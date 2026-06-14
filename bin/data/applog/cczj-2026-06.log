@@ -1,0 +1,34 @@
+[2026-06-11 18:38:13] [INFO] ===== 应用启动 =====
+[2026-06-11 18:38:13] [INFO] [collect:wj] 开始采集: wj
+[2026-06-11 18:38:13] [INFO] [collect:wj] 采集参数: limit=50
+[2026-06-11 18:38:13] [INFO] [collect:wj] 请求第 1 页 (第 1 次尝试)
+[2026-06-11 18:38:14] [INFO] [collect:wj] 共 5649 页, 总数 112969
+[2026-06-11 18:38:42] [INFO] [collect:mt] 开始采集: mt
+[2026-06-11 18:38:42] [INFO] [collect:mt] 采集参数: limit=50
+[2026-06-11 18:38:42] [INFO] [collect:mt] 请求第 1 页 (第 1 次尝试)
+[2026-06-11 18:38:44] [INFO] [collect:wj] 采集第 2/5649 页
+[2026-06-11 18:38:44] [INFO] [collect:wj] 请求第 2 页 (第 1 次尝试)
+[2026-06-11 18:38:53] [INFO] [collect:mt] 第 1 页 第 1 次请求失败: fetch https://caiji.maotaizy.cc/api.php/provide/vod/from/mtm3u8?ac=detail&limit=50&pg=1: Get "https://caiji.maotaizy.cc/api.php/provide/vod/from/mtm3u8?ac=detail&limit=50&pg=1": read tcp 192.168.43.219:50891->162.19.247.40:443: wsarecv: An existing connection was forcibly closed by the remote host.
+[2026-06-11 18:38:53] [INFO] [collect:mt] 等待 5s 后重试...
+[2026-06-11 18:38:58] [INFO] [collect:mt] 请求第 1 页 (第 2 次尝试)
+[2026-06-11 18:39:15] [INFO] [collect:wj] 采集第 3/5649 页
+[2026-06-11 18:39:15] [INFO] [collect:wj] 请求第 3 页 (第 1 次尝试)
+[2026-06-11 18:39:19] [INFO] [collect:mt] 第 1 页 第 2 次请求失败: fetch https://caiji.maotaizy.cc/api.php/provide/vod/from/mtm3u8?ac=detail&limit=50&pg=1: Get "https://caiji.maotaizy.cc/api.php/provide/vod/from/mtm3u8?ac=detail&limit=50&pg=1": read tcp 192.168.43.219:50894->162.19.247.40:443: wsarecv: An existing connection was forcibly closed by the remote host.
+[2026-06-11 18:39:19] [INFO] [collect:mt] 等待 10s 后重试...
+[2026-06-11 18:39:29] [INFO] [collect:mt] 请求第 1 页 (第 3 次尝试)
+[2026-06-11 18:39:46] [INFO] [collect:wj] 采集第 4/5649 页
+[2026-06-11 18:39:46] [INFO] [collect:wj] 请求第 4 页 (第 1 次尝试)
+[2026-06-11 18:39:49] [INFO] [collect:mt] 第 1 页 第 3 次请求失败: status 502 for https://caiji.maotaizy.cc/api.php/provide/vod/from/mtm3u8?ac=detail&limit=50&pg=1
+[2026-06-11 18:40:17] [INFO] [collect:wj] 采集第 5/5649 页
+[2026-06-11 18:40:17] [INFO] [collect:wj] 请求第 5 页 (第 1 次尝试)
+[2026-06-11 18:40:50] [INFO] [collect:wj] 采集第 6/5649 页
+[2026-06-11 18:40:50] [INFO] [collect:wj] 请求第 6 页 (第 1 次尝试)
+[2026-06-11 18:41:21] [INFO] [collect:wj] 采集第 7/5649 页
+[2026-06-11 18:41:21] [INFO] [collect:wj] 请求第 7 页 (第 1 次尝试)
+[2026-06-11 18:41:44] [INFO] 应用正常退出
+[2026-06-11 18:47:47] [INFO] ===== 应用启动 =====
+[2026-06-11 19:25:49] [INFO] 应用正常退出
+[2026-06-11 19:35:03] [INFO] ===== 应用启动 =====
+[2026-06-11 19:37:58] [INFO] 应用正常退出
+[2026-06-11 19:55:36] [INFO] ===== 应用启动 =====
+[2026-06-11 20:05:59] [INFO] 应用正常退出

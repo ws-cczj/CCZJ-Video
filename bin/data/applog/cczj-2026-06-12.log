@@ -1,0 +1,28 @@
+[2026-06-12 09:50:37.688] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-12 09:51:30.318] [INFO] [application.go:710] 应用正常退出
+[2026-06-12 09:53:28.598] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-12 10:06:29.650] [INFO] [application.go:710] 应用正常退出
+[2026-06-12 10:06:48.275] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-12 10:07:29.861] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-12 10:07:52.906] [INFO] [application.go:710] 应用正常退出
+[2026-06-12 10:22:57.699] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-12 10:28:26.198] [INFO] [application.go:710] 应用正常退出
+[2026-06-12 10:33:15.547] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-12 10:33:44.347] [INFO] [application.go:710] 应用正常退出
+[2026-06-12 10:33:53.787] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-12 10:35:36.095] [INFO] [application.go:710] 应用正常退出
+[2026-06-12 10:35:52.616] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-12 10:40:15.320] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-12 10:40:46.757] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-12 11:00:17.620] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-12 11:00:17.776] [INFO] [application.go:710] 应用正常退出
+[2026-06-12 11:08:21.095] [ERROR] [value.go:586] UnhandledRejection :: 未处理的 Promise 异常 — Cannot read properties of undefined (reading 'continue')     Detail: TypeError: Cannot read properties of undefined (reading 'continue')     at http://wails.localhost:9245/src/views/Home.vue?t=1781233628387:384:52     at renderList (http://wails.localhost:9245/node_modules/.vite/deps/chunk-2XN74TZ7.js?v=111a4c89:5307:16)     at Proxy._sfc_render (http://wails.localhost:9245/src/views/Home.vue?t=1781233628387:375:65)     at renderComponentRoot (http://wails.localhost:9245/node_modules/.vite/deps/chunk-2XN74TZ7.js?v=111a4c89:6663:17)     at ReactiveEffect.componentUpdateFn [as fn] (http://wails.localhost:9245/node_modules/.vite/deps/chunk-2XN74TZ7.js?v=111a4c89:8272:26)     at ReactiveEffect.run (http://wails.localhost:9245/node_modules/.vite/deps/chunk-2XN74TZ7.js?v=111a4c89:513:19)     at updateComponent (http://wails.localhost:9245/node_modules/.vite/deps/chunk-2XN74TZ7.js?v=111a4c89:8129:18)     at processComponent (http://wails.localhost:9245/node_modules/.vite/deps/chunk-2XN74TZ7.js?v=111a4c89:8062:7)     at patch (http://wails.localhost:9245/node_modules/.vite/deps/chunk-2XN74TZ7.js?v=111a4c89:7574:11)     at sharedContext.activate (http://wails.localhost:9245/node_modules/.vite/deps/chunk-2XN74TZ7.js?v=111a4c89:4971:7)
+[2026-06-12 11:14:03.370] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-12 11:56:38.274] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-12 12:27:09.414] [INFO] [application.go:710] 应用正常退出
+[2026-06-12 13:07:31.354] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-12 13:17:34.597] [INFO] [application.go:710] 应用正常退出
+[2026-06-12 13:17:46.954] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-12 13:25:40.829] [INFO] [application.go:710] 应用正常退出
+[2026-06-12 13:25:53.188] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-12 13:29:54.511] [INFO] [once.go:69] ===== 应用启动 =====

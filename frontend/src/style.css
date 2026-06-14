@@ -1,0 +1,3 @@
+/* 全局 reset */
+html, body { margin: 0; height: 100%; }
+#app { height: 100%; }

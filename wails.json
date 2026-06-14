@@ -1,0 +1,14 @@
+{
+  "name": "CCZJ Video",
+  "frontend": {
+    "dir": "./frontend",
+    "install": "npm install",
+    "build": "npm run build",
+    "dev": "npm run dev",
+    "devServerUrl": "http://127.0.0.1:9245"
+  },
+  "author": {
+    "name": "cczj",
+    "email": "cczj@qq.com"
+  }
+}
