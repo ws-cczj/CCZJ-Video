@@ -1,0 +1,33 @@
+version: '3'
+
+includes:
+  common: ../Taskfile.yml
+
+tasks:
+  build:
+    summary: Build the application for Windows (release, stripped)
+    deps:
+      - task: common:go:mod:tidy
+      - task: common:build:frontend
+    cmds:
+      - go build -tags production -ldflags="-w -s -H windowsgui" -o ./bin/cczjVideo.exe
+
+  build:dev:
+    summary: Build the application for Windows (development, with console + logs)
+    deps:
+      - task: common:go:mod:tidy
+    cmds:
+      - go build -o ./bin/cczjVideo.exe
+
+  build:prod:
+    summary: Build the application for Windows (production)
+    deps:
+      - task: common:go:mod:tidy
+      - task: common:build:frontend
+    cmds:
+      - go build -tags production -ldflags="-w -s -H windowsgui" -o ./bin/cczjVideo.exe
+
+  run:
+    summary: Runs the application
+    cmds:
+      - ./bin/cczjVideo.exe

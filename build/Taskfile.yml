@@ -1,0 +1,29 @@
+version: '3'
+
+tasks:
+  install:frontend:deps:
+    summary: Install frontend dependencies
+    dir: frontend
+    cmds:
+      - npm install
+
+  build:frontend:
+    summary: Build the frontend project
+    dir: frontend
+    deps:
+      - install:frontend:deps
+    cmds:
+      - npm run build
+
+  dev:frontend:
+    summary: Run frontend dev server
+    dir: frontend
+    deps:
+      - install:frontend:deps
+    cmds:
+      - npm run dev
+
+  go:mod:tidy:
+    summary: Tidy Go modules
+    cmds:
+      - go mod tidy
