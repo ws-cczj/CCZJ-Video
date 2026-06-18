@@ -122,6 +122,7 @@ type Video struct {
 	TypeName string         `json:"type_name" db:"type_name"`
 
 	VodName     string `json:"vod_name" db:"vod_name"`
+	GlobalId    int64  `json:"global_id" db:"global_id"`
 	VodClass    string `json:"vod_class" db:"vod_class"`
 	VodLang     string `json:"vod_lang" db:"vod_lang"`
 	VodActor    string `json:"vod_actor" db:"vod_actor"`
@@ -242,9 +243,12 @@ func truncate(s string, maxLen int) string {
 }
 
 type VType struct {
-	Id     int            `json:"id" db:"id"`
-	TypeId FlexibleString `json:"type_id" db:"type_id"`
-	Name   string         `json:"name" db:"name"`
+	Id        int            `json:"id" db:"id"`
+	TypeId    FlexibleString `json:"type_id" db:"type_id"`
+	Name      string         `json:"name" db:"name"`
+	ParentId  int            `json:"parent_id" db:"parent_id"`
+	Sort      int            `json:"sort" db:"sort"`
+	SourceKey string         `json:"source_key" db:"source_key"`
 }
 
 type Episode struct {

@@ -7,10 +7,7 @@ import { useErrorStore } from '../stores/error'
 import type { SourceScheduleItem } from '../stores/collect'
 import { AddSource, UpdateSource, DeleteSource, GetSourceParamsDoc, ExportSource, ImportSourceFromBase64, OpenFolder } from '../../bindings/cczjVideo/app'
 import Icon from '../components/Icon.vue'
-import LoadingSpinner from '../components/LoadingSpinner.vue'
-import EmptyState from '../components/EmptyState.vue'
-import SelectDropdown from '../components/SelectDropdown.vue'
-import { Button, Modal, Tag } from '../components/ui'
+import { Button, Modal, Tag, Spinner as LoadingSpinner, Empty as EmptyState, Select as SelectDropdown } from '../components/ui'
 import { useConfirmStore } from '../stores/confirm'
 import { extractDomainKey } from '../utils'
 
@@ -130,19 +127,32 @@ function scheduleStateFor(key: string): SourceScheduleItem | undefined {
 }
 
 // === 生命周期 ===
-onMounted(() => {
-  sourceStore.loadSources()
-  collectStore.loadSchedule()
+onMounted(async () => {
+  try {
+    await Promise.all([
+      sourceStore.loadSources().catch(e => {
+        console.error('[Sources] loadSources failed:', e)
+        errorStore.fromError('加载源站列表失败', e)
+      }),
+      collectStore.loadSchedule().catch(e => {
+        console.error('[Sources] loadSchedule failed:', e)
+      })
+    ])
+  } catch (e) {
+    console.error('[Sources] onMounted init failed:', e)
+  }
 })
 
 // === 添加/编辑弹窗 ===
 const autoKey = computed(() => extractDomainKey(form.value.api_url))
 
 function openAdd(): void {
+  console.log('[Sources] openAdd called, showForm before:', showForm.value)
   editing.value = null
   form.value = { name: '', api_url: '', url_template: '', url_prefix: '', url_suffix: '', collect_limit: 50, collect_hours: 0 }
   showAdvanced.value = false
   showForm.value = true
+  console.log('[Sources] openAdd done, showForm after:', showForm.value)
 }
 
 function openEdit(s: EditSource): void {

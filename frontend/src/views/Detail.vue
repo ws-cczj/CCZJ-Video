@@ -1,6 +1,6 @@
 <script setup lang="ts">
 defineOptions({ name: 'Detail' })
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, onActivated, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { GetRecentHistory, SaveWatchHistory, AddFavorite, RemoveFavorite, IsFavorite, DeleteVideo } from '../../bindings/cczjVideo/app'
 import { useSourceStore } from '../stores/source'
@@ -8,11 +8,10 @@ import { useVideoStore } from '../stores/video'
 import { useDownloadStore } from '../stores/download'
 import { useConfirmStore } from '../stores/confirm'
 import Icon from '../components/Icon.vue'
-import LoadingSpinner from '../components/LoadingSpinner.vue'
-import { Button, Modal, Tag } from '../components/ui'
+import { Button, Modal, Tag, Spinner as LoadingSpinner } from '../components/ui'
 import { getDetailPath, getSearchPath, getPlayerPath, humanizeBytes, buildEpisodeFilename, buildSingleFilename, sanitizeFilename, resolveEpisodeUrl, stripHtmlTags } from '../utils'
 import { TsCache } from '../utils/tsCache'
-import { epProgressKey, loadEpProgress, getEpProgressPct } from '../utils/episodeProgress'
+import { epProgressKey, loadEpProgress, getEpProgressPct, flushEpProgress } from '../utils/episodeProgress'
 import { bumpFavoritesRefresh } from '../stores/favoritesSync'
 import type { Video, HistoryItem, Episode } from '../types'
 
@@ -52,7 +51,7 @@ const epProgressMap = ref<Record<string, number>>({}) // key -> 0-100
 const lastWatched = ref<{ epNum: number; epIdx: number; epName: string; position: number } | null>(null)
 
 function epKeyOf(ep: Episode | undefined | null, idx: number): string {
-  return epProgressKey(sourceKey.value, vodId.value, ep?.ep_num ?? idx)
+  return epProgressKey(video.value?.global_id, video.value?.vod_name, ep?.ep_num ?? idx)
 }
 
 function refreshEpProgress(): void {
@@ -63,14 +62,37 @@ function refreshEpProgress(): void {
       out[k] = getEpProgressPct(local[k])
     }
     epProgressMap.value = out
-  } catch { /* ignore */ }
+    // Debug: 检查当前视频的进度是否正确加载
+    const vName = video.value?.vod_name
+    const gid = video.value?.global_id
+    if (vName) {
+      const prefix = gid ? String(gid) : vName
+      const epKeys = Object.keys(out).filter(k => k.startsWith(prefix + '-'))
+      if (epKeys.length > 0) {
+        console.log(`[Detail] ✔ 进度已加载: global_id=${gid}, vodName="${vName}", 已观看 ${epKeys.length} 集`, epKeys.map(k => `${k}=${Math.round(out[k])}%`).join(', '))
+      } else {
+        console.log(`[Detail] ⚠ 未找到进度: global_id=${gid}, vodName="${vName}", localStorage 中共 ${Object.keys(out).length} 条记录`)
+      }
+    }
+  } catch (e) { console.warn('[Detail] refreshEpProgress 失败:', e) }
 }
 refreshEpProgress()
+
+// 当视频或剧集列表变化时自动刷新进度（处理异步加载的时序问题）
+watch(
+  () => [video.value?.vod_name, videoStore.episodes.length],
+  () => {
+    if (video.value?.vod_name && videoStore.episodes.length > 0) {
+      nextTick(() => refreshEpProgress())
+    }
+  },
+)
 
 // 页面可见性变化时刷新进度（从播放页返回时同步）
 function onVisibilityChange(): void {
   if (document.visibilityState === 'visible') {
     refreshEpProgress()
+    refreshLastWatched()
   }
 }
 
@@ -89,10 +111,11 @@ async function refreshLastWatched(): Promise<void> {
     }
     let found: HistoryItem | null = null
     for (const h of history) {
-      if (String(h.vod_id) !== String(vodId.value)) continue
+      // 优先按 global_id 跨源匹配，fallback 到 vod_id
+      const globalMatch = video.value?.global_id ? (h.global_id === video.value.global_id) : null
+      if (globalMatch === true) { found = h; break }
+      if (globalMatch === null && String(h.vod_id) === String(vodId.value)) { found = h; break }
       if (h.ep_num == null) continue
-      found = h
-      break
     }
     if (found && found.ep_num != null) {
       const idx = epNumToIdx.get(Number(found.ep_num))
@@ -325,10 +348,22 @@ async function downloadAllEpisodes(): Promise<void> {
 
 // ==================== 剧集播放/下载模式 ====================
 const episodeMode = ref<'play' | 'download'>('play') // 'play'=播放, 'download'=下载
+const episodeSortAsc = ref(true) // true=正序, false=倒序
 
 function toggleEpisodeMode(): void {
   episodeMode.value = episodeMode.value === 'play' ? 'download' : 'play'
 }
+
+function toggleEpisodeSort(): void {
+  episodeSortAsc.value = !episodeSortAsc.value
+}
+
+// 排序后的剧集列表
+const sortedEpisodes = computed(() => {
+  const eps = [...videoStore.episodes]
+  if (!episodeSortAsc.value) eps.reverse()
+  return eps
+})
 
 function onEpisodeClick(index: number, ep: Episode): void {
   if (episodeMode.value === 'download') {
@@ -345,7 +380,7 @@ function playEpisode(epIndex: number): void {
   try {
     const ep = videoStore.episodes[epIndex]
     const epNum = ep?.ep_num ?? (epIndex + 1)
-    const progKey = epProgressKey(sourceKey.value, vodId.value, epNum)
+    const progKey = epProgressKey(v.global_id, v.vod_name, epNum)
     const entry = loadEpProgress()[progKey]
     SaveWatchHistory({
       source_key: sourceKey.value,
@@ -399,24 +434,30 @@ interface RecommendItem {
 }
 const similarVideos = ref<RecommendItem[]>([])
 const similarLoading = ref(false)
-const showMoreSimilar = ref(false)
 const MAX_SIMILAR_INITIAL = 10
 
-function toggleShowMore(): void {
-  showMoreSimilar.value = !showMoreSimilar.value
-}
-
 const displayedSimilar = computed(() => {
-  if (showMoreSimilar.value) return similarVideos.value
   return similarVideos.value.slice(0, MAX_SIMILAR_INITIAL)
 })
 
 const hasMoreSimilar = computed(() => similarVideos.value.length > MAX_SIMILAR_INITIAL)
 
+function goToRecommendations(): void {
+  const v = video.value
+  if (!v) return
+  router.push({
+    path: '/recommendations',
+    query: {
+      sourceKey: sourceKey.value,
+      vodId: String(v.vod_id || ''),
+      vodName: v.vod_name || '',
+    },
+  })
+}
+
 async function loadSimilar(): Promise<void> {
   if (!sourceKey.value || !video.value) return
   similarLoading.value = true
-  showMoreSimilar.value = false
   try {
     const list: Video[] = Array.isArray(videoStore.videos) ? videoStore.videos : []
     const currentIdStr = String(video.value.vod_id || '')
@@ -554,17 +595,44 @@ async function loadDetail(): Promise<void> {
   loading.value = false
 
   // 选集加载完成后刷新进度百分比 & 最近观看（不阻塞 UI）
+  // 先 flush 确保播放器写入的最新进度已落盘，再读取
+  flushEpProgress()
   refreshEpProgress()
   refreshLastWatched()
+  // 延迟再刷一次，确保从播放页返回时进度已同步
+  setTimeout(() => {
+    refreshEpProgress()
+    refreshLastWatched()
+  }, 200)
 }
 
 onMounted(async () => {
   await sourceStore.loadSources()
   try { await downloadStore.init() } catch {}
   await loadDetail()
+  refreshEpProgress() // 视频加载完成后刷新进度
+  await refreshLastWatched() // 从播放页返回时刷新“继续观看”
   refreshFav().catch(() => {})
   // 页面可见性变化时刷新进度（从播放页返回时同步）
   document.addEventListener('visibilitychange', onVisibilityChange)
+})
+
+// KeepAlive 激活时刷新进度（若将来 Detail 被加入缓存）
+onActivated(() => {
+  nextTick(() => {
+    refreshEpProgress()
+    refreshLastWatched()
+  })
+})
+
+// 路由级别监听：同一组件复用时参数变化也刷新
+watch(() => route.fullPath, (newPath, oldPath) => {
+  if (newPath !== oldPath && newPath.includes('/detail/')) {
+    nextTick(() => {
+      refreshEpProgress()
+      refreshLastWatched()
+    })
+  }
 })
 
 watch(vodId, () => {
@@ -741,22 +809,31 @@ onBeforeUnmount(() => {
           </div>
           <div class="section-head-right">
             <Button
+              variant="secondary"
+              size="sm"
+              @click="toggleEpisodeSort"
+              :title="episodeSortAsc ? '当前正序，点击切换倒序' : '当前倒序，点击切换正序'"
+            >
+              <Icon :name="episodeSortAsc ? 'chevron-down' : 'chevron-up'" :size="14" />
+              <span>{{ episodeSortAsc ? '正序' : '倒序' }}</span>
+            </Button>
+            <Button
               :variant="episodeMode === 'download' ? 'primary' : 'secondary'"
               size="sm"
               @click="toggleEpisodeMode"
             >
               <Icon name="download" :size="14" />
-              <span>{{ episodeMode === 'download' ? '下载模式' : '下载视频' }}</span>
+              <span>{{ episodeMode === 'download' ? '返回观看模式' : '下载模式' }}</span>
             </Button>
             <Button v-if="episodeMode === 'download'" variant="primary" size="sm" @click="downloadAllEpisodes">
               <Icon name="layers" :size="14" />
-              <span>全部下载</span>
+              <span>批量下载</span>
             </Button>
           </div>
         </div>
         <div class="episodes-grid">
           <button
-            v-for="(ep, i) in videoStore.episodes"
+            v-for="(ep, i) in sortedEpisodes"
             :key="'ep-' + (ep.ep_num || i)"
             class="episode-btn"
             :class="{
@@ -784,10 +861,10 @@ onBeforeUnmount(() => {
             <button
               v-if="hasMoreSimilar"
               class="show-more-btn"
-              @click="toggleShowMore"
+              @click="goToRecommendations"
             >
-              {{ showMoreSimilar ? '收起' : '查看更多' }}
-              <span class="show-more-arrow">{{ showMoreSimilar ? '▲' : '▼' }}</span>
+              查看更多
+              <span class="show-more-arrow">→</span>
             </button>
           </div>
         </div>
@@ -1481,7 +1558,15 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
   gap: 8px;
-  align-content: start;  /* ⭐ 防止少数集时被拉伸 */
+  align-content: start;
+  max-height: 320px;
+  overflow-y: auto;
+  /* 隐藏滚动条但保留滚动功能 */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+.episodes-grid::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
 }
 
 .episode-btn {

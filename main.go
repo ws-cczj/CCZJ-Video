@@ -4,7 +4,6 @@ import (
 	"embed"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
-	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
 //go:embed all:frontend/dist
@@ -13,12 +12,8 @@ var assets embed.FS
 //go:embed icon.png
 var appIcon []byte
 
-// appInstance 包级引用，供窗口关闭 hook 使用
-var appInstance *App
-
 func main() {
 	myApp := NewApp()
-	appInstance = myApp
 
 	app := application.New(application.Options{
 		Name: "CCZJ Video",
@@ -77,17 +72,9 @@ func main() {
 		mainWindow.Focus()
 	})
 
-	// ========== 窗口关闭处理 ==========
-	// 默认行为：点击关闭按钮 -> 由前端调用 HandleWindowClose 决定
-	// 这里注册 hook，当用户选择"最小化到托盘"时，拦截关闭事件
-	mainWindow.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
-		if appInstance != nil && appInstance.shouldMinimizeToTray() {
-			mainWindow.Hide()
-			e.Cancel()
-			return
-		}
-		app.Quit()
-	})
+	// 窗口关闭时，Wails 框架会自动调用 ServiceShutdown() 完成清理（停止调度器、关闭数据库等），
+	// 无需在 WindowClosing 钩子中手动处理（之前在这里调用 app.Quit() 会导致递归，
+	// 造成窗口关闭延迟）。
 
 	err := app.Run()
 	if err != nil {

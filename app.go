@@ -2,6 +2,7 @@ package main
 
 import (
 	"cczjVideo/app/applog"
+	"cczjVideo/app/ciligou"
 	"cczjVideo/app/collect"
 	"cczjVideo/app/db"
 	"cczjVideo/app/douban"
@@ -42,9 +43,11 @@ var imageProxyClient = &http.Client{
 }
 
 type App struct {
-	app       *application.App
-	collectMu sync.Mutex
-	doubanScheduler *douban.Scheduler
+	app              *application.App
+	collectMu        sync.Mutex
+	doubanScheduler  *douban.Scheduler
+	ciligouScheduler *ciligou.Scheduler
+	forceQuit        atomic.Bool
 }
 
 // ======================== 关闭行为 ========================
@@ -118,15 +121,16 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 	dataDir := a.getDataDir()
 	os.MkdirAll(dataDir, 0755)
 
-	if err := db.InitDB(dataDir); err != nil {
-		panic(fmt.Sprintf("Failed to init database: %v", err))
-	}
-
 	// 初始化日志（data/applog 目录），按月滚动，超过2个月自动清理
 	logDir := filepath.Join(dataDir, "applog")
 	if err := applog.Init(logDir); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to init applog: %v\n", err)
 	}
+
+	if err := db.InitDB(dataDir); err != nil {
+		panic(fmt.Sprintf("Failed to init database: %v", err))
+	}
+
 	// 把 db 层的日志桥接到 applog（避免 db 直接依赖 applog 产生循环）
 	db.SetLogger(func(level, msg string) {
 		switch level {
@@ -153,6 +157,20 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 	// 启动豆瓣信息补全调度器（每30秒执行一次）
 	a.doubanScheduler = douban.NewScheduler(30 * time.Second)
 	go a.doubanScheduler.Start()
+
+	// 启动磁力链接爬取调度器（每60秒执行一次）
+	a.ciligouScheduler = ciligou.NewScheduler(60 * time.Second)
+	go a.ciligouScheduler.Start()
+
+	// 同步全局类型表
+	go func() {
+		count, err := db.SyncGlobalTypesFromSources()
+		if err != nil {
+			applog.Warn("同步全局类型失败: %v", err)
+		} else {
+			applog.Info("同步全局类型完成: %d 条", count)
+		}
+	}()
 
 	a.app.Event.Emit("app:ready", map[string]string{
 		"data_dir": dataDir,
@@ -190,6 +208,16 @@ func (a *App) GetVideoDetail(req handler.VideoDetailReq) (*handler.VideoDetailRe
 
 func (a *App) SearchVideos(req handler.VideoSearchReq) (*handler.VideoListResp, error) {
 	return handler.SearchVideos(req)
+}
+
+// GetGlobalIdForVideo 获取指定源中某个视频的 global_id
+func (a *App) GetGlobalIdForVideo(sourceKey string, vodId string) (int64, error) {
+	return db.GetGlobalIdForVideo(sourceKey, vodId)
+}
+
+// FindSourcesByGlobalId 通过 global_id 查找所有拥有该视频的源
+func (a *App) FindSourcesByGlobalId(globalId int64) ([]db.SourceVideoRef, error) {
+	return db.FindSourcesByGlobalId(globalId)
 }
 
 func (a *App) GetTypes(req handler.GetTypesReq) ([]*model.VType, error) {
@@ -816,6 +844,16 @@ func (a *App) TriggerCollectNow(req TriggerCollectReq) (bool, error) {
 func (a *App) StopBackgroundCollect() (bool, error) {
 	s := handler.GetScheduler(context.Background())
 	s.Stop()
+	// 同时停止豆瓣调度器
+	if a.doubanScheduler != nil {
+		a.doubanScheduler.Stop()
+	}
+	// 停止磁力链接调度器
+	if a.ciligouScheduler != nil {
+		a.ciligouScheduler.Stop()
+	}
+	// 标记强制退出，下次 Window.Close() 直接通过
+	a.forceQuit.Store(true)
 	// 短暂等待确保 Stop 已把 running 置为 false 后返回（前端状态即时刷新）
 	time.Sleep(50 * time.Millisecond)
 	return true, nil
@@ -922,19 +960,138 @@ func (a *App) DoubanTriggerNow() (int, error) {
 
 // DoubanStatus 返回豆瓣调度器状态
 func (a *App) DoubanStatus() map[string]interface{} {
-	if a.doubanScheduler == nil {
-		return map[string]interface{}{"running": false}
+	result := map[string]interface{}{
+		"running": false,
 	}
-	return map[string]interface{}{
-		"running":  a.doubanScheduler.IsRunning(),
-		"updating": a.doubanScheduler.Updater().IsRunning(),
-		"min_request_interval": "5s",
+	if a.doubanScheduler != nil {
+		result["running"] = a.doubanScheduler.IsRunning()
+		result["updating"] = a.doubanScheduler.Updater().IsRunning()
 	}
+	// 附加数据统计
+	if all, err := db.GetAllDoubanInfo(); err == nil {
+		result["total"] = len(all)
+		completed := 0
+		for _, r := range all {
+			if r.SubjectID != "" {
+				completed++
+			}
+		}
+		result["completed"] = completed
+		result["pending"] = len(all) - completed
+	}
+	return result
 }
 
-// DoubanGetAll 获取全局豆瓣信息表中的所有记录
-func (a *App) DoubanGetAll() ([]*db.DoubanInfoRow, error) {
-	return db.GetAllDoubanInfo()
+// DoubanGetAllReq 豆瓣数据请求（支持分页）
+type DoubanGetAllReq struct {
+	Page     int `json:"page"`
+	PageSize int `json:"page_size"`
+}
+
+// DoubanGetAllResp 豆瓣数据响应（含分页信息）
+type DoubanGetAllResp struct {
+	Rows     []*db.DoubanInfoRow `json:"rows"`
+	Total    int                 `json:"total"`
+	Page     int                 `json:"page"`
+	PageSize int                 `json:"page_size"`
+}
+
+// DoubanGetAll 获取全局豆瓣信息表中的记录（支持分页）
+func (a *App) DoubanGetAll(req DoubanGetAllReq) (*DoubanGetAllResp, error) {
+	if req.Page <= 0 {
+		req.Page = 1
+	}
+	if req.PageSize <= 0 {
+		req.PageSize = 20
+	}
+	rows, total, err := db.GetAllDoubanInfoPaginated(req.Page, req.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	return &DoubanGetAllResp{
+		Rows:     rows,
+		Total:    total,
+		Page:     req.Page,
+		PageSize: req.PageSize,
+	}, nil
+}
+
+// ======================== 全局类型管理 ========================
+
+// GlobalTypeItem 全局类型项
+type GlobalTypeItem struct {
+	Id              int    `json:"id"`
+	TypeName        string `json:"type_name"`
+	CollectEnabled  int    `json:"collect_enabled"`
+	MagnetEnabled   int    `json:"magnet_enabled"`
+	Sort            int    `json:"sort"`
+	CreatedAt       string `json:"created_at"`
+}
+
+// GetGlobalTypes 获取所有全局类型
+func (a *App) GetGlobalTypes() ([]*db.GlobalTypeRow, error) {
+	return db.GetAllGlobalTypes()
+}
+
+// SetGlobalTypeCollectEnabledReq 设置全局类型采集开关请求
+type SetGlobalTypeCollectEnabledReq struct {
+	TypeName string `json:"type_name"`
+	Enabled  bool   `json:"enabled"`
+}
+
+// SetGlobalTypeCollectEnabled 设置全局类型的采集开关
+func (a *App) SetGlobalTypeCollectEnabled(req SetGlobalTypeCollectEnabledReq) (bool, error) {
+	if req.TypeName == "" {
+		return false, fmt.Errorf("type_name is empty")
+	}
+	if err := db.SetGlobalTypeCollectEnabled(req.TypeName, req.Enabled); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// SetGlobalTypeMagnetEnabledReq 设置全局类型磁力开关请求
+type SetGlobalTypeMagnetEnabledReq struct {
+	TypeName string `json:"type_name"`
+	Enabled  bool   `json:"enabled"`
+}
+
+// SetGlobalTypeMagnetEnabled 设置全局类型的磁力链接获取开关
+func (a *App) SetGlobalTypeMagnetEnabled(req SetGlobalTypeMagnetEnabledReq) (bool, error) {
+	if req.TypeName == "" {
+		return false, fmt.Errorf("type_name is empty")
+	}
+	if err := db.SetGlobalTypeMagnetEnabled(req.TypeName, req.Enabled); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// SyncGlobalTypes 从所有源同步类型到全局类型表
+func (a *App) SyncGlobalTypes() (int, error) {
+	return db.SyncGlobalTypesFromSources()
+}
+
+// ======================== 磁力链接 ========================
+
+// CiligouStatus 磁力链接调度器状态
+func (a *App) CiligouStatus() map[string]interface{} {
+	result := map[string]interface{}{
+		"running": false,
+	}
+	if a.ciligouScheduler != nil {
+		result["running"] = a.ciligouScheduler.IsRunning()
+		result["updating"] = a.ciligouScheduler.Updater().IsRunning()
+	}
+	return result
+}
+
+// CiligouTriggerNow 立即触发一次磁力链接获取
+func (a *App) CiligouTriggerNow() (int, error) {
+	if a.ciligouScheduler == nil {
+		return 0, fmt.Errorf("磁力链接调度器未启动")
+	}
+	return a.ciligouScheduler.TriggerNow()
 }
 
 // ======================== 日志 ========================
@@ -1398,7 +1555,7 @@ func defaultDownloadDir() string {
 	if home == "" {
 		home = "."
 	}
-	return filepath.Join(home, "Downloads", "videos")
+	return filepath.Join(home, "Downloads")
 }
 
 func sanitizeFilename(name string) string {
@@ -2830,12 +2987,66 @@ func (a *App) ServiceShutdown() error {
 	s := handler.GetScheduler(context.Background())
 	s.Stop()
 
+	// 停止豆瓣调度器
+	if a.doubanScheduler != nil {
+		a.doubanScheduler.Stop()
+	}
+
+	// 停止磁力链接调度器
+	if a.ciligouScheduler != nil {
+		a.ciligouScheduler.Stop()
+	}
+
 	applog.Info("应用正常退出")
 	// 关闭日志文件
 	applog.Default().Close()
 	db.Close()
 
 	return nil
+}
+
+// IsSchedulerRunning 检查是否有调度任务正在运行（采集调度或豆瓣调度）
+func (a *App) IsSchedulerRunning() bool {
+	s := handler.GetScheduler(context.Background())
+	if s.IsRunning() {
+		return true
+	}
+	// 检查是否有活跃的采集引擎
+	sources, err := handler.GetAllSources()
+	if err == nil {
+		for _, src := range sources {
+			status := handler.GetCollectStatus(src.SourceKey)
+			if status != nil && status.Running {
+				return true
+			}
+		}
+	}
+	if a.doubanScheduler != nil && a.doubanScheduler.IsRunning() {
+		return true
+	}
+	if a.ciligouScheduler != nil && a.ciligouScheduler.IsRunning() {
+		return true
+	}
+	return false
+}
+
+// ConfirmShutdown 确认退出：触发应用退出，清理由 ServiceShutdown 统一处理
+func (a *App) ConfirmShutdown() {
+	if a.app != nil {
+		a.app.Quit()
+	}
+}
+
+// GracefulShutdown 优雅关闭：等待所有采集任务完成当前页后退出
+func (a *App) GracefulShutdown() {
+	s := handler.GetScheduler(context.Background())
+	s.Stop()
+	if a.doubanScheduler != nil {
+		a.doubanScheduler.Stop()
+	}
+	if a.ciligouScheduler != nil {
+		a.ciligouScheduler.Stop()
+	}
 }
 
 func errStr(err error) string {

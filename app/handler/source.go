@@ -98,7 +98,7 @@ func GetSourceDetail(sourceKey string) (*SourceDetail, error) {
 	tables := []SourceTableSummary{
 		{TableName: db.VideoTableName(sourceKey), Role: "video"},
 		{TableName: db.EpisodeTableName(sourceKey), Role: "episode"},
-		{TableName: db.TypeTableName(sourceKey), Role: "type"},
+		{TableName: "global_types", Role: "type"},
 	}
 	for i := range tables {
 		t := &tables[i]
@@ -134,7 +134,7 @@ func TruncateSourceData(sourceKey string) (bool, error) {
 	return true, nil
 }
 
-// RecreateSourceTables 删除并重建该源的三张表（数据全部丢失）
+// RecreateSourceTables 删除并重建该源的两张表（数据全部丢失）
 func RecreateSourceTables(sourceKey string) (bool, error) {
 	if err := db.RecreateSourceTables(sourceKey); err != nil {
 		return false, err

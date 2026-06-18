@@ -21,6 +21,11 @@ export default defineConfig({
     __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: JSON.stringify(false),
   },
   build: {
+    // 生产构建剔除 console.log 和 console.debug，保留 warn/error 用于排错
+    minify: 'esbuild',
+    esbuild: {
+      drop: ['console.log', 'console.debug'],
+    },
     // 优化代码分割，避免单个 chunk 过大
     rollupOptions: {
       output: {

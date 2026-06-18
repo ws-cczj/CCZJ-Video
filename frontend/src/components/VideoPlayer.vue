@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref, nextTick, onMounted, onBeforeUnmount, watch, computed } from 'vue'
 import Icon from './Icon.vue'
-import SelectDropdown from './SelectDropdown.vue'
+import { Select as SelectDropdown } from './ui'
 import { TsCache } from '../utils/tsCache'
 import { AiUpscaler, checkUpscalerSupport } from '../utils/aiUpscaler'
+import loadingGif from '../assets/videos/loading.gif'
 import {
-  WindowIsFs, WindowIsMax, WindowSetFullscreen, WindowToggleMax } from '../../bindings/cczjVideo/app'
+  WindowIsFs, WindowIsMax, WindowSetFullscreen, WindowToggleMax
+} from '../../bindings/cczjVideo/app'
 
 const props = withDefaults(defineProps<{
   url: string
@@ -28,7 +30,7 @@ const props = withDefaults(defineProps<{
   favBusy: false,
 })
 
-const emit = defineEmits(['back', 'prev', 'next', 'toggleFavorite'])
+const emit = defineEmits(['back', 'prev', 'next', 'toggleFavorite', 'toggleAutoplay'])
 
 const wrapperRef = ref<HTMLDivElement>()
 const errorMsg = ref('')
@@ -46,20 +48,135 @@ let hideTimer: number | null = null
 const loading = ref(true)
 const videoReady = ref(false)
 
+// ========= 预缓冲：等待加载完5个TS分片或超过10s才准备播放 =========
+const preBuffering = ref(false)       // 是否处于初始预缓冲阶段
+const loadingCached = ref(0)          // 当前已缓存片段数
+const loadingTotal = ref(0)           // 总片段数
+const loadingSpeed = ref('')          // 下载速度文本
+const loadingElapsed = ref(0)         // 已等待秒数
+let prebufferTimeout: number | null = null
+let prebufferCheckTimer: number | null = null
+let loadingStatsTimer: number | null = null
+let loadingStatsStartTime = 0
+let loadingStatsLastBytes = 0
+
+/** 启动加载统计轮询（用于显示缓冲进度和速度） */
+function startLoadingStats(): void {
+  loadingStatsStartTime = Date.now()
+  loadingStatsLastBytes = TsCache.stats().bytes
+  loadingElapsed.value = 0
+  loadingSpeed.value = ''
+
+  if (loadingStatsTimer) clearInterval(loadingStatsTimer)
+  loadingStatsTimer = window.setInterval(() => {
+    const s = TsCache.stats()
+    loadingCached.value = s.entries
+    loadingTotal.value = s.totalSegments
+    loadingElapsed.value = Math.round((Date.now() - loadingStatsStartTime) / 1000)
+
+    // 计算下载速度
+    const bytesDelta = s.bytes - loadingStatsLastBytes
+    loadingStatsLastBytes = s.bytes
+    const intervalSec = 0.3
+    if (bytesDelta > 0) {
+      const speedBps = bytesDelta / intervalSec
+      if (speedBps > 1024 * 1024) {
+        loadingSpeed.value = (speedBps / 1024 / 1024).toFixed(1) + ' MB/s'
+      } else {
+        loadingSpeed.value = Math.round(speedBps / 1024) + ' KB/s'
+      }
+    } else if (loadingSpeed.value === '') {
+      loadingSpeed.value = '连接中...'
+    }
+  }, 300)
+}
+
+function stopLoadingStats(): void {
+  if (loadingStatsTimer) {
+    clearInterval(loadingStatsTimer)
+    loadingStatsTimer = null
+  }
+  loadingSpeed.value = ''
+}
+
+/** 启动预缓冲检查：等待5个TS分片或10秒超时 */
+function startPrebuffer(): void {
+  if (preBuffering.value) return
+  preBuffering.value = true
+  startLoadingStats()
+
+  // 每300ms检查一次条件
+  prebufferCheckTimer = window.setInterval(() => {
+    const s = TsCache.stats()
+    if (s.entries >= 5) {
+      console.log(`[Player] ✅ 预缓冲完成: ${s.entries} 片段已缓存 (${loadingElapsed.value}s)`)
+      stopPrebuffer()
+    }
+  }, 300)
+
+  // 10秒超时
+  prebufferTimeout = window.setTimeout(() => {
+    const s = TsCache.stats()
+    console.log(`[Player] ⏰ 预缓冲超时: ${s.entries} 片段已缓存 (10s)，开始播放`)
+    stopPrebuffer()
+  }, 10000)
+
+  console.log('[Player] 🔄 开始预缓冲 (等待5片段或10s超时)...')
+}
+
+function stopPrebuffer(): void {
+  if (!preBuffering.value) return
+  preBuffering.value = false
+  if (prebufferCheckTimer) { clearInterval(prebufferCheckTimer); prebufferCheckTimer = null }
+  if (prebufferTimeout) { clearTimeout(prebufferTimeout); prebufferTimeout = null }
+  stopLoadingStats()
+
+  // 开始播放
+  const v = getVideoEl()
+  if (v && props.autoplay !== false) {
+    loading.value = false
+    if (!v.hasAttribute('data-autoplay-done')) {
+      v.setAttribute('data-autoplay-done', '1')
+      console.log('[Player] ▶ 预缓冲完成，开始播放')
+      safePlay(true)
+    }
+  }
+}
+
 // 弹出面板状态（音量和倍速）
 const showVolumePanel = ref(false)
 const showSpeedPanel = ref(false)
+const showPlaybackSettings = ref(false)
+const autoNextEnabled = ref(true)
 const speedOptions = [0.5, 0.75, 1, 1.25, 1.5, 2]
 
+function toggleAutoNext(): void {
+  autoNextEnabled.value = !autoNextEnabled.value
+  try { localStorage.setItem('cczj_auto_next', autoNextEnabled.value ? '1' : '0') } catch { /* ignore */ }
+}
+
+// 初始化自动连播设置
+try {
+  const saved = localStorage.getItem('cczj_auto_next')
+  if (saved === '0') autoNextEnabled.value = false
+} catch { /* ignore */ }
+// 画质下拉框是否展开 —— 展开期间锁定控制条可见，避免全屏下 2.5s 自动隐藏导致面板错位
+const qualityOpen = ref(false)
+
 // ========= 画质模式 =========
-type QualityMode = 'original' | 'ai_frame_interp'
-const qualityMode = ref<QualityMode>(
-  (readSetting('quality_mode', 'original') as QualityMode) || 'original'
-)
+// 注意：'ai_enhance' 为画质增强（WebGL2 实时锐化/对比度/边缘增强/去色带），并非帧插值。
+// 兼容旧版 localStorage 中存的 'ai_frame_interp' 值（读取时映射为 'ai_enhance'）。
+type QualityMode = 'original' | 'ai_enhance'
+const qualityMode = ref<QualityMode>(normalizeQualityMode(readSetting('quality_mode', 'original')))
 const qualityOptions = [
   { value: 'original', label: '原高清' },
-  { value: 'ai_frame_interp', label: 'AI 补帧' },
+  { value: 'ai_enhance', label: '画质增强' },
 ]
+function normalizeQualityMode(v: string): QualityMode {
+  // 旧版叫 ai_frame_interp，统一迁移到 ai_enhance
+  if (v === 'ai_frame_interp') return 'ai_enhance'
+  return (v === 'ai_enhance' ? 'ai_enhance' : 'original')
+}
 const showAiWarning = ref(false)
 const aiWarningAccepted = ref(readSetting('ai_warning_accepted', '0') === '1')
 
@@ -72,7 +189,7 @@ function showQualityToast(text: string): void {
   qualityToastTimer = setTimeout(() => { qualityToastText.value = '' }, 1500)
 }
 
-// AI 补帧管线（WebGL2 实时增强）
+// 画质增强管线（WebGL2 实时增强：锐化/对比度/边缘/去色带）
 let upscaler: AiUpscaler | null = null
 let upscalerStatsTimer: ReturnType<typeof setInterval> | null = null
 const upscalerSupported = ref(false)
@@ -81,8 +198,8 @@ let _aiReady = false // 视频是否已就绪（loadedmetadata 之后），AI �
 
 function onQualityChange(value: string | number): void {
   const mode = String(value) as QualityMode
-  if (mode === 'ai_frame_interp' && !aiWarningAccepted.value) {
-    // 首次开启 AI 补帧 → 弹出警告
+  if (mode === 'ai_enhance' && !aiWarningAccepted.value) {
+    // 首次开启画质增强 → 弹出提示
     showAiWarning.value = true
     return
   }
@@ -92,11 +209,11 @@ function onQualityChange(value: string | number): void {
 function applyQualityMode(mode: QualityMode): void {
   qualityMode.value = mode
   writeSetting('quality_mode', mode)
-  if (mode === 'ai_frame_interp') {
+  if (mode === 'ai_enhance') {
     if (_aiReady) {
       startAiPipeline()
     }
-    showQualityToast('已切换至 AI 补帧（GPU 实时增强）')
+    showQualityToast('已切换至画质增强（GPU 实时增强）')
   } else {
     stopAiPipeline()
     showQualityToast('已切换至原高清')
@@ -107,7 +224,7 @@ function confirmAiMode(): void {
   aiWarningAccepted.value = true
   writeSetting('ai_warning_accepted', '1')
   showAiWarning.value = false
-  applyQualityMode('ai_frame_interp')
+  applyQualityMode('ai_enhance')
 }
 
 function cancelAiMode(): void {
@@ -158,10 +275,10 @@ async function startAiPipeline(): Promise<void> {
 
   // 定期更新性能统计
   upscalerStatsTimer = setInterval(() => {
-    if (!upscaler) { 
+    if (!upscaler) {
       if (upscalerStatsTimer) clearInterval(upscalerStatsTimer)
       upscalerStatsTimer = null
-      return 
+      return
     }
     const s = upscaler.getStats()
     upscalerStats.value = { fps: s.fps, gpuEnabled: s.gpuEnabled }
@@ -434,7 +551,24 @@ async function loadHls(video: HTMLVideoElement, url: string): Promise<void> {
       }
 
       const hls = new Hls(hlsConfig)
-      ;(video as any).__hls = hls
+        ; (video as any).__hls = hls
+
+      // ⭐ v3: 注册 ABR 降级回调 —— TsCache 检测到连续慢分片时主动降码率
+      TsCache.setAbrSwitchCallback((targetLevel: number) => {
+        if (!hls || !hls.levels || hls.levels.length <= 1) return
+        const currentLevel = hls.currentLevel >= 0 ? hls.currentLevel : hls.nextAutoLevel
+        if (targetLevel === -1) {
+          // 降一级
+          const newLevel = Math.max(0, currentLevel - 1)
+          if (newLevel < currentLevel) {
+            hls.nextAutoLevel = newLevel
+            console.log(`[Player] ⬇️ ABR 降级: level ${currentLevel} → ${newLevel} (bitrate: ${hls.levels[newLevel]?.bitrate || '?'})`)
+          }
+        } else if (targetLevel >= 0 && targetLevel < hls.levels.length) {
+          hls.nextAutoLevel = targetLevel
+          console.log(`[Player] ↕️ ABR 切换: → level ${targetLevel}`)
+        }
+      })
 
       let firstPlayTriggered = false
       hls.on(Hls.Events.MANIFEST_PARSED, (_e, data: any) => {
@@ -465,6 +599,8 @@ async function loadHls(video: HTMLVideoElement, url: string): Promise<void> {
           })
           TsCache.prefetchFromSegments(segUrls, 0, startIdx, prefetchCount)
           console.log(`[Player] 📡 TsCache 预取: 片段 #${startIdx}+${prefetchCount} 片 (共 ${segUrls.length})`)
+          // ⭐ 启动预缓冲：等待5个TS分片或10秒超时后才开始播放
+          startPrebuffer()
         }
       })
       hls.on(Hls.Events.FRAG_CHANGED, (_e, data: any) => {
@@ -560,9 +696,9 @@ function setupPlayer(): void {
 
 function bindCommonVideoEvents(video: HTMLVideoElement): void {
   if ((video as any).__eventsBound) return
-  ;(video as any).__eventsBound = true
+    ; (video as any).__eventsBound = true
 
-  video.addEventListener('play', () => { playing.value = true; loading.value = false; videoReady.value = true })
+  video.addEventListener('play', () => { playing.value = true; loading.value = false; videoReady.value = true; stopLoadingStats() })
   video.addEventListener('pause', () => { playing.value = false })
   video.addEventListener('timeupdate', () => {
     current.value = video.currentTime
@@ -588,11 +724,15 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
     }
     const savedMuted = readSetting('muted', '0') === '1'
     try { video.muted = savedMuted; muted.value = savedMuted } catch { /* ignore */ }
+    const savedSpeed = parseFloat(readSetting('speed', '1'))
+    if (isFinite(savedSpeed) && savedSpeed >= 0.5 && savedSpeed <= 2) {
+      try { video.playbackRate = savedSpeed; speed.value = savedSpeed } catch { /* ignore */ }
+    }
     updateBuffer()
     console.log(`[Player] loadedmetadata: duration=${video.duration.toFixed(1)}s, volume=${video.volume.toFixed(2)}`)
     // ⭐ 视频元数据就绪后，根据用户保存的画质模式自动启动 AI 管线
     _aiReady = true
-    if (qualityMode.value === 'ai_frame_interp') {
+    if (qualityMode.value === 'ai_enhance') {
       // 延迟启动：确保视频帧已可供 WebGL 读取
       setTimeout(() => { startAiPipeline() }, 100)
     }
@@ -600,10 +740,15 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
   video.addEventListener('progress', updateBuffer)
   video.addEventListener('seeking', updateBuffer)
   video.addEventListener('seeked', updateBuffer)
-  video.addEventListener('waiting', () => { loading.value = true })
+  video.addEventListener('waiting', () => { loading.value = true; startLoadingStats() })
   video.addEventListener('canplay', () => {
-    loading.value = false
     videoReady.value = true
+    // 预缓冲阶段：不设置 loading=false，不自动播放，等待预缓冲完成
+    if (preBuffering.value) {
+      console.log('[Player] canplay 但预缓冲尚未完成，等待中...')
+      return
+    }
+    loading.value = false
     // ⭐ 修复：视频解码出帧后才触发自动播放，避免 AbortError
     if (props.autoplay !== false && !video.hasAttribute('data-autoplay-done')) {
       video.setAttribute('data-autoplay-done', '1')
@@ -617,7 +762,7 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
     writeSetting('volume', String(video.volume))
     writeSetting('muted', video.muted ? '1' : '0')
   })
-  video.addEventListener('ratechange', () => { speed.value = video.playbackRate })
+  video.addEventListener('ratechange', () => { speed.value = video.playbackRate; writeSetting('speed', String(video.playbackRate)) })
   video.addEventListener('ended', () => {
     // 播放结束：移除当前进度（下次不跳回结尾）
     try { localStorage.removeItem(stableResumeKey()) } catch { /* ignore */ }
@@ -656,11 +801,13 @@ function jumpToSavedTime(autoRememberChoice: boolean): void {
 
 function destroyPlayerInternal(video: HTMLVideoElement): void {
   ++_playToken
+  // ⭐ v3: 清理 ABR 回调
+  TsCache.setAbrSwitchCallback(null)
   try {
     const hls = (video as any).__hls
     if (hls) {
       try { hls.destroy() } catch { /* ignore */ }
-      ;(video as any).__hls = null
+      ; (video as any).__hls = null
     }
     try { video.pause() } catch { /* ignore */ }
     try { video.removeAttribute('src') } catch { /* ignore */ }
@@ -669,6 +816,11 @@ function destroyPlayerInternal(video: HTMLVideoElement): void {
   if (cacheStatsTimer != null) { window.clearInterval(cacheStatsTimer); cacheStatsTimer = null }
   if (_saveTimer != null) { window.clearInterval(_saveTimer); _saveTimer = null }
   if (_resumeTimer != null) { window.clearInterval(_resumeTimer); _resumeTimer = null }
+  // 清理预缓冲定时器
+  preBuffering.value = false
+  if (prebufferCheckTimer) { clearInterval(prebufferCheckTimer); prebufferCheckTimer = null }
+  if (prebufferTimeout) { clearTimeout(prebufferTimeout); prebufferTimeout = null }
+  stopLoadingStats()
   stopAiPipeline()
   _aiReady = false
   cacheStats.value = { hits: 0, misses: 0, entries: 0, bytes: 0, hitRate: 0, totalSegments: 0, prefetched: 0 }
@@ -821,43 +973,125 @@ function onProgressHover(e: MouseEvent): void {
 function captureThumbnail(time: number): void {
   const v = getVideoEl()
   if (!v || !v.duration || v.readyState < 2) { progressThumbnailImg.value = ''; return }
-  try {
-    const canvas = document.createElement('canvas')
-    canvas.width = 160
-    canvas.height = 90
-    const ctx = canvas.getContext('2d')
-    if (!ctx) { progressThumbnailImg.value = ''; return }
-    // 在 video 上 seek 到指定时间会中断播放，此处用已加载的帧近似
-    // 如果 video 已加载该位置附近的数据，用 buffered 检查
-    let hasBuffer = false
-    for (let i = 0; i < v.buffered.length; i++) {
-      if (time >= v.buffered.start(i) && time <= v.buffered.end(i)) {
-        hasBuffer = true
-        break
-      }
-    }
-    if (hasBuffer) {
-      // 临时暂停然后 seek 去截图
-      const wasPlaying = !v.paused
-      if (wasPlaying) v.pause()
-      const origTime = v.currentTime
-      const onSeeked = () => {
-        v.removeEventListener('seeked', onSeeked)
-        try {
-          ctx.drawImage(v, 0, 0, canvas.width, canvas.height)
-          progressThumbnailImg.value = canvas.toDataURL('image/jpeg', 0.7)
-        } catch {
-          progressThumbnailImg.value = ''
-        }
-        if (wasPlaying) v.play().catch(() => {})
-        v.currentTime = origTime
-      }
-      v.addEventListener('seeked', onSeeked)
-      v.currentTime = time
-    }
-  } catch {
-    progressThumbnailImg.value = ''
+
+  // ⚠️ 关键：绝不修改主视频的 currentTime 来截图。
+  // 之前的实现会在 hover 时 v.currentTime = time（且不恢复），
+  // 导致"鼠标 hover 进度条就会跳转播放进度"的致命 bug。
+  // 这里改用一个独立的离屏 video 元素承载同一 src，对它 seek + drawImage，
+  // 主视频的播放进度完全不受影响。
+
+  const off = ensureThumbnailVideo(v)
+  if (!off) { progressThumbnailImg.value = ''; return }
+
+  // 立即清除旧缩略图，避免显示上一次的缓存
+  progressThumbnailImg.value = ''
+
+  let resolved = false
+  const cleanup = () => {
+    if (resolved) return
+    resolved = true
+    off.removeEventListener('seeked', onSeeked)
   }
+  const onSeeked = () => {
+    if (resolved) return
+    cleanup()
+    requestAnimationFrame(() => {
+      try {
+        const canvas = document.createElement('canvas')
+        canvas.width = 160
+        canvas.height = 90
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return
+        ctx.drawImage(off, 0, 0, canvas.width, canvas.height)
+        progressThumbnailImg.value = canvas.toDataURL('image/jpeg', 0.7)
+      } catch {
+        progressThumbnailImg.value = ''
+      }
+    })
+  }
+
+  off.addEventListener('seeked', onSeeked, { once: true })
+  // 超时保护：800ms 内未 seeked 成功则放弃（不阻塞 hover）
+  setTimeout(cleanup, 800)
+
+  try {
+    off.currentTime = Math.max(0, Math.min(off.duration || time, time))
+  } catch {
+    cleanup()
+  }
+}
+
+// 离屏 video 元素：用于缩略图预览截图，独立于主视频，可自由 seek
+let _thumbVideo: HTMLVideoElement | null = null
+let _thumbVideoSrc = ''
+let _thumbHls: any = null // 离屏 video 的 hls.js 实例（HLS 视频用）
+
+function ensureThumbnailVideo(main: HTMLVideoElement): HTMLVideoElement | null {
+  if (!_thumbVideo) {
+    _thumbVideo = document.createElement('video')
+    _thumbVideo.muted = true
+    _thumbVideo.preload = 'auto'
+    _thumbVideo.setAttribute('crossorigin', 'anonymous')
+    _thumbVideo.style.position = 'fixed'
+    _thumbVideo.style.left = '-9999px'
+    _thumbVideo.style.width = '160px'
+    _thumbVideo.style.height = '90px'
+    _thumbVideo.style.opacity = '0'
+    _thumbVideo.style.pointerEvents = 'none'
+    document.body.appendChild(_thumbVideo)
+  }
+
+  // 判断源 URL：HLS（hls.js 管理）时 main.src 为空，需用 props.url
+  const mainSrc = main.src || (main.querySelector('source') as HTMLSourceElement | null)?.src || ''
+  const effectiveSrc = mainSrc || props.url
+
+  // 源变化时重新加载
+  if (effectiveSrc && effectiveSrc !== _thumbVideoSrc) {
+    _thumbVideoSrc = effectiveSrc
+
+    // 清理旧的离屏 hls 实例
+    if (_thumbHls) {
+      try { _thumbHls.destroy() } catch { /* ignore */ }
+      _thumbHls = null
+    }
+
+    const isHlsSource = /\.m3u8(\?|$)/i.test(effectiveSrc)
+    if (isHlsSource) {
+      // HLS：为离屏 video 创建独立的 hls.js 实例
+      import('hls.js').then(({ default: Hls }) => {
+        if (!_thumbVideo || _thumbVideoSrc !== effectiveSrc) return // 已换源，放弃
+        if (Hls.isSupported()) {
+          const hls = new Hls({
+            enableWorker: false,
+            lowLatencyMode: false,
+            maxBufferLength: 10,
+            maxMaxBufferLength: 20,
+          })
+          hls.loadSource(effectiveSrc)
+          hls.attachMedia(_thumbVideo)
+          _thumbHls = hls
+        } else if (_thumbVideo.canPlayType('application/vnd.apple.mpegurl')) {
+          _thumbVideo.src = effectiveSrc
+          _thumbVideo.load()
+        }
+      }).catch(() => {
+        // hls.js 加载失败，尝试直接设置 src（Safari 原生 HLS）
+        if (_thumbVideo) {
+          _thumbVideo.src = effectiveSrc
+          _thumbVideo.load()
+        }
+      })
+    } else {
+      _thumbVideo.src = effectiveSrc
+      _thumbVideo.load()
+    }
+  }
+
+  // 修复：readyState < 2 时数据不足以 seek
+  if (!_thumbVideo || _thumbVideo.readyState < 2) {
+    return null
+  }
+  return _thumbVideo
 }
 
 function changeSpeed(s: number): void {
@@ -865,6 +1099,7 @@ function changeSpeed(s: number): void {
   if (v) {
     v.playbackRate = s
     speed.value = s
+    writeSetting('speed', String(s))
   }
   showSpeedPanel.value = false
 }
@@ -891,7 +1126,7 @@ async function toggleFullscreen(): Promise<void> {
         try {
           const isMaxNow = await WindowIsMax()
           if (!isMaxNow) WindowToggleMax()
-        } catch {}
+        } catch { }
       }
     }
     // 3) 浏览器元素级全屏兜底：同时尝试退出
@@ -946,7 +1181,7 @@ function onFsChange(): void {
 
 // ------ 控制条显示/隐藏 ------
 // 规则：
-//   · mousemove → 显示 + 启动 2.5 秒隐藏定时器（每次移动都重置）
+//   · mousemove → 显示 + 启动 3 秒隐藏定时器（每次移动都重置）
 //   · mouseleave → 延迟检查，如果鼠标在弹出面板内则不隐藏
 //   · 键盘操作（上下键等）→ 显示 + 重置定时器
 //   · 暂停时（!playing）→ 控制条保持可见（方便点击播放）
@@ -959,7 +1194,7 @@ function toggleShow(visible: boolean): void {
   if (visible) {
     hideTimer = window.setTimeout(() => {
       showControls.value = false
-    }, 2500)
+    }, 3000)
   }
 }
 
@@ -979,13 +1214,13 @@ function onMouseLeave(): void {
     const isInDropdown = Array.from(dropdownPanels).some(panel => {
       return panel.contains(activeEl) || panel.matches(':hover')
     })
-    if (!isInDropdown && !showVolumePanel.value && !showSpeedPanel.value) {
+    if (!isInDropdown && !showVolumePanel.value && !showSpeedPanel.value && !qualityOpen.value) {
       toggleShow(false)
     }
-  }, 150)
+  }, 500)
 }
 
-// 新工具：供键盘/点击调用（只刷新"可见 2.5 秒"，不会误切换显示状态）
+// 新工具：供键盘/点击调用（只刷新“可见 3 秒”，不会误切换显示状态）
 function keepVisible(): void {
   showControls.value = true
   if (hideTimer !== null) {
@@ -994,7 +1229,7 @@ function keepVisible(): void {
   }
   hideTimer = window.setTimeout(() => {
     showControls.value = false
-  }, 2500)
+  }, 3000)
 }
 
 // ------ 键盘控制（仅在鼠标位于播放器内 或 全屏时生效） ------
@@ -1042,71 +1277,73 @@ onBeforeUnmount(() => {
     try {
       if (doc.exitFullscreen) doc.exitFullscreen()
       else if (doc.webkitExitFullscreen) doc.webkitExitFullscreen()
-    } catch {}
+    } catch { }
   }
   // 2) 如果 Wails 仍在系统级全屏（历史遗留状态）→ 强制退出
   if ((window as any).go) {
     try {
       WindowIsFs().then((fs: boolean) => {
         if (fs) {
-          try { WindowSetFullscreen(false) } catch {}
+          try { WindowSetFullscreen(false) } catch { }
         }
-      }).catch(() => {})
-    } catch {}
+      }).catch(() => { })
+    } catch { }
   }
   document.body.removeAttribute('data-player-fullscreen')
+  // 清理缩略图预览用的离屏 video 元素
+  if (_thumbVideo) {
+    try {
+      if (_thumbHls) { try { _thumbHls.destroy() } catch { /* ignore */ } _thumbHls = null }
+      _thumbVideo.pause(); _thumbVideo.src = ''; _thumbVideo.load()
+    } catch { }
+    _thumbVideo.remove()
+    _thumbVideo = null
+    _thumbVideoSrc = ''
+  }
+  if (_thumbDebounceTimer) { clearTimeout(_thumbDebounceTimer); _thumbDebounceTimer = null }
 })
 
 watch(() => props.url, (newUrl) => {
   if (!newUrl) return
   setTimeout(setupPlayer, 0)
 })
+
+// 监听 loading 状态：播放中卡顿时自动显示加载统计
+watch(loading, (val) => {
+  if (val && !preBuffering.value) {
+    // 播放中卡顿，显示加载速度
+    startLoadingStats()
+  }
+})
 </script>
 
 <template>
-  <div
-    class="player-wrapper"
-    :class="{ fullscreen: isFullscreen, 'cursor-hidden': playing && !showControls }"
-    ref="wrapperRef"
-    tabindex="0"
-    @mousemove="toggleShow(true); mouseInside = true"
-    @mouseenter="mouseInside = true"
-    @mouseleave="onMouseLeave"
-    @click="onWrapperClick"
-    @dblclick.stop="toggleFullscreen()"
-    @wheel.prevent="onWheel"
-  >
+  <div class="player-wrapper" :class="{ fullscreen: isFullscreen, 'cursor-hidden': playing && !showControls }"
+    ref="wrapperRef" tabindex="0" @mousemove="toggleShow(true); mouseInside = true" @mouseenter="mouseInside = true"
+    @mouseleave="onMouseLeave" @click="onWrapperClick" @dblclick.stop="toggleFullscreen()" @wheel.prevent="onWheel">
     <!-- 顶部栏：标题 + 缓存统计 + 收藏按钮 -->
     <div v-if="showTitleBar && (showControls || !playing)" class="player-title-bar" @click.stop @dblclick.stop>
       <span class="player-title">{{ title || url }}</span>
-      <span
-        v-if="isHls(url) && cacheStats.totalSegments > 0"
-        class="cache-info"
-        :title="`命中: ${cacheStats.hits} 未命中: ${cacheStats.misses} 预取: ${cacheStats.entries}/${cacheStats.totalSegments} 片`"
-      >
+      <span v-if="isHls(url) && cacheStats.totalSegments > 0" class="cache-info"
+        :title="`命中: ${cacheStats.hits} 未命中: ${cacheStats.misses} 预取: ${cacheStats.entries}/${cacheStats.totalSegments} 片`">
         预取 {{ cacheStats.entries }}/{{ cacheStats.totalSegments }} ·
         命中 {{ (cacheStats.hitRate * 100).toFixed(0) }}%
       </span>
-      <button
-        class="fav-btn-in-player"
-        :class="{ 'is-fav': isFav }"
-        :disabled="favBusy"
-        :title="isFav ? '取消收藏' : '加入收藏'"
-        @click.stop="emit('toggleFavorite')"
-      >
+      <button class="fav-btn-in-player" :class="{ 'is-fav': isFav }" :disabled="favBusy"
+        :title="isFav ? '取消收藏' : '加入收藏'" @click.stop="emit('toggleFavorite')">
         {{ isFav ? '★' : '☆' }}
       </button>
     </div>
 
     <!-- 拖拽遮罩条：鼠标经过视频顶部时出现，可拖拽移动窗口 -->
-    <div
-      v-if="mouseInside"
-      class="player-drag-handle"
-      title="拖拽移动窗口"
-      style="--wails-draggable: drag"
-      @click.stop
-      @dblclick.stop
-    />
+    <!-- 注意：
+         1) 用 v-show 而非 v-if —— 保持元素始终在 DOM 中，避免 Wails 的
+            --wails-draggable 命中测试与动态挂载产生竞态（参考 TitleBar.vue 始终渲染）。
+         2) 不加 @click.stop / @dblclick.stop —— 这些会干扰 Wails 在 mousedown 阶段
+            的拖拽识别（参考 TitleBar.vue 的稳定写法：只设 --wails-draggable: drag）。
+         3) z-index 高于 player-title-bar，保证拖拽区不被标题栏遮住；标题栏容器
+            pointer-events:none，仅按钮区单独 pointer-events:auto。 -->
+    <div v-show="mouseInside" class="player-drag-handle" title="拖拽移动窗口" />
 
     <video class="native-video" playsinline preload="auto" @click.stop="togglePlay"></video>
 
@@ -1121,7 +1358,26 @@ watch(() => props.url, (newUrl) => {
     </transition>
 
     <div v-if="loading" class="loading">
-      <div class="spinner"></div>
+      <div class="loading-overlay">
+        <!-- 加载动画 -->
+        <img :src="loadingGif" class="loading-spinner" alt="加载中..." />
+        <!-- 缓冲信息 -->
+        <div class="loading-info" v-if="loadingTotal > 0">
+          <div class="loading-text">
+            <template v-if="preBuffering">缓冲中 {{ loadingCached }}/{{ loadingTotal }} 片段</template>
+            <template v-else>已缓存 {{ loadingCached }}/{{ loadingTotal }} 片段</template>
+          </div>
+          <div class="loading-speed" v-if="loadingSpeed">{{ loadingSpeed }}</div>
+          <div class="loading-bar-wrap">
+            <div class="loading-bar-fill" :style="{ width: (loadingTotal > 0 ? loadingCached / loadingTotal * 100 : 0) + '%' }"></div>
+          </div>
+        </div>
+        <!-- 无片段信息时显示文字提示 -->
+        <div class="loading-text" v-else-if="loadingElapsed > 0">
+          <template v-if="preBuffering">连接中... {{ loadingElapsed }}s</template>
+          <template v-else>加载中...</template>
+        </div>
+      </div>
     </div>
 
     <div v-if="errorMsg" class="player-error">
@@ -1144,17 +1400,17 @@ watch(() => props.url, (newUrl) => {
       <span>{{ qualityToastText }}</span>
     </div>
 
-    <!-- AI 补帧警告弹窗 -->
+    <!-- 画质增强提示弹窗 -->
     <div v-if="showAiWarning" class="ai-warning-overlay" @click.stop>
       <div class="ai-warning-dialog">
         <div class="ai-warning-header">
           <span class="ai-warning-icon">⚡</span>
-          <span>AI 补帧模式</span>
+          <span>画质增强模式</span>
         </div>
         <div class="ai-warning-body">
-          <p>开启 AI 补帧模式将消耗额外的系统资源：</p>
+          <p>开启画质增强模式将消耗额外的系统资源：</p>
           <ul>
-            <li><b>GPU 计算负载</b> — 将使用本地 GPU 实时处理视频帧，可能导致显卡温度升高和风扇加速</li>
+            <li><b>GPU 计算负载</b> — 将使用本地 GPU 实时处理视频帧（锐化/对比度/边缘/去色带），可能导致显卡温度升高和风扇加速</li>
             <li><b>电池消耗</b> — 笔记本设备将显著增加耗电量</li>
             <li><b>性能影响</b> — 低端设备可能出现卡顿或掉帧</li>
           </ul>
@@ -1168,14 +1424,10 @@ watch(() => props.url, (newUrl) => {
     </div>
 
     <!-- 底部控制条 -->
-    <div class="ctrl-bar" v-show="showControls || !playing" @click.stop @mousedown.stop @pointerdown.stop @dblclick.stop>
+    <div class="ctrl-bar" v-show="showControls || !playing || qualityOpen" @click.stop @mousedown.stop @pointerdown.stop
+      @dblclick.stop>
       <!-- 上一集 -->
-      <button
-        class="ctrl-btn"
-        @click="emit('prev')"
-        :disabled="!hasPrev"
-        title="上一集"
-      >
+      <button class="ctrl-btn" @click="emit('prev')" :disabled="!hasPrev" title="上一集">
         <Icon name="prev" :size="16" />
       </button>
 
@@ -1185,95 +1437,55 @@ watch(() => props.url, (newUrl) => {
       </button>
 
       <!-- 下一集 -->
-      <button
-        class="ctrl-btn"
-        @click="emit('next')"
-        :disabled="!hasNext"
-        title="下一集"
-      >
+      <button class="ctrl-btn" @click="emit('next')" :disabled="!hasNext" title="下一集">
         <Icon name="next" :size="16" />
       </button>
 
       <span class="time">{{ fmt(current) }} / {{ fmt(duration) }}</span>
 
       <!-- 进度条：三层结构（背景 / 缓冲 / 已播放）+ 透明 range input 提供拖动交互 -->
-      <div
-        class="progress-container"
-        ref="progressContainerRef"
-        @mousedown.stop="onProgressMouseDown"
-        @mousemove="onProgressHover"
-        @mouseleave="progressHoverPct = -1"
-      >
+      <div class="progress-container" ref="progressContainerRef" @mousedown.stop="onProgressMouseDown"
+        @mousemove="onProgressHover" @mouseleave="progressHoverPct = -1">
         <div class="progress-track-bg"></div>
         <div class="progress-buffer" :style="{ width: bufferPct + '%' }"></div>
         <div class="progress-played" :style="{ width: progressPct + '%' }"></div>
         <!-- 悬停预览线 -->
-        <div
-          v-if="progressHoverPct >= 0"
-          class="progress-hover-line"
-          :style="{ left: progressHoverPct + '%' }"
-        ></div>
+        <div v-if="progressHoverPct >= 0" class="progress-hover-line" :style="{ left: progressHoverPct + '%' }"></div>
         <!-- 缩略图预览 -->
-        <div
-          v-if="progressHoverPct >= 0 && progressThumbnailImg"
-          class="progress-thumbnail-preview"
-          :style="{ left: progressHoverPct + '%' }"
-        >
+        <div v-if="progressHoverPct >= 0 && progressThumbnailImg" class="progress-thumbnail-preview"
+          :style="{ left: progressHoverPct + '%' }">
           <img :src="progressThumbnailImg" />
           <span class="preview-time">{{ fmt((progressHoverPct / 100) * (duration || 0)) }}</span>
         </div>
         <!-- 当前播放位置的"独特"指示点（白色内圆 + 蓝色光晕 + 外圈） -->
-        <div
-          class="progress-thumb"
-          :style="{ left: progressPct + '%' }"
-          :class="{ playing: playing }"
-        >
+        <div class="progress-thumb" :style="{ left: progressPct + '%' }" :class="{ playing: playing }">
           <span class="thumb-halo"></span>
           <span class="thumb-core"></span>
           <span class="thumb-ring"></span>
         </div>
-        <input
-          class="progress-slider"
-          type="range"
-          min="0"
-          :max="duration || 0"
-          step="0.1"
-          :value="current"
-          @input="seek"
-        />
+        <input class="progress-slider" type="range" min="0" :max="duration || 0" step="0.1" :value="current"
+          @input="seek" />
       </div>
 
-      <!-- 画质选择 -->
+      <!-- 画质选择。
+           inline + inline-drop="up"：面板不 Teleport，留在控制条 DOM 树内，
+           (1) 解决全屏下面板 fixed 定位 rect 归零打不开；
+           (2) 解决 Teleport 后父级 scoped 的 :deep 深色样式失效（与播放页不协调）。
+           qualityOpen 状态在面板打开期间锁定控制条可见，避免 2.5s 自动隐藏导致面板错位。 -->
       <div class="quality-group" @click.stop>
-        <SelectDropdown
-          :model-value="qualityMode"
-          :options="qualityOptions"
-          size="sm"
-          @change="onQualityChange"
-        />
+        <SelectDropdown :model-value="qualityMode" :options="qualityOptions" size="sm" inline inline-drop="up"
+          @change="onQualityChange" @open-change="(v: boolean) => qualityOpen = v" />
       </div>
 
       <!-- 音量 + 垂直滑块弹出（纯 CSS hover；鼠标从图标移动到滑块不会消失） -->
       <div class="volume-group" @click.stop>
-        <button
-          class="ctrl-btn"
-          @click.stop="toggleMute(); keepVisible()"
-          :title="muted ? '取消静音' : '静音（M）'"
-        >
+        <button class="ctrl-btn" @click.stop="toggleMute(); keepVisible()" :title="muted ? '取消静音' : '静音（M）'">
           <Icon :name="muted ? 'volume-off' : 'volume'" :size="16" />
         </button>
         <div class="volume-popup" :class="{ show: showVolumePanel }" @click.stop>
           <div class="volume-slider-wrap">
-            <input
-              class="volume-slider-v"
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              :value="muted ? 0 : volume"
-              @input="onVolumeInput"
-              @change="keepVisible()"
-            />
+            <input class="volume-slider-v" type="range" min="0" max="1" step="0.05" :value="muted ? 0 : volume"
+              @input="onVolumeInput" @change="keepVisible()" />
           </div>
           <span class="volume-label">{{ Math.round((muted ? 0 : volume) * 100) }}</span>
         </div>
@@ -1281,31 +1493,42 @@ watch(() => props.url, (newUrl) => {
 
       <!-- 倍速按钮 + 弹出垂直列表（hover 显示，点击切换） -->
       <div class="speed-group" @click.stop>
-        <button
-          class="ctrl-btn speed-btn"
-          @click="showSpeedPanel = !showSpeedPanel; showVolumePanel = false; keepVisible()"
-          title="播放速度"
-        >
+        <button class="ctrl-btn speed-btn"
+          @click="showSpeedPanel = !showSpeedPanel; showVolumePanel = false; keepVisible()" title="播放速度">
           <span class="speed-text">{{ speed }}x</span>
           <Icon name="chevron-down" :size="10" />
         </button>
-        <div
-          class="speed-popup"
-          :class="{ show: showSpeedPanel }"
-        >
-          <button
-            v-for="s in speedOptions"
-            :key="s"
-            class="speed-item"
-            :class="{ active: speed === s }"
-            @click="changeSpeed(s)"
-          >
+        <div class="speed-popup" :class="{ show: showSpeedPanel }">
+          <button v-for="s in speedOptions" :key="s" class="speed-item" :class="{ active: speed === s }"
+            @click="changeSpeed(s)">
             {{ s }}x
             <Icon v-if="speed === s" name="check" :size="12" />
           </button>
         </div>
       </div>
 
+      <!-- 播放设置 -->
+      <div class="playback-settings-group" @click.stop>
+        <button class="ctrl-btn" @click="showPlaybackSettings = !showPlaybackSettings; keepVisible()" title="播放设置">
+          <Icon name="settings" :size="16" />
+        </button>
+        <div class="playback-settings-popup" :class="{ show: showPlaybackSettings }" @click.stop>
+          <div class="playback-settings-item">
+            <span>自动播放</span>
+            <label class="ps-toggle">
+              <input type="checkbox" :checked="props.autoplay" @change="emit('toggleAutoplay')" />
+              <span class="ps-switch"></span>
+            </label>
+          </div>
+          <div class="playback-settings-item">
+            <span>自动连播</span>
+            <label class="ps-toggle">
+              <input type="checkbox" :checked="autoNextEnabled" @change="toggleAutoNext" />
+              <span class="ps-switch"></span>
+            </label>
+          </div>
+        </div>
+      </div>
       <!-- 全屏 -->
       <button class="ctrl-btn" @click="toggleFullscreen" :title="isFullscreen ? '退出全屏' : '全屏（F）'">
         <Icon :name="isFullscreen ? 'exit-fullscreen' : 'fullscreen'" :size="16" />
@@ -1324,14 +1547,18 @@ watch(() => props.url, (newUrl) => {
   position: relative;
   cursor: pointer;
   overflow: hidden;
-  outline: none; /* 键盘焦点时不显示默认 outline */
+  outline: none;
+  /* 键盘焦点时不显示默认 outline */
 }
+
 .player-wrapper.cursor-hidden {
   cursor: none;
 }
+
 .player-wrapper.cursor-hidden .native-video {
   cursor: none;
 }
+
 .player-wrapper.fullscreen {
   width: 100vw;
   height: 100vh;
@@ -1340,6 +1567,7 @@ watch(() => props.url, (newUrl) => {
   margin: 0;
   padding: 0;
 }
+
 /* ====== 系统级全屏时的全局样式覆盖 ======
    当 Wails WindowFullscreen 把整个应用窗口全屏时，让父级的弹窗/遮罩/容器
    也一起扩展到整个窗口，让视频真正铺满整个屏幕（而非局限于弹窗尺寸） */
@@ -1348,6 +1576,7 @@ watch(() => props.url, (newUrl) => {
   padding: 0;
   overflow: hidden;
 }
+
 :global(body[data-player-fullscreen='1'] #app),
 :global(body[data-player-fullscreen='1'] .app-shell),
 :global(body[data-player-fullscreen='1'] .app-body),
@@ -1359,11 +1588,13 @@ watch(() => props.url, (newUrl) => {
   padding: 0 !important;
   overflow: hidden !important;
 }
+
 :global(body[data-player-fullscreen='1'] .player-modal-mask),
 :global(body[data-player-fullscreen='1'] .modal-backdrop) {
   background: #000;
   padding: 0;
 }
+
 :global(body[data-player-fullscreen='1'] .player-modal),
 :global(body[data-player-fullscreen='1'] .modal-box) {
   width: 100vw !important;
@@ -1375,13 +1606,16 @@ watch(() => props.url, (newUrl) => {
   border: none !important;
   box-shadow: none !important;
 }
+
 :global(body[data-player-fullscreen='1'] .player-modal-top),
 :global(body[data-player-fullscreen='1'] .modal-head) {
   display: none;
 }
+
 :global(body[data-player-fullscreen='1'] .player-modal-body) {
   padding: 0;
 }
+
 :global(body[data-player-fullscreen='1'] .player-col-main),
 :global(body[data-player-fullscreen='1'] .player-box),
 :global(body[data-player-fullscreen='1'] .player-wrap),
@@ -1391,11 +1625,14 @@ watch(() => props.url, (newUrl) => {
   padding: 0;
   margin: 0;
 }
+
 :global(body[data-player-fullscreen='1'] .player-col-side) {
   display: none;
 }
 
-/* 顶部栏：标题 + 缓存统计 + 关闭按钮（右） */
+/* 顶部栏：标题 + 缓存统计 + 关闭按钮（右）
+   容器设为 pointer-events:none，让拖拽事件穿透到下层的 player-drag-handle；
+   内部需要交互的元素（收藏按钮等）单独 pointer-events:auto。 */
 .player-title-bar {
   position: absolute;
   top: 0;
@@ -1408,30 +1645,42 @@ watch(() => props.url, (newUrl) => {
   background: linear-gradient(to bottom, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0));
   color: #fff;
   font-size: 13px;
-  z-index: 25;
+  z-index: 24;
   box-sizing: border-box;
+  pointer-events: none;
 }
 
-/* 拖拽遮罩条：鼠标经过视频顶部时浮现，可拖拽移动整个窗口 */
+/* 标题栏内所有可点击元素恢复交互 */
+.player-title-bar button,
+.player-title-bar .fav-btn-in-player {
+  pointer-events: auto;
+}
+
+/* 拖拽遮罩条：鼠标经过视频顶部时浮现，可拖拽移动整个窗口。
+   z-index 高于 player-title-bar(24)，确保拖拽区不被遮住。 */
 .player-drag-handle {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   height: 34px;
-  z-index: 20;
+  z-index: 30;
   cursor: grab;
   background: linear-gradient(to bottom, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.25), transparent);
-  /* Wails v3 在 Windows WebView2 下使用 --wails-draggable: drag 来实现窗口拖拽 */
+  /* Wails v3 在 Windows WebView2 下使用 --wails-draggable: drag 来实现窗口拖拽。
+     放在 CSS 而非 inline style，避免被 Vue 的 style 绑定覆盖。 */
   --wails-draggable: drag;
   transition: opacity 0.2s ease, background 0.2s ease;
 }
+
 .player-drag-handle:hover {
   background: linear-gradient(to bottom, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.35), transparent);
 }
+
 .player-drag-handle:active {
   cursor: grabbing;
 }
+
 .player-title {
   color: #fff;
   font-size: 13px;
@@ -1458,19 +1707,23 @@ watch(() => props.url, (newUrl) => {
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
 }
+
 .fav-btn-in-player:hover {
   background: rgba(255, 255, 255, 0.22);
   transform: scale(1.08);
 }
+
 .fav-btn-in-player:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   transform: none;
 }
+
 .fav-btn-in-player.is-fav {
   color: #fbbf24;
   background: rgba(251, 191, 36, 0.18);
 }
+
 .fav-btn-in-player.is-fav:hover {
   background: rgba(251, 191, 36, 0.3);
 }
@@ -1484,6 +1737,7 @@ watch(() => props.url, (newUrl) => {
   flex: 1;
   min-width: 0;
 }
+
 .cache-info {
   flex: none;
   color: #7ee2b8;
@@ -1494,6 +1748,7 @@ watch(() => props.url, (newUrl) => {
   border-radius: 999px;
   white-space: nowrap;
 }
+
 /* ========= 视频元素 ========= */
 .native-video {
   width: 100%;
@@ -1503,6 +1758,7 @@ watch(() => props.url, (newUrl) => {
   object-fit: contain;
   outline: none;
 }
+
 .player-wrapper.fullscreen .native-video {
   /* 全屏时仍然保持比例，避免裁切画面 */
   object-fit: contain;
@@ -1512,19 +1768,70 @@ watch(() => props.url, (newUrl) => {
 
 /* ========= 加载动画 ========= */
 .loading {
-  position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   pointer-events: none;
   z-index: 3;
 }
-.spinner {
-  width: 42px; height: 42px;
-  border: 3px solid rgba(255,255,255,0.15);
-  border-top-color: #1890ff;
-  border-radius: 50%;
-  animation: spin 0.9s linear infinite;
+
+.loading-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 28px 36px;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 12px;
+  backdrop-filter: blur(6px);
+  min-width: 220px;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
+
+.loading-spinner {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+}
+
+.loading-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.loading-text {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.loading-speed {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.loading-bar-wrap {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.loading-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #1890ff 0%, #40a9ff 100%);
+  border-radius: 2px;
+  transition: width 0.4s ease;
+  box-shadow: 0 0 6px rgba(24, 144, 255, 0.5);
+}
 
 /* ========= 错误提示 ========= */
 .player-error {
@@ -1535,7 +1842,9 @@ watch(() => props.url, (newUrl) => {
   padding: 10px 14px;
   background: rgba(220, 53, 69, 0.92);
   color: #fff;
-  display: flex; align-items: center; gap: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 13px;
   border-radius: 8px;
   z-index: 4;
@@ -1550,8 +1859,9 @@ watch(() => props.url, (newUrl) => {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 14px 16px;
-  background: linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0));
+  padding: 120px 16px 14px 16px;
+  /* 上方留出 120px 空间给缩略图预览 */
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.85) 60px, rgba(0, 0, 0, 0) 100%);
   color: #fff;
   font-size: 12px;
   user-select: none;
@@ -1569,17 +1879,21 @@ watch(() => props.url, (newUrl) => {
   min-width: 32px;
   border-radius: 6px;
   cursor: pointer;
-  display: inline-flex; align-items: center; justify-content: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   gap: 4px;
   transition: all 0.15s;
   flex-shrink: 0;
   font-size: 11px;
   font-family: inherit;
 }
+
 .ctrl-btn:hover:not(:disabled) {
   background: rgba(24, 144, 255, 0.25);
   color: #40a9ff;
 }
+
 .ctrl-btn:disabled {
   opacity: 0.35;
   cursor: not-allowed;
@@ -1590,6 +1904,7 @@ watch(() => props.url, (newUrl) => {
   height: 36px;
   min-width: 36px;
 }
+
 .play-btn:hover:not(:disabled) {
   background: rgba(24, 144, 255, 0.35);
 }
@@ -1599,19 +1914,21 @@ watch(() => props.url, (newUrl) => {
   min-width: 100px;
   text-align: center;
   flex-shrink: 0;
-  color: rgba(255,255,255,0.85);
+  color: rgba(255, 255, 255, 0.85);
 }
 
 /* ============ 进度条（重构：三层轨道 + 独特滑块） ============ */
 .progress-container {
   position: relative;
   flex: 1;
-  height: 18px;               /* 更大的点击热区，避免误触 */
+  height: 18px;
+  /* 更大的点击热区，避免误触 */
   display: flex;
   align-items: center;
   cursor: pointer;
   user-select: none;
 }
+
 .progress-track-bg,
 .progress-buffer,
 .progress-played {
@@ -1624,21 +1941,26 @@ watch(() => props.url, (newUrl) => {
   transition: height 0.15s ease;
   pointer-events: none;
 }
+
 .progress-container:hover .progress-track-bg,
 .progress-container:hover .progress-buffer,
 .progress-container:hover .progress-played {
-  height: 6px;        /* 悬停时变粗，给用户反馈 */
+  height: 6px;
+  /* 悬停时变粗，给用户反馈 */
 }
+
 .progress-track-bg {
   width: 100%;
   background: rgba(255, 255, 255, 0.18);
 }
+
 /* 缓冲层（灰色/淡色）—— 代表已经下载到的位置 */
 .progress-buffer {
   background: rgba(255, 255, 255, 0.42);
   width: 0;
   transition: width 0.35s ease;
 }
+
 /* 已播放（蓝色渐变） */
 .progress-played {
   background: linear-gradient(90deg, #1890ff 0%, #40a9ff 60%, #69c0ff 100%);
@@ -1658,9 +1980,11 @@ watch(() => props.url, (newUrl) => {
   transition: transform 0.15s ease;
   z-index: 2;
 }
+
 .progress-container:hover .progress-thumb {
   transform: translate(-50%, -50%) scale(1);
 }
+
 .thumb-core {
   position: absolute;
   inset: 4px;
@@ -1668,6 +1992,7 @@ watch(() => props.url, (newUrl) => {
   border-radius: 50%;
   box-shadow: 0 0 4px rgba(255, 255, 255, 0.9);
 }
+
 .thumb-ring {
   position: absolute;
   inset: 0;
@@ -1675,6 +2000,7 @@ watch(() => props.url, (newUrl) => {
   border: 2px solid #40a9ff;
   box-shadow: 0 0 0 1px rgba(24, 144, 255, 0.5);
 }
+
 .thumb-halo {
   position: absolute;
   inset: -4px;
@@ -1682,13 +2008,24 @@ watch(() => props.url, (newUrl) => {
   background: radial-gradient(circle, rgba(64, 169, 255, 0.35) 0%, transparent 70%);
   opacity: 0.9;
 }
+
 /* 播放中：外层光环轻微呼吸 */
 .progress-thumb.playing .thumb-halo {
   animation: thumb-breathe 1.8s ease-in-out infinite;
 }
+
 @keyframes thumb-breathe {
-  0%, 100% { transform: scale(1); opacity: 0.6; }
-  50%      { transform: scale(1.2); opacity: 1; }
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
 }
 
 /* 透明 range input 覆盖在整个容器上 —— 只负责交互（拖动），不显示默认外观 */
@@ -1707,10 +2044,12 @@ watch(() => props.url, (newUrl) => {
   cursor: pointer;
   z-index: 3;
 }
+
 .progress-slider::-webkit-slider-runnable-track {
   background: transparent;
   height: 100%;
 }
+
 .progress-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 16px;
@@ -1720,9 +2059,11 @@ watch(() => props.url, (newUrl) => {
   margin-top: 0;
   cursor: pointer;
 }
+
 .progress-slider::-moz-range-track {
   background: transparent;
 }
+
 .progress-slider::-moz-range-thumb {
   width: 16px;
   height: 16px;
@@ -1755,13 +2096,16 @@ watch(() => props.url, (newUrl) => {
   overflow: hidden;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
   border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.6);
 }
+
 .progress-thumbnail-preview img {
   display: block;
   width: 160px;
   height: 90px;
   object-fit: cover;
 }
+
 .progress-thumbnail-preview .preview-time {
   display: block;
   text-align: center;
@@ -1781,6 +2125,7 @@ watch(() => props.url, (newUrl) => {
   display: inline-flex;
   align-items: center;
 }
+
 /* 桥接区：从按钮到 popup 之间不会丢失 hover */
 .volume-group::before {
   content: '';
@@ -1792,12 +2137,14 @@ watch(() => props.url, (newUrl) => {
   pointer-events: auto;
   z-index: 1;
 }
+
 .volume-group:hover .volume-popup,
 .volume-popup.show {
   opacity: 1;
   pointer-events: auto;
   transform: translateX(-50%) translateY(0);
 }
+
 .volume-popup {
   position: absolute;
   bottom: calc(100% + 6px);
@@ -1819,14 +2166,17 @@ watch(() => props.url, (newUrl) => {
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55);
   z-index: 15;
 }
+
 .volume-slider-wrap {
   position: relative;
   width: 32px;
-  height: 120px;   /* 垂直滑块轨道高度 */
+  height: 120px;
+  /* 垂直滑块轨道高度 */
   display: flex;
   align-items: center;
   justify-content: center;
 }
+
 .volume-slider-v {
   /* 水平方向的 input，轨道宽 120px → 旋转 90° 后变成 120px 高 */
   width: 120px;
@@ -1841,22 +2191,27 @@ watch(() => props.url, (newUrl) => {
   cursor: pointer;
   accent-color: #1890ff;
 }
+
 .volume-slider-v::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 16px; height: 16px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: #1890ff;
   border: 2px solid #fff;
   box-shadow: 0 0 0 4px rgba(24, 144, 255, 0.18);
   cursor: pointer;
 }
+
 .volume-slider-v::-moz-range-thumb {
-  width: 16px; height: 16px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: #1890ff;
   border: 2px solid #fff;
   cursor: pointer;
 }
+
 .volume-label {
   font-size: 11px;
   color: rgba(255, 255, 255, 0.85);
@@ -1871,6 +2226,7 @@ watch(() => props.url, (newUrl) => {
   display: inline-flex;
   align-items: center;
 }
+
 /* 桥接区：从按钮到 popup 之间不会丢失 hover */
 .speed-group::before {
   content: '';
@@ -1882,21 +2238,25 @@ watch(() => props.url, (newUrl) => {
   pointer-events: auto;
   z-index: 1;
 }
+
 .speed-group:hover .speed-popup,
 .speed-popup.show {
   opacity: 1;
   pointer-events: auto;
   transform: translateY(0);
 }
+
 .speed-btn {
   min-width: 52px;
   padding: 0 8px;
 }
+
 .speed-text {
   font-weight: 600;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
+
 .speed-popup {
   position: absolute;
   bottom: calc(100% + 10px);
@@ -1916,11 +2276,13 @@ watch(() => props.url, (newUrl) => {
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
   z-index: 10;
 }
+
 .speed-popup.show {
   opacity: 1;
   pointer-events: auto;
   transform: translateY(0);
 }
+
 .speed-item {
   display: flex;
   align-items: center;
@@ -1938,21 +2300,119 @@ watch(() => props.url, (newUrl) => {
   transition: all 0.1s ease;
   font-variant-numeric: tabular-nums;
 }
+
 .speed-item:hover {
   background: rgba(24, 144, 255, 0.18);
   color: #fff;
 }
+
 .speed-item.active {
   background: rgba(24, 144, 255, 0.3);
   color: #40a9ff;
   font-weight: 600;
 }
 
+/* ========= 播放设置弹出面板 ========= */
+.playback-settings-group {
+  position: relative;
+}
+.playback-settings-popup {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  right: 0;
+  background: rgba(20, 20, 20, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 160px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(6px);
+  transition: all 0.18s ease;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  z-index: 10;
+}
+.playback-settings-popup.show {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+.playback-settings-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.86rem;
+  border-radius: 6px;
+  gap: 12px;
+}
+.playback-settings-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.ps-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+.ps-toggle input {
+  display: none;
+}
+.ps-switch {
+  position: relative;
+  width: 32px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+.ps-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+.ps-toggle input:checked ~ .ps-switch {
+  background: #1890ff;
+}
+.ps-toggle input:checked ~ .ps-switch::after {
+  transform: translateX(14px);
+}
+.ps-select {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  color: #fff;
+  padding: 3px 6px;
+  font-size: 0.79rem;
+  font-family: inherit;
+  cursor: pointer;
+  outline: none;
+}
+.ps-select:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+.ps-select option {
+  background: #1a1a1a;
+  color: #fff;
+}
+
 /* ========= B 站风格：底部左侧继续播放小提示 ========= */
 .resume-bili {
   position: absolute;
   left: 12px;
-  bottom: 52px;     /* 放在控制条上方 */
+  bottom: 52px;
+  /* 放在控制条上方 */
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -1965,15 +2425,25 @@ watch(() => props.url, (newUrl) => {
   border: 1px solid rgba(255, 255, 255, 0.08);
   animation: slideInLeft 0.3s ease;
 }
+
 @keyframes slideInLeft {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
+
 .resume-bili-text b {
   color: #40a9ff;
   font-weight: 600;
   margin: 0 2px;
 }
+
 .resume-bili-link {
   background: transparent;
   color: #40a9ff;
@@ -1985,13 +2455,16 @@ watch(() => props.url, (newUrl) => {
   font-family: inherit;
   transition: all 0.15s;
 }
+
 .resume-bili-link:hover {
   background: rgba(24, 144, 255, 0.2);
   color: #fff;
 }
+
 .resume-bili-dismiss {
   color: rgba(255, 255, 255, 0.65);
 }
+
 .resume-bili-dismiss:hover {
   background: rgba(255, 255, 255, 0.08);
   color: #fff;
@@ -2015,9 +2488,17 @@ watch(() => props.url, (newUrl) => {
   animation: quality-toast-in 0.3s ease;
   border-left: 3px solid #40a9ff;
 }
+
 @keyframes quality-toast-in {
-  from { opacity: 0; transform: translateX(-10px); }
-  to   { opacity: 1; transform: translateX(0); }
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 /* ========= 音量 toast（键盘调节音量 1 秒显示） ========= */
@@ -2040,6 +2521,7 @@ watch(() => props.url, (newUrl) => {
   backdrop-filter: blur(6px);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 }
+
 .volume-toast-bar {
   width: 100%;
   height: 6px;
@@ -2047,20 +2529,26 @@ watch(() => props.url, (newUrl) => {
   border-radius: 3px;
   overflow: hidden;
 }
+
 .volume-toast-fill {
   height: 100%;
   background: #1890ff;
   transition: width 0.18s ease;
 }
+
 .volume-toast-text {
   font-size: 16px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
-.fade-enter-active, .fade-leave-active {
+
+.fade-enter-active,
+.fade-leave-active {
   transition: opacity 0.2s ease;
 }
-.fade-enter-from, .fade-leave-to {
+
+.fade-enter-from,
+.fade-leave-to {
   opacity: 0;
 }
 
@@ -2069,9 +2557,11 @@ watch(() => props.url, (newUrl) => {
   flex-shrink: 0;
   margin: 0 2px;
 }
+
 .quality-group :deep(.select-dropdown) {
   min-width: 100px;
 }
+
 .quality-group :deep(.select-trigger) {
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.12);
@@ -2081,36 +2571,38 @@ watch(() => props.url, (newUrl) => {
   min-height: 26px;
   border-radius: 4px;
 }
+
 .quality-group :deep(.select-trigger:hover) {
   border-color: rgba(24, 144, 255, 0.5);
   color: #fff;
   background: rgba(24, 144, 255, 0.15);
 }
+
 .quality-group :deep(.select-panel) {
   background: rgba(20, 20, 20, 0.96);
   border-color: rgba(255, 255, 255, 0.1);
   font-size: 12px;
-  bottom: 100%;
-  top: auto;
-  margin-bottom: 6px;
   border-radius: 6px;
   min-width: 120px;
 }
+
 .quality-group :deep(.option) {
   color: rgba(255, 255, 255, 0.75);
   padding: 6px 10px;
   font-size: 12px;
 }
+
 .quality-group :deep(.option:hover) {
   background: rgba(24, 144, 255, 0.15);
   color: #fff;
 }
+
 .quality-group :deep(.option.is-selected) {
   background: rgba(24, 144, 255, 0.25);
   color: #40a9ff;
 }
 
-/* ========= AI 补帧警告弹窗 ========= */
+/* ========= 画质增强提示弹窗 ========= */
 .ai-warning-overlay {
   position: absolute;
   inset: 0;
@@ -2122,10 +2614,17 @@ watch(() => props.url, (newUrl) => {
   backdrop-filter: blur(4px);
   animation: fadeIn 0.2s ease;
 }
+
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
+
 .ai-warning-dialog {
   background: rgba(28, 28, 36, 0.98);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -2136,6 +2635,7 @@ watch(() => props.url, (newUrl) => {
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
   color: #fff;
 }
+
 .ai-warning-header {
   display: flex;
   align-items: center;
@@ -2145,33 +2645,41 @@ watch(() => props.url, (newUrl) => {
   margin-bottom: 16px;
   color: #ffa940;
 }
+
 .ai-warning-icon {
   font-size: 22px;
 }
+
 .ai-warning-body {
   font-size: 13px;
   color: rgba(255, 255, 255, 0.75);
   line-height: 1.6;
 }
+
 .ai-warning-body p {
   margin: 0 0 8px;
 }
+
 .ai-warning-body ul {
   margin: 0 0 12px;
   padding-left: 20px;
 }
+
 .ai-warning-body li {
   margin-bottom: 6px;
 }
+
 .ai-warning-body b {
   color: #ffa940;
   font-weight: 600;
 }
+
 .ai-warning-note {
   font-size: 12px;
   color: rgba(255, 255, 255, 0.5);
   margin-top: 8px;
 }
+
 .ai-warning-footer {
   display: flex;
   justify-content: flex-end;
@@ -2180,6 +2688,7 @@ watch(() => props.url, (newUrl) => {
   padding-top: 16px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
+
 .ai-warning-btn {
   padding: 8px 20px;
   border-radius: 4px;
@@ -2190,18 +2699,22 @@ watch(() => props.url, (newUrl) => {
   font-family: inherit;
   transition: all 0.15s ease;
 }
+
 .ai-warning-btn--cancel {
   background: rgba(255, 255, 255, 0.08);
   color: rgba(255, 255, 255, 0.6);
 }
+
 .ai-warning-btn--cancel:hover {
   background: rgba(255, 255, 255, 0.15);
   color: #fff;
 }
+
 .ai-warning-btn--confirm {
   background: #ff7a00;
   color: #fff;
 }
+
 .ai-warning-btn--confirm:hover {
   background: #ff9426;
   transform: translateY(-1px);

@@ -123,7 +123,7 @@ func FetchVideoDetail(apiUrl string, vodId string) (*model.Video, error) {
 		return nil, fmt.Errorf("parse url: %w", err)
 	}
 	q := u.Query()
-	q.Set("ac", "videolist")
+	q.Set("ac", "detail")
 	q.Set("ids", vodId)
 	u.RawQuery = q.Encode()
 	target := u.String()

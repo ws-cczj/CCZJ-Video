@@ -6,12 +6,9 @@ import { GetRecentHistory, DeleteHistoryByVideo } from '../../bindings/cczjVideo
 import { useSourceStore } from '../stores/source'
 import { useVideoStore, type VideoFilter } from '../stores/video'
 import VideoCard from '../components/VideoCard.vue'
-import LoadingSpinner from '../components/LoadingSpinner.vue'
-import EmptyState from '../components/EmptyState.vue'
-import SelectDropdown from '../components/SelectDropdown.vue'
-import Carousel from '../components/Carousel.vue'
+import { Button, Tag, Spinner as LoadingSpinner, Empty as EmptyState, Select as SelectDropdown } from '../components/ui'
+import BookCarousel from '../components/BookCarousel.vue'
 import Icon from '../components/Icon.vue'
-import { Button, Tag } from '../components/ui'
 import { getDetailPath } from '../utils'
 import type { Video } from '../types'
 
@@ -382,7 +379,7 @@ watch(
                 </Button>
               </div>
             </template>
-            <template v-else>
+            <template v-else-if="group.items && group.items.length > 0">
               <VideoCard
                 v-for="(item, idx) in group.items"
                 :key="`rec-${group.key}-${String((item as any).vod_id ?? '')}-${idx}`"
@@ -408,8 +405,6 @@ watch(
         </Button>
       </div>
       
-      <Carousel v-if="carouselSlides.length > 0" :slides="carouselSlides" :source-key="sourceStore.currentSourceKey" />
-
       <!-- 类型：始终显示 -->
       <div class="filter-row">
         <label class="filter-row-label">类型</label>
@@ -480,6 +475,8 @@ watch(
         已筛选出 <span class="highlight">{{ videoStore.total }}</span> 条结果
       </div>
     </section>
+
+    <BookCarousel v-if="carouselSlides.length > 0" :slides="carouselSlides" :source-key="sourceStore.currentSourceKey" />
 
     <!-- ============ 视频网格 / 空状态 ============ -->
     <div v-if="videoStore.loading && videoStore.videos.length === 0" class="center-pad">

@@ -12,8 +12,10 @@ import { useConfirmStore } from '../stores/confirm'
 import { useDownloadStore } from '../stores/download'
 import { useDevMode } from '../stores/devMode'
 import Icon from '../components/Icon.vue'
-import SelectDropdown from '../components/SelectDropdown.vue'
-import { Button, Modal, Segment } from '../components/ui'
+import { Button, Modal, Segment, Select as SelectDropdown } from '../components/ui'
+import { useI18n } from '../locales'
+
+const { t, setLocale } = useI18n()
 
 // ---------- 分组配置（顶部 tab） ----------
 interface GroupItem {
@@ -21,13 +23,12 @@ interface GroupItem {
   label: string
   icon: string
 }
-const GROUPS: GroupItem[] = [
-  { id: 'basic',  label: '基本设置', icon: 'sliders' },
-  { id: 'theme',  label: '主题外观', icon: 'palette' },
-  { id: 'play',   label: '播放设置', icon: 'play' },
-  { id: 'search', label: '搜索设置', icon: 'search' },
-  { id: 'about',  label: '关于应用', icon: 'info' },
-]
+const GROUPS = computed<GroupItem[]>(() => [
+  { id: 'basic',  label: t('settings.basic'), icon: 'sliders' },
+  { id: 'theme',  label: t('settings.theme'), icon: 'palette' },
+  { id: 'play',   label: t('settings.playback'), icon: 'play' },
+  { id: 'about',  label: t('settings.about'), icon: 'info' },
+])
 
 const themeStore = useThemeStore()
 const errorStore = useErrorStore()
@@ -46,32 +47,53 @@ const layoutDensity = ref<'comfortable' | 'compact'>('comfortable')
 const playbackAutoPlay = ref(true)
 const playbackAutoNext = ref(true)
 const playbackSpeed = ref<number>(1)
-const searchHistoryKeep = ref<number>(100)
+
 
 // 窗口设置
 const windowResizable = ref(true)
 const windowWidth = ref<number>(1280)
 const windowHeight = ref<number>(800)
-const applyingWindowSize = ref(false)
+
+// 窗口尺寸预设：更小/小/中/大/更大/超大/巨大
+const windowSizePresets = computed(() => [
+  { key: 'xs',   label: t('settings.windowSizePresets.xs'), width: 1024, height: 640 },
+  { key: 'sm',   label: t('settings.windowSizePresets.sm'), width: 1152, height: 720 },
+  { key: 'md',   label: t('settings.windowSizePresets.md'), width: 1280, height: 800 },
+  { key: 'lg',   label: t('settings.windowSizePresets.lg'), width: 1366, height: 854 },
+  { key: 'xl',   label: t('settings.windowSizePresets.xl'), width: 1440, height: 900 },
+  { key: 'xxl',  label: t('settings.windowSizePresets.xxl'), width: 1600, height: 1000 },
+  { key: 'huge', label: t('settings.windowSizePresets.huge'), width: 1920, height: 1080 },
+])
+const windowSizeKey = ref('md')
+
+// 字体大小预设：更小/小/标准/大/更大/非常大
+const fontSizePresets = computed(() => [
+  { key: 'xs',    label: t('settings.fontSizePresets.xs'), px: 12 },
+  { key: 'sm',    label: t('settings.fontSizePresets.sm'), px: 13 },
+  { key: 'md',    label: t('settings.fontSizePresets.md'), px: 14 },
+  { key: 'lg',    label: t('settings.fontSizePresets.lg'), px: 16 },
+  { key: 'xl',    label: t('settings.fontSizePresets.xl'), px: 18 },
+  { key: 'xxl',   label: t('settings.fontSizePresets.xxl'), px: 20 },
+])
+const fontSizeKey = ref('md')
 
 // 字体设置
-const fontSize = ref<number>(14)
-const fontFamily = ref<string>('system')
+const fontFamily = ref<string>('')
+const fontFamilyOptions = computed(() => [
+  { value: '',     label: t('settings.fontOptions.default') },
+  { value: '"Microsoft YaHei", "微软雅黑", sans-serif', label: t('settings.fontOptions.yahei') },
+  { value: '"Source Han Sans SC", "思源黑体", sans-serif', label: t('settings.fontOptions.sourceHan') },
+  { value: '"SimSun", "宋体", serif', label: t('settings.fontOptions.simsun') },
+  { value: '"KaiTi", "楷体", serif', label: t('settings.fontOptions.kaiti') },
+])
+
+// 语言
 const language = ref<string>('zh-CN')
-
-const fontFamilyOptions = [
-  { value: 'system', label: '系统默认' },
-  { value: '"Microsoft YaHei", "微软雅黑", sans-serif', label: '微软雅黑' },
-  { value: '"Source Han Sans SC", "思源黑体", sans-serif', label: '思源黑体' },
-  { value: '"SimSun", "宋体", serif', label: '宋体' },
-  { value: '"KaiTi", "楷体", serif', label: '楷体' },
-]
-
-const languageOptions = [
-  { value: 'zh-CN', label: '简体中文' },
-  { value: 'zh-TW', label: '繁體中文' },
-  { value: 'en', label: 'English' },
-]
+const languageOptions = computed(() => [
+  { value: 'zh-CN', label: t('settings.languageOptions.zhCN') },
+  { value: 'zh-TW', label: t('settings.languageOptions.zhTW') },
+  { value: 'en',    label: t('settings.languageOptions.en') },
+])
 
 async function loadWindowResizable(): Promise<void> {
   try { windowResizable.value = await WindowGetResizable() } catch { /* 忽略 */ }
@@ -87,24 +109,37 @@ async function loadWindowSize(): Promise<void> {
     if (!size) return
     windowWidth.value = size.width
     windowHeight.value = size.height
+    // 匹配最近的预设
+    const match = windowSizePresets.value.find(p => p.width === size.width && p.height === size.height)
+    if (match) windowSizeKey.value = match.key
   } catch { /* 忽略 */ }
 }
 
-async function applyWindowSize(): Promise<void> {
-  if (applyingWindowSize.value) return
-  applyingWindowSize.value = true
-  try {
-    await WindowSetSize(windowWidth.value, windowHeight.value)
-  } catch { /* 忽略 */ }
-  finally { applyingWindowSize.value = false }
+async function applyWindowPreset(key: string): Promise<void> {
+  windowSizeKey.value = key
+  const preset = windowSizePresets.value.find(p => p.key === key)
+  if (!preset) return
+  windowWidth.value = preset.width
+  windowHeight.value = preset.height
+  try { await WindowSetSize(preset.width, preset.height) } catch { /* 忽略 */ }
+  await save('window_size_key', key)
+}
+
+function applyFontPreset(key: string): void {
+  fontSizeKey.value = key
+  const preset = fontSizePresets.value.find(p => p.key === key)
+  if (!preset) return
+  document.documentElement.style.fontSize = preset.px + 'px'
+  document.documentElement.style.setProperty('--font-size-base', preset.px + 'px')
+  save('font_size_key', key)
 }
 
 function applyFontFamily(): void {
-  document.documentElement.style.fontFamily = fontFamily.value
-}
-
-function applyFontSize(): void {
-  document.documentElement.style.fontSize = fontSize.value + 'px'
+  if (fontFamily.value) {
+    document.documentElement.style.fontFamily = fontFamily.value
+  } else {
+    document.documentElement.style.removeProperty('font-family')
+  }
 }
 
 // 关闭行为 & 重启
@@ -446,7 +481,7 @@ function pickTheme(id: string): void {
 // ---------- 启动 ----------
 onMounted(async () => {
   const hash = (route.hash || '').replace('#', '').trim()
-  const validIds = GROUPS.map(g => g.id)
+  const validIds = GROUPS.value.map(g => g.id)
   if (hash && validIds.includes(hash)) {
     activeGroup.value = hash
   }
@@ -461,21 +496,22 @@ onMounted(async () => {
   playbackAutoPlay.value = (await safeGet('playback_auto_play', '1')) !== '0'
   playbackAutoNext.value = (await safeGet('playback_auto_next', '1')) !== '0'
   playbackSpeed.value = parseFloat(await safeGet('playback_speed', '1')) || 1
-  searchHistoryKeep.value = parseInt(await safeGet('search_history_keep', '100'), 10) || 100
 
   // 加载窗口设置
   await loadWindowResizable()
   await loadWindowSize()
+  const wsk = await safeGet('window_size_key', 'md')
+  if (windowSizePresets.value.find(p => p.key === wsk)) windowSizeKey.value = wsk
 
   // 加载字体设置
-  const fs = await safeGet('font_size', '14')
-  fontSize.value = parseInt(fs, 10) || 14
-  const ff = await safeGet('font_family', 'system')
-  fontFamily.value = ff || 'system'
+  const fsk = await safeGet('font_size_key', 'md')
+  if (fontSizePresets.value.find(p => p.key === fsk)) fontSizeKey.value = fsk
+  applyFontPreset(fontSizeKey.value)
+  const ff = await safeGet('font_family', '')
+  fontFamily.value = ff
+  applyFontFamily()
   const lang = await safeGet('language', 'zh-CN')
   language.value = lang || 'zh-CN'
-  applyFontSize()
-  applyFontFamily()
 
   // 加载关闭行为设置
   await loadCloseBehavior()
@@ -510,47 +546,48 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
     <div class="content">
       <!-- ========== 基本设置 ========== -->
       <div v-if="activeGroup === 'basic'" class="panel">
-        <!-- 窗口尺寸 -->
+
+        <!-- 窗口尺寸（预设单选） -->
         <section class="block">
-          <h3>窗口尺寸</h3>
-          <div class="row window-size-row">
-            <div class="input-group">
-              <label>宽度</label>
-              <input type="number" v-model.number="windowWidth" min="800" max="3840" step="10" class="num-input" />
-              <span class="unit">px</span>
-            </div>
-            <span class="size-sep">×</span>
-            <div class="input-group">
-              <label>高度</label>
-              <input type="number" v-model.number="windowHeight" min="500" max="2160" step="10" class="num-input" />
-              <span class="unit">px</span>
-            </div>
-            <button class="apply-btn" :disabled="applyingWindowSize" @click="applyWindowSize">
-              {{ applyingWindowSize ? '应用中…' : '应用' }}
-            </button>
+          <h3>{{ t('settings.windowSize') }}</h3>
+          <div class="radio-group">
+            <label v-for="p in windowSizePresets" :key="p.key" class="radio-item"
+              :class="{ checked: windowSizeKey === p.key }"
+              @click="applyWindowPreset(p.key)"
+            >
+              <span class="radio-box">
+                <Icon v-if="windowSizeKey === p.key" name="check" :size="12" />
+              </span>
+              <span class="radio-label">{{ p.label }}</span>
+            </label>
           </div>
           <div class="row" style="margin-top: 10px;">
             <label class="toggle">
               <input type="checkbox" v-model="windowResizable" @change="saveWindowResizable" />
-              <span>允许拖动调整窗口大小</span>
+              <span>{{ t('settings.allowResize') }}</span>
             </label>
           </div>
         </section>
 
-        <!-- 字体大小 -->
+        <!-- 字体大小（预设单选） -->
         <section class="block">
-          <h3>字体大小</h3>
-          <div class="row">
-            <input type="range" v-model.number="fontSize" min="12" max="22" step="1"
-              @change="applyFontSize(); save('font_size', fontSize)" />
-            <span class="value">{{ fontSize }}px</span>
+          <h3>{{ t('settings.fontSize') }}</h3>
+          <div class="radio-group">
+            <label v-for="p in fontSizePresets" :key="p.key" class="radio-item"
+              :class="{ checked: fontSizeKey === p.key }"
+              @click="applyFontPreset(p.key)"
+            >
+              <span class="radio-box">
+                <Icon v-if="fontSizeKey === p.key" name="check" :size="12" />
+              </span>
+              <span class="radio-label">{{ p.label }}</span>
+            </label>
           </div>
-          <div class="font-preview" :style="{ fontSize: fontSize + 'px' }">示例文字 AaBbCc 123</div>
         </section>
 
-        <!-- 字体类型 -->
+        <!-- 字体（下拉框） -->
         <section class="block">
-          <h3>字体类型</h3>
+          <h3>{{ t('settings.fontFamily') }}</h3>
           <div class="row">
             <SelectDropdown
               :model-value="fontFamily"
@@ -560,21 +597,25 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
           </div>
         </section>
 
-        <!-- 语言 -->
+        <!-- 语言（单选） -->
         <section class="block">
-          <h3>语言</h3>
-          <div class="row">
-            <SelectDropdown
-              :model-value="language"
-              :options="languageOptions"
-              @update:model-value="(v: any) => { language = v; save('language', v) }"
-            />
+          <h3>{{ t('settings.language') }}</h3>
+          <div class="radio-group">
+            <label v-for="opt in languageOptions" :key="opt.value" class="radio-item"
+              :class="{ checked: language === opt.value }"
+              @click="language = opt.value; setLocale(opt.value); save('language', opt.value)"
+            >
+              <span class="radio-box">
+                <Icon v-if="language === opt.value" name="check" :size="12" />
+              </span>
+              <span class="radio-label">{{ opt.label }}</span>
+            </label>
           </div>
         </section>
 
         <!-- 首页网格列数 -->
         <section class="block">
-          <h3>首页网格列数</h3>
+          <h3>{{ t('settings.gridColumns') }}</h3>
           <div class="row">
             <input type="range" v-model.number="gridColumns" min="3" max="8" @change="save('grid_columns', gridColumns)" />
             <span class="value">{{ gridColumns }} 列</span>
@@ -583,11 +624,11 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 
         <!-- 卡片密度 -->
         <section class="block">
-          <h3>卡片密度</h3>
+          <h3>{{ t('settings.cardDensity') }}</h3>
           <div class="row">
             <Segment
               :model-value="layoutDensity"
-              :options="[{ value: 'comfortable', label: '舒适' }, { value: 'compact', label: '紧凑' }]"
+              :options="[{ value: 'comfortable', label: t('settings.comfortable') }, { value: 'compact', label: t('settings.compact') }]"
               @update:model-value="(v: any) => { layoutDensity = v as 'comfortable'|'compact'; save('layout_density', String(v)) }"
             />
           </div>
@@ -595,11 +636,11 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 
         <!-- 关闭行为 -->
         <section class="block">
-          <h3>关闭行为</h3>
+          <h3>{{ t('settings.closeBehavior') }}</h3>
           <div class="row">
             <label class="toggle">
               <input type="checkbox" v-model="closeToTray" @change="saveCloseBehavior" />
-              <span>点击关闭按钮时最小化到托盘</span>
+              <span>{{ t('settings.minimizeToTray') }}</span>
             </label>
           </div>
         </section>
@@ -791,16 +832,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
         </section>
       </div>
 
-      <!-- ========== 搜索设置 ========== -->
-      <div v-else-if="activeGroup === 'search'" class="panel">
-        <section class="block">
-          <h3>搜索历史</h3>
-          <div class="row">
-            <input type="range" v-model.number="searchHistoryKeep" min="0" max="500" step="10" @change="save('search_history_keep', searchHistoryKeep)" />
-            <span class="value">保留 {{ searchHistoryKeep }} 条</span>
-          </div>
-        </section>
-      </div>
+      
 
       <!-- ========== 关于 ========== -->
       <div v-else-if="activeGroup === 'about'" class="panel">
@@ -998,12 +1030,12 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   padding: 12px 14px 6px;
 }
 .page-head h1 {
-  font-size: 20px;
+  font-size: 1.43rem;
   font-weight: 700;
   margin: 0 0 4px;
 }
 .page-desc {
-  font-size: 12px;
+  font-size: 0.86rem;
   color: var(--text-muted);
   margin: 0;
 }
@@ -1031,7 +1063,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   background: transparent;
   color: var(--text-secondary);
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 0.93rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -1063,84 +1095,58 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   margin-bottom: 12px;
 }
 .block h3 {
-  font-size: 14px;
+  font-size: 1rem;
   font-weight: 700;
   margin: 0 0 14px;
   letter-spacing: 0.3px;
 }
 
-/* 窗口尺寸设置 */
-.window-size-row {
+/* 单选按钮组 */
+.radio-group {
   display: flex;
-  align-items: flex-end;
-  gap: 8px;
   flex-wrap: wrap;
+  gap: 6px 10px;
 }
-.input-group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.input-group label {
-  font-size: 11px;
-  color: var(--text-muted);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-.num-input {
-  width: 90px;
-  padding: 6px 10px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
+.radio-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
   border-radius: 6px;
-  color: var(--text-primary);
-  font-size: 13px;
-  text-align: center;
-}
-.num-input:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(var(--accent-rgb, 99, 102, 241), 0.15);
-}
-.input-group .unit {
-  font-size: 11px;
-  color: var(--text-muted);
-  margin-top: 2px;
-  text-align: center;
-}
-.size-sep {
-  color: var(--text-muted);
-  font-size: 16px;
-  padding-bottom: 6px;
-}
-.apply-btn {
-  padding: 6px 16px;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
   cursor: pointer;
-  transition: opacity 0.15s;
-  margin-bottom: 2px;
+  font-size: 0.93rem;
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
+  user-select: none;
 }
-.apply-btn:hover { opacity: 0.85; }
-.apply-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-/* 字体预览 */
-.font-preview {
-  margin-top: 10px;
-  padding: 10px 14px;
+.radio-item:hover {
   background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text-primary);
-  line-height: 1.6;
+}
+.radio-item.checked {
+  color: var(--accent);
+  font-weight: 600;
+}
+.radio-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border);
+  border-radius: 3px;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+.radio-item.checked .radio-box {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.radio-label {
+  white-space: nowrap;
 }
 .sub-title {
-  font-size: 13px;
+  font-size: 0.93rem;
   color: var(--text-secondary);
   font-weight: 700;
   text-transform: uppercase;
@@ -1179,7 +1185,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 0.93rem;
   color: var(--text-primary);
 }
 .toggle input[type='checkbox'] {
@@ -1229,7 +1235,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   border: none;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 0.93rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -1326,7 +1332,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2), inset 0 0 0 2px rgba(255,255,255,0.3);
 }
 .theme-card .label {
-  font-size: 12px;
+  font-size: 0.86rem;
   color: var(--text-secondary);
   font-weight: 700;
   max-width: 100%;
@@ -1347,7 +1353,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 0.86rem;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
   z-index: 2;
 }
@@ -1419,7 +1425,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 0.93rem;
 }
 .source-item .dot {
   width: 8px; height: 8px; border-radius: 50%;
@@ -1428,7 +1434,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 .source-item .muted {
   color: var(--text-muted);
   font-family: ui-monospace, Menlo, Monaco, Consolas, monospace;
-  font-size: 11px;
+  font-size: 0.79rem;
   margin-left: auto;
 }
 .empty {
@@ -1441,7 +1447,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   border: 1px dashed var(--border);
   border-radius: 10px;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 0.93rem;
 }
 .about-card {
   display: flex;
@@ -1462,9 +1468,9 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   justify-content: center;
   box-shadow: 0 6px 18px var(--accent-alpha-35);
 }
-.about-card h3 { margin: 0 0 4px; font-size: 16px; font-weight: 700; }
-.about-card p { margin: 0 0 4px; font-size: 13px; color: var(--text-secondary); }
-.about-card small { color: var(--text-muted); font-size: 12px; }
+.about-card h3 { margin: 0 0 4px; font-size: 1.14rem; font-weight: 700; }
+.about-card p { margin: 0 0 4px; font-size: 0.93rem; color: var(--text-secondary); }
+.about-card small { color: var(--text-muted); font-size: 0.86rem; }
 .about-actions {
   margin-top: 16px;
   display: flex;
@@ -1499,7 +1505,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 }
 .disclaimer-content p {
   margin: 0 0 6px;
-  font-size: 12.5px;
+  font-size: 0.89rem;
   line-height: 1.55;
   color: var(--text-secondary);
 }
@@ -1531,7 +1537,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   padding: 14px 18px;
   border-bottom: 1px solid var(--border);
 }
-.modal-head h3 { margin: 0; font-size: 15px; font-weight: 700; }
+.modal-head h3 { margin: 0; font-size: 1.07rem; font-weight: 700; }
 .close-btn {
   background: transparent; border: none;
   color: var(--text-muted); cursor: pointer;
@@ -1553,14 +1559,14 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   flex-wrap: wrap;
 }
 .field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 180px; }
-.field label { font-size: 11px; color: var(--text-muted); font-weight: 600; }
+.field label { font-size: 0.79rem; color: var(--text-muted); font-weight: 600; }
 .field input[type='text'] {
   padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--bg-secondary);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 0.93rem;
   outline: none;
 }
 .field input[type='text']:focus { border-color: var(--accent); }
@@ -1574,7 +1580,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   color: var(--accent-contrast);
   border: none;
   border-radius: 8px;
-  font-size: 12px;
+  font-size: 0.86rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -1582,7 +1588,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 .derive-btn:hover { background: var(--accent-dim); transform: translateY(-1px); }
 
 .group-title {
-  font-size: 11px;
+  font-size: 0.79rem;
   color: var(--text-muted);
   font-weight: 600;
   text-transform: uppercase;
@@ -1600,7 +1606,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 }
 .picker-item label {
   display: block;
-  font-size: 11px;
+  font-size: 0.79rem;
   color: var(--text-muted);
   margin-bottom: 4px;
   font-weight: 600;
@@ -1623,7 +1629,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   cursor: pointer;
 }
 .picker-cell span {
-  font-size: 11px;
+  font-size: 0.79rem;
   color: var(--text-secondary);
   font-family: ui-monospace, Menlo, Monaco, Consolas, monospace;
 }
@@ -1679,7 +1685,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   gap: 10px;
   color: var(--text-secondary);
 }
-.bg-drop-hint span { font-size: 13px; }
+.bg-drop-hint span { font-size: 0.93rem; }
 .bg-remove {
   position: absolute;
   top: 8px;
@@ -1720,7 +1726,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 }
 .modal-footer .btn {
   padding: 9px 18px;
-  font-size: 13px;
+  font-size: 0.93rem;
   border-radius: 9px;
   min-width: 80px;
   justify-content: center;
@@ -1732,7 +1738,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   border: 1px solid var(--border);
   background: var(--bg-card);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 0.93rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -1766,7 +1772,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   border: 1px solid var(--border);
   background: var(--bg-card);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 0.93rem;
   font-family: inherit;
   outline: none;
   transition: border-color 0.15s ease;
@@ -1776,7 +1782,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 }
 .block .hint {
   margin-top: 8px;
-  font-size: 12px;
+  font-size: 0.86rem;
   color: var(--text-muted);
   line-height: 1.5;
 }
@@ -1784,7 +1790,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 /* -------- 采集调度面板样式 -------- */
 .desc {
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 0.93rem;
   margin: 0 0 12px 0;
 }
 .schedule-card {
@@ -1815,7 +1821,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   color: var(--accent);
   padding: 6px 14px;
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 0.93rem;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
@@ -1839,16 +1845,16 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   border: 1px solid var(--accent);
   background: var(--bg-input);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 0.93rem;
   font-variant-numeric: tabular-nums;
   text-align: right;
   outline: none;
   box-shadow: 0 0 0 3px var(--accent-alpha-20);
 }
-.bubble-input .unit { color: var(--text-muted); font-size: 13px; }
+.bubble-input .unit { color: var(--text-muted); font-size: 0.93rem; }
 
-.row-right .unit { color: var(--text-muted); font-size: 13px; }
-.row-right .hint { font-size: 12px; margin-left: 4px; }
+.row-right .unit { color: var(--text-muted); font-size: 0.93rem; }
+.row-right .hint { font-size: 0.86rem; margin-left: 4px; }
 .row.actions {
   margin-top: 6px;
   padding-top: 12px;
@@ -1861,7 +1867,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   padding: 8px 18px;
   border-radius: 8px;
   border: 1px solid var(--border);
-  font-size: 13px;
+  font-size: 0.93rem;
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -1892,7 +1898,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   align-items: center;
   gap: 10px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 1rem;
   color: var(--text-primary);
   user-select: none;
 }
@@ -1930,7 +1936,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px 16px;
-  font-size: 13px;
+  font-size: 0.93rem;
   color: var(--text-primary);
 }
 .schedule-status .muted { color: var(--text-muted); margin-right: 6px; }
@@ -1966,7 +1972,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   border-radius: 12px;
   padding: 12px 14px;
   font-family: 'SF Mono', Consolas, monospace;
-  font-size: 12px;
+  font-size: 0.86rem;
   color: var(--text-secondary);
   max-height: 220px;
   overflow-y: auto;
@@ -1987,7 +1993,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 6px 10px;
-  font-size: 12px;
+  font-size: 0.86rem;
   outline: none;
 }
 .log-toolbar .btn {
@@ -1996,7 +2002,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 6px 12px;
-  font-size: 12px;
+  font-size: 0.86rem;
   cursor: pointer;
   transition: background .15s, border-color .15s;
 }
@@ -2008,7 +2014,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 .log-toolbar .btn.danger:hover { background: var(--danger); color: #fff; }
 .log-toolbar .btn:disabled { opacity: .4; cursor: not-allowed; }
 
-.log-dir { margin: 6px 0 10px 0; font-size: 11px; color: var(--text-muted); }
+.log-dir { margin: 6px 0 10px 0; font-size: 0.79rem; color: var(--text-muted); }
 .log-dir code { background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px; }
 
 .log-viewer {
@@ -2022,7 +2028,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 }
 .log-viewer pre {
   margin: 0;
-  font-size: 11px;
+  font-size: 0.79rem;
   line-height: 1.55;
   color: var(--text-secondary);
   white-space: pre-wrap;
@@ -2036,7 +2042,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   gap: 10px;
   padding: 30px 0;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 0.93rem;
   justify-content: center;
 }
 
@@ -2053,7 +2059,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   min-width: 0;
 }
 .source-panel .source-list .source-item .name {
-  font-size: 14px;
+  font-size: 1rem;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -2077,14 +2083,14 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   border-bottom: 1px dashed var(--border);
   margin-bottom: 12px;
 }
-.detail-head .d-name { font-size: 16px; font-weight: 700; color: var(--text-primary); }
+.detail-head .d-name { font-size: 1.14rem; font-weight: 700; color: var(--text-primary); }
 .detail-head .d-key {
-  font-size: 11px; font-family: ui-monospace, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.79rem; font-family: ui-monospace, Menlo, Monaco, Consolas, monospace;
   color: var(--text-muted);
   margin-top: 2px;
 }
 .detail-head .d-url {
-  font-size: 11px; color: var(--text-muted); word-break: break-all; margin-top: 2px;
+  font-size: 0.79rem; color: var(--text-muted); word-break: break-all; margin-top: 2px;
 }
 .detail-head .d-actions {
   display: flex; flex-wrap: wrap; gap: 8px;
@@ -2103,7 +2109,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 }
 .source-toolbar .btn {
   padding: 10px 18px;
-  font-size: 13px;
+  font-size: 0.93rem;
   border-radius: 10px;
   box-shadow: 0 2px 8px var(--accent-alpha-20);
 }
@@ -2117,14 +2123,14 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   background: linear-gradient(135deg, var(--accent), var(--accent-dim));
 }
 .source-toolbar .hint {
-  font-size: 12px;
+  font-size: 0.86rem;
   color: var(--text-muted);
 }
 
 /* 源详情头部 */
 .detail-head .d-actions .btn {
   padding: 8px 14px;
-  font-size: 12px;
+  font-size: 0.86rem;
   border-radius: 8px;
 }
 
@@ -2134,12 +2140,12 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   background: var(--bg-card);
   border: 1px dashed var(--accent);
   border-radius: 12px;
-  font-size: 13px;
+  font-size: 0.93rem;
   color: var(--text-primary);
 }
 .export-result .export-path {
   font-family: ui-monospace, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
+  font-size: 0.86rem;
   word-break: break-all;
   margin-bottom: 10px;
   padding: 8px 10px;
@@ -2153,11 +2159,11 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 }
 .export-result .btn {
   padding: 8px 14px;
-  font-size: 12px;
+  font-size: 0.86rem;
   border-radius: 8px;
 }
 .export-result .hint {
-  font-size: 12px;
+  font-size: 0.86rem;
   color: var(--text-muted);
 }
 
@@ -2169,7 +2175,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 }
 .file-picker .file-name {
   font-family: ui-monospace, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
+  font-size: 0.86rem;
   color: var(--text-secondary);
   word-break: break-all;
 }
@@ -2180,7 +2186,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 10px;
-  font-size: 13px;
+  font-size: 0.93rem;
   color: var(--text-primary);
 }
 
@@ -2230,20 +2236,20 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 }
 
 .drop-title {
-  font-size: 16px;
+  font-size: 1.14rem;
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
 }
 
 .drop-subtitle {
-  font-size: 13px;
+  font-size: 0.93rem;
   color: var(--text-muted);
   margin: 0;
 }
 
 .drop-format {
-  font-size: 12px;
+  font-size: 0.86rem;
   color: var(--text-muted);
   margin: 0;
   padding: 4px 10px;
@@ -2261,7 +2267,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   border: 1px solid var(--accent);
   border-radius: 10px;
   margin-top: -8px;
-  font-size: 13px;
+  font-size: 0.93rem;
   color: var(--text-primary);
 }
 
@@ -2298,7 +2304,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   align-items: center;
   gap: 8px;
   margin-bottom: 8px;
-  font-size: 12px;
+  font-size: 0.86rem;
 }
 .t-head .t-name {
   font-family: ui-monospace, Menlo, Monaco, Consolas, monospace;
@@ -2310,19 +2316,19 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   background: var(--accent-alpha-10);
   color: var(--accent);
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 0.79rem;
   font-weight: 600;
 }
 .t-head .t-count {
   margin-left: auto;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 0.79rem;
 }
 
 .col-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 0.86rem;
   color: var(--text-secondary);
 }
 .col-table th, .col-table td {
@@ -2333,7 +2339,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 .col-table th {
   font-weight: 600;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 0.79rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -2341,7 +2347,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 
 .samples { margin-bottom: 16px; }
 .samples h4 {
-  font-size: 12px;
+  font-size: 0.86rem;
   margin: 6px 0 8px;
   color: var(--text-primary);
   font-weight: 700;
@@ -2363,7 +2369,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 }
 .sample-meta { flex: 1; min-width: 0; }
 .sample-meta .title {
-  font-size: 13px; font-weight: 600; color: var(--text-primary);
+  font-size: 0.93rem; font-weight: 600; color: var(--text-primary);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .sample-meta .small { margin-top: 2px; }
@@ -2383,7 +2389,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 }
 .sample-head:hover { background: var(--bg-hover); }
 .sample-head .chevron {
-  font-size: 20px; color: var(--text-muted);
+  font-size: 1.43rem; color: var(--text-muted);
   transition: transform 0.2s;
   line-height: 1;
   padding-top: 2px;
@@ -2402,11 +2408,11 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   display: flex; flex-direction: column; gap: 3px;
 }
 .sample-meta .title {
-  font-size: 13px; font-weight: 600; color: var(--text-primary);
+  font-size: 0.93rem; font-weight: 600; color: var(--text-primary);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .sample-meta .small {
-  font-size: 11px;
+  font-size: 0.79rem;
   line-height: 1.5;
 }
 .sample-eps {
@@ -2417,7 +2423,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 .sample-eps .inline-btn {
   margin-top: 10px;
   padding: 5px 14px;
-  font-size: 12px;
+  font-size: 0.86rem;
   white-space: nowrap;
   min-width: 90px;
   border: none;
@@ -2434,12 +2440,12 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   margin: 0; line-height: 1.6;
 }
 .samples h4 .hint {
-  font-size: 11px; font-weight: normal; color: var(--text-muted);
+  font-size: 0.79rem; font-weight: normal; color: var(--text-muted);
   margin-left: 8px;
 }
 
 .mono { font-family: ui-monospace, Menlo, Monaco, Consolas, monospace; }
-.small { font-size: 11px; }
+.small { font-size: 0.79rem; }
 .break-all { word-break: break-all; }
 
 /* ---------- 日志查看器新样式 ---------- */
@@ -2447,12 +2453,12 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   margin-bottom: 4px;
 }
 .panel-header h3 {
-  font-size: 15px;
+  font-size: 1.07rem;
   font-weight: 700;
   margin: 0 0 4px;
 }
 .panel-header .hint {
-  font-size: 12px;
+  font-size: 0.86rem;
   color: var(--text-muted);
   margin: 0;
 }
@@ -2473,7 +2479,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   border-radius: 8px;
   background: var(--bg-secondary);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 0.93rem;
   outline: none;
   transition: border-color 0.15s ease;
 }
@@ -2488,7 +2494,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   border-radius: 8px;
   background: var(--bg-secondary) url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e") no-repeat right 8px center;
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: 0.86rem;
   outline: none;
   cursor: pointer;
   font-family: inherit;
@@ -2501,7 +2507,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   box-shadow: 0 0 0 2px var(--accent-alpha-20);
 }
 .log-info {
-  font-size: 12px;
+  font-size: 0.86rem;
   color: var(--text-muted);
   white-space: nowrap;
 }
@@ -2516,7 +2522,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   max-height: 480px;
   overflow-y: auto;
   font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', Consolas, 'Courier New', monospace;
-  font-size: 13px;
+  font-size: 0.93rem;
   line-height: 1.7;
 }
 .log-lines {
@@ -2554,7 +2560,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 .log-line.level-debug {
   background: transparent;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 0.86rem;
   opacity: 0.7;
 }
 .log-line.level-info {
@@ -2577,7 +2583,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 
 @media (max-width: 720px) {
   .tabs { flex-wrap: wrap; }
-  .tab { padding: 6px 10px; font-size: 12px; }
+  .tab { padding: 6px 10px; font-size: 0.86rem; }
 }
 
 /* ====== 开发者模式密码弹窗 ====== */
@@ -2605,20 +2611,20 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 
 .dev-password-modal h2 {
   margin: 0 0 8px;
-  font-size: 20px;
+  font-size: 1.43rem;
   color: var(--accent);
 }
 
 .dev-password-desc {
   margin: 0 0 20px;
-  font-size: 13px;
+  font-size: 0.93rem;
   color: var(--text-muted);
 }
 
 .dev-password-input {
   width: 160px;
   padding: 10px 16px;
-  font-size: 22px;
+  font-size: 1.57rem;
   letter-spacing: 8px;
   text-align: center;
   border: 2px solid var(--border-strong);
@@ -2638,7 +2644,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 .dev-password-error {
   margin: 10px 0 0;
   color: var(--danger);
-  font-size: 13px;
+  font-size: 0.93rem;
   font-weight: 500;
 }
 
@@ -2654,7 +2660,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   border: none;
   border-radius: var(--radius);
   cursor: pointer;
-  font-size: 14px;
+  font-size: 1rem;
   font-weight: 600;
   transition: all 0.15s;
   font-family: inherit;
@@ -2689,7 +2695,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   display: block;
   margin-top: 6px;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 0.86rem;
   line-height: 1.5;
 }
 </style>

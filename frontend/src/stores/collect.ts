@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { StartCollect, PauseCollect, ResumeCollect, StopCollect, GetCollectSchedule, SetCollectSchedule, TriggerCollectNow, StopBackgroundCollect, SetSourceSchedule } from '../../bindings/cczjVideo/app'
+import { useErrorStore } from './error'
 import { Events } from '@wailsio/runtime'
 
 export interface CollectPageEvent {
@@ -377,7 +378,7 @@ export const useCollectStore = defineStore('collect', () => {
         }
       }
     } catch (e) {
-      console.error('loadSchedule failed', e)
+      useErrorStore().fromError('加载采集调度配置失败', e)
     }
   }
 

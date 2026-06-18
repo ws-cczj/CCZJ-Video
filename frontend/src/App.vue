@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, KeepAlive } from 'vue'
 import { useRouter } from 'vue-router'
+import { Window } from '@wailsio/runtime'
 import TitleBar from './components/TitleBar.vue'
 import Sidebar from './components/Sidebar.vue'
+import SplashScreen from './components/SplashScreen.vue'
 import ErrorToastStack from './components/ErrorToastStack.vue'
 import ConfirmModal from './components/ConfirmModal.vue'
 import Icon from './components/Icon.vue'
@@ -11,6 +13,9 @@ import { useCollectStore } from './stores/collect'
 import { useErrorStore } from './stores/error'
 import { useThemeStore } from './stores/theme'
 import { useDownloadStore } from './stores/download'
+import { useI18n } from './locales'
+import { GetSetting } from '../bindings/cczjVideo/app'
+
 
 // 仅缓存"列表型"页面（Home/Search/Sources/...这些展示视频/源/下载/历史/收藏/设置的页面）。
 // Player/Detail 每次进入都是不同的视频，不适合缓存，放在 exclude 里或不在 include 里。
@@ -23,7 +28,7 @@ const KEEP_ALIVE_INCLUDE = [
   'History',
   'Downloads',
   'Settings',
-  'DevAdmin',
+  'AdminPanel',
 ]
 
 const router = useRouter()
@@ -62,9 +67,35 @@ function onFabLeave(): void {
 let winErrorHandler: ((e: ErrorEvent) => void) | null = null
 let rejectHandler: ((e: PromiseRejectionEvent) => void) | null = null
 
+async function safeGetSetting(key: string, fallback: string): Promise<string> {
+  try { const v = await GetSetting(key); return v || fallback } catch { return fallback }
+}
+
 onMounted(async () => {
   await theme.load()
   await dl.init()
+  const i18n = useI18n()
+  await i18n.load()
+
+  // 加载字体大小设置
+  try {
+    const fsk = await safeGetSetting('font_size_key', 'md')
+    const fontSizePresetMap: Record<string, number> = {
+      xs: 12, sm: 13, md: 14, lg: 16, xl: 18, xxl: 20,
+    }
+    const px = fontSizePresetMap[fsk] || 14
+    document.documentElement.style.fontSize = px + 'px'
+  } catch { /* ignore */ }
+  // 加载字体设置
+  try {
+    const ff = await safeGetSetting('font_family', '')
+    if (ff) {
+      document.documentElement.style.fontFamily = ff
+    } else {
+      // 默认字体（与之前 CSS 中硬编码的保持一致）
+      document.documentElement.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif'
+    }
+  } catch { /* ignore */ }
 
   window.addEventListener('mousemove', handleFabMouseMove)
 
@@ -92,6 +123,9 @@ onUnmounted(() => {
 </script>
 
 <template>
+  <!-- 启动画面 -->
+  <SplashScreen />
+
   <div class="app-shell">
     <!-- 自定义标题栏：最顶部一条，背景色与页面主背景一致 -->
     <TitleBar />
@@ -260,10 +294,8 @@ html, body {
   background-repeat: no-repeat;
   background-attachment: fixed;
   color: var(--text-primary);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
-  font-size: 14px;
   user-select: none;
   -webkit-user-select: none;
 }

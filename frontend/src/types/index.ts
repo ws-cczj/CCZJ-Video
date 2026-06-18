@@ -41,6 +41,7 @@ export interface Video {
   vod_id?: string
   vod_g_id?: string
   vod_name?: string
+  global_id?: number
   vod_pic?: string
   vod_remarks?: string
   vod_area?: string
@@ -106,6 +107,7 @@ export interface Favorite {
 
 // 历史记录
 export interface HistoryItem {
+  global_id?: number
   source_key: string
   vod_id: string
   ep_num: number

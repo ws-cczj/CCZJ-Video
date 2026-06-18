@@ -8,10 +8,7 @@ import { useVideoStore } from '../stores/video'
 import { usePosterCacheStore } from '../stores/posterCache'
 import VideoCard from '../components/VideoCard.vue'
 import Icon from '../components/Icon.vue'
-import SelectDropdown from '../components/SelectDropdown.vue'
-import LoadingSpinner from '../components/LoadingSpinner.vue'
-import EmptyState from '../components/EmptyState.vue'
-import { Button, Tag } from '../components/ui'
+import { Button, Tag, Select as SelectDropdown, Spinner as LoadingSpinner, Empty as EmptyState } from '../components/ui'
 import { getDetailPath } from '../utils'
 import type { Video, HistoryItem } from '../types'
 
@@ -427,6 +424,8 @@ function clearSourceResults(): void {
         <Icon name="search" :size="14" />
         <span>搜索</span>
       </Button>
+
+      
     </div>
 
     <!-- 历史搜索 -->

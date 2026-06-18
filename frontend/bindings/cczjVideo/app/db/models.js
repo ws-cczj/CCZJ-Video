@@ -6,6 +6,166 @@
 // @ts-ignore: Unused imports
 import { Create as $Create } from "@wailsio/runtime";
 
+/**
+ * DoubanInfoRow 豆瓣信息视图（映射到 global_video 的豆瓣相关字段，兼容 updater.go 的调用方式）
+ */
+export class DoubanInfoRow {
+    /**
+     * Creates a new DoubanInfoRow instance.
+     * @param {Partial<DoubanInfoRow>} [$$source = {}] - The source object to create the DoubanInfoRow.
+     */
+    constructor($$source = {}) {
+        if (!("GlobalID" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["GlobalID"] = 0;
+        }
+        if (!("SubjectID" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["SubjectID"] = "";
+        }
+        if (!("Rating" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["Rating"] = "";
+        }
+        if (!("Votes" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["Votes"] = "";
+        }
+        if (!("Director" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["Director"] = "";
+        }
+        if (!("Writer" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["Writer"] = "";
+        }
+        if (!("Actor" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["Actor"] = "";
+        }
+        if (!("Genre" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["Genre"] = "";
+        }
+        if (!("Country" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["Country"] = "";
+        }
+        if (!("Language" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["Language"] = "";
+        }
+        if (!("ReleaseDate" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["ReleaseDate"] = "";
+        }
+        if (!("SeasonCount" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["SeasonCount"] = "";
+        }
+        if (!("EpisodeCount" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["EpisodeCount"] = "";
+        }
+        if (!("Duration" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["Duration"] = "";
+        }
+        if (!("Aka" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["Aka"] = "";
+        }
+        if (!("Imdb" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["Imdb"] = "";
+        }
+        if (!("PosterURL" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["PosterURL"] = "";
+        }
+        if (!("UpdatedAt" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["UpdatedAt"] = "";
+        }
+        if (!("VodName" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["VodName"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DoubanInfoRow instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {DoubanInfoRow}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new DoubanInfoRow(/** @type {Partial<DoubanInfoRow>} */($$parsedSource));
+    }
+}
+
+/**
+ * FavWithVideo 收藏条目（含视频信息）
+ */
 export class FavWithVideo {
     /**
      * Creates a new FavWithVideo instance.
@@ -18,6 +178,13 @@ export class FavWithVideo {
              * @type {number}
              */
             this["id"] = 0;
+        }
+        if (!("global_id" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["global_id"] = 0;
         }
         if (!("source_key" in $$source)) {
             /**
@@ -32,6 +199,20 @@ export class FavWithVideo {
              * @type {string}
              */
             this["vod_id"] = "";
+        }
+        if (!("vod_name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["vod_name"] = "";
+        }
+        if (!("vod_pic" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["vod_pic"] = "";
         }
         if (!("created_at" in $$source)) {
             /**
@@ -52,6 +233,117 @@ export class FavWithVideo {
     static createFrom($$source = {}) {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new FavWithVideo(/** @type {Partial<FavWithVideo>} */($$parsedSource));
+    }
+}
+
+/**
+ * GlobalTypeRow 全局类型行
+ */
+export class GlobalTypeRow {
+    /**
+     * Creates a new GlobalTypeRow instance.
+     * @param {Partial<GlobalTypeRow>} [$$source = {}] - The source object to create the GlobalTypeRow.
+     */
+    constructor($$source = {}) {
+        if (!("Id" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["Id"] = 0;
+        }
+        if (!("TypeName" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["TypeName"] = "";
+        }
+        if (!("CollectEnabled" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["CollectEnabled"] = 0;
+        }
+        if (!("MagnetEnabled" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["MagnetEnabled"] = 0;
+        }
+        if (!("Sort" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["Sort"] = 0;
+        }
+        if (!("CreatedAt" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["CreatedAt"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new GlobalTypeRow instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {GlobalTypeRow}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new GlobalTypeRow(/** @type {Partial<GlobalTypeRow>} */($$parsedSource));
+    }
+}
+
+/**
+ * SourceVideoRef 表示某个视频在特定源中的引用
+ */
+export class SourceVideoRef {
+    /**
+     * Creates a new SourceVideoRef instance.
+     * @param {Partial<SourceVideoRef>} [$$source = {}] - The source object to create the SourceVideoRef.
+     */
+    constructor($$source = {}) {
+        if (!("source_key" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["source_key"] = "";
+        }
+        if (!("vod_id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["vod_id"] = "";
+        }
+        if (!("vod_name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["vod_name"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SourceVideoRef instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {SourceVideoRef}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new SourceVideoRef(/** @type {Partial<SourceVideoRef>} */($$parsedSource));
     }
 }
 

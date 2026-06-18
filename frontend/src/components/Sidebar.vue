@@ -24,6 +24,7 @@ const navItems: NavItem[] = [
 
 const toolItems: NavItem[] = [
   { path: '/sources', label: '采集源', icon: 'source' },
+  { path: '/video-types', label: '视频类型', icon: 'tag' },
   { path: '/downloads', label: '下载', icon: 'download' },
   { path: '/settings', label: '设置', icon: 'settings' },
 ]

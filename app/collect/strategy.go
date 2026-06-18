@@ -73,13 +73,13 @@ func NewDefaultStrategy(apiUrl string) *DefaultStrategy {
 				TypeParam:    "t",
 				KeywordParam: "wd",
 				HoursParam:   "h",
-				FixedParams:  map[string]string{"ac": "list"},
+				FixedParams:  map[string]string{"ac": "detail"},
 			},
 			DetailParams: struct {
 				FixedParams map[string]string
 				IDParam     string
 			}{
-				FixedParams: map[string]string{"ac": "videolist"},
+				FixedParams: map[string]string{"ac": "detail"},
 				IDParam:     "ids",
 			},
 			SearchParams: struct {
@@ -265,10 +265,10 @@ func isCustomConfig(config *StrategyConfig) bool {
 	if len(config.FieldMapping) > 0 {
 		return true
 	}
-	if len(config.ListParams.FixedParams) > 0 && config.ListParams.FixedParams["ac"] != "list" {
+	if len(config.ListParams.FixedParams) > 0 && config.ListParams.FixedParams["ac"] != "detail" {
 		return true
 	}
-	if len(config.DetailParams.FixedParams) > 0 && config.DetailParams.FixedParams["ac"] != "videolist" {
+	if len(config.DetailParams.FixedParams) > 0 && config.DetailParams.FixedParams["ac"] != "detail" {
 		return true
 	}
 	if config.ListParams.PageParam != "" && config.ListParams.PageParam != "pg" {

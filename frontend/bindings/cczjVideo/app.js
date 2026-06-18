@@ -11,6 +11,9 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 import * as db$0 from "./app/db/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as douban$0 from "./app/douban/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as handler$0 from "./app/handler/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -54,6 +57,24 @@ export function CancelDownload(taskId) {
 }
 
 /**
+ * CiligouStatus 磁力链接调度器状态
+ * @returns {$CancellablePromise<{ [_ in string]?: any }>}
+ */
+export function CiligouStatus() {
+    return $Call.ByID(2138044537).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType0($result);
+    }));
+}
+
+/**
+ * CiligouTriggerNow 立即触发一次磁力链接获取
+ * @returns {$CancellablePromise<number>}
+ */
+export function CiligouTriggerNow() {
+    return $Call.ByID(2337338755);
+}
+
+/**
  * ClearAllHistory 清空全部观看历史，返回删除的条数
  * @returns {$CancellablePromise<number>}
  */
@@ -67,6 +88,14 @@ export function ClearAllHistory() {
  */
 export function ClearLogs() {
     return $Call.ByID(1566804265);
+}
+
+/**
+ * ConfirmShutdown 确认退出：触发应用退出，清理由 ServiceShutdown 统一处理
+ * @returns {$CancellablePromise<void>}
+ */
+export function ConfirmShutdown() {
+    return $Call.ByID(2087002845);
 }
 
 /**
@@ -105,6 +134,68 @@ export function DeleteVideo(req) {
 }
 
 /**
+ * DoubanDetail 获取豆瓣详情信息
+ * @param {$models.DoubanDetailReq} req
+ * @returns {$CancellablePromise<$models.DoubanDetailResp | null>}
+ */
+export function DoubanDetail(req) {
+    return $Call.ByID(3249473505, req).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType2($result);
+    }));
+}
+
+/**
+ * DoubanGetAll 获取全局豆瓣信息表中的记录（支持分页）
+ * @param {$models.DoubanGetAllReq} req
+ * @returns {$CancellablePromise<$models.DoubanGetAllResp | null>}
+ */
+export function DoubanGetAll(req) {
+    return $Call.ByID(3566435463, req).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType4($result);
+    }));
+}
+
+/**
+ * DoubanSearch 搜索豆瓣获取 subject_id
+ * @param {$models.DoubanSearchReq} req
+ * @returns {$CancellablePromise<$models.DoubanSearchResp | null>}
+ */
+export function DoubanSearch(req) {
+    return $Call.ByID(427130172, req).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType6($result);
+    }));
+}
+
+/**
+ * DoubanStatus 返回豆瓣调度器状态
+ * @returns {$CancellablePromise<{ [_ in string]?: any }>}
+ */
+export function DoubanStatus() {
+    return $Call.ByID(3707256930).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType0($result);
+    }));
+}
+
+/**
+ * DoubanTriggerNow 立即触发一次豆瓣信息补全
+ * @returns {$CancellablePromise<number>}
+ */
+export function DoubanTriggerNow() {
+    return $Call.ByID(2908978180);
+}
+
+/**
+ * DoubanUpdateVideo 手动为某个视频补全豆瓣信息（搜索+解析详情，存入全局表）
+ * @param {$models.DoubanUpdateVideoReq} req
+ * @returns {$CancellablePromise<douban$0.DoubanInfo | null>}
+ */
+export function DoubanUpdateVideo(req) {
+    return $Call.ByID(1029637856, req).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType8($result);
+    }));
+}
+
+/**
  * ExportSource 导出某个源的所有数据到 .json.br 文件（Brotli 压缩），返回绝对路径
  * 前端拿到文件路径后可以在系统文件管理器中复制/传给他人
  * @param {string} sourceKey
@@ -115,11 +206,22 @@ export function ExportSource(sourceKey) {
 }
 
 /**
+ * FindSourcesByGlobalId 通过 global_id 查找所有拥有该视频的源
+ * @param {number} globalId
+ * @returns {$CancellablePromise<db$0.SourceVideoRef[]>}
+ */
+export function FindSourcesByGlobalId(globalId) {
+    return $Call.ByID(4164783863, globalId).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType10($result);
+    }));
+}
+
+/**
  * @returns {$CancellablePromise<(model$0.Source | null)[]>}
  */
 export function GetAllSources() {
     return $Call.ByID(4208623164).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType2($result);
+        return $$createType13($result);
     }));
 }
 
@@ -137,7 +239,7 @@ export function GetCloseBehavior() {
  */
 export function GetCollectSchedule() {
     return $Call.ByID(732671778).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType4($result);
+        return $$createType15($result);
     }));
 }
 
@@ -148,7 +250,7 @@ export function GetCollectSchedule() {
  */
 export function GetCollectStatus(sourceKey) {
     return $Call.ByID(1666790733, sourceKey).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType6($result);
+        return $$createType17($result);
     }));
 }
 
@@ -167,7 +269,7 @@ export function GetDownloadDir() {
  */
 export function GetDownloadProgress(taskId) {
     return $Call.ByID(1305665572, taskId).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType8($result);
+        return $$createType19($result);
     }));
 }
 
@@ -178,7 +280,27 @@ export function GetDownloadProgress(taskId) {
  */
 export function GetFavorites(page, pageSize) {
     return $Call.ByID(1693347796, page, pageSize).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType10($result);
+        return $$createType21($result);
+    }));
+}
+
+/**
+ * GetGlobalIdForVideo 获取指定源中某个视频的 global_id
+ * @param {string} sourceKey
+ * @param {string} vodId
+ * @returns {$CancellablePromise<number>}
+ */
+export function GetGlobalIdForVideo(sourceKey, vodId) {
+    return $Call.ByID(3154905735, sourceKey, vodId);
+}
+
+/**
+ * GetGlobalTypes 获取所有全局类型
+ * @returns {$CancellablePromise<(db$0.GlobalTypeRow | null)[]>}
+ */
+export function GetGlobalTypes() {
+    return $Call.ByID(1792034461).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType24($result);
     }));
 }
 
@@ -189,6 +311,16 @@ export function GetFavorites(page, pageSize) {
  */
 export function GetLogContent(filename) {
     return $Call.ByID(4287414792, filename);
+}
+
+/**
+ * GetLogContentTail 返回指定日志文件的末尾 N 行内容
+ * @param {string} filename
+ * @param {number} tailLines
+ * @returns {$CancellablePromise<string>}
+ */
+export function GetLogContentTail(filename, tailLines) {
+    return $Call.ByID(990452922, filename, tailLines);
 }
 
 /**
@@ -205,7 +337,7 @@ export function GetLogDir() {
  */
 export function GetLogList() {
     return $Call.ByID(4031992807).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType11($result);
+        return $$createType25($result);
     }));
 }
 
@@ -215,7 +347,7 @@ export function GetLogList() {
  */
 export function GetRecentHistory(limit) {
     return $Call.ByID(3759499244, limit).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType14($result);
+        return $$createType28($result);
     }));
 }
 
@@ -225,7 +357,7 @@ export function GetRecentHistory(limit) {
  */
 export function GetRecommend(req) {
     return $Call.ByID(4171590299, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType17($result);
+        return $$createType31($result);
     }));
 }
 
@@ -244,7 +376,7 @@ export function GetSetting(key) {
  */
 export function GetSourceDetail(sourceKey) {
     return $Call.ByID(42587419, sourceKey).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType19($result);
+        return $$createType33($result);
     }));
 }
 
@@ -255,7 +387,7 @@ export function GetSourceDetail(sourceKey) {
  */
 export function GetSourceParamsDoc(sourceKey) {
     return $Call.ByID(1484335526, sourceKey).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType21($result);
+        return $$createType35($result);
     }));
 }
 
@@ -264,7 +396,7 @@ export function GetSourceParamsDoc(sourceKey) {
  */
 export function GetSourceStats() {
     return $Call.ByID(1267600873).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType23($result);
+        return $$createType37($result);
     }));
 }
 
@@ -274,7 +406,7 @@ export function GetSourceStats() {
  */
 export function GetTypes(req) {
     return $Call.ByID(3112948108, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType26($result);
+        return $$createType40($result);
     }));
 }
 
@@ -284,7 +416,7 @@ export function GetTypes(req) {
  */
 export function GetVideoDetail(req) {
     return $Call.ByID(3080948803, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType28($result);
+        return $$createType42($result);
     }));
 }
 
@@ -294,7 +426,7 @@ export function GetVideoDetail(req) {
  */
 export function GetVideoList(req) {
     return $Call.ByID(643094798, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType30($result);
+        return $$createType44($result);
     }));
 }
 
@@ -305,7 +437,7 @@ export function GetVideoList(req) {
  */
 export function GetWatchedEpisodes(req) {
     return $Call.ByID(70235905, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType31($result);
+        return $$createType45($result);
     }));
 }
 
@@ -316,8 +448,16 @@ export function GetWatchedEpisodes(req) {
  */
 export function GetYearsAndAreas(sourceKey) {
     return $Call.ByID(2141058010, sourceKey).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType33($result);
+        return $$createType47($result);
     }));
+}
+
+/**
+ * GracefulShutdown 优雅关闭：等待所有采集任务完成当前页后退出
+ * @returns {$CancellablePromise<void>}
+ */
+export function GracefulShutdown() {
+    return $Call.ByID(1956164136);
 }
 
 /**
@@ -351,12 +491,20 @@ export function IsFavorite(req) {
 }
 
 /**
+ * IsSchedulerRunning 检查是否有调度任务正在运行（采集调度或豆瓣调度）
+ * @returns {$CancellablePromise<boolean>}
+ */
+export function IsSchedulerRunning() {
+    return $Call.ByID(1183580401);
+}
+
+/**
  * ListDownloads 返回所有任务快照
  * @returns {$CancellablePromise<$models.VideoDownloadStatus[]>}
  */
 export function ListDownloads() {
     return $Call.ByID(2520899730).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType34($result);
+        return $$createType48($result);
     }));
 }
 
@@ -403,6 +551,16 @@ export function PauseCollect(req) {
  */
 export function PauseDownload(taskId) {
     return $Call.ByID(1028494649, taskId);
+}
+
+/**
+ * ProxyImage 代理获取远程图片，绕过 CORS 限制
+ * 返回 base64 编码的图片数据
+ * @param {string} urlStr
+ * @returns {$CancellablePromise<string>}
+ */
+export function ProxyImage(urlStr) {
+    return $Call.ByID(2830726648, urlStr);
 }
 
 /**
@@ -480,7 +638,7 @@ export function SaveWatchHistory(req) {
  */
 export function SearchSource(sourceKey, keyword, limit) {
     return $Call.ByID(3286592348, sourceKey, keyword, limit).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType36($result);
+        return $$createType50($result);
     }));
 }
 
@@ -490,7 +648,7 @@ export function SearchSource(sourceKey, keyword, limit) {
  */
 export function SearchVideos(req) {
     return $Call.ByID(4225132681, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType30($result);
+        return $$createType44($result);
     }));
 }
 
@@ -510,7 +668,7 @@ export function SetCloseBehavior(minimize) {
  */
 export function SetCollectSchedule(cfg) {
     return $Call.ByID(3093903894, cfg).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType37($result);
+        return $$createType51($result);
     }));
 }
 
@@ -521,6 +679,24 @@ export function SetCollectSchedule(cfg) {
  */
 export function SetDownloadDir(dir) {
     return $Call.ByID(3697951214, dir);
+}
+
+/**
+ * SetGlobalTypeCollectEnabled 设置全局类型的采集开关
+ * @param {$models.SetGlobalTypeCollectEnabledReq} req
+ * @returns {$CancellablePromise<boolean>}
+ */
+export function SetGlobalTypeCollectEnabled(req) {
+    return $Call.ByID(3501918471, req);
+}
+
+/**
+ * SetGlobalTypeMagnetEnabled 设置全局类型的磁力链接获取开关
+ * @param {$models.SetGlobalTypeMagnetEnabledReq} req
+ * @returns {$CancellablePromise<boolean>}
+ */
+export function SetGlobalTypeMagnetEnabled(req) {
+    return $Call.ByID(372246071, req);
 }
 
 /**
@@ -557,7 +733,7 @@ export function SetTitleBarTheme(theme) {
  */
 export function StartCollect(req) {
     return $Call.ByID(3544874275, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType6($result);
+        return $$createType17($result);
     }));
 }
 
@@ -568,7 +744,7 @@ export function StartCollect(req) {
  */
 export function StartVideoDownload(req) {
     return $Call.ByID(2198607162, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType8($result);
+        return $$createType19($result);
     }));
 }
 
@@ -587,6 +763,14 @@ export function StopBackgroundCollect() {
  */
 export function StopCollect(req) {
     return $Call.ByID(4193761833, req);
+}
+
+/**
+ * SyncGlobalTypes 从所有源同步类型到全局类型表
+ * @returns {$CancellablePromise<number>}
+ */
+export function SyncGlobalTypes() {
+    return $Call.ByID(757137074);
 }
 
 /**
@@ -619,7 +803,7 @@ export function WindowGetResizable() {
  */
 export function WindowGetSize() {
     return $Call.ByID(2449844830).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType39($result);
+        return $$createType53($result);
     }));
 }
 
@@ -684,53 +868,58 @@ export function WriteLog(entry) {
     return $Call.ByID(1800746550, entry);
 }
 
-/**
- * ProxyImage 代理获取远程图片，绕过 CORS 限制
- * @param {string} urlStr
- * @returns {$CancellablePromise<string>}
- */
-export function ProxyImage(urlStr) {
-    return $Call.ByID(1234567890, urlStr);
-}
-
 // Private type creation functions
-const $$createType0 = model$0.Source.createFrom;
-const $$createType1 = $Create.Nullable($$createType0);
-const $$createType2 = $Create.Array($$createType1);
-const $$createType3 = handler$0.SchedulerStatus.createFrom;
+const $$createType0 = $Create.Map($Create.Any, $Create.Any);
+const $$createType1 = $models.DoubanDetailResp.createFrom;
+const $$createType2 = $Create.Nullable($$createType1);
+const $$createType3 = $models.DoubanGetAllResp.createFrom;
 const $$createType4 = $Create.Nullable($$createType3);
-const $$createType5 = handler$0.CollectStatus.createFrom;
+const $$createType5 = $models.DoubanSearchResp.createFrom;
 const $$createType6 = $Create.Nullable($$createType5);
-const $$createType7 = $models.VideoDownloadStatus.createFrom;
+const $$createType7 = douban$0.DoubanInfo.createFrom;
 const $$createType8 = $Create.Nullable($$createType7);
-const $$createType9 = db$0.FavWithVideo.createFrom;
+const $$createType9 = db$0.SourceVideoRef.createFrom;
 const $$createType10 = $Create.Array($$createType9);
-const $$createType11 = $Create.Array($Create.Any);
-const $$createType12 = handler$0.HistoryItemWithVideo.createFrom;
-const $$createType13 = $Create.Nullable($$createType12);
-const $$createType14 = $Create.Array($$createType13);
-const $$createType15 = model$0.Video.createFrom;
-const $$createType16 = $Create.Nullable($$createType15);
-const $$createType17 = $Create.Array($$createType16);
-const $$createType18 = handler$0.SourceDetail.createFrom;
+const $$createType11 = model$0.Source.createFrom;
+const $$createType12 = $Create.Nullable($$createType11);
+const $$createType13 = $Create.Array($$createType12);
+const $$createType14 = handler$0.SchedulerStatus.createFrom;
+const $$createType15 = $Create.Nullable($$createType14);
+const $$createType16 = handler$0.CollectStatus.createFrom;
+const $$createType17 = $Create.Nullable($$createType16);
+const $$createType18 = $models.VideoDownloadStatus.createFrom;
 const $$createType19 = $Create.Nullable($$createType18);
-const $$createType20 = handler$0.SourceParamsDoc.createFrom;
-const $$createType21 = $Create.Nullable($$createType20);
-const $$createType22 = model$0.SourceStat.createFrom;
-const $$createType23 = $Create.Array($$createType22);
-const $$createType24 = model$0.VType.createFrom;
-const $$createType25 = $Create.Nullable($$createType24);
-const $$createType26 = $Create.Array($$createType25);
-const $$createType27 = handler$0.VideoDetailResp.createFrom;
-const $$createType28 = $Create.Nullable($$createType27);
-const $$createType29 = handler$0.VideoListResp.createFrom;
+const $$createType20 = db$0.FavWithVideo.createFrom;
+const $$createType21 = $Create.Array($$createType20);
+const $$createType22 = db$0.GlobalTypeRow.createFrom;
+const $$createType23 = $Create.Nullable($$createType22);
+const $$createType24 = $Create.Array($$createType23);
+const $$createType25 = $Create.Array($Create.Any);
+const $$createType26 = handler$0.HistoryItemWithVideo.createFrom;
+const $$createType27 = $Create.Nullable($$createType26);
+const $$createType28 = $Create.Array($$createType27);
+const $$createType29 = model$0.Video.createFrom;
 const $$createType30 = $Create.Nullable($$createType29);
-const $$createType31 = $Create.Array($Create.Any);
-const $$createType32 = handler$0.YearsResp.createFrom;
+const $$createType31 = $Create.Array($$createType30);
+const $$createType32 = handler$0.SourceDetail.createFrom;
 const $$createType33 = $Create.Nullable($$createType32);
-const $$createType34 = $Create.Array($$createType7);
-const $$createType35 = handler$0.SearchSourceResult.createFrom;
-const $$createType36 = $Create.Nullable($$createType35);
-const $$createType37 = handler$0.CollectScheduleConfig.createFrom;
-const $$createType38 = $models.WindowSizeResp.createFrom;
+const $$createType34 = handler$0.SourceParamsDoc.createFrom;
+const $$createType35 = $Create.Nullable($$createType34);
+const $$createType36 = model$0.SourceStat.createFrom;
+const $$createType37 = $Create.Array($$createType36);
+const $$createType38 = model$0.VType.createFrom;
 const $$createType39 = $Create.Nullable($$createType38);
+const $$createType40 = $Create.Array($$createType39);
+const $$createType41 = handler$0.VideoDetailResp.createFrom;
+const $$createType42 = $Create.Nullable($$createType41);
+const $$createType43 = handler$0.VideoListResp.createFrom;
+const $$createType44 = $Create.Nullable($$createType43);
+const $$createType45 = $Create.Array($Create.Any);
+const $$createType46 = handler$0.YearsResp.createFrom;
+const $$createType47 = $Create.Nullable($$createType46);
+const $$createType48 = $Create.Array($$createType18);
+const $$createType49 = handler$0.SearchSourceResult.createFrom;
+const $$createType50 = $Create.Nullable($$createType49);
+const $$createType51 = handler$0.CollectScheduleConfig.createFrom;
+const $$createType52 = $models.WindowSizeResp.createFrom;
+const $$createType53 = $Create.Nullable($$createType52);

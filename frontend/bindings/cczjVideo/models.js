@@ -6,6 +6,10 @@
 // @ts-ignore: Unused imports
 import { Create as $Create } from "@wailsio/runtime";
 
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as db$0 from "./app/db/models.js";
+
 /**
  * ChunkProgress 单个并发连接的分块进度
  */
@@ -56,6 +60,374 @@ export class ChunkProgress {
     static createFrom($$source = {}) {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new ChunkProgress(/** @type {Partial<ChunkProgress>} */($$parsedSource));
+    }
+}
+
+/**
+ * DoubanDetailReq 豆瓣详情请求
+ */
+export class DoubanDetailReq {
+    /**
+     * Creates a new DoubanDetailReq instance.
+     * @param {Partial<DoubanDetailReq>} [$$source = {}] - The source object to create the DoubanDetailReq.
+     */
+    constructor($$source = {}) {
+        if (!("subject_id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["subject_id"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DoubanDetailReq instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {DoubanDetailReq}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new DoubanDetailReq(/** @type {Partial<DoubanDetailReq>} */($$parsedSource));
+    }
+}
+
+/**
+ * DoubanDetailResp 豆瓣详情响应
+ */
+export class DoubanDetailResp {
+    /**
+     * Creates a new DoubanDetailResp instance.
+     * @param {Partial<DoubanDetailResp>} [$$source = {}] - The source object to create the DoubanDetailResp.
+     */
+    constructor($$source = {}) {
+        if (!("SubjectID" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["SubjectID"] = "";
+        }
+        if (!("Title" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["Title"] = "";
+        }
+        if (!("Rating" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["Rating"] = "";
+        }
+        if (!("Votes" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["Votes"] = "";
+        }
+        if (!("Director" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["Director"] = "";
+        }
+        if (!("Writer" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["Writer"] = "";
+        }
+        if (!("Actor" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["Actor"] = "";
+        }
+        if (!("Genre" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["Genre"] = "";
+        }
+        if (!("Country" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["Country"] = "";
+        }
+        if (!("Language" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["Language"] = "";
+        }
+        if (!("ReleaseDate" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["ReleaseDate"] = "";
+        }
+        if (!("SeasonCount" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["SeasonCount"] = "";
+        }
+        if (!("EpisodeCount" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["EpisodeCount"] = "";
+        }
+        if (!("Duration" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["Duration"] = "";
+        }
+        if (!("Aka" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["Aka"] = "";
+        }
+        if (!("IMDb" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["IMDb"] = "";
+        }
+        if (!("PosterURL" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["PosterURL"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DoubanDetailResp instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {DoubanDetailResp}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new DoubanDetailResp(/** @type {Partial<DoubanDetailResp>} */($$parsedSource));
+    }
+}
+
+/**
+ * DoubanGetAllReq 豆瓣数据请求（支持分页）
+ */
+export class DoubanGetAllReq {
+    /**
+     * Creates a new DoubanGetAllReq instance.
+     * @param {Partial<DoubanGetAllReq>} [$$source = {}] - The source object to create the DoubanGetAllReq.
+     */
+    constructor($$source = {}) {
+        if (!("page" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["page"] = 0;
+        }
+        if (!("page_size" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["page_size"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DoubanGetAllReq instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {DoubanGetAllReq}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new DoubanGetAllReq(/** @type {Partial<DoubanGetAllReq>} */($$parsedSource));
+    }
+}
+
+/**
+ * DoubanGetAllResp 豆瓣数据响应（含分页信息）
+ */
+export class DoubanGetAllResp {
+    /**
+     * Creates a new DoubanGetAllResp instance.
+     * @param {Partial<DoubanGetAllResp>} [$$source = {}] - The source object to create the DoubanGetAllResp.
+     */
+    constructor($$source = {}) {
+        if (!("rows" in $$source)) {
+            /**
+             * @member
+             * @type {(db$0.DoubanInfoRow | null)[]}
+             */
+            this["rows"] = [];
+        }
+        if (!("total" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["total"] = 0;
+        }
+        if (!("page" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["page"] = 0;
+        }
+        if (!("page_size" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["page_size"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DoubanGetAllResp instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {DoubanGetAllResp}
+     */
+    static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType2;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("rows" in $$parsedSource) {
+            $$parsedSource["rows"] = $$createField0_0($$parsedSource["rows"]);
+        }
+        return new DoubanGetAllResp(/** @type {Partial<DoubanGetAllResp>} */($$parsedSource));
+    }
+}
+
+/**
+ * DoubanSearchReq 豆瓣搜索请求
+ */
+export class DoubanSearchReq {
+    /**
+     * Creates a new DoubanSearchReq instance.
+     * @param {Partial<DoubanSearchReq>} [$$source = {}] - The source object to create the DoubanSearchReq.
+     */
+    constructor($$source = {}) {
+        if (!("keyword" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["keyword"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DoubanSearchReq instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {DoubanSearchReq}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new DoubanSearchReq(/** @type {Partial<DoubanSearchReq>} */($$parsedSource));
+    }
+}
+
+/**
+ * DoubanSearchResp 豆瓣搜索响应
+ */
+export class DoubanSearchResp {
+    /**
+     * Creates a new DoubanSearchResp instance.
+     * @param {Partial<DoubanSearchResp>} [$$source = {}] - The source object to create the DoubanSearchResp.
+     */
+    constructor($$source = {}) {
+        if (!("subject_id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["subject_id"] = "";
+        }
+        if (!("url" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["url"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DoubanSearchResp instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {DoubanSearchResp}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new DoubanSearchResp(/** @type {Partial<DoubanSearchResp>} */($$parsedSource));
+    }
+}
+
+/**
+ * DoubanUpdateVideoReq 更新单个视频的豆瓣信息请求
+ */
+export class DoubanUpdateVideoReq {
+    /**
+     * Creates a new DoubanUpdateVideoReq instance.
+     * @param {Partial<DoubanUpdateVideoReq>} [$$source = {}] - The source object to create the DoubanUpdateVideoReq.
+     */
+    constructor($$source = {}) {
+        if (!("keyword" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["keyword"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DoubanUpdateVideoReq instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {DoubanUpdateVideoReq}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new DoubanUpdateVideoReq(/** @type {Partial<DoubanUpdateVideoReq>} */($$parsedSource));
     }
 }
 
@@ -239,12 +611,88 @@ export class RecommendReq {
      * @returns {RecommendReq}
      */
     static createFrom($$source = {}) {
-        const $$createField2_0 = $$createType0;
+        const $$createField2_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("exclude_ids" in $$parsedSource) {
             $$parsedSource["exclude_ids"] = $$createField2_0($$parsedSource["exclude_ids"]);
         }
         return new RecommendReq(/** @type {Partial<RecommendReq>} */($$parsedSource));
+    }
+}
+
+/**
+ * SetGlobalTypeCollectEnabledReq 设置全局类型采集开关请求
+ */
+export class SetGlobalTypeCollectEnabledReq {
+    /**
+     * Creates a new SetGlobalTypeCollectEnabledReq instance.
+     * @param {Partial<SetGlobalTypeCollectEnabledReq>} [$$source = {}] - The source object to create the SetGlobalTypeCollectEnabledReq.
+     */
+    constructor($$source = {}) {
+        if (!("type_name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["type_name"] = "";
+        }
+        if (!("enabled" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["enabled"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SetGlobalTypeCollectEnabledReq instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {SetGlobalTypeCollectEnabledReq}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new SetGlobalTypeCollectEnabledReq(/** @type {Partial<SetGlobalTypeCollectEnabledReq>} */($$parsedSource));
+    }
+}
+
+/**
+ * SetGlobalTypeMagnetEnabledReq 设置全局类型磁力开关请求
+ */
+export class SetGlobalTypeMagnetEnabledReq {
+    /**
+     * Creates a new SetGlobalTypeMagnetEnabledReq instance.
+     * @param {Partial<SetGlobalTypeMagnetEnabledReq>} [$$source = {}] - The source object to create the SetGlobalTypeMagnetEnabledReq.
+     */
+    constructor($$source = {}) {
+        if (!("type_name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["type_name"] = "";
+        }
+        if (!("enabled" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["enabled"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SetGlobalTypeMagnetEnabledReq instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {SetGlobalTypeMagnetEnabledReq}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new SetGlobalTypeMagnetEnabledReq(/** @type {Partial<SetGlobalTypeMagnetEnabledReq>} */($$parsedSource));
     }
 }
 
@@ -517,7 +965,7 @@ export class VideoDownloadStatus {
      * @returns {VideoDownloadStatus}
      */
     static createFrom($$source = {}) {
-        const $$createField12_0 = $$createType2;
+        const $$createField12_0 = $$createType5;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("chunks" in $$parsedSource) {
             $$parsedSource["chunks"] = $$createField12_0($$parsedSource["chunks"]);
@@ -565,6 +1013,9 @@ export class WindowSizeResp {
 }
 
 // Private type creation functions
-const $$createType0 = $Create.Array($Create.Any);
-const $$createType1 = ChunkProgress.createFrom;
+const $$createType0 = db$0.DoubanInfoRow.createFrom;
+const $$createType1 = $Create.Nullable($$createType0);
 const $$createType2 = $Create.Array($$createType1);
+const $$createType3 = $Create.Array($Create.Any);
+const $$createType4 = ChunkProgress.createFrom;
+const $$createType5 = $Create.Array($$createType4);

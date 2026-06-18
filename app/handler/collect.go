@@ -62,9 +62,9 @@ type CollectScheduleConfig struct {
 // 默认配置
 func defaultScheduleConfig() CollectScheduleConfig {
 	return CollectScheduleConfig{
-		EnableBackground:          true,
+		EnableBackground:          false,
 		BackgroundIntervalSeconds: 60,
-		EnableStartupCatchup:      true,
+		EnableStartupCatchup:      false,
 		EnableInitialFullCollect:  false,
 		SourceGapSeconds:          10,
 		PageGapSeconds:            30,
@@ -297,8 +297,8 @@ func StopCollect(sourceKey string) bool {
 
 func AddDefaultSources() error {
 	defaults := []model.Source{
-		{SourceKey: "wj", Name: "无极资源", ApiUrl: "https://api.wujinapi.me/api.php/provide/vod/?ac=detail", CollectLimit: 50},
-		{SourceKey: "mt", Name: "麻淘资源", ApiUrl: "https://caiji.maotaizy.cc/api.php/provide/vod/from/mtm3u8?ac=detail", CollectLimit: 50},
+		{SourceKey: "wj", Name: "无极资源", ApiUrl: "https://api.wujinapi.me/api.php/provide/vod/?ac=detail", CollectLimit: 50, Enabled: 0},
+		{SourceKey: "mt", Name: "麻淘资源", ApiUrl: "https://caiji.maotaizy.cc/api.php/provide/vod/from/mtm3u8?ac=detail", CollectLimit: 50, Enabled: 0},
 	}
 
 	for _, d := range defaults {
@@ -373,44 +373,37 @@ func SearchSource(sourceKey string, keyword string, limit int) (*SearchSourceRes
 	applog.Info("[SearchSource] 源站搜索完成 - sourceKey: %s, keyword: %s, total: %d, listSize: %d",
 		sourceKey, keyword, page.Total.Int(), len(page.List))
 
-	// 调用详情接口获取完整字段（搜索接口只返回基础字段）
+	// 调用详情接口获取完整字段（使用协程池并发，并发数 3）
+	pool := collect.NewPool(3)
+	var mu sync.Mutex
 	for i, v := range page.List {
 		if v == nil || v.VodId.String() == "" {
 			continue
 		}
-		detail, err := collect.FetchVideoDetail(src.ApiUrl, v.VodId.String())
-		if err == nil && detail != nil {
+		idx := i
+		vid := v
+		pool.Submit(func() {
+			detail, err := collect.FetchVideoDetail(src.ApiUrl, vid.VodId.String())
+			if err != nil || detail == nil {
+				applog.Info("[SearchSource] 获取详情失败 - vod_id: %s, error: %v", vid.VodId.String(), err)
+				return
+			}
 			applog.Info("[SearchSource] 获取详情成功 - vod_id: %s, vod_actor: %s, vod_director: %s, vod_content: %s",
-				v.VodId.String(), detail.VodActor, detail.VodDirector, truncate(detail.VodContent, 100))
-			if detail.VodActor != "" {
-				v.VodActor = detail.VodActor
-			}
-			if detail.VodDirector != "" {
-				v.VodDirector = detail.VodDirector
-			}
-			if detail.VodContent != "" {
-				v.VodContent = detail.VodContent
-			}
-			if detail.VodPic != "" {
-				v.VodPic = detail.VodPic
-			}
-			if detail.VodLang != "" {
-				v.VodLang = detail.VodLang
-			}
-			if detail.VodArea != "" {
-				v.VodArea = detail.VodArea
-			}
-			if detail.VodYear != "" {
-				v.VodYear = detail.VodYear
-			}
-			if detail.VodPlayUrl != "" {
-				v.VodPlayUrl = detail.VodPlayUrl
-			}
-			page.List[i] = v
-		} else {
-			applog.Info("[SearchSource] 获取详情失败 - vod_id: %s, error: %v", v.VodId.String(), err)
-		}
+				vid.VodId.String(), detail.VodActor, detail.VodDirector, truncate(detail.VodContent, 100))
+			mu.Lock()
+			if detail.VodActor != "" { page.List[idx].VodActor = detail.VodActor }
+			if detail.VodDirector != "" { page.List[idx].VodDirector = detail.VodDirector }
+			if detail.VodContent != "" { page.List[idx].VodContent = detail.VodContent }
+			if detail.VodPic != "" { page.List[idx].VodPic = detail.VodPic }
+			if detail.VodLang != "" { page.List[idx].VodLang = detail.VodLang }
+			if detail.VodArea != "" { page.List[idx].VodArea = detail.VodArea }
+			if detail.VodYear != "" { page.List[idx].VodYear = detail.VodYear }
+			if detail.VodPlayUrl != "" { page.List[idx].VodPlayUrl = detail.VodPlayUrl }
+			mu.Unlock()
+		})
 	}
+	pool.Wait()
+	pool.Stop()
 
 	// 2) 入库（合并源站数据与数据库已有数据：源站非空字段覆盖，源站空字段保留数据库值）
 	if err := db.EnsureVideoTable(sourceKey); err != nil {
@@ -441,13 +434,6 @@ func SearchSource(sourceKey string, keyword string, limit int) (*SearchSourceRes
 
 	// 将源数据中携带的豆瓣信息存入全局 douban_info 表
 	db.SaveDoubanInfoFromBatch(page.List)
-
-	for _, v := range page.List {
-		if v == nil || v.TypeName == "" {
-			continue
-		}
-		db.InsTypeIfNotExist(sourceKey, v.TypeId, v.TypeName)
-	}
 
 	// 3) 从数据库读（带齐全字段）
 	videos, _, err := db.GetVideos(sourceKey, db.FilterParams{Keyword: keyword, PageSize: limit})
