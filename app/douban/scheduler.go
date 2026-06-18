@@ -57,11 +57,25 @@ func (s *Scheduler) Stop() {
 		return
 	}
 
-	applog.Info("[Douban] Stopping scheduler...")
+	applog.Info("[Douban] Stopping scheduler (graceful)...")
 	s.running = false
+	s.updater.RequestStop()
 	if s.ticker != nil {
 		s.ticker.Stop()
 		s.ticker = nil
+	}
+
+	done := make(chan struct{})
+	go func() {
+		for s.updater.IsRunning() {
+			time.Sleep(100 * time.Millisecond)
+		}
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
 	}
 
 	applog.Info("[Douban] Scheduler stopped")

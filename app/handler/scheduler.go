@@ -279,11 +279,14 @@ func (s *Scheduler) runSourceCollect(sourceKey string, mode model.CollectMode, h
 		<-done
 		return
 	case <-s.stopCh:
+		// 优雅停止：通知引擎完成当前页后停止，并等待引擎结束
+		engine.Stop()
+		<-done
 		return
 	}
 }
 
-// Stop 停止调度器的后台循环
+// Stop 停止调度器的后台循环，并等待所有正在运行的采集引擎优雅结束
 func (s *Scheduler) Stop() {
 	s.mu.Lock()
 	if !s.running {
@@ -291,13 +294,20 @@ func (s *Scheduler) Stop() {
 		return
 	}
 	s.running = false
-	s.mu.Unlock()
-
 	s.stopAllSourceTimers()
 
 	select {
-	case s.stopCh <- struct{}{}:
+	case <-s.stopCh:
 	default:
+		close(s.stopCh)
+	}
+
+	stoppedCh := s.stopped
+	s.mu.Unlock()
+
+	select {
+	case <-stoppedCh:
+	case <-time.After(5 * time.Second):
 	}
 }
 
@@ -371,6 +381,13 @@ type SourceScheduleItem struct {
 }
 
 // Status 返回当前调度器状态
+// IsRunning 返回调度器是否正在运行
+func (s *Scheduler) IsRunning() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.running
+}
+
 func (s *Scheduler) Status() SchedulerStatus {
 	s.mu.Lock()
 	cfg := GetScheduleConfig()

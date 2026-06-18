@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { GetAllSources, GetSourceStats, GetSetting, SetSetting } from '../../bindings/cczjVideo/app'
+import { useErrorStore } from './error'
 import type { SourceStat } from '../types'
 
 const DEFAULT_SOURCE_KEY = 'default_source_key'
@@ -48,7 +49,7 @@ export const useSourceStore = defineStore('source', () => {
         }
       }
     } catch (e) {
-      console.error('loadSources:', e)
+      useErrorStore().fromError('加载源站列表失败', e)
     } finally {
       loading.value = false
     }

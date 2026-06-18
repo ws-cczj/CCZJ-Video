@@ -5,9 +5,7 @@ import { useRouter } from 'vue-router'
 import { GetRecentHistory, DeleteHistoryByVideo, ClearAllHistory } from '../../bindings/cczjVideo/app'
 import { usePosterCacheStore } from '../stores/posterCache'
 import Icon from '../components/Icon.vue'
-import LoadingSpinner from '../components/LoadingSpinner.vue'
-import EmptyState from '../components/EmptyState.vue'
-import { Button, Badge } from '../components/ui'
+import { Button, Badge, Spinner as LoadingSpinner, Empty as EmptyState } from '../components/ui'
 import { formatTime } from '../utils'
 import { epProgressKey, getEpProgress, getEpProgressPct } from '../utils/episodeProgress'
 import type { HistoryItem } from '../types'
@@ -122,7 +120,7 @@ function keyOf(h: HistoryItem): string {
 }
 
 function getWatchPct(h: HistoryItem): number {
-  const entry = getEpProgress(epProgressKey(h.source_key, h.vod_id, h.ep_num))
+  const entry = getEpProgress(epProgressKey(h.global_id, h.vod_name, h.ep_num))
   if (entry) return getEpProgressPct(entry)
   if (h.position && h.position > 0 && h.position <= 100) return Math.round(h.position)
   return 0

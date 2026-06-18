@@ -13,22 +13,34 @@ const LOG_PREFIX = '[TsCache]'
 
 // ====== 可调参数 ======
 // ⭐ 用户建议：不要粗暴清空，用"单集上限 + 全局上限 + 权重分配"的 LRU 调度
-//   - 单集最多 128 片（超出就优先淘汰该集的旧片段）
-//   - 全局最多 1024 片 / 256 MB（超出就按权重淘汰最老 / 最没用的）
+//   - 单集最多 64 片（超出就优先淘汰该集的旧片段）
+//   - 全局最多 1024 片 / 512 MB（超出就按权重淘汰最老 / 最没用的）
 //   - 这样切换到已看过的集，缓存仍能命中；而长期不用的片段会自然被淘汰
 const DEFAULT_PREFETCH_SECONDS = 60
 const MIN_PREFETCH_COUNT = 4
 const MAX_PREFETCH_COUNT = 20
 const PREFETCH_TRIGGER_WHEN_LESS_THAN = 12
 const PREFETCH_AHEAD_NEXT_EPISODE = 5
-const FETCH_TIMEOUT_MS = 8000
 const PREFETCH_DEBOUNCE_MS = 300
-const MAX_CONCURRENT_FETCH = 4
 const MAX_QUEUE_PER_EPISODE = 30
 const MAX_CACHED_SEGMENTS = 1024          // 全局 LRU 上限：1024 片
-const MAX_CACHED_BYTES = 256 * 1024 * 1024 // 全局上限：256 MB
-const MAX_PER_EPISODE = 128                // ⭐ 单集上限：128 片（硬约束）
+const MAX_CACHED_BYTES = 512 * 1024 * 1024 // 全局上限：512 MB
+const MAX_PER_EPISODE = 64                 // ⭐ 单集上限：64 片（硬约束）
 const SPEED_SAMPLE_COUNT = 8
+
+// ====== 网络诊断阈值 ======
+const DIAG_CONGESTED_AVG_MS = 5000       // avg > 5s → server_congested
+const DIAG_SLOW_AVG_MS = 2000            // avg > 2s → local_network_slow
+const DIAG_FAST_THRESHOLD_MS = 1000      // avg < 1s 连续4次 → normal
+const DIAG_VARIANCE_THRESHOLD = 0.5      // stddev/avg > 0.5 → 高方差（服务器侧抖动）
+const HEDGE_STAGGER_MS = 1000            // 对冲请求延迟发射间隔
+const FRAGMENT_TIMEOUT_MS = 8000         // 普通分片超时
+const FRAGMENT_TIMEOUT_CONGESTED_MS = 12000  // 拥堵时放宽超时
+const FRAGMENT_TIMEOUT_SLOW_MS = 10000   // 慢网络超时
+const CONSECUTIVE_SLOW_FOR_ABR = 3       // 连续N个慢分片 → 触发 ABR 降级
+const COOLDOWN_SAMPLES = 6               // 切回 normal 后的冷却样本数
+const REENTRY_CONFIRM_COUNT = 3          // 冷却后需连续 N 次确认才允许重新切入 congested
+const EXTREME_CONGESTED_AVG_MS = 8000    // 极端拥塞阈值：bypass 冷却直接切入
 
 // ====== 类型 ======
 
@@ -49,11 +61,6 @@ let currentSourceKey = ''
  */
 function episodeKey(sourceKey: unknown, vodId: unknown, epNum: unknown): string {
   return `ep_${String(sourceKey ?? '')}_${String(vodId ?? '')}_${String(epNum ?? '')}`
-}
-
-/** 旧版 key（无 source_key），用于 IndexedDB 历史数据兼容 */
-function legacyEpisodeKey(vodId: unknown, epNum: unknown): string {
-  return `ep_${String(vodId ?? '')}_${String(epNum ?? '')}`
 }
 
 function epKeyFrom(ep: EpisodeLite | undefined | null, fallbackIdx?: number): string {
@@ -243,6 +250,20 @@ let _curEpStats: EpisodeCounter = { hits: 0, misses: 0 }
 // 已播放片段追踪：key = episodeKey，value = 已播放 segment 索引集合
 const playedSegmentsByEpisode = new Map<string, Set<number>>()
 
+// ====== 网络诊断状态 ======
+type NetworkMode = 'normal' | 'server_congested' | 'local_network_slow'
+let _networkMode: NetworkMode = 'normal'
+let _downloadAvgMs = 0        // 滚动平均下载耗时 (ms)
+let _downloadVariance = 0     // 下载耗时方差
+let _slowFetchCount = 0       // 近期慢请求计数（>3s 计一次）
+let _fastFetchStreak = 0      // 连续快请求计数（<1s 计一次）
+let _consecutiveSlowSegs = 0  // 连续慢分片计数（触发 ABR 降级）
+let _abrSwitchCallback: ((targetLevel: number) => void) | null = null
+let _normalCooldown = 0         // 冷却倒计时：>0 时阻止切入 congested / local_network_slow
+let _congestedReentryCount = 0  // 冷却结束后，连续确认 congested 的计数
+let _slowReentryCount = 0       // 冷却结束后，连续确认 local_network_slow 的计数
+const hedgeInFlight = new Set<string>()  // 正在进行对冲请求的 URL
+
 // ====== fetch 透明拦截 ======
 
 let originalFetch: typeof fetch | null = null
@@ -289,6 +310,7 @@ function installFetchInterceptor(): void {
     _curEpStats.misses++
     fireListeners()
     logCounter++
+    const missT0 = performance.now()  // ⭐ v3: 记录 miss 耗时用于网络诊断
     if (logCounter % 10 === 0) {
       const h = _curEpStats.hits, m = _curEpStats.misses
       const total = h + m
@@ -307,7 +329,9 @@ function installFetchInterceptor(): void {
         if (!enabled) return
         cacheSet(urlStr, buf)
         diskSave(urlStr, buf).catch(() => { })
-        recordFetchDuration(0)  // 0 表示非预取请求，不影响网速自适应
+        // ⭐ v3: 记录实际下载耗时用于网络诊断（不再是 0）
+        recordFetchDuration(performance.now() - missT0)
+        updateNetworkDiagnosis()
         fireListeners()
       }).catch(() => { /* clone 读取失败没关系，hls.js 还能拿到原始 response */ })
       return response
@@ -319,65 +343,175 @@ function uninstallFetchInterceptor(): void {
   if (originalFetch) { window.fetch = originalFetch; originalFetch = null }
 }
 
-// ====== 自适应预取 ======
+// ====== 网络诊断引擎 ======
 //
-// 核心原则（v2 - 非连续分散策略）：
-//   1. 网速越慢，预取的起始偏移越大（给预取留更多时间）
-//   2. 网速越慢，预取片段之间的间距越大（覆盖更远距离）
-//   3. 只预取未播放的片段（已播放的缓存意义不大）
-//   4. 不连续预取（避免与 hls.js 的顺序拉取竞争同一批数据）
+// 初始化 → 对比测速诊断
+//   ├─ server_congested → 多连接+降码率+对冲
+//   ├─ local_network_slow → 降码率+缓存储备+低并发
+//   └─ normal → 白天默认策略
+
+function updateNetworkDiagnosis(): void {
+  const n = recentFetchDurations.length
+  if (n < 3) return
+  const avg = recentFetchDurations.reduce((a, b) => a + b, 0) / n
+  const variance = recentFetchDurations.reduce((a, b) => a + (b - avg) ** 2, 0) / n
+  const stddev = Math.sqrt(variance)
+  const cv = avg > 0 ? stddev / avg : 0
+  const slowCount = recentFetchDurations.filter((d) => d > 3000).length
+
+  _downloadAvgMs = avg
+  _downloadVariance = variance
+  _slowFetchCount = slowCount
+
+  // 连续快请求 → 恢复正常
+  const lastDur = recentFetchDurations[n - 1]
+  if (lastDur < DIAG_FAST_THRESHOLD_MS) {
+    _fastFetchStreak++
+  } else {
+    _fastFetchStreak = 0
+  }
+
+  const prevMode = _networkMode
+
+  // ⭐ 冷却递减
+  if (_normalCooldown > 0) _normalCooldown--
+
+  // ── 判定目标模式 ──
+  let targetMode: NetworkMode = _networkMode  // 默认保持当前
+
+  if (_fastFetchStreak >= 4 && avg < DIAG_FAST_THRESHOLD_MS) {
+    targetMode = 'normal'
+  } else if (avg > DIAG_CONGESTED_AVG_MS || (slowCount >= 3 && cv > DIAG_VARIANCE_THRESHOLD)) {
+    // 目标为 congested → 需过冷却检查
+    if (_normalCooldown > 0 && avg <= EXTREME_CONGESTED_AVG_MS) {
+      // 冷却中且非极端拥塞 → 保持 normal，计数不累加
+      _congestedReentryCount = 0
+      targetMode = _networkMode === 'server_congested' ? 'normal' : _networkMode
+    } else if (_normalCooldown > 0 && avg > EXTREME_CONGESTED_AVG_MS) {
+      // 极端拥塞 → bypass 冷却
+      _congestedReentryCount = 0
+      targetMode = 'server_congested'
+      console.log(`${LOG_PREFIX} 🔥 极端拥塞 (avg=${Math.round(avg)}ms)，bypass 冷却切入 congested`)
+    } else {
+      // 冷却已结束 → 需要连续 REENTRY_CONFIRM_COUNT 次确认
+      _congestedReentryCount++
+      if (_congestedReentryCount >= REENTRY_CONFIRM_COUNT) {
+        targetMode = 'server_congested'
+      }
+      // 未达确认次数 → 保持当前模式
+    }
+  } else if (avg > DIAG_SLOW_AVG_MS && cv <= DIAG_VARIANCE_THRESHOLD) {
+    // 目标为 local_network_slow → 需过冷却检查
+    if (_normalCooldown > 0) {
+      // 冷却中 → 阻止切入 slow
+      _slowReentryCount = 0
+      targetMode = _networkMode === 'local_network_slow' ? 'normal' : _networkMode
+    } else {
+      // 冷却已结束 → 需要连续 REENTRY_CONFIRM_COUNT 次确认
+      _slowReentryCount++
+      if (_slowReentryCount >= REENTRY_CONFIRM_COUNT) {
+        targetMode = 'local_network_slow'
+      }
+    }
+  } else {
+    // 不满足任何切换条件 → 重置所有确认计数
+    _congestedReentryCount = 0
+    _slowReentryCount = 0
+  }
+
+  _networkMode = targetMode
+
+  // ⭐ 从非 normal 切回 normal → 启动冷却
+  if (prevMode !== 'normal' && _networkMode === 'normal') {
+    _normalCooldown = COOLDOWN_SAMPLES
+    _congestedReentryCount = 0
+    _slowReentryCount = 0
+    console.log(`${LOG_PREFIX} 🧊 进入冷却期 (${COOLDOWN_SAMPLES} 样本内不允许切入 congested/slow)`)
+  }
+
+  // 连续慢分片 → ABR 降级
+  if (lastDur > DIAG_SLOW_AVG_MS) {
+    _consecutiveSlowSegs++
+    if (_consecutiveSlowSegs >= CONSECUTIVE_SLOW_FOR_ABR) {
+      _abrSwitchCallback?.(-1)  // -1 = 降一级
+      console.log(`${LOG_PREFIX} ⚠️ 连续 ${_consecutiveSlowSegs} 片慢 (avg=${Math.round(avg)}ms)，建议降码率`)
+    }
+  } else {
+    _consecutiveSlowSegs = 0
+  }
+  if (prevMode !== _networkMode) {
+    console.log(`${LOG_PREFIX} 🔍 网络诊断: ${prevMode} → ${_networkMode} (avg=${Math.round(avg)}ms, cv=${cv.toFixed(2)}, slow=${slowCount}/${n}, cooldown=${_normalCooldown}, congRe=${_congestedReentryCount}, slowRe=${_slowReentryCount})`)
+  }
+}
+
+function getNetworkMode(): NetworkMode { return _networkMode }
+
+// ====== 自适应预取策略（v3 — 聪明地缓存）======
 //
-// 示意（pos = 当前播放片段位置）：
-//   慢速网络:  pos ... [预取1] ... [预取2] ... [预取3] ... （间距大，起点远）
-//   中速网络:  pos . [预取1] .. [预取2] ... [预取3] ...   （间距中）
-//   快速网络:  pos [预取1][预取2][预取3] ...                （连续也可，因为下载很快）
+// 分片选择策略：不只"多缓存"，而要"聪明地缓存"
+// 预存128个ts，但晚上播放位置附近的 ts 都下载慢，光缓存多也没用（远水不解近渴）
+//
+// 三级区域权重：
+//   紧急区 (pos+1 ~ pos+2): 最高优先，对冲请求双并发取最快
+//   温热区 (pos+3 ~ pos+15): 中等优先，密集预取
+//   冷区   (pos+16+):        低优先，稀疏预取
+//
+// 网络模式适配：
+//   server_congested → 全力紧急区 + 对冲，减少冷区
+//   local_network_slow → 均匀分配，低并发
+//   normal → 标准分布
 
 function adaptivePrefetchCount(): number {
-  // 预取总量：网速慢时略多一点，但绝不超过 MAX_PREFETCH_COUNT
   const base = Math.ceil(DEFAULT_PREFETCH_SECONDS / Math.max(targetDuration, 1))
   if (recentFetchDurations.length < 3) return clamp(base, MIN_PREFETCH_COUNT, MAX_PREFETCH_COUNT)
-  const avg = recentFetchDurations.reduce((a, b) => a + b, 0) / recentFetchDurations.length
-  if (avg > 5000) return clamp(base + 8, MIN_PREFETCH_COUNT, MAX_PREFETCH_COUNT)
-  if (avg > 3000) return clamp(base + 6, MIN_PREFETCH_COUNT, MAX_PREFETCH_COUNT)
-  if (avg > 1500) return clamp(base + 4, MIN_PREFETCH_COUNT, MAX_PREFETCH_COUNT)
+  const avg = _downloadAvgMs || (recentFetchDurations.reduce((a, b) => a + b, 0) / recentFetchDurations.length)
+  if (_networkMode === 'server_congested') return clamp(base + 10, MIN_PREFETCH_COUNT, MAX_PREFETCH_COUNT)
+  if (_networkMode === 'local_network_slow') return clamp(base + 4, MIN_PREFETCH_COUNT, MAX_PREFETCH_COUNT)
   if (avg < 500) return clamp(base - 2, MIN_PREFETCH_COUNT, MAX_PREFETCH_COUNT)
   return clamp(base, MIN_PREFETCH_COUNT, MAX_PREFETCH_COUNT)
 }
 
-/**
- * 起始偏移：从当前播放位置往后第几片开始预取。
- * 逻辑：网速越慢，offset 越大 —— 让 hls.js 自己处理紧接的几片，
- * 我们的预取专注于更远的位置，这样才能保证"到时候已经下好了"。
- */
 function adaptiveBufferOffset(): number {
   if (recentFetchDurations.length < 3) return 8
-  const avg = recentFetchDurations.reduce((a, b) => a + b, 0) / recentFetchDurations.length
-  // 单片下载时间 / 片时长 = 下载一片需要多少"播放时间"
-  // 比例 > 1 意味着下载比播放慢，必须把预取起点推远
+  const avg = _downloadAvgMs || (recentFetchDurations.reduce((a, b) => a + b, 0) / recentFetchDurations.length)
   const ratio = avg / (targetDuration * 1000)
-  if (avg > 5000 || ratio > 1.5) return 20   // 很慢：起点推到 20 片后
-  if (avg > 3000 || ratio > 1.0) return 15   // 较慢：起点推到 15 片后
-  if (avg > 1500 || ratio > 0.5) return 12   // 中等：起点推到 12 片后
-  if (avg < 500) return 8                    // 很快：起点可以近一点
+  // 拥堵时：偏移小 → 优先缓存近处（对冲+密集）
+  if (_networkMode === 'server_congested') return 3
+  if (avg > 5000 || ratio > 1.5) return 20
+  if (avg > 3000 || ratio > 1.0) return 15
+  if (avg > 1500 || ratio > 0.5) return 12
+  if (avg < 500) return 8
   return 10
 }
 
-/**
- * 预取间距：相邻两个预取片段之间隔几片。
- * 逻辑：网速越慢，间距越大，用"稀疏但广覆盖"换取更高的命中概率。
- *   step=1 → 连续预取 [pos+offset, pos+offset+1, pos+offset+2, ...]
- *   step=2 → 隔一片预取 [pos+offset, pos+offset+2, pos+offset+4, ...]
- *   step=3 → 隔两片预取 [pos+offset, pos+offset+3, pos+offset+6, ...]
- */
 function adaptiveSpreadStep(): number {
   if (recentFetchDurations.length < 3) return 2
-  const avg = recentFetchDurations.reduce((a, b) => a + b, 0) / recentFetchDurations.length
+  const avg = _downloadAvgMs || (recentFetchDurations.reduce((a, b) => a + b, 0) / recentFetchDurations.length)
   const ratio = avg / (targetDuration * 1000)
-  if (avg > 5000 || ratio > 1.5) return 4   // 很慢：大片间距，广撒网
-  if (avg > 3000 || ratio > 1.0) return 3   // 较慢：中等间距
-  if (avg > 1500 || ratio > 0.5) return 2   // 中等：较小间距
-  if (avg < 300) return 1                    // 极快：连续预取也不怕
+  if (_networkMode === 'server_congested') return 3
+  if (avg > 5000 || ratio > 1.5) return 4
+  if (avg > 3000 || ratio > 1.0) return 3
+  if (avg > 1500 || ratio > 0.5) return 2
+  if (avg < 300) return 1
   return 2
+}
+
+/** 动态并发数：根据网络状况调整同时拉取的分片数 */
+function adaptiveConcurrency(): number {
+  switch (_networkMode) {
+    case 'server_congested': return 5     // 提高并发抢占带宽
+    case 'local_network_slow': return 2   // 低并发避免加剧拥塞
+    default: return 3
+  }
+}
+
+/** 分片超时：根据网络状况动态调整 */
+function adaptiveFragmentTimeout(): number {
+  switch (_networkMode) {
+    case 'server_congested': return FRAGMENT_TIMEOUT_CONGESTED_MS
+    case 'local_network_slow': return FRAGMENT_TIMEOUT_SLOW_MS
+    default: return FRAGMENT_TIMEOUT_MS
+  }
 }
 
 function clamp(v: number, min: number, max: number): number { return Math.max(min, Math.min(max, v)) }
@@ -399,6 +533,14 @@ export function setEpisodes(list: EpisodeLite[]): void {
   epStats.clear()  // ⭐ 集数级统计重置
   _curEpStats = { hits: 0, misses: 0 }
   recentFetchDurations.length = 0
+  // ⭐ v3: 重置网络诊断状态（新视频 = 新网络环境）
+  _networkMode = 'normal'
+  _downloadAvgMs = 0
+  _downloadVariance = 0
+  _slowFetchCount = 0
+  _fastFetchStreak = 0
+  _consecutiveSlowSegs = 0
+  hedgeInFlight.clear()
 
   currentVodId = newVodId
   currentSourceKey = episodes[0]?.source_key ? String(episodes[0].source_key) : ''
@@ -432,8 +574,7 @@ export function setCurrentEpisode(idx: number): void {
 
     // ⭐ 按需从磁盘加载该集的缓存（只有当前集的片段才恢复到内存）
     const segUrls = segmentsByEpisode.get(currentEpKey) || undefined
-    const legacyKey = ep ? legacyEpisodeKey(ep.vod_id, ep.ep_num ?? idx) : ''
-    diskLoadForEpisode(currentEpKey, segUrls, legacyKey).catch(() => { })
+    diskLoadForEpisode(currentEpKey, segUrls).catch(() => { })
   } else {
     _curEpStats = { hits: 0, misses: 0 }
   }
@@ -563,26 +704,65 @@ export function notifyCurrentTs(absUrl: string): void {
   if (!playedSet) { playedSet = new Set<number>(); playedSegmentsByEpisode.set(currentEpKey, playedSet) }
   for (let i = 0; i <= pos; i++) playedSet.add(i)
 
-  // 2. 预取参数：上限同时考虑 "adaptivePrefetchCount()" 与"剩余未播放片段数"，避免重复
   const totalActual = segs.length
   const remaining = totalActual - pos - 1
-  const prefetchCount = Math.min(adaptivePrefetchCount(), remaining)
-  const startOffset = adaptiveBufferOffset()
+  if (remaining <= 0) return
+
+  // 2. 三级区域权重预取
+  //   紧急区 (pos+1 ~ pos+2): 对冲请求，双并发取最快
+  //   温热区 (pos+3 ~ pos+15): 密集预取，高优先
+  //   冷区   (pos+16+):        稀疏预取，广覆盖
+  const totalCount = Math.min(adaptivePrefetchCount(), remaining)
   const spreadStep = adaptiveSpreadStep()
-
-  // 3. 非连续预取：按 spreadStep 间距跳跃；已有缓存的不拉
   let addedCount = 0
-  let tried = 0
-  const maxTries = prefetchCount * spreadStep * 2
 
-  for (let offset = startOffset; tried < maxTries && addedCount < prefetchCount; offset += spreadStep) {
+  // --- 紧急区：对冲请求（仅拥堵时启用）---
+  if (_networkMode === 'server_congested') {
+    let hedgeAdded = 0
+    for (let offset = 1; offset <= 2 && pos + offset < segs.length; offset++) {
+      const idx = pos + offset
+      if (playedSet.has(idx)) continue
+      const u = segs[idx]
+      if (cacheHas(u) || pendingUrls.has(u) || hedgeInFlight.has(u)) continue
+      // 对冲：双请求取最快
+      hedgeAdded++
+      addedCount++
+      hedgeInFlight.add(u)
+      const t0 = performance.now()
+      hedgeFetch(u).then((buf) => {
+        if (buf) {
+          cacheSet(u, buf)
+          diskSave(u, buf, currentEpKey).catch(() => { })
+          recordFetchDuration(performance.now() - t0)
+          fireListeners()
+        }
+      }).finally(() => { hedgeInFlight.delete(u) })
+    }
+    if (hedgeAdded > 0) {
+      console.log(`${LOG_PREFIX} 🚨 紧急对冲: ${hedgeAdded} 片 (pos=${pos}, mode=${_networkMode})`)
+    }
+  }
+
+  // --- 温热区：密集预取 (pos+3 ~ pos+15) ---
+  const warmStart = 3
+  const warmEnd = Math.min(15, remaining)
+  for (let offset = warmStart; offset <= warmEnd && addedCount < totalCount; offset++) {
     const idx = pos + offset
     if (idx >= segs.length) break
-    if (playedSet.has(idx)) { tried++; continue }
+    if (playedSet.has(idx)) continue
     const u = segs[idx]
-    if (cacheHas(u) || pendingUrls.has(u)) { tried++; continue }
+    if (cacheHas(u) || pendingUrls.has(u) || hedgeInFlight.has(u)) continue
     if (enqueue({ url: u, episodeKey: currentEpKey, priority: 1 })) addedCount++
-    tried++
+  }
+
+  // --- 冷区：稀疏预取 (pos+16+, 按 spreadStep 间距) ---
+  const coldStart = Math.max(16, warmEnd + 1)
+  for (let offset = coldStart; addedCount < totalCount && pos + offset < segs.length; offset += spreadStep) {
+    const idx = pos + offset
+    if (playedSet.has(idx)) continue
+    const u = segs[idx]
+    if (cacheHas(u) || pendingUrls.has(u) || hedgeInFlight.has(u)) continue
+    if (enqueue({ url: u, episodeKey: currentEpKey, priority: 2 })) addedCount++
   }
 
   if (pos % 5 === 0) {
@@ -591,11 +771,11 @@ export function notifyCurrentTs(absUrl: string): void {
     const rate = total === 0 ? 0 : h / total
     console.log(
       `${LOG_PREFIX} pos=${pos}/${totalActual}, prefetch=${addedCount}, ` +
-      `命中率=${(rate * 100).toFixed(1)}%`
+      `命中率=${(rate * 100).toFixed(1)}%, mode=${_networkMode}, conc=${adaptiveConcurrency()}`
     )
   }
 
-  // 4. 下一集预取：进度到 30% 或剩余 ≤12 片时触发
+  // 3. 下一集预取：进度到 30% 或剩余 ≤12 片时触发
   if (currentEpIdx + 1 < episodes.length && (pos / Math.max(totalActual, 1) >= 0.3 || remaining <= PREFETCH_TRIGGER_WHEN_LESS_THAN)) {
     const nextEp = episodes[currentEpIdx + 1]
     if (nextEp) {
@@ -627,7 +807,6 @@ export function notifyFragmentRequested(absUrl: string): void {
 
 export function stats() {
   const segs = currentEpKey ? (segmentsByEpisode.get(currentEpKey) || []) : []
-  // ⭐ 当前集已缓存的片段数（不是所有 LRU 条目）
   let cachedForCurEp = 0
   if (currentEpKey) {
     for (const u of segs) if (cacheHas(u)) cachedForCurEp++
@@ -647,6 +826,11 @@ export function stats() {
     bufferOffset: adaptiveBufferOffset(),
     spreadStep: adaptiveSpreadStep(),
     cacheMB: totalCacheBytes / 1024 / 1024,
+    // ⭐ v3: 网络诊断信息
+    networkMode: _networkMode,
+    concurrency: adaptiveConcurrency(),
+    fragmentTimeout: adaptiveFragmentTimeout(),
+    consecutiveSlowSegs: _consecutiveSlowSegs,
   }
 }
 
@@ -667,6 +851,11 @@ export function enable(): void { enabled = true; installFetchInterceptor() }
 export function disable(): void { enabled = false; uninstallFetchInterceptor() }
 export function isEnabled(): boolean { return enabled }
 
+// ⭐ v3: ABR 回调注册 —— VideoPlayer 通过此接口接收降码率信号
+export function setAbrSwitchCallback(cb: ((targetLevel: number) => void) | null): void {
+  _abrSwitchCallback = cb
+}
+
 export function clear(): void {
   episodes = []
   currentEpIdx = -1
@@ -679,11 +868,20 @@ export function clear(): void {
   m3u8TextCache.clear()
   epQueueCount.clear()
   pendingUrls.clear()
+  hedgeInFlight.clear()
   queue.length = 0
   inflight = 0
   epStats.clear()
   _curEpStats = { hits: 0, misses: 0 }
   recentFetchDurations.length = 0
+  // ⭐ v3: 重置网络诊断状态
+  _networkMode = 'normal'
+  _downloadAvgMs = 0
+  _downloadVariance = 0
+  _slowFetchCount = 0
+  _fastFetchStreak = 0
+  _consecutiveSlowSegs = 0
+  _abrSwitchCallback = null
   if (debounceTimer != null) { window.clearTimeout(debounceTimer); debounceTimer = null }
   fireListeners()
 }
@@ -730,17 +928,28 @@ function scheduleDrain(): void {
 }
 
 function drainQueue(): void {
-  while (inflight < MAX_CONCURRENT_FETCH && queue.length > 0) {
+  const maxConc = adaptiveConcurrency()
+  while (inflight < maxConc && queue.length > 0) {
     const job = queue.shift(); if (!job) break
-    inflight++; runOne(job).finally(() => { inflight--; drainQueue() })
+    inflight++
+    // ⭐ 交错启动：每个分片间隔 ~1s，避免服务器敏感封禁
+    if (inflight > 1) {
+      const staggerDelay = (inflight - 1) * 1000
+      window.setTimeout(() => {
+        runOne(job).finally(() => { inflight--; drainQueue() })
+      }, staggerDelay)
+    } else {
+      runOne(job).finally(() => { inflight--; drainQueue() })
+    }
   }
 }
 
 async function runOne(job: FetchJob): Promise<void> {
   const t0 = performance.now()
+  const timeout = adaptiveFragmentTimeout()
   try {
     const ctrl = new AbortController()
-    const tid = window.setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS)
+    const tid = window.setTimeout(() => ctrl.abort(), timeout)
     const init: RequestInit = { signal: ctrl.signal }
     try { (init as any).priority = 'low' } catch { /* ignore */ }
     const resp = originalFetch
@@ -750,9 +959,11 @@ async function runOne(job: FetchJob): Promise<void> {
     if (resp.ok) {
       const buf = await resp.arrayBuffer()
       cacheSet(job.url, buf)
-      diskSave(job.url, buf).catch(() => { })
+      diskSave(job.url, buf, job.episodeKey).catch(() => { })
       epQueueCount.set(job.episodeKey, (epQueueCount.get(job.episodeKey) || 0) - 1)
-      recordFetchDuration(performance.now() - t0)
+      const elapsed = performance.now() - t0
+      recordFetchDuration(elapsed)
+      updateNetworkDiagnosis()
       fireListeners()
     }
   } catch { /* 静默 */ }
@@ -762,6 +973,59 @@ async function runOne(job: FetchJob): Promise<void> {
 function recordFetchDuration(ms: number): void {
   recentFetchDurations.push(ms)
   if (recentFetchDurations.length > SPEED_SAMPLE_COUNT) recentFetchDurations.shift()
+}
+
+// ====== 对冲请求（Hedge Fetch）======
+//
+// 对紧邻播放位置的关键分片开两个并发请求（同一文件），取最快返回的，另一个 abort。
+// 能大幅降低尾部延迟，避免单个慢请求拖住整个播放流水线。
+// 第二个请求延迟 HEDGE_STAGGER_MS 后发射，避免同时冲击服务器。
+
+function hedgeFetch(url: string): Promise<ArrayBuffer | null> {
+  const ctrl1 = new AbortController()
+  const ctrl2 = new AbortController()
+  const timeout = adaptiveFragmentTimeout()
+
+  const doFetch = (signal: AbortSignal) => {
+    const init: RequestInit = { signal }
+    return originalFetch
+      ? originalFetch.call(window, url, init)
+      : fetch(url, init)
+  }
+
+  const racePromise = new Promise<ArrayBuffer | null>((resolve, reject) => {
+    let settled = false
+    const settle = (value: ArrayBuffer | null) => {
+      if (!settled) { settled = true; resolve(value) }
+    }
+
+    // 请求1：立即发射
+    doFetch(ctrl1.signal)
+      .then((r) => r.ok ? r.arrayBuffer() : Promise.reject(new Error('http ' + r.status)))
+      .then((buf) => { settle(buf); try { ctrl2.abort() } catch { } })
+      .catch((err) => { if (!settled && !ctrl1.signal.aborted) reject(err) })
+
+    // 请求2：延迟发射（错开避免服务器压力）
+    window.setTimeout(() => {
+      if (settled || ctrl2.signal.aborted) return
+      doFetch(ctrl2.signal)
+        .then((r) => r.ok ? r.arrayBuffer() : Promise.reject(new Error('http ' + r.status)))
+        .then((buf) => { settle(buf); try { ctrl1.abort() } catch { } })
+        .catch((err) => { if (!settled && !ctrl2.signal.aborted) reject(err) })
+    }, HEDGE_STAGGER_MS)
+  })
+
+  // 全局超时保护
+  return Promise.race([
+    racePromise,
+    new Promise<ArrayBuffer | null>((resolve) => {
+      window.setTimeout(() => {
+        try { ctrl1.abort() } catch { }
+        try { ctrl2.abort() } catch { }
+        resolve(null)
+      }, timeout)
+    }),
+  ])
 }
 
 // ====== IndexedDB 持久化 ======
@@ -798,7 +1062,7 @@ async function diskSave(url: string, buf: ArrayBuffer, epKey?: string): Promise<
  *
  * 避免把其他视频的 650 片全部加载到内存。
  */
-async function diskLoadForEpisode(epKey: string, segmentUrls?: string[], legacyKey?: string): Promise<number> {
+async function diskLoadForEpisode(epKey: string, segmentUrls?: string[]): Promise<number> {
   if (!epKey && (!segmentUrls || segmentUrls.length === 0)) return 0
   try {
     const db = await openDB()
@@ -812,10 +1076,9 @@ async function diskLoadForEpisode(epKey: string, segmentUrls?: string[], legacyK
     for (const e of entries) {
       if (now - e.ts > DISK_TTL_MS) continue
       if (!e.data || e.data.byteLength <= 0) continue
-      // epKey 匹配（新格式含 source_key，或旧格式兼容）
+      // epKey 匹配（含 source_key）
       if (epKey && e.episodeKey && e.episodeKey === epKey) { cacheSet(e.url, e.data); loaded++; continue }
-      if (legacyKey && e.episodeKey && e.episodeKey === legacyKey) { cacheSet(e.url, e.data); loaded++; continue }
-      // 老数据：通过 URL 白名单匹配
+      // 老数据 fallback：通过 URL 白名单匹配
       if (urlSet && urlSet.has(e.url)) { cacheSet(e.url, e.data); loaded++; continue }
     }
     if (loaded > 0) {
@@ -961,6 +1224,7 @@ async function diskCachePrune(maxBytes: number): Promise<number> {
 class TsCacheLoader {
   private _abort: AbortController | null = null
   private _destroyed = false
+  private _hedgeAbort: AbortController | null = null  // ⭐ v3: 对冲请求的 abort 控制器
 
   // hls.js v1.7.0-beta.1 的 LoadStats 完整结构（必须在构造器中初始化）
   public stats = {
@@ -1038,32 +1302,45 @@ class TsCacheLoader {
       fireListeners()
       const ctrl = new AbortController()
       this._abort = ctrl
+      this._hedgeAbort = null
+      const t0 = this.stats.loading.start
 
       const doFetch = () => {
         if (originalFetch) return originalFetch.call(window, url, { signal: ctrl.signal })
         return fetch(url, { signal: ctrl.signal })
       }
 
-      doFetch()
-        .then(async (resp) => {
-          if (this._destroyed || ctrl.signal.aborted) return
+      // ⭐ v3: 根据网络诊断决定使用对冲请求还是普通请求
+      const useHedge = _networkMode === 'server_congested' && hedgeInFlight.size < 2
+      const fetchPromise = useHedge
+        ? hedgeFetch(url).then((buf) => buf ? { buf, hedged: true as const, resp: null as Response | null } : Promise.reject(new Error('hedge timeout')))
+        : doFetch().then(async (resp) => {
+          if (this._destroyed || ctrl.signal.aborted) throw new Error('aborted')
           if (!resp.ok) throw new Error('HTTP ' + resp.status)
           const buf = await resp.arrayBuffer()
+          return { buf, hedged: false as const, resp: resp as Response | null }
+        })
+
+      fetchPromise
+        .then(({ buf, hedged, resp }) => {
           if (this._destroyed) return
           // 写入缓存
           cacheSet(url, buf)
           diskSave(url, buf).catch(() => { })
-          recordFetchDuration(performance.now() - this.stats.loading.start)
+          const elapsed = performance.now() - t0
+          recordFetchDuration(elapsed)
+          updateNetworkDiagnosis()
           fireListeners()
           // 统计
           const now = performance.now()
-          this.stats.loading.first = Math.max(this.stats.loading.start + 1, this.stats.loading.start)
+          this.stats.loading.first = Math.max(t0 + 1, t0)
           this.stats.loading.end = Math.max(this.stats.loading.first, now)
           this.stats.loaded = this.stats.total = buf.byteLength
-          this.stats.bwEstimate = Math.round((buf.byteLength * 8 * 1000) / Math.max(1, now - this.stats.loading.start))
+          this.stats.bwEstimate = Math.round((buf.byteLength * 8 * 1000) / Math.max(1, now - t0))
           this.stats.chunkCount = 1
+          if (hedged) console.log(`${LOG_PREFIX} ⚡ 对冲命中: ${url.slice(-60)} (${Math.round(elapsed)}ms)`)
           if (callbacks?.onSuccess) {
-            callbacks.onSuccess({ url, data: buf, code: 200 }, this.stats, context, resp)
+            callbacks.onSuccess({ url, data: buf, code: 200 }, this.stats, context, resp || null)
           }
         })
         .catch((_err) => {
@@ -1170,18 +1447,39 @@ class TsCacheLoader {
 
   abort() {
     try { this._abort?.abort() } catch { }
+    try { this._hedgeAbort?.abort() } catch { }
   }
 
   destroy() {
     this._destroyed = true
     try { this._abort?.abort() } catch { }
+    try { this._hedgeAbort?.abort() } catch { }
   }
 }
 
 // ====== m3u8 文本级缓存（避免重复请求同一个 m3u8）
+// 上限：最多保留 16 条（每个 m3u8 文本很小，但 URL 无限多，不加限会长期泄漏）。
+// 用 Map 的插入有序特性做简易 LRU：命中时 delete+set 重新插入到末尾，超限时删头部最旧。
+const M3U8_CACHE_MAX = 16
 const m3u8TextCache = new Map<string, string>()
-function getM3u8FromCache(url: string): string | null { return m3u8TextCache.get(url) || null }
-function setM3u8Cache(url: string, text: string): void { m3u8TextCache.set(url, text) }
+function getM3u8FromCache(url: string): string | null {
+  const v = m3u8TextCache.get(url)
+  if (v == null) return null
+  // LRU：命中则移到末尾（最近使用）
+  m3u8TextCache.delete(url)
+  m3u8TextCache.set(url, v)
+  return v
+}
+function setM3u8Cache(url: string, text: string): void {
+  if (m3u8TextCache.has(url)) m3u8TextCache.delete(url)
+  m3u8TextCache.set(url, text)
+  // 超限淘汰最旧（Map 迭代顺序 = 插入顺序，第一个即最久未用）
+  while (m3u8TextCache.size > M3U8_CACHE_MAX) {
+    const oldest = m3u8TextCache.keys().next().value
+    if (oldest === undefined) break
+    m3u8TextCache.delete(oldest)
+  }
+}
 
 // ====== 解析 m3u8 -> 片段 URL 列表 + targetduration
 // 关键区分：
@@ -1273,4 +1571,9 @@ export const TsCache = {
   TsCacheLoader,
   fetchAndParseM3u8, getM3u8FromCache, setM3u8Cache,
   prefetchFromSegments: prefetchFromSegments,
+  // ⭐ v3: 网络诊断 + ABR 集成
+  getNetworkMode,
+  setAbrSwitchCallback,
+  adaptiveConcurrency,
+  adaptiveFragmentTimeout,
 }

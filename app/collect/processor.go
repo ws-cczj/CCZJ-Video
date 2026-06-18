@@ -112,7 +112,10 @@ type VideoData struct {
 var DefaultFieldAliases = map[string][]string{
 	"vod_id":       {"vod_id", "id", "video_id", "vid", "videoId", "VideoId"},
 	"vod_name":     {"vod_name", "title", "vod_title", "name", "vodname", "VideoName"},
-	"vod_pic":      {"vod_pic", "poster", "vod_poster", "thumb", "vod_thumb", "cover", "vod_cover", "img", "vod_img", "pic", "image", "vod_pic_screenshot"},
+	// 注意：vod_pic_screenshot / vod_pic_thumb / vod_pic_slide 不放在此处，
+	// 因为 API 返回这些字段可能为空字符串，会因 map 随机迭代顺序覆盖有效的 vod_pic。
+	// 它们的回退逻辑在 ParseVideoWithMapping 的 "vod_pic 回退" 部分单独处理。
+	"vod_pic":      {"vod_pic", "poster", "vod_poster", "thumb", "vod_thumb", "cover", "vod_cover", "img", "vod_img", "pic", "image"},
 	"vod_actor":    {"vod_actor", "actor", "actors", "vod_actors", "author", "authors", "vod_authors"},
 	"vod_director": {"vod_director", "director", "directors", "vod_directors"},
 	"vod_content":  {"vod_content", "content", "desc", "description", "vod_desc", "vod_description", "detail", "vod_detail", "summary", "vod_blurb"},
@@ -198,6 +201,10 @@ func ParseVideoWithMapping(rawData []byte, fieldMapping map[string]string) (*mod
 			}
 			jsonName := strings.Split(jsonTag, ",")[0]
 			if jsonName == targetFieldName {
+				// 跳过空字符串值，防止后遍历的空别名覆盖已设置的有效值
+				if s, ok := srcValue.(string); ok && s == "" {
+					break
+				}
 				setFieldValue(field, srcValue)
 				break
 			}
@@ -205,7 +212,19 @@ func ParseVideoWithMapping(rawData []byte, fieldMapping map[string]string) (*mod
 	}
 
 	applog.Debug("[FieldMapping] 解析结果 - vod_id: %s, vod_name: %s, vod_pic: %s, vod_actor: %s, vod_director: %s, vod_content: %s",
-		v.VodId.String(), v.VodName, v.VodPic, v.VodActor, v.VodDirector, truncate(v.VodContent, 50))
+			v.VodId.String(), v.VodName, v.VodPic, v.VodActor, v.VodDirector, truncate(v.VodContent, 50))
+
+	// vod_pic 回退：列表 API 的 vod_pic 可能为空，但 vod_pic_thumb/vod_pic_screenshot/vod_pic_slide 可能有值
+	if v.VodPic == "" {
+		for _, fallback := range []string{"vod_pic_thumb", "vod_pic_screenshot", "vod_pic_slide", "vod_pic_screenshot"} {
+			if pic, ok := rawMap[fallback]; ok && pic != nil {
+				if s := fmt.Sprintf("%v", pic); s != "" && s != "<nil>" {
+					v.VodPic = s
+					break
+				}
+			}
+		}
+	}
 
 	return v, nil
 }
@@ -282,7 +301,11 @@ func setFieldValue(field reflect.Value, value interface{}) {
 			field.Set(reflect.ValueOf(fs))
 		}
 	case float64:
-		s := fmt.Sprintf("%v", v)
+		// 避免科学计数法：整数部分用 %d，小数用 %g
+		s := fmt.Sprintf("%g", v)
+		if v == float64(int64(v)) && v >= 0 {
+			s = fmt.Sprintf("%d", int64(v))
+		}
 		if field.Kind() == reflect.String {
 			field.SetString(s)
 		} else if field.Type() == reflect.TypeOf(model.FlexibleString("")) {

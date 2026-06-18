@@ -481,54 +481,65 @@ func (e *Engine) saveVideos(videos []*model.Video) error {
 		return nil
 	}
 
-	// 补充详情：对没有图片的视频调用详情接口
+	// 过滤掉被禁用采集的类型
+	var filtered []*model.Video
+	for _, v := range videos {
+		if v == nil || v.TypeName == "" {
+			continue
+		}
+		if db.IsTypeCollectEnabled(v.TypeName) {
+			filtered = append(filtered, v)
+		} else {
+			e.log(fmt.Sprintf("[类型过滤] 跳过禁用采集类型: %s (%s)", v.VodName, v.TypeName))
+		}
+	}
+	videos = filtered
+
+	if len(videos) == 0 {
+		return nil
+	}
+
+	// 补充详情：使用协程池并发请求（并发数 3，纯 HTTP 不影响 SQLite 写）
 	if e.strategy != nil {
+		pool := NewPool(3)
+		var mu sync.Mutex // 保护 videos 切片的写
+
 		for i, v := range videos {
-			if v == nil {
+			if v == nil || v.VodPic != "" {
 				continue
 			}
-			if v.VodPic == "" {
-				// 检查停止信号，如果已停止则跳过详情补充，直接保存已有数据
-				if e.IsStopped() {
-					e.log("[详情补充] 已收到停止信号，跳过详情补充，直接保存")
-					break
-				}
-				e.log(fmt.Sprintf("[详情补充] vod_id=%s, vod_name=%s", v.VodId.String(), v.VodName))
-				detailUrl := e.strategy.BuildDetailUrl(v.VodId.String())
+			// 检查停止信号
+			if e.IsStopped() {
+				break
+			}
+
+			idx := i
+			vid := v
+			pool.Submit(func() {
+				e.log(fmt.Sprintf("[详情补充] vod_id=%s, vod_name=%s", vid.VodId.String(), vid.VodName))
+				detailUrl := e.strategy.BuildDetailUrl(vid.VodId.String())
 				fieldMapping := e.strategy.GetFieldMapping()
 				detail, err := fetchVideoDetailWithStrategy(detailUrl, fieldMapping)
-				if err == nil && detail != nil {
-					if detail.VodPic != "" {
-						v.VodPic = detail.VodPic
-					}
-					if detail.VodActor != "" {
-						v.VodActor = detail.VodActor
-					}
-					if detail.VodDirector != "" {
-						v.VodDirector = detail.VodDirector
-					}
-					if detail.VodContent != "" {
-						v.VodContent = detail.VodContent
-					}
-					if detail.VodLang != "" {
-						v.VodLang = detail.VodLang
-					}
-					if detail.VodArea != "" {
-						v.VodArea = detail.VodArea
-					}
-					if detail.VodYear != "" {
-						v.VodYear = detail.VodYear
-					}
-					if detail.VodPlayUrl != "" {
-						v.VodPlayUrl = detail.VodPlayUrl
-					}
-					videos[i] = v
-					e.log(fmt.Sprintf("[详情补充成功] vod_id=%s, pic=%s", v.VodId.String(), v.VodPic))
-				} else {
-					e.log(fmt.Sprintf("[详情补充失败] vod_id=%s, error=%v", v.VodId.String(), err))
+				if err != nil || detail == nil {
+					e.log(fmt.Sprintf("[详情补充失败] vod_id=%s, error=%v", vid.VodId.String(), err))
+					return
 				}
-			}
+				mu.Lock()
+				if detail.VodPic != "" { videos[idx].VodPic = detail.VodPic }
+				if detail.VodActor != "" { videos[idx].VodActor = detail.VodActor }
+				if detail.VodDirector != "" { videos[idx].VodDirector = detail.VodDirector }
+				if detail.VodContent != "" { videos[idx].VodContent = detail.VodContent }
+				if detail.VodLang != "" { videos[idx].VodLang = detail.VodLang }
+				if detail.VodArea != "" { videos[idx].VodArea = detail.VodArea }
+				if detail.VodYear != "" { videos[idx].VodYear = detail.VodYear }
+				if detail.VodPlayUrl != "" { videos[idx].VodPlayUrl = detail.VodPlayUrl }
+				mu.Unlock()
+				e.log(fmt.Sprintf("[详情补充成功] vod_id=%s, pic=%s", vid.VodId.String(), detail.VodPic))
+			})
 		}
+
+		pool.Wait()
+		pool.Stop()
 	}
 
 	if err := db.UpsertVideos(e.sourceKey, videos); err != nil {
@@ -537,11 +548,6 @@ func (e *Engine) saveVideos(videos []*model.Video) error {
 
 	// 将源数据中携带的豆瓣信息存入全局 douban_info 表
 	db.SaveDoubanInfoFromBatch(videos)
-
-	// 只维护分类表；剧集信息整体存放在 videos.vod_play_url（br 压缩），按集展开由读取时按需解析
-	for _, v := range videos {
-		db.InsTypeIfNotExist(e.sourceKey, v.TypeId, v.TypeName)
-	}
 
 	return nil
 }

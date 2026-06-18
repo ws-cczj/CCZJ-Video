@@ -114,6 +114,14 @@ export class Source {
         }
         if (/** @type {any} */(false)) {
             /**
+             * 策略配置（JSON 字符串，DB 列，用于自定义数据源参数组合）
+             * @member
+             * @type {string | undefined}
+             */
+            this["strategy_config"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
              * === 以下为兼容旧字段（逐步废弃），读 DB 后自动展开到 AdvConfig ===
              * @member
              * @type {string | undefined}
@@ -238,6 +246,27 @@ export class VType {
              * @type {string}
              */
             this["name"] = "";
+        }
+        if (!("parent_id" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["parent_id"] = 0;
+        }
+        if (!("sort" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["sort"] = 0;
+        }
+        if (!("source_key" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["source_key"] = "";
         }
 
         Object.assign(this, $$source);

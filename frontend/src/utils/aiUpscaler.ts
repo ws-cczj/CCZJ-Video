@@ -83,61 +83,58 @@ float luminance(vec3 c) {
 }
 
 // 锐化 (Unsharp Mask)
-// 原理：原图 + (原图 - 模糊图) * 强度
-// 在 main() 中被调用，确保在低分辨率空间执行
-vec3 unsharpMask(sampler2D tex, vec2 uv, vec2 ts, float strength) {
-  vec3 center = texture(tex, uv).rgb;
-  if (strength <= 0.0) return center;
+// 原理：inColor + (inColor - 模糊图) * 强度
+// 注意：center 用上一步传入的 inColor（保证管线叠加），邻域仍从源纹理采样。
+vec3 unsharpMask(sampler2D tex, vec2 uv, vec2 ts, float strength, vec3 inColor) {
+  if (strength <= 0.0) return inColor;
 
-  // 3x3 模糊核（近似高斯）
+  // 3x3 模糊核（近似高斯）—— 邻域从源纹理采样
   vec3 blur = vec3(0.0);
   blur += texture(tex, uv + vec2(-ts.x, -ts.y)).rgb;
   blur += texture(tex, uv + vec2(0.0, -ts.y)).rgb;
   blur += texture(tex, uv + vec2(ts.x, -ts.y)).rgb;
   blur += texture(tex, uv + vec2(-ts.x, 0.0)).rgb;
-  blur += center * 4.0;
+  blur += inColor * 4.0;
   blur += texture(tex, uv + vec2(ts.x, 0.0)).rgb;
   blur += texture(tex, uv + vec2(-ts.x, ts.y)).rgb;
   blur += texture(tex, uv + vec2(0.0, ts.y)).rgb;
   blur += texture(tex, uv + vec2(ts.x, ts.y)).rgb;
   blur /= 12.0;
 
-  return clamp(center + (center - blur) * strength, 0.0, 1.0);
+  return clamp(inColor + (inColor - blur) * strength, 0.0, 1.0);
 }
 
 // 局部对比度增强 (局部对比度拉伸)
 // 原理：每个像素相对于周围局部均值的偏移量放大
-// 在 main() 中被调用，确保在低分辨率空间执行
-vec3 localContrast(sampler2D tex, vec2 uv, vec2 ts, float strength) {
-  vec3 center = texture(tex, uv).rgb;
-  if (strength <= 0.0) return center;
+// 注意：center 用上一步传入的 inColor（保证管线叠加），邻域仍从源纹理采样。
+vec3 localContrast(sampler2D tex, vec2 uv, vec2 ts, float strength, vec3 inColor) {
+  if (strength <= 0.0) return inColor;
 
-  // 局部平均（3x3）- 减少纹理采样提升性能
+  // 局部平均（3x3）- 邻域从源纹理采样
   vec3 local = vec3(0.0);
   local += texture(tex, uv + vec2(-ts.x, -ts.y)).rgb;
   local += texture(tex, uv + vec2(0.0, -ts.y)).rgb;
   local += texture(tex, uv + vec2(ts.x, -ts.y)).rgb;
   local += texture(tex, uv + vec2(-ts.x, 0.0)).rgb;
-  local += center * 4.0;
+  local += inColor * 4.0;
   local += texture(tex, uv + vec2(ts.x, 0.0)).rgb;
   local += texture(tex, uv + vec2(-ts.x, ts.y)).rgb;
   local += texture(tex, uv + vec2(0.0, ts.y)).rgb;
   local += texture(tex, uv + vec2(ts.x, ts.y)).rgb;
   local /= 12.0;
 
-  return clamp(center + (center - local) * strength * 3.0, 0.0, 1.0);
+  return clamp(inColor + (inColor - local) * strength * 3.0, 0.0, 1.0);
 }
 
 // 边缘增强 (Anime4K 简化思想)
 // 原理：检测边缘 → 沿边缘方向加强对比
-// 在 main() 中被调用，确保在低分辨率空间执行
-vec3 edgeEnhancement(sampler2D tex, vec2 uv, vec2 ts, float strength) {
-  vec3 center = texture(tex, uv).rgb;
-  if (strength <= 0.0) return center;
+// 注意：center 用上一步传入的 inColor（保证管线叠加），邻域亮度仍从源纹理采样。
+vec3 edgeEnhancement(sampler2D tex, vec2 uv, vec2 ts, float strength, vec3 inColor) {
+  if (strength <= 0.0) return inColor;
 
-  float lc = luminance(center);
+  float lc = luminance(inColor);
 
-  // Sobel 边缘检测
+  // Sobel 边缘检测 —— 邻域亮度从源纹理采样
   float tl = luminance(texture(tex, uv + vec2(-ts.x, ts.y)).rgb);
   float t  = luminance(texture(tex, uv + vec2(0.0, ts.y)).rgb);
   float tr = luminance(texture(tex, uv + vec2(ts.x, ts.y)).rgb);
@@ -154,8 +151,8 @@ vec3 edgeEnhancement(sampler2D tex, vec2 uv, vec2 ts, float strength) {
   // 沿边缘增强
   float factor = 1.0 + edge * strength * 2.0;
   float edgeMask = smoothstep(0.05, 0.25, edge);
-  
-  return mix(center, clamp(center * factor, 0.0, 1.0), edgeMask);
+
+  return mix(inColor, clamp(inColor * factor, 0.0, 1.0), edgeMask);
 }
 
 // 去色带 (De-banding)
@@ -231,22 +228,26 @@ void main() {
   // 基础采样 - 从原始低分辨率纹理采样
   vec3 color = texture(u_source, uv).rgb;
 
+  // 管线说明（修复后）：
+  // 每个增强函数都接受上一步的 color 作为中心像素 inColor，邻域仍从 u_source 采样，
+  // 从而让去色带 → 锐化 → 对比度 → 边缘增强 的效果真正叠加，而非互相覆盖。
+
   // 1. 去色带 - 在低分辨率空间进行，色带更容易检测和修正
   color = debanding(color, uv, u_deband);
 
   // 2. 锐化 - 在低分辨率空间进行，邻域采样与中心颜色一致
   if (u_sharpness > 0.0) {
-    color = unsharpMask(u_source, uv, ts, u_sharpness);
+    color = unsharpMask(u_source, uv, ts, u_sharpness, color);
   }
 
   // 3. 局部对比度 - 在低分辨率空间进行
   if (u_contrast > 0.0) {
-    color = localContrast(u_source, uv, ts, u_contrast);
+    color = localContrast(u_source, uv, ts, u_contrast, color);
   }
 
   // 4. 边缘增强 - 在低分辨率空间进行
   if (u_edgeEnhance > 0.0) {
-    color = edgeEnhancement(u_source, uv, ts, u_edgeEnhance);
+    color = edgeEnhancement(u_source, uv, ts, u_edgeEnhance, color);
   }
 
   // 5. 最后做高质量上采样 - 所有增强操作已完成，传入增强后的颜色

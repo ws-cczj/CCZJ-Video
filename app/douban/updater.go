@@ -8,10 +8,11 @@ import (
 )
 
 type Updater struct {
-	batchSize int
-	mu        sync.Mutex
-	enabled   bool
-	running   bool
+	batchSize     int
+	mu            sync.Mutex
+	enabled       bool
+	running       bool
+	stopRequested bool
 }
 
 func NewUpdater() *Updater {
@@ -34,6 +35,28 @@ func (u *Updater) IsRunning() bool {
 	return u.running
 }
 
+// RequestStop 请求优雅停止当前批量更新（完成当前记录后停止）
+func (u *Updater) RequestStop() {
+	u.mu.Lock()
+	u.stopRequested = true
+	u.mu.Unlock()
+	applog.Info("[Douban] Updater graceful stop requested")
+}
+
+// isStopRequested 检查是否请求了停止
+func (u *Updater) isStopRequested() bool {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	return u.stopRequested
+}
+
+// resetStop 重置停止标志
+func (u *Updater) resetStop() {
+	u.mu.Lock()
+	u.stopRequested = false
+	u.mu.Unlock()
+}
+
 func (u *Updater) UpdateBatch() (int, error) {
 	u.mu.Lock()
 	if !u.enabled || u.running {
@@ -46,6 +69,7 @@ func (u *Updater) UpdateBatch() (int, error) {
 		return 0, nil
 	}
 	u.running = true
+	u.stopRequested = false
 	u.mu.Unlock()
 
 	defer func() {
@@ -64,6 +88,10 @@ func (u *Updater) UpdateBatch() (int, error) {
 	} else {
 		applog.Info("[Douban] Found %d records missing subject_id", len(missingID))
 		for i, row := range missingID {
+			if u.isStopRequested() {
+				applog.Info("[Douban] Stop requested, halting batch after %d/%d records (fillSubjectID)", i, len(missingID))
+				break
+			}
 			if row == nil || row.VodName == "" {
 				continue
 			}
@@ -84,6 +112,10 @@ func (u *Updater) UpdateBatch() (int, error) {
 	} else {
 		applog.Info("[Douban] Found %d incomplete records (has subject_id but missing details)", len(incomplete))
 		for i, row := range incomplete {
+			if u.isStopRequested() {
+				applog.Info("[Douban] Stop requested, halting batch after %d/%d records (fillDetail)", i, len(incomplete))
+				break
+			}
 			if row == nil || row.SubjectID == "" {
 				continue
 			}
@@ -184,7 +216,18 @@ func (u *Updater) fillDetail(row *db.DoubanInfoRow) error {
 	}
 
 	applog.Debug("[Douban] Upserting %d fields for subject '%s' (global_id=%d)", updatedFields, row.SubjectID, row.GlobalID)
-	return db.UpsertDoubanInfo(&updated)
+	err = db.UpsertDoubanInfo(&updated)
+	if err != nil {
+		return err
+	}
+
+	// 详情页获取成功但未获取到评分 → 设置24小时冷静期（隔天再尝试）
+	if info.Rating == "" && updated.Rating == "" {
+		applog.Info("[Douban] Detail fetched but no rating for '%s' (subject=%s), setting 24h cooldown", row.VodName, row.SubjectID)
+		db.SetDoubanCooldown(row.GlobalID)
+	}
+
+	return nil
 }
 
 func (u *Updater) UpdateSingleByKeyword(keyword string) (*DoubanInfo, error) {

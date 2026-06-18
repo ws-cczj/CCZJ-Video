@@ -142,9 +142,9 @@ func GetVideoList(req VideoListReq) (*VideoListResp, error) {
 		v.VodActor = util.DecompressIfNeeded(v.VodActor)
 		v.VodDirector = util.DecompressIfNeeded(v.VodDirector)
 		v.VodContent = util.DecompressIfNeeded(v.VodContent)
-		// 用全局豆瓣数据补充缺失字段
-		db.EnrichVideoWithDouban(v)
 	}
+	// 用全局豆瓣数据批量补充缺失字段（一次 JOIN 替代 N×2 次查询）
+	db.EnrichVideosWithDouban(videos)
 
 	return &VideoListResp{Videos: videos, Total: total}, nil
 }
@@ -170,9 +170,9 @@ func GetRecommend(sourceKey string, limit int, excludeIds []string) ([]*model.Vi
 	for _, v := range videos {
 		v.VodActor = util.DecompressIfNeeded(v.VodActor)
 		v.VodDirector = util.DecompressIfNeeded(v.VodDirector)
-		// 用全局豆瓣数据补充缺失字段
-		db.EnrichVideoWithDouban(v)
 	}
+	// 用全局豆瓣数据批量补充缺失字段（一次 JOIN 替代 N×2 次查询）
+	db.EnrichVideosWithDouban(videos)
 	return videos, nil
 }
 
@@ -307,9 +307,9 @@ func SearchVideos(req VideoSearchReq) (*VideoListResp, error) {
 		v.VodActor = util.DecompressIfNeeded(v.VodActor)
 		v.VodDirector = util.DecompressIfNeeded(v.VodDirector)
 		v.VodContent = util.DecompressIfNeeded(v.VodContent)
-		// 用全局豆瓣数据补充缺失字段
-		db.EnrichVideoWithDouban(v)
 	}
+	// 用全局豆瓣数据批量补充缺失字段（一次 JOIN 替代 N×2 次查询）
+	db.EnrichVideosWithDouban(videos)
 	return &VideoListResp{Videos: videos, Total: total}, nil
 }
 

@@ -14,14 +14,22 @@ const props = withDefaults(defineProps<{
   placeholder?: string
   disabled?: boolean
   size?: 'sm' | 'md'
+  /** inline 模式：面板不 Teleport 到 body，而是 position:absolute 相对本组件定位。
+   *  适用于面板需要留在父级 scoped 作用域（如播放器控制条深色主题）、
+   *  或父容器会被全屏/动态隐藏（Teleport 出去后 getBoundingClientRect 归零）的场景。 */
+  inline?: boolean
+  /** inline 模式下面板展开方向：'up' 向上（底部控制条场景），'down' 向下（默认） */
+  inlineDrop?: 'up' | 'down'
 }>(), {
   modelValue: '',
   placeholder: '请选择',
   disabled: false,
   size: 'md',
+  inline: false,
+  inlineDrop: 'down',
 })
 
-const emit = defineEmits(['update:modelValue', 'change'])
+const emit = defineEmits(['update:modelValue', 'change', 'open-change'])
 
 const open = ref(false)
 const rootRef = ref<HTMLElement | null>(null)
@@ -35,27 +43,41 @@ const selected = computed(() => {
 function toggle(): void {
   if (props.disabled) return
   open.value = !open.value
+  emit('open-change', open.value)
 }
 
 function choose(value: string | number): void {
   if (props.disabled) return
   open.value = false
+  emit('open-change', false)
   if (value !== props.modelValue) {
     emit('update:modelValue', value)
     emit('change', value)
   }
 }
 
+function closePanel(): void {
+  if (!open.value) return
+  open.value = false
+  emit('open-change', false)
+}
+
 function onDocClick(e: MouseEvent): void {
   if (!rootRef.value) return
   if (!open.value) return
   if (!rootRef.value.contains(e.target as Node)) {
-    open.value = false
+    closePanel()
   }
 }
 
 function updatePanelPosition(): void {
   if (!rootRef.value) return
+  // inline 模式：面板用 CSS 绝对定位（配合 .select-panel.is-inline 样式），
+  // 不需要 JS 计算坐标，避免 Teleport 出去后 rect 归零的问题。
+  if (props.inline) {
+    panelStyle.value = {}
+    return
+  }
   const rect = rootRef.value.getBoundingClientRect()
   const panelHeight = 260 // max-height
   const spaceBelow = window.innerHeight - rect.bottom
@@ -113,9 +135,17 @@ watch(open, async (v) => {
       </svg>
     </button>
 
-    <Teleport to="body">
+    <!-- 面板：inline 模式不 Teleport（留在 scoped 作用域，避免 :deep 样式失效），
+         非 inline 模式 Teleport 到 body 并用 fixed 定位。 -->
+    <Teleport to="body" :disabled="inline">
       <transition name="slide-down">
-        <div v-if="open" class="select-panel" :style="panelStyle" @click.stop>
+        <div
+          v-if="open"
+          class="select-panel"
+          :class="{ 'is-inline': inline, 'drop-up': inline && inlineDrop === 'up' }"
+          :style="panelStyle"
+          @click.stop
+        >
           <ul class="option-list">
             <li
               v-for="opt in options"
@@ -225,6 +255,25 @@ watch(open, async (v) => {
   max-height: 260px;
   overflow: auto;
   box-sizing: border-box;
+}
+
+/* inline 模式：绝对定位相对 .select-dropdown（本身 position:relative），
+   留在父级 DOM 树内，跟随父级显隐，且父级的 scoped 样式（含 :deep）能命中。 */
+.select-panel.is-inline {
+  position: absolute;
+  left: 0;
+  min-width: 100%;
+  z-index: 100;
+}
+/* 向下展开：面板顶部贴在 trigger 下方 */
+.select-panel.is-inline:not(.drop-up) {
+  top: calc(100% + 4px);
+  bottom: auto;
+}
+/* 向上展开：面板底部贴在 trigger 上方（底部控制条场景） */
+.select-panel.is-inline.drop-up {
+  bottom: calc(100% + 4px);
+  top: auto;
 }
 
 .option-list {

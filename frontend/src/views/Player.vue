@@ -3,6 +3,7 @@ defineOptions({ name: 'Player' })
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { GetRecentHistory, SaveWatchHistory, AddFavorite, RemoveFavorite, IsFavorite } from '../../bindings/cczjVideo/app'
+import * as AppMod from '../../bindings/cczjVideo/app'
 import { useSourceStore } from '../stores/source'
 import { useVideoStore } from '../stores/video'
 import VideoPlayer from '../components/VideoPlayer.vue'
@@ -10,8 +11,9 @@ import Icon from '../components/Icon.vue'
 import { Button, Modal } from '../components/ui'
 import { resolveEpisodeUrl, stripHtmlTags } from '../utils'
 import { TsCache } from '../utils/tsCache'
-import { epProgressKey, loadEpProgress, saveEpProgress, getEpProgressPct } from '../utils/episodeProgress'
+import { epProgressKey, loadEpProgress, saveEpProgress, getEpProgressPct, flushEpProgress } from '../utils/episodeProgress'
 import { bumpFavoritesRefresh } from '../stores/favoritesSync'
+import { Window } from '@wailsio/runtime'
 import type { HistoryItem } from '../types'
 
 const route = useRoute()
@@ -44,7 +46,7 @@ const video = computed(() => videoStore.currentVideo)
 const episodes = computed(() => videoStore.episodes)
 
 /** 当前正在播放的集数（0-based） */
-const currentEpIndex = ref(0)
+const currentEpIndex = ref(-1) // 初始化为 -1，避免加载前错误触发第 0 集
 
 /** 从右侧选集面板触发的集数切换信号（VideoPlayer 监听用） */
 const _playToken = ref(0)
@@ -71,6 +73,104 @@ const currentEpName = computed(() => {
 const hasPrev = computed(() => currentEpIndex.value > 0)
 const hasNext = computed(() => currentEpIndex.value < episodes.value.length - 1)
 
+/** 模糊匹配视频名称（去除空格、大小写统一、允许包含关系） */
+function fuzzyMatchVod(name1: string, name2: string): boolean {
+  const n1 = name1.replace(/\s+/g, '').toLowerCase()
+  const n2 = name2.replace(/\s+/g, '').toLowerCase()
+  if (n1 === n2) return true
+  if (n1.includes(n2) || n2.includes(n1)) return true
+  // 允许去掉常见后缀（第一季/第二季等）后匹配
+  const seasonRe = /第[一二三四五六七八九十\d]+季$/
+  const s1 = n1.replace(seasonRe, '')
+  const s2 = n2.replace(seasonRe, '')
+  if (s1 && s2 && (s1 === s2 || s1.includes(s2) || s2.includes(s1))) return true
+  return false
+}
+
+function findBestMatch(list: any[], vodName: string): any | null {
+  if (!list.length) return null
+  // 精确匹配优先
+  const exact = list.find((v: any) => v.vod_name === vodName)
+  if (exact) return exact
+  // 模糊匹配
+  const fuzzy = list.find((v: any) => fuzzyMatchVod(v.vod_name || '', vodName))
+  if (fuzzy) return fuzzy
+  // 兆底第一条
+  return list[0]
+}
+
+/** 搜索源并自动回退：原名 → 去空格版 → 去季后缀版 */
+async function searchSourceWithFallback(sk: string, vodName: string): Promise<any[]> {
+  // 第一次：原名搜索
+  try {
+    const resp = await (AppMod as any).SearchSource(sk, vodName, 10) as any
+    const list = Array.isArray(resp?.videos) ? resp.videos : []
+    if (list.length > 0) return list
+  } catch {}
+
+  // 第二次：去空格版搜索（解决“权力的游戏 第一季”vs“权力的游戏第一季”问题）
+  const noSpaceName = vodName.replace(/\s+/g, '')
+  if (noSpaceName !== vodName) {
+    try {
+      const resp2 = await (AppMod as any).SearchSource(sk, noSpaceName, 10) as any
+      const list2 = Array.isArray(resp2?.videos) ? resp2.videos : []
+      if (list2.length > 0) {
+        console.log(`[Player] ✔ 去空格搜索 "${noSpaceName}" 找到 ${list2.length} 条结果`)
+        return list2
+      }
+    } catch {}
+  }
+
+  // 第三次：去掉季后缀搜索（如“权力的游戏 第一季”→“权力的游戏”）
+  const seasonRe = /第[一二三四五六七八九十\d]+季\s*$/
+  const baseName = vodName.replace(seasonRe, '').trim()
+  if (baseName && baseName !== vodName && baseName !== noSpaceName) {
+    try {
+      const resp3 = await (AppMod as any).SearchSource(sk, baseName, 10) as any
+      const list3 = Array.isArray(resp3?.videos) ? resp3.videos : []
+      if (list3.length > 0) {
+        console.log(`[Player] ✔ 基名搜索 "${baseName}" 找到 ${list3.length} 条结果`)
+        return list3
+      }
+    } catch {}
+  }
+
+  return []
+}
+
+/* ==================== 侧面板收起/展开 ==================== */
+const sidePanelCollapsed = ref(false)
+
+function onMinimizeApp(): void {
+  try { Window.Minimise() } catch { /* 忽略 */ }
+}
+
+/* ==================== 源切换 ==================== */
+interface SourceOption {
+  source_key: string
+  name: string
+  vod_id?: string  // 该源中对应视频的 vod_id
+  loaded: boolean   // 是否已加载过剧集
+  hasData?: boolean // 是否确认该源有此视频（预搜索后设置）
+}
+const sourceOptions = ref<SourceOption[]>([])
+const activeSourceKey = ref('')  // 当前激活的源 key
+const sourceSearchLoading = ref(false)
+const showEpisodes = ref(true)   // 源列表 vs 选集列表切换
+
+/* ==================== 选集正序/倒序 ==================== */
+const episodeSortAsc = ref(true)
+
+function toggleEpisodeSort(): void {
+  episodeSortAsc.value = !episodeSortAsc.value
+}
+
+const sortedEpisodes = computed(() => {
+  const eps = [...episodes.value]
+  if (!episodeSortAsc.value) eps.reverse()
+  return eps
+})
+
 /* ==================== TsCache 响应式（顶部栏片段进度） ====================
  * 每 250ms TsCache 可能有新片段缓存 → 触发此函数更新页面的 cached/total 显示
  */
@@ -87,7 +187,7 @@ function refreshCacheUI(): void { cacheReadTick.value++ }
 const epProgressMap = ref<Record<number, number>>({})
 
 function epKeyOf(idx: number): string {
-  return epProgressKey(sourceKey.value, vodId.value, episodes.value[idx]?.ep_num ?? idx)
+  return epProgressKey(video.value?.global_id, video.value?.vod_name, episodes.value[idx]?.ep_num ?? idx)
 }
 
 // 从独立存储刷新 UI 可见的进度百分比表
@@ -103,7 +203,7 @@ function refreshEpProgressUI(): void {
   } catch { /* ignore */ }
 }
 
-// 播放开始时先执行一次
+// 播放开始时先执行一次（此时 episodes 可能为空，后面 loadData 会再刷一次）
 refreshEpProgressUI()
 
 function getEpWatchPct(idx: number): number {
@@ -141,7 +241,16 @@ function updateCurrentEpProgress(position: number, duration?: number): void {
   const out: Record<number, number> = { ...epProgressMap.value }
   out[currentEpIndex.value] = getEpProgressPct(store[k])
   epProgressMap.value = out
+  // 派发自定义事件，供详情页等其他页面监听以实时同步已观看状态
+  try {
+    window.dispatchEvent(new CustomEvent('cczj-ep-progress-updated', {
+      detail: { key: k, position, duration },
+    }))
+  } catch { /* ignore */ }
 }
+
+// Debug: 跟踪进度更新频率
+let _epUpdateCount = 0
 
 /* ==================== 鼠标位置跟踪（用于键盘快捷键作用域） ==================== */
 const mouseInside = ref(false)
@@ -204,13 +313,37 @@ function onPageKeyDown(e: KeyboardEvent): void {
 }
 
 // 监听视频元素的 timeupdate 和 durationchange（用于进度条）
+// 使用重试机制：VideoPlayer 组件挂载可能超过 200ms，轮询直到找到 video 元素
+let _videoTrackRetries = 0
+const MAX_VIDEO_TRACK_RETRIES = 20
+let _videoTrackTimer: ReturnType<typeof setTimeout> | null = null
+
 function bindVideoTimeTracking(): void {
   const v = document.querySelector('.native-video') as HTMLVideoElement | null
-  if (!v) return
+  if (!v) {
+    _videoTrackRetries++
+    if (_videoTrackRetries <= MAX_VIDEO_TRACK_RETRIES) {
+      _videoTrackTimer = setTimeout(bindVideoTimeTracking, 300)
+    } else {
+      console.warn('[Player] 视频元素未找到，进度追踪未启动（已重试 ' + MAX_VIDEO_TRACK_RETRIES + ' 次）')
+    }
+    return
+  }
+  // 防止重复绑定
+  if ((v as any).__epProgressBound) return
+  ;(v as any).__epProgressBound = true
+  console.log('[Player] ✔ 进度追踪已绑定到 video 元素')
   v.addEventListener('timeupdate', () => {
+    _epUpdateCount++
     updateCurrentEpProgress(v.currentTime, v.duration)
+    // 每20次更新输出一次日志
+    if (_epUpdateCount % 20 === 1) {
+      const k = epKeyOf(currentEpIndex.value)
+      console.log(`[Player] ✔ timeupdate #${_epUpdateCount}: key="${k}", time=${v.currentTime.toFixed(1)}s, dur=${v.duration?.toFixed(1) || '?'}`)
+    }
   })
   v.addEventListener('loadedmetadata', () => {
+    console.log(`[Player] ✔ loadedmetadata: dur=${v.duration?.toFixed(1) || '?'}`)
     updateCurrentEpProgress(v.currentTime, v.duration)
   })
 }
@@ -302,7 +435,7 @@ function recordHistory(idx: number): void {
   const ep = episodes.value[idx]
   if (!ep) return
   const epNum = ep.ep_num ?? (idx + 1)
-  const progKey = epProgressKey(sourceKey.value, vodId.value, epNum)
+  const progKey = epProgressKey(video.value?.global_id, video.value?.vod_name, epNum)
   const entry = loadEpProgress()[progKey]
   const position = entry?.position ?? 0
   lastHistorySyncAt = Date.now()
@@ -334,7 +467,6 @@ function prevEpisode(): void { if (hasPrev.value) goToEpisode(currentEpIndex.val
 function nextEpisode(): void { if (hasNext.value) goToEpisode(currentEpIndex.value + 1) }
 
 function goBack(): void {
-  try { TsCache.clear() } catch {}
   router.back()
 }
 
@@ -371,7 +503,9 @@ async function loadData(): Promise<void> {
         const history = (await GetRecentHistory(1)) as HistoryItem[] | null | undefined
         if (Array.isArray(history) && history.length > 0) {
           const last = history[0]
-          if (String(last.vod_id) === String(vodId.value)) {
+          // 优先按 global_id 跨源匹配，fallback 到 vod_id
+          const globalMatch = video.value?.global_id ? (last.global_id === video.value.global_id) : null
+          if (globalMatch === true || (globalMatch === null && String(last.vod_id) === String(vodId.value))) {
             const idx = episodes.value.findIndex((e) => Number(e.ep_num) === Number(last.ep_num))
             if (idx >= 0) targetIdx = idx
           }
@@ -393,8 +527,158 @@ async function loadData(): Promise<void> {
       )
       TsCache.setCurrentEpisode(targetIdx)
     } catch {}
+
+    // 剧集加载完成后刷新播放进度（首次调用时 episodes 可能为空，此处补充）
+    refreshEpProgressUI()
   } catch {}
   finally { loading.value = false }
+}
+
+// ==================== 源切换逻辑（基于 global_id 查找，不再依赖远端名称搜索） ====================
+async function buildSourceOptions(): Promise<void> {
+  if (!sourceStore.sources.length) return
+  const vodName = video.value?.vod_name || ''
+  const opts: SourceOption[] = sourceStore.sources
+    .map((s: any) => ({
+      source_key: s.source_key || '',
+      name: s.name || s.source_key || '',
+      vod_id: s.source_key === sourceKey.value ? String(vodId.value) : undefined,
+      loaded: s.source_key === sourceKey.value,
+      hasData: s.source_key === sourceKey.value, // 当前源默认有数据
+    }))
+  sourceOptions.value = opts
+  activeSourceKey.value = sourceKey.value
+
+  // 优先通过 global_id 查找所有拥有该视频的源（本地查询，无需网络请求）
+  try {
+    const globalId = await (AppMod as any).GetGlobalIdForVideo(sourceKey.value, String(vodId.value)) as number
+    if (globalId > 0) {
+      const refs = await (AppMod as any).FindSourcesByGlobalId(globalId) as any[]
+      if (Array.isArray(refs) && refs.length > 0) {
+        console.log(`[Player] ✔ global_id=${globalId} 找到 ${refs.length} 个源:`, refs.map((r: any) => r.source_key).join(', '))
+        sourceOptions.value = opts.map((o) => {
+          if (o.loaded) return o
+          const ref = refs.find((r: any) => r.source_key === o.source_key)
+          if (ref && ref.vod_id) {
+            o.hasData = true
+            o.vod_id = String(ref.vod_id)
+          }
+          return o
+        })
+        return // global_id 已找到所有源，无需远端搜索
+      }
+    }
+  } catch (e) {
+    console.log('[Player] global_id 查找失败，回退到远端搜索:', e)
+  }
+
+  // 回退：远端 API 搜索（当 global_id 不可用时）
+  if (!vodName) return
+  const otherOpts = opts.filter((o) => !o.loaded)
+  if (otherOpts.length === 0) return
+
+  const results = await Promise.allSettled(
+    otherOpts.map(async (o) => {
+      try {
+        const list = await searchSourceWithFallback(o.source_key, vodName)
+        const match = findBestMatch(list, vodName)
+        return { opt: o, vodId: match?.vod_id ? String(match.vod_id) : null }
+      } catch {
+        return { opt: o, vodId: null }
+      }
+    })
+  )
+
+  sourceOptions.value = opts.map((o) => {
+    if (o.loaded) return o
+    const result = results.find((r) => r.status === 'fulfilled' && r.value?.opt?.source_key === o.source_key)
+    if (result && result.status === 'fulfilled' && result.value.vodId != null) {
+      o.hasData = true
+      o.vod_id = result.value.vodId
+    }
+    return o
+  })
+}
+
+async function switchToSource(sk: string): Promise<void> {
+  if (!sk || sk === activeSourceKey.value) return
+  sourceSearchLoading.value = true
+  try {
+    // 如果 pre-search 已找到 vod_id，直接切换（来自 global_id 查找或远端搜索）
+    const existing = sourceOptions.value.find((s) => s.source_key === sk)
+    if (existing?.vod_id) {
+      await loadFromSource(sk, existing.vod_id)
+      return
+    }
+    // 回退：远端搜索该源中的同名视频
+    const vodName = video.value?.vod_name || ''
+    if (!vodName) return
+    const list = await searchSourceWithFallback(sk, vodName)
+    const match = findBestMatch(list, vodName)
+    if (!match?.vod_id) {
+      console.log(`[Player] ❗ 源 "${sk}" 中未找到 "${vodName}"`)
+      return
+    }
+    const idx = sourceOptions.value.findIndex((s) => s.source_key === sk)
+    if (idx >= 0) {
+      sourceOptions.value[idx].vod_id = String(match.vod_id)
+      sourceOptions.value[idx].loaded = true
+    }
+    await loadFromSource(sk, String(match.vod_id))
+  } catch (e) {
+    console.error('[Player] 切换源失败:', e)
+  } finally {
+    sourceSearchLoading.value = false
+  }
+}
+
+async function loadFromSource(sk: string, vid: string): Promise<void> {
+  activeSourceKey.value = sk
+  const prevEpNum = episodes.value[currentEpIndex.value]?.ep_num ?? undefined
+  loading.value = true
+  try {
+    await videoStore.loadDetail(sk, vid)
+    if (!video.value || !episodes.value.length) {
+      loading.value = false
+      return
+    }
+
+    // 尽量保持当前集数：按 ep_num 匹配，匹配不到则回退到第 0 集
+    let targetIdx = 0
+    if (prevEpNum != null) {
+      const idx = episodes.value.findIndex((e) => Number(e.ep_num) === Number(prevEpNum))
+      if (idx >= 0) targetIdx = idx
+    }
+    currentEpIndex.value = targetIdx
+    _playToken.value++
+    showEpisodes.value = true
+
+    // 更新路由
+    router.replace(`/player/${sk}/${vid}/${targetIdx}`).catch(() => {})
+
+    // 重新初始化 TsCache 集数映射（不清除，LRU 自动淘汰旧源的数据）
+    try {
+      TsCache.setEpisodes(
+        episodes.value.map((ep) => ({
+          source_key: sk,
+          vod_id: String(vid),
+          ep_url: resolveEpisodeUrl(ep),
+          ep_name: ep.ep_name || '',
+          ep_num: ep.ep_num ?? 0,
+        })),
+      )
+      TsCache.setCurrentEpisode(targetIdx)
+    } catch {}
+
+    // 刷新进度和收藏状态
+    refreshEpProgressUI()
+    refreshFav().catch(() => {})
+    if (targetIdx >= 0) recordHistory(targetIdx)
+  } catch (e) {
+    console.error('[Player] loadFromSource 失败:', e)
+  } finally {
+    loading.value = false
+  }
 }
 
 watch(currentEpIndex, (idx) => {
@@ -417,6 +701,7 @@ function onVisibilityChange(): void {
 onMounted(async () => {
   await sourceStore.loadSources()
   await loadData()
+  await buildSourceOptions()
   // 首集（或恢复的上一集）也记录历史
   if (currentEpIndex.value >= 0 && episodes.value.length > 0) {
     recordHistory(currentEpIndex.value)
@@ -431,7 +716,10 @@ onMounted(async () => {
         if (!isNaN(num)) epNumToIdx.set(num, i)
       }
       for (const h of history) {
-        if (String(h.vod_id) === String(vodId.value) && h.ep_num != null) {
+        // 优先按 global_id 跨源匹配，fallback 到 vod_id
+        const globalMatch = video.value?.global_id ? (h.global_id === video.value.global_id) : null
+        const isMatch = (globalMatch === true) || (globalMatch === null && String(h.vod_id) === String(vodId.value))
+        if (isMatch && h.ep_num != null) {
           const idx = epNumToIdx.get(Number(h.ep_num))
           if (idx !== undefined) {
             const k = epKeyOf(idx)
@@ -466,11 +754,20 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  // 确保最新的进度写入 localStorage
+  flushEpProgress()
+  console.log(`[Player] ✔ 组件卸载，进度已 flush 到 localStorage (共 ${_epUpdateCount} 次 timeupdate)`)
+  // 通知其他页面进度已更新
+  try { window.dispatchEvent(new CustomEvent('cczj-ep-progress-flushed')) } catch { /* ignore */ }
   document.removeEventListener('keydown', onPageKeyDown)
   document.removeEventListener('visibilitychange', onVisibilityChange)
   if (_unsubTsCache) {
     try { _unsubTsCache() } catch {}
     _unsubTsCache = null
+  }
+  if (_videoTrackTimer != null) {
+    clearTimeout(_videoTrackTimer)
+    _videoTrackTimer = null
   }
 })
 
@@ -516,22 +813,36 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
 
           <!-- 底部浮层：切集提示（显示"即将播放：下一集"） -->
           <transition name="fade">
-            <div v-if="hasNext && getNextEpCached().cached > 0" class="prefetch-hint">
+            <div v-show="hasNext && getNextEpCached().cached > 0" class="prefetch-hint">
               <span class="prefetch-icon">⬇</span>
               <span>下一集已预取 {{ getNextEpCached().cached }} 片，切换即可秒开</span>
             </div>
           </transition>
+
+          <!-- 侧面板折叠/展开按钮（视频区右侧中间） -->
+          <button
+            class="panel-toggle-btn"
+            :title="sidePanelCollapsed ? '展开面板' : '收起面板'"
+            @click="sidePanelCollapsed = !sidePanelCollapsed"
+          >
+            <Icon :name="sidePanelCollapsed ? 'chevron-left' : 'chevron-right'" :size="14" />
+          </button>
         </div>
 
         <!-- ============= 右侧选集面板 ============= -->
-        <aside class="player-col-side">
+        <aside class="player-col-side" :class="{ collapsed: sidePanelCollapsed }">
           <!-- 顶部卡：标题 + 年份/地区/分类 + 简介 + 收藏按钮 -->
           <div class="side-header">
             <div class="side-top-bar">
               <h1 class="side-title">{{ video?.vod_name || '视频播放' }}</h1>
-              <Button variant="text" size="sm" class="close-btn-panel" @click="router.back()" title="关闭">
-                <Icon name="x" :size="18" />
-              </Button>
+              <div class="side-top-actions">
+                <button class="close-btn-panel" title="最小化" @click="onMinimizeApp">
+                  <Icon name="minimize" :size="14" />
+                </button>
+                <Button variant="text" size="sm" class="close-btn-panel" @click="flushEpProgress(); router.back()" title="关闭">
+                  <Icon name="x" :size="18" />
+                </Button>
+              </div>
             </div>
             <div class="side-meta">
               <span v-if="video?.vod_year" class="side-meta-chip">{{ video.vod_year }}</span>
@@ -541,62 +852,94 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
             <p v-if="overviewText" class="side-blurb">{{ overviewText }}</p>
           </div>
 
-          <!-- 选集区 -->
+          <!-- 选源区 + 选集区 -->
           <section class="side-section">
+            <!-- 源列表 -->
             <div class="side-section-title">
               <div class="side-section-title-left">
                 <span class="bullet"></span>
-                <span>选集</span>
+                <span>播放源</span>
               </div>
               <div class="side-section-right">
-                <span class="side-count">共 {{ episodes.length }} 集</span>
-                <span
-                  v-if="getCurrentEpCached().total > 0"
-                  class="side-cache-chip"
-                  :title="'当前集已预取 ' + getCurrentEpCached().cached + ' / ' + getCurrentEpCached().total + ' 片段；命中率 ' + Math.round(getHitRate() * 100) + '%'"
-                >
-                  <span class="side-cache-dot"></span>
-                  预取 {{ getCurrentEpCached().cached }}/{{ getCurrentEpCached().total }} · {{ Math.round(getHitRate() * 100) }}%
-                </span>
+                <span class="side-count">{{ sourceOptions.length }} 个可用源</span>
               </div>
             </div>
 
-            <div v-if="episodes.length === 0" class="side-empty">暂无可播放剧集</div>
-
-            <div v-else class="ep-grid">
+            <div class="source-list">
               <button
-                v-for="(ep, i) in episodes"
-                :key="String(i)"
-                class="ep-item"
-                :class="{
-                  active: i === currentEpIndex,
-                  watched: isWatchedEp(i),
-                  future: i > currentEpIndex && !isWatchedEp(i),
-                }"
-                @click="goToEpisode(i)"
-                :title="epLabel(i, ep) + (getEpWatchPct(i) > 0 ? ' · 已观看 ' + Math.round(getEpWatchPct(i)) + '%' : '')"
+                v-for="src in sourceOptions"
+                :key="src.source_key"
+                class="source-item"
+                :class="{ active: src.source_key === activeSourceKey }"
+                @click="switchToSource(src.source_key)"
+                :disabled="sourceSearchLoading"
               >
-                <span class="ep-item-num">{{ epLabel(i, ep) }}</span>
-
-                <!-- ⭐ 播放中动画徽章 -->
-                <span v-if="i === currentEpIndex" class="ep-playing-badge">
-                  <span class="bar b1"></span>
-                  <span class="bar b2"></span>
-                  <span class="bar b3"></span>
-                </span>
-
-                <!-- ⭐ 已观看：底部进度条填充 + 右上角百分比 -->
-                <span
-                  v-if="isWatchedEp(i) && getEpWatchPct(i) > 0"
-                  class="ep-watched-progress"
-                  :style="{ width: getEpWatchPct(i) + '%' }"
-                ></span>
-                <span
-                  v-if="isWatchedEp(i) && getEpWatchPct(i) > 0"
-                  class="ep-watched-pct"
-                >{{ Math.round(getEpWatchPct(i)) }}%</span>
+                <span class="source-name">{{ src.name }}</span>
+                <span v-if="src.source_key === activeSourceKey" class="source-active-dot"></span>
+                <span v-if="sourceSearchLoading && src.source_key !== activeSourceKey" class="source-loading-dot">…</span>
               </button>
             </div>
+
+            <!-- 选集区（仅当有剧集时显示） -->
+            <template v-if="episodes.length > 0">
+              <div class="side-section-title" style="margin-top: 16px">
+                <div class="side-section-title-left">
+                  <span class="bullet"></span>
+                  <span>选集</span>
+                </div>
+                <div class="side-section-right">
+                  <button
+                    class="sort-toggle-btn"
+                    :title="episodeSortAsc ? '当前正序，点击切换倒序' : '当前倒序，点击切换正序'"
+                    @click="toggleEpisodeSort"
+                  >
+                    <Icon :name="episodeSortAsc ? 'chevron-down' : 'chevron-up'" :size="12" />
+                    <span class="sort-label">{{ episodeSortAsc ? '正序' : '倒序' }}</span>
+                  </button>
+                  <span class="side-count">共 {{ episodes.length }} 集</span>
+                  <span
+                    v-if="getCurrentEpCached().total > 0"
+                    class="side-cache-chip"
+                    :title="'当前集已预取 ' + getCurrentEpCached().cached + ' / ' + getCurrentEpCached().total + ' 片段；命中率 ' + Math.round(getHitRate() * 100) + '%'"
+                  >
+                    <span class="side-cache-dot"></span>
+                    预取 {{ getCurrentEpCached().cached }}/{{ getCurrentEpCached().total }} · {{ Math.round(getHitRate() * 100) }}%
+                  </span>
+                </div>
+              </div>
+
+              <div class="ep-grid">
+                <button
+                  v-for="(ep, i) in sortedEpisodes"
+                  :key="String(i)"
+                  class="ep-item"
+                  :class="{
+                    active: i === currentEpIndex,
+                    watched: isWatchedEp(i),
+                    future: i > currentEpIndex && !isWatchedEp(i),
+                  }"
+                  @click="goToEpisode(i)"
+                  :title="epLabel(i, ep) + (getEpWatchPct(i) > 0 ? ' · 已观看 ' + Math.round(getEpWatchPct(i)) + '%' : '')"
+                >
+                  <span class="ep-item-num">{{ epLabel(i, ep) }}</span>
+                  <span v-show="i === currentEpIndex" class="ep-playing-badge">
+                    <span class="bar b1"></span>
+                    <span class="bar b2"></span>
+                    <span class="bar b3"></span>
+                  </span>
+                  <span
+                    v-show="isWatchedEp(i) && getEpWatchPct(i) > 0"
+                    class="ep-watched-progress"
+                    :style="{ width: getEpWatchPct(i) + '%' }"
+                  ></span>
+                  <span
+                    v-show="isWatchedEp(i) && getEpWatchPct(i) > 0"
+                    class="ep-watched-pct"
+                  >{{ Math.round(getEpWatchPct(i)) }}%</span>
+                </button>
+              </div>
+            </template>
+            <div v-else-if="!sourceSearchLoading" class="side-empty">暂无可播放剧集</div>
           </section>
         </aside>
       </div>
@@ -681,6 +1024,51 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transition: flex-basis 0.3s ease, max-width 0.3s ease, opacity 0.3s ease;
+}
+.player-col-side.collapsed {
+  flex: 0 0 0;
+  max-width: 0;
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* ============ 视频区右侧折叠按钮 ============== */
+.panel-toggle-btn {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  z-index: 30;
+  width: 22px;
+  height: 56px;
+  border-radius: 11px 0 0 11px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-right: none;
+  background: rgba(10, 12, 16, 0.75);
+  backdrop-filter: blur(6px);
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.25s ease;
+  padding: 0;
+  font-family: inherit;
+}
+.panel-toggle-btn:hover {
+  width: 28px;
+  color: #fff;
+  background: rgba(24, 144, 255, 0.35);
+  border-color: rgba(24, 144, 255, 0.5);
+}
+
+.side-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 /* 响应式：窄屏收起右侧 */
@@ -736,6 +1124,69 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   color: #ff4d4f;
   border-color: rgba(255, 77, 79, 0.5);
   background: rgba(255, 77, 79, 0.12);
+}
+
+/* ============ 源列表（横向排布） ============== */
+.source-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.source-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.source-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+.source-item.active {
+  background: linear-gradient(135deg, rgba(24, 144, 255, 0.15) 0%, rgba(64, 169, 255, 0.08) 100%);
+  border-color: rgba(64, 169, 255, 0.5);
+  color: #69c0ff;
+  font-weight: 600;
+}
+.source-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.source-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.source-active-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #40a9ff;
+  box-shadow: 0 0 6px #40a9ff;
+  flex-shrink: 0;
+  animation: glow-pulse 1.4s ease-in-out infinite;
+}
+.source-loading-dot {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.4);
+  animation: glow-pulse 0.8s ease-in-out infinite;
+  flex-shrink: 0;
 }
 
 .fav-btn-text {
@@ -836,6 +1287,31 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+.sort-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  font-size: 11px;
+}
+.sort-toggle-btn .sort-label {
+  font-size: 11px;
+  white-space: nowrap;
+}
+.sort-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.2);
 }
 .side-count {
   font-size: 11.5px;

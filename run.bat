@@ -1,2 +1,2 @@
-wails3 build
+wails3 dev
 pause

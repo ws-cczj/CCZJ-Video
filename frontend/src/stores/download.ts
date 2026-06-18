@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { Events } from '@wailsio/runtime'
 import { GetSetting, SetSetting } from '../../bindings/cczjVideo/app'
+import { useErrorStore } from './error'
 
 const DIR_STORAGE_KEY = 'cczj_download_dir'
 
@@ -171,22 +172,17 @@ export const useDownloadStore = defineStore('download', () => {
   async function setDir(newDir: string): Promise<void> {
     newDir = (newDir || '').trim()
     try {
-      // 1) 推送到 Go 后端（设置进程内的 customDownloadDir）
+      // 1) 推送到 Go 后端（设置进程内的 customDownloadDir，后端会自动持久化）
       try {
         const ret = await safeCall('SetDownloadDir', [newDir])
         if (typeof ret === 'string' && ret) dir.value = ret
       } catch {
         // 忽略
       }
-      // 2) 持久化到应用设置（下次启动可恢复）
+      // 2) localStorage 作为兜底
       try {
-        await SetSetting('download_dir', newDir)
-      } catch {
-        // 忽略
-      }
-      // 3) localStorage 作为兜底
-      try {
-        if (newDir) localStorage.setItem(DIR_STORAGE_KEY, newDir)
+        const effectiveDir = dir.value || newDir
+        if (effectiveDir) localStorage.setItem(DIR_STORAGE_KEY, effectiveDir)
         else localStorage.removeItem(DIR_STORAGE_KEY)
       } catch {
         // 忽略
@@ -289,7 +285,7 @@ export const useDownloadStore = defineStore('download', () => {
       }
       return !!ok
     } catch (e: any) {
-      console.error('pause download failed:', e)
+      useErrorStore().fromError('暂停下载任务失败', e)
       return false
     }
   }
@@ -303,7 +299,7 @@ export const useDownloadStore = defineStore('download', () => {
       }
       return !!ok
     } catch (e: any) {
-      console.error('resume download failed:', e)
+      useErrorStore().fromError('恢复下载任务失败', e)
       return false
     }
   }

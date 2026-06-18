@@ -37,6 +37,26 @@ func normalizeFlex(v model.FlexibleString) string {
 	return s
 }
 
+// flexIsZeroOrEmpty 判断 FlexibleString 是否为空或为 "0"（源站 API 返回 0 表示未分类）
+func flexIsZeroOrEmpty(v model.FlexibleString) bool {
+	s := strings.TrimSpace(v.String())
+	return s == "" || s == "0"
+}
+
+// resolveGlobalTypeId 根据 type_name 查询全局类型表返回 id，type_name 为空时返回 "0"（类型未知）
+// 不使用源站原始 type_id，避免污染全局类型 ID 体系
+func resolveGlobalTypeId(typeName string, fallbackTypeId model.FlexibleString) string {
+	if typeName != "" {
+		id, err := GetOrCreateGlobalTypeId(typeName)
+		if err == nil && id > 0 {
+			return fmt.Sprintf("%d", id)
+		}
+		logWarn(fmt.Sprintf("[resolveGlobalTypeId] GetOrCreateGlobalTypeId failed for '%s': %v", typeName, err))
+	}
+	// 返回 "0" 表示类型未知，不使用源站原始 type_id
+	return "0"
+}
+
 func UpsertVideos(sourceKey string, videos []*model.Video) error {
 	if len(videos) == 0 {
 		return nil
@@ -46,62 +66,39 @@ func UpsertVideos(sourceKey string, videos []*model.Video) error {
 	}
 	tn := VideoTableName(sourceKey)
 
+	// 精简的 v_* 表：只存源站特有字段，共享元数据统一存于 global_video
 	cols := []string{"vod_id", "type_id", "type_name", "vod_name", "global_id",
-		"vod_class", "vod_remarks", "vod_pic", "vod_play_url", "vod_down_url", "vod_time",
-		"vod_douban_id", "vod_douban_score", "vod_hits", "vod_hits_day", "vod_hits_week", "vod_hits_month",
-		"vod_pubdate", "vod_version", "vod_state", "vod_score", "vod_score_all", "vod_score_num",
-		"vod_isend", "vod_play_from", "vod_play_note", "vod_letter", "vod_sub", "vod_en"}
+		"vod_class", "vod_remarks", "vod_play_url", "vod_down_url", "vod_time",
+		"vod_play_from", "vod_letter", "vod_sub", "vod_en"}
 
 	q := fmt.Sprintf(`INSERT INTO %s (%s) VALUES (%s)
 		ON CONFLICT(vod_id) DO UPDATE SET
 		type_id=excluded.type_id, type_name=excluded.type_name,
 		vod_name=excluded.vod_name, global_id=excluded.global_id,
 		vod_class=excluded.vod_class, vod_remarks=excluded.vod_remarks,
-		vod_pic=excluded.vod_pic,
 		vod_play_url=excluded.vod_play_url, vod_down_url=excluded.vod_down_url,
 		vod_time=excluded.vod_time,
-		vod_douban_id=excluded.vod_douban_id, vod_douban_score=excluded.vod_douban_score,
-		vod_hits=excluded.vod_hits, vod_hits_day=excluded.vod_hits_day,
-		vod_hits_week=excluded.vod_hits_week, vod_hits_month=excluded.vod_hits_month,
-		vod_pubdate=excluded.vod_pubdate, vod_version=excluded.vod_version,
-		vod_state=excluded.vod_state, vod_score=excluded.vod_score,
-		vod_score_all=excluded.vod_score_all, vod_score_num=excluded.vod_score_num,
-		vod_isend=excluded.vod_isend, vod_play_from=excluded.vod_play_from,
-		vod_play_note=excluded.vod_play_note, vod_letter=excluded.vod_letter,
+		vod_play_from=excluded.vod_play_from,
+		vod_letter=excluded.vod_letter,
 		vod_sub=excluded.vod_sub, vod_en=excluded.vod_en`,
 		tn, strings.Join(cols, ","),
 		":"+strings.Join(cols, ",:"))
 
 	type row struct {
-		VodId          string `db:"vod_id"`
-		TypeId         string `db:"type_id"`
-		TypeName       string `db:"type_name"`
-		VodName        string `db:"vod_name"`
-		GlobalId       int64  `db:"global_id"`
-		VodClass       string `db:"vod_class"`
-		VodRemarks     string `db:"vod_remarks"`
-		VodPic         string `db:"vod_pic"`
-		VodPlayUrl     string `db:"vod_play_url"`
-		VodDownUrl     string `db:"vod_down_url"`
-		VodTime        string `db:"vod_time"`
-		VodDoubanId    string `db:"vod_douban_id"`
-		VodDoubanScore string `db:"vod_douban_score"`
-		VodHits        string `db:"vod_hits"`
-		VodHitsDay     string `db:"vod_hits_day"`
-		VodHitsWeek    string `db:"vod_hits_week"`
-		VodHitsMonth   string `db:"vod_hits_month"`
-		VodPubdate     string `db:"vod_pubdate"`
-		VodVersion     string `db:"vod_version"`
-		VodState       string `db:"vod_state"`
-		VodScore       string `db:"vod_score"`
-		VodScoreAll    string `db:"vod_score_all"`
-		VodScoreNum    string `db:"vod_score_num"`
-		VodIsEnd       string `db:"vod_isend"`
-		VodPlayFrom    string `db:"vod_play_from"`
-		VodPlayNote    string `db:"vod_play_note"`
-		VodLetter      string `db:"vod_letter"`
-		VodSub         string `db:"vod_sub"`
-		VodEn          string `db:"vod_en"`
+		VodId      string `db:"vod_id"`
+		TypeId     string `db:"type_id"`
+		TypeName   string `db:"type_name"`
+		VodName    string `db:"vod_name"`
+		GlobalId   int64  `db:"global_id"`
+		VodClass   string `db:"vod_class"`
+		VodRemarks string `db:"vod_remarks"`
+		VodPlayUrl string `db:"vod_play_url"`
+		VodDownUrl string `db:"vod_down_url"`
+		VodTime    string `db:"vod_time"`
+		VodPlayFrom string `db:"vod_play_from"`
+		VodLetter  string `db:"vod_letter"`
+		VodSub     string `db:"vod_sub"`
+		VodEn      string `db:"vod_en"`
 	}
 	var rows []*row
 	var skipped int
@@ -115,43 +112,28 @@ func UpsertVideos(sourceKey string, videos []*model.Video) error {
 			continue
 		}
 
-		globalID, err := upsertGlobalVideo(v.VodName, v.VodYear, v.VodArea, v.VodLang,
-			v.VodDirector, v.VodActor, v.VodTag, v.VodContent, v.VodPic)
+		globalID, err := upsertGlobalVideo(v)
 		if err != nil {
-			logWarn(fmt.Sprintf("UpsertVideos[%s] upsert global_video failed for '%s': %v", sourceKey, v.VodName, err))
-			globalID = 0
+			logWarn(fmt.Sprintf("UpsertVideos[%s] upsert global_video failed for '%s': %v (跳过该条)", sourceKey, v.VodName, err))
+			skipped++
+			continue
 		}
 
 		rows = append(rows, &row{
-			VodId:          vid,
-			TypeId:         normalizeFlex(v.TypeId),
-			TypeName:       v.TypeName,
-			VodName:        v.VodName,
-			GlobalId:       globalID,
-			VodClass:       v.VodClass,
-			VodRemarks:     v.VodRemarks,
-			VodPic:         v.VodPic,
-			VodPlayUrl:     v.VodPlayUrl,
-			VodDownUrl:     v.VodDownUrl,
-			VodTime:        v.VodTime,
-			VodDoubanId:    normalizeFlex(v.VodDoubanId),
-			VodDoubanScore: normalizeFlex(v.VodDoubanScore),
-			VodHits:        normalizeFlex(v.VodHits),
-			VodHitsDay:     normalizeFlex(v.VodHitsDay),
-			VodHitsWeek:    normalizeFlex(v.VodHitsWeek),
-			VodHitsMonth:   normalizeFlex(v.VodHitsMonth),
-			VodPubdate:     normalizeFlex(v.VodPubdate),
-			VodVersion:     normalizeFlex(v.VodVersion),
-			VodState:       normalizeFlex(v.VodState),
-			VodScore:       normalizeFlex(v.VodScore),
-			VodScoreAll:    normalizeFlex(v.VodScoreAll),
-			VodScoreNum:    normalizeFlex(v.VodScoreNum),
-			VodIsEnd:       normalizeFlex(v.VodIsEnd),
-			VodPlayFrom:    v.VodPlayFrom,
-			VodPlayNote:    v.VodPlayNote,
-			VodLetter:      v.VodLetter,
-			VodSub:         v.VodSub,
-			VodEn:          v.VodEn,
+			VodId:       vid,
+			TypeId:      resolveGlobalTypeId(v.TypeName, v.TypeId),
+			TypeName:    v.TypeName,
+			VodName:     v.VodName,
+			GlobalId:    globalID,
+			VodClass:    v.VodClass,
+			VodRemarks:  v.VodRemarks,
+			VodPlayUrl:  v.VodPlayUrl,
+			VodDownUrl:  v.VodDownUrl,
+			VodTime:     v.VodTime,
+			VodPlayFrom: v.VodPlayFrom,
+			VodLetter:   v.VodLetter,
+			VodSub:      v.VodSub,
+			VodEn:       v.VodEn,
 		})
 	}
 	if skipped > 0 {
@@ -168,27 +150,75 @@ func UpsertVideos(sourceKey string, videos []*model.Video) error {
 	return nil
 }
 
-func upsertGlobalVideo(vodName, year, area, lang, director, actor, tag, content, pic string) (int64, error) {
-	globalID, err := GetOrCreateGlobalID(vodName)
+// upsertGlobalVideo 将视频的所有共享元数据写入 global_video（合并原 douban_info 功能）
+func upsertGlobalVideo(v *model.Video) (int64, error) {
+	if v.VodName == "" {
+		return 0, fmt.Errorf("vod_name is empty")
+	}
+
+	// 传入元数据前先解压缩，否则模糊匹配中的 metadataMatch 无法正确比对
+	director := util.DecompressIfNeeded(v.VodDirector)
+	actor := util.DecompressIfNeeded(v.VodActor)
+
+	globalID, err := GetOrCreateGlobalIDWithMeta(v.VodName, string(v.VodYear), director, actor)
 	if err != nil {
 		return 0, err
 	}
+
 	_, err = instance.Exec(`UPDATE global_video SET
-		year=CASE WHEN ? != '' AND ? IS NOT NULL THEN ? ELSE year END,
-		area=CASE WHEN ? != '' AND ? IS NOT NULL THEN ? ELSE area END,
-		lang=CASE WHEN ? != '' AND ? IS NOT NULL THEN ? ELSE lang END,
-		director=CASE WHEN ? != '' AND ? IS NOT NULL THEN ? ELSE director END,
-		actor=CASE WHEN ? != '' AND ? IS NOT NULL THEN ? ELSE actor END,
-		tag=CASE WHEN ? != '' AND ? IS NOT NULL THEN ? ELSE tag END,
-		content=CASE WHEN ? != '' AND ? IS NOT NULL THEN ? ELSE content END,
-		pic=CASE WHEN ? != '' AND ? IS NOT NULL THEN ? ELSE pic END,
+		year=CASE WHEN ? != '' THEN ? ELSE year END,
+		area=CASE WHEN ? != '' THEN ? ELSE area END,
+		lang=CASE WHEN ? != '' THEN ? ELSE lang END,
+		director=CASE WHEN ? != '' THEN ? ELSE director END,
+		actor=CASE WHEN ? != '' THEN ? ELSE actor END,
+		tag=CASE WHEN ? != '' THEN ? ELSE tag END,
+		content=CASE WHEN ? != '' THEN ? ELSE content END,
+		pic=CASE WHEN ? != '' THEN ? ELSE pic END,
+		douban_id=CASE WHEN ? != '' THEN ? ELSE douban_id END,
+		douban_score=CASE WHEN ? != '' THEN ? ELSE douban_score END,
+		genre=CASE WHEN ? != '' THEN ? ELSE genre END,
+		release_date=CASE WHEN ? != '' THEN ? ELSE release_date END,
+		duration=CASE WHEN ? != '' THEN ? ELSE duration END,
+		aka=CASE WHEN ? != '' THEN ? ELSE aka END,
+		imdb=CASE WHEN ? != '' THEN ? ELSE imdb END,
+		season_count=CASE WHEN ? != '' THEN ? ELSE season_count END,
+		episode_count=CASE WHEN ? != '' THEN ? ELSE episode_count END,
 		updated_at=CURRENT_TIMESTAMP
 		WHERE id = ?`,
-		year, year, year, area, area, area, lang, lang, lang,
-		director, director, director, actor, actor, actor,
-		tag, tag, tag, content, content, content, pic, pic, pic,
+		v.VodYear, v.VodYear, v.VodArea, v.VodArea, v.VodLang, v.VodLang,
+		v.VodDirector, v.VodDirector, v.VodActor, v.VodActor,
+		v.VodTag, v.VodTag, v.VodContent, v.VodContent, v.VodPic, v.VodPic,
+		normalizeFlex(v.VodDoubanId), normalizeFlex(v.VodDoubanId),
+		normalizeFlex(v.VodDoubanScore), normalizeFlex(v.VodDoubanScore),
+		v.VodTag, v.VodTag,
+		normalizeFlex(v.VodPubdate), normalizeFlex(v.VodPubdate),
+		"", "",
+		v.VodSub, v.VodSub,
+		"", "",
+		"", "",
+		"", "",
 		globalID)
 	return globalID, err
+}
+
+// upsertGlobalVideoFromExport 从导出行构建 model.Video 并调用 upsertGlobalVideo
+func upsertGlobalVideoFromExport(r *ExportVideoRow) (int64, error) {
+	v := &model.Video{
+		VodName:        r.VodName,
+		VodYear:        r.VodYear,
+		VodArea:        r.VodArea,
+		VodLang:        r.VodLang,
+		VodDirector:    r.VodDirector,
+		VodActor:       r.VodActor,
+		VodTag:         r.VodTag,
+		VodContent:     r.VodContent,
+		VodPic:         r.VodPic,
+		VodDoubanId:    model.FlexibleString(r.VodDoubanId),
+		VodDoubanScore: model.FlexibleString(r.VodDoubanScore),
+		VodPubdate:     model.FlexibleString(r.VodPubdate),
+		VodSub:         r.VodSub,
+	}
+	return upsertGlobalVideo(v)
 }
 
 // InsertNewVideos 已废弃，保留为向后兼容
@@ -216,7 +246,7 @@ func MergeVideoDetails(sourceKey string, videos []*model.Video) error {
 		existing, err := GetVideoById(sourceKey, vid)
 		if err == nil && existing != nil {
 			if v.VodName == "" { v.VodName = existing.VodName }
-			if v.TypeId.String() == "" { v.TypeId = existing.TypeId }
+			if flexIsZeroOrEmpty(v.TypeId) { v.TypeId = existing.TypeId }
 			if v.TypeName == "" { v.TypeName = existing.TypeName }
 			if v.VodPic == "" { v.VodPic = existing.VodPic }
 			if v.VodActor == "" { v.VodActor = existing.VodActor }
@@ -230,7 +260,6 @@ func MergeVideoDetails(sourceKey string, videos []*model.Video) error {
 			if v.VodDownUrl == "" { v.VodDownUrl = existing.VodDownUrl }
 			if v.VodTime == "" { v.VodTime = existing.VodTime }
 			if v.VodDoubanScore.String() == "" { v.VodDoubanScore = existing.VodDoubanScore }
-			if v.VodHits.String() == "" { v.VodHits = existing.VodHits }
 			if v.VodScore.String() == "" { v.VodScore = existing.VodScore }
 			if v.VodPlayFrom == "" { v.VodPlayFrom = existing.VodPlayFrom }
 			if v.VodLetter == "" { v.VodLetter = existing.VodLetter }
@@ -245,25 +274,26 @@ func MergeVideoDetails(sourceKey string, videos []*model.Video) error {
 	return UpsertVideos(sourceKey, mergedVideos)
 }
 
-// rawVideoRow 仅用于 SQL 扫描，使用原生 Go 类型，避免 FlexibleString 与 sqlx/sqlite3 驱动的兼容性问题
+// rawVideoRow 仅用于 SQL 扫描，所有共享字段从 global_video JOIN 获取
 type rawVideoRow struct {
-	Id             int    `db:"id"`
-	VodId          string `db:"vod_id"`
-	TypeId         string `db:"type_id"`
-	TypeName       string `db:"type_name"`
-	VodName        string `db:"vod_name"`
-	VodPic         string `db:"vod_pic"`
-	VodRemarks     string `db:"vod_remarks"`
-	VodYear        string `db:"vod_year"`
-	VodArea        string `db:"vod_area"`
-	VodDirector    string `db:"vod_director"`
-	VodActor       string `db:"vod_actor"`
-	VodDoubanScore string `db:"vod_douban_score"`
-	VodHits        string `db:"vod_hits"`
-	VodVersion     string `db:"vod_version"`
-	VodState       string `db:"vod_state"`
-	VodIsEnd       string `db:"vod_isend"`
-	GlobalId       int64  `db:"global_id"`
+	Id           int    `db:"id"`
+	VodId        string `db:"vod_id"`
+	TypeId       string `db:"type_id"`
+	TypeName     string `db:"type_name"`
+	VodName      string `db:"vod_name"`
+	VodPic       string `db:"vod_pic"`
+	VodRemarks   string `db:"vod_remarks"`
+	VodYear      string `db:"vod_year"`
+	VodArea      string `db:"vod_area"`
+	VodDirector  string `db:"vod_director"`
+	VodActor     string `db:"vod_actor"`
+	DoubanScore  string `db:"douban_score"`
+	DoubanId     string `db:"douban_id"`
+	VodHits      string `db:"vod_hits"`
+	VodLang      string `db:"vod_lang"`
+	VodContent   string `db:"vod_content"`
+	VodTag       string `db:"vod_tag"`
+	GlobalId     int64  `db:"global_id"`
 }
 
 func rowToVideo(r rawVideoRow) *model.Video {
@@ -273,17 +303,19 @@ func rowToVideo(r rawVideoRow) *model.Video {
 		TypeId:         model.FlexibleString(r.TypeId),
 		TypeName:       r.TypeName,
 		VodName:        r.VodName,
+		GlobalId:       r.GlobalId,
 		VodPic:         r.VodPic,
 		VodRemarks:     r.VodRemarks,
 		VodYear:        r.VodYear,
 		VodArea:        r.VodArea,
 		VodDirector:    r.VodDirector,
 		VodActor:       r.VodActor,
-		VodDoubanScore: model.FlexibleString(r.VodDoubanScore),
+		VodDoubanScore: model.FlexibleString(r.DoubanScore),
+		VodDoubanId:    model.FlexibleString(r.DoubanId),
 		VodHits:        model.FlexibleString(r.VodHits),
-		VodVersion:     model.FlexibleString(r.VodVersion),
-		VodState:       model.FlexibleString(r.VodState),
-		VodIsEnd:       model.FlexibleString(r.VodIsEnd),
+		VodLang:        r.VodLang,
+		VodContent:     r.VodContent,
+		VodTag:         r.VodTag,
 	}
 }
 
@@ -317,19 +349,19 @@ func GetVideos(sourceKey string, filter FilterParams) ([]*model.Video, int, erro
 		args = append(args, filter.TypeId, filter.TypeId)
 	}
 	if filter.Year != "" && filter.Year != "all" {
-		whereParts = append(whereParts, "(v.vod_year = ? OR g.year = ?)")
-		args = append(args, filter.Year, filter.Year)
+		whereParts = append(whereParts, "g.year = ?")
+		args = append(args, filter.Year)
 	}
 	if filter.Area != "" && filter.Area != "all" {
-		whereParts = append(whereParts, "(v.vod_area = ? OR g.area = ?)")
-		args = append(args, filter.Area, filter.Area)
+		whereParts = append(whereParts, "g.area = ?")
+		args = append(args, filter.Area)
 	}
 	kw := strings.TrimSpace(filter.Keyword)
 	if kw != "" {
 		like := "%" + kw + "%"
 		whereParts = append(whereParts,
-			`(v.vod_name LIKE ? OR v.type_name LIKE ? OR g.actor LIKE ? OR g.director LIKE ? OR v.vod_remarks LIKE ? OR v.vod_year LIKE ? OR v.vod_area LIKE ? OR g.year LIKE ? OR g.area LIKE ?)`)
-		args = append(args, like, like, like, like, like, like, like, like, like)
+			`(v.vod_name LIKE ? OR v.type_name LIKE ? OR g.actor LIKE ? OR g.director LIKE ? OR v.vod_remarks LIKE ? OR g.year LIKE ? OR g.area LIKE ?)`)
+		args = append(args, like, like, like, like, like, like, like)
 	}
 
 	whereClause := ""
@@ -346,16 +378,18 @@ func GetVideos(sourceKey string, filter FilterParams) ([]*model.Video, int, erro
 	orderClause := "ORDER BY v.vod_time DESC"
 	switch strings.ToLower(strings.TrimSpace(filter.Sort)) {
 	case "rating":
-		orderClause = "ORDER BY CASE WHEN v.vod_douban_score = '' OR v.vod_douban_score IS NULL THEN 1 ELSE 0 END ASC, CAST(v.vod_douban_score AS REAL) DESC, v.vod_time DESC"
+		orderClause = "ORDER BY CASE WHEN g.douban_score = '' OR g.douban_score IS NULL THEN 1 ELSE 0 END ASC, CAST(g.douban_score AS REAL) DESC, v.vod_time DESC"
 	case "hot":
-		orderClause = "ORDER BY CASE WHEN v.vod_hits = '' OR v.vod_hits IS NULL THEN 1 ELSE 0 END ASC, CAST(v.vod_hits AS INTEGER) DESC, v.vod_time DESC"
+		orderClause = "ORDER BY v.vod_time DESC"
 	}
 
 	var rows []rawVideoRow
 	listQ := fmt.Sprintf(`SELECT v.id, CAST(v.vod_id AS TEXT) AS vod_id, CAST(v.type_id AS TEXT) AS type_id,
-		v.type_name, v.vod_name, COALESCE(g.pic, v.vod_pic, '') AS vod_pic, v.vod_remarks, COALESCE(g.year, '') AS vod_year,
+		v.type_name, v.vod_name, COALESCE(g.pic, '') AS vod_pic, v.vod_remarks, COALESCE(g.year, '') AS vod_year,
 		COALESCE(g.area, '') AS vod_area, COALESCE(g.director, '') AS vod_director, COALESCE(g.actor, '') AS vod_actor,
-		v.vod_douban_score, v.vod_hits, v.vod_version, v.vod_state, v.vod_isend
+		COALESCE(g.douban_score, '') AS douban_score, COALESCE(g.douban_id, '') AS douban_id,
+		'' AS vod_hits, COALESCE(g.lang, '') AS vod_lang, COALESCE(g.content, '') AS vod_content, COALESCE(g.tag, '') AS vod_tag,
+		v.global_id
 		FROM %s v LEFT JOIN global_video g ON v.global_id = g.id%s %s LIMIT ? OFFSET ?`, tn, whereClause, orderClause)
 	queryArgs := append(append([]interface{}{}, args...), filter.PageSize, (filter.Page-1)*filter.PageSize)
 	err := instance.Select(&rows, listQ, queryArgs...)
@@ -371,57 +405,16 @@ func GetVideos(sourceKey string, filter FilterParams) ([]*model.Video, int, erro
 }
 
 func GetVideoById(sourceKey string, vodId string) (*model.Video, error) {
-	type row struct {
-		Id             int    `db:"id"`
-		VodId          string `db:"vod_id"`
-		TypeId         string `db:"type_id"`
-		TypeName       string `db:"type_name"`
-		VodName        string `db:"vod_name"`
-		VodClass       string `db:"vod_class"`
-		VodLang        string `db:"vod_lang"`
-		VodActor       string `db:"vod_actor"`
-		VodArea        string `db:"vod_area"`
-		VodContent     string `db:"vod_content"`
-		VodPic         string `db:"vod_pic"`
-		VodDirector    string `db:"vod_director"`
-		VodRemarks     string `db:"vod_remarks"`
-		VodYear        string `db:"vod_year"`
-		VodPlayUrl     string `db:"vod_play_url"`
-		VodDownUrl     string `db:"vod_down_url"`
-		VodTime        string `db:"vod_time"`
-		VodDoubanId    string `db:"vod_douban_id"`
-		VodDoubanScore string `db:"vod_douban_score"`
-		VodHits        string `db:"vod_hits"`
-		VodHitsDay     string `db:"vod_hits_day"`
-		VodHitsWeek    string `db:"vod_hits_week"`
-		VodHitsMonth   string `db:"vod_hits_month"`
-		VodPubdate     string `db:"vod_pubdate"`
-		VodVersion     string `db:"vod_version"`
-		VodState       string `db:"vod_state"`
-		VodScore       string `db:"vod_score"`
-		VodScoreAll    string `db:"vod_score_all"`
-		VodScoreNum    string `db:"vod_score_num"`
-		VodIsEnd       string `db:"vod_isend"`
-		VodPlayFrom    string `db:"vod_play_from"`
-		VodPlayNote    string `db:"vod_play_note"`
-		VodLetter      string `db:"vod_letter"`
-		VodTag         string `db:"vod_tag"`
-		VodSub         string `db:"vod_sub"`
-		VodEn          string `db:"vod_en"`
-	}
-	var r row
+	var r rawVideoRow
 	tn := VideoTableName(sourceKey)
 	q := fmt.Sprintf(`SELECT 
 			v.id, CAST(v.vod_id AS TEXT) AS vod_id, CAST(v.type_id AS TEXT) AS type_id,
-			v.type_name, v.vod_name, v.vod_class,
-			COALESCE(g.lang, '') AS vod_lang, COALESCE(g.actor, '') AS vod_actor,
-			COALESCE(g.area, '') AS vod_area, COALESCE(g.content, '') AS vod_content,
-			COALESCE(g.pic, v.vod_pic, '') AS vod_pic, COALESCE(g.director, '') AS vod_director,
-			v.vod_remarks, COALESCE(g.year, '') AS vod_year,
-			v.vod_play_url, v.vod_down_url, v.vod_time,
-			v.vod_douban_id, v.vod_douban_score, v.vod_hits, v.vod_hits_day, v.vod_hits_week, v.vod_hits_month,
-			v.vod_pubdate, v.vod_version, v.vod_state, v.vod_score, v.vod_score_all, v.vod_score_num,
-			v.vod_isend, v.vod_play_from, v.vod_play_note, v.vod_letter, COALESCE(g.tag, '') AS vod_tag, v.vod_sub, v.vod_en
+			v.type_name, v.vod_name,
+			COALESCE(g.pic, '') AS vod_pic, v.vod_remarks, COALESCE(g.year, '') AS vod_year,
+			COALESCE(g.area, '') AS vod_area, COALESCE(g.director, '') AS vod_director, COALESCE(g.actor, '') AS vod_actor,
+			COALESCE(g.douban_score, '') AS douban_score, COALESCE(g.douban_id, '') AS douban_id,
+			'' AS vod_hits, COALESCE(g.lang, '') AS vod_lang, COALESCE(g.content, '') AS vod_content, COALESCE(g.tag, '') AS vod_tag,
+			v.global_id
 		FROM %s v
 		LEFT JOIN global_video g ON v.global_id = g.id
 		WHERE v.vod_id = ? OR CAST(v.vod_id AS TEXT) = ? LIMIT 1`, tn)
@@ -434,44 +427,33 @@ func GetVideoById(sourceKey string, vodId string) (*model.Video, error) {
 		return nil, err
 	}
 
-	return &model.Video{
-		Id:             r.Id,
-		VodId:          model.FlexibleString(r.VodId),
-		TypeId:         model.FlexibleString(r.TypeId),
-		TypeName:       r.TypeName,
-		VodName:        r.VodName,
-		VodClass:       r.VodClass,
-		VodLang:        r.VodLang,
-		VodActor:       r.VodActor,
-		VodArea:        r.VodArea,
-		VodContent:     r.VodContent,
-		VodPic:         r.VodPic,
-		VodDirector:    r.VodDirector,
-		VodRemarks:     r.VodRemarks,
-		VodYear:        r.VodYear,
-		VodPlayUrl:     r.VodPlayUrl,
-		VodDownUrl:     r.VodDownUrl,
-		VodTime:        r.VodTime,
-		VodDoubanId:    model.FlexibleString(r.VodDoubanId),
-		VodDoubanScore: model.FlexibleString(r.VodDoubanScore),
-		VodHits:        model.FlexibleString(r.VodHits),
-		VodHitsDay:     model.FlexibleString(r.VodHitsDay),
-		VodHitsWeek:    model.FlexibleString(r.VodHitsWeek),
-		VodHitsMonth:   model.FlexibleString(r.VodHitsMonth),
-		VodPubdate:     model.FlexibleString(r.VodPubdate),
-		VodVersion:     model.FlexibleString(r.VodVersion),
-		VodState:       model.FlexibleString(r.VodState),
-		VodScore:       model.FlexibleString(r.VodScore),
-		VodScoreAll:    model.FlexibleString(r.VodScoreAll),
-		VodScoreNum:    model.FlexibleString(r.VodScoreNum),
-		VodIsEnd:       model.FlexibleString(r.VodIsEnd),
-		VodPlayFrom:    r.VodPlayFrom,
-		VodPlayNote:    r.VodPlayNote,
-		VodLetter:      r.VodLetter,
-		VodTag:         r.VodTag,
-		VodSub:         r.VodSub,
-		VodEn:          r.VodEn,
-	}, nil
+	video := rowToVideo(r)
+
+	// 补充 v_* 表特有的字段（play_url 等）
+	type extraRow struct {
+		VodPlayUrl  string `db:"vod_play_url"`
+		VodDownUrl  string `db:"vod_down_url"`
+		VodTime     string `db:"vod_time"`
+		VodPlayFrom string `db:"vod_play_from"`
+		VodClass    string `db:"vod_class"`
+		VodLetter   string `db:"vod_letter"`
+		VodSub      string `db:"vod_sub"`
+		VodEn       string `db:"vod_en"`
+	}
+	var extra extraRow
+	q2 := fmt.Sprintf(`SELECT vod_play_url, vod_down_url, vod_time, vod_play_from, vod_class, vod_letter, vod_sub, vod_en FROM %s WHERE vod_id = ? LIMIT 1`, tn)
+	if err2 := instance.Get(&extra, q2, vodId); err2 == nil {
+		video.VodPlayUrl = extra.VodPlayUrl
+		video.VodDownUrl = extra.VodDownUrl
+		video.VodTime = extra.VodTime
+		video.VodPlayFrom = extra.VodPlayFrom
+		video.VodClass = extra.VodClass
+		video.VodLetter = extra.VodLetter
+		video.VodSub = extra.VodSub
+		video.VodEn = extra.VodEn
+	}
+
+	return video, nil
 }
 
 func GetDistinctYears(sourceKey string) ([]string, error) {
@@ -517,7 +499,9 @@ func GetRandomRecommend(sourceKey string, limit int, excludeIds []string) ([]*mo
 	q := fmt.Sprintf(`SELECT v.id, CAST(v.vod_id AS TEXT) AS vod_id, CAST(v.type_id AS TEXT) AS type_id,
 		v.type_name, v.vod_name, COALESCE(g.pic, '') AS vod_pic, v.vod_remarks, COALESCE(g.year, '') AS vod_year,
 		COALESCE(g.area, '') AS vod_area, COALESCE(g.director, '') AS vod_director, COALESCE(g.actor, '') AS vod_actor,
-		v.vod_douban_score, v.vod_hits, v.vod_version, v.vod_state, v.vod_isend
+		COALESCE(g.douban_score, '') AS douban_score, COALESCE(g.douban_id, '') AS douban_id,
+		'' AS vod_hits, COALESCE(g.lang, '') AS vod_lang, COALESCE(g.content, '') AS vod_content, COALESCE(g.tag, '') AS vod_tag,
+		v.global_id
 		FROM %s v LEFT JOIN global_video g ON v.global_id = g.id
 		ORDER BY v.vod_time DESC LIMIT ?`, tn)
 	err := instance.Select(&rows, q, 200)
@@ -572,7 +556,9 @@ func SearchVideos(sourceKey, keyword string, page, pageSize int) ([]*model.Video
 	listQ := fmt.Sprintf(`SELECT v.id, CAST(v.vod_id AS TEXT) AS vod_id, CAST(v.type_id AS TEXT) AS type_id,
 		v.type_name, v.vod_name, COALESCE(g.pic, '') AS vod_pic, v.vod_remarks, COALESCE(g.year, '') AS vod_year,
 		COALESCE(g.area, '') AS vod_area, COALESCE(g.director, '') AS vod_director, COALESCE(g.actor, '') AS vod_actor,
-		v.vod_douban_score, v.vod_hits, v.vod_version, v.vod_state, v.vod_isend
+		COALESCE(g.douban_score, '') AS douban_score, COALESCE(g.douban_id, '') AS douban_id,
+		'' AS vod_hits, COALESCE(g.lang, '') AS vod_lang, COALESCE(g.content, '') AS vod_content, COALESCE(g.tag, '') AS vod_tag,
+		v.global_id
 		FROM %s v LEFT JOIN global_video g ON v.global_id = g.id%s ORDER BY v.vod_time DESC LIMIT ? OFFSET ?`, tn, where)
 	args := append(append([]interface{}{}, likes...), pageSize, (page-1)*pageSize)
 	err := instance.Select(&rows, listQ, args...)
@@ -617,45 +603,35 @@ func GetVideoCountByType(sourceKey string, typeId string) (int, error) {
 }
 
 func InsTypeIfNotExist(sourceKey string, typeId model.FlexibleString, typeName string) error {
-	tid := normalizeFlex(typeId)
-	if tid == "" {
-		// 没有 type_id 就不写入，避免大量空值合并
-		return nil
-	}
-	// 过滤空类型名：源站可能返回 type_name 为空的条目
+	// 过滤空类型名
 	tn := strings.TrimSpace(typeName)
 	if tn == "" {
 		return nil
 	}
-	EnsureTypeTable(sourceKey)
-	q := fmt.Sprintf(`INSERT OR IGNORE INTO %s (type_id, type_name) VALUES (?, ?)`, TypeTableName(sourceKey))
-	_, err := instance.Exec(q, tid, tn)
-	return err
+	return UpsertGlobalType(tn)
 }
 
 func GetTypes(sourceKey string) ([]*model.VType, error) {
-	EnsureTypeTable(sourceKey)
 	type typeRow struct {
 		Id       int    `db:"id"`
-		TypeId   string `db:"type_id"`
-		TypeName string `db:"name"`
+		TypeName string `db:"type_name"`
+		Sort     int    `db:"sort"`
 	}
 	var rows []typeRow
-	q := fmt.Sprintf(`SELECT id, CAST(type_id AS TEXT) AS type_id, type_name as name FROM %s ORDER BY type_id`, TypeTableName(sourceKey))
-	err := instance.Select(&rows, q)
+	err := instance.Select(&rows, `SELECT id, type_name, sort FROM global_types ORDER BY sort, id`)
 	if err != nil {
 		return nil, err
 	}
 	out := make([]*model.VType, 0, len(rows))
 	for _, r := range rows {
-		// 过滤空类型名（源站可能返回空名）
 		if strings.TrimSpace(r.TypeName) == "" {
 			continue
 		}
 		out = append(out, &model.VType{
-			Id:     r.Id,
-			TypeId: model.FlexibleString(r.TypeId),
-			Name:   r.TypeName,
+			Id:       r.Id,
+			TypeId:   model.FlexibleString(fmt.Sprintf("%d", r.Id)),
+			Name:     r.TypeName,
+			Sort:     r.Sort,
 		})
 	}
 	return out, nil
@@ -819,7 +795,9 @@ type TableColumn struct {
 // GetTableColumns 返回指定表的列定义（基于 SQLite PRAGMA table_info）
 func GetTableColumns(tableName string) ([]TableColumn, error) {
 	var cols []TableColumn
-	err := instance.Select(&cols, fmt.Sprintf(`PRAGMA table_info(%s)`, safeIdent(tableName)))
+	tn := safeIdent(tableName)
+	err := instance.Select(&cols, fmt.Sprintf(
+		"SELECT cid, name, COALESCE(type,'') AS col_type, \"notnull\", COALESCE(dflt_value,'') AS dflt_value, pk FROM pragma_table_info('%s')", tn))
 	return cols, err
 }
 
@@ -831,23 +809,23 @@ func GetSampleVideos(sourceKey string, limit int) ([]*model.Video, error) {
 	EnsureVideoTable(sourceKey)
 	tn := VideoTableName(sourceKey)
 	type sampleRow struct {
-		Id             int    `db:"id"`
-		VodId          string `db:"vod_id"`
-		TypeId         string `db:"type_id"`
-		TypeName       string `db:"type_name"`
-		VodName        string `db:"vod_name"`
-		VodPic         string `db:"vod_pic"`
-		VodRemarks     string `db:"vod_remarks"`
-		VodYear        string `db:"vod_year"`
-		VodArea        string `db:"vod_area"`
-		VodTime        string `db:"vod_time"`
-		VodDoubanScore string `db:"vod_douban_score"`
-		VodHits        string `db:"vod_hits"`
+		Id          int    `db:"id"`
+		VodId       string `db:"vod_id"`
+		TypeId      string `db:"type_id"`
+		TypeName    string `db:"type_name"`
+		VodName     string `db:"vod_name"`
+		VodPic      string `db:"vod_pic"`
+		VodRemarks  string `db:"vod_remarks"`
+		VodYear     string `db:"vod_year"`
+		VodArea     string `db:"vod_area"`
+		VodTime     string `db:"vod_time"`
+		DoubanScore string `db:"douban_score"`
+		VodHits     string `db:"vod_hits"`
 	}
 	var rows []*sampleRow
 	q := fmt.Sprintf(`SELECT v.id, CAST(v.vod_id AS TEXT) AS vod_id, CAST(v.type_id AS TEXT) AS type_id,
 		v.type_name, v.vod_name, COALESCE(g.pic, '') AS vod_pic, v.vod_remarks, COALESCE(g.year, '') AS vod_year,
-		COALESCE(g.area, '') AS vod_area, v.vod_time, v.vod_douban_score, v.vod_hits
+		COALESCE(g.area, '') AS vod_area, v.vod_time, COALESCE(g.douban_score, '') AS douban_score, '' AS vod_hits
 		FROM %s v LEFT JOIN global_video g ON v.global_id = g.id ORDER BY v.vod_time DESC LIMIT ?`, tn)
 	err := instance.Select(&rows, q, limit)
 	if err != nil {
@@ -866,7 +844,7 @@ func GetSampleVideos(sourceKey string, limit int) ([]*model.Video, error) {
 			VodYear:        r.VodYear,
 			VodArea:        r.VodArea,
 			VodTime:        r.VodTime,
-			VodDoubanScore: model.FlexibleString(r.VodDoubanScore),
+			VodDoubanScore: model.FlexibleString(r.DoubanScore),
 			VodHits:        model.FlexibleString(r.VodHits),
 		})
 	}
@@ -918,11 +896,10 @@ func GetSampleEpisodes(sourceKey string, limit int) ([]*model.Episode, error) {
 	return out, nil
 }
 
-// TruncateSource 仅清空某源的视频/剧集/分类数据，但保留 source 元信息
+// TruncateSource 仅清空某源的视频/剧集数据，但保留 source 元信息
 func TruncateSource(sourceKey string) error {
 	vTbl := VideoTableName(sourceKey)
 	eTbl := EpisodeTableName(sourceKey)
-	tTbl := TypeTableName(sourceKey)
 	if TableExists(vTbl) {
 		if _, err := instance.Exec(fmt.Sprintf(`DELETE FROM %s`, safeIdent(vTbl))); err != nil {
 			return err
@@ -933,17 +910,12 @@ func TruncateSource(sourceKey string) error {
 			return err
 		}
 	}
-	if TableExists(tTbl) {
-		if _, err := instance.Exec(fmt.Sprintf(`DELETE FROM %s`, safeIdent(tTbl))); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
-// DropSourceTables 删除该源的三张子表（视频/剧集/分类）。下次 Ensure*Table 时会重建。
+// DropSourceTables 删除该源的两张子表（视频/剧集）。下次 Ensure*Table 时会重建。
 func DropSourceTables(sourceKey string) error {
-	for _, name := range []string{VideoTableName(sourceKey), EpisodeTableName(sourceKey), TypeTableName(sourceKey)} {
+	for _, name := range []string{VideoTableName(sourceKey), EpisodeTableName(sourceKey)} {
 		if _, err := instance.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS %s`, safeIdent(name))); err != nil {
 			return err
 		}
@@ -951,7 +923,7 @@ func DropSourceTables(sourceKey string) error {
 	return nil
 }
 
-// RecreateSourceTables 删除并重建该源的三张表（数据全部丢失）
+// RecreateSourceTables 删除并重建该源的两张表（数据全部丢失）
 func RecreateSourceTables(sourceKey string) error {
 	if err := DropSourceTables(sourceKey); err != nil {
 		return err
@@ -960,9 +932,6 @@ func RecreateSourceTables(sourceKey string) error {
 		return err
 	}
 	if err := EnsureEpisodeTable(sourceKey); err != nil {
-		return err
-	}
-	if err := EnsureTypeTable(sourceKey); err != nil {
 		return err
 	}
 	return nil
@@ -1056,9 +1025,12 @@ func ExportAllVideos(sourceKey string) ([]*ExportVideoRow, error) {
 		COALESCE(g.area, '') AS vod_area, COALESCE(g.content, '') AS vod_content, COALESCE(g.pic, '') AS vod_pic,
 		COALESCE(g.director, '') AS vod_director, v.vod_remarks, COALESCE(g.year, '') AS vod_year,
 		v.vod_play_url, v.vod_down_url, v.vod_time,
-		v.vod_douban_id, v.vod_douban_score, v.vod_hits, v.vod_hits_day, v.vod_hits_week, v.vod_hits_month,
-		v.vod_pubdate, v.vod_version, v.vod_state, v.vod_score, v.vod_score_all, v.vod_score_num,
-		v.vod_isend, v.vod_play_from, v.vod_play_note, v.vod_letter, COALESCE(g.tag, '') AS vod_tag, v.vod_sub, v.vod_en
+		COALESCE(g.douban_id, '') AS vod_douban_id, COALESCE(g.douban_score, '') AS vod_douban_score,
+		'' AS vod_hits, '' AS vod_hits_day, '' AS vod_hits_week, '' AS vod_hits_month,
+		COALESCE(g.release_date, '') AS vod_pubdate, '' AS vod_version, '' AS vod_state,
+		'' AS vod_score, '' AS vod_score_all, '' AS vod_score_num,
+		'' AS vod_isend, v.vod_play_from, '' AS vod_play_note, v.vod_letter,
+		COALESCE(g.tag, '') AS vod_tag, v.vod_sub, v.vod_en
 		FROM %s v LEFT JOIN global_video g ON v.global_id = g.id ORDER BY v.vod_time DESC`, tn)
 	var rows []*ExportVideoRow
 	if err := instance.Select(&rows, q); err != nil {
@@ -1067,16 +1039,12 @@ func ExportAllVideos(sourceKey string) ([]*ExportVideoRow, error) {
 	return rows, nil
 }
 
-// ExportAllTypes 导出某个源的所有类型行
+// ExportAllTypes 导出所有全局类型行
 func ExportAllTypes(sourceKey string) ([]*ExportTypeRow, error) {
-	if !TableExists(TypeTableName(sourceKey)) {
-		return nil, nil
-	}
-	tn := TypeTableName(sourceKey)
-	q := fmt.Sprintf(`SELECT CAST(type_id AS TEXT) AS type_id, type_name FROM %s`, tn)
+	q := `SELECT CAST(id AS TEXT) AS type_id, type_name FROM global_types ORDER BY sort, id`
 	var rows []*ExportTypeRow
 	if err := instance.Select(&rows, q); err != nil {
-		return nil, fmt.Errorf("ExportAllTypes[%s] failed: %w", sourceKey, err)
+		return nil, fmt.Errorf("ExportAllTypes failed: %w", err)
 	}
 	return rows, nil
 }
@@ -1092,41 +1060,25 @@ func ImportVideos(sourceKey string, rows []*ExportVideoRow) error {
 	tn := VideoTableName(sourceKey)
 
 	type importRow struct {
-		VodId          string `db:"vod_id"`
-		TypeId         string `db:"type_id"`
-		TypeName       string `db:"type_name"`
-		VodName        string `db:"vod_name"`
-		GlobalId       int64  `db:"global_id"`
-		VodClass       string `db:"vod_class"`
-		VodRemarks     string `db:"vod_remarks"`
-		VodPlayUrl     string `db:"vod_play_url"`
-		VodDownUrl     string `db:"vod_down_url"`
-		VodTime        string `db:"vod_time"`
-		VodDoubanId    string `db:"vod_douban_id"`
-		VodDoubanScore string `db:"vod_douban_score"`
-		VodHits        string `db:"vod_hits"`
-		VodHitsDay     string `db:"vod_hits_day"`
-		VodHitsWeek    string `db:"vod_hits_week"`
-		VodHitsMonth   string `db:"vod_hits_month"`
-		VodPubdate     string `db:"vod_pubdate"`
-		VodVersion     string `db:"vod_version"`
-		VodState       string `db:"vod_state"`
-		VodScore       string `db:"vod_score"`
-		VodScoreAll    string `db:"vod_score_all"`
-		VodScoreNum    string `db:"vod_score_num"`
-		VodIsEnd       string `db:"vod_isend"`
-		VodPlayFrom    string `db:"vod_play_from"`
-		VodPlayNote    string `db:"vod_play_note"`
-		VodLetter      string `db:"vod_letter"`
-		VodSub         string `db:"vod_sub"`
-		VodEn          string `db:"vod_en"`
+		VodId       string `db:"vod_id"`
+		TypeId      string `db:"type_id"`
+		TypeName    string `db:"type_name"`
+		VodName     string `db:"vod_name"`
+		GlobalId    int64  `db:"global_id"`
+		VodClass    string `db:"vod_class"`
+		VodRemarks  string `db:"vod_remarks"`
+		VodPlayUrl  string `db:"vod_play_url"`
+		VodDownUrl  string `db:"vod_down_url"`
+		VodTime     string `db:"vod_time"`
+		VodPlayFrom string `db:"vod_play_from"`
+		VodLetter   string `db:"vod_letter"`
+		VodSub      string `db:"vod_sub"`
+		VodEn       string `db:"vod_en"`
 	}
 
 	cols := []string{"vod_id", "type_id", "type_name", "vod_name", "global_id",
 		"vod_class", "vod_remarks", "vod_play_url", "vod_down_url", "vod_time",
-		"vod_douban_id", "vod_douban_score", "vod_hits", "vod_hits_day", "vod_hits_week", "vod_hits_month",
-		"vod_pubdate", "vod_version", "vod_state", "vod_score", "vod_score_all", "vod_score_num",
-		"vod_isend", "vod_play_from", "vod_play_note", "vod_letter", "vod_sub", "vod_en"}
+		"vod_play_from", "vod_letter", "vod_sub", "vod_en"}
 
 	q := fmt.Sprintf(`INSERT INTO %s (%s) VALUES (%s)
 		ON CONFLICT(vod_id) DO UPDATE SET
@@ -1135,54 +1087,41 @@ func ImportVideos(sourceKey string, rows []*ExportVideoRow) error {
 		vod_class=excluded.vod_class, vod_remarks=excluded.vod_remarks,
 		vod_play_url=excluded.vod_play_url, vod_down_url=excluded.vod_down_url,
 		vod_time=excluded.vod_time,
-		vod_douban_id=excluded.vod_douban_id, vod_douban_score=excluded.vod_douban_score,
-		vod_hits=excluded.vod_hits, vod_hits_day=excluded.vod_hits_day,
-		vod_hits_week=excluded.vod_hits_week, vod_hits_month=excluded.vod_hits_month,
-		vod_pubdate=excluded.vod_pubdate, vod_version=excluded.vod_version,
-		vod_state=excluded.vod_state, vod_score=excluded.vod_score,
-		vod_score_all=excluded.vod_score_all, vod_score_num=excluded.vod_score_num,
-		vod_isend=excluded.vod_isend, vod_play_from=excluded.vod_play_from,
-		vod_play_note=excluded.vod_play_note, vod_letter=excluded.vod_letter,
+		vod_play_from=excluded.vod_play_from,
+		vod_letter=excluded.vod_letter,
 		vod_sub=excluded.vod_sub, vod_en=excluded.vod_en`,
 		tn, strings.Join(cols, ","), ":"+strings.Join(cols, ",:"))
 
 	var importRows []*importRow
 	for _, r := range rows {
-		globalID, err := upsertGlobalVideo(r.VodName, r.VodYear, r.VodArea, r.VodLang,
-			r.VodDirector, r.VodActor, r.VodTag, r.VodContent, r.VodPic)
+		// 将共享元数据写入 global_video
+		globalID, err := upsertGlobalVideoFromExport(r)
 		if err != nil {
 			logWarn(fmt.Sprintf("ImportVideos[%s] upsert global_video failed for '%s': %v", sourceKey, r.VodName, err))
 			globalID = 0
 		}
+		// 通过 type_name 重新解析全局 type_id，不使用导入数据中的原始 type_id
+		resolvedTypeId := "0"
+		if r.TypeName != "" {
+			if id, err := GetOrCreateGlobalTypeId(r.TypeName); err == nil {
+				resolvedTypeId = fmt.Sprintf("%d", id)
+			}
+		}
 		importRows = append(importRows, &importRow{
-			VodId:          r.VodId,
-			TypeId:         r.TypeId,
-			TypeName:       r.TypeName,
-			VodName:        r.VodName,
-			GlobalId:       globalID,
-			VodClass:       r.VodClass,
-			VodRemarks:     r.VodRemarks,
-			VodPlayUrl:     r.VodPlayUrl,
-			VodDownUrl:     r.VodDownUrl,
-			VodTime:        r.VodTime,
-			VodDoubanId:    r.VodDoubanId,
-			VodDoubanScore: r.VodDoubanScore,
-			VodHits:        r.VodHits,
-			VodHitsDay:     r.VodHitsDay,
-			VodHitsWeek:    r.VodHitsWeek,
-			VodHitsMonth:   r.VodHitsMonth,
-			VodPubdate:     r.VodPubdate,
-			VodVersion:     r.VodVersion,
-			VodState:       r.VodState,
-			VodScore:       r.VodScore,
-			VodScoreAll:    r.VodScoreAll,
-			VodScoreNum:    r.VodScoreNum,
-			VodIsEnd:       r.VodIsEnd,
-			VodPlayFrom:    r.VodPlayFrom,
-			VodPlayNote:    r.VodPlayNote,
-			VodLetter:      r.VodLetter,
-			VodSub:         r.VodSub,
-			VodEn:          r.VodEn,
+			VodId:       r.VodId,
+			TypeId:      resolvedTypeId,
+			TypeName:    r.TypeName,
+			VodName:     r.VodName,
+			GlobalId:    globalID,
+			VodClass:    r.VodClass,
+			VodRemarks:  r.VodRemarks,
+			VodPlayUrl:  r.VodPlayUrl,
+			VodDownUrl:  r.VodDownUrl,
+			VodTime:     r.VodTime,
+			VodPlayFrom: r.VodPlayFrom,
+			VodLetter:   r.VodLetter,
+			VodSub:      r.VodSub,
+			VodEn:       r.VodEn,
 		})
 	}
 
@@ -1200,18 +1139,17 @@ func ImportVideos(sourceKey string, rows []*ExportVideoRow) error {
 	return nil
 }
 
-// ImportTypes 批量 upsert 导入的类型行
+// ImportTypes 批量 upsert 导入的类型行到全局表
 func ImportTypes(sourceKey string, rows []*ExportTypeRow) error {
 	if len(rows) == 0 {
 		return nil
 	}
-	if err := EnsureTypeTable(sourceKey); err != nil {
-		return err
-	}
-	tn := TypeTableName(sourceKey)
-	q := fmt.Sprintf(`INSERT OR IGNORE INTO %s (type_id, type_name) VALUES (:type_id, :type_name)`, tn)
-	if _, err := instance.NamedExec(q, rows); err != nil {
-		return fmt.Errorf("ImportTypes[%s] failed: %w", sourceKey, err)
+	for _, r := range rows {
+		if r.TypeName != "" {
+			if err := UpsertGlobalType(r.TypeName); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
@@ -1227,4 +1165,55 @@ func safeIdent(s string) string {
 		}
 	}
 	return string(out)
+}
+
+// ==================== 基于 global_id 的跨源查找 ====================
+
+// SourceVideoRef 表示某个视频在特定源中的引用
+type SourceVideoRef struct {
+	SourceKey string `json:"source_key" db:"source_key"`
+	VodId     string `json:"vod_id" db:"vod_id"`
+	VodName   string `json:"vod_name" db:"vod_name"`
+}
+
+// GetGlobalIdForVideo 获取指定源中某个视频的 global_id
+func GetGlobalIdForVideo(sourceKey, vodId string) (int64, error) {
+	tbl := "v_" + safeIdent(sourceKey)
+	var gid sql.NullInt64
+	err := instance.Get(&gid,
+		fmt.Sprintf(`SELECT global_id FROM "%s" WHERE vod_id = ?`, tbl), vodId)
+	if err != nil || !gid.Valid || gid.Int64 == 0 {
+		return 0, fmt.Errorf("未找到 global_id")
+	}
+	return gid.Int64, nil
+}
+
+// FindSourcesByGlobalId 通过 global_id 查找所有拥有该视频的源
+// 遍历所有 v_* 源表，返回每个源的 source_key 和 vod_id
+func FindSourcesByGlobalId(globalId int64) ([]SourceVideoRef, error) {
+	if globalId <= 0 {
+		return nil, fmt.Errorf("invalid global_id: %d", globalId)
+	}
+
+	// 获取所有 v_* 源表
+	var tables []struct{ Name string `db:"name"` }
+	err := instance.Select(&tables,
+		`SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'v_%'`)
+	if err != nil {
+		return nil, err
+	}
+
+	var results []SourceVideoRef
+	for _, t := range tables {
+		sk := strings.TrimPrefix(t.Name, "v_")
+		var ref SourceVideoRef
+		err := instance.Get(&ref,
+			fmt.Sprintf(`SELECT ? AS source_key, vod_id, vod_name FROM "%s" WHERE global_id = ? LIMIT 1`, t.Name),
+			sk, globalId)
+		if err == nil && ref.VodId != "" {
+			ref.SourceKey = sk
+			results = append(results, ref)
+		}
+	}
+	return results, nil
 }

@@ -2,7 +2,7 @@
 defineOptions({ name: 'Downloads' })
 import { computed, onMounted, ref } from 'vue'
 import { useDownloadStore, formatBytes, formatSpeed, formatEta, percent as pct, type ChunkProgress } from '../stores/download'
-import { GetSetting, SetSetting } from '../../bindings/cczjVideo/app'
+import { GetSetting, SetSetting, GetDownloadDir } from '../../bindings/cczjVideo/app'
 import Icon from '../components/Icon.vue'
 import { Button, Tag } from '../components/ui'
 import { useErrorStore } from '../stores/error'
@@ -30,9 +30,19 @@ async function applyDownloadDir(): Promise<void> {
   }
 }
 
-function resetDownloadDir(): void {
-  downloadDirInput.value = ''
-  applyDownloadDir()
+async function resetDownloadDir(): Promise<void> {
+  savingDownloadDir.value = true
+  try {
+    const defaultDir = await GetDownloadDir()
+    downloadDirInput.value = defaultDir || ''
+    await applyDownloadDir()
+  } catch (e: any) {
+    errorStore.fromError('获取默认下载目录失败', e, 'Downloads.resetDownloadDir')
+    downloadDirInput.value = ''
+    await applyDownloadDir()
+  } finally {
+    savingDownloadDir.value = false
+  }
 }
 
 onMounted(async () => {
@@ -44,6 +54,14 @@ onMounted(async () => {
     const saved = await GetSetting('download_dir')
     if (saved) downloadDirInput.value = saved
   } catch { /* 忽略 */ }
+
+  // 如果仍然为空，直接从后端获取默认下载目录
+  if (!downloadDirInput.value) {
+    try {
+      const defaultDir = await GetDownloadDir()
+      if (defaultDir) downloadDirInput.value = defaultDir
+    } catch { /* 忽略 */ }
+  }
 })
 
 // ========== 分块进度可视化 ==========
