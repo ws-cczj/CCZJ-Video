@@ -5,6 +5,7 @@ import { Select as SelectDropdown } from './ui'
 import { TsCache } from '../utils/tsCache'
 import { AiUpscaler, checkUpscalerSupport } from '../utils/aiUpscaler'
 import loadingGif from '../assets/videos/loading.gif'
+import pauseImg from '../assets/images/pause.png'
 import {
   WindowIsFs, WindowIsMax, WindowSetFullscreen, WindowToggleMax
 } from '../../bindings/cczjVideo/app'
@@ -801,7 +802,6 @@ function jumpToSavedTime(autoRememberChoice: boolean): void {
 
 function destroyPlayerInternal(video: HTMLVideoElement): void {
   ++_playToken
-  // ⭐ v3: 清理 ABR 回调
   TsCache.setAbrSwitchCallback(null)
   try {
     const hls = (video as any).__hls
@@ -811,7 +811,9 @@ function destroyPlayerInternal(video: HTMLVideoElement): void {
     }
     try { video.pause() } catch { /* ignore */ }
     try { video.removeAttribute('src') } catch { /* ignore */ }
+    try { video.load() } catch { /* ignore */ }
     try { video.removeAttribute('data-autoplay-done') } catch { /* ignore */ }
+    try { delete (video as any).__eventsBound } catch { /* ignore */ }
   } catch { /* ignore */ }
   if (cacheStatsTimer != null) { window.clearInterval(cacheStatsTimer); cacheStatsTimer = null }
   if (_saveTimer != null) { window.clearInterval(_saveTimer); _saveTimer = null }
@@ -975,13 +977,33 @@ function captureThumbnail(time: number): void {
   if (!v || !v.duration || v.readyState < 2) { progressThumbnailImg.value = ''; return }
 
   // ⚠️ 关键：绝不修改主视频的 currentTime 来截图。
-  // 之前的实现会在 hover 时 v.currentTime = time（且不恢复），
-  // 导致"鼠标 hover 进度条就会跳转播放进度"的致命 bug。
-  // 这里改用一个独立的离屏 video 元素承载同一 src，对它 seek + drawImage，
+  // 这里使用独立的离屏 video 元素承载同一 src，对它 seek + drawImage，
   // 主视频的播放进度完全不受影响。
 
   const off = ensureThumbnailVideo(v)
-  if (!off) { progressThumbnailImg.value = ''; return }
+  if (!off) {
+    // 离屏 video 尚未就绪（首次加载 / HLS 缓冲中），
+    // 监听 loadedmetadata 后自动重试一次
+    progressThumbnailImg.value = ''
+    if (_thumbVideo && !_thumbRetryBound) {
+      _thumbRetryBound = true
+      const onReady = () => {
+        _thumbVideo!.removeEventListener('loadedmetadata', onReady)
+        // 用最后一次的 pendingTime 重试
+        if (_pendingThumbTime >= 0) {
+          captureThumbnail(_pendingThumbTime)
+        }
+      }
+      _thumbVideo.addEventListener('loadedmetadata', onReady, { once: true })
+      // 5s 超时保护
+      setTimeout(() => {
+        if (_thumbVideo) {
+          _thumbVideo.removeEventListener('loadedmetadata', onReady)
+        }
+      }, 5000)
+    }
+    return
+  }
 
   // 立即清除旧缩略图，避免显示上一次的缓存
   progressThumbnailImg.value = ''
@@ -1025,6 +1047,7 @@ function captureThumbnail(time: number): void {
 let _thumbVideo: HTMLVideoElement | null = null
 let _thumbVideoSrc = ''
 let _thumbHls: any = null // 离屏 video 的 hls.js 实例（HLS 视频用）
+let _thumbRetryBound = false // 离屏 video 是否已绑定 loadedmetadata 重试
 
 function ensureThumbnailVideo(main: HTMLVideoElement): HTMLVideoElement | null {
   if (!_thumbVideo) {
@@ -1048,6 +1071,7 @@ function ensureThumbnailVideo(main: HTMLVideoElement): HTMLVideoElement | null {
   // 源变化时重新加载
   if (effectiveSrc && effectiveSrc !== _thumbVideoSrc) {
     _thumbVideoSrc = effectiveSrc
+    _thumbRetryBound = false // 新源需要重新允许重试
 
     // 清理旧的离屏 hls 实例
     if (_thumbHls) {
@@ -1303,8 +1327,23 @@ onBeforeUnmount(() => {
   if (_thumbDebounceTimer) { clearTimeout(_thumbDebounceTimer); _thumbDebounceTimer = null }
 })
 
-watch(() => props.url, (newUrl) => {
-  if (!newUrl) return
+watch(() => props.url, (newUrl, oldUrl) => {
+  if (!newUrl) {
+    destroyPlayer()
+    return
+  }
+  if (oldUrl && oldUrl !== newUrl) {
+    const v = getVideoEl()
+    if (v) {
+      try { v.pause() } catch { /* ignore */ }
+      try { v.removeAttribute('src') } catch { /* ignore */ }
+      try { v.load() } catch { /* ignore */ }
+    }
+    preBuffering.value = false
+    loading.value = true
+    videoReady.value = false
+    playing.value = false
+  }
   setTimeout(setupPlayer, 0)
 })
 
@@ -1322,7 +1361,7 @@ watch(loading, (val) => {
     ref="wrapperRef" tabindex="0" @mousemove="toggleShow(true); mouseInside = true" @mouseenter="mouseInside = true"
     @mouseleave="onMouseLeave" @click="onWrapperClick" @dblclick.stop="toggleFullscreen()" @wheel.prevent="onWheel">
     <!-- 顶部栏：标题 + 缓存统计 + 收藏按钮 -->
-    <div v-if="showTitleBar && (showControls || !playing)" class="player-title-bar" @click.stop @dblclick.stop>
+    <div v-show="showTitleBar && (showControls || !playing)" class="player-title-bar" @click.stop @dblclick.stop>
       <span class="player-title">{{ title || url }}</span>
       <span v-if="isHls(url) && cacheStats.totalSegments > 0" class="cache-info"
         :title="`命中: ${cacheStats.hits} 未命中: ${cacheStats.misses} 预取: ${cacheStats.entries}/${cacheStats.totalSegments} 片`">
@@ -1349,7 +1388,7 @@ watch(loading, (val) => {
 
     <!-- 音量 toast：键盘调节音量时显示 1 秒 -->
     <transition name="fade">
-      <div v-if="showVolumeToast" class="volume-toast">
+      <div v-show="showVolumeToast" class="volume-toast">
         <div class="volume-toast-bar">
           <div class="volume-toast-fill" :style="{ width: toastVolumePct + '%' }"></div>
         </div>
@@ -1396,7 +1435,7 @@ watch(loading, (val) => {
     </div>
 
     <!-- 画质切换 toast（左下角，1.5 秒自动消失） -->
-    <div v-if="qualityToastText" class="quality-toast">
+    <div v-show="qualityToastText" class="quality-toast">
       <span>{{ qualityToastText }}</span>
     </div>
 
@@ -1423,6 +1462,40 @@ watch(loading, (val) => {
       </div>
     </div>
 
+    <!-- 暂停图标：右下角大字，仅暂停时显示 -->
+    <div v-show="!playing && !loading" class="pause-overlay" @click.stop="togglePlay">
+      <img :src="pauseImg" class="pause-icon" alt="已暂停" />
+    </div>
+
+    <!-- 进度条（独立行，在控制条上方） -->
+    <div class="progress-bar-wrapper" v-show="showControls || !playing || qualityOpen" @click.stop @mousedown.stop
+      @dblclick.stop>
+      <span class="progress-time-left">{{ fmt(current) }}</span>
+      <div class="progress-container" ref="progressContainerRef" @mousedown.stop="onProgressMouseDown"
+        @mousemove="onProgressHover" @mouseleave="progressHoverPct = -1">
+        <div class="progress-track-bg"></div>
+        <div class="progress-buffer" :style="{ width: bufferPct + '%' }"></div>
+        <div class="progress-played" :style="{ width: progressPct + '%' }"></div>
+        <!-- 悬停预览线 -->
+        <div v-show="progressHoverPct >= 0" class="progress-hover-line" :style="{ left: progressHoverPct + '%' }"></div>
+        <!-- 缩略图预览 -->
+        <div v-show="progressHoverPct >= 0 && progressThumbnailImg" class="progress-thumbnail-preview"
+          :style="{ left: progressHoverPct + '%' }">
+          <img :src="progressThumbnailImg" />
+          <span class="preview-time">{{ fmt((progressHoverPct / 100) * (duration || 0)) }}</span>
+        </div>
+        <!-- 当前播放位置的“独特”指示点（白色内圆 + 蓝色光晕 + 外圈） -->
+        <div class="progress-thumb" :style="{ left: progressPct + '%' }" :class="{ playing: playing }">
+          <span class="thumb-halo"></span>
+          <span class="thumb-core"></span>
+          <span class="thumb-ring"></span>
+        </div>
+        <input class="progress-slider" type="range" min="0" :max="duration || 0" step="0.1" :value="current"
+          @input="seek" />
+      </div>
+      <span class="progress-time-right">{{ fmt(duration) }}</span>
+    </div>
+
     <!-- 底部控制条 -->
     <div class="ctrl-bar" v-show="showControls || !playing || qualityOpen" @click.stop @mousedown.stop @pointerdown.stop
       @dblclick.stop>
@@ -1441,38 +1514,12 @@ watch(loading, (val) => {
         <Icon name="next" :size="16" />
       </button>
 
-      <span class="time">{{ fmt(current) }} / {{ fmt(duration) }}</span>
-
-      <!-- 进度条：三层结构（背景 / 缓冲 / 已播放）+ 透明 range input 提供拖动交互 -->
-      <div class="progress-container" ref="progressContainerRef" @mousedown.stop="onProgressMouseDown"
-        @mousemove="onProgressHover" @mouseleave="progressHoverPct = -1">
-        <div class="progress-track-bg"></div>
-        <div class="progress-buffer" :style="{ width: bufferPct + '%' }"></div>
-        <div class="progress-played" :style="{ width: progressPct + '%' }"></div>
-        <!-- 悬停预览线 -->
-        <div v-if="progressHoverPct >= 0" class="progress-hover-line" :style="{ left: progressHoverPct + '%' }"></div>
-        <!-- 缩略图预览 -->
-        <div v-if="progressHoverPct >= 0 && progressThumbnailImg" class="progress-thumbnail-preview"
-          :style="{ left: progressHoverPct + '%' }">
-          <img :src="progressThumbnailImg" />
-          <span class="preview-time">{{ fmt((progressHoverPct / 100) * (duration || 0)) }}</span>
-        </div>
-        <!-- 当前播放位置的"独特"指示点（白色内圆 + 蓝色光晕 + 外圈） -->
-        <div class="progress-thumb" :style="{ left: progressPct + '%' }" :class="{ playing: playing }">
-          <span class="thumb-halo"></span>
-          <span class="thumb-core"></span>
-          <span class="thumb-ring"></span>
-        </div>
-        <input class="progress-slider" type="range" min="0" :max="duration || 0" step="0.1" :value="current"
-          @input="seek" />
-      </div>
-
       <!-- 画质选择。
            inline + inline-drop="up"：面板不 Teleport，留在控制条 DOM 树内，
            (1) 解决全屏下面板 fixed 定位 rect 归零打不开；
            (2) 解决 Teleport 后父级 scoped 的 :deep 深色样式失效（与播放页不协调）。
            qualityOpen 状态在面板打开期间锁定控制条可见，避免 2.5s 自动隐藏导致面板错位。 -->
-      <div class="quality-group" @click.stop>
+      <div class="quality-group" @click.stop style="margin-left: auto">
         <SelectDropdown :model-value="qualityMode" :options="qualityOptions" size="sm" inline inline-drop="up"
           @change="onQualityChange" @open-change="(v: boolean) => qualityOpen = v" />
       </div>
@@ -1850,7 +1897,66 @@ watch(loading, (val) => {
   z-index: 4;
 }
 
+/* ========= 暂停图标（右下角） ========= */
+.pause-overlay {
+  position: absolute;
+  right: 24px;
+  bottom: 90px;
+  z-index: 6;
+  cursor: pointer;
+  pointer-events: auto;
+  animation: pause-fade-in 0.3s ease;
+  opacity: 0.85;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.pause-overlay:hover {
+  opacity: 1;
+  transform: scale(1.05);
+}
+.pause-icon {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.6));
+}
+@keyframes pause-fade-in {
+  from { opacity: 0; transform: scale(0.85); }
+  to { opacity: 0.85; transform: scale(1); }
+}
+
+/* ========= 进度条独立行（控制条上方） ========= */
+/* z-index 低于 ctrl-bar(8)，确保 ctrl-bar 的弹出面板（音量/倍速/画质）
+   始终在进度条上方，不会发生"点画质却点到进度条"的问题。 */
+.progress-bar-wrapper {
+  position: absolute;
+  bottom: 52px;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 16px;
+  z-index: 4;
+  height: 28px;
+  box-sizing: border-box;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0) 100%);
+}
+
+.progress-time-left,
+.progress-time-right {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.7);
+  flex-shrink: 0;
+  min-width: 42px;
+}
+.progress-time-left { text-align: right; }
+.progress-time-right { text-align: left; }
+
 /* ========= 控制条 ========= */
+/* z-index 高于 progress-bar-wrapper(4)，保证所有弹出面板在进度条上方。
+   ::before 桥接区填补 ctrl-bar 顶部与 progress-bar-wrapper 之间的缝隙，
+   防止鼠标从按钮移向弹出面板时误触进度条。 */
 .ctrl-bar {
   position: absolute;
   bottom: 0;
@@ -1859,15 +1965,26 @@ watch(loading, (val) => {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 120px 16px 14px 16px;
-  /* 上方留出 120px 空间给缩略图预览 */
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.85) 60px, rgba(0, 0, 0, 0) 100%);
+  padding: 10px 16px 12px 16px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.6) 60%, rgba(0, 0, 0, 0) 100%);
   color: #fff;
   font-size: 12px;
   user-select: none;
-  z-index: 5;
+  z-index: 8;
   box-sizing: border-box;
   flex-wrap: nowrap;
+}
+/* 桥接区：ctrl-bar 顶部到 progress-bar-wrapper 之间的过渡带，
+   确保鼠标在按钮和弹出面板之间移动时不会落入进度条区域 */
+.ctrl-bar::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -8px;
+  height: 8px;
+  pointer-events: auto;
+  z-index: 1;
 }
 
 .ctrl-btn {
@@ -1915,6 +2032,7 @@ watch(loading, (val) => {
   text-align: center;
   flex-shrink: 0;
   color: rgba(255, 255, 255, 0.85);
+  display: none; /* 时间已移到进度条行 */
 }
 
 /* ============ 进度条（重构：三层轨道 + 独特滑块） ============ */
@@ -2015,17 +2133,8 @@ watch(loading, (val) => {
 }
 
 @keyframes thumb-breathe {
-
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 0.6;
-  }
-
-  50% {
-    transform: scale(1.2);
-    opacity: 1;
-  }
+  0%, 100% { transform: scale(1); opacity: 0.6; }
+  50% { transform: scale(1.2); opacity: 1; }
 }
 
 /* 透明 range input 覆盖在整个容器上 —— 只负责交互（拖动），不显示默认外观 */
@@ -2084,14 +2193,14 @@ watch(loading, (val) => {
   transform: translateX(-50%);
 }
 
-/* 缩略图预览 */
+/* 缩略图预览（z-index 高于 ctrl-bar，确保始终可见） */
 .progress-thumbnail-preview {
   position: absolute;
   bottom: 100%;
   transform: translateX(-50%);
   margin-bottom: 10px;
   pointer-events: none;
-  z-index: 10;
+  z-index: 20;
   border-radius: 6px;
   overflow: hidden;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);

@@ -56,6 +56,8 @@ function epKeyOf(ep: Episode | undefined | null, idx: number): string {
 
 function refreshEpProgress(): void {
   try {
+    // 先强制写入确保内存缓存已同步到 localStorage
+    flushEpProgress()
     const local = loadEpProgress()
     const out: Record<string, number> = {}
     for (const k of Object.keys(local)) {
@@ -96,27 +98,44 @@ function onVisibilityChange(): void {
   }
 }
 
+// 自定义事件监听：播放页实时同步进度到详情页
+function onEpProgressUpdated(): void {
+  flushEpProgress() // 确保内存缓存已写入 localStorage
+  refreshEpProgress()
+}
+function onEpProgressFlushed(): void {
+  refreshEpProgress()
+  refreshLastWatched()
+}
+
+// localStorage 变化监听（跨标签页同步进度）
+function onStorageChange(e: StorageEvent): void {
+  if (e.key === 'cczj_ep_prog_v1') {
+    // 其他标签页修改了进度数据，重新加载
+    refreshEpProgress()
+  }
+}
+
 async function refreshLastWatched(): Promise<void> {
   try {
     const history = (await GetRecentHistory(50)) as HistoryItem[] | null | undefined
-    if (!Array.isArray(history) || history.length === 0) {
-      lastWatched.value = null
-      return
-    }
     const eps = videoStore.episodes
     const epNumToIdx = new Map<number, number>()
     for (let i = 0; i < eps.length; i++) {
       const num = Number(eps[i].ep_num)
       if (!isNaN(num)) epNumToIdx.set(num, i)
     }
+
     let found: HistoryItem | null = null
-    for (const h of history) {
-      // 优先按 global_id 跨源匹配，fallback 到 vod_id
-      const globalMatch = video.value?.global_id ? (h.global_id === video.value.global_id) : null
-      if (globalMatch === true) { found = h; break }
-      if (globalMatch === null && String(h.vod_id) === String(vodId.value)) { found = h; break }
-      if (h.ep_num == null) continue
+    if (Array.isArray(history) && history.length > 0) {
+      for (const h of history) {
+        const globalMatch = video.value?.global_id ? (h.global_id === video.value.global_id) : null
+        if (globalMatch === true) { found = h; break }
+        if (globalMatch === null && String(h.vod_id) === String(vodId.value)) { found = h; break }
+        if (h.ep_num == null) continue
+      }
     }
+
     if (found && found.ep_num != null) {
       const idx = epNumToIdx.get(Number(found.ep_num))
       if (idx !== undefined) {
@@ -130,6 +149,33 @@ async function refreshLastWatched(): Promise<void> {
         return
       }
     }
+
+    const localStore = loadEpProgress()
+    let maxUpdatedAt = 0
+    let bestKey: string | null = null
+    for (const k of Object.keys(localStore)) {
+      const prog = localStore[k]
+      if (prog.updatedAt && prog.updatedAt > maxUpdatedAt && prog.position && prog.position > 0) {
+        maxUpdatedAt = prog.updatedAt
+        bestKey = k
+      }
+    }
+
+    if (bestKey) {
+      for (let i = 0; i < eps.length; i++) {
+        const k = epKeyOf(eps[i], i)
+        if (k === bestKey) {
+          lastWatched.value = {
+            epNum: Number(eps[i].ep_num) || (i + 1),
+            epIdx: i,
+            epName: formatEpisodeName(eps[i], i),
+            position: getEpProgressPct(localStore[bestKey]),
+          }
+          return
+        }
+      }
+    }
+
     lastWatched.value = null
   } catch { /* ignore */ }
 }
@@ -615,6 +661,11 @@ onMounted(async () => {
   refreshFav().catch(() => {})
   // 页面可见性变化时刷新进度（从播放页返回时同步）
   document.addEventListener('visibilitychange', onVisibilityChange)
+  // 监听播放页实时进度更新事件
+  window.addEventListener('cczj-ep-progress-updated', onEpProgressUpdated)
+  window.addEventListener('cczj-ep-progress-flushed', onEpProgressFlushed)
+  // 监听 localStorage 变化（跨标签页同步）
+  window.addEventListener('storage', onStorageChange)
 })
 
 // KeepAlive 激活时刷新进度（若将来 Detail 被加入缓存）
@@ -641,6 +692,9 @@ watch(vodId, () => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('visibilitychange', onVisibilityChange)
+  window.removeEventListener('cczj-ep-progress-updated', onEpProgressUpdated)
+  window.removeEventListener('cczj-ep-progress-flushed', onEpProgressFlushed)
+  window.removeEventListener('storage', onStorageChange)
 })
 </script>
 
