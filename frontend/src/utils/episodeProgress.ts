@@ -129,14 +129,15 @@ export function getEpProgress(key: string): EpProgressEntry | undefined {
   return store[key]
 }
 
-/** 计算进度百分比 0-100。position 有值但无 duration 时返回 15%（表示"看过一点"）。 */
+/** 计算进度百分比 0-100。条目存在即表示"已开始观看"，position=0 时返回 1%；position>0 但无 duration 时返回 15%。 */
 export function getEpProgressPct(entry: EpProgressEntry | undefined): number {
   if (!entry) return 0
   const pos = Number(entry.position) || 0
-  if (pos <= 0) return 0
+  // 条目存在但 position=0：用户点开过但还没播放，标记为 1%
+  if (pos <= 0) return 1
   const dur = entry.duration && entry.duration > 0 ? Number(entry.duration) : 0
   if (dur > 0) {
-    return Math.min(100, Math.max(0, (pos / dur) * 100))
+    return Math.min(100, Math.max(1, (pos / dur) * 100))
   }
   return 15
 }

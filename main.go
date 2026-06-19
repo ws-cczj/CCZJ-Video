@@ -36,7 +36,6 @@ func main() {
 		BackgroundColour: application.RGBA{Red: 20, Green: 20, Blue: 40, Alpha: 255},
 		Windows: application.WindowsWindow{
 			Theme:                             application.Dark,
-			ResizeDebounceMS:                  10,
 			DisableFramelessWindowDecorations: false,
 		},
 	})

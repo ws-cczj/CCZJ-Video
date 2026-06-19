@@ -1,12 +1,10 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import UnoCSS from 'unocss/vite'
 
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
     vue(),
-    UnoCSS(), // UnoCSS 按需生成原子样式（替代 Tailwind CSS）
   ],
   server: {
     host: '127.0.0.1', // 强制 IPv4，避免 wails3 用 127.0.0.1 连接时因 IPv6 绑定失败

@@ -214,10 +214,12 @@ function isWatchedEp(idx: number): boolean { return getEpWatchPct(idx) > 0 }
 let lastHistorySyncAt = 0
 const HISTORY_SYNC_INTERVAL_MS = 10000
 
-function syncHistoryToDb(position: number): void {
-  const now = Date.now()
-  if (now - lastHistorySyncAt < HISTORY_SYNC_INTERVAL_MS) return
-  lastHistorySyncAt = now
+function syncHistoryToDb(position: number, force = false): void {
+  if (!force) {
+    const now = Date.now()
+    if (now - lastHistorySyncAt < HISTORY_SYNC_INTERVAL_MS) return
+    lastHistorySyncAt = now
+  }
   if (!vodId.value || currentEpIndex.value < 0) return
   const ep = episodes.value[currentEpIndex.value]
   if (!ep) return
@@ -319,6 +321,8 @@ const MAX_VIDEO_TRACK_RETRIES = 20
 let _videoTrackTimer: ReturnType<typeof setTimeout> | null = null
 
 function bindVideoTimeTracking(): void {
+  if (_videoTrackTimer) { clearTimeout(_videoTrackTimer); _videoTrackTimer = null }
+  _videoTrackRetries = 0
   const v = document.querySelector('.native-video') as HTMLVideoElement | null
   if (!v) {
     _videoTrackRetries++
@@ -329,14 +333,12 @@ function bindVideoTimeTracking(): void {
     }
     return
   }
-  // 防止重复绑定
-  if ((v as any).__epProgressBound) return
+  try { delete (v as any).__epProgressBound } catch { /* ignore */ }
   ;(v as any).__epProgressBound = true
   console.log('[Player] ✔ 进度追踪已绑定到 video 元素')
   v.addEventListener('timeupdate', () => {
     _epUpdateCount++
     updateCurrentEpProgress(v.currentTime, v.duration)
-    // 每20次更新输出一次日志
     if (_epUpdateCount % 20 === 1) {
       const k = epKeyOf(currentEpIndex.value)
       console.log(`[Player] ✔ timeupdate #${_epUpdateCount}: key="${k}", time=${v.currentTime.toFixed(1)}s, dur=${v.duration?.toFixed(1) || '?'}`)
@@ -457,10 +459,21 @@ const overviewText = computed(() => stripHtmlTags(video.value?.vod_content || ''
 function goToEpisode(idx: number): void {
   if (idx < 0 || idx >= episodes.value.length) return
   if (idx === currentEpIndex.value) return
+  try {
+    const v = document.querySelector('.native-video') as HTMLVideoElement | null
+    if (v && !isNaN(v.currentTime)) {
+      syncHistoryToDb(v.currentTime, true)
+    }
+  } catch { /* ignore */ }
   recordHistory(idx)
   currentEpIndex.value = idx
   _playToken.value++
   try { TsCache.setCurrentEpisode(idx) } catch {}
+  try {
+    const v = document.querySelector('.native-video') as HTMLVideoElement | null
+    if (v) delete (v as any).__epProgressBound
+  } catch { /* ignore */ }
+  setTimeout(() => bindVideoTimeTracking(), 300)
   router.replace(`/player/${sourceKey.value}/${vodId.value}/${idx}`).catch(() => {})
 }
 function prevEpisode(): void { if (hasPrev.value) goToEpisode(currentEpIndex.value - 1) }
@@ -691,6 +704,13 @@ watch(currentEpIndex, (idx) => {
   try { TsCache.setCurrentEpisode(idx) } catch {}
 })
 
+// 源切换/重新加载后，VideoPlayer 被销毁重建，需重新绑定 timeupdate 监听
+watch(loading, (val) => {
+  if (!val) {
+    bindVideoTimeTracking()
+  }
+})
+
 // 页面可见性变化时刷新进度（从其他页面返回时同步）
 function onVisibilityChange(): void {
   if (document.visibilityState === 'visible') {
@@ -754,10 +774,15 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
-  // 确保最新的进度写入 localStorage
   flushEpProgress()
   console.log(`[Player] ✔ 组件卸载，进度已 flush 到 localStorage (共 ${_epUpdateCount} 次 timeupdate)`)
-  // 通知其他页面进度已更新
+  try {
+    const v = document.querySelector('.native-video') as HTMLVideoElement | null
+    if (v && !isNaN(v.currentTime)) {
+      syncHistoryToDb(v.currentTime, true)
+      console.log(`[Player] ✔ 强制同步历史记录到后端: position=${v.currentTime.toFixed(1)}s`)
+    }
+  } catch { /* ignore */ }
   try { window.dispatchEvent(new CustomEvent('cczj-ep-progress-flushed')) } catch { /* ignore */ }
   document.removeEventListener('keydown', onPageKeyDown)
   document.removeEventListener('visibilitychange', onVisibilityChange)
@@ -811,13 +836,6 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
             :force-play-token="_playToken"
           />
 
-          <!-- 底部浮层：切集提示（显示"即将播放：下一集"） -->
-          <transition name="fade">
-            <div v-show="hasNext && getNextEpCached().cached > 0" class="prefetch-hint">
-              <span class="prefetch-icon">⬇</span>
-              <span>下一集已预取 {{ getNextEpCached().cached }} 片，切换即可秒开</span>
-            </div>
-          </transition>
 
           <!-- 侧面板折叠/展开按钮（视频区右侧中间） -->
           <button
@@ -861,13 +879,13 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
                 <span>播放源</span>
               </div>
               <div class="side-section-right">
-                <span class="side-count">{{ sourceOptions.length }} 个可用源</span>
+                <span class="side-count">{{ sourceOptions.filter(s => s.hasData).length }} 个可用源</span>
               </div>
             </div>
 
             <div class="source-list">
               <button
-                v-for="src in sourceOptions"
+                v-for="src in sourceOptions.filter(s => s.hasData)"
                 :key="src.source_key"
                 class="source-item"
                 :class="{ active: src.source_key === activeSourceKey }"
