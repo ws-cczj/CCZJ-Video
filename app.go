@@ -3056,6 +3056,104 @@ func errStr(err error) string {
 	return err.Error()
 }
 
+// ======================== Cache Management ========================
+
+// CacheInfo 缓存信息
+type CacheInfo struct {
+	LocalStorageBytes int64  `json:"local_storage_bytes"`
+	IndexedDBBytes    int64  `json:"indexed_db_bytes"`
+	DatabaseBytes     int64  `json:"database_bytes"`
+	DatabasePath      string `json:"database_path"`
+	DiskCacheDir      string `json:"disk_cache_dir"`
+	DiskCacheBytes    int64  `json:"disk_cache_bytes"`
+	LogFileBytes      int64  `json:"log_file_bytes"`
+	LogFilePath       string `json:"log_file_path"`
+}
+
+// getDirSize 递归计算目录大小
+func getDirSize(path string) int64 {
+	var size int64
+	filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return nil
+	})
+	return size
+}
+
+// GetCacheInfo 获取缓存信息
+func (a *App) GetCacheInfo() (*CacheInfo, error) {
+	info := &CacheInfo{}
+
+	// 数据库文件大小
+	dataDir := a.getDataDir()
+	dbPath := filepath.Join(dataDir, "cczj_video.db")
+	if fi, err := os.Stat(dbPath); err == nil {
+		info.DatabaseBytes = fi.Size()
+		// 也包含 WAL 和 SHM 文件
+		for _, ext := range []string{"-wal", "-shm"} {
+			if fi2, err := os.Stat(dbPath + ext); err == nil {
+				info.DatabaseBytes += fi2.Size()
+			}
+		}
+	}
+	info.DatabasePath = dbPath
+
+	// 磁盘缓存目录（TsCache 下载的 TS 片段）
+	diskCacheDir := filepath.Join(dataDir, "ts_cache")
+	if fi, err := os.Stat(diskCacheDir); err == nil && fi.IsDir() {
+		info.DiskCacheBytes = getDirSize(diskCacheDir)
+	}
+	info.DiskCacheDir = diskCacheDir
+
+	// 日志文件
+	logDir := filepath.Join(dataDir, "logs")
+	if fi, err := os.Stat(logDir); err == nil && fi.IsDir() {
+		info.LogFileBytes = getDirSize(logDir)
+	}
+	info.LogFilePath = logDir
+
+	return info, nil
+}
+
+// ClearCacheReq 清除缓存请求
+type ClearCacheReq struct {
+	Type string `json:"type"` // "database" | "disk_cache" | "logs" | "all"
+}
+
+// ClearCache 清除指定类型的缓存
+func (a *App) ClearCache(req ClearCacheReq) (bool, error) {
+	dataDir := a.getDataDir()
+
+	doClear := func(t string) error {
+		switch t {
+		case "disk_cache":
+			diskCacheDir := filepath.Join(dataDir, "ts_cache")
+			return os.RemoveAll(diskCacheDir)
+		case "logs":
+			logDir := filepath.Join(dataDir, "logs")
+			return os.RemoveAll(logDir)
+		case "database":
+			// 数据库文件不能直接删除（正在使用），标记需要下次重启清理
+			return fmt.Errorf("数据库文件正在使用中，请通过「重置数据库」功能操作")
+		case "all":
+			os.RemoveAll(filepath.Join(dataDir, "ts_cache"))
+			os.RemoveAll(filepath.Join(dataDir, "logs"))
+			return nil
+		}
+		return fmt.Errorf("未知缓存类型: %s", t)
+	}
+
+	if err := doClear(req.Type); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // ProxyImage 代理获取远程图片，绕过 CORS 限制
 // 返回 base64 编码的图片数据
 func (a *App) ProxyImage(urlStr string) (string, error) {

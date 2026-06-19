@@ -172,8 +172,8 @@ func (s *Scheduler) startSourceTimers() {
 
 // scheduleSource 为一个源安排定时采集
 func (s *Scheduler) scheduleSource(sourceKey string, sc *model.ScheduleConfig) {
-	if sc.IntervalMin < 5 {
-		sc.IntervalMin = 5 // 最小 5 分钟
+	if sc.IntervalMin < 1 {
+		sc.IntervalMin = 1 // 最小 1 分钟
 	}
 	interval := time.Duration(sc.IntervalMin) * time.Minute
 

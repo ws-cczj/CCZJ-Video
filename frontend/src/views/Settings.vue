@@ -14,6 +14,7 @@ import { useDevMode } from '../stores/devMode'
 import Icon from '../components/Icon.vue'
 import { Button, Modal, Segment, Select as SelectDropdown } from '../components/ui'
 import { useI18n } from '../locales'
+import { stats as tsStats, clear as tsClear, diskCacheInfo, TsCache } from '../utils/tsCache'
 
 const { t, setLocale } = useI18n()
 
@@ -27,6 +28,7 @@ const GROUPS = computed<GroupItem[]>(() => [
   { id: 'basic',  label: t('settings.basic'), icon: 'sliders' },
   { id: 'theme',  label: t('settings.theme'), icon: 'palette' },
   { id: 'play',   label: t('settings.playback'), icon: 'play' },
+  { id: 'cache',  label: '缓存管理', icon: 'database' },
   { id: 'about',  label: t('settings.about'), icon: 'info' },
 ])
 
@@ -478,6 +480,101 @@ function pickTheme(id: string): void {
   themeStore.setTheme(id)
 }
 
+// ---------- 缓存管理 ----------
+interface CacheInfo {
+  localStorageBytes: number
+  indexedDBBytes: number
+  tsMemoryBytes: number
+  tsMemoryEntries: number
+  tsDiskBytes: number
+  tsDiskEntries: number
+}
+
+const cacheInfo = ref<CacheInfo | null>(null)
+const cacheLoading = ref(false)
+const cacheClearing = ref('')
+
+function fmtBytes(bytes: number): string {
+  if (bytes <= 0) return '0 B'
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+  return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB'
+}
+
+async function loadCacheInfo(): Promise<void> {
+  cacheLoading.value = true
+  try {
+    // 1. localStorage
+    let lsBytes = 0
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key) {
+        lsBytes += (key.length + (localStorage.getItem(key)?.length || 0)) * 2
+      }
+    }
+
+    // 2. TsCache 内存
+    const tsMem = tsStats()
+    const tsMemoryBytes = tsMem.bytes || 0
+    const tsMemoryEntries = tsMem.totalEntries || 0
+
+    // 3. TsCache 磁盘 (IndexedDB)
+    let tsDiskBytes = 0
+    let tsDiskEntries = 0
+    try {
+      const disk = await diskCacheInfo()
+      tsDiskBytes = disk.bytes || 0
+      tsDiskEntries = disk.count || 0
+    } catch { /* TsCache 未初始化 */ }
+
+    // 4. IndexedDB 总量 (包含 TsCache 磁盘 + 其他)
+    let idxDBBytes = tsDiskBytes
+    try {
+      const est = await (navigator as any).storage?.estimate()
+      if (est && est.usage) {
+        idxDBBytes = est.usage
+      }
+    } catch { /* ignore */ }
+
+    cacheInfo.value = {
+      localStorageBytes: lsBytes,
+      indexedDBBytes: idxDBBytes,
+      tsMemoryBytes,
+      tsMemoryEntries,
+      tsDiskBytes,
+      tsDiskEntries,
+    }
+  } catch {
+    cacheInfo.value = null
+  } finally {
+    cacheLoading.value = false
+  }
+}
+
+async function doClearCache(type: string, label: string): Promise<void> {
+  const yes = await confirmStore.confirm({
+    title: '清除缓存',
+    message: `确定要清除${label}吗？\n\n⚠ 注意：清除后相关数据将无法恢复。${type === 'ts_memory' ? '\n清除内存缓存不会影响已下载的磁盘缓存。' : ''}`,
+    okText: '确认清除',
+    level: 'warn',
+  })
+  if (!yes) return
+  cacheClearing.value = type
+  try {
+    if (type === 'ts_memory') {
+      tsClear()
+    } else if (type === 'ts_disk') {
+      await TsCache.diskClear()
+    }
+    await loadCacheInfo()
+  } catch (e: any) {
+    errorStore.fromError('清除失败', e, 'Settings.clearCache')
+  } finally {
+    cacheClearing.value = ''
+  }
+}
+
 // ---------- 启动 ----------
 onMounted(async () => {
   const hash = (route.hash || '').replace('#', '').trim()
@@ -832,7 +929,90 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
         </section>
       </div>
 
-      
+      <!-- ========== 缓存管理 ========== -->
+      <div v-else-if="activeGroup === 'cache'" class="panel">
+        <section class="block">
+          <div class="block-hd">
+            <h3>缓存占用</h3>
+            <Button variant="secondary" size="sm" :loading="cacheLoading" @click="loadCacheInfo">
+              <Icon name="refresh" :size="12" /> 刷新
+            </Button>
+          </div>
+
+          <div v-if="cacheLoading" class="cache-loading">
+            <Icon name="spinner" :size="18" /> 正在统计...
+          </div>
+          <div v-else-if="cacheInfo" class="cache-grid">
+            <div class="cache-item">
+              <div class="cache-item-icon"><Icon name="cpu" :size="18" /></div>
+              <div class="cache-item-info">
+                <div class="cache-item-label">TS 内存缓存</div>
+                <div class="cache-item-size">{{ fmtBytes(cacheInfo.tsMemoryBytes) }}</div>
+                <div class="cache-item-path">{{ cacheInfo.tsMemoryEntries }} 个片段 · 当前播放集</div>
+              </div>
+              <Button
+                variant="danger"
+                size="sm"
+                :disabled="cacheInfo.tsMemoryBytes <= 0"
+                :loading="cacheClearing === 'ts_memory'"
+                @click="doClearCache('ts_memory', 'TS 内存缓存')"
+              >
+                清除
+              </Button>
+            </div>
+
+            <div class="cache-item">
+              <div class="cache-item-icon"><Icon name="download" :size="18" /></div>
+              <div class="cache-item-info">
+                <div class="cache-item-label">TS 磁盘缓存 (IndexedDB)</div>
+                <div class="cache-item-size">{{ fmtBytes(cacheInfo.tsDiskBytes) }}</div>
+                <div class="cache-item-path">{{ cacheInfo.tsDiskEntries }} 个片段 · 跨会话持久化</div>
+              </div>
+              <Button
+                variant="danger"
+                size="sm"
+                :disabled="cacheInfo.tsDiskBytes <= 0"
+                :loading="cacheClearing === 'ts_disk'"
+                @click="doClearCache('ts_disk', 'TS 磁盘缓存')"
+              >
+                清除
+              </Button>
+            </div>
+
+            <div class="cache-item">
+              <div class="cache-item-icon"><Icon name="database" :size="18" /></div>
+              <div class="cache-item-info">
+                <div class="cache-item-label">IndexedDB 总计</div>
+                <div class="cache-item-size">{{ fmtBytes(cacheInfo.indexedDBBytes) }}</div>
+                <div class="cache-item-path">浏览器分配的 IndexedDB 总占用空间</div>
+              </div>
+              <div class="cache-item-note">由浏览器自动管理</div>
+            </div>
+
+            <div class="cache-item">
+              <div class="cache-item-icon"><Icon name="browser" :size="18" /></div>
+              <div class="cache-item-info">
+                <div class="cache-item-label">浏览器存储 (localStorage)</div>
+                <div class="cache-item-size">{{ fmtBytes(cacheInfo.localStorageBytes) }}</div>
+                <div class="cache-item-path">主题、偏好设置、收藏夹映射等</div>
+              </div>
+              <div class="cache-item-note">⚠ 仅建议开发者手动清理</div>
+            </div>
+          </div>
+          <div v-else class="cache-loading">
+            <span>点击「刷新」按钮查看缓存占用</span>
+          </div>
+        </section>
+
+        <section class="block">
+          <h3>说明</h3>
+          <div class="cache-desc">
+            <p><strong>TS 内存缓存：</strong>视频播放时缓存在内存中的 TS 片段，切换视频或关闭页面后自动释放。</p>
+            <p><strong>TS 磁盘缓存：</strong>存储在浏览器 IndexedDB 中的 TS 片段，用于跨会话加速播放。</p>
+            <p><strong>数据库文件：</strong>由后端管理，包含视频数据、收藏、历史记录等，位于应用数据目录。</p>
+          </div>
+        </section>
+      </div>
 
       <!-- ========== 关于 ========== -->
       <div v-else-if="activeGroup === 'about'" class="panel">
@@ -2696,6 +2876,80 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   margin-top: 6px;
   color: var(--text-muted);
   font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+/* ============ 缓存管理 ============ */
+.block-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.block-hd h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.cache-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.cache-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cache-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.cache-item-icon {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.cache-item-info {
+  flex: 1;
+  min-width: 0;
+}
+.cache-item-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.cache-item-size {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 2px 0;
+}
+.cache-item-path {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 320px;
+}
+.cache-item-note {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.cache-desc {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0 0 12px;
   line-height: 1.5;
 }
 </style>

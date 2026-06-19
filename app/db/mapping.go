@@ -13,9 +13,9 @@ func AddFavorite(sourceKey string, vodId string, vodName string) error {
 	return err
 }
 
-// RemoveFavoriteByGlobalID 按 global_id 删除收藏
+// RemoveFavoriteByGlobalID 按 global_id 删除所有源的收藏
 func RemoveFavoriteByGlobalID(globalID int, sourceKey string) error {
-	_, err := instance.Exec(`DELETE FROM favorites WHERE global_id = ? AND source_key = ?`, globalID, sourceKey)
+	_, err := instance.Exec(`DELETE FROM favorites WHERE global_id = ?`, globalID)
 	return err
 }
 
@@ -28,14 +28,14 @@ func RemoveFavorite(vodName string, sourceKey string) error {
 	return RemoveFavoriteByGlobalID(row.Id, sourceKey)
 }
 
-// IsFavorite 按 vod_name + source_key 检查是否已收藏
+// IsFavorite 按 vod_name 检查是否已收藏（跨所有源）
 func IsFavorite(vodName string, sourceKey string) bool {
 	row, err := GetGlobalVideoByName(vodName)
 	if err != nil {
 		return false
 	}
 	var count int
-	_ = instance.Get(&count, `SELECT COUNT(1) FROM favorites WHERE global_id = ? AND source_key = ?`, row.Id, sourceKey)
+	_ = instance.Get(&count, `SELECT COUNT(1) FROM favorites WHERE global_id = ?`, row.Id)
 	return count > 0
 }
 

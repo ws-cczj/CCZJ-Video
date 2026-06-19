@@ -165,8 +165,6 @@ func ParseVideoWithMapping(rawData []byte, fieldMapping map[string]string) (*mod
 	vType := reflect.ValueOf(v).Elem()
 	vTypeStruct := vType.Type()
 
-	applog.Debug("[FieldMapping] 原始数据字段: %v", getKeys(rawMap))
-
 	for srcKey, srcValue := range rawMap {
 		if srcValue == nil {
 			continue
@@ -177,15 +175,11 @@ func ParseVideoWithMapping(rawData []byte, fieldMapping map[string]string) (*mod
 		if fieldMapping != nil && len(fieldMapping) > 0 {
 			if mappedKey, ok := fieldMapping[srcKey]; ok {
 				targetFieldName = mappedKey
-				applog.Debug("[FieldMapping] 自定义映射 - 源字段: %s -> 目标字段: %s", srcKey, targetFieldName)
 			}
 		}
 
 		if targetFieldName == "" {
 			targetFieldName = findTargetField(srcKey)
-			if targetFieldName != "" {
-				applog.Debug("[FieldMapping] 默认别名映射 - 源字段: %s -> 目标字段: %s", srcKey, targetFieldName)
-			}
 		}
 
 		if targetFieldName == "" {

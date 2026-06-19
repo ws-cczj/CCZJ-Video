@@ -7,6 +7,7 @@ import { useVideoStore } from '../stores/video'
 import Icon from '../components/Icon.vue'
 import { Button, Spinner as LoadingSpinner } from '../components/ui'
 import { getDetailPath } from '../utils'
+import { computeRecommendations, type RecommendItem, extractYear } from '../utils/recommend'
 import type { Video } from '../types'
 
 const route = useRoute()
@@ -17,15 +18,6 @@ const videoStore = useVideoStore()
 const sourceKey = computed(() => String(route.query.sourceKey || ''))
 const vodId = computed(() => String(route.query.vodId || ''))
 const vodName = computed(() => String(route.query.vodName || ''))
-
-interface RecommendItem {
-  vod_id: string
-  vod_name: string
-  vod_pic?: string
-  vod_remarks?: string
-  matchKey: string
-  score: number
-}
 
 const recommendations = ref<RecommendItem[]>([])
 const loading = ref(true)
@@ -42,66 +34,12 @@ async function loadRecommendations(): Promise<void> {
   loading.value = true
   try {
     const list: Video[] = Array.isArray(videoStore.videos) ? videoStore.videos : []
-    const currentIdStr = vodId.value
+    const currentId = vodId.value
+    const currentVideo = list.find((v) => String(v.vod_id || '') === currentId)
+    const currentName = currentVideo?.vod_name || vodName.value || ''
+    const year = extractYear(currentVideo?.vod_year)
 
-    // 获取当前视频的元数据
-    const currentVideo = list.find((v) => String(v.vod_id || '') === currentIdStr)
-    const currentActors = currentVideo?.vod_actor
-      ? currentVideo.vod_actor.split(/[,，\/、]+/).map((s) => s.trim()).filter(Boolean)
-      : []
-    const currentDirector = currentVideo?.vod_director || ''
-    const currentYear = currentVideo?.vod_year || ''
-    const currentArea = currentVideo?.vod_area || ''
-    const currentType = currentVideo?.type_name || ''
-
-    const scored: { v: Video; score: number; matchKey: string }[] = []
-
-    for (const v of list) {
-      if (String(v.vod_id || '') === currentIdStr) continue
-      let score = 0
-      let matchKey = ''
-
-      if (currentActors.length > 0 && v.vod_actor) {
-        let matchedActor = ''
-        for (const a of currentActors) {
-          if (v.vod_actor.includes(a)) {
-            score += 5
-            matchedActor = matchedActor || a
-          }
-        }
-        if (matchedActor) matchKey = `同演员: ${matchedActor}`
-      }
-      if (currentDirector && v.vod_director && v.vod_director.includes(currentDirector)) {
-        score += 4
-        if (!matchKey) matchKey = `同导演: ${currentDirector}`
-      }
-      if (currentType && v.type_name && v.type_name === currentType) {
-        score += 3
-        if (!matchKey) matchKey = `同类型: ${currentType}`
-      }
-      if (currentYear && v.vod_year === currentYear) {
-        score += 2
-        if (!matchKey) matchKey = `同年份: ${currentYear}`
-      }
-      if (currentArea && v.vod_area && v.vod_area === currentArea) {
-        score += 1
-        if (!matchKey) matchKey = `同地区: ${currentArea}`
-      }
-
-      if (score > 0) {
-        scored.push({ v, score, matchKey })
-      }
-    }
-
-    scored.sort((a, b) => b.score - a.score)
-    recommendations.value = scored.map((s) => ({
-      vod_id: String(s.v.vod_id || ''),
-      vod_name: s.v.vod_name || '视频',
-      vod_pic: s.v.vod_pic,
-      vod_remarks: s.v.vod_remarks,
-      matchKey: s.matchKey,
-      score: s.score,
-    }))
+    recommendations.value = computeRecommendations(list, currentId, currentName, year)
   } catch {
     recommendations.value = []
   } finally {

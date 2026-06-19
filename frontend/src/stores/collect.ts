@@ -366,16 +366,14 @@ export const useCollectStore = defineStore('collect', () => {
       const status: any = await GetCollectSchedule()
       schedulerStatus.value = status as SchedulerStatus
       const everySec = Number(status.background_every_seconds) || (Number(status.background_every_minutes) || 1) * 60
-      if (!scheduleConfig.value) {
-        scheduleConfig.value = {
-          enable_background: !!status.background,
-          background_interval_seconds: Math.max(30, everySec),
-          background_interval_minutes: Math.floor(everySec / 60),
-          enable_startup_catchup: true,
-          enable_initial_full_collect: false,
-          source_gap_seconds: Number(status.source_gap_seconds) || 10,
-          page_gap_seconds: Number(status.page_gap_seconds) || 30,
-        }
+      scheduleConfig.value = {
+        enable_background: !!status.background,
+        background_interval_seconds: Math.max(30, everySec),
+        background_interval_minutes: Math.floor(everySec / 60),
+        enable_startup_catchup: true,
+        enable_initial_full_collect: false,
+        source_gap_seconds: Number(status.source_gap_seconds) || 10,
+        page_gap_seconds: Number(status.page_gap_seconds) || 30,
       }
     } catch (e) {
       useErrorStore().fromError('加载采集调度配置失败', e)

@@ -11,6 +11,7 @@ import Icon from '../components/Icon.vue'
 import { Button, Modal, Tag, Spinner as LoadingSpinner } from '../components/ui'
 import { getDetailPath, getSearchPath, getPlayerPath, humanizeBytes, buildEpisodeFilename, buildSingleFilename, sanitizeFilename, resolveEpisodeUrl, stripHtmlTags } from '../utils'
 import { TsCache } from '../utils/tsCache'
+import { computeRecommendations, type RecommendItem, extractYear } from '../utils/recommend'
 import { epProgressKey, loadEpProgress, getEpProgressPct, flushEpProgress } from '../utils/episodeProgress'
 import { bumpFavoritesRefresh } from '../stores/favoritesSync'
 import type { Video, HistoryItem, Episode } from '../types'
@@ -411,6 +412,11 @@ const sortedEpisodes = computed(() => {
   return eps
 })
 
+/** 将排序数组索引映射回原始数组索引 */
+function origIdx(sortedIndex: number): number {
+  return episodeSortAsc.value ? sortedIndex : videoStore.episodes.length - 1 - sortedIndex
+}
+
 function onEpisodeClick(index: number, ep: Episode): void {
   if (episodeMode.value === 'download') {
     downloadEpisode(ep)
@@ -471,13 +477,6 @@ function formatEpisodeName(ep: Episode, i: number): string {
 }
 
 // ==================== 类似推荐 ====================
-interface RecommendItem {
-  vod_id: string
-  vod_name: string
-  vod_pic?: string
-  vod_remarks?: string
-  matchKey: string
-}
 const similarVideos = ref<RecommendItem[]>([])
 const similarLoading = ref(false)
 const MAX_SIMILAR_INITIAL = 10
@@ -506,65 +505,11 @@ async function loadSimilar(): Promise<void> {
   similarLoading.value = true
   try {
     const list: Video[] = Array.isArray(videoStore.videos) ? videoStore.videos : []
-    const currentIdStr = String(video.value.vod_id || '')
-    const currentActors = actorList.value
-    const currentDirector = video.value.vod_director || ''
-    const currentYear = video.value.vod_year || ''
-    const currentArea = video.value.vod_area || ''
-    const currentType = video.value.type_name || ''
+    const currentId = String(video.value.vod_id || '')
+    const currentName = video.value.vod_name || ''
+    const year = extractYear(video.value.vod_year)
 
-    const scored: { v: Video; score: number; matchKey: string }[] = []
-
-    for (const v of list) {
-      if (String(v.vod_id || '') === currentIdStr) continue
-      let score = 0
-      let matchKey = ''
-
-      // 同演员加分
-      if (currentActors.length > 0 && v.vod_actor) {
-        let matchedActor = ''
-        for (const a of currentActors) {
-          if (v.vod_actor.includes(a)) {
-            score += 5
-            matchedActor = matchedActor || a
-          }
-        }
-        if (matchedActor) matchKey = `同演员: ${matchedActor}`
-      }
-      // 同导演
-      if (currentDirector && v.vod_director && v.vod_director.includes(currentDirector)) {
-        score += 4
-        if (!matchKey) matchKey = `同导演: ${currentDirector}`
-      }
-      // 同类型
-      if (currentType && v.type_name && v.type_name === currentType) {
-        score += 3
-        if (!matchKey) matchKey = `同类型: ${currentType}`
-      }
-      // 同年份
-      if (currentYear && v.vod_year === currentYear) {
-        score += 2
-        if (!matchKey) matchKey = `同年份: ${currentYear}`
-      }
-      // 同地区
-      if (currentArea && v.vod_area && v.vod_area === currentArea) {
-        score += 1
-        if (!matchKey) matchKey = `同地区: ${currentArea}`
-      }
-
-      if (score > 0) {
-        scored.push({ v, score, matchKey })
-      }
-    }
-    scored.sort((a, b) => b.score - a.score)
-    // 存储所有匹配项，由模板根据 showMore 显示
-    similarVideos.value = scored.map((s) => ({
-      vod_id: String(s.v.vod_id || ''),
-      vod_name: s.v.vod_name || '视频',
-      vod_pic: s.v.vod_pic,
-      vod_remarks: s.v.vod_remarks,
-      matchKey: s.matchKey,
-    }))
+    similarVideos.value = computeRecommendations(list, currentId, currentName, year)
   } catch {
     similarVideos.value = []
   } finally {
@@ -687,7 +632,10 @@ watch(() => route.fullPath, (newPath, oldPath) => {
 })
 
 watch(vodId, () => {
-  if (vodId.value) loadDetail()
+  if (vodId.value) {
+    loadDetail()
+    refreshFav().catch(() => {})
+  }
 })
 
 onBeforeUnmount(() => {
@@ -888,20 +836,20 @@ onBeforeUnmount(() => {
         <div class="episodes-grid">
           <button
             v-for="(ep, i) in sortedEpisodes"
-            :key="'ep-' + (ep.ep_num || i)"
+            :key="'ep-' + origIdx(i)"
             class="episode-btn"
             :class="{
               'download-mode': episodeMode === 'download',
               'in-download': downloadingEpKeys.has(epKey(ep)),
-              'watched': episodeMode !== 'download' && isWatched(ep, i),
+              'watched': episodeMode !== 'download' && isWatched(ep, origIdx(i)),
             }"
-            @click="onEpisodeClick(i, ep)"
-            :title="formatEpisodeName(ep, i) + (isWatched(ep, i) ? ' · 已观看 ' + Math.round(getEpPct(ep, i)) + '%' : '')"
+            @click="onEpisodeClick(origIdx(i), ep)"
+            :title="formatEpisodeName(ep, origIdx(i)) + (isWatched(ep, origIdx(i)) ? ' · 已观看 ' + Math.round(getEpPct(ep, origIdx(i))) + '%' : '')"
           >
             <Icon v-if="episodeMode === 'download'" name="download" :size="11" />
-            <span class="ep-num">{{ formatEpisodeName(ep, i) }}</span>
-            <div v-if="episodeMode !== 'download' && getEpPct(ep, i) > 0" class="ep-progress-fill" :style="{ width: getEpPct(ep, i) + '%' }"></div>
-            <span v-if="episodeMode !== 'download' && getEpPct(ep, i) > 0" class="ep-progress-pct">{{ Math.round(getEpPct(ep, i)) }}%</span>
+            <span class="ep-num">{{ formatEpisodeName(ep, origIdx(i)) }}</span>
+            <div v-if="episodeMode !== 'download' && getEpPct(ep, origIdx(i)) > 0" class="ep-progress-fill" :style="{ width: getEpPct(ep, origIdx(i)) + '%' }"></div>
+            <span v-if="episodeMode !== 'download' && getEpPct(ep, origIdx(i)) > 0" class="ep-progress-pct">{{ Math.round(getEpPct(ep, origIdx(i))) }}%</span>
           </button>
         </div>
       </section>
