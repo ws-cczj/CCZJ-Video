@@ -178,6 +178,7 @@ func GetRecommend(sourceKey string, limit int, excludeIds []string) ([]*model.Vi
 
 // HistoryItemWithVideo 前端可用的"继续观看"条目：含视频名+封面，便于卡片展示
 type HistoryItemWithVideo struct {
+	GlobalID  int     `json:"global_id"`
 	SourceKey string  `json:"source_key"`
 	VodId     string  `json:"vod_id"`
 	EpNum     int     `json:"ep_num"`
@@ -196,6 +197,7 @@ func HydrateHistory(sourceKey string, raws []db.HistEntry) []*HistoryItemWithVid
 	out := make([]*HistoryItemWithVideo, 0, len(raws))
 	for _, r := range raws {
 		item := &HistoryItemWithVideo{
+			GlobalID:  r.GlobalID,
 			SourceKey: r.SourceKey,
 			VodId:     r.VodId,
 			EpNum:     r.EpNum,

@@ -116,6 +116,7 @@ const allKeys = computed(() => filteredHistory.value.map(keyOf))
 const allSelected = computed(() => allKeys.value.length > 0 && allKeys.value.every(k => selectedKeys.value.has(k)))
 
 function keyOf(h: HistoryItem): string {
+  if (h.global_id != null) return `g-${h.global_id}`
   return `${h.source_key}-${h.vod_id}`
 }
 

@@ -40,10 +40,10 @@ type GlobalVideoRow struct {
 	Imdb                string `db:"imdb"`
 	SeasonCount         string `db:"season_count"`
 	EpisodeCount        string `db:"episode_count"`
-	DoubanCooldownUntil  string `db:"douban_cooldown_until"`
+	DoubanCooldownUntil  *string `db:"douban_cooldown_until"`
 	DoubanSearchFailures int    `db:"douban_search_failures"`
 	MagnetLink           string `db:"magnet_link"`
-	MagnetCooldownUntil  string `db:"magnet_cooldown_until"`
+	MagnetCooldownUntil  *string `db:"magnet_cooldown_until"`
 	MagnetSearchFailures int    `db:"magnet_search_failures"`
 	CreatedAt            string `db:"created_at"`
 	UpdatedAt            string `db:"updated_at"`
@@ -1018,10 +1018,10 @@ func IsDoubanOnCooldown(vodName string) bool {
 	if err != nil {
 		return false
 	}
-	if row.DoubanCooldownUntil == "" {
+	if row.DoubanCooldownUntil == nil {
 		return false
 	}
-	cooldownTime, err := time.Parse("2006-01-02 15:04:05", row.DoubanCooldownUntil)
+	cooldownTime, err := time.Parse("2006-01-02 15:04:05", *row.DoubanCooldownUntil)
 	if err != nil {
 		return false
 	}

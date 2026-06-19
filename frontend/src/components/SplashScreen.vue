@@ -91,16 +91,17 @@ onMounted(() => {
 }
 
 .splash-img {
-  width: 85%;
-  height: 85%;
+  width: 65%;
+  height: 65%;
   object-fit: contain;
+  opacity: .7;
 }
 
 .splash-brand {
   position: absolute;
   bottom: 40px;
   z-index: 2;
-  font-size: 16px;
+  font-size: 20px;
   font-weight: 500;
   letter-spacing: 0.15em;
   color: #fff;

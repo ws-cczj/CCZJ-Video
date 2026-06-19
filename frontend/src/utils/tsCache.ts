@@ -268,6 +268,57 @@ const hedgeInFlight = new Set<string>()  // 正在进行对冲请求的 URL
 
 let originalFetch: typeof fetch | null = null
 
+// ====== HTTPS → HTTP 自动降级（SSL 证书问题） ======
+const HTTP_FALLBACK_TTL = 24 * 60 * 60 * 1000 // 1 天过期
+const httpFallbackHosts = new Map<string, number>() // host → 过期时间戳
+
+function markHttpFallback(host: string): void {
+  httpFallbackHosts.set(host, Date.now() + HTTP_FALLBACK_TTL)
+}
+
+function isHttpFallbackHost(host: string): boolean {
+  const exp = httpFallbackHosts.get(host)
+  if (!exp) return false
+  if (Date.now() > exp) { httpFallbackHosts.delete(host); return false }
+  return true
+}
+
+/** 将已知证书失败主机的 HTTPS URL 转为 HTTP */
+function resolveUrl(url: string): string {
+  if (!url.startsWith('https://')) return url
+  try {
+    const u = new URL(url)
+    if (isHttpFallbackHost(u.host)) {
+      u.protocol = 'http:'
+      return u.href
+    }
+  } catch { /* ignore */ }
+  return url
+}
+
+/** 安全 fetch：HTTPS 失败时自动降级到 HTTP */
+function safeFetch(input: string | URL | Request, init?: RequestInit): Promise<Response> {
+  const urlStr = typeof input === 'string' ? input
+    : input instanceof URL ? input.href
+      : input instanceof Request ? input.url : String(input)
+  const resolved = resolveUrl(urlStr)
+  const baseFetch = originalFetch || window.fetch
+  return baseFetch(resolved, init).catch((err: any) => {
+    // HTTPS 失败且尚未降级 → 尝试 HTTP
+    if (resolved.startsWith('https://')) {
+      try {
+        const u = new URL(resolved)
+        markHttpFallback(u.host)
+        u.protocol = 'http:'
+        const httpUrl = u.href
+        console.log(`${LOG_PREFIX} ⚠️ HTTPS 证书失败，降级 HTTP: ${u.host}`)
+        return baseFetch(httpUrl, init)
+      } catch { /* 解析失败，抛出原错误 */ }
+    }
+    throw err
+  })
+}
+
 function isTsUrl(u: string): boolean {
   // 匹配 .ts (MPEG-TS) 或 .m4s (fMP4 segment)，忽略大小写
   return /\.(ts|m4s)(\?|$)/i.test(u)
@@ -285,7 +336,7 @@ function installFetchInterceptor(): void {
 
     // 非 TS 片段：直接透传（m3u8、图片、API 等都走这里）
     if (!enabled || !isTsUrl(urlStr)) {
-      return originalFetch!.call(window, input, init)
+      return safeFetch(input, init)
     }
 
     // === TS 片段请求：先走缓存 ===
@@ -318,7 +369,7 @@ function installFetchInterceptor(): void {
       console.log(`${LOG_PREFIX} 💫 miss #${m} (${(rate * 100).toFixed(1)}%), cache ${lruCache.size} / ${(totalCacheBytes / 1024 / 1024).toFixed(1)} MB`)
     }
 
-    return originalFetch!.call(window, input, init).then((response) => {
+    return safeFetch(input, init).then((response) => {
       // 只缓存 200 OK 的 TS 片段
       if (!response.ok || response.status !== 200) return response
 
@@ -952,9 +1003,7 @@ async function runOne(job: FetchJob): Promise<void> {
     const tid = window.setTimeout(() => ctrl.abort(), timeout)
     const init: RequestInit = { signal: ctrl.signal }
     try { (init as any).priority = 'low' } catch { /* ignore */ }
-    const resp = originalFetch
-      ? await originalFetch.call(window, job.url, init)
-      : await fetch(job.url, init)
+    const resp = await safeFetch(job.url, init)
     window.clearTimeout(tid)
     if (resp.ok) {
       const buf = await resp.arrayBuffer()
@@ -988,9 +1037,7 @@ function hedgeFetch(url: string): Promise<ArrayBuffer | null> {
 
   const doFetch = (signal: AbortSignal) => {
     const init: RequestInit = { signal }
-    return originalFetch
-      ? originalFetch.call(window, url, init)
-      : fetch(url, init)
+    return safeFetch(url, init)
   }
 
   const racePromise = new Promise<ArrayBuffer | null>((resolve, reject) => {
@@ -1157,7 +1204,7 @@ async function diskClear(): Promise<void> {
 //   4) 代码: TsCache.diskCacheClear() → 清空
 //   5) 代码: TsCache.diskCachePrune(maxBytes) → 只保留最近 maxBytes 大小
 
-async function diskCacheInfo(): Promise<{ dbName: string; storeName: string; count: number; bytes: number; ttlDays: number; }> {
+export async function diskCacheInfo(): Promise<{ dbName: string; storeName: string; count: number; bytes: number; ttlDays: number; }> {
   try {
     const db = await openDB()
     const tx = db.transaction(STORE_NAME, 'readonly')
@@ -1305,10 +1352,7 @@ class TsCacheLoader {
       this._hedgeAbort = null
       const t0 = this.stats.loading.start
 
-      const doFetch = () => {
-        if (originalFetch) return originalFetch.call(window, url, { signal: ctrl.signal })
-        return fetch(url, { signal: ctrl.signal })
-      }
+      const doFetch = () => safeFetch(url, { signal: ctrl.signal })
 
       // ⭐ v3: 根据网络诊断决定使用对冲请求还是普通请求
       const useHedge = _networkMode === 'server_congested' && hedgeInFlight.size < 2
@@ -1380,10 +1424,7 @@ class TsCacheLoader {
       // 未命中 → 原生 fetch 并缓存文本
       const ctrl = new AbortController()
       this._abort = ctrl
-      const doFetch2 = () => {
-        if (originalFetch) return originalFetch.call(window, url, { signal: ctrl.signal })
-        return fetch(url, { signal: ctrl.signal })
-      }
+      const doFetch2 = () => safeFetch(url, { signal: ctrl.signal })
       doFetch2()
         .then(async (resp) => {
           if (this._destroyed || ctrl.signal.aborted) return
@@ -1413,10 +1454,7 @@ class TsCacheLoader {
     // === 3) 其他请求（key、证书等）：直接走原生 fetch ===
     const ctrl = new AbortController()
     this._abort = ctrl
-    const doFetch3 = () => {
-      if (originalFetch) return originalFetch.call(window, url, { signal: ctrl.signal })
-      return fetch(url, { signal: ctrl.signal })
-    }
+    const doFetch3 = () => safeFetch(url, { signal: ctrl.signal })
     doFetch3()
       .then(async (resp) => {
         if (this._destroyed || ctrl.signal.aborted) return
@@ -1527,17 +1565,31 @@ function _parseM3u8Text(text: string, url: string): M3u8ParseResult {
   return { urls, variantUrls, targetduration: m ? parseInt(m[1]) : 6, text, isMaster }
 }
 
-async function fetchAndParseM3u8(url: string): Promise<M3u8ParseResult> {
+async function fetchAndParseM3u8(url: string, retries = 3): Promise<M3u8ParseResult> {
   // 1) 文本缓存命中
   const cachedText = getM3u8FromCache(url)
   if (cachedText) return _parseM3u8Text(cachedText, url)
 
-  // 2) 真正 fetch
-  const resp = await fetch(url)
-  if (!resp.ok) throw new Error('m3u8 fetch failed: ' + resp.status)
-  const text = await resp.text()
-  setM3u8Cache(url, text)
-  return _parseM3u8Text(text, url)
+  // 2) safeFetch（HTTPS 证书失败自动降级 HTTP）+ 重试
+  let lastError: Error | null = null
+  let actualUrl = url
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const resp = await safeFetch(actualUrl)
+      if (!resp.ok) throw new Error('m3u8 fetch failed: ' + resp.status)
+      const text = await resp.text()
+      setM3u8Cache(url, text)
+      // 如果实际请求走了 HTTP，用实际 URL 作 base 解析相对路径
+      const finalUrl = resp.url || actualUrl
+      return _parseM3u8Text(text, finalUrl)
+    } catch (e) {
+      lastError = e as Error
+      if (attempt < retries - 1) {
+        await new Promise(resolve => setTimeout(resolve, (attempt + 1) * 1000))
+      }
+    }
+  }
+  throw lastError || new Error('m3u8 fetch failed after retries')
 }
 
 // 从已解析的片段 URL 直接开始预取（不需要再请求 m3u8 了）

@@ -303,6 +303,13 @@ export class HistoryItemWithVideo {
      * @param {Partial<HistoryItemWithVideo>} [$$source = {}] - The source object to create the HistoryItemWithVideo.
      */
     constructor($$source = {}) {
+        if (!("global_id" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["global_id"] = 0;
+        }
         if (!("source_key" in $$source)) {
             /**
              * @member

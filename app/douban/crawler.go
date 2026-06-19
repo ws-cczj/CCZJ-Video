@@ -54,8 +54,10 @@ var (
 
 	// 智能搜索结果中的标题提取 - class="DouWeb-SR-subject-info-name tv">万界独尊 第一季</a>
 	smartTitleRegex = regexp.MustCompile(`class=["']DouWeb-SR-subject-info-name[^"]*["'][^>]*>([^<]+)</a>`)
-	// 常规搜索结果中的标题提取 - <a href="..." title="万界独尊 第一季">
+	// 常规搜索结果中的标题提取（title属性格式） - <a href="..." title="万界独尊 第一季">
 	regularTitleRegex = regexp.MustCompile(`<a[^>]*href=["']https?://movie\.douban\.com/subject/\d+/?["'][^>]*title=["']([^"']+)["']`)
+	// 常规搜索结果中的标题提取（文本格式） - <a ... class="title-text">权力的游戏 第一季 Game of Thrones Season 1‎ (2011)</a>
+	titleTextRegex = regexp.MustCompile(`<a[^>]*class=["']title-text["'][^>]*>([^<]+)</a>`)
 
 	directorRegex     = regexp.MustCompile(`<span class="pl">导演</span>\s*:\s*<span class="attrs">([\s\S]*?)</span></span>`)
 	writerRegex       = regexp.MustCompile(`<span class="pl">编剧</span>\s*:\s*<span class="attrs">([\s\S]*?)</span></span>`)
@@ -178,9 +180,21 @@ func extractAllSearchTitles(html string) []string {
 		}
 	}
 	
-	// 从常规搜索结果中提取
+	// 从常规搜索结果中提取（title属性格式）
 	regularMatches := regularTitleRegex.FindAllStringSubmatch(html, -1)
 	for _, match := range regularMatches {
+		if len(match) >= 2 {
+			title := strings.TrimSpace(match[1])
+			if title != "" && !seen[title] {
+				titles = append(titles, title)
+				seen[title] = true
+			}
+		}
+	}
+	
+	// 从常规搜索结果中提取（title-text文本格式）
+	textMatches := titleTextRegex.FindAllStringSubmatch(html, -1)
+	for _, match := range textMatches {
 		if len(match) >= 2 {
 			title := strings.TrimSpace(match[1])
 			if title != "" && !seen[title] {
@@ -326,6 +340,8 @@ func SearchSubjectID(keyword string) (string, error) {
 
 		params := url.Values{}
 		params.Set("search_text", kw)
+		// 搜索类型：1002 为电影
+		params.Set("cat", "1002")
 
 		fullURL := searchURL + "?" + params.Encode()
 

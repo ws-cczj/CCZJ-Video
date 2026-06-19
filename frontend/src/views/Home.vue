@@ -111,6 +111,7 @@ const areaChipList = computed(() => {
 interface ContinueItem extends Video {
   source_key: string
   ep_num?: number
+  global_id?: number
 }
 
 interface RecommendGroup {
@@ -145,9 +146,9 @@ async function loadRecommendations(): Promise<void> {
     if (historyItems.length > 0) {
       const continueItems: ContinueItem[] = []
       for (const h of historyItems) {
-        const id = String(h.vod_id ?? '')
-        if (!id || usedIds.has(id)) continue
-        usedIds.add(id)
+        const gid = h.global_id != null ? String(h.global_id) : `${h.source_key || ''}-${h.vod_id || ''}`
+        if (!gid || usedIds.has(gid)) continue
+        usedIds.add(gid)
         continueItems.push({
           vod_id: h.vod_id,
           vod_name: h.vod_name || '',
@@ -156,6 +157,7 @@ async function loadRecommendations(): Promise<void> {
           type_name: '',
           source_key: h.source_key || sourceStore.currentSourceKey || '',
           ep_num: h.ep_num,
+          global_id: h.global_id,
         } as ContinueItem)
         if (continueItems.length >= 8) break
       }
@@ -253,7 +255,7 @@ function goDetailFromRecommend(item: Video): void {
 const removingContinueId = ref('')
 
 async function removeContinueItem(item: ContinueItem): Promise<void> {
-  const key = `${item.source_key}-${item.vod_id}`
+  const key = item.global_id != null ? `g-${item.global_id}` : `${item.source_key}-${item.vod_id}`
   if (removingContinueId.value === key) return
   removingContinueId.value = key
   try {
@@ -261,7 +263,7 @@ async function removeContinueItem(item: ContinueItem): Promise<void> {
     const group = recommendGroups.value.find(g => g.key === 'continue')
     if (group?.continueItems) {
       group.continueItems = group.continueItems.filter(
-        x => !(x.source_key === item.source_key && String(x.vod_id) === String(item.vod_id))
+        x => (x.global_id != null && item.global_id != null) ? x.global_id !== item.global_id : !(x.source_key === item.source_key && String(x.vod_id) === String(item.vod_id))
       )
       group.items = group.continueItems
       if (group.continueItems.length === 0) {

@@ -171,6 +171,11 @@ const sortedEpisodes = computed(() => {
   return eps
 })
 
+/** 将排序数组索引映射回原始数组索引 */
+function origIdx(sortedIndex: number): number {
+  return episodeSortAsc.value ? sortedIndex : episodes.value.length - 1 - sortedIndex
+}
+
 /* ==================== TsCache 响应式（顶部栏片段进度） ====================
  * 每 250ms TsCache 可能有新片段缓存 → 触发此函数更新页面的 cached/total 显示
  */
@@ -929,31 +934,31 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
               <div class="ep-grid">
                 <button
                   v-for="(ep, i) in sortedEpisodes"
-                  :key="String(i)"
+                  :key="'ep-' + origIdx(i)"
                   class="ep-item"
                   :class="{
-                    active: i === currentEpIndex,
-                    watched: isWatchedEp(i),
-                    future: i > currentEpIndex && !isWatchedEp(i),
+                    active: origIdx(i) === currentEpIndex,
+                    watched: isWatchedEp(origIdx(i)),
+                    future: origIdx(i) > currentEpIndex && !isWatchedEp(origIdx(i)),
                   }"
-                  @click="goToEpisode(i)"
-                  :title="epLabel(i, ep) + (getEpWatchPct(i) > 0 ? ' · 已观看 ' + Math.round(getEpWatchPct(i)) + '%' : '')"
+                  @click="goToEpisode(origIdx(i))"
+                  :title="epLabel(origIdx(i), ep) + (getEpWatchPct(origIdx(i)) > 0 ? ' · 已观看 ' + Math.round(getEpWatchPct(origIdx(i))) + '%' : '')"
                 >
-                  <span class="ep-item-num">{{ epLabel(i, ep) }}</span>
-                  <span v-show="i === currentEpIndex" class="ep-playing-badge">
+                  <span class="ep-item-num">{{ epLabel(origIdx(i), ep) }}</span>
+                  <span v-show="origIdx(i) === currentEpIndex" class="ep-playing-badge">
                     <span class="bar b1"></span>
                     <span class="bar b2"></span>
                     <span class="bar b3"></span>
                   </span>
                   <span
-                    v-show="isWatchedEp(i) && getEpWatchPct(i) > 0"
+                    v-show="isWatchedEp(origIdx(i)) && getEpWatchPct(origIdx(i)) > 0"
                     class="ep-watched-progress"
-                    :style="{ width: getEpWatchPct(i) + '%' }"
+                    :style="{ width: getEpWatchPct(origIdx(i)) + '%' }"
                   ></span>
                   <span
-                    v-show="isWatchedEp(i) && getEpWatchPct(i) > 0"
+                    v-show="isWatchedEp(origIdx(i)) && getEpWatchPct(origIdx(i)) > 0"
                     class="ep-watched-pct"
-                  >{{ Math.round(getEpWatchPct(i)) }}%</span>
+                  >{{ Math.round(getEpWatchPct(origIdx(i))) }}%</span>
                 </button>
               </div>
             </template>

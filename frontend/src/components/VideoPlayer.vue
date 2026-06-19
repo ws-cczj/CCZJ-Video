@@ -3,7 +3,7 @@ import { ref, nextTick, onMounted, onBeforeUnmount, watch, computed } from 'vue'
 import Icon from './Icon.vue'
 import { Select as SelectDropdown } from './ui'
 import { TsCache } from '../utils/tsCache'
-import { AiUpscaler, checkUpscalerSupport } from '../utils/aiUpscaler'
+import { AiUpscaler, checkUpscalerSupport, ANIME_PRESET, FILM_PRESET } from '../utils/aiUpscaler'
 import loadingGif from '../assets/videos/loading.gif'
 import pauseImg from '../assets/images/pause.png'
 import {
@@ -35,6 +35,13 @@ const emit = defineEmits(['back', 'prev', 'next', 'toggleFavorite', 'toggleAutop
 
 const wrapperRef = ref<HTMLDivElement>()
 const errorMsg = ref('')
+let networkErrTimer: ReturnType<typeof setTimeout> | null = null
+const showNetworkError = ref(false)
+function clearNetworkErrTimer(): void {
+  if (networkErrTimer) { clearTimeout(networkErrTimer); networkErrTimer = null }
+  showNetworkError.value = false
+}
+function refreshPage(): void { location.reload() }
 
 const playing = ref(false)
 const current = ref(0)
@@ -165,18 +172,22 @@ try {
 const qualityOpen = ref(false)
 
 // ========= 画质模式 =========
-// 注意：'ai_enhance' 为画质增强（WebGL2 实时锐化/对比度/边缘增强/去色带），并非帧插值。
-// 兼容旧版 localStorage 中存的 'ai_frame_interp' 值（读取时映射为 'ai_enhance'）。
-type QualityMode = 'original' | 'ai_enhance'
+// 三种模式：原高清 / 动画增强（anime） / 影视增强（film）
+// 兼容旧版 localStorage 中存的 'ai_frame_interp' 和 'ai_enhance' 值。
+type QualityMode = 'original' | 'ai_anime' | 'ai_film'
 const qualityMode = ref<QualityMode>(normalizeQualityMode(readSetting('quality_mode', 'original')))
 const qualityOptions = [
   { value: 'original', label: '原高清' },
-  { value: 'ai_enhance', label: '画质增强' },
+  { value: 'ai_anime', label: '动画增强' },
+  { value: 'ai_film', label: '影视增强' },
 ]
 function normalizeQualityMode(v: string): QualityMode {
-  // 旧版叫 ai_frame_interp，统一迁移到 ai_enhance
-  if (v === 'ai_frame_interp') return 'ai_enhance'
-  return (v === 'ai_enhance' ? 'ai_enhance' : 'original')
+  if (v === 'ai_frame_interp' || v === 'ai_enhance') return 'ai_anime' // 旧版统一迁移
+  if (v === 'ai_anime' || v === 'ai_film') return v
+  return 'original'
+}
+function isAiMode(mode: string): mode is 'ai_anime' | 'ai_film' {
+  return mode === 'ai_anime' || mode === 'ai_film'
 }
 const showAiWarning = ref(false)
 const aiWarningAccepted = ref(readSetting('ai_warning_accepted', '0') === '1')
@@ -197,10 +208,12 @@ const upscalerSupported = ref(false)
 const upscalerStats = ref<{ fps: number; gpuEnabled: boolean }>({ fps: 0, gpuEnabled: false })
 let _aiReady = false // 视频是否已就绪（loadedmetadata 之后），AI 才会启动
 
+let _pendingQualityMode: QualityMode = 'original'
 function onQualityChange(value: string | number): void {
   const mode = String(value) as QualityMode
-  if (mode === 'ai_enhance' && !aiWarningAccepted.value) {
+  if (isAiMode(mode) && !aiWarningAccepted.value) {
     // 首次开启画质增强 → 弹出提示
+    _pendingQualityMode = mode
     showAiWarning.value = true
     return
   }
@@ -210,11 +223,12 @@ function onQualityChange(value: string | number): void {
 function applyQualityMode(mode: QualityMode): void {
   qualityMode.value = mode
   writeSetting('quality_mode', mode)
-  if (mode === 'ai_enhance') {
+  if (isAiMode(mode)) {
     if (_aiReady) {
-      startAiPipeline()
+      startAiPipeline(mode)
     }
-    showQualityToast('已切换至画质增强（GPU 实时增强）')
+    const label = mode === 'ai_anime' ? '动画增强' : '影视增强'
+    showQualityToast(`已切换至${label}（GPU 实时增强）`)
   } else {
     stopAiPipeline()
     showQualityToast('已切换至原高清')
@@ -225,7 +239,7 @@ function confirmAiMode(): void {
   aiWarningAccepted.value = true
   writeSetting('ai_warning_accepted', '1')
   showAiWarning.value = false
-  applyQualityMode('ai_enhance')
+  applyQualityMode(_pendingQualityMode)
 }
 
 function cancelAiMode(): void {
@@ -234,9 +248,14 @@ function cancelAiMode(): void {
   writeSetting('quality_mode', 'original')
 }
 
-// AI 增强管线：使用 AiUpscaler (WebGL2) 实时处理视频帧
-async function startAiPipeline(): Promise<void> {
-  if (upscaler) return // 已在运行
+// AI 增强管线：使用 AiUpscaler (WebGL2 双 Pass) 实时处理视频帧
+async function startAiPipeline(mode: 'ai_anime' | 'ai_film'): Promise<void> {
+  // 先销毁旧实例（切换模式时）
+  if (upscaler) {
+    upscaler.stop()
+    upscaler.destroy()
+    upscaler = null
+  }
 
   const v = getVideoEl()
   if (!v) return
@@ -252,13 +271,9 @@ async function startAiPipeline(): Promise<void> {
     return
   }
 
-  upscaler = new AiUpscaler({
-    upscale: 1.0,         // 不上采样，保持原分辨率
-    sharpness: 0.6,       // 锐化强度
-    contrast: 0.3,        // 对比度增强
-    deband: 0.4,          // 去色带
-    edgeEnhance: 0.5,     // 边缘增强
-  })
+  // 根据模式选择预设
+  const preset = mode === 'ai_anime' ? ANIME_PRESET : FILM_PRESET
+  upscaler = new AiUpscaler({ ...preset })
 
   const ok = await upscaler.init(v, wrapperRef.value ?? undefined)
   if (!ok) {
@@ -272,7 +287,8 @@ async function startAiPipeline(): Promise<void> {
   }
 
   upscaler.start()
-  console.log('[Player] 🎨 AI 增强管线已启动 (WebGL2 GPU 加速)')
+  const label = mode === 'ai_anime' ? '动画增强' : '影视增强'
+  console.log(`[Player] 🎨 AI ${label}管线已启动 (WebGL2 双 Pass GPU 加速)`)
 
   // 定期更新性能统计
   upscalerStatsTimer = setInterval(() => {
@@ -476,6 +492,7 @@ async function loadHls(video: HTMLVideoElement, url: string): Promise<void> {
   console.log('[Player] 🔄 开始加载视频:', url.slice(-80))
   destroyPlayerInternal(video)
   errorMsg.value = ''
+  clearNetworkErrTimer()
   loading.value = true
   try {
     console.log('[Player] 启动 TsCache')
@@ -629,6 +646,14 @@ async function loadHls(video: HTMLVideoElement, url: string): Promise<void> {
             case Hls.ErrorTypes.NETWORK_ERROR:
               console.log('[Player] 网络错误，尝试恢复 startLoad()')
               try { hls.startLoad() } catch (e) { console.warn('[Player] startLoad 失败:', e) }
+              // 启动 10 秒超时计时器：若 10 秒内视频未开始播放，显示错误提示
+              if (!networkErrTimer) {
+                networkErrTimer = setTimeout(() => {
+                  showNetworkError.value = true
+                  errorMsg.value = '播放链接超过 10 秒无法连接'
+                  networkErrTimer = null
+                }, 10000)
+              }
               break
             case Hls.ErrorTypes.MEDIA_ERROR:
               console.log('[Player] 媒体错误，尝试恢复 recoverMediaError()')
@@ -699,7 +724,7 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
   if ((video as any).__eventsBound) return
     ; (video as any).__eventsBound = true
 
-  video.addEventListener('play', () => { playing.value = true; loading.value = false; videoReady.value = true; stopLoadingStats() })
+  video.addEventListener('play', () => { playing.value = true; loading.value = false; videoReady.value = true; stopLoadingStats(); clearNetworkErrTimer() })
   video.addEventListener('pause', () => { playing.value = false })
   video.addEventListener('timeupdate', () => {
     current.value = video.currentTime
@@ -733,9 +758,10 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
     console.log(`[Player] loadedmetadata: duration=${video.duration.toFixed(1)}s, volume=${video.volume.toFixed(2)}`)
     // ⭐ 视频元数据就绪后，根据用户保存的画质模式自动启动 AI 管线
     _aiReady = true
-    if (qualityMode.value === 'ai_enhance') {
+    if (isAiMode(qualityMode.value)) {
+      const aiMode = qualityMode.value
       // 延迟启动：确保视频帧已可供 WebGL 读取
-      setTimeout(() => { startAiPipeline() }, 100)
+      setTimeout(() => { startAiPipeline(aiMode) }, 100)
     }
   })
   video.addEventListener('progress', updateBuffer)
@@ -1290,6 +1316,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   destroyPlayer()
+  clearNetworkErrTimer()
   document.removeEventListener('fullscreenchange', onFsChange)
   document.removeEventListener('webkitfullscreenchange', onFsChange)
   document.removeEventListener('keydown', onKeyDown)
@@ -1422,6 +1449,9 @@ watch(loading, (val) => {
     <div v-if="errorMsg" class="player-error">
       <span>⚠</span>
       <span>{{ errorMsg }}</span>
+      <div v-if="showNetworkError" class="error-actions">
+        <button class="error-btn error-btn-primary" @click.stop="refreshPage()">刷新视频</button>
+      </div>
     </div>
 
     <!-- B 站风格：底部左侧继续播放提示（小胶囊，仅在有记忆时出现） -->
@@ -1439,17 +1469,22 @@ watch(loading, (val) => {
       <span>{{ qualityToastText }}</span>
     </div>
 
-    <!-- 画质增强提示弹窗 -->
+    <!-- AI 画质增强提示弹窗 -->
     <div v-if="showAiWarning" class="ai-warning-overlay" @click.stop>
       <div class="ai-warning-dialog">
         <div class="ai-warning-header">
           <span class="ai-warning-icon">⚡</span>
-          <span>画质增强模式</span>
+          <span>AI 画质增强</span>
         </div>
         <div class="ai-warning-body">
-          <p>开启画质增强模式将消耗额外的系统资源：</p>
+          <p>即将开启 AI 画质增强，将使用 GPU 实时处理视频帧：</p>
           <ul>
-            <li><b>GPU 计算负载</b> — 将使用本地 GPU 实时处理视频帧（锐化/对比度/边缘/去色带），可能导致显卡温度升高和风扇加速</li>
+            <li><b>动画增强</b> — 针对动画/动漫优化：去色带、线条增强、平坦区域降噪</li>
+            <li><b>影视增强</b> — 针对真人影视优化：纹理锐化、暗部细节提升、压缩噪声抑制</li>
+          </ul>
+          <p>注意：动画增强不适用于真人影视，反之亦然，请根据内容类型选择。</p>
+          <ul>
+            <li><b>GPU 计算负载</b> — 可能导致显卡温度升高和风扇加速</li>
             <li><b>电池消耗</b> — 笔记本设备将显著增加耗电量</li>
             <li><b>性能影响</b> — 低端设备可能出现卡顿或掉帧</li>
           </ul>
@@ -1891,10 +1926,33 @@ watch(loading, (val) => {
   color: #fff;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   font-size: 13px;
   border-radius: 8px;
   z-index: 4;
+}
+.error-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+.error-btn {
+  padding: 4px 12px;
+  border: 1px solid rgba(255,255,255,0.6);
+  border-radius: 4px;
+  background: transparent;
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.error-btn:hover {
+  background: rgba(255,255,255,0.15);
+}
+.error-btn-primary {
+  background: rgba(255,255,255,0.2);
+  border-color: #fff;
 }
 
 /* ========= 暂停图标（右下角） ========= */
