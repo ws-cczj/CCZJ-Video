@@ -171,9 +171,9 @@ const sortedEpisodes = computed(() => {
   return eps
 })
 
-/** 将排序数组索引映射回原始数组索引 */
-function origIdx(sortedIndex: number): number {
-  return episodeSortAsc.value ? sortedIndex : episodes.value.length - 1 - sortedIndex
+/** 排序索引 → 原始数组索引（倒序时映射回去） */
+function origIdx(sortedI: number): number {
+  return episodeSortAsc.value ? sortedI : episodes.value.length - 1 - sortedI
 }
 
 /* ==================== TsCache 响应式（顶部栏片段进度） ====================
@@ -934,7 +934,7 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
               <div class="ep-grid">
                 <button
                   v-for="(ep, i) in sortedEpisodes"
-                  :key="'ep-' + origIdx(i)"
+                  :key="String(i)"
                   class="ep-item"
                   :class="{
                     active: origIdx(i) === currentEpIndex,

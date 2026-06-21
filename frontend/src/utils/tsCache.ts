@@ -268,57 +268,6 @@ const hedgeInFlight = new Set<string>()  // 正在进行对冲请求的 URL
 
 let originalFetch: typeof fetch | null = null
 
-// ====== HTTPS → HTTP 自动降级（SSL 证书问题） ======
-const HTTP_FALLBACK_TTL = 24 * 60 * 60 * 1000 // 1 天过期
-const httpFallbackHosts = new Map<string, number>() // host → 过期时间戳
-
-function markHttpFallback(host: string): void {
-  httpFallbackHosts.set(host, Date.now() + HTTP_FALLBACK_TTL)
-}
-
-function isHttpFallbackHost(host: string): boolean {
-  const exp = httpFallbackHosts.get(host)
-  if (!exp) return false
-  if (Date.now() > exp) { httpFallbackHosts.delete(host); return false }
-  return true
-}
-
-/** 将已知证书失败主机的 HTTPS URL 转为 HTTP */
-function resolveUrl(url: string): string {
-  if (!url.startsWith('https://')) return url
-  try {
-    const u = new URL(url)
-    if (isHttpFallbackHost(u.host)) {
-      u.protocol = 'http:'
-      return u.href
-    }
-  } catch { /* ignore */ }
-  return url
-}
-
-/** 安全 fetch：HTTPS 失败时自动降级到 HTTP */
-function safeFetch(input: string | URL | Request, init?: RequestInit): Promise<Response> {
-  const urlStr = typeof input === 'string' ? input
-    : input instanceof URL ? input.href
-      : input instanceof Request ? input.url : String(input)
-  const resolved = resolveUrl(urlStr)
-  const baseFetch = originalFetch || window.fetch
-  return baseFetch(resolved, init).catch((err: any) => {
-    // HTTPS 失败且尚未降级 → 尝试 HTTP
-    if (resolved.startsWith('https://')) {
-      try {
-        const u = new URL(resolved)
-        markHttpFallback(u.host)
-        u.protocol = 'http:'
-        const httpUrl = u.href
-        console.log(`${LOG_PREFIX} ⚠️ HTTPS 证书失败，降级 HTTP: ${u.host}`)
-        return baseFetch(httpUrl, init)
-      } catch { /* 解析失败，抛出原错误 */ }
-    }
-    throw err
-  })
-}
-
 function isTsUrl(u: string): boolean {
   // 匹配 .ts (MPEG-TS) 或 .m4s (fMP4 segment)，忽略大小写
   return /\.(ts|m4s)(\?|$)/i.test(u)
@@ -336,7 +285,7 @@ function installFetchInterceptor(): void {
 
     // 非 TS 片段：直接透传（m3u8、图片、API 等都走这里）
     if (!enabled || !isTsUrl(urlStr)) {
-      return safeFetch(input, init)
+      return originalFetch!.call(window, input, init)
     }
 
     // === TS 片段请求：先走缓存 ===
@@ -369,7 +318,7 @@ function installFetchInterceptor(): void {
       console.log(`${LOG_PREFIX} 💫 miss #${m} (${(rate * 100).toFixed(1)}%), cache ${lruCache.size} / ${(totalCacheBytes / 1024 / 1024).toFixed(1)} MB`)
     }
 
-    return safeFetch(input, init).then((response) => {
+    return originalFetch!.call(window, input, init).then((response) => {
       // 只缓存 200 OK 的 TS 片段
       if (!response.ok || response.status !== 200) return response
 
@@ -1003,7 +952,9 @@ async function runOne(job: FetchJob): Promise<void> {
     const tid = window.setTimeout(() => ctrl.abort(), timeout)
     const init: RequestInit = { signal: ctrl.signal }
     try { (init as any).priority = 'low' } catch { /* ignore */ }
-    const resp = await safeFetch(job.url, init)
+    const resp = originalFetch
+      ? await originalFetch.call(window, job.url, init)
+      : await fetch(job.url, init)
     window.clearTimeout(tid)
     if (resp.ok) {
       const buf = await resp.arrayBuffer()
@@ -1037,7 +988,9 @@ function hedgeFetch(url: string): Promise<ArrayBuffer | null> {
 
   const doFetch = (signal: AbortSignal) => {
     const init: RequestInit = { signal }
-    return safeFetch(url, init)
+    return originalFetch
+      ? originalFetch.call(window, url, init)
+      : fetch(url, init)
   }
 
   const racePromise = new Promise<ArrayBuffer | null>((resolve, reject) => {
@@ -1352,7 +1305,10 @@ class TsCacheLoader {
       this._hedgeAbort = null
       const t0 = this.stats.loading.start
 
-      const doFetch = () => safeFetch(url, { signal: ctrl.signal })
+      const doFetch = () => {
+        if (originalFetch) return originalFetch.call(window, url, { signal: ctrl.signal })
+        return fetch(url, { signal: ctrl.signal })
+      }
 
       // ⭐ v3: 根据网络诊断决定使用对冲请求还是普通请求
       const useHedge = _networkMode === 'server_congested' && hedgeInFlight.size < 2
@@ -1400,18 +1356,20 @@ class TsCacheLoader {
     if (isPlaylist) {
       const cachedText = m3u8TextCache.get(url)
       if (cachedText) {
-        // 异步回传缓存文本
+        // ⭐ 剔除广告后返回给 hls.js
+        const cleanText = stripAdFromM3u8Text(cachedText, url)
+        // 异步回传
         Promise.resolve().then(() => {
           if (this._destroyed) return
           const now = performance.now()
           this.stats.loading.first = Math.max(now, this.stats.loading.start)
           this.stats.loading.end = Math.max(this.stats.loading.first, now)
-          this.stats.loaded = this.stats.total = cachedText.length
+          this.stats.loaded = this.stats.total = cleanText.length
           this.stats.bwEstimate = 100000000
           this.stats.chunkCount = 1
           if (callbacks?.onSuccess) {
             callbacks.onSuccess(
-              { url, data: cachedText, code: 200 },
+              { url, data: cleanText, code: 200 },
               this.stats,
               context,
               null
@@ -1421,25 +1379,29 @@ class TsCacheLoader {
         return
       }
 
-      // 未命中 → 原生 fetch 并缓存文本
+      // 未命中 → 原生 fetch 并缓存文本（缓存原始文本，剔除广告后返回给 hls.js）
       const ctrl = new AbortController()
       this._abort = ctrl
-      const doFetch2 = () => safeFetch(url, { signal: ctrl.signal })
+      const doFetch2 = () => {
+        if (originalFetch) return originalFetch.call(window, url, { signal: ctrl.signal })
+        return fetch(url, { signal: ctrl.signal })
+      }
       doFetch2()
         .then(async (resp) => {
           if (this._destroyed || ctrl.signal.aborted) return
           if (!resp.ok) throw new Error('HTTP ' + resp.status)
-          const text = await resp.text()
+          const rawText = await resp.text()
           if (this._destroyed) return
-          m3u8TextCache.set(url, text)
+          m3u8TextCache.set(url, rawText) // 缓存原始文本
+          const cleanText = stripAdFromM3u8Text(rawText, url) // ⭐ 剔除广告
           const now = performance.now()
           this.stats.loading.first = Math.max(this.stats.loading.start + 1, this.stats.loading.start)
           this.stats.loading.end = Math.max(this.stats.loading.first, now)
-          this.stats.loaded = this.stats.total = text.length
-          this.stats.bwEstimate = Math.round((text.length * 8 * 1000) / Math.max(1, now - this.stats.loading.start))
+          this.stats.loaded = this.stats.total = cleanText.length
+          this.stats.bwEstimate = Math.round((cleanText.length * 8 * 1000) / Math.max(1, now - this.stats.loading.start))
           this.stats.chunkCount = 1
           if (callbacks?.onSuccess) {
-            callbacks.onSuccess({ url, data: text, code: 200 }, this.stats, context, resp)
+            callbacks.onSuccess({ url, data: cleanText, code: 200 }, this.stats, context, resp)
           }
         })
         .catch((_err) => {
@@ -1454,7 +1416,10 @@ class TsCacheLoader {
     // === 3) 其他请求（key、证书等）：直接走原生 fetch ===
     const ctrl = new AbortController()
     this._abort = ctrl
-    const doFetch3 = () => safeFetch(url, { signal: ctrl.signal })
+    const doFetch3 = () => {
+      if (originalFetch) return originalFetch.call(window, url, { signal: ctrl.signal })
+      return fetch(url, { signal: ctrl.signal })
+    }
     doFetch3()
       .then(async (resp) => {
         if (this._destroyed || ctrl.signal.aborted) return
@@ -1531,12 +1496,245 @@ interface M3u8ParseResult {
   variantUrls: string[];   // master playlist 时的 variant m3u8 URL
 }
 
+/** 广告域名黑名单 localStorage 键 */
+const AD_BLACKLIST_STORAGE_KEY = 'cczj_ad_domain_blacklist'
+
+/** 内置广告域名黑名单（匹配 hostname 子串） */
+const _BUILTIN_AD_DOMAINS: string[] = [
+  'dcs-vod.', 'vod-dcs.',
+  'ads.', 'ad.', 'advert',
+  'dsp.', 'doubleclick',
+  'googlesyndication', 'googleads',
+]
+
+/** 当前生效的广告域名黑名单（内置 + 用户上报） */
+let AD_DOMAIN_BLACKLIST: string[] = (() => {
+  try {
+    const saved = localStorage.getItem(AD_BLACKLIST_STORAGE_KEY)
+    if (saved) {
+      const userDomains: string[] = JSON.parse(saved)
+      return [..._BUILTIN_AD_DOMAINS, ...userDomains]
+    }
+  } catch {}
+  return [..._BUILTIN_AD_DOMAINS]
+})()
+
+/** 用户上报的广告域名列表（不含内置域名） */
+function _getUserAdDomains(): string[] {
+  return AD_DOMAIN_BLACKLIST.filter(d => !_BUILTIN_AD_DOMAINS.includes(d))
+}
+
+/** 将域名加入广告黑名单（持久化到 localStorage） */
+function addAdDomain(domain: string): boolean {
+  if (!domain || AD_DOMAIN_BLACKLIST.includes(domain)) return false
+  AD_DOMAIN_BLACKLIST.push(domain)
+  try {
+    localStorage.setItem(AD_BLACKLIST_STORAGE_KEY, JSON.stringify(_getUserAdDomains()))
+  } catch {}
+  return true
+}
+
+/** 获取当前所有广告黑名单域名 */
+function getAdDomains(): string[] {
+  return [...AD_DOMAIN_BLACKLIST]
+}
+
+/** 从 URL 字符串提取 hostname */
+function _hostname(u: string): string {
+  try { return new URL(u).hostname } catch { return '' }
+}
+
+/** 将 m3u8 中的片段路径解析为绝对 URL */
+function _resolveSegUrl(seg: string, base: string): string {
+  try { return new URL(seg, base).href } catch { return base + seg }
+}
+
+/**
+ * 从 m3u8 文本中移除广告片段（双层过滤）
+ * 第一层：域名黑名单 — .ts 片段域名命中黑名单则视为广告
+ * 第二层（兜底）：DISCONTINUITY 分组，保留片段数最多的组（主内容）
+ * @param text  m3u8 原始文本
+ * @param m3u8Url m3u8 自身的 URL，用于解析相对路径
+ */
+function stripAdFromM3u8Text(text: string, m3u8Url: string): string {
+  const base = m3u8Url.substring(0, m3u8Url.lastIndexOf('/') + 1)
+  const lines = text.split('\n')
+
+  // ── 第一层：域名黑名单过滤 ──
+  // 先扫描所有 .ts 片段，统计黑名单命中比例
+  const segLines: { idx: number; raw: string; absUrl: string }[] = []
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+    // 跳过 #EXT-X-* 之后的值行（如 #EXT-X-MAP 的 URI 等），只收集真正的片段行
+    // 片段行不以 # 开头，且上一行通常是 #EXTINF 或 #EXT-X-BYTERANGE 等
+    const absUrl = _resolveSegUrl(trimmed, base)
+    segLines.push({ idx: i, raw: trimmed, absUrl })
+  }
+
+  // 如果黑名单能过滤掉部分片段（但不是全部），直接用黑名单
+  if (segLines.length > 0) {
+    const adIndices = new Set<number>()
+    for (const s of segLines) {
+      const host = _hostname(s.absUrl)
+      if (host && AD_DOMAIN_BLACKLIST.some(d => host.includes(d))) {
+        adIndices.add(s.idx)
+      }
+    }
+    // 黑名单命中了部分片段（非全部）→ 移除广告片段及其关联标签
+    if (adIndices.size > 0 && adIndices.size < segLines.length) {
+      const removeLines = new Set<number>()
+      for (const idx of adIndices) {
+        removeLines.add(idx)
+        // 向上移除该片段关联的 #EXTINF / #EXT-X-* 标签行
+        for (let j = idx - 1; j >= 0; j--) {
+          const t = lines[j].trim()
+          if (!t) continue
+          if (t.startsWith('#EXTINF') || t.startsWith('#EXT-X-BYTERANGE') ||
+              t.startsWith('#EXT-X-PROGRAM-DATE-TIME') || t.startsWith('#EXT-X-MAP')) {
+            removeLines.add(j)
+            continue
+          }
+          break // 遇到 DISCONTINUITY 或其他非关联标签停止
+        }
+      }
+      // 同时移除孤立的 #EXT-X-DISCONTINUITY（前后片段都被删了）
+      const remaining = lines.filter((_, i) => !removeLines.has(i))
+      return _cleanOrphanDiscontinuity(remaining).join('\n')
+    }
+    // 黑名单未命中任何片段 → 进入第二层
+  }
+
+  // ── 第二层（兜底）：DISCONTINUITY 分组，保守移除小组（广告） ──
+  return _stripAdByDiscontinuityGroup(lines)
+}
+
+/** 广告片段最大数量阈值（广告一般 10~20s，片段 2~5 个） */
+const MAX_AD_SEGMENT_COUNT = 4
+/** 广告最大总时长（秒） */
+const MAX_AD_TOTAL_DURATION = 25
+
+/**
+ * DISCONTINUITY 分组兜底：保守策略
+ * 只移除同时满足以下条件的小组：
+ *   1. 片段数 ≤ MAX_AD_SEGMENT_COUNT
+ *   2. 总时长 ≤ MAX_AD_TOTAL_DURATION
+ *   3. 不是唯一的内容组（避免把所有内容当广告删掉）
+ * 其余所有组保留，组间用 #EXT-X-DISCONTINUITY 连接
+ */
+function _stripAdByDiscontinuityGroup(lines: string[]): string {
+  interface Group { lines: string[]; segCount: number; totalDuration: number }
+  const groups: Group[] = []
+  let cur: Group = { lines: [], segCount: 0, totalDuration: 0 }
+
+  const header: string[] = []
+  const footer: string[] = []
+  let inFooter = false
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+
+    // 收集头部（全局标签）
+    if (cur.segCount === 0 && groups.length === 0 &&
+        (trimmed.startsWith('#EXTM3U') || trimmed.startsWith('#EXT-X-VERSION') ||
+         trimmed.startsWith('#EXT-X-TARGETDURATION') || trimmed.startsWith('#EXT-X-MEDIA-SEQUENCE') ||
+         trimmed.startsWith('#EXT-X-PLAYLIST-TYPE') || trimmed.startsWith('#EXT-X-INDEPENDENT-SEGMENTS'))) {
+      header.push(line)
+      continue
+    }
+
+    // 尾部标签
+    if (trimmed === '#EXT-X-ENDLIST') {
+      inFooter = true
+      footer.push(line)
+      continue
+    }
+    if (inFooter) { footer.push(line); continue }
+
+    if (trimmed === '#EXT-X-DISCONTINUITY') {
+      groups.push(cur)
+      cur = { lines: [], segCount: 0, totalDuration: 0 }
+      continue
+    }
+
+    cur.lines.push(line)
+    if (trimmed && !trimmed.startsWith('#')) {
+      cur.segCount++
+    } else {
+      // 提取 #EXTINF 时长
+      const m = trimmed.match(/^#EXTINF:([\d.]+)/)
+      if (m) cur.totalDuration += parseFloat(m[1])
+    }
+  }
+  groups.push(cur)
+
+  // 无分组或只有一组 → 原样返回
+  if (groups.length <= 1) {
+    return [...header, ...(groups[0]?.lines || []), ...footer].join('\n')
+  }
+
+  // 判断哪些组是广告（小组）
+  const isAdGroup = (g: Group): boolean =>
+    g.segCount > 0 &&
+    g.segCount <= MAX_AD_SEGMENT_COUNT &&
+    g.totalDuration > 0 &&
+    g.totalDuration <= MAX_AD_TOTAL_DURATION
+
+  // 统计非广告组数量
+  const contentGroups = groups.filter(g => !isAdGroup(g))
+
+  // 如果所有内容都被判定为广告（不应该发生）→ 全部保留，不做任何删除
+  if (contentGroups.length === 0) {
+    const result: string[] = [...header]
+    for (let i = 0; i < groups.length; i++) {
+      if (i > 0) result.push('#EXT-X-DISCONTINUITY')
+      result.push(...groups[i].lines)
+    }
+    result.push(...footer)
+    return result.join('\n')
+  }
+
+  // 正常情况：只移除广告小组，保留其余所有组
+  const result: string[] = [...header]
+  let firstKept = true
+  for (const g of groups) {
+    if (isAdGroup(g)) continue // 跳过广告组
+    if (!firstKept) result.push('#EXT-X-DISCONTINUITY')
+    result.push(...g.lines)
+    firstKept = false
+  }
+  result.push(...footer)
+  return result.join('\n')
+}
+
+/** 清理孤立的 #EXT-X-DISCONTINUITY（前后无片段时移除） */
+function _cleanOrphanDiscontinuity(lines: string[]): string[] {
+  const result: string[] = []
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].trim() === '#EXT-X-DISCONTINUITY') {
+      // 检查后面是否紧跟有效片段（跳过空行和标签）
+      let hasSegAfter = false
+      for (let j = i + 1; j < lines.length; j++) {
+        const t = lines[j].trim()
+        if (!t) continue
+        if (!t.startsWith('#')) { hasSegAfter = true; break }
+        if (t === '#EXT-X-DISCONTINUITY') break
+        if (t === '#EXT-X-ENDLIST') break
+      }
+      if (hasSegAfter) result.push(lines[i])
+      // 否则丢弃（孤立 DISCONTINUITY）
+    } else {
+      result.push(lines[i])
+    }
+  }
+  return result
+}
+
 function _parseM3u8Text(text: string, url: string): M3u8ParseResult {
   const base = url.substring(0, url.lastIndexOf('/') + 1)
   const urls: string[] = []
   const variantUrls: string[] = []
   let nextLineIsVariant = false
-  // ⭐ 更严谨的检测：仅当同时存在 #EXT-X-STREAM-INF 且 无 #EXTINF 时才算 master
   const hasStreamInf = /#EXT-X-STREAM-INF/.test(text)
   const hasExtInf = /#EXTINF/.test(text)
   const isMaster = hasStreamInf && !hasExtInf
@@ -1549,10 +1747,8 @@ function _parseM3u8Text(text: string, url: string): M3u8ParseResult {
       continue
     }
     if (trimmed.startsWith('#')) continue
-    // 非 # 行：URL
     let absUrl: string
     try { absUrl = new URL(trimmed, base).href } catch { absUrl = base + trimmed }
-    // master 时所有非 # 行都是 variant m3u8；否则都是 TS
     if (isMaster || nextLineIsVariant) {
       variantUrls.push(absUrl)
     } else {
@@ -1565,31 +1761,21 @@ function _parseM3u8Text(text: string, url: string): M3u8ParseResult {
   return { urls, variantUrls, targetduration: m ? parseInt(m[1]) : 6, text, isMaster }
 }
 
-async function fetchAndParseM3u8(url: string, retries = 3): Promise<M3u8ParseResult> {
+async function fetchAndParseM3u8(url: string): Promise<M3u8ParseResult> {
   // 1) 文本缓存命中
   const cachedText = getM3u8FromCache(url)
-  if (cachedText) return _parseM3u8Text(cachedText, url)
-
-  // 2) safeFetch（HTTPS 证书失败自动降级 HTTP）+ 重试
-  let lastError: Error | null = null
-  let actualUrl = url
-  for (let attempt = 0; attempt < retries; attempt++) {
-    try {
-      const resp = await safeFetch(actualUrl)
-      if (!resp.ok) throw new Error('m3u8 fetch failed: ' + resp.status)
-      const text = await resp.text()
-      setM3u8Cache(url, text)
-      // 如果实际请求走了 HTTP，用实际 URL 作 base 解析相对路径
-      const finalUrl = resp.url || actualUrl
-      return _parseM3u8Text(text, finalUrl)
-    } catch (e) {
-      lastError = e as Error
-      if (attempt < retries - 1) {
-        await new Promise(resolve => setTimeout(resolve, (attempt + 1) * 1000))
-      }
-    }
+  if (cachedText) {
+    const clean = stripAdFromM3u8Text(cachedText, url)
+    return _parseM3u8Text(clean, url)
   }
-  throw lastError || new Error('m3u8 fetch failed after retries')
+
+  // 2) 真正 fetch
+  const resp = await fetch(url)
+  if (!resp.ok) throw new Error('m3u8 fetch failed: ' + resp.status)
+  const rawText = await resp.text()
+  setM3u8Cache(url, rawText) // 缓存原始文本
+  const clean = stripAdFromM3u8Text(rawText, url)
+  return _parseM3u8Text(clean, url)
 }
 
 // 从已解析的片段 URL 直接开始预取（不需要再请求 m3u8 了）
@@ -1628,4 +1814,7 @@ export const TsCache = {
   setAbrSwitchCallback,
   adaptiveConcurrency,
   adaptiveFragmentTimeout,
+  // ⭐ 广告域名上报
+  addAdDomain,
+  getAdDomains,
 }

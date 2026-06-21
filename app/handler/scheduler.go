@@ -402,13 +402,10 @@ func (s *Scheduler) Status() SchedulerStatus {
 	pageGap := cfg.PageGapSeconds
 	s.mu.Unlock()
 
-	// 收集每个源的调度信息
+	// 收集每个源的调度信息（包含所有源，不按 enabled 过滤，前端需要看到全部源的调度配置）
 	var srcItems []SourceScheduleItem
 	sources, _ := db.GetAllSources()
 	for _, src := range sources {
-		if src.Enabled != 1 {
-			continue
-		}
 		sc := src.GetScheduleConfig()
 		entry := GetCollectStatus(src.SourceKey)
 		item := SourceScheduleItem{

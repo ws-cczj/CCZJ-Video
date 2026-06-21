@@ -1,0 +1,599 @@
+﻿[2026-06-21 11:42:40.822] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-21 11:42:40.829] [INFO] [asm_amd64.s:1771] [Douban] Scheduler started, interval: 30s
+[2026-06-21 11:42:40.829] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler started, interval: 1m0s
+[2026-06-21 11:42:40.841] [INFO] [asm_amd64.s:1771] 同步全局类型完成: 0 条
+[2026-06-21 11:43:10.829] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-21 11:43:10.829] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-21 11:43:10.829] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-21 11:43:10.830] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 火影忍者剧场版：血狱
+[2026-06-21 11:43:10.830] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者剧场版：血狱
+[2026-06-21 11:43:10.830] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 25.8s
+[2026-06-21 11:43:36.640] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E7%81%AB%E5%BD%B1%E5%BF%8D%E8%80%85%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E8%A1%80%E7%8B%B1
+[2026-06-21 11:43:36.879] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 26.05s
+[2026-06-21 11:43:36.880] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 火影忍者剧场版：血狱 (HTML length: 15157)
+[2026-06-21 11:43:36.880] [DEBUG] [updater.go:137] [Douban] Response snippet (first 500 chars):  <!DOCTYPE html> <html lang="en">   <head>     <meta charset="utf-8">     <meta http-equiv="X-UA-Compatible" content="edge" />     <meta name=“renderer” content=“webkit”>     <meta name="referrer" content="always">     <meta name="viewport" content="width=device-width, initial-scale=1">     <link rel="shortcut icon" href="https://img1.doubanio.com/favicon.ico" type="image/x-icon">     <link rel="search" type="application/opensearchdescription+xml" title="豆瓣搜索" href="/opensearch?s
+[2026-06-21 11:43:36.882] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '火影忍者剧场版：血狱': no subject ID found for keyword: 火影忍者剧场版：血狱
+[2026-06-21 11:43:36.882] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 火影忍者疾风传剧场版：失落之塔
+[2026-06-21 11:43:36.883] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者疾风传剧场版：失落之塔
+[2026-06-21 11:43:36.883] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 19.8s
+[2026-06-21 11:43:40.829] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler tick triggered
+[2026-06-21 11:43:40.829] [INFO] [scheduler.go:45] [Ciligou] Starting batch update, enabled types: 3
+[2026-06-21 11:43:40.829] [INFO] [scheduler.go:45] [Ciligou] Found 3 records missing magnet link
+[2026-06-21 11:43:40.829] [INFO] [scheduler.go:45] [Ciligou] [1/3] Skipping '权力的游戏：最后的守夜人': type not in enabled list
+[2026-06-21 11:43:40.829] [INFO] [scheduler.go:45] [Ciligou] [2/3] Skipping '回复术士的重来人生': type not in enabled list
+[2026-06-21 11:43:40.830] [INFO] [scheduler.go:45] [Ciligou] [3/3] Skipping '凡人修仙传真人版': type not in enabled list
+[2026-06-21 11:43:40.830] [INFO] [scheduler.go:45] [Ciligou] Batch update completed: 0 records updated
+[2026-06-21 11:43:40.830] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler batch update: no magnet links updated
+[2026-06-21 11:43:56.641] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 19.0s
+[2026-06-21 11:44:15.648] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E7%81%AB%E5%BD%B1%E5%BF%8D%E8%80%85%E7%96%BE%E9%A3%8E%E4%BC%A0%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E5%A4%B1%E8%90%BD%E4%B9%8B%E5%A1%94
+[2026-06-21 11:44:15.851] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 38.97s
+[2026-06-21 11:44:15.852] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 火影忍者疾风传剧场版：失落之塔 (HTML length: 15396)
+[2026-06-21 11:44:15.852] [DEBUG] [updater.go:137] [Douban] Response snippet (first 500 chars):  <!DOCTYPE html> <html lang="en">   <head>     <meta charset="utf-8">     <meta http-equiv="X-UA-Compatible" content="edge" />     <meta name=“renderer” content=“webkit”>     <meta name="referrer" content="always">     <meta name="viewport" content="width=device-width, initial-scale=1">     <link rel="shortcut icon" href="https://img1.doubanio.com/favicon.ico" type="image/x-icon">     <link rel="search" type="application/opensearchdescription+xml" title="豆瓣搜索" href="/opensearch?s
+[2026-06-21 11:44:15.854] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '火影忍者疾风传剧场版：失落之塔': no subject ID found for keyword: 火影忍者疾风传剧场版：失落之塔
+[2026-06-21 11:44:15.854] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 火影忍者疾风传剧场版：火之意志的继承者
+[2026-06-21 11:44:15.854] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者疾风传剧场版：火之意志的继承者
+[2026-06-21 11:44:15.854] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 19.8s
+[2026-06-21 11:44:35.649] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 10.9s
+[2026-06-21 11:44:40.829] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler tick triggered
+[2026-06-21 11:44:40.829] [INFO] [scheduler.go:45] [Ciligou] Starting batch update, enabled types: 3
+[2026-06-21 11:44:40.829] [INFO] [scheduler.go:45] [Ciligou] Found 3 records missing magnet link
+[2026-06-21 11:44:40.829] [INFO] [scheduler.go:45] [Ciligou] [1/3] Skipping '权力的游戏：最后的守夜人': type not in enabled list
+[2026-06-21 11:44:40.829] [INFO] [scheduler.go:45] [Ciligou] [2/3] Skipping '回复术士的重来人生': type not in enabled list
+[2026-06-21 11:44:40.829] [INFO] [scheduler.go:45] [Ciligou] [3/3] Skipping '凡人修仙传真人版': type not in enabled list
+[2026-06-21 11:44:40.829] [INFO] [scheduler.go:45] [Ciligou] Batch update completed: 0 records updated
+[2026-06-21 11:44:40.829] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler batch update: no magnet links updated
+[2026-06-21 11:44:46.564] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E7%81%AB%E5%BD%B1%E5%BF%8D%E8%80%85%E7%96%BE%E9%A3%8E%E4%BC%A0%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E7%81%AB%E4%B9%8B%E6%84%8F%E5%BF%97%E7%9A%84%E7%BB%A7%E6%89%BF%E8%80%85
+[2026-06-21 11:44:46.855] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 31.00s
+[2026-06-21 11:44:46.856] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 火影忍者疾风传剧场版：火之意志的继承者 (HTML length: 17132)
+[2026-06-21 11:44:46.856] [DEBUG] [updater.go:137] [Douban] Response snippet (first 500 chars):  <!DOCTYPE html> <html lang="en">   <head>     <meta charset="utf-8">     <meta http-equiv="X-UA-Compatible" content="edge" />     <meta name=“renderer” content=“webkit”>     <meta name="referrer" content="always">     <meta name="viewport" content="width=device-width, initial-scale=1">     <link rel="shortcut icon" href="https://img1.doubanio.com/favicon.ico" type="image/x-icon">     <link rel="search" type="application/opensearchdescription+xml" title="豆瓣搜索" href="/opensearch?s
+[2026-06-21 11:44:46.859] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '火影忍者疾风传剧场版：火之意志的继承者': no subject ID found for keyword: 火影忍者疾风传剧场版：火之意志的继承者
+[2026-06-21 11:44:46.859] [INFO] [scheduler.go:42] [Douban] Found 1 incomplete records (has subject_id but missing details)
+[2026-06-21 11:44:46.859] [INFO] [scheduler.go:42] [Douban] [1/1] Filling detail for subject 35681765 (真正的权力的游戏 第三季)
+[2026-06-21 11:44:46.859] [INFO] [updater.go:149] [Douban] Parsing detail for subject ID: 35681765
+[2026-06-21 11:44:46.859] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 19.7s
+[2026-06-21 11:44:48.372] [INFO] [app.go:3122] [Douban] Stopping scheduler (graceful)...
+[2026-06-21 11:44:48.372] [INFO] [scheduler.go:62] [Douban] Updater graceful stop requested
+[2026-06-21 11:44:53.372] [INFO] [app.go:3122] [Douban] Scheduler stopped
+[2026-06-21 11:44:53.372] [INFO] [app.go:3127] [Ciligou] Stopping scheduler (graceful)...
+[2026-06-21 11:44:53.372] [INFO] [scheduler.go:66] [Ciligou] Updater graceful stop requested
+[2026-06-21 11:44:53.372] [INFO] [app.go:3127] [Ciligou] Scheduler stopped
+[2026-06-21 11:44:53.372] [INFO] [application.go:720] 应用正常退出
+[2026-06-21 12:05:22.058] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-21 12:05:22.068] [INFO] [asm_amd64.s:1771] [Douban] Scheduler started, interval: 30s
+[2026-06-21 12:05:22.068] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler started, interval: 1m0s
+[2026-06-21 12:05:22.082] [INFO] [asm_amd64.s:1771] 同步全局类型完成: 0 条
+[2026-06-21 12:05:52.068] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-21 12:05:52.068] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-21 12:05:52.068] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-21 12:05:52.068] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 火影忍者剧场版：血狱
+[2026-06-21 12:05:52.068] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者剧场版：血狱
+[2026-06-21 12:05:52.068] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 38.0s
+[2026-06-21 12:06:22.069] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler tick triggered
+[2026-06-21 12:06:22.069] [INFO] [scheduler.go:45] [Ciligou] Starting batch update, enabled types: 3
+[2026-06-21 12:06:22.069] [INFO] [scheduler.go:45] [Ciligou] Found 3 records missing magnet link
+[2026-06-21 12:06:22.069] [INFO] [scheduler.go:45] [Ciligou] [1/3] Skipping '权力的游戏：最后的守夜人': type not in enabled list
+[2026-06-21 12:06:22.069] [INFO] [scheduler.go:45] [Ciligou] [2/3] Skipping '回复术士的重来人生': type not in enabled list
+[2026-06-21 12:06:22.069] [INFO] [scheduler.go:45] [Ciligou] [3/3] Skipping '凡人修仙传真人版': type not in enabled list
+[2026-06-21 12:06:22.070] [INFO] [scheduler.go:45] [Ciligou] Batch update completed: 0 records updated
+[2026-06-21 12:06:22.070] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler batch update: no magnet links updated
+[2026-06-21 12:06:30.044] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E7%81%AB%E5%BD%B1%E5%BF%8D%E8%80%85%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E8%A1%80%E7%8B%B1
+[2026-06-21 12:06:30.242] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 38.17s
+[2026-06-21 12:06:30.243] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 火影忍者剧场版：血狱 (HTML length: 15157)
+[2026-06-21 12:06:30.243] [DEBUG] [updater.go:137] [Douban] Response snippet (first 500 chars):  <!DOCTYPE html> <html lang="en">   <head>     <meta charset="utf-8">     <meta http-equiv="X-UA-Compatible" content="edge" />     <meta name=“renderer” content=“webkit”>     <meta name="referrer" content="always">     <meta name="viewport" content="width=device-width, initial-scale=1">     <link rel="shortcut icon" href="https://img1.doubanio.com/favicon.ico" type="image/x-icon">     <link rel="search" type="application/opensearchdescription+xml" title="豆瓣搜索" href="/opensearch?s
+[2026-06-21 12:06:30.246] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '火影忍者剧场版：血狱': no subject ID found for keyword: 火影忍者剧场版：血狱
+[2026-06-21 12:06:30.246] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 火影忍者疾风传剧场版：失落之塔
+[2026-06-21 12:06:30.246] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者疾风传剧场版：失落之塔
+[2026-06-21 12:06:30.246] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 19.8s
+[2026-06-21 12:06:50.044] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 21.3s
+[2026-06-21 12:07:11.343] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E7%81%AB%E5%BD%B1%E5%BF%8D%E8%80%85%E7%96%BE%E9%A3%8E%E4%BC%A0%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E5%A4%B1%E8%90%BD%E4%B9%8B%E5%A1%94
+[2026-06-21 12:07:11.545] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 41.30s
+[2026-06-21 12:07:11.545] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 火影忍者疾风传剧场版：失落之塔 (HTML length: 15396)
+[2026-06-21 12:07:11.545] [DEBUG] [updater.go:137] [Douban] Response snippet (first 500 chars):  <!DOCTYPE html> <html lang="en">   <head>     <meta charset="utf-8">     <meta http-equiv="X-UA-Compatible" content="edge" />     <meta name=“renderer” content=“webkit”>     <meta name="referrer" content="always">     <meta name="viewport" content="width=device-width, initial-scale=1">     <link rel="shortcut icon" href="https://img1.doubanio.com/favicon.ico" type="image/x-icon">     <link rel="search" type="application/opensearchdescription+xml" title="豆瓣搜索" href="/opensearch?s
+[2026-06-21 12:07:11.547] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '火影忍者疾风传剧场版：失落之塔': no subject ID found for keyword: 火影忍者疾风传剧场版：失落之塔
+[2026-06-21 12:07:11.548] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 火影忍者疾风传剧场版：火之意志的继承者
+[2026-06-21 12:07:11.548] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者疾风传剧场版：火之意志的继承者
+[2026-06-21 12:07:11.548] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 19.8s
+[2026-06-21 12:07:22.069] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler tick triggered
+[2026-06-21 12:07:22.069] [INFO] [scheduler.go:45] [Ciligou] Starting batch update, enabled types: 3
+[2026-06-21 12:07:22.069] [INFO] [scheduler.go:45] [Ciligou] Found 3 records missing magnet link
+[2026-06-21 12:07:22.069] [INFO] [scheduler.go:45] [Ciligou] [1/3] Skipping '权力的游戏：最后的守夜人': type not in enabled list
+[2026-06-21 12:07:22.069] [INFO] [scheduler.go:45] [Ciligou] [2/3] Skipping '回复术士的重来人生': type not in enabled list
+[2026-06-21 12:07:22.070] [INFO] [scheduler.go:45] [Ciligou] [3/3] Skipping '凡人修仙传真人版': type not in enabled list
+[2026-06-21 12:07:22.070] [INFO] [scheduler.go:45] [Ciligou] Batch update completed: 0 records updated
+[2026-06-21 12:07:22.070] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler batch update: no magnet links updated
+[2026-06-21 12:07:31.344] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 12.7s
+[2026-06-21 12:07:44.014] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E7%81%AB%E5%BD%B1%E5%BF%8D%E8%80%85%E7%96%BE%E9%A3%8E%E4%BC%A0%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E7%81%AB%E4%B9%8B%E6%84%8F%E5%BF%97%E7%9A%84%E7%BB%A7%E6%89%BF%E8%80%85
+[2026-06-21 12:07:44.253] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 32.71s
+[2026-06-21 12:07:44.254] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 火影忍者疾风传剧场版：火之意志的继承者 (HTML length: 17132)
+[2026-06-21 12:07:44.254] [DEBUG] [updater.go:137] [Douban] Response snippet (first 500 chars):  <!DOCTYPE html> <html lang="en">   <head>     <meta charset="utf-8">     <meta http-equiv="X-UA-Compatible" content="edge" />     <meta name=“renderer” content=“webkit”>     <meta name="referrer" content="always">     <meta name="viewport" content="width=device-width, initial-scale=1">     <link rel="shortcut icon" href="https://img1.doubanio.com/favicon.ico" type="image/x-icon">     <link rel="search" type="application/opensearchdescription+xml" title="豆瓣搜索" href="/opensearch?s
+[2026-06-21 12:07:44.256] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '火影忍者疾风传剧场版：火之意志的继承者': no subject ID found for keyword: 火影忍者疾风传剧场版：火之意志的继承者
+[2026-06-21 12:07:44.256] [INFO] [scheduler.go:42] [Douban] Found 1 incomplete records (has subject_id but missing details)
+[2026-06-21 12:07:44.256] [INFO] [scheduler.go:42] [Douban] [1/1] Filling detail for subject 35681765 (真正的权力的游戏 第三季)
+[2026-06-21 12:07:44.256] [INFO] [updater.go:149] [Douban] Parsing detail for subject ID: 35681765
+[2026-06-21 12:07:44.256] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 19.8s
+[2026-06-21 12:08:04.014] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 9.3s
+[2026-06-21 12:08:13.358] [INFO] [crawler.go:431] [Douban] Fetching URL: https://movie.douban.com/subject/35681765/
+[2026-06-21 12:08:14.414] [INFO] [crawler.go:431] [Douban] HTTP status: 200, duration: 30.16s
+[2026-06-21 12:08:14.416] [INFO] [updater.go:149] [Douban] Parsed detail for 35681765: Title='La Guerre des Trônes, la véritable histoire de l&#39;Europe', Rating='8.5', Votes='197', Director='', Actor='', Genre='爱情'
+[2026-06-21 12:08:14.416] [DEBUG] [updater.go:123] [Douban] Upserting 0 fields for subject '35681765' (global_id=12)
+[2026-06-21 12:08:14.418] [INFO] [scheduler.go:42] [Douban] [1/1] SUCCESS filled detail for subject '35681765'
+[2026-06-21 12:08:14.418] [INFO] [scheduler.go:42] [Douban] Batch update completed: 1 records updated
+[2026-06-21 12:08:14.418] [INFO] [asm_amd64.s:1771] [Douban] Scheduler batch update SUCCESS: 1 videos updated
+[2026-06-21 12:08:14.418] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-21 12:08:14.418] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-21 12:08:14.418] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-21 12:08:14.418] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 火影忍者剧场版：血狱
+[2026-06-21 12:08:14.418] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者剧场版：血狱
+[2026-06-21 12:08:14.418] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 18.9s
+[2026-06-21 12:08:22.069] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler tick triggered
+[2026-06-21 12:08:22.069] [INFO] [scheduler.go:45] [Ciligou] Starting batch update, enabled types: 3
+[2026-06-21 12:08:22.069] [INFO] [scheduler.go:45] [Ciligou] Found 3 records missing magnet link
+[2026-06-21 12:08:22.069] [INFO] [scheduler.go:45] [Ciligou] [1/3] Skipping '权力的游戏：最后的守夜人': type not in enabled list
+[2026-06-21 12:08:22.069] [INFO] [scheduler.go:45] [Ciligou] [2/3] Skipping '回复术士的重来人生': type not in enabled list
+[2026-06-21 12:08:22.069] [INFO] [scheduler.go:45] [Ciligou] [3/3] Skipping '凡人修仙传真人版': type not in enabled list
+[2026-06-21 12:08:22.069] [INFO] [scheduler.go:45] [Ciligou] Batch update completed: 0 records updated
+[2026-06-21 12:08:22.069] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler batch update: no magnet links updated
+[2026-06-21 12:08:33.358] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 10.0s
+[2026-06-21 12:08:43.363] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E7%81%AB%E5%BD%B1%E5%BF%8D%E8%80%85%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E8%A1%80%E7%8B%B1
+[2026-06-21 12:08:43.538] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 29.12s
+[2026-06-21 12:08:43.539] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 火影忍者剧场版：血狱 (HTML length: 15157)
+[2026-06-21 12:08:43.539] [DEBUG] [updater.go:137] [Douban] Response snippet (first 500 chars):  <!DOCTYPE html> <html lang="en">   <head>     <meta charset="utf-8">     <meta http-equiv="X-UA-Compatible" content="edge" />     <meta name=“renderer” content=“webkit”>     <meta name="referrer" content="always">     <meta name="viewport" content="width=device-width, initial-scale=1">     <link rel="shortcut icon" href="https://img1.doubanio.com/favicon.ico" type="image/x-icon">     <link rel="search" type="application/opensearchdescription+xml" title="豆瓣搜索" href="/opensearch?s
+[2026-06-21 12:08:43.541] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '火影忍者剧场版：血狱': no subject ID found for keyword: 火影忍者剧场版：血狱
+[2026-06-21 12:08:43.541] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 火影忍者疾风传剧场版：失落之塔
+[2026-06-21 12:08:43.541] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者疾风传剧场版：失落之塔
+[2026-06-21 12:08:43.541] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 19.8s
+[2026-06-21 12:09:03.364] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 10.8s
+[2026-06-21 12:09:14.152] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E7%81%AB%E5%BD%B1%E5%BF%8D%E8%80%85%E7%96%BE%E9%A3%8E%E4%BC%A0%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E5%A4%B1%E8%90%BD%E4%B9%8B%E5%A1%94
+[2026-06-21 12:09:14.441] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 30.90s
+[2026-06-21 12:09:14.442] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 火影忍者疾风传剧场版：失落之塔 (HTML length: 15396)
+[2026-06-21 12:09:14.442] [DEBUG] [updater.go:137] [Douban] Response snippet (first 500 chars):  <!DOCTYPE html> <html lang="en">   <head>     <meta charset="utf-8">     <meta http-equiv="X-UA-Compatible" content="edge" />     <meta name=“renderer” content=“webkit”>     <meta name="referrer" content="always">     <meta name="viewport" content="width=device-width, initial-scale=1">     <link rel="shortcut icon" href="https://img1.doubanio.com/favicon.ico" type="image/x-icon">     <link rel="search" type="application/opensearchdescription+xml" title="豆瓣搜索" href="/opensearch?s
+[2026-06-21 12:09:14.443] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '火影忍者疾风传剧场版：失落之塔': no subject ID found for keyword: 火影忍者疾风传剧场版：失落之塔
+[2026-06-21 12:09:14.443] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 火影忍者疾风传剧场版：火之意志的继承者
+[2026-06-21 12:09:14.444] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者疾风传剧场版：火之意志的继承者
+[2026-06-21 12:09:14.444] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 19.7s
+[2026-06-21 12:09:22.069] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler tick triggered
+[2026-06-21 12:09:22.069] [INFO] [scheduler.go:45] [Ciligou] Starting batch update, enabled types: 3
+[2026-06-21 12:09:22.069] [INFO] [scheduler.go:45] [Ciligou] Found 3 records missing magnet link
+[2026-06-21 12:09:22.070] [INFO] [scheduler.go:45] [Ciligou] [1/3] Skipping '权力的游戏：最后的守夜人': type not in enabled list
+[2026-06-21 12:09:22.070] [INFO] [scheduler.go:45] [Ciligou] [2/3] Skipping '回复术士的重来人生': type not in enabled list
+[2026-06-21 12:09:22.070] [INFO] [scheduler.go:45] [Ciligou] [3/3] Skipping '凡人修仙传真人版': type not in enabled list
+[2026-06-21 12:09:22.070] [INFO] [scheduler.go:45] [Ciligou] Batch update completed: 0 records updated
+[2026-06-21 12:09:22.070] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler batch update: no magnet links updated
+[2026-06-21 12:09:34.153] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 26.4s
+[2026-06-21 12:09:36.237] [INFO] [app.go:3122] [Douban] Stopping scheduler (graceful)...
+[2026-06-21 12:09:36.237] [INFO] [scheduler.go:62] [Douban] Updater graceful stop requested
+[2026-06-21 12:52:31.360] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-21 12:52:31.365] [INFO] [asm_amd64.s:1771] [Douban] Scheduler started, interval: 30s
+[2026-06-21 12:52:31.365] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler started, interval: 1m0s
+[2026-06-21 12:52:31.366] [INFO] [asm_amd64.s:1771] 同步全局类型完成: 0 条
+[2026-06-21 12:53:01.366] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-21 12:53:01.366] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-21 12:53:01.367] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-21 12:53:01.367] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 火影忍者剧场版：血狱
+[2026-06-21 12:53:01.368] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者剧场版：血狱
+[2026-06-21 12:53:01.368] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 15.0s
+[2026-06-21 12:53:16.389] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E7%81%AB%E5%BD%B1%E5%BF%8D%E8%80%85%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E8%A1%80%E7%8B%B1
+[2026-06-21 12:53:16.631] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 15.26s
+[2026-06-21 12:53:16.632] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 火影忍者剧场版：血狱 (HTML length: 15157)
+[2026-06-21 12:53:16.632] [DEBUG] [updater.go:137] [Douban] Response snippet (first 500 chars):  <!DOCTYPE html> <html lang="en">   <head>     <meta charset="utf-8">     <meta http-equiv="X-UA-Compatible" content="edge" />     <meta name=“renderer” content=“webkit”>     <meta name="referrer" content="always">     <meta name="viewport" content="width=device-width, initial-scale=1">     <link rel="shortcut icon" href="https://img1.doubanio.com/favicon.ico" type="image/x-icon">     <link rel="search" type="application/opensearchdescription+xml" title="豆瓣搜索" href="/opensearch?s
+[2026-06-21 12:53:16.634] [INFO] [crawler.go:408] [Douban] Search cooldown activated for '火影忍者剧场版：血狱' (failures=5, until=2026-06-22 12:53:16)
+[2026-06-21 12:53:16.634] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '火影忍者剧场版：血狱': no subject ID found for keyword: 火影忍者剧场版：血狱
+[2026-06-21 12:53:16.634] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 火影忍者疾风传剧场版：失落之塔
+[2026-06-21 12:53:16.634] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者疾风传剧场版：失落之塔
+[2026-06-21 12:53:16.634] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 19.8s
+[2026-06-21 12:53:31.366] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler tick triggered
+[2026-06-21 12:53:31.366] [INFO] [scheduler.go:45] [Ciligou] Starting batch update, enabled types: 3
+[2026-06-21 12:53:31.366] [INFO] [scheduler.go:45] [Ciligou] Found 3 records missing magnet link
+[2026-06-21 12:53:31.367] [INFO] [scheduler.go:45] [Ciligou] [1/3] Skipping '权力的游戏：最后的守夜人': type not in enabled list
+[2026-06-21 12:53:31.368] [INFO] [scheduler.go:45] [Ciligou] [2/3] Skipping '回复术士的重来人生': type not in enabled list
+[2026-06-21 12:53:31.368] [INFO] [scheduler.go:45] [Ciligou] [3/3] Skipping '凡人修仙传真人版': type not in enabled list
+[2026-06-21 12:53:31.368] [INFO] [scheduler.go:45] [Ciligou] Batch update completed: 0 records updated
+[2026-06-21 12:53:31.368] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler batch update: no magnet links updated
+[2026-06-21 12:53:36.389] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 31.1s
+[2026-06-21 12:53:57.840] [INFO] [app.go:3122] [Douban] Stopping scheduler (graceful)...
+[2026-06-21 12:53:57.840] [INFO] [scheduler.go:62] [Douban] Updater graceful stop requested
+[2026-06-21 13:13:11.533] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-21 13:13:11.538] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler started, interval: 1m0s
+[2026-06-21 13:13:11.538] [INFO] [asm_amd64.s:1771] [Douban] Scheduler started, interval: 30s
+[2026-06-21 13:13:11.551] [INFO] [asm_amd64.s:1771] 同步全局类型完成: 0 条
+[2026-06-21 13:13:41.538] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-21 13:13:41.538] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-21 13:13:41.538] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-21 13:13:41.538] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 火影忍者疾风传剧场版：失落之塔
+[2026-06-21 13:13:41.538] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者疾风传剧场版：失落之塔
+[2026-06-21 13:13:41.539] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 29.7s
+[2026-06-21 13:14:11.225] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E7%81%AB%E5%BD%B1%E5%BF%8D%E8%80%85%E7%96%BE%E9%A3%8E%E4%BC%A0%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E5%A4%B1%E8%90%BD%E4%B9%8B%E5%A1%94
+[2026-06-21 13:14:11.442] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 29.90s
+[2026-06-21 13:14:11.443] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 火影忍者疾风传剧场版：失落之塔 (HTML length: 15396)
+[2026-06-21 13:14:11.443] [DEBUG] [updater.go:137] [Douban] Response snippet (first 500 chars):  <!DOCTYPE html> <html lang="en">   <head>     <meta charset="utf-8">     <meta http-equiv="X-UA-Compatible" content="edge" />     <meta name=“renderer” content=“webkit”>     <meta name="referrer" content="always">     <meta name="viewport" content="width=device-width, initial-scale=1">     <link rel="shortcut icon" href="https://img1.doubanio.com/favicon.ico" type="image/x-icon">     <link rel="search" type="application/opensearchdescription+xml" title="豆瓣搜索" href="/opensearch?s
+[2026-06-21 13:14:11.445] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '火影忍者疾风传剧场版：失落之塔': no subject ID found for keyword: 火影忍者疾风传剧场版：失落之塔
+[2026-06-21 13:14:11.445] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 火影忍者疾风传剧场版：火之意志的继承者
+[2026-06-21 13:14:11.446] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者疾风传剧场版：火之意志的继承者
+[2026-06-21 13:14:11.446] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 19.8s
+[2026-06-21 13:14:11.539] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler tick triggered
+[2026-06-21 13:14:11.539] [INFO] [scheduler.go:45] [Ciligou] Starting batch update, enabled types: 3
+[2026-06-21 13:14:11.539] [INFO] [scheduler.go:45] [Ciligou] Found 3 records missing magnet link
+[2026-06-21 13:14:11.539] [INFO] [scheduler.go:45] [Ciligou] [1/3] Skipping '权力的游戏：最后的守夜人': type not in enabled list
+[2026-06-21 13:14:11.539] [INFO] [scheduler.go:45] [Ciligou] [2/3] Skipping '回复术士的重来人生': type not in enabled list
+[2026-06-21 13:14:11.539] [INFO] [scheduler.go:45] [Ciligou] [3/3] Skipping '凡人修仙传真人版': type not in enabled list
+[2026-06-21 13:14:11.539] [INFO] [scheduler.go:45] [Ciligou] Batch update completed: 0 records updated
+[2026-06-21 13:14:11.539] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler batch update: no magnet links updated
+[2026-06-21 13:14:31.225] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 13.9s
+[2026-06-21 13:14:45.115] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E7%81%AB%E5%BD%B1%E5%BF%8D%E8%80%85%E7%96%BE%E9%A3%8E%E4%BC%A0%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E7%81%AB%E4%B9%8B%E6%84%8F%E5%BF%97%E7%9A%84%E7%BB%A7%E6%89%BF%E8%80%85
+[2026-06-21 13:14:45.392] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 33.95s
+[2026-06-21 13:14:45.394] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 火影忍者疾风传剧场版：火之意志的继承者 (HTML length: 17132)
+[2026-06-21 13:14:45.394] [DEBUG] [updater.go:137] [Douban] Response snippet (first 500 chars):  <!DOCTYPE html> <html lang="en">   <head>     <meta charset="utf-8">     <meta http-equiv="X-UA-Compatible" content="edge" />     <meta name=“renderer” content=“webkit”>     <meta name="referrer" content="always">     <meta name="viewport" content="width=device-width, initial-scale=1">     <link rel="shortcut icon" href="https://img1.doubanio.com/favicon.ico" type="image/x-icon">     <link rel="search" type="application/opensearchdescription+xml" title="豆瓣搜索" href="/opensearch?s
+[2026-06-21 13:14:45.396] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '火影忍者疾风传剧场版：火之意志的继承者': no subject ID found for keyword: 火影忍者疾风传剧场版：火之意志的继承者
+[2026-06-21 13:14:45.396] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 火影忍者疾风传剧场版：羁绊
+[2026-06-21 13:14:45.396] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者疾风传剧场版：羁绊
+[2026-06-21 13:14:45.396] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 19.7s
+[2026-06-21 13:15:05.115] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 8.9s
+[2026-06-21 13:15:11.538] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler tick triggered
+[2026-06-21 13:15:11.538] [INFO] [scheduler.go:45] [Ciligou] Starting batch update, enabled types: 3
+[2026-06-21 13:15:11.538] [INFO] [scheduler.go:45] [Ciligou] Found 3 records missing magnet link
+[2026-06-21 13:15:11.539] [INFO] [scheduler.go:45] [Ciligou] [1/3] Skipping '权力的游戏：最后的守夜人': type not in enabled list
+[2026-06-21 13:15:11.539] [INFO] [scheduler.go:45] [Ciligou] [2/3] Skipping '回复术士的重来人生': type not in enabled list
+[2026-06-21 13:15:11.539] [INFO] [scheduler.go:45] [Ciligou] [3/3] Skipping '凡人修仙传真人版': type not in enabled list
+[2026-06-21 13:15:11.539] [INFO] [scheduler.go:45] [Ciligou] Batch update completed: 0 records updated
+[2026-06-21 13:15:11.539] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler batch update: no magnet links updated
+[2026-06-21 13:15:13.971] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E7%81%AB%E5%BD%B1%E5%BF%8D%E8%80%85%E7%96%BE%E9%A3%8E%E4%BC%A0%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E7%BE%81%E7%BB%8A
+[2026-06-21 13:15:14.097] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 28.70s
+[2026-06-21 13:15:14.097] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 火影忍者疾风传剧场版：羁绊 (HTML length: 15374)
+[2026-06-21 13:15:14.097] [DEBUG] [updater.go:137] [Douban] Response snippet (first 500 chars):  <!DOCTYPE html> <html lang="en">   <head>     <meta charset="utf-8">     <meta http-equiv="X-UA-Compatible" content="edge" />     <meta name=“renderer” content=“webkit”>     <meta name="referrer" content="always">     <meta name="viewport" content="width=device-width, initial-scale=1">     <link rel="shortcut icon" href="https://img1.doubanio.com/favicon.ico" type="image/x-icon">     <link rel="search" type="application/opensearchdescription+xml" title="豆瓣搜索" href="/opensearch?s
+[2026-06-21 13:15:14.100] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '火影忍者疾风传剧场版：羁绊': no subject ID found for keyword: 火影忍者疾风传剧场版：羁绊
+[2026-06-21 13:15:14.100] [INFO] [scheduler.go:42] [Douban] Found 1 incomplete records (has subject_id but missing details)
+[2026-06-21 13:15:14.100] [INFO] [scheduler.go:42] [Douban] [1/1] Filling detail for subject 35681765 (真正的权力的游戏 第三季)
+[2026-06-21 13:15:14.100] [INFO] [updater.go:149] [Douban] Parsing detail for subject ID: 35681765
+[2026-06-21 13:15:14.100] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 19.9s
+[2026-06-21 13:15:33.972] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 22.8s
+[2026-06-21 13:15:56.783] [INFO] [crawler.go:431] [Douban] Fetching URL: https://movie.douban.com/subject/35681765/
+[2026-06-21 13:15:58.248] [INFO] [crawler.go:431] [Douban] HTTP status: 200, duration: 44.15s
+[2026-06-21 13:15:58.249] [INFO] [updater.go:149] [Douban] Parsed detail for 35681765: Title='La Guerre des Trônes, la véritable histoire de l&#39;Europe', Rating='8.5', Votes='197', Director='', Actor='', Genre='爱情'
+[2026-06-21 13:15:58.249] [DEBUG] [updater.go:123] [Douban] Upserting 0 fields for subject '35681765' (global_id=12)
+[2026-06-21 13:15:58.252] [INFO] [scheduler.go:42] [Douban] [1/1] SUCCESS filled detail for subject '35681765'
+[2026-06-21 13:15:58.252] [INFO] [scheduler.go:42] [Douban] Batch update completed: 1 records updated
+[2026-06-21 13:15:58.252] [INFO] [asm_amd64.s:1771] [Douban] Scheduler batch update SUCCESS: 1 videos updated
+[2026-06-21 13:15:58.252] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-21 13:15:58.252] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-21 13:15:58.252] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-21 13:15:58.252] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 火影忍者疾风传剧场版：失落之塔
+[2026-06-21 13:15:58.252] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者疾风传剧场版：失落之塔
+[2026-06-21 13:15:58.252] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 18.5s
+[2026-06-21 13:16:11.538] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler tick triggered
+[2026-06-21 13:16:11.538] [INFO] [scheduler.go:45] [Ciligou] Starting batch update, enabled types: 3
+[2026-06-21 13:16:11.538] [INFO] [scheduler.go:45] [Ciligou] Found 3 records missing magnet link
+[2026-06-21 13:16:11.538] [INFO] [scheduler.go:45] [Ciligou] [1/3] Skipping '权力的游戏：最后的守夜人': type not in enabled list
+[2026-06-21 13:16:11.539] [INFO] [scheduler.go:45] [Ciligou] [2/3] Skipping '回复术士的重来人生': type not in enabled list
+[2026-06-21 13:16:11.539] [INFO] [scheduler.go:45] [Ciligou] [3/3] Skipping '凡人修仙传真人版': type not in enabled list
+[2026-06-21 13:16:11.539] [INFO] [scheduler.go:45] [Ciligou] Batch update completed: 0 records updated
+[2026-06-21 13:16:11.539] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler batch update: no magnet links updated
+[2026-06-21 13:16:16.784] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 3.2s
+[2026-06-21 13:16:19.941] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E7%81%AB%E5%BD%B1%E5%BF%8D%E8%80%85%E7%96%BE%E9%A3%8E%E4%BC%A0%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E5%A4%B1%E8%90%BD%E4%B9%8B%E5%A1%94
+[2026-06-21 13:16:20.126] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 21.87s
+[2026-06-21 13:16:20.126] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 火影忍者疾风传剧场版：失落之塔 (HTML length: 15396)
+[2026-06-21 13:16:20.126] [DEBUG] [updater.go:137] [Douban] Response snippet (first 500 chars):  <!DOCTYPE html> <html lang="en">   <head>     <meta charset="utf-8">     <meta http-equiv="X-UA-Compatible" content="edge" />     <meta name=“renderer” content=“webkit”>     <meta name="referrer" content="always">     <meta name="viewport" content="width=device-width, initial-scale=1">     <link rel="shortcut icon" href="https://img1.doubanio.com/favicon.ico" type="image/x-icon">     <link rel="search" type="application/opensearchdescription+xml" title="豆瓣搜索" href="/opensearch?s
+[2026-06-21 13:16:20.129] [INFO] [crawler.go:408] [Douban] Search cooldown activated for '火影忍者疾风传剧场版：失落之塔' (failures=5, until=2026-06-22 13:16:20)
+[2026-06-21 13:16:20.129] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '火影忍者疾风传剧场版：失落之塔': no subject ID found for keyword: 火影忍者疾风传剧场版：失落之塔
+[2026-06-21 13:16:20.129] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 火影忍者疾风传剧场版：火之意志的继承者
+[2026-06-21 13:16:20.129] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者疾风传剧场版：火之意志的继承者
+[2026-06-21 13:16:20.129] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 19.8s
+[2026-06-21 13:16:39.942] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 37.1s
+[2026-06-21 13:17:11.538] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler tick triggered
+[2026-06-21 13:17:11.539] [INFO] [scheduler.go:45] [Ciligou] Starting batch update, enabled types: 3
+[2026-06-21 13:17:11.539] [INFO] [scheduler.go:45] [Ciligou] Found 3 records missing magnet link
+[2026-06-21 13:17:11.539] [INFO] [scheduler.go:45] [Ciligou] [1/3] Skipping '权力的游戏：最后的守夜人': type not in enabled list
+[2026-06-21 13:17:11.539] [INFO] [scheduler.go:45] [Ciligou] [2/3] Skipping '回复术士的重来人生': type not in enabled list
+[2026-06-21 13:17:11.539] [INFO] [scheduler.go:45] [Ciligou] [3/3] Skipping '凡人修仙传真人版': type not in enabled list
+[2026-06-21 13:17:11.539] [INFO] [scheduler.go:45] [Ciligou] Batch update completed: 0 records updated
+[2026-06-21 13:17:11.539] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler batch update: no magnet links updated
+[2026-06-21 13:17:17.018] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E7%81%AB%E5%BD%B1%E5%BF%8D%E8%80%85%E7%96%BE%E9%A3%8E%E4%BC%A0%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E7%81%AB%E4%B9%8B%E6%84%8F%E5%BF%97%E7%9A%84%E7%BB%A7%E6%89%BF%E8%80%85
+[2026-06-21 13:17:17.267] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 57.14s
+[2026-06-21 13:17:17.268] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 火影忍者疾风传剧场版：火之意志的继承者 (HTML length: 17132)
+[2026-06-21 13:17:17.268] [DEBUG] [updater.go:137] [Douban] Response snippet (first 500 chars):  <!DOCTYPE html> <html lang="en">   <head>     <meta charset="utf-8">     <meta http-equiv="X-UA-Compatible" content="edge" />     <meta name=“renderer” content=“webkit”>     <meta name="referrer" content="always">     <meta name="viewport" content="width=device-width, initial-scale=1">     <link rel="shortcut icon" href="https://img1.doubanio.com/favicon.ico" type="image/x-icon">     <link rel="search" type="application/opensearchdescription+xml" title="豆瓣搜索" href="/opensearch?s
+[2026-06-21 13:17:17.271] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '火影忍者疾风传剧场版：火之意志的继承者': no subject ID found for keyword: 火影忍者疾风传剧场版：火之意志的继承者
+[2026-06-21 13:17:17.271] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 火影忍者疾风传剧场版：羁绊
+[2026-06-21 13:17:17.271] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者疾风传剧场版：羁绊
+[2026-06-21 13:17:17.271] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 19.7s
+[2026-06-21 13:17:29.288] [INFO] [app.go:3122] [Douban] Stopping scheduler (graceful)...
+[2026-06-21 13:17:29.288] [INFO] [scheduler.go:62] [Douban] Updater graceful stop requested
+[2026-06-21 13:31:31.243] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-21 13:31:31.259] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler started, interval: 1m0s
+[2026-06-21 13:31:31.259] [INFO] [asm_amd64.s:1771] [Douban] Scheduler started, interval: 30s
+[2026-06-21 13:31:31.280] [INFO] [asm_amd64.s:1771] 同步全局类型完成: 0 条
+[2026-06-21 13:32:01.259] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-21 13:32:01.260] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-21 13:32:01.261] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-21 13:32:01.261] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 火影忍者疾风传剧场版：火之意志的继承者
+[2026-06-21 13:32:01.261] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者疾风传剧场版：火之意志的继承者
+[2026-06-21 13:32:01.262] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 8.2s
+[2026-06-21 13:32:09.415] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E7%81%AB%E5%BD%B1%E5%BF%8D%E8%80%85%E7%96%BE%E9%A3%8E%E4%BC%A0%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E7%81%AB%E4%B9%8B%E6%84%8F%E5%BF%97%E7%9A%84%E7%BB%A7%E6%89%BF%E8%80%85
+[2026-06-21 13:32:09.687] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 8.43s
+[2026-06-21 13:32:09.689] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 火影忍者疾风传剧场版：火之意志的继承者 (HTML length: 17132)
+[2026-06-21 13:32:09.689] [DEBUG] [updater.go:137] [Douban] Response snippet (first 500 chars):  <!DOCTYPE html> <html lang="en">   <head>     <meta charset="utf-8">     <meta http-equiv="X-UA-Compatible" content="edge" />     <meta name=“renderer” content=“webkit”>     <meta name="referrer" content="always">     <meta name="viewport" content="width=device-width, initial-scale=1">     <link rel="shortcut icon" href="https://img1.doubanio.com/favicon.ico" type="image/x-icon">     <link rel="search" type="application/opensearchdescription+xml" title="豆瓣搜索" href="/opensearch?s
+[2026-06-21 13:32:09.691] [INFO] [crawler.go:408] [Douban] Search cooldown activated for '火影忍者疾风传剧场版：火之意志的继承者' (failures=5, until=2026-06-22 13:32:09)
+[2026-06-21 13:32:09.691] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '火影忍者疾风传剧场版：火之意志的继承者': no subject ID found for keyword: 火影忍者疾风传剧场版：火之意志的继承者
+[2026-06-21 13:32:09.691] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 火影忍者疾风传剧场版：羁绊
+[2026-06-21 13:32:09.691] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者疾风传剧场版：羁绊
+[2026-06-21 13:32:09.691] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 19.7s
+[2026-06-21 13:32:29.416] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 9.3s
+[2026-06-21 13:32:31.260] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler tick triggered
+[2026-06-21 13:32:31.260] [INFO] [scheduler.go:45] [Ciligou] Starting batch update, enabled types: 3
+[2026-06-21 13:32:31.260] [INFO] [scheduler.go:45] [Ciligou] Found 3 records missing magnet link
+[2026-06-21 13:32:31.261] [INFO] [scheduler.go:45] [Ciligou] [1/3] Skipping '权力的游戏：最后的守夜人': type not in enabled list
+[2026-06-21 13:32:31.262] [INFO] [scheduler.go:45] [Ciligou] [2/3] Skipping '回复术士的重来人生': type not in enabled list
+[2026-06-21 13:32:31.262] [INFO] [scheduler.go:45] [Ciligou] [3/3] Skipping '凡人修仙传真人版': type not in enabled list
+[2026-06-21 13:32:31.262] [INFO] [scheduler.go:45] [Ciligou] Batch update completed: 0 records updated
+[2026-06-21 13:32:31.262] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler batch update: no magnet links updated
+[2026-06-21 13:32:38.725] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E7%81%AB%E5%BD%B1%E5%BF%8D%E8%80%85%E7%96%BE%E9%A3%8E%E4%BC%A0%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E7%BE%81%E7%BB%8A
+[2026-06-21 13:32:38.837] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 29.15s
+[2026-06-21 13:32:38.838] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 火影忍者疾风传剧场版：羁绊 (HTML length: 15374)
+[2026-06-21 13:32:38.838] [DEBUG] [updater.go:137] [Douban] Response snippet (first 500 chars):  <!DOCTYPE html> <html lang="en">   <head>     <meta charset="utf-8">     <meta http-equiv="X-UA-Compatible" content="edge" />     <meta name=“renderer” content=“webkit”>     <meta name="referrer" content="always">     <meta name="viewport" content="width=device-width, initial-scale=1">     <link rel="shortcut icon" href="https://img1.doubanio.com/favicon.ico" type="image/x-icon">     <link rel="search" type="application/opensearchdescription+xml" title="豆瓣搜索" href="/opensearch?s
+[2026-06-21 13:32:38.840] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '火影忍者疾风传剧场版：羁绊': no subject ID found for keyword: 火影忍者疾风传剧场版：羁绊
+[2026-06-21 13:32:38.840] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 火影忍者疾风传剧场版：鸣人之死
+[2026-06-21 13:32:38.840] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者疾风传剧场版：鸣人之死
+[2026-06-21 13:32:38.840] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 19.9s
+[2026-06-21 13:32:58.726] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 13.0s
+[2026-06-21 13:33:11.720] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E7%81%AB%E5%BD%B1%E5%BF%8D%E8%80%85%E7%96%BE%E9%A3%8E%E4%BC%A0%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E9%B8%A3%E4%BA%BA%E4%B9%8B%E6%AD%BB
+[2026-06-21 13:33:11.962] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 33.12s
+[2026-06-21 13:33:11.963] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 火影忍者疾风传剧场版：鸣人之死 (HTML length: 15453)
+[2026-06-21 13:33:11.963] [DEBUG] [updater.go:137] [Douban] Response snippet (first 500 chars):  <!DOCTYPE html> <html lang="en">   <head>     <meta charset="utf-8">     <meta http-equiv="X-UA-Compatible" content="edge" />     <meta name=“renderer” content=“webkit”>     <meta name="referrer" content="always">     <meta name="viewport" content="width=device-width, initial-scale=1">     <link rel="shortcut icon" href="https://img1.doubanio.com/favicon.ico" type="image/x-icon">     <link rel="search" type="application/opensearchdescription+xml" title="豆瓣搜索" href="/opensearch?s
+[2026-06-21 13:33:11.965] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '火影忍者疾风传剧场版：鸣人之死': no subject ID found for keyword: 火影忍者疾风传剧场版：鸣人之死
+[2026-06-21 13:33:11.965] [INFO] [scheduler.go:42] [Douban] Found 1 incomplete records (has subject_id but missing details)
+[2026-06-21 13:33:11.965] [INFO] [scheduler.go:42] [Douban] [1/1] Filling detail for subject 35681765 (真正的权力的游戏 第三季)
+[2026-06-21 13:33:11.965] [INFO] [updater.go:149] [Douban] Parsing detail for subject ID: 35681765
+[2026-06-21 13:33:11.965] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 19.8s
+[2026-06-21 13:33:31.259] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler tick triggered
+[2026-06-21 13:33:31.259] [INFO] [scheduler.go:45] [Ciligou] Starting batch update, enabled types: 3
+[2026-06-21 13:33:31.259] [INFO] [scheduler.go:45] [Ciligou] Found 3 records missing magnet link
+[2026-06-21 13:33:31.259] [INFO] [scheduler.go:45] [Ciligou] [1/3] Skipping '权力的游戏：最后的守夜人': type not in enabled list
+[2026-06-21 13:33:31.259] [INFO] [scheduler.go:45] [Ciligou] [2/3] Skipping '回复术士的重来人生': type not in enabled list
+[2026-06-21 13:33:31.259] [INFO] [scheduler.go:45] [Ciligou] [3/3] Skipping '凡人修仙传真人版': type not in enabled list
+[2026-06-21 13:33:31.259] [INFO] [scheduler.go:45] [Ciligou] Batch update completed: 0 records updated
+[2026-06-21 13:33:31.259] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler batch update: no magnet links updated
+[2026-06-21 13:33:31.720] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 6.8s
+[2026-06-21 13:33:38.518] [INFO] [crawler.go:431] [Douban] Fetching URL: https://movie.douban.com/subject/35681765/
+[2026-06-21 13:33:39.839] [INFO] [crawler.go:431] [Douban] HTTP status: 200, duration: 27.87s
+[2026-06-21 13:33:39.842] [INFO] [updater.go:149] [Douban] Parsed detail for 35681765: Title='La Guerre des Trônes, la véritable histoire de l&#39;Europe', Rating='8.5', Votes='197', Director='', Actor='', Genre='爱情'
+[2026-06-21 13:33:39.842] [DEBUG] [updater.go:123] [Douban] Upserting 0 fields for subject '35681765' (global_id=12)
+[2026-06-21 13:33:39.843] [INFO] [scheduler.go:42] [Douban] [1/1] SUCCESS filled detail for subject '35681765'
+[2026-06-21 13:33:39.843] [INFO] [scheduler.go:42] [Douban] Batch update completed: 1 records updated
+[2026-06-21 13:33:39.843] [INFO] [asm_amd64.s:1771] [Douban] Scheduler batch update SUCCESS: 1 videos updated
+[2026-06-21 13:33:39.843] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-21 13:33:39.843] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-21 13:33:39.844] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-21 13:33:39.844] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 火影忍者疾风传剧场版：羁绊
+[2026-06-21 13:33:39.844] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者疾风传剧场版：羁绊
+[2026-06-21 13:33:39.844] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 18.7s
+[2026-06-21 13:33:58.519] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 11.9s
+[2026-06-21 13:34:04.843] [INFO] [app.go:3122] [Douban] Stopping scheduler (graceful)...
+[2026-06-21 13:34:04.843] [INFO] [scheduler.go:62] [Douban] Updater graceful stop requested
+[2026-06-21 13:39:46.353] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-21 13:39:46.358] [INFO] [asm_amd64.s:1771] [Douban] Scheduler started, interval: 30s
+[2026-06-21 13:39:46.358] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler started, interval: 1m0s
+[2026-06-21 13:39:46.371] [INFO] [asm_amd64.s:1771] 同步全局类型完成: 0 条
+[2026-06-21 13:40:16.359] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-21 13:40:16.359] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-21 13:40:16.359] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-21 13:40:16.359] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 火影忍者疾风传剧场版：羁绊
+[2026-06-21 13:40:16.359] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者疾风传剧场版：羁绊
+[2026-06-21 13:40:16.359] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 28.7s
+[2026-06-21 13:40:45.027] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E7%81%AB%E5%BD%B1%E5%BF%8D%E8%80%85%E7%96%BE%E9%A3%8E%E4%BC%A0%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E7%BE%81%E7%BB%8A
+[2026-06-21 13:40:45.217] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 28.86s
+[2026-06-21 13:40:45.218] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 火影忍者疾风传剧场版：羁绊 (HTML length: 15374)
+[2026-06-21 13:40:45.218] [DEBUG] [updater.go:137] [Douban] Response snippet (first 500 chars):  <!DOCTYPE html> <html lang="en">   <head>     <meta charset="utf-8">     <meta http-equiv="X-UA-Compatible" content="edge" />     <meta name=“renderer” content=“webkit”>     <meta name="referrer" content="always">     <meta name="viewport" content="width=device-width, initial-scale=1">     <link rel="shortcut icon" href="https://img1.doubanio.com/favicon.ico" type="image/x-icon">     <link rel="search" type="application/opensearchdescription+xml" title="豆瓣搜索" href="/opensearch?s
+[2026-06-21 13:40:45.220] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '火影忍者疾风传剧场版：羁绊': no subject ID found for keyword: 火影忍者疾风传剧场版：羁绊
+[2026-06-21 13:40:45.221] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 火影忍者疾风传剧场版：鸣人之死
+[2026-06-21 13:40:45.221] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者疾风传剧场版：鸣人之死
+[2026-06-21 13:40:45.221] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 19.8s
+[2026-06-21 13:40:46.359] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler tick triggered
+[2026-06-21 13:40:46.359] [INFO] [scheduler.go:45] [Ciligou] Starting batch update, enabled types: 3
+[2026-06-21 13:40:46.359] [INFO] [scheduler.go:45] [Ciligou] Found 3 records missing magnet link
+[2026-06-21 13:40:46.359] [INFO] [scheduler.go:45] [Ciligou] [1/3] Skipping '权力的游戏：最后的守夜人': type not in enabled list
+[2026-06-21 13:40:46.359] [INFO] [scheduler.go:45] [Ciligou] [2/3] Skipping '回复术士的重来人生': type not in enabled list
+[2026-06-21 13:40:46.360] [INFO] [scheduler.go:45] [Ciligou] [3/3] Skipping '凡人修仙传真人版': type not in enabled list
+[2026-06-21 13:40:46.360] [INFO] [scheduler.go:45] [Ciligou] Batch update completed: 0 records updated
+[2026-06-21 13:40:46.360] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler batch update: no magnet links updated
+[2026-06-21 13:41:05.028] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 12.8s
+[2026-06-21 13:41:17.801] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E7%81%AB%E5%BD%B1%E5%BF%8D%E8%80%85%E7%96%BE%E9%A3%8E%E4%BC%A0%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E9%B8%A3%E4%BA%BA%E4%B9%8B%E6%AD%BB
+[2026-06-21 13:41:17.995] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 32.77s
+[2026-06-21 13:41:17.996] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 火影忍者疾风传剧场版：鸣人之死 (HTML length: 15453)
+[2026-06-21 13:41:17.996] [DEBUG] [updater.go:137] [Douban] Response snippet (first 500 chars):  <!DOCTYPE html> <html lang="en">   <head>     <meta charset="utf-8">     <meta http-equiv="X-UA-Compatible" content="edge" />     <meta name=“renderer” content=“webkit”>     <meta name="referrer" content="always">     <meta name="viewport" content="width=device-width, initial-scale=1">     <link rel="shortcut icon" href="https://img1.doubanio.com/favicon.ico" type="image/x-icon">     <link rel="search" type="application/opensearchdescription+xml" title="豆瓣搜索" href="/opensearch?s
+[2026-06-21 13:41:17.997] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '火影忍者疾风传剧场版：鸣人之死': no subject ID found for keyword: 火影忍者疾风传剧场版：鸣人之死
+[2026-06-21 13:41:17.997] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 火影忍者剧场版：大兴奋！三日月岛的动物骚动
+[2026-06-21 13:41:17.998] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者剧场版：大兴奋！三日月岛的动物骚动
+[2026-06-21 13:41:17.998] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 19.8s
+[2026-06-21 13:41:37.804] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 21.6s
+[2026-06-21 13:41:46.359] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler tick triggered
+[2026-06-21 13:41:46.359] [INFO] [scheduler.go:45] [Ciligou] Starting batch update, enabled types: 3
+[2026-06-21 13:41:46.359] [INFO] [scheduler.go:45] [Ciligou] Found 3 records missing magnet link
+[2026-06-21 13:41:46.359] [INFO] [scheduler.go:45] [Ciligou] [1/3] Skipping '权力的游戏：最后的守夜人': type not in enabled list
+[2026-06-21 13:41:46.360] [INFO] [scheduler.go:45] [Ciligou] [2/3] Skipping '回复术士的重来人生': type not in enabled list
+[2026-06-21 13:41:46.360] [INFO] [scheduler.go:45] [Ciligou] [3/3] Skipping '凡人修仙传真人版': type not in enabled list
+[2026-06-21 13:41:46.360] [INFO] [scheduler.go:45] [Ciligou] Batch update completed: 0 records updated
+[2026-06-21 13:41:46.360] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler batch update: no magnet links updated
+[2026-06-21 13:41:59.359] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E7%81%AB%E5%BD%B1%E5%BF%8D%E8%80%85%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E5%A4%A7%E5%85%B4%E5%A5%8B%EF%BC%81%E4%B8%89%E6%97%A5%E6%9C%88%E5%B2%9B%E7%9A%84%E5%8A%A8%E7%89%A9%E9%AA%9A%E5%8A%A8
+[2026-06-21 13:41:59.593] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 41.60s
+[2026-06-21 13:41:59.594] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 火影忍者剧场版：大兴奋！三日月岛的动物骚动 (HTML length: 15822)
+[2026-06-21 13:41:59.594] [DEBUG] [updater.go:137] [Douban] Response snippet (first 500 chars):  <!DOCTYPE html> <html lang="en">   <head>     <meta charset="utf-8">     <meta http-equiv="X-UA-Compatible" content="edge" />     <meta name=“renderer” content=“webkit”>     <meta name="referrer" content="always">     <meta name="viewport" content="width=device-width, initial-scale=1">     <link rel="shortcut icon" href="https://img1.doubanio.com/favicon.ico" type="image/x-icon">     <link rel="search" type="application/opensearchdescription+xml" title="豆瓣搜索" href="/opensearch?s
+[2026-06-21 13:41:59.598] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '火影忍者剧场版：大兴奋！三日月岛的动物骚动': no subject ID found for keyword: 火影忍者剧场版：大兴奋！三日月岛的动物骚动
+[2026-06-21 13:41:59.598] [INFO] [scheduler.go:42] [Douban] Found 1 incomplete records (has subject_id but missing details)
+[2026-06-21 13:41:59.598] [INFO] [scheduler.go:42] [Douban] [1/1] Filling detail for subject 35681765 (真正的权力的游戏 第三季)
+[2026-06-21 13:41:59.598] [INFO] [updater.go:149] [Douban] Parsing detail for subject ID: 35681765
+[2026-06-21 13:41:59.598] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 19.8s
+[2026-06-21 13:42:19.359] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 18.6s
+[2026-06-21 13:42:37.913] [INFO] [crawler.go:431] [Douban] Fetching URL: https://movie.douban.com/subject/35681765/
+[2026-06-21 13:42:39.161] [INFO] [crawler.go:431] [Douban] HTTP status: 200, duration: 39.56s
+[2026-06-21 13:42:39.166] [INFO] [updater.go:149] [Douban] Parsed detail for 35681765: Title='La Guerre des Trônes, la véritable histoire de l&#39;Europe', Rating='8.5', Votes='197', Director='', Actor='', Genre='爱情'
+[2026-06-21 13:42:39.166] [DEBUG] [updater.go:123] [Douban] Upserting 0 fields for subject '35681765' (global_id=12)
+[2026-06-21 13:42:39.168] [INFO] [scheduler.go:42] [Douban] [1/1] SUCCESS filled detail for subject '35681765'
+[2026-06-21 13:42:39.168] [INFO] [scheduler.go:42] [Douban] Batch update completed: 1 records updated
+[2026-06-21 13:42:39.168] [INFO] [asm_amd64.s:1771] [Douban] Scheduler batch update SUCCESS: 1 videos updated
+[2026-06-21 13:42:39.168] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-21 13:42:39.168] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-21 13:42:39.169] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-21 13:42:39.169] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 火影忍者疾风传剧场版：羁绊
+[2026-06-21 13:42:39.169] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者疾风传剧场版：羁绊
+[2026-06-21 13:42:39.169] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 18.7s
+[2026-06-21 13:42:46.359] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler tick triggered
+[2026-06-21 13:42:46.361] [INFO] [scheduler.go:45] [Ciligou] Starting batch update, enabled types: 3
+[2026-06-21 13:42:46.361] [INFO] [scheduler.go:45] [Ciligou] Found 3 records missing magnet link
+[2026-06-21 13:42:46.362] [INFO] [scheduler.go:45] [Ciligou] [1/3] Skipping '权力的游戏：最后的守夜人': type not in enabled list
+[2026-06-21 13:42:46.362] [INFO] [scheduler.go:45] [Ciligou] [2/3] Skipping '回复术士的重来人生': type not in enabled list
+[2026-06-21 13:42:46.362] [INFO] [scheduler.go:45] [Ciligou] [3/3] Skipping '凡人修仙传真人版': type not in enabled list
+[2026-06-21 13:42:46.362] [INFO] [scheduler.go:45] [Ciligou] Batch update completed: 0 records updated
+[2026-06-21 13:42:46.362] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler batch update: no magnet links updated
+[2026-06-21 13:42:57.914] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 12.6s
+[2026-06-21 13:43:10.555] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E7%81%AB%E5%BD%B1%E5%BF%8D%E8%80%85%E7%96%BE%E9%A3%8E%E4%BC%A0%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E7%BE%81%E7%BB%8A
+[2026-06-21 13:43:10.762] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 31.59s
+[2026-06-21 13:43:10.763] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 火影忍者疾风传剧场版：羁绊 (HTML length: 15374)
+[2026-06-21 13:43:10.763] [DEBUG] [updater.go:137] [Douban] Response snippet (first 500 chars):  <!DOCTYPE html> <html lang="en">   <head>     <meta charset="utf-8">     <meta http-equiv="X-UA-Compatible" content="edge" />     <meta name=“renderer” content=“webkit”>     <meta name="referrer" content="always">     <meta name="viewport" content="width=device-width, initial-scale=1">     <link rel="shortcut icon" href="https://img1.doubanio.com/favicon.ico" type="image/x-icon">     <link rel="search" type="application/opensearchdescription+xml" title="豆瓣搜索" href="/opensearch?s
+[2026-06-21 13:43:10.767] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '火影忍者疾风传剧场版：羁绊': no subject ID found for keyword: 火影忍者疾风传剧场版：羁绊
+[2026-06-21 13:43:10.767] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 火影忍者疾风传剧场版：鸣人之死
+[2026-06-21 13:43:10.767] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者疾风传剧场版：鸣人之死
+[2026-06-21 13:43:10.767] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 19.8s
+[2026-06-21 13:43:30.556] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 15.4s
+[2026-06-21 13:43:45.962] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E7%81%AB%E5%BD%B1%E5%BF%8D%E8%80%85%E7%96%BE%E9%A3%8E%E4%BC%A0%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E9%B8%A3%E4%BA%BA%E4%B9%8B%E6%AD%BB
+[2026-06-21 13:43:46.182] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 35.41s
+[2026-06-21 13:43:46.183] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 火影忍者疾风传剧场版：鸣人之死 (HTML length: 15453)
+[2026-06-21 13:43:46.183] [DEBUG] [updater.go:137] [Douban] Response snippet (first 500 chars):  <!DOCTYPE html> <html lang="en">   <head>     <meta charset="utf-8">     <meta http-equiv="X-UA-Compatible" content="edge" />     <meta name=“renderer” content=“webkit”>     <meta name="referrer" content="always">     <meta name="viewport" content="width=device-width, initial-scale=1">     <link rel="shortcut icon" href="https://img1.doubanio.com/favicon.ico" type="image/x-icon">     <link rel="search" type="application/opensearchdescription+xml" title="豆瓣搜索" href="/opensearch?s
+[2026-06-21 13:43:46.188] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '火影忍者疾风传剧场版：鸣人之死': no subject ID found for keyword: 火影忍者疾风传剧场版：鸣人之死
+[2026-06-21 13:43:46.188] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 火影忍者剧场版：大兴奋！三日月岛的动物骚动
+[2026-06-21 13:43:46.188] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者剧场版：大兴奋！三日月岛的动物骚动
+[2026-06-21 13:43:46.188] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 19.8s
+[2026-06-21 13:43:46.359] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler tick triggered
+[2026-06-21 13:43:46.359] [INFO] [scheduler.go:45] [Ciligou] Starting batch update, enabled types: 3
+[2026-06-21 13:43:46.359] [INFO] [scheduler.go:45] [Ciligou] Found 3 records missing magnet link
+[2026-06-21 13:43:46.359] [INFO] [scheduler.go:45] [Ciligou] [1/3] Skipping '权力的游戏：最后的守夜人': type not in enabled list
+[2026-06-21 13:43:46.359] [INFO] [scheduler.go:45] [Ciligou] [2/3] Skipping '回复术士的重来人生': type not in enabled list
+[2026-06-21 13:43:46.359] [INFO] [scheduler.go:45] [Ciligou] [3/3] Skipping '凡人修仙传真人版': type not in enabled list
+[2026-06-21 13:43:46.359] [INFO] [scheduler.go:45] [Ciligou] Batch update completed: 0 records updated
+[2026-06-21 13:43:46.359] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler batch update: no magnet links updated
+[2026-06-21 13:44:05.963] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 1.8s
+[2026-06-21 13:44:07.735] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E7%81%AB%E5%BD%B1%E5%BF%8D%E8%80%85%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E5%A4%A7%E5%85%B4%E5%A5%8B%EF%BC%81%E4%B8%89%E6%97%A5%E6%9C%88%E5%B2%9B%E7%9A%84%E5%8A%A8%E7%89%A9%E9%AA%9A%E5%8A%A8
+[2026-06-21 13:44:07.907] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 21.72s
+[2026-06-21 13:44:07.908] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 火影忍者剧场版：大兴奋！三日月岛的动物骚动 (HTML length: 15822)
+[2026-06-21 13:44:07.908] [DEBUG] [updater.go:137] [Douban] Response snippet (first 500 chars):  <!DOCTYPE html> <html lang="en">   <head>     <meta charset="utf-8">     <meta http-equiv="X-UA-Compatible" content="edge" />     <meta name=“renderer” content=“webkit”>     <meta name="referrer" content="always">     <meta name="viewport" content="width=device-width, initial-scale=1">     <link rel="shortcut icon" href="https://img1.doubanio.com/favicon.ico" type="image/x-icon">     <link rel="search" type="application/opensearchdescription+xml" title="豆瓣搜索" href="/opensearch?s
+[2026-06-21 13:44:07.911] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '火影忍者剧场版：大兴奋！三日月岛的动物骚动': no subject ID found for keyword: 火影忍者剧场版：大兴奋！三日月岛的动物骚动
+[2026-06-21 13:44:07.911] [INFO] [scheduler.go:42] [Douban] Found 1 incomplete records (has subject_id but missing details)
+[2026-06-21 13:44:07.911] [INFO] [scheduler.go:42] [Douban] [1/1] Filling detail for subject 35681765 (真正的权力的游戏 第三季)
+[2026-06-21 13:44:07.911] [INFO] [updater.go:149] [Douban] Parsing detail for subject ID: 35681765
+[2026-06-21 13:44:07.911] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 19.8s
+[2026-06-21 13:44:23.620] [INFO] [app.go:3122] [Douban] Stopping scheduler (graceful)...
+[2026-06-21 13:44:23.620] [INFO] [scheduler.go:62] [Douban] Updater graceful stop requested
+[2026-06-21 13:44:27.735] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 10.4s
+[2026-06-21 13:57:44.992] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-21 13:57:45.005] [INFO] [asm_amd64.s:1771] [Douban] Scheduler started, interval: 30s
+[2026-06-21 13:57:45.005] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler started, interval: 1m0s
+[2026-06-21 13:57:45.016] [INFO] [asm_amd64.s:1771] 同步全局类型完成: 0 条
+[2026-06-21 13:58:15.005] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-21 13:58:15.005] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-21 13:58:15.005] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-21 13:58:15.005] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 火影忍者疾风传剧场版：羁绊
+[2026-06-21 13:58:15.005] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者疾风传剧场版：羁绊
+[2026-06-21 13:58:15.005] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 1.4s
+[2026-06-21 13:58:16.449] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E7%81%AB%E5%BD%B1%E5%BF%8D%E8%80%85%E7%96%BE%E9%A3%8E%E4%BC%A0%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E7%BE%81%E7%BB%8A
+[2026-06-21 13:58:16.634] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 1.63s
+[2026-06-21 13:58:16.635] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 火影忍者疾风传剧场版：羁绊 (HTML length: 15374)
+[2026-06-21 13:58:16.635] [DEBUG] [updater.go:137] [Douban] Response snippet (first 500 chars):  <!DOCTYPE html> <html lang="en">   <head>     <meta charset="utf-8">     <meta http-equiv="X-UA-Compatible" content="edge" />     <meta name=“renderer” content=“webkit”>     <meta name="referrer" content="always">     <meta name="viewport" content="width=device-width, initial-scale=1">     <link rel="shortcut icon" href="https://img1.doubanio.com/favicon.ico" type="image/x-icon">     <link rel="search" type="application/opensearchdescription+xml" title="豆瓣搜索" href="/opensearch?s
+[2026-06-21 13:58:16.637] [INFO] [crawler.go:408] [Douban] Search cooldown activated for '火影忍者疾风传剧场版：羁绊' (failures=5, until=2026-06-22 13:58:16)
+[2026-06-21 13:58:16.638] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '火影忍者疾风传剧场版：羁绊': no subject ID found for keyword: 火影忍者疾风传剧场版：羁绊
+[2026-06-21 13:58:16.638] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 火影忍者疾风传剧场版：鸣人之死
+[2026-06-21 13:58:16.638] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者疾风传剧场版：鸣人之死
+[2026-06-21 13:58:16.638] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 19.8s
+[2026-06-21 13:58:36.450] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 7.7s
+[2026-06-21 13:58:44.128] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E7%81%AB%E5%BD%B1%E5%BF%8D%E8%80%85%E7%96%BE%E9%A3%8E%E4%BC%A0%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E9%B8%A3%E4%BA%BA%E4%B9%8B%E6%AD%BB
+[2026-06-21 13:58:44.243] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 27.61s
+[2026-06-21 13:58:44.244] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 火影忍者疾风传剧场版：鸣人之死 (HTML length: 15453)
+[2026-06-21 13:58:44.244] [DEBUG] [updater.go:137] [Douban] Response snippet (first 500 chars):  <!DOCTYPE html> <html lang="en">   <head>     <meta charset="utf-8">     <meta http-equiv="X-UA-Compatible" content="edge" />     <meta name=“renderer” content=“webkit”>     <meta name="referrer" content="always">     <meta name="viewport" content="width=device-width, initial-scale=1">     <link rel="shortcut icon" href="https://img1.doubanio.com/favicon.ico" type="image/x-icon">     <link rel="search" type="application/opensearchdescription+xml" title="豆瓣搜索" href="/opensearch?s
+[2026-06-21 13:58:44.247] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '火影忍者疾风传剧场版：鸣人之死': no subject ID found for keyword: 火影忍者疾风传剧场版：鸣人之死
+[2026-06-21 13:58:44.247] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 火影忍者剧场版：大兴奋！三日月岛的动物骚动
+[2026-06-21 13:58:44.247] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者剧场版：大兴奋！三日月岛的动物骚动
+[2026-06-21 13:58:44.247] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 19.9s
+[2026-06-21 13:58:45.005] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler tick triggered
+[2026-06-21 13:58:45.005] [INFO] [scheduler.go:45] [Ciligou] Starting batch update, enabled types: 3
+[2026-06-21 13:58:45.005] [INFO] [scheduler.go:45] [Ciligou] Found 3 records missing magnet link
+[2026-06-21 13:58:45.006] [INFO] [scheduler.go:45] [Ciligou] [1/3] Skipping '权力的游戏：最后的守夜人': type not in enabled list
+[2026-06-21 13:58:45.006] [INFO] [scheduler.go:45] [Ciligou] [2/3] Skipping '回复术士的重来人生': type not in enabled list
+[2026-06-21 13:58:45.006] [INFO] [scheduler.go:45] [Ciligou] [3/3] Skipping '凡人修仙传真人版': type not in enabled list
+[2026-06-21 13:58:45.006] [INFO] [scheduler.go:45] [Ciligou] Batch update completed: 0 records updated
+[2026-06-21 13:58:45.006] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler batch update: no magnet links updated
+[2026-06-21 13:59:04.130] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 36.3s
+[2026-06-21 13:59:40.480] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E7%81%AB%E5%BD%B1%E5%BF%8D%E8%80%85%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E5%A4%A7%E5%85%B4%E5%A5%8B%EF%BC%81%E4%B8%89%E6%97%A5%E6%9C%88%E5%B2%9B%E7%9A%84%E5%8A%A8%E7%89%A9%E9%AA%9A%E5%8A%A8
+[2026-06-21 13:59:40.726] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 56.48s
+[2026-06-21 13:59:40.728] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 火影忍者剧场版：大兴奋！三日月岛的动物骚动 (HTML length: 15822)
+[2026-06-21 13:59:40.728] [DEBUG] [updater.go:137] [Douban] Response snippet (first 500 chars):  <!DOCTYPE html> <html lang="en">   <head>     <meta charset="utf-8">     <meta http-equiv="X-UA-Compatible" content="edge" />     <meta name=“renderer” content=“webkit”>     <meta name="referrer" content="always">     <meta name="viewport" content="width=device-width, initial-scale=1">     <link rel="shortcut icon" href="https://img1.doubanio.com/favicon.ico" type="image/x-icon">     <link rel="search" type="application/opensearchdescription+xml" title="豆瓣搜索" href="/opensearch?s
+[2026-06-21 13:59:40.731] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '火影忍者剧场版：大兴奋！三日月岛的动物骚动': no subject ID found for keyword: 火影忍者剧场版：大兴奋！三日月岛的动物骚动
+[2026-06-21 13:59:40.732] [INFO] [scheduler.go:42] [Douban] Found 1 incomplete records (has subject_id but missing details)
+[2026-06-21 13:59:40.732] [INFO] [scheduler.go:42] [Douban] [1/1] Filling detail for subject 35681765 (真正的权力的游戏 第三季)
+[2026-06-21 13:59:40.732] [INFO] [updater.go:149] [Douban] Parsing detail for subject ID: 35681765
+[2026-06-21 13:59:40.732] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 19.7s
+[2026-06-21 13:59:45.006] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler tick triggered
+[2026-06-21 13:59:45.006] [INFO] [scheduler.go:45] [Ciligou] Starting batch update, enabled types: 3
+[2026-06-21 13:59:45.006] [INFO] [scheduler.go:45] [Ciligou] Found 3 records missing magnet link
+[2026-06-21 13:59:45.006] [INFO] [scheduler.go:45] [Ciligou] [1/3] Skipping '权力的游戏：最后的守夜人': type not in enabled list
+[2026-06-21 13:59:45.006] [INFO] [scheduler.go:45] [Ciligou] [2/3] Skipping '回复术士的重来人生': type not in enabled list
+[2026-06-21 13:59:45.006] [INFO] [scheduler.go:45] [Ciligou] [3/3] Skipping '凡人修仙传真人版': type not in enabled list
+[2026-06-21 13:59:45.006] [INFO] [scheduler.go:45] [Ciligou] Batch update completed: 0 records updated
+[2026-06-21 13:59:45.006] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler batch update: no magnet links updated
+[2026-06-21 14:00:00.481] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 28.3s
+[2026-06-21 14:00:28.822] [INFO] [crawler.go:431] [Douban] Fetching URL: https://movie.douban.com/subject/35681765/
+[2026-06-21 14:00:30.299] [INFO] [crawler.go:431] [Douban] HTTP status: 200, duration: 49.57s
+[2026-06-21 14:00:30.300] [INFO] [updater.go:149] [Douban] Parsed detail for 35681765: Title='La Guerre des Trônes, la véritable histoire de l&#39;Europe', Rating='8.5', Votes='197', Director='', Actor='', Genre='爱情'
+[2026-06-21 14:00:30.301] [DEBUG] [updater.go:123] [Douban] Upserting 0 fields for subject '35681765' (global_id=12)
+[2026-06-21 14:00:30.304] [INFO] [scheduler.go:42] [Douban] [1/1] SUCCESS filled detail for subject '35681765'
+[2026-06-21 14:00:30.304] [INFO] [scheduler.go:42] [Douban] Batch update completed: 1 records updated
+[2026-06-21 14:00:30.304] [INFO] [asm_amd64.s:1771] [Douban] Scheduler batch update SUCCESS: 1 videos updated
+[2026-06-21 14:00:30.304] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-21 14:00:30.304] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-21 14:00:30.304] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-21 14:00:30.304] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 火影忍者疾风传剧场版：鸣人之死
+[2026-06-21 14:00:30.304] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者疾风传剧场版：鸣人之死
+[2026-06-21 14:00:30.304] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 18.5s
+[2026-06-21 14:00:45.005] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler tick triggered
+[2026-06-21 14:00:45.006] [INFO] [scheduler.go:45] [Ciligou] Starting batch update, enabled types: 3
+[2026-06-21 14:00:45.006] [INFO] [scheduler.go:45] [Ciligou] Found 3 records missing magnet link
+[2026-06-21 14:00:45.006] [INFO] [scheduler.go:45] [Ciligou] [1/3] Skipping '权力的游戏：最后的守夜人': type not in enabled list
+[2026-06-21 14:00:45.007] [INFO] [scheduler.go:45] [Ciligou] [2/3] Skipping '回复术士的重来人生': type not in enabled list
+[2026-06-21 14:00:45.007] [INFO] [scheduler.go:45] [Ciligou] [3/3] Skipping '凡人修仙传真人版': type not in enabled list
+[2026-06-21 14:00:45.007] [INFO] [scheduler.go:45] [Ciligou] Batch update completed: 0 records updated
+[2026-06-21 14:00:45.007] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler batch update: no magnet links updated
+[2026-06-21 14:00:48.823] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 13.4s
+[2026-06-21 14:01:02.231] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E7%81%AB%E5%BD%B1%E5%BF%8D%E8%80%85%E7%96%BE%E9%A3%8E%E4%BC%A0%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E9%B8%A3%E4%BA%BA%E4%B9%8B%E6%AD%BB
+[2026-06-21 14:01:02.424] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 32.12s
+[2026-06-21 14:01:02.425] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 火影忍者疾风传剧场版：鸣人之死 (HTML length: 15453)
+[2026-06-21 14:01:02.425] [DEBUG] [updater.go:137] [Douban] Response snippet (first 500 chars):  <!DOCTYPE html> <html lang="en">   <head>     <meta charset="utf-8">     <meta http-equiv="X-UA-Compatible" content="edge" />     <meta name=“renderer” content=“webkit”>     <meta name="referrer" content="always">     <meta name="viewport" content="width=device-width, initial-scale=1">     <link rel="shortcut icon" href="https://img1.doubanio.com/favicon.ico" type="image/x-icon">     <link rel="search" type="application/opensearchdescription+xml" title="豆瓣搜索" href="/opensearch?s
+[2026-06-21 14:01:02.428] [INFO] [crawler.go:408] [Douban] Search cooldown activated for '火影忍者疾风传剧场版：鸣人之死' (failures=5, until=2026-06-22 14:01:02)
+[2026-06-21 14:01:02.428] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '火影忍者疾风传剧场版：鸣人之死': no subject ID found for keyword: 火影忍者疾风传剧场版：鸣人之死
+[2026-06-21 14:01:02.428] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 火影忍者剧场版：大兴奋！三日月岛的动物骚动
+[2026-06-21 14:01:02.428] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者剧场版：大兴奋！三日月岛的动物骚动
+[2026-06-21 14:01:02.428] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 19.8s
+[2026-06-21 14:01:22.231] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 16.7s
+[2026-06-21 14:01:38.883] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E7%81%AB%E5%BD%B1%E5%BF%8D%E8%80%85%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E5%A4%A7%E5%85%B4%E5%A5%8B%EF%BC%81%E4%B8%89%E6%97%A5%E6%9C%88%E5%B2%9B%E7%9A%84%E5%8A%A8%E7%89%A9%E9%AA%9A%E5%8A%A8
+[2026-06-21 14:01:39.107] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 36.68s
+[2026-06-21 14:01:39.108] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 火影忍者剧场版：大兴奋！三日月岛的动物骚动 (HTML length: 15822)
+[2026-06-21 14:01:39.108] [DEBUG] [updater.go:137] [Douban] Response snippet (first 500 chars):  <!DOCTYPE html> <html lang="en">   <head>     <meta charset="utf-8">     <meta http-equiv="X-UA-Compatible" content="edge" />     <meta name=“renderer” content=“webkit”>     <meta name="referrer" content="always">     <meta name="viewport" content="width=device-width, initial-scale=1">     <link rel="shortcut icon" href="https://img1.doubanio.com/favicon.ico" type="image/x-icon">     <link rel="search" type="application/opensearchdescription+xml" title="豆瓣搜索" href="/opensearch?s
+[2026-06-21 14:01:39.112] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '火影忍者剧场版：大兴奋！三日月岛的动物骚动': no subject ID found for keyword: 火影忍者剧场版：大兴奋！三日月岛的动物骚动
+[2026-06-21 14:01:39.112] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 火影忍者剧场版：大激突！幻之地底遗迹
+[2026-06-21 14:01:39.112] [INFO] [updater.go:137] [Douban] Searching for keyword: 火影忍者剧场版：大激突！幻之地底遗迹
+[2026-06-21 14:01:39.112] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 19.8s
+[2026-06-21 14:01:45.006] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler tick triggered
+[2026-06-21 14:01:45.006] [INFO] [scheduler.go:45] [Ciligou] Starting batch update, enabled types: 3
+[2026-06-21 14:01:45.006] [INFO] [scheduler.go:45] [Ciligou] Found 3 records missing magnet link
+[2026-06-21 14:01:45.006] [INFO] [scheduler.go:45] [Ciligou] [1/3] Skipping '权力的游戏：最后的守夜人': type not in enabled list
+[2026-06-21 14:01:45.006] [INFO] [scheduler.go:45] [Ciligou] [2/3] Skipping '回复术士的重来人生': type not in enabled list
+[2026-06-21 14:01:45.006] [INFO] [scheduler.go:45] [Ciligou] [3/3] Skipping '凡人修仙传真人版': type not in enabled list
+[2026-06-21 14:01:45.006] [INFO] [scheduler.go:45] [Ciligou] Batch update completed: 0 records updated
+[2026-06-21 14:01:45.006] [INFO] [asm_amd64.s:1771] [Ciligou] Scheduler batch update: no magnet links updated
+[2026-06-21 14:01:58.883] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 9.8s
+[2026-06-21 14:02:08.637] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E7%81%AB%E5%BD%B1%E5%BF%8D%E8%80%85%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E5%A4%A7%E6%BF%80%E7%AA%81%EF%BC%81%E5%B9%BB%E4%B9%8B%E5%9C%B0%E5%BA%95%E9%81%97%E8%BF%B9
+[2026-06-21 14:02:08.788] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 29.68s
+[2026-06-21 14:02:08.789] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 火影忍者剧场版：大激突！幻之地底遗迹 (HTML length: 15594)
+[2026-06-21 14:02:08.789] [DEBUG] [updater.go:137] [Douban] Response snippet (first 500 chars):  <!DOCTYPE html> <html lang="en">   <head>     <meta charset="utf-8">     <meta http-equiv="X-UA-Compatible" content="edge" />     <meta name=“renderer” content=“webkit”>     <meta name="referrer" content="always">     <meta name="viewport" content="width=device-width, initial-scale=1">     <link rel="shortcut icon" href="https://img1.doubanio.com/favicon.ico" type="image/x-icon">     <link rel="search" type="application/opensearchdescription+xml" title="豆瓣搜索" href="/opensearch?s
+[2026-06-21 14:02:08.793] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '火影忍者剧场版：大激突！幻之地底遗迹': no subject ID found for keyword: 火影忍者剧场版：大激突！幻之地底遗迹
+[2026-06-21 14:02:08.793] [INFO] [scheduler.go:42] [Douban] Found 1 incomplete records (has subject_id but missing details)
+[2026-06-21 14:02:08.793] [INFO] [scheduler.go:42] [Douban] [1/1] Filling detail for subject 35681765 (真正的权力的游戏 第三季)
+[2026-06-21 14:02:08.793] [INFO] [updater.go:149] [Douban] Parsing detail for subject ID: 35681765
+[2026-06-21 14:02:08.793] [DEBUG] [crawler.go:253] [Douban] Rate limiting: base wait 19.8s
+[2026-06-21 14:02:28.638] [DEBUG] [crawler.go:253] [Douban] Rate limiting: random jitter 38.2s
+[2026-06-21 14:02:38.498] [INFO] [app.go:3122] [Douban] Stopping scheduler (graceful)...
+[2026-06-21 14:02:38.498] [INFO] [scheduler.go:62] [Douban] Updater graceful stop requested

@@ -295,37 +295,6 @@ func StopCollect(sourceKey string) bool {
 	return true
 }
 
-func AddDefaultSources() error {
-	defaults := []model.Source{
-		{SourceKey: "wj", Name: "无极资源", ApiUrl: "https://api.wujinapi.me/api.php/provide/vod/?ac=detail", CollectLimit: 50, Enabled: 0},
-		{SourceKey: "mt", Name: "麻淘资源", ApiUrl: "https://caiji.maotaizy.cc/api.php/provide/vod/from/mtm3u8?ac=detail", CollectLimit: 50, Enabled: 0},
-	}
-
-	for _, d := range defaults {
-		existing, _ := db.GetSourceByKey(d.SourceKey)
-		if existing != nil {
-			// 老源补齐默认字段
-			advCfg := existing.GetAdvConfig()
-			updated := false
-			if advCfg.CollectLimit == 0 && existing.CollectLimit == 0 {
-				advCfg.CollectLimit = d.CollectLimit
-				existing.SetAdvConfig(advCfg)
-				existing.CollectLimit = d.CollectLimit
-				updated = true
-			}
-			if updated {
-				_ = db.UpdateSource(existing)
-			}
-			continue
-		}
-		d.SetAdvConfig(model.AdvConfig{CollectLimit: d.CollectLimit})
-		if err := db.AddSource(&d); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // ============================================================
 // SearchSource: 用 wd=keyword 去源站模糊搜索，把结果入库，并返回
 // ============================================================

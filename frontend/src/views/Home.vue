@@ -347,6 +347,7 @@ watch(
 
 <template>
   <div class="home">
+    <BookCarousel v-if="carouselSlides.length > 0" :slides="carouselSlides" :source-key="sourceStore.currentSourceKey" />
     <!-- ============ 推荐区域（仅在无筛选时展示） ============ -->
     <section v-if="!hasActiveFilter && (carouselSlides.length > 0 || recommendGroups.length > 0 || recommendLoading)" class="recommend-section">
       <div v-if="recommendLoading" class="recommend-loading">
@@ -369,7 +370,7 @@ watch(
               >
                 <VideoCard :video="item" @click="goDetailFromRecommend(item)" />
                 <Button
-                  variant="text"
+                  variant="overlay"
                   size="sm"
                   icon
                   class="rec-remove-btn"
@@ -478,8 +479,6 @@ watch(
       </div>
     </section>
 
-    <BookCarousel v-if="carouselSlides.length > 0" :slides="carouselSlides" :source-key="sourceStore.currentSourceKey" />
-
     <!-- ============ 视频网格 / 空状态 ============ -->
     <div v-if="videoStore.loading && videoStore.videos.length === 0" class="center-pad">
       <LoadingSpinner label="加载视频中..." />
@@ -572,27 +571,13 @@ watch(
   top: 6px;
   right: 6px;
   z-index: 3;
-  width: 24px !important;
-  height: 24px !important;
-  min-width: 24px !important;
-  padding: 0 !important;
   border-radius: 50% !important;
-  border: none !important;
-  background: rgba(0, 0, 0, 0.65) !important;
-  color: #fff !important;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   opacity: 0;
-  transition: opacity 0.15s ease, background 0.15s ease;
+  transition: opacity 0.15s ease;
 }
 
 .rec-card-wrap:hover .rec-remove-btn {
   opacity: 1;
-}
-
-.rec-remove-btn:hover {
-  background: rgba(255, 90, 95, 0.9);
 }
 
 .rec-remove-btn:disabled {
