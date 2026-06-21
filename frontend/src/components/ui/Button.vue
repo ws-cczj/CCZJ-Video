@@ -1,7 +1,7 @@
 <script setup lang="ts">
 defineProps<{
   /** 按钮变体 */
-  variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'text'
+  variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'text' | 'overlay'
   /** 按钮尺寸 */
   size?: 'sm' | 'md' | 'lg'
   /** 是否为图标按钮（正方形） */
@@ -52,8 +52,6 @@ defineProps<{
   white-space: nowrap;
   transition: all 0.15s ease;
   outline: none;
-  position: relative;
-  overflow: hidden;
   font-family: inherit;
   user-select: none;
   -webkit-user-select: none;
@@ -139,10 +137,36 @@ defineProps<{
 }
 .ui-btn--text:active { color: var(--accent); }
 
+/* ========== Variant: Overlay ========== */
+/* 浮动在卡片/图片上方的按钮（如删除、关闭标记）。
+ * 不设置 position/overflow，不影响外部 absolute 定位和 stacking context。
+ * 背景半透明，hover 时变色。 */
+.ui-btn--overlay {
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  border: none;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.ui-btn--overlay:hover {
+  background: rgba(255, 80, 80, 0.85);
+  color: #fff;
+}
+.ui-btn--overlay:active {
+  background: rgba(200, 50, 50, 0.95);
+}
+
 /* ========== Block / Disabled / Loading ========== */
 .ui-btn--block { width: 100%; }
 .ui-btn--disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
-.ui-btn--loading { cursor: wait; pointer-events: none; }
+
+/* loading 状态需要 position:relative 给 spinner 定位，overflow:hidden 裁剪 spinner 动画 */
+.ui-btn--loading {
+  cursor: wait;
+  pointer-events: none;
+  position: relative;
+  overflow: hidden;
+}
 
 .ui-btn__spinner {
   display: inline-block;

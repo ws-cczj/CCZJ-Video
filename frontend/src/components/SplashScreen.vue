@@ -57,12 +57,9 @@ const bgSrc = computed(() => {
   return theme.current.mode === 'dark' ? splashDeepblue : splashGreen
 })
 
-// 背景色：优先使用主题背景图，其次使用主题背景色，最后按模式兜底
+// 背景色：使用主题背景色，最后按模式兜底
 const bgStyle = computed(() => {
   const t = theme.current
-  if (t.bgImage) {
-    return { backgroundImage: `url(${t.bgImage})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-  }
   return { backgroundColor: t.palette?.bgApp || (t.mode === 'dark' ? '#1a1a1e' : '#ffffff') }
 })
 

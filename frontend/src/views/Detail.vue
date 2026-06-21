@@ -412,17 +412,17 @@ const sortedEpisodes = computed(() => {
   return eps
 })
 
-/** 将排序数组索引映射回原始数组索引 */
-function origIdx(sortedIndex: number): number {
-  return episodeSortAsc.value ? sortedIndex : videoStore.episodes.length - 1 - sortedIndex
+/** 排序索引 → 原始数组索引（倒序时映射回去） */
+function origIdx(sortedI: number): number {
+  return episodeSortAsc.value ? sortedI : videoStore.episodes.length - 1 - sortedI
 }
 
-function onEpisodeClick(index: number, ep: Episode): void {
+function onEpisodeClick(sortedI: number, ep: Episode): void {
   if (episodeMode.value === 'download') {
     downloadEpisode(ep)
     return
   }
-  playEpisode(index)
+  playEpisode(origIdx(sortedI))
 }
 
 function playEpisode(epIndex: number): void {
@@ -836,14 +836,14 @@ onBeforeUnmount(() => {
         <div class="episodes-grid">
           <button
             v-for="(ep, i) in sortedEpisodes"
-            :key="'ep-' + origIdx(i)"
+            :key="'ep-' + (ep.ep_num || i)"
             class="episode-btn"
             :class="{
               'download-mode': episodeMode === 'download',
               'in-download': downloadingEpKeys.has(epKey(ep)),
               'watched': episodeMode !== 'download' && isWatched(ep, origIdx(i)),
             }"
-            @click="onEpisodeClick(origIdx(i), ep)"
+            @click="onEpisodeClick(i, ep)"
             :title="formatEpisodeName(ep, origIdx(i)) + (isWatched(ep, origIdx(i)) ? ' · 已观看 ' + Math.round(getEpPct(ep, origIdx(i))) + '%' : '')"
           >
             <Icon v-if="episodeMode === 'download'" name="download" :size="11" />
