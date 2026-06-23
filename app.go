@@ -2,7 +2,6 @@ package main
 
 import (
 	"cczjVideo/app/applog"
-	"cczjVideo/app/ciligou"
 	"cczjVideo/app/collect"
 	"cczjVideo/app/db"
 	"cczjVideo/app/douban"
@@ -46,11 +45,22 @@ type App struct {
 	app              *application.App
 	collectMu        sync.Mutex
 	doubanScheduler  *douban.Scheduler
-	ciligouScheduler *ciligou.Scheduler
 	forceQuit        atomic.Bool
 }
 
 // ======================== 关闭行为 ========================
+
+// safeGo 在 goroutine 中执行函数，自动捕获 panic 并记录日志
+func safeGo(name string, fn func()) {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				applog.Error("[PANIC] goroutine %s 崩溃: %v", name, r)
+			}
+		}()
+		fn()
+	}()
+}
 
 var minimizeToTray atomic.Bool
 
@@ -131,6 +141,14 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 		panic(fmt.Sprintf("Failed to init database: %v", err))
 	}
 
+	// 读取调试模式设置，控制日志级别
+	if debugMode, err := db.GetSetting("debug_mode"); err == nil && debugMode == "1" {
+		applog.SetMinLevel(applog.LevelDebug)
+		applog.Info("调试模式已启用，将输出详细日志")
+	} else {
+		applog.SetMinLevel(applog.LevelInfo)
+	}
+
 	// 把 db 层的日志桥接到 applog（避免 db 直接依赖 applog 产生循环）
 	db.SetLogger(func(level, msg string) {
 		switch level {
@@ -146,29 +164,25 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 	util.InitSnowFlake()
 	_ = snowflake.Epoch
 
-	// 启动后台采集调度器（根据配置决定是否真正运行）
-	go func() {
+// 启动后台采集调度器（根据配置决定是否真正运行）
+	safeGo("scheduler", func() {
 		s := handler.GetScheduler(ctx)
 		s.Start()
-	}()
+	})
 
 	// 启动豆瓣信息补全调度器（每30秒执行一次）
 	a.doubanScheduler = douban.NewScheduler(30 * time.Second)
-	go a.doubanScheduler.Start()
-
-	// 启动磁力链接爬取调度器（每60秒执行一次）
-	a.ciligouScheduler = ciligou.NewScheduler(60 * time.Second)
-	go a.ciligouScheduler.Start()
+	safeGo("doubanScheduler", func() { a.doubanScheduler.Start() })
 
 	// 同步全局类型表
-	go func() {
+	safeGo("syncGlobalTypes", func() {
 		count, err := db.SyncGlobalTypesFromSources()
 		if err != nil {
 			applog.Warn("同步全局类型失败: %v", err)
 		} else {
 			applog.Info("同步全局类型完成: %d 条", count)
 		}
-	}()
+	})
 
 	a.app.Event.Emit("app:ready", map[string]string{
 		"data_dir": dataDir,
@@ -801,7 +815,7 @@ func (a *App) SetCollectSchedule(cfg handler.CollectScheduleConfig) (handler.Col
 	// 让调度器在下次循环使用最新配置
 	s := handler.GetScheduler(context.Background())
 	s.ReloadConfig()
-	// 如果后台采集从"关"变为"开"，重启调度器
+	// 如果后台采集从"关"变为"开"，重启调度器以应用新配置
 	if cfg.EnableBackground {
 		s.Stop()
 		time.Sleep(100 * time.Millisecond)
@@ -809,9 +823,11 @@ func (a *App) SetCollectSchedule(cfg handler.CollectScheduleConfig) (handler.Col
 			ns := handler.GetScheduler(context.Background())
 			ns.Start()
 		}()
-	} else {
-		s.Stop()
 	}
+	// ⭐ 修复：当 EnableBackground 为 false 时，不再停止调度器
+	// 因为每个源可能有独立的定时采集配置（per-source schedule），
+	// 停止调度器会杀死所有源级定时器，导致源级定时采集失效。
+	// EnableBackground 仅影响 Status() 中的 note 显示文字。
 	return handler.GetScheduleConfig(), nil
 }
 
@@ -843,15 +859,11 @@ func (a *App) StopBackgroundCollect() (bool, error) {
 	s := handler.GetScheduler(context.Background())
 	s.Stop()
 	// 同时停止豆瓣调度器
-	if a.doubanScheduler != nil {
-		a.doubanScheduler.Stop()
-	}
-	// 停止磁力链接调度器
-	if a.ciligouScheduler != nil {
-		a.ciligouScheduler.Stop()
-	}
-	// 标记强制退出，下次 Window.Close() 直接通过
-	a.forceQuit.Store(true)
+if a.doubanScheduler != nil {
+			a.doubanScheduler.Stop()
+		}
+		// 标记强制退出，下次 Window.Close() 直接通过
+		a.forceQuit.Store(true)
 	// 短暂等待确保 Stop 已把 running 置为 false 后返回（前端状态即时刷新）
 	time.Sleep(50 * time.Millisecond)
 	return true, nil
@@ -865,8 +877,8 @@ func (a *App) SetSourceSchedule(req handler.SourceScheduleReq) error {
 	}
 
 	intervalMin := req.IntervalMin
-	if intervalMin < 5 {
-		intervalMin = 5
+	if intervalMin < 1 {
+		intervalMin = 1
 	}
 	sc := model.ScheduleConfig{
 		Enabled:     req.Enabled,
@@ -1021,7 +1033,6 @@ type GlobalTypeItem struct {
 	Id              int    `json:"id"`
 	TypeName        string `json:"type_name"`
 	CollectEnabled  int    `json:"collect_enabled"`
-	MagnetEnabled   int    `json:"magnet_enabled"`
 	Sort            int    `json:"sort"`
 	CreatedAt       string `json:"created_at"`
 }
@@ -1048,48 +1059,9 @@ func (a *App) SetGlobalTypeCollectEnabled(req SetGlobalTypeCollectEnabledReq) (b
 	return true, nil
 }
 
-// SetGlobalTypeMagnetEnabledReq 设置全局类型磁力开关请求
-type SetGlobalTypeMagnetEnabledReq struct {
-	TypeName string `json:"type_name"`
-	Enabled  bool   `json:"enabled"`
-}
-
-// SetGlobalTypeMagnetEnabled 设置全局类型的磁力链接获取开关
-func (a *App) SetGlobalTypeMagnetEnabled(req SetGlobalTypeMagnetEnabledReq) (bool, error) {
-	if req.TypeName == "" {
-		return false, fmt.Errorf("type_name is empty")
-	}
-	if err := db.SetGlobalTypeMagnetEnabled(req.TypeName, req.Enabled); err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
 // SyncGlobalTypes 从所有源同步类型到全局类型表
 func (a *App) SyncGlobalTypes() (int, error) {
 	return db.SyncGlobalTypesFromSources()
-}
-
-// ======================== 磁力链接 ========================
-
-// CiligouStatus 磁力链接调度器状态
-func (a *App) CiligouStatus() map[string]interface{} {
-	result := map[string]interface{}{
-		"running": false,
-	}
-	if a.ciligouScheduler != nil {
-		result["running"] = a.ciligouScheduler.IsRunning()
-		result["updating"] = a.ciligouScheduler.Updater().IsRunning()
-	}
-	return result
-}
-
-// CiligouTriggerNow 立即触发一次磁力链接获取
-func (a *App) CiligouTriggerNow() (int, error) {
-	if a.ciligouScheduler == nil {
-		return 0, fmt.Errorf("磁力链接调度器未启动")
-	}
-	return a.ciligouScheduler.TriggerNow()
 }
 
 // ======================== 日志 ========================
@@ -3122,11 +3094,6 @@ func (a *App) ServiceShutdown() error {
 		a.doubanScheduler.Stop()
 	}
 
-	// 停止磁力链接调度器
-	if a.ciligouScheduler != nil {
-		a.ciligouScheduler.Stop()
-	}
-
 	applog.Info("应用正常退出")
 	// 关闭日志文件
 	applog.Default().Close()
@@ -3151,14 +3118,11 @@ func (a *App) IsSchedulerRunning() bool {
 			}
 		}
 	}
-	if a.doubanScheduler != nil && a.doubanScheduler.IsRunning() {
-		return true
+if a.doubanScheduler != nil && a.doubanScheduler.IsRunning() {
+			return true
+		}
+		return false
 	}
-	if a.ciligouScheduler != nil && a.ciligouScheduler.IsRunning() {
-		return true
-	}
-	return false
-}
 
 // ConfirmShutdown 确认退出：触发应用退出，清理由 ServiceShutdown 统一处理
 func (a *App) ConfirmShutdown() {
@@ -3169,15 +3133,12 @@ func (a *App) ConfirmShutdown() {
 
 // GracefulShutdown 优雅关闭：等待所有采集任务完成当前页后退出
 func (a *App) GracefulShutdown() {
-	s := handler.GetScheduler(context.Background())
-	s.Stop()
-	if a.doubanScheduler != nil {
-		a.doubanScheduler.Stop()
+s := handler.GetScheduler(context.Background())
+		s.Stop()
+		if a.doubanScheduler != nil {
+			a.doubanScheduler.Stop()
+		}
 	}
-	if a.ciligouScheduler != nil {
-		a.ciligouScheduler.Stop()
-	}
-}
 
 func errStr(err error) string {
 	if err == nil {

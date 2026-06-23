@@ -157,12 +157,155 @@ function stopPrebuffer(): void {
 const showVolumePanel = ref(false)
 const showSpeedPanel = ref(false)
 const showPlaybackSettings = ref(false)
+const showVideoInfo = ref(false)
+const showShortcutModal = ref(false)
+
+// B站风格时间显示 - 可点击跳转
+const showTimeInput = ref(false)
+
+// m3u8 流信息（码率/编码/分辨率）
+interface StreamVariantInfo { bandwidth: number; resolution: string; codecs: string; url: string }
+const m3u8StreamInfo = ref<StreamVariantInfo[]>([])
+const timeInputValue = ref('')
+const timeInputRef = ref<HTMLInputElement | null>(null)
+
+// 记录打开时间输入框时的原始值，用于判断用户是否实际修改了时间
+const timeInputOriginal = ref('')
+
+function toggleTimeInput(): void {
+  showTimeInput.value = !showTimeInput.value
+  if (showTimeInput.value) {
+    timeInputValue.value = fmt(current.value)
+    timeInputOriginal.value = timeInputValue.value
+    nextTick(() => { timeInputRef.value?.focus(); timeInputRef.value?.select() })
+  }
+}
+function parseTimeInput(val: string): number {
+  val = val.trim()
+  // 支持格式: mm:ss, hh:mm:ss, 纯秒数
+  const parts = val.split(':')
+  if (parts.length === 3) {
+    const h = parseInt(parts[0], 10) || 0
+    const m = parseInt(parts[1], 10) || 0
+    const s = parseInt(parts[2], 10) || 0
+    return h * 3600 + m * 60 + s
+  } else if (parts.length === 2) {
+    const m = parseInt(parts[0], 10) || 0
+    const s = parseInt(parts[1], 10) || 0
+    return m * 60 + s
+  } else {
+    return parseInt(val, 10) || 0
+  }
+}
+function jumpToTime(): void {
+  // ⭐ 修复：只有用户实际修改了时间才执行跳转
+  const trimmed = timeInputValue.value.trim()
+  if (trimmed === timeInputOriginal.value.trim()) {
+    showTimeInput.value = false
+    return
+  }
+  const sec = parseTimeInput(timeInputValue.value)
+  const v = getVideoEl()
+  if (v && sec >= 0 && sec <= duration.value) {
+    v.currentTime = sec
+  }
+  showTimeInput.value = false
+}
+function cancelTimeInput(): void {
+  showTimeInput.value = false
+}
 const showReportAd = ref(false)
 const reportAdDomains = ref<string[]>([])
 const reportAdToast = ref('')
 let _reportAdToastTimer: number | null = null
 const autoNextEnabled = ref(true)
 const speedOptions = [0.5, 0.75, 1, 1.25, 1.5, 2]
+
+// ========= 快捷键设置 =========
+interface ShortcutAction { id: string; label: string; description: string; defaultKeys: string[] }
+const SHORTCUT_ACTIONS: ShortcutAction[] = [
+  { id: 'togglePlay', label: '播放/暂停', description: '切换播放和暂停状态', defaultKeys: ['Space', 'K'] },
+  { id: 'seekBack', label: '快退 5s', description: '后退 5 秒', defaultKeys: ['ArrowLeft'] },
+  { id: 'seekForward', label: '快进 5s', description: '前进 5 秒', defaultKeys: ['ArrowRight'] },
+  { id: 'seekBackBig', label: '快退 30s', description: '后退 30 秒', defaultKeys: ['J'] },
+  { id: 'seekForwardBig', label: '快进 30s', description: '前进 30 秒', defaultKeys: ['L'] },
+  { id: 'volumeUp', label: '音量+', description: '音量增加 5%', defaultKeys: ['ArrowUp'] },
+  { id: 'volumeDown', label: '音量-', description: '音量减少 5%', defaultKeys: ['ArrowDown'] },
+  { id: 'mute', label: '静音', description: '切换静音', defaultKeys: ['M'] },
+  { id: 'speedUp', label: '加速', description: '播放速度 +0.25x', defaultKeys: [']'] },
+  { id: 'speedDown', label: '减速', description: '播放速度 -0.25x', defaultKeys: ['['] },
+  { id: 'fullscreen', label: '全屏', description: '切换全屏', defaultKeys: ['F'] },
+  { id: 'prevEp', label: '上一集', description: '切换到上一集', defaultKeys: ['P'] },
+  { id: 'nextEp', label: '下一集', description: '切换到下一集', defaultKeys: ['N'] },
+  { id: 'pip', label: '画中画', description: '切换画中画模式', defaultKeys: ['I'] },
+]
+const shortcutMap = ref<Record<string, string[]>>({})
+const editingShortcutId = ref<string | null>(null)
+
+function loadShortcuts(): void {
+  try {
+    const raw = localStorage.getItem('cczj_shortcuts')
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object') {
+        shortcutMap.value = parsed
+        return
+      }
+    }
+  } catch { }
+  const defaults: Record<string, string[]> = {}
+  SHORTCUT_ACTIONS.forEach(a => { defaults[a.id] = [...a.defaultKeys] })
+  shortcutMap.value = defaults
+}
+function saveShortcuts(): void {
+  try { localStorage.setItem('cczj_shortcuts', JSON.stringify(shortcutMap.value)) } catch { }
+}
+function startEditShortcut(id: string): void {
+  editingShortcutId.value = id
+}
+function cancelEditShortcut(): void {
+  editingShortcutId.value = null
+}
+function onShortcutKeyDown(e: KeyboardEvent): void {
+  if (!editingShortcutId.value) return
+  e.preventDefault()
+  e.stopPropagation()
+  if (e.key === 'Escape') { cancelEditShortcut(); return }
+  let key = e.key
+  if (key === ' ') key = 'Space'
+  shortcutMap.value[editingShortcutId.value] = [key]
+  saveShortcuts()
+  editingShortcutId.value = null
+}
+function resetShortcut(id: string): void {
+  const action = SHORTCUT_ACTIONS.find(a => a.id === id)
+  if (!action) return
+  shortcutMap.value[id] = [...action.defaultKeys]
+  saveShortcuts()
+}
+function resetAllShortcuts(): void {
+  const defaults: Record<string, string[]> = {}
+  SHORTCUT_ACTIONS.forEach(a => { defaults[a.id] = [...a.defaultKeys] })
+  shortcutMap.value = defaults
+  saveShortcuts()
+}
+function fmtKey(k: string): string {
+  if (k === 'Space') return '空格'
+  if (k === 'ArrowLeft') return '←'
+  if (k === 'ArrowRight') return '→'
+  if (k === 'ArrowUp') return '↑'
+  if (k === 'ArrowDown') return '↓'
+  if (k === '[') return '['
+  if (k === ']') return ']'
+  if (k === 'Escape') return 'Esc'
+  if (k === 'Enter') return 'Enter'
+  if (k === 'Tab') return 'Tab'
+  if (k.length === 1) return k.toUpperCase()
+  return k
+}
+
+// 初始化快捷键
+loadShortcuts()
 
 function toggleAutoNext(): void {
   autoNextEnabled.value = !autoNextEnabled.value
@@ -192,16 +335,16 @@ function toggleReportAd(): void {
             const abs = new URL(t, base).href
             const h = new URL(abs).hostname
             if (h) domains.add(h)
-          } catch {}
+          } catch { }
         }
       }
-    } catch {}
+    } catch { }
     // 如果 m3u8 缓存无片段，回退到 props.url 自身域名
     if (domains.size === 0 && props.url) {
       try {
         const h = new URL(props.url).hostname
         if (h) domains.add(h)
-      } catch {}
+      } catch { }
     }
     const blacklist = TsCache.getAdDomains()
     reportAdDomains.value = [...domains].filter(d => !blacklist.some(b => d.includes(b) || b.includes(d)))
@@ -221,29 +364,97 @@ function doReportAd(domain: string): void {
 // 画质下拉框是否展开 —— 展开期间锁定控制条可见，避免全屏下 2.5s 自动隐藏导致面板错位
 const qualityOpen = ref(false)
 
+// ⭐ 播放器设置统一存储在单个 JSON 对象中（key: 'vp_settings'），避免 localStorage 碎片化。
+// 旧版散落的 vp_* 键会在首次读取时自动迁移并清理。
+const VP_SETTINGS_KEY = 'vp_settings'
+const LEGACY_KEYS = [
+  'vp_quality_mode', 'vp_anime4k_tier', 'vp_ai_warning_accepted',
+  'vp_auto_resume_jump', 'vp_volume', 'vp_muted', 'vp_speed',
+  'vp_auto_next',
+]
+let _settingsCache: Record<string, string> | null = null
+
+function _loadSettings(): Record<string, string> {
+  if (_settingsCache) return _settingsCache
+  try {
+    const raw = localStorage.getItem(VP_SETTINGS_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object') {
+        _settingsCache = parsed
+        return _settingsCache ? _settingsCache : {}
+      }
+    }
+  } catch { /* ignore */ }
+  const migrated: Record<string, string> = {}
+  for (const oldKey of LEGACY_KEYS) {
+    const val = localStorage.getItem(oldKey)
+    if (val != null) {
+      migrated[oldKey.replace(/^vp_/, '')] = val
+      localStorage.removeItem(oldKey)
+    }
+  }
+  _settingsCache = migrated
+  if (Object.keys(migrated).length > 0) {
+    try { localStorage.setItem(VP_SETTINGS_KEY, JSON.stringify(migrated)) } catch { /* ignore */ }
+  }
+  return _settingsCache
+}
+
+function _saveSettings(): void {
+  if (!_settingsCache) return
+  try { localStorage.setItem(VP_SETTINGS_KEY, JSON.stringify(_settingsCache)) } catch { /* ignore */ }
+}
+
+function readSetting(key: string, def: string): string {
+  const s = _loadSettings()
+  return s[key] ?? def
+}
+function writeSetting(key: string, val: string): void {
+  const s = _loadSettings()
+  if (s[key] === val) return
+  s[key] = val
+  _saveSettings()
+}
+
 // ========= 画质模式 =========
 // 模式：原高清 / 动画增强 M·L·VL / 影视增强（M/L/VL 直接在画质下拉框中选择）
 // 兼容旧版 localStorage 中存的 'ai_frame_interp' 和 'ai_enhance' 值。
 type QualityMode = 'original' | 'ai_anime' | 'ai_film'
 const qualityMode = ref<QualityMode>(normalizeQualityMode(readSetting('quality_mode', 'original')))
 
-// 画质下拉框合并选项（原高清 + 动画增强三档 + 影视增强）
-const qualityOptions = [
-  { value: 'original', label: '原高清' },
-  { value: 'ai_anime_M', label: '动画增强 M' },
-  { value: 'ai_anime_L', label: '动画增强 L' },
-  { value: 'ai_anime_VL', label: '动画增强 VL' },
-  { value: 'ai_film', label: '影视增强' },
-]
+const anime4kTier = ref<Anime4kTier>(
+  (readSetting('anime4k_tier', 'M') as Anime4kTier) || 'M'
+)
+
+/** 根据视频分辨率推荐最佳档位 */
+const recommendedTier = computed<Anime4kTier>(() => {
+  const h = (getVideoEl()?.videoHeight) || 0
+  if (h <= 0) return 'M'        // 元数据未就绪，默认 M
+  if (h >= 1080) return 'S'
+  if (h >= 720) return 'M'
+  return 'L'
+})
+
+// 画质下拉框（原高清 + 动画增强三档(含推荐) + 影视增强）
+const qualityOptions = computed(() => {
+  const rec = recommendedTier.value
+  const tiers: Anime4kTier[] = ['S', 'M', 'L']
+  const animeOptions = tiers.map(t => ({
+    value: `ai_anime_${t}`,
+    label: `动画增强 ${t}${t === rec ? ' (推荐)' : ''}`,
+  }))
+  return [
+    { value: 'original', label: '原高清' },
+    ...animeOptions,
+    { value: 'ai_film', label: '影视增强' },
+  ]
+})
 // 当前下拉框选中值（根据 qualityMode + anime4kTier 计算）
 const qualityDropdownValue = computed(() => {
   if (qualityMode.value === 'ai_anime') return `ai_anime_${anime4kTier.value}`
   return qualityMode.value
 })
-
-const anime4kTier = ref<Anime4kTier>(
-  (readSetting('anime4k_tier', 'M') as Anime4kTier) || 'M'
-)
 function normalizeQualityMode(v: string): QualityMode {
   if (v === 'ai_frame_interp' || v === 'ai_enhance') return 'ai_anime' // 旧版统一迁移
   if (v === 'ai_anime' || v === 'ai_film') return v
@@ -453,18 +664,6 @@ function updateBuffer(): void {
   bufferPct.value = Math.max(0, Math.min(100, (end / v.duration) * 100))
 }
 
-// ⭐ 2026-06-09：简化——全部使用 localStorage 读写，避免依赖 Go 端的 GetSetting/SetSetting 签名差异。
-//    （Wails 下 `go.main.App.GetSetting(key)` 需要传 1 个参数；之前漏传会导致
-//    "received 0 arguments to method 'main.App.GetSetting', expected 1" 的控制台告警。）
-function readSetting(key: string, def: string): string {
-  try {
-    const v = localStorage.getItem('vp_' + key)
-    return v != null ? v : def
-  } catch { return def }
-}
-function writeSetting(key: string, val: string): void {
-  try { localStorage.setItem('vp_' + key, val) } catch { /* ignore */ }
-}
 function readLocalTime(videoKey: string): number {
   try {
     const s = localStorage.getItem('vp_t_' + videoKey)
@@ -504,6 +703,191 @@ function formatBytes(n: number): string {
   if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB'
   return (n / 1024 / 1024).toFixed(2) + ' MB'
 }
+
+// 从 TS URL 推断码率（优先匹配 "数字+k" 模式，如 2100k, 3000K）
+function extractBitrateFromUrl(url: string): number {
+  try {
+    const path = new URL(url).pathname
+    // 优先: /2100k/ 或 _3000K. 等明确的码率标记
+    const mk = path.match(/[\/_.-](\d{3,5})[kK][\/_.-]/)
+    if (mk) {
+      const val = parseInt(mk[1])
+      if (val >= 200 && val <= 50000) return val * 1000
+    }
+    // 其次: 2100k 作为路径段
+    const segments = path.split('/').filter(Boolean)
+    for (const seg of segments) {
+      const m = seg.match(/^(\d{3,5})[kK]$/)
+      if (m) {
+        const val = parseInt(m[1])
+        if (val >= 200 && val <= 50000) return val * 1000
+      }
+    }
+  } catch { }
+  return 0
+}
+
+// 从 m3u8 缓存的 TS 片段 URL 中提取码率
+function extractBitrateFromCachedTs(): number {
+  try {
+    const cached = TsCache.getM3u8FromCache(props.url)
+    if (cached) {
+      const base = props.url.substring(0, props.url.lastIndexOf('/') + 1)
+      const lines = cached.split('\n')
+      for (const line of lines) {
+        const t = line.trim()
+        if (!t || t.startsWith('#')) continue
+        try {
+          const abs = new URL(t, base).href
+          const br = extractBitrateFromUrl(abs)
+          if (br > 0) return br
+        } catch { }
+      }
+    }
+  } catch { }
+  return 0
+}
+
+// ========= 视频信息弹出面板 =========
+const videoInfo = computed(() => {
+  const v = getVideoEl()
+  if (!v) return null
+  const dur = duration.value
+  const cur = current.value
+  const pct = dur > 0 ? ((cur / dur) * 100).toFixed(1) : '0'
+  // 分辨率
+  const videoWidth = v.videoWidth || 0
+  const videoHeight = v.videoHeight || 0
+  const resolution = videoWidth && videoHeight ? `${videoWidth} x ${videoHeight}` : ''
+  // 帧率
+  let fps = ''
+  let droppedFrames = 0
+  try {
+    const q = (v as any).getVideoPlaybackQuality?.()
+    if (q && q.totalVideoFrames > 10 && cur > 2) {
+      droppedFrames = q.droppedVideoFrames || 0
+      const total = q.totalVideoFrames
+      const rate = total > 0 ? ((total - droppedFrames) / total * 100).toFixed(0) : '100'
+      const fpsNum = Math.round(total / cur)
+      if (fpsNum >= 15 && fpsNum <= 120) fps = fpsNum + ' fps (流畅度 ' + rate + '%)'
+    }
+  } catch { }
+
+  // 码率和编码 - 多层级获取
+  let streamBitrate = ''    // 源声明的码率 (URL/m3u8)
+  let currentBitrate = ''   // hls.js 当前播放级别的码率
+  let codec = ''
+
+  // 1) 从 URL 提取码率
+  let urlBitrate = extractBitrateFromUrl(props.url)
+  // 1b) m3u8 URL 本身无码率标记 → 从缓存的 TS 片段 URL 提取
+  if (urlBitrate === 0) {
+    urlBitrate = extractBitrateFromCachedTs()
+  }
+  if (urlBitrate > 0) {
+    streamBitrate = urlBitrate >= 1000000 ? (urlBitrate / 1000000).toFixed(1) + ' Mbps' : Math.round(urlBitrate / 1000) + ' Kbps'
+  }
+  // 2) 从 m3u8 streamInfo 提取
+  if (!streamBitrate && m3u8StreamInfo.value.length > 0) {
+    const best = m3u8StreamInfo.value.reduce((a, b) => a.bandwidth > b.bandwidth ? a : b)
+    if (best.bandwidth > 0) {
+      streamBitrate = best.bandwidth >= 1000000 ? (best.bandwidth / 1000000).toFixed(1) + ' Mbps' : Math.round(best.bandwidth / 1000) + ' Kbps'
+    }
+    if (best.codecs) {
+      const vc = best.codecs.split(',')[0].split('.')[0]
+      if (vc.startsWith('avc')) codec = 'H.264 (AVC)'
+      else if (vc.startsWith('hev') || vc.startsWith('hvc')) codec = 'H.265 (HEVC)'
+      else if (vc.startsWith('av01') || vc.startsWith('av1')) codec = 'AV1'
+      else codec = best.codecs.split(',')[0]
+    }
+  }
+
+  // 3) hls.js 当前级别信息
+  let hlsLevelInfo = ''
+  let hlsLevelsCount = 0
+  try {
+    const hls = (v as any).__hls
+    if (hls && hls.levels && hls.levels.length > 0) {
+      hlsLevelsCount = hls.levels.length
+      const lvlIdx = hls.currentLevel >= 0 ? hls.currentLevel : hls.nextAutoLevel
+      const lvl = hls.levels[lvlIdx] || hls.levels[hls.levels.length - 1]
+      if (lvl) {
+        if (lvl.bitrate) {
+          const bps = lvl.bitrate
+          currentBitrate = bps >= 1000000 ? (bps / 1000000).toFixed(1) + ' Mbps' : Math.round(bps / 1000) + ' Kbps'
+        }
+        if (!codec && lvl.videoCodec) {
+          const vc = lvl.videoCodec.split('.')[0]
+          if (vc.startsWith('avc')) codec = 'H.264 (AVC)'
+          else if (vc.startsWith('hev') || vc.startsWith('hvc')) codec = 'H.265 (HEVC)'
+          else if (vc.startsWith('av01') || vc.startsWith('av1')) codec = 'AV1'
+          else if (vc.startsWith('vp9') || vc.startsWith('vp09')) codec = 'VP9'
+          else codec = lvl.videoCodec
+        }
+        hlsLevelInfo = `Level ${lvlIdx + 1}/${hlsLevelsCount}`
+      }
+    }
+  } catch { }
+
+  // 缓冲进度
+  let buffered = ''
+  let bufferedSec = 0
+  try {
+    if (v.buffered.length > 0) {
+      const bufEnd = v.buffered.end(v.buffered.length - 1)
+      bufferedSec = bufEnd - cur
+      const bufPct = dur > 0 ? ((bufEnd / dur) * 100).toFixed(0) : '0'
+      buffered = bufPct + '%'
+      if (bufferedSec > 0) buffered += ` (${fmt(bufferedSec)} 可用)`
+    }
+  } catch { }
+
+  // 源域名 + 完整源 URL
+  let sourceHost = ''
+  let sourceUrl = ''
+  try {
+    const u = new URL(props.url)
+    sourceHost = u.hostname
+    sourceUrl = props.url.length > 80 ? props.url.slice(0, 77) + '...' : props.url
+  } catch { }
+
+  // 缓存统计
+  const cs = cacheStats.value
+  const cacheInfo = `${cs.entries}/${cs.totalSegments} 片段 · ${formatBytes(cs.bytes)} · 命中率 ${(cs.hitRate * 100).toFixed(0)}%`
+  const cacheMode = cs.totalSegments > 0 ? 'TsCache 已激活' : '未激活'
+
+  // 网络模式
+  let networkMode = ''
+  try {
+    networkMode = (TsCache as any).getNetworkMode?.() || ''
+  } catch { }
+
+  // 画质模式
+  const qm = qualityMode.value === 'ai_anime' ? `动画增强 ${anime4kTier.value}` : qualityMode.value === 'ai_film' ? '影视增强' : '原高清'
+  return {
+    duration: fmt(dur),
+    current: fmt(cur),
+    progress: pct + '%',
+    resolution,
+    fps,
+    droppedFrames,
+    streamBitrate,
+    currentBitrate,
+    codec,
+    qualityMode: qm,
+    volume: Math.round((muted.value ? 0 : volume.value) * 100) + '%',
+    speed: speed.value + 'x',
+    buffered,
+    bufferedSec,
+    sourceHost,
+    sourceUrl,
+    hlsLevelInfo,
+    hlsLevelsCount,
+    cacheInfo,
+    cacheMode,
+    networkMode,
+  }
+})
 function updateCacheStats(): void {
   const s = TsCache.stats()
   const changed = cacheStats.value.hits !== s.hits || cacheStats.value.misses !== s.misses
@@ -577,7 +961,14 @@ function safePlay(auto: boolean): void {
       })
       .catch((err) => {
         if (_playToken !== token) return
-        console.warn('[Player] play 被拒绝:', err?.name || err, 'auto=', auto)
+        const errName = err?.name || ''
+        console.warn('[Player] play 被拒绝:', errName, 'auto=', auto)
+        // NotSupportedError: 媒体格式不支持，静音重试无效，直接报错
+        if (errName === 'NotSupportedError') {
+          errorMsg.value = '视频格式不支持，无法播放'
+          loading.value = false
+          return
+        }
         // 只有自动播放（非用户点击）时才 fallback 到静音
         if (auto) {
           try { v.muted = true } catch { /* ignore */ }
@@ -627,11 +1018,16 @@ async function loadHls(video: HTMLVideoElement, url: string): Promise<void> {
       // 1) 用 TsCache 解析 m3u8（文本缓存，避免重复请求 m3u8）
       //    同时激活 fetch 拦截器，hls.js 的 TS 片段下载会透明经过缓存
       TsCache.enable()
-      let parsed: { urls: string[], variantUrls: string[], targetduration: number, isMaster: boolean }
+      let parsed: { urls: string[], variantUrls: string[], targetduration: number, isMaster: boolean, streamInfo?: StreamVariantInfo[] }
       try {
         parsed = await TsCache.fetchAndParseM3u8(url)
       } catch {
-        parsed = { urls: [], variantUrls: [], targetduration: 6, isMaster: false }
+        parsed = { urls: [], variantUrls: [], targetduration: 6, isMaster: false, streamInfo: [] }
+      }
+
+      // 存储 m3u8 流信息供视频信息弹窗使用
+      if (parsed.streamInfo && parsed.streamInfo.length > 0) {
+        m3u8StreamInfo.value = parsed.streamInfo
       }
 
       // 判断是否为单码率（media playlist），如是则立即设置 segments 列表
@@ -639,6 +1035,13 @@ async function loadHls(video: HTMLVideoElement, url: string): Promise<void> {
       if (isMediaPlaylist) {
         TsCache.setSegments(parsed.urls)
         TsCache.setTargetDuration(parsed.targetduration)
+        // 单码率时从 TS URL 推断码率
+        if (parsed.urls.length > 0 && m3u8StreamInfo.value.length === 0) {
+          const bitrateHint = extractBitrateFromUrl(parsed.urls[0])
+          if (bitrateHint > 0) {
+            m3u8StreamInfo.value = [{ bandwidth: bitrateHint, resolution: '', codecs: '', url: parsed.urls[0] }]
+          }
+        }
         console.log(`[Player] ✅ m3u8 (单码率): ${parsed.urls.length} 片段, targetduration=${parsed.targetduration}`)
       } else {
         console.log(`[Player] ✅ m3u8 (多码率): ${parsed.variantUrls.length || '?'} 个码率, 由 hls.js 管理`)
@@ -728,22 +1131,38 @@ async function loadHls(video: HTMLVideoElement, url: string): Promise<void> {
           catch { TsCache.notifyCurrentTs(data.frag.url) }
         }
       })
-      hls.on(Hls.Events.ERROR, (_e, data: any) => {
-        if (!data) return
-        const details = String(data.details || '')
-        const isSoft =
-          details === 'bufferStalledError' ||
-          details === 'bufferSeekOverHole' ||
-          details === 'levelLoadingError'
-        if (isSoft) {
-          console.debug(`[Player] 缓冲/网络波动: ${details}`)
-          return
-        }
-        const fatalFlag = data.fatal ? '🔴 FATAL ' : ''
-        console.log(`[Player] ${fatalFlag}ERROR type=${data.type} details=${details} err=${data.err || ''}`)
+hls.on(Hls.Events.ERROR, (_e, data: any) => {
+	        if (!data) return
+	        const details = String(data.details || '')
+	        const isSoft =
+	          details === 'bufferStalledError' ||
+	          details === 'bufferSeekOverHole' ||
+	          details === 'levelLoadingError'
+	        if (isSoft) {
+	          console.debug(`[Player] 缓冲/网络波动: ${details}`)
+	          return
+	        }
+	        const fatalFlag = data.fatal ? '🔴 FATAL ' : ''
+	        console.log(`[Player] ${fatalFlag}ERROR type=${data.type} details=${details} err=${data.err || ''}`)
 
-        if (data.fatal) {
-          switch (data.type) {
+	        if (data.fatal) {
+	          // ⭐ 非 m3u8 URL 回退：manifest 加载/解析失败 → 尝试直接 video.src
+	          const isManifestError =
+	            details === 'manifestLoadError' ||
+	            details === 'manifestParsingError' ||
+	            details === 'manifestIncompatibleCodecsError' ||
+	            details === 'manifestLoadTimeOut'
+	          if (isManifestError) {
+	            console.log('[Player] ⚠ HLS manifest 失败，回退到直接播放')
+	            try { hls.destroy() } catch { /* ignore */ }
+	            ;(video as any).__hls = null
+	            video.src = url
+	            video.onerror = () => {
+	              errorMsg.value = '视频加载失败，请检查链接或网络'
+	            }
+	            return
+	          }
+	          switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
               console.log('[Player] 网络错误，尝试恢复 startLoad()')
               try { hls.startLoad() } catch (e) { console.warn('[Player] startLoad 失败:', e) }
@@ -803,6 +1222,18 @@ function setupPlayer(): void {
   }
   _retryCount = 0
 
+  // ⭐ 提前恢复音量：在视频开始加载前设置，避免 loadedmetadata 之前的默认音量覆盖
+  const savedVol = parseFloat(readSetting('volume', '1'))
+  if (isFinite(savedVol) && savedVol >= 0 && savedVol <= 1) {
+    try { video.volume = savedVol; volume.value = savedVol } catch { /* ignore */ }
+  }
+  const savedMuted = readSetting('muted', '0') === '1'
+  try { video.muted = savedMuted; muted.value = savedMuted } catch { /* ignore */ }
+  const savedSpeed = parseFloat(readSetting('speed', '1'))
+  if (isFinite(savedSpeed) && savedSpeed >= 0.5 && savedSpeed <= 2) {
+    try { video.playbackRate = savedSpeed; speed.value = savedSpeed } catch { /* ignore */ }
+  }
+
   const url = props.url
   if (!url) {
     errorMsg.value = '未获取到视频地址'
@@ -813,17 +1244,16 @@ function setupPlayer(): void {
     loadHls(video, url)
   } else {
     destroyPlayerInternal(video)
-    video.src = url
-    if (props.autoplay !== false) safePlay(true)
-    video.onerror = () => {
-      errorMsg.value = '视频加载失败，请检查链接或网络'
-    }
+    // ⭐ 修复：非 m3u8 后缀的 URL 可能是重定向到 HLS 的短链接（如 hn.bfvvs.com/play/xxx）
+    // 直接尝试用 hls.js 加载，如果解析到有效 m3u8 就播放，失败则回退到 video.src
+    loadHls(video, url)
   }
 }
 
 function bindCommonVideoEvents(video: HTMLVideoElement): void {
   if ((video as any).__eventsBound) return
     ; (video as any).__eventsBound = true
+  bindOsdListeners(video)
 
   video.addEventListener('play', () => { playing.value = true; loading.value = false; videoReady.value = true; stopLoadingStats(); clearNetworkErrTimer() })
   video.addEventListener('pause', () => { playing.value = false })
@@ -857,17 +1287,14 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
     }
     updateBuffer()
     console.log(`[Player] loadedmetadata: duration=${video.duration.toFixed(1)}s, volume=${video.volume.toFixed(2)}`)
-    // ⭐ 视频元数据就绪后，根据用户保存的画质模式自动启动 AI 管线
     _aiReady = true
-    if (isAiMode(qualityMode.value)) {
-      const aiMode = qualityMode.value
-      // 延迟启动：确保视频帧已可供 WebGL 读取
-      setTimeout(() => { startAiPipeline(aiMode) }, 100)
-    }
   })
   video.addEventListener('progress', updateBuffer)
   video.addEventListener('seeking', updateBuffer)
-  video.addEventListener('seeked', updateBuffer)
+  video.addEventListener('seeked', () => {
+    updateBuffer()
+    if (upscaler) upscaler.onSeeked()
+  })
   video.addEventListener('waiting', () => { loading.value = true; startLoadingStats() })
   video.addEventListener('canplay', () => {
     videoReady.value = true
@@ -889,8 +1316,12 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
     muted.value = video.muted
     writeSetting('volume', String(video.volume))
     writeSetting('muted', video.muted ? '1' : '0')
+    // ⭐ 统一由 volumechange 触发 toast，覆盖所有场景（滚轮/键盘/按钮）
+    showVolumeToastRef()
   })
   video.addEventListener('ratechange', () => { speed.value = video.playbackRate; writeSetting('speed', String(video.playbackRate)) })
+  video.addEventListener('enterpictureinpicture', () => { isPiP.value = true })
+  video.addEventListener('leavepictureinpicture', () => { isPiP.value = false })
   video.addEventListener('ended', () => {
     // 播放结束：移除当前进度（下次不跳回结尾）
     try { localStorage.removeItem(stableResumeKey()) } catch { /* ignore */ }
@@ -977,18 +1408,18 @@ function togglePlay(): void {
   keepVisible()
 }
 
-// 滚轮调整音量：向上=+5%，向下=-5%，同时显示音量 Toast
+// 滚轮调整音量：向上=+2%，向下=-2%
 function onWheel(e: WheelEvent): void {
   const v = getVideoEl()
   if (!v) return
-  const delta = e.deltaY < 0 ? 0.05 : -0.05
+  const delta = e.deltaY < 0 ? 0.02 : -0.02
   v.volume = Math.max(0, Math.min(1, v.volume + delta))
   if (v.volume > 0 && v.muted) { v.muted = false }
   if (v.volume === 0 && !v.muted) { v.muted = true }
   volume.value = v.volume
   muted.value = v.muted
   keepVisible()
-  showVolumeToastRef()
+  // ⭐ volumechange 事件会统一触发 showVolumeToastRef()，此处不再重复调用
 }
 
 function toggleMute(): void {
@@ -1019,7 +1450,7 @@ const toastVolumePct = ref(100)
 let _toastTimer: number | null = null
 function onVolumeInput(e: Event): void {
   changeVolume(e)
-  showVolumeToastRef()
+  // ⭐ volumechange 事件已统一触发 showVolumeToastRef()
 }
 function showVolumeToastRef(): void {
   const v = getVideoEl()
@@ -1030,19 +1461,191 @@ function showVolumeToastRef(): void {
   _toastTimer = window.setTimeout(() => { showVolumeToast.value = false }, 1000)
 }
 
-function setVolume(val: number): void {
-  const v = getVideoEl()
-  if (!v) return
-  val = Math.max(0, Math.min(1, val))
-  v.volume = val
-  volume.value = val
-  if (val > 0 && v.muted) { v.muted = false; muted.value = false }
-  if (val === 0) { v.muted = true; muted.value = true }
-}
-
 const progressContainerRef = ref<HTMLDivElement>()
 const progressHoverPct = ref(-1) // 鼠标悬停在进度条上的百分比位置（-1 表示不显示）
-const progressThumbnailImg = ref('') // 缩略图预览
+const progressHoverTime = ref(-1) // 悬停时间（秒），用于显示时间预览
+const thumbPreviewImg = ref('') // 缩略图 dataURL
+const thumbPreviewVisible = ref(false)
+
+// 缩略图采样：用一个隐藏的 <video> 元素 seek + canvas 抓帧
+const thumbVideoRef = ref<HTMLVideoElement | null>(null)
+const thumbCanvasRef = ref<HTMLCanvasElement | null>(null)
+let _thumbLastSeekTime = 0 // 节流：上次 seek 时间戳
+const THUMB_SEEK_THROTTLE_MS = 150 // 至少 150ms 间隔才触发新 seek
+let _thumbSeekPending = false
+
+function captureThumbnail(timeSec: number): void {
+  const v = thumbVideoRef.value
+  const canvas = thumbCanvasRef.value
+  if (!v || !canvas) { _thumbSeekPending = false; return }
+  const ctx = canvas.getContext('2d')
+  if (!ctx) { _thumbSeekPending = false; return }
+
+  // ⭐ 检查视频是否可 seek：readyState >= 1 (HAVE_METADATA) 才允许设置 currentTime
+  if (v.readyState < 1) {
+    _thumbSeekPending = false
+    return
+  }
+
+  // 实际抓帧逻辑
+  const doCapture = () => {
+    try {
+      const vw = v.videoWidth || 160
+      const vh = v.videoHeight || 90
+      if (vw <= 0 || vh <= 0) {
+        thumbPreviewVisible.value = false
+        _thumbSeekPending = false
+        return
+      }
+      const scale = Math.min(160 / vw, 90 / vh, 1)
+      const tw = Math.round(vw * scale)
+      const th = Math.round(vh * scale)
+      canvas.width = tw
+      canvas.height = th
+      ctx.drawImage(v, 0, 0, tw, th)
+      thumbPreviewImg.value = canvas.toDataURL('image/jpeg', 0.7)
+      thumbPreviewVisible.value = true
+    } catch {
+      thumbPreviewVisible.value = false
+    }
+    _thumbSeekPending = false
+  }
+
+  // ⭐ 超时保护：500ms 后强制重置 _thumbSeekPending，防止 seeked 事件永不触发导致卡死
+  let timedOut = false
+  const timeoutId = setTimeout(() => {
+    timedOut = true
+    _thumbSeekPending = false
+  }, 500)
+
+  // seeked 事件回调
+  const onSeeked = () => {
+    v.removeEventListener('seeked', onSeeked)
+    if (timedOut) return
+    clearTimeout(timeoutId)
+    doCapture()
+  }
+
+  // ⭐ 如果已接近目标时间（差距 < 0.5s），无需 seek，直接抓帧
+  if (Math.abs(v.currentTime - timeSec) <= 0.5) {
+    clearTimeout(timeoutId)
+    _thumbSeekPending = false
+    doCapture()
+    return
+  }
+
+  v.addEventListener('seeked', onSeeked)
+  try {
+    v.currentTime = timeSec
+  } catch {
+    v.removeEventListener('seeked', onSeeked)
+    clearTimeout(timeoutId)
+    _thumbSeekPending = false
+  }
+}
+
+async function initThumbSampler(): Promise<void> {
+  const mainVideo = getVideoEl()
+  if (!mainVideo) return
+  // 创建隐藏的采样 video（同源，静音，不播放）
+  const sampleVideo = document.createElement('video')
+  sampleVideo.muted = true
+  sampleVideo.preload = 'auto'
+  sampleVideo.playsInline = true
+  sampleVideo.style.display = 'none'
+  sampleVideo.style.position = 'absolute'
+  sampleVideo.style.visibility = 'hidden'
+  sampleVideo.style.pointerEvents = 'none'
+  sampleVideo.setAttribute('tabindex', '-1')
+  wrapperRef.value?.appendChild(sampleVideo)
+  thumbVideoRef.value = sampleVideo
+
+  // 创建 canvas（隐藏）
+  const canvas = document.createElement('canvas')
+  canvas.style.display = 'none'
+  wrapperRef.value?.appendChild(canvas)
+  thumbCanvasRef.value = canvas
+
+  let thumbHls: any = null
+
+  // 主 video 元素销毁时清理
+  const cleanup = () => {
+    try { thumbHls?.destroy() } catch { }
+    try { sampleVideo.remove() } catch { }
+    try { canvas.remove() } catch { }
+    thumbVideoRef.value = null
+    thumbCanvasRef.value = null
+    thumbPreviewImg.value = ''
+    thumbPreviewVisible.value = false
+  }
+    ; (mainVideo as any).__thumbCleanup = cleanup
+
+  // ⭐ HLS 流：用第二个 hls.js 小实例加载同源流（低缓冲，仅用于 seek + 抓帧）
+  if (isHls(props.url)) {
+    try {
+      const { default: Hls } = await import('hls.js')
+      if (Hls.isSupported()) {
+        const hlsConfig: any = {
+          enableWorker: false,
+          lowLatencyMode: false,
+          maxBufferLength: 2,
+          maxMaxBufferLength: 3,
+          maxBufferSize: 3 * 1000 * 1000,
+          fragLoadingTimeOut: 8000,
+          fragLoadingMaxRetry: 3,
+          manifestLoadingTimeOut: 6000,
+          manifestLoadingMaxRetry: 2,
+          autoStartLoad: true,
+          startLevel: -1,
+          loader: TsCache.TsCacheLoader,
+        }
+        thumbHls = new Hls(hlsConfig)
+        thumbHls.loadSource(props.url)
+        thumbHls.attachMedia(sampleVideo)
+        // 加载后暂停，只用于 canvas 抓帧
+        thumbHls.on(Hls.Events.MANIFEST_PARSED, () => {
+          sampleVideo.play().then(() => {
+            sampleVideo.pause()
+          }).catch(() => { })
+        })
+        console.log('[Player] 🖼️ 缩略图 HLS 实例已创建')
+      }
+    } catch (e) {
+      console.warn('[Player] 缩略图 HLS 初始化失败，回退到纯时间预览:', e)
+    }
+  } else {
+    // 非 HLS：直接用 src
+    sampleVideo.src = mainVideo.src || (mainVideo.querySelector('source') as HTMLSourceElement)?.src || ''
+  }
+
+  // 当主视频 url 变化时，重新加载缩略图采样视频
+  const origUrl = props.url
+  const urlWatch = watch(() => props.url, (newUrl) => {
+    if (newUrl !== origUrl) {
+      cleanup()
+      setTimeout(() => initThumbSampler(), 500)
+    }
+  })
+    ; (mainVideo as any).__thumbUrlWatch = urlWatch
+}
+
+function destroyThumbSampler(): void {
+  const v = getVideoEl()
+  if (v) {
+    try { (v as any).__thumbCleanup?.() } catch { }
+    try { (v as any).__thumbUrlWatch?.() } catch { }
+  }
+  if (thumbVideoRef.value) {
+    try { thumbVideoRef.value.remove() } catch { }
+    thumbVideoRef.value = null
+  }
+  if (thumbCanvasRef.value) {
+    try { thumbCanvasRef.value.remove() } catch { }
+    thumbCanvasRef.value = null
+  }
+  thumbPreviewImg.value = ''
+  thumbPreviewVisible.value = false
+}
 
 function seek(e: Event): void {
   const v = getVideoEl()
@@ -1052,6 +1655,9 @@ function seek(e: Event): void {
   if (!isFinite(val)) return
   v.currentTime = val
   current.value = val
+    // ⭐ 修复：seek 后让输入框失焦，避免键盘事件被拦截
+    ; (target as HTMLElement).blur()
+  wrapperRef.value?.focus?.()
 }
 
 function seekRelative(delta: number): void {
@@ -1069,180 +1675,70 @@ function onProgressMouseDown(e: MouseEvent): void {
   const rect = progressContainerRef.value.getBoundingClientRect()
   const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
   const newTime = pct * v.duration
-  // ⭐ 使用 setTimeout 确保在 range input 的 input 事件之后执行，用鼠标坐标覆盖更精确的跳转位置
-  setTimeout(() => {
-    v.currentTime = newTime
-    current.value = newTime
-  }, 0)
+  v.currentTime = newTime
+  current.value = newTime
+  // ⭐ 修复：seek 后让输入框失焦，避免键盘事件被拦截
+  const slider = progressContainerRef.value.querySelector('.progress-slider') as HTMLElement | null
+  if (slider) slider.blur()
+  wrapperRef.value?.focus?.()
 }
 
-// 进度条悬停：计算百分比位置 + 捕获缩略图
-let _thumbDebounceTimer: ReturnType<typeof setTimeout> | null = null
-let _pendingThumbTime = -1
-
+// 进度条悬停：计算百分比位置 + 显示时间预览 + 缩略图
 function onProgressHover(e: MouseEvent): void {
   if (!progressContainerRef.value) return
   const rect = progressContainerRef.value.getBoundingClientRect()
   const pct = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100))
   progressHoverPct.value = pct
-
-  // 捕获缩略图（防抖 200ms）
   const v = getVideoEl()
-  if (!v || !v.duration || v.readyState < 2) return
-  const targetTime = (pct / 100) * v.duration
-  if (Math.abs(targetTime - _pendingThumbTime) < 0.5) return
-  _pendingThumbTime = targetTime
-  if (_thumbDebounceTimer) clearTimeout(_thumbDebounceTimer)
-  _thumbDebounceTimer = setTimeout(() => {
-    captureThumbnail(targetTime)
-    _thumbDebounceTimer = null
-  }, 200)
-}
-
-function captureThumbnail(time: number): void {
-  const v = getVideoEl()
-  if (!v || !v.duration || v.readyState < 2) { progressThumbnailImg.value = ''; return }
-
-  // ⚠️ 关键：绝不修改主视频的 currentTime 来截图。
-  // 这里使用独立的离屏 video 元素承载同一 src，对它 seek + drawImage，
-  // 主视频的播放进度完全不受影响。
-
-  const off = ensureThumbnailVideo(v)
-  if (!off) {
-    // 离屏 video 尚未就绪（首次加载 / HLS 缓冲中），
-    // 监听 loadedmetadata 后自动重试一次
-    progressThumbnailImg.value = ''
-    if (_thumbVideo && !_thumbRetryBound) {
-      _thumbRetryBound = true
-      const onReady = () => {
-        _thumbVideo!.removeEventListener('loadedmetadata', onReady)
-        // 用最后一次的 pendingTime 重试
-        if (_pendingThumbTime >= 0) {
-          captureThumbnail(_pendingThumbTime)
-        }
-      }
-      _thumbVideo.addEventListener('loadedmetadata', onReady, { once: true })
-      // 5s 超时保护
-      setTimeout(() => {
-        if (_thumbVideo) {
-          _thumbVideo.removeEventListener('loadedmetadata', onReady)
-        }
-      }, 5000)
+  if (v && v.duration) {
+    progressHoverTime.value = (pct / 100) * v.duration
+    // 节流触发缩略图抓帧
+    const now = performance.now()
+    if (now - _thumbLastSeekTime >= THUMB_SEEK_THROTTLE_MS && !_thumbSeekPending) {
+      _thumbLastSeekTime = now
+      _thumbSeekPending = true
+      captureThumbnail(progressHoverTime.value)
     }
-    return
-  }
-
-  // 立即清除旧缩略图，避免显示上一次的缓存
-  progressThumbnailImg.value = ''
-
-  let resolved = false
-  const cleanup = () => {
-    if (resolved) return
-    resolved = true
-    off.removeEventListener('seeked', onSeeked)
-  }
-  const onSeeked = () => {
-    if (resolved) return
-    cleanup()
-    requestAnimationFrame(() => {
-      try {
-        const canvas = document.createElement('canvas')
-        canvas.width = 160
-        canvas.height = 90
-        const ctx = canvas.getContext('2d')
-        if (!ctx) return
-        ctx.drawImage(off, 0, 0, canvas.width, canvas.height)
-        progressThumbnailImg.value = canvas.toDataURL('image/jpeg', 0.7)
-      } catch {
-        progressThumbnailImg.value = ''
-      }
-    })
-  }
-
-  off.addEventListener('seeked', onSeeked, { once: true })
-  // 超时保护：800ms 内未 seeked 成功则放弃（不阻塞 hover）
-  setTimeout(cleanup, 800)
-
-  try {
-    off.currentTime = Math.max(0, Math.min(off.duration || time, time))
-  } catch {
-    cleanup()
   }
 }
 
-// 离屏 video 元素：用于缩略图预览截图，独立于主视频，可自由 seek
-let _thumbVideo: HTMLVideoElement | null = null
-let _thumbVideoSrc = ''
-let _thumbHls: any = null // 离屏 video 的 hls.js 实例（HLS 视频用）
-let _thumbRetryBound = false // 离屏 video 是否已绑定 loadedmetadata 重试
+// ========= 操作 OSD（屏幕中央提示：快进/快退/音量/倍速） =========
+const osdText = ref('')
+const osdIcon = ref('')
+let _osdTimer: ReturnType<typeof setTimeout> | null = null
 
-function ensureThumbnailVideo(main: HTMLVideoElement): HTMLVideoElement | null {
-  if (!_thumbVideo) {
-    _thumbVideo = document.createElement('video')
-    _thumbVideo.muted = true
-    _thumbVideo.preload = 'auto'
-    _thumbVideo.setAttribute('crossorigin', 'anonymous')
-    _thumbVideo.style.position = 'fixed'
-    _thumbVideo.style.left = '-9999px'
-    _thumbVideo.style.width = '160px'
-    _thumbVideo.style.height = '90px'
-    _thumbVideo.style.opacity = '0'
-    _thumbVideo.style.pointerEvents = 'none'
-    document.body.appendChild(_thumbVideo)
-  }
+function showOsd(icon: string, text: string, duration = 800): void {
+  osdIcon.value = icon
+  osdText.value = text
+  if (_osdTimer) clearTimeout(_osdTimer)
+  _osdTimer = setTimeout(() => { osdText.value = ''; osdIcon.value = '' }, duration)
+}
 
-  // 判断源 URL：HLS（hls.js 管理）时 main.src 为空，需用 props.url
-  const mainSrc = main.src || (main.querySelector('source') as HTMLSourceElement | null)?.src || ''
-  const effectiveSrc = mainSrc || props.url
+// 监听视频 seek 事件（来自键盘快捷键或进度条拖动）
+function bindOsdListeners(video: HTMLVideoElement): void {
+  if ((video as any).__osdBound) return
+    ; (video as any).__osdBound = true
 
-  // 源变化时重新加载
-  if (effectiveSrc && effectiveSrc !== _thumbVideoSrc) {
-    _thumbVideoSrc = effectiveSrc
-    _thumbRetryBound = false // 新源需要重新允许重试
-
-    // 清理旧的离屏 hls 实例
-    if (_thumbHls) {
-      try { _thumbHls.destroy() } catch { /* ignore */ }
-      _thumbHls = null
+  let _lastSeekTime = -1
+  video.addEventListener('seeking', () => {
+    const now = Date.now()
+    // 只在短时间内连续 seek 时更新（避免进度条拖动时疯狂闪烁）
+    if (now - _lastSeekTime > 300) {
+      _lastSeekTime = now
     }
+  })
+  video.addEventListener('volumechange', () => {
+    const pct = Math.round(video.volume * 100)
+    showOsd(video.muted ? '🔇' : '🔊', `${pct}%`)
+  })
 
-    const isHlsSource = /\.m3u8(\?|$)/i.test(effectiveSrc)
-    if (isHlsSource) {
-      // HLS：为离屏 video 创建独立的 hls.js 实例
-      import('hls.js').then(({ default: Hls }) => {
-        if (!_thumbVideo || _thumbVideoSrc !== effectiveSrc) return // 已换源，放弃
-        if (Hls.isSupported()) {
-          const hls = new Hls({
-            enableWorker: false,
-            lowLatencyMode: false,
-            maxBufferLength: 10,
-            maxMaxBufferLength: 20,
-          })
-          hls.loadSource(effectiveSrc)
-          hls.attachMedia(_thumbVideo)
-          _thumbHls = hls
-        } else if (_thumbVideo.canPlayType('application/vnd.apple.mpegurl')) {
-          _thumbVideo.src = effectiveSrc
-          _thumbVideo.load()
-        }
-      }).catch(() => {
-        // hls.js 加载失败，尝试直接设置 src（Safari 原生 HLS）
-        if (_thumbVideo) {
-          _thumbVideo.src = effectiveSrc
-          _thumbVideo.load()
-        }
-      })
-    } else {
-      _thumbVideo.src = effectiveSrc
-      _thumbVideo.load()
-    }
-  }
-
-  // 修复：readyState < 2 时数据不足以 seek
-  if (!_thumbVideo || _thumbVideo.readyState < 2) {
-    return null
-  }
-  return _thumbVideo
+  // 自定义 seek OSD 事件（由 Player.vue 键盘快捷键派发）
+  video.addEventListener('cczj-seek-osd', ((e: CustomEvent) => {
+    const { delta } = e.detail
+    const icon = delta > 0 ? '⏩' : '⏪'
+    const absSec = Math.abs(delta)
+    showOsd(icon, `${delta > 0 ? '+' : '-'}${absSec}s`)
+  }) as EventListener)
 }
 
 function changeSpeed(s: number): void {
@@ -1330,6 +1826,34 @@ function onFsChange(): void {
   else document.body.removeAttribute('data-player-fullscreen')
 }
 
+// ====== 画中画 (PiP) ======
+const isPiP = ref(false)
+
+async function togglePiP(): Promise<void> {
+  const v = getVideoEl()
+  if (!v) return
+  // ⭐ 视频元数据未加载时不能进入画中画
+  if (v.readyState < 1) {
+    console.warn('[Player] PiP: 视频尚未就绪')
+    return
+  }
+  try {
+    if (document.pictureInPictureElement) {
+      await document.exitPictureInPicture()
+      isPiP.value = false
+    } else {
+      const pip = (v as any).requestPictureInPicture?.()
+      if (pip && typeof pip.then === 'function') {
+        await pip
+      }
+      isPiP.value = true
+    }
+  } catch (e) {
+    console.warn('[Player] PiP 切换失败:', e)
+    isPiP.value = false
+  }
+}
+
 // ------ 控制条显示/隐藏 ------
 // 规则：
 //   · mousemove → 显示 + 启动 3 秒隐藏定时器（每次移动都重置）
@@ -1412,11 +1936,12 @@ onMounted(async () => {
   document.addEventListener('webkitfullscreenchange', onFsChange)
   document.addEventListener('keydown', onKeyDown)
   // 让播放器区域自动获得键盘焦点（上下键调节音量等）
-  setTimeout(() => { wrapperRef.value?.focus?.() }, 100)
+  setTimeout(() => { wrapperRef.value?.focus?.(); initThumbSampler() }, 100)
 })
 
 onBeforeUnmount(() => {
   destroyPlayer()
+  destroyThumbSampler()
   clearNetworkErrTimer()
   document.removeEventListener('fullscreenchange', onFsChange)
   document.removeEventListener('webkitfullscreenchange', onFsChange)
@@ -1442,17 +1967,7 @@ onBeforeUnmount(() => {
     } catch { }
   }
   document.body.removeAttribute('data-player-fullscreen')
-  // 清理缩略图预览用的离屏 video 元素
-  if (_thumbVideo) {
-    try {
-      if (_thumbHls) { try { _thumbHls.destroy() } catch { /* ignore */ } _thumbHls = null }
-      _thumbVideo.pause(); _thumbVideo.src = ''; _thumbVideo.load()
-    } catch { }
-    _thumbVideo.remove()
-    _thumbVideo = null
-    _thumbVideoSrc = ''
-  }
-  if (_thumbDebounceTimer) { clearTimeout(_thumbDebounceTimer); _thumbDebounceTimer = null }
+  if (_osdTimer) { clearTimeout(_osdTimer); _osdTimer = null }
 })
 
 watch(() => props.url, (newUrl, oldUrl) => {
@@ -1482,10 +1997,13 @@ watch(loading, (val) => {
     startLoadingStats()
   }
 })
+
+// 暴露 PiP 方法给父组件（Player.vue 快捷键调用）
+defineExpose({ togglePiP })
 </script>
 
 <template>
-  <div class="player-wrapper" :class="{ fullscreen: isFullscreen, 'cursor-hidden': playing && !showControls }"
+  <div class="player-wrapper" :class="{ fullscreen: isFullscreen, 'cursor-hidden': playing && !showControls, 'show-controls': showControls }"
     ref="wrapperRef" tabindex="0" @mousemove="toggleShow(true); mouseInside = true" @mouseenter="mouseInside = true"
     @mouseleave="onMouseLeave" @click="onWrapperClick" @dblclick.stop="toggleFullscreen()" @wheel.prevent="onWheel">
     <!-- 顶部栏：标题 + 缓存统计 + 收藏按钮 -->
@@ -1514,13 +2032,11 @@ watch(loading, (val) => {
 
     <video class="native-video" playsinline preload="auto" @click.stop="togglePlay"></video>
 
-    <!-- 音量 toast：键盘调节音量时显示 1 秒 -->
-    <transition name="fade">
-      <div v-show="showVolumeToast" class="volume-toast">
-        <div class="volume-toast-bar">
-          <div class="volume-toast-fill" :style="{ width: toastVolumePct + '%' }"></div>
-        </div>
-        <span class="volume-toast-text">{{ toastVolumePct }}%</span>
+    <!-- 操作 OSD：快进/快退/倍速 屏幕中央提示 -->
+    <transition name="osd-fade">
+      <div v-show="osdText" class="action-osd">
+        <span class="action-osd-icon">{{ osdIcon }}</span>
+        <span class="action-osd-text">{{ osdText }}</span>
       </div>
     </transition>
 
@@ -1536,7 +2052,9 @@ watch(loading, (val) => {
           </div>
           <div class="loading-speed" v-if="loadingSpeed">{{ loadingSpeed }}</div>
           <div class="loading-bar-wrap">
-            <div class="loading-bar-fill" :style="{ width: (loadingTotal > 0 ? loadingCached / loadingTotal * 100 : 0) + '%' }"></div>
+            <div class="loading-bar-fill"
+              :style="{ width: (loadingTotal > 0 ? loadingCached / loadingTotal * 100 : 0) + '%' }">
+            </div>
           </div>
         </div>
         <!-- 无片段信息时显示文字提示 -->
@@ -1571,7 +2089,7 @@ watch(loading, (val) => {
     </div>
 
     <!-- AI 画质增强提示弹窗 -->
-    <div v-if="showAiWarning" class="ai-warning-overlay" @click.stop>
+    <div v-if="showAiWarning" class="ai-warning-overlay" @click.stop @wheel.stop>
       <div class="ai-warning-dialog">
         <div class="ai-warning-header">
           <span class="ai-warning-icon">⚡</span>
@@ -1604,21 +2122,21 @@ watch(loading, (val) => {
     </div>
 
     <!-- 进度条（独立行，在控制条上方） -->
-    <div class="progress-bar-wrapper" v-show="showControls || !playing || qualityOpen" @click.stop @mousedown.stop
-      @dblclick.stop>
-      <span class="progress-time-left">{{ fmt(current) }}</span>
+    <!-- ⭐ @mousemove.stop 阻止冒泡到 player-wrapper，避免悬停进度条时触发控制栏和音量弹出 -->
+    <div class="progress-bar-wrapper" v-show="showControls || !playing || qualityOpen || showVideoInfo" @click.stop
+      @mousedown.stop @dblclick.stop @mousemove.stop>
       <div class="progress-container" ref="progressContainerRef" @mousedown.stop="onProgressMouseDown"
-        @mousemove="onProgressHover" @mouseleave="progressHoverPct = -1">
+        @mousemove="onProgressHover" @mouseleave="progressHoverPct = -1; thumbPreviewVisible = false">
         <div class="progress-track-bg"></div>
         <div class="progress-buffer" :style="{ width: bufferPct + '%' }"></div>
         <div class="progress-played" :style="{ width: progressPct + '%' }"></div>
-        <!-- 悬停预览线 -->
+        <!-- 悬停预览线 + 时间提示 + 缩略图 -->
         <div v-show="progressHoverPct >= 0" class="progress-hover-line" :style="{ left: progressHoverPct + '%' }"></div>
-        <!-- 缩略图预览 -->
-        <div v-show="progressHoverPct >= 0 && progressThumbnailImg" class="progress-thumbnail-preview"
+        <div v-show="progressHoverPct >= 0 && progressHoverTime >= 0" class="progress-time-preview"
           :style="{ left: progressHoverPct + '%' }">
-          <img :src="progressThumbnailImg" />
-          <span class="preview-time">{{ fmt((progressHoverPct / 100) * (duration || 0)) }}</span>
+          <canvas v-show="false" ref="thumbCanvasRef"></canvas>
+          <img v-if="thumbPreviewVisible && thumbPreviewImg" class="preview-thumb-img" :src="thumbPreviewImg" alt="" />
+          <span class="preview-time">{{ fmt(progressHoverTime) }}</span>
         </div>
         <!-- 当前播放位置的“独特”指示点（白色内圆 + 蓝色光晕 + 外圈） -->
         <div class="progress-thumb" :style="{ left: progressPct + '%' }" :class="{ playing: playing }">
@@ -1629,12 +2147,13 @@ watch(loading, (val) => {
         <input class="progress-slider" type="range" min="0" :max="duration || 0" step="0.1" :value="current"
           @input="seek" />
       </div>
-      <span class="progress-time-right">{{ fmt(duration) }}</span>
     </div>
 
     <!-- 底部控制条 -->
-    <div class="ctrl-bar" v-show="showControls || !playing || qualityOpen" @click.stop @mousedown.stop @pointerdown.stop
-      @dblclick.stop>
+    <!-- ⭐ @wheel.stop 阻止 wheel 从控制栏/弹出面板冒泡到 player-wrapper，
+         避免音量滑块和弹出面板内的滚动被 onWheel 劫持 -->
+    <div class="ctrl-bar" v-show="showControls || !playing || qualityOpen || showVideoInfo" @click.stop @mousedown.stop
+      @pointerdown.stop @dblclick.stop @wheel.stop>
       <!-- 上一集 -->
       <button class="ctrl-btn" @click="emit('prev')" :disabled="!hasPrev" title="上一集">
         <Icon name="prev" :size="16" />
@@ -1650,6 +2169,21 @@ watch(loading, (val) => {
         <Icon name="next" :size="16" />
       </button>
 
+      <!-- B站风格时间显示 / 跳转 -->
+      <div class="time-display" @click.stop>
+        <template v-if="showTimeInput">
+          <input ref="timeInputRef" class="time-input" v-model="timeInputValue" @keydown.enter.prevent="jumpToTime"
+            @keydown.escape.prevent="cancelTimeInput" @blur="jumpToTime" @click.stop @mousedown.stop />
+        </template>
+        <template v-else>
+          <div class="time-bar" @click="toggleTimeInput" title="点击跳转到指定时间">
+            <span class="time-current">{{ fmt(current) }}</span>
+            <span class="time-sep">/</span>
+            <span class="time-duration">{{ fmt(duration) }}</span>
+          </div>
+        </template>
+      </div>
+
       <!-- 画质选择。
            inline + inline-drop="up"：面板不 Teleport，留在控制条 DOM 树内，
            (1) 解决全屏下面板 fixed 定位 rect 归零打不开；
@@ -1661,7 +2195,7 @@ watch(loading, (val) => {
       </div>
 
       <!-- 音量 + 垂直滑块弹出（纯 CSS hover；鼠标从图标移动到滑块不会消失） -->
-      <div class="volume-group" @click.stop>
+      <div class="volume-group" @click.stop @mouseenter="showVolumePanel = true" @mouseleave="showVolumePanel = false">
         <button class="ctrl-btn" @click.stop="toggleMute(); keepVisible()" :title="muted ? '取消静音' : '静音（M）'">
           <Icon :name="muted ? 'volume-off' : 'volume'" :size="16" />
         </button>
@@ -1710,6 +2244,12 @@ watch(loading, (val) => {
               <span class="ps-switch"></span>
             </label>
           </div>
+          <div class="playback-settings-divider"></div>
+          <button class="playback-settings-link" @click.stop="showPlaybackSettings = false; showShortcutModal = true">
+            <Icon name="keyboard" :size="14" />
+            <span>快捷键设置</span>
+            <Icon name="chevron-right" :size="12" />
+          </button>
         </div>
       </div>
       <!-- 报告广告 -->
@@ -1720,13 +2260,22 @@ watch(loading, (val) => {
         <div class="report-ad-popup" :class="{ show: showReportAd }" @click.stop>
           <div class="report-ad-title">点击上报广告域名</div>
           <div v-if="reportAdDomains.length === 0" class="report-ad-empty">未检测到片段域名</div>
-          <button v-for="d in reportAdDomains" :key="d" class="report-ad-item"
-            @click.stop="doReportAd(d)">
+          <button v-for="d in reportAdDomains" :key="d" class="report-ad-item" @click.stop="doReportAd(d)">
             <Icon name="shield" :size="13" />
             <span class="report-ad-domain">{{ d }}</span>
           </button>
         </div>
       </div>
+      <!-- 视频信息 -->
+      <div class="video-info-group" @click.stop>
+        <button class="ctrl-btn" @click.stop="showVideoInfo = !showVideoInfo; keepVisible()" title="视频信息">
+          <Icon name="info" :size="16" />
+        </button>
+      </div>
+      <!-- 画中画 -->
+      <button class="ctrl-btn" @click="togglePiP" :title="isPiP ? '退出画中画' : '画中画（I）'" :class="{ active: isPiP }">
+        <Icon :name="isPiP ? 'pip-exit' : 'pip'" :size="16" />
+      </button>
       <!-- 全屏 -->
       <button class="ctrl-btn" @click="toggleFullscreen" :title="isFullscreen ? '退出全屏' : '全屏（F）'">
         <Icon :name="isFullscreen ? 'exit-fullscreen' : 'fullscreen'" :size="16" />
@@ -1740,6 +2289,159 @@ watch(loading, (val) => {
         <span>{{ reportAdToast }}</span>
       </div>
     </transition>
+
+    <!-- ====== 视频信息模态框 ====== -->
+    <transition name="modal-fade">
+      <div v-if="showVideoInfo" class="vp-modal-overlay" @click="showVideoInfo = false" @keydown="onShortcutKeyDown"
+        @wheel.stop>
+        <div class="vp-modal vp-modal-info" @click.stop>
+          <div class="vp-modal-header">
+            <span>视频信息</span>
+            <button class="vp-modal-close" @click="showVideoInfo = false">
+              <Icon name="x" :size="16" />
+            </button>
+          </div>
+          <div class="vp-modal-body vp-modal-scroll" v-if="videoInfo">
+            <!-- 基本播放信息 -->
+            <div class="vp-info-section-title">播放信息</div>
+            <div class="vp-info-grid">
+              <div class="vp-info-item">
+                <span class="vp-info-label">时长</span>
+                <span class="vp-info-val">{{ videoInfo.duration }}</span>
+              </div>
+              <div class="vp-info-item">
+                <span class="vp-info-label">当前时间</span>
+                <span class="vp-info-val">{{ videoInfo.current }} ({{ videoInfo.progress }})</span>
+              </div>
+              <div class="vp-info-item">
+                <span class="vp-info-label">播放速度</span>
+                <span class="vp-info-val">{{ videoInfo.speed }}</span>
+              </div>
+              <div class="vp-info-item">
+                <span class="vp-info-label">音量</span>
+                <span class="vp-info-val">{{ videoInfo.volume }}</span>
+              </div>
+              <div v-if="videoInfo.buffered" class="vp-info-item">
+                <span class="vp-info-label">缓冲进度</span>
+                <span class="vp-info-val">{{ videoInfo.buffered }}</span>
+              </div>
+            </div>
+            <!-- 视频流信息 -->
+            <div class="vp-info-section-title">视频流</div>
+            <div class="vp-info-grid">
+              <div v-if="videoInfo.resolution" class="vp-info-item">
+                <span class="vp-info-label">分辨率</span>
+                <span class="vp-info-val">{{ videoInfo.resolution }}</span>
+              </div>
+              <div v-if="videoInfo.fps" class="vp-info-item">
+                <span class="vp-info-label">帧率</span>
+                <span class="vp-info-val">{{ videoInfo.fps }}</span>
+              </div>
+              <div v-if="videoInfo.droppedFrames > 0" class="vp-info-item">
+                <span class="vp-info-label">丢帧</span>
+                <span class="vp-info-val vp-info-warn">{{ videoInfo.droppedFrames }}</span>
+              </div>
+              <div v-if="videoInfo.streamBitrate" class="vp-info-item">
+                <span class="vp-info-label">源码率</span>
+                <span class="vp-info-val vp-info-highlight">{{ videoInfo.streamBitrate }}</span>
+              </div>
+              <div v-if="videoInfo.currentBitrate" class="vp-info-item">
+                <span class="vp-info-label">当前码率</span>
+                <span class="vp-info-val">{{ videoInfo.currentBitrate }}</span>
+              </div>
+              <div v-if="videoInfo.codec" class="vp-info-item">
+                <span class="vp-info-label">编码格式</span>
+                <span class="vp-info-val">{{ videoInfo.codec }}</span>
+              </div>
+              <div v-if="videoInfo.hlsLevelInfo" class="vp-info-item">
+                <span class="vp-info-label">HLS级别</span>
+                <span class="vp-info-val">{{ videoInfo.hlsLevelInfo }}</span>
+              </div>
+            </div>
+            <!-- 缓存 & 网络 -->
+            <div class="vp-info-section-title">缓存 & 网络</div>
+            <div class="vp-info-grid">
+              <div class="vp-info-item vp-info-full">
+                <span class="vp-info-label">缓存状态</span>
+                <span class="vp-info-val">{{ videoInfo.cacheInfo }}</span>
+              </div>
+              <div class="vp-info-item">
+                <span class="vp-info-label">缓存模式</span>
+                <span class="vp-info-val">{{ videoInfo.cacheMode }}</span>
+              </div>
+              <div v-if="videoInfo.networkMode" class="vp-info-item">
+                <span class="vp-info-label">网络模式</span>
+                <span class="vp-info-val">{{ videoInfo.networkMode }}</span>
+              </div>
+            </div>
+            <!-- 增强 & 源 -->
+            <div class="vp-info-section-title">增强 & 源</div>
+            <div class="vp-info-grid">
+              <div class="vp-info-item">
+                <span class="vp-info-label">画质模式</span>
+                <span class="vp-info-val">{{ videoInfo.qualityMode }}</span>
+              </div>
+              <div v-if="videoInfo.sourceHost" class="vp-info-item vp-info-full">
+                <span class="vp-info-label">源域名</span>
+                <span class="vp-info-val vp-info-mono">{{ videoInfo.sourceHost }}</span>
+              </div>
+              <div v-if="videoInfo.sourceUrl" class="vp-info-item vp-info-full">
+                <span class="vp-info-label">源URL</span>
+                <span class="vp-info-val vp-info-mono vp-info-url">{{ videoInfo.sourceUrl }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="vp-modal-body" v-else>
+            <p class="vp-empty-text">暂无视频信息</p>
+          </div>
+        </div>
+      </div>
+    </transition>
+
+    <!-- ====== 快捷键设置模态框 ====== -->
+    <transition name="modal-fade">
+      <div v-if="showShortcutModal" class="vp-modal-overlay" @click="showShortcutModal = false"
+        @keydown="onShortcutKeyDown" @wheel.stop>
+        <div class="vp-modal vp-modal-shortcut" @click.stop>
+          <div class="vp-modal-header">
+            <span>快捷键设置</span>
+            <button class="vp-modal-close" @click="showShortcutModal = false">
+              <Icon name="x" :size="16" />
+            </button>
+          </div>
+          <div class="vp-modal-body vp-modal-scroll">
+            <p class="vp-modal-hint">点击按键可自定义，按下新的按键即可绑定。按 Esc 取消编辑。</p>
+            <div class="vp-shortcut-list">
+              <div v-for="action in SHORTCUT_ACTIONS" :key="action.id" class="vp-shortcut-row">
+                <span class="vp-sc-label">{{ action.label }}</span>
+                <span class="vp-sc-desc">{{ action.description }}</span>
+                <div class="vp-sc-actions">
+                  <button class="vp-sc-btn" :class="{ editing: editingShortcutId === action.id }"
+                    @click.stop="startEditShortcut(action.id)">
+                    <template v-if="editingShortcutId === action.id">
+                      <span class="vp-sc-recording">按下新按键...</span>
+                    </template>
+                    <template v-else>
+                      <span v-for="(k, ki) in (shortcutMap[action.id] || [])" :key="ki" class="vp-sc-key">{{ fmtKey(k)
+                      }}</span>
+                      <span v-if="!shortcutMap[action.id] || shortcutMap[action.id].length === 0"
+                        class="vp-sc-none">未设置</span>
+                    </template>
+                  </button>
+                  <button class="vp-sc-reset" @click.stop="resetShortcut(action.id)" title="还原默认">
+                    <Icon name="reset" :size="12" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="vp-modal-footer">
+            <button class="vp-btn-secondary" @click="resetAllShortcuts">重置全部</button>
+            <button class="vp-btn-primary" @click="showShortcutModal = false">完成</button>
+          </div>
+        </div>
+      </div>
+    </transition>
   </div>
 </template>
 
@@ -1751,7 +2453,6 @@ watch(loading, (val) => {
   width: 100%;
   height: 100%;
   position: relative;
-  cursor: pointer;
   overflow: hidden;
   outline: none;
   /* 键盘焦点时不显示默认 outline */
@@ -1957,6 +2658,9 @@ watch(loading, (val) => {
 
 /* ========= 视频元素 ========= */
 .native-video {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
   width: 100%;
   height: 100%;
   background: #000;
@@ -2042,6 +2746,7 @@ watch(loading, (val) => {
 /* ========= 错误提示 ========= */
 .player-error {
   position: absolute;
+  z-index: 4;
   bottom: 80px;
   left: 16px;
   right: 16px;
@@ -2056,14 +2761,16 @@ watch(loading, (val) => {
   border-radius: 8px;
   z-index: 4;
 }
+
 .error-actions {
   display: flex;
   gap: 8px;
   margin-left: auto;
 }
+
 .error-btn {
   padding: 4px 12px;
-  border: 1px solid rgba(255,255,255,0.6);
+  border: 1px solid rgba(255, 255, 255, 0.6);
   border-radius: 4px;
   background: transparent;
   color: #fff;
@@ -2071,11 +2778,13 @@ watch(loading, (val) => {
   cursor: pointer;
   transition: background 0.15s;
 }
+
 .error-btn:hover {
-  background: rgba(255,255,255,0.15);
+  background: rgba(255, 255, 255, 0.15);
 }
+
 .error-btn-primary {
-  background: rgba(255,255,255,0.2);
+  background: rgba(255, 255, 255, 0.2);
   border-color: #fff;
 }
 
@@ -2091,19 +2800,29 @@ watch(loading, (val) => {
   opacity: 0.85;
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
+
 .pause-overlay:hover {
   opacity: 1;
   transform: scale(1.05);
 }
+
 .pause-icon {
   width: 80px;
   height: 80px;
   object-fit: contain;
   filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.6));
 }
+
 @keyframes pause-fade-in {
-  from { opacity: 0; transform: scale(0.85); }
-  to { opacity: 0.85; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+
+  to {
+    opacity: 0.85;
+    transform: scale(1);
+  }
 }
 
 /* ========= 进度条独立行（控制条上方） ========= */
@@ -2116,7 +2835,6 @@ watch(loading, (val) => {
   right: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
   padding: 4px 16px;
   z-index: 4;
   height: 28px;
@@ -2124,21 +2842,67 @@ watch(loading, (val) => {
   background: linear-gradient(to top, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0) 100%);
 }
 
-.progress-time-left,
-.progress-time-right {
-  font-size: 11px;
+/* B站风格时间显示 */
+.time-display {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.8);
   flex-shrink: 0;
-  min-width: 42px;
+  white-space: nowrap;
+  line-height: 1;
 }
-.progress-time-left { text-align: right; }
-.progress-time-right { text-align: left; }
+
+.time-bar {
+  cursor: text;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.time-bar:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.time-current {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.time-sep {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 11px;
+}
+
+.time-duration {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.time-input {
+  width: 60px;
+  padding: 2px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  outline: none;
+  font-family: inherit;
+}
+
+.time-input:focus {
+  border-color: var(--accent, #1890ff);
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+}
 
 /* ========= 控制条 ========= */
 /* z-index 高于 progress-bar-wrapper(4)，保证所有弹出面板在进度条上方。
-   ::before 桥接区填补 ctrl-bar 顶部与 progress-bar-wrapper 之间的缝隙，
-   防止鼠标从按钮移向弹出面板时误触进度条。 */
+   各弹出面板按钮组（volume-group, speed-group）各自定义 ::before 桥接区，
+   不在此处设置全局桥接，避免阻碍进度条的悬停交互。 */
 .ctrl-bar {
   position: absolute;
   bottom: 0;
@@ -2155,18 +2919,7 @@ watch(loading, (val) => {
   z-index: 8;
   box-sizing: border-box;
   flex-wrap: nowrap;
-}
-/* 桥接区：ctrl-bar 顶部到 progress-bar-wrapper 之间的过渡带，
-   确保鼠标在按钮和弹出面板之间移动时不会落入进度条区域 */
-.ctrl-bar::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: -8px;
-  height: 8px;
-  pointer-events: auto;
-  z-index: 1;
+  cursor: pointer;
 }
 
 .ctrl-btn {
@@ -2198,6 +2951,11 @@ watch(loading, (val) => {
   cursor: not-allowed;
 }
 
+.ctrl-btn.active {
+  color: #40a9ff;
+  background: rgba(24, 144, 255, 0.3);
+}
+
 .play-btn {
   /* 播放按钮略大一点，视觉上是中心 */
   height: 36px;
@@ -2214,14 +2972,15 @@ watch(loading, (val) => {
   text-align: center;
   flex-shrink: 0;
   color: rgba(255, 255, 255, 0.85);
-  display: none; /* 时间已移到进度条行 */
+  display: none;
+  /* 时间已移到进度条行 */
 }
 
-/* ============ 进度条（重构：三层轨道 + 独特滑块） ============ */
+/* ============ 进度条（三层轨道 + 独特滑块） ============ */
 .progress-container {
   position: relative;
   flex: 1;
-  height: 18px;
+  height: 24px;
   /* 更大的点击热区，避免误触 */
   display: flex;
   align-items: center;
@@ -2236,7 +2995,7 @@ watch(loading, (val) => {
   left: 0;
   top: 50%;
   transform: translateY(-50%);
-  height: 4px;
+  height: 5px;
   border-radius: 3px;
   transition: height 0.15s ease;
   pointer-events: none;
@@ -2245,7 +3004,7 @@ watch(loading, (val) => {
 .progress-container:hover .progress-track-bg,
 .progress-container:hover .progress-buffer,
 .progress-container:hover .progress-played {
-  height: 6px;
+  height: 7px;
   /* 悬停时变粗，给用户反馈 */
 }
 
@@ -2315,8 +3074,17 @@ watch(loading, (val) => {
 }
 
 @keyframes thumb-breathe {
-  0%, 100% { transform: scale(1); opacity: 0.6; }
-  50% { transform: scale(1.2); opacity: 1; }
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
 }
 
 /* 透明 range input 覆盖在整个容器上 —— 只负责交互（拖动），不显示默认外观 */
@@ -2375,35 +3143,79 @@ watch(loading, (val) => {
   transform: translateX(-50%);
 }
 
-/* 缩略图预览（z-index 高于 ctrl-bar，确保始终可见） */
-.progress-thumbnail-preview {
+/* 时间预览（悬停时显示） */
+.progress-time-preview {
   position: absolute;
   bottom: 100%;
   transform: translateX(-50%);
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   pointer-events: none;
   z-index: 20;
-  border-radius: 6px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 0;
   overflow: hidden;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  background: rgba(0, 0, 0, 0.6);
+  min-width: 56px;
+  text-align: center;
 }
 
-.progress-thumbnail-preview img {
+/* 缩略图图片（B站风格） */
+.progress-time-preview .preview-thumb-img {
   display: block;
   width: 160px;
   height: 90px;
   object-fit: cover;
+  border-radius: 4px 4px 0 0;
 }
 
-.progress-thumbnail-preview .preview-time {
+.progress-time-preview .preview-time {
   display: block;
   text-align: center;
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.85);
-  background: rgba(0, 0, 0, 0.6);
-  padding: 2px 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 8px;
+  background: rgba(0, 0, 0, 0.85);
+}
+
+/* 操作 OSD（快进/快退/倍速/音量 屏幕中央提示） */
+.action-osd {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 8px;
+  pointer-events: none;
+  z-index: 50;
+  backdrop-filter: blur(4px);
+}
+
+.action-osd-icon {
+  font-size: 20px;
+}
+
+.action-osd-text {
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.osd-fade-enter-active,
+.osd-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.osd-fade-enter-from,
+.osd-fade-leave-to {
+  opacity: 0;
 }
 
 /* ========= 音量组（垂直弹出滑块） ========= */
@@ -2417,14 +3229,14 @@ watch(loading, (val) => {
   align-items: center;
 }
 
-/* 桥接区：从按钮到 popup 之间不会丢失 hover */
+/* 桥接区：仅覆盖按钮与 popup 之间的 6px 缝隙，不延伸到进度条区域 */
 .volume-group::before {
   content: '';
   position: absolute;
   left: -4px;
   right: -4px;
-  top: -120px;
-  height: 128px;
+  top: -8px;
+  height: 10px;
   pointer-events: auto;
   z-index: 1;
 }
@@ -2469,18 +3281,17 @@ watch(loading, (val) => {
 }
 
 .volume-slider-v {
-  /* 水平方向的 input，轨道宽 120px → 旋转 90° 后变成 120px 高 */
   width: 120px;
   height: 6px;
   -webkit-appearance: none;
   appearance: none;
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255,255,255,0.2);
   border-radius: 3px;
   outline: none;
   transform: rotate(-90deg);
   transform-origin: center center;
   cursor: pointer;
-  accent-color: #1890ff;
+  accent-color: var(--accent, #1890ff);
 }
 
 .volume-slider-v::-webkit-slider-thumb {
@@ -2518,14 +3329,14 @@ watch(loading, (val) => {
   align-items: center;
 }
 
-/* 桥接区：从按钮到 popup 之间不会丢失 hover */
+/* 桥接区：仅覆盖按钮与 popup 之间的缝隙，不延伸到进度条区域 */
 .speed-group::before {
   content: '';
   position: absolute;
   left: -4px;
   right: -4px;
-  top: -110px;
-  height: 118px;
+  top: -8px;
+  height: 10px;
   pointer-events: auto;
   z-index: 1;
 }
@@ -2607,6 +3418,7 @@ watch(loading, (val) => {
 .playback-settings-group {
   position: relative;
 }
+
 .playback-settings-popup {
   position: absolute;
   bottom: calc(100% + 10px);
@@ -2618,7 +3430,7 @@ watch(loading, (val) => {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  min-width: 160px;
+  min-width: 180px;
   opacity: 0;
   pointer-events: none;
   transform: translateY(6px);
@@ -2626,11 +3438,13 @@ watch(loading, (val) => {
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
   z-index: 10;
 }
+
 .playback-settings-popup.show {
   opacity: 1;
   pointer-events: auto;
   transform: translateY(0);
 }
+
 .playback-settings-item {
   display: flex;
   align-items: center;
@@ -2641,18 +3455,22 @@ watch(loading, (val) => {
   border-radius: 6px;
   gap: 12px;
 }
+
 .playback-settings-item:hover {
   background: rgba(255, 255, 255, 0.05);
 }
+
 .ps-toggle {
   position: relative;
   display: inline-flex;
   align-items: center;
   cursor: pointer;
 }
+
 .ps-toggle input {
   display: none;
 }
+
 .ps-switch {
   position: relative;
   width: 32px;
@@ -2662,6 +3480,7 @@ watch(loading, (val) => {
   transition: background 0.2s;
   flex-shrink: 0;
 }
+
 .ps-switch::after {
   content: '';
   position: absolute;
@@ -2673,12 +3492,15 @@ watch(loading, (val) => {
   border-radius: 50%;
   transition: transform 0.2s;
 }
-.ps-toggle input:checked ~ .ps-switch {
+
+.ps-toggle input:checked~.ps-switch {
   background: #1890ff;
 }
-.ps-toggle input:checked ~ .ps-switch::after {
+
+.ps-toggle input:checked~.ps-switch::after {
   transform: translateX(14px);
 }
+
 .ps-select {
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -2690,9 +3512,11 @@ watch(loading, (val) => {
   cursor: pointer;
   outline: none;
 }
+
 .ps-select:hover {
   border-color: rgba(255, 255, 255, 0.3);
 }
+
 .ps-select option {
   background: #1a1a1a;
   color: #fff;
@@ -2702,6 +3526,7 @@ watch(loading, (val) => {
 .report-ad-group {
   position: relative;
 }
+
 .report-ad-popup {
   position: absolute;
   bottom: calc(100% + 10px);
@@ -2722,22 +3547,26 @@ watch(loading, (val) => {
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
   z-index: 10;
 }
+
 .report-ad-popup.show {
   opacity: 1;
   pointer-events: auto;
   transform: translateY(0);
 }
+
 .report-ad-title {
   padding: 6px 12px 4px;
   color: rgba(255, 255, 255, 0.5);
   font-size: 0.75rem;
   user-select: none;
 }
+
 .report-ad-empty {
   padding: 8px 12px;
   color: rgba(255, 255, 255, 0.4);
   font-size: 0.82rem;
 }
+
 .report-ad-item {
   display: flex;
   align-items: center;
@@ -2753,15 +3582,18 @@ watch(loading, (val) => {
   text-align: left;
   font-family: inherit;
 }
+
 .report-ad-item:hover {
   background: rgba(255, 77, 77, 0.15);
   color: #ff6b6b;
 }
+
 .report-ad-domain {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
 .report-ad-toast {
   position: absolute;
   top: 50%;
@@ -2775,7 +3607,7 @@ watch(loading, (val) => {
   color: #4ade80;
   border-radius: 10px;
   font-size: 0.85rem;
-  z-index: 20;
+  z-index: 25;
   pointer-events: none;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
@@ -2847,7 +3679,7 @@ watch(loading, (val) => {
 .quality-toast {
   position: absolute;
   left: 12px;
-  bottom: 52px;
+  bottom: 90px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -2979,11 +3811,11 @@ watch(loading, (val) => {
 .ai-warning-overlay {
   position: absolute;
   inset: 0;
+  z-index: 100;
   background: rgba(0, 0, 0, 0.7);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 20;
   backdrop-filter: blur(4px);
   animation: fadeIn 0.2s ease;
 }
@@ -3091,5 +3923,400 @@ watch(loading, (val) => {
 .ai-warning-btn--confirm:hover {
   background: #ff9426;
   transform: translateY(-1px);
+}
+
+/* ========= 模态框通用 ========= */
+.modal-fade-enter-active,
+.modal-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.modal-fade-enter-active .vp-modal,
+.modal-fade-leave-active .vp-modal {
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.modal-fade-enter-from,
+.modal-fade-leave-to {
+  opacity: 0;
+}
+
+.modal-fade-enter-from .vp-modal,
+.modal-fade-leave-to .vp-modal {
+  transform: scale(0.95) translateY(10px);
+  opacity: 0;
+}
+
+.vp-modal-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.vp-modal {
+  background: rgba(28, 28, 32, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  min-width: 320px;
+  max-width: 90vw;
+  width: 440px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: 85vh;
+}
+
+.vp-modal-info {
+  max-width: 480px;
+  min-width: 360px;
+  width: 480px;
+}
+
+.vp-modal-shortcut {
+  max-width: 90vw;
+  min-width: 380px;
+  width: 520px;
+}
+
+.vp-modal-shortcut .vp-modal-body {
+  max-height: calc(85vh - 140px);
+}
+
+.vp-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.vp-modal-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.vp-modal-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.vp-modal-body {
+  padding: 14px 18px;
+  max-height: calc(85vh - 120px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+
+.vp-modal-body::-webkit-scrollbar {
+  width: 5px;
+}
+
+.vp-modal-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+}
+
+.vp-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.vp-btn-primary,
+.vp-btn-secondary {
+  padding: 6px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.vp-btn-primary {
+  background: var(--accent, #1890ff);
+  color: #fff;
+}
+
+.vp-btn-primary:hover {
+  filter: brightness(1.1);
+}
+
+.vp-btn-secondary {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.vp-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.vp-modal-hint {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+
+.vp-empty-text {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.4);
+  padding: 20px 0;
+  font-size: 13px;
+}
+
+/* 视频信息 - 网格布局 */
+.vp-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 20px;
+}
+
+.vp-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.vp-info-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.vp-info-val {
+  font-size: 14px;
+  color: #fff;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  word-break: break-all;
+}
+
+.vp-info-val.vp-info-warn {
+  color: #ff6b6b;
+}
+
+.vp-info-val.vp-info-highlight {
+  color: #40a9ff;
+  font-weight: 600;
+}
+
+.vp-info-val.vp-info-mono {
+  font-size: 12px;
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.vp-info-val.vp-info-url {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.4;
+}
+
+.vp-info-item.vp-info-full {
+  grid-column: 1 / -1;
+}
+
+.vp-info-section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.55);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 16px 0 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.vp-info-section-title:first-child {
+  margin-top: 0;
+}
+
+/* 快捷键列表 */
+.vp-shortcut-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.vp-shortcut-row {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  gap: 10px;
+  transition: border-color 0.15s;
+}
+
+.vp-shortcut-row:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.vp-sc-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  min-width: 55px;
+}
+
+.vp-sc-desc {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  flex: 1;
+  min-width: 0;
+}
+
+.vp-sc-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.vp-sc-btn {
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 65px;
+  justify-content: center;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.vp-sc-btn:hover {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.vp-sc-btn.editing {
+  border-color: var(--accent, #1890ff);
+  color: var(--accent, #1890ff);
+  animation: vp-blink 0.8s ease infinite;
+}
+
+@keyframes vp-blink {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.vp-sc-key {
+  display: inline-block;
+  padding: 2px 7px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.vp-sc-key+.vp-sc-key {
+  margin-left: 3px;
+}
+
+.vp-sc-none {
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 11px;
+}
+
+.vp-sc-recording {
+  font-size: 12px;
+  color: var(--accent, #1890ff);
+}
+
+.vp-sc-reset {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  opacity: 0;
+}
+
+.vp-shortcut-row:hover .vp-sc-reset {
+  opacity: 1;
+}
+
+.vp-sc-reset:hover {
+  color: var(--accent, #1890ff);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* 播放设置弹窗 - 分隔线 + 快捷键入口 */
+.playback-settings-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 4px 0;
+}
+
+.playback-settings-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.12s;
+  font-family: inherit;
+  width: 100%;
+  text-align: left;
+}
+
+.playback-settings-link:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.playback-settings-link span {
+  flex: 1;
 }
 </style>

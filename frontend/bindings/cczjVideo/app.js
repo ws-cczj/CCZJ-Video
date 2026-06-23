@@ -57,29 +57,20 @@ export function CancelDownload(taskId) {
 }
 
 /**
- * CiligouStatus 磁力链接调度器状态
- * @returns {$CancellablePromise<{ [_ in string]?: any }>}
- */
-export function CiligouStatus() {
-    return $Call.ByID(2138044537).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType0($result);
-    }));
-}
-
-/**
- * CiligouTriggerNow 立即触发一次磁力链接获取
- * @returns {$CancellablePromise<number>}
- */
-export function CiligouTriggerNow() {
-    return $Call.ByID(2337338755);
-}
-
-/**
  * ClearAllHistory 清空全部观看历史，返回删除的条数
  * @returns {$CancellablePromise<number>}
  */
 export function ClearAllHistory() {
     return $Call.ByID(232718195);
+}
+
+/**
+ * ClearCache 清除指定类型的缓存
+ * @param {$models.ClearCacheReq} req
+ * @returns {$CancellablePromise<boolean>}
+ */
+export function ClearCache(req) {
+    return $Call.ByID(1413834504, req);
 }
 
 /**
@@ -226,6 +217,16 @@ export function GetAllSources() {
 }
 
 /**
+ * GetCacheInfo 获取缓存信息
+ * @returns {$CancellablePromise<$models.CacheInfo | null>}
+ */
+export function GetCacheInfo() {
+    return $Call.ByID(1735807799).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType15($result);
+    }));
+}
+
+/**
  * GetCloseBehavior 返回关闭行为：true=缩小到托盘，false=直接退出
  * @returns {$CancellablePromise<boolean>}
  */
@@ -239,7 +240,7 @@ export function GetCloseBehavior() {
  */
 export function GetCollectSchedule() {
     return $Call.ByID(732671778).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType15($result);
+        return $$createType17($result);
     }));
 }
 
@@ -250,7 +251,7 @@ export function GetCollectSchedule() {
  */
 export function GetCollectStatus(sourceKey) {
     return $Call.ByID(1666790733, sourceKey).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType17($result);
+        return $$createType19($result);
     }));
 }
 
@@ -269,7 +270,7 @@ export function GetDownloadDir() {
  */
 export function GetDownloadProgress(taskId) {
     return $Call.ByID(1305665572, taskId).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType19($result);
+        return $$createType21($result);
     }));
 }
 
@@ -280,7 +281,7 @@ export function GetDownloadProgress(taskId) {
  */
 export function GetFavorites(page, pageSize) {
     return $Call.ByID(1693347796, page, pageSize).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType21($result);
+        return $$createType23($result);
     }));
 }
 
@@ -300,7 +301,7 @@ export function GetGlobalIdForVideo(sourceKey, vodId) {
  */
 export function GetGlobalTypes() {
     return $Call.ByID(1792034461).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType24($result);
+        return $$createType26($result);
     }));
 }
 
@@ -337,7 +338,7 @@ export function GetLogDir() {
  */
 export function GetLogList() {
     return $Call.ByID(4031992807).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType25($result);
+        return $$createType27($result);
     }));
 }
 
@@ -347,7 +348,7 @@ export function GetLogList() {
  */
 export function GetRecentHistory(limit) {
     return $Call.ByID(3759499244, limit).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType28($result);
+        return $$createType30($result);
     }));
 }
 
@@ -357,7 +358,7 @@ export function GetRecentHistory(limit) {
  */
 export function GetRecommend(req) {
     return $Call.ByID(4171590299, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType31($result);
+        return $$createType33($result);
     }));
 }
 
@@ -376,7 +377,7 @@ export function GetSetting(key) {
  */
 export function GetSourceDetail(sourceKey) {
     return $Call.ByID(42587419, sourceKey).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType33($result);
+        return $$createType35($result);
     }));
 }
 
@@ -387,7 +388,7 @@ export function GetSourceDetail(sourceKey) {
  */
 export function GetSourceParamsDoc(sourceKey) {
     return $Call.ByID(1484335526, sourceKey).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType35($result);
+        return $$createType37($result);
     }));
 }
 
@@ -396,7 +397,7 @@ export function GetSourceParamsDoc(sourceKey) {
  */
 export function GetSourceStats() {
     return $Call.ByID(1267600873).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType37($result);
+        return $$createType39($result);
     }));
 }
 
@@ -406,7 +407,7 @@ export function GetSourceStats() {
  */
 export function GetTypes(req) {
     return $Call.ByID(3112948108, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType40($result);
+        return $$createType44($result);
     }));
 }
 
@@ -416,7 +417,7 @@ export function GetTypes(req) {
  */
 export function GetVideoDetail(req) {
     return $Call.ByID(3080948803, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType42($result);
+        return $$createType46($result);
     }));
 }
 
@@ -426,7 +427,7 @@ export function GetVideoDetail(req) {
  */
 export function GetVideoList(req) {
     return $Call.ByID(643094798, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType44($result);
+        return $$createType48($result);
     }));
 }
 
@@ -437,7 +438,7 @@ export function GetVideoList(req) {
  */
 export function GetWatchedEpisodes(req) {
     return $Call.ByID(70235905, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType45($result);
+        return $$createType49($result);
     }));
 }
 
@@ -448,7 +449,7 @@ export function GetWatchedEpisodes(req) {
  */
 export function GetYearsAndAreas(sourceKey) {
     return $Call.ByID(2141058010, sourceKey).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType47($result);
+        return $$createType51($result);
     }));
 }
 
@@ -504,7 +505,7 @@ export function IsSchedulerRunning() {
  */
 export function ListDownloads() {
     return $Call.ByID(2520899730).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType48($result);
+        return $$createType52($result);
     }));
 }
 
@@ -638,7 +639,7 @@ export function SaveWatchHistory(req) {
  */
 export function SearchSource(sourceKey, keyword, limit) {
     return $Call.ByID(3286592348, sourceKey, keyword, limit).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType50($result);
+        return $$createType54($result);
     }));
 }
 
@@ -648,7 +649,7 @@ export function SearchSource(sourceKey, keyword, limit) {
  */
 export function SearchVideos(req) {
     return $Call.ByID(4225132681, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType44($result);
+        return $$createType48($result);
     }));
 }
 
@@ -668,7 +669,7 @@ export function SetCloseBehavior(minimize) {
  */
 export function SetCollectSchedule(cfg) {
     return $Call.ByID(3093903894, cfg).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType51($result);
+        return $$createType55($result);
     }));
 }
 
@@ -688,15 +689,6 @@ export function SetDownloadDir(dir) {
  */
 export function SetGlobalTypeCollectEnabled(req) {
     return $Call.ByID(3501918471, req);
-}
-
-/**
- * SetGlobalTypeMagnetEnabled 设置全局类型的磁力链接获取开关
- * @param {$models.SetGlobalTypeMagnetEnabledReq} req
- * @returns {$CancellablePromise<boolean>}
- */
-export function SetGlobalTypeMagnetEnabled(req) {
-    return $Call.ByID(372246071, req);
 }
 
 /**
@@ -733,7 +725,7 @@ export function SetTitleBarTheme(theme) {
  */
 export function StartCollect(req) {
     return $Call.ByID(3544874275, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType17($result);
+        return $$createType19($result);
     }));
 }
 
@@ -744,7 +736,7 @@ export function StartCollect(req) {
  */
 export function StartVideoDownload(req) {
     return $Call.ByID(2198607162, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType19($result);
+        return $$createType21($result);
     }));
 }
 
@@ -803,7 +795,7 @@ export function WindowGetResizable() {
  */
 export function WindowGetSize() {
     return $Call.ByID(2449844830).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType53($result);
+        return $$createType57($result);
     }));
 }
 
@@ -883,43 +875,45 @@ const $$createType10 = $Create.Array($$createType9);
 const $$createType11 = model$0.Source.createFrom;
 const $$createType12 = $Create.Nullable($$createType11);
 const $$createType13 = $Create.Array($$createType12);
-const $$createType14 = handler$0.SchedulerStatus.createFrom;
+const $$createType14 = $models.CacheInfo.createFrom;
 const $$createType15 = $Create.Nullable($$createType14);
-const $$createType16 = handler$0.CollectStatus.createFrom;
+const $$createType16 = handler$0.SchedulerStatus.createFrom;
 const $$createType17 = $Create.Nullable($$createType16);
-const $$createType18 = $models.VideoDownloadStatus.createFrom;
+const $$createType18 = handler$0.CollectStatus.createFrom;
 const $$createType19 = $Create.Nullable($$createType18);
-const $$createType20 = db$0.FavWithVideo.createFrom;
-const $$createType21 = $Create.Array($$createType20);
-const $$createType22 = db$0.GlobalTypeRow.createFrom;
-const $$createType23 = $Create.Nullable($$createType22);
-const $$createType24 = $Create.Array($$createType23);
-const $$createType25 = $Create.Array($Create.Any);
-const $$createType26 = handler$0.HistoryItemWithVideo.createFrom;
-const $$createType27 = $Create.Nullable($$createType26);
-const $$createType28 = $Create.Array($$createType27);
-const $$createType29 = model$0.Video.createFrom;
-const $$createType30 = $Create.Nullable($$createType29);
-const $$createType31 = $Create.Array($$createType30);
-const $$createType32 = handler$0.SourceDetail.createFrom;
-const $$createType33 = $Create.Nullable($$createType32);
-const $$createType34 = handler$0.SourceParamsDoc.createFrom;
+const $$createType20 = $models.VideoDownloadStatus.createFrom;
+const $$createType21 = $Create.Nullable($$createType20);
+const $$createType22 = db$0.FavWithVideo.createFrom;
+const $$createType23 = $Create.Array($$createType22);
+const $$createType24 = db$0.GlobalTypeRow.createFrom;
+const $$createType25 = $Create.Nullable($$createType24);
+const $$createType26 = $Create.Array($$createType25);
+const $$createType27 = $Create.Array($Create.Any);
+const $$createType28 = handler$0.HistoryItemWithVideo.createFrom;
+const $$createType29 = $Create.Nullable($$createType28);
+const $$createType30 = $Create.Array($$createType29);
+const $$createType31 = model$0.Video.createFrom;
+const $$createType32 = $Create.Nullable($$createType31);
+const $$createType33 = $Create.Array($$createType32);
+const $$createType34 = handler$0.SourceDetail.createFrom;
 const $$createType35 = $Create.Nullable($$createType34);
-const $$createType36 = model$0.SourceStat.createFrom;
-const $$createType37 = $Create.Array($$createType36);
-const $$createType38 = model$0.VType.createFrom;
-const $$createType39 = $Create.Nullable($$createType38);
-const $$createType40 = $Create.Array($$createType39);
-const $$createType41 = handler$0.VideoDetailResp.createFrom;
-const $$createType42 = $Create.Nullable($$createType41);
-const $$createType43 = handler$0.VideoListResp.createFrom;
-const $$createType44 = $Create.Nullable($$createType43);
-const $$createType45 = $Create.Array($Create.Any);
-const $$createType46 = handler$0.YearsResp.createFrom;
-const $$createType47 = $Create.Nullable($$createType46);
-const $$createType48 = $Create.Array($$createType18);
-const $$createType49 = handler$0.SearchSourceResult.createFrom;
-const $$createType50 = $Create.Nullable($$createType49);
-const $$createType51 = handler$0.CollectScheduleConfig.createFrom;
-const $$createType52 = $models.WindowSizeResp.createFrom;
-const $$createType53 = $Create.Nullable($$createType52);
+const $$createType36 = handler$0.SourceParamsDoc.createFrom;
+const $$createType37 = $Create.Nullable($$createType36);
+const $$createType38 = model$0.SourceStat.createFrom;
+const $$createType39 = $Create.Array($$createType38);
+const $$createType42 = model$0.VType.createFrom;
+const $$createType43 = $Create.Nullable($$createType42);
+const $$createType44 = $Create.Array($$createType43);
+const $$createType45 = handler$0.VideoDetailResp.createFrom;
+const $$createType46 = $Create.Nullable($$createType45);
+const $$createType47 = handler$0.VideoListResp.createFrom;
+const $$createType48 = $Create.Nullable($$createType47);
+const $$createType49 = $Create.Array($Create.Any);
+const $$createType50 = handler$0.YearsResp.createFrom;
+const $$createType51 = $Create.Nullable($$createType50);
+const $$createType52 = $Create.Array($$createType20);
+const $$createType53 = handler$0.SearchSourceResult.createFrom;
+const $$createType54 = $Create.Nullable($$createType53);
+const $$createType55 = handler$0.CollectScheduleConfig.createFrom;
+const $$createType56 = $models.WindowSizeResp.createFrom;
+const $$createType57 = $Create.Nullable($$createType56);

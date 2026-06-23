@@ -1,5 +1,5 @@
 /**
- * Anime4K 模型配置定义 — S / M / L / VL 四档
+ * Anime4K 模型配置定义 — S / M / L 三档
  *
  * 每档模型由 restore + upscale 两组 shader 组成，
  * buildPipeline() 根据模型配置自动计算纹理分配和 pass 流程。
@@ -27,6 +27,8 @@ export interface ModelStructure {
     split16?: PassShaderDef[]
     /** 最终 pass: pointwise 或 spatial+residual */
     final: PassShaderDef
+    /** pointwise 是否包含 linear 纹理 (M=true, VL=false) */
+    pwIncludeLinear?: boolean
   }
   /** Upscale_CNN_x2 各阶段的 shader 源 */
   upscale: {
@@ -40,6 +42,8 @@ export interface ModelStructure {
     pointwise?: PassShaderDef[]
     /** 最终空间卷积 pass (L 有, 在 Depth2Space 前) */
     finalSpatial?: PassShaderDef
+    /** pointwise 是否包含 linear 纹理 (M=true, VL=false) */
+    pwIncludeLinear?: boolean
   }
   /** Depth2Space shader (所有模型共用逻辑, 引擎内置) */
   depth2Space: PassShaderDef
@@ -131,34 +135,33 @@ export function buildPipeline(structure: ModelStructure): EnginePassDef[] {
   }
 
   // 16ch Split ReLU passes (双纹理输入, L/VL)
-  // 每个权重 shader 对应 mpv 里的两个独立 hook: 读同样的两个输入纹理,
-  // 各自写一个 4 通道输出 (conv2d_N_tf 与 conv2d_N_tf1)。这里拆成两个
-  // 独立的单输出 pass, 绝不能用 MRT (shader 只声明了单个 fragColor 输出)。
+  // 每两个连续 shader 是一对 (tf + tf1)，权重不同但共享同一对输入纹理。
+  // 拆成两个独立的单输出 pass，绝不能用 MRT (shader 只声明了单个 fragColor 输出)。
   const rSplit16Tex: number[] = []
   let rDualA = -1, rDualB = -1
-  // 进入 split16 循环前的一对输入纹理 (供 final pass 读取, 即最后一对的输入)
-  let rPreDualA = -1, rPreDualB = -1
 
   if (r.split16) {
     let readA = (r.split && rSplitTex.length > 0) ? rSplitTex[rSplitTex.length - 1] : lastLinearTex
     let readB = rLinearTex.length > 1 ? rLinearTex[rLinearTex.length - 2] : lastLinearTex
-    for (let i = 0; i < r.split16.length; i++) {
-      const fs = r.split16[i].source
+    for (let i = 0; i < r.split16.length; i += 2) {
+      const fsA = r.split16[i].source
+      const fsB = (i + 1 < r.split16.length) ? r.split16[i + 1].source : fsA
       const outA = nextTex++, outB = nextTex++
-      // 两个 pass 使用同一份权重 shader、同样的两个输入, 仅 write 目标不同
-      passes.push({ fs, read: readA, read2: readB, write: outA, resScale: 1, flipY: 1 })
-      passes.push({ fs, read: readA, read2: readB, write: outB, resScale: 1, flipY: 1 })
+      passes.push({ fs: fsA, read: readA, read2: readB, write: outA, resScale: 1, flipY: 1 })
+      passes.push({ fs: fsB, read: readA, read2: readB, write: outB, resScale: 1, flipY: 1 })
       rSplit16Tex.push(outA, outB)
-      rPreDualA = readA; rPreDualB = readB
       readA = outA; readB = outB
     }
     rDualA = readA; rDualB = readB
   }
 
   // 最终 Restore pass (残差 + video)
-  // 所有 Restore 中间层输出 (linear + split + split16), 供 M 模型的 pointwise final 读取
-  // (M 的 FS_R7 是 Conv-3x1x1x56 pointwise, 需要 u_pw0..u_pwN 绑定所有中间层纹理)
-  const allRestoreTex = [...rLinearTex, ...rSplitTex, ...rSplit16Tex]
+  // 所有 Restore 中间层输出，供 M 模型的 pointwise final 读取
+  // M 的 FS_R7 是 Conv-3x1x1x56 pointwise (需要 1 linear + 6 split = 7 个纹理)
+  // VL 的 FS_R16 是 Conv-3x1x1x112 pointwise (需要 14 split16 = 14 个纹理，不含 linear)
+  const allRestoreTex = r.pwIncludeLinear
+    ? [...rLinearTex, ...rSplitTex, ...rSplit16Tex]
+    : [...rSplit16Tex]
   let restoreWrite: number
   if (r.split16 && r.split16.length > 0) {
     const writeTex = nextTex++
@@ -227,10 +230,9 @@ export function buildPipeline(structure: ModelStructure): EnginePassDef[] {
   }
 
   // 16ch Split ReLU passes (双纹理输入, L/VL) — 拆成成对单输出 pass (非 MRT)
+  // 每两个连续 shader 是一对 (tf + tf1)，权重不同。
   const uSplit16Tex: number[] = []
   let udA = -1, udB = -1
-  // 收集所有 split16 对输出, 供 finalSpatial 和 Depth2Space 按索引访问
-  // 原始 GLSL 命名: pairs[0]=conv2d_1, pairs[1]=conv2d_2, ..., pairs[N-1]=conv2d_last
   const uSplit16Pairs: Array<[number, number]> = []
 
   if (u.split16) {
@@ -240,11 +242,12 @@ export function buildPipeline(structure: ModelStructure): EnginePassDef[] {
     let readB = uLinearTex.length > 1 ? uLinearTex[uLinearTex.length - 2]
       : uLinearTex.length > 0 ? uLinearTex[uLinearTex.length - 1]
       : restoreWrite
-    for (let i = 0; i < u.split16.length; i++) {
-      const fs = u.split16[i].source
+    for (let i = 0; i < u.split16.length; i += 2) {
+      const fsA = u.split16[i].source
+      const fsB = (i + 1 < u.split16.length) ? u.split16[i + 1].source : fsA
       const outA = nextTex++, outB = nextTex++
-      passes.push({ fs, read: readA, read2: readB, write: outA, resScale: 1, flipY: 1 })
-      passes.push({ fs, read: readA, read2: readB, write: outB, resScale: 1, flipY: 1 })
+      passes.push({ fs: fsA, read: readA, read2: readB, write: outA, resScale: 1, flipY: 1 })
+      passes.push({ fs: fsB, read: readA, read2: readB, write: outB, resScale: 1, flipY: 1 })
       uSplit16Tex.push(outA, outB)
       uSplit16Pairs.push([outA, outB])
       readA = outA; readB = outB
@@ -253,11 +256,13 @@ export function buildPipeline(structure: ModelStructure): EnginePassDef[] {
   }
 
   // Pointwise passes (M/VL: 1×1 卷积，读取所有中间层输出)
-  // 收集所有 pointwise 输出纹理, 供 VL 的 3 输入 Depth2Space 使用
+  // M 的 FS_U7 是 Conv-4x1x1x56 (需要 1 linear + 6 split = 7 个纹理)
+  // VL 的 FS_U14/15/16 是 Conv-4x1x1x112 (需要 14 split16 = 14 个纹理，不含 linear)
   const pointwiseOutTex: number[] = []
   if (u.pointwise) {
-    // 所有 upscale 中间层输出: linear + split + split16
-    const allUpscaleTex = [...uLinearTex, ...uSplitTex, ...uSplit16Tex]
+    const allUpscaleTex = u.pwIncludeLinear
+      ? [...uLinearTex, ...uSplitTex, ...uSplit16Tex]
+      : [...uSplit16Tex]
     let pwRead = allUpscaleTex.length > 0
       ? allUpscaleTex[allUpscaleTex.length - 1]
       : restoreWrite
@@ -277,17 +282,17 @@ export function buildPipeline(structure: ModelStructure): EnginePassDef[] {
   }
 
   // 最终空间卷积 pass (L: FS_U8, 在 Depth2Space 前)
-  // FS_U8 的 BIND 是 conv2d_2_tf + conv2d_2_tf1 = 倒数第 2 对 split16 的输出
-  // (即最后一对的 *输入*, 不是最后一对本身。对于 6 个 split16: pairs[4])
+  // FS_U8 读取最后一对 split16 的输出 (conv2d_last_tf + conv2d_last_tf1),
+  // 形成残差结构: lastPair → FS_U8 → Depth2Space(读 lastPair + FS_U8 输出)
   let finalSpatialWrite = -1
   if (u.finalSpatial) {
-    if (uSplit16Pairs.length >= 2) {
-      const preLast = uSplit16Pairs[uSplit16Pairs.length - 2]
+    if (uSplit16Pairs.length >= 1) {
+      const lastPair = uSplit16Pairs[uSplit16Pairs.length - 1]
       const writeTex = nextTex++
       passes.push({
         fs: u.finalSpatial.source,
-        read: preLast[0],
-        read2: preLast[1],
+        read: lastPair[0],
+        read2: lastPair[1],
         write: writeTex,
         resScale: 1,
         flipY: 1,

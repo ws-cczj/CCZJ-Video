@@ -240,7 +240,7 @@ func (u *Updater) UpdateSingleByKeyword(keyword string) (*DoubanInfo, error) {
 
 	if info != nil {
 		// 获取或创建 global_video 记录
-		globalID, err := db.GetOrCreateGlobalID(keyword)
+		globalID, err := db.GetOrCreateGlobalID(keyword, 0)
 		if err != nil {
 			applog.Error("[Douban] Failed to get/create global_video for '%s': %v", keyword, err)
 		} else {

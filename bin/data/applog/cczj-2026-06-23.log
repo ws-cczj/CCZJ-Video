@@ -1,0 +1,77 @@
+﻿[2026-06-23 13:35:36.451] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-23 13:35:36.461] [INFO] [app.go:175] [Douban] Scheduler started, interval: 30s
+[2026-06-23 13:35:36.473] [INFO] [app.go:61] 同步全局类型完成: 0 条
+[2026-06-23 13:36:06.462] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-23 13:36:06.462] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-23 13:36:06.462] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-23 13:36:06.462] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传
+[2026-06-23 13:36:06.463] [INFO] [updater.go:137] [Douban] Searching for keyword: 凡人修仙传
+[2026-06-23 13:36:26.204] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0
+[2026-06-23 13:36:26.653] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 20.19s
+[2026-06-23 13:36:26.654] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 凡人修仙传 (HTML length: 29896)
+[2026-06-23 13:36:26.656] [INFO] [crawler.go:408] [Douban] Search cooldown activated for '凡人修仙传' (failures=33, until=2026-06-24 13:36:26)
+[2026-06-23 13:36:26.657] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传': no subject ID found for keyword: 凡人修仙传
+[2026-06-23 13:36:26.657] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 权力的游戏第二季
+[2026-06-23 13:36:26.657] [INFO] [updater.go:137] [Douban] Searching for keyword: 权力的游戏第二季
+[2026-06-23 13:36:55.665] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E6%9D%83%E5%8A%9B%E7%9A%84%E6%B8%B8%E6%88%8F%E7%AC%AC%E4%BA%8C%E5%AD%A3
+[2026-06-23 13:36:56.002] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 29.35s
+[2026-06-23 13:36:56.003] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 权力的游戏第二季 (HTML length: 35886)
+[2026-06-23 13:36:56.003] [INFO] [updater.go:137] [Douban] Searching for keyword: 权力的游戏
+[2026-06-23 13:37:29.264] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E6%9D%83%E5%8A%9B%E7%9A%84%E6%B8%B8%E6%88%8F
+[2026-06-23 13:37:29.652] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 33.65s
+[2026-06-23 13:37:29.654] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 权力的游戏 (HTML length: 36602)
+[2026-06-23 13:37:29.656] [INFO] [crawler.go:408] [Douban] Search cooldown activated for '权力的游戏第二季' (failures=5, until=2026-06-24 13:37:29)
+[2026-06-23 13:37:29.656] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '权力的游戏第二季': no subject ID found for keyword: 权力的游戏
+[2026-06-23 13:37:29.656] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 权力的游戏第三季
+[2026-06-23 13:37:29.657] [INFO] [updater.go:137] [Douban] Searching for keyword: 权力的游戏第三季
+[2026-06-23 13:38:28.669] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E6%9D%83%E5%8A%9B%E7%9A%84%E6%B8%B8%E6%88%8F%E7%AC%AC%E4%B8%89%E5%AD%A3
+[2026-06-23 13:38:29.110] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 59.45s
+[2026-06-23 13:38:29.111] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 权力的游戏第三季 (HTML length: 35712)
+[2026-06-23 13:38:29.111] [INFO] [updater.go:137] [Douban] Searching for keyword: 权力的游戏
+[2026-06-23 13:38:59.990] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E6%9D%83%E5%8A%9B%E7%9A%84%E6%B8%B8%E6%88%8F
+[2026-06-23 13:39:00.413] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 31.30s
+[2026-06-23 13:39:00.414] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 权力的游戏 (HTML length: 36602)
+[2026-06-23 13:39:00.416] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '权力的游戏第三季': no subject ID found for keyword: 权力的游戏
+[2026-06-23 13:39:00.416] [INFO] [scheduler.go:42] [Douban] Found 0 incomplete records (has subject_id but missing details)
+[2026-06-23 13:39:00.416] [INFO] [scheduler.go:42] [Douban] Batch update completed: 0 records updated
+[2026-06-23 13:39:00.416] [INFO] [asm_amd64.s:1771] [Douban] Scheduler batch update: no videos updated
+[2026-06-23 13:39:00.416] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-23 13:39:00.416] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-23 13:39:00.416] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-23 13:39:00.416] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传
+[2026-06-23 13:39:00.416] [INFO] [updater.go:137] [Douban] Searching for keyword: 凡人修仙传
+[2026-06-23 13:39:45.143] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0
+[2026-06-23 13:39:45.617] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 45.20s
+[2026-06-23 13:39:45.618] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 凡人修仙传 (HTML length: 29896)
+[2026-06-23 13:39:45.620] [INFO] [crawler.go:408] [Douban] Search cooldown activated for '凡人修仙传' (failures=34, until=2026-06-24 13:39:45)
+[2026-06-23 13:39:45.620] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传': no subject ID found for keyword: 凡人修仙传
+[2026-06-23 13:39:45.620] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 权力的游戏第三季
+[2026-06-23 13:39:45.620] [INFO] [updater.go:137] [Douban] Searching for keyword: 权力的游戏第三季
+[2026-06-23 13:40:31.387] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E6%9D%83%E5%8A%9B%E7%9A%84%E6%B8%B8%E6%88%8F%E7%AC%AC%E4%B8%89%E5%AD%A3
+[2026-06-23 13:40:31.755] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 46.13s
+[2026-06-23 13:40:31.756] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 权力的游戏第三季 (HTML length: 35712)
+[2026-06-23 13:40:31.756] [INFO] [updater.go:137] [Douban] Searching for keyword: 权力的游戏
+[2026-06-23 13:41:07.150] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E6%9D%83%E5%8A%9B%E7%9A%84%E6%B8%B8%E6%88%8F
+[2026-06-23 13:41:07.547] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 35.79s
+[2026-06-23 13:41:07.547] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 权力的游戏 (HTML length: 36602)
+[2026-06-23 13:41:07.550] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '权力的游戏第三季': no subject ID found for keyword: 权力的游戏
+[2026-06-23 13:41:07.550] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 权力的游戏第四季
+[2026-06-23 13:41:07.550] [INFO] [updater.go:137] [Douban] Searching for keyword: 权力的游戏第四季
+[2026-06-23 13:41:29.505] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E6%9D%83%E5%8A%9B%E7%9A%84%E6%B8%B8%E6%88%8F%E7%AC%AC%E5%9B%9B%E5%AD%A3
+[2026-06-23 13:41:29.893] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 22.34s
+[2026-06-23 13:41:29.893] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 权力的游戏第四季 (HTML length: 36157)
+[2026-06-23 13:41:29.893] [INFO] [updater.go:137] [Douban] Searching for keyword: 权力的游戏
+[2026-06-23 13:42:22.384] [INFO] [crawler.go:348] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E6%9D%83%E5%8A%9B%E7%9A%84%E6%B8%B8%E6%88%8F
+[2026-06-23 13:42:22.828] [INFO] [crawler.go:348] [Douban] HTTP status: 200, duration: 52.93s
+[2026-06-23 13:42:22.829] [WARN] [updater.go:137] [Douban] No subject ID found for keyword: 权力的游戏 (HTML length: 36602)
+[2026-06-23 13:42:22.831] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '权力的游戏第四季': no subject ID found for keyword: 权力的游戏
+[2026-06-23 13:42:22.831] [INFO] [scheduler.go:42] [Douban] Found 0 incomplete records (has subject_id but missing details)
+[2026-06-23 13:42:22.831] [INFO] [scheduler.go:42] [Douban] Batch update completed: 0 records updated
+[2026-06-23 13:42:22.831] [INFO] [asm_amd64.s:1771] [Douban] Scheduler batch update: no videos updated
+[2026-06-23 13:42:22.831] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-23 13:42:22.831] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-23 13:42:22.831] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-23 13:42:22.831] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传
+[2026-06-23 13:42:22.832] [INFO] [updater.go:137] [Douban] Searching for keyword: 凡人修仙传
+[2026-06-23 13:42:33.625] [INFO] [app.go:3094] [Douban] Stopping scheduler (graceful)...
+[2026-06-23 13:42:33.625] [INFO] [scheduler.go:62] [Douban] Updater graceful stop requested

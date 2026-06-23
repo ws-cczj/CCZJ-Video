@@ -8,7 +8,9 @@ export {
 };
 
 export {
+    CacheInfo,
     ChunkProgress,
+    ClearCacheReq,
     DoubanDetailReq,
     DoubanDetailResp,
     DoubanGetAllReq,
@@ -21,7 +23,6 @@ export {
     LogEntry,
     RecommendReq,
     SetGlobalTypeCollectEnabledReq,
-    SetGlobalTypeMagnetEnabledReq,
     SourceActionReq,
     TriggerCollectReq,
     VideoDownloadReq,

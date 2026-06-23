@@ -68,14 +68,15 @@ type CollectMode = 'full' | 'incremental' | 'once'
 
 function toGoCfg(cfg: CollectScheduleConfig): any {
   const seconds = Math.max(30, Math.floor(cfg.background_interval_seconds || 60))
+  // ⭐ 字段名必须与 Go struct 的 json tag 一致（snake_case），否则 Wails 反序列化时字段为零值
   return {
-    EnableBackground: !!cfg.enable_background,
-    BackgroundIntervalSeconds: seconds,
-    BackgroundIntervalMinutes: Math.floor(seconds / 60),
-    EnableStartupCatchup: !!cfg.enable_startup_catchup,
-    EnableInitialFullCollect: !!cfg.enable_initial_full_collect,
-    SourceGapSeconds: Math.max(1, Math.floor(cfg.source_gap_seconds || 10)),
-    PageGapSeconds: Math.max(1, Math.floor(cfg.page_gap_seconds || 30)),
+    enable_background: !!cfg.enable_background,
+    background_interval_seconds: seconds,
+    background_interval_minutes: Math.floor(seconds / 60),
+    enable_startup_catchup: !!cfg.enable_startup_catchup,
+    enable_initial_full_collect: !!cfg.enable_initial_full_collect,
+    source_gap_seconds: Math.max(1, Math.floor(cfg.source_gap_seconds || 10)),
+    page_gap_seconds: Math.max(1, Math.floor(cfg.page_gap_seconds || 30)),
   }
 }
 

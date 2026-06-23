@@ -4,8 +4,8 @@ package db
 
 // AddFavorite 添加收藏：通过 vod_name 获取 global_id，然后写入 favorites 表
 func AddFavorite(sourceKey string, vodId string, vodName string) error {
-	globalID, err := GetOrCreateGlobalID(vodName)
-	if err != nil {
+		globalID, err := GetOrCreateGlobalID(vodName, 0)
+		if err != nil {
 		return err
 	}
 	q := `INSERT OR IGNORE INTO favorites (global_id, source_key, vod_id) VALUES (?, ?, ?)`
@@ -65,8 +65,8 @@ func GetFavorites(page, pageSize int) ([]FavWithVideo, error) {
 
 // SaveWatchHistory 保存观看进度
 func SaveWatchHistory(sourceKey string, vodId string, vodName string, epNum int, position float64) error {
-	globalID, err := GetOrCreateGlobalID(vodName)
-	if err != nil {
+		globalID, err := GetOrCreateGlobalID(vodName, 0)
+		if err != nil {
 		return err
 	}
 	q := `INSERT INTO watch_history (global_id, source_key, vod_id, ep_num, position, updated_at)

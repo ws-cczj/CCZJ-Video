@@ -329,7 +329,7 @@ function openDownload(): void {
   showDownloadModal.value = true
   downloadError.value = null
   if (!downloadStore.dir) {
-    try { downloadStore.init() } catch {}
+    try { downloadStore.init() } catch { }
   }
 }
 
@@ -440,11 +440,11 @@ function playEpisode(epIndex: number): void {
       vod_name: v.vod_name || '',
       ep_num: epNum,
       position: entry?.position ?? 0,
-    } as any).catch(() => {})
+    } as any).catch(() => { })
     // 预取点击剧集的 m3u8 文本（轻量，跳转到播放页时可命中缓存）
     TsCache.setCurrentEpisode(epIndex)
     const epUrl = resolveEpisodeUrl(ep)
-    if (epUrl) TsCache.fetchAndParseM3u8(epUrl).catch(() => {})
+    if (epUrl) TsCache.fetchAndParseM3u8(epUrl).catch(() => { })
   } catch { /* ignore */ }
   router.push(getPlayerPath(sourceKey.value, v, epIndex))
 }
@@ -479,7 +479,7 @@ function formatEpisodeName(ep: Episode, i: number): string {
 // ==================== 类似推荐 ====================
 const similarVideos = ref<RecommendItem[]>([])
 const similarLoading = ref(false)
-const MAX_SIMILAR_INITIAL = 10
+const MAX_SIMILAR_INITIAL = 7
 
 const displayedSimilar = computed(() => {
   return similarVideos.value.slice(0, MAX_SIMILAR_INITIAL)
@@ -581,7 +581,7 @@ async function loadDetail(): Promise<void> {
     TsCache.enable()
     // 只预取 m3u8 文本（约 10KB，几乎无成本），用户点击播放时命中文本缓存即可
     const firstUrl = resolveEpisodeUrl(eps[0])
-    if (firstUrl) TsCache.fetchAndParseM3u8(firstUrl).catch(() => {})
+    if (firstUrl) TsCache.fetchAndParseM3u8(firstUrl).catch(() => { })
   }
   loading.value = false
 
@@ -599,11 +599,11 @@ async function loadDetail(): Promise<void> {
 
 onMounted(async () => {
   await sourceStore.loadSources()
-  try { await downloadStore.init() } catch {}
+  try { await downloadStore.init() } catch { }
   await loadDetail()
   refreshEpProgress() // 视频加载完成后刷新进度
   await refreshLastWatched() // 从播放页返回时刷新“继续观看”
-  refreshFav().catch(() => {})
+  refreshFav().catch(() => { })
   // 页面可见性变化时刷新进度（从播放页返回时同步）
   document.addEventListener('visibilitychange', onVisibilityChange)
   // 监听播放页实时进度更新事件
@@ -634,7 +634,7 @@ watch(() => route.fullPath, (newPath, oldPath) => {
 watch(vodId, () => {
   if (vodId.value) {
     loadDetail()
-    refreshFav().catch(() => {})
+    refreshFav().catch(() => { })
   }
 })
 
@@ -657,13 +657,7 @@ onBeforeUnmount(() => {
       <div v-if="video" class="nav-title">
         <span>{{ video.vod_name }}</span>
       </div>
-      <button
-        v-if="video"
-        class="delete-btn-nav"
-        :disabled="deleting"
-        title="删除此视频"
-        @click="deleteThisVideo"
-      >
+      <button v-if="video" class="delete-btn-nav" :disabled="deleting" title="删除此视频" @click="deleteThisVideo">
         <Icon name="trash" :size="14" />
       </button>
     </div>
@@ -698,16 +692,12 @@ onBeforeUnmount(() => {
               <button v-if="lastWatched" class="continue-btn" @click="playEpisode(lastWatched.epIdx)">
                 <Icon name="play" :size="12" />
                 <span class="continue-main">继续观看 · {{ lastWatched.epName }}</span>
-                <span v-if="lastWatched.position > 0" class="continue-pct">{{ Math.min(100, Math.round(lastWatched.position)) }}%</span>
+                <span v-if="lastWatched.position > 0" class="continue-pct">{{ Math.min(100,
+                  Math.round(lastWatched.position)) }}%</span>
               </button>
             </div>
-            <Button
-              :variant="isFav ? 'primary' : 'secondary'"
-              size="md"
-              :disabled="favBusy"
-              @click="toggleFavorite"
-              :title="isFav ? '取消收藏' : '加入收藏'"
-            >
+            <Button :variant="isFav ? 'primary' : 'secondary'" size="md" :disabled="favBusy" @click="toggleFavorite"
+              :title="isFav ? '取消收藏' : '加入收藏'">
               <span>{{ isFav ? '★' : '☆' }}</span>
               <span>{{ isFav ? '已收藏' : '收藏' }}</span>
             </Button>
@@ -735,24 +725,16 @@ onBeforeUnmount(() => {
           <div v-if="directorList.length > 0" class="meta-row">
             <span class="meta-label">导演</span>
             <div class="meta-values">
-              <button
-                v-for="(d, i) in directorList"
-                :key="'d-' + i"
-                class="meta-chip clickable"
-                @click="searchByKeyword(d)"
-              >{{ d }}</button>
+              <button v-for="(d, i) in directorList" :key="'d-' + i" class="meta-chip clickable"
+                @click="searchByKeyword(d)">{{ d }}</button>
             </div>
           </div>
 
           <div v-if="actorList.length > 0" class="meta-row">
             <span class="meta-label">演员</span>
             <div class="meta-values">
-              <button
-                v-for="(a, i) in actorList"
-                :key="'a-' + i"
-                class="meta-chip clickable"
-                @click="searchByKeyword(a)"
-              >{{ a }}</button>
+              <button v-for="(a, i) in actorList" :key="'a-' + i" class="meta-chip clickable"
+                @click="searchByKeyword(a)">{{ a }}</button>
             </div>
           </div>
 
@@ -789,7 +771,8 @@ onBeforeUnmount(() => {
           <div class="overview-block">
             <div class="overview-label-row">
               <span class="overview-label">简介</span>
-              <Button v-if="overviewText && overviewText.length > 120" variant="text" size="sm" class="expand-btn" @click="expandOverview = !expandOverview">
+              <Button v-if="overviewText && overviewText.length > 120" variant="text" size="sm" class="expand-btn"
+                @click="expandOverview = !expandOverview">
                 {{ expandOverview ? '收起' : '展开' }}
               </Button>
             </div>
@@ -806,24 +789,17 @@ onBeforeUnmount(() => {
         <div class="section-head">
           <div class="section-head-left">
             <h3>{{ episodeMode === 'download' ? '选集 · 点击下载' : '选集 · 点击播放' }}</h3>
-              <!-- 共 X 集信息（始终显示为次要信息） -->
+            <!-- 共 X 集信息（始终显示为次要信息） -->
             <span>共 {{ videoStore.episodes.length }} 集</span>
           </div>
           <div class="section-head-right">
-            <Button
-              variant="secondary"
-              size="sm"
-              @click="toggleEpisodeSort"
-              :title="episodeSortAsc ? '当前正序，点击切换倒序' : '当前倒序，点击切换正序'"
-            >
+            <Button variant="secondary" size="sm" @click="toggleEpisodeSort"
+              :title="episodeSortAsc ? '当前正序，点击切换倒序' : '当前倒序，点击切换正序'">
               <Icon :name="episodeSortAsc ? 'chevron-down' : 'chevron-up'" :size="14" />
               <span>{{ episodeSortAsc ? '正序' : '倒序' }}</span>
             </Button>
-            <Button
-              :variant="episodeMode === 'download' ? 'primary' : 'secondary'"
-              size="sm"
-              @click="toggleEpisodeMode"
-            >
+            <Button :variant="episodeMode === 'download' ? 'primary' : 'secondary'" size="sm"
+              @click="toggleEpisodeMode">
               <Icon name="download" :size="14" />
               <span>{{ episodeMode === 'download' ? '返回观看模式' : '下载模式' }}</span>
             </Button>
@@ -834,22 +810,18 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <div class="episodes-grid">
-          <button
-            v-for="(ep, i) in sortedEpisodes"
-            :key="'ep-' + (ep.ep_num || i)"
-            class="episode-btn"
-            :class="{
-              'download-mode': episodeMode === 'download',
-              'in-download': downloadingEpKeys.has(epKey(ep)),
-              'watched': episodeMode !== 'download' && isWatched(ep, origIdx(i)),
-            }"
-            @click="onEpisodeClick(i, ep)"
-            :title="formatEpisodeName(ep, origIdx(i)) + (isWatched(ep, origIdx(i)) ? ' · 已观看 ' + Math.round(getEpPct(ep, origIdx(i))) + '%' : '')"
-          >
+          <button v-for="(ep, i) in sortedEpisodes" :key="'ep-' + (ep.ep_num || i)" class="episode-btn" :class="{
+            'download-mode': episodeMode === 'download',
+            'in-download': downloadingEpKeys.has(epKey(ep)),
+            'watched': episodeMode !== 'download' && isWatched(ep, origIdx(i)),
+          }" @click="onEpisodeClick(i, ep)"
+            :title="formatEpisodeName(ep, origIdx(i)) + (isWatched(ep, origIdx(i)) ? ' · 已观看 ' + Math.round(getEpPct(ep, origIdx(i))) + '%' : '')">
             <Icon v-if="episodeMode === 'download'" name="download" :size="11" />
             <span class="ep-num">{{ formatEpisodeName(ep, origIdx(i)) }}</span>
-            <div v-if="episodeMode !== 'download' && getEpPct(ep, origIdx(i)) > 0" class="ep-progress-fill" :style="{ width: getEpPct(ep, origIdx(i)) + '%' }"></div>
-            <span v-if="episodeMode !== 'download' && getEpPct(ep, origIdx(i)) > 0" class="ep-progress-pct">{{ Math.round(getEpPct(ep, origIdx(i))) }}%</span>
+            <div v-if="episodeMode !== 'download' && getEpPct(ep, origIdx(i)) > 0" class="ep-progress-fill"
+              :style="{ width: getEpPct(ep, origIdx(i)) + '%' }"></div>
+            <span v-if="episodeMode !== 'download' && getEpPct(ep, origIdx(i)) > 0" class="ep-progress-pct">{{
+              Math.round(getEpPct(ep, origIdx(i))) }}%</span>
           </button>
         </div>
       </section>
@@ -860,11 +832,7 @@ onBeforeUnmount(() => {
           <h3>相似推荐</h3>
           <div class="section-head-right">
             <span v-if="similarVideos.length > 0" class="section-sub">{{ similarVideos.length }} 部</span>
-            <button
-              v-if="hasMoreSimilar"
-              class="show-more-btn"
-              @click="goToRecommendations"
-            >
+            <button v-if="hasMoreSimilar" class="show-more-btn" @click="goToRecommendations">
               查看更多
               <span class="show-more-arrow">→</span>
             </button>
@@ -880,12 +848,8 @@ onBeforeUnmount(() => {
         </div>
 
         <div v-else class="similar-grid">
-          <div
-            v-for="(item, i) in displayedSimilar"
-            :key="'sim-' + item.vod_id + '-' + i"
-            class="similar-card"
-            @click="openSimilarVideo(item)"
-          >
+          <div v-for="(item, i) in displayedSimilar" :key="'sim-' + item.vod_id + '-' + i" class="similar-card"
+            @click="openSimilarVideo(item)">
             <div class="similar-cover">
               <img v-if="item.vod_pic" :src="item.vod_pic" :alt="item.vod_name" loading="lazy" />
               <div v-else class="similar-cover-empty">
@@ -904,13 +868,8 @@ onBeforeUnmount(() => {
     </template>
 
     <!-- ==================== 下载弹窗 ==================== -->
-    <Modal
-      :model-value="showDownloadModal"
-      title="选择剧集下载"
-      width="640px"
-      :show-footer="true"
-      @update:model-value="(v: boolean) => !v && closeDownload()"
-    >
+    <Modal :model-value="showDownloadModal" title="选择剧集下载" width="640px" :show-footer="true"
+      @update:model-value="(v: boolean) => !v && closeDownload()">
       <div v-if="downloadError" class="modal-error">
         <Icon name="alert-triangle" :size="14" />
         <span>{{ downloadError }}</span>
@@ -930,13 +889,8 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="modal-episodes">
-          <div
-            v-for="(ep, i) in videoStore.episodes"
-            :key="'dl-' + (ep.ep_num || i)"
-            class="modal-episode"
-            :class="{ downloading: downloadingEpKeys.has(epKey(ep)) }"
-            @click="downloadEpisode(ep)"
-          >
+          <div v-for="(ep, i) in videoStore.episodes" :key="'dl-' + (ep.ep_num || i)" class="modal-episode"
+            :class="{ downloading: downloadingEpKeys.has(epKey(ep)) }" @click="downloadEpisode(ep)">
             <span class="modal-ep-index">{{ ep.ep_num ?? (i + 1) }}</span>
             <span class="modal-ep-name">{{ formatEpisodeName(ep, i) }}</span>
             <span class="modal-ep-action">
@@ -953,18 +907,13 @@ onBeforeUnmount(() => {
           <span class="modal-tasks-count">{{ downloadStore.tasks.length }} 个</span>
         </div>
         <div class="modal-tasks-list">
-          <div
-            v-for="task in downloadStore.tasks.slice(0, 6)"
-            :key="task.task_id"
-            class="task-row"
-          >
+          <div v-for="task in downloadStore.tasks.slice(0, 6)" :key="task.task_id" class="task-row">
             <div class="task-name">{{ sanitizeFilename(task.filename) }}</div>
             <div class="task-progress">
               <div class="task-bar">
-                <div
-                  class="task-bar-fill"
-                  :style="{ width: (task.total > 0 ? Math.round((task.downloaded / task.total) * 100) : 0) + '%' }"
-                ></div>
+                <div class="task-bar-fill"
+                  :style="{ width: (task.total > 0 ? Math.round((task.downloaded / task.total) * 100) : 0) + '%' }">
+                </div>
               </div>
               <div class="task-meta">
                 <template v-if="task.status === 'downloading'">
@@ -988,20 +937,11 @@ onBeforeUnmount(() => {
     </Modal>
 
     <!-- ==================== 选择收藏夹弹窗 ==================== -->
-    <Modal
-      :model-value="showFavFolderModal"
-      title="收藏到文件夹"
-      width="420px"
-      :show-footer="true"
-      @update:model-value="(v: boolean) => !v && (showFavFolderModal = false)"
-    >
+    <Modal :model-value="showFavFolderModal" title="收藏到文件夹" width="420px" :show-footer="true"
+      @update:model-value="(v: boolean) => !v && (showFavFolderModal = false)">
       <div class="folder-select-list">
-        <label
-          v-for="folder in favFolders"
-          :key="folder.id"
-          class="folder-select-item"
-          :class="{ active: favTargetFolderId === folder.id }"
-        >
+        <label v-for="folder in favFolders" :key="folder.id" class="folder-select-item"
+          :class="{ active: favTargetFolderId === folder.id }">
           <input type="radio" v-model="favTargetFolderId" :value="folder.id" />
           <span class="folder-radio" />
           <Icon :name="folder.default ? 'star' : 'list'" :size="14" />
@@ -1025,8 +965,15 @@ onBeforeUnmount(() => {
 }
 
 @keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .center-pad {
@@ -1044,6 +991,7 @@ onBeforeUnmount(() => {
   gap: 16px;
   margin-bottom: 14px;
 }
+
 .delete-btn-nav {
   margin-left: auto;
   flex-shrink: 0;
@@ -1059,11 +1007,13 @@ onBeforeUnmount(() => {
   cursor: pointer;
   transition: all 0.15s ease;
 }
+
 .delete-btn-nav:hover:not(:disabled) {
   background: rgba(239, 68, 68, 0.12);
   border-color: #ef4444;
   color: #ef4444;
 }
+
 .delete-btn-nav:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -1083,6 +1033,7 @@ onBeforeUnmount(() => {
   font-family: inherit;
   transition: all 0.15s ease;
 }
+
 .back-btn:hover {
   border-color: var(--accent);
   color: var(--accent);
@@ -1107,9 +1058,23 @@ onBeforeUnmount(() => {
   text-align: center;
   max-width: 480px;
 }
-.error-emoji { font-size: 48px; margin-bottom: 12px; }
-.error-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
-.error-msg { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; }
+
+.error-emoji {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.error-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.error-msg {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+}
 
 /* ============ 顶部信息区 ============ */
 .detail-header {
@@ -1123,7 +1088,9 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 720px) {
-  .detail-header { flex-direction: column; }
+  .detail-header {
+    flex-direction: column;
+  }
 }
 
 .poster-column {
@@ -1133,7 +1100,12 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 12px;
 }
-@media (max-width: 720px) { .poster-column { width: 100%; } }
+
+@media (max-width: 720px) {
+  .poster-column {
+    width: 100%;
+  }
+}
 
 .poster-frame {
   position: relative;
@@ -1197,6 +1169,7 @@ onBeforeUnmount(() => {
   font-family: inherit;
   transition: all 0.15s ease;
 }
+
 .btn-download:hover {
   border-color: var(--accent);
   background: var(--accent-alpha-10);
@@ -1241,11 +1214,13 @@ onBeforeUnmount(() => {
   transition: all 0.2s ease;
   width: 100%;
 }
+
 .continue-btn:hover {
   background: var(--accent);
   transform: translateY(-1px);
   box-shadow: 0 4px 14px var(--accent-alpha-35);
 }
+
 .continue-btn .continue-main {
   flex: 1;
   text-align: center;
@@ -1253,6 +1228,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
 .continue-btn .continue-pct {
   font-size: 11px;
   padding: 2px 8px;
@@ -1281,22 +1257,32 @@ onBeforeUnmount(() => {
   transition: all 0.2s ease;
   width: 100%;
 }
+
 .fav-btn-detail:hover {
   border-color: var(--accent);
   background: var(--accent);
   color: var(--accent-contrast);
   transform: translateY(-1px);
 }
+
 .fav-btn-detail.active {
   border-color: var(--accent);
   background: var(--btn-solid);
   color: var(--btn-solid-text);
 }
+
 .fav-btn-detail.active:hover {
   background: var(--accent);
 }
-.fav-btn-detail.busy { opacity: 0.6; pointer-events: none; }
-.fav-btn-detail .fav-icon { font-size: 14px; }
+
+.fav-btn-detail.busy {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.fav-btn-detail .fav-icon {
+  font-size: 14px;
+}
 
 .info-column {
   flex: 1;
@@ -1380,7 +1366,9 @@ onBeforeUnmount(() => {
   transition: all 0.15s ease;
 }
 
-.meta-chip.clickable { cursor: pointer; }
+.meta-chip.clickable {
+  cursor: pointer;
+}
 
 .meta-chip.clickable:hover {
   background: var(--accent);
@@ -1438,7 +1426,10 @@ onBeforeUnmount(() => {
   font-family: inherit;
   transition: background 0.15s;
 }
-.expand-btn:hover { background: var(--accent-alpha-10); }
+
+.expand-btn:hover {
+  background: var(--accent-alpha-10);
+}
 
 .overview-text {
   font-size: 13px;
@@ -1449,12 +1440,15 @@ onBeforeUnmount(() => {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
 .overview-text.expanded {
   -webkit-line-clamp: unset;
   display: block;
 }
 
-.text-muted { color: var(--text-muted); }
+.text-muted {
+  color: var(--text-muted);
+}
 
 /* ============ 剧集列表 ============ */
 .episodes-section {
@@ -1472,23 +1466,30 @@ onBeforeUnmount(() => {
   gap: 16px;
   margin-bottom: 14px;
 }
+
 .section-head-left {
   display: flex;
   align-items: baseline;
   gap: 10px;
 }
+
 .section-head-right {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
 }
+
 .section-head h3 {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
 }
-.section-sub { font-size: 12px; color: var(--text-muted); }
+
+.section-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+}
 
 /* 查看更多按钮 */
 .show-more-btn {
@@ -1505,12 +1506,14 @@ onBeforeUnmount(() => {
   transition: all 0.2s ease;
   font-weight: 500;
 }
+
 .show-more-btn:hover {
   background: var(--bg-card);
   color: var(--text-secondary);
   border-color: var(--border);
   transform: none;
 }
+
 .show-more-arrow {
   font-size: 9px;
   opacity: 0.7;
@@ -1531,26 +1534,31 @@ onBeforeUnmount(() => {
   font-weight: 500;
   transition: all 0.15s ease;
 }
+
 .mode-toggle-btn:hover {
   border-color: var(--border);
   color: var(--text-secondary);
   background: var(--bg-secondary);
   transform: none;
 }
+
 .mode-toggle-btn.active {
   border-color: var(--accent);
   background: var(--accent);
   color: var(--accent-contrast);
 }
+
 .mode-toggle-btn.active:hover {
   background: var(--accent-alpha-10);
   color: var(--accent);
 }
+
 .mode-toggle-btn.secondary {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--accent-contrast);
 }
+
 .mode-toggle-btn.secondary:hover {
   background: var(--accent-alpha-10);
   color: var(--accent);
@@ -1564,11 +1572,15 @@ onBeforeUnmount(() => {
   max-height: 320px;
   overflow-y: auto;
   /* 隐藏滚动条但保留滚动功能 */
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE/Edge */
+  scrollbar-width: none;
+  /* Firefox */
+  -ms-overflow-style: none;
+  /* IE/Edge */
 }
+
 .episodes-grid::-webkit-scrollbar {
-  display: none; /* Chrome/Safari */
+  display: none;
+  /* Chrome/Safari */
 }
 
 .episode-btn {
@@ -1606,6 +1618,7 @@ onBeforeUnmount(() => {
   border-color: var(--accent);
   background: var(--accent-alpha-10);
 }
+
 .episode-btn.download-mode:hover {
   background: var(--accent);
   color: var(--accent-contrast);
@@ -1627,6 +1640,7 @@ onBeforeUnmount(() => {
   color: var(--accent-contrast);
   font-weight: 500;
 }
+
 .episode-btn.watched:hover {
   background: var(--btn-soft);
   border-color: var(--accent);
@@ -1645,6 +1659,7 @@ onBeforeUnmount(() => {
   pointer-events: none;
   transition: width 0.25s ease;
 }
+
 .episode-btn:hover .ep-progress-fill {
   background: var(--accent);
 }
@@ -1663,6 +1678,7 @@ onBeforeUnmount(() => {
   line-height: 1.4;
   pointer-events: none;
 }
+
 .episode-btn:hover .ep-progress-pct {
   color: var(--accent);
   background: var(--accent-alpha-10);
@@ -1704,10 +1720,21 @@ onBeforeUnmount(() => {
   transition: transform 0.2s ease;
 }
 
-.similar-card:hover { transform: translateY(-3px); }
-.similar-card:hover .similar-cover { border-color: var(--accent); }
-.similar-card:hover .similar-overlay { opacity: 1; }
-.similar-card:hover .similar-name { color: var(--accent); }
+.similar-card:hover {
+  transform: translateY(-3px);
+}
+
+.similar-card:hover .similar-cover {
+  border-color: var(--accent);
+}
+
+.similar-card:hover .similar-overlay {
+  opacity: 1;
+}
+
+.similar-card:hover .similar-name {
+  color: var(--accent);
+}
 
 .similar-cover {
   position: relative;
@@ -1796,8 +1823,13 @@ onBeforeUnmount(() => {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 .modal-box {
@@ -1815,8 +1847,15 @@ onBeforeUnmount(() => {
 }
 
 @keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.96); }
-  to { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .modal-head {
@@ -1849,6 +1888,7 @@ onBeforeUnmount(() => {
   border-radius: 6px;
   transition: all 0.15s ease;
 }
+
 .modal-close:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
@@ -1910,6 +1950,7 @@ onBeforeUnmount(() => {
   font-family: inherit;
   transition: all 0.15s ease;
 }
+
 .btn-download-all:hover {
   background: var(--accent-alpha-10);
   border-color: var(--accent);
@@ -1990,7 +2031,9 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 
-.modal-episode:hover .modal-ep-action { color: var(--text-muted); }
+.modal-episode:hover .modal-ep-action {
+  color: var(--text-muted);
+}
 
 .modal-tasks {
   margin-top: 20px;
@@ -2064,6 +2107,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 10px;
 }
+
 .modal-foot .btn-primary {
   margin-top: 0;
 }
@@ -2079,6 +2123,7 @@ onBeforeUnmount(() => {
   font-family: inherit;
   transition: all 0.15s ease;
 }
+
 .btn-ghost:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
@@ -2146,6 +2191,7 @@ onBeforeUnmount(() => {
   height: 0;
   pointer-events: none;
 }
+
 .folder-radio {
   flex-shrink: 0;
   width: 16px;
@@ -2156,10 +2202,12 @@ onBeforeUnmount(() => {
   transition: all 0.15s ease;
   position: relative;
 }
+
 .folder-select-item.active .folder-radio {
   border-color: var(--accent-contrast);
   background: var(--accent-contrast);
 }
+
 .folder-select-item.active .folder-radio::after {
   content: '';
   position: absolute;
@@ -2167,6 +2215,7 @@ onBeforeUnmount(() => {
   border-radius: 50%;
   background: var(--accent);
 }
+
 .folder-name {
   flex: 1;
   min-width: 0;

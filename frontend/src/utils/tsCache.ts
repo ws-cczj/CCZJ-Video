@@ -1050,8 +1050,14 @@ async function diskSave(url: string, buf: ArrayBuffer, epKey?: string): Promise<
     tx.objectStore(STORE_NAME).put({ url, data: buf, ts: Date.now(), episodeKey: epKey || currentEpKey || '' })
     await new Promise<void>((r, j) => { tx.oncomplete = () => r(); tx.onerror = () => j(tx.error) })
     db.close(); diskPrune()
-  } catch { /* ignore */ }
+  } catch (e: any) {
+    if (e?.name === 'QuotaExceededError' || String(e?.message || '').includes('quota')) {
+      if (!_diskQuotaWarned) { _diskQuotaWarned = true; console.warn('[TsCache] 磁盘缓存配额已满，自动清理中') }
+      diskClear().catch(() => { })
+    }
+  }
 }
+let _diskQuotaWarned = false
 
 /**
  * ⭐ 按需从磁盘加载指定集的缓存 —— 只把"与当前 epKey/segmentUrls 匹配"的分片恢复到内存。
@@ -1494,6 +1500,15 @@ interface M3u8ParseResult {
   text: string;
   isMaster: boolean;       // 是否为 master playlist（多码率）
   variantUrls: string[];   // master playlist 时的 variant m3u8 URL
+  streamInfo: StreamVariantInfo[];  // master playlist 时每个 variant 的元数据
+}
+
+/** master playlist 中 #EXT-X-STREAM-INF 提取的 variant 元数据 */
+interface StreamVariantInfo {
+  bandwidth: number;       // 码率 (bps)
+  resolution: string;      // 分辨率 e.g. "1920x1080"
+  codecs: string;          // 编解码器 e.g. "avc1.640028,mp4a.40.2"
+  url: string;             // variant URL
 }
 
 /** 广告域名黑名单 localStorage 键 */
@@ -1609,10 +1624,10 @@ function stripAdFromM3u8Text(text: string, m3u8Url: string): string {
   return _stripAdByDiscontinuityGroup(lines)
 }
 
-/** 广告片段最大数量阈值（广告一般 10~20s，片段 2~5 个） */
-const MAX_AD_SEGMENT_COUNT = 4
-/** 广告最大总时长（秒） */
-const MAX_AD_TOTAL_DURATION = 25
+/** 广告片段最大数量阈值（广告一般 10~25s，片段 2~8 个，放宽到 12 兜底） */
+const MAX_AD_SEGMENT_COUNT = 12
+/** 广告最大总时长（秒）—— 25s 的广告组也能被识别 */
+const MAX_AD_TOTAL_DURATION = 30
 
 /**
  * DISCONTINUITY 分组兜底：保守策略
@@ -1620,6 +1635,8 @@ const MAX_AD_TOTAL_DURATION = 25
  *   1. 片段数 ≤ MAX_AD_SEGMENT_COUNT
  *   2. 总时长 ≤ MAX_AD_TOTAL_DURATION
  *   3. 不是唯一的内容组（避免把所有内容当广告删掉）
+ *   4. 【新增】时长占比兜底：若某组片段数远小于最大组（< 10%），且
+ *      平均片段时长明显小于内容组（广告常 3.5s/片 vs 正片 4.0s/片），也判为广告
  * 其余所有组保留，组间用 #EXT-X-DISCONTINUITY 连接
  */
 function _stripAdByDiscontinuityGroup(lines: string[]): string {
@@ -1673,12 +1690,31 @@ function _stripAdByDiscontinuityGroup(lines: string[]): string {
     return [...header, ...(groups[0]?.lines || []), ...footer].join('\n')
   }
 
+  // 计算内容组参考值：最大片段数、内容组平均片段时长
+  const maxSegCount = Math.max(...groups.map(g => g.segCount))
+  // 收集"大组"（片段数 > maxSegCount * 30%）的平均片段时长，作为正片参考
+  const largeGroups = groups.filter(g => g.segCount > maxSegCount * 0.3 && g.totalDuration > 0)
+  const contentAvgDuration = largeGroups.length > 0
+    ? largeGroups.reduce((s, g) => s + g.totalDuration / g.segCount, 0) / largeGroups.length
+    : 0
+
   // 判断哪些组是广告（小组）
-  const isAdGroup = (g: Group): boolean =>
-    g.segCount > 0 &&
-    g.segCount <= MAX_AD_SEGMENT_COUNT &&
-    g.totalDuration > 0 &&
-    g.totalDuration <= MAX_AD_TOTAL_DURATION
+  const isAdGroup = (g: Group): boolean => {
+    if (g.segCount <= 0) return false
+    // 基本阈值判定
+    if (g.segCount <= MAX_AD_SEGMENT_COUNT && g.totalDuration > 0 && g.totalDuration <= MAX_AD_TOTAL_DURATION) {
+      return true
+    }
+    // 【增强】时长占比兜底：片段数远小于最大组 + 平均片段时长明显偏短
+    if (maxSegCount > 20 && g.segCount < maxSegCount * 0.1 && contentAvgDuration > 0) {
+      const avgDur = g.totalDuration / g.segCount
+      // 广告片段平均时长比正片短 10% 以上
+      if (avgDur > 0 && avgDur < contentAvgDuration * 0.9) {
+        return true
+      }
+    }
+    return false
+  }
 
   // 统计非广告组数量
   const contentGroups = groups.filter(g => !isAdGroup(g))
@@ -1734,7 +1770,9 @@ function _parseM3u8Text(text: string, url: string): M3u8ParseResult {
   const base = url.substring(0, url.lastIndexOf('/') + 1)
   const urls: string[] = []
   const variantUrls: string[] = []
+  const streamInfo: StreamVariantInfo[] = []
   let nextLineIsVariant = false
+  let currentVariantMeta: { bandwidth: number; resolution: string; codecs: string } | null = null
   const hasStreamInf = /#EXT-X-STREAM-INF/.test(text)
   const hasExtInf = /#EXTINF/.test(text)
   const isMaster = hasStreamInf && !hasExtInf
@@ -1743,6 +1781,15 @@ function _parseM3u8Text(text: string, url: string): M3u8ParseResult {
     const trimmed = line.trim()
     if (!trimmed) continue
     if (trimmed.startsWith('#EXT-X-STREAM-INF')) {
+      // 提取 BANDWIDTH, RESOLUTION, CODECS
+      const bw = trimmed.match(/BANDWIDTH=(\d+)/)
+      const res = trimmed.match(/RESOLUTION=([\dx]+)/i)
+      const cod = trimmed.match(/CODECS="([^"]+)"/)
+      currentVariantMeta = {
+        bandwidth: bw ? parseInt(bw[1]) : 0,
+        resolution: res ? res[1] : '',
+        codecs: cod ? cod[1] : '',
+      }
       nextLineIsVariant = true
       continue
     }
@@ -1751,14 +1798,18 @@ function _parseM3u8Text(text: string, url: string): M3u8ParseResult {
     try { absUrl = new URL(trimmed, base).href } catch { absUrl = base + trimmed }
     if (isMaster || nextLineIsVariant) {
       variantUrls.push(absUrl)
+      if (currentVariantMeta) {
+        streamInfo.push({ ...currentVariantMeta, url: absUrl })
+      }
     } else {
       urls.push(absUrl)
     }
     nextLineIsVariant = false
+    currentVariantMeta = null
   }
 
   const m = text.match(/#EXT-X-TARGETDURATION:(\d+)/)
-  return { urls, variantUrls, targetduration: m ? parseInt(m[1]) : 6, text, isMaster }
+  return { urls, variantUrls, targetduration: m ? parseInt(m[1]) : 6, text, isMaster, streamInfo }
 }
 
 async function fetchAndParseM3u8(url: string): Promise<M3u8ParseResult> {

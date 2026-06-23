@@ -18,13 +18,19 @@ export default {
   },
   // 侧边栏
   sidebar: {
+    browse: '浏览',
+    manage: '管理',
+    developer: '开发者',
     home: '首页',
     search: '搜索',
-    sources: '数据源',
+    sources: '采集源',
+    videoTypes: '视频类型',
     favorites: '收藏',
     history: '历史',
     downloads: '下载',
     settings: '设置',
+    devMode: '开发者模式',
+    noSource: '未选择来源',
   },
   // 设置页面
   settings: {

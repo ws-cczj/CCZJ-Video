@@ -180,6 +180,16 @@ func doFetch(target string, fieldMapping map[string]string) (*FetchResult, error
 
 	result := &FetchResult{}
 
+	// ⭐ 预检：响应体是否为 JSON 格式，避免将纯文本错误消息当作 JSON 解析
+	trimmed := strings.TrimSpace(string(body))
+	if len(trimmed) > 0 && trimmed[0] != '{' && trimmed[0] != '[' {
+		preview := trimmed
+		if len(preview) > 300 {
+			preview = preview[:300]
+		}
+		return nil, fmt.Errorf("源站返回了非JSON响应: %s", preview)
+	}
+
 	videos, err := ParseVideosWithMapping(body, fieldMapping)
 	if err != nil {
 		preview := string(body)

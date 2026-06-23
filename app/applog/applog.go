@@ -47,6 +47,7 @@ type Logger struct {
 	currentFile *os.File
 	currentDay  string // YYYY-MM-DD
 	keepDays    int    // 保留最近多少天的日志
+	minLevel    Level  // 最低输出级别，低于此级别的日志被丢弃
 }
 
 var defaultLogger *Logger
@@ -96,7 +97,23 @@ func (l *Logger) Write(level Level, msg string) {
 	l.writeInternal(level, msg, 3)
 }
 
+// SetMinLevel 设置最低日志级别，低于此级别的日志不会写入文件
+func SetMinLevel(level Level) {
+	if defaultLogger != nil {
+		defaultLogger.minLevel = level
+	}
+}
+
+// IsDebug 返回是否处于调试模式
+func IsDebug() bool {
+	return defaultLogger != nil && defaultLogger.minLevel <= LevelDebug
+}
+
 func (l *Logger) writeInternal(level Level, msg string, skip int) {
+	// 级别过滤
+	if level < l.minLevel {
+		return
+	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 

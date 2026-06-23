@@ -57,6 +57,17 @@ func resolveGlobalTypeId(typeName string, fallbackTypeId model.FlexibleString) s
 	return "0"
 }
 
+// resolveGlobalTypeIdInt 返回 int64 类型的全局类型ID
+func resolveGlobalTypeIdInt(typeName string) int64 {
+	if typeName != "" {
+		id, err := GetOrCreateGlobalTypeId(typeName)
+		if err == nil && id > 0 {
+			return id
+		}
+	}
+	return 0
+}
+
 func UpsertVideos(sourceKey string, videos []*model.Video) error {
 	if len(videos) == 0 {
 		return nil
@@ -160,12 +171,16 @@ func upsertGlobalVideo(v *model.Video) (int64, error) {
 	director := util.DecompressIfNeeded(v.VodDirector)
 	actor := util.DecompressIfNeeded(v.VodActor)
 
-	globalID, err := GetOrCreateGlobalIDWithMeta(v.VodName, string(v.VodYear), director, actor)
+	// 解析类型ID
+	typeId := resolveGlobalTypeIdInt(v.TypeName)
+
+	globalID, err := GetOrCreateGlobalIDWithMeta(v.VodName, string(v.VodYear), director, actor, typeId)
 	if err != nil {
 		return 0, err
 	}
 
 	_, err = instance.Exec(`UPDATE global_video SET
+		type_id=CASE WHEN ? != 0 THEN ? ELSE type_id END,
 		year=CASE WHEN ? != '' THEN ? ELSE year END,
 		area=CASE WHEN ? != '' THEN ? ELSE area END,
 		lang=CASE WHEN ? != '' THEN ? ELSE lang END,
@@ -185,6 +200,7 @@ func upsertGlobalVideo(v *model.Video) (int64, error) {
 		episode_count=CASE WHEN ? != '' THEN ? ELSE episode_count END,
 		updated_at=CURRENT_TIMESTAMP
 		WHERE id = ?`,
+		typeId, typeId,
 		v.VodYear, v.VodYear, v.VodArea, v.VodArea, v.VodLang, v.VodLang,
 		v.VodDirector, v.VodDirector, v.VodActor, v.VodActor,
 		v.VodTag, v.VodTag, v.VodContent, v.VodContent, v.VodPic, v.VodPic,
@@ -699,6 +715,10 @@ func parseEpisodesInline(playUrl, vodId string) []*model.Episode {
 	if playUrl == "" {
 		return nil
 	}
+	// ⭐ 修复：vod_play_url 可能包含多个播放源（用 $$$ 分隔），只取第一个源的集数
+	if idx := strings.Index(playUrl, "$$$"); idx >= 0 {
+		playUrl = playUrl[:idx]
+	}
 	parts := strings.Split(playUrl, "#")
 	out := make([]*model.Episode, 0, len(parts))
 	for i, part := range parts {
@@ -757,6 +777,10 @@ func GetEpisodeCount(sourceKey string) int {
 		raw := util.DecompressIfNeeded(r.PlayUrl)
 		if raw == "" {
 			continue
+		}
+		// ⭐ 修复：只统计第一个播放源（$$$ 之前）的集数
+		if idx := strings.Index(raw, "$$$"); idx >= 0 {
+			raw = raw[:idx]
 		}
 		cnt := strings.Count(raw, "#") + 1
 		total += cnt

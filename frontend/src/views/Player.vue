@@ -106,7 +106,7 @@ async function searchSourceWithFallback(sk: string, vodName: string): Promise<an
     const resp = await (AppMod as any).SearchSource(sk, vodName, 10) as any
     const list = Array.isArray(resp?.videos) ? resp.videos : []
     if (list.length > 0) return list
-  } catch {}
+  } catch { }
 
   // 第二次：去空格版搜索（解决“权力的游戏 第一季”vs“权力的游戏第一季”问题）
   const noSpaceName = vodName.replace(/\s+/g, '')
@@ -118,7 +118,7 @@ async function searchSourceWithFallback(sk: string, vodName: string): Promise<an
         console.log(`[Player] ✔ 去空格搜索 "${noSpaceName}" 找到 ${list2.length} 条结果`)
         return list2
       }
-    } catch {}
+    } catch { }
   }
 
   // 第三次：去掉季后缀搜索（如“权力的游戏 第一季”→“权力的游戏”）
@@ -132,7 +132,7 @@ async function searchSourceWithFallback(sk: string, vodName: string): Promise<an
         console.log(`[Player] ✔ 基名搜索 "${baseName}" 找到 ${list3.length} 条结果`)
         return list3
       }
-    } catch {}
+    } catch { }
   }
 
   return []
@@ -234,7 +234,7 @@ function syncHistoryToDb(position: number, force = false): void {
     vod_name: video.value?.vod_name || '',
     ep_num: ep.ep_num ?? (currentEpIndex.value + 1),
     position,
-  } as any).catch(() => {})
+  } as any).catch(() => { })
 }
 
 // 写入当前集播放时持续写入独立存储（position/duration 会在用户播放过程中不断被写入
@@ -259,6 +259,77 @@ function updateCurrentEpProgress(position: number, duration?: number): void {
 // Debug: 跟踪进度更新频率
 let _epUpdateCount = 0
 
+/* ==================== 自定义快捷键 ==================== */
+interface ShortcutMap {
+  togglePlay: string[]
+  seekBack: string[]
+  seekForward: string[]
+  seekBackBig: string[]
+  seekForwardBig: string[]
+  volumeUp: string[]
+  volumeDown: string[]
+  mute: string[]
+  speedUp: string[]
+  speedDown: string[]
+  fullscreen: string[]
+  prevEp: string[]
+  nextEp: string[]
+  pip: string[]
+}
+
+const DEFAULT_SHORTCUTS: ShortcutMap = {
+  togglePlay: ['Space', 'K', 'k'],
+  seekBack: ['ArrowLeft'],
+  seekForward: ['ArrowRight'],
+  seekBackBig: ['J', 'j'],
+  seekForwardBig: ['L', 'l'],
+  volumeUp: ['ArrowUp'],
+  volumeDown: ['ArrowDown'],
+  mute: ['M', 'm'],
+  speedUp: [']'],
+  speedDown: ['['],
+  fullscreen: ['F', 'f'],
+  prevEp: ['P', 'p'],
+  nextEp: ['N', 'n'],
+  pip: ['I', 'i'],
+}
+
+function loadShortcuts(): ShortcutMap {
+  try {
+    const raw = localStorage.getItem('cczj_shortcuts')
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object') {
+        // 合并默认值，确保所有键都存在
+        const merged = { ...DEFAULT_SHORTCUTS }
+        for (const key of Object.keys(merged) as (keyof ShortcutMap)[]) {
+          if (Array.isArray(parsed[key]) && parsed[key].length > 0) {
+            // 将 Space 规范化，并且同时加入小写版本（对于字母键）
+            const keys: string[] = []
+            for (const k of parsed[key]) {
+              keys.push(k)
+              if (k.length === 1) keys.push(k.toLowerCase())
+            }
+            merged[key] = keys
+          }
+        }
+        return merged
+      }
+    }
+  } catch { }
+  return DEFAULT_SHORTCUTS
+}
+
+function normalizeKey(key: string): string {
+  if (key === ' ') return 'Space'
+  return key
+}
+
+function matchShortcut(action: keyof ShortcutMap, key: string, shortcuts: ShortcutMap): boolean {
+  const normalizedKey = normalizeKey(key)
+  return shortcuts[action].some(k => k === normalizedKey || k.toLowerCase() === key.toLowerCase())
+}
+
 /* ==================== 鼠标位置跟踪（用于键盘快捷键作用域） ==================== */
 const mouseInside = ref(false)
 function onPageKeyDown(e: KeyboardEvent): void {
@@ -267,55 +338,88 @@ function onPageKeyDown(e: KeyboardEvent): void {
   if (activeTag === 'input' || activeTag === 'textarea') return
 
   // ESC 总是允许退出全屏（由 VideoPlayer 组件内部处理）
-  // 其他键（空格、上下左右、f、m）需要鼠标位于播放器区域内才响应
+  // 其他键需要鼠标位于播放器区域内才响应
   const v = document.querySelector('.native-video') as HTMLVideoElement | null
   if (!v) return
 
-  switch (e.key) {
-    case 'ArrowUp':
-      if (!mouseInside.value) return
+  const sc = loadShortcuts()
+  const key = e.key
+
+  if (matchShortcut('togglePlay', key, sc)) {
+    if (!mouseInside.value) return
+    e.preventDefault()
+    if (v.paused) v.play()
+    else v.pause()
+  } else if (matchShortcut('seekBack', key, sc)) {
+    if (!mouseInside.value) return
+    e.preventDefault()
+    v.currentTime = Math.max(0, v.currentTime - 5)
+    v.dispatchEvent(new CustomEvent('cczj-seek-osd', { detail: { delta: -5 } }))
+  } else if (matchShortcut('seekForward', key, sc)) {
+    if (!mouseInside.value) return
+    e.preventDefault()
+    v.currentTime = Math.min(v.duration || 0, v.currentTime + 5)
+    v.dispatchEvent(new CustomEvent('cczj-seek-osd', { detail: { delta: 5 } }))
+  } else if (matchShortcut('seekBackBig', key, sc)) {
+    if (!mouseInside.value) return
+    e.preventDefault()
+    v.currentTime = Math.max(0, v.currentTime - 30)
+    v.dispatchEvent(new CustomEvent('cczj-seek-osd', { detail: { delta: -30 } }))
+  } else if (matchShortcut('seekForwardBig', key, sc)) {
+    if (!mouseInside.value) return
+    e.preventDefault()
+    v.currentTime = Math.min(v.duration || 0, v.currentTime + 30)
+    v.dispatchEvent(new CustomEvent('cczj-seek-osd', { detail: { delta: 30 } }))
+  } else if (matchShortcut('volumeUp', key, sc)) {
+    if (!mouseInside.value) return
+    e.preventDefault()
+    v.volume = Math.min(1, v.volume + 0.05)
+  } else if (matchShortcut('volumeDown', key, sc)) {
+    if (!mouseInside.value) return
+    e.preventDefault()
+    v.volume = Math.max(0, v.volume - 0.05)
+  } else if (matchShortcut('mute', key, sc)) {
+    if (!mouseInside.value) return
+    e.preventDefault()
+    v.muted = !v.muted
+  } else if (matchShortcut('speedUp', key, sc)) {
+    if (!mouseInside.value) return
+    e.preventDefault()
+    const newRate = Math.min(4, v.playbackRate + 0.25)
+    v.playbackRate = Math.round(newRate * 100) / 100
+  } else if (matchShortcut('speedDown', key, sc)) {
+    if (!mouseInside.value) return
+    e.preventDefault()
+    const newRate = Math.max(0.25, v.playbackRate - 0.25)
+    v.playbackRate = Math.round(newRate * 100) / 100
+  } else if (matchShortcut('fullscreen', key, sc)) {
+    if (!mouseInside.value) return
+    e.preventDefault()
+    if (!document.fullscreenElement) v.requestFullscreen?.()
+    else document.exitFullscreen?.()
+  } else if (matchShortcut('pip', key, sc)) {
+    if (!mouseInside.value) return
+    e.preventDefault()
+    if (v.readyState < 1) return
+    try {
+      if (document.pictureInPictureElement) {
+        document.exitPictureInPicture()
+      } else {
+        (v as any).requestPictureInPicture?.()
+      }
+    } catch { }
+  } else if (matchShortcut('prevEp', key, sc)) {
+    if (hasPrev.value) {
       e.preventDefault()
-      v.volume = Math.min(1, v.volume + 0.05)
-      break
-    case 'ArrowDown':
-      if (!mouseInside.value) return
+      prevEpisode()
+    }
+  } else if (matchShortcut('nextEp', key, sc)) {
+    if (hasNext.value) {
       e.preventDefault()
-      v.volume = Math.max(0, v.volume - 0.05)
-      break
-    case 'ArrowLeft':
-      if (!mouseInside.value) return
-      e.preventDefault()
-      v.currentTime = Math.max(0, v.currentTime - 5)
-      break
-    case 'ArrowRight':
-      if (!mouseInside.value) return
-      e.preventDefault()
-      v.currentTime = Math.min(v.duration || 0, v.currentTime + 5)
-      break
-    case ' ':
-    case 'k':
-    case 'K':
-      if (!mouseInside.value) return
-      e.preventDefault()
-      if (v.paused) v.play()
-      else v.pause()
-      break
-    case 'm':
-    case 'M':
-      if (!mouseInside.value) return
-      e.preventDefault()
-      v.muted = !v.muted
-      break
-    case 'f':
-    case 'F':
-      if (!mouseInside.value) return
-      e.preventDefault()
-      if (!document.fullscreenElement) v.requestFullscreen?.()
-      else document.exitFullscreen?.()
-      break
-    case 'Escape':
-      // 保留给系统和 VideoPlayer 内部使用（退出全屏）
-      break
+      nextEpisode()
+    }
+  } else if (e.key === 'Escape') {
+    // 保留给系统和 VideoPlayer 内部使用（退出全屏）
   }
 }
 
@@ -339,7 +443,7 @@ function bindVideoTimeTracking(): void {
     return
   }
   try { delete (v as any).__epProgressBound } catch { /* ignore */ }
-  ;(v as any).__epProgressBound = true
+  ; (v as any).__epProgressBound = true
   console.log('[Player] ✔ 进度追踪已绑定到 video 元素')
   v.addEventListener('timeupdate', () => {
     _epUpdateCount++
@@ -453,7 +557,7 @@ function recordHistory(idx: number): void {
       vod_name: video.value?.vod_name || '',
       ep_num: epNum,
       position,
-    } as any).catch(() => {})
+    } as any).catch(() => { })
   } catch { /* ignore */ }
 }
 
@@ -473,13 +577,13 @@ function goToEpisode(idx: number): void {
   recordHistory(idx)
   currentEpIndex.value = idx
   _playToken.value++
-  try { TsCache.setCurrentEpisode(idx) } catch {}
+  try { TsCache.setCurrentEpisode(idx) } catch { }
   try {
     const v = document.querySelector('.native-video') as HTMLVideoElement | null
     if (v) delete (v as any).__epProgressBound
   } catch { /* ignore */ }
   setTimeout(() => bindVideoTimeTracking(), 300)
-  router.replace(`/player/${sourceKey.value}/${vodId.value}/${idx}`).catch(() => {})
+  router.replace(`/player/${sourceKey.value}/${vodId.value}/${idx}`).catch(() => { })
 }
 function prevEpisode(): void { if (hasPrev.value) goToEpisode(currentEpIndex.value - 1) }
 function nextEpisode(): void { if (hasNext.value) goToEpisode(currentEpIndex.value + 1) }
@@ -492,10 +596,6 @@ function goBack(): void {
 function getCurrentEpCached(): { cached: number; total: number } {
   cacheReadTick.value // 订阅：触发响应式重算
   try { return TsCache.episodeProgress(currentEpIndex.value) } catch { return { cached: 0, total: 0 } }
-}
-function getNextEpCached(): { cached: number; total: number } {
-  cacheReadTick.value
-  try { return TsCache.episodeProgress(currentEpIndex.value + 1) } catch { return { cached: 0, total: 0 } }
 }
 function getHitRate(): number {
   cacheReadTick.value
@@ -528,7 +628,7 @@ async function loadData(): Promise<void> {
             if (idx >= 0) targetIdx = idx
           }
         }
-      } catch {}
+      } catch { }
     }
     currentEpIndex.value = targetIdx
     _playToken.value++
@@ -544,11 +644,11 @@ async function loadData(): Promise<void> {
         })),
       )
       TsCache.setCurrentEpisode(targetIdx)
-    } catch {}
+    } catch { }
 
     // 剧集加载完成后刷新播放进度（首次调用时 episodes 可能为空，此处补充）
     refreshEpProgressUI()
-  } catch {}
+  } catch { }
   finally { loading.value = false }
 }
 
@@ -672,7 +772,7 @@ async function loadFromSource(sk: string, vid: string): Promise<void> {
     showEpisodes.value = true
 
     // 更新路由
-    router.replace(`/player/${sk}/${vid}/${targetIdx}`).catch(() => {})
+    router.replace(`/player/${sk}/${vid}/${targetIdx}`).catch(() => { })
 
     // 重新初始化 TsCache 集数映射（不清除，LRU 自动淘汰旧源的数据）
     try {
@@ -686,11 +786,11 @@ async function loadFromSource(sk: string, vid: string): Promise<void> {
         })),
       )
       TsCache.setCurrentEpisode(targetIdx)
-    } catch {}
+    } catch { }
 
     // 刷新进度和收藏状态
     refreshEpProgressUI()
-    refreshFav().catch(() => {})
+    refreshFav().catch(() => { })
     if (targetIdx >= 0) recordHistory(targetIdx)
   } catch (e) {
     console.error('[Player] loadFromSource 失败:', e)
@@ -706,7 +806,7 @@ watch(currentEpIndex, (idx) => {
     saveEpProgress(k, 0, undefined)
     refreshEpProgressUI()
   }
-  try { TsCache.setCurrentEpisode(idx) } catch {}
+  try { TsCache.setCurrentEpisode(idx) } catch { }
 })
 
 // 源切换/重新加载后，VideoPlayer 被销毁重建，需重新绑定 timeupdate 监听
@@ -763,10 +863,10 @@ onMounted(async () => {
     }
   } catch { /* ignore */ }
   // 刷新收藏状态
-  refreshFav().catch(() => {})
+  refreshFav().catch(() => { })
   try {
     _unsubTsCache = TsCache.onStateChange(refreshCacheUI)
-  } catch {}
+  } catch { }
 
   // 页面级键盘监听
   document.addEventListener('keydown', onPageKeyDown)
@@ -792,7 +892,7 @@ onBeforeUnmount(() => {
   document.removeEventListener('keydown', onPageKeyDown)
   document.removeEventListener('visibilitychange', onVisibilityChange)
   if (_unsubTsCache) {
-    try { _unsubTsCache() } catch {}
+    try { _unsubTsCache() } catch { }
     _unsubTsCache = null
   }
   if (_videoTrackTimer != null) {
@@ -819,35 +919,16 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
     <template v-else-if="currentUrl">
       <div class="player-layout">
         <!-- ============= 左侧视频区 ============= -->
-        <div
-          class="player-col-main"
-          @mouseenter="mouseInside = true"
-          @dblclick.stop
-        >
-          <VideoPlayer
-            :url="currentUrl"
-            :autoplay="true"
-            :has-prev="hasPrev"
-            :has-next="hasNext"
-            :video-key="currentVideoKey"
-            :show-title-bar="true"
-            :title="currentEpName"
-            :is-fav="isFav"
-            :fav-busy="favBusy"
-            @toggle-favorite="toggleFavorite"
-            @back="goBack"
-            @prev="prevEpisode"
-            @next="nextEpisode"
-            :force-play-token="_playToken"
-          />
+        <div class="player-col-main" @mouseenter="mouseInside = true" @dblclick.stop>
+          <VideoPlayer :url="currentUrl" :autoplay="true" :has-prev="hasPrev" :has-next="hasNext"
+            :video-key="currentVideoKey" :show-title-bar="true" :title="currentEpName" :is-fav="isFav"
+            :fav-busy="favBusy" @toggle-favorite="toggleFavorite" @back="goBack" @prev="prevEpisode" @next="nextEpisode"
+            :force-play-token="_playToken" />
 
 
           <!-- 侧面板折叠/展开按钮（视频区右侧中间） -->
-          <button
-            class="panel-toggle-btn"
-            :title="sidePanelCollapsed ? '展开面板' : '收起面板'"
-            @click="sidePanelCollapsed = !sidePanelCollapsed"
-          >
+          <button class="panel-toggle-btn" :title="sidePanelCollapsed ? '展开面板' : '收起面板'"
+            @click="sidePanelCollapsed = !sidePanelCollapsed">
             <Icon :name="sidePanelCollapsed ? 'chevron-left' : 'chevron-right'" :size="14" />
           </button>
         </div>
@@ -862,7 +943,8 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
                 <button class="close-btn-panel" title="最小化" @click="onMinimizeApp">
                   <Icon name="minimize" :size="14" />
                 </button>
-                <Button variant="text" size="sm" class="close-btn-panel" @click="flushEpProgress(); router.back()" title="关闭">
+                <Button variant="text" size="sm" class="close-btn-panel" @click="flushEpProgress(); router.back()"
+                  title="关闭">
                   <Icon name="x" :size="18" />
                 </Button>
               </div>
@@ -884,22 +966,18 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
                 <span>播放源</span>
               </div>
               <div class="side-section-right">
-                <span class="side-count">{{ sourceOptions.filter(s => s.hasData).length }} 个可用源</span>
+                <span class="side-count">{{sourceOptions.filter(s => s.hasData).length}} 个可用源</span>
               </div>
             </div>
 
             <div class="source-list">
-              <button
-                v-for="src in sourceOptions.filter(s => s.hasData)"
-                :key="src.source_key"
-                class="source-item"
-                :class="{ active: src.source_key === activeSourceKey }"
-                @click="switchToSource(src.source_key)"
-                :disabled="sourceSearchLoading"
-              >
+              <button v-for="src in sourceOptions.filter(s => s.hasData)" :key="src.source_key" class="source-item"
+                :class="{ active: src.source_key === activeSourceKey }" @click="switchToSource(src.source_key)"
+                :disabled="sourceSearchLoading">
                 <span class="source-name">{{ src.name }}</span>
                 <span v-if="src.source_key === activeSourceKey" class="source-active-dot"></span>
-                <span v-if="sourceSearchLoading && src.source_key !== activeSourceKey" class="source-loading-dot">…</span>
+                <span v-if="sourceSearchLoading && src.source_key !== activeSourceKey"
+                  class="source-loading-dot">…</span>
               </button>
             </div>
 
@@ -909,56 +987,34 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
                 <div class="side-section-title-left">
                   <span class="bullet"></span>
                   <span>选集</span>
+                  <span class="side-count">共 {{ episodes.length }} 集</span>
                 </div>
                 <div class="side-section-right">
-                  <button
-                    class="sort-toggle-btn"
-                    :title="episodeSortAsc ? '当前正序，点击切换倒序' : '当前倒序，点击切换正序'"
-                    @click="toggleEpisodeSort"
-                  >
+                  <button class="sort-toggle-btn" :title="episodeSortAsc ? '当前正序，点击切换倒序' : '当前倒序，点击切换正序'"
+                    @click="toggleEpisodeSort">
                     <Icon :name="episodeSortAsc ? 'chevron-down' : 'chevron-up'" :size="12" />
                     <span class="sort-label">{{ episodeSortAsc ? '正序' : '倒序' }}</span>
                   </button>
-                  <span class="side-count">共 {{ episodes.length }} 集</span>
-                  <span
-                    v-if="getCurrentEpCached().total > 0"
-                    class="side-cache-chip"
-                    :title="'当前集已预取 ' + getCurrentEpCached().cached + ' / ' + getCurrentEpCached().total + ' 片段；命中率 ' + Math.round(getHitRate() * 100) + '%'"
-                  >
-                    <span class="side-cache-dot"></span>
-                    预取 {{ getCurrentEpCached().cached }}/{{ getCurrentEpCached().total }} · {{ Math.round(getHitRate() * 100) }}%
-                  </span>
                 </div>
               </div>
 
               <div class="ep-grid">
-                <button
-                  v-for="(ep, i) in sortedEpisodes"
-                  :key="String(i)"
-                  class="ep-item"
-                  :class="{
-                    active: origIdx(i) === currentEpIndex,
-                    watched: isWatchedEp(origIdx(i)),
-                    future: origIdx(i) > currentEpIndex && !isWatchedEp(origIdx(i)),
-                  }"
-                  @click="goToEpisode(origIdx(i))"
-                  :title="epLabel(origIdx(i), ep) + (getEpWatchPct(origIdx(i)) > 0 ? ' · 已观看 ' + Math.round(getEpWatchPct(origIdx(i))) + '%' : '')"
-                >
+                <button v-for="(ep, i) in sortedEpisodes" :key="String(i)" class="ep-item" :class="{
+                  active: origIdx(i) === currentEpIndex,
+                  watched: isWatchedEp(origIdx(i)),
+                  future: origIdx(i) > currentEpIndex && !isWatchedEp(origIdx(i)),
+                }" @click="goToEpisode(origIdx(i))"
+                  :title="epLabel(origIdx(i), ep) + (getEpWatchPct(origIdx(i)) > 0 ? ' · 已观看 ' + Math.round(getEpWatchPct(origIdx(i))) + '%' : '')">
                   <span class="ep-item-num">{{ epLabel(origIdx(i), ep) }}</span>
                   <span v-show="origIdx(i) === currentEpIndex" class="ep-playing-badge">
                     <span class="bar b1"></span>
                     <span class="bar b2"></span>
                     <span class="bar b3"></span>
                   </span>
-                  <span
-                    v-show="isWatchedEp(origIdx(i)) && getEpWatchPct(origIdx(i)) > 0"
-                    class="ep-watched-progress"
-                    :style="{ width: getEpWatchPct(origIdx(i)) + '%' }"
-                  ></span>
-                  <span
-                    v-show="isWatchedEp(origIdx(i)) && getEpWatchPct(origIdx(i)) > 0"
-                    class="ep-watched-pct"
-                  >{{ Math.round(getEpWatchPct(origIdx(i))) }}%</span>
+                  <span v-show="isWatchedEp(origIdx(i)) && getEpWatchPct(origIdx(i)) > 0" class="ep-watched-progress"
+                    :style="{ width: getEpWatchPct(origIdx(i)) + '%' }"></span>
+                  <span v-show="isWatchedEp(origIdx(i)) && getEpWatchPct(origIdx(i)) > 0" class="ep-watched-pct">{{
+                    Math.round(getEpWatchPct(origIdx(i))) }}%</span>
                 </button>
               </div>
             </template>
@@ -974,20 +1030,11 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
     </div>
 
     <!-- 收藏夹选择弹窗 -->
-    <Modal
-      :model-value="showFavFolderModal"
-      title="收藏到文件夹"
-      width="420px"
-      :show-footer="true"
-      @update:model-value="(v: boolean) => !v && (showFavFolderModal = false)"
-    >
+    <Modal :model-value="showFavFolderModal" title="收藏到文件夹" width="420px" :show-footer="true"
+      @update:model-value="(v: boolean) => !v && (showFavFolderModal = false)">
       <div class="folder-select-list">
-        <label
-          v-for="folder in favFolders"
-          :key="folder.id"
-          class="folder-select-item"
-          :class="{ active: favTargetFolderId === folder.id }"
-        >
+        <label v-for="folder in favFolders" :key="folder.id" class="folder-select-item"
+          :class="{ active: favTargetFolderId === folder.id }">
           <input type="radio" v-model="favTargetFolderId" :value="folder.id" />
           <span class="folder-radio" />
           <Icon :name="folder.default ? 'star' : 'list'" :size="14" />
@@ -1034,7 +1081,8 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   padding: 0;
   margin: 0;
 }
-.player-col-main > * {
+
+.player-col-main>* {
   width: 100%;
   height: 100%;
   flex: 1 1 auto;
@@ -1049,6 +1097,7 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   overflow: hidden;
   transition: flex-basis 0.3s ease, max-width 0.3s ease, opacity 0.3s ease;
 }
+
 .player-col-side.collapsed {
   flex: 0 0 0;
   max-width: 0;
@@ -1080,6 +1129,7 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   padding: 0;
   font-family: inherit;
 }
+
 .panel-toggle-btn:hover {
   width: 28px;
   color: #fff;
@@ -1096,7 +1146,9 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
 
 /* 响应式：窄屏收起右侧 */
 @media (max-width: 960px) {
-  .player-col-side { display: none; }
+  .player-col-side {
+    display: none;
+  }
 }
 
 /* ============ 右侧：标题/简介区 ============== */
@@ -1143,6 +1195,7 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   justify-content: center;
   transition: all 0.2s ease;
 }
+
 .close-btn-panel:hover {
   color: #ff4d4f;
   border-color: rgba(255, 77, 79, 0.5);
@@ -1152,18 +1205,33 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
 /* ============ 源列表（横向排布） ============== */
 .source-list {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
   margin-bottom: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-shrink: 0;
+  /* padding 给 active 按钮的 box-shadow 光晕 + translateY 动画留出空间（防止 overflow-y:hidden 裁剪） */
+  padding: 16px 0 22px 0;
+  /* 隐藏滚动条但保留滚动能力 */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
+
+.source-list::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 .source-item {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 6px 14px;
-  border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1.5px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.03);
   color: rgba(255, 255, 255, 0.65);
   font-size: 12.5px;
@@ -1172,23 +1240,53 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   transition: all 0.15s ease;
   font-family: inherit;
   white-space: nowrap;
-  max-width: 100%;
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
 }
+
 .source-item:hover {
   background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.18);
   color: #fff;
 }
+
 .source-item.active {
   background: linear-gradient(135deg, rgba(24, 144, 255, 0.15) 0%, rgba(64, 169, 255, 0.08) 100%);
   border-color: rgba(64, 169, 255, 0.5);
   color: #69c0ff;
   font-weight: 600;
+  box-shadow: 0 0 0 1px rgba(64, 169, 255, 0.3), 0 0 12px rgba(24, 144, 255, 0.25);
+  transform: scale(1.03);
+  animation: source-active-glow 1.6s ease-in-out infinite;
 }
+
+/* 激活源左侧 3px 蓝色竖条 */
+.source-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 20%;
+  bottom: 20%;
+  width: 3px;
+  background: linear-gradient(180deg, #40a9ff, #1890ff);
+  border-radius: 0 2px 2px 0;
+}
+
+@keyframes source-active-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 1px rgba(64, 169, 255, 0.3), 0 0 8px rgba(24, 144, 255, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 1px rgba(100, 181, 246, 0.5), 0 0 18px rgba(24, 144, 255, 0.4);
+  }
+}
+
 .source-item:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
 .source-name {
   flex: 1;
   min-width: 0;
@@ -1196,6 +1294,7 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
 .source-active-dot {
   width: 7px;
   height: 7px;
@@ -1205,6 +1304,7 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   flex-shrink: 0;
   animation: glow-pulse 1.4s ease-in-out infinite;
 }
+
 .source-loading-dot {
   font-size: 14px;
   color: rgba(255, 255, 255, 0.4);
@@ -1230,18 +1330,22 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   font-family: inherit;
   transition: all 0.2s ease;
 }
+
 .fav-btn-text .fav-icon {
   font-size: 14px;
 }
+
 .fav-btn-text:hover {
   background: rgba(255, 255, 255, 0.09);
   color: #fff;
 }
+
 .fav-btn-text.active {
   color: #ffc107;
   border-color: rgba(255, 193, 7, 0.55);
   background: rgba(255, 193, 7, 0.12);
 }
+
 .fav-btn-text.busy {
   opacity: 0.6;
   pointer-events: none;
@@ -1253,6 +1357,7 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   gap: 6px;
   margin-bottom: 12px;
 }
+
 .side-meta-chip {
   display: inline-block;
   padding: 3px 10px;
@@ -1291,6 +1396,7 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   gap: 12px;
   margin-bottom: 12px;
 }
+
 .side-section-title-left {
   display: flex;
   align-items: center;
@@ -1300,17 +1406,20 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   color: #fff;
   letter-spacing: 0.3px;
 }
+
 .side-section-title-left .bullet {
   width: 3px;
   height: 14px;
   background: linear-gradient(180deg, #40a9ff, #1890ff);
   border-radius: 2px;
 }
+
 .side-section-right {
   display: flex;
   align-items: center;
   gap: 8px;
 }
+
 .sort-toggle-btn {
   display: inline-flex;
   align-items: center;
@@ -1327,19 +1436,23 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   font-family: inherit;
   font-size: 11px;
 }
+
 .sort-toggle-btn .sort-label {
   font-size: 11px;
   white-space: nowrap;
 }
+
 .sort-toggle-btn:hover {
   background: rgba(255, 255, 255, 0.08);
   color: #fff;
   border-color: rgba(255, 255, 255, 0.2);
 }
+
 .side-count {
   font-size: 11.5px;
   color: rgba(255, 255, 255, 0.45);
 }
+
 .side-cache-chip {
   display: inline-flex;
   align-items: center;
@@ -1352,6 +1465,7 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   border-radius: 10px;
   white-space: nowrap;
 }
+
 .side-cache-chip .side-cache-dot {
   width: 6px;
   height: 6px;
@@ -1360,9 +1474,17 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   box-shadow: 0 0 6px #7ee3b6;
   animation: glow-pulse 1.4s ease-in-out infinite;
 }
+
 @keyframes glow-pulse {
-  0%, 100% { opacity: 0.6; }
-  50% { opacity: 1; }
+
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+
+  50% {
+    opacity: 1;
+  }
 }
 
 .side-empty {
@@ -1383,13 +1505,23 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }
-.ep-grid::-webkit-scrollbar { width: 6px; }
+
+.ep-grid::-webkit-scrollbar {
+  width: 6px;
+}
+
 .ep-grid::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.14);
   border-radius: 3px;
 }
-.ep-grid::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.28); }
-.ep-grid::-webkit-scrollbar-track { background: transparent; }
+
+.ep-grid::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.ep-grid::-webkit-scrollbar-track {
+  background: transparent;
+}
 
 /* 单个集数卡片：默认态（未观看 & 非当前集）——默认显示明显 */
 .ep-item {
@@ -1414,18 +1546,20 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   justify-content: center;
   gap: 2px;
   transition: transform 0.15s ease,
-              background 0.15s ease,
-              border-color 0.15s ease,
-              box-shadow 0.15s ease,
-              color 0.15s ease,
-              opacity 0.15s ease;
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    color 0.15s ease,
+    opacity 0.15s ease;
 }
+
 .ep-item-num {
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
 /* hover：收住（次要态） */
 .ep-item:hover {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0.015) 100%);
@@ -1434,10 +1568,15 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   transform: none;
   box-shadow: none;
 }
-.ep-item:active { transform: translateY(0); }
+
+.ep-item:active {
+  transform: translateY(0);
+}
 
 /* 未来集（在当前集之后，且未观看）：正常中性，不灰 */
-.ep-item.future { opacity: 1; }
+.ep-item.future {
+  opacity: 1;
+}
 
 /* 已观看：绿色高亮（明显态） */
 .ep-item.watched {
@@ -1447,6 +1586,7 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   cursor: pointer;
   font-weight: 500;
 }
+
 .ep-item.watched:hover {
   background: linear-gradient(180deg, rgba(76, 175, 80, 0.08) 0%, rgba(76, 175, 80, 0.04) 100%);
   border-color: rgba(76, 175, 80, 0.25);
@@ -1465,6 +1605,7 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   z-index: 1;
   pointer-events: none;
 }
+
 .ep-watched-pct {
   position: absolute;
   top: 3px;
@@ -1479,6 +1620,7 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   z-index: 2;
   pointer-events: none;
 }
+
 /* 当前播放集：百分比移到左上角，避免与播放中徽章重叠 */
 .ep-item.active .ep-watched-pct {
   top: 3px;
@@ -1487,6 +1629,7 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   color: #69c0ff;
   background: rgba(0, 0, 0, 0.55);
 }
+
 /* 当前播放集：进度条颜色调整为适配蓝色主题 */
 .ep-item.active .ep-watched-progress {
   background: linear-gradient(90deg, #40a9ff 0%, #69c0ff 100%);
@@ -1505,13 +1648,17 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   transform: translateY(-1px);
   animation: active-ep-pulse 1.6s ease-in-out infinite;
 }
+
 @keyframes active-ep-pulse {
-  0%, 100% {
+
+  0%,
+  100% {
     box-shadow:
       0 0 0 1px rgba(64, 169, 255, 0.35),
       0 0 10px rgba(24, 144, 255, 0.45),
       0 4px 12px rgba(24, 144, 255, 0.25);
   }
+
   50% {
     box-shadow:
       0 0 0 1px rgba(100, 181, 246, 0.6),
@@ -1530,6 +1677,7 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   gap: 2px;
   height: 14px;
 }
+
 .ep-playing-badge .bar {
   display: inline-block;
   width: 2px;
@@ -1539,12 +1687,31 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   box-shadow: 0 0 4px #40a9ff;
   animation: bar-bounce 0.9s ease-in-out infinite;
 }
-.ep-playing-badge .b1 { animation-delay: -0.2s; }
-.ep-playing-badge .b2 { animation-delay: -0.5s; }
-.ep-playing-badge .b3 { animation-delay: -0.8s; }
+
+.ep-playing-badge .b1 {
+  animation-delay: -0.2s;
+}
+
+.ep-playing-badge .b2 {
+  animation-delay: -0.5s;
+}
+
+.ep-playing-badge .b3 {
+  animation-delay: -0.8s;
+}
+
 @keyframes bar-bounce {
-  0%, 100% { height: 4px; }
-  50% { height: 12px; background: #69c0ff; box-shadow: 0 0 6px #69c0ff; }
+
+  0%,
+  100% {
+    height: 4px;
+  }
+
+  50% {
+    height: 12px;
+    background: #69c0ff;
+    box-shadow: 0 0 6px #69c0ff;
+  }
 }
 
 /* 左下角：下一集预取提示 */
@@ -1567,21 +1734,33 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   z-index: 10;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
 }
+
 .prefetch-icon {
   color: #7ee3b6;
   font-size: 14px;
   text-shadow: 0 0 6px #7ee3b6;
   animation: float-down 1.4s ease-in-out infinite;
 }
+
 @keyframes float-down {
-  0%, 100% { transform: translateY(0); opacity: 0.7; }
-  50% { transform: translateY(2px); opacity: 1; }
+
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.7;
+  }
+
+  50% {
+    transform: translateY(2px);
+    opacity: 1;
+  }
 }
 
 /* loading / error */
 .player-loading {
   position: absolute;
   inset: 0;
+  z-index: 10;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1590,6 +1769,7 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   color: #8892a0;
   font-size: 14px;
 }
+
 .player-loading .spinner {
   width: 44px;
   height: 44px;
@@ -1598,13 +1778,17 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
+
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .player-error-page {
   position: absolute;
   inset: 0;
+  z-index: 10;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1612,10 +1796,12 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   gap: 20px;
   color: #aaa;
 }
+
 .player-error-page .error-msg {
   font-size: 15px;
   color: #e8e8e8;
 }
+
 .player-error-page .back-btn {
   padding: 8px 20px;
   border-radius: 20px;
@@ -1626,13 +1812,19 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   cursor: pointer;
   font-family: inherit;
 }
-.player-error-page .back-btn:hover { background: rgba(24, 144, 255, 0.25); }
+
+.player-error-page .back-btn:hover {
+  background: rgba(24, 144, 255, 0.25);
+}
 
 /* ============ fade transition（vue built-in） ============ */
-.fade-enter-active, .fade-leave-active {
+.fade-enter-active,
+.fade-leave-active {
   transition: opacity 0.35s ease, transform 0.35s ease;
 }
-.fade-enter-from, .fade-leave-to {
+
+.fade-enter-from,
+.fade-leave-to {
   opacity: 0;
   transform: translateY(4px);
 }
@@ -1650,8 +1842,28 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   padding: 24px;
   animation: fadeIn 0.18s ease;
 }
-@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
-@keyframes scaleIn { from { opacity: 0; transform: scale(0.96) } to { opacity: 1; transform: scale(1) } }
+
+@keyframes fadeIn {
+  from {
+    opacity: 0
+  }
+
+  to {
+    opacity: 1
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96)
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1)
+  }
+}
 
 .modal-box {
   width: 100%;
@@ -1665,7 +1877,10 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
   animation: scaleIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.modal-box.small { max-width: 420px; }
+
+.modal-box.small {
+  max-width: 420px;
+}
 
 .modal-head {
   padding: 14px 18px;
@@ -1674,6 +1889,7 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   justify-content: space-between;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
+
 .modal-title {
   margin: 0;
   font-size: 15px;
@@ -1683,6 +1899,7 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   align-items: center;
   gap: 8px;
 }
+
 .modal-close {
   background: transparent;
   border: none;
@@ -1693,9 +1910,16 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   line-height: 0;
   transition: all 0.15s ease;
 }
-.modal-close:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
 
-.modal-body { padding: 18px; }
+.modal-close:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+.modal-body {
+  padding: 18px;
+}
+
 .modal-foot {
   padding: 12px 18px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
@@ -1715,8 +1939,11 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   font-family: inherit;
   transition: all 0.15s ease;
 }
+
 .btn-ghost:hover {
-  background: rgba(255, 255, 255, 0.06); color: #fff; border-color: rgba(64, 169, 255, 0.45);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  border-color: rgba(64, 169, 255, 0.45);
 }
 
 .btn-primary {
@@ -1731,6 +1958,7 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   font-family: inherit;
   transition: all 0.15s ease;
 }
+
 .btn-primary:hover {
   background: #40a9ff;
   transform: translateY(-1px);
@@ -1738,24 +1966,39 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
 }
 
 /* 文件夹选择列表 */
-.folder-select-list { display: flex; flex-direction: column; gap: 8px; }
+.folder-select-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .folder-select-item {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 14px; border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--bg-secondary);
   cursor: pointer;
-  font-size: 13px; color: var(--text-primary);
+  font-size: 13px;
+  color: var(--text-primary);
   transition: all 0.15s ease;
   position: relative;
 }
-.folder-select-item:hover { border-color: var(--accent); background: var(--accent-alpha-10); }
+
+.folder-select-item:hover {
+  border-color: var(--accent);
+  background: var(--accent-alpha-10);
+}
+
 .folder-select-item.active {
   border-color: var(--accent);
   background: var(--accent);
   color: var(--accent-contrast);
   font-weight: 600;
 }
+
 .folder-select-item input {
   position: absolute;
   opacity: 0;
@@ -1763,6 +2006,7 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   height: 0;
   pointer-events: none;
 }
+
 .folder-radio {
   flex-shrink: 0;
   width: 16px;
@@ -1773,10 +2017,12 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   transition: all 0.15s ease;
   position: relative;
 }
+
 .folder-select-item.active .folder-radio {
   border-color: var(--accent-contrast);
   background: var(--accent-contrast);
 }
+
 .folder-select-item.active .folder-radio::after {
   content: '';
   position: absolute;
@@ -1784,5 +2030,9 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   border-radius: 50%;
   background: var(--accent);
 }
-.folder-name { flex: 1; min-width: 0; }
+
+.folder-name {
+  flex: 1;
+  min-width: 0;
+}
 </style>

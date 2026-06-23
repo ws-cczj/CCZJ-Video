@@ -2,12 +2,15 @@
 import { useRouter, useRoute } from 'vue-router'
 import { useSourceStore } from '../stores/source'
 import { useDevMode } from '../stores/devMode'
+import { useI18n } from '../locales'
+import { computed } from 'vue'
 import Icon from './Icon.vue'
 
 const router = useRouter()
 const route = useRoute()
 const sourceStore = useSourceStore()
 const devMode = useDevMode()
+const { t } = useI18n()
 
 interface NavItem {
   path: string
@@ -15,21 +18,21 @@ interface NavItem {
   icon: string
 }
 
-const navItems: NavItem[] = [
-  { path: '/', label: '首页', icon: 'home' },
-  { path: '/search', label: '搜索', icon: 'search' },
-  { path: '/favorites', label: '收藏', icon: 'star' },
-  { path: '/history', label: '历史', icon: 'clock' },
-]
+const navItems = computed<NavItem[]>(() => [
+  { path: '/', label: t('sidebar.home'), icon: 'home' },
+  { path: '/search', label: t('sidebar.search'), icon: 'search' },
+  { path: '/favorites', label: t('sidebar.favorites'), icon: 'star' },
+  { path: '/history', label: t('sidebar.history'), icon: 'clock' },
+])
 
-const toolItems: NavItem[] = [
-  { path: '/sources', label: '采集源', icon: 'source' },
-  { path: '/video-types', label: '视频类型', icon: 'tag' },
-  { path: '/downloads', label: '下载', icon: 'download' },
-  { path: '/settings', label: '设置', icon: 'settings' },
-]
+const toolItems = computed<NavItem[]>(() => [
+  { path: '/sources', label: t('sidebar.sources'), icon: 'source' },
+  { path: '/video-types', label: t('sidebar.videoTypes'), icon: 'tag' },
+  { path: '/downloads', label: t('sidebar.downloads'), icon: 'download' },
+  { path: '/settings', label: t('sidebar.settings'), icon: 'settings' },
+])
 
-const devItem: NavItem = { path: '/dev-admin', label: '开发者模式', icon: 'code' }
+const devItem = computed<NavItem>(() => ({ path: '/dev-admin', label: t('sidebar.devMode'), icon: 'code' }))
 
 function isActive(path: string): boolean {
   if (path === '/') return route.path === '/'
@@ -42,7 +45,7 @@ function isActive(path: string): boolean {
     <nav class="nav-section">
       <div class="section-label">
         <span class="line left"></span>
-        <span class="label-text">浏览</span>
+        <span class="label-text">{{ t('sidebar.browse') }}</span>
         <span class="line right"></span>
       </div>
       <button
@@ -60,7 +63,7 @@ function isActive(path: string): boolean {
     <nav class="nav-section">
       <div class="section-label">
         <span class="line left"></span>
-        <span class="label-text">管理</span>
+        <span class="label-text">{{ t('sidebar.manage') }}</span>
         <span class="line right"></span>
       </div>
       <button
@@ -79,7 +82,7 @@ function isActive(path: string): boolean {
     <nav v-if="devMode.enabled" class="nav-section">
       <div class="section-label">
         <span class="line left"></span>
-        <span class="label-text">开发者</span>
+        <span class="label-text">{{ t('sidebar.developer') }}</span>
         <span class="line right"></span>
       </div>
       <button
@@ -95,7 +98,7 @@ function isActive(path: string): boolean {
     <div class="sidebar-footer">
       <div class="source-info">
         <span class="source-dot" :class="{ online: sourceStore.currentSource }"></span>
-        <span class="source-name" @click="devMode.clickSourceName">{{ sourceStore.currentSource?.name || '未选择来源' }}</span>
+        <span class="source-name" @click="devMode.clickSourceName">{{ sourceStore.currentSource?.name || t('sidebar.noSource') }}</span>
       </div>
     </div>
   </aside>
