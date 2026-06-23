@@ -2,6 +2,7 @@ package db
 
 import (
 	"cczjVideo/app/model"
+	"fmt"
 )
 
 func GetAllSources() ([]*model.Source, error) {
@@ -41,6 +42,12 @@ func UpdateSource(s *model.Source) error {
 }
 
 func DeleteSource(key string) error {
+	// ⭐ 先删除关联的 v_* 和 e_* 数据表，避免残留数据
+	vTbl := VideoTableName(key)
+	eTbl := EpisodeTableName(key)
+	_, _ = instance.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS %s`, vTbl))
+	_, _ = instance.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS %s`, eTbl))
+	// 删除源记录
 	_, err := instance.Exec(`DELETE FROM sources WHERE source_key = ?`, key)
 	return err
 }

@@ -347,9 +347,11 @@ watch(
 
 <template>
   <div class="home">
-    <BookCarousel v-if="carouselSlides.length > 0" :slides="carouselSlides" :source-key="sourceStore.currentSourceKey" />
+    <BookCarousel v-if="carouselSlides.length > 0" :slides="carouselSlides"
+      :source-key="sourceStore.currentSourceKey" />
     <!-- ============ 推荐区域（仅在无筛选时展示） ============ -->
-    <section v-if="!hasActiveFilter && (carouselSlides.length > 0 || recommendGroups.length > 0 || recommendLoading)" class="recommend-section">
+    <section v-if="!hasActiveFilter && (carouselSlides.length > 0 || recommendGroups.length > 0 || recommendLoading)"
+      class="recommend-section">
       <div v-if="recommendLoading" class="recommend-loading">
         <LoadingSpinner size="sm" label="加载推荐中..." />
       </div>
@@ -363,32 +365,20 @@ watch(
           </div>
           <div class="recommend-row">
             <template v-if="group.key === 'continue' && group.continueItems">
-              <div
-                v-for="item in group.continueItems"
-                :key="`rec-continue-${item.source_key}-${item.vod_id}`"
-                class="rec-card-wrap"
-              >
+              <div v-for="item in group.continueItems" :key="`rec-continue-${item.source_key}-${item.vod_id}`"
+                class="rec-card-wrap">
                 <VideoCard :video="item" @click="goDetailFromRecommend(item)" />
-                <Button
-                  variant="overlay"
-                  size="sm"
-                  icon
-                  class="rec-remove-btn"
-                  title="从继续观看中移除"
+                <Button variant="overlay" size="sm" icon class="rec-remove-btn" title="从继续观看中移除"
                   :disabled="removingContinueId === `${item.source_key}-${item.vod_id}`"
-                  @click.stop="removeContinueItem(item)"
-                >
+                  @click.stop="removeContinueItem(item)">
                   <Icon name="x" :size="12" />
                 </Button>
               </div>
             </template>
             <template v-else-if="group.items && group.items.length > 0">
-              <VideoCard
-                v-for="(item, idx) in group.items"
-                :key="`rec-${group.key}-${String((item as any).vod_id ?? '')}-${idx}`"
-                :video="item"
-                @click="goDetailFromRecommend(item)"
-              />
+              <VideoCard v-for="(item, idx) in group.items"
+                :key="`rec-${group.key}-${String((item as any).vod_id ?? '')}-${idx}`" :video="item"
+                @click="goDetailFromRecommend(item)" />
             </template>
           </div>
         </div>
@@ -407,17 +397,17 @@ watch(
           <Icon :name="expanded ? 'chevron-up' : 'chevron-down'" :size="14" />
         </Button>
       </div>
-      
-      <!-- 类型：始终显示 -->
+
+      <!-- 类型：收起时显示六个，展开后显示全部 -->
       <div class="filter-row">
         <label class="filter-row-label">类型</label>
         <div class="filter-row-chips">
-          <Tag
-            v-for="opt in typeChipList"
-            :key="'type-' + opt.value"
-            :active="activeFilters.typeId === opt.value"
-            @click="selectChip('type', opt.value)"
-          >
+          <Tag v-show="!expanded" v-for="opt in typeChipList.slice(0, 6)" :key="'type-' + opt.value"
+            :active="activeFilters.typeId === opt.value" @click="selectChip('type', opt.value)">
+            {{ opt.label }}
+          </Tag>
+          <Tag v-show="expanded" v-for="opt in typeChipList" :key="'type-' + opt.value"
+            :active="activeFilters.typeId === opt.value" @click="selectChip('type', opt.value)">
             {{ opt.label }}
           </Tag>
         </div>
@@ -428,12 +418,8 @@ watch(
         <div class="filter-row">
           <label class="filter-row-label">年份</label>
           <div class="filter-row-chips">
-            <Tag
-              v-for="opt in yearChipList"
-              :key="'year-' + opt.value"
-              :active="activeFilters.year === opt.value"
-              @click="selectChip('year', opt.value)"
-            >
+            <Tag v-for="opt in yearChipList" :key="'year-' + opt.value" :active="activeFilters.year === opt.value"
+              @click="selectChip('year', opt.value)">
               {{ opt.label }}
             </Tag>
           </div>
@@ -442,12 +428,8 @@ watch(
         <div class="filter-row">
           <label class="filter-row-label">地区</label>
           <div class="filter-row-chips">
-            <Tag
-              v-for="opt in areaChipList"
-              :key="'area-' + opt.value"
-              :active="activeFilters.area === opt.value"
-              @click="selectChip('area', opt.value)"
-            >
+            <Tag v-for="opt in areaChipList" :key="'area-' + opt.value" :active="activeFilters.area === opt.value"
+              @click="selectChip('area', opt.value)">
               {{ opt.label }}
             </Tag>
           </div>
@@ -458,18 +440,9 @@ watch(
       <div class="filter-row filter-row-flex">
         <div class="sort-row">
           <span class="sort-label">排序</span>
-          <Tag
-            :active="activeFilters.sort === 'default'"
-            @click="setSort('default')"
-          >默认</Tag>
-          <Tag
-            :active="activeFilters.sort === 'rating'"
-            @click="setSort('rating')"
-          >按评分</Tag>
-          <Tag
-            :active="activeFilters.sort === 'hot'"
-            @click="setSort('hot')"
-          >按热度</Tag>
+          <Tag :active="activeFilters.sort === 'default'" @click="setSort('default')">默认</Tag>
+          <Tag :active="activeFilters.sort === 'rating'" @click="setSort('rating')">按评分</Tag>
+          <Tag :active="activeFilters.sort === 'hot'" @click="setSort('hot')">按热度</Tag>
           <Button variant="secondary" size="sm" @click="resetFilters">重置</Button>
         </div>
       </div>
@@ -491,12 +464,9 @@ watch(
     </div>
 
     <div v-else class="video-grid">
-      <VideoCard
-        v-for="(v, idx) in videoStore.videos"
-        :key="`${sourceStore.currentSourceKey}-${String((v as any).vod_id ?? '')}-${idx}`"
-        :video="v"
-        @click="goDetail(v)"
-      />
+      <VideoCard v-for="(v, idx) in videoStore.videos"
+        :key="`${sourceStore.currentSourceKey}-${String((v as any).vod_id ?? '')}-${idx}`" :video="v"
+        @click="goDetail(v)" />
     </div>
   </div>
 </template>
@@ -509,8 +479,15 @@ watch(
 }
 
 @keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ============ 推荐区域 ============ */
@@ -585,10 +562,29 @@ watch(
   cursor: not-allowed;
 }
 
-@media (max-width: 1400px) { .recommend-row { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
-@media (max-width: 1100px) { .recommend-row { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-@media (max-width: 780px)  { .recommend-row { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 480px)  { .recommend-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 1400px) {
+  .recommend-row {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
+  .recommend-row {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 780px) {
+  .recommend-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .recommend-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
 
 /* ============ 筛选区域 ============ */
 .filter-section {
@@ -625,8 +621,9 @@ watch(
   padding: 8px 0;
   border-bottom: 1px dashed transparent;
 }
-.filter-row + .filter-row {
-  border-top: 1px dashed var(--border-light, rgba(255,255,255,0.08));
+
+.filter-row+.filter-row {
+  border-top: 1px dashed var(--border-light, rgba(255, 255, 255, 0.08));
   padding-top: 10px;
 }
 
@@ -685,7 +682,9 @@ watch(
 }
 
 @media (max-width: 720px) {
-  .filter-row-label { width: 40px; }
+  .filter-row-label {
+    width: 40px;
+  }
 }
 
 /* ============ 视频网格 ============ */

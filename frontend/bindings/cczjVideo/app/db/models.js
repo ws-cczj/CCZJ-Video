@@ -264,16 +264,9 @@ export class GlobalTypeRow {
              * @member
              * @type {number}
              */
-            this["CollectEnabled"] = 0;
-        }
-        if (!("MagnetEnabled" in $$source)) {
-            /**
-             * @member
-             * @type {number}
-             */
-            this["MagnetEnabled"] = 0;
-        }
-        if (!("Sort" in $$source)) {
+this["CollectEnabled"] = 0;
+	        }
+	        if (!("Sort" in $$source)) {
             /**
              * @member
              * @type {number}

@@ -2,7 +2,7 @@
  * Anime4K 动画超分辨率增强器 — WebGL2 实时 CNN 超分（多档位版）
  *
  * 移植自 bloc97 的 Anime4K v4.0 (MIT License, Copyright (c) 2019-2021 bloc97)。
- * 支持 S / M / L / VL 四档模型，对动画/动漫做 2× CNN 超分辨率重建。
+ * 支持 S / M / L 三档模型，对动画/动漫做 2× CNN 超分辨率重建。
  *
  * 需要 EXT_color_buffer_float 扩展（RGBA16F 渲染目标）。
  * 所有计算在 GPU 上完成，外部 API: init/start/stop/destroy/updateOptions/getStats。
@@ -13,11 +13,10 @@ import { TEX_VIDEO, buildPipeline } from './anime4kModels'
 import * as WS from './anime4kWeights_S'
 import * as WM from './anime4kWeights_M'
 import * as WL from './anime4kWeights_L'
-import * as WVL from './anime4kWeights_VL'
 
 // ==================== 类型定义 ====================
 
-export type Anime4kTier = 'S' | 'M' | 'L' | 'VL'
+export type Anime4kTier = 'S' | 'M' | 'L'
 
 export interface UpscalerOptions {
   outputWidth?: number
@@ -149,11 +148,13 @@ function getMModel(): ModelStructure {
       linear: [WM.FS_R0],
       split: [WM.FS_R1, WM.FS_R2, WM.FS_R3, WM.FS_R4, WM.FS_R5, WM.FS_R6],
       final: WM.FS_R7,
+      pwIncludeLinear: true,
     },
     upscale: {
       linear: [WM.FS_U0],
       split: [WM.FS_U1, WM.FS_U2, WM.FS_U3, WM.FS_U4, WM.FS_U5, WM.FS_U6],
       pointwise: [WM.FS_U7],
+      pwIncludeLinear: true,
     },
     depth2Space: { desc: 'Depth2Space', source: DEPTH2SPACE_SOURCE },
   }
@@ -175,35 +176,10 @@ function getLModel(): ModelStructure {
   }
 }
 
-function getVLModel(): ModelStructure {
-  return {
-    restore: {
-      linear: [WVL.FS_R0, WVL.FS_R1],
-      split16: [
-        WVL.FS_R2, WVL.FS_R3, WVL.FS_R4, WVL.FS_R5, WVL.FS_R6, WVL.FS_R7,
-        WVL.FS_R8, WVL.FS_R9, WVL.FS_R10, WVL.FS_R11, WVL.FS_R12, WVL.FS_R13, WVL.FS_R14,
-      ],
-      final: WVL.FS_R15,
-    },
-    upscale: {
-      linear: [WVL.FS_U0, WVL.FS_U1],
-      split16: [
-        WVL.FS_U2, WVL.FS_U3, WVL.FS_U4, WVL.FS_U5, WVL.FS_U6, WVL.FS_U7,
-        WVL.FS_U8, WVL.FS_U9, WVL.FS_U10, WVL.FS_U11, WVL.FS_U12, WVL.FS_U13,
-      ],
-      pointwise: [WVL.FS_U14, WVL.FS_U15, WVL.FS_U16],
-    },
-    // VL 的 Depth2Space 读取 3 个 conv2d_last_tf/tf1/tf2 (3 个 pointwise 输出),
-    // 必须用三纹理版本, 否则 c1/c2 退化为 c0 导致输出偏暗。
-    depth2Space: { desc: 'Depth2Space-L', source: DEPTH2SPACE_L_SOURCE },
-  }
-}
-
 function getModelStructure(tier: Anime4kTier): ModelStructure {
   switch (tier) {
     case 'M': return getMModel()
     case 'L': return getLModel()
-    case 'VL': return getVLModel()
     default: return getSModel()
   }
 }
@@ -220,11 +196,14 @@ export class Anime4kUpscaler {
   private programs: WebGLProgram[] = []
   private uniforms: UniformMap[] = []
   private vao: WebGLVertexArrayObject | null = null
+  private quadBuf: WebGLBuffer | null = null
   private textures: (WebGLTexture | null)[] = []
   private fbo: WebGLFramebuffer | null = null
   private sourceVideo: HTMLVideoElement | null = null
   private animFrameId = 0
   private running = false
+  private destroyed = false
+  private seekFlag = false
   private lastVideoTime = 0
   private texW = 0
   private texH = 0
@@ -234,7 +213,7 @@ export class Anime4kUpscaler {
   private frameCount = 0
   private lastFpsTime = 0
   private fps = 0
-  private useFloat = false
+  private useFloatBuffer = false
   private passes: EnginePassDef[] = []
   private tier: Anime4kTier = 'S'
   private opts: Required<Pick<UpscalerOptions, 'strength' | 'upscale' | 'outputWidth' | 'outputHeight'>>
@@ -242,12 +221,12 @@ export class Anime4kUpscaler {
   error: string | null = null
 
   // ===== 诊断 =====
-  private diagEnabled = true
+  private diagEnabled = false
   private diagReadFbo: WebGLFramebuffer | null = null
   private diagSampleThisSecond = false
   private diagSampled = false
   private _lastDiagTime = 0
-  private _diagPassSums = new Float32Array(40) // 最大 VL 38+2 passes
+  private _diagPassSums = new Float32Array(64)
   private _diagCanvasSum = 0
   private _diagVideoSum = 0
   private _diagBilinearDiff = 0
@@ -257,6 +236,7 @@ export class Anime4kUpscaler {
   private _diagCanvasSnap: HTMLCanvasElement | null = null
   private _renderErrorCount = 0
   private glErrorCount = 0
+  private _texImageFailCount = 0
 
   constructor(options: UpscalerOptions = {}) {
     this.tier = options.tier ?? 'S'
@@ -266,9 +246,23 @@ export class Anime4kUpscaler {
       outputWidth: options.outputWidth ?? 0,
       outputHeight: options.outputHeight ?? 0,
     }
+    // 开发环境自动开启诊断日志
+    if (typeof import.meta !== 'undefined' && (import.meta as any).env?.DEV) {
+      this.diagEnabled = true
+    }
+  }
+
+  /** 开关诊断日志（生产环境默认关闭） */
+  setDiag(enabled: boolean): void {
+    this.diagEnabled = enabled
   }
 
   async init(video: HTMLVideoElement, parent?: HTMLElement): Promise<boolean> {
+    // 防止重复初始化泄漏
+    if (this.canvas) {
+      this.destroy()
+    }
+    this.destroyed = false
     this.sourceVideo = video
     this.canvas = document.createElement('canvas')
     this.canvas.style.cssText =
@@ -290,8 +284,23 @@ export class Anime4kUpscaler {
     const vw = video.videoWidth, vh = video.videoHeight
     if (!vw || !vh) { this.error = '视频尚未就绪'; return false }
 
-    const outW = this.opts.outputWidth > 0 ? this.opts.outputWidth : vw * 2
-    const outH = this.opts.outputHeight > 0 ? this.opts.outputHeight : vh * 2
+    let outW = this.opts.outputWidth > 0 ? this.opts.outputWidth : vw * 2
+    let outH = this.opts.outputHeight > 0 ? this.opts.outputHeight : vh * 2
+    // 限制输出尺寸不超过屏幕分辨率，同时保持视频宽高比
+    const dpr = window.devicePixelRatio || 1
+    const containerW = (parent ?? video.parentElement)?.clientWidth ?? vw
+    const containerH = (parent ?? video.parentElement)?.clientHeight ?? vh
+    const maxOutW = Math.round(containerW * dpr)
+    const maxOutH = Math.round(containerH * dpr)
+    const aspectRatio = vw / vh
+    if (outW > maxOutW) {
+      outW = maxOutW
+      outH = Math.round(maxOutW / aspectRatio)
+    }
+    if (outH > maxOutH) {
+      outH = maxOutH
+      outW = Math.round(maxOutH * aspectRatio)
+    }
     const maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE) as number
     if (outW > maxTex || outH > maxTex) {
       this.error = `输出尺寸 ${outW}x${outH} 超过 GPU 最大纹理限制 ${maxTex}x${maxTex}`
@@ -308,7 +317,7 @@ export class Anime4kUpscaler {
       console.warn('[Anime4K]', this.error)
       return false
     }
-    this.useFloat = true
+    this.useFloatBuffer = true
 
     // 构建 pass 管线
     const structure = getModelStructure(this.tier)
@@ -398,7 +407,13 @@ export class Anime4kUpscaler {
     if (this.animFrameId) { cancelAnimationFrame(this.animFrameId); this.animFrameId = 0 }
   }
 
+  /** 通知 upscaler 视频发生了 seek，强制下一帧渲染 */
+  onSeeked(): void {
+    this.seekFlag = true
+  }
+
   destroy(): void {
+    this.destroyed = true
     this.stop(); this.ready = false
     const gl = this.gl
     if (gl) {
@@ -407,12 +422,15 @@ export class Anime4kUpscaler {
       if (this.fbo) gl.deleteFramebuffer(this.fbo)
       if (this.diagReadFbo) gl.deleteFramebuffer(this.diagReadFbo)
       if (this.vao) gl.deleteVertexArray(this.vao)
+      if (this.quadBuf) gl.deleteBuffer(this.quadBuf)
     }
     if (this.canvas?.parentNode) this.canvas.parentNode.removeChild(this.canvas)
     this.canvas = this.gl = null
     this.programs = []; this.uniforms = []
     this.textures = []
-    this.fbo = this.diagReadFbo = this.vao = this.sourceVideo = null
+    this.fbo = this.diagReadFbo = this.vao = this.quadBuf = this.sourceVideo = null
+    // 清理诊断 canvas
+    this._diagVideoCanvas = this._diagBilinCanvas = this._diagCanvasSnap = null
   }
 
   updateOptions(opts: Partial<UpscalerOptions>): void {
@@ -455,7 +473,8 @@ export class Anime4kUpscaler {
     const vw = video.videoWidth, vh = video.videoHeight
     if (vw <= 0 || vh <= 0) return
     const ct = video.currentTime
-    if (Math.abs(ct - this.lastVideoTime) < 0.001) return
+    if (!this.seekFlag && Math.abs(ct - this.lastVideoTime) < 0.001) return
+    this.seekFlag = false
     this.lastVideoTime = ct
 
     if (this.texW !== vw || this.texH !== vh) {
@@ -473,8 +492,13 @@ export class Anime4kUpscaler {
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false)
     try {
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, video)
+      this._texImageFailCount = 0
     } catch (e) {
-      console.warn('[Anime4K] texImage2D(video) 失败，跳过本帧:', e)
+      this._texImageFailCount++
+      if (this._texImageFailCount >= 10) {
+        console.error('[Anime4K] texImage2D(video) 连续失败 %d 次，停止管线', this._texImageFailCount)
+        this.stop()
+      }
       return
     }
 
@@ -656,11 +680,11 @@ export class Anime4kUpscaler {
   // ==================== 辅助方法 ====================
 
   private allocateTextures(gl: WebGL2RenderingContext): void {
-    const internal = this.useFloat ? gl.RGBA16F : gl.RGBA8
+    const internal = this.useFloatBuffer ? gl.RGBA16F : gl.RGBA8
     for (let i = 0; i < this.textures.length; i++) {
       if (!this.textures[i]) continue
       gl.bindTexture(gl.TEXTURE_2D, this.textures[i]!)
-      gl.texImage2D(gl.TEXTURE_2D, 0, internal, this.texW, this.texH, 0, gl.RGBA, this.useFloat ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE, null)
+      gl.texImage2D(gl.TEXTURE_2D, 0, internal, this.texW, this.texH, 0, gl.RGBA, this.useFloatBuffer ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE, null)
     }
   }
 
@@ -782,6 +806,7 @@ export class Anime4kUpscaler {
       -1, 1, 0, 0,   1, -1, 1, 1,   1, 1, 1, 0,
     ])
     const buf = gl.createBuffer()
+    this.quadBuf = buf
     gl.bindBuffer(gl.ARRAY_BUFFER, buf)
     gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW)
     gl.enableVertexAttribArray(0)

@@ -12,7 +12,6 @@ type GlobalTypeRow struct {
 	Id              int    `db:"id"`
 	TypeName        string `db:"type_name"`
 	CollectEnabled  int    `db:"collect_enabled"`
-	MagnetEnabled   int    `db:"magnet_enabled"`
 	Sort            int    `db:"sort"`
 	CreatedAt       string `db:"created_at"`
 }
@@ -28,17 +27,6 @@ func GetAllGlobalTypes() ([]*GlobalTypeRow, error) {
 	return rows, nil
 }
 
-// GetEnabledGlobalTypes 获取所有启用了磁力链接获取的类型
-func GetEnabledGlobalTypes() ([]*GlobalTypeRow, error) {
-	var rows []*GlobalTypeRow
-	err := instance.Select(&rows, `SELECT * FROM global_types WHERE magnet_enabled = 1 ORDER BY sort ASC, id ASC`)
-	if err != nil {
-		applog.Error("[GlobalTypes] GetEnabledGlobalTypes failed: %v", err)
-		return nil, err
-	}
-	return rows, nil
-}
-
 // SetGlobalTypeCollectEnabled 设置某个类型的采集状态
 func SetGlobalTypeCollectEnabled(typeName string, enabled bool) error {
 	val := 0
@@ -48,19 +36,6 @@ func SetGlobalTypeCollectEnabled(typeName string, enabled bool) error {
 	_, err := instance.Exec(`UPDATE global_types SET collect_enabled = ? WHERE type_name = ?`, val, typeName)
 	if err != nil {
 		applog.Error("[GlobalTypes] SetGlobalTypeCollectEnabled failed for '%s': %v", typeName, err)
-	}
-	return err
-}
-
-// SetGlobalTypeMagnetEnabled 设置某个类型的磁力链接获取状态
-func SetGlobalTypeMagnetEnabled(typeName string, enabled bool) error {
-	val := 0
-	if enabled {
-		val = 1
-	}
-	_, err := instance.Exec(`UPDATE global_types SET magnet_enabled = ? WHERE type_name = ?`, val, typeName)
-	if err != nil {
-		applog.Error("[GlobalTypes] SetGlobalTypeMagnetEnabled failed for '%s': %v", typeName, err)
 	}
 	return err
 }
@@ -246,18 +221,15 @@ func IsTypeCollectEnabled(typeName string) bool {
 	return enabled == 1
 }
 
-// IsTypeMagnetEnabled 检查某个类型是否启用了磁力链接获取
-// 默认值：类型不存在时返回 false（默认禁用磁力）
-func IsTypeMagnetEnabled(typeName string) bool {
-	var count int
-	err := instance.Get(&count, `SELECT COUNT(*) FROM global_types WHERE type_name = ?`, typeName)
-	if err != nil || count == 0 {
-		return false
+// getAllSourceKeys 获取所有源的 source_key（内部使用）
+func getAllSourceKeys() ([]struct {
+	SourceKey string `db:"source_key"`
+	Name      string `db:"name"`
+}, error) {
+	var rows []struct {
+		SourceKey string `db:"source_key"`
+		Name      string `db:"name"`
 	}
-	var enabled int
-	err = instance.Get(&enabled, `SELECT magnet_enabled FROM global_types WHERE type_name = ?`, typeName)
-	if err != nil {
-		return false
-	}
-	return enabled == 1
+	err := instance.Select(&rows, `SELECT source_key, name FROM sources`)
+	return rows, err
 }

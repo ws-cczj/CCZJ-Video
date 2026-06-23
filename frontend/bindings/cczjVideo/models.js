@@ -11,6 +11,86 @@ import { Create as $Create } from "@wailsio/runtime";
 import * as db$0 from "./app/db/models.js";
 
 /**
+ * CacheInfo 缓存信息
+ */
+export class CacheInfo {
+    /**
+     * Creates a new CacheInfo instance.
+     * @param {Partial<CacheInfo>} [$$source = {}] - The source object to create the CacheInfo.
+     */
+    constructor($$source = {}) {
+        if (!("local_storage_bytes" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["local_storage_bytes"] = 0;
+        }
+        if (!("indexed_db_bytes" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["indexed_db_bytes"] = 0;
+        }
+        if (!("database_bytes" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["database_bytes"] = 0;
+        }
+        if (!("database_path" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["database_path"] = "";
+        }
+        if (!("disk_cache_dir" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["disk_cache_dir"] = "";
+        }
+        if (!("disk_cache_bytes" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["disk_cache_bytes"] = 0;
+        }
+        if (!("log_file_bytes" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["log_file_bytes"] = 0;
+        }
+        if (!("log_file_path" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["log_file_path"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new CacheInfo instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {CacheInfo}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new CacheInfo(/** @type {Partial<CacheInfo>} */($$parsedSource));
+    }
+}
+
+/**
  * ChunkProgress 单个并发连接的分块进度
  */
 export class ChunkProgress {
@@ -60,6 +140,38 @@ export class ChunkProgress {
     static createFrom($$source = {}) {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new ChunkProgress(/** @type {Partial<ChunkProgress>} */($$parsedSource));
+    }
+}
+
+/**
+ * ClearCacheReq 清除缓存请求
+ */
+export class ClearCacheReq {
+    /**
+     * Creates a new ClearCacheReq instance.
+     * @param {Partial<ClearCacheReq>} [$$source = {}] - The source object to create the ClearCacheReq.
+     */
+    constructor($$source = {}) {
+        if (!("type" in $$source)) {
+            /**
+             * "database" | "disk_cache" | "logs" | "all"
+             * @member
+             * @type {string}
+             */
+            this["type"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ClearCacheReq instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {ClearCacheReq}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ClearCacheReq(/** @type {Partial<ClearCacheReq>} */($$parsedSource));
     }
 }
 
@@ -655,44 +767,6 @@ export class SetGlobalTypeCollectEnabledReq {
     static createFrom($$source = {}) {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new SetGlobalTypeCollectEnabledReq(/** @type {Partial<SetGlobalTypeCollectEnabledReq>} */($$parsedSource));
-    }
-}
-
-/**
- * SetGlobalTypeMagnetEnabledReq 设置全局类型磁力开关请求
- */
-export class SetGlobalTypeMagnetEnabledReq {
-    /**
-     * Creates a new SetGlobalTypeMagnetEnabledReq instance.
-     * @param {Partial<SetGlobalTypeMagnetEnabledReq>} [$$source = {}] - The source object to create the SetGlobalTypeMagnetEnabledReq.
-     */
-    constructor($$source = {}) {
-        if (!("type_name" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["type_name"] = "";
-        }
-        if (!("enabled" in $$source)) {
-            /**
-             * @member
-             * @type {boolean}
-             */
-            this["enabled"] = false;
-        }
-
-        Object.assign(this, $$source);
-    }
-
-    /**
-     * Creates a new SetGlobalTypeMagnetEnabledReq instance from a string or object.
-     * @param {any} [$$source = {}]
-     * @returns {SetGlobalTypeMagnetEnabledReq}
-     */
-    static createFrom($$source = {}) {
-        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        return new SetGlobalTypeMagnetEnabledReq(/** @type {Partial<SetGlobalTypeMagnetEnabledReq>} */($$parsedSource));
     }
 }
 

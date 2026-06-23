@@ -337,6 +337,18 @@ func (s *Scheduler) TriggerOne(sourceKey string, mode model.CollectMode, hours i
 
 // UpdateSourceSchedule 更新某个源的后台采集配置
 func (s *Scheduler) UpdateSourceSchedule(sourceKey string) {
+	// 检查调度器是否在运行，如果没有则重启
+	s.mu.Lock()
+	running := s.running
+	s.mu.Unlock()
+	
+	if !running {
+		// 调度器已停止，重新启动
+		go s.Start()
+		// 等待调度器启动完成
+		time.Sleep(100 * time.Millisecond)
+	}
+
 	s.sourceTimersMu.Lock()
 	if old, ok := s.sourceTimers[sourceKey]; ok {
 		old.Stop()
@@ -420,8 +432,8 @@ func (s *Scheduler) Status() SchedulerStatus {
 				item.Mode = "incremental"
 			}
 			item.IntervalMin = sc.IntervalMin
-			if item.IntervalMin < 5 {
-				item.IntervalMin = 5
+			if item.IntervalMin < 1 {
+				item.IntervalMin = 1
 			}
 		}
 		srcItems = append(srcItems, item)
@@ -429,7 +441,18 @@ func (s *Scheduler) Status() SchedulerStatus {
 
 	note := fmt.Sprintf("独立定时器模式: 每个源按各自配置间隔采集")
 	if !bgEnabled {
-		note = "后台周期采集已禁用"
+		// ⭐ 统计实际启用定时采集的源数量
+		enabledCount := 0
+		for _, item := range srcItems {
+			if item.Enabled {
+				enabledCount++
+			}
+		}
+		if enabledCount > 0 {
+			note = fmt.Sprintf("独立定时器模式: %d 个源已配置定时采集（全局开关未启用）", enabledCount)
+		} else {
+			note = "后台周期采集已禁用"
+		}
 	}
 
 	return SchedulerStatus{

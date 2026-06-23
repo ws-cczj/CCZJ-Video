@@ -327,6 +327,13 @@ export class Video {
              */
             this["vod_name"] = "";
         }
+        if (!("global_id" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["global_id"] = 0;
+        }
         if (!("vod_class" in $$source)) {
             /**
              * @member

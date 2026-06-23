@@ -21,6 +21,7 @@ import (
 type GlobalVideoRow struct {
 	Id                  int    `db:"id"`
 	VodName             string `db:"vod_name"`
+	TypeId              int    `db:"type_id"`
 	Year                string `db:"year"`
 	Area                string `db:"area"`
 	Lang                string `db:"lang"`
@@ -42,9 +43,6 @@ type GlobalVideoRow struct {
 	EpisodeCount        string `db:"episode_count"`
 	DoubanCooldownUntil  *string `db:"douban_cooldown_until"`
 	DoubanSearchFailures int    `db:"douban_search_failures"`
-	MagnetLink           string `db:"magnet_link"`
-	MagnetCooldownUntil  *string `db:"magnet_cooldown_until"`
-	MagnetSearchFailures int    `db:"magnet_search_failures"`
 	CreatedAt            string `db:"created_at"`
 	UpdatedAt            string `db:"updated_at"`
 }
@@ -130,8 +128,11 @@ func UpsertGlobalVideo(v *model.Video) (int64, error) {
 	director := util.DecompressIfNeeded(v.VodDirector)
 	actor := util.DecompressIfNeeded(v.VodActor)
 
+	// 解析类型ID
+	typeId := resolveGlobalTypeIdInt(v.TypeName)
+
 	// 使用智能匹配获取 global_id（精确→归一化→模糊+元数据）
-	globalID, err := GetOrCreateGlobalIDWithMeta(v.VodName, string(v.VodYear), director, actor)
+	globalID, err := GetOrCreateGlobalIDWithMeta(v.VodName, string(v.VodYear), director, actor, typeId)
 	if err != nil {
 		return 0, err
 	}
@@ -139,6 +140,7 @@ func UpsertGlobalVideo(v *model.Video) (int64, error) {
 	// 合并更新非空字段（写入 global_video 的字段保持明文，不压缩）
 	content := util.DecompressIfNeeded(v.VodContent)
 	_, err = instance.Exec(`UPDATE global_video SET
+		type_id=CASE WHEN ? != 0 THEN ? ELSE type_id END,
 		pic=CASE WHEN ? != '' THEN ? ELSE pic END,
 		year=CASE WHEN ? != '' THEN ? ELSE year END,
 		area=CASE WHEN ? != '' THEN ? ELSE area END,
@@ -149,6 +151,7 @@ func UpsertGlobalVideo(v *model.Video) (int64, error) {
 		content=CASE WHEN ? != '' THEN ? ELSE content END,
 		updated_at=CURRENT_TIMESTAMP
 		WHERE id = ?`,
+		typeId, typeId,
 		v.VodPic, v.VodPic, v.VodYear, v.VodYear, v.VodArea, v.VodArea,
 		v.VodLang, v.VodLang, director, director, actor, actor,
 		v.VodTag, v.VodTag, content, content, globalID)
@@ -162,7 +165,7 @@ func UpsertGlobalVideo(v *model.Video) (int64, error) {
 // GetGlobalVideoByName 按 vod_name 查询全局视频
 func GetGlobalVideoByName(vodName string) (*GlobalVideoRow, error) {
 	var row GlobalVideoRow
-	err := instance.Get(&row, `SELECT id, vod_name, year, area, lang, director, writer, actor, tag, content, pic, douban_id, douban_score, douban_votes, genre, release_date, duration, aka, imdb, season_count, episode_count, douban_cooldown_until, douban_search_failures, magnet_link, magnet_cooldown_until, magnet_search_failures, created_at, updated_at FROM global_video WHERE vod_name = ? LIMIT 1`, vodName)
+	err := instance.Get(&row, `SELECT id, vod_name, type_id, year, area, lang, director, writer, actor, tag, content, pic, douban_id, douban_score, douban_votes, genre, release_date, duration, aka, imdb, season_count, episode_count, douban_cooldown_until, douban_search_failures, created_at, updated_at FROM global_video WHERE vod_name = ? LIMIT 1`, vodName)
 	if err != nil {
 		return nil, err
 	}
@@ -805,58 +808,92 @@ func globalVideoIDAndName(whereClause string, args ...interface{}) (int64, strin
 	return p.ID, p.VodName, nil
 }
 
+// globalVideoIDAndNameWithType 查询 id, vod_name, type_id
+func globalVideoIDAndNameWithType(whereClause string, args ...interface{}) (int64, string, int64, error) {
+	type triplet struct {
+		ID      int64  `db:"id"`
+		VodName string `db:"vod_name"`
+		TypeId  int64  `db:"type_id"`
+	}
+	var t triplet
+	err := instance.Get(&t, fmt.Sprintf(`SELECT id, vod_name, type_id FROM global_video WHERE %s LIMIT 1`, whereClause), args...)
+	if err != nil {
+		return 0, "", 0, err
+	}
+	return t.ID, t.VodName, t.TypeId, nil
+}
+
 // selectAllGlobalCandidates 查询所有候选行（仅取 id、vod_name 和元数据字段）
 // 不做长度预过滤，由 nameSimilarity + metadataMatch 完成精确匹配
 func selectAllGlobalCandidates() ([]GlobalVideoRow, error) {
 	var rows []struct {
 		Id       int    `db:"id"`
 		VodName  string `db:"vod_name"`
+		TypeId   int    `db:"type_id"`
 		Year     string `db:"year"`
 		Director string `db:"director"`
 		Actor    string `db:"actor"`
 	}
-	err := instance.Select(&rows, `SELECT id, vod_name, year, director, actor FROM global_video`)
+	err := instance.Select(&rows, `SELECT id, vod_name, type_id, year, director, actor FROM global_video`)
 	if err != nil {
 		return nil, err
 	}
 	result := make([]GlobalVideoRow, len(rows))
 	for i, r := range rows {
-		result[i] = GlobalVideoRow{Id: r.Id, VodName: r.VodName, Year: r.Year, Director: r.Director, Actor: r.Actor}
+		result[i] = GlobalVideoRow{Id: r.Id, VodName: r.VodName, TypeId: r.TypeId, Year: r.Year, Director: r.Director, Actor: r.Actor}
 	}
 	return result, nil
 }
 
-func GetOrCreateGlobalID(vodName string) (int64, error) {
+func GetOrCreateGlobalID(vodName string, typeId int64) (int64, error) {
 	// 1. 精确匹配
 	row, err := GetGlobalVideoByName(vodName)
 	if err == nil {
-		return int64(row.Id), nil
+		if typeId == 0 || int64(row.TypeId) == typeId {
+			return int64(row.Id), nil
+		}
+		// 类型不匹配，继续尝试
 	}
 
 	// 2. 归一化匹配（去除所有空白字符 + 小写）
 	normalized := sqlNorm(vodName)
-	id, normName, err := globalVideoIDAndName(
-		fmt.Sprintf(`%s = ?`, sqlNormExpr()), normalized)
-	if err == nil {
-		applog.Info("[global] 归一化匹配: %q -> global_id=%d (原名: %q)", vodName, id, normName)
-		return id, nil
+	if typeId > 0 {
+		id, _, _, err := globalVideoIDAndNameWithType(
+			fmt.Sprintf(`%s = ? AND type_id = ?`, sqlNormExpr()), normalized, typeId)
+		if err == nil {
+			applog.Info("[global] 归一化匹配: %q -> global_id=%d (type_id=%d)", vodName, id, typeId)
+			return id, nil
+		}
+	} else {
+		id, normName, err := globalVideoIDAndName(
+			fmt.Sprintf(`%s = ?`, sqlNormExpr()), normalized)
+		if err == nil {
+			applog.Info("[global] 归一化匹配: %q -> global_id=%d (原名: %q)", vodName, id, normName)
+			return id, nil
+		}
 	}
 
-	// 3. 创建新条目 —— 不在此处做模糊匹配，因为没有元数据做交叉验证，容易将不同季/部/期误判为同一视频
-	// 模糊匹配 + 元数据交叉验证仅在 GetOrCreateGlobalIDWithMeta 中进行
+	// 3. 创建新条目
 	normVal := sqlNorm(vodName)
-	_, _ = instance.Exec(`INSERT OR IGNORE INTO global_video (vod_name, updated_at) VALUES (?, CURRENT_TIMESTAMP)`, vodName)
-	// 无论 INSERT 成功还是被忽略，都通过归一化 SELECT 获取 ID（只取 id，避免 scan 列不匹配）
-	if id, _, e := globalVideoIDAndName(
-		fmt.Sprintf(`%s = ?`, sqlNormExpr()), normVal); e == nil && id > 0 {
-		return id, nil
+	_, _ = instance.Exec(`INSERT OR IGNORE INTO global_video (vod_name, type_id, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)`, vodName, typeId)
+	// 通过归一化 SELECT 获取 ID
+	if typeId > 0 {
+		if id, _, _, e := globalVideoIDAndNameWithType(
+			fmt.Sprintf(`%s = ? AND type_id = ?`, sqlNormExpr()), normVal, typeId); e == nil && id > 0 {
+			return id, nil
+		}
+	} else {
+		if id, _, e := globalVideoIDAndName(
+			fmt.Sprintf(`%s = ?`, sqlNormExpr()), normVal); e == nil && id > 0 {
+			return id, nil
+		}
 	}
-	// 最后回退：用精确名称查询
+	// 回退：精确名称查询
 	if id, e := selectGlobalID(`vod_name = ?`, vodName); e == nil && id > 0 {
 		return id, nil
 	}
-	// 最终回退：重新 INSERT 并取 lastInsertId（处理索引不存在导致 INSERT 被忽略但查不到的边界情况）
-	res, insertErr := instance.Exec(`INSERT OR IGNORE INTO global_video (vod_name, updated_at) VALUES (?, CURRENT_TIMESTAMP)`, vodName)
+	// 最终回退
+	res, insertErr := instance.Exec(`INSERT OR IGNORE INTO global_video (vod_name, type_id, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)`, vodName, typeId)
 	if insertErr == nil {
 		if lid, err := res.LastInsertId(); err == nil && lid > 0 {
 			return lid, nil
@@ -866,22 +903,29 @@ func GetOrCreateGlobalID(vodName string) (int64, error) {
 }
 
 // GetOrCreateGlobalIDWithMeta 带元数据的智能匹配，用于采集入库时
-// 当名称 90%+ 相似且元数据（年份+导演/演员）完全吻合时，视为同一视频
+// 当名称 90%+ 相似且元数据（年份+导演/演员+类型）吻合时，视为同一视频
 // 注意：传入的 director/actor 应为明文（调用方负责解压缩）
-func GetOrCreateGlobalIDWithMeta(vodName, year, director, actor string) (int64, error) {
+func GetOrCreateGlobalIDWithMeta(vodName, year, director, actor string, typeId int64) (int64, error) {
 	// 1. 精确匹配
 	row, err := GetGlobalVideoByName(vodName)
 	if err == nil {
-		return int64(row.Id), nil
+		if int64(row.TypeId) == typeId {
+			return int64(row.Id), nil
+		}
+		// ⭐ 类型不匹配：同名但不同类型，视为不同视频
+		applog.Info("[global] 精确匹配命中但类型不匹配: %q (现有type_id=%d, 新type_id=%d), 跳过", vodName, row.TypeId, typeId)
 	}
 
 	// 2. 归一化匹配（去除所有空白字符 + 小写）
 	normalized := sqlNorm(vodName)
-	id, normName, err := globalVideoIDAndName(
+	id, normName, normTypeId, err := globalVideoIDAndNameWithType(
 		fmt.Sprintf(`%s = ?`, sqlNormExpr()), normalized)
 	if err == nil {
-		applog.Info("[global] 归一化匹配: %q -> global_id=%d (%q)", vodName, id, normName)
-		return id, nil
+		if normTypeId == typeId {
+			applog.Info("[global] 归一化匹配: %q -> global_id=%d (%q, type_id=%d)", vodName, id, normName, normTypeId)
+			return id, nil
+		}
+		applog.Info("[global] 归一化匹配命中但类型不匹配: %q (现有type_id=%d, 新type_id=%d), 跳过", vodName, normTypeId, typeId)
 	}
 
 	// 3. 模糊匹配（90%+ 相似度 + 元数据交叉验证），全表扫描不做长度预过滤
@@ -892,6 +936,10 @@ func GetOrCreateGlobalIDWithMeta(vodName, year, director, actor string) (int64, 
 
 	for i := range candidates {
 		c := &candidates[i]
+		// ⭐ 类型预检：类型不匹配的直接跳过
+		if int64(c.TypeId) != typeId {
+			continue
+		}
 		sim := nameSimilarity(vodName, c.VodName)
 		if sim < 0.90 {
 			continue
@@ -902,8 +950,8 @@ func GetOrCreateGlobalIDWithMeta(vodName, year, director, actor string) (int64, 
 		}
 		// 90%+ 相似度，检查元数据
 		if metadataMatch(year, director, actor, c.Year, c.Director, c.Actor) {
-			applog.Info("[global] 模糊+元数据匹配(%.0f%%): %q -> global_id=%d (%q)",
-				sim*100, vodName, c.Id, c.VodName)
+			applog.Info("[global] 模糊+元数据匹配(%.0f%%): %q -> global_id=%d (%q, type_id=%d)",
+				sim*100, vodName, c.Id, c.VodName, c.TypeId)
 			return int64(c.Id), nil
 		}
 		// 95%+ 相似度但元数据不匹配（可能是同一视频但元数据不完整）
@@ -915,18 +963,18 @@ func GetOrCreateGlobalIDWithMeta(vodName, year, director, actor string) (int64, 
 
 	// 如果名称极度相似(≥95%)且没有元数据冲突，视为同一视频
 	if bestMatch != nil {
-		applog.Info("[global] 高相似度回退(%.0f%%): %q -> global_id=%d (%q)",
-			bestSim*100, vodName, bestMatch.Id, bestMatch.VodName)
+		applog.Info("[global] 高相似度回退(%.0f%%): %q -> global_id=%d (%q, type_id=%d)",
+			bestSim*100, vodName, bestMatch.Id, bestMatch.VodName, bestMatch.TypeId)
 		return int64(bestMatch.Id), nil
 	}
 
-	// 4. 创建新条目（使用 INSERT OR IGNORE 避免 UNIQUE 冲突报错）
+	// 4. 创建新条目（使用 INSERT OR IGNORE 避免 UNIQUE 冲突报错，包含 type_id）
 	normVal := sqlNorm(vodName)
-	_, _ = instance.Exec(`INSERT OR IGNORE INTO global_video (vod_name, updated_at) VALUES (?, CURRENT_TIMESTAMP)`, vodName)
-	// 无论 INSERT 成功还是被忽略，都通过归一化 SELECT 获取 ID（只取 id，避免 scan 列不匹配）
-	if id, _, e := globalVideoIDAndName(
-		fmt.Sprintf(`%s = ?`, sqlNormExpr()), normVal); e == nil && id > 0 {
-		applog.Info("[global] 新建/已有条目: %q -> global_id=%d", vodName, id)
+	_, _ = instance.Exec(`INSERT OR IGNORE INTO global_video (vod_name, type_id, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)`, vodName, typeId)
+	// 通过归一化 + type_id 精确 SELECT 获取 ID
+	if id, _, _, e := globalVideoIDAndNameWithType(
+		fmt.Sprintf(`%s = ? AND type_id = ?`, sqlNormExpr()), normVal, typeId); e == nil && id > 0 {
+		applog.Info("[global] 新建/已有条目: %q -> global_id=%d (type_id=%d)", vodName, id, typeId)
 		return id, nil
 	}
 	// 回退：精确名称查询
@@ -934,10 +982,10 @@ func GetOrCreateGlobalIDWithMeta(vodName, year, director, actor string) (int64, 
 		return id, nil
 	}
 	// 最终回退：重新 INSERT 并取 lastInsertId
-	res, insertErr := instance.Exec(`INSERT OR IGNORE INTO global_video (vod_name, updated_at) VALUES (?, CURRENT_TIMESTAMP)`, vodName)
+	res, insertErr := instance.Exec(`INSERT OR IGNORE INTO global_video (vod_name, type_id, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)`, vodName, typeId)
 	if insertErr == nil {
 		if lid, err := res.LastInsertId(); err == nil && lid > 0 {
-			applog.Info("[global] 新建条目(lastInsertId): %q -> global_id=%d", vodName, lid)
+			applog.Info("[global] 新建条目(lastInsertId): %q -> global_id=%d (type_id=%d)", vodName, lid, typeId)
 			return lid, nil
 		}
 	}
@@ -974,7 +1022,7 @@ func SetDoubanCooldownByVodName(vodName string) error {
 // IncrementSearchFailures 增加搜索失败计数，达到上限时设置冷静期
 func IncrementSearchFailures(vodName string) error {
 	// 使用智能匹配获取 global_id（避免直接 INSERT 导致唯一索引冲突）
-	globalID, err := GetOrCreateGlobalID(vodName)
+	globalID, err := GetOrCreateGlobalID(vodName, 0)
 	if err != nil {
 		applog.Error("[Douban] IncrementSearchFailures GetOrCreateGlobalID failed for '%s': %v", vodName, err)
 		return err

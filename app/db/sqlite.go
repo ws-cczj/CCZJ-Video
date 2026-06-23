@@ -123,14 +123,13 @@ func createTables() error {
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 		// 全局视频类型表（统一管理所有类型的采集和磁力链接获取权限）
-		`CREATE TABLE IF NOT EXISTS global_types (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			type_name TEXT NOT NULL UNIQUE,
-			collect_enabled INTEGER DEFAULT 1,
-			magnet_enabled INTEGER DEFAULT 0,
-			sort INTEGER DEFAULT 0,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)`,
+`CREATE TABLE IF NOT EXISTS global_types (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				type_name TEXT NOT NULL UNIQUE,
+				collect_enabled INTEGER DEFAULT 1,
+				sort INTEGER DEFAULT 0,
+				created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+			)`,
 		// 收藏表
 		`CREATE TABLE IF NOT EXISTS favorites (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -165,12 +164,13 @@ func createTables() error {
 
 	// 先删除旧版归一化索引（索引表达式已更新，需重建）
 	_, _ = instance.Exec(`DROP INDEX IF EXISTS idx_gv_name_norm`)
+	_, _ = instance.Exec(`DROP INDEX IF EXISTS idx_gv_name_type_norm`)
 
 	// 创建索引（IF NOT EXISTS 确保幂等）
-	// global_video: 名称归一化唯一索引，表达式由 sqlNormExpr() 统一管理
+	// global_video: 名称+类型归一化唯一索引，允许同名但不同类型共存
 	indexes := []string{
-		fmt.Sprintf(`CREATE UNIQUE INDEX IF NOT EXISTS idx_gv_name_norm
-			ON global_video (%s)`, sqlNormExpr()),
+		fmt.Sprintf(`CREATE UNIQUE INDEX IF NOT EXISTS idx_gv_name_type_norm
+			ON global_video (%s, type_id)`, sqlNormExpr()),
 		// global_video: douban_id 索引（加速豆瓣信息查询）
 		`CREATE INDEX IF NOT EXISTS idx_gv_douban_id
 			ON global_video (douban_id) WHERE douban_id != ''`,
@@ -190,14 +190,13 @@ func createTables() error {
 	return nil
 }
 
-// migrateGlobalTypesColumns 为 global_types 表补充采集启用和磁力启用字段
+// migrateGlobalTypesColumns 为 global_types 表补充采集启用字段，并移除已废弃的磁力启用字段
 func migrateGlobalTypesColumns() {
 	migrations := []struct {
 		col string
 		def string
 	}{
 		{"collect_enabled", "INTEGER DEFAULT 1"},
-		{"magnet_enabled", "INTEGER DEFAULT 0"},
 	}
 	for _, m := range migrations {
 		q := fmt.Sprintf("ALTER TABLE global_types ADD COLUMN %s %s", m.col, m.def)
@@ -207,9 +206,15 @@ func migrateGlobalTypesColumns() {
 			logInfo(fmt.Sprintf("迁移 global_types 列 %s 成功", m.col))
 		}
 	}
+	// 移除已废弃的 magnet_enabled 列（SQLite 3.35.0+ 支持 DROP COLUMN）
+	if _, err := instance.Exec("ALTER TABLE global_types DROP COLUMN magnet_enabled"); err != nil {
+		logInfo(fmt.Sprintf("移除 global_types.magnet_enabled: %v (已忽略，列可能不存在)", err))
+	} else {
+		logInfo("移除 global_types.magnet_enabled 成功")
+	}
 }
 
-// migrateGlobalVideoColumns 为 global_video 表补充豆瓣冷静期相关列及磁力链接列
+// migrateGlobalVideoColumns 为 global_video 表补充豆瓣冷静期相关列、type_id 列，并移除已废弃的磁力链接列
 func migrateGlobalVideoColumns() {
 	migrations := []struct {
 		col string
@@ -217,9 +222,7 @@ func migrateGlobalVideoColumns() {
 	}{
 		{"douban_cooldown_until", "DATETIME DEFAULT NULL"},
 		{"douban_search_failures", "INTEGER DEFAULT 0"},
-		{"magnet_link", "TEXT DEFAULT ''"},
-		{"magnet_cooldown_until", "DATETIME DEFAULT NULL"},
-		{"magnet_search_failures", "INTEGER DEFAULT 0"},
+		{"type_id", "INTEGER DEFAULT 0"},
 	}
 	for _, m := range migrations {
 		q := fmt.Sprintf("ALTER TABLE global_video ADD COLUMN %s %s", m.col, m.def)
@@ -227,6 +230,16 @@ func migrateGlobalVideoColumns() {
 			logInfo(fmt.Sprintf("迁移 global_video 列 %s: %v (已忽略)", m.col, err))
 		} else {
 			logInfo(fmt.Sprintf("迁移 global_video 列 %s 成功", m.col))
+		}
+	}
+	// 移除已废弃的磁力链接列（SQLite 3.35.0+ 支持 DROP COLUMN）
+	dropCols := []string{"magnet_link", "magnet_cooldown_until", "magnet_search_failures"}
+	for _, col := range dropCols {
+		q := fmt.Sprintf("ALTER TABLE global_video DROP COLUMN %s", col)
+		if _, err := instance.Exec(q); err != nil {
+			logInfo(fmt.Sprintf("移除 global_video.%s: %v (已忽略，列可能不存在)", col, err))
+		} else {
+			logInfo(fmt.Sprintf("移除 global_video.%s 成功", col))
 		}
 	}
 }

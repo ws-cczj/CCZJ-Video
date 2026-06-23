@@ -355,6 +355,33 @@ defineProps<{ name: string; size?: number }>()
       <line x1="4" y1="22" x2="4" y2="15" />
     </g>
 
+    <g v-else-if="name === 'keyboard'">
+      <rect x="2" y="4" width="20" height="16" rx="2" ry="2" />
+      <line x1="6" y1="8" x2="6.01" y2="8" />
+      <line x1="10" y1="8" x2="10.01" y2="8" />
+      <line x1="14" y1="8" x2="14.01" y2="8" />
+      <line x1="18" y1="8" x2="18.01" y2="8" />
+      <line x1="6" y1="12" x2="6.01" y2="12" />
+      <line x1="10" y1="12" x2="10.01" y2="12" />
+      <line x1="14" y1="12" x2="14.01" y2="12" />
+      <line x1="18" y1="12" x2="18.01" y2="12" />
+      <line x1="7" y1="16" x2="17" y2="16" />
+    </g>
+
+    <g v-else-if="name === 'pip'">
+      <!-- 画中画：外框 + 内框 -->
+      <rect x="2" y="3" width="15" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.5" />
+      <rect x="8" y="8" width="13" height="10" rx="2" fill="currentColor" opacity="0.15" stroke="currentColor" stroke-width="1.5" />
+    </g>
+
+    <g v-else-if="name === 'pip-exit'">
+      <!-- 退出画中画：箭头指向外框 -->
+      <rect x="2" y="3" width="15" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.5" />
+      <rect x="8" y="8" width="13" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.5" />
+      <line x1="23" y1="1" x2="17" y2="7" stroke="currentColor" stroke-width="1.5" />
+      <polyline points="23,4 23,1 20,1" fill="none" stroke="currentColor" stroke-width="1.5" />
+    </g>
+
     <!-- fallback -->
     <g v-else>
       <circle cx="12" cy="12" r="8" />
