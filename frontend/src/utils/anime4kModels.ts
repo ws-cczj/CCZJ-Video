@@ -11,8 +11,6 @@
 export interface PassShaderDef {
   desc: string
   source: string
-  /** 1×1 pointwise 卷积的源纹理名称列表（仅 pointwise pass 有） */
-  pwSources?: string[]
 }
 
 /** 模型结构描述 */
@@ -23,11 +21,11 @@ export interface ModelStructure {
     linear: PassShaderDef[]
     /** Split ReLU 3×3 卷积 (4ch → 4ch, 18 mat4 per pass) */
     split?: PassShaderDef[]
-    /** 16ch Split ReLU 3×3 卷积 (dual-tex input, 36 mat4, 仅 L/VL) */
+    /** 16ch Split ReLU 3×3 卷积 (dual-tex input, 36 mat4, 仅 L) */
     split16?: PassShaderDef[]
     /** 最终 pass: pointwise 或 spatial+residual */
     final: PassShaderDef
-    /** pointwise 是否包含 linear 纹理 (M=true, VL=false) */
+    /** pointwise 是否包含 linear 纹理 (M=true) */
     pwIncludeLinear?: boolean
   }
   /** Upscale_CNN_x2 各阶段的 shader 源 */
@@ -36,13 +34,13 @@ export interface ModelStructure {
     linear: PassShaderDef[]
     /** Split ReLU 3×3 卷积 */
     split?: PassShaderDef[]
-    /** 16ch Split ReLU 3×3 卷积 (仅 L/VL) */
+    /** 16ch Split ReLU 3×3 卷积 (仅 L) */
     split16?: PassShaderDef[]
-    /** 可选的 pointwise 1×1 卷积 (M/VL 有) */
+    /** 可选的 pointwise 1×1 卷积 (M 有) */
     pointwise?: PassShaderDef[]
     /** 最终空间卷积 pass (L 有, 在 Depth2Space 前) */
     finalSpatial?: PassShaderDef
-    /** pointwise 是否包含 linear 纹理 (M=true, VL=false) */
+    /** pointwise 是否包含 linear 纹理 (M=true) */
     pwIncludeLinear?: boolean
   }
   /** Depth2Space shader (所有模型共用逻辑, 引擎内置) */
@@ -57,7 +55,7 @@ export interface EnginePassDef {
   read: number
   /** 第二输入纹理索引 (16ch 双纹理 pass, -1 = 无) */
   read2?: number
-  /** 第三输入纹理索引 (L/VL Depth2Space, -1 = 无) */
+  /** 第三输入纹理索引 (L Depth2Space, -1 = 无) */
   read3?: number
   /** 残差/主纹理索引 (可选) */
   mainTex?: number
@@ -73,16 +71,9 @@ export interface EnginePassDef {
   pwSources?: number[]
 }
 
-/** 完整模型配置 */
-export interface Anime4kModelConfig {
-  name: string
-  label: string
-  structure: ModelStructure
-}
-
 // ==================== 纹理索引常量 ====================
 
-export const TEX_VIDEO = 3
+export const TEX_VIDEO = 0
 
 // ==================== 管线构建 ====================
 
@@ -94,10 +85,10 @@ export function buildPipeline(structure: ModelStructure): EnginePassDef[] {
   const u = structure.upscale
 
   // 动态纹理索引分配器。
-  // 必须跳过 TEX_VIDEO (索引 3), 否则 restore 链第 4 个 pass (R3) 的输出会
-  // 写到视频纹理上, 既覆盖了视频 (后续 FS_R7 的 MAIN_tex 残差取到错误数据),
-  // 又把 CNN 浮点特征截断到 RGBA8 导致整条 restore 链路污染、画面近黑。
-  let nextTex = TEX_VIDEO + 1
+  // TEX_VIDEO 占用索引 0 作为视频纹理，中间纹理从 1 开始分配。
+  // 中间 pass 的输出绝不能写到 TEX_VIDEO 上，否则会覆盖视频帧
+  // (后续 MAIN_tex 残差取到错误数据)，且 RGBA8 截断会把 CNN 浮点特征归零导致画面近黑。
+  let nextTex = 1
 
   // === Restore 阶段 ===
 
@@ -134,7 +125,7 @@ export function buildPipeline(structure: ModelStructure): EnginePassDef[] {
     }
   }
 
-  // 16ch Split ReLU passes (双纹理输入, L/VL)
+  // 16ch Split ReLU passes (双纹理输入, L)
   // 每两个连续 shader 是一对 (tf + tf1)，权重不同但共享同一对输入纹理。
   // 拆成两个独立的单输出 pass，绝不能用 MRT (shader 只声明了单个 fragColor 输出)。
   const rSplit16Tex: number[] = []
@@ -158,7 +149,6 @@ export function buildPipeline(structure: ModelStructure): EnginePassDef[] {
   // 最终 Restore pass (残差 + video)
   // 所有 Restore 中间层输出，供 M 模型的 pointwise final 读取
   // M 的 FS_R7 是 Conv-3x1x1x56 pointwise (需要 1 linear + 6 split = 7 个纹理)
-  // VL 的 FS_R16 是 Conv-3x1x1x112 pointwise (需要 14 split16 = 14 个纹理，不含 linear)
   const allRestoreTex = r.pwIncludeLinear
     ? [...rLinearTex, ...rSplitTex, ...rSplit16Tex]
     : [...rSplit16Tex]
@@ -173,7 +163,7 @@ export function buildPipeline(structure: ModelStructure): EnginePassDef[] {
       write: writeTex,
       resScale: 1,
       flipY: 1,
-      pwSources: allRestoreTex.length > 0 ? [...allRestoreTex] : undefined,
+      pwSources: r.pwIncludeLinear !== undefined ? [...allRestoreTex] : undefined,
     })
     restoreWrite = writeTex
   } else {
@@ -188,7 +178,7 @@ export function buildPipeline(structure: ModelStructure): EnginePassDef[] {
       write: writeTex,
       resScale: 1,
       flipY: 1,
-      pwSources: allRestoreTex.length > 0 ? [...allRestoreTex] : undefined,
+      pwSources: r.pwIncludeLinear !== undefined ? [...allRestoreTex] : undefined,
     })
     restoreWrite = writeTex
   }
@@ -229,7 +219,7 @@ export function buildPipeline(structure: ModelStructure): EnginePassDef[] {
     }
   }
 
-  // 16ch Split ReLU passes (双纹理输入, L/VL) — 拆成成对单输出 pass (非 MRT)
+  // 16ch Split ReLU passes (双纹理输入, L) — 拆成成对单输出 pass (非 MRT)
   // 每两个连续 shader 是一对 (tf + tf1)，权重不同。
   const uSplit16Tex: number[] = []
   let udA = -1, udB = -1
@@ -255,9 +245,8 @@ export function buildPipeline(structure: ModelStructure): EnginePassDef[] {
     udA = readA; udB = readB
   }
 
-  // Pointwise passes (M/VL: 1×1 卷积，读取所有中间层输出)
+  // Pointwise passes (M: 1×1 卷积，读取所有中间层输出)
   // M 的 FS_U7 是 Conv-4x1x1x56 (需要 1 linear + 6 split = 7 个纹理)
-  // VL 的 FS_U14/15/16 是 Conv-4x1x1x112 (需要 14 split16 = 14 个纹理，不含 linear)
   const pointwiseOutTex: number[] = []
   if (u.pointwise) {
     const allUpscaleTex = u.pwIncludeLinear
@@ -303,7 +292,6 @@ export function buildPipeline(structure: ModelStructure): EnginePassDef[] {
 
   // Depth2Space: 最终 upscale 输出 → canvas (2x 分辨率)
   // L 模型: read conv2d_last_tf(tf1) = 最后一对 split16 + conv2d_last_tf2 = finalSpatial 输出
-  // VL 模型: read 最后 3 个 pointwise 输出 (conv2d_last_tf/tf1/tf2)
   // S/M 模型: read 最后一个 pass 输出 (单纹理)
   //
   // flipY 策略: 所有中间 pass 用 flipY=1, Depth2Space 用 flipY=0.
@@ -331,17 +319,11 @@ export function buildPipeline(structure: ModelStructure): EnginePassDef[] {
     d2sPass.read = lastPair[0]
     d2sPass.read2 = lastPair[1]
     d2sPass.read3 = finalSpatialWrite
-  } else if (pointwiseOutTex.length >= 3) {
-    // VL 模型: Depth2Space 三输入 = 最后 3 个 pointwise 输出
-    const n = pointwiseOutTex.length
-    d2sPass.read = pointwiseOutTex[n - 3]
-    d2sPass.read2 = pointwiseOutTex[n - 2]
-    d2sPass.read3 = pointwiseOutTex[n - 1]
   }
   passes.push(d2sPass)
 
   // 自检: 反馈环 + 纹理索引越界 (权重/管线配置错误时尽早暴露)
-  // 中间纹理索引与 TEX_VIDEO 共享同一命名空间, 总纹理数 = max(nextTex, TEX_VIDEO) + 1
+  // 纹理索引 0 = TEX_VIDEO, 中间纹理从 1 开始, 总纹理数 = nextTex
   assertPipelineValid(passes, Math.max(nextTex, TEX_VIDEO + 1))
 
   return passes

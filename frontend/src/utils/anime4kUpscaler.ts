@@ -8,7 +8,7 @@
  * 所有计算在 GPU 上完成，外部 API: init/start/stop/destroy/updateOptions/getStats。
  */
 
-import type { EnginePassDef, Anime4kModelConfig, ModelStructure } from './anime4kModels'
+import type { EnginePassDef, ModelStructure } from './anime4kModels'
 import { TEX_VIDEO, buildPipeline } from './anime4kModels'
 import * as WS from './anime4kWeights_S'
 import * as WM from './anime4kWeights_M'
@@ -187,7 +187,7 @@ function getModelStructure(tier: Anime4kTier): ModelStructure {
 // ==================== WebGL2 引擎 ====================
 
 interface UniformMap {
-  [key: string]: WebGLUniformLocation | null
+  [key: string]: WebGLUniformLocation | null | (WebGLUniformLocation | null)[]
 }
 
 export class Anime4kUpscaler {
@@ -286,21 +286,7 @@ export class Anime4kUpscaler {
 
     let outW = this.opts.outputWidth > 0 ? this.opts.outputWidth : vw * 2
     let outH = this.opts.outputHeight > 0 ? this.opts.outputHeight : vh * 2
-    // 限制输出尺寸不超过屏幕分辨率，同时保持视频宽高比
-    const dpr = window.devicePixelRatio || 1
-    const containerW = (parent ?? video.parentElement)?.clientWidth ?? vw
-    const containerH = (parent ?? video.parentElement)?.clientHeight ?? vh
-    const maxOutW = Math.round(containerW * dpr)
-    const maxOutH = Math.round(containerH * dpr)
-    const aspectRatio = vw / vh
-    if (outW > maxOutW) {
-      outW = maxOutW
-      outH = Math.round(maxOutW / aspectRatio)
-    }
-    if (outH > maxOutH) {
-      outH = maxOutH
-      outW = Math.round(maxOutH * aspectRatio)
-    }
+
     const maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE) as number
     if (outW > maxTex || outH > maxTex) {
       this.error = `输出尺寸 ${outW}x${outH} 超过 GPU 最大纹理限制 ${maxTex}x${maxTex}`
@@ -324,7 +310,7 @@ export class Anime4kUpscaler {
     this.passes = buildPipeline(structure)
     const numPasses = this.passes.length
 
-    // 计算需要的中间纹理数量（所有 pass 中最大的 write 索引 + 1，加上视频纹理）
+    // 计算需要的中间纹理数量（所有 pass 中最大的 write 索引 + 1，TEX_VIDEO=0 占首位）
     let maxTexIdx = TEX_VIDEO
     for (const p of this.passes) {
       if (typeof p.write === 'number' && p.write > maxTexIdx) maxTexIdx = p.write
@@ -367,7 +353,7 @@ export class Anime4kUpscaler {
         for (let j = 0; j < def.pwSources.length; j++) {
           pwU.push(gl.getUniformLocation(prog, `u_pw${j}`))
         }
-        (this.uniforms[this.uniforms.length - 1] as any).u_pw = pwU
+        this.uniforms[this.uniforms.length - 1].u_pw = pwU
       }
     }
     gl.deleteShader(vs)
@@ -434,9 +420,27 @@ export class Anime4kUpscaler {
   }
 
   updateOptions(opts: Partial<UpscalerOptions>): void {
+    let needResize = false
     if (opts.strength !== undefined) this.opts.strength = opts.strength
-    if (opts.outputWidth !== undefined) this.opts.outputWidth = opts.outputWidth
-    if (opts.outputHeight !== undefined) this.opts.outputHeight = opts.outputHeight
+    if (opts.outputWidth !== undefined) {
+      this.opts.outputWidth = opts.outputWidth
+      needResize = true
+    }
+    if (opts.outputHeight !== undefined) {
+      this.opts.outputHeight = opts.outputHeight
+      needResize = true
+    }
+    // 动态响应尺寸修改
+    if (needResize && this.gl && this.sourceVideo && this.canvas) {
+      const vw = this.sourceVideo.videoWidth
+      const vh = this.sourceVideo.videoHeight
+      if (vw && vh) {
+        this.outW = this.opts.outputWidth > 0 ? this.opts.outputWidth : vw * 2
+        this.outH = this.opts.outputHeight > 0 ? this.opts.outputHeight : vh * 2
+        this.canvas.width = this.outW
+        this.canvas.height = this.outH
+      }
+    }
   }
 
   getStats(): UpscalerStats {
@@ -485,6 +489,9 @@ export class Anime4kUpscaler {
       }
       this.allocateTextures(gl)
     }
+
+    // 每帧重置 GL 错误计数
+    this.glErrorCount = 0
 
     // 上传视频帧
     gl.activeTexture(gl.TEXTURE0)
@@ -561,8 +568,8 @@ export class Anime4kUpscaler {
 
       // Pointwise 源纹理 → unit 5+j
       if (def.pwSources && def.pwSources.length > 0) {
-        const pwU = (u as any).u_pw as (WebGLUniformLocation | null)[] | undefined
-        if (pwU) {
+        const pwU = u.u_pw
+        if (pwU && Array.isArray(pwU)) {
           for (let j = 0; j < def.pwSources.length; j++) {
             gl.activeTexture(gl.TEXTURE5 + j)
             gl.bindTexture(gl.TEXTURE_2D, this.textures[def.pwSources[j]])
@@ -571,11 +578,11 @@ export class Anime4kUpscaler {
         }
       }
 
-      // 第三输入纹理 → unit 6 (L Depth2Space)
+      // 第三输入纹理 → unit 7 (L Depth2Space, 排在 pwSources 之后避免冲突)
       if (def.read3 !== undefined && def.read3 >= 0 && u.u_input2) {
-        gl.activeTexture(gl.TEXTURE6)
+        gl.activeTexture(gl.TEXTURE7)
         gl.bindTexture(gl.TEXTURE_2D, this.textures[def.read3])
-        gl.uniform1i(u.u_input2, 6)
+        gl.uniform1i(u.u_input2, 7)
       }
 
       // 公共 uniforms
@@ -714,6 +721,8 @@ export class Anime4kUpscaler {
   }
 
   private compareBilinearVsCanvas(_gl: WebGL2RenderingContext): number {
+    // 注意: canvas 创建时 preserveDrawingBuffer: false，drawImage 可能读到
+    // 被交换后的空白帧。诊断模式下此方法结果仅供参考，不可靠时应改用 readPixels。
     const v = this.sourceVideo, c = this.canvas
     if (!v || !c || !v.videoWidth) return -1
     try {
@@ -802,8 +811,8 @@ export class Anime4kUpscaler {
     if (!vao) return null
     gl.bindVertexArray(vao)
     const vertices = new Float32Array([
-      -1, -1, 0, 1,  1, -1, 1, 1,  -1, 1, 0, 0,
-      -1, 1, 0, 0,   1, -1, 1, 1,   1, 1, 1, 0,
+      -1, -1, 0, 1, 1, -1, 1, 1, -1, 1, 0, 0,
+      -1, 1, 0, 0, 1, -1, 1, 1, 1, 1, 1, 0,
     ])
     const buf = gl.createBuffer()
     this.quadBuf = buf

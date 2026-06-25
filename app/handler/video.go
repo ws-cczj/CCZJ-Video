@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"cczjVideo/app/collect"
 	"cczjVideo/app/db"
 	"cczjVideo/app/model"
 	"cczjVideo/app/util"
@@ -224,18 +225,21 @@ func HydrateHistory(sourceKey string, raws []db.HistEntry) []*HistoryItemWithVid
 type VideoDetailReq struct {
 	SourceKey string `json:"source_key"`
 	VodId     string `json:"vod_id"`
+	Refresh   bool   `json:"refresh"` // 为 true 时先从源站拉取最新数据再返回
 }
 
 func (r *VideoDetailReq) UnmarshalJSON(data []byte) error {
 	var raw struct {
 		SourceKey string          `json:"source_key"`
 		VodId     json.RawMessage `json:"vod_id"`
+		Refresh   bool            `json:"refresh"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
 	r.SourceKey = raw.SourceKey
 	r.VodId = normalizeStringId(raw.VodId)
+	r.Refresh = raw.Refresh
 	return nil
 }
 
@@ -245,6 +249,27 @@ type VideoDetailResp struct {
 }
 
 func GetVideoDetail(req VideoDetailReq) (*VideoDetailResp, error) {
+	// 刷新模式：先从源站拉取最新数据
+	if req.Refresh {
+		source, err := db.GetSourceByKey(req.SourceKey)
+		if err == nil && source != nil && source.ApiUrl != "" {
+			freshVideo, fetchErr := collect.FetchVideoDetail(source.ApiUrl, req.VodId)
+			if fetchErr == nil && freshVideo != nil {
+				// 确保 vod_id 在 upsert 时正确
+				if freshVideo.VodId.String() == "" {
+					freshVideo.VodId = model.FlexibleString(req.VodId)
+				}
+				// 更新到数据库
+				if err := db.UpsertVideos(req.SourceKey, []*model.Video{freshVideo}); err != nil {
+					// 刷新失败不阻塞，仍然返回现有数据
+					fmt.Printf("[GetVideoDetail] 刷新 upsert 失败: %v\n", err)
+				}
+			} else {
+				fmt.Printf("[GetVideoDetail] 源站拉取失败: %v\n", fetchErr)
+			}
+		}
+	}
+
 	video, err := db.GetVideoById(req.SourceKey, req.VodId)
 	if err != nil {
 		return nil, fmt.Errorf("video not found: %w", err)

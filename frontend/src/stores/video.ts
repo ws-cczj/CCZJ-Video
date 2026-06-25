@@ -75,10 +75,10 @@ export const useVideoStore = defineStore('video', () => {
     }
   }
 
-  async function loadDetail(sourceKey: string, vodId: string): Promise<void> {
+  async function loadDetail(sourceKey: string, vodId: string, refresh = false): Promise<void> {
     loading.value = true
     try {
-      const resp = (await (AppMod as any).GetVideoDetail({ source_key: sourceKey, vod_id: vodId })) as VideoDetailResponse
+      const resp = (await (AppMod as any).GetVideoDetail({ source_key: sourceKey, vod_id: vodId, refresh })) as VideoDetailResponse
       currentVideo.value = resp?.video ?? null
       episodes.value = Array.isArray(resp?.episodes) ? resp.episodes : []
     } catch (e: any) {
