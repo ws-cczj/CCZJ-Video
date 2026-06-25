@@ -86,8 +86,9 @@ void main() {
   vec3 c = texture(u_input, v_uv).rgb;
   vec3 p = texture(u_prev, v_uv).rgb;
   float diff = abs(dot(c,vec3(0.333)) - dot(p,vec3(0.333)));
-  float w = mix(1.0, 0.3, smoothstep(0.02, 0.15, diff));
-  float alpha = clamp(u_strength * w, 0.0, 1.0);
+  // 静止时(diff小) w接近1.0，多取上一帧；运动时(diff大) w接近0.1
+  float w = mix(0.9, 0.1, smoothstep(0.02, 0.15, diff));
+  float alpha = clamp(u_strength * w, 0.0, 0.9); // 限制最大混合率
   fragColor = vec4(mix(c, p, alpha), 1.0);
 }`
 
@@ -136,7 +137,7 @@ void main() {
   fragColor = texture(u_input, v_uv);
 }`
 
-// 轻量锐化（qualityScale 降级时补偿 bilinear 模糊）
+// 轻量锐化——Unsharp Mask（qualityScale 降级时补偿 bilinear 模糊）
 const LIGHT_SHARPEN_FRAG = `#version 300 es
 precision highp float; in vec2 v_uv; out vec4 fragColor;
 uniform sampler2D u_input; uniform vec2 u_texelSize; uniform float u_amount;
@@ -147,22 +148,34 @@ void main() {
   vec3 b = texture(u_input, v_uv + vec2(-ts.x,0)).rgb;
   vec3 c = texture(u_input, v_uv + vec2(ts.x,0)).rgb;
   vec3 d = texture(u_input, v_uv + vec2(0,ts.y)).rgb;
-  vec3 sum = e * 5.0 - (a + b + c + d);
-  fragColor = vec4(mix(e, sum, u_amount * 0.5), 1.0);
+  
+  // 计算周边平均
+  vec3 blur = (a + b + c + d) * 0.25;
+  // 提取高频并放大
+  vec3 highFreq = e - blur;
+  
+  fragColor = vec4(e + highFreq * u_amount * 4.0, 1.0);
 }`
 
-// 颜色-细节合成着色器：将 FSRCNNX 输出的细节亮度迁移到彩色放大图上
+// 颜色-细节合成着色器：将 FSRCNNX 提取的高频细节以加法叠加到彩色放大图上
 const DETAIL_COMPOSE_FRAG = `#version 300 es
 precision highp float; in vec2 v_uv; out vec4 fragColor;
-uniform sampler2D u_detail;   // FSRCNNX 输出 (灰度/亮度)
+uniform sampler2D u_detail;   // FSRCNNX 输出
 uniform sampler2D u_color;    // bilinear 上采样的彩色图
 float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 void main() {
   vec3 color = texture(u_color, v_uv).rgb;
   float detailL = texture(u_detail, v_uv).r;
   float baseL = luma(color);
-  float ratio = detailL / (baseL + 0.001);
-  vec3 outColor = color * clamp(ratio, 0.5, 1.5);
+  
+  // 提取 FSRCNNX 带来的"高频细节差值"
+  float detailDiff = detailL - baseL;
+  
+  // 将细节差值按照原色彩的亮度比例加回去，而不是直接相乘
+  vec3 outColor = color + detailDiff;
+  
+  // 防止过曝或负值
+  outColor = clamp(outColor, 0.0, 1.0);
   fragColor = vec4(outColor, 1.0);
 }`
 
@@ -330,10 +343,10 @@ export class FilmUpscaler {
 
   constructor(opts: FilmUpscalerOptions = {}) {
     this.opts = {
-      sharpness: opts.sharpness ?? 0.5, casStrength: opts.casStrength ?? 0.4,
-      deinterlace: opts.deinterlace ?? false, denoise: opts.denoise ?? 0.3,
-      temporalBlend: opts.temporalBlend ?? 0.5, hdrToneMap: opts.hdrToneMap ?? 0.3,
-      autoQuality: opts.autoQuality ?? true,
+      sharpness: opts.sharpness ?? 0.8, casStrength: opts.casStrength ?? 0.8,
+      deinterlace: opts.deinterlace ?? false, denoise: opts.denoise ?? 0.0,
+      temporalBlend: opts.temporalBlend ?? 0.0, hdrToneMap: opts.hdrToneMap ?? 0.0,
+      autoQuality: opts.autoQuality ?? false,
     }
   }
 
@@ -805,8 +818,8 @@ export function checkFilmSupport(): { supported: boolean; message: string } {
 }
 
 export const FILM_PRESET: Required<FilmUpscalerOptions> = {
-  sharpness: 0.5, casStrength: 0.4,
-  deinterlace: false, denoise: 0.3,
-  temporalBlend: 0.5, hdrToneMap: 0.3,
-  autoQuality: true,
+  sharpness: 0.8, casStrength: 0.8,
+  deinterlace: false, denoise: 0.0,
+  temporalBlend: 0.0, hdrToneMap: 0.0,
+  autoQuality: false,
 }

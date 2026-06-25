@@ -523,6 +523,29 @@ function openSimilarVideo(item: RecommendItem): void {
 
 // ==================== 详情加载 ====================
 
+// 视频数据刷新限制：localStorage key 前缀，5 分钟内只允许刷新一次
+const REFRESH_KEY_PREFIX = 'cczj_video_refresh_'
+const REFRESH_INTERVAL_MS = 5 * 60 * 1000 // 5 分钟
+
+function canRefresh(sourceKey: string, vodId: string): boolean {
+  try {
+    const key = REFRESH_KEY_PREFIX + sourceKey + '_' + vodId
+    const last = localStorage.getItem(key)
+    if (!last) return true
+    const elapsed = Date.now() - parseInt(last, 10)
+    return elapsed >= REFRESH_INTERVAL_MS
+  } catch {
+    return true
+  }
+}
+
+function markRefreshed(sourceKey: string, vodId: string): void {
+  try {
+    const key = REFRESH_KEY_PREFIX + sourceKey + '_' + vodId
+    localStorage.setItem(key, String(Date.now()))
+  } catch { /* ignore */ }
+}
+
 // ==================== 删除视频 ====================
 const deleting = ref(false)
 
@@ -550,14 +573,20 @@ async function deleteThisVideo(): Promise<void> {
 
 async function loadDetail(): Promise<void> {
   if (!sourceKey.value || !vodId.value) {
-    error.value = '缺少视频标识，无法加载'
+    error.value = '视频不存在或加载失败'
     return
   }
   loading.value = true
   error.value = null
   similarVideos.value = []
 
-  await videoStore.loadDetail(sourceKey.value, vodId.value)
+  // 检查是否允许从源站刷新数据（5 分钟内只允许刷新一次）
+  const shouldRefresh = canRefresh(sourceKey.value, vodId.value)
+  if (shouldRefresh) {
+    markRefreshed(sourceKey.value, vodId.value)
+  }
+
+  await videoStore.loadDetail(sourceKey.value, vodId.value, shouldRefresh)
 
   if (!video.value) {
     error.value = '视频不存在或加载失败'
