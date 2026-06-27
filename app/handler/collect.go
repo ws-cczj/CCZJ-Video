@@ -11,7 +11,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 type CollectReq struct {
@@ -324,6 +327,14 @@ func SearchSource(sourceKey string, keyword string, limit int) (*SearchSourceRes
 		limit = 50
 	}
 
+	// Emit: 开始搜索
+	application.Get().Event.Emit("search:progress", map[string]interface{}{
+		"stage":   "fetching_list",
+		"message": "正在从源站获取搜索结果...",
+		"current": 0,
+		"total":   0,
+	})
+
 	advCfg := src.GetAdvConfig()
 	opts := collect.FetchOptions{
 		Limit:        limit,
@@ -342,9 +353,19 @@ func SearchSource(sourceKey string, keyword string, limit int) (*SearchSourceRes
 	applog.Info("[SearchSource] 源站搜索完成 - sourceKey: %s, keyword: %s, total: %d, listSize: %d",
 		sourceKey, keyword, page.Total.Int(), len(page.List))
 
+	// Emit: 开始获取详情
+	totalVideos := len(page.List)
+	application.Get().Event.Emit("search:progress", map[string]interface{}{
+		"stage":   "fetching_details",
+		"message": fmt.Sprintf("正在获取视频详情 (0/%d)...", totalVideos),
+		"current": 0,
+		"total":   totalVideos,
+	})
+
 	// 调用详情接口获取完整字段（使用协程池并发，并发数 3）
 	pool := collect.NewPool(3)
 	var mu sync.Mutex
+	var completedCount int32
 	for i, v := range page.List {
 		if v == nil || v.VodId.String() == "" {
 			continue
@@ -355,24 +376,40 @@ func SearchSource(sourceKey string, keyword string, limit int) (*SearchSourceRes
 			detail, err := collect.FetchVideoDetail(src.ApiUrl, vid.VodId.String())
 			if err != nil || detail == nil {
 				applog.Info("[SearchSource] 获取详情失败 - vod_id: %s, error: %v", vid.VodId.String(), err)
-				return
+			} else {
+				applog.Info("[SearchSource] 获取详情成功 - vod_id: %s, vod_actor: %s, vod_director: %s, vod_content: %s",
+					vid.VodId.String(), detail.VodActor, detail.VodDirector, truncate(detail.VodContent, 100))
+				mu.Lock()
+				if detail.VodActor != "" { page.List[idx].VodActor = detail.VodActor }
+				if detail.VodDirector != "" { page.List[idx].VodDirector = detail.VodDirector }
+				if detail.VodContent != "" { page.List[idx].VodContent = detail.VodContent }
+				if detail.VodPic != "" { page.List[idx].VodPic = detail.VodPic }
+				if detail.VodLang != "" { page.List[idx].VodLang = detail.VodLang }
+				if detail.VodArea != "" { page.List[idx].VodArea = detail.VodArea }
+				if detail.VodYear != "" { page.List[idx].VodYear = detail.VodYear }
+				if detail.VodPlayUrl != "" { page.List[idx].VodPlayUrl = detail.VodPlayUrl }
+				mu.Unlock()
 			}
-			applog.Info("[SearchSource] 获取详情成功 - vod_id: %s, vod_actor: %s, vod_director: %s, vod_content: %s",
-				vid.VodId.String(), detail.VodActor, detail.VodDirector, truncate(detail.VodContent, 100))
-			mu.Lock()
-			if detail.VodActor != "" { page.List[idx].VodActor = detail.VodActor }
-			if detail.VodDirector != "" { page.List[idx].VodDirector = detail.VodDirector }
-			if detail.VodContent != "" { page.List[idx].VodContent = detail.VodContent }
-			if detail.VodPic != "" { page.List[idx].VodPic = detail.VodPic }
-			if detail.VodLang != "" { page.List[idx].VodLang = detail.VodLang }
-			if detail.VodArea != "" { page.List[idx].VodArea = detail.VodArea }
-			if detail.VodYear != "" { page.List[idx].VodYear = detail.VodYear }
-			if detail.VodPlayUrl != "" { page.List[idx].VodPlayUrl = detail.VodPlayUrl }
-			mu.Unlock()
+			// Emit progress update
+			current := int(atomic.AddInt32(&completedCount, 1))
+			application.Get().Event.Emit("search:progress", map[string]interface{}{
+				"stage":   "fetching_details",
+				"message": fmt.Sprintf("正在获取视频详情 (%d/%d)...", current, totalVideos),
+				"current": current,
+				"total":   totalVideos,
+			})
 		})
 	}
 	pool.Wait()
 	pool.Stop()
+
+	// Emit: 开始保存数据
+	application.Get().Event.Emit("search:progress", map[string]interface{}{
+		"stage":   "saving",
+		"message": "正在保存搜索结果到本地...",
+		"current": 0,
+		"total":   0,
+	})
 
 	// 2) 入库（合并源站数据与数据库已有数据：源站非空字段覆盖，源站空字段保留数据库值）
 	if err := db.EnsureVideoTable(sourceKey); err != nil {

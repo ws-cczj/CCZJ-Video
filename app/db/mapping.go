@@ -34,8 +34,13 @@ func IsFavorite(vodName string, sourceKey string) bool {
 	if err != nil {
 		return false
 	}
+	return IsFavoriteByGlobalID(row.Id)
+}
+
+// IsFavoriteByGlobalID 按 global_id 检查是否已收藏（跨所有源）
+func IsFavoriteByGlobalID(globalID int) bool {
 	var count int
-	_ = instance.Get(&count, `SELECT COUNT(1) FROM favorites WHERE global_id = ?`, row.Id)
+	_ = instance.Get(&count, `SELECT COUNT(1) FROM favorites WHERE global_id = ?`, globalID)
 	return count > 0
 }
 

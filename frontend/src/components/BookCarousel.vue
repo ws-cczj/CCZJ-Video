@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { getDetailPath, getProxiedImageUrl } from '../utils'
 import type { Video } from '../types'
+import imageNotFound from '../assets/images/image_notfound.png'
 
 interface Props {
   slides: Video[]
   sourceKey: string
+  onSlideClick?: (video: Video) => void | Promise<void>
 }
 
 const props = defineProps<Props>()
@@ -14,30 +16,94 @@ const router = useRouter()
 
 const PAGE_HEIGHT = 360
 const PAGE_PADDING = 20
-const FLIP_DURATION = 700
+const SLIDE_DURATION = 500
 const AUTO_INTERVAL = 6000
 
 const currentIndex = ref(0)
-const flipState = ref<'idle' | 'next'>('idle')
-const pendingIndex = ref(0)
-const animationKey = ref(0)
+const isTransitioning = ref(false)
+const slideDirection = ref<'left' | 'right'>('left')
+const pendingIndex = ref(-1)
+
 let timer: ReturnType<typeof setInterval> | null = null
+let transitionTimer: ReturnType<typeof setTimeout> | null = null
 
 const total = computed(() => props.slides.length)
 const activeSlide = computed(() => props.slides[currentIndex.value])
-const nextSlideIndex = computed(() => (currentIndex.value + 1) % total.value)
 
-function goNext(): void {
-  if (flipState.value !== 'idle' || total.value <= 1) return
-  pendingIndex.value = nextSlideIndex.value
-  flipState.value = 'next'
-  animationKey.value++
+// Slide positions: current at 0, next at 100%, prev at -100%
+const currentOffset = ref(0) // percentage offset for current slide
+const incomingOffset = ref(0) // percentage offset for incoming slide
+
+function goTo(idx: number): void {
+  if (isTransitioning.value || total.value <= 1 || idx === currentIndex.value) return
+
+  const direction: 'left' | 'right' = idx > currentIndex.value ? 'left' : 'right'
+
+  // Handle wrap-around
+  if (currentIndex.value === 0 && idx === total.value - 1) {
+    slideDirection.value = 'right'
+  } else if (currentIndex.value === total.value - 1 && idx === 0) {
+    slideDirection.value = 'left'
+  } else {
+    slideDirection.value = direction
+  }
+
+  pendingIndex.value = idx
+  startTransition()
 }
 
-function onFlipEnd(): void {
-  if (flipState.value === 'idle') return
-  currentIndex.value = pendingIndex.value
-  flipState.value = 'idle'
+function goNext(): void {
+  if (isTransitioning.value) return
+  const nextIdx = (currentIndex.value + 1) % total.value
+  slideDirection.value = 'left'
+  pendingIndex.value = nextIdx
+  startTransition()
+}
+
+function goPrev(): void {
+  if (isTransitioning.value) return
+  const prevIdx = (currentIndex.value - 1 + total.value) % total.value
+  slideDirection.value = 'right'
+  pendingIndex.value = prevIdx
+  startTransition()
+}
+
+function startTransition(): void {
+  isTransitioning.value = true
+  const direction = slideDirection.value
+
+  // Incoming slide starts off-screen
+  if (direction === 'left') {
+    // Going forward: current slides left, incoming comes from right
+    currentOffset.value = 0
+    incomingOffset.value = 100
+  } else {
+    // Going backward: current slides right, incoming comes from left
+    currentOffset.value = 0
+    incomingOffset.value = -100
+  }
+
+  // Force reflow then animate
+  nextTick(() => {
+    requestAnimationFrame(() => {
+      if (direction === 'left') {
+        currentOffset.value = -100
+        incomingOffset.value = 0
+      } else {
+        currentOffset.value = 100
+        incomingOffset.value = 0
+      }
+    })
+  })
+
+  // After transition completes
+  if (transitionTimer) clearTimeout(transitionTimer)
+  transitionTimer = setTimeout(() => {
+    currentIndex.value = pendingIndex.value
+    isTransitioning.value = false
+    currentOffset.value = 0
+    pendingIndex.value = -1
+  }, SLIDE_DURATION)
 }
 
 function startAutoPlay(): void {
@@ -50,7 +116,18 @@ function stopAutoPlay(): void {
   if (timer) { clearInterval(timer); timer = null }
 }
 
-function goDetail(video: Video): void {
+const clickingLoading = ref(false)
+
+async function goDetail(video: Video): Promise<void> {
+  if (props.onSlideClick) {
+    clickingLoading.value = true
+    try {
+      await props.onSlideClick(video)
+    } finally {
+      clickingLoading.value = false
+    }
+    return
+  }
   const vodId = String((video as any).vod_id ?? '')
   const sk = String((video as any).source_key || props.sourceKey || '')
   if (sk && vodId) {
@@ -58,6 +135,7 @@ function goDetail(video: Video): void {
   }
 }
 
+// Image proxying
 const proxiedUrls = ref<Map<string, string>>(new Map())
 const slideImgUrls = ref<Map<number, string>>(new Map())
 
@@ -77,7 +155,9 @@ watch(() => props.slides, async (slides) => {
   slideImgUrls.value.clear()
   proxiedUrls.value.clear()
   currentIndex.value = 0
-  flipState.value = 'idle'
+  isTransitioning.value = false
+  currentOffset.value = 0
+  pendingIndex.value = -1
   for (let i = 0; i < slides.length; i++) {
     const url = await getImgUrl((slides[i] as any)?.vod_pic || '')
     slideImgUrls.value.set(i, url)
@@ -90,7 +170,15 @@ onMounted(() => {
 
 onUnmounted(() => {
   stopAutoPlay()
+  if (transitionTimer) clearTimeout(transitionTimer)
 })
+
+function onImageError(evt: Event): void {
+  const img = evt.target as HTMLImageElement
+  if (img && img.src !== imageNotFound) {
+    img.src = imageNotFound
+  }
+}
 
 function onMouseEnter(): void {
   stopAutoPlay()
@@ -99,224 +187,177 @@ function onMouseEnter(): void {
 function onMouseLeave(): void {
   startAutoPlay()
 }
+
+// Helper to get slide data by index (with wrap-around for pending)
+function getSlideData(idx: number): Video | undefined {
+  if (idx < 0 || idx >= total.value) return undefined
+  return props.slides[idx]
+}
 </script>
 
 <template>
-  <div v-if="total > 0" class="book-carousel"
-    :style="{ height: PAGE_HEIGHT + PAGE_PADDING * 2 + 'px', padding: PAGE_PADDING + 'px' }" @mouseenter="onMouseEnter"
-    @mouseleave="onMouseLeave">
-    <div class="bc-page-wrapper" :style="{ height: PAGE_HEIGHT + 'px' }">
-      <div class="bc-page bc-page-next">
-        <div class="bc-page-inner">
-          <div class="bc-image-wrap">
-            <img :src="slideImgUrls.get(nextSlideIndex) || ''" :alt="slides[nextSlideIndex]?.vod_name || ''"
-              class="bc-image" draggable="false" />
-            <div class="bc-image-gradient" />
+  <div v-if="total > 0" class="carousel"
+    :style="{ height: PAGE_HEIGHT + PAGE_PADDING * 2 + 'px', padding: PAGE_PADDING + 'px' }"
+    @mouseenter="onMouseEnter" @mouseleave="onMouseLeave">
+    <div class="carousel-viewport" :style="{ height: PAGE_HEIGHT + 'px' }">
+      <!-- Current slide -->
+      <div class="carousel-slide"
+        :style="{ transform: `translateX(${currentOffset}%)`, transition: isTransitioning ? `transform ${SLIDE_DURATION}ms ease-in-out` : 'none' }">
+        <div class="slide-inner" v-if="activeSlide">
+          <div class="slide-image-wrap">
+            <img :src="slideImgUrls.get(currentIndex) || ''" :alt="activeSlide?.vod_name || ''"
+              class="slide-image" draggable="false" referrerpolicy="no-referrer" @error="onImageError" />
+            <div class="slide-image-gradient" />
           </div>
-          <div class="bc-detail-wrap">
-            <div class="bc-detail-bg" />
-            <div class="bc-detail-content">
-              <span class="bc-badge">热播推荐</span>
-              <h2 class="bc-title">{{ slides[nextSlideIndex]?.vod_name || '' }}</h2>
-              <p class="bc-desc">{{ slides[nextSlideIndex]?.vod_content?.replace(/<[^>]+>/g, '') ||
-                slides[nextSlideIndex]?.vod_remarks || '' }}</p>
-              <div class="bc-tags">
-                <span v-if="slides[nextSlideIndex]?.type_name" class="bc-tag">{{ slides[nextSlideIndex].type_name
-                }}</span>
-                <span v-if="slides[nextSlideIndex]?.vod_year" class="bc-tag">{{ slides[nextSlideIndex].vod_year
-                }}</span>
-                <span v-if="slides[nextSlideIndex]?.vod_area" class="bc-tag">{{ slides[nextSlideIndex].vod_area
-                }}</span>
-                <span v-if="slides[nextSlideIndex]?.vod_score && Number(slides[nextSlideIndex].vod_score) > 0"
-                  class="bc-tag bc-tag-score">{{ slides[nextSlideIndex].vod_score }}分</span>
+          <div class="slide-detail-wrap">
+            <div class="slide-detail-bg" />
+            <div class="slide-detail-content">
+              <span class="slide-badge">豆瓣热榜</span>
+              <h2 class="slide-title">{{ activeSlide?.vod_name || '' }}</h2>
+              <div class="slide-meta">
+                <div v-if="(activeSlide as any)?.release_date" class="slide-meta-row">
+                  <span class="slide-meta-label">上映</span>
+                  <span class="slide-meta-value">{{ (activeSlide as any).release_date }}</span>
+                </div>
+                <div v-if="(activeSlide as any)?.director" class="slide-meta-row">
+                  <span class="slide-meta-label">导演</span>
+                  <span class="slide-meta-value">{{ (activeSlide as any).director }}</span>
+                </div>
+                <div v-if="(activeSlide as any)?.actors" class="slide-meta-row">
+                  <span class="slide-meta-label">主演</span>
+                  <span class="slide-meta-value slide-meta-actors">{{ (activeSlide as any).actors }}</span>
+                </div>
+              </div>
+              <div class="slide-tags">
+                <span v-if="(activeSlide as any)?.year" class="slide-tag">{{ (activeSlide as any).year }}</span>
+                <span v-if="(activeSlide as any)?.area" class="slide-tag">{{ (activeSlide as any).area }}</span>
+                <span v-if="activeSlide?.vod_score && Number(activeSlide.vod_score) > 0"
+                  class="slide-tag slide-tag-score">{{ activeSlide.vod_score }}分</span>
+                <span v-if="activeSlide?.vod_remarks" class="slide-tag slide-tag-votes">{{ activeSlide.vod_remarks }}</span>
               </div>
             </div>
-            <div class="bc-actions">
-              <button class="bc-btn bc-btn-primary" @click.stop="goDetail(slides[nextSlideIndex])">立即播放</button>
-              <button class="bc-btn bc-btn-secondary" @click.stop="goDetail(slides[nextSlideIndex])">详情</button>
+            <div class="slide-actions">
+              <button class="slide-btn slide-btn-primary" @click.stop="goDetail(activeSlide)">查看详情</button>
             </div>
           </div>
         </div>
       </div>
 
-      <div v-if="flipState === 'next'" :key="animationKey" class="bc-page bc-page-flipping"
-        :style="{ animationDuration: FLIP_DURATION + 'ms' }" @animationend="onFlipEnd">
-        <div class="bc-page-inner">
-          <div class="bc-image-wrap">
-            <img :src="slideImgUrls.get(currentIndex) || ''" :alt="activeSlide?.vod_name || ''" class="bc-image"
-              draggable="false" />
-            <div class="bc-image-gradient" />
+      <!-- Incoming slide (during transition) -->
+      <div v-if="isTransitioning && pendingIndex >= 0 && getSlideData(pendingIndex)"
+        class="carousel-slide carousel-slide-incoming"
+        :style="{ transform: `translateX(${incomingOffset}%)`, transition: isTransitioning ? `transform ${SLIDE_DURATION}ms ease-in-out` : 'none' }">
+        <div class="slide-inner">
+          <div class="slide-image-wrap">
+            <img :src="slideImgUrls.get(pendingIndex) || ''" :alt="getSlideData(pendingIndex)?.vod_name || ''"
+              class="slide-image" draggable="false" referrerpolicy="no-referrer" @error="onImageError" />
+            <div class="slide-image-gradient" />
           </div>
-          <div class="bc-detail-wrap">
-            <div class="bc-detail-bg" />
-            <div class="bc-detail-content">
-              <span class="bc-badge">热播推荐</span>
-              <h2 class="bc-title">{{ activeSlide?.vod_name || '' }}</h2>
-              <p class="bc-desc">{{ activeSlide?.vod_content?.replace(/<[^>]+>/g, '') || activeSlide?.vod_remarks || ''
-              }}</p>
-              <div class="bc-tags">
-                <span v-if="activeSlide?.type_name" class="bc-tag">{{ activeSlide.type_name }}</span>
-                <span v-if="activeSlide?.vod_year" class="bc-tag">{{ activeSlide.vod_year }}</span>
-                <span v-if="activeSlide?.vod_area" class="bc-tag">{{ activeSlide.vod_area }}</span>
-                <span v-if="activeSlide?.vod_score && Number(activeSlide.vod_score) > 0" class="bc-tag bc-tag-score">{{
-                  activeSlide.vod_score }}分</span>
+          <div class="slide-detail-wrap">
+            <div class="slide-detail-bg" />
+            <div class="slide-detail-content">
+              <span class="slide-badge">豆瓣热榜</span>
+              <h2 class="slide-title">{{ getSlideData(pendingIndex)?.vod_name || '' }}</h2>
+              <div class="slide-meta">
+                <div v-if="(getSlideData(pendingIndex) as any)?.release_date" class="slide-meta-row">
+                  <span class="slide-meta-label">上映</span>
+                  <span class="slide-meta-value">{{ (getSlideData(pendingIndex) as any).release_date }}</span>
+                </div>
+                <div v-if="(getSlideData(pendingIndex) as any)?.director" class="slide-meta-row">
+                  <span class="slide-meta-label">导演</span>
+                  <span class="slide-meta-value">{{ (getSlideData(pendingIndex) as any).director }}</span>
+                </div>
+                <div v-if="(getSlideData(pendingIndex) as any)?.actors" class="slide-meta-row">
+                  <span class="slide-meta-label">主演</span>
+                  <span class="slide-meta-value slide-meta-actors">{{ (getSlideData(pendingIndex) as any).actors }}</span>
+                </div>
+              </div>
+              <div class="slide-tags">
+                <span v-if="(getSlideData(pendingIndex) as any)?.year" class="slide-tag">{{ (getSlideData(pendingIndex) as any).year }}</span>
+                <span v-if="(getSlideData(pendingIndex) as any)?.area" class="slide-tag">{{ (getSlideData(pendingIndex) as any).area }}</span>
+                <span v-if="getSlideData(pendingIndex)?.vod_score && Number(getSlideData(pendingIndex)!.vod_score) > 0"
+                  class="slide-tag slide-tag-score">{{ getSlideData(pendingIndex)!.vod_score }}分</span>
+                <span v-if="getSlideData(pendingIndex)?.vod_remarks" class="slide-tag slide-tag-votes">{{ getSlideData(pendingIndex)!.vod_remarks }}</span>
               </div>
             </div>
-            <div class="bc-actions">
-              <button class="bc-btn bc-btn-primary" @click.stop="goDetail(activeSlide)">立即播放</button>
-              <button class="bc-btn bc-btn-secondary" @click.stop="goDetail(activeSlide)">详情</button>
+            <div class="slide-actions">
+              <button class="slide-btn slide-btn-primary" @click.stop="goDetail(activeSlide)">查看详情</button>
             </div>
           </div>
-        </div>
-        <div class="bc-flip-shadow" />
-      </div>
-
-      <div class="bc-page bc-page-current" v-if="flipState === 'idle'">
-        <div class="bc-page-inner">
-          <div class="bc-image-wrap">
-            <img :src="slideImgUrls.get(currentIndex) || ''" :alt="activeSlide?.vod_name || ''" class="bc-image"
-              draggable="false" />
-            <div class="bc-image-gradient" />
-          </div>
-          <div class="bc-detail-wrap">
-            <div class="bc-detail-bg" />
-            <div class="bc-detail-content">
-              <span class="bc-badge">热播推荐</span>
-              <h2 class="bc-title">{{ activeSlide?.vod_name || '' }}</h2>
-              <p class="bc-desc">{{ activeSlide?.vod_content?.replace(/<[^>]+>/g, '') || activeSlide?.vod_remarks || ''
-              }}</p>
-              <div class="bc-tags">
-                <span v-if="activeSlide?.type_name" class="bc-tag">{{ activeSlide.type_name }}</span>
-                <span v-if="activeSlide?.vod_year" class="bc-tag">{{ activeSlide.vod_year }}</span>
-                <span v-if="activeSlide?.vod_area" class="bc-tag">{{ activeSlide.vod_area }}</span>
-                <span v-if="activeSlide?.vod_score && Number(activeSlide.vod_score) > 0" class="bc-tag bc-tag-score">{{
-                  activeSlide.vod_score }}分</span>
-              </div>
-            </div>
-            <div class="bc-actions">
-              <button class="bc-btn bc-btn-primary" @click.stop="goDetail(activeSlide)">立即播放</button>
-              <button class="bc-btn bc-btn-secondary" @click.stop="goDetail(activeSlide)">详情</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="bc-corner" @click.stop="goNext">
-          <div class="bc-corner-fold" />
-          <div class="bc-corner-shine" />
-          <div class="bc-corner-shadow" />
         </div>
       </div>
     </div>
 
-    <div class="bc-indicators">
-      <button v-for="(_, idx) in slides.slice(0, Math.min(total, 10))" :key="'ind-' + idx" class="bc-indicator"
-        :class="{ active: idx === currentIndex }" :disabled="flipState !== 'idle'" @click.stop="currentIndex = idx" />
+    <!-- Loading overlay when clicking -->
+    <div v-if="clickingLoading" class="carousel-loading-overlay">
+      <div class="carousel-loading-spinner" />
+      <span class="carousel-loading-text">加载中...</span>
+    </div>
+
+    <!-- Navigation arrows -->
+    <button v-if="total > 1" class="carousel-arrow carousel-arrow-left" @click.stop="goPrev">‹</button>
+    <button v-if="total > 1" class="carousel-arrow carousel-arrow-right" @click.stop="goNext">›</button>
+
+    <!-- Indicators -->
+    <div class="carousel-indicators">
+      <button v-for="(_, idx) in slides.slice(0, Math.min(total, 10))" :key="'ind-' + idx" class="carousel-indicator"
+        :class="{ active: idx === currentIndex }" :disabled="isTransitioning" @click.stop="goTo(idx)" />
     </div>
   </div>
 </template>
 
 <style scoped>
-@keyframes bookFlipLeft {
-  0% {
-    transform-origin: left top;
-    transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1);
-    opacity: 1;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
-  }
-
-  20% {
-    transform-origin: left top;
-    transform: rotateX(-15deg) rotateY(10deg) rotateZ(-2deg) scale(1.01);
-    opacity: 1;
-    box-shadow: -5px 5px 30px rgba(0, 0, 0, 0.45);
-  }
-
-  45% {
-    transform-origin: left top;
-    transform: rotateX(-45deg) rotateY(35deg) rotateZ(-8deg) scale(0.97);
-    opacity: 1;
-    box-shadow: -20px 10px 50px rgba(0, 0, 0, 0.5);
-  }
-
-  70% {
-    transform-origin: left top;
-    transform: rotateX(-70deg) rotateY(60deg) rotateZ(-15deg) scale(0.88);
-    opacity: 0.7;
-    box-shadow: -35px 5px 40px rgba(0, 0, 0, 0.35);
-  }
-
-  100% {
-    transform-origin: left top;
-    transform: rotateX(-90deg) rotateY(90deg) rotateZ(-20deg) scale(0.6);
-    opacity: 0;
-    box-shadow: none;
-  }
-}
-
-.book-carousel {
+.carousel {
   position: relative;
   width: 100%;
   user-select: none;
   box-sizing: border-box;
 }
 
-.bc-page-wrapper {
+.carousel-viewport {
   position: relative;
   width: 100%;
-  perspective: 2500px;
+  border-radius: 12px;
+  overflow: hidden;
 }
 
-.bc-page {
+.carousel-slide {
   position: absolute;
   inset: 0;
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
-  cursor: default;
+  will-change: transform;
 }
 
-.bc-page-inner {
+.carousel-slide-incoming {
+  z-index: 2;
+}
+
+.slide-inner {
   position: relative;
   height: 100%;
   display: flex;
 }
 
-.bc-page-flipping {
-  z-index: 10;
-  transform-style: preserve-3d;
-  animation: bookFlipLeft cubic-bezier(0.45, 0, 0.25, 1) forwards;
-}
-
-.bc-page-next {
-  z-index: 1;
-}
-
-.bc-page-current {
-  z-index: 3;
-}
-
-.bc-flip-shadow {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to left, transparent 0%, rgba(0, 0, 0, 0.5) 100%);
-  pointer-events: none;
-  z-index: 5;
-}
-
-.bc-image-wrap {
+.slide-image-wrap {
   position: relative;
   overflow: hidden;
   background: #0a0a0f;
   border-radius: 12px 0 0 12px;
+  flex-shrink: 0;
+  width: 220px;
+  min-width: 160px;
+  max-width: 30%;
 }
 
-.bc-image {
+.slide-image {
   height: 100%;
   object-fit: contain;
   display: block;
 }
 
-.bc-image-gradient {
+.slide-image-gradient {
   position: absolute;
   inset: 0;
   background: linear-gradient(to right,
@@ -327,7 +368,7 @@ function onMouseLeave(): void {
   pointer-events: none;
 }
 
-.bc-detail-wrap {
+.slide-detail-wrap {
   flex: 1;
   position: relative;
   display: flex;
@@ -338,7 +379,7 @@ function onMouseLeave(): void {
   overflow: hidden;
 }
 
-.bc-detail-bg {
+.slide-detail-bg {
   position: absolute;
   inset: 0;
   background: linear-gradient(to right,
@@ -348,12 +389,12 @@ function onMouseLeave(): void {
   z-index: -1;
 }
 
-.bc-detail-content {
+.slide-detail-content {
   position: relative;
   z-index: 2;
 }
 
-.bc-badge {
+.slide-badge {
   display: inline-block;
   padding: 3px 10px;
   background: rgba(239, 68, 68, 0.9);
@@ -365,7 +406,7 @@ function onMouseLeave(): void {
   letter-spacing: 0.5px;
 }
 
-.bc-title {
+.slide-title {
   font-size: 20px;
   font-weight: 700;
   color: #fff;
@@ -378,7 +419,7 @@ function onMouseLeave(): void {
   -webkit-box-orient: vertical;
 }
 
-.bc-desc {
+.slide-desc {
   font-size: 13px;
   color: rgba(255, 255, 255, 0.55);
   line-height: 1.6;
@@ -390,13 +431,44 @@ function onMouseLeave(): void {
   -webkit-box-orient: vertical;
 }
 
-.bc-tags {
+.slide-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.slide-meta-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.slide-meta-label {
+  color: rgba(255, 255, 255, 0.4);
+  flex-shrink: 0;
+  min-width: 32px;
+}
+
+.slide-meta-value {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.slide-meta-actors {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slide-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
 
-.bc-tag {
+.slide-tag {
   padding: 3px 10px;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.1);
@@ -404,20 +476,25 @@ function onMouseLeave(): void {
   font-size: 11px;
 }
 
-.bc-tag-score {
+.slide-tag-score {
   background: rgba(245, 158, 11, 0.2);
   color: #fcd34d;
   font-weight: 600;
 }
 
-.bc-actions {
+.slide-tag-votes {
+  background: rgba(99, 102, 241, 0.15);
+  color: rgba(165, 180, 252, 0.85);
+}
+
+.slide-actions {
   display: flex;
   gap: 12px;
   position: relative;
   z-index: 2;
 }
 
-.bc-btn {
+.slide-btn {
   padding: 8px 20px;
   border-radius: 6px;
   font-size: 13px;
@@ -427,99 +504,52 @@ function onMouseLeave(): void {
   transition: all 0.25s ease;
 }
 
-.bc-btn-primary {
+.slide-btn-primary {
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   color: #fff;
 }
 
-.bc-btn-primary:hover {
+.slide-btn-primary:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
 }
 
-.bc-btn-secondary {
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.bc-btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.15);
-  border-color: rgba(255, 255, 255, 0.3);
-}
-
-.bc-corner {
+/* Navigation arrows */
+.carousel-arrow {
   position: absolute;
-  bottom: 0;
-  right: 0;
-  width: 64px;
-  height: 64px;
-  z-index: 20;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-size: 24px;
+  line-height: 1;
   cursor: pointer;
-  transform-style: preserve-3d;
-  perspective: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  padding: 0;
 }
 
-.bc-corner-fold {
-  position: absolute;
-  inset: 0;
-  clip-path: polygon(100% 0%, 100% 100%, 0% 100%);
-  background: linear-gradient(225deg,
-      rgba(255, 255, 255, 0.95) 0%,
-      rgba(230, 230, 245, 0.95) 30%,
-      rgba(200, 200, 220, 0.9) 60%,
-      rgba(160, 160, 185, 0.85) 100%);
-  transform-origin: right bottom;
-  transition: transform 0.5s cubic-bezier(0.23, 1, 0.32, 1),
-    box-shadow 0.5s ease;
-  transform: rotateX(0deg) rotateY(0deg);
-  box-shadow: -2px -2px 6px rgba(0, 0, 0, 0.2);
-  backface-visibility: visible;
+.carousel-arrow:hover {
+  background: rgba(0, 0, 0, 0.7);
 }
 
-.bc-corner:hover .bc-corner-fold {
-  transform: rotateX(-35deg) rotateY(25deg) rotateZ(-5deg) translateZ(15px);
-  box-shadow:
-    -8px -8px 20px rgba(0, 0, 0, 0.35),
-    -3px -3px 8px rgba(255, 255, 255, 0.3);
+.carousel-arrow-left {
+  left: 28px;
 }
 
-.bc-corner-shine {
-  position: absolute;
-  inset: 0;
-  clip-path: polygon(100% 0%, 100% 100%, 0% 100%);
-  background: linear-gradient(to left top,
-      rgba(255, 255, 255, 0.7) 0%,
-      rgba(255, 255, 255, 0.2) 40%,
-      transparent 70%);
-  transform-origin: right bottom;
-  transition: transform 0.5s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.5s ease;
-  transform: rotateX(0deg) rotateY(0deg);
-  pointer-events: none;
+.carousel-arrow-right {
+  right: 28px;
 }
 
-.bc-corner:hover .bc-corner-shine {
-  transform: rotateX(-35deg) rotateY(25deg) rotateZ(-5deg) translateZ(16px);
-  opacity: 0.8;
-}
-
-.bc-corner-shadow {
-  position: absolute;
-  inset: 0;
-  clip-path: polygon(100% 0%, 100% 100%, 0% 100%);
-  background: radial-gradient(ellipse at 100% 100%,
-      rgba(0, 0, 0, 0.3) 0%,
-      rgba(0, 0, 0, 0.1) 50%,
-      transparent 80%);
-  transition: opacity 0.5s ease;
-  pointer-events: none;
-}
-
-.bc-corner:hover .bc-corner-shadow {
-  opacity: 0.3;
-}
-
-.bc-indicators {
+/* Indicators */
+.carousel-indicators {
   position: absolute;
   bottom: 28px;
   left: 50%;
@@ -529,7 +559,7 @@ function onMouseLeave(): void {
   gap: 8px;
 }
 
-.bc-indicator {
+.carousel-indicator {
   height: 6px;
   border-radius: 9999px;
   border: none;
@@ -540,12 +570,44 @@ function onMouseLeave(): void {
   padding: 0;
 }
 
-.bc-indicator:hover {
+.carousel-indicator:hover {
   background: rgba(255, 255, 255, 0.4);
 }
 
-.bc-indicator.active {
+.carousel-indicator.active {
   width: 28px;
   background: #10b981;
+}
+
+/* Loading overlay */
+.carousel-loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 20;
+  border-radius: 12px;
+}
+
+.carousel-loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #10b981;
+  border-radius: 50%;
+  animation: carousel-spin 0.8s linear infinite;
+}
+
+@keyframes carousel-spin {
+  to { transform: rotate(360deg); }
+}
+
+.carousel-loading-text {
+  margin-top: 12px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
 }
 </style>

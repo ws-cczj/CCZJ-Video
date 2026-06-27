@@ -62,6 +62,7 @@ export const useVideoStore = defineStore('video', () => {
       const list: Video[] = Array.isArray(resp?.videos) ? resp.videos : []
       const ttl: number = typeof resp?.total === 'number' ? resp.total : list.length
       if (p === 1) {
+        // 先加载完新数据，再一次性替换，避免短暂空白引起布局跳动
         videos.value = list
       } else {
         videos.value.push(...list)
@@ -82,11 +83,34 @@ export const useVideoStore = defineStore('video', () => {
       currentVideo.value = resp?.video ?? null
       episodes.value = Array.isArray(resp?.episodes) ? resp.episodes : []
     } catch (e: any) {
-      errorStore.fromError('加载视频详情失败', e, 'videoStore.loadDetail')
-      currentVideo.value = null
-      episodes.value = []
+      const msg = e?.message || ''
+      if (msg.includes('video not found') || msg.includes('sql: no rows')) {
+        currentVideo.value = null
+        episodes.value = []
+      } else {
+        errorStore.fromError('加载视频详情失败', e, 'videoStore.loadDetail')
+        currentVideo.value = null
+        episodes.value = []
+      }
     } finally {
       loading.value = false
+    }
+  }
+
+  /** 后台刷新详情（不设置 loading，用于已有本地数据后异步更新） */
+  async function refreshDetail(sourceKey: string, vodId: string): Promise<boolean> {
+    try {
+      const resp = (await (AppMod as any).GetVideoDetail({ source_key: sourceKey, vod_id: vodId, refresh: true })) as VideoDetailResponse
+      if (resp?.video) {
+        currentVideo.value = resp.video
+        if (Array.isArray(resp.episodes) && resp.episodes.length > 0) {
+          episodes.value = resp.episodes
+        }
+        return true
+      }
+      return false
+    } catch {
+      return false
     }
   }
 
@@ -169,6 +193,7 @@ export const useVideoStore = defineStore('video', () => {
     loading,
     loadVideos,
     loadDetail,
+    refreshDetail,
     search,
     loadTypes,
     loadYearsAndAreas,

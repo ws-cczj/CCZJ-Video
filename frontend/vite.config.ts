@@ -1,10 +1,15 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import Icons from 'unplugin-icons/vite'
 
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
     vue(),
+    Icons({
+      compiler: 'vue3',
+      autoInstall: true,
+    }),
   ],
   server: {
     host: '127.0.0.1', // 强制 IPv4，避免 wails3 用 127.0.0.1 连接时因 IPv6 绑定失败

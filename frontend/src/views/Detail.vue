@@ -2,7 +2,8 @@
 defineOptions({ name: 'Detail' })
 import { ref, computed, onMounted, onBeforeUnmount, onActivated, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { GetRecentHistory, SaveWatchHistory, AddFavorite, RemoveFavorite, IsFavorite, DeleteVideo } from '../../bindings/cczjVideo/app'
+import { useI18n } from 'vue-i18n'
+import { GetRecentHistory, SaveWatchHistory, AddFavorite, RemoveFavorite, IsFavorite, DeleteVideo, GetSimilarVideos, DoubanUpdateVideo } from '../../bindings/cczjVideo/app'
 import { useSourceStore } from '../stores/source'
 import { useVideoStore } from '../stores/video'
 import { useDownloadStore } from '../stores/download'
@@ -15,6 +16,8 @@ import { computeRecommendations, type RecommendItem, extractYear } from '../util
 import { epProgressKey, loadEpProgress, getEpProgressPct, flushEpProgress } from '../utils/episodeProgress'
 import { bumpFavoritesRefresh } from '../stores/favoritesSync'
 import type { Video, HistoryItem, Episode } from '../types'
+
+const { t } = useI18n()
 
 const route = useRoute()
 const router = useRouter()
@@ -40,6 +43,7 @@ const sourceKey = computed(() => {
 
 // ==================== 页面状态 ====================
 const loading = ref(false)
+const refreshing = ref(false) // 后台刷新标记
 const error = ref<string | null>(null)
 const video = computed(() => videoStore.currentVideo)
 
@@ -214,13 +218,13 @@ function loadFavFolders(): void {
       }
     }
   } catch { /* ignore */ }
-  favFolders.value = [{ id: 'default', name: '默认收藏夹', default: true }]
+  favFolders.value = [{ id: 'default', name: t('detail.defaultFolder'), default: true }]
 }
 
 async function refreshFav(): Promise<void> {
   if (!vodId.value) return
   try {
-    const val = await IsFavorite({ source_key: sourceKey.value, vod_id: String(vodId.value) }) as boolean
+    const val = await IsFavorite({ source_key: sourceKey.value, vod_id: String(vodId.value), global_id: video.value?.global_id || 0 }) as boolean
     isFav.value = !!val
   } catch { /* ignore */ }
 }
@@ -230,7 +234,7 @@ async function toggleFavorite(): Promise<void> {
   if (isFav.value) {
     favBusy.value = true
     try {
-      await RemoveFavorite({ source_key: sourceKey.value, vod_id: String(vodId.value) })
+      await RemoveFavorite({ source_key: sourceKey.value, vod_id: String(vodId.value), global_id: video.value?.global_id || 0 })
       // 清除 mapping
       const key = `${sourceKey.value}-${vodId.value}`
       try {
@@ -309,8 +313,8 @@ function formatHits(raw: string | undefined | null): string {
   if (!raw) return ''
   const n = parseInt(raw, 10)
   if (isNaN(n)) return raw
-  if (n >= 100000000) return (n / 100000000).toFixed(1) + '亿'
-  if (n >= 10000) return (n / 10000).toFixed(1) + '万'
+  if (n >= 100000000) return (n / 100000000).toFixed(1) + t('detail.hundredMillion')
+  if (n >= 10000) return (n / 10000).toFixed(1) + t('detail.tenThousand')
   if (n >= 1000) return (n / 1000).toFixed(1) + 'k'
   return String(n)
 }
@@ -350,17 +354,17 @@ async function downloadEpisode(ep: Episode): Promise<void> {
   const existing = downloadStore.findStatusForVideo({ vod_id: String(video.value.vod_id || ''), ep_num: ep.ep_num })
   if (existing) {
     const ok = await confirmStore.confirm({
-      title: '重复下载',
-      message: `「${ep.ep_name || ('第' + ep.ep_num + '集')}」已存在下载记录，是否重新下载？`,
-      okText: '重新下载',
-      cancelText: '取消',
+      title: t('detail.duplicateDownload'),
+      message: t('detail.duplicateDownloadMessage', { name: ep.ep_name || t('detail.episode', { num: ep.ep_num }) }),
+      okText: t('detail.duplicateDownloadOk'),
+      cancelText: t('common.cancel'),
     })
     if (!ok) return
   }
 
   downloadingEpKeys.value.add(key)
   try {
-    const fn = buildEpisodeFilename(video.value.vod_name || '视频', ep.ep_num, ep.ep_name, ep.ep_url)
+    const fn = buildEpisodeFilename(video.value.vod_name || t('search.video'), ep.ep_num, ep.ep_name, ep.ep_url)
     await downloadStore.startDownload({
       url: resolveEpisodeUrl(ep),
       filename: fn,
@@ -372,8 +376,8 @@ async function downloadEpisode(ep: Episode): Promise<void> {
       force: true,
     })
   } catch (e: any) {
-    const msg = e?.message || String(e) || '下载启动失败'
-    if (msg !== '取消') downloadError.value = msg
+    const msg = e?.message || String(e) || t('detail.downloadFailed')
+    if (msg !== t('common.cancel')) downloadError.value = msg
   } finally {
     setTimeout(() => downloadingEpKeys.value.delete(key), 200)
   }
@@ -382,10 +386,10 @@ async function downloadEpisode(ep: Episode): Promise<void> {
 async function downloadAllEpisodes(): Promise<void> {
   if (videoStore.episodes.length === 0) return
   const ok = await confirmStore.confirm({
-    title: '下载全部剧集',
-    message: `即将下载 ${videoStore.episodes.length} 个视频，是否继续？`,
-    okText: '全部下载',
-    cancelText: '取消',
+    title: t('detail.downloadAll'),
+    message: t('detail.downloadAllMessage', { count: videoStore.episodes.length }),
+    okText: t('detail.downloadAllOk'),
+    cancelText: t('common.cancel'),
   })
   if (!ok) return
   for (const ep of videoStore.episodes) {
@@ -473,7 +477,7 @@ function playFromHistory(): void {
 function formatEpisodeName(ep: Episode, i: number): string {
   if (ep.ep_name) return ep.ep_name
   const num = ep.ep_num ?? (i + 1)
-  return '第' + String(num) + '集'
+  return t('detail.episode', { num: String(num) })
 }
 
 // ==================== 类似推荐 ====================
@@ -509,7 +513,37 @@ async function loadSimilar(): Promise<void> {
     const currentName = video.value.vod_name || ''
     const year = extractYear(video.value.vod_year)
 
-    similarVideos.value = computeRecommendations(list, currentId, currentName, year)
+    // 1. 前端基于内容的推荐
+    let results = computeRecommendations(list, currentId, currentName, year)
+    
+    // 2. 如果前端推荐为空，调用后端兜底（按类型推荐）
+    if (results.length === 0) {
+      try {
+        const typeId = video.value.type_id ? String(video.value.type_id) : ''
+        const similar = await GetSimilarVideos({
+          source_key: sourceKey.value,
+          type_id: typeId,
+          limit: 8,
+          exclude_ids: [currentId]
+        })
+        
+        if (similar && similar.length > 0) {
+          // 转换为 RecommendItem 格式
+          results = similar.map((v: any) => ({
+            vod_id: String(v.vod_id || ''),
+            vod_name: v.vod_name || '',
+            vod_pic: v.vod_pic,
+            vod_remarks: v.vod_remarks,
+            score: 0,
+            matchKey: t('detail.sameTypeRecommend')
+          }))
+        }
+      } catch (e) {
+        console.warn('后端相似推荐失败', e)
+      }
+    }
+    
+    similarVideos.value = results
   } catch {
     similarVideos.value = []
   } finally {
@@ -552,10 +586,13 @@ const deleting = ref(false)
 async function deleteThisVideo(): Promise<void> {
   if (!video.value || deleting.value) return
   const ok = await confirmStore.confirm({
-    title: '删除视频',
-    message: `确定要删除「${video.value.vod_name}」吗？\n此操作将从「${sourceStore.sources.find(s => s.source_key === sourceKey.value)?.name || sourceKey.value}」源中永久删除该视频及其相关收藏和历史记录。`,
-    okText: '确认删除',
-    cancelText: '取消',
+    title: t('detail.deleteConfirm'),
+    message: t('detail.deleteConfirmMessage', {
+      name: video.value.vod_name,
+      source: sourceStore.sources.find(s => s.source_key === sourceKey.value)?.name || sourceKey.value
+    }),
+    okText: t('detail.deleteConfirmOk'),
+    cancelText: t('common.cancel'),
   })
   if (!ok) return
   deleting.value = true
@@ -565,7 +602,7 @@ async function deleteThisVideo(): Promise<void> {
     videoStore.notifyDeletion(sourceKey.value, String(vodId.value))
     router.back()
   } catch (e: any) {
-    error.value = `删除失败: ${e?.message || e}`
+    error.value = `${t('detail.deleteFailed')}: ${e?.message || e}`
   } finally {
     deleting.value = false
   }
@@ -586,13 +623,21 @@ async function loadDetail(): Promise<void> {
     markRefreshed(sourceKey.value, vodId.value)
   }
 
-  await videoStore.loadDetail(sourceKey.value, vodId.value, shouldRefresh)
+  // 阶段1: 先加载本地数据（refresh=false），立即展示
+  await videoStore.loadDetail(sourceKey.value, vodId.value, false)
+
+  if (!video.value) {
+    // 本地无数据时，强制从源站获取
+    await videoStore.loadDetail(sourceKey.value, vodId.value, true)
+  }
 
   if (!video.value) {
     error.value = '视频不存在或加载失败'
     loading.value = false
     return
   }
+
+  loading.value = false // 本地数据已就绪，关闭 loading
 
   loadSimilar()
   // 仅注册剧集列表 + 预取第一集 m3u8 文本（轻量），
@@ -612,7 +657,28 @@ async function loadDetail(): Promise<void> {
     const firstUrl = resolveEpisodeUrl(eps[0])
     if (firstUrl) TsCache.fetchAndParseM3u8(firstUrl).catch(() => { })
   }
-  loading.value = false
+
+  // 阶段2: 后台异步刷新源站数据（不阻塞 UI）
+  if (shouldRefresh) {
+    refreshing.value = true
+    videoStore.refreshDetail(sourceKey.value, vodId.value).then(() => {
+      refreshing.value = false
+      // 刷新后重新加载相似推荐（可能数据更丰富了）
+      loadSimilar()
+    }).catch(() => {
+      refreshing.value = false
+    })
+  }
+
+  // 异步更新豆瓣热度（有豆瓣 id 且无豆瓣评分时才更新，避免每次访问都请求豆瓣）
+  const doubanId = (video.value as any)?.vod_douban_id || ''
+  const doubanScore = (video.value as any)?.vod_douban_score || ''
+  if (doubanId && !doubanScore) {
+    const vName = video.value?.vod_name || ''
+    if (vName) {
+      DoubanUpdateVideo({ keyword: vName }).catch(() => { })
+    }
+  }
 
   // 选集加载完成后刷新进度百分比 & 最近观看（不阻塞 UI）
   // 先 flush 确保播放器写入的最新进度已落盘，再读取
@@ -660,9 +726,9 @@ watch(() => route.fullPath, (newPath, oldPath) => {
   }
 })
 
-watch(vodId, () => {
+watch(vodId, async () => {
   if (vodId.value) {
-    loadDetail()
+    await loadDetail()
     refreshFav().catch(() => { })
   }
 })
@@ -676,118 +742,126 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="detail-page">
+  <div class="detail-page cczj-max-w-full cczj-text-primary">
     <!-- 顶部面包屑 / 返回 -->
-    <div class="detail-nav">
-      <Button variant="text" size="md" @click="router.back()">
+    <div class="detail-nav cczj-flex cczj-items-center cczj-gap-3 cczj-mb-4">
+      <Button variant="text" size="md" @click="router.back()" class="cczj-flex cczj-items-center cczj-gap-1">
         <Icon name="back" :size="14" />
-        <span>返回</span>
+        <span>{{ t('detail.back') }}</span>
       </Button>
-      <div v-if="video" class="nav-title">
+      <div v-if="video" class="nav-title cczj-truncate cczj-flex-1">
         <span>{{ video.vod_name }}</span>
       </div>
-      <button v-if="video" class="delete-btn-nav" :disabled="deleting" title="删除此视频" @click="deleteThisVideo">
+      <button v-if="video" class="delete-btn-nav cczj-ml-auto cczj-flex-shrink-0 cczj-w-32 cczj-h-32 cczj-flex cczj-items-center cczj-justify-center cczj-border cczj-rounded-md cczj-bg-card cczj-text-muted cczj-cursor-pointer cczj-transition-fast" :disabled="deleting" :title="t('detail.deleteVideo')" @click="deleteThisVideo">
         <Icon name="trash" :size="14" />
       </button>
     </div>
 
-    <div v-if="loading" class="center-pad">
-      <LoadingSpinner label="正在加载详情..." />
+    <div v-if="loading" class="center-pad cczj-text-center cczj-py-8 cczj-flex cczj-flex-col cczj-items-center cczj-justify-center">
+      <LoadingSpinner :label="t('detail.loadingDetail')" />
     </div>
 
-    <div v-else-if="error" class="center-pad">
-      <div class="error-box">
-        <div class="error-emoji">⚠️</div>
-        <div class="error-title">加载失败</div>
-        <div class="error-msg">{{ error }}</div>
-        <button class="btn-primary" @click="loadDetail">重试</button>
+    <div v-else-if="error" class="center-pad cczj-text-center cczj-py-8 cczj-flex cczj-flex-col cczj-items-center cczj-justify-center">
+      <div class="error-box cczj-flex cczj-flex-col cczj-items-center cczj-gap-3 cczj-bg-card cczj-border cczj-text-center">
+        <div class="error-emoji cczj-mb-6">⚠️</div>
+        <div class="error-title cczj-text-lg cczj-font-semibold">{{ t('detail.loadFailed') }}</div>
+        <div class="error-msg cczj-text-13 cczj-text-muted cczj-mb-10">{{ error }}</div>
+        <button class="btn-primary cczj-cursor-pointer cczj-rounded cczj-px-4 cczj-py-2" @click="loadDetail">{{ t('detail.retry') }}</button>
       </div>
     </div>
 
     <template v-else-if="video">
       <!-- 顶部信息区 -->
-      <section class="detail-header">
-        <div class="poster-column">
-          <div class="poster-frame">
-            <img v-if="video.vod_pic" :src="video.vod_pic" :alt="video.vod_name" class="poster" loading="lazy" />
-            <div v-else class="poster poster-placeholder">
+      <section class="detail-header cczj-flex cczj-gap-6 cczj-mb-6 cczj-bg-card cczj-border">
+        <div class="poster-column cczj-flex cczj-flex-col cczj-gap-4 cczj-flex-shrink-0">
+          <div class="poster-frame cczj-relative cczj-rounded-lg cczj-w-full cczj-overflow-hidden cczj-bg-secondary">
+            <img v-if="video.vod_pic" :src="video.vod_pic" :alt="video.vod_name" class="poster cczj-w-full cczj-h-full cczj-rounded" loading="lazy" referrerpolicy="no-referrer" />
+            <div v-else class="poster poster-placeholder cczj-flex cczj-items-center cczj-justify-center cczj-rounded cczj-text-muted cczj-opacity-40">
               <Icon name="film" :size="64" />
             </div>
-            <span v-if="video.vod_remarks" class="badge-float">{{ video.vod_remarks }}</span>
+            <span v-if="video.vod_remarks" class="badge-float cczj-absolute cczj-top-2 cczj-right-2 cczj-rounded cczj-px-2 cczj-py-1 cczj-text-xs">{{ video.vod_remarks }}</span>
           </div>
-          <div class="poster-actions">
+          <div class="poster-actions cczj-flex cczj-flex-col cczj-gap-2">
             <div v-if="videoStore.episodes.length > 0" class="poster-action-group">
               <!-- 继续上次观看 → 有历史时显示 -->
-              <button v-if="lastWatched" class="continue-btn" @click="playEpisode(lastWatched.epIdx)">
+              <button v-if="lastWatched" class="continue-btn cczj-inline-flex cczj-items-center cczj-justify-center cczj-gap-4 cczj-cursor-pointer cczj-rounded cczj-px-3 cczj-py-2 cczj-w-full cczj-text-13 cczj-font-semibold cczj-transition" @click="playEpisode(lastWatched.epIdx)">
                 <Icon name="play" :size="12" />
-                <span class="continue-main">继续观看 · {{ lastWatched.epName }}</span>
-                <span v-if="lastWatched.position > 0" class="continue-pct">{{ Math.min(100,
+                <span class="continue-main cczj-flex-1">{{ t('detail.continueWatching') }} · {{ lastWatched.epName }}</span>
+                <span v-if="lastWatched.position > 0" class="continue-pct cczj-text-xs cczj-text-muted">{{ Math.min(100,
                   Math.round(lastWatched.position)) }}%</span>
               </button>
             </div>
             <Button :variant="isFav ? 'primary' : 'secondary'" size="md" :disabled="favBusy" @click="toggleFavorite"
-              :title="isFav ? '取消收藏' : '加入收藏'">
+              :title="isFav ? t('detail.removeFav') : t('detail.addFav')" class="cczj-flex cczj-items-center cczj-gap-2">
               <span>{{ isFav ? '★' : '☆' }}</span>
-              <span>{{ isFav ? '已收藏' : '收藏' }}</span>
+              <span>{{ isFav ? t('detail.removeFav') : t('detail.addFav') }}</span>
             </Button>
           </div>
         </div>
 
-        <div class="info-column">
-          <h1 class="title">{{ video.vod_name }}</h1>
+        <div class="info-column cczj-flex-1 cczj-flex cczj-flex-col cczj-gap-4">
+          <h1 class="title cczj-text-2xl cczj-font-bold cczj-flex cczj-items-center cczj-gap-6">
+            {{ video.vod_name }}
+            <span v-if="refreshing" class="refreshing-badge cczj-inline-flex cczj-items-center cczj-gap-1 cczj-text-xs cczj-text-accent cczj-rounded cczj-px-2 cczj-py-1" :title="t('detail.updating')">
+              <svg class="refreshing-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 12a9 9 0 11-6.219-8.56"/>
+              </svg>
+              {{ t('detail.updating') }}
+            </span>
+          </h1>
 
-          <div class="meta-tags">
-            <button v-if="video.type_name" class="tag clickable" @click="searchByKeyword(video.type_name)">
+          <div class="meta-tags cczj-flex cczj-flex-wrap cczj-gap-2">
+            <button v-if="video.type_name" class="tag clickable cczj-cursor-pointer cczj-rounded cczj-px-2 cczj-py-1 cczj-text-xs cczj-flex cczj-items-center cczj-gap-1" @click="searchByKeyword(video.type_name)">
               <Icon name="tag" :size="10" />
               <span>{{ video.type_name }}</span>
             </button>
-            <button v-if="video.vod_year" class="tag clickable" @click="searchByKeyword(video.vod_year)">
+            <button v-if="video.vod_year" class="tag clickable cczj-cursor-pointer cczj-rounded cczj-px-2 cczj-py-1 cczj-text-xs cczj-flex cczj-items-center cczj-gap-1" @click="searchByKeyword(video.vod_year)">
               <Icon name="calendar" :size="10" />
               <span>{{ video.vod_year }}</span>
             </button>
-            <button v-if="video.vod_area" class="tag clickable" @click="searchByKeyword(video.vod_area)">
+            <button v-if="video.vod_area" class="tag clickable cczj-cursor-pointer cczj-rounded cczj-px-2 cczj-py-1 cczj-text-xs cczj-flex cczj-items-center cczj-gap-1" @click="searchByKeyword(video.vod_area)">
               <Icon name="map-pin" :size="10" />
               <span>{{ video.vod_area }}</span>
             </button>
           </div>
 
-          <div v-if="directorList.length > 0" class="meta-row">
-            <span class="meta-label">导演</span>
-            <div class="meta-values">
-              <button v-for="(d, i) in directorList" :key="'d-' + i" class="meta-chip clickable"
+          <div v-if="directorList.length > 0" class="meta-row cczj-flex cczj-items-start cczj-gap-2">
+            <span class="meta-label cczj-text-sm cczj-font-semibold cczj-text-muted cczj-w-16 cczj-flex-shrink-0">导演</span>
+            <div class="meta-values cczj-flex cczj-flex-wrap cczj-gap-1 cczj-flex-1">
+              <button v-for="(d, i) in directorList" :key="'d-' + i" class="meta-chip clickable cczj-cursor-pointer cczj-rounded cczj-px-2 cczj-py-1 cczj-text-xs cczj-bg-secondary cczj-hover-bg-accent-alpha"
                 @click="searchByKeyword(d)">{{ d }}</button>
             </div>
           </div>
 
-          <div v-if="actorList.length > 0" class="meta-row">
-            <span class="meta-label">演员</span>
-            <div class="meta-values">
-              <button v-for="(a, i) in actorList" :key="'a-' + i" class="meta-chip clickable"
+          <div v-if="actorList.length > 0" class="meta-row cczj-flex cczj-items-start cczj-gap-2">
+            <span class="meta-label cczj-text-sm cczj-font-semibold cczj-text-muted cczj-w-16 cczj-flex-shrink-0">演员</span>
+            <div class="meta-values cczj-flex cczj-flex-wrap cczj-gap-1 cczj-flex-1">
+              <button v-for="(a, i) in actorList" :key="'a-' + i" class="meta-chip clickable cczj-cursor-pointer cczj-rounded cczj-px-2 cczj-py-1 cczj-text-xs cczj-bg-secondary cczj-hover-bg-accent-alpha"
                 @click="searchByKeyword(a)">{{ a }}</button>
             </div>
           </div>
 
-          <div v-if="hasMetaRow" class="meta-row">
-            <span class="meta-label">评分</span>
-            <div class="meta-values">
-              <Tag v-if="video.vod_douban_score" variant="success" size="sm">
+          <div v-if="hasMetaRow" class="meta-row cczj-flex cczj-items-start cczj-gap-2">
+            <span class="meta-label cczj-text-sm cczj-font-semibold cczj-text-muted cczj-w-16 cczj-flex-shrink-0">评分</span>
+            <div class="meta-values cczj-flex cczj-flex-wrap cczj-gap-2 cczj-flex-1">
+              <Tag v-if="video.vod_douban_score" variant="success" size="sm" class="cczj-flex cczj-items-center cczj-gap-1">
                 <Icon name="star" :size="10" />
                 <span>豆瓣 {{ video.vod_douban_score }}</span>
               </Tag>
-              <Tag v-if="video.vod_score" variant="primary" size="sm">
+              <Tag v-if="video.vod_score" variant="primary" size="sm" class="cczj-flex cczj-items-center cczj-gap-1">
                 <Icon name="star" :size="10" />
                 <span>评分 {{ video.vod_score }}</span>
               </Tag>
-              <Tag v-if="video.vod_hits" size="sm">
+              <Tag v-if="video.vod_hits" size="sm" class="cczj-flex cczj-items-center cczj-gap-1">
                 <Icon name="flame" :size="10" />
                 <span>{{ formatHits(video.vod_hits) }} 热度</span>
               </Tag>
             </div>
           </div>
 
-          <div v-if="hasInfoRow" class="meta-row">
-            <span class="meta-label">信息</span>
-            <div class="meta-values">
+          <div v-if="hasInfoRow" class="meta-row cczj-flex cczj-items-start cczj-gap-2">
+            <span class="meta-label cczj-text-sm cczj-font-semibold cczj-text-muted cczj-w-16 cczj-flex-shrink-0">信息</span>
+            <div class="meta-values cczj-flex cczj-flex-wrap cczj-gap-2 cczj-flex-1">
               <Tag v-if="video.vod_version" size="sm">{{ video.vod_version }}</Tag>
               <Tag v-if="video.vod_state" size="sm">{{ video.vod_state }}</Tag>
               <Tag v-if="video.vod_isend === '1'" variant="success" size="sm">已完结</Tag>
@@ -797,100 +871,105 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <div class="overview-block">
-            <div class="overview-label-row">
-              <span class="overview-label">简介</span>
-              <Button v-if="overviewText && overviewText.length > 120" variant="text" size="sm" class="expand-btn"
+          <div class="overview-block cczj-flex cczj-flex-col cczj-gap-2">
+            <div class="overview-label-row cczj-flex cczj-items-center cczj-justify-between">
+              <span class="overview-label cczj-text-sm cczj-font-semibold">简介</span>
+              <Button v-if="overviewText && overviewText.length > 120" variant="text" size="sm" class="expand-btn cczj-text-xs cczj-text-accent cczj-cursor-pointer"
                 @click="expandOverview = !expandOverview">
                 {{ expandOverview ? '收起' : '展开' }}
               </Button>
             </div>
-            <div class="overview-text" :class="{ expanded: expandOverview }">
+            <div class="overview-text cczj-text-sm cczj-text-secondary" :class="{ expanded: expandOverview }">
               <template v-if="overviewText">{{ overviewText }}</template>
-              <span v-else class="text-muted">暂无简介</span>
+              <span v-else class="text-muted cczj-text-muted">暂无简介</span>
             </div>
           </div>
         </div>
       </section>
 
       <!-- 剧集列表 -->
-      <section v-if="videoStore.episodes.length > 0" class="episodes-section">
-        <div class="section-head">
-          <div class="section-head-left">
-            <h3>{{ episodeMode === 'download' ? '选集 · 点击下载' : '选集 · 点击播放' }}</h3>
+      <section v-if="videoStore.episodes.length > 0" class="episodes-section cczj-mt-6 cczj-bg-card cczj-border">
+        <div class="section-head cczj-flex cczj-items-center cczj-justify-between cczj-gap-4 cczj-mb-4">
+          <div class="section-head-left cczj-flex cczj-items-center cczj-gap-2">
+            <h3 class="cczj-text-lg cczj-font-semibold">{{ episodeMode === 'download' ? '选集 · 点击下载' : '选集 · 点击播放' }}</h3>
             <!-- 共 X 集信息（始终显示为次要信息） -->
-            <span>共 {{ videoStore.episodes.length }} 集</span>
+            <span class="cczj-text-sm cczj-text-muted">共 {{ videoStore.episodes.length }} 集</span>
           </div>
-          <div class="section-head-right">
+          <div class="section-head-right cczj-flex cczj-items-center cczj-gap-2">
             <Button variant="secondary" size="sm" @click="toggleEpisodeSort"
-              :title="episodeSortAsc ? '当前正序，点击切换倒序' : '当前倒序，点击切换正序'">
+              :title="episodeSortAsc ? '当前正序，点击切换倒序' : '当前倒序，点击切换正序'" class="cczj-flex cczj-items-center cczj-gap-1">
               <Icon :name="episodeSortAsc ? 'chevron-down' : 'chevron-up'" :size="14" />
               <span>{{ episodeSortAsc ? '正序' : '倒序' }}</span>
             </Button>
             <Button :variant="episodeMode === 'download' ? 'primary' : 'secondary'" size="sm"
-              @click="toggleEpisodeMode">
+              @click="toggleEpisodeMode" class="cczj-flex cczj-items-center cczj-gap-1">
               <Icon name="download" :size="14" />
-              <span>{{ episodeMode === 'download' ? '返回观看模式' : '下载模式' }}</span>
+              <span>{{ episodeMode === 'download' ? t('detail.backToPlayMode') : t('detail.downloadMode') }}</span>
             </Button>
-            <Button v-if="episodeMode === 'download'" variant="primary" size="sm" @click="downloadAllEpisodes">
+            <Button v-if="episodeMode === 'download'" variant="primary" size="sm" @click="downloadAllEpisodes" class="cczj-flex cczj-items-center cczj-gap-1">
               <Icon name="layers" :size="14" />
               <span>批量下载</span>
             </Button>
           </div>
         </div>
-        <div class="episodes-grid">
-          <button v-for="(ep, i) in sortedEpisodes" :key="'ep-' + (ep.ep_num || i)" class="episode-btn" :class="{
+        <div class="episodes-grid cczj-grid cczj-gap-2">
+          <button v-for="(ep, i) in sortedEpisodes" :key="'ep-' + (ep.ep_num || i)" class="episode-btn cczj-relative cczj-rounded cczj-px-3 cczj-py-2 cczj-cursor-pointer cczj-flex cczj-items-center cczj-gap-1 cczj-text-sm cczj-transition" :class="{
             'download-mode': episodeMode === 'download',
             'in-download': downloadingEpKeys.has(epKey(ep)),
             'watched': episodeMode !== 'download' && isWatched(ep, origIdx(i)),
           }" @click="onEpisodeClick(i, ep)"
             :title="formatEpisodeName(ep, origIdx(i)) + (isWatched(ep, origIdx(i)) ? ' · 已观看 ' + Math.round(getEpPct(ep, origIdx(i))) + '%' : '')">
             <Icon v-if="episodeMode === 'download'" name="download" :size="11" />
-            <span class="ep-num">{{ formatEpisodeName(ep, origIdx(i)) }}</span>
-            <div v-if="episodeMode !== 'download' && getEpPct(ep, origIdx(i)) > 0" class="ep-progress-fill"
+            <span class="ep-num cczj-flex-1 cczj-truncate">{{ formatEpisodeName(ep, origIdx(i)) }}</span>
+            <div v-if="episodeMode !== 'download' && getEpPct(ep, origIdx(i)) > 0" class="ep-progress-fill cczj-absolute cczj-bottom-0 cczj-left-0 cczj-bg-accent"
               :style="{ width: getEpPct(ep, origIdx(i)) + '%' }"></div>
-            <span v-if="episodeMode !== 'download' && getEpPct(ep, origIdx(i)) > 0" class="ep-progress-pct">{{
+            <span v-if="episodeMode !== 'download' && getEpPct(ep, origIdx(i)) > 0" class="ep-progress-pct cczj-text-xs cczj-text-accent">{{
               Math.round(getEpPct(ep, origIdx(i))) }}%</span>
           </button>
         </div>
       </section>
 
       <!-- 相似推荐 -->
-      <section class="similar-section">
-        <div class="section-head">
-          <h3>相似推荐</h3>
-          <div class="section-head-right">
-            <span v-if="similarVideos.length > 0" class="section-sub">{{ similarVideos.length }} 部</span>
-            <button v-if="hasMoreSimilar" class="show-more-btn" @click="goToRecommendations">
-              查看更多
+      <section class="similar-section cczj-mt-6 cczj-p-4 cczj-rounded cczj-bg-card cczj-border" v-motion :initial="{ opacity: 0, y: 30 }" :visible="{ opacity: 1, y: 0, transition: { duration: 500, ease: 'easeOut' } }">
+        <div class="section-head cczj-flex cczj-items-center cczj-justify-between cczj-gap-2 cczj-mb-4">
+          <h3 class="cczj-text-lg cczj-font-semibold">{{ t('detail.similar') }}</h3>
+          <div class="section-head-right cczj-flex cczj-items-center cczj-gap-2">
+            <span v-if="similarVideos.length > 0" class="section-sub cczj-text-sm cczj-text-muted">{{ similarVideos.length }} 部</span>
+            <button v-if="hasMoreSimilar" class="show-more-btn cczj-cursor-pointer cczj-text-sm cczj-text-accent cczj-flex cczj-items-center cczj-gap-1 cczj-hover-underline" @click="goToRecommendations">
+              {{ t('detail.viewMore') }}
               <span class="show-more-arrow">→</span>
             </button>
           </div>
         </div>
 
-        <div v-if="similarLoading" class="similar-loading">
+        <div v-if="similarLoading" class="similar-loading cczj-text-center cczj-py-4">
           <LoadingSpinner size="sm" label="加载中..." />
         </div>
 
-        <div v-else-if="similarVideos.length === 0" class="similar-empty">
+        <div v-else-if="similarVideos.length === 0" class="similar-empty cczj-text-center cczj-py-4 cczj-text-muted">
           <span>暂无相似推荐</span>
         </div>
 
-        <div v-else class="similar-grid">
-          <div v-for="(item, i) in displayedSimilar" :key="'sim-' + item.vod_id + '-' + i" class="similar-card"
-            @click="openSimilarVideo(item)">
-            <div class="similar-cover">
-              <img v-if="item.vod_pic" :src="item.vod_pic" :alt="item.vod_name" loading="lazy" />
-              <div v-else class="similar-cover-empty">
+        <div v-else class="similar-grid cczj-grid cczj-gap-3">
+          <div v-for="(item, i) in displayedSimilar" :key="'sim-' + item.vod_id + '-' + i" class="similar-card cczj-rounded cczj-overflow-hidden cczj-cursor-pointer cczj-transition"
+            @click="openSimilarVideo(item)"
+            v-motion
+            :initial="{ opacity: 0, scale: 0.85 }"
+            :visible="{ opacity: 1, scale: 1, transition: { duration: 350, delay: i * 60, ease: 'easeOut' } }"
+            :hovered="{ scale: 1.05, transition: { duration: 200 } }"
+          >
+            <div class="similar-cover cczj-relative cczj-rounded cczj-overflow-hidden cczj-bg-secondary cczj-border">
+              <img v-if="item.vod_pic" :src="item.vod_pic" :alt="item.vod_name" loading="lazy" referrerpolicy="no-referrer" class="cczj-w-full cczj-h-full cczj-block" />
+              <div v-else class="similar-cover-empty cczj-flex cczj-items-center cczj-justify-center cczj-bg-secondary cczj-text-muted">
                 <Icon name="film" :size="24" />
               </div>
-              <span v-if="item.vod_remarks" class="similar-remarks">{{ item.vod_remarks }}</span>
-              <div class="similar-overlay">
+              <span v-if="item.vod_remarks" class="similar-remarks cczj-absolute cczj-top-1 cczj-right-1 cczj-text-xs cczj-rounded">{{ item.vod_remarks }}</span>
+              <div class="similar-overlay cczj-absolute cczj-inset-0 cczj-flex cczj-items-center cczj-justify-center cczj-opacity-0">
                 <Icon name="play" :size="18" />
               </div>
             </div>
-            <div class="similar-name" :title="item.vod_name">{{ item.vod_name }}</div>
-            <div class="similar-match">{{ item.matchKey }}</div>
+            <div class="similar-name cczj-mt-2 cczj-text-sm cczj-font-medium cczj-truncate" :title="item.vod_name">{{ item.vod_name }}</div>
+            <div class="similar-match cczj-text-xs cczj-text-muted cczj-truncate">{{ item.matchKey }}</div>
           </div>
         </div>
       </section>
@@ -899,30 +978,30 @@ onBeforeUnmount(() => {
     <!-- ==================== 下载弹窗 ==================== -->
     <Modal :model-value="showDownloadModal" title="选择剧集下载" width="640px" :show-footer="true"
       @update:model-value="(v: boolean) => !v && closeDownload()">
-      <div v-if="downloadError" class="modal-error">
+      <div v-if="downloadError" class="modal-error cczj-flex cczj-items-center cczj-gap-2 cczj-p-3 cczj-rounded cczj-bg-danger-alpha cczj-text-danger cczj-mb-3">
         <Icon name="alert-triangle" :size="14" />
-        <span>{{ downloadError }}</span>
+        <span class="cczj-text-sm">{{ downloadError }}</span>
       </div>
 
-      <div v-if="videoStore.episodes.length === 0" class="modal-empty">
+      <div v-if="videoStore.episodes.length === 0" class="modal-empty cczj-text-center cczj-py-6 cczj-text-muted">
         暂无可下载的剧集
       </div>
 
       <template v-else>
-        <div class="modal-toolbar">
-          <span class="modal-toolbar-tip">点击单集下载 · 每集独立任务</span>
-          <Button variant="primary" size="sm" @click="downloadAllEpisodes">
+        <div class="modal-toolbar cczj-flex cczj-items-center cczj-justify-between cczj-gap-2 cczj-mb-3">
+          <span class="modal-toolbar-tip cczj-text-sm cczj-text-muted">点击单集下载 · 每集独立任务</span>
+          <Button variant="primary" size="sm" @click="downloadAllEpisodes" class="cczj-flex cczj-items-center cczj-gap-1">
             <Icon name="layers" :size="14" />
             <span>全部下载 ({{ videoStore.episodes.length }})</span>
           </Button>
         </div>
 
-        <div class="modal-episodes">
-          <div v-for="(ep, i) in videoStore.episodes" :key="'dl-' + (ep.ep_num || i)" class="modal-episode"
+        <div class="modal-episodes cczj-grid cczj-gap-2 cczj-max-h-64 cczj-overflow-y-auto">
+          <div v-for="(ep, i) in videoStore.episodes" :key="'dl-' + (ep.ep_num || i)" class="modal-episode cczj-flex cczj-items-center cczj-gap-2 cczj-p-2 cczj-rounded cczj-border cczj-cursor-pointer cczj-transition cczj-hover-bg-accent-alpha"
             :class="{ downloading: downloadingEpKeys.has(epKey(ep)) }" @click="downloadEpisode(ep)">
-            <span class="modal-ep-index">{{ ep.ep_num ?? (i + 1) }}</span>
-            <span class="modal-ep-name">{{ formatEpisodeName(ep, i) }}</span>
-            <span class="modal-ep-action">
+            <span class="modal-ep-index cczj-text-sm cczj-font-medium cczj-w-8">{{ ep.ep_num ?? (i + 1) }}</span>
+            <span class="modal-ep-name cczj-truncate cczj-flex-1 cczj-text-sm">{{ formatEpisodeName(ep, i) }}</span>
+            <span class="modal-ep-action cczj-text-accent">
               <Icon name="download" :size="14" />
             </span>
           </div>
@@ -930,21 +1009,21 @@ onBeforeUnmount(() => {
       </template>
 
       <!-- 下载任务状态 -->
-      <div v-if="downloadStore.tasks.length > 0" class="modal-tasks">
-        <div class="modal-tasks-title">
-          <span>下载任务</span>
-          <span class="modal-tasks-count">{{ downloadStore.tasks.length }} 个</span>
+      <div v-if="downloadStore.tasks.length > 0" class="modal-tasks cczj-mt-4 cczj-p-3 cczj-rounded cczj-bg-secondary cczj-border">
+        <div class="modal-tasks-title cczj-flex cczj-items-center cczj-justify-between cczj-gap-2 cczj-mb-2">
+          <span class="cczj-text-sm cczj-font-semibold">下载任务</span>
+          <span class="modal-tasks-count cczj-text-xs cczj-text-muted">{{ downloadStore.tasks.length }} 个</span>
         </div>
-        <div class="modal-tasks-list">
-          <div v-for="task in downloadStore.tasks.slice(0, 6)" :key="task.task_id" class="task-row">
-            <div class="task-name">{{ sanitizeFilename(task.filename) }}</div>
-            <div class="task-progress">
-              <div class="task-bar">
-                <div class="task-bar-fill"
+        <div class="modal-tasks-list cczj-flex cczj-flex-col cczj-gap-2">
+          <div v-for="task in downloadStore.tasks.slice(0, 6)" :key="task.task_id" class="task-row cczj-flex cczj-flex-col cczj-gap-1">
+            <div class="task-name cczj-truncate cczj-text-sm cczj-font-medium">{{ sanitizeFilename(task.filename) }}</div>
+            <div class="task-progress cczj-flex cczj-flex-col cczj-gap-1">
+              <div class="task-bar cczj-h-1.5 cczj-rounded cczj-bg-border cczj-overflow-hidden">
+                <div class="task-bar-fill cczj-h-full cczj-bg-accent cczj-transition-all"
                   :style="{ width: (task.total > 0 ? Math.round((task.downloaded / task.total) * 100) : 0) + '%' }">
                 </div>
               </div>
-              <div class="task-meta">
+              <div class="task-meta cczj-text-xs cczj-text-muted cczj-flex cczj-items-center cczj-gap-2">
                 <template v-if="task.status === 'downloading'">
                   {{ humanizeBytes(task.speed_bps || 0) }}/s ·
                   {{ task.total > 0 ? Math.round((task.downloaded / task.total) * 100) : 0 }}%
@@ -987,8 +1066,6 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .detail-page {
-  max-width: 100%;
-  color: var(--text-primary);
   padding: 0;
   animation: fadeInUp 0.3s ease;
 }
@@ -998,45 +1075,13 @@ onBeforeUnmount(() => {
     opacity: 0;
     transform: translateY(8px);
   }
-
   to {
     opacity: 1;
     transform: translateY(0);
   }
 }
 
-.center-pad {
-  padding: 60px 20px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-/* 顶部导航 */
-.detail-nav {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 14px;
-}
-
-.delete-btn-nav {
-  margin-left: auto;
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-card);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
+/* 顶栏删除按钮 */
 .delete-btn-nav:hover:not(:disabled) {
   background: rgba(239, 68, 68, 0.12);
   border-color: #ef4444;
@@ -1048,72 +1093,17 @@ onBeforeUnmount(() => {
   cursor: not-allowed;
 }
 
-.back-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border-radius: 20px;
-  border: 1px solid var(--border);
-  background: var(--bg-card);
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-size: 12px;
-  font-family: inherit;
-  transition: all 0.15s ease;
-}
-
-.back-btn:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--accent-alpha-10);
-}
-
-.nav-title {
-  font-size: 13px;
-  color: var(--text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-}
-
 /* 错误框 */
 .error-box {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
   border-radius: 14px;
   padding: 32px 40px;
-  text-align: center;
   max-width: 480px;
-}
-
-.error-emoji {
-  font-size: 48px;
-  margin-bottom: 12px;
-}
-
-.error-title {
-  font-size: 18px;
-  font-weight: 600;
-  margin-bottom: 8px;
-}
-
-.error-msg {
-  font-size: 13px;
-  color: var(--text-muted);
-  margin-bottom: 20px;
 }
 
 /* ============ 顶部信息区 ============ */
 .detail-header {
-  display: flex;
-  gap: 24px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
   border-radius: 14px;
   padding: 20px;
-  margin-bottom: 20px;
 }
 
 @media (max-width: 720px) {
@@ -1123,11 +1113,7 @@ onBeforeUnmount(() => {
 }
 
 .poster-column {
-  flex-shrink: 0;
   width: 220px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
 }
 
 @media (max-width: 720px) {
@@ -1137,36 +1123,15 @@ onBeforeUnmount(() => {
 }
 
 .poster-frame {
-  position: relative;
   aspect-ratio: 2/3;
-  width: 100%;
-  border-radius: 12px;
-  overflow: hidden;
-  background: var(--bg-secondary);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
 }
 
 .poster {
-  width: 100%;
-  height: 100%;
   object-fit: cover;
-  display: block;
-}
-
-.poster-placeholder {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted);
-  opacity: 0.4;
 }
 
 .badge-float {
-  position: absolute;
-  top: 10px;
-  right: 10px;
   padding: 4px 10px;
   border-radius: 12px;
   background: var(--accent);
@@ -1176,72 +1141,14 @@ onBeforeUnmount(() => {
   box-shadow: 0 2px 10px var(--accent-alpha-35);
 }
 
-.poster-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.btn-download {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px 18px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
-  font-family: inherit;
-  transition: all 0.15s ease;
-}
-
-.btn-download:hover {
-  border-color: var(--accent);
-  background: var(--accent-alpha-10);
-  color: var(--accent);
-}
-
-.ep-count-info {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  background: var(--tag-bg);
-  font-size: 12px;
-  color: var(--tag-text);
-  border: 1px solid var(--border);
-}
-
-.poster-action-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-}
-
 /* ⭐ 继续上次观看 —— 实心主题色按钮 */
 .continue-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
   padding: 10px 16px;
   border-radius: 10px;
   border: 1px solid var(--accent);
   background: var(--btn-solid);
   color: var(--btn-solid-text);
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
   font-family: inherit;
-  transition: all 0.2s ease;
-  width: 100%;
 }
 
 .continue-btn:hover {
@@ -1268,76 +1175,21 @@ onBeforeUnmount(() => {
   opacity: 0.9;
 }
 
-/* ⭐ 收藏按钮：主题化 */
-.fav-btn-detail {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 10px 16px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: var(--btn-soft);
-  color: var(--btn-soft-text);
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
-  font-family: inherit;
-  transition: all 0.2s ease;
-  width: 100%;
-}
-
-.fav-btn-detail:hover {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--accent-contrast);
-  transform: translateY(-1px);
-}
-
-.fav-btn-detail.active {
-  border-color: var(--accent);
-  background: var(--btn-solid);
-  color: var(--btn-solid-text);
-}
-
-.fav-btn-detail.active:hover {
-  background: var(--accent);
-}
-
-.fav-btn-detail.busy {
-  opacity: 0.6;
-  pointer-events: none;
-}
-
-.fav-btn-detail .fav-icon {
-  font-size: 14px;
-}
-
-.info-column {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
 .title {
-  font-size: 24px;
-  font-weight: 700;
   margin: 0;
   line-height: 1.3;
 }
 
-.meta-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+.refreshing-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
   padding: 5px 12px;
   border-radius: 20px;
   background: var(--bg-secondary);
@@ -1362,25 +1214,7 @@ onBeforeUnmount(() => {
 }
 
 .meta-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
   font-size: 13px;
-}
-
-.meta-label {
-  flex-shrink: 0;
-  color: var(--text-muted);
-  width: 48px;
-  padding-top: 5px;
-  font-weight: 500;
-}
-
-.meta-values {
-  flex: 1;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
 }
 
 .meta-chip {
@@ -1431,25 +1265,9 @@ onBeforeUnmount(() => {
   border-top: 1px dashed var(--border);
 }
 
-.overview-label-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.overview-label {
-  font-size: 12px;
-  color: var(--text-muted);
-  font-weight: 500;
-}
-
 .expand-btn {
   background: transparent;
   border: none;
-  color: var(--accent);
-  font-size: 12px;
-  cursor: pointer;
   padding: 4px 8px;
   border-radius: 6px;
   font-family: inherit;
@@ -1461,9 +1279,7 @@ onBeforeUnmount(() => {
 }
 
 .overview-text {
-  font-size: 13px;
   line-height: 1.8;
-  color: var(--text-secondary);
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
@@ -1475,56 +1291,23 @@ onBeforeUnmount(() => {
   display: block;
 }
 
-.text-muted {
-  color: var(--text-muted);
-}
-
 /* ============ 剧集列表 ============ */
 .episodes-section {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
   border-radius: 14px;
   padding: 18px;
   margin-bottom: 20px;
 }
 
 .section-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
   margin-bottom: 14px;
-}
-
-.section-head-left {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-}
-
-.section-head-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
 }
 
 .section-head h3 {
   margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.section-sub {
-  font-size: 12px;
-  color: var(--text-muted);
 }
 
 /* 查看更多按钮 */
 .show-more-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
   padding: 5px 12px;
   font-size: 12px;
   border: 1px solid var(--accent);
@@ -1548,68 +1331,17 @@ onBeforeUnmount(() => {
   opacity: 0.7;
 }
 
-.mode-toggle-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border-radius: 8px;
-  border: 1px solid var(--accent);
-  background: var(--accent-alpha-10);
-  color: var(--accent);
-  cursor: pointer;
-  font-size: 12px;
-  font-family: inherit;
-  font-weight: 500;
-  transition: all 0.15s ease;
-}
-
-.mode-toggle-btn:hover {
-  border-color: var(--border);
-  color: var(--text-secondary);
-  background: var(--bg-secondary);
-  transform: none;
-}
-
-.mode-toggle-btn.active {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--accent-contrast);
-}
-
-.mode-toggle-btn.active:hover {
-  background: var(--accent-alpha-10);
-  color: var(--accent);
-}
-
-.mode-toggle-btn.secondary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-contrast);
-}
-
-.mode-toggle-btn.secondary:hover {
-  background: var(--accent-alpha-10);
-  color: var(--accent);
-}
-
 .episodes-grid {
-  display: grid;
   grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
-  gap: 8px;
   align-content: start;
   max-height: 320px;
   overflow-y: auto;
-  /* 隐藏滚动条但保留滚动功能 */
   scrollbar-width: none;
-  /* Firefox */
   -ms-overflow-style: none;
-  /* IE/Edge */
 }
 
 .episodes-grid::-webkit-scrollbar {
   display: none;
-  /* Chrome/Safari */
 }
 
 .episode-btn {
@@ -1662,7 +1394,6 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 
-/* 已观看态：按播放进度渲染底部进度条 + 百分比角标 */
 .episode-btn.watched {
   background: var(--accent);
   border-color: var(--accent);
@@ -1677,7 +1408,6 @@ onBeforeUnmount(() => {
   box-shadow: 0 2px 8px var(--accent-alpha-35);
 }
 
-/* 已观看的底部进度条 */
 .ep-progress-fill {
   position: absolute;
   left: 0;
@@ -1693,7 +1423,6 @@ onBeforeUnmount(() => {
   background: var(--accent);
 }
 
-/* 已观看的百分比角标 */
 .ep-progress-pct {
   position: absolute;
   right: 6px;
@@ -1720,32 +1449,15 @@ onBeforeUnmount(() => {
 
 /* ============ 相似推荐 ============ */
 .similar-section {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
   border-radius: 14px;
   padding: 18px;
 }
 
-.similar-loading {
-  padding: 30px;
-  text-align: center;
-}
-
-.similar-empty {
-  padding: 30px;
-  color: var(--text-muted);
-  font-size: 13px;
-  text-align: center;
-}
-
 .similar-grid {
-  display: grid;
   grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-  gap: 12px;
 }
 
 .similar-card {
-  cursor: pointer;
   transition: transform 0.2s ease;
 }
 
@@ -1766,36 +1478,20 @@ onBeforeUnmount(() => {
 }
 
 .similar-cover {
-  position: relative;
   aspect-ratio: 2/3;
   border-radius: 10px;
-  overflow: hidden;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
   transition: border-color 0.15s ease;
 }
 
 .similar-cover img {
-  width: 100%;
-  height: 100%;
   object-fit: cover;
-  display: block;
 }
 
 .similar-cover-empty {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted);
   opacity: 0.45;
 }
 
 .similar-remarks {
-  position: absolute;
-  top: 6px;
-  right: 6px;
   padding: 3px 8px;
   border-radius: 10px;
   background: var(--accent);
@@ -1805,379 +1501,22 @@ onBeforeUnmount(() => {
 }
 
 .similar-overlay {
-  position: absolute;
-  inset: 0;
   background: linear-gradient(to top, rgba(0, 0, 0, 0.5), transparent 60%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   color: #fff;
-  opacity: 0;
   transition: opacity 0.15s ease;
 }
 
 .similar-name {
-  margin-top: 8px;
-  font-size: 12px;
   color: var(--text-primary);
   line-height: 1.35;
   text-align: center;
-  overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   transition: color 0.15s ease;
-  font-weight: 500;
 }
 
-.similar-match {
-  margin-top: 4px;
-  text-align: center;
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-/* ============ 下载弹窗 ============ */
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(6px);
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  animation: fadeIn 0.18s ease;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-
-  to {
-    opacity: 1;
-  }
-}
-
-.modal-box {
-  width: 100%;
-  max-width: 720px;
-  max-height: 80vh;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-  animation: scaleIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-@keyframes scaleIn {
-  from {
-    opacity: 0;
-    transform: scale(0.96);
-  }
-
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-.modal-head {
-  padding: 16px 20px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--border);
-}
-
-.modal-title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-primary);
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.modal-close {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 4px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  transition: all 0.15s ease;
-}
-
-.modal-close:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.modal-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px 20px;
-}
-
-.modal-empty {
-  padding: 30px;
-  text-align: center;
-  color: var(--text-muted);
-  font-size: 13px;
-}
-
-.modal-error {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(255, 68, 68, 0.1);
-  border: 1px solid rgba(255, 68, 68, 0.3);
-  color: #ff6b6b;
-  padding: 10px 14px;
-  border-radius: 8px;
-  font-size: 12px;
-  margin-bottom: 14px;
-}
-
-.modal-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-  padding: 8px 12px;
-  background: var(--bg-secondary);
-  border-radius: 8px;
-}
-
-.modal-toolbar-tip {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.btn-download-all {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border-radius: 6px;
-  border: 1px solid var(--accent);
-  background: var(--accent);
-  color: var(--accent-contrast);
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
-  font-family: inherit;
-  transition: all 0.15s ease;
-}
-
-.btn-download-all:hover {
-  background: var(--accent-alpha-10);
-  border-color: var(--accent);
-  color: var(--accent);
-  transform: none;
-}
-
-.modal-episodes {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 8px;
-}
-
-.modal-episode {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--accent);
-  background: var(--accent-alpha-10);
-  color: var(--accent);
-  cursor: pointer;
-  font-size: 12px;
-  font-family: inherit;
-  text-align: left;
-  font-weight: 500;
-  transition: all 0.15s ease;
-}
-
-.modal-episode:hover {
-  border-color: var(--border);
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  transform: none;
-}
-
-.modal-episode.downloading {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-contrast);
-  pointer-events: none;
-  opacity: 0.9;
-}
-
-.modal-ep-index {
-  flex-shrink: 0;
-  min-width: 28px;
-  height: 28px;
-  padding: 0 8px;
-  border-radius: 6px;
-  background: var(--accent);
-  border: 1px solid var(--accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--accent-contrast);
-}
-
-.modal-episode:hover .modal-ep-index {
-  background: var(--bg-card);
-  border-color: var(--border);
-  color: var(--text-muted);
-}
-
-.modal-ep-name {
-  flex: 1;
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.modal-ep-action {
-  color: inherit;
-  flex-shrink: 0;
-}
-
-.modal-episode:hover .modal-ep-action {
-  color: var(--text-muted);
-}
-
-.modal-tasks {
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px dashed var(--border);
-}
-
-.modal-tasks-title {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 12px;
-  color: var(--text-muted);
-  font-weight: 500;
-  margin-bottom: 10px;
-}
-
-.modal-tasks-count {
-  font-weight: 600;
-  color: var(--accent);
-}
-
-.modal-tasks-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.task-row {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 12px;
-}
-
-.task-name {
-  font-size: 12px;
-  font-weight: 500;
-  margin-bottom: 6px;
-  color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.task-bar {
-  height: 4px;
-  background: var(--bg-card);
-  border-radius: 2px;
-  overflow: hidden;
-  margin-bottom: 6px;
-}
-
-.task-bar-fill {
-  height: 100%;
-  background: var(--accent);
-  border-radius: 2px;
-  transition: width 0.3s ease;
-}
-
-.task-meta {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.modal-foot {
-  padding: 14px 20px;
-  border-top: 1px solid var(--border);
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 10px;
-}
-
-.modal-foot .btn-primary {
-  margin-top: 0;
-}
-
-.btn-ghost {
-  padding: 8px 20px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-size: 13px;
-  font-family: inherit;
-  transition: all 0.15s ease;
-}
-
-.btn-ghost:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-  border-color: var(--accent);
-}
-
-.btn-primary {
-  margin-top: 16px;
-  padding: 12px 28px;
-  border-radius: 10px;
-  border: none;
-  background: var(--accent);
-  color: var(--accent-contrast);
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  font-family: inherit;
-  transition: all 0.15s ease;
-}
-
-.btn-primary:hover {
-  background: var(--accent-dim);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px var(--accent-alpha-35);
-}
+/* ============ 下载弹窗（已迁移到 Modal 组件，保留旧样式以防引用） ============ */
 
 /* 文件夹选择列表 */
 .folder-select-list {

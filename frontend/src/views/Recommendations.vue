@@ -83,7 +83,7 @@ onMounted(async () => {
         @click="openVideo(item)"
       >
         <div class="rec-cover">
-          <img v-if="item.vod_pic" :src="item.vod_pic" :alt="item.vod_name" loading="lazy" />
+          <img v-if="item.vod_pic" :src="item.vod_pic" :alt="item.vod_name" loading="lazy" referrerpolicy="no-referrer" />
           <div v-else class="rec-cover-empty">
             <Icon name="film" :size="28" />
           </div>

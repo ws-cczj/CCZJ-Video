@@ -41,13 +41,6 @@ export function getPlayerPath(
   return `/player/${sourceKey}/${getVideoId(video)}/${epIndex}`
 }
 
-// 安全地截断文本
-export function truncate(text: string | undefined | null, maxLen: number): string {
-  if (!text) return ''
-  if (text.length <= maxLen) return text
-  return text.slice(0, maxLen) + '...'
-}
-
 // 解析 URL 获取域名部分
 export function extractDomainKey(apiUrl: string): string {
   try {
@@ -105,11 +98,6 @@ export function buildSingleFilename(vodName: string, url?: string): string {
 // 解析下载 URL（优先 down_url，其次 play_url）
 export function resolveEpisodeUrl(ep: { ep_url: string; ep_down_url?: string }): string {
   return ep.ep_down_url || ep.ep_url || ''
-}
-
-// 从单个 Video 对象解析下载 URL
-export function resolveVideoUrl(v: { vod_play_url?: string; vod_down_url?: string }): string {
-  return v.vod_down_url || v.vod_play_url || ''
 }
 
 // 构造搜索路由路径（用于类型/导演/演员/年份标签跳转）

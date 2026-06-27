@@ -22,6 +22,7 @@ const props = withDefaults(defineProps<{
   title?: string
   isFav?: boolean
   favBusy?: boolean
+  doubanId?: string
 }>(), {
   autoplay: true,
   hasPrev: false,
@@ -31,9 +32,10 @@ const props = withDefaults(defineProps<{
   title: '',
   isFav: false,
   favBusy: false,
+  doubanId: '',
 })
 
-const emit = defineEmits(['back', 'prev', 'next', 'toggleFavorite', 'toggleAutoplay'])
+const emit = defineEmits(['back', 'prev', 'next', 'toggleFavorite', 'toggleAutoplay', 'showComments'])
 
 const wrapperRef = ref<HTMLDivElement>()
 const errorMsg = ref('')
@@ -2155,7 +2157,7 @@ defineExpose({ togglePiP })
     <div class="ctrl-bar" v-show="showControls || !playing || qualityOpen || showVideoInfo" @click.stop @mousedown.stop
       @pointerdown.stop @dblclick.stop @wheel.stop>
       <!-- 上一集 -->
-      <button class="ctrl-btn" @click="emit('prev')" :disabled="!hasPrev" title="上一集">
+      <button v-if="hasPrev" class="ctrl-btn" @click="emit('prev')" title="上一集">
         <Icon name="prev" :size="16" />
       </button>
 
@@ -2165,7 +2167,7 @@ defineExpose({ togglePiP })
       </button>
 
       <!-- 下一集 -->
-      <button class="ctrl-btn" @click="emit('next')" :disabled="!hasNext" title="下一集">
+      <button v-if="hasNext" class="ctrl-btn" @click="emit('next')" title="下一集">
         <Icon name="next" :size="16" />
       </button>
 
@@ -2272,6 +2274,10 @@ defineExpose({ togglePiP })
           <Icon name="info" :size="16" />
         </button>
       </div>
+      <!-- 豆瓣评论（仅有豆瓣ID时显示） -->
+      <button v-if="doubanId" class="ctrl-btn" @click.stop="emit('showComments'); keepVisible()" title="查看豆瓣评论">
+        <Icon name="comment" :size="16" />
+      </button>
       <!-- 画中画 -->
       <button class="ctrl-btn" @click="togglePiP" :title="isPiP ? '退出画中画' : '画中画（I）'" :class="{ active: isPiP }">
         <Icon :name="isPiP ? 'pip-exit' : 'pip'" :size="16" />
@@ -2599,6 +2605,13 @@ defineExpose({ togglePiP })
   min-width: 0;
 }
 
+@keyframes fav-bounce {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.35); }
+  60% { transform: scale(0.85); }
+  100% { transform: scale(1); }
+}
+
 .fav-btn-in-player {
   flex-shrink: 0;
   width: 32px;
@@ -2629,6 +2642,7 @@ defineExpose({ togglePiP })
 .fav-btn-in-player.is-fav {
   color: #fbbf24;
   background: rgba(251, 191, 36, 0.18);
+  animation: fav-bounce 0.4s ease;
 }
 
 .fav-btn-in-player.is-fav:hover {
@@ -3283,15 +3297,13 @@ defineExpose({ togglePiP })
 .volume-slider-v {
   width: 120px;
   height: 6px;
-  -webkit-appearance: none;
-  appearance: none;
   background: rgba(255,255,255,0.2);
   border-radius: 3px;
   outline: none;
   transform: rotate(-90deg);
   transform-origin: center center;
   cursor: pointer;
-  accent-color: var(--accent, #1890ff);
+  accent-color:  #1890ff;
 }
 
 .volume-slider-v::-webkit-slider-thumb {

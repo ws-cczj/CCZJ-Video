@@ -85,14 +85,14 @@ onMounted(async () => {
           <template v-for="root in treeTypes" :key="`${root.source_key}-${root.id}`">
             <tr>
               <td class="a-tb-num">{{ root.id }}</td>
-              <td class="a-tb-mono">{{ root.source_key }}</td>
-              <td class="a-tb-name">{{ root.type_name }}</td>
+              <td class="a-tb-mono cczj-truncate">{{ root.source_key }}</td>
+              <td class="a-tb-name cczj-truncate">{{ root.type_name }}</td>
               <td class="a-tb-num">{{ root.parent_id }}</td>
               <td class="a-tb-num">{{ root.sort }}</td>
             </tr>
             <tr v-for="child in root.children" :key="`${child.source_key}-${child.id}`">
               <td class="a-tb-num">{{ child.id }}</td>
-              <td class="a-tb-mono">{{ child.source_key }}</td>
+              <td class="a-tb-mono cczj-truncate">{{ child.source_key }}</td>
               <td style="padding-left:28px;color:var(--text-secondary)">└ {{ child.type_name }}</td>
               <td class="a-tb-num">{{ child.parent_id }}</td>
               <td class="a-tb-num">{{ child.sort }}</td>

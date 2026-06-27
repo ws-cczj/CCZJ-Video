@@ -6,6 +6,311 @@
 // @ts-ignore: Unused imports
 import { Create as $Create } from "@wailsio/runtime";
 
+/**
+ * ChartVideoItem 热榜视频项（直接展示 + 匹配状态）
+ */
+export class ChartVideoItem {
+    /**
+     * Creates a new ChartVideoItem instance.
+     * @param {Partial<ChartVideoItem>} [$$source = {}] - The source object to create the ChartVideoItem.
+     */
+    constructor($$source = {}) {
+        if (!("subject_id" in $$source)) {
+            /**
+             * 基本信息（立即返回）
+             * @member
+             * @type {string}
+             */
+            this["subject_id"] = "";
+        }
+        if (!("title" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["title"] = "";
+        }
+        if (!("poster_url" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["poster_url"] = "";
+        }
+        if (!("rating" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["rating"] = "";
+        }
+        if (!("votes" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["votes"] = "";
+        }
+        if (!("info" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["info"] = "";
+        }
+        if (!("year" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["year"] = "";
+        }
+        if (!("area" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["area"] = "";
+        }
+        if (!("director" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["director"] = "";
+        }
+        if (!("actors" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["actors"] = "";
+        }
+        if (!("release_date" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["release_date"] = "";
+        }
+        if (!("global_id" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["global_id"] = 0;
+        }
+        if (!("status" in $$source)) {
+            /**
+             * 匹配状态
+             * "matched" | "searching" | "not_found"
+             * @member
+             * @type {string}
+             */
+            this["status"] = "";
+        }
+        if (!("source_key" in $$source)) {
+            /**
+             * 匹配到的源 key（matched 时有效）
+             * @member
+             * @type {string}
+             */
+            this["source_key"] = "";
+        }
+        if (!("vod_id" in $$source)) {
+            /**
+             * 匹配到的 vod_id（matched 时有效）
+             * @member
+             * @type {string}
+             */
+            this["vod_id"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ChartVideoItem instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {ChartVideoItem}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ChartVideoItem(/** @type {Partial<ChartVideoItem>} */($$parsedSource));
+    }
+}
+
+/**
+ * DoubanComment 豆瓣评论结构
+ */
+export class DoubanComment {
+    /**
+     * Creates a new DoubanComment instance.
+     * @param {Partial<DoubanComment>} [$$source = {}] - The source object to create the DoubanComment.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * 评论 ID (data-cid)
+             * @member
+             * @type {string}
+             */
+            this["id"] = "";
+        }
+        if (!("avatar" in $$source)) {
+            /**
+             * 用户头像 URL
+             * @member
+             * @type {string}
+             */
+            this["avatar"] = "";
+        }
+        if (!("username" in $$source)) {
+            /**
+             * 用户名
+             * @member
+             * @type {string}
+             */
+            this["username"] = "";
+        }
+        if (!("profile" in $$source)) {
+            /**
+             * 豆瓣主页链接
+             * @member
+             * @type {string}
+             */
+            this["profile"] = "";
+        }
+        if (!("status" in $$source)) {
+            /**
+             * "看过" / "想看"
+             * @member
+             * @type {string}
+             */
+            this["status"] = "";
+        }
+        if (!("rating" in $$source)) {
+            /**
+             * 1-5 星
+             * @member
+             * @type {number}
+             */
+            this["rating"] = 0;
+        }
+        if (!("rating_title" in $$source)) {
+            /**
+             * "力荐"/"推荐"/"还行"/"较差"/"很差"
+             * @member
+             * @type {string}
+             */
+            this["rating_title"] = "";
+        }
+        if (!("time" in $$source)) {
+            /**
+             * "2011-06-22 13:07:28"
+             * @member
+             * @type {string}
+             */
+            this["time"] = "";
+        }
+        if (!("location" in $$source)) {
+            /**
+             * 用户所在地
+             * @member
+             * @type {string}
+             */
+            this["location"] = "";
+        }
+        if (!("votes" in $$source)) {
+            /**
+             * "有用"票数
+             * @member
+             * @type {number}
+             */
+            this["votes"] = 0;
+        }
+        if (!("content" in $$source)) {
+            /**
+             * 评论内容
+             * @member
+             * @type {string}
+             */
+            this["content"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DoubanComment instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {DoubanComment}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new DoubanComment(/** @type {Partial<DoubanComment>} */($$parsedSource));
+    }
+}
+
+/**
+ * DoubanCommentsResp 评论列表响应
+ */
+export class DoubanCommentsResp {
+    /**
+     * Creates a new DoubanCommentsResp instance.
+     * @param {Partial<DoubanCommentsResp>} [$$source = {}] - The source object to create the DoubanCommentsResp.
+     */
+    constructor($$source = {}) {
+        if (!("comments" in $$source)) {
+            /**
+             * @member
+             * @type {DoubanComment[]}
+             */
+            this["comments"] = [];
+        }
+        if (!("total" in $$source)) {
+            /**
+             * 评论总数（估算）
+             * @member
+             * @type {number}
+             */
+            this["total"] = 0;
+        }
+        if (!("page" in $$source)) {
+            /**
+             * 当前页码
+             * @member
+             * @type {number}
+             */
+            this["page"] = 0;
+        }
+        if (!("total_pages" in $$source)) {
+            /**
+             * 总页数
+             * @member
+             * @type {number}
+             */
+            this["total_pages"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DoubanCommentsResp instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {DoubanCommentsResp}
+     */
+    static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType1;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("comments" in $$parsedSource) {
+            $$parsedSource["comments"] = $$createField0_0($$parsedSource["comments"]);
+        }
+        return new DoubanCommentsResp(/** @type {Partial<DoubanCommentsResp>} */($$parsedSource));
+    }
+}
+
 export class DoubanInfo {
     /**
      * Creates a new DoubanInfo instance.
@@ -131,6 +436,22 @@ export class DoubanInfo {
              */
             this["PosterURL"] = "";
         }
+        if (!("ShortComments" in $$source)) {
+            /**
+             * 短评数量
+             * @member
+             * @type {string}
+             */
+            this["ShortComments"] = "";
+        }
+        if (!("Hotness" in $$source)) {
+            /**
+             * 计算热度: votes + short_comments + 7天内新片加权
+             * @member
+             * @type {string}
+             */
+            this["Hotness"] = "";
+        }
 
         Object.assign(this, $$source);
     }
@@ -145,3 +466,7 @@ export class DoubanInfo {
         return new DoubanInfo(/** @type {Partial<DoubanInfo>} */($$parsedSource));
     }
 }
+
+// Private type creation functions
+const $$createType0 = DoubanComment.createFrom;
+const $$createType1 = $Create.Array($$createType0);

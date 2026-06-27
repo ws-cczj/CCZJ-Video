@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { Events } from '@wailsio/runtime'
 import { GetSetting, SetSetting } from '../../bindings/cczjVideo/app'
 import { useErrorStore } from './error'
+import { appEvent } from '../event'
 
 const DIR_STORAGE_KEY = 'cczj_download_dir'
 
@@ -141,6 +142,11 @@ export const useDownloadStore = defineStore('download', () => {
         _off = Events.On('download:progress', (ev: any) => {
           const data = ev.data
           upsert(data)
+          // 桥接到前端事件总线
+          const taskId = data.task_id ?? data.TaskId ?? ''
+          const downloaded = Number(data.downloaded ?? data.Downloaded ?? 0)
+          const total = Number(data.total ?? data.Total ?? 0)
+          appEvent.emit('download:progress', taskId, downloaded, total)
         }) as unknown as (() => void) | null
       } catch {
         // 忽略
@@ -232,6 +238,7 @@ export const useDownloadStore = defineStore('download', () => {
         },
       ])
       if (res) upsert(res)
+      appEvent.emit('download:start', id, opts.url)
     } catch (e: any) {
       const msg: string = e?.message || String(e)
       const isDuplicate = msg.startsWith('duplicate_url:')

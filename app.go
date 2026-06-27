@@ -7,6 +7,7 @@ import (
 	"cczjVideo/app/douban"
 	"cczjVideo/app/handler"
 	"cczjVideo/app/model"
+	"cczjVideo/app/updater"
 	"cczjVideo/app/util"
 	"bytes"
 	"compress/gzip"
@@ -33,19 +34,29 @@ import (
 )
 
 var imageProxyClient = &http.Client{
-	Timeout: 10 * time.Second,
+	Timeout: 30 * time.Second,
 	Transport: &http.Transport{
 		MaxIdleConns:        20,
-		IdleConnTimeout:     30 * time.Second,
-		TLSHandshakeTimeout: 10 * time.Second,
+		IdleConnTimeout:     60 * time.Second,
+		TLSHandshakeTimeout: 15 * time.Second,
 	},
 }
 
+// 图片代理限速：避免对同一CDN连续快速请求导致被限流
+var (
+	imageProxyMu       sync.Mutex
+	imageProxyLastTime time.Time
+	imageProxyMinGap   = 300 * time.Millisecond // 两次请求最少间隔
+)
+
 type App struct {
-	app              *application.App
-	collectMu        sync.Mutex
-	doubanScheduler  *douban.Scheduler
-	forceQuit        atomic.Bool
+	app               *application.App
+	systray           *application.SystemTray
+	collectMu         sync.Mutex
+	doubanScheduler   *douban.Scheduler
+	forceQuit         atomic.Bool
+	pendingUpdateInfo *updater.UpdateInfo
+	pendingUpdateMu   sync.Mutex
 }
 
 // ======================== 关闭行为 ========================
@@ -95,29 +106,27 @@ func (a *App) RestartApp() {
 		return
 	}
 
-	// 使用 os.StartProcess 比 exec.Command(cmd) 不继承父进程资源，更可靠
-	// Windows 上需使用 STARTF_USESTDHANDLES 但直接用 os.StartProcess
-	// 并设置 CreationFlags=DETACHED_PROCESS|CREATE_NEW_PROCESS_GROUP 让新进程独立于父进程
 	attr := &os.ProcAttr{
 		Files: []*os.File{nil, nil, nil},
 	}
-	// 在 Windows 上为可执行程序通过 cmd.exe 包装一下，确保完全脱离父进程
 	if goruntime.GOOS == "windows" {
-		// Windows: 使用 DETACHED_PROCESS 标志，完全脱离
 		attr.Files = []*os.File{os.Stdin, os.Stdout, os.Stderr}
 	}
 
-	// 简单直接使用 exec.Command 搭配 cmd.Run 不等待，用 os.StartProcess
-	// 先启动新进程，再退出。使用 os.StartProcess 对跨平台兼容
 	_, err = os.StartProcess(exe, []string{exe}, attr)
 	if err != nil {
-		// 回退到 exec.Command
 		cmd := exec.Command(exe)
 		_ = cmd.Start()
 	}
 
-	// 延迟一点时间给新进程准备好再退出
+	a.forceQuit.Store(true)
+
 	time.Sleep(200 * time.Millisecond)
+
+	go func() {
+		os.Exit(0)
+	}()
+
 	a.app.Quit()
 }
 
@@ -174,6 +183,16 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 	a.doubanScheduler = douban.NewScheduler(30 * time.Second)
 	safeGo("doubanScheduler", func() { a.doubanScheduler.Start() })
 
+	// 预加载豆瓣热榜缓存（异步，不阻塞启动）
+	safeGo("preloadDoubanChart", func() {
+		_, err := douban.FetchDoubanChart()
+		if err != nil {
+			applog.Debug("预加载豆瓣热榜失败: %v", err)
+		} else {
+			applog.Info("豆瓣热榜预加载完成")
+		}
+	})
+
 	// 同步全局类型表
 	safeGo("syncGlobalTypes", func() {
 		count, err := db.SyncGlobalTypesFromSources()
@@ -198,6 +217,9 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 
 	// 应用窗口设置（尺寸、是否可调整大小）
 	a.ApplyWindowSettings()
+
+	// 启动时自动检查更新（每天一次）
+	safeGo("startupCheckUpdate", func() { a.startupCheckUpdate() })
 
 	return nil
 }
@@ -261,6 +283,24 @@ func (a *App) GetRecommend(req RecommendReq) ([]*model.Video, error) {
 		req.ExcludeIds = []string{}
 	}
 	return handler.GetRecommend(req.SourceKey, req.Limit, req.ExcludeIds)
+}
+
+// GetSimilarVideos 返回同类型的相似视频（用于详情页推荐兜底）
+type SimilarReq struct {
+	SourceKey string   `json:"source_key"`
+	TypeId    string   `json:"type_id"`
+	Limit     int      `json:"limit"`
+	ExcludeIds []string `json:"exclude_ids"`
+}
+
+func (a *App) GetSimilarVideos(req SimilarReq) ([]*model.Video, error) {
+	if req.Limit <= 0 {
+		req.Limit = 8
+	}
+	if req.ExcludeIds == nil {
+		req.ExcludeIds = []string{}
+	}
+	return handler.GetSimilarVideos(req.SourceKey, req.TypeId, req.Limit, req.ExcludeIds)
 }
 
 // ======================== Source ========================
@@ -915,7 +955,7 @@ func (a *App) DoubanSearch(req DoubanSearchReq) (*DoubanSearchResp, error) {
 	if req.Keyword == "" {
 		return nil, fmt.Errorf("关键词不能为空")
 	}
-	id, err := douban.SearchSubjectID(req.Keyword)
+	id, err := douban.SearchSubjectID(req.Keyword, douban.SearchMeta{VodName: req.Keyword})
 	if err != nil {
 		return nil, err
 	}
@@ -958,6 +998,16 @@ func (a *App) DoubanUpdateVideo(req DoubanUpdateVideoReq) (*douban.DoubanInfo, e
 		return nil, fmt.Errorf("关键词不能为空")
 	}
 	return a.doubanScheduler.Updater().UpdateSingleByKeyword(req.Keyword)
+}
+
+// DoubanChart 获取豆瓣热榜视频（立即返回，带匹配状态）
+func (a *App) DoubanChart() ([]douban.ChartVideoItem, error) {
+	return douban.GetChartVideos()
+}
+
+// DoubanChartResolve 用户点击时解析热榜视频（实时检查匹配状态）
+func (a *App) DoubanChartResolve(subjectID string) (*douban.ChartVideoItem, error) {
+	return douban.ResolveChartVideo(subjectID)
 }
 
 // DoubanTriggerNow 立即触发一次豆瓣信息补全
@@ -1024,6 +1074,29 @@ func (a *App) DoubanGetAll(req DoubanGetAllReq) (*DoubanGetAllResp, error) {
 		Page:     req.Page,
 		PageSize: req.PageSize,
 	}, nil
+}
+
+// ======================== 豆瓣评论 ========================
+
+// DoubanCommentsReq 获取豆瓣评论请求
+type DoubanCommentsReq struct {
+	DoubanId string `json:"douban_id"`
+	Page     int    `json:"page"`
+	Sort     string `json:"sort"` // "new_score" | "time"
+}
+
+// GetDoubanComments 获取豆瓣评论（带 24h 缓存）
+func (a *App) GetDoubanComments(req DoubanCommentsReq) (*douban.DoubanCommentsResp, error) {
+	if req.DoubanId == "" {
+		return nil, fmt.Errorf("douban_id 不能为空")
+	}
+	if req.Page <= 0 {
+		req.Page = 1
+	}
+	if req.Sort == "" {
+		req.Sort = "new_score"
+	}
+	return douban.FetchComments(req.DoubanId, req.Page, req.Sort)
 }
 
 // ======================== 全局类型管理 ========================
@@ -1134,18 +1207,21 @@ func (a *App) getVodName(sourceKey, vodId string) (string, error) {
 type FavReq struct {
 	SourceKey string `json:"source_key"`
 	VodId     string `json:"vod_id"`
+	GlobalId  int    `json:"global_id"`
 }
 
 func (r *FavReq) UnmarshalJSON(data []byte) error {
 	var raw struct {
 		SourceKey string          `json:"source_key"`
 		VodId     json.RawMessage `json:"vod_id"`
+		GlobalId  int             `json:"global_id"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
 	r.SourceKey = raw.SourceKey
 	r.VodId = normalizeId(raw.VodId)
+	r.GlobalId = raw.GlobalId
 	return nil
 }
 
@@ -1166,11 +1242,14 @@ func (a *App) RemoveFavorite(req FavReq) error {
 }
 
 func (a *App) IsFavorite(req FavReq) (bool, error) {
-	vodName, err := a.getVodName(req.SourceKey, req.VodId)
+	v, err := db.GetVideoById(req.SourceKey, req.VodId)
 	if err != nil {
 		return false, nil
 	}
-	return db.IsFavorite(vodName, req.SourceKey), nil
+	if v.GlobalId <= 0 {
+		return false, nil
+	}
+	return db.IsFavoriteByGlobalID(int(v.GlobalId)), nil
 }
 
 func (a *App) GetFavorites(page, pageSize int) ([]db.FavWithVideo, error) {
@@ -3082,7 +3161,142 @@ func (a *App) MigrateOldData(apiUrl, sourceKey string) error {
 	return nil
 }
 
+// ======================== 版本更新 ========================
+
+// GetAppVersion 返回当前应用版本号
+func (a *App) GetAppVersion() string {
+	return updater.Version
+}
+
+// CheckUpdate 检查是否有新版本
+// reCheck: 是否强制刷新缓存（参考 lx-music-desktop 的 reCheck）
+func (a *App) CheckUpdate(reCheck bool) (*updater.UpdateInfo, error) {
+	return updater.CheckUpdate(reCheck)
+}
+
+// DownloadUpdate 下载更新包，通过事件向前端推送进度
+func (a *App) DownloadUpdate(downloadURL string) (string, error) {
+	return updater.DownloadUpdate(downloadURL, func(downloaded, total int64, speedBps float64) {
+		a.app.Event.Emit("update:download:progress", map[string]interface{}{
+			"downloaded": downloaded,
+			"total":      total,
+			"speed_bps":  speedBps,
+		})
+	})
+}
+
+// InstallUpdate 安装更新并退出当前程序
+func (a *App) InstallUpdate(filePath string) error {
+	return updater.InstallUpdate(filePath)
+}
+
+// IgnoreVersion 忽略指定版本（存入数据库，下次不再提示）
+func (a *App) IgnoreVersion(version string) error {
+	return db.SetSetting("ignored_version", version)
+}
+
+// GetIgnoredVersion 返回被忽略的版本号
+func (a *App) GetIgnoredVersion() string {
+	v, _ := db.GetSetting("ignored_version")
+	return v
+}
+
+// GetLastStartVersion 返回上次启动时的版本号（参考 lx-music-desktop 的 getLastStartInfo）
+// 用于检测版本升级，决定是否展示 changelog
+func (a *App) GetLastStartVersion() string {
+	v, _ := db.GetSetting("last_start_version")
+	return v
+}
+
+// SaveLastStartVersion 保存当前版本号（启动时调用）
+func (a *App) SaveLastStartVersion() {
+	_ = db.SetSetting("last_start_version", updater.Version)
+}
+
+// ShouldCheckUpdateToday 判断今天是否已经检查过更新（每天只检查一次）
+func (a *App) ShouldCheckUpdateToday() bool {
+	lastCheck, _ := db.GetSetting("last_update_check")
+	today := time.Now().Format("2006-01-02")
+	return lastCheck != today
+}
+
+// MarkUpdateChecked 标记今天已检查过更新
+func (a *App) MarkUpdateChecked() {
+	_ = db.SetSetting("last_update_check", time.Now().Format("2006-01-02"))
+}
+
+// GetPendingUpdateInfo 返回启动时检测到的待处理更新信息
+func (a *App) GetPendingUpdateInfo() *updater.UpdateInfo {
+	a.pendingUpdateMu.Lock()
+	defer a.pendingUpdateMu.Unlock()
+	return a.pendingUpdateInfo
+}
+
+// ClearPendingUpdateInfo 清除待处理的更新信息
+func (a *App) ClearPendingUpdateInfo() {
+	a.pendingUpdateMu.Lock()
+	defer a.pendingUpdateMu.Unlock()
+	a.pendingUpdateInfo = nil
+}
+
+// startupCheckUpdate 启动时自动检查更新（每天一次，静默检查）
+func (a *App) startupCheckUpdate() {
+	// 检测版本变化（参考 lx-music-desktop 的 changelog 展示）
+	lastVersion := a.GetLastStartVersion()
+	a.SaveLastStartVersion()
+
+	if lastVersion != "" && lastVersion != updater.Version {
+		// 版本发生了变化（升级或降级），推送事件告知前端
+		applog.Info("[Updater] 版本变化: %s -> %s", lastVersion, updater.Version)
+		a.app.Event.Emit("update:version:changed", map[string]string{
+			"old_version": lastVersion,
+			"new_version": updater.Version,
+		})
+	}
+
+	if !a.ShouldCheckUpdateToday() {
+		return
+	}
+	// 延迟 3 秒，确保前端已挂载
+	time.Sleep(3 * time.Second)
+
+	if !a.ShouldCheckUpdateToday() {
+		return
+	}
+	a.MarkUpdateChecked()
+
+	safeGo("startupCheckUpdate", func() {
+		info, err := updater.CheckUpdate(false) // 启动时使用缓存，不强制刷新
+		if err != nil {
+			applog.Debug("[Updater] 启动时检查更新失败: %v", err)
+			return
+		}
+		if !info.HasUpdate {
+			return
+		}
+		// 检查是否被用户忽略
+		ignored := a.GetIgnoredVersion()
+		if info.LatestVer == ignored {
+			applog.Info("[Updater] 版本 %s 已被用户忽略，跳过提示", info.LatestVer)
+			return
+		}
+		// 存储待处理更新信息，供前端轮询获取
+		a.pendingUpdateMu.Lock()
+		a.pendingUpdateInfo = info
+		a.pendingUpdateMu.Unlock()
+
+		// 推送更新事件到前端
+		applog.Info("[Updater] 发现新版本 %s，推送到前端", info.LatestVer)
+		a.app.Event.Emit("update:available", info)
+	})
+}
+
 func (a *App) ServiceShutdown() error {
+	// 移除系统托盘图标（如果存在）
+	if a.systray != nil {
+		a.systray.Destroy()
+	}
+
 	// 记录退出时间（下次启动"补采"可使用）
 	handler.TouchLastExit()
 	// 停止调度器的后台循环
@@ -3251,6 +3465,59 @@ func (a *App) ProxyImage(urlStr string) (string, error) {
 	if strings.TrimSpace(urlStr) == "" {
 		return "", fmt.Errorf("url is empty")
 	}
+
+	originalURL := urlStr
+	// 豆瓣小图升级为大图（s_ratio_poster → l_ratio_poster）
+	if strings.Contains(urlStr, "s_ratio_poster") {
+		urlStr = strings.Replace(urlStr, "s_ratio_poster", "l_ratio_poster", 1)
+	}
+
+	// 先尝试大图，失败则回退小图
+	result, err := doProxyImageWithRetry(urlStr)
+	if err != nil {
+		// 大图失败，回退尝试原始小图
+		if originalURL != urlStr {
+			if r2, e2 := doProxyImageWithRetry(originalURL); e2 == nil {
+				return r2, nil
+			}
+		}
+		return "", err
+	}
+	return result, nil
+}
+
+// doProxyImageWithRetry 带限速+重试的图片代理
+func doProxyImageWithRetry(urlStr string) (string, error) {
+	var lastErr error
+	for attempt := 0; attempt < 2; attempt++ {
+		if attempt > 0 {
+			time.Sleep(500 * time.Millisecond) // 重试前等待
+		}
+		// 限速：确保两次请求之间有足够间隔
+		imageProxyMu.Lock()
+		elapsed := time.Since(imageProxyLastTime)
+		if elapsed < imageProxyMinGap {
+			time.Sleep(imageProxyMinGap - elapsed)
+		}
+		imageProxyLastTime = time.Now()
+		imageProxyMu.Unlock()
+
+		result, err := doProxyImage(urlStr)
+		if err == nil {
+			return result, nil
+		}
+		lastErr = err
+		errStr := err.Error()
+		// 仅对超时和反爬（text/html）重试，其他错误直接返回
+		if !strings.Contains(errStr, "deadline") && !strings.Contains(errStr, "text/html") && !strings.Contains(errStr, "HTTP 4") {
+			return "", err
+		}
+		applog.Debug("[ProxyImage] 第%d次尝试失败 url=%s: %v", attempt+1, urlStr[:min(len(urlStr), 60)], err)
+	}
+	return "", lastErr
+}
+
+func doProxyImage(urlStr string) (string, error) {
 	u, err := url.Parse(urlStr)
 	if err != nil {
 		return "", fmt.Errorf("invalid url: %w", err)
@@ -3263,10 +3530,15 @@ func (a *App) ProxyImage(urlStr string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("build request failed: %w", err)
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 CCZJ-Video/1.0")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0")
 	req.Header.Set("Accept", "image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
 	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
 	req.Header.Set("Accept-Encoding", "identity")
+
+	// 豆瓣图片需要 Referer 才能正常访问
+	if strings.Contains(u.Host, "doubanio.com") || strings.Contains(u.Host, "douban.com") {
+		req.Header.Set("Referer", "https://movie.douban.com/")
+	}
 
 	resp, err := imageProxyClient.Do(req)
 	if err != nil {
@@ -3280,7 +3552,10 @@ func (a *App) ProxyImage(urlStr string) (string, error) {
 
 	contentType := resp.Header.Get("Content-Type")
 	if !strings.HasPrefix(contentType, "image/") {
-		return "", fmt.Errorf("not an image: %s", contentType)
+		// 服务器返回非图片内容（如豆瓣反爬返回 HTML）
+		// 读取并丢弃 body，避免连接不可复用
+		io.Copy(io.Discard, resp.Body)
+		return "", fmt.Errorf("not an image: %s (url: %s)", contentType, urlStr[:min(len(urlStr), 80)])
 	}
 
 	data, err := io.ReadAll(resp.Body)

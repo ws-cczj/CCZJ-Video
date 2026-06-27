@@ -134,7 +134,17 @@ func (u *Updater) UpdateBatch() (int, error) {
 }
 
 func (u *Updater) fillSubjectID(row *db.DoubanInfoRow) error {
-	subjectID, err := SearchSubjectID(row.VodName)
+	meta := SearchMeta{
+		VodName:  row.VodName,
+		Year:     row.Year,
+		VodType:  row.VodType,
+		Director: row.Director,
+		Actor:    row.Actor,
+	}
+	applog.Info("[Douban] fillSubjectID meta: name=%s year=%s type=%s director=%s",
+		meta.VodName, meta.Year, meta.VodType, meta.Director)
+
+	subjectID, err := SearchSubjectID(row.VodName, meta)
 	if err != nil {
 		return err
 	}
@@ -215,6 +225,12 @@ func (u *Updater) fillDetail(row *db.DoubanInfoRow) error {
 		updatedFields++
 	}
 
+	// 热度始终更新（随时间变化，不受“已有值”限制）
+	if info.Hotness != "" && info.Hotness != "0" {
+		updated.Hotness = info.Hotness
+		updatedFields++
+	}
+
 	applog.Debug("[Douban] Upserting %d fields for subject '%s' (global_id=%d)", updatedFields, row.SubjectID, row.GlobalID)
 	err = db.UpsertDoubanInfo(&updated)
 	if err != nil {
@@ -232,7 +248,7 @@ func (u *Updater) fillDetail(row *db.DoubanInfoRow) error {
 
 func (u *Updater) UpdateSingleByKeyword(keyword string) (*DoubanInfo, error) {
 	applog.Info("[Douban] Manual update for keyword: %s", keyword)
-	info, err := FetchDoubanInfo(keyword)
+	info, err := FetchDoubanInfo(keyword, SearchMeta{VodName: keyword})
 	if err != nil {
 		applog.Error("[Douban] Manual update FAILED for '%s': %v", keyword, err)
 		return nil, err
@@ -262,6 +278,7 @@ func (u *Updater) UpdateSingleByKeyword(keyword string) (*DoubanInfo, error) {
 				Aka:          info.Aka,
 				Imdb:         info.IMDb,
 				PosterURL:    info.PosterURL,
+				Hotness:      info.Hotness,
 			}
 			if err := db.UpsertDoubanInfo(row); err != nil {
 				applog.Error("[Douban] Failed to upsert manual update for '%s': %v", keyword, err)

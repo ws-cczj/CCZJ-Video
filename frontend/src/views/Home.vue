@@ -1,20 +1,42 @@
 <script setup lang="ts">
 defineOptions({ name: 'Home' })
-import { ref, computed, onMounted, onActivated, onBeforeUnmount, watch, watchEffect, defineComponent, h } from 'vue'
+import { ref, computed, onMounted, onActivated, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { GetRecentHistory, DeleteHistoryByVideo } from '../../bindings/cczjVideo/app'
+import { useI18n } from 'vue-i18n'
+import { GetRecentHistory, DeleteHistoryByVideo, GetSetting, DoubanChart, DoubanChartResolve } from '../../bindings/cczjVideo/app'
 import { useSourceStore } from '../stores/source'
 import { useVideoStore, type VideoFilter } from '../stores/video'
+import { useErrorStore } from '../stores/error'
 import VideoCard from '../components/VideoCard.vue'
 import { Button, Tag, Spinner as LoadingSpinner, Empty as EmptyState, Select as SelectDropdown } from '../components/ui'
 import BookCarousel from '../components/BookCarousel.vue'
 import Icon from '../components/Icon.vue'
-import { getDetailPath } from '../utils'
+import { getDetailPath, getSearchPath } from '../utils'
 import type { Video } from '../types'
+
+const { t } = useI18n()
 
 const router = useRouter()
 const sourceStore = useSourceStore()
 const videoStore = useVideoStore()
+const errorStore = useErrorStore()
+
+// ==================== 网格布局设置 ====================
+const gridColumns = ref<number>(5)
+const layoutDensity = ref<'comfortable' | 'compact' | 'spacious'>('comfortable')
+
+const gridStyle = computed(() => {
+  const density = layoutDensity.value
+  const gap = density === 'compact' ? '10px' : density === 'spacious' ? '20px' : '16px'
+  const minWidth = density === 'compact' ? '120px' : density === 'spacious' ? '180px' : '150px'
+  const cols = gridColumns.value
+  
+  return {
+    display: 'grid',
+    gridTemplateColumns: `repeat(${cols}, minmax(${minWidth}, 1fr))`,
+    gap: gap
+  }
+})
 
 // ==================== 筛选状态 ====================
 interface ActiveFilters {
@@ -34,7 +56,19 @@ const activeFilters = ref<ActiveFilters>({
 // 单个展开/收起按钮：未展开时只显示类型，展开后同时显示年份与地区
 const expanded = ref(false)
 
+// debounce 防止快速连续触发（如点击chip同时watcher触发）
+let applyTimer: ReturnType<typeof setTimeout> | null = null
+
 function applyFilters(): void {
+  if (!sourceStore.currentSourceKey) return
+  if (applyTimer) clearTimeout(applyTimer)
+  applyTimer = setTimeout(() => {
+    applyTimer = null
+    doApplyFilters()
+  }, 80)
+}
+
+function doApplyFilters(): void {
   if (!sourceStore.currentSourceKey) return
   const f: VideoFilter = {
     type_id: activeFilters.value.typeId === 'all' ? '' : activeFilters.value.typeId,
@@ -49,6 +83,7 @@ function applyFilters(): void {
 function resetFilters(): void {
   activeFilters.value = { typeId: 'all', year: 'all', area: 'all', sort: 'default' }
   expanded.value = false
+  if (applyTimer) { clearTimeout(applyTimer); applyTimer = null }
   if (sourceStore.currentSourceKey) {
     videoStore.loadVideos(sourceStore.currentSourceKey, {
       type_id: '', year: '', area: '', keyword: '', sort: '',
@@ -59,26 +94,31 @@ function resetFilters(): void {
 function setSort(sort: string): void {
   if (activeFilters.value.sort === sort) return
   activeFilters.value.sort = sort
-  applyFilters()
+  // watcher 会自动触发 applyFilters
 }
 
 function selectChip(category: 'type' | 'year' | 'area', value: string): void {
   if (category === 'type') activeFilters.value.typeId = value
   if (category === 'year') activeFilters.value.year = value
   if (category === 'area') activeFilters.value.area = value
-  applyFilters()
+  // watcher 会自动触发 applyFilters
 }
 
-const hasActiveFilter = computed<boolean>(() =>
+// 是否有内容筛选（不含排序），用于控制推荐区显隐
+const hasContentFilter = computed<boolean>(() =>
   activeFilters.value.typeId !== 'all' ||
   activeFilters.value.year !== 'all' ||
-  activeFilters.value.area !== 'all' ||
-  activeFilters.value.sort !== 'default'
+  activeFilters.value.area !== 'all'
+)
+
+// 是否有任何筛选（含排序），用于显示筛选状态栏
+const hasActiveFilter = computed<boolean>(() =>
+  hasContentFilter.value || activeFilters.value.sort !== 'default'
 )
 
 // 类型 chip 列表
 const typeChipList = computed(() => {
-  const base: Array<{ value: string; label: string }> = [{ value: 'all', label: '全部' }]
+  const base: Array<{ value: string; label: string }> = [{ value: 'all', label: t('home.allTypes') }]
   if (videoStore.types && videoStore.types.length > 0) {
     for (const t of videoStore.types) {
       base.push({ value: String(t.type_id ?? ''), label: t.name || String(t.type_id ?? '') })
@@ -89,7 +129,7 @@ const typeChipList = computed(() => {
 
 // 年份 chip 列表（倒序：新的在前）
 const yearChipList = computed(() => {
-  const base: Array<{ value: string; label: string }> = [{ value: 'all', label: '全部年份' }]
+  const base: Array<{ value: string; label: string }> = [{ value: 'all', label: t('home.allYears') }]
   const years = [...(videoStore.years || [])].sort((a, b) => {
     const na = Number(a)
     const nb = Number(b)
@@ -102,7 +142,7 @@ const yearChipList = computed(() => {
 
 // 地区 chip 列表
 const areaChipList = computed(() => {
-  const base: Array<{ value: string; label: string }> = [{ value: 'all', label: '全部地区' }]
+  const base: Array<{ value: string; label: string }> = [{ value: 'all', label: t('home.allRegions') }]
   for (const a of (videoStore.areas || [])) base.push({ value: a, label: a })
   return base
 })
@@ -163,8 +203,8 @@ async function loadRecommendations(): Promise<void> {
       }
       if (continueItems.length > 0) groups.push({
         key: 'continue',
-        title: '继续观看',
-        description: '你看过的剧集，继续从上次的位置开始',
+        title: t('home.continueWatching'),
+        description: t('home.continueWatchingDesc'),
         items: continueItems,
         continueItems,
       })
@@ -187,8 +227,8 @@ async function loadRecommendations(): Promise<void> {
         if (items.length > 0) {
           groups.push({
             key: 'liked',
-            title: '猜你喜欢',
-            description: '基于你最近观看的内容为你推荐',
+            title: t('home.recommended'),
+            description: t('home.recommendedDesc'),
             items,
           })
           for (const id of seen) usedIds.add(id)
@@ -210,32 +250,41 @@ async function loadRecommendations(): Promise<void> {
       }
       if (newest.length > 0) groups.push({
         key: 'newest',
-        title: '最新上线',
-        description: '近期新入库的视频资源',
+        title: t('home.latest'),
+        description: t('home.latestDesc'),
         items: newest,
       })
     }
 
-    // 0) 热榜：从当前 videos 取热度最高的若干条 → 同时用于轮播图
-    if (allVideos.length > 0) {
-      const hotList: Video[] = [...allVideos]
-        .sort((a, b) => {
-          const sa = Number((a as any).vod_score ?? 0) || 0
-          const sb = Number((b as any).vod_score ?? 0) || 0
-          return sb - sa
+    // 0) 热榜：从豆瓣热榜获取数据用于轮播图（立即展示，带匹配状态）
+    try {
+      const chart = await DoubanChart()
+      console.log('[热榜] 原始数据:', chart?.[0])
+      if (Array.isArray(chart) && chart.length > 0) {
+        carouselSlides.value = chart.map((item: any) => {
+          const mapped = {
+            global_id: item.global_id || 0,
+            vod_id: item.subject_id || '',
+            vod_name: item.title || '',
+            vod_pic: item.poster_url || '',
+            vod_score: item.rating || '',
+            vod_remarks: item.votes ? `${item.votes} 人评价` : '',
+            vod_content: item.info || '',
+            year: item.year || '',
+            area: item.area || '',
+            director: item.director || '',
+            actors: item.actors || '',
+            release_date: item.release_date || '',
+            chart_status: item.status || 'searching',
+            chart_source_key: item.source_key || '',
+            chart_vod_id: item.vod_id || '',
+          }
+          console.log('[热榜] 映射后:', mapped.vod_name, '状态:', mapped.chart_status)
+          return mapped
         })
-      const hotItems: Video[] = []
-      const seenHot = new Set<string>()
-      for (const v of hotList) {
-        const id = String((v as any).vod_id ?? '')
-        if (!id || seenHot.has(id)) continue
-        seenHot.add(id)
-        hotItems.push(v)
-        if (hotItems.length >= 10) break
       }
-      if (hotItems.length > 0) {
-        carouselSlides.value = hotItems
-      }
+    } catch (e) {
+      console.warn('加载豆瓣热榜失败:', e)
     }
 
     recommendGroups.value = groups
@@ -252,6 +301,38 @@ function goDetailFromRecommend(item: Video): void {
   }
 }
 
+function onChartSlideClick(video: Video): void {
+  const slide = video as any
+  const status = slide.chart_status as string
+  const subjectID = String(video.vod_id || '')
+
+  // 已匹配到资源，直接跳转详情页
+  if (status === 'matched' && slide.chart_source_key && slide.chart_vod_id) {
+    router.push(getDetailPath(slide.chart_source_key, { vod_id: slide.chart_vod_id }))
+    return
+  }
+
+  if (status === 'not_found') {
+    errorStore.warn('暂无资源', '该视频暂未采集到播放源，请在“源管理”中启用采集源后刷新重试')
+    return
+  }
+
+  // searching 状态，尝试实时解析
+  if (subjectID) {
+    DoubanChartResolve(subjectID).then((result: any) => {
+      if (result?.status === 'matched' && result.source_key && result.vod_id) {
+        router.push(getDetailPath(result.source_key, { vod_id: result.vod_id }))
+      } else if (result?.status === 'searching') {
+        errorStore.info('正在搜索中', '后台正在采集该资源，请稍后再试')
+      } else {
+        errorStore.warn('暂无资源', '该视频暂未采集到播放源，请在“源管理”中启用采集源后刷新重试')
+      }
+    }).catch(() => {
+      errorStore.warn('暂无资源', '该视频暂未采集到播放源，请在“源管理”中启用采集源后刷新重试')
+    })
+  }
+}
+
 const removingContinueId = ref('')
 
 async function removeContinueItem(item: ContinueItem): Promise<void> {
@@ -259,7 +340,7 @@ async function removeContinueItem(item: ContinueItem): Promise<void> {
   if (removingContinueId.value === key) return
   removingContinueId.value = key
   try {
-    await DeleteHistoryByVideo({ source_key: item.source_key, vod_id: String(item.vod_id) })
+    await DeleteHistoryByVideo({ source_key: item.source_key, vod_id: String(item.vod_id), global_id: item.global_id || 0 })
     const group = recommendGroups.value.find(g => g.key === 'continue')
     if (group?.continueItems) {
       group.continueItems = group.continueItems.filter(
@@ -271,7 +352,7 @@ async function removeContinueItem(item: ContinueItem): Promise<void> {
       }
     }
   } catch (e) {
-    console.error('删除继续观看失败:', e)
+    console.error(t('home.removeContinueFailed'), e)
   } finally {
     removingContinueId.value = ''
   }
@@ -282,7 +363,17 @@ function goDetail(video: Video): void {
 }
 
 // ==================== 生命周期 ====================
+async function loadLayoutSettings(): Promise<void> {
+  try {
+    const col = await GetSetting('grid_columns')
+    if (col) gridColumns.value = parseInt(col, 10) || 5
+    const den = await GetSetting('layout_density')
+    if (den === 'compact' || den === 'spacious') layoutDensity.value = den as any
+  } catch { /* ignore */ }
+}
+
 onMounted(async () => {
+  await loadLayoutSettings()
   await sourceStore.loadSources()
   if (sourceStore.currentSourceKey) {
     await Promise.all([
@@ -338,37 +429,37 @@ watch(() => videoStore.deletedVodId, (vodId) => {
   videoStore.clearDeletionNotify()
 })
 
-// ⭐ 合并三个筛选 watch 为一个，减少冗余监听器
+// ⭐ 筛选 watch：监听所有筛选条件变化，自动触发（带 debounce）
 watch(
-  () => [activeFilters.value.typeId, activeFilters.value.year, activeFilters.value.area] as const,
+  () => [activeFilters.value.typeId, activeFilters.value.year, activeFilters.value.area, activeFilters.value.sort] as const,
   () => { applyFilters() },
 )
 </script>
 
 <template>
-  <div class="home">
+  <div class="home cczj-max-w-full cczj-text-primary">
     <BookCarousel v-if="carouselSlides.length > 0" :slides="carouselSlides"
-      :source-key="sourceStore.currentSourceKey" />
-    <!-- ============ 推荐区域（仅在无筛选时展示） ============ -->
-    <section v-if="!hasActiveFilter && (carouselSlides.length > 0 || recommendGroups.length > 0 || recommendLoading)"
-      class="recommend-section">
-      <div v-if="recommendLoading" class="recommend-loading">
-        <LoadingSpinner size="sm" label="加载推荐中..." />
+      :source-key="sourceStore.currentSourceKey" :on-slide-click="onChartSlideClick" />
+    <!-- ============ 推荐区域（仅在无内容筛选时展示，排序不影响） ============ -->
+    <section v-if="!hasContentFilter && (carouselSlides.length > 0 || recommendGroups.length > 0 || recommendLoading)"
+      class="recommend-section cczj-mb-10 cczj-rounded-md">
+      <div v-if="recommendLoading" class="recommend-loading cczj-text-center">
+        <LoadingSpinner size="sm" :label="t('home.loadingRecommendations')" />
       </div>
 
       <!-- 推荐分组（紧凑行） -->
-      <div v-if="recommendGroups.length > 0" class="recommend-groups">
-        <div v-for="group in recommendGroups" :key="group.key" class="recommend-group">
-          <div class="group-head">
-            <h4 class="group-title">{{ group.title }}</h4>
-            <span class="group-desc">{{ group.description }}</span>
+      <div v-if="recommendGroups.length > 0" class="recommend-groups cczj-flex cczj-flex-col">
+        <div v-for="(group, groupIdx) in recommendGroups" :key="group.key" class="recommend-group cczj-flex cczj-flex-col cczj-gap-5">
+          <div class="group-head cczj-flex cczj-items-baseline cczj-gap-5 cczj-flex-wrap">
+            <h4 class="group-title cczj-font-bold cczj-text-primary">{{ group.title }}</h4>
+            <span class="group-desc cczj-text-base cczj-text-muted">{{ group.description }}</span>
           </div>
-          <div class="recommend-row">
+          <div class="recommend-row cczj-grid cczj-gap-6">
             <template v-if="group.key === 'continue' && group.continueItems">
-              <div v-for="item in group.continueItems" :key="`rec-continue-${item.source_key}-${item.vod_id}`"
-                class="rec-card-wrap">
+              <div v-for="(item, idx) in group.continueItems" :key="`rec-continue-${item.source_key}-${item.vod_id}`"
+                class="rec-card-wrap cczj-relative">
                 <VideoCard :video="item" @click="goDetailFromRecommend(item)" />
-                <Button variant="overlay" size="sm" icon class="rec-remove-btn" title="从继续观看中移除"
+                <Button variant="overlay" size="sm" icon class="rec-remove-btn cczj-absolute cczj-rounded-50 cczj-opacity-0 cczj-transition-fast" :title="t('home.removeFromContinue')"
                   :disabled="removingContinueId === `${item.source_key}-${item.vod_id}`"
                   @click.stop="removeContinueItem(item)">
                   <Icon name="x" :size="12" />
@@ -386,22 +477,22 @@ watch(
     </section>
 
     <!-- ============ 筛选区域 ============ -->
-    <section class="filter-section">
-      <div class="filter-head">
-        <h3>
+    <section class="filter-section cczj-bg-card cczj-border cczj-mb-10">
+      <div class="filter-head cczj-flex cczj-items-center cczj-justify-between cczj-gap-6 cczj-mb-6">
+        <h3 class="cczj-inline-flex cczj-items-center cczj-gap-4 cczj-font-bold cczj-text-primary">
           <Icon name="sliders" :size="14" />
-          <span>筛选</span>
+          <span>{{ t('home.filter') }}</span>
         </h3>
-        <Button variant="secondary" size="sm" @click="expanded = !expanded">
-          <span>{{ expanded ? '收起' : '展开' }}</span>
+        <Button variant="secondary" size="sm" @click="expanded = !expanded" class="cczj-flex cczj-items-center cczj-gap-1">
+          <span>{{ expanded ? t('home.collapse') : t('home.expand') }}</span>
           <Icon :name="expanded ? 'chevron-up' : 'chevron-down'" :size="14" />
         </Button>
       </div>
 
       <!-- 类型：收起时显示六个，展开后显示全部 -->
-      <div class="filter-row">
-        <label class="filter-row-label">类型</label>
-        <div class="filter-row-chips">
+      <div class="filter-row cczj-flex cczj-items-start cczj-gap-7">
+        <label class="filter-row-label cczj-flex-shrink-0 cczj-text-13 cczj-font-medium cczj-text-muted">{{ t('home.type') }}</label>
+        <div class="filter-row-chips cczj-flex cczj-flex-1 cczj-flex-wrap cczj-items-center cczj-gap-4 cczj-min-w-0">
           <Tag v-show="!expanded" v-for="opt in typeChipList.slice(0, 6)" :key="'type-' + opt.value"
             :active="activeFilters.typeId === opt.value" @click="selectChip('type', opt.value)">
             {{ opt.label }}
@@ -415,9 +506,9 @@ watch(
 
       <!-- 仅展开时显示：年份 + 地区 -->
       <template v-if="expanded">
-        <div class="filter-row">
-          <label class="filter-row-label">年份</label>
-          <div class="filter-row-chips">
+        <div class="filter-row cczj-flex cczj-items-start cczj-gap-7">
+          <label class="filter-row-label cczj-flex-shrink-0 cczj-text-13 cczj-font-medium cczj-text-muted">{{ t('home.year') }}</label>
+          <div class="filter-row-chips cczj-flex cczj-flex-1 cczj-flex-wrap cczj-items-center cczj-gap-4 cczj-min-w-0">
             <Tag v-for="opt in yearChipList" :key="'year-' + opt.value" :active="activeFilters.year === opt.value"
               @click="selectChip('year', opt.value)">
               {{ opt.label }}
@@ -425,9 +516,9 @@ watch(
           </div>
         </div>
 
-        <div class="filter-row">
-          <label class="filter-row-label">地区</label>
-          <div class="filter-row-chips">
+        <div class="filter-row cczj-flex cczj-items-start cczj-gap-7">
+          <label class="filter-row-label cczj-flex-shrink-0 cczj-text-13 cczj-font-medium cczj-text-muted">{{ t('home.region') }}</label>
+          <div class="filter-row-chips cczj-flex cczj-flex-1 cczj-flex-wrap cczj-items-center cczj-gap-4 cczj-min-w-0">
             <Tag v-for="opt in areaChipList" :key="'area-' + opt.value" :active="activeFilters.area === opt.value"
               @click="selectChip('area', opt.value)">
               {{ opt.label }}
@@ -437,33 +528,33 @@ watch(
       </template>
 
       <!-- 排序 -->
-      <div class="filter-row filter-row-flex">
-        <div class="sort-row">
-          <span class="sort-label">排序</span>
-          <Tag :active="activeFilters.sort === 'default'" @click="setSort('default')">默认</Tag>
-          <Tag :active="activeFilters.sort === 'rating'" @click="setSort('rating')">按评分</Tag>
-          <Tag :active="activeFilters.sort === 'hot'" @click="setSort('hot')">按热度</Tag>
-          <Button variant="secondary" size="sm" @click="resetFilters">重置</Button>
+      <div class="filter-row filter-row-flex cczj-flex cczj-gap-7 cczj-items-center cczj-flex-wrap cczj-border-top cczj-mt-2">
+        <div class="sort-row cczj-flex cczj-items-center cczj-gap-4 cczj-flex-wrap">
+          <span class="sort-label cczj-text-13 cczj-text-muted cczj-font-medium">{{ t('home.sort') }}</span>
+          <Tag :active="activeFilters.sort === 'default'" @click="setSort('default')">{{ t('home.sortDefault') }}</Tag>
+          <Tag :active="activeFilters.sort === 'rating'" @click="setSort('rating')">{{ t('home.byRating') }}</Tag>
+          <Tag :active="activeFilters.sort === 'hot'" @click="setSort('hot')">{{ t('home.byPopularity') }}</Tag>
+          <Button variant="secondary" size="sm" @click="resetFilters">{{ t('home.reset') }}</Button>
         </div>
       </div>
 
-      <div v-if="hasActiveFilter" class="filter-status">
-        已筛选出 <span class="highlight">{{ videoStore.total }}</span> 条结果
+      <div v-if="hasActiveFilter" class="filter-status cczj-mt-6 cczj-pt-6 cczj-text-13 cczj-text-muted">
+        {{ t('home.filteredResults', { count: videoStore.total }) }}
       </div>
     </section>
 
     <!-- ============ 视频网格 / 空状态 ============ -->
     <div v-if="videoStore.loading && videoStore.videos.length === 0" class="center-pad">
-      <LoadingSpinner label="加载视频中..." />
+      <LoadingSpinner :label="t('home.loadingVideos')" />
     </div>
 
     <div v-else-if="videoStore.videos.length === 0" class="center-pad">
-      <EmptyState icon="📺" title="暂无数据" description="请先在「采集源」中添加来源并采集数据">
-        <Button variant="primary" @click="router.push('/sources')">前往采集源</Button>
+      <EmptyState icon="📺" :title="t('home.noData')" :description="t('home.noDataDesc')">
+        <Button variant="primary" @click="router.push('/sources')">{{ t('home.goToSources') }}</Button>
       </EmptyState>
     </div>
 
-    <div v-else class="video-grid">
+    <div v-else class="video-grid" :style="gridStyle">
       <VideoCard v-for="(v, idx) in videoStore.videos"
         :key="`${sourceStore.currentSourceKey}-${String((v as any).vod_id ?? '')}-${idx}`" :video="v"
         @click="goDetail(v)" />
@@ -473,8 +564,6 @@ watch(
 
 <style scoped>
 .home {
-  max-width: 100%;
-  color: var(--text-primary);
   animation: fadeInUp 0.4s ease;
 }
 
@@ -491,66 +580,23 @@ watch(
 }
 
 /* ============ 推荐区域 ============ */
-.recommend-section {
-  margin-bottom: 20px;
-  border-radius: 8px;
-}
-
 .recommend-loading {
   padding: 20px;
-  text-align: center;
 }
 
 /* ========== 推荐分组 ========== */
 .recommend-groups {
-  display: flex;
-  flex-direction: column;
   gap: 18px;
 }
 
-.recommend-group {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.group-head {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.group-title {
-  margin: 0;
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.group-desc {
-  font-size: 14px;
-  color: var(--text-muted);
-}
-
 .recommend-row {
-  display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.rec-card-wrap {
-  position: relative;
 }
 
 .rec-remove-btn {
-  position: absolute;
   top: 6px;
   right: 6px;
   z-index: 3;
-  border-radius: 50% !important;
-  opacity: 0;
-  transition: opacity 0.15s ease;
 }
 
 .rec-card-wrap:hover .rec-remove-btn {
@@ -588,36 +634,17 @@ watch(
 
 /* ============ 筛选区域 ============ */
 .filter-section {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
   border-radius: 14px;
   padding: 16px 20px 18px;
-  margin-bottom: 20px;
-}
-
-.filter-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
 }
 
 .filter-head h3 {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
   margin: 0;
   font-size: 17px;
-  font-weight: 700;
-  color: var(--text-primary);
 }
 
 /* chip 行 */
 .filter-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
   padding: 8px 0;
   border-bottom: 1px dashed transparent;
 }
@@ -628,56 +655,19 @@ watch(
 }
 
 .filter-row-flex {
-  align-items: center;
-  flex-wrap: wrap;
-  border-top: 1px solid var(--border);
   padding-top: 14px;
-  margin-top: 4px;
 }
 
 .filter-row-label {
-  flex-shrink: 0;
   width: 48px;
   padding-top: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-muted);
-}
-
-.filter-row-chips {
-  flex: 1;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-/* 排序行 */
-.sort-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.sort-label {
-  font-size: 13px;
-  color: var(--text-muted);
-  font-weight: 500;
 }
 
 .filter-status {
-  margin-top: 12px;
-  padding-top: 12px;
   border-top: 1px dashed var(--border);
-  font-size: 13px;
-  color: var(--text-muted);
 }
 
 .filter-status .highlight {
-  color: var(--accent);
-  font-weight: 600;
   font-size: 15px;
 }
 
@@ -688,12 +678,6 @@ watch(
 }
 
 /* ============ 视频网格 ============ */
-.video-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 16px;
-}
-
 .center-pad {
   padding: 40px 20px;
 }

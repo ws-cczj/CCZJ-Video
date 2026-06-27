@@ -391,12 +391,36 @@ func GetVideos(sourceKey string, filter FilterParams) ([]*model.Video, int, erro
 		logError(fmt.Sprintf("GetVideos[%s] count failed: %v", sourceKey, err))
 	}
 
+	// 评分排序：优先豆瓣评分，无评分时按时间兜底（确保与热度排序有差异）
 	orderClause := "ORDER BY v.vod_time DESC"
 	switch strings.ToLower(strings.TrimSpace(filter.Sort)) {
 	case "rating":
-		orderClause = "ORDER BY CASE WHEN g.douban_score = '' OR g.douban_score IS NULL THEN 1 ELSE 0 END ASC, CAST(g.douban_score AS REAL) DESC, v.vod_time DESC"
+		orderClause = `ORDER BY
+			CASE WHEN g.douban_score != '' AND g.douban_score IS NOT NULL AND CAST(g.douban_score AS REAL) > 0
+				THEN CAST(g.douban_score AS REAL)
+				ELSE -1 END DESC,
+			v.vod_time DESC`
 	case "hot":
-		orderClause = "ORDER BY v.vod_time DESC"
+		// 热度排序：以评价人数 + 时间衰减为主，评分为辅（与纯评分排序有明显差异）
+		orderClause = `ORDER BY (
+			CASE
+				WHEN g.douban_hotness != '' AND g.douban_hotness IS NOT NULL AND CAST(g.douban_hotness AS REAL) > 0
+					THEN CAST(g.douban_hotness AS REAL)
+				ELSE (
+					CASE WHEN g.douban_votes != '' AND g.douban_votes IS NOT NULL
+						THEN CAST(g.douban_votes AS REAL) ELSE 0 END
+					+ CASE WHEN g.douban_score != '' AND g.douban_score IS NOT NULL
+						THEN CAST(g.douban_score AS REAL) * 5.0 ELSE 0 END
+				)
+			END
+			+ CASE
+				WHEN julianday('now') - julianday(v.vod_time) < 7 THEN 8000
+				WHEN julianday('now') - julianday(v.vod_time) < 30 THEN 3000
+				WHEN julianday('now') - julianday(v.vod_time) < 90 THEN 1000
+				WHEN julianday('now') - julianday(v.vod_time) < 365 THEN 300
+				ELSE 0
+			END
+		) DESC, v.vod_time DESC`
 	}
 
 	var rows []rawVideoRow
@@ -421,6 +445,9 @@ func GetVideos(sourceKey string, filter FilterParams) ([]*model.Video, int, erro
 }
 
 func GetVideoById(sourceKey string, vodId string) (*model.Video, error) {
+	if !TableExists(VideoTableName(sourceKey)) {
+		return nil, sql.ErrNoRows
+	}
 	var r rawVideoRow
 	tn := VideoTableName(sourceKey)
 	q := fmt.Sprintf(`SELECT 
@@ -546,6 +573,92 @@ func GetRandomRecommend(sourceKey string, limit int, excludeIds []string) ([]*mo
 			break
 		}
 	}
+	return out, nil
+}
+
+// GetRecommendByType 返回同类型的推荐视频（优先同类型，不足时用随机补充）
+func GetRecommendByType(sourceKey string, typeId string, limit int, excludeIds []string) ([]*model.Video, error) {
+	if limit <= 0 {
+		limit = 8
+	}
+	tn := VideoTableName(sourceKey)
+	if !TableExists(tn) {
+		return []*model.Video{}, nil
+	}
+
+	// 1. 先取同类型的视频（按热度排序）
+	var sameTypeRows []rawVideoRow
+	sameTypeQ := fmt.Sprintf(`SELECT v.id, CAST(v.vod_id AS TEXT) AS vod_id, CAST(v.type_id AS TEXT) AS type_id,
+		v.type_name, v.vod_name, COALESCE(g.pic, '') AS vod_pic, v.vod_remarks, COALESCE(g.year, '') AS vod_year,
+		COALESCE(g.area, '') AS vod_area, COALESCE(g.director, '') AS vod_director, COALESCE(g.actor, '') AS vod_actor,
+		COALESCE(g.douban_score, '') AS douban_score, COALESCE(g.douban_id, '') AS douban_id,
+		'' AS vod_hits, COALESCE(g.lang, '') AS vod_lang, COALESCE(g.content, '') AS vod_content, COALESCE(g.tag, '') AS vod_tag,
+		v.global_id
+		FROM %s v LEFT JOIN global_video g ON v.global_id = g.id
+		WHERE v.type_id = ? OR CAST(v.type_id AS TEXT) = ?
+		ORDER BY (
+			CASE WHEN g.douban_score != '' AND g.douban_score IS NOT NULL 
+				THEN CAST(g.douban_score AS REAL) * 4.0 ELSE 0 END
+			+ CASE 
+				WHEN julianday('now') - julianday(v.vod_time) < 7 THEN 35
+				WHEN julianday('now') - julianday(v.vod_time) < 30 THEN 28
+				WHEN julianday('now') - julianday(v.vod_time) < 90 THEN 20
+				WHEN julianday('now') - julianday(v.vod_time) < 365 THEN 12
+				ELSE 5 
+			END
+		) DESC, v.vod_time DESC LIMIT ?`, tn)
+	err := instance.Select(&sameTypeRows, sameTypeQ, typeId, typeId, limit*2)
+	if err != nil {
+		logError(fmt.Sprintf("GetRecommendByType[%s] same-type query failed: %v", sourceKey, err))
+	}
+
+	excludeSet := make(map[string]bool, len(excludeIds))
+	for _, id := range excludeIds {
+		if id != "" {
+			excludeSet[strings.ToLower(id)] = true
+		}
+	}
+
+	out := make([]*model.Video, 0, limit)
+	seen := make(map[string]bool)
+	for _, r := range sameTypeRows {
+		id := strings.ToLower(r.VodId)
+		if id == "" || seen[id] || excludeSet[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, rowToVideo(r))
+		if len(out) >= limit {
+			break
+		}
+	}
+
+	// 2. 如果同类型不足，用最新视频补充
+	if len(out) < limit {
+		var fallbackRows []rawVideoRow
+		fallbackQ := fmt.Sprintf(`SELECT v.id, CAST(v.vod_id AS TEXT) AS vod_id, CAST(v.type_id AS TEXT) AS type_id,
+			v.type_name, v.vod_name, COALESCE(g.pic, '') AS vod_pic, v.vod_remarks, COALESCE(g.year, '') AS vod_year,
+			COALESCE(g.area, '') AS vod_area, COALESCE(g.director, '') AS vod_director, COALESCE(g.actor, '') AS vod_actor,
+			COALESCE(g.douban_score, '') AS douban_score, COALESCE(g.douban_id, '') AS douban_id,
+			'' AS vod_hits, COALESCE(g.lang, '') AS vod_lang, COALESCE(g.content, '') AS vod_content, COALESCE(g.tag, '') AS vod_tag,
+			v.global_id
+			FROM %s v LEFT JOIN global_video g ON v.global_id = g.id
+			ORDER BY v.vod_time DESC LIMIT ?`, tn)
+		if err := instance.Select(&fallbackRows, fallbackQ, 50); err == nil {
+			for _, r := range fallbackRows {
+				if len(out) >= limit {
+					break
+				}
+				id := strings.ToLower(r.VodId)
+				if id == "" || seen[id] || excludeSet[id] {
+					continue
+				}
+				seen[id] = true
+				out = append(out, rowToVideo(r))
+			}
+		}
+	}
+
 	return out, nil
 }
 

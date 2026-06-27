@@ -177,6 +177,20 @@ func GetRecommend(sourceKey string, limit int, excludeIds []string) ([]*model.Vi
 	return videos, nil
 }
 
+// GetSimilarVideos 返回同类型的相似视频（用于详情页推荐兜底）
+func GetSimilarVideos(sourceKey string, typeId string, limit int, excludeIds []string) ([]*model.Video, error) {
+	videos, err := db.GetRecommendByType(sourceKey, typeId, limit, excludeIds)
+	if err != nil {
+		return nil, err
+	}
+	for _, v := range videos {
+		v.VodActor = util.DecompressIfNeeded(v.VodActor)
+		v.VodDirector = util.DecompressIfNeeded(v.VodDirector)
+	}
+	db.EnrichVideosWithDouban(videos)
+	return videos, nil
+}
+
 // HistoryItemWithVideo 前端可用的"继续观看"条目：含视频名+封面，便于卡片展示
 type HistoryItemWithVideo struct {
 	GlobalID  int     `json:"global_id"`

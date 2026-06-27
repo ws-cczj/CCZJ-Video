@@ -44,6 +44,7 @@ func main() {
 	systray := app.SystemTray.New()
 	systray.SetIcon(appIcon) // 使用项目根目录的自定义 icon.png
 	systray.SetTooltip("CCZJ Video")
+	myApp.systray = systray // 保存引用，以便在关闭时清理
 
 	// 托盘菜单
 	trayMenu := app.Menu.New()
@@ -70,10 +71,6 @@ func main() {
 		mainWindow.Show()
 		mainWindow.Focus()
 	})
-
-	// 窗口关闭时，Wails 框架会自动调用 ServiceShutdown() 完成清理（停止调度器、关闭数据库等），
-	// 无需在 WindowClosing 钩子中手动处理（之前在这里调用 app.Quit() 会导致递归，
-	// 造成窗口关闭延迟）。
 
 	err := app.Run()
 	if err != nil {

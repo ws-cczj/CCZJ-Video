@@ -98,15 +98,26 @@ const isAllSelected = computed(() => {
 const hasSelection = computed(() => selectedKeys.value.size > 0)
 
 const gridColumns = ref(5)
-const gridStyle = computed(() => ({
-  gridTemplateColumns: `repeat(${gridColumns.value}, minmax(0, 1fr))`,
-}))
+const layoutDensity = ref<'comfortable' | 'compact' | 'spacious'>('comfortable')
+const gridStyle = computed(() => {
+  const density = layoutDensity.value
+  const gap = density === 'compact' ? '10px' : density === 'spacious' ? '20px' : '16px'
+  const minWidth = density === 'compact' ? '120px' : density === 'spacious' ? '180px' : '150px'
+  
+  return {
+    display: 'grid',
+    gridTemplateColumns: `repeat(${gridColumns.value}, minmax(${minWidth}, 1fr))`,
+    gap: gap
+  }
+})
 
 onMounted(async () => {
   loadFoldersFromStorage()
   try {
     const col = await GetSetting('grid_columns')
     if (col) gridColumns.value = parseInt(col as string, 10) || 5
+    const den = await GetSetting('layout_density')
+    if (den === 'compact' || den === 'spacious') layoutDensity.value = den as any
   } catch {
     // 忽略
   }
@@ -128,6 +139,7 @@ async function loadFavorites(): Promise<void> {
         const detail = (await GetVideoDetail({
           source_key: f.source_key,
           vod_id: String(f.vod_id),
+          refresh: false,
         })) as { video: Video | null }
         const fav: FavItem = { ...f, video: detail?.video || null, folderId: resolveFolderId(f) }
         result.push(fav)
@@ -190,7 +202,7 @@ async function onRemove(fav: FavItem, evt: Event): Promise<void> {
   evt.stopPropagation()
   removingKey.value = favKey(fav)
   try {
-    await RemoveFavorite({ source_key: fav.source_key, vod_id: fav.vod_id })
+    await RemoveFavorite({ source_key: fav.source_key, vod_id: fav.vod_id, global_id: 0 })
     const idx = favorites.value.findIndex(
       (f) => f.source_key === fav.source_key && f.vod_id === fav.vod_id
     )
@@ -214,7 +226,7 @@ async function onRemoveSelected(): Promise<void> {
     const toRemove = favorites.value.filter((f) => selectedKeys.value.has(favKey(f)))
     for (const fav of toRemove) {
       try {
-        await RemoveFavorite({ source_key: fav.source_key, vod_id: fav.vod_id })
+        await RemoveFavorite({ source_key: fav.source_key, vod_id: fav.vod_id, global_id: 0 })
         const idx = favorites.value.findIndex(
           (f) => f.source_key === fav.source_key && f.vod_id === fav.vod_id
         )
@@ -316,22 +328,22 @@ watch([mapping, folders], () => {
 
 <template>
   <div class="favorites-page">
-    <div class="page-header">
+    <div class="page-header cczj-flex cczj-items-center cczj-justify-between cczj-gap-4 cczj-mb-6">
       <div>
-        <h2>
+        <h2 class="cczj-flex cczj-items-center cczj-gap-2 cczj-text-accent">
           <Icon name="star" :size="20" /> 我的收藏
         </h2>
-        <p class="desc" v-if="manageMode && hasSelection">
+        <p class="desc cczj-text-muted cczj-mt-1" v-if="manageMode && hasSelection">
           已选择 {{ selectedKeys.size }} 项
         </p>
-        <p class="desc" v-else-if="manageMode">
+        <p class="desc cczj-text-muted cczj-mt-1" v-else-if="manageMode">
           请选择要删除或移动的收藏
         </p>
-        <p class="desc" v-else-if="favorites.length > 0">共 {{ favorites.length }} 部精彩内容 · 当前夹「{{
+        <p class="desc cczj-text-muted cczj-mt-1" v-else-if="favorites.length > 0">共 {{ favorites.length }} 部精彩内容 · 当前夹「{{
           getFolderName(activeFolderId) }}」{{ displayedFavorites.length }} 部</p>
-        <p class="desc" v-else>还没有收藏，进入视频详情页点击「收藏」即可保存</p>
+        <p class="desc cczj-text-muted cczj-mt-1" v-else>还没有收藏，进入视频详情页点击「收藏」即可保存</p>
       </div>
-      <div class="manage-actions">
+      <div class="manage-actions cczj-flex cczj-items-center cczj-gap-2 cczj-flex-shrink-0">
         <template v-if="!manageMode">
           <Button variant="ghost" size="sm" @click="openCreateFolder">
             <Icon name="plus" :size="14" /> 新建收藏夹
@@ -358,18 +370,18 @@ watch([mapping, folders], () => {
     </div>
 
     <!-- 收藏夹侧边栏 + 主区域 -->
-    <div class="fav-layout">
-      <aside class="fav-folders">
-        <div v-for="folder in folders" :key="folder.id" class="folder-row"
+    <div class="fav-layout cczj-flex cczj-gap-6">
+      <aside class="fav-folders cczj-flex cczj-flex-col cczj-gap-2 cczj-w-64">
+        <div v-for="folder in folders" :key="folder.id" class="folder-row cczj-flex cczj-items-center cczj-justify-between cczj-p-2 cczj-rounded cczj-transition cczj-cursor-pointer"
           :class="{ active: folder.id === activeFolderId }" @click="activeFolderId = folder.id">
-          <div class="folder-name">
+          <div class="folder-name cczj-flex cczj-items-center cczj-gap-2 cczj-flex-1">
             <Icon :name="folder.default ? 'star' : 'list'" :size="14" />
             <span>{{ folder.name }}</span>
-            <small class="count">{{
+            <small class="count cczj-text-muted cczj-text-xs">{{
               favorites.filter((f) => f.folderId === folder.id).length
             }}</small>
           </div>
-          <div v-if="!folder.default" class="folder-actions" @click.stop>
+          <div v-if="!folder.default" class="folder-actions cczj-flex cczj-gap-1" @click.stop>
             <Button variant="text" size="sm" icon @click="openRenameFolder(folder)" title="重命名">
               <Icon name="edit" :size="12" />
             </Button>
@@ -380,7 +392,7 @@ watch([mapping, folders], () => {
         </div>
       </aside>
 
-      <main class="fav-main">
+      <main class="fav-main cczj-flex-1">
         <!-- 加载状态 -->
         <div v-if="loading">
           <LoadingSpinner label="加载收藏中..." />
@@ -394,24 +406,24 @@ watch([mapping, folders], () => {
         </div>
 
         <!-- 视频网格 -->
-        <div v-else class="fav-grid" :style="gridStyle">
-          <div v-for="fav in displayedFavorites" :key="favKey(fav)" class="fav-card"
+        <div v-else class="fav-grid cczj-grid" :style="gridStyle">
+          <div v-for="fav in displayedFavorites" :key="favKey(fav)" class="fav-card cczj-relative cczj-transition cczj-rounded"
             :class="{ 'is-selected': selectedKeys.has(favKey(fav)), 'is-manage': manageMode, 'is-removing': removingKey === favKey(fav) }">
             <VideoCard v-if="fav.video" :video="fav.video" @click="goDetail(fav)" />
-            <div v-else class="placeholder-card" @click="goDetail(fav)">
-              <div class="placeholder-inner">
+            <div v-else class="placeholder-card cczj-flex cczj-items-center cczj-justify-center cczj-rounded cczj-border cczj-border-dashed cczj-bg-card cczj-cursor-pointer cczj-transition" @click="goDetail(fav)">
+              <div class="placeholder-inner cczj-flex cczj-flex-col cczj-items-center cczj-gap-2 cczj-text-muted">
                 <Icon name="film" :size="32" />
                 <span>视频 #{{ fav.vod_id }}</span>
-                <small class="source-tag">{{ fav.source_key }}</small>
+                <small class="source-tag cczj-text-xs">{{ fav.source_key }}</small>
               </div>
             </div>
 
-            <label v-if="manageMode" class="fav-checkbox" @click.stop>
+            <label v-if="manageMode" class="fav-checkbox cczj-absolute cczj-top-2 cczj-right-2 cczj-z-10" @click.stop>
               <input type="checkbox" :checked="selectedKeys.has(favKey(fav))" :disabled="batchRemoving"
                 @change="toggleSelect(fav)" />
               <span class="check-mark" />
             </label>
-            <span v-if="removingKey === favKey(fav)" class="fav-loading">
+            <span v-if="removingKey === favKey(fav)" class="fav-loading cczj-absolute cczj-top-2 cczj-right-2 cczj-z-20">
               <LoadingSpinner size="sm" />
             </span>
           </div>
@@ -423,21 +435,21 @@ watch([mapping, folders], () => {
     <Modal v-model="showFolderModal" :title="folderEditTarget ? '重命名收藏夹' : '新建收藏夹'" :show-footer="true"
       :ok-text="folderEditTarget ? '保存' : '创建'" :ok-disabled="!folderEditName.trim()" @ok="saveFolder"
       @cancel="showFolderModal = false" width="420px">
-      <input v-model="folderEditName" type="text" class="folder-input" placeholder="请输入收藏夹名称" @keyup.enter="saveFolder"
+      <input v-model="folderEditName" type="text" class="folder-input cczj-w-full cczj-p-3 cczj-rounded cczj-border cczj-bg-secondary" placeholder="请输入收藏夹名称" @keyup.enter="saveFolder"
         autofocus />
     </Modal>
 
     <!-- 移动到收藏夹弹窗 -->
     <Modal v-model="showMoveModal" :title="`移动所选（${movePendingKeys.length}）到：`" :show-footer="true" ok-text="移动"
       @ok="moveSelectedToFolder" @cancel="showMoveModal = false" width="420px">
-      <div class="folder-select-list">
-        <label v-for="folder in folders" :key="folder.id" class="folder-select-item"
+      <div class="folder-select-list cczj-flex cczj-flex-col cczj-gap-2">
+        <label v-for="folder in folders" :key="folder.id" class="folder-select-item cczj-flex cczj-items-center cczj-gap-2 cczj-p-2 cczj-rounded cczj-cursor-pointer cczj-transition"
           :class="{ active: moveTargetFolderId === folder.id }" @click="moveTargetFolderId = folder.id">
           <input type="radio" v-model="moveTargetFolderId" :value="folder.id" />
           <span class="folder-radio" />
           <Icon :name="folder.default ? 'star' : 'list'" :size="14" />
-          <span>{{ folder.name }}</span>
-          <small>{{favorites.filter((f) => f.folderId === folder.id).length}} 部</small>
+          <span class="cczj-flex-1">{{ folder.name }}</span>
+          <small class="cczj-text-muted cczj-text-xs">{{favorites.filter((f) => f.folderId === folder.id).length}} 部</small>
         </label>
       </div>
     </Modal>
@@ -446,8 +458,6 @@ watch([mapping, folders], () => {
 
 <style scoped>
 .favorites-page {
-  max-width: 100%;
-  color: var(--text-primary);
   animation: fadeInUp 0.4s ease;
 }
 
@@ -464,16 +474,11 @@ watch([mapping, folders], () => {
 }
 
 .page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   margin-bottom: 24px;
   gap: 16px;
 }
 
 .page-header h2 {
-  display: inline-flex;
-  align-items: center;
   gap: 10px;
   font-size: 22px;
   font-weight: 700;
@@ -483,25 +488,14 @@ watch([mapping, folders], () => {
 
 .page-header .desc {
   font-size: 13px;
-  color: var(--text-muted);
   margin: 0;
 }
 
-.manage-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
 .fav-grid {
-  display: grid;
   gap: 18px;
 }
 
 .fav-card {
-  position: relative;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
   border-radius: 12px;
 }
 
@@ -525,13 +519,6 @@ watch([mapping, folders], () => {
   aspect-ratio: 2 / 3;
   background: var(--bg-card);
   border: 1px dashed var(--border);
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: var(--text-muted);
-  transition: all 0.2s ease;
 }
 
 .placeholder-card:hover {
@@ -540,9 +527,6 @@ watch([mapping, folders], () => {
 }
 
 .placeholder-inner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
   gap: 8px;
   font-size: 13px;
   opacity: 0.7;
@@ -556,44 +540,7 @@ watch([mapping, folders], () => {
   color: var(--text-muted);
 }
 
-.remove-btn {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(0, 0, 0, 0.6);
-  color: #ffffff;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transform: scale(0.9);
-  transition: all 0.2s ease;
-  backdrop-filter: blur(4px);
-  z-index: 3;
-}
-
-.fav-card:hover .remove-btn {
-  opacity: 1;
-  transform: scale(1);
-}
-
-.remove-btn:hover:not(:disabled) {
-  background: var(--danger);
-  transform: scale(1.1);
-}
-
-.remove-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 .fav-checkbox {
-  position: absolute;
   top: 8px;
   left: 8px;
   width: 24px;
@@ -653,7 +600,6 @@ watch([mapping, folders], () => {
 
 /* 两栏布局：左侧文件夹列表 + 右侧内容 */
 .fav-layout {
-  display: flex;
   gap: 20px;
   align-items: flex-start;
 }
@@ -661,8 +607,6 @@ watch([mapping, folders], () => {
 .fav-folders {
   flex-shrink: 0;
   width: 220px;
-  display: flex;
-  flex-direction: column;
   gap: 6px;
   padding: 16px;
   background: var(--bg-card);
@@ -673,13 +617,9 @@ watch([mapping, folders], () => {
 }
 
 .folder-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   gap: 8px;
   padding: 8px 12px;
   border-radius: 8px;
-  cursor: pointer;
   transition: all 0.15s ease;
   background: var(--accent-alpha-10);
   border: 1px solid var(--accent);
@@ -702,12 +642,9 @@ watch([mapping, folders], () => {
 }
 
 .folder-name {
-  display: flex;
-  align-items: center;
   gap: 8px;
   font-size: 13px;
   color: inherit;
-  flex: 1;
   min-width: 0;
 }
 
@@ -731,8 +668,6 @@ watch([mapping, folders], () => {
 }
 
 .folder-actions {
-  display: inline-flex;
-  align-items: center;
   gap: 4px;
   flex-shrink: 0;
 }
@@ -759,7 +694,6 @@ watch([mapping, folders], () => {
 }
 
 .fav-main {
-  flex: 1;
   min-width: 0;
 }
 
@@ -770,7 +704,6 @@ watch([mapping, folders], () => {
 }
 
 .fav-loading {
-  position: absolute;
   top: 8px;
   right: 8px;
   z-index: 3;
@@ -795,19 +728,14 @@ watch([mapping, folders], () => {
 
 /* 文件夹选择列表 */
 .folder-select-list {
-  display: flex;
-  flex-direction: column;
   gap: 8px;
 }
 
 .folder-select-item {
-  display: flex;
-  align-items: center;
   gap: 10px;
   padding: 10px 14px;
   border-radius: 8px;
   border: 1px solid var(--border);
-  cursor: pointer;
   font-size: 13px;
   color: var(--text-primary);
   transition: all 0.15s ease;
@@ -815,7 +743,6 @@ watch([mapping, folders], () => {
 }
 
 .folder-select-item small {
-  margin-left: auto;
   font-size: 11px;
   color: var(--text-muted);
   font-weight: 500;

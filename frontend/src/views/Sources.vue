@@ -22,6 +22,7 @@ interface EditSource {
   url_suffix?: string
   collect_limit?: number
   collect_hours?: number
+  enabled?: number
 }
 
 interface ParamsDoc {
@@ -65,7 +66,7 @@ const filteredSources = computed(() => {
 // === 表单状态 ===
 const showForm = ref(false)
 const editing = ref<string | null>(null)
-const form = ref({ name: '', api_url: '', url_template: '', url_prefix: '', url_suffix: '', collect_limit: 0, collect_hours: 0 })
+const form = ref({ name: '', api_url: '', url_template: '', url_prefix: '', url_suffix: '', collect_limit: 0, collect_hours: 0, enabled: true })
 const showAdvanced = ref(false)
 
 // === 采集模式选择（每个源独立）===
@@ -149,7 +150,7 @@ const autoKey = computed(() => extractDomainKey(form.value.api_url))
 function openAdd(): void {
   console.log('[Sources] openAdd called, showForm before:', showForm.value)
   editing.value = null
-  form.value = { name: '', api_url: '', url_template: '', url_prefix: '', url_suffix: '', collect_limit: 50, collect_hours: 0 }
+  form.value = { name: '', api_url: '', url_template: '', url_prefix: '', url_suffix: '', collect_limit: 50, collect_hours: 0, enabled: true }
   showAdvanced.value = false
   showForm.value = true
   console.log('[Sources] openAdd done, showForm after:', showForm.value)
@@ -165,6 +166,7 @@ function openEdit(s: EditSource): void {
     url_suffix: s.url_suffix || '',
     collect_limit: s.collect_limit ?? 0,
     collect_hours: s.collect_hours ?? 0,
+    enabled: (s.enabled ?? 1) === 1,
   }
   showAdvanced.value = !!(s.url_template || s.collect_limit || s.collect_hours)
   showForm.value = true
@@ -180,6 +182,7 @@ async function save(): Promise<void> {
     url_suffix: form.value.url_suffix,
     collect_limit: Number(form.value.collect_limit) || 0,
     collect_hours: Number(form.value.collect_hours) || 0,
+    enabled: form.value.enabled ? 1 : 0,
   }
   if (editing.value) {
     await UpdateSource(payload as any)
@@ -719,6 +722,12 @@ function fallbackCopy(text: string): void {
       <div v-if="form.api_url" class="auto-info">
         <span class="auto-label">自动识别:</span>
         <code>{{ autoKey || '(请输入有效URL)' }}</code>
+      </div>
+      <div class="form-group" style="display:flex;align-items:center;gap:8px">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" v-model="form.enabled" style="width:auto" />
+          <span>启用此采集源</span>
+        </label>
       </div>
       <div class="form-group">
         <label>显示名称 <span class="optional">(可选)</span></label>
@@ -1618,9 +1627,6 @@ function fallbackCopy(text: string): void {
   padding: 2px 8px;
   border-radius: 4px;
   max-width: 240px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-family: 'SF Mono', Consolas, monospace;
 }
 

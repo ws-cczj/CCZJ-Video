@@ -137,7 +137,7 @@ export function getEpProgressPct(entry: EpProgressEntry | undefined): number {
   if (pos <= 0) return 1
   const dur = entry.duration && entry.duration > 0 ? Number(entry.duration) : 0
   if (dur > 0) {
-    return Math.min(100, Math.max(1, (pos / dur) * 100))
+    return Math.round(Math.min(100, Math.max(1, (pos / dur) * 100)))
   }
   return 15
 }
