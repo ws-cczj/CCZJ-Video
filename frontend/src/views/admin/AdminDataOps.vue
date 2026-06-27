@@ -83,8 +83,8 @@ onMounted(async () => {
         </thead>
         <tbody>
           <tr v-for="st in sourceStats" :key="st.source_key">
-            <td class="a-tb-name">{{ st.name }}</td>
-            <td class="a-tb-mono">{{ st.source_key }}</td>
+            <td class="a-tb-name cczj-truncate">{{ st.name }}</td>
+            <td class="a-tb-mono cczj-truncate">{{ st.source_key }}</td>
             <td class="a-tb-num">{{ st.video_count }}</td>
             <td class="a-tb-num">{{ st.episode_count }}</td>
             <td class="a-tb-acts">

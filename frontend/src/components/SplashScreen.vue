@@ -2,7 +2,7 @@
 /**
  * SplashScreen — 启动画面
  *
- * 根据当前主题显示对应的背景图片，3.5 秒后自动消失。
+ * 根据当前主题显示对应的背景图片，1.5 秒后自动消失。
  * 图片透明区域会根据主题模式显示白底（浅色主题）或深灰底（深色主题）。
  */
 import { ref, computed, onMounted } from 'vue'
@@ -66,40 +66,31 @@ const bgStyle = computed(() => {
 const show = ref(true)
 
 onMounted(() => {
-  setTimeout(() => { show.value = false }, 3500)
+  setTimeout(() => { show.value = false }, 1500)
 })
 </script>
 
 <template>
-  <div v-if="show" class="splash-wrap" :style="bgStyle">
-    <div class="splash-brand">CCZJ Video</div>
-    <img :src="bgSrc" class="splash-img" />
+  <div v-if="show" class="splash-wrap cczj-fixed cczj-items-center cczj-justify-center cczj-flex cczj-z-max"
+    :style="bgStyle">
+    <div class="splash-brand cczj-absolute">CCZJ Video</div>
+    <img :src="bgSrc" class="splash-img cczj-text-2xl cczj-z-10 cczj-font-medium cczj-opacity-70" />
   </div>
 </template>
 
 <style scoped>
 .splash-wrap {
-  position: fixed;
   inset: 0;
-  z-index: 999999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .splash-img {
   width: 65%;
   height: 65%;
   object-fit: contain;
-  opacity: .7;
 }
 
 .splash-brand {
-  position: absolute;
   bottom: 40px;
-  z-index: 2;
-  font-size: 20px;
-  font-weight: 500;
   letter-spacing: 0.15em;
   color: #fff;
 }

@@ -148,6 +148,27 @@ export class DoubanInfoRow {
              */
             this["VodName"] = "";
         }
+        if (!("Year" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["Year"] = "";
+        }
+        if (!("VodType" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["VodType"] = "";
+        }
+        if (!("Hotness" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["Hotness"] = "";
+        }
 
         Object.assign(this, $$source);
     }
@@ -264,9 +285,9 @@ export class GlobalTypeRow {
              * @member
              * @type {number}
              */
-this["CollectEnabled"] = 0;
-	        }
-	        if (!("Sort" in $$source)) {
+            this["CollectEnabled"] = 0;
+        }
+        if (!("Sort" in $$source)) {
             /**
              * @member
              * @type {number}

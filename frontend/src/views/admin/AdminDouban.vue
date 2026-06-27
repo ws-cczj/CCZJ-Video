@@ -159,8 +159,8 @@ onMounted(async () => {
           </thead>
           <tbody>
             <tr v-for="row in filteredRows" :key="row.GlobalID || row.VodName || row.Id">
-              <td class="a-tb-name">{{ row.VodName || `(记录 #${row.GlobalID})` }}</td>
-              <td class="a-tb-mono">{{ row.SubjectID || '--' }}</td>
+              <td class="a-tb-name cczj-truncate">{{ row.VodName || `(记录 #${row.GlobalID})` }}</td>
+              <td class="a-tb-mono cczj-truncate">{{ row.SubjectID || '--' }}</td>
               <td class="a-tb-num">{{ row.Rating || '--' }}</td>
               <td>{{ row.ReleaseDate ? row.ReleaseDate.substring(0, 4) : '--' }}</td>
               <td>

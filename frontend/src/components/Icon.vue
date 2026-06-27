@@ -382,6 +382,11 @@ defineProps<{ name: string; size?: number }>()
       <polyline points="23,4 23,1 20,1" fill="none" stroke="currentColor" stroke-width="1.5" />
     </g>
 
+    <!-- 评论/对话气泡 -->
+    <g v-else-if="name === 'comment'">
+      <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+    </g>
+
     <!-- fallback -->
     <g v-else>
       <circle cx="12" cy="12" r="8" />

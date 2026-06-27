@@ -51,6 +51,8 @@ func InitDB(dir string) error {
 			migrateSourcesColumns()
 			migrateGlobalTypesColumns()
 			migrateGlobalVideoColumns()
+			// 去重 + 添加 vod_name 唯一约束
+			migrateGlobalVideoUniqueName()
 			// 启动时修复数据库中格式异常的 douban_id（科学计数法、浮点格式等）
 			RepairDoubanIDs()
 	})
@@ -110,6 +112,7 @@ func createTables() error {
 			douban_id TEXT DEFAULT '',
 			douban_score TEXT DEFAULT '',
 			douban_votes TEXT DEFAULT '',
+			douban_hotness TEXT DEFAULT '',
 			genre TEXT DEFAULT '',
 			release_date TEXT DEFAULT '',
 			duration TEXT DEFAULT '',
@@ -223,6 +226,7 @@ func migrateGlobalVideoColumns() {
 		{"douban_cooldown_until", "DATETIME DEFAULT NULL"},
 		{"douban_search_failures", "INTEGER DEFAULT 0"},
 		{"type_id", "INTEGER DEFAULT 0"},
+		{"douban_hotness", "TEXT DEFAULT ''"},
 	}
 	for _, m := range migrations {
 		q := fmt.Sprintf("ALTER TABLE global_video ADD COLUMN %s %s", m.col, m.def)
@@ -242,6 +246,77 @@ func migrateGlobalVideoColumns() {
 			logInfo(fmt.Sprintf("移除 global_video.%s 成功", col))
 		}
 	}
+}
+
+// migrateGlobalVideoUniqueName 去重后为 global_video 添加 vod_name UNIQUE 约束
+// SQLite 不支持 ALTER TABLE ADD CONSTRAINT，需要重建表
+func migrateGlobalVideoUniqueName() {
+	// 检查是否已有该索引（已迁移过则跳过）
+	var count int
+	instance.Get(&count, "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_global_video_vod_name_unique'")
+	if count > 0 {
+		return
+	}
+
+	logInfo("开始 global_video 去重 + 添加 UNIQUE(vod_name) 迁移...")
+
+	// 第 1 步：去重（按归一化名称保留 id 最小的记录）
+	res, err := instance.Exec(`DELETE FROM global_video WHERE id NOT IN (
+		SELECT MIN(id) FROM global_video GROUP BY
+			LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(vod_name, ' ', ''), char(9), ''), char(10), ''), char(13), ''), char(12288), ''), char(160), ''), char(65306), ':'), char(65288), '('), char(65289), ')'))
+	)`)
+	if err != nil {
+		logInfo(fmt.Sprintf("global_video 去重失败: %v", err))
+		return
+	}
+	if rows, _ := res.RowsAffected(); rows > 0 {
+		logInfo(fmt.Sprintf("global_video 去重: 删除 %d 条重复记录", rows))
+	}
+
+	// 第 2 步：重建表（SQLite 不支持 ALTER TABLE ADD UNIQUE）
+	steps := []string{
+		`DROP TABLE IF EXISTS global_video_new`,
+		`CREATE TABLE global_video_new (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			vod_name TEXT NOT NULL DEFAULT '' UNIQUE,
+			year TEXT DEFAULT '',
+			area TEXT DEFAULT '',
+			lang TEXT DEFAULT '',
+			director TEXT DEFAULT '',
+			writer TEXT DEFAULT '',
+			actor TEXT DEFAULT '',
+			tag TEXT DEFAULT '',
+			content TEXT DEFAULT '',
+			pic TEXT DEFAULT '',
+			douban_id TEXT DEFAULT '',
+			douban_score TEXT DEFAULT '',
+			douban_votes TEXT DEFAULT '',
+			douban_hotness TEXT DEFAULT '',
+			genre TEXT DEFAULT '',
+			release_date TEXT DEFAULT '',
+			duration TEXT DEFAULT '',
+			aka TEXT DEFAULT '',
+			imdb TEXT DEFAULT '',
+			season_count TEXT DEFAULT '',
+			episode_count TEXT DEFAULT '',
+			type_id INTEGER DEFAULT 0,
+			douban_cooldown_until DATETIME DEFAULT NULL,
+			douban_search_failures INTEGER DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`INSERT OR IGNORE INTO global_video_new SELECT * FROM global_video`,
+		`DROP TABLE global_video`,
+		`ALTER TABLE global_video_new RENAME TO global_video`,
+		`CREATE INDEX IF NOT EXISTS idx_global_video_vod_name_unique ON global_video(vod_name)`,
+	}
+	for _, sql := range steps {
+		if _, err := instance.Exec(sql); err != nil {
+			logInfo(fmt.Sprintf("global_video 迁移步骤失败: %v (sql: %s)", err, sql[:min(len(sql), 80)]))
+			return
+		}
+	}
+	logInfo("global_video UNIQUE(vod_name) 迁移完成")
 }
 
 // migrateSourcesColumns 为旧版数据库补充缺失的列

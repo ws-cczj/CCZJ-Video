@@ -33,13 +33,17 @@ async function applyDownloadDir(): Promise<void> {
 async function resetDownloadDir(): Promise<void> {
   savingDownloadDir.value = true
   try {
+    // 1. 先清空自定义目录
+    downloadDirInput.value = ''
+    await dl.setDir('')
+    // 2. 获取操作系统默认目录
     const defaultDir = await GetDownloadDir()
     downloadDirInput.value = defaultDir || ''
-    await applyDownloadDir()
+    // 3. 同步 UI 显示
+    downloadDirInput.value = dl.dir || downloadDirInput.value
   } catch (e: any) {
     errorStore.fromError('获取默认下载目录失败', e, 'Downloads.resetDownloadDir')
     downloadDirInput.value = ''
-    await applyDownloadDir()
   } finally {
     savingDownloadDir.value = false
   }
@@ -169,38 +173,38 @@ function isMatchFilter(t: { status: string }): boolean {
 
 <template>
   <div class="downloads-page">
-    <header class="page-header">
-      <div class="header-top">
+    <header class="page-header cczj-flex cczj-flex-col cczj-gap-4">
+      <div class="header-top cczj-flex cczj-justify-between cczj-items-start">
         <div>
-          <h1>下载管理</h1>
-          <p class="subtitle" v-if="dl.dir">默认目录：{{ dl.dir }}</p>
+          <h1 class="cczj-text-xl cczj-font-semibold">下载管理</h1>
+          <p class="subtitle cczj-text-sm cczj-text-muted cczj-mt-1" v-if="dl.dir">默认目录：{{ dl.dir }}</p>
         </div>
         <!-- 批量操作按钮 -->
-        <div v-if="dl.tasks.length > 0" class="bulk-actions">
+        <div v-if="dl.tasks.length > 0" class="bulk-actions cczj-flex cczj-gap-2 cczj-items-center cczj-flex-wrap">
           <button
             v-if="stats.active > 0"
-            class="b-btn b-btn-pause"
+            class="b-btn b-btn-pause cczj-cursor-pointer cczj-rounded cczj-transition cczj-flex cczj-items-center cczj-gap-1"
             @click="pauseAllActive"
           >
             <Icon name="pause" :size="11" /><span>全部暂停 ({{ stats.active }})</span>
           </button>
           <button
             v-if="stats.paused > 0"
-            class="b-btn b-btn-resume"
+            class="b-btn b-btn-resume cczj-cursor-pointer cczj-rounded cczj-transition cczj-flex cczj-items-center cczj-gap-1"
             @click="resumeAllPaused"
           >
             <Icon name="play" :size="11" /><span>全部继续 ({{ stats.paused }})</span>
           </button>
           <button
             v-if="stats.active + stats.paused > 0"
-            class="b-btn b-btn-danger"
+            class="b-btn b-btn-danger cczj-cursor-pointer cczj-rounded cczj-transition cczj-flex cczj-items-center cczj-gap-1"
             @click="cancelAllActive"
           >
             <Icon name="close" :size="11" /><span>取消全部</span>
           </button>
           <button
             v-if="stats.done > 0"
-            class="b-btn b-btn-remove"
+            class="b-btn b-btn-remove cczj-cursor-pointer cczj-rounded cczj-transition cczj-flex cczj-items-center cczj-gap-1"
             @click="removeAllCompleted"
           >
             <Icon name="trash" :size="11" /><span>清除已完成 ({{ stats.done }})</span>
@@ -208,7 +212,7 @@ function isMatchFilter(t: { status: string }): boolean {
         </div>
       </div>
 
-      <div class="filter-row">
+      <div class="filter-row cczj-flex cczj-gap-2 cczj-flex-wrap">
         <Tag :active="filter === 'all'" @click="filter = 'all'">全部 ({{ stats.total }})</Tag>
         <Tag :active="filter === 'active'" @click="filter = 'active'">下载中 ({{ stats.active }})</Tag>
         <Tag :active="filter === 'paused'" @click="filter = 'paused'">已暂停 ({{ stats.paused }})</Tag>
@@ -218,12 +222,12 @@ function isMatchFilter(t: { status: string }): boolean {
     </header>
 
     <!-- ========== 下载设置 ========== -->
-    <section class="download-settings-block">
-      <h3>下载目录</h3>
-      <div class="setting-row">
+    <section class="download-settings-block cczj-rounded cczj-border cczj-p-4 cczj-bg-card">
+      <h3 class="cczj-text-lg cczj-font-semibold cczj-mb-3">下载目录</h3>
+      <div class="setting-row cczj-flex cczj-gap-3 cczj-items-center cczj-flex-wrap">
         <input
           type="text"
-          class="setting-input"
+          class="setting-input cczj-flex-1 cczj-min-w-48 cczj-rounded cczj-border cczj-bg-secondary cczj-p-2"
           v-model="downloadDirInput"
           placeholder="留空则使用默认目录"
           @keyup.enter="applyDownloadDir"
@@ -235,46 +239,46 @@ function isMatchFilter(t: { status: string }): boolean {
           使用默认
         </Button>
       </div>
-      <p class="hint">当前目录：{{ dl.dir || '未设置（使用默认）' }}</p>
-      <p class="hint">提示：m3u8 视频会自动解析并下载所有分片，合并为单个 TS 文件保存。支持多连接并行下载（IDM 风格）。</p>
+      <p class="hint cczj-text-xs cczj-text-muted cczj-mt-2">当前目录：{{ dl.dir || '未设置（使用默认）' }}</p>
+      <p class="hint cczj-text-xs cczj-text-muted cczj-mt-1">提示：m3u8 视频会自动解析并下载所有分片，合并为单个 TS 文件保存。支持多连接并行下载（IDM 风格）。</p>
     </section>
 
-    <div v-if="dl.tasks.length === 0" class="empty">
-      <div class="empty-icon">⬇️</div>
-      <div class="empty-title">还没有下载任务</div>
-      <div class="empty-desc">在详情页点击"下载到本地"即可新建任务</div>
+    <div v-if="dl.tasks.length === 0" class="empty cczj-text-center cczj-py-12">
+      <div class="empty-icon cczj-text-4xl cczj-mb-3">⬇️</div>
+      <div class="empty-title cczj-text-lg cczj-font-semibold cczj-mb-2">还没有下载任务</div>
+      <div class="empty-desc cczj-text-sm cczj-text-muted">在详情页点击"下载到本地"即可新建任务</div>
     </div>
 
-    <div v-else class="task-list">
+    <div v-else class="task-list cczj-flex cczj-flex-col cczj-gap-3">
       <div
         v-for="task in dl.tasks.filter(isMatchFilter)"
         :key="task.task_id"
-        class="task-card"
+        class="task-card cczj-rounded cczj-border cczj-p-4 cczj-bg-card"
       >
-        <div class="task-head">
-          <div class="task-title" :title="task.filename">
-            <Icon name="download" :size="14" />
+        <div class="task-head cczj-flex cczj-justify-between cczj-items-start cczj-gap-3">
+          <div class="task-title cczj-truncate cczj-flex cczj-items-center cczj-gap-2 cczj-flex-1" :title="task.filename">
+            <Icon name="download" :size="14" class="cczj-flex-shrink-0" />
             <span>{{ task.vod_name || task.filename }}</span>
-            <span v-if="task.ep_name" class="task-ep">- {{ task.ep_name }}</span>
+            <span v-if="task.ep_name" class="task-ep cczj-text-muted">- {{ task.ep_name }}</span>
           </div>
-          <span :class="['status-chip', statusClass(task.status)]">{{ statusLabel(task.status) }}</span>
+          <span :class="['status-chip', statusClass(task.status)]" class="cczj-rounded cczj-px-2 cczj-py-1 cczj-text-xs cczj-font-medium cczj-flex-shrink-0">{{ statusLabel(task.status) }}</span>
         </div>
 
-        <div class="task-meta-row">
+        <div class="task-meta-row cczj-flex cczj-gap-3 cczj-items-center cczj-text-sm cczj-text-muted cczj-mt-2 cczj-flex-wrap">
           <span class="muted">{{ formatBytes(task.downloaded) }} / {{ task.total > 0 ? formatBytes(task.total) : '未知大小' }}</span>
           <span v-if="task.status === 'paused'" class="speed status-paused-label">已暂停</span>
           <span v-if="task.status === 'downloading'" class="speed">{{ formatSpeed(task.speed_bps) }}</span>
           <span v-if="task.status === 'downloading'" class="eta">剩余 {{ formatEta(task.eta_sec) }}</span>
           <span v-if="task.status === 'queued'" class="muted">等待下载...</span>
-          <span v-if="task.error" class="err-msg" :title="task.error">{{ task.error }}</span>
+          <span v-if="task.error" class="err-msg cczj-truncate cczj-max-w-72" :title="task.error">{{ task.error }}</span>
         </div>
 
         <!-- IDM 风格分块进度可视化 -->
-        <div v-if="task.chunks && task.chunks.length > 0 && task.total > 0 && task.status === 'downloading'" class="chunk-progress-container">
+        <div v-if="task.chunks && task.chunks.length > 0 && task.total > 0 && task.status === 'downloading'" class="chunk-progress-container cczj-relative cczj-h-2 cczj-rounded cczj-bg-border cczj-overflow-hidden cczj-mt-2">
           <div
             v-for="chunk in task.chunks"
             :key="chunk.id"
-            class="chunk-bar"
+            class="chunk-bar cczj-absolute cczj-top-0 cczj-h-full"
             :style="{
               left: chunkLeft(chunk, task.total) + '%',
               width: chunkWidth(chunk, task.total) + '%',
@@ -282,49 +286,49 @@ function isMatchFilter(t: { status: string }): boolean {
             }"
             :title="`分块 ${chunk.id + 1}: ${chunkPercent(chunk)}% (${formatBytes(chunk.done)} / ${formatBytes(chunk.end - chunk.start + 1)})`"
           >
-            <span class="chunk-label" v-if="chunkWidth(chunk, task.total) > 8">
+            <span class="chunk-label cczj-absolute cczj-inset-0 cczj-flex cczj-items-center cczj-justify-center cczj-text-white cczj-text-xs cczj-font-bold" v-if="chunkWidth(chunk, task.total) > 8">
               {{ chunk.id + 1 }}
             </span>
           </div>
         </div>
 
-        <div class="progress-track">
-          <div class="progress-fill" :style="{ width: pct(task) + '%' }"></div>
-          <span class="progress-text">{{ pct(task) }}%</span>
+        <div class="progress-track cczj-relative cczj-h-2 cczj-rounded cczj-bg-border cczj-overflow-hidden cczj-mt-2">
+          <div class="progress-fill cczj-absolute cczj-top-0 cczj-left-0 cczj-h-full cczj-bg-accent cczj-transition-all" :style="{ width: pct(task) + '%' }"></div>
+          <span class="progress-text cczj-absolute cczj-inset-0 cczj-flex cczj-items-center cczj-justify-center cczj-text-xs cczj-font-bold cczj-text-white">{{ pct(task) }}%</span>
         </div>
 
-        <div class="task-footer">
-          <span class="file-path" :title="task.save_path">{{ task.save_path }}</span>
-          <div class="task-actions">
+        <div class="task-footer cczj-flex cczj-justify-between cczj-items-center cczj-gap-3 cczj-mt-3">
+          <span class="file-path cczj-truncate cczj-flex-1 cczj-text-xs cczj-text-muted" :title="task.save_path">{{ task.save_path }}</span>
+          <div class="task-actions cczj-flex cczj-gap-2 cczj-flex-shrink-0">
             <button
               v-if="task.status === 'downloading' || task.status === 'queued'"
-              class="t-btn t-btn-pause"
+              class="t-btn t-btn-pause cczj-cursor-pointer cczj-rounded cczj-transition cczj-flex cczj-items-center cczj-gap-1 cczj-px-2 cczj-py-1 cczj-text-xs"
               @click="dl.pause(task.task_id)"
             >
               <Icon name="pause" :size="12" /><span>暂停</span>
             </button>
             <button
               v-if="task.status === 'paused'"
-              class="t-btn t-btn-resume"
+              class="t-btn t-btn-resume cczj-cursor-pointer cczj-rounded cczj-transition cczj-flex cczj-items-center cczj-gap-1 cczj-px-2 cczj-py-1 cczj-text-xs"
               @click="dl.resume(task.task_id)"
             >
               <Icon name="play" :size="12" /><span>继续</span>
             </button>
             <button
               v-if="task.status === 'downloading' || task.status === 'queued' || task.status === 'paused'"
-              class="t-btn t-btn-danger"
+              class="t-btn t-btn-danger cczj-cursor-pointer cczj-rounded cczj-transition cczj-flex cczj-items-center cczj-gap-1 cczj-px-2 cczj-py-1 cczj-text-xs"
               @click="dl.cancel(task.task_id)"
             >
               <Icon name="close" :size="12" /><span>取消</span>
             </button>
             <button
               v-if="task.status === 'done'"
-              class="t-btn t-btn-open"
+              class="t-btn t-btn-open cczj-cursor-pointer cczj-rounded cczj-transition cczj-flex cczj-items-center cczj-gap-1 cczj-px-2 cczj-py-1 cczj-text-xs"
               @click="dl.openFile(task.save_path)"
             >
               <Icon name="play" :size="12" /><span>打开</span>
             </button>
-            <button class="t-btn t-btn-remove" @click="dl.remove(task.task_id)">
+            <button class="t-btn t-btn-remove cczj-cursor-pointer cczj-rounded cczj-transition cczj-flex cczj-items-center cczj-gap-1 cczj-px-2 cczj-py-1 cczj-text-xs" @click="dl.remove(task.task_id)">
               <Icon name="trash" :size="12" /><span>移除</span>
             </button>
           </div>
@@ -500,9 +504,6 @@ function isMatchFilter(t: { status: string }): boolean {
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .task-ep {
   color: var(--text-secondary);
@@ -606,9 +607,6 @@ function isMatchFilter(t: { status: string }): boolean {
 .file-path {
   font-size: 11px;
   color: var(--text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   flex: 1;
   min-width: 0;
 }

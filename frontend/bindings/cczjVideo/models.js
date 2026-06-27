@@ -176,6 +176,52 @@ export class ClearCacheReq {
 }
 
 /**
+ * DoubanCommentsReq 获取豆瓣评论请求
+ */
+export class DoubanCommentsReq {
+    /**
+     * Creates a new DoubanCommentsReq instance.
+     * @param {Partial<DoubanCommentsReq>} [$$source = {}] - The source object to create the DoubanCommentsReq.
+     */
+    constructor($$source = {}) {
+        if (!("douban_id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["douban_id"] = "";
+        }
+        if (!("page" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["page"] = 0;
+        }
+        if (!("sort" in $$source)) {
+            /**
+             * "new_score" | "time"
+             * @member
+             * @type {string}
+             */
+            this["sort"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DoubanCommentsReq instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {DoubanCommentsReq}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new DoubanCommentsReq(/** @type {Partial<DoubanCommentsReq>} */($$parsedSource));
+    }
+}
+
+/**
  * DoubanDetailReq 豆瓣详情请求
  */
 export class DoubanDetailReq {
@@ -333,6 +379,22 @@ export class DoubanDetailResp {
              * @type {string}
              */
             this["PosterURL"] = "";
+        }
+        if (!("ShortComments" in $$source)) {
+            /**
+             * 短评数量
+             * @member
+             * @type {string}
+             */
+            this["ShortComments"] = "";
+        }
+        if (!("Hotness" in $$source)) {
+            /**
+             * 计算热度: votes + short_comments + 7天内新片加权
+             * @member
+             * @type {string}
+             */
+            this["Hotness"] = "";
         }
 
         Object.assign(this, $$source);
@@ -563,6 +625,13 @@ export class FavReq {
              */
             this["vod_id"] = "";
         }
+        if (!("global_id" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["global_id"] = 0;
+        }
 
         Object.assign(this, $$source);
     }
@@ -767,6 +836,62 @@ export class SetGlobalTypeCollectEnabledReq {
     static createFrom($$source = {}) {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new SetGlobalTypeCollectEnabledReq(/** @type {Partial<SetGlobalTypeCollectEnabledReq>} */($$parsedSource));
+    }
+}
+
+/**
+ * GetSimilarVideos 返回同类型的相似视频（用于详情页推荐兜底）
+ */
+export class SimilarReq {
+    /**
+     * Creates a new SimilarReq instance.
+     * @param {Partial<SimilarReq>} [$$source = {}] - The source object to create the SimilarReq.
+     */
+    constructor($$source = {}) {
+        if (!("source_key" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["source_key"] = "";
+        }
+        if (!("type_id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["type_id"] = "";
+        }
+        if (!("limit" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["limit"] = 0;
+        }
+        if (!("exclude_ids" in $$source)) {
+            /**
+             * @member
+             * @type {string[]}
+             */
+            this["exclude_ids"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SimilarReq instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {SimilarReq}
+     */
+    static createFrom($$source = {}) {
+        const $$createField3_0 = $$createType3;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("exclude_ids" in $$parsedSource) {
+            $$parsedSource["exclude_ids"] = $$createField3_0($$parsedSource["exclude_ids"]);
+        }
+        return new SimilarReq(/** @type {Partial<SimilarReq>} */($$parsedSource));
     }
 }
 

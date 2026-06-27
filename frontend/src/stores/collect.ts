@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { StartCollect, PauseCollect, ResumeCollect, StopCollect, GetCollectSchedule, SetCollectSchedule, TriggerCollectNow, StopBackgroundCollect, SetSourceSchedule } from '../../bindings/cczjVideo/app'
 import { useErrorStore } from './error'
 import { Events } from '@wailsio/runtime'
+import { appEvent } from '../event'
 
 export interface CollectPageEvent {
   source_key: string
@@ -185,7 +186,7 @@ export const useCollectStore = defineStore('collect', () => {
   // 记录上一次 progress 事件的时间和页码，用于计算速度
   const _lastProgressAt = new Map<string, { ts: number; page: number }>()
 
-  // === 事件监听 ===
+  // === 事件监听（Wails 后端事件 → appEvent 桥接） ===
   Events.On('collect:progress', (ev) => {
     const data = ev.data as { source_key: string; current: number; total: number }
     const st = getState(data.source_key)
@@ -213,6 +214,9 @@ export const useCollectStore = defineStore('collect', () => {
       current.value = data.current
       total.value = data.total
     }
+
+    // 桥接到前端事件总线
+    appEvent.emit('collect:progress', data.source_key, data.current, data.total)
   })
 
   Events.On('collect:log', (ev) => {
@@ -229,6 +233,9 @@ export const useCollectStore = defineStore('collect', () => {
       log.value.push(data.message)
       if (log.value.length > 200) log.value.shift()
     }
+
+    // 桥接到前端事件总线
+    appEvent.emit('collect:log', data.source_key, data.message)
   })
 
   Events.On('collect:page', (ev) => {
@@ -266,6 +273,10 @@ export const useCollectStore = defineStore('collect', () => {
         log.value.push('采集出错: ' + error.value)
       }
     }
+
+    // 桥接到前端事件总线
+    appEvent.emit('collect:done', data.source_key, data.error)
+
     setTimeout(() => {
       st.done = false
       st.error = ''
@@ -294,6 +305,7 @@ export const useCollectStore = defineStore('collect', () => {
 
     try {
       await StartCollect({ source_key: key, mode: collectMode, hours })
+      appEvent.emit('collect:start', key, collectMode)
     } catch (e) {
       st.running = false
       st.paused = false

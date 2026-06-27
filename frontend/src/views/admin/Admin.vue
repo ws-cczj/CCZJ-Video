@@ -295,18 +295,12 @@ function isActive(path: string): boolean {
   font-weight: 600;
   color: var(--text-primary);
   max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .a-tb-mono {
   font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
   font-size: 11px;
   color: var(--text-muted);
   max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .a-tb-num {
   text-align: center;

@@ -1,8 +1,10 @@
 <script setup lang="ts">
 defineOptions({ name: 'Search' })
-import { ref, onMounted, computed, watch, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { GetSetting, GetRecentHistory, GetVideoList, SearchSource } from '../../bindings/cczjVideo/app'
+import { Events } from '@wailsio/runtime'
 import { useSourceStore } from '../stores/source'
 import { useVideoStore } from '../stores/video'
 import { usePosterCacheStore } from '../stores/posterCache'
@@ -12,6 +14,7 @@ import { Button, Tag, Select as SelectDropdown, Spinner as LoadingSpinner, Empty
 import { getDetailPath } from '../utils'
 import type { Video, HistoryItem } from '../types'
 
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const sourceStore = useSourceStore()
@@ -58,14 +61,25 @@ const recommendGroups = ref<RecommendGroup[]>([])
 const loadingRecommend = ref<Set<string>>(new Set())
 
 const gridColumns = ref(5)
-const gridStyle = computed(() => ({
-  gridTemplateColumns: `repeat(${gridColumns.value}, minmax(0, 1fr))`,
-}))
+const layoutDensity = ref<'comfortable' | 'compact' | 'spacious'>('comfortable')
+const gridStyle = computed(() => {
+  const density = layoutDensity.value
+  const gap = density === 'compact' ? '10px' : density === 'spacious' ? '20px' : '16px'
+  const minWidth = density === 'compact' ? '120px' : density === 'spacious' ? '180px' : '150px'
+  
+  return {
+    display: 'grid',
+    gridTemplateColumns: `repeat(${gridColumns.value}, minmax(${minWidth}, 1fr))`,
+    gap: gap
+  }
+})
 
 onMounted(async () => {
   try {
     const col = await GetSetting('grid_columns')
     if (col) gridColumns.value = parseInt(col as string, 10) || 5
+    const den = await GetSetting('layout_density')
+    if (den === 'compact' || den === 'spacious') layoutDensity.value = den as any
   } catch {
     // 忽略
   }
@@ -182,14 +196,14 @@ async function loadRecommendations(): Promise<void> {
             history: h,
           }
         })
-      groups.push({ typeName: '继续观看', items: historyItems })
+      groups.push({ typeName: t('home.continueWatching'), items: historyItems })
 
       // 过滤掉已看过的视频作为"猜你喜欢"
       const seenIds = new Set(sameSourceHistory.map(h => h.vod_id))
       const unknownVideos = freshVideos.filter(v => !seenIds.has(String(v.vod_id)))
       if (unknownVideos.length > 0) {
         groups.push({
-          typeName: '猜你喜欢',
+          typeName: t('home.recommended'),
           items: unknownVideos.slice(0, 6).map(v => ({
             vod_id: String(v.vod_id || ''),
             vod_name: v.vod_name,
@@ -202,7 +216,7 @@ async function loadRecommendations(): Promise<void> {
     } else {
       // 没有历史记录：只显示最新上线
       groups.push({
-        typeName: '最新上线',
+        typeName: t('home.latest'),
         items: freshVideos.slice(0, 12).map(v => ({
           vod_id: String(v.vod_id || ''),
           vod_name: v.vod_name,
@@ -263,7 +277,7 @@ function resolveName(item: RecommendItem): string {
   if (item.video?.vod_name) return item.video.vod_name
   if (item.isHistory && item.history?.vod_name) return item.history.vod_name
   const cached = posterCache.get(item.source_key, item.vod_id)
-  return cached?.vod_name || '视频'
+  return cached?.vod_name || t('search.video')
 }
 
 function resolvePic(item: RecommendItem): string {
@@ -361,20 +375,45 @@ const sourceSearchResults = ref<Video[]>([])
 const sourceSearchTotal = ref(0)
 const hasSourceSearched = ref(false)
 
+// 搜索进度状态
+const searchProgress = ref({ stage: '', message: '', current: 0, total: 0 })
+let searchProgressListener: (() => void) | null = null
+
+onMounted(() => {
+  searchProgressListener = Events.On('search:progress', (event) => {
+    const data = event.data
+    searchProgress.value = {
+      stage: data.stage || '',
+      message: data.message || '',
+      current: data.current || 0,
+      total: data.total || 0,
+    }
+  })
+})
+
+onUnmounted(() => {
+  if (searchProgressListener) {
+    searchProgressListener()
+    searchProgressListener = null
+  }
+})
+
 async function doSourceSearch(): Promise<void> {
   const kw = keyword.value.trim()
   if (!kw || !currentSearchSource.value) return
   sourceSearching.value = true
   hasSourceSearched.value = true
   sourceSearchResults.value = []
+  searchProgress.value = { stage: '', message: '', current: 0, total: 0 }
   try {
     const resp = (await SearchSource(currentSearchSource.value, kw, 50)) as any
     sourceSearchTotal.value = resp?.total || 0
     sourceSearchResults.value = (resp?.videos as Video[]) || []
   } catch (e) {
-    console.warn('源站搜索失败', e)
+    console.warn(t('search.sourceSearchFailed'), e)
   } finally {
     sourceSearching.value = false
+    searchProgress.value = { stage: '', message: '', current: 0, total: 0 }
   }
 }
 
@@ -388,24 +427,24 @@ function clearSourceResults(): void {
 <template>
   <div class="search-page">
     <!-- 搜索栏 -->
-    <div class="search-bar">
-      <div class="source-picker">
+    <div class="search-bar cczj-flex cczj-gap-2 cczj-mb-4 cczj-p-2">
+      <div class="source-picker cczj-relative cczj-flex cczj-items-center">
         <SelectDropdown
           v-model="currentSearchSource"
           :options="sourceOptions"
           :disabled="sourceStore.sources.length === 0"
-          placeholder="选择数据源"
+          :placeholder="t('search.selectSource')"
         />
         <Icon name="source" :size="14" class="pick-icon" />
       </div>
 
-      <div class="input-wrap">
+      <div class="input-wrap cczj-flex-1 cczj-relative cczj-flex cczj-items-center">
         <Icon name="search" :size="16" class="input-icon" />
         <input
           v-model="keyword"
           @keyup.enter="doSearch"
-          placeholder="输入视频名称搜索..."
-          class="search-input"
+          :placeholder="t('search.inputPlaceholder')"
+          class="search-input cczj-flex-1"
         />
         <Button
           v-if="keyword"
@@ -414,83 +453,88 @@ function clearSourceResults(): void {
           icon
           class="clear-x"
           @click="keyword = ''"
-          aria-label="清除"
+          :aria-label="t('search.clear')"
         >
           <Icon name="close" :size="12" />
         </Button>
       </div>
 
-      <Button variant="primary" @click="doSearch">
+      <Button variant="primary" @click="doSearch" class="cczj-flex cczj-items-center cczj-gap-1">
         <Icon name="search" :size="14" />
-        <span>搜索</span>
+        <span>{{ t('search.search') }}</span>
       </Button>
 
       
     </div>
 
     <!-- 历史搜索 -->
-    <div v-if="searchHistory.length > 0 && !hasSearched" class="history-tags">
-      <span class="history-label">
+    <div v-if="searchHistory.length > 0 && !hasSearched" class="history-tags cczj-flex cczj-flex-wrap cczj-gap-2 cczj-mb-4">
+      <span class="history-label cczj-flex cczj-items-center cczj-gap-1">
         <Icon name="clock" :size="12" />
-        历史搜索
+        {{ t('search.historySearch') }}
       </span>
       <div
         v-for="h in searchHistory"
         :key="h"
-        class="tag-wrap"
+        class="tag-wrap cczj-flex cczj-items-center cczj-gap-1"
       >
-        <Tag class="tag-btn" @click="keyword = h; doSearch()">{{ h }}</Tag>
-        <Button variant="text" size="sm" icon class="tag-remove" title="删除此记录" @click.stop="removeHistoryItem(h)">
+        <Tag class="tag-btn cczj-cursor-pointer" @click="keyword = h; doSearch()">{{ h }}</Tag>
+        <Button variant="text" size="sm" icon class="tag-remove" :title="t('search.deleteHistory')" @click.stop="removeHistoryItem(h)">
           <Icon name="close" :size="10" />
         </Button>
       </div>
-      <Button variant="text" size="sm" @click="clearHistory">清空</Button>
+      <Button variant="text" size="sm" @click="clearHistory">{{ t('search.clearAll') }}</Button>
     </div>
 
     <!-- ============ 推荐区域（未搜索时显示） ============ -->
-    <section v-if="!hasSearched && (recommendGroups.length > 0 || recommendLoading)" class="recommend-section">
-      <div class="recommend-header">
-        <h3>
+    <section v-if="!hasSearched && (recommendGroups.length > 0 || recommendLoading)" class="recommend-section cczj-mb-4">
+      <div class="recommend-header cczj-flex cczj-items-center cczj-gap-2 cczj-mb-3">
+        <h3 class="cczj-flex cczj-items-center cczj-gap-2">
           <Icon name="play" :size="14" />
-          <span>为你推荐</span>
+          <span>{{ t('search.recommendForYou') }}</span>
         </h3>
       </div>
 
-      <div v-if="recommendLoading" class="recommend-loading">
-        <LoadingSpinner size="sm" label="加载推荐中..." />
+      <div v-if="recommendLoading" class="recommend-loading cczj-text-center cczj-py-4">
+        <LoadingSpinner size="sm" :label="t('search.loadingRecommendations')" />
       </div>
 
-      <div v-else class="recommend-groups">
-        <div v-for="group in recommendGroups" :key="group.typeName" class="recommend-group">
-          <div class="group-label-row">
+      <div v-else class="recommend-groups cczj-flex cczj-flex-col cczj-gap-4">
+        <div v-for="(group, groupIdx) in recommendGroups" :key="group.typeName" class="recommend-group" v-motion :initial="{ opacity: 0, y: 20 }" :visible="{ opacity: 1, y: 0, transition: { duration: 400, delay: groupIdx * 100, ease: 'easeOut' } }">
+          <div class="group-label-row cczj-flex cczj-items-center cczj-gap-2 cczj-mb-2">
             <span class="dot"></span>
             <span>{{ group.typeName }}</span>
           </div>
-          <div class="recommend-row">
+          <div class="recommend-row cczj-grid cczj-gap-3">
             <div
               v-for="(item, idx) in group.items"
               :key="`rec-${group.typeName}-${item.vod_id}-${idx}`"
-              class="rec-card"
+              class="rec-card cczj-cursor-pointer cczj-rounded"
               @click="goDetail(item)"
+              v-motion
+              :initial="{ opacity: 0, scale: 0.9 }"
+              :visible="{ opacity: 1, scale: 1, transition: { duration: 300, delay: idx * 50, ease: 'easeOut' } }"
+              :hovered="{ scale: 1.05, transition: { duration: 200 } }"
             >
-              <div class="rec-poster">
+              <div class="rec-poster cczj-relative cczj-rounded cczj-overflow-hidden">
                 <img
                   v-if="resolvePic(item)"
                   :src="resolvePic(item)"
                   :alt="resolveName(item)"
                   loading="lazy"
+                  class="cczj-w-full"
                 />
-                <div v-else-if="isPicLoading(item)" class="rec-poster-loading">
+                <div v-else-if="isPicLoading(item)" class="rec-poster-loading cczj-flex cczj-items-center cczj-justify-center">
                   <LoadingSpinner size="sm" />
                 </div>
-                <div v-else class="rec-poster-placeholder">
+                <div v-else class="rec-poster-placeholder cczj-flex cczj-items-center cczj-justify-center">
                   <Icon name="film" :size="22" />
                 </div>
-                <div class="rec-overlay">
+                <div class="rec-overlay cczj-absolute cczj-inset-0 cczj-flex cczj-items-center cczj-justify-center">
                   <Icon name="play" :size="16" />
                 </div>
               </div>
-              <div class="rec-title">{{ resolveName(item) }}</div>
+              <div class="rec-title cczj-truncate cczj-mt-1">{{ resolveName(item) }}</div>
             </div>
           </div>
         </div>
@@ -498,22 +542,22 @@ function clearSourceResults(): void {
     </section>
 
     <!-- 搜索结果 -->
-    <div v-if="hasSearched && videoStore.loading && videoStore.videos.length === 0">
-      <LoadingSpinner label="搜索中..." />
+    <div v-if="hasSearched && videoStore.loading && videoStore.videos.length === 0" class="cczj-text-center cczj-py-8">
+      <LoadingSpinner :label="t('search.searching')" />
     </div>
 
     <div
       v-else-if="hasSearched && videoStore.videos.length > 0"
-      class="search-results"
+      class="search-results cczj-mb-4"
     >
-      <div class="results-header">
-        <span class="results-label">
+      <div class="results-header cczj-flex cczj-items-center cczj-justify-between cczj-gap-2 cczj-mb-3">
+        <span class="results-label cczj-flex cczj-items-center cczj-gap-1">
           <Icon name="search" :size="12" />
-          搜索结果
+          {{ t('search.searchResults') }}
         </span>
-        <span class="results-count">共 {{ videoStore.total }} 条</span>
+        <span class="results-count cczj-text-sm cczj-text-muted">{{ t('search.totalItems', { count: videoStore.total }) }}</span>
       </div>
-      <div class="video-grid" :style="gridStyle">
+      <div class="video-grid cczj-grid" :style="gridStyle">
         <VideoCard
           v-for="v in videoStore.videos"
           :key="`${v.vod_g_id ?? v.vod_id ?? v.id}`"
@@ -525,10 +569,10 @@ function clearSourceResults(): void {
 
     <div
       v-if="hasSearched && videoStore.videos.length > 0 && searchTotalPages > 1"
-      class="search-pagination"
+      class="search-pagination cczj-flex cczj-items-center cczj-justify-center cczj-gap-2 cczj-my-4"
     >
       <button
-        class="page-btn"
+        class="page-btn cczj-cursor-pointer cczj-rounded"
         :disabled="searchCurrentPage <= 1"
         @click="goSearchPage(searchCurrentPage - 1)"
       >
@@ -538,19 +582,53 @@ function clearSourceResults(): void {
         <span v-if="p === -1" class="page-ellipsis">…</span>
         <button
           v-else
-          class="page-btn"
+          class="page-btn cczj-cursor-pointer cczj-rounded"
           :class="{ active: p === searchCurrentPage }"
           @click="goSearchPage(p)"
         >{{ p }}</button>
       </template>
       <button
-        class="page-btn"
+        class="page-btn cczj-cursor-pointer cczj-rounded"
         :disabled="searchCurrentPage >= searchTotalPages"
         @click="goSearchPage(searchCurrentPage + 1)"
       >
         <Icon name="chevron-right" :size="12" />
       </button>
-      <span class="page-info">{{ searchCurrentPage }} / {{ searchTotalPages }}页，共 {{ videoStore.total }} 条</span>
+      <span class="page-info cczj-text-sm cczj-text-muted">{{ searchCurrentPage }} / {{ searchTotalPages }} {{ t('search.page') }}，{{ t('search.totalItems', { count: videoStore.total }) }}</span>
+    </div>
+
+    <!-- 源站搜索进度（独立展示，不受空状态组件约束） -->
+    <div v-if="sourceSearching" class="source-search-progress-section cczj-mb-6">
+      <div class="search-progress-card">
+        <!-- 步骤指示器 -->
+        <div class="sp-steps">
+          <div class="sp-step" :class="{ active: searchProgress.stage === 'fetching_list' || !searchProgress.stage, done: searchProgress.stage === 'fetching_details' }">
+            <div class="sp-step-dot">
+              <svg v-if="searchProgress.stage === 'fetching_details'" class="sp-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg>
+              <div v-else class="sp-pulse"></div>
+            </div>
+            <span class="sp-step-label">{{ t('search.fetchingList') || '获取列表' }}</span>
+          </div>
+          <div class="sp-step-line" :class="{ filled: searchProgress.stage === 'fetching_details' }"></div>
+          <div class="sp-step" :class="{ active: searchProgress.stage === 'fetching_details' }">
+            <div class="sp-step-dot">
+              <div v-if="searchProgress.stage === 'fetching_details'" class="sp-pulse"></div>
+              <svg v-else class="sp-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="opacity:0.3"><path d="M5 13l4 4L19 7"/></svg>
+            </div>
+            <span class="sp-step-label">{{ t('search.fetchingDetails') || '获取详情' }}</span>
+          </div>
+        </div>
+        <!-- 进度条 -->
+        <div class="sp-bar-wrap">
+          <div class="sp-bar">
+            <div class="sp-bar-fill" :style="{ width: searchProgress.total > 0 ? `${(searchProgress.current / searchProgress.total) * 100}%` : (searchProgress.stage === 'fetching_list' ? '30%' : '70%') }"></div>
+            <div class="sp-bar-shimmer"></div>
+          </div>
+          <span v-if="searchProgress.total > 0" class="sp-bar-pct">{{ searchProgress.current }}/{{ searchProgress.total }}</span>
+        </div>
+        <!-- 状态消息 -->
+        <p class="sp-msg">{{ searchProgress.message || t('search.searchingFromSource') }}</p>
+      </div>
     </div>
 
     <div
@@ -558,26 +636,25 @@ function clearSourceResults(): void {
         hasSearched &&
         !videoStore.loading &&
         videoStore.videos.length === 0 &&
-        sourceStore.currentSourceKey
+        sourceStore.currentSourceKey &&
+        !sourceSearching
       "
     >
       <EmptyState
         icon="🔍"
-        title="未找到相关视频"
-        description="试试换个关键词，或直接到源站搜索最新结果"
+        :title="t('search.noResultsTitle')"
+        :description="t('search.noResultsHint')"
       >
-        <div class="source-search-wrap">
+        <div class="source-search-wrap cczj-flex cczj-flex-col cczj-gap-3 cczj-items-center cczj-mt-4">
           <Button
-            v-if="!sourceSearching && !hasSourceSearched"
+            v-if="!hasSourceSearched"
             variant="primary"
             @click="doSourceSearch"
+            class="cczj-flex cczj-items-center cczj-gap-2"
           >
             <Icon name="search" :size="12" />
-            <span>到源站搜索 "{{ keyword }}"</span>
+            <span>{{ t('search.searchFromSource', { keyword: keyword }) }}</span>
           </Button>
-          <div v-else-if="sourceSearching" class="source-search-loading">
-            <LoadingSpinner size="sm" label="正在从源站搜索..." />
-          </div>
         </div>
       </EmptyState>
     </div>
@@ -585,16 +662,16 @@ function clearSourceResults(): void {
     <!-- 源站搜索结果 -->
     <div
       v-if="hasSourceSearched && !sourceSearching && sourceSearchTotal > 0"
-      class="source-search-results"
+      class="source-search-results cczj-mb-4"
     >
-      <div class="results-header source-search-header">
-        <span class="results-label">
+      <div class="results-header source-search-header cczj-flex cczj-items-center cczj-justify-between cczj-gap-2 cczj-mb-3">
+        <span class="results-label cczj-flex cczj-items-center cczj-gap-1">
           <Icon name="globe" :size="12" />
-          源站搜索结果
+          {{ t('search.sourceSearchResults') }}
         </span>
-        <span class="results-count">共 {{ sourceSearchTotal }} 条（已自动入库）</span>
+        <span class="results-count cczj-text-sm cczj-text-muted">{{ t('search.totalItems', { count: sourceSearchTotal }) }}（{{ t('search.autoImported') }}）</span>
       </div>
-      <div class="video-grid" :style="gridStyle">
+      <div class="video-grid cczj-grid" :style="gridStyle">
         <VideoCard
           v-for="v in sourceSearchResults"
           :key="`src-${v.vod_g_id ?? v.vod_id ?? v.id}`"
@@ -606,22 +683,23 @@ function clearSourceResults(): void {
 
     <div
       v-if="hasSourceSearched && !sourceSearching && sourceSearchTotal === 0"
+      class="cczj-mb-4"
     >
       <EmptyState
         icon="📡"
-        title="源站也无结果"
-        description="该关键词在源站也找不到相关视频，试试换个关键词"
+        :title="t('search.noSourceResults')"
+        :description="t('search.noSourceResultsHint')"
       />
     </div>
 
-    <div v-if="!currentSearchSource && !videoStore.loading">
+    <div v-if="!currentSearchSource && !videoStore.loading" class="cczj-mb-4">
       <EmptyState
         icon="📡"
-        title="请先选择采集源"
-        description="在上方下拉框中选择一个来源，然后输入关键词搜索"
+        :title="t('search.selectSourceFirst')"
+        :description="t('search.selectSourceHint')"
       >
         <Button variant="primary" @click="router.push('/sources')">
-          管理采集源
+          {{ t('search.manageSources') }}
         </Button>
       </EmptyState>
     </div>
@@ -970,9 +1048,151 @@ function clearSourceResults(): void {
 .source-search-wrap {
   margin-top: 8px;
 }
-.source-search-loading {
-  margin-top: 16px;
+
+/* 源站搜索进度（独立全宽区域） */
+.source-search-progress-section {
+  max-width: 560px;
+  margin: 0 auto;
 }
+
+/* ============ 搜索进度卡片 ============ */
+.search-progress-card {
+  background: var(--bg-card);
+  border: 1px solid var(--accent-alpha-20);
+  border-radius: 14px;
+  padding: 24px 28px 20px;
+  animation: sp-fadeIn 0.35s ease;
+}
+@keyframes sp-fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 步骤指示器 */
+.sp-steps {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-bottom: 20px;
+}
+.sp-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sp-step-dot {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--bg-secondary);
+  border: 2px solid var(--border);
+  transition: all 0.3s ease;
+}
+.sp-step.done .sp-step-dot {
+  background: var(--success, #22c55e);
+  border-color: var(--success, #22c55e);
+}
+.sp-step.active .sp-step-dot {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-alpha-15, rgba(99,102,241,0.15));
+}
+.sp-check {
+  width: 14px;
+  height: 14px;
+  color: #fff;
+}
+.sp-pulse {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  animation: sp-pulse 1.2s ease-in-out infinite;
+}
+@keyframes sp-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.7); }
+}
+.sp-step-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
+  transition: color 0.3s;
+}
+.sp-step.active .sp-step-label {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.sp-step.done .sp-step-label {
+  color: var(--text-secondary, var(--text-muted));
+}
+.sp-step-line {
+  flex: 1;
+  height: 2px;
+  background: var(--border);
+  margin: 0 14px;
+  border-radius: 1px;
+  transition: background 0.4s;
+}
+.sp-step-line.filled {
+  background: var(--success, #22c55e);
+}
+
+/* 进度条 */
+.sp-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+.sp-bar {
+  flex: 1;
+  height: 10px;
+  background: var(--bg-secondary);
+  border-radius: 5px;
+  overflow: hidden;
+  position: relative;
+}
+.sp-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 70%, #a78bfa));
+  border-radius: 5px;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.sp-bar-shimmer {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.15) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: sp-shimmer 1.8s ease-in-out infinite;
+}
+@keyframes sp-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.sp-bar-pct {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  font-family: 'SF Mono', Consolas, monospace;
+  min-width: 52px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* 状态消息 */
+.sp-msg {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
 .source-search-results {
   margin-top: 16px;
   padding: 16px;

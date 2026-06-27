@@ -210,6 +210,7 @@ export const usePosterCacheStore = defineStore('posterCache', () => {
         const resp = (await GetVideoDetail({
           source_key: sourceKey,
           vod_id: vodId,
+          refresh: false,
         })) as { video?: Video | null } | null | undefined
         const v = resp?.video
         if (v) {

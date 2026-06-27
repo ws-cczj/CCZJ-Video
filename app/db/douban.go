@@ -34,6 +34,7 @@ type GlobalVideoRow struct {
 	DoubanId            string `db:"douban_id"`
 	DoubanScore         string `db:"douban_score"`
 	DoubanVotes         string `db:"douban_votes"`
+	DoubanHotness       string `db:"douban_hotness"`
 	Genre               string `db:"genre"`
 	ReleaseDate         string `db:"release_date"`
 	Duration            string `db:"duration"`
@@ -68,6 +69,9 @@ type DoubanInfoRow struct {
 	PosterURL    string `db:"poster_url"`
 	UpdatedAt    string `db:"updated_at"`
 	VodName      string `db:"vod_name"`
+	Year         string `db:"year"`
+	VodType      string `db:"vod_type"`
+	Hotness      string `db:"douban_hotness"`
 }
 
 // normalizeSubjectID 将 subject_id 统一为纯整数字符串。
@@ -205,6 +209,7 @@ func UpsertDoubanInfo(info *DoubanInfoRow) error {
 		aka = CASE WHEN ? != '' THEN ? ELSE aka END,
 		imdb = CASE WHEN ? != '' THEN ? ELSE imdb END,
 		pic = CASE WHEN ? != '' THEN ? ELSE pic END,
+		douban_hotness = CASE WHEN ? != '' AND ? != '0' THEN ? ELSE douban_hotness END,
 		updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?`
 
@@ -225,6 +230,7 @@ func UpsertDoubanInfo(info *DoubanInfoRow) error {
 		info.Aka, info.Aka,
 		info.Imdb, info.Imdb,
 		info.PosterURL, info.PosterURL,
+		info.Hotness, info.Hotness, info.Hotness,
 		info.GlobalID)
 	if err != nil {
 		applog.Error("[Douban] UpsertDoubanInfo failed for global_id=%d: %v", info.GlobalID, err)
@@ -247,6 +253,129 @@ func GetDoubanInfoByGlobalID(globalID int) (*DoubanInfoRow, error) {
 		return nil, err
 	}
 	return &row, nil
+}
+
+// GetGlobalIDByDoubanSubject 通过豆瓣 subject_id 查找对应的 global_video.id
+func GetGlobalIDByDoubanSubject(subjectID string) int {
+	if subjectID == "" {
+		return 0
+	}
+	var globalID int
+	err := instance.Get(&globalID, `SELECT id FROM global_video WHERE douban_id = ? LIMIT 1`, subjectID)
+	if err != nil {
+		return 0
+	}
+	return globalID
+}
+
+// UpdateDoubanHotness 直接更新某个视频的热度值
+func UpdateDoubanHotness(globalID int, hotness string) error {
+	if globalID <= 0 || hotness == "" || hotness == "0" {
+		return nil
+	}
+	_, err := instance.Exec(`UPDATE global_video SET douban_hotness = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, hotness, globalID)
+	if err != nil {
+		applog.Error("[Douban] UpdateDoubanHotness failed for global_id=%d: %v", globalID, err)
+	}
+	return err
+}
+
+// GetGlobalVideoByDoubanID 通过豆瓣 subject_id 查找全局视频完整信息
+func GetGlobalVideoByDoubanID(doubanID string) (*GlobalVideoRow, error) {
+	if doubanID == "" {
+		return nil, fmt.Errorf("douban_id is empty")
+	}
+	var row GlobalVideoRow
+	err := instance.Get(&row, `SELECT * FROM global_video WHERE douban_id = ? LIMIT 1`, doubanID)
+	if err != nil {
+		return nil, err
+	}
+	return &row, nil
+}
+
+// GetRecentGlobalVideos 获取最近更新的全局视频列表（用于保底填充）
+func GetRecentGlobalVideos(limit int) ([]GlobalVideoRow, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	var rows []GlobalVideoRow
+	err := instance.Select(&rows, `SELECT * FROM global_video WHERE pic != '' ORDER BY updated_at DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+// UpsertGlobalVideoFromChart 将热榜数据插入/更新到 global_video 表
+func UpsertGlobalVideoFromChart(doubanID, title, posterURL, rating, votes string) error {
+	if doubanID == "" || title == "" {
+		return fmt.Errorf("douban_id or title is empty")
+	}
+
+	// 检查是否已存在
+	var existingID int
+	err := instance.Get(&existingID, `SELECT id FROM global_video WHERE douban_id = ? LIMIT 1`, doubanID)
+	if err == nil && existingID > 0 {
+		// 已存在，更新评分和热度相关字段
+		_, err = instance.Exec(`UPDATE global_video SET 
+			douban_score = CASE WHEN ? != '' THEN ? ELSE douban_score END,
+			douban_votes = CASE WHEN ? != '' THEN ? ELSE douban_votes END,
+			pic = CASE WHEN pic = '' AND ? != '' THEN ? ELSE pic END,
+			updated_at = CURRENT_TIMESTAMP
+			WHERE id = ?`, rating, rating, votes, votes, posterURL, posterURL, existingID)
+		return err
+	}
+
+	// 不存在，使用 INSERT OR IGNORE 插入（避免 UNIQUE 冲突）
+	_, err = instance.Exec(`INSERT OR IGNORE INTO global_video (vod_name, douban_id, douban_score, douban_votes, pic, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+		title, doubanID, rating, votes, posterURL)
+	if err != nil {
+		return err
+	}
+	// 重新查询获取实际 ID（可能是已存在记录）
+	var actualID int64
+	instance.Get(&actualID, `SELECT id FROM global_video WHERE vod_name = ? LIMIT 1`, title)
+	if actualID <= 0 {
+		return fmt.Errorf("INSERT OR IGNORE 后未找到记录: %s", title)
+	}
+	// 如果实际 ID 和 existingID 不同，补充数据
+	if int64(existingID) != actualID {
+		_, err = instance.Exec(`UPDATE global_video SET 
+			douban_id = CASE WHEN douban_id = '' THEN ? ELSE douban_id END,
+			douban_score = CASE WHEN ? != '' THEN ? ELSE douban_score END,
+			douban_votes = CASE WHEN ? != '' THEN ? ELSE douban_votes END,
+			pic = CASE WHEN pic = '' AND ? != '' THEN ? ELSE pic END,
+			updated_at = CURRENT_TIMESTAMP
+			WHERE id = ?`, doubanID, rating, rating, votes, votes, posterURL, posterURL, actualID)
+	}
+	return err
+}
+
+// SearchVideoInSourceTable 在指定源的视频表中按名称搜索
+func SearchVideoInSourceTable(sourceKey, title string) (string, bool) {
+	if sourceKey == "" || title == "" {
+		return "", false
+	}
+	tn := VideoTableName(sourceKey)
+	if !TableExists(tn) {
+		return "", false
+	}
+
+	// 精确匹配优先
+	var vodID string
+	err := instance.Get(&vodID, fmt.Sprintf(`SELECT CAST(vod_id AS TEXT) FROM %s WHERE vod_name = ? LIMIT 1`, tn), title)
+	if err == nil && vodID != "" {
+		return vodID, true
+	}
+
+	// 模糊匹配：标题包含
+	err = instance.Get(&vodID, fmt.Sprintf(`SELECT CAST(vod_id AS TEXT) FROM %s WHERE vod_name LIKE ? LIMIT 1`, tn), "%"+title+"%")
+	if err == nil && vodID != "" {
+		return vodID, true
+	}
+
+	return "", false
 }
 
 // GetDoubanInfoByVodName 通过 vod_name 查询豆瓣信息
@@ -323,16 +452,18 @@ func GetDoubanInfoMissingSubjectID(limit int) ([]*DoubanInfoRow, error) {
 	}
 	var rows []*DoubanInfoRow
 	q := `SELECT
-		id AS global_id,
-		douban_id AS subject_id, douban_score AS rating, douban_votes AS votes,
-		director, writer, actor, genre,
-		area AS country, lang AS language,
-		release_date, season_count, episode_count, duration,
-		aka, imdb, pic AS poster_url, updated_at, vod_name
-		FROM global_video
-		WHERE (douban_id = '' OR douban_id IS NULL)
-		AND (douban_cooldown_until IS NULL OR douban_cooldown_until < ?)
-		ORDER BY id ASC LIMIT ?`
+		gv.id AS global_id,
+		gv.douban_id AS subject_id, gv.douban_score AS rating, gv.douban_votes AS votes,
+		gv.director, gv.writer, gv.actor, gv.genre,
+		gv.area AS country, gv.lang AS language,
+		gv.release_date, gv.season_count, gv.episode_count, gv.duration,
+		gv.aka, gv.imdb, gv.pic AS poster_url, gv.updated_at, gv.vod_name,
+		gv.year, COALESCE(gt.type_name, '') AS vod_type
+		FROM global_video gv
+		LEFT JOIN global_types gt ON gv.type_id = gt.id
+		WHERE (gv.douban_id = '' OR gv.douban_id IS NULL)
+		AND (gv.douban_cooldown_until IS NULL OR gv.douban_cooldown_until < ?)
+		ORDER BY gv.id ASC LIMIT ?`
 	err := instance.Select(&rows, q,
 		time.Now().Format("2006-01-02 15:04:05"), limit)
 	if err != nil {
@@ -906,10 +1037,14 @@ func GetOrCreateGlobalID(vodName string, typeId int64) (int64, error) {
 // 当名称 90%+ 相似且元数据（年份+导演/演员+类型）吻合时，视为同一视频
 // 注意：传入的 director/actor 应为明文（调用方负责解压缩）
 func GetOrCreateGlobalIDWithMeta(vodName, year, director, actor string, typeId int64) (int64, error) {
+	// typeId=0 表示「不知道类型」（如热榜/收藏/历史），此时跳过类型检查，按名称匹配即可
+	matchAnyType := typeId == 0
+
 	// 1. 精确匹配
 	row, err := GetGlobalVideoByName(vodName)
 	if err == nil {
-		if int64(row.TypeId) == typeId {
+		// ⭐ 如果已有记录的 type_id=0（轮播图等无类型数据），视为占位符，允许匹配
+		if matchAnyType || int64(row.TypeId) == typeId || row.TypeId == 0 {
 			return int64(row.Id), nil
 		}
 		// ⭐ 类型不匹配：同名但不同类型，视为不同视频
@@ -918,14 +1053,25 @@ func GetOrCreateGlobalIDWithMeta(vodName, year, director, actor string, typeId i
 
 	// 2. 归一化匹配（去除所有空白字符 + 小写）
 	normalized := sqlNorm(vodName)
-	id, normName, normTypeId, err := globalVideoIDAndNameWithType(
-		fmt.Sprintf(`%s = ?`, sqlNormExpr()), normalized)
-	if err == nil {
-		if normTypeId == typeId {
-			applog.Info("[global] 归一化匹配: %q -> global_id=%d (%q, type_id=%d)", vodName, id, normName, normTypeId)
+	if matchAnyType {
+		// typeId 未知时，只按归一化名称匹配，不限制 type_id
+		id, normName, err := globalVideoIDAndName(
+			fmt.Sprintf(`%s = ?`, sqlNormExpr()), normalized)
+		if err == nil {
+			applog.Info("[global] 归一化匹配(无类型约束): %q -> global_id=%d (%q)", vodName, id, normName)
 			return id, nil
 		}
-		applog.Info("[global] 归一化匹配命中但类型不匹配: %q (现有type_id=%d, 新type_id=%d), 跳过", vodName, normTypeId, typeId)
+	} else {
+		id, normName, normTypeId, err := globalVideoIDAndNameWithType(
+			fmt.Sprintf(`%s = ?`, sqlNormExpr()), normalized)
+		if err == nil {
+			// ⭐ 如果已有记录的 type_id=0（轮播图等无类型数据），视为占位符，允许匹配
+			if normTypeId == typeId || normTypeId == 0 {
+				applog.Info("[global] 归一化匹配: %q -> global_id=%d (%q, type_id=%d)", vodName, id, normName, normTypeId)
+				return id, nil
+			}
+			applog.Info("[global] 归一化匹配命中但类型不匹配: %q (现有type_id=%d, 新type_id=%d), 跳过", vodName, normTypeId, typeId)
+		}
 	}
 
 	// 3. 模糊匹配（90%+ 相似度 + 元数据交叉验证），全表扫描不做长度预过滤
@@ -936,15 +1082,15 @@ func GetOrCreateGlobalIDWithMeta(vodName, year, director, actor string, typeId i
 
 	for i := range candidates {
 		c := &candidates[i]
-		// ⭐ 类型预检：类型不匹配的直接跳过
-		if int64(c.TypeId) != typeId {
+		// ⭐ 类型预检：typeId=0 时不做类型过滤，已有记录 type_id=0 也允许匹配
+		if !matchAnyType && int64(c.TypeId) != typeId && c.TypeId != 0 {
 			continue
 		}
 		sim := nameSimilarity(vodName, c.VodName)
 		if sim < 0.90 {
 			continue
 		}
-		// 防止不同季/部/期被误判为同一视频（如"权力的游戏 第一季" vs "权力的游戏 第二季"）
+		// 防止不同季/部/期被误判为同一视频（如“权力的游戏 第一季” vs “权力的游戏 第二季”）
 		if hasSeasonSuffix(vodName, c.VodName) {
 			continue
 		}
@@ -971,11 +1117,19 @@ func GetOrCreateGlobalIDWithMeta(vodName, year, director, actor string, typeId i
 	// 4. 创建新条目（使用 INSERT OR IGNORE 避免 UNIQUE 冲突报错，包含 type_id）
 	normVal := sqlNorm(vodName)
 	_, _ = instance.Exec(`INSERT OR IGNORE INTO global_video (vod_name, type_id, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)`, vodName, typeId)
-	// 通过归一化 + type_id 精确 SELECT 获取 ID
-	if id, _, _, e := globalVideoIDAndNameWithType(
-		fmt.Sprintf(`%s = ? AND type_id = ?`, sqlNormExpr()), normVal, typeId); e == nil && id > 0 {
-		applog.Info("[global] 新建/已有条目: %q -> global_id=%d (type_id=%d)", vodName, id, typeId)
-		return id, nil
+	// 通过归一化 SELECT 获取 ID（同时考虑 type_id=0 的占位记录）
+	if matchAnyType {
+		if id, _, e := globalVideoIDAndName(
+			fmt.Sprintf(`%s = ?`, sqlNormExpr()), normVal); e == nil && id > 0 {
+			applog.Info("[global] 新建/已有条目(无类型约束): %q -> global_id=%d", vodName, id)
+			return id, nil
+		}
+	} else {
+		if id, _, _, e := globalVideoIDAndNameWithType(
+			fmt.Sprintf(`%s = ?`, sqlNormExpr()), normVal); e == nil && id > 0 {
+			applog.Info("[global] 新建/已有条目: %q -> global_id=%d", vodName, id)
+			return id, nil
+		}
 	}
 	// 回退：精确名称查询
 	if id, e := selectGlobalID(`vod_name = ?`, vodName); e == nil && id > 0 {

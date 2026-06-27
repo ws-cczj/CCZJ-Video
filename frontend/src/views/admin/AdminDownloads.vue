@@ -62,7 +62,7 @@ onMounted(async () => {
         </thead>
         <tbody>
           <tr v-for="t in dl.tasks" :key="t.task_id">
-            <td class="a-tb-name" :title="t.filename || t.vod_name">
+            <td class="a-tb-name cczj-truncate" :title="t.filename || t.vod_name">
               {{ t.vod_name ? `${t.vod_name} - ${t.ep_name || ''}` : t.filename }}
             </td>
             <td>
@@ -75,9 +75,9 @@ onMounted(async () => {
                 <span class="dl-prog-txt">{{ percent(t) }}%</span>
               </div>
             </td>
-            <td class="a-tb-mono">{{ formatBytes(t.downloaded) }} / {{ formatBytes(t.total) }}</td>
-            <td class="a-tb-mono">{{ t.status === 'downloading' ? formatSpeed(t.speed_bps) : '--' }}</td>
-            <td class="a-tb-mono">{{ t.status === 'downloading' ? formatEta(t.eta_sec) : '--' }}</td>
+            <td class="a-tb-mono cczj-truncate">{{ formatBytes(t.downloaded) }} / {{ formatBytes(t.total) }}</td>
+            <td class="a-tb-mono cczj-truncate">{{ t.status === 'downloading' ? formatSpeed(t.speed_bps) : '--' }}</td>
+            <td class="a-tb-mono cczj-truncate">{{ t.status === 'downloading' ? formatEta(t.eta_sec) : '--' }}</td>
             <td class="a-tb-acts">
               <Button v-if="t.status === 'downloading'" variant="secondary" size="sm" @click="dl.pause(t.task_id)">暂停</Button>
               <Button v-if="t.status === 'paused'" variant="primary" size="sm" @click="dl.resume(t.task_id)">恢复</Button>

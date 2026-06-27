@@ -5,6 +5,8 @@ import { useRoute } from 'vue-router'
 import {
   GetSetting, SetSetting, GetCloseBehavior, SetCloseBehavior, RestartApp,
   WindowSetResizable, WindowGetResizable, WindowSetSize, WindowGetSize,
+  CheckUpdate, DownloadUpdate, InstallUpdate, GetAppVersion, IgnoreVersion, GetIgnoredVersion,
+  GetPendingUpdateInfo, ClearPendingUpdateInfo,
 } from '../../bindings/cczjVideo/app'
 import { useThemeStore, type CustomTheme, type ColorPalette } from '../stores/theme'
 import { useErrorStore } from '../stores/error'
@@ -13,10 +15,11 @@ import { useDownloadStore } from '../stores/download'
 import { useDevMode } from '../stores/devMode'
 import Icon from '../components/Icon.vue'
 import { Button, Modal, Segment, Select as SelectDropdown } from '../components/ui'
-import { useI18n } from '../locales'
+import { useI18n } from 'vue-i18n'
+import { setLocale as saveLocalePreference } from '../locales'
 import { stats as tsStats, clear as tsClear, diskCacheInfo, TsCache } from '../utils/tsCache'
 
-const { t, setLocale } = useI18n()
+const { t } = useI18n()
 
 // ---------- 分组配置（顶部 tab） ----------
 interface GroupItem {
@@ -28,7 +31,7 @@ const GROUPS = computed<GroupItem[]>(() => [
   { id: 'basic',  label: t('settings.basic'), icon: 'sliders' },
   { id: 'theme',  label: t('settings.theme'), icon: 'palette' },
   { id: 'play',   label: t('settings.playback'), icon: 'play' },
-  { id: 'cache',  label: '缓存管理', icon: 'database' },
+  { id: 'cache',  label: t('settings.cacheManagement'), icon: 'database' },
   { id: 'about',  label: t('settings.about'), icon: 'info' },
 ])
 
@@ -45,7 +48,7 @@ const speedOptions = [0.5, 0.75, 1, 1.25, 1.5, 2].map(s => ({ value: s, label: `
 
 // 通用设置
 const gridColumns = ref<number>(5)
-const layoutDensity = ref<'comfortable' | 'compact'>('comfortable')
+const layoutDensity = ref<'comfortable' | 'compact' | 'spacious'>('comfortable')
 const playbackAutoPlay = ref(true)
 const playbackAutoNext = ref(true)
 const playbackSpeed = ref<number>(1)
@@ -93,7 +96,6 @@ const fontFamilyOptions = computed(() => [
 const language = ref<string>('zh-CN')
 const languageOptions = computed(() => [
   { value: 'zh-CN', label: t('settings.languageOptions.zhCN') },
-  { value: 'zh-TW', label: t('settings.languageOptions.zhTW') },
   { value: 'en',    label: t('settings.languageOptions.en') },
 ])
 
@@ -181,6 +183,230 @@ async function restartApp(): Promise<void> {
     restarting.value = false
   }
 }
+
+// ---------- 版本更新 ----------
+const appVersion = ref('1.1.0')
+const updateChecking = ref(false)
+const updateDownloading = ref(false)
+const updateDownloaded = ref(false)
+const updateFilePath = ref('')
+const updateInfo = ref<{
+  has_update: boolean
+  current_version: string
+  latest_version: string
+  release_name: string
+  release_notes: string
+  download_url: string
+  asset_name: string
+  asset_size: number
+  published_at: string
+  history?: { version: string; desc: string }[]
+} | null>(null)
+const updateDownloadProgress = reactive({
+  downloaded: 0,
+  total: 0,
+  speed_bps: 0,
+  percent: 0,
+})
+const updateModalOpen = ref(false)
+const updateModalDownloaded = ref(false)
+const updateInstalling = ref(false)
+const updateCheckFailed = ref(false) // 检查更新失败状态
+const tryAutoUpdate = ref(true) // 发现新版本时是否自动下载（参考 lx-music-desktop）
+const showChangeLog = ref(true) // 版本变化时是否展示更新日志（参考 lx-music-desktop）
+const changelogModalOpen = ref(false) // 更新日志弹窗
+const changelogLastVersion = ref('') // 上次启动的版本号
+
+// 一周内不再提醒检查失败
+function canShowUpdateFailTip(): boolean {
+  const lastTip = localStorage.getItem('update__check_failed_tip')
+  if (!lastTip) return true
+  return Date.now() - parseInt(lastTip) > 7 * 86400000
+}
+function dismissUpdateFailTip(): void {
+  localStorage.setItem('update__check_failed_tip', Date.now().toString())
+  updateCheckFailed.value = false
+  updateModalOpen.value = false
+}
+
+function fmtSize(bytes: number): string {
+  if (bytes <= 0) return '未知'
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
+
+function fmtSpeed(bps: number): string {
+  if (bps <= 0) return ''
+  if (bps < 1024) return bps.toFixed(0) + ' B/s'
+  if (bps < 1024 * 1024) return (bps / 1024).toFixed(1) + ' KB/s'
+  return (bps / (1024 * 1024)).toFixed(1) + ' MB/s'
+}
+
+async function doCheckUpdate(): Promise<void> {
+  updateChecking.value = true
+  updateCheckFailed.value = false
+  try {
+    const info = await CheckUpdate(true) // reCheck: 强制刷新缓存
+    if (!info) return
+    updateInfo.value = info
+    if (info.has_update) {
+      updateModalOpen.value = true
+      // tryAutoUpdate: 自动下载更新（参考 lx-music-desktop）
+      if (tryAutoUpdate.value && info.download_url) {
+        updateDownloading.value = true
+        doDownloadUpdate().catch(() => {})
+      }
+    } else {
+      errorStore.info('检查更新', `当前已是最新版本 ${info.current_version}`)
+    }
+  } catch (e: any) {
+    // 检查更新失败：显示友好提示（参考 lx-music-desktop 的 isUnknown 状态）
+    updateCheckFailed.value = true
+    if (canShowUpdateFailTip()) {
+      updateModalOpen.value = true
+    } else {
+      errorStore.fromError('检查更新失败', e, 'Settings.checkUpdate')
+    }
+  } finally {
+    updateChecking.value = false
+  }
+}
+
+async function doDownloadUpdate(): Promise<void> {
+  if (!updateInfo.value?.download_url) return
+  updateDownloading.value = true
+  updateDownloadProgress.downloaded = 0
+  updateDownloadProgress.total = 0
+  updateDownloadProgress.percent = 0
+  updateDownloadProgress.speed_bps = 0
+  try {
+    const path = await DownloadUpdate(updateInfo.value.download_url)
+    updateFilePath.value = path
+    updateDownloaded.value = true
+    updateModalDownloaded.value = true
+  } catch (e: any) {
+    errorStore.fromError('下载更新失败', e, 'Settings.downloadUpdate')
+    // 下载失败一次提示（参考 lx-music-desktop 的 update__download_failed_tip）
+    if (!localStorage.getItem('update__download_failed_tip')) {
+      setTimeout(() => {
+        errorStore.info('下载提示', '下载更新失败，可能是网络问题。你可以稍后重试，或手动前往发布页下载更新。')
+        localStorage.setItem('update__download_failed_tip', '1')
+      }, 500)
+    }
+  } finally {
+    updateDownloading.value = false
+  }
+}
+
+async function doInstallUpdate(): Promise<void> {
+  if (!updateFilePath.value) return
+  updateInstalling.value = true
+  try {
+    await ClearPendingUpdateInfo()
+    await InstallUpdate(updateFilePath.value)
+  } catch (e: any) {
+    errorStore.fromError('安装更新失败', e, 'Settings.installUpdate')
+    updateInstalling.value = false
+  }
+}
+
+async function doIgnoreVersion(): Promise<void> {
+  if (!updateInfo.value?.latest_version) return
+  try {
+    await IgnoreVersion(updateInfo.value.latest_version)
+    await ClearPendingUpdateInfo()
+    updateModalOpen.value = false
+    updateModalDownloaded.value = false
+  } catch { /* ignore */ }
+}
+
+// 监听下载进度事件
+function onUpdateDownloadProgress(data: any): void {
+  if (data.total > 0) {
+    updateDownloadProgress.total = data.total
+    updateDownloadProgress.percent = Math.round((data.downloaded / data.total) * 100)
+  }
+  updateDownloadProgress.downloaded = data.downloaded
+  updateDownloadProgress.speed_bps = data.speed_bps
+}
+
+// 监听自动检查更新事件（来自 App.vue 或 Go 后端启动检查）
+function onUpdateAvailable(data: any): void {
+  updateInfo.value = data
+  updateModalOpen.value = true
+}
+
+// 监听版本变化事件（参考 lx-music-desktop 的 ChangeLogModal）
+function onVersionChanged(data: any): void {
+  if (!data || !data.old_version) return
+  changelogLastVersion.value = data.old_version
+  // 检查是否应该显示更新日志
+  if (showChangeLog.value && data.new_version && data.old_version) {
+    changelogModalOpen.value = true
+  }
+}
+
+// 计算当前版本的更新日志（参考 lx-music-desktop 的 ChangeLogModal）
+const changelogInfo = computed(() => {
+  const currentVer = appVersion.value
+  const lastVer = changelogLastVersion.value
+  const info = {
+    version: currentVer,
+    desc: '',
+    history: [] as Array<{ version: string; desc: string }>,
+    isLatest: true,
+  }
+
+  if (!updateInfo.value) return info
+
+  // 构建完整的版本历史列表（当前最新版本 + 历史版本）
+  const allVersions = [
+    {
+      version: updateInfo.value.latest_version,
+      desc: updateInfo.value.release_notes || '',
+    },
+    ...(updateInfo.value.history || []),
+  ]
+
+  // 检查当前版本是否是最新
+  info.isLatest = currentVer >= updateInfo.value.latest_version
+
+  if (lastVer) {
+    // 有上次启动版本号：精确筛选从上次版本到当前版本之间的变更
+    for (const ver of allVersions) {
+      if (ver.version === currentVer) {
+        info.version = ver.version
+        info.desc = ver.desc
+        // 找到当前版本后，把其余大于 lastVer 的版本作为历史
+        for (const v of allVersions) {
+          if (v.version > lastVer && v.version < currentVer) {
+            info.history.push(v)
+          }
+        }
+        break
+      }
+    }
+  } else {
+    // 首次启动：只显示当前版本信息
+    const found = allVersions.find(v => v.version === currentVer)
+    if (found) {
+      info.version = found.version
+      info.desc = found.desc
+    } else {
+      info.desc = '未找到当前版本的更新日志'
+    }
+  }
+
+  // 设置历史版本
+  if (info.history.length === 0 && updateInfo.value.history) {
+    info.history = updateInfo.value.history
+      .filter((v: any) => v.version < currentVer)
+      .slice(0, 10)
+  }
+
+  return info
+})
 
 async function onDeleteTheme(id: string, name: string): Promise<void> {
   const yes = await confirmStore.confirm({
@@ -586,10 +812,13 @@ onMounted(async () => {
   try { if (!themeStore.loaded) await themeStore.load() } catch { /* 忽略 */ }
   try { await downloadStore.init() } catch { /* 忽略 */ }
 
+  // 加载版本号
+  try { const v = await GetAppVersion(); if (v) appVersion.value = v } catch { /* ignore */ }
+
   const col = await safeGet('grid_columns', '5')
   gridColumns.value = parseInt(col, 10) || 5
   const den = await safeGet('layout_density', 'comfortable')
-  layoutDensity.value = den === 'compact' ? 'compact' : 'comfortable'
+  layoutDensity.value = (den === 'compact' || den === 'spacious') ? den as any : 'comfortable'
   playbackAutoPlay.value = (await safeGet('playback_auto_play', '1')) !== '0'
   playbackAutoNext.value = (await safeGet('playback_auto_next', '1')) !== '0'
   playbackSpeed.value = parseFloat(await safeGet('playback_speed', '1')) || 1
@@ -612,9 +841,40 @@ onMounted(async () => {
 
   // 加载关闭行为设置
   await loadCloseBehavior()
+
+  // 加载更新设置
+  tryAutoUpdate.value = localStorage.getItem('update__try_auto_update') !== '0'
+  showChangeLog.value = localStorage.getItem('update__show_change_log') !== '0'
+
+  // 监听更新下载进度事件
+  const { Events } = await import('@wailsio/runtime')
+  Events.On('update:download:progress', onUpdateDownloadProgress)
+  Events.On('update:available', onUpdateAvailable)
+  Events.On('update:version:changed', onVersionChanged)
+
+  // 检查是否有待处理的启动更新（从 App.vue 跳转过来时）
+  if (activeGroup.value === 'about') {
+    try {
+      const pending = await GetPendingUpdateInfo()
+      if (pending && pending.has_update) {
+        updateInfo.value = pending
+        updateModalOpen.value = true
+      }
+    } catch { /* ignore */ }
+  }
 })
 
-onUnmounted(() => {})
+onUnmounted(() => {
+  import('@wailsio/runtime').then(({ Events }) => {
+    Events.Off('update:download:progress')
+    Events.Off('update:available')
+    Events.Off('update:version:changed')
+  }).catch(() => {})
+})
+
+// 持久化更新设置
+watch(tryAutoUpdate, (v) => { localStorage.setItem('update__try_auto_update', v ? '1' : '0') })
+watch(showChangeLog, (v) => { localStorage.setItem('update__show_change_log', v ? '1' : '0') })
 
 async function safeGet(key: string, fallback: string): Promise<string> {
   try { const v = await GetSetting(key); return v || fallback } catch { return fallback }
@@ -627,11 +887,11 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 <template>
   <div class="settings-page">
     <!-- 顶部分组切换 tab -->
-    <div class="tabs">
+    <div class="tabs cczj-flex">
       <button
         v-for="g in GROUPS"
         :key="g.id"
-        class="tab"
+        class="tab cczj-inline-flex cczj-items-center cczj-gap-4 cczj-cursor-pointer"
         :class="{ active: activeGroup === g.id }"
         @click="activeGroup = g.id"
       >
@@ -642,24 +902,24 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 
     <div class="content">
       <!-- ========== 基本设置 ========== -->
-      <div v-if="activeGroup === 'basic'" class="panel">
+      <div v-if="activeGroup === 'basic'" class="panel cczj-flex cczj-flex-col cczj-gap-2">
 
         <!-- 窗口尺寸（预设单选） -->
         <section class="block">
           <h3>{{ t('settings.windowSize') }}</h3>
-          <div class="radio-group">
-            <label v-for="p in windowSizePresets" :key="p.key" class="radio-item"
+          <div class="radio-group cczj-flex cczj-flex-wrap">
+            <label v-for="p in windowSizePresets" :key="p.key" class="radio-item cczj-inline-flex cczj-items-center cczj-gap-3 cczj-cursor-pointer"
               :class="{ checked: windowSizeKey === p.key }"
               @click="applyWindowPreset(p.key)"
             >
-              <span class="radio-box">
+              <span class="radio-box cczj-inline-flex cczj-items-center cczj-justify-center">
                 <Icon v-if="windowSizeKey === p.key" name="check" :size="12" />
               </span>
               <span class="radio-label">{{ p.label }}</span>
             </label>
           </div>
-          <div class="row" style="margin-top: 10px;">
-            <label class="toggle">
+          <div class="row cczj-flex cczj-items-center cczj-gap-7" style="margin-top: 10px;">
+            <label class="toggle cczj-inline-flex cczj-items-center cczj-gap-4 cczj-cursor-pointer">
               <input type="checkbox" v-model="windowResizable" @change="saveWindowResizable" />
               <span>{{ t('settings.allowResize') }}</span>
             </label>
@@ -669,12 +929,12 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
         <!-- 字体大小（预设单选） -->
         <section class="block">
           <h3>{{ t('settings.fontSize') }}</h3>
-          <div class="radio-group">
-            <label v-for="p in fontSizePresets" :key="p.key" class="radio-item"
+          <div class="radio-group cczj-flex cczj-flex-wrap">
+            <label v-for="p in fontSizePresets" :key="p.key" class="radio-item cczj-inline-flex cczj-items-center cczj-gap-3 cczj-cursor-pointer"
               :class="{ checked: fontSizeKey === p.key }"
               @click="applyFontPreset(p.key)"
             >
-              <span class="radio-box">
+              <span class="radio-box cczj-inline-flex cczj-items-center cczj-justify-center">
                 <Icon v-if="fontSizeKey === p.key" name="check" :size="12" />
               </span>
               <span class="radio-label">{{ p.label }}</span>
@@ -685,7 +945,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
         <!-- 字体（下拉框） -->
         <section class="block">
           <h3>{{ t('settings.fontFamily') }}</h3>
-          <div class="row">
+          <div class="row cczj-flex cczj-items-center cczj-gap-7">
             <SelectDropdown
               :model-value="fontFamily"
               :options="fontFamilyOptions"
@@ -697,12 +957,12 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
         <!-- 语言（单选） -->
         <section class="block">
           <h3>{{ t('settings.language') }}</h3>
-          <div class="radio-group">
-            <label v-for="opt in languageOptions" :key="opt.value" class="radio-item"
+          <div class="radio-group cczj-flex cczj-flex-wrap">
+            <label v-for="opt in languageOptions" :key="opt.value" class="radio-item cczj-inline-flex cczj-items-center cczj-gap-3 cczj-cursor-pointer"
               :class="{ checked: language === opt.value }"
-              @click="language = opt.value; setLocale(opt.value); save('language', opt.value)"
+              @click="language = opt.value; saveLocalePreference(opt.value); save('language', opt.value)"
             >
-              <span class="radio-box">
+              <span class="radio-box cczj-inline-flex cczj-items-center cczj-justify-center">
                 <Icon v-if="language === opt.value" name="check" :size="12" />
               </span>
               <span class="radio-label">{{ opt.label }}</span>
@@ -713,8 +973,8 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
         <!-- 首页网格列数 -->
         <section class="block">
           <h3>{{ t('settings.gridColumns') }}</h3>
-          <div class="row">
-            <input type="range" v-model.number="gridColumns" min="3" max="8" @change="save('grid_columns', gridColumns)" />
+          <div class="row cczj-flex cczj-items-center cczj-gap-7">
+            <input type="range" v-model.number="gridColumns" min="2" max="10" @change="save('grid_columns', gridColumns)" />
             <span class="value">{{ gridColumns }} 列</span>
           </div>
         </section>
@@ -722,11 +982,11 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
         <!-- 卡片密度 -->
         <section class="block">
           <h3>{{ t('settings.cardDensity') }}</h3>
-          <div class="row">
+          <div class="row cczj-flex cczj-items-center cczj-gap-7">
             <Segment
               :model-value="layoutDensity"
-              :options="[{ value: 'comfortable', label: t('settings.comfortable') }, { value: 'compact', label: t('settings.compact') }]"
-              @update:model-value="(v: any) => { layoutDensity = v as 'comfortable'|'compact'; save('layout_density', String(v)) }"
+              :options="[{ value: 'comfortable', label: t('settings.comfortable') }, { value: 'compact', label: t('settings.compact') }, { value: 'spacious', label: t('settings.spacious') }]"
+              @update:model-value="(v: any) => { layoutDensity = v as 'comfortable'|'compact'|'spacious'; save('layout_density', String(v)) }"
             />
           </div>
         </section>
@@ -734,8 +994,8 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
         <!-- 关闭行为 -->
         <section class="block">
           <h3>{{ t('settings.closeBehavior') }}</h3>
-          <div class="row">
-            <label class="toggle">
+          <div class="row cczj-flex cczj-items-center cczj-gap-7">
+            <label class="toggle cczj-inline-flex cczj-items-center cczj-gap-4 cczj-cursor-pointer">
               <input type="checkbox" v-model="closeToTray" @change="saveCloseBehavior" />
               <span>{{ t('settings.minimizeToTray') }}</span>
             </label>
@@ -745,8 +1005,8 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
         <!-- 开发者模式开关（密码解锁后可见） -->
         <section v-if="devMode.unlocked" class="block block-dev">
           <h3>开发者模式</h3>
-          <div class="row">
-            <label class="toggle">
+          <div class="row cczj-flex cczj-items-center cczj-gap-7">
+            <label class="toggle cczj-inline-flex cczj-items-center cczj-gap-4 cczj-cursor-pointer">
               <input type="checkbox" :checked="devMode.enabled" @change="(e: any) => devMode.setEnabled(e.target.checked)" />
               <span>打开开发者模式</span>
             </label>
@@ -757,17 +1017,17 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
       </div>
 
       <!-- ========== 主题外观 ========== -->
-      <div v-else-if="activeGroup === 'theme'" class="panel">
+      <div v-else-if="activeGroup === 'theme'" class="panel cczj-flex cczj-flex-col cczj-gap-2">
         <section class="block">
           <h3>主题颜色</h3>
 
           <h4 class="sub-title">浅色主题</h4>
-          <div class="theme-grid">
+          <div class="theme-grid cczj-grid">
             <!-- 预设 -->
             <button
               v-for="t in lightPresets"
               :key="t.id"
-              class="theme-card"
+              class="theme-card cczj-flex cczj-flex-col cczj-items-center cczj-gap-5 cczj-cursor-pointer"
               :class="{ active: isActive(t.id), hasBg: !!resolvePreset(t).bg, 'is-override': resolvePreset(t).isOverride }"
               :style="[
                 resolvePreset(t).bg
@@ -782,22 +1042,22 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
               ]"
               @click="pickTheme(t.id)"
             >
-              <span class="card-actions-top" @click.stop>
-                <button class="mini-btn" @click="openEditPreset(t)" title="编辑主题">
+              <span class="card-actions-top cczj-absolute cczj-flex cczj-gap-2" @click.stop>
+                <button class="mini-btn cczj-inline-flex cczj-items-center cczj-justify-center" @click="openEditPreset(t)" title="编辑主题">
                   <Icon name="pencil" :size="12" />
                 </button>
               </span>
               <span v-if="!resolvePreset(t).bg" class="swatch" :style="{ background: resolvePreset(t).data.primary }"></span>
               <span v-if="resolvePreset(t).bg" class="swatch small" :style="{ background: resolvePreset(t).data.primary }"></span>
-              <span class="label" :style="{ color: resolvePreset(t).textPrimary }">{{ resolvePreset(t).data.name }}</span>
-              <span v-if="isActive(t.id)" class="check"><Icon name="check" :size="12" /></span>
+              <span class="label cczj-truncate" :style="{ color: resolvePreset(t).textPrimary }">{{ resolvePreset(t).data.name }}</span>
+              <span v-if="isActive(t.id)" class="check cczj-inline-flex cczj-items-center cczj-justify-center"><Icon name="check" :size="12" /></span>
             </button>
 
             <!-- 自定义（排除与预设同名的覆盖项，那些已通过上方预设卡显示） -->
             <button
               v-for="c in pureCustomThemes.filter((c) => !c.dark)"
               :key="c.id"
-              class="theme-card custom"
+              class="theme-card custom cczj-flex cczj-flex-col cczj-items-center cczj-gap-5 cczj-cursor-pointer"
               :class="{ active: isActive(c.id), hasBg: !!c.backgroundImage }"
               :style="[
                 c.backgroundImage
@@ -812,15 +1072,15 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
               ]"
               @click="pickTheme(c.id)"
             >
-              <span class="card-actions-top" @click.stop>
-                <button class="mini-btn" @click="openEdit(c)" title="编辑主题">
+              <span class="card-actions-top cczj-absolute cczj-flex cczj-gap-2" @click.stop>
+                <button class="mini-btn cczj-inline-flex cczj-items-center cczj-justify-center" @click="openEdit(c)" title="编辑主题">
                   <Icon name="pencil" :size="12" />
                 </button>
               </span>
               <span v-if="!c.backgroundImage" class="swatch" :style="{ background: c.primary }"></span>
               <span v-if="c.backgroundImage" class="swatch small" :style="{ background: c.primary }"></span>
-              <span class="label" :style="{ color: c.text }">{{ c.name }}</span>
-              <span class="card-actions" @click.stop>
+              <span class="label cczj-truncate" :style="{ color: c.text }">{{ c.name }}</span>
+              <span class="card-actions cczj-absolute cczj-flex cczj-gap-2" @click.stop>
                 <button class="mini-btn danger" @click="onDeleteTheme(c.id, c.name)" title="删除">
                   <Icon name="x" :size="12" />
                 </button>
@@ -828,18 +1088,18 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
             </button>
 
             <!-- 添加（浅色区） -->
-            <button class="theme-card add" @click="openCreate(); applyPreview()">
+            <button class="theme-card add cczj-flex cczj-flex-col cczj-items-center cczj-gap-5 cczj-cursor-pointer" @click="openCreate(); applyPreview()">
               <span class="swatch plus"><Icon name="plus" :size="22" /></span>
-              <span class="label">添加主题</span>
+              <span class="label cczj-truncate">添加主题</span>
             </button>
           </div>
 
           <h4 class="sub-title">深色主题</h4>
-          <div class="theme-grid">
+          <div class="theme-grid cczj-grid">
             <button
               v-for="t in darkPresets"
               :key="t.id"
-              class="theme-card"
+              class="theme-card cczj-flex cczj-flex-col cczj-items-center cczj-gap-5 cczj-cursor-pointer"
               :class="{ active: isActive(t.id), hasBg: !!resolvePreset(t).bg, 'is-override': resolvePreset(t).isOverride }"
               :style="[
                 resolvePreset(t).bg
@@ -854,21 +1114,21 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
               ]"
               @click="pickTheme(t.id)"
             >
-              <span class="card-actions-top" @click.stop>
-                <button class="mini-btn" @click="openEditPreset(t)" title="编辑主题">
+              <span class="card-actions-top cczj-absolute cczj-flex cczj-gap-2" @click.stop>
+                <button class="mini-btn cczj-inline-flex cczj-items-center cczj-justify-center" @click="openEditPreset(t)" title="编辑主题">
                   <Icon name="pencil" :size="12" />
                 </button>
               </span>
               <span v-if="!resolvePreset(t).bg" class="swatch" :style="{ background: resolvePreset(t).data.primary }"></span>
               <span v-if="resolvePreset(t).bg" class="swatch small" :style="{ background: resolvePreset(t).data.primary }"></span>
-              <span class="label" :style="{ color: resolvePreset(t).textPrimary }">{{ resolvePreset(t).data.name }}</span>
-              <span v-if="isActive(t.id)" class="check"><Icon name="check" :size="12" /></span>
+              <span class="label cczj-truncate" :style="{ color: resolvePreset(t).textPrimary }">{{ resolvePreset(t).data.name }}</span>
+              <span v-if="isActive(t.id)" class="check cczj-inline-flex cczj-items-center cczj-justify-center"><Icon name="check" :size="12" /></span>
             </button>
 
             <button
               v-for="c in pureCustomThemes.filter((c) => c.dark)"
               :key="c.id"
-              class="theme-card custom"
+              class="theme-card custom cczj-flex cczj-flex-col cczj-items-center cczj-gap-5 cczj-cursor-pointer"
               :class="{ active: isActive(c.id), hasBg: !!c.backgroundImage }"
               :style="[
                 c.backgroundImage
@@ -883,15 +1143,15 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
               ]"
               @click="pickTheme(c.id)"
             >
-              <span class="card-actions-top" @click.stop>
-                <button class="mini-btn" @click="openEdit(c)" title="编辑主题">
+              <span class="card-actions-top cczj-absolute cczj-flex cczj-gap-2" @click.stop>
+                <button class="mini-btn cczj-inline-flex cczj-items-center cczj-justify-center" @click="openEdit(c)" title="编辑主题">
                   <Icon name="pencil" :size="12" />
                 </button>
               </span>
               <span v-if="!c.backgroundImage" class="swatch" :style="{ background: c.primary }"></span>
               <span v-if="c.backgroundImage" class="swatch small" :style="{ background: c.primary }"></span>
-              <span class="label" :style="{ color: c.text }">{{ c.name }}</span>
-              <span class="card-actions" @click.stop>
+              <span class="label cczj-truncate" :style="{ color: c.text }">{{ c.name }}</span>
+              <span class="card-actions cczj-absolute cczj-flex cczj-gap-2" @click.stop>
                 <button class="mini-btn danger" @click="onDeleteTheme(c.id, c.name)" title="删除">
                   <Icon name="x" :size="12" />
                 </button>
@@ -902,15 +1162,15 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
       </div>
 
       <!-- ========== 播放设置 ========== -->
-      <div v-else-if="activeGroup === 'play'" class="panel">
+      <div v-else-if="activeGroup === 'play'" class="panel cczj-flex cczj-flex-col cczj-gap-2">
         <section class="block">
           <h3>播放行为</h3>
-          <div class="row toggles">
-            <label class="toggle">
+          <div class="row toggles cczj-flex cczj-items-center cczj-gap-7">
+            <label class="toggle cczj-inline-flex cczj-items-center cczj-gap-4 cczj-cursor-pointer">
               <input type="checkbox" v-model="playbackAutoPlay" @change="save('playback_auto_play', playbackAutoPlay?'1':'0')" />
               <span>自动开始播放</span>
             </label>
-            <label class="toggle">
+            <label class="toggle cczj-inline-flex cczj-items-center cczj-gap-4 cczj-cursor-pointer">
               <input type="checkbox" v-model="playbackAutoNext" @change="save('playback_auto_next', playbackAutoNext?'1':'0')" />
               <span>播放完自动下一集</span>
             </label>
@@ -919,7 +1179,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 
         <section class="block">
           <h3>默认播放速度</h3>
-          <div class="row">
+          <div class="row cczj-flex cczj-items-center cczj-gap-7">
             <Segment
               :model-value="playbackSpeed"
               :options="speedOptions"
@@ -930,22 +1190,22 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
       </div>
 
       <!-- ========== 缓存管理 ========== -->
-      <div v-else-if="activeGroup === 'cache'" class="panel">
+      <div v-else-if="activeGroup === 'cache'" class="panel cczj-flex cczj-flex-col cczj-gap-2">
         <section class="block">
-          <div class="block-hd">
+          <div class="block-hd cczj-flex cczj-items-center cczj-justify-between">
             <h3>缓存占用</h3>
             <Button variant="secondary" size="sm" :loading="cacheLoading" @click="loadCacheInfo">
               <Icon name="refresh" :size="12" /> 刷新
             </Button>
           </div>
 
-          <div v-if="cacheLoading" class="cache-loading">
+          <div v-if="cacheLoading" class="cache-loading cczj-flex cczj-items-center cczj-gap-4">
             <Icon name="spinner" :size="18" /> 正在统计...
           </div>
-          <div v-else-if="cacheInfo" class="cache-grid">
-            <div class="cache-item">
-              <div class="cache-item-icon"><Icon name="cpu" :size="18" /></div>
-              <div class="cache-item-info">
+          <div v-else-if="cacheInfo" class="cache-grid cczj-flex cczj-flex-col cczj-gap-6">
+            <div class="cache-item cczj-flex cczj-items-center cczj-gap-7">
+              <div class="cache-item-icon cczj-flex-shrink-0"><Icon name="cpu" :size="18" /></div>
+              <div class="cache-item-info cczj-flex-1 cczj-min-w-0">
                 <div class="cache-item-label">TS 内存缓存</div>
                 <div class="cache-item-size">{{ fmtBytes(cacheInfo.tsMemoryBytes) }}</div>
                 <div class="cache-item-path">{{ cacheInfo.tsMemoryEntries }} 个片段 · 当前播放集</div>
@@ -961,9 +1221,9 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
               </Button>
             </div>
 
-            <div class="cache-item">
-              <div class="cache-item-icon"><Icon name="download" :size="18" /></div>
-              <div class="cache-item-info">
+            <div class="cache-item cczj-flex cczj-items-center cczj-gap-7">
+              <div class="cache-item-icon cczj-flex-shrink-0"><Icon name="download" :size="18" /></div>
+              <div class="cache-item-info cczj-flex-1 cczj-min-w-0">
                 <div class="cache-item-label">TS 磁盘缓存 (IndexedDB)</div>
                 <div class="cache-item-size">{{ fmtBytes(cacheInfo.tsDiskBytes) }}</div>
                 <div class="cache-item-path">{{ cacheInfo.tsDiskEntries }} 个片段 · 跨会话持久化</div>
@@ -979,27 +1239,27 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
               </Button>
             </div>
 
-            <div class="cache-item">
-              <div class="cache-item-icon"><Icon name="database" :size="18" /></div>
-              <div class="cache-item-info">
+            <div class="cache-item cczj-flex cczj-items-center cczj-gap-7">
+              <div class="cache-item-icon cczj-flex-shrink-0"><Icon name="database" :size="18" /></div>
+              <div class="cache-item-info cczj-flex-1 cczj-min-w-0">
                 <div class="cache-item-label">IndexedDB 总计</div>
                 <div class="cache-item-size">{{ fmtBytes(cacheInfo.indexedDBBytes) }}</div>
                 <div class="cache-item-path">浏览器分配的 IndexedDB 总占用空间</div>
               </div>
-              <div class="cache-item-note">由浏览器自动管理</div>
+              <div class="cache-item-note cczj-flex-shrink-0">由浏览器自动管理</div>
             </div>
 
-            <div class="cache-item">
-              <div class="cache-item-icon"><Icon name="browser" :size="18" /></div>
-              <div class="cache-item-info">
+            <div class="cache-item cczj-flex cczj-items-center cczj-gap-7">
+              <div class="cache-item-icon cczj-flex-shrink-0"><Icon name="browser" :size="18" /></div>
+              <div class="cache-item-info cczj-flex-1 cczj-min-w-0">
                 <div class="cache-item-label">浏览器存储 (localStorage)</div>
                 <div class="cache-item-size">{{ fmtBytes(cacheInfo.localStorageBytes) }}</div>
                 <div class="cache-item-path">主题、偏好设置、收藏夹映射等</div>
               </div>
-              <div class="cache-item-note">⚠ 仅建议开发者手动清理</div>
+              <div class="cache-item-note cczj-flex-shrink-0">⚠ 仅建议开发者手动清理</div>
             </div>
           </div>
-          <div v-else class="cache-loading">
+          <div v-else class="cache-loading cczj-flex cczj-items-center cczj-gap-4">
             <span>点击「刷新」按钮查看缓存占用</span>
           </div>
         </section>
@@ -1015,20 +1275,28 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
       </div>
 
       <!-- ========== 关于 ========== -->
-      <div v-else-if="activeGroup === 'about'" class="panel">
+      <div v-else-if="activeGroup === 'about'" class="panel cczj-flex cczj-flex-col cczj-gap-2">
         <section class="block">
-          <div class="about-card">
-            <div class="about-icon"><Icon name="film" :size="22" /></div>
+          <div class="about-card cczj-flex cczj-items-center cczj-gap-8">
+            <div class="about-icon cczj-inline-flex cczj-items-center cczj-justify-center"><Icon name="film" :size="22" /></div>
             <div>
               <h3 class="app-name-clickable" @click="devMode.clickAppName" title="点击 3 次以激活开发者模式">CCZJ Video</h3>
-              <p>版本 <strong>1.1.0</strong> · Wails + Vue 3</p>
+              <p>版本 <strong>{{ appVersion }}</strong> · Wails + Vue 3</p>
               <small>当前生效主题：<em>{{ themeStore.current.name }}</em>（{{ themeStore.current.mode === 'dark' ? '深色' : '浅色' }}）</small>
             </div>
           </div>
 
-          <div class="about-actions">
+          <div class="about-actions cczj-flex cczj-gap-5">
             <Button
               variant="primary"
+              size="md"
+              :loading="updateChecking"
+              @click="doCheckUpdate"
+            >
+              <Icon name="refresh" :size="14" /> 检查更新
+            </Button>
+            <Button
+              variant="secondary"
               size="md"
               :disabled="restarting"
               :loading="restarting"
@@ -1037,12 +1305,22 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
               <Icon name="refresh" :size="14" /> 重启应用
             </Button>
           </div>
+          <div class="about-auto-update cczj-flex cczj-items-center cczj-gap-4">
+            <label class="cczj-flex cczj-items-center cczj-gap-3" style="cursor: pointer">
+              <input type="checkbox" v-model="tryAutoUpdate" />
+              <span class="auto-update-label">发现新版本时自动下载</span>
+            </label>
+            <label class="cczj-flex cczj-items-center cczj-gap-3" style="cursor: pointer">
+              <input type="checkbox" v-model="showChangeLog" />
+              <span class="auto-update-label">版本变化时显示更新日志</span>
+            </label>
+          </div>
         </section>
 
         <section class="block">
           <h3>使用声明</h3>
-          <div class="disclaimer-card">
-            <div class="disclaimer-icon"><Icon name="shield" :size="20" /></div>
+          <div class="disclaimer-card cczj-flex cczj-gap-7">
+            <div class="disclaimer-icon cczj-inline-flex cczj-items-center cczj-justify-center"><Icon name="shield" :size="20" /></div>
             <div class="disclaimer-content">
               <p><strong>本软件仅供学习与研究使用</strong>，不保留任何网络资源。</p>
               <p>所有通过本软件访问或下载的内容，观看后请自行删除，版权归原作者/原版权方所有。</p>
@@ -1055,7 +1333,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 
     <!-- ========== 开发者模式密码弹窗 ========== -->
     <teleport to="body">
-      <div v-if="devMode.showPasswordModal" class="dev-password-overlay" @click.self="devMode.closePasswordModal">
+      <div v-if="devMode.showPasswordModal" class="dev-password-overlay cczj-fixed cczj-inset-0 cczj-flex cczj-items-center cczj-justify-center" @click.self="devMode.closePasswordModal">
         <div class="dev-password-modal">
           <h2>开发者模式验证</h2>
           <p class="dev-password-desc">请输入6位数字密码以启用开发者模式</p>
@@ -1070,7 +1348,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
             @keyup.enter="devMode.verifyPassword"
           />
           <p v-if="devMode.passwordError" class="dev-password-error">{{ devMode.passwordError }}</p>
-          <div class="dev-password-actions">
+          <div class="dev-password-actions cczj-flex cczj-justify-center cczj-gap-6">
             <button class="dev-password-btn dev-password-btn--cancel" @click="devMode.closePasswordModal">取消</button>
             <button class="dev-password-btn dev-password-btn--confirm" @click="devMode.verifyPassword">验证</button>
           </div>
@@ -1087,13 +1365,13 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
       @update:model-value="(v: boolean) => !v && closeEditor()"
     >
       <div class="modal-body">
-        <div class="edit-row">
-          <div class="field">
+        <div class="edit-row cczj-flex cczj-flex-wrap">
+          <div class="field cczj-flex cczj-flex-col cczj-gap-2">
             <label>主题名称</label>
             <input type="text" v-model="editing.name" placeholder="我的主题" @input="applyPreview" />
           </div>
-          <div class="flags">
-            <label class="toggle">
+          <div class="flags cczj-flex cczj-items-center cczj-flex-wrap">
+            <label class="toggle cczj-inline-flex cczj-items-center cczj-gap-4 cczj-cursor-pointer">
               <input type="checkbox" v-model="editing.dark" @change="applyPreview" />
               <span>暗色主题</span>
             </label>
@@ -1107,23 +1385,23 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
         <div class="picker-grid">
           <div class="picker-item">
             <label>主题色</label>
-            <div class="picker-cell"><input type="color" v-model="editing.primary" @input="applyPreview" /><span>{{ editing.primary }}</span></div>
+            <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.primary" @input="applyPreview" /><span>{{ editing.primary }}</span></div>
           </div>
           <div class="picker-item">
             <label>字体颜色</label>
-            <div class="picker-cell"><input type="color" v-model="editing.text" @input="applyPreview" /><span>{{ editing.text }}</span></div>
+            <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.text" @input="applyPreview" /><span>{{ editing.text }}</span></div>
           </div>
           <div class="picker-item">
             <label>应用背景</label>
-            <div class="picker-cell"><input type="color" v-model="editing.background" @input="applyPreview" /><span>{{ editing.background }}</span></div>
+            <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.background" @input="applyPreview" /><span>{{ editing.background }}</span></div>
           </div>
           <div class="picker-item">
             <label>侧边栏背景</label>
-            <div class="picker-cell"><input type="color" v-model="editing.sidebar" @input="applyPreview" /><span>{{ editing.sidebar }}</span></div>
+            <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.sidebar" @input="applyPreview" /><span>{{ editing.sidebar }}</span></div>
           </div>
           <div class="picker-item">
             <label>内容区域背景</label>
-            <div class="picker-cell"><input type="color" v-model="editing.content" @input="applyPreview" /><span>{{ editing.content }}</span></div>
+            <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.content" @input="applyPreview" /><span>{{ editing.content }}</span></div>
           </div>
         </div>
 
@@ -1131,14 +1409,14 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
         <div class="picker-grid">
           <div class="picker-item">
             <label>侧边栏透明度</label>
-            <div class="picker-cell range-cell">
+            <div class="picker-cell range-cell cczj-flex cczj-items-center cczj-gap-4">
               <input type="range" v-model.number="editing.sidebarAlpha" min="0" max="1" step="0.05" @input="applyPreview" />
               <span>{{ Math.round((editing.sidebarAlpha ?? 0.65) * 100) }}%</span>
             </div>
           </div>
           <div class="picker-item">
             <label>卡片透明度</label>
-            <div class="picker-cell range-cell">
+            <div class="picker-cell range-cell cczj-flex cczj-items-center cczj-gap-4">
               <input type="range" v-model.number="editing.contentAlpha" min="0" max="1" step="0.05" @input="applyPreview" />
               <span>{{ Math.round((editing.contentAlpha ?? 0.88) * 100) }}%</span>
             </div>
@@ -1149,20 +1427,20 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
         <div class="picker-grid small">
           <div class="picker-item">
             <label>关闭按钮</label>
-            <div class="picker-cell"><input type="color" v-model="editing.btnClose" @input="applyPreview" /><span>{{ editing.btnClose }}</span></div>
+            <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.btnClose" @input="applyPreview" /><span>{{ editing.btnClose }}</span></div>
           </div>
           <div class="picker-item">
             <label>最小化按钮</label>
-            <div class="picker-cell"><input type="color" v-model="editing.btnMin" @input="applyPreview" /><span>{{ editing.btnMin }}</span></div>
+            <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.btnMin" @input="applyPreview" /><span>{{ editing.btnMin }}</span></div>
           </div>
           <div class="picker-item">
             <label>隐藏按钮</label>
-            <div class="picker-cell"><input type="color" v-model="editing.btnHide" @input="applyPreview" /><span>{{ editing.btnHide }}</span></div>
+            <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.btnHide" @input="applyPreview" /><span>{{ editing.btnHide }}</span></div>
           </div>
         </div>
 
         <div
-          class="bg-drop-zone"
+          class="bg-drop-zone cczj-relative cczj-flex cczj-items-center cczj-justify-center cczj-overflow-hidden cczj-cursor-pointer"
           :class="{ 'has-image': !!backgroundImageUrl }"
           @click="onDropZoneClick"
           @dragover.prevent="onDragOver"
@@ -1171,14 +1449,14 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
         >
           <button
             v-if="backgroundImageUrl"
-            class="bg-remove"
+            class="bg-remove cczj-absolute cczj-flex cczj-items-center cczj-justify-center"
             title="移除图片"
             @click.stop="clearBackgroundImage"
           >
             <Icon name="x" :size="14" />
           </button>
           <img v-if="backgroundImageUrl" :src="backgroundImageUrl" alt="背景预览" />
-          <div v-else class="bg-drop-hint">
+          <div v-else class="bg-drop-hint cczj-flex cczj-flex-col cczj-items-center cczj-gap-5">
             <Icon name="plus" :size="42" />
             <span>点击或拖拽图片到此处</span>
           </div>
@@ -1197,6 +1475,175 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
         </Button>
       </template>
     </Modal>
+
+    <!-- ========== 版本更新弹窗 ========== -->
+    <Modal
+      :model-value="updateModalOpen"
+      :title="updateCheckFailed ? '获取更新信息失败' : (updateModalDownloaded ? '下载完成' : '发现新版本')"
+      width="min(560px, 94vw)"
+      :show-footer="true"
+      :closable="!updateDownloading"
+      @update:model-value="(v: boolean) => { if (!v && !updateDownloading) { updateModalOpen = false; updateModalDownloaded = false; updateCheckFailed = false; ClearPendingUpdateInfo() } }"
+    >
+      <div class="modal-body">
+        <!-- 检查更新失败界面（参考 lx-music-desktop 的 isUnknown 状态） -->
+        <template v-if="updateCheckFailed">
+          <div class="update-done-card cczj-flex cczj-flex-col cczj-items-center cczj-gap-8">
+            <div class="update-fail-icon cczj-inline-flex cczj-items-center cczj-justify-center">
+              <Icon name="alert-circle" :size="28" />
+            </div>
+            <div class="update-done-text">
+              <p><strong>获取最新版本信息失败</strong></p>
+              <p>可能是无法访问 GitHub 导致的，请尝试手动检查更新。</p>
+            </div>
+            <div class="update-fail-hint">
+              <p>检查方法：打开 <a href="https://github.com/ws-cczj/CCZJ-Video/releases" target="_blank" class="update-link">软件发布页</a>，查看「Latest」发布的版本号与当前版本 (<strong>{{ appVersion }}</strong>) 对比是否一致。</p>
+              <p>若一致则不必理会，直接关闭即可；否则请手动下载新版本更新。</p>
+            </div>
+          </div>
+        </template>
+
+        <!-- 下载完成界面 -->
+        <template v-else-if="updateModalDownloaded">
+          <div class="update-done-card cczj-flex cczj-flex-col cczj-items-center cczj-gap-8">
+            <div class="update-done-icon cczj-inline-flex cczj-items-center cczj-justify-center">
+              <Icon name="check" :size="28" />
+            </div>
+            <div class="update-done-text">
+              <p><strong>更新包已下载完成</strong></p>
+              <p class="update-done-path">{{ updateFilePath }}</p>
+            </div>
+            <div class="update-done-hint">
+              <p>点击「立即更新」将关闭当前程序并启动新版本安装程序。</p>
+              <p>也可以点击「下次启动」，下次启动应用时再安装更新。</p>
+            </div>
+          </div>
+        </template>
+
+        <!-- 更新信息界面 -->
+        <template v-else-if="updateInfo">
+          <div class="update-header cczj-flex cczj-items-center cczj-gap-8">
+            <div class="update-icon cczj-inline-flex cczj-items-center cczj-justify-center">
+              <Icon name="download" :size="22" />
+            </div>
+            <div>
+              <h3 class="update-title">{{ updateInfo.release_name || `v${updateInfo.latest_version}` }}</h3>
+              <p class="update-versions">
+                <span class="update-current">{{ updateInfo.current_version }}</span>
+                <span class="update-arrow">&rarr;</span>
+                <span class="update-latest">{{ updateInfo.latest_version }}</span>
+              </p>
+            </div>
+          </div>
+
+          <!-- 更新内容 -->
+          <div v-if="updateInfo.release_notes" class="update-notes">
+            <h4>更新内容</h4>
+            <div class="update-notes-body">{{ updateInfo.release_notes }}</div>
+          </div>
+
+          <!-- 历史版本（参考 lx-music-desktop 的 history 展示） -->
+          <div v-if="updateInfo.history && updateInfo.history.length > 0" class="update-history">
+            <h4>历史版本</h4>
+            <div v-for="(ver, index) in updateInfo.history" :key="index" class="update-history-item">
+              <h5>v{{ ver.version }}</h5>
+              <pre>{{ ver.desc }}</pre>
+            </div>
+          </div>
+
+          <!-- 下载进度 -->
+          <div v-if="updateDownloading" class="update-progress">
+            <div class="progress-track">
+              <div class="progress-fill" :style="{ width: updateDownloadProgress.percent + '%' }"></div>
+            </div>
+            <div class="progress-meta cczj-flex cczj-justify-between">
+              <span>{{ fmtSize(updateDownloadProgress.downloaded) }} / {{ fmtSize(updateDownloadProgress.total) }}</span>
+              <span>{{ fmtSpeed(updateDownloadProgress.speed_bps) }}</span>
+            </div>
+          </div>
+
+          <!-- 文件信息 -->
+          <div v-if="updateInfo.asset_name" class="update-file-info">
+            <span class="update-file-name">{{ updateInfo.asset_name }}</span>
+            <span class="update-file-size">{{ fmtSize(updateInfo.asset_size) }}</span>
+          </div>
+        </template>
+      </div>
+
+      <template #footer>
+        <!-- 检查失败界面按钮 -->
+        <template v-if="updateCheckFailed">
+          <Button variant="secondary" size="md" :disabled="!canShowUpdateFailTip()" @click="dismissUpdateFailTip">
+            一个星期内不再提醒
+          </Button>
+          <span style="flex: 1"></span>
+          <Button variant="primary" size="md" :loading="updateChecking" @click="doCheckUpdate">
+            <Icon name="refresh" :size="14" /> 重新检查更新
+          </Button>
+        </template>
+
+        <!-- 下载完成界面按钮 -->
+        <template v-else-if="updateModalDownloaded">
+          <Button variant="secondary" size="md" @click="doIgnoreVersion">
+            下次启动
+          </Button>
+          <span style="flex: 1"></span>
+          <Button variant="primary" size="md" :loading="updateInstalling" @click="doInstallUpdate">
+            <Icon name="zap" :size="14" /> 立即更新
+          </Button>
+        </template>
+
+        <!-- 更新信息界面按钮 -->
+        <template v-else>
+          <Button variant="secondary" size="md" @click="doIgnoreVersion">
+            忽略此版本
+          </Button>
+          <span style="flex: 1"></span>
+          <Button variant="primary" size="md" :disabled="updateDownloading" :loading="updateDownloading" @click="doDownloadUpdate">
+            <Icon name="download" :size="14" /> {{ updateDownloading ? '下载中...' : '下载更新' }}
+          </Button>
+        </template>
+      </template>
+    </Modal>
+
+    <!-- ========== 更新日志弹窗（参考 lx-music-desktop 的 ChangeLogModal） ========== -->
+    <Modal
+      :model-value="changelogModalOpen"
+      title="当前版本更新日志"
+      width="min(560px, 94vw)"
+      :show-footer="true"
+      @update:model-value="(v: boolean) => { if (!v) changelogModalOpen = false }"
+    >
+      <div class="modal-body">
+        <div class="changelog-content">
+          <div class="changelog-current">
+            <h3>当前版本：{{ changelogInfo.version }}</h3>
+            <template v-if="changelogInfo.desc">
+              <h3>版本变化：</h3>
+              <pre class="changelog-desc">{{ changelogInfo.desc }}</pre>
+            </template>
+          </div>
+          <div v-if="changelogInfo.history.length > 0" class="changelog-history">
+            <h3>历史版本：</h3>
+            <div v-for="(ver, index) in changelogInfo.history" :key="index" class="changelog-history-item">
+              <h4>v{{ ver.version }}</h4>
+              <pre>{{ ver.desc }}</pre>
+            </div>
+          </div>
+        </div>
+        <div class="changelog-footer-note">
+          <p>为了减少疑问，强烈建议阅读版本更新日志来了解当前所用版本的变化！</p>
+          <p v-if="!changelogInfo.isLatest">发现新版本 (v{{ updateInfo?.latest_version }})！建议去「软件更新」更新新版本。</p>
+        </div>
+      </div>
+      <template #footer>
+        <span style="flex: 1"></span>
+        <Button variant="primary" size="md" @click="changelogModalOpen = false">
+          我知道了
+        </Button>
+      </template>
+    </Modal>
+
   </div>
 </template>
 
@@ -1222,7 +1669,6 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 
 /* ============ 顶部 tab ============ */
 .tabs {
-  display: flex;
   gap: 6px;
   padding: 28px 24px 12px;
   margin: 0 -24px;
@@ -1235,8 +1681,6 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   border-bottom-right-radius: 20%;
 }
 .tab {
-  display: inline-flex;
-  align-items: center;
   gap: 8px;
   padding: 8px 14px;
   border: 1px solid transparent;
@@ -1245,7 +1689,6 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   border-radius: 8px;
   font-size: 0.93rem;
   font-weight: 500;
-  cursor: pointer;
   transition: all 0.15s ease;
 }
 .tab:hover {
@@ -1263,8 +1706,6 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   padding: 12px 14px;
 }
 .panel {
-  display: flex;
-  flex-direction: column;
   gap: 4px;
 }
 .block {
@@ -1283,17 +1724,12 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 
 /* 单选按钮组 */
 .radio-group {
-  display: flex;
-  flex-wrap: wrap;
   gap: 6px 10px;
 }
 .radio-item {
-  display: inline-flex;
-  align-items: center;
   gap: 6px;
   padding: 5px 12px;
   border-radius: 6px;
-  cursor: pointer;
   font-size: 0.93rem;
   color: var(--text-secondary);
   transition: all 0.15s ease;
@@ -1307,9 +1743,6 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   font-weight: 600;
 }
 .radio-box {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   width: 16px;
   height: 16px;
   border: 2px solid var(--border);
@@ -1341,8 +1774,6 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 }
 
 .row {
-  display: flex;
-  align-items: center;
   gap: 14px;
 }
 .row.toggles {
@@ -1361,10 +1792,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 }
 
 .toggle {
-  display: inline-flex;
-  align-items: center;
   gap: 8px;
-  cursor: pointer;
   font-size: 0.93rem;
   color: var(--text-primary);
 }
@@ -1428,23 +1856,18 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 
 /* ============ 主题网格 ============ */
 .theme-grid {
-  display: grid;
   grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
   gap: 14px;
   margin-bottom: 18px;
 }
 .theme-card {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
   gap: 10px;
   padding: 14px 10px 14px;
   min-height: 160px;
   background: var(--bg-secondary);
   border: 2px solid transparent;
   border-radius: 12px;
-  cursor: pointer;
   transition: all 0.15s ease;
   overflow: hidden;
 }
@@ -1516,9 +1939,6 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   color: var(--text-secondary);
   font-weight: 700;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   text-align: center;
 }
 .check {
@@ -1530,9 +1950,6 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   border-radius: 50%;
   background: var(--accent);
   color: var(--accent-contrast);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   font-size: 0.86rem;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
   z-index: 2;
@@ -1540,10 +1957,8 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 
 /* 主题卡片上的编辑按钮（右上角，hover 显示） */
 .card-actions-top {
-  position: absolute;
   top: 6px;
   right: 6px;
-  display: flex;
   gap: 4px;
   opacity: 0;
   transition: opacity 0.15s ease;
@@ -1555,10 +1970,8 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 
 /* 自定义主题卡片上的删除按钮（右下角，hover 显示） */
 .card-actions {
-  position: absolute;
   bottom: 6px;
   right: 6px;
-  display: flex;
   gap: 4px;
   opacity: 0;
   transition: opacity 0.15s ease;
@@ -1575,9 +1988,6 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   background: var(--bg-card);
   color: var(--text-secondary);
   cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   transition: all 0.15s ease;
 }
 .mini-btn:hover {
@@ -1593,13 +2003,9 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 
 /* ============ 数据源 / 关于 ============ */
 .source-list {
-  display: flex;
-  flex-direction: column;
   gap: 6px;
 }
 .source-item {
-  display: flex;
-  align-items: center;
   gap: 10px;
   padding: 10px 14px;
   background: var(--bg-secondary);
@@ -1618,9 +2024,6 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   margin-left: auto;
 }
 .empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
   gap: 10px;
   padding: 32px;
   background: var(--bg-secondary);
@@ -1630,8 +2033,6 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   font-size: 0.93rem;
 }
 .about-card {
-  display: flex;
-  align-items: center;
   gap: 16px;
   padding: 16px 18px;
   background: linear-gradient(135deg, var(--accent-alpha-10), transparent 75%);
@@ -1643,9 +2044,6 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   border-radius: 14px;
   background: var(--accent);
   color: var(--accent-contrast);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   box-shadow: 0 6px 18px var(--accent-alpha-35);
 }
 .about-card h3 { margin: 0 0 4px; font-size: 1.14rem; font-weight: 700; }
@@ -1653,14 +2051,12 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 .about-card small { color: var(--text-muted); font-size: 0.86rem; }
 .about-actions {
   margin-top: 16px;
-  display: flex;
   gap: 10px;
   flex-wrap: wrap;
 }
 
 /* ============ 声明卡片 ============ */
 .disclaimer-card {
-  display: flex;
   gap: 14px;
   padding: 16px 18px;
   background: linear-gradient(135deg, rgba(255, 193, 7, 0.08), transparent 75%);
@@ -1674,9 +2070,6 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   border-radius: 12px;
   background: var(--warning);
   color: #1a1a1a;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   box-shadow: 0 4px 12px var(--warning-alpha-10);
 }
 .disclaimer-content {
@@ -1730,15 +2123,13 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   overflow-y: auto;
 }
 .edit-row {
-  display: flex;
   align-items: flex-end;
   gap: 20px;
   padding-bottom: 14px;
   margin-bottom: 10px;
   border-bottom: 1px dashed var(--border);
-  flex-wrap: wrap;
 }
-.field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 180px; }
+.field { gap: 4px; flex: 1; min-width: 180px; }
 .field label { font-size: 0.79rem; color: var(--text-muted); font-weight: 600; }
 .field input[type='text'] {
   padding: 8px 12px;
@@ -1750,7 +2141,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   outline: none;
 }
 .field input[type='text']:focus { border-color: var(--accent); }
-.flags { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+.flags { gap: 18px; }
 .derive-btn {
   display: inline-flex;
   align-items: center;
@@ -1792,8 +2183,6 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   font-weight: 600;
 }
 .picker-cell {
-  display: flex;
-  align-items: center;
   gap: 8px;
   padding: 8px 10px;
   background: var(--bg-secondary);
@@ -1835,18 +2224,12 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 .bg-drop-zone {
-  position: relative;
   margin-top: 14px;
   border: 2px dashed var(--border);
   border-radius: 10px;
   min-height: 180px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   background: var(--bg-card);
-  cursor: pointer;
   transition: all 0.15s ease;
-  overflow: hidden;
 }
 .bg-drop-zone:hover { border-color: var(--accent); background: var(--bg-hover); }
 .bg-drop-zone.has-image { border-style: solid; cursor: default; padding: 0; }
@@ -1859,15 +2242,11 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   object-fit: cover;
 }
 .bg-drop-hint {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
   gap: 10px;
   color: var(--text-secondary);
 }
 .bg-drop-hint span { font-size: 0.93rem; }
 .bg-remove {
-  position: absolute;
   top: 8px;
   right: 8px;
   width: 28px;
@@ -1877,16 +2256,13 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   color: #fff;
   border: none;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   z-index: 2;
   transition: background 0.15s ease;
 }
 .bg-remove:hover { background: var(--danger); }
 
 .modal-foot {
-  display: flex; align-items: center; gap: 10px;
+  gap: 10px;
   padding: 14px 20px;
   border-top: 1px solid var(--border);
   background: var(--bg-secondary);
@@ -1894,9 +2270,6 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 
 /* 导入弹窗底部 - 与 modal-footer 与 modal-foot 统一 */
 .modal-footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
   gap: 10px;
   padding: 14px 20px;
   border-top: 1px solid var(--border);
@@ -2161,11 +2534,8 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 
 /* ---------- 日志 viewer ---------- */
 .log-toolbar {
-  display: flex;
   gap: 10px;
-  align-items: center;
   margin: 12px 0 8px 0;
-  flex-wrap: wrap;
 }
 .log-toolbar select {
   background: var(--bg-secondary);
@@ -2273,14 +2643,11 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   font-size: 0.79rem; color: var(--text-muted); word-break: break-all; margin-top: 2px;
 }
 .detail-head .d-actions {
-  display: flex; flex-wrap: wrap; gap: 8px;
+  gap: 8px;
 }
 
 .source-toolbar {
-  display: flex;
-  align-items: center;
   gap: 14px;
-  flex-wrap: wrap;
   margin: 10px 0 18px;
   padding: 14px 16px;
   background: var(--bg-card);
@@ -2348,10 +2715,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 }
 
 .file-picker {
-  display: flex;
-  align-items: center;
   gap: 10px;
-  flex-wrap: wrap;
 }
 .file-picker .file-name {
   font-family: ui-monospace, Menlo, Monaco, Consolas, monospace;
@@ -2377,11 +2741,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   border: 2px dashed var(--border);
   border-radius: 14px;
   background: var(--bg-secondary);
-  cursor: pointer;
   transition: all 0.2s ease;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
   gap: 10px;
 }
 
@@ -2401,9 +2761,6 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 .drop-icon {
   width: 64px;
   height: 64px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   border-radius: 16px;
   background: var(--accent);
   color: var(--accent-contrast);
@@ -2439,8 +2796,6 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 
 /* 已选择的文件 */
 .selected-file {
-  display: flex;
-  align-items: center;
   gap: 8px;
   padding: 10px 12px;
   background: var(--bg-card);
@@ -2537,7 +2892,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   display: flex; flex-direction: column; gap: 8px;
 }
 .sample-row {
-  display: flex; align-items: center; gap: 10px;
+  gap: 10px;
   padding: 8px 10px;
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -2561,9 +2916,8 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   overflow: hidden;
 }
 .sample-head {
-  display: flex; align-items: flex-start; gap: 10px;
+  align-items: flex-start; gap: 10px;
   padding: 10px 12px;
-  cursor: pointer;
   user-select: none;
   transition: background 0.15s;
 }
@@ -2645,11 +2999,8 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 
 /* 日志过滤栏 */
 .log-filter-bar {
-  display: flex;
   gap: 10px;
-  align-items: center;
   margin: 10px 0 8px 0;
-  flex-wrap: wrap;
 }
 .log-search {
   flex: 1;
@@ -2768,13 +3119,8 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 
 /* ====== 开发者模式密码弹窗 ====== */
 .dev-password-overlay {
-  position: fixed;
-  inset: 0;
   z-index: 10000;
   background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }
@@ -2829,9 +3175,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 }
 
 .dev-password-actions {
-  display: flex;
   gap: 12px;
-  justify-content: center;
   margin-top: 20px;
 }
 
@@ -2881,9 +3225,6 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 
 /* ============ 缓存管理 ============ */
 .block-hd {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   margin-bottom: 16px;
 }
 .block-hd h3 {
@@ -2892,21 +3233,15 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   font-weight: 600;
 }
 .cache-loading {
-  display: flex;
-  align-items: center;
   gap: 8px;
   padding: 20px 0;
   color: var(--text-muted);
   font-size: 13px;
 }
 .cache-grid {
-  display: flex;
-  flex-direction: column;
   gap: 12px;
 }
 .cache-item {
-  display: flex;
-  align-items: center;
   gap: 14px;
   padding: 14px 16px;
   background: var(--bg-card);
@@ -2915,11 +3250,8 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 }
 .cache-item-icon {
   color: var(--accent);
-  flex-shrink: 0;
 }
 .cache-item-info {
-  flex: 1;
-  min-width: 0;
 }
 .cache-item-label {
   font-size: 13px;
@@ -2944,12 +3276,288 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   font-size: 11px;
   color: var(--text-muted);
   white-space: nowrap;
-  flex-shrink: 0;
 }
 .cache-desc {
   font-size: 13px;
   color: var(--text-muted);
   margin: 0 0 12px;
   line-height: 1.5;
+}
+
+/* ============ 版本更新弹窗 ============ */
+.update-header {
+  gap: 16px;
+  padding: 8px 0 16px;
+  border-bottom: 1px dashed var(--border);
+  margin-bottom: 16px;
+}
+.update-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: 0 6px 18px var(--accent-alpha-35);
+  flex-shrink: 0;
+}
+.update-title {
+  font-size: 1.14rem;
+  font-weight: 700;
+  margin: 0 0 4px;
+  color: var(--text-primary);
+}
+.update-versions {
+  margin: 0;
+  font-size: 0.93rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.update-current {
+  color: var(--text-muted);
+  font-family: ui-monospace, Menlo, Monaco, Consolas, monospace;
+}
+.update-arrow {
+  color: var(--text-muted);
+  font-size: 1.14rem;
+}
+.update-latest {
+  color: var(--accent);
+  font-weight: 700;
+  font-family: ui-monospace, Menlo, Monaco, Consolas, monospace;
+}
+
+.update-notes {
+  margin-bottom: 16px;
+}
+.update-notes h4 {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 0 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.update-notes-body {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 0.93rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.update-progress {
+  margin-bottom: 16px;
+}
+.update-progress .progress-track {
+  height: 6px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+.update-progress .progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+.update-progress .progress-meta {
+  font-size: 0.86rem;
+  color: var(--text-muted);
+}
+
+.update-file-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.86rem;
+}
+.update-file-name {
+  color: var(--text-primary);
+  font-family: ui-monospace, Menlo, Monaco, Consolas, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+  margin-right: 12px;
+}
+.update-file-size {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* 下载完成界面 */
+.update-done-card {
+  gap: 16px;
+  padding: 16px 0;
+  text-align: center;
+}
+.update-done-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--success);
+  color: #fff;
+  box-shadow: 0 6px 18px var(--success-alpha-10);
+}
+.update-done-text p {
+  margin: 0 0 4px;
+  font-size: 1.07rem;
+  color: var(--text-primary);
+}
+.update-done-path {
+  font-size: 0.79rem !important;
+  color: var(--text-muted) !important;
+  font-family: ui-monospace, Menlo, Monaco, Consolas, monospace;
+  word-break: break-all;
+  margin-top: 6px !important;
+}
+.update-done-hint {
+  font-size: 0.86rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+.update-done-hint p {
+  margin: 0 0 4px;
+}
+
+/* 检查更新失败界面 */
+.update-fail-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--warning, #f59e0b);
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(245, 158, 11, 0.15);
+}
+.update-fail-hint {
+  font-size: 0.86rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+  text-align: left;
+  padding: 0 8px;
+}
+.update-fail-hint p {
+  margin: 0 0 4px;
+}
+.update-link {
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.update-link:hover {
+  opacity: 0.8;
+}
+
+/* 历史版本 */
+.update-history {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.update-history h4 {
+  font-size: 0.91rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 10px;
+}
+.update-history-item {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+}
+.update-history-item h5 {
+  font-size: 0.89rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 6px;
+}
+.update-history-item pre {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  margin: 0;
+  line-height: 1.5;
+  font-family: inherit;
+}
+
+/* 自动更新开关 */
+.about-auto-update {
+  margin-top: 12px;
+  padding: 8px 0;
+}
+.auto-update-label {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  user-select: none;
+}
+
+/* 更新日志弹窗 */
+.changelog-content {
+  max-height: 50vh;
+  overflow-y: auto;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+.changelog-content h3 {
+  font-size: 0.93rem;
+  font-weight: 600;
+  padding: 8px 0 4px;
+}
+.changelog-content h4 {
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 4px 0;
+}
+.changelog-desc {
+  white-space: pre-wrap;
+  text-align: justify;
+  margin-top: 8px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-family: inherit;
+  line-height: 1.5;
+}
+.changelog-history {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+.changelog-history-item {
+  padding: 8px 12px;
+  margin-bottom: 8px;
+}
+.changelog-history-item pre {
+  white-space: pre-wrap;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.5;
+  font-family: inherit;
+}
+.changelog-footer-note {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.changelog-footer-note p {
+  margin: 4px 0;
 }
 </style>

@@ -1,0 +1,1295 @@
+﻿[2026-06-26 17:19:19.062] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-26 17:19:19.071] [INFO] [app.go:174] [Douban] Scheduler started, interval: 30s
+[2026-06-26 17:19:19.083] [INFO] [app.go:62] 同步全局类型完成: 0 条
+[2026-06-26 17:19:44.386] [INFO] [app.go:3150] [Douban] Stopping scheduler (graceful)...
+[2026-06-26 17:19:44.386] [INFO] [scheduler.go:62] [Douban] Updater graceful stop requested
+[2026-06-26 17:19:44.386] [INFO] [app.go:3150] [Douban] Scheduler stopped
+[2026-06-26 17:19:44.386] [INFO] [application.go:720] 应用正常退出
+[2026-06-26 17:23:26.963] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-26 17:23:26.974] [INFO] [app.go:174] [Douban] Scheduler started, interval: 30s
+[2026-06-26 17:23:26.974] [INFO] [app.go:62] 同步全局类型完成: 0 条
+[2026-06-26 17:23:28.841] [INFO] [app.go:982] [DoubanChart] 缓存过期或为空，开始抓取热榜...
+[2026-06-26 17:23:56.974] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 17:23:56.974] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 17:23:56.974] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 17:23:56.974] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传
+[2026-06-26 17:23:56.974] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传 year=2020 type=国产动漫 director=伍镇焯,王裕仁
+[2026-06-26 17:23:56.974] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传 (meta: year=2020 type=国产动漫 director=伍镇焯,王裕仁)
+[2026-06-26 17:23:57.850] [INFO] [chart.go:66] [Douban] Fetching URL: https://movie.douban.com/chart
+[2026-06-26 17:23:58.198] [INFO] [chart.go:66] [Douban] HTTP status: 200, duration: 29.36s
+[2026-06-26 17:23:58.199] [INFO] [app.go:982] [DoubanChart] 抓取完成: 10 条热榜数据
+[2026-06-26 17:24:45.685] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0
+[2026-06-26 17:24:46.096] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 49.12s
+[2026-06-26 17:24:46.097] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传' (HTML len=29896)
+[2026-06-26 17:24:46.099] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传': no candidates parsed for keyword: 凡人修仙传
+[2026-06-26 17:24:46.099] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 凡人修仙传：重返天南
+[2026-06-26 17:24:46.099] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传：重返天南 year=2025 type=国产动漫 director=王裕仁
+[2026-06-26 17:24:46.099] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传：重返天南 (meta: year=2025 type=国产动漫 director=王裕仁)
+[2026-06-26 17:25:44.310] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%EF%BC%9A%E9%87%8D%E8%BF%94%E5%A4%A9%E5%8D%97
+[2026-06-26 17:25:44.515] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 58.42s
+[2026-06-26 17:25:44.516] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传：重返天南' (HTML len=15143)
+[2026-06-26 17:25:44.518] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '凡人修仙传：重返天南': no candidates parsed for keyword: 凡人修仙传：重返天南
+[2026-06-26 17:25:44.518] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 凡人修仙传真人版
+[2026-06-26 17:25:44.518] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传真人版 year=2025 type=国产剧 director=杨阳
+[2026-06-26 17:25:44.519] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传真人版 (meta: year=2025 type=国产剧 director=杨阳)
+[2026-06-26 17:26:37.660] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%E7%9C%9F%E4%BA%BA%E7%89%88
+[2026-06-26 17:26:38.111] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 53.59s
+[2026-06-26 17:26:38.112] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传真人版' (HTML len=29303)
+[2026-06-26 17:26:38.114] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '凡人修仙传真人版': no candidates parsed for keyword: 凡人修仙传真人版
+[2026-06-26 17:26:38.114] [INFO] [scheduler.go:42] [Douban] Found 0 incomplete records (has subject_id but missing details)
+[2026-06-26 17:26:38.114] [INFO] [scheduler.go:42] [Douban] Batch update completed: 0 records updated
+[2026-06-26 17:26:38.114] [INFO] [asm_amd64.s:1771] [Douban] Scheduler batch update: no videos updated
+[2026-06-26 17:26:38.114] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 17:26:38.114] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 17:26:38.114] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 17:26:38.114] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传
+[2026-06-26 17:26:38.114] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传 year=2020 type=国产动漫 director=伍镇焯,王裕仁
+[2026-06-26 17:26:38.115] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传 (meta: year=2020 type=国产动漫 director=伍镇焯,王裕仁)
+[2026-06-26 17:27:04.993] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0
+[2026-06-26 17:27:05.305] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 27.19s
+[2026-06-26 17:27:05.305] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传' (HTML len=29937)
+[2026-06-26 17:27:05.307] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传': no candidates parsed for keyword: 凡人修仙传
+[2026-06-26 17:27:05.307] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 凡人修仙传：重返天南
+[2026-06-26 17:27:05.307] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传：重返天南 year=2025 type=国产动漫 director=王裕仁
+[2026-06-26 17:27:05.307] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传：重返天南 (meta: year=2025 type=国产动漫 director=王裕仁)
+[2026-06-26 17:27:47.989] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%EF%BC%9A%E9%87%8D%E8%BF%94%E5%A4%A9%E5%8D%97
+[2026-06-26 17:27:48.216] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 42.91s
+[2026-06-26 17:27:48.216] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传：重返天南' (HTML len=15143)
+[2026-06-26 17:27:48.218] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '凡人修仙传：重返天南': no candidates parsed for keyword: 凡人修仙传：重返天南
+[2026-06-26 17:27:48.219] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 凡人修仙传真人版
+[2026-06-26 17:27:48.219] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传真人版 year=2025 type=国产剧 director=杨阳
+[2026-06-26 17:27:48.219] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传真人版 (meta: year=2025 type=国产剧 director=杨阳)
+[2026-06-26 17:28:47.283] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%E7%9C%9F%E4%BA%BA%E7%89%88
+[2026-06-26 17:28:47.659] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 59.44s
+[2026-06-26 17:28:47.659] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传真人版' (HTML len=29303)
+[2026-06-26 17:28:47.662] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '凡人修仙传真人版': no candidates parsed for keyword: 凡人修仙传真人版
+[2026-06-26 17:28:47.662] [INFO] [scheduler.go:42] [Douban] Found 0 incomplete records (has subject_id but missing details)
+[2026-06-26 17:28:47.662] [INFO] [scheduler.go:42] [Douban] Batch update completed: 0 records updated
+[2026-06-26 17:28:47.662] [INFO] [asm_amd64.s:1771] [Douban] Scheduler batch update: no videos updated
+[2026-06-26 17:28:47.662] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 17:28:47.662] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 17:28:47.662] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 17:28:47.662] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传
+[2026-06-26 17:28:47.662] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传 year=2020 type=国产动漫 director=伍镇焯,王裕仁
+[2026-06-26 17:28:47.662] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传 (meta: year=2020 type=国产动漫 director=伍镇焯,王裕仁)
+[2026-06-26 17:29:22.239] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0
+[2026-06-26 17:29:22.809] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 35.15s
+[2026-06-26 17:29:22.810] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传' (HTML len=29937)
+[2026-06-26 17:29:22.812] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传': no candidates parsed for keyword: 凡人修仙传
+[2026-06-26 17:29:22.812] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 凡人修仙传：重返天南
+[2026-06-26 17:29:22.812] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传：重返天南 year=2025 type=国产动漫 director=王裕仁
+[2026-06-26 17:29:22.812] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传：重返天南 (meta: year=2025 type=国产动漫 director=王裕仁)
+[2026-06-26 17:30:11.274] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%EF%BC%9A%E9%87%8D%E8%BF%94%E5%A4%A9%E5%8D%97
+[2026-06-26 17:30:11.489] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 48.68s
+[2026-06-26 17:30:11.489] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传：重返天南' (HTML len=15143)
+[2026-06-26 17:30:11.492] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '凡人修仙传：重返天南': no candidates parsed for keyword: 凡人修仙传：重返天南
+[2026-06-26 17:30:11.492] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 凡人修仙传真人版
+[2026-06-26 17:30:11.492] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传真人版 year=2025 type=国产剧 director=杨阳
+[2026-06-26 17:30:11.492] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传真人版 (meta: year=2025 type=国产剧 director=杨阳)
+[2026-06-26 17:31:05.609] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%E7%9C%9F%E4%BA%BA%E7%89%88
+[2026-06-26 17:31:06.043] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 54.55s
+[2026-06-26 17:31:06.043] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传真人版' (HTML len=29303)
+[2026-06-26 17:31:06.045] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '凡人修仙传真人版': no candidates parsed for keyword: 凡人修仙传真人版
+[2026-06-26 17:31:06.045] [INFO] [scheduler.go:42] [Douban] Found 0 incomplete records (has subject_id but missing details)
+[2026-06-26 17:31:06.045] [INFO] [scheduler.go:42] [Douban] Batch update completed: 0 records updated
+[2026-06-26 17:31:06.045] [INFO] [asm_amd64.s:1771] [Douban] Scheduler batch update: no videos updated
+[2026-06-26 17:31:06.045] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 17:31:06.045] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 17:31:06.045] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 17:31:06.045] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传
+[2026-06-26 17:31:06.045] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传 year=2020 type=国产动漫 director=伍镇焯,王裕仁
+[2026-06-26 17:31:06.046] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传 (meta: year=2020 type=国产动漫 director=伍镇焯,王裕仁)
+[2026-06-26 17:32:00.176] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0
+[2026-06-26 17:32:00.538] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 54.49s
+[2026-06-26 17:32:00.539] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传' (HTML len=29937)
+[2026-06-26 17:32:00.541] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传': no candidates parsed for keyword: 凡人修仙传
+[2026-06-26 17:32:00.541] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 凡人修仙传：重返天南
+[2026-06-26 17:32:00.541] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传：重返天南 year=2025 type=国产动漫 director=王裕仁
+[2026-06-26 17:32:00.541] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传：重返天南 (meta: year=2025 type=国产动漫 director=王裕仁)
+[2026-06-26 17:32:25.691] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%EF%BC%9A%E9%87%8D%E8%BF%94%E5%A4%A9%E5%8D%97
+[2026-06-26 17:32:25.817] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 25.28s
+[2026-06-26 17:32:25.817] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传：重返天南' (HTML len=15143)
+[2026-06-26 17:32:25.819] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '凡人修仙传：重返天南': no candidates parsed for keyword: 凡人修仙传：重返天南
+[2026-06-26 17:32:25.819] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 凡人修仙传真人版
+[2026-06-26 17:32:25.819] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传真人版 year=2025 type=国产剧 director=杨阳
+[2026-06-26 17:32:25.819] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传真人版 (meta: year=2025 type=国产剧 director=杨阳)
+[2026-06-26 17:32:55.713] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%E7%9C%9F%E4%BA%BA%E7%89%88
+[2026-06-26 17:32:56.025] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 30.21s
+[2026-06-26 17:32:56.025] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传真人版' (HTML len=29303)
+[2026-06-26 17:32:56.028] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '凡人修仙传真人版': no candidates parsed for keyword: 凡人修仙传真人版
+[2026-06-26 17:32:56.028] [INFO] [scheduler.go:42] [Douban] Found 0 incomplete records (has subject_id but missing details)
+[2026-06-26 17:32:56.028] [INFO] [scheduler.go:42] [Douban] Batch update completed: 0 records updated
+[2026-06-26 17:32:56.028] [INFO] [asm_amd64.s:1771] [Douban] Scheduler batch update: no videos updated
+[2026-06-26 17:32:56.028] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 17:32:56.028] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 17:32:56.028] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 17:32:56.028] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传
+[2026-06-26 17:32:56.028] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传 year=2020 type=国产动漫 director=伍镇焯,王裕仁
+[2026-06-26 17:32:56.028] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传 (meta: year=2020 type=国产动漫 director=伍镇焯,王裕仁)
+[2026-06-26 17:33:53.763] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0
+[2026-06-26 17:33:54.148] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 58.12s
+[2026-06-26 17:33:54.148] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传' (HTML len=29937)
+[2026-06-26 17:33:54.150] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传' (failures=5, until=2026-06-27 17:33:54)
+[2026-06-26 17:33:54.150] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传': no candidates parsed for keyword: 凡人修仙传
+[2026-06-26 17:33:54.150] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 凡人修仙传：重返天南
+[2026-06-26 17:33:54.150] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传：重返天南 year=2025 type=国产动漫 director=王裕仁
+[2026-06-26 17:33:54.151] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传：重返天南 (meta: year=2025 type=国产动漫 director=王裕仁)
+[2026-06-26 17:34:41.544] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%EF%BC%9A%E9%87%8D%E8%BF%94%E5%A4%A9%E5%8D%97
+[2026-06-26 17:34:41.720] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 47.57s
+[2026-06-26 17:34:41.721] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传：重返天南' (HTML len=15143)
+[2026-06-26 17:34:41.722] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传：重返天南' (failures=5, until=2026-06-27 17:34:41)
+[2026-06-26 17:34:41.722] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '凡人修仙传：重返天南': no candidates parsed for keyword: 凡人修仙传：重返天南
+[2026-06-26 17:34:41.722] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 凡人修仙传真人版
+[2026-06-26 17:34:41.722] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传真人版 year=2025 type=国产剧 director=杨阳
+[2026-06-26 17:34:41.723] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传真人版 (meta: year=2025 type=国产剧 director=杨阳)
+[2026-06-26 17:35:18.053] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%E7%9C%9F%E4%BA%BA%E7%89%88
+[2026-06-26 17:35:18.430] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 36.71s
+[2026-06-26 17:35:18.431] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传真人版' (HTML len=29303)
+[2026-06-26 17:35:18.434] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传真人版' (failures=5, until=2026-06-27 17:35:18)
+[2026-06-26 17:35:18.434] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '凡人修仙传真人版': no candidates parsed for keyword: 凡人修仙传真人版
+[2026-06-26 17:35:18.434] [INFO] [scheduler.go:42] [Douban] Found 0 incomplete records (has subject_id but missing details)
+[2026-06-26 17:35:18.434] [INFO] [scheduler.go:42] [Douban] Batch update completed: 0 records updated
+[2026-06-26 17:35:18.434] [INFO] [asm_amd64.s:1771] [Douban] Scheduler batch update: no videos updated
+[2026-06-26 17:35:18.434] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 17:35:18.434] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 17:35:18.434] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 17:35:18.434] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传：外海风云
+[2026-06-26 17:35:18.434] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传：外海风云 year=2025 type=国产动漫 director=王裕仁
+[2026-06-26 17:35:18.434] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传：外海风云 (meta: year=2025 type=国产动漫 director=王裕仁)
+[2026-06-26 17:36:07.501] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%EF%BC%9A%E5%A4%96%E6%B5%B7%E9%A3%8E%E4%BA%91
+[2026-06-26 17:36:07.727] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 49.29s
+[2026-06-26 17:36:07.728] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传：外海风云' (HTML len=15141)
+[2026-06-26 17:36:07.729] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传：外海风云': no candidates parsed for keyword: 凡人修仙传：外海风云
+[2026-06-26 17:36:07.730] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 凡人修仙传：星海飞驰篇
+[2026-06-26 17:36:07.730] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传：星海飞驰篇 year=2023 type=国产动漫 director=王裕仁,林宇昂
+[2026-06-26 17:36:07.730] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传：星海飞驰篇 (meta: year=2023 type=国产动漫 director=王裕仁,林宇昂)
+[2026-06-26 17:36:41.849] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%EF%BC%9A%E6%98%9F%E6%B5%B7%E9%A3%9E%E9%A9%B0%E7%AF%87
+[2026-06-26 17:36:42.048] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 34.32s
+[2026-06-26 17:36:42.048] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传：星海飞驰篇' (HTML len=15150)
+[2026-06-26 17:36:42.051] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '凡人修仙传：星海飞驰篇': no candidates parsed for keyword: 凡人修仙传：星海飞驰篇
+[2026-06-26 17:36:42.051] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 凡人修仙传重制版
+[2026-06-26 17:36:42.051] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传重制版 year=2023 type=国产动漫 director=未知
+[2026-06-26 17:36:42.051] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传重制版 (meta: year=2023 type=国产动漫 director=未知)
+[2026-06-26 17:37:22.346] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%E9%87%8D%E5%88%B6%E7%89%88
+[2026-06-26 17:37:22.756] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 40.70s
+[2026-06-26 17:37:22.757] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传重制版' (HTML len=29303)
+[2026-06-26 17:37:22.759] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '凡人修仙传重制版': no candidates parsed for keyword: 凡人修仙传重制版
+[2026-06-26 17:37:22.759] [INFO] [scheduler.go:42] [Douban] Found 0 incomplete records (has subject_id but missing details)
+[2026-06-26 17:37:22.759] [INFO] [scheduler.go:42] [Douban] Batch update completed: 0 records updated
+[2026-06-26 17:37:22.759] [INFO] [asm_amd64.s:1771] [Douban] Scheduler batch update: no videos updated
+[2026-06-26 17:37:22.759] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 17:37:22.759] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 17:37:22.760] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 17:37:22.760] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传：外海风云
+[2026-06-26 17:37:22.760] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传：外海风云 year=2025 type=国产动漫 director=王裕仁
+[2026-06-26 17:37:22.760] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传：外海风云 (meta: year=2025 type=国产动漫 director=王裕仁)
+[2026-06-26 17:38:01.151] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%EF%BC%9A%E5%A4%96%E6%B5%B7%E9%A3%8E%E4%BA%91
+[2026-06-26 17:38:01.333] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 38.57s
+[2026-06-26 17:38:01.334] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传：外海风云' (HTML len=15141)
+[2026-06-26 17:38:01.336] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传：外海风云': no candidates parsed for keyword: 凡人修仙传：外海风云
+[2026-06-26 17:38:01.337] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 凡人修仙传：星海飞驰篇
+[2026-06-26 17:38:01.337] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传：星海飞驰篇 year=2023 type=国产动漫 director=王裕仁,林宇昂
+[2026-06-26 17:38:01.337] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传：星海飞驰篇 (meta: year=2023 type=国产动漫 director=王裕仁,林宇昂)
+[2026-06-26 17:38:46.081] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%EF%BC%9A%E6%98%9F%E6%B5%B7%E9%A3%9E%E9%A9%B0%E7%AF%87
+[2026-06-26 17:38:46.284] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 44.95s
+[2026-06-26 17:38:46.285] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传：星海飞驰篇' (HTML len=15150)
+[2026-06-26 17:38:46.287] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '凡人修仙传：星海飞驰篇': no candidates parsed for keyword: 凡人修仙传：星海飞驰篇
+[2026-06-26 17:38:46.287] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 凡人修仙传重制版
+[2026-06-26 17:38:46.287] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传重制版 year=2023 type=国产动漫 director=未知
+[2026-06-26 17:38:46.287] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传重制版 (meta: year=2023 type=国产动漫 director=未知)
+[2026-06-26 17:39:26.854] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%E9%87%8D%E5%88%B6%E7%89%88
+[2026-06-26 17:39:27.243] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 40.96s
+[2026-06-26 17:39:27.244] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传重制版' (HTML len=29303)
+[2026-06-26 17:39:27.246] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '凡人修仙传重制版': no candidates parsed for keyword: 凡人修仙传重制版
+[2026-06-26 17:39:27.246] [INFO] [scheduler.go:42] [Douban] Found 0 incomplete records (has subject_id but missing details)
+[2026-06-26 17:39:27.246] [INFO] [scheduler.go:42] [Douban] Batch update completed: 0 records updated
+[2026-06-26 17:39:27.246] [INFO] [asm_amd64.s:1771] [Douban] Scheduler batch update: no videos updated
+[2026-06-26 17:39:27.246] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 17:39:27.246] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 17:39:27.247] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 17:39:27.247] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传：外海风云
+[2026-06-26 17:39:27.247] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传：外海风云 year=2025 type=国产动漫 director=王裕仁
+[2026-06-26 17:39:27.247] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传：外海风云 (meta: year=2025 type=国产动漫 director=王裕仁)
+[2026-06-26 17:40:12.262] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%EF%BC%9A%E5%A4%96%E6%B5%B7%E9%A3%8E%E4%BA%91
+[2026-06-26 17:40:12.462] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 45.22s
+[2026-06-26 17:40:12.463] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传：外海风云' (HTML len=15141)
+[2026-06-26 17:40:12.464] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传：外海风云': no candidates parsed for keyword: 凡人修仙传：外海风云
+[2026-06-26 17:40:12.464] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 凡人修仙传：星海飞驰篇
+[2026-06-26 17:40:12.464] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传：星海飞驰篇 year=2023 type=国产动漫 director=王裕仁,林宇昂
+[2026-06-26 17:40:12.464] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传：星海飞驰篇 (meta: year=2023 type=国产动漫 director=王裕仁,林宇昂)
+[2026-06-26 17:41:07.151] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%EF%BC%9A%E6%98%9F%E6%B5%B7%E9%A3%9E%E9%A9%B0%E7%AF%87
+[2026-06-26 17:41:07.334] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 54.87s
+[2026-06-26 17:41:07.334] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传：星海飞驰篇' (HTML len=15150)
+[2026-06-26 17:41:07.337] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '凡人修仙传：星海飞驰篇': no candidates parsed for keyword: 凡人修仙传：星海飞驰篇
+[2026-06-26 17:41:07.337] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 凡人修仙传重制版
+[2026-06-26 17:41:07.337] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传重制版 year=2023 type=国产动漫 director=未知
+[2026-06-26 17:41:07.337] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传重制版 (meta: year=2023 type=国产动漫 director=未知)
+[2026-06-26 17:41:32.105] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%E9%87%8D%E5%88%B6%E7%89%88
+[2026-06-26 17:41:32.436] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 25.10s
+[2026-06-26 17:41:32.436] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传重制版' (HTML len=29303)
+[2026-06-26 17:41:32.439] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '凡人修仙传重制版': no candidates parsed for keyword: 凡人修仙传重制版
+[2026-06-26 17:41:32.439] [INFO] [scheduler.go:42] [Douban] Found 0 incomplete records (has subject_id but missing details)
+[2026-06-26 17:41:32.439] [INFO] [scheduler.go:42] [Douban] Batch update completed: 0 records updated
+[2026-06-26 17:41:32.439] [INFO] [asm_amd64.s:1771] [Douban] Scheduler batch update: no videos updated
+[2026-06-26 17:41:32.439] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 17:41:32.439] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 17:41:32.439] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 17:41:32.439] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传：外海风云
+[2026-06-26 17:41:32.439] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传：外海风云 year=2025 type=国产动漫 director=王裕仁
+[2026-06-26 17:41:32.439] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传：外海风云 (meta: year=2025 type=国产动漫 director=王裕仁)
+[2026-06-26 17:41:45.303] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-26 17:41:45.310] [INFO] [app.go:174] [Douban] Scheduler started, interval: 30s
+[2026-06-26 17:41:45.327] [INFO] [app.go:62] 同步全局类型完成: 0 条
+[2026-06-26 17:41:46.192] [INFO] [app.go:982] [DoubanChart] 缓存过期或为空，开始抓取热榜...
+[2026-06-26 17:41:46.193] [INFO] [chart.go:101] [DoubanChart] Fetching URL: https://movie.douban.com/chart
+[2026-06-26 17:41:46.490] [INFO] [app.go:982] [DoubanChart] 抓取完成: 10 条热榜数据
+[2026-06-26 17:41:53.780] [INFO] [app.go:3150] [Douban] Stopping scheduler (graceful)...
+[2026-06-26 17:41:53.780] [INFO] [scheduler.go:62] [Douban] Updater graceful stop requested
+[2026-06-26 17:41:53.780] [INFO] [app.go:3150] [Douban] Scheduler stopped
+[2026-06-26 17:41:53.780] [INFO] [application.go:720] 应用正常退出
+[2026-06-26 17:45:09.032] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-26 17:45:09.041] [INFO] [app.go:178] [DoubanChart] 缓存过期或为空，开始抓取热榜...
+[2026-06-26 17:45:09.041] [INFO] [chart.go:101] [DoubanChart] Fetching URL: https://movie.douban.com/chart
+[2026-06-26 17:45:09.041] [INFO] [app.go:174] [Douban] Scheduler started, interval: 30s
+[2026-06-26 17:45:09.041] [INFO] [app.go:62] 同步全局类型完成: 0 条
+[2026-06-26 17:45:09.297] [INFO] [app.go:178] [DoubanChart] 抓取完成: 10 条热榜数据
+[2026-06-26 17:45:09.297] [INFO] [app.go:62] 豆瓣热榜预加载完成
+[2026-06-26 17:45:39.041] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 17:45:39.041] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 17:45:39.041] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 17:45:39.041] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传：外海风云
+[2026-06-26 17:45:39.041] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传：外海风云 year=2025 type=国产动漫 director=王裕仁
+[2026-06-26 17:45:39.041] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传：外海风云 (meta: year=2025 type=国产动漫 director=王裕仁)
+[2026-06-26 17:45:49.136] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%EF%BC%9A%E5%A4%96%E6%B5%B7%E9%A3%8E%E4%BA%91
+[2026-06-26 17:45:49.340] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 10.30s
+[2026-06-26 17:45:49.341] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传：外海风云' (HTML len=15141)
+[2026-06-26 17:45:49.344] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传：外海风云': no candidates parsed for keyword: 凡人修仙传：外海风云
+[2026-06-26 17:45:49.344] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 凡人修仙传：星海飞驰篇
+[2026-06-26 17:45:49.344] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传：星海飞驰篇 year=2023 type=国产动漫 director=王裕仁,林宇昂
+[2026-06-26 17:45:49.344] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传：星海飞驰篇 (meta: year=2023 type=国产动漫 director=王裕仁,林宇昂)
+[2026-06-26 17:46:40.783] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%EF%BC%9A%E6%98%9F%E6%B5%B7%E9%A3%9E%E9%A9%B0%E7%AF%87
+[2026-06-26 17:46:40.983] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 51.64s
+[2026-06-26 17:46:40.984] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传：星海飞驰篇' (HTML len=15150)
+[2026-06-26 17:46:40.986] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '凡人修仙传：星海飞驰篇': no candidates parsed for keyword: 凡人修仙传：星海飞驰篇
+[2026-06-26 17:46:40.986] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 凡人修仙传重制版
+[2026-06-26 17:46:40.986] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传重制版 year=2023 type=国产动漫 director=未知
+[2026-06-26 17:46:40.986] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传重制版 (meta: year=2023 type=国产动漫 director=未知)
+[2026-06-26 17:47:26.747] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%E9%87%8D%E5%88%B6%E7%89%88
+[2026-06-26 17:47:27.148] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 46.16s
+[2026-06-26 17:47:27.148] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传重制版' (HTML len=29303)
+[2026-06-26 17:47:27.151] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '凡人修仙传重制版': no candidates parsed for keyword: 凡人修仙传重制版
+[2026-06-26 17:47:27.151] [INFO] [scheduler.go:42] [Douban] Found 0 incomplete records (has subject_id but missing details)
+[2026-06-26 17:47:27.151] [INFO] [scheduler.go:42] [Douban] Batch update completed: 0 records updated
+[2026-06-26 17:47:27.151] [INFO] [asm_amd64.s:1771] [Douban] Scheduler batch update: no videos updated
+[2026-06-26 17:47:27.151] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 17:47:27.151] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 17:47:27.151] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 17:47:27.151] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传：外海风云
+[2026-06-26 17:47:27.151] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传：外海风云 year=2025 type=国产动漫 director=王裕仁
+[2026-06-26 17:47:27.151] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传：外海风云 (meta: year=2025 type=国产动漫 director=王裕仁)
+[2026-06-26 17:48:21.990] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%EF%BC%9A%E5%A4%96%E6%B5%B7%E9%A3%8E%E4%BA%91
+[2026-06-26 17:48:22.176] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 55.02s
+[2026-06-26 17:48:22.176] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传：外海风云' (HTML len=15141)
+[2026-06-26 17:48:22.178] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传：外海风云' (failures=5, until=2026-06-27 17:48:22)
+[2026-06-26 17:48:22.178] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传：外海风云': no candidates parsed for keyword: 凡人修仙传：外海风云
+[2026-06-26 17:48:22.178] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 凡人修仙传：星海飞驰篇
+[2026-06-26 17:48:22.178] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传：星海飞驰篇 year=2023 type=国产动漫 director=王裕仁,林宇昂
+[2026-06-26 17:48:22.178] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传：星海飞驰篇 (meta: year=2023 type=国产动漫 director=王裕仁,林宇昂)
+[2026-06-26 17:48:53.540] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%EF%BC%9A%E6%98%9F%E6%B5%B7%E9%A3%9E%E9%A9%B0%E7%AF%87
+[2026-06-26 17:48:53.744] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 31.57s
+[2026-06-26 17:48:53.745] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传：星海飞驰篇' (HTML len=15150)
+[2026-06-26 17:48:53.746] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传：星海飞驰篇' (failures=5, until=2026-06-27 17:48:53)
+[2026-06-26 17:48:53.746] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '凡人修仙传：星海飞驰篇': no candidates parsed for keyword: 凡人修仙传：星海飞驰篇
+[2026-06-26 17:48:53.746] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 凡人修仙传重制版
+[2026-06-26 17:48:53.746] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传重制版 year=2023 type=国产动漫 director=未知
+[2026-06-26 17:48:53.747] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传重制版 (meta: year=2023 type=国产动漫 director=未知)
+[2026-06-26 18:10:21.011] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-26 18:10:21.018] [INFO] [app.go:174] [Douban] Scheduler started, interval: 30s
+[2026-06-26 18:10:21.018] [INFO] [app.go:178] [DoubanChart] 缓存过期或为空，开始抓取热榜...
+[2026-06-26 18:10:21.018] [INFO] [chart.go:122] [DoubanChart] Fetching URL: https://movie.douban.com/chart
+[2026-06-26 18:10:21.032] [INFO] [app.go:62] 同步全局类型完成: 0 条
+[2026-06-26 18:10:21.295] [INFO] [app.go:178] [DoubanChart] 抓取完成: 10 条热榜数据
+[2026-06-26 18:10:21.295] [INFO] [app.go:62] 豆瓣热榜预加载完成
+[2026-06-26 18:10:21.295] [INFO] [chart.go:147] [DoubanChart] 入库完成: 10 条
+[2026-06-26 18:10:51.019] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 18:10:51.019] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 18:10:51.019] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 18:10:51.019] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传重制版
+[2026-06-26 18:10:51.019] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传重制版 year=2023 type=国产动漫 director=未知
+[2026-06-26 18:10:51.020] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传重制版 (meta: year=2023 type=国产动漫 director=未知)
+[2026-06-26 18:11:21.248] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%E9%87%8D%E5%88%B6%E7%89%88
+[2026-06-26 18:11:21.616] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 30.60s
+[2026-06-26 18:11:21.616] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传重制版' (HTML len=29287)
+[2026-06-26 18:11:21.618] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传重制版' (failures=5, until=2026-06-27 18:11:21)
+[2026-06-26 18:11:21.619] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传重制版': no candidates parsed for keyword: 凡人修仙传重制版
+[2026-06-26 18:11:21.619] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 凡人修仙传年番4
+[2026-06-26 18:11:21.619] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传年番4 year=2026 type=国产动漫 director=王裕仁,林宇昂
+[2026-06-26 18:11:21.619] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传年番4 (meta: year=2026 type=国产动漫 director=王裕仁,林宇昂)
+[2026-06-26 18:11:49.028] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%E5%B9%B4%E7%95%AA4
+[2026-06-26 18:11:49.212] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 27.59s
+[2026-06-26 18:11:49.212] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传年番4' (HTML len=22692)
+[2026-06-26 18:11:49.215] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '凡人修仙传年番4': no candidates parsed for keyword: 凡人修仙传年番4
+[2026-06-26 18:11:49.215] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 凡人修仙传
+[2026-06-26 18:11:49.215] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传 year=2025 type=国产剧 director=杨阳
+[2026-06-26 18:11:49.215] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传 (meta: year=2025 type=国产剧 director=杨阳)
+[2026-06-26 18:12:13.779] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0
+[2026-06-26 18:12:14.074] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 24.86s
+[2026-06-26 18:12:14.075] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传' (HTML len=29921)
+[2026-06-26 18:12:14.078] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传' (failures=6, until=2026-06-27 18:12:14)
+[2026-06-26 18:12:14.078] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '凡人修仙传': no candidates parsed for keyword: 凡人修仙传
+[2026-06-26 18:12:14.078] [INFO] [scheduler.go:42] [Douban] Found 0 incomplete records (has subject_id but missing details)
+[2026-06-26 18:12:14.078] [INFO] [scheduler.go:42] [Douban] Batch update completed: 0 records updated
+[2026-06-26 18:12:14.078] [INFO] [asm_amd64.s:1771] [Douban] Scheduler batch update: no videos updated
+[2026-06-26 18:12:14.078] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 18:12:14.078] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 18:12:14.078] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 18:12:14.078] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传年番4
+[2026-06-26 18:12:14.078] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传年番4 year=2026 type=国产动漫 director=王裕仁,林宇昂
+[2026-06-26 18:12:14.078] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传年番4 (meta: year=2026 type=国产动漫 director=王裕仁,林宇昂)
+[2026-06-26 18:12:43.880] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%E5%B9%B4%E7%95%AA4
+[2026-06-26 18:12:44.049] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 29.97s
+[2026-06-26 18:12:44.049] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传年番4' (HTML len=22692)
+[2026-06-26 18:12:44.051] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传年番4': no candidates parsed for keyword: 凡人修仙传年番4
+[2026-06-26 18:12:44.051] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 凡人修仙传
+[2026-06-26 18:12:44.051] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传 year=2025 type=国产剧 director=杨阳
+[2026-06-26 18:12:44.051] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传 (meta: year=2025 type=国产剧 director=杨阳)
+[2026-06-26 18:13:13.583] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0
+[2026-06-26 18:13:13.895] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 29.84s
+[2026-06-26 18:13:13.896] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传' (HTML len=29921)
+[2026-06-26 18:13:13.898] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传' (failures=7, until=2026-06-27 18:13:13)
+[2026-06-26 18:13:13.898] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '凡人修仙传': no candidates parsed for keyword: 凡人修仙传
+[2026-06-26 18:13:13.898] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 凡人修仙传特别篇燕家堡之战
+[2026-06-26 18:13:13.898] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传特别篇燕家堡之战 year= type=国产动漫 director=
+[2026-06-26 18:13:13.898] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传特别篇燕家堡之战 (meta: year= type=国产动漫 director=)
+[2026-06-26 18:14:00.232] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%E7%89%B9%E5%88%AB%E7%AF%87%E7%87%95%E5%AE%B6%E5%A0%A1%E4%B9%8B%E6%88%98
+[2026-06-26 18:14:00.438] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 46.54s
+[2026-06-26 18:14:00.439] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传特别篇燕家堡之战' (HTML len=15190)
+[2026-06-26 18:14:00.446] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '凡人修仙传特别篇燕家堡之战': no candidates parsed for keyword: 凡人修仙传特别篇燕家堡之战
+[2026-06-26 18:14:00.446] [INFO] [scheduler.go:42] [Douban] Found 0 incomplete records (has subject_id but missing details)
+[2026-06-26 18:14:00.446] [INFO] [scheduler.go:42] [Douban] Batch update completed: 0 records updated
+[2026-06-26 18:14:00.446] [INFO] [asm_amd64.s:1771] [Douban] Scheduler batch update: no videos updated
+[2026-06-26 18:14:00.446] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 18:14:00.446] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 18:14:00.446] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 18:14:00.446] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传年番4
+[2026-06-26 18:14:00.446] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传年番4 year=2026 type=国产动漫 director=王裕仁,林宇昂
+[2026-06-26 18:14:00.446] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传年番4 (meta: year=2026 type=国产动漫 director=王裕仁,林宇昂)
+[2026-06-26 18:14:43.243] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%E5%B9%B4%E7%95%AA4
+[2026-06-26 18:14:43.469] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 43.02s
+[2026-06-26 18:14:43.470] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传年番4' (HTML len=22692)
+[2026-06-26 18:14:43.472] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传年番4': no candidates parsed for keyword: 凡人修仙传年番4
+[2026-06-26 18:14:43.472] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 凡人修仙传
+[2026-06-26 18:14:43.472] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传 year=2025 type=国产剧 director=杨阳
+[2026-06-26 18:14:43.473] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传 (meta: year=2025 type=国产剧 director=杨阳)
+[2026-06-26 18:15:30.215] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0
+[2026-06-26 18:15:30.605] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 47.13s
+[2026-06-26 18:15:30.605] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传' (HTML len=29921)
+[2026-06-26 18:15:30.608] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传' (failures=8, until=2026-06-27 18:15:30)
+[2026-06-26 18:15:30.608] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '凡人修仙传': no candidates parsed for keyword: 凡人修仙传
+[2026-06-26 18:15:30.608] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 凡人修仙传特别篇燕家堡之战
+[2026-06-26 18:15:30.608] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传特别篇燕家堡之战 year= type=国产动漫 director=
+[2026-06-26 18:15:30.608] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传特别篇燕家堡之战 (meta: year= type=国产动漫 director=)
+[2026-06-26 18:16:23.748] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%E7%89%B9%E5%88%AB%E7%AF%87%E7%87%95%E5%AE%B6%E5%A0%A1%E4%B9%8B%E6%88%98
+[2026-06-26 18:16:23.965] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 53.36s
+[2026-06-26 18:16:23.965] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传特别篇燕家堡之战' (HTML len=15190)
+[2026-06-26 18:16:23.967] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '凡人修仙传特别篇燕家堡之战': no candidates parsed for keyword: 凡人修仙传特别篇燕家堡之战
+[2026-06-26 18:16:23.967] [INFO] [scheduler.go:42] [Douban] Found 0 incomplete records (has subject_id but missing details)
+[2026-06-26 18:16:23.967] [INFO] [scheduler.go:42] [Douban] Batch update completed: 0 records updated
+[2026-06-26 18:16:23.967] [INFO] [asm_amd64.s:1771] [Douban] Scheduler batch update: no videos updated
+[2026-06-26 18:16:23.967] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 18:16:23.967] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 18:16:23.967] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 18:16:23.967] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传年番4
+[2026-06-26 18:16:23.967] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传年番4 year=2026 type=国产动漫 director=王裕仁,林宇昂
+[2026-06-26 18:16:23.967] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传年番4 (meta: year=2026 type=国产动漫 director=王裕仁,林宇昂)
+[2026-06-26 18:17:20.821] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%E5%B9%B4%E7%95%AA4
+[2026-06-26 18:17:21.099] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 57.13s
+[2026-06-26 18:17:21.100] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传年番4' (HTML len=22692)
+[2026-06-26 18:17:21.103] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传年番4': no candidates parsed for keyword: 凡人修仙传年番4
+[2026-06-26 18:17:21.103] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 凡人修仙传
+[2026-06-26 18:17:21.103] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传 year=2025 type=国产剧 director=杨阳
+[2026-06-26 18:17:21.103] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传 (meta: year=2025 type=国产剧 director=杨阳)
+[2026-06-26 18:17:50.698] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0
+[2026-06-26 18:17:51.016] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 29.91s
+[2026-06-26 18:17:51.017] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传' (HTML len=29921)
+[2026-06-26 18:17:51.020] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传' (failures=9, until=2026-06-27 18:17:51)
+[2026-06-26 18:17:51.020] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '凡人修仙传': no candidates parsed for keyword: 凡人修仙传
+[2026-06-26 18:17:51.020] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 凡人修仙传特别篇燕家堡之战
+[2026-06-26 18:17:51.020] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传特别篇燕家堡之战 year= type=国产动漫 director=
+[2026-06-26 18:17:51.020] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传特别篇燕家堡之战 (meta: year= type=国产动漫 director=)
+[2026-06-26 18:18:45.264] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%E7%89%B9%E5%88%AB%E7%AF%87%E7%87%95%E5%AE%B6%E5%A0%A1%E4%B9%8B%E6%88%98
+[2026-06-26 18:18:45.490] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 54.47s
+[2026-06-26 18:18:45.491] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传特别篇燕家堡之战' (HTML len=15190)
+[2026-06-26 18:18:45.493] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '凡人修仙传特别篇燕家堡之战': no candidates parsed for keyword: 凡人修仙传特别篇燕家堡之战
+[2026-06-26 18:18:45.494] [INFO] [scheduler.go:42] [Douban] Found 0 incomplete records (has subject_id but missing details)
+[2026-06-26 18:18:45.494] [INFO] [scheduler.go:42] [Douban] Batch update completed: 0 records updated
+[2026-06-26 18:18:45.494] [INFO] [asm_amd64.s:1771] [Douban] Scheduler batch update: no videos updated
+[2026-06-26 18:18:45.494] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 18:18:45.494] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 18:18:45.494] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 18:18:45.494] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传年番4
+[2026-06-26 18:18:45.494] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传年番4 year=2026 type=国产动漫 director=王裕仁,林宇昂
+[2026-06-26 18:18:45.494] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传年番4 (meta: year=2026 type=国产动漫 director=王裕仁,林宇昂)
+[2026-06-26 18:19:11.221] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%E5%B9%B4%E7%95%AA4
+[2026-06-26 18:19:11.408] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 25.91s
+[2026-06-26 18:19:11.409] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传年番4' (HTML len=22692)
+[2026-06-26 18:19:11.412] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传年番4' (failures=5, until=2026-06-27 18:19:11)
+[2026-06-26 18:19:11.412] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传年番4': no candidates parsed for keyword: 凡人修仙传年番4
+[2026-06-26 18:19:11.412] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 凡人修仙传
+[2026-06-26 18:19:11.412] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传 year=2025 type=国产剧 director=杨阳
+[2026-06-26 18:19:11.412] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传 (meta: year=2025 type=国产剧 director=杨阳)
+[2026-06-26 18:19:38.873] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0
+[2026-06-26 18:19:39.220] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 27.81s
+[2026-06-26 18:19:39.220] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传' (HTML len=29921)
+[2026-06-26 18:19:39.223] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传' (failures=10, until=2026-06-27 18:19:39)
+[2026-06-26 18:19:39.223] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '凡人修仙传': no candidates parsed for keyword: 凡人修仙传
+[2026-06-26 18:19:39.223] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 凡人修仙传特别篇燕家堡之战
+[2026-06-26 18:19:39.223] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传特别篇燕家堡之战 year= type=国产动漫 director=
+[2026-06-26 18:19:39.223] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传特别篇燕家堡之战 (meta: year= type=国产动漫 director=)
+[2026-06-26 18:19:58.880] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%E7%89%B9%E5%88%AB%E7%AF%87%E7%87%95%E5%AE%B6%E5%A0%A1%E4%B9%8B%E6%88%98
+[2026-06-26 18:19:59.025] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 19.80s
+[2026-06-26 18:19:59.025] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传特别篇燕家堡之战' (HTML len=15190)
+[2026-06-26 18:19:59.027] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '凡人修仙传特别篇燕家堡之战': no candidates parsed for keyword: 凡人修仙传特别篇燕家堡之战
+[2026-06-26 18:19:59.027] [INFO] [scheduler.go:42] [Douban] Found 0 incomplete records (has subject_id but missing details)
+[2026-06-26 18:19:59.027] [INFO] [scheduler.go:42] [Douban] Batch update completed: 0 records updated
+[2026-06-26 18:19:59.027] [INFO] [asm_amd64.s:1771] [Douban] Scheduler batch update: no videos updated
+[2026-06-26 18:19:59.027] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 18:19:59.027] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 18:19:59.028] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 18:19:59.028] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传
+[2026-06-26 18:19:59.028] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传 year=2025 type=国产剧 director=杨阳
+[2026-06-26 18:19:59.028] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传 (meta: year=2025 type=国产剧 director=杨阳)
+[2026-06-26 18:20:02.671] [INFO] [app.go:3165] [Douban] Stopping scheduler (graceful)...
+[2026-06-26 18:20:02.671] [INFO] [scheduler.go:62] [Douban] Updater graceful stop requested
+[2026-06-26 20:08:58.222] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-26 20:08:58.235] [INFO] [app.go:178] [DoubanChart] 缓存过期或为空，开始抓取热榜...
+[2026-06-26 20:08:58.235] [INFO] [chart.go:125] [DoubanChart] Fetching URL: https://movie.douban.com/chart
+[2026-06-26 20:08:58.235] [INFO] [app.go:174] [Douban] Scheduler started, interval: 30s
+[2026-06-26 20:08:58.243] [INFO] [app.go:62] 同步全局类型完成: 0 条
+[2026-06-26 20:08:58.516] [INFO] [app.go:178] [DoubanChart] 抓取完成: 10 条热榜数据
+[2026-06-26 20:08:58.516] [INFO] [app.go:62] 豆瓣热榜预加载完成
+[2026-06-26 20:08:58.516] [INFO] [chart.go:150] [DoubanChart] 入库完成: 10 条
+[2026-06-26 20:09:27.876] [WARN] [value.go:586] 暂时无此数据 — 该资源暂未收录，请稍后再试
+[2026-06-26 20:09:28.235] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 20:09:28.235] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 20:09:28.235] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 20:09:28.235] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传
+[2026-06-26 20:09:28.235] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传 year=2025 type=国产剧 director=杨阳
+[2026-06-26 20:09:28.235] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传 (meta: year=2025 type=国产剧 director=杨阳)
+[2026-06-26 20:09:30.750] [WARN] [value.go:586] 暂时无此数据 — 该资源暂未收录，请稍后再试
+[2026-06-26 20:09:33.159] [WARN] [value.go:586] 暂时无此数据 — 该资源暂未收录，请稍后再试
+[2026-06-26 20:09:35.120] [WARN] [value.go:586] 暂时无此数据 — 该资源暂未收录，请稍后再试
+[2026-06-26 20:09:53.341] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0
+[2026-06-26 20:09:53.803] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 25.57s
+[2026-06-26 20:09:53.803] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传' (HTML len=29921)
+[2026-06-26 20:09:53.805] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传' (failures=11, until=2026-06-27 20:09:53)
+[2026-06-26 20:09:53.806] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传': no candidates parsed for keyword: 凡人修仙传
+[2026-06-26 20:09:53.806] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 凡人修仙传特别篇燕家堡之战
+[2026-06-26 20:09:53.806] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传特别篇燕家堡之战 year= type=国产动漫 director=
+[2026-06-26 20:09:53.806] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传特别篇燕家堡之战 (meta: year= type=国产动漫 director=)
+[2026-06-26 20:10:29.462] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%E7%89%B9%E5%88%AB%E7%AF%87%E7%87%95%E5%AE%B6%E5%A0%A1%E4%B9%8B%E6%88%98
+[2026-06-26 20:10:30.700] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 36.89s
+[2026-06-26 20:10:30.700] [WARN] [crawler.go:541] [Douban] Anti-crawl detected: pattern '加载中' matched (page len=13936)
+[2026-06-26 20:10:30.700] [WARN] [crawler.go:583] [Douban] Anti-crawl triggered, response length: 13936
+[2026-06-26 20:10:30.700] [ERROR] [updater.go:147] [Douban] Search fetch failed for '凡人修仙传特别篇燕家堡之战': anti-crawl detected
+[2026-06-26 20:10:30.702] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传特别篇燕家堡之战' (failures=5, until=2026-06-27 20:10:30)
+[2026-06-26 20:10:30.703] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '凡人修仙传特别篇燕家堡之战': anti-crawl detected
+[2026-06-26 20:10:30.703] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 凡人修仙传星海飞驰续篇
+[2026-06-26 20:10:30.703] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传星海飞驰续篇 year=2023 type=国产动漫 director=王裕仁,林宇昂
+[2026-06-26 20:10:30.703] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传星海飞驰续篇 (meta: year=2023 type=国产动漫 director=王裕仁,林宇昂)
+[2026-06-26 20:11:27.500] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%E6%98%9F%E6%B5%B7%E9%A3%9E%E9%A9%B0%E7%BB%AD%E7%AF%87
+[2026-06-26 20:11:27.762] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 57.06s
+[2026-06-26 20:11:27.762] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传星海飞驰续篇' (HTML len=17722)
+[2026-06-26 20:11:27.765] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '凡人修仙传星海飞驰续篇': no candidates parsed for keyword: 凡人修仙传星海飞驰续篇
+[2026-06-26 20:11:27.765] [INFO] [scheduler.go:42] [Douban] Found 0 incomplete records (has subject_id but missing details)
+[2026-06-26 20:11:27.765] [INFO] [scheduler.go:42] [Douban] Batch update completed: 0 records updated
+[2026-06-26 20:11:27.765] [INFO] [asm_amd64.s:1771] [Douban] Scheduler batch update: no videos updated
+[2026-06-26 20:11:27.765] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 20:11:27.765] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 20:11:27.765] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 20:11:27.765] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传
+[2026-06-26 20:11:27.765] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传 year=2025 type=国产剧 director=杨阳
+[2026-06-26 20:11:27.765] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传 (meta: year=2025 type=国产剧 director=杨阳)
+[2026-06-26 20:11:49.948] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0
+[2026-06-26 20:11:50.272] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 22.51s
+[2026-06-26 20:11:50.272] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传' (HTML len=29921)
+[2026-06-26 20:11:50.274] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传' (failures=12, until=2026-06-27 20:11:50)
+[2026-06-26 20:11:50.274] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传': no candidates parsed for keyword: 凡人修仙传
+[2026-06-26 20:11:50.274] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 凡人修仙传星海飞驰续篇
+[2026-06-26 20:11:50.274] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传星海飞驰续篇 year=2023 type=国产动漫 director=王裕仁,林宇昂
+[2026-06-26 20:11:50.275] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传星海飞驰续篇 (meta: year=2023 type=国产动漫 director=王裕仁,林宇昂)
+[2026-06-26 20:12:29.683] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%E6%98%9F%E6%B5%B7%E9%A3%9E%E9%A9%B0%E7%BB%AD%E7%AF%87
+[2026-06-26 20:12:29.919] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 39.64s
+[2026-06-26 20:12:29.920] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传星海飞驰续篇' (HTML len=17722)
+[2026-06-26 20:12:29.922] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '凡人修仙传星海飞驰续篇': no candidates parsed for keyword: 凡人修仙传星海飞驰续篇
+[2026-06-26 20:12:29.922] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 凡人修仙传4初入星海
+[2026-06-26 20:12:29.922] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传4初入星海 year=2022 type=国产动漫 director=王裕仁,赵侠
+[2026-06-26 20:12:29.922] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传4初入星海 (meta: year=2022 type=国产动漫 director=王裕仁,赵侠)
+[2026-06-26 20:12:30.471] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-26 20:12:30.485] [INFO] [app.go:174] [Douban] Scheduler started, interval: 30s
+[2026-06-26 20:12:30.485] [INFO] [app.go:178] [DoubanChart] 缓存过期或为空，开始抓取热榜...
+[2026-06-26 20:12:30.485] [INFO] [chart.go:125] [DoubanChart] Fetching URL: https://movie.douban.com/chart
+[2026-06-26 20:12:30.492] [INFO] [app.go:62] 同步全局类型完成: 0 条
+[2026-06-26 20:12:30.754] [INFO] [app.go:178] [DoubanChart] 抓取完成: 10 条热榜数据
+[2026-06-26 20:12:30.754] [INFO] [app.go:62] 豆瓣热榜预加载完成
+[2026-06-26 20:12:30.754] [INFO] [chart.go:150] [DoubanChart] 入库完成: 10 条
+[2026-06-26 20:12:33.663] [INFO] [app.go:3165] [Douban] Stopping scheduler (graceful)...
+[2026-06-26 20:12:33.663] [INFO] [scheduler.go:62] [Douban] Updater graceful stop requested
+[2026-06-26 20:12:33.663] [INFO] [app.go:3165] [Douban] Scheduler stopped
+[2026-06-26 20:12:33.663] [INFO] [application.go:720] 应用正常退出
+[2026-06-26 20:13:15.755] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A04%E5%88%9D%E5%85%A5%E6%98%9F%E6%B5%B7
+[2026-06-26 20:13:17.025] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 47.10s
+[2026-06-26 20:13:17.025] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传4初入星海' (HTML len=17623)
+[2026-06-26 20:13:17.028] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '凡人修仙传4初入星海': no candidates parsed for keyword: 凡人修仙传4初入星海
+[2026-06-26 20:13:17.028] [INFO] [scheduler.go:42] [Douban] Found 0 incomplete records (has subject_id but missing details)
+[2026-06-26 20:13:17.028] [INFO] [scheduler.go:42] [Douban] Batch update completed: 0 records updated
+[2026-06-26 20:13:17.028] [INFO] [asm_amd64.s:1771] [Douban] Scheduler batch update: no videos updated
+[2026-06-26 20:13:17.028] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 20:13:17.028] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 20:13:17.028] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 20:13:17.028] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传
+[2026-06-26 20:13:17.028] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传 year=2025 type=国产剧 director=杨阳
+[2026-06-26 20:13:17.028] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传 (meta: year=2025 type=国产剧 director=杨阳)
+[2026-06-26 20:13:57.839] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0
+[2026-06-26 20:14:09.494] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 52.47s
+[2026-06-26 20:14:09.494] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传' (HTML len=29921)
+[2026-06-26 20:14:09.497] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传' (failures=13, until=2026-06-27 20:14:09)
+[2026-06-26 20:14:09.497] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传': no candidates parsed for keyword: 凡人修仙传
+[2026-06-26 20:14:09.497] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 凡人修仙传星海飞驰续篇
+[2026-06-26 20:14:09.497] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传星海飞驰续篇 year=2023 type=国产动漫 director=王裕仁,林宇昂
+[2026-06-26 20:14:09.497] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传星海飞驰续篇 (meta: year=2023 type=国产动漫 director=王裕仁,林宇昂)
+[2026-06-26 20:14:30.487] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%E6%98%9F%E6%B5%B7%E9%A3%9E%E9%A9%B0%E7%BB%AD%E7%AF%87
+[2026-06-26 20:14:45.488] [ERROR] [crawler.go:583] [Douban] HTTP request failed: Get "https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%E6%98%9F%E6%B5%B7%E9%A3%9E%E9%A9%B0%E7%BB%AD%E7%AF%87": context deadline exceeded (Client.Timeout exceeded while awaiting headers)
+[2026-06-26 20:14:45.488] [ERROR] [updater.go:147] [Douban] Search fetch failed for '凡人修仙传星海飞驰续篇': failed to fetch: Get "https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%E6%98%9F%E6%B5%B7%E9%A3%9E%E9%A9%B0%E7%BB%AD%E7%AF%87": context deadline exceeded (Client.Timeout exceeded while awaiting headers)
+[2026-06-26 20:14:45.490] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '凡人修仙传星海飞驰续篇': failed to fetch: Get "https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%E6%98%9F%E6%B5%B7%E9%A3%9E%E9%A9%B0%E7%BB%AD%E7%AF%87": context deadline exceeded (Client.Timeout exceeded while awaiting headers)
+[2026-06-26 20:14:45.490] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 凡人修仙传4初入星海
+[2026-06-26 20:14:45.490] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传4初入星海 year=2022 type=国产动漫 director=王裕仁,赵侠
+[2026-06-26 20:14:45.490] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传4初入星海 (meta: year=2022 type=国产动漫 director=王裕仁,赵侠)
+[2026-06-26 20:15:03.246] [INFO] [app.go:3165] [Douban] Stopping scheduler (graceful)...
+[2026-06-26 20:15:03.246] [INFO] [scheduler.go:62] [Douban] Updater graceful stop requested
+[2026-06-26 20:15:08.247] [INFO] [app.go:3165] [Douban] Scheduler stopped
+[2026-06-26 20:15:08.247] [INFO] [application.go:720] 应用正常退出
+[2026-06-26 20:16:31.844] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-26 20:16:31.850] [INFO] [app.go:174] [Douban] Scheduler started, interval: 30s
+[2026-06-26 20:16:31.850] [INFO] [app.go:178] [DoubanChart] 缓存过期或为空，开始抓取热榜...
+[2026-06-26 20:16:31.850] [INFO] [chart.go:125] [DoubanChart] Fetching URL: https://movie.douban.com/chart
+[2026-06-26 20:16:31.850] [INFO] [app.go:62] 同步全局类型完成: 0 条
+[2026-06-26 20:16:46.851] [ERROR] [app.go:178] [DoubanChart] 抓取失败: failed to fetch: Get "https://movie.douban.com/chart": context deadline exceeded (Client.Timeout exceeded while awaiting headers)
+[2026-06-26 20:16:46.851] [INFO] [chart.go:410] [DoubanChart] 缓存过期或为空，开始抓取热榜...
+[2026-06-26 20:16:46.851] [INFO] [chart.go:125] [DoubanChart] Fetching URL: https://movie.douban.com/chart
+[2026-06-26 20:16:47.058] [INFO] [chart.go:410] [DoubanChart] 抓取完成: 10 条热榜数据
+[2026-06-26 20:16:47.058] [INFO] [chart.go:150] [DoubanChart] 入库完成: 10 条
+[2026-06-26 20:17:01.850] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 20:17:01.850] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 20:17:01.850] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 20:17:01.850] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传
+[2026-06-26 20:17:01.850] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传 year=2025 type=国产剧 director=杨阳
+[2026-06-26 20:17:01.851] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传 (meta: year=2025 type=国产剧 director=杨阳)
+[2026-06-26 20:17:06.058] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0
+[2026-06-26 20:17:08.647] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 6.80s
+[2026-06-26 20:17:08.648] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传' (HTML len=29921)
+[2026-06-26 20:17:08.650] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传' (failures=14, until=2026-06-27 20:17:08)
+[2026-06-26 20:17:08.650] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传': no candidates parsed for keyword: 凡人修仙传
+[2026-06-26 20:17:08.650] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 凡人修仙传星海飞驰续篇
+[2026-06-26 20:17:08.650] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传星海飞驰续篇 year=2023 type=国产动漫 director=王裕仁,林宇昂
+[2026-06-26 20:17:08.650] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传星海飞驰续篇 (meta: year=2023 type=国产动漫 director=王裕仁,林宇昂)
+[2026-06-26 20:17:49.003] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%E6%98%9F%E6%B5%B7%E9%A3%9E%E9%A9%B0%E7%BB%AD%E7%AF%87
+[2026-06-26 20:17:49.249] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 40.60s
+[2026-06-26 20:17:49.250] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传星海飞驰续篇' (HTML len=17722)
+[2026-06-26 20:17:49.252] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '凡人修仙传星海飞驰续篇': no candidates parsed for keyword: 凡人修仙传星海飞驰续篇
+[2026-06-26 20:17:49.252] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 凡人修仙传4初入星海
+[2026-06-26 20:17:49.252] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传4初入星海 year=2022 type=国产动漫 director=王裕仁,赵侠
+[2026-06-26 20:17:49.252] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传4初入星海 (meta: year=2022 type=国产动漫 director=王裕仁,赵侠)
+[2026-06-26 20:18:13.749] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A04%E5%88%9D%E5%85%A5%E6%98%9F%E6%B5%B7
+[2026-06-26 20:18:19.319] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-26 20:18:19.325] [INFO] [app.go:174] [Douban] Scheduler started, interval: 30s
+[2026-06-26 20:18:19.325] [INFO] [app.go:178] [DoubanChart] 缓存过期或为空，开始抓取热榜...
+[2026-06-26 20:18:19.325] [INFO] [chart.go:128] [DoubanChart] Fetching URL: https://movie.douban.com/chart
+[2026-06-26 20:18:19.334] [INFO] [app.go:62] 同步全局类型完成: 0 条
+[2026-06-26 20:18:19.709] [INFO] [app.go:178] [DoubanChart] 抓取完成: 10 条热榜数据
+[2026-06-26 20:18:19.709] [INFO] [app.go:62] 豆瓣热榜预加载完成
+[2026-06-26 20:18:19.709] [INFO] [chart.go:153] [DoubanChart] 入库完成: 10 条
+[2026-06-26 20:18:22.863] [INFO] [app.go:3165] [Douban] Stopping scheduler (graceful)...
+[2026-06-26 20:18:22.863] [INFO] [scheduler.go:62] [Douban] Updater graceful stop requested
+[2026-06-26 20:18:22.863] [INFO] [app.go:3165] [Douban] Scheduler stopped
+[2026-06-26 20:18:22.863] [INFO] [application.go:720] 应用正常退出
+[2026-06-26 20:18:55.992] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-26 20:18:55.998] [INFO] [app.go:174] [Douban] Scheduler started, interval: 30s
+[2026-06-26 20:18:55.998] [INFO] [app.go:178] [DoubanChart] 缓存过期或为空，开始抓取热榜...
+[2026-06-26 20:18:55.998] [INFO] [chart.go:128] [DoubanChart] Fetching URL: https://movie.douban.com/chart
+[2026-06-26 20:18:56.007] [INFO] [app.go:62] 同步全局类型完成: 0 条
+[2026-06-26 20:18:56.291] [INFO] [app.go:178] [DoubanChart] 抓取完成: 10 条热榜数据
+[2026-06-26 20:18:56.291] [INFO] [app.go:62] 豆瓣热榜预加载完成
+[2026-06-26 20:18:56.291] [INFO] [chart.go:153] [DoubanChart] 入库完成: 10 条
+[2026-06-26 20:19:12.880] [INFO] [app.go:3165] [Douban] Stopping scheduler (graceful)...
+[2026-06-26 20:19:12.880] [INFO] [scheduler.go:62] [Douban] Updater graceful stop requested
+[2026-06-26 20:19:12.880] [INFO] [app.go:3165] [Douban] Scheduler stopped
+[2026-06-26 20:19:12.880] [INFO] [application.go:720] 应用正常退出
+[2026-06-26 20:19:48.214] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-26 20:19:48.222] [INFO] [app.go:174] [Douban] Scheduler started, interval: 30s
+[2026-06-26 20:19:48.222] [INFO] [app.go:178] [DoubanChart] 缓存过期或为空，开始抓取热榜...
+[2026-06-26 20:19:48.222] [INFO] [chart.go:128] [DoubanChart] Fetching URL: https://movie.douban.com/chart
+[2026-06-26 20:19:48.232] [INFO] [app.go:62] 同步全局类型完成: 0 条
+[2026-06-26 20:19:48.510] [INFO] [app.go:178] [DoubanChart] 抓取完成: 10 条热榜数据
+[2026-06-26 20:19:48.510] [INFO] [app.go:62] 豆瓣热榜预加载完成
+[2026-06-26 20:19:48.510] [INFO] [chart.go:153] [DoubanChart] 入库完成: 10 条
+[2026-06-26 20:19:52.410] [INFO] [app.go:3165] [Douban] Stopping scheduler (graceful)...
+[2026-06-26 20:19:52.410] [INFO] [scheduler.go:62] [Douban] Updater graceful stop requested
+[2026-06-26 20:19:52.410] [INFO] [app.go:3165] [Douban] Scheduler stopped
+[2026-06-26 20:19:52.410] [INFO] [application.go:720] 应用正常退出
+[2026-06-26 20:47:31.749] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-26 20:47:31.761] [INFO] [app.go:174] [Douban] Scheduler started, interval: 30s
+[2026-06-26 20:47:31.762] [INFO] [app.go:178] [DoubanChart] 缓存过期或为空，开始抓取热榜...
+[2026-06-26 20:47:31.762] [INFO] [chart.go:128] [DoubanChart] Fetching URL: https://movie.douban.com/chart
+[2026-06-26 20:47:31.771] [INFO] [app.go:62] 同步全局类型完成: 0 条
+[2026-06-26 20:47:32.056] [INFO] [app.go:178] [DoubanChart] 抓取完成: 10 条热榜数据
+[2026-06-26 20:47:32.056] [INFO] [app.go:62] 豆瓣热榜预加载完成
+[2026-06-26 20:47:32.056] [INFO] [chart.go:153] [DoubanChart] 入库完成: 成功 0/10 条
+[2026-06-26 20:47:32.058] [WARN] [asm_amd64.s:1771] [DoubanChart] 无可用采集源，跳过源站匹配 (err=<nil>, sources=0)
+[2026-06-26 20:48:01.762] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 20:48:01.762] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 20:48:01.762] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 20:48:01.762] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传
+[2026-06-26 20:48:01.762] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传 year=2025 type=国产剧 director=杨阳
+[2026-06-26 20:48:01.762] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传 (meta: year=2025 type=国产剧 director=杨阳)
+[2026-06-26 20:48:01.846] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0
+[2026-06-26 20:48:03.798] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 2.04s
+[2026-06-26 20:48:03.799] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传' (HTML len=29921)
+[2026-06-26 20:48:03.802] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传' (failures=15, until=2026-06-27 20:48:03)
+[2026-06-26 20:48:03.802] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传': no candidates parsed for keyword: 凡人修仙传
+[2026-06-26 20:48:03.802] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 凡人修仙传星海飞驰续篇
+[2026-06-26 20:48:03.802] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传星海飞驰续篇 year=2023 type=国产动漫 director=王裕仁,林宇昂
+[2026-06-26 20:48:03.802] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传星海飞驰续篇 (meta: year=2023 type=国产动漫 director=王裕仁,林宇昂)
+[2026-06-26 20:48:36.465] [WARN] [value.go:586] 暂时无此数据 — 该资源暂未收录，请稍后再试
+[2026-06-26 20:48:37.964] [WARN] [value.go:586] 暂时无此数据 — 该资源暂未收录，请稍后再试
+[2026-06-26 20:48:39.594] [WARN] [value.go:586] 暂时无此数据 — 该资源暂未收录，请稍后再试
+[2026-06-26 20:48:39.964] [WARN] [value.go:586] 暂时无此数据 — 该资源暂未收录，请稍后再试
+[2026-06-26 20:48:40.321] [WARN] [value.go:586] 暂时无此数据 — 该资源暂未收录，请稍后再试
+[2026-06-26 20:48:55.334] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%E6%98%9F%E6%B5%B7%E9%A3%9E%E9%A9%B0%E7%BB%AD%E7%AF%87
+[2026-06-26 20:48:55.587] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 51.78s
+[2026-06-26 20:48:55.587] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传星海飞驰续篇' (HTML len=17722)
+[2026-06-26 20:48:55.590] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传星海飞驰续篇' (failures=5, until=2026-06-27 20:48:55)
+[2026-06-26 20:48:55.590] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '凡人修仙传星海飞驰续篇': no candidates parsed for keyword: 凡人修仙传星海飞驰续篇
+[2026-06-26 20:48:55.590] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 凡人修仙传4初入星海
+[2026-06-26 20:48:55.590] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传4初入星海 year=2022 type=国产动漫 director=王裕仁,赵侠
+[2026-06-26 20:48:55.590] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传4初入星海 (meta: year=2022 type=国产动漫 director=王裕仁,赵侠)
+[2026-06-26 20:49:37.747] [WARN] [value.go:586] 暂时无此数据 — 该资源暂未收录，请稍后再试
+[2026-06-26 20:49:38.182] [WARN] [value.go:586] 暂时无此数据 — 该资源暂未收录，请稍后再试
+[2026-06-26 20:49:38.560] [WARN] [value.go:586] 暂时无此数据 — 该资源暂未收录，请稍后再试
+[2026-06-26 20:49:43.347] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A04%E5%88%9D%E5%85%A5%E6%98%9F%E6%B5%B7
+[2026-06-26 20:49:43.587] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 48.00s
+[2026-06-26 20:49:43.587] [WARN] [crawler.go:541] [Douban] Anti-crawl detected: pattern '加载中' matched (page len=13834)
+[2026-06-26 20:49:43.587] [WARN] [crawler.go:583] [Douban] Anti-crawl triggered, response length: 13834
+[2026-06-26 20:49:43.587] [ERROR] [updater.go:147] [Douban] Search fetch failed for '凡人修仙传4初入星海': anti-crawl detected
+[2026-06-26 20:49:43.589] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '凡人修仙传4初入星海': anti-crawl detected
+[2026-06-26 20:49:43.589] [INFO] [scheduler.go:42] [Douban] Found 0 incomplete records (has subject_id but missing details)
+[2026-06-26 20:49:43.589] [INFO] [scheduler.go:42] [Douban] Batch update completed: 0 records updated
+[2026-06-26 20:49:43.589] [INFO] [asm_amd64.s:1771] [Douban] Scheduler batch update: no videos updated
+[2026-06-26 20:49:43.589] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 20:49:43.589] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 20:49:43.589] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 20:49:43.589] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传
+[2026-06-26 20:49:43.589] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传 year=2025 type=国产剧 director=杨阳
+[2026-06-26 20:49:43.590] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传 (meta: year=2025 type=国产剧 director=杨阳)
+[2026-06-26 20:50:10.894] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0
+[2026-06-26 20:50:12.380] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 28.79s
+[2026-06-26 20:50:12.380] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传' (HTML len=29921)
+[2026-06-26 20:50:12.383] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传' (failures=16, until=2026-06-27 20:50:12)
+[2026-06-26 20:50:12.383] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传': no candidates parsed for keyword: 凡人修仙传
+[2026-06-26 20:50:12.383] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 凡人修仙传4初入星海
+[2026-06-26 20:50:12.383] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传4初入星海 year=2022 type=国产动漫 director=王裕仁,赵侠
+[2026-06-26 20:50:12.383] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传4初入星海 (meta: year=2022 type=国产动漫 director=王裕仁,赵侠)
+[2026-06-26 20:50:46.319] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A04%E5%88%9D%E5%85%A5%E6%98%9F%E6%B5%B7
+[2026-06-26 20:50:46.557] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 34.17s
+[2026-06-26 20:50:46.558] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传4初入星海' (HTML len=17623)
+[2026-06-26 20:50:46.560] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '凡人修仙传4初入星海': no candidates parsed for keyword: 凡人修仙传4初入星海
+[2026-06-26 20:50:46.560] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 凡人修仙传3再别天南
+[2026-06-26 20:50:46.560] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传3再别天南 year=2022 type=国产动漫 director=王裕仁
+[2026-06-26 20:50:46.561] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传3再别天南 (meta: year=2022 type=国产动漫 director=王裕仁)
+[2026-06-26 20:51:35.237] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A03%E5%86%8D%E5%88%AB%E5%A4%A9%E5%8D%97
+[2026-06-26 20:51:36.067] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 49.51s
+[2026-06-26 20:51:36.069] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传3再别天南' (HTML len=20289)
+[2026-06-26 20:51:36.070] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '凡人修仙传3再别天南': no candidates parsed for keyword: 凡人修仙传3再别天南
+[2026-06-26 20:51:36.071] [INFO] [scheduler.go:42] [Douban] Found 0 incomplete records (has subject_id but missing details)
+[2026-06-26 20:51:36.071] [INFO] [scheduler.go:42] [Douban] Batch update completed: 0 records updated
+[2026-06-26 20:51:36.071] [INFO] [asm_amd64.s:1771] [Douban] Scheduler batch update: no videos updated
+[2026-06-26 20:51:36.071] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 20:51:36.071] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 20:51:36.071] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 20:51:36.071] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传
+[2026-06-26 20:51:36.071] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传 year=2025 type=国产剧 director=杨阳
+[2026-06-26 20:51:36.071] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传 (meta: year=2025 type=国产剧 director=杨阳)
+[2026-06-26 20:52:21.184] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0
+[2026-06-26 20:52:21.628] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 45.56s
+[2026-06-26 20:52:21.628] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传' (HTML len=29921)
+[2026-06-26 20:52:21.631] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传' (failures=17, until=2026-06-27 20:52:21)
+[2026-06-26 20:52:21.631] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传': no candidates parsed for keyword: 凡人修仙传
+[2026-06-26 20:52:21.631] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 凡人修仙传4初入星海
+[2026-06-26 20:52:21.631] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传4初入星海 year=2022 type=国产动漫 director=王裕仁,赵侠
+[2026-06-26 20:52:21.631] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传4初入星海 (meta: year=2022 type=国产动漫 director=王裕仁,赵侠)
+[2026-06-26 20:52:56.035] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A04%E5%88%9D%E5%85%A5%E6%98%9F%E6%B5%B7
+[2026-06-26 20:52:56.287] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 34.66s
+[2026-06-26 20:52:56.288] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传4初入星海' (HTML len=17623)
+[2026-06-26 20:52:56.291] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '凡人修仙传4初入星海': no candidates parsed for keyword: 凡人修仙传4初入星海
+[2026-06-26 20:52:56.291] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 凡人修仙传3再别天南
+[2026-06-26 20:52:56.291] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传3再别天南 year=2022 type=国产动漫 director=王裕仁
+[2026-06-26 20:52:56.291] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传3再别天南 (meta: year=2022 type=国产动漫 director=王裕仁)
+[2026-06-26 20:53:30.809] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A03%E5%86%8D%E5%88%AB%E5%A4%A9%E5%8D%97
+[2026-06-26 20:53:31.082] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 34.79s
+[2026-06-26 20:53:31.082] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传3再别天南' (HTML len=20289)
+[2026-06-26 20:53:31.084] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '凡人修仙传3再别天南': no candidates parsed for keyword: 凡人修仙传3再别天南
+[2026-06-26 20:53:31.085] [INFO] [scheduler.go:42] [Douban] Found 0 incomplete records (has subject_id but missing details)
+[2026-06-26 20:53:31.085] [INFO] [scheduler.go:42] [Douban] Batch update completed: 0 records updated
+[2026-06-26 20:53:31.085] [INFO] [asm_amd64.s:1771] [Douban] Scheduler batch update: no videos updated
+[2026-06-26 20:53:31.085] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 20:53:31.085] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 20:53:31.085] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 20:53:31.085] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传
+[2026-06-26 20:53:31.085] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传 year=2025 type=国产剧 director=杨阳
+[2026-06-26 20:53:31.085] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传 (meta: year=2025 type=国产剧 director=杨阳)
+[2026-06-26 20:54:19.446] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0
+[2026-06-26 20:54:19.943] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 48.86s
+[2026-06-26 20:54:19.943] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传' (HTML len=29921)
+[2026-06-26 20:54:19.946] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传' (failures=18, until=2026-06-27 20:54:19)
+[2026-06-26 20:54:19.946] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传': no candidates parsed for keyword: 凡人修仙传
+[2026-06-26 20:54:19.946] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 凡人修仙传4初入星海
+[2026-06-26 20:54:19.946] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传4初入星海 year=2022 type=国产动漫 director=王裕仁,赵侠
+[2026-06-26 20:54:19.946] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传4初入星海 (meta: year=2022 type=国产动漫 director=王裕仁,赵侠)
+[2026-06-26 20:54:44.302] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A04%E5%88%9D%E5%85%A5%E6%98%9F%E6%B5%B7
+[2026-06-26 20:54:44.458] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 24.51s
+[2026-06-26 20:54:44.458] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传4初入星海' (HTML len=17623)
+[2026-06-26 20:54:44.461] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传4初入星海' (failures=5, until=2026-06-27 20:54:44)
+[2026-06-26 20:54:44.461] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '凡人修仙传4初入星海': no candidates parsed for keyword: 凡人修仙传4初入星海
+[2026-06-26 20:54:44.461] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 凡人修仙传3再别天南
+[2026-06-26 20:54:44.461] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传3再别天南 year=2022 type=国产动漫 director=王裕仁
+[2026-06-26 20:54:44.461] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传3再别天南 (meta: year=2022 type=国产动漫 director=王裕仁)
+[2026-06-26 20:55:16.739] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A03%E5%86%8D%E5%88%AB%E5%A4%A9%E5%8D%97
+[2026-06-26 20:55:16.996] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 32.53s
+[2026-06-26 20:55:16.996] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传3再别天南' (HTML len=20289)
+[2026-06-26 20:55:16.998] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '凡人修仙传3再别天南': no candidates parsed for keyword: 凡人修仙传3再别天南
+[2026-06-26 20:55:16.999] [INFO] [scheduler.go:42] [Douban] Found 0 incomplete records (has subject_id but missing details)
+[2026-06-26 20:55:16.999] [INFO] [scheduler.go:42] [Douban] Batch update completed: 0 records updated
+[2026-06-26 20:55:16.999] [INFO] [asm_amd64.s:1771] [Douban] Scheduler batch update: no videos updated
+[2026-06-26 20:55:16.999] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 20:55:16.999] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 20:55:16.999] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 20:55:16.999] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传
+[2026-06-26 20:55:16.999] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传 year=2025 type=国产剧 director=杨阳
+[2026-06-26 20:55:16.999] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传 (meta: year=2025 type=国产剧 director=杨阳)
+[2026-06-26 20:55:38.781] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0
+[2026-06-26 20:55:39.131] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 22.13s
+[2026-06-26 20:55:39.131] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传' (HTML len=29921)
+[2026-06-26 20:55:39.134] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传' (failures=19, until=2026-06-27 20:55:39)
+[2026-06-26 20:55:39.134] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传': no candidates parsed for keyword: 凡人修仙传
+[2026-06-26 20:55:39.134] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 凡人修仙传3再别天南
+[2026-06-26 20:55:39.134] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传3再别天南 year=2022 type=国产动漫 director=王裕仁
+[2026-06-26 20:55:39.134] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传3再别天南 (meta: year=2022 type=国产动漫 director=王裕仁)
+[2026-06-26 20:56:33.699] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A03%E5%86%8D%E5%88%AB%E5%A4%A9%E5%8D%97
+[2026-06-26 20:56:33.961] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 54.83s
+[2026-06-26 20:56:33.961] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传3再别天南' (HTML len=20289)
+[2026-06-26 20:56:33.964] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '凡人修仙传3再别天南': no candidates parsed for keyword: 凡人修仙传3再别天南
+[2026-06-26 20:56:33.964] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 凡人修仙传2魔道争锋
+[2026-06-26 20:56:33.964] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传2魔道争锋 year=2021 type=国产动漫 director=王裕仁,赵侠
+[2026-06-26 20:56:33.964] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传2魔道争锋 (meta: year=2021 type=国产动漫 director=王裕仁,赵侠)
+[2026-06-26 20:57:32.257] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A02%E9%AD%94%E9%81%93%E4%BA%89%E9%94%8B
+[2026-06-26 20:57:32.751] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 58.79s
+[2026-06-26 20:57:32.752] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传2魔道争锋' (HTML len=31656)
+[2026-06-26 20:57:32.754] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '凡人修仙传2魔道争锋': no candidates parsed for keyword: 凡人修仙传2魔道争锋
+[2026-06-26 20:57:32.755] [INFO] [scheduler.go:42] [Douban] Found 0 incomplete records (has subject_id but missing details)
+[2026-06-26 20:57:32.755] [INFO] [scheduler.go:42] [Douban] Batch update completed: 0 records updated
+[2026-06-26 20:57:32.755] [INFO] [asm_amd64.s:1771] [Douban] Scheduler batch update: no videos updated
+[2026-06-26 20:57:32.755] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 20:57:32.755] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 20:57:32.755] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 20:57:32.755] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传
+[2026-06-26 20:57:32.755] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传 year=2025 type=国产剧 director=杨阳
+[2026-06-26 20:57:32.755] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传 (meta: year=2025 type=国产剧 director=杨阳)
+[2026-06-26 20:57:55.667] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0
+[2026-06-26 20:57:57.575] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 24.82s
+[2026-06-26 20:57:57.576] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传' (HTML len=29921)
+[2026-06-26 20:57:57.577] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传' (failures=20, until=2026-06-27 20:57:57)
+[2026-06-26 20:57:57.577] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传': no candidates parsed for keyword: 凡人修仙传
+[2026-06-26 20:57:57.577] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 凡人修仙传3再别天南
+[2026-06-26 20:57:57.577] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传3再别天南 year=2022 type=国产动漫 director=王裕仁
+[2026-06-26 20:57:57.578] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传3再别天南 (meta: year=2022 type=国产动漫 director=王裕仁)
+[2026-06-26 20:58:14.315] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-26 20:58:14.329] [INFO] [app.go:174] [Douban] Scheduler started, interval: 30s
+[2026-06-26 20:58:14.329] [INFO] [app.go:178] [DoubanChart] 缓存过期或为空，开始抓取热榜...
+[2026-06-26 20:58:14.329] [INFO] [chart.go:128] [DoubanChart] Fetching URL: https://movie.douban.com/chart
+[2026-06-26 20:58:14.329] [INFO] [app.go:62] 同步全局类型完成: 0 条
+[2026-06-26 20:58:14.667] [INFO] [app.go:178] [DoubanChart] 抓取完成: 10 条热榜数据
+[2026-06-26 20:58:14.667] [INFO] [app.go:62] 豆瓣热榜预加载完成
+[2026-06-26 20:58:14.667] [INFO] [chart.go:153] [DoubanChart] 入库完成: 成功 0/10 条
+[2026-06-26 20:58:14.667] [WARN] [asm_amd64.s:1771] [DoubanChart] 无可用采集源，跳过源站匹配 (err=<nil>, sources=0)
+[2026-06-26 20:58:44.329] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 20:58:44.329] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 20:58:44.330] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 20:58:44.330] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传
+[2026-06-26 20:58:44.330] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传 year=2025 type=国产剧 director=杨阳
+[2026-06-26 20:58:44.330] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传 (meta: year=2025 type=国产剧 director=杨阳)
+[2026-06-26 20:58:50.506] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-26 20:58:50.512] [INFO] [app.go:178] [DoubanChart] 缓存过期或为空，开始抓取热榜...
+[2026-06-26 20:58:50.512] [INFO] [chart.go:128] [DoubanChart] Fetching URL: https://movie.douban.com/chart
+[2026-06-26 20:58:50.512] [INFO] [app.go:174] [Douban] Scheduler started, interval: 30s
+[2026-06-26 20:58:50.520] [INFO] [app.go:62] 同步全局类型完成: 0 条
+[2026-06-26 20:58:51.461] [INFO] [app.go:178] [DoubanChart] 抓取完成: 10 条热榜数据
+[2026-06-26 20:58:51.461] [INFO] [app.go:62] 豆瓣热榜预加载完成
+[2026-06-26 20:58:51.462] [INFO] [chart.go:153] [DoubanChart] 开始入库 10 条热榜数据 (当前 global_video 总数: 113)
+[2026-06-26 20:58:51.462] [INFO] [chart.go:153] [DoubanChart] 入库完成: 成功 0/10 条 (global_video 总数: 113 → 113)
+[2026-06-26 20:58:51.462] [WARN] [asm_amd64.s:1771] [DoubanChart] 无可用采集源，跳过源站匹配 (err=<nil>, sources=0)
+[2026-06-26 20:59:20.512] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 20:59:20.512] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 20:59:20.513] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 20:59:20.513] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传
+[2026-06-26 20:59:20.513] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传 year=2025 type=国产剧 director=杨阳
+[2026-06-26 20:59:20.513] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传 (meta: year=2025 type=国产剧 director=杨阳)
+[2026-06-26 20:59:55.109] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0
+[2026-06-26 20:59:56.351] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 35.84s
+[2026-06-26 20:59:56.351] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传' (HTML len=29921)
+[2026-06-26 20:59:56.353] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传' (failures=21, until=2026-06-27 20:59:56)
+[2026-06-26 20:59:56.353] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传': no candidates parsed for keyword: 凡人修仙传
+[2026-06-26 20:59:56.353] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 凡人修仙传3再别天南
+[2026-06-26 20:59:56.353] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传3再别天南 year=2022 type=国产动漫 director=王裕仁
+[2026-06-26 20:59:56.354] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传3再别天南 (meta: year=2022 type=国产动漫 director=王裕仁)
+[2026-06-26 21:00:18.082] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A03%E5%86%8D%E5%88%AB%E5%A4%A9%E5%8D%97
+[2026-06-26 21:00:18.303] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 21.95s
+[2026-06-26 21:00:18.303] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传3再别天南' (HTML len=20289)
+[2026-06-26 21:00:18.305] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传3再别天南' (failures=5, until=2026-06-27 21:00:18)
+[2026-06-26 21:00:18.305] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '凡人修仙传3再别天南': no candidates parsed for keyword: 凡人修仙传3再别天南
+[2026-06-26 21:00:18.305] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 凡人修仙传2魔道争锋
+[2026-06-26 21:00:18.305] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传2魔道争锋 year=2021 type=国产动漫 director=王裕仁,赵侠
+[2026-06-26 21:00:18.305] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传2魔道争锋 (meta: year=2021 type=国产动漫 director=王裕仁,赵侠)
+[2026-06-26 21:00:44.823] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A02%E9%AD%94%E9%81%93%E4%BA%89%E9%94%8B
+[2026-06-26 21:00:45.182] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 26.88s
+[2026-06-26 21:00:45.182] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传2魔道争锋' (HTML len=31656)
+[2026-06-26 21:00:45.185] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '凡人修仙传2魔道争锋': no candidates parsed for keyword: 凡人修仙传2魔道争锋
+[2026-06-26 21:00:45.185] [INFO] [scheduler.go:42] [Douban] Found 0 incomplete records (has subject_id but missing details)
+[2026-06-26 21:00:45.186] [INFO] [scheduler.go:42] [Douban] Batch update completed: 0 records updated
+[2026-06-26 21:00:45.186] [INFO] [asm_amd64.s:1771] [Douban] Scheduler batch update: no videos updated
+[2026-06-26 21:00:45.186] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 21:00:45.186] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 21:00:45.186] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 21:00:45.186] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传
+[2026-06-26 21:00:45.186] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传 year=2025 type=国产剧 director=杨阳
+[2026-06-26 21:00:45.186] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传 (meta: year=2025 type=国产剧 director=杨阳)
+[2026-06-26 21:01:41.419] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-26 21:01:41.433] [INFO] [app.go:174] [Douban] Scheduler started, interval: 30s
+[2026-06-26 21:01:41.433] [INFO] [app.go:178] [DoubanChart] 缓存过期或为空，开始抓取热榜...
+[2026-06-26 21:01:41.433] [INFO] [chart.go:128] [DoubanChart] Fetching URL: https://movie.douban.com/chart
+[2026-06-26 21:01:41.433] [INFO] [app.go:62] 同步全局类型完成: 0 条
+[2026-06-26 21:01:42.365] [INFO] [app.go:178] [DoubanChart] 抓取完成: 10 条热榜数据
+[2026-06-26 21:01:42.365] [INFO] [app.go:62] 豆瓣热榜预加载完成
+[2026-06-26 21:01:42.365] [INFO] [chart.go:153] [DoubanChart] 开始入库 10 条热榜数据 (当前 global_video 总数: 113)
+[2026-06-26 21:01:42.365] [INFO] [chart.go:153] [DoubanChart] 入库完成: 成功 0/10 条 (global_video 总数: 113 → 113)
+[2026-06-26 21:01:42.366] [WARN] [asm_amd64.s:1771] [DoubanChart] 无可用采集源，跳过源站匹配 (err=<nil>, sources=0)
+[2026-06-26 21:02:11.433] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 21:02:11.433] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 21:02:11.433] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 21:02:11.433] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传
+[2026-06-26 21:02:11.433] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传 year=2025 type=国产剧 director=杨阳
+[2026-06-26 21:02:11.434] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传 (meta: year=2025 type=国产剧 director=杨阳)
+[2026-06-26 21:26:17.298] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-26 21:26:17.314] [INFO] [app.go:184] [Douban] Scheduler started, interval: 30s
+[2026-06-26 21:26:17.314] [INFO] [app.go:188] [DoubanChart] 缓存过期或为空，开始抓取热榜...
+[2026-06-26 21:26:17.315] [INFO] [chart.go:128] [DoubanChart] Fetching URL: https://movie.douban.com/chart
+[2026-06-26 21:26:17.323] [INFO] [app.go:72] 同步全局类型完成: 0 条
+[2026-06-26 21:26:17.638] [INFO] [app.go:188] [DoubanChart] 抓取完成: 10 条热榜数据
+[2026-06-26 21:26:17.638] [INFO] [app.go:72] 豆瓣热榜预加载完成
+[2026-06-26 21:26:17.638] [INFO] [chart.go:153] [DoubanChart] 开始入库 10 条热榜数据 (当前 global_video 总数: 113)
+[2026-06-26 21:26:17.639] [INFO] [chart.go:153] [DoubanChart] 入库完成: 新增 0 + 更新 0 = 处理 0/10 条 (global_video: 113 → 113)
+[2026-06-26 21:26:17.639] [INFO] [asm_amd64.s:1771] [DoubanChart] 源状态: key=maoyanapi name=茅台资源 enabled=0 apiUrl=https://api.maoyanapi.top/api.php/provide/vod
+[2026-06-26 21:26:17.639] [INFO] [asm_amd64.s:1771] [DoubanChart] 源状态: key=rycjapi name=如意资源 enabled=0 apiUrl=https://cj.rycjapi.com/api.php/provide/vod
+[2026-06-26 21:26:17.639] [INFO] [asm_amd64.s:1771] [DoubanChart] 源状态: key=yyzy_tv name=优质资源 enabled=0 apiUrl=https://api.yyzy-tv.vip/inc/apijson.php
+[2026-06-26 21:26:17.639] [INFO] [asm_amd64.s:1771] [DoubanChart] 源统计: 总共 3 个, 启用 0 个
+[2026-06-26 21:26:17.639] [INFO] [asm_amd64.s:1771] [DoubanChart] ⚠️ 没有启用的采集源，无法匹配视频资源。请在“源管理”中启用至少一个采集源，然后刷新首页重试。
+[2026-06-26 21:26:18.633] [ERROR] [value.go:586] UnhandledRejection :: 未处理的 Promise 异常 — Window.On is not a function     Detail: TypeError: Window.On is not a function     at http://wails.localhost:9245/src/App.vue:109:14
+[2026-06-26 21:26:21.286] [INFO] [app.go:3243] [Updater] 当前已是最新版本: 1.1.0
+[2026-06-26 21:26:47.315] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 21:26:47.315] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 21:26:47.315] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 21:26:47.315] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传
+[2026-06-26 21:26:47.315] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传 year=2025 type=国产剧 director=杨阳
+[2026-06-26 21:26:47.315] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传 (meta: year=2025 type=国产剧 director=杨阳)
+[2026-06-26 21:27:00.216] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0
+[2026-06-26 21:27:01.377] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 14.06s
+[2026-06-26 21:27:01.377] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传' (HTML len=29921)
+[2026-06-26 21:27:01.381] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传' (failures=22, until=2026-06-27 21:27:01)
+[2026-06-26 21:27:01.381] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传': no candidates parsed for keyword: 凡人修仙传
+[2026-06-26 21:27:01.381] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 凡人修仙传2魔道争锋
+[2026-06-26 21:27:01.381] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传2魔道争锋 year=2021 type=国产动漫 director=王裕仁,赵侠
+[2026-06-26 21:27:01.381] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传2魔道争锋 (meta: year=2021 type=国产动漫 director=王裕仁,赵侠)
+[2026-06-26 21:27:57.521] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A02%E9%AD%94%E9%81%93%E4%BA%89%E9%94%8B
+[2026-06-26 21:27:58.012] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 56.63s
+[2026-06-26 21:27:58.013] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传2魔道争锋' (HTML len=31656)
+[2026-06-26 21:27:58.016] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '凡人修仙传2魔道争锋': no candidates parsed for keyword: 凡人修仙传2魔道争锋
+[2026-06-26 21:27:58.017] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 凡人修仙传1风起天南篇
+[2026-06-26 21:27:58.017] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传1风起天南篇 year=2020 type=国产动漫 director=伍镇焯,王裕仁
+[2026-06-26 21:27:58.017] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传1风起天南篇 (meta: year=2020 type=国产动漫 director=伍镇焯,王裕仁)
+[2026-06-26 21:28:51.652] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A01%E9%A3%8E%E8%B5%B7%E5%A4%A9%E5%8D%97%E7%AF%87
+[2026-06-26 21:28:51.973] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 53.96s
+[2026-06-26 21:28:51.974] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传1风起天南篇' (HTML len=20339)
+[2026-06-26 21:28:51.978] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '凡人修仙传1风起天南篇': no candidates parsed for keyword: 凡人修仙传1风起天南篇
+[2026-06-26 21:28:51.978] [INFO] [scheduler.go:42] [Douban] Found 0 incomplete records (has subject_id but missing details)
+[2026-06-26 21:28:51.978] [INFO] [scheduler.go:42] [Douban] Batch update completed: 0 records updated
+[2026-06-26 21:28:51.978] [INFO] [asm_amd64.s:1771] [Douban] Scheduler batch update: no videos updated
+[2026-06-26 21:28:51.978] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 21:28:51.978] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 21:28:51.978] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 21:28:51.978] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传
+[2026-06-26 21:28:51.978] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传 year=2025 type=国产剧 director=杨阳
+[2026-06-26 21:28:51.978] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传 (meta: year=2025 type=国产剧 director=杨阳)
+[2026-06-26 21:28:53.472] [WARN] [value.go:586] 暂无资源 — 该视频暂未采集到播放源，请在“源管理”中启用采集源后刷新重试
+[2026-06-26 21:29:23.811] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0
+[2026-06-26 21:29:24.754] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 32.78s
+[2026-06-26 21:29:24.754] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传' (HTML len=29921)
+[2026-06-26 21:29:24.757] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传' (failures=23, until=2026-06-27 21:29:24)
+[2026-06-26 21:29:24.757] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传': no candidates parsed for keyword: 凡人修仙传
+[2026-06-26 21:29:24.757] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 凡人修仙传2魔道争锋
+[2026-06-26 21:29:24.757] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传2魔道争锋 year=2021 type=国产动漫 director=王裕仁,赵侠
+[2026-06-26 21:29:24.758] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传2魔道争锋 (meta: year=2021 type=国产动漫 director=王裕仁,赵侠)
+[2026-06-26 21:30:04.654] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A02%E9%AD%94%E9%81%93%E4%BA%89%E9%94%8B
+[2026-06-26 21:30:05.108] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 40.35s
+[2026-06-26 21:30:05.109] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传2魔道争锋' (HTML len=31656)
+[2026-06-26 21:30:05.112] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '凡人修仙传2魔道争锋': no candidates parsed for keyword: 凡人修仙传2魔道争锋
+[2026-06-26 21:30:05.112] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 凡人修仙传1风起天南篇
+[2026-06-26 21:30:05.112] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传1风起天南篇 year=2020 type=国产动漫 director=伍镇焯,王裕仁
+[2026-06-26 21:30:05.113] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传1风起天南篇 (meta: year=2020 type=国产动漫 director=伍镇焯,王裕仁)
+[2026-06-26 21:30:56.120] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A01%E9%A3%8E%E8%B5%B7%E5%A4%A9%E5%8D%97%E7%AF%87
+[2026-06-26 21:30:56.390] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 51.28s
+[2026-06-26 21:30:56.390] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传1风起天南篇' (HTML len=20339)
+[2026-06-26 21:30:56.394] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '凡人修仙传1风起天南篇': no candidates parsed for keyword: 凡人修仙传1风起天南篇
+[2026-06-26 21:30:56.394] [INFO] [scheduler.go:42] [Douban] Found 0 incomplete records (has subject_id but missing details)
+[2026-06-26 21:30:56.394] [INFO] [scheduler.go:42] [Douban] Batch update completed: 0 records updated
+[2026-06-26 21:30:56.394] [INFO] [asm_amd64.s:1771] [Douban] Scheduler batch update: no videos updated
+[2026-06-26 21:30:56.394] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 21:30:56.394] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 21:30:56.394] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 21:30:56.394] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传
+[2026-06-26 21:30:56.394] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传 year=2025 type=国产剧 director=杨阳
+[2026-06-26 21:30:56.394] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传 (meta: year=2025 type=国产剧 director=杨阳)
+[2026-06-26 21:31:36.426] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0
+[2026-06-26 21:31:37.102] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 40.71s
+[2026-06-26 21:31:37.102] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传' (HTML len=29921)
+[2026-06-26 21:31:37.107] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传' (failures=24, until=2026-06-27 21:31:37)
+[2026-06-26 21:31:37.107] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传': no candidates parsed for keyword: 凡人修仙传
+[2026-06-26 21:31:37.107] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 凡人修仙传2魔道争锋
+[2026-06-26 21:31:37.107] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传2魔道争锋 year=2021 type=国产动漫 director=王裕仁,赵侠
+[2026-06-26 21:31:37.107] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传2魔道争锋 (meta: year=2021 type=国产动漫 director=王裕仁,赵侠)
+[2026-06-26 21:32:19.890] [INFO] [app.go:3282] [Douban] Stopping scheduler (graceful)...
+[2026-06-26 21:32:19.890] [INFO] [scheduler.go:62] [Douban] Updater graceful stop requested
+[2026-06-26 21:39:40.210] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-26 21:39:40.230] [INFO] [app.go:184] [Douban] Scheduler started, interval: 30s
+[2026-06-26 21:39:40.230] [INFO] [app.go:188] [DoubanChart] 缓存过期或为空，开始抓取热榜...
+[2026-06-26 21:39:40.230] [INFO] [chart.go:128] [DoubanChart] Fetching URL: https://movie.douban.com/chart
+[2026-06-26 21:39:40.244] [INFO] [app.go:72] 同步全局类型完成: 0 条
+[2026-06-26 21:39:40.656] [INFO] [app.go:188] [DoubanChart] 抓取完成: 10 条热榜数据
+[2026-06-26 21:39:40.656] [INFO] [app.go:72] 豆瓣热榜预加载完成
+[2026-06-26 21:39:40.656] [INFO] [chart.go:153] [DoubanChart] 开始入库 10 条热榜数据 (当前 global_video 总数: 113)
+[2026-06-26 21:39:40.717] [INFO] [chart.go:153] [DoubanChart] 入库完成: 新增 0 + 更新 10 = 处理 10/10 条 (global_video: 113 → 123)
+[2026-06-26 21:39:40.717] [INFO] [asm_amd64.s:1771] [DoubanChart] 源状态: key=maoyanapi name=茅台资源 enabled=0 apiUrl=https://api.maoyanapi.top/api.php/provide/vod
+[2026-06-26 21:39:40.717] [INFO] [asm_amd64.s:1771] [DoubanChart] 源状态: key=rycjapi name=如意资源 enabled=0 apiUrl=https://cj.rycjapi.com/api.php/provide/vod
+[2026-06-26 21:39:40.717] [INFO] [asm_amd64.s:1771] [DoubanChart] 源状态: key=yyzy_tv name=优质资源 enabled=0 apiUrl=https://api.yyzy-tv.vip/inc/apijson.php
+[2026-06-26 21:39:40.717] [INFO] [asm_amd64.s:1771] [DoubanChart] 源统计: 总共 3 个, 启用 0 个
+[2026-06-26 21:39:40.717] [INFO] [asm_amd64.s:1771] [DoubanChart] ⚠️ 没有启用的采集源，无法匹配视频资源。请在“源管理”中启用至少一个采集源，然后刷新首页重试。
+[2026-06-26 21:39:41.598] [ERROR] [value.go:586] UnhandledRejection :: 未处理的 Promise 异常 — Window.On is not a function     Detail: TypeError: Window.On is not a function     at http://wails.localhost:9245/src/App.vue:109:14
+[2026-06-26 21:40:01.012] [WARN] [value.go:586] 暂无资源 — 该视频暂未采集到播放源，请在“源管理”中启用采集源后刷新重试
+[2026-06-26 21:40:04.049] [WARN] [value.go:586] 暂无资源 — 该视频暂未采集到播放源，请在“源管理”中启用采集源后刷新重试
+[2026-06-26 21:40:10.230] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 21:40:10.230] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 21:40:10.231] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 21:40:10.231] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传
+[2026-06-26 21:40:10.231] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传 year=2025 type=国产剧 director=杨阳
+[2026-06-26 21:40:10.231] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传 (meta: year=2025 type=国产剧 director=杨阳)
+[2026-06-26 21:40:30.692] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0
+[2026-06-26 21:40:31.147] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 20.92s
+[2026-06-26 21:40:31.147] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传' (HTML len=29921)
+[2026-06-26 21:40:31.151] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传' (failures=25, until=2026-06-27 21:40:31)
+[2026-06-26 21:40:31.151] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传': no candidates parsed for keyword: 凡人修仙传
+[2026-06-26 21:40:31.151] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 凡人修仙传2魔道争锋
+[2026-06-26 21:40:31.151] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传2魔道争锋 year=2021 type=国产动漫 director=王裕仁,赵侠
+[2026-06-26 21:40:31.151] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传2魔道争锋 (meta: year=2021 type=国产动漫 director=王裕仁,赵侠)
+[2026-06-26 21:40:37.614] [INFO] [value.go:586] 默认源已切换 — 已将「茅台资源」设为默认数据源
+[2026-06-26 21:40:38.540] [INFO] [value.go:586] 默认源已切换 — 已将「优质资源」设为默认数据源
+[2026-06-26 21:40:55.800] [WARN] [value.go:586] 暂无资源 — 该视频暂未采集到播放源，请在“源管理”中启用采集源后刷新重试
+[2026-06-26 21:40:56.513] [WARN] [value.go:586] 暂无资源 — 该视频暂未采集到播放源，请在“源管理”中启用采集源后刷新重试
+[2026-06-26 21:41:04.127] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A02%E9%AD%94%E9%81%93%E4%BA%89%E9%94%8B
+[2026-06-26 21:41:04.972] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 33.82s
+[2026-06-26 21:41:04.973] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传2魔道争锋' (HTML len=31656)
+[2026-06-26 21:41:04.976] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传2魔道争锋' (failures=5, until=2026-06-27 21:41:04)
+[2026-06-26 21:41:04.976] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '凡人修仙传2魔道争锋': no candidates parsed for keyword: 凡人修仙传2魔道争锋
+[2026-06-26 21:41:04.976] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 凡人修仙传1风起天南篇
+[2026-06-26 21:41:04.976] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传1风起天南篇 year=2020 type=国产动漫 director=伍镇焯,王裕仁
+[2026-06-26 21:41:04.976] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传1风起天南篇 (meta: year=2020 type=国产动漫 director=伍镇焯,王裕仁)
+[2026-06-26 21:42:03.031] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A01%E9%A3%8E%E8%B5%B7%E5%A4%A9%E5%8D%97%E7%AF%87
+[2026-06-26 21:42:03.349] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 58.37s
+[2026-06-26 21:42:03.349] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传1风起天南篇' (HTML len=20339)
+[2026-06-26 21:42:03.353] [WARN] [scheduler.go:42] [Douban] [3/3] FAILED to fill subject_id for '凡人修仙传1风起天南篇': no candidates parsed for keyword: 凡人修仙传1风起天南篇
+[2026-06-26 21:42:03.354] [INFO] [scheduler.go:42] [Douban] Found 3 incomplete records (has subject_id but missing details)
+[2026-06-26 21:42:03.354] [INFO] [scheduler.go:42] [Douban] [1/3] Filling detail for subject 36217763 (我的妈耶)
+[2026-06-26 21:42:03.354] [INFO] [updater.go:159] [Douban] Parsing detail for subject ID: 36217763
+[2026-06-26 21:42:24.153] [INFO] [crawler.go:671] [Douban] Fetching URL: https://movie.douban.com/subject/36217763/
+[2026-06-26 21:42:25.324] [INFO] [crawler.go:671] [Douban] HTTP status: 200, duration: 21.97s
+[2026-06-26 21:42:25.330] [INFO] [updater.go:159] [Douban] Parsed detail for 36217763: Title='我的妈耶', Rating='6.3', Votes='35999', ShortComments='16372', Hotness='52371', Director='', Actor='', Genre='剧情'
+[2026-06-26 21:42:25.334] [INFO] [scheduler.go:42] [Douban] [1/3] SUCCESS filled detail for subject '36217763'
+[2026-06-26 21:42:25.334] [INFO] [scheduler.go:42] [Douban] [2/3] Filling detail for subject 36235977 (后室)
+[2026-06-26 21:42:25.334] [INFO] [updater.go:159] [Douban] Parsing detail for subject ID: 36235977
+[2026-06-26 21:43:33.538] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-26 21:43:33.547] [INFO] [app.go:184] [Douban] Scheduler started, interval: 30s
+[2026-06-26 21:43:33.547] [INFO] [app.go:188] [DoubanChart] 缓存过期或为空，开始抓取热榜...
+[2026-06-26 21:43:33.547] [INFO] [chart.go:128] [DoubanChart] Fetching URL: https://movie.douban.com/chart
+[2026-06-26 21:43:33.547] [INFO] [app.go:72] 同步全局类型完成: 0 条
+[2026-06-26 21:43:33.835] [INFO] [app.go:188] [DoubanChart] 抓取完成: 10 条热榜数据
+[2026-06-26 21:43:33.835] [INFO] [app.go:72] 豆瓣热榜预加载完成
+[2026-06-26 21:43:33.835] [INFO] [chart.go:153] [DoubanChart] 开始入库 10 条热榜数据 (当前 global_video 总数: 123)
+[2026-06-26 21:43:33.893] [INFO] [chart.go:153] [DoubanChart] 入库完成: 新增 0 + 更新 10 = 处理 10/10 条 (global_video: 123 → 123)
+[2026-06-26 21:43:33.893] [INFO] [asm_amd64.s:1771] [DoubanChart] 源状态: key=maoyanapi name=茅台资源 enabled=0 apiUrl=https://api.maoyanapi.top/api.php/provide/vod
+[2026-06-26 21:43:33.893] [INFO] [asm_amd64.s:1771] [DoubanChart] 源状态: key=rycjapi name=如意资源 enabled=0 apiUrl=https://cj.rycjapi.com/api.php/provide/vod
+[2026-06-26 21:43:33.893] [INFO] [asm_amd64.s:1771] [DoubanChart] 源状态: key=yyzy_tv name=优质资源 enabled=0 apiUrl=https://api.yyzy-tv.vip/inc/apijson.php
+[2026-06-26 21:43:33.893] [INFO] [asm_amd64.s:1771] [DoubanChart] 源统计: 总共 3 个, 启用 0 个
+[2026-06-26 21:43:33.893] [INFO] [asm_amd64.s:1771] [DoubanChart] ⚠️ 没有启用的采集源，无法匹配视频资源。请在“源管理”中启用至少一个采集源，然后刷新首页重试。
+[2026-06-26 21:44:03.548] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 21:44:03.548] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 21:44:03.548] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 21:44:03.548] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传
+[2026-06-26 21:44:03.548] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传 year=2025 type=国产剧 director=杨阳
+[2026-06-26 21:44:03.548] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传 (meta: year=2025 type=国产剧 director=杨阳)
+[2026-06-26 21:44:12.246] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0
+[2026-06-26 21:44:12.970] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 9.42s
+[2026-06-26 21:44:12.971] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传' (HTML len=29921)
+[2026-06-26 21:44:12.975] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传' (failures=26, until=2026-06-27 21:44:12)
+[2026-06-26 21:44:12.975] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传': no candidates parsed for keyword: 凡人修仙传
+[2026-06-26 21:44:12.975] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 凡人修仙传1风起天南篇
+[2026-06-26 21:44:12.975] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传1风起天南篇 year=2020 type=国产动漫 director=伍镇焯,王裕仁
+[2026-06-26 21:44:12.975] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传1风起天南篇 (meta: year=2020 type=国产动漫 director=伍镇焯,王裕仁)
+[2026-06-26 21:44:15.612] [INFO] [app.go:3282] [Douban] Stopping scheduler (graceful)...
+[2026-06-26 21:44:15.612] [INFO] [scheduler.go:62] [Douban] Updater graceful stop requested
+[2026-06-26 21:52:44.388] [INFO] [once.go:69] ===== 应用启动 =====
+[2026-06-26 21:52:44.402] [INFO] [app.go:184] [Douban] Scheduler started, interval: 30s
+[2026-06-26 21:52:44.403] [INFO] [app.go:188] [DoubanChart] 缓存过期或为空，开始抓取热榜...
+[2026-06-26 21:52:44.403] [INFO] [chart.go:128] [DoubanChart] Fetching URL: https://movie.douban.com/chart
+[2026-06-26 21:52:44.415] [INFO] [app.go:72] 同步全局类型完成: 0 条
+[2026-06-26 21:52:44.698] [INFO] [app.go:188] [DoubanChart] 抓取完成: 10 条热榜数据
+[2026-06-26 21:52:44.698] [INFO] [app.go:72] 豆瓣热榜预加载完成
+[2026-06-26 21:52:44.699] [INFO] [chart.go:153] [DoubanChart] 开始入库 10 条热榜数据 (当前 global_video 总数: 123)
+[2026-06-26 21:52:44.786] [INFO] [chart.go:153] [DoubanChart] 入库完成: 新增 0 + 更新 10 = 处理 10/10 条 (global_video: 123 → 123)
+[2026-06-26 21:52:44.787] [INFO] [asm_amd64.s:1771] [DoubanChart] 源状态: key=maoyanapi name=茅台资源 enabled=0 apiUrl=https://api.maoyanapi.top/api.php/provide/vod
+[2026-06-26 21:52:44.787] [INFO] [asm_amd64.s:1771] [DoubanChart] 源状态: key=rycjapi name=如意资源 enabled=0 apiUrl=https://cj.rycjapi.com/api.php/provide/vod
+[2026-06-26 21:52:44.787] [INFO] [asm_amd64.s:1771] [DoubanChart] 源状态: key=yyzy_tv name=优质资源 enabled=0 apiUrl=https://api.yyzy-tv.vip/inc/apijson.php
+[2026-06-26 21:52:44.787] [INFO] [asm_amd64.s:1771] [DoubanChart] 源统计: 总共 3 个, 启用 0 个
+[2026-06-26 21:52:44.787] [INFO] [asm_amd64.s:1771] [DoubanChart] 没有显式启用的采集源，自动使用全部 3 个源进行匹配（建议在源管理中启用常用源）
+[2026-06-26 21:52:44.787] [INFO] [asm_amd64.s:1771] [DoubanChart] 开始源站匹配: 10 个热榜条目, 3 个采集源
+[2026-06-26 21:52:44.789] [INFO] [chart.go:378] [DoubanChart] 开始源站搜索 src=maoyanapi apiUrl=https://api.maoyanapi.top/api.php/provide/vod title=金谍行动
+[2026-06-26 21:52:44.789] [INFO] [chart.go:378] [DoubanChart] 开始源站搜索 src=maoyanapi apiUrl=https://api.maoyanapi.top/api.php/provide/vod title=女士优先
+[2026-06-26 21:52:44.789] [INFO] [chart.go:378] [DoubanChart] 开始源站搜索 src=maoyanapi apiUrl=https://api.maoyanapi.top/api.php/provide/vod title=双喜
+[2026-06-26 21:52:44.789] [INFO] [chart.go:378] [DoubanChart] 开始源站搜索 src=maoyanapi apiUrl=https://api.maoyanapi.top/api.php/provide/vod title=世界的主人
+[2026-06-26 21:52:44.789] [INFO] [chart.go:378] [DoubanChart] 开始源站搜索 src=maoyanapi apiUrl=https://api.maoyanapi.top/api.php/provide/vod title=杀木池
+[2026-06-26 21:52:44.801] [INFO] [chart.go:378] [DoubanChart] 开始源站搜索 src=maoyanapi apiUrl=https://api.maoyanapi.top/api.php/provide/vod title=后室
+[2026-06-26 21:52:44.813] [INFO] [chart.go:378] [DoubanChart] 开始源站搜索 src=maoyanapi apiUrl=https://api.maoyanapi.top/api.php/provide/vod title=大濛
+[2026-06-26 21:52:44.824] [INFO] [chart.go:378] [DoubanChart] 开始源站搜索 src=maoyanapi apiUrl=https://api.maoyanapi.top/api.php/provide/vod title=我的妈耶
+[2026-06-26 21:52:44.833] [INFO] [chart.go:378] [DoubanChart] 开始源站搜索 src=maoyanapi apiUrl=https://api.maoyanapi.top/api.php/provide/vod title=痴迷
+[2026-06-26 21:52:44.833] [INFO] [chart.go:378] [DoubanChart] 开始源站搜索 src=maoyanapi apiUrl=https://api.maoyanapi.top/api.php/provide/vod title=幽旅巫咒
+[2026-06-26 21:52:45.712] [ERROR] [value.go:586] UnhandledRejection :: 未处理的 Promise 异常 — Window.On is not a function     Detail: TypeError: Window.On is not a function     at http://wails.localhost:9245/src/App.vue:109:14
+[2026-06-26 21:52:46.254] [INFO] [fetcher.go:117] [FETCH] 原始响应 - URL: https://api.maoyanapi.top/api.php/provide/vod?limit=5&pg=1&wd=%E6%9D%80%E6%9C%A8%E6%B1%A0, Code: 1, Total: 0, ListSize: 0
+[2026-06-26 21:52:46.254] [INFO] [chart.go:378] [DoubanChart] 源站无结果 src=maoyanapi title=杀木池 (total=0)
+[2026-06-26 21:52:46.254] [INFO] [chart.go:378] [DoubanChart] 开始源站搜索 src=rycjapi apiUrl=https://cj.rycjapi.com/api.php/provide/vod title=杀木池
+[2026-06-26 21:52:46.254] [INFO] [fetcher.go:117] [FETCH] 原始响应 - URL: https://api.maoyanapi.top/api.php/provide/vod?limit=5&pg=1&wd=%E5%90%8E%E5%AE%A4, Code: 1, Total: 0, ListSize: 0
+[2026-06-26 21:52:46.254] [INFO] [chart.go:378] [DoubanChart] 源站无结果 src=maoyanapi title=后室 (total=0)
+[2026-06-26 21:52:46.254] [INFO] [chart.go:378] [DoubanChart] 开始源站搜索 src=rycjapi apiUrl=https://cj.rycjapi.com/api.php/provide/vod title=后室
+[2026-06-26 21:52:46.337] [INFO] [fetcher.go:117] [FETCH] 原始响应 - URL: https://api.maoyanapi.top/api.php/provide/vod?limit=5&pg=1&wd=%E7%97%B4%E8%BF%B7, Code: 1, Total: 0, ListSize: 0
+[2026-06-26 21:52:46.337] [INFO] [chart.go:378] [DoubanChart] 源站无结果 src=maoyanapi title=痴迷 (total=0)
+[2026-06-26 21:52:46.337] [INFO] [chart.go:378] [DoubanChart] 开始源站搜索 src=rycjapi apiUrl=https://cj.rycjapi.com/api.php/provide/vod title=痴迷
+[2026-06-26 21:52:46.337] [INFO] [fetcher.go:117] [FETCH] 原始响应 - URL: https://api.maoyanapi.top/api.php/provide/vod?limit=5&pg=1&wd=%E5%A4%A7%E6%BF%9B, Code: 1, Total: 1, ListSize: 1
+[2026-06-26 21:52:46.337] [INFO] [fetcher.go:117] [FETCH] 视频[0]原始数据 - vod_id: 156859, vod_name: 大濛, vod_actor: , vod_director: , vod_content: , vod_pic: 
+[2026-06-26 21:52:46.337] [INFO] [chart.go:378] [DoubanChart] 源站搜索结果 src=maoyanapi title=大濛: 找到 1 条
+[2026-06-26 21:52:46.337] [INFO] [chart.go:378] [DoubanChart] 名称匹配: "大濛" 匹配 "大濛" (src=maoyanapi)
+[2026-06-26 21:52:46.337] [INFO] [fetcher.go:117] [FETCH] 原始响应 - URL: https://api.maoyanapi.top/api.php/provide/vod?limit=5&pg=1&wd=%E5%8F%8C%E5%96%9C, Code: 1, Total: 2, ListSize: 2
+[2026-06-26 21:52:46.337] [INFO] [fetcher.go:117] [FETCH] 视频[0]原始数据 - vod_id: 156999, vod_name: 双喜, vod_actor: , vod_director: , vod_content: , vod_pic: 
+[2026-06-26 21:52:46.337] [INFO] [fetcher.go:117] [FETCH] 原始响应 - URL: https://api.maoyanapi.top/api.php/provide/vod?limit=5&pg=1&wd=%E5%B9%BD%E6%97%85%E5%B7%AB%E5%92%92, Code: 1, Total: 1, ListSize: 1
+[2026-06-26 21:52:46.337] [INFO] [fetcher.go:117] [FETCH] 视频[0]原始数据 - vod_id: 156909, vod_name: 幽旅巫咒, vod_actor: , vod_director: , vod_content: , vod_pic: 
+[2026-06-26 21:52:46.337] [INFO] [chart.go:378] [DoubanChart] 源站搜索结果 src=maoyanapi title=幽旅巫咒: 找到 1 条
+[2026-06-26 21:52:46.337] [INFO] [fetcher.go:117] [FETCH] 视频[1]原始数据 - vod_id: 125024, vod_name: 双喜临门 雙喜臨門, vod_actor: , vod_director: , vod_content: , vod_pic: 
+[2026-06-26 21:52:46.337] [INFO] [chart.go:378] [DoubanChart] 源站搜索结果 src=maoyanapi title=双喜: 找到 2 条
+[2026-06-26 21:52:46.337] [INFO] [chart.go:378] [DoubanChart] 名称匹配: "双喜" 匹配 "双喜" (src=maoyanapi)
+[2026-06-26 21:52:46.337] [INFO] [chart.go:378] [DoubanChart] 名称匹配: "幽旅巫咒" 匹配 "幽旅巫咒" (src=maoyanapi)
+[2026-06-26 21:52:46.341] [INFO] [fetcher.go:117] [FETCH] 原始响应 - URL: https://api.maoyanapi.top/api.php/provide/vod?limit=5&pg=1&wd=%E9%87%91%E8%B0%8D%E8%A1%8C%E5%8A%A8, Code: 1, Total: 0, ListSize: 0
+[2026-06-26 21:52:46.341] [INFO] [chart.go:378] [DoubanChart] 源站无结果 src=maoyanapi title=金谍行动 (total=0)
+[2026-06-26 21:52:46.341] [INFO] [chart.go:378] [DoubanChart] 开始源站搜索 src=rycjapi apiUrl=https://cj.rycjapi.com/api.php/provide/vod title=金谍行动
+[2026-06-26 21:52:46.410] [INFO] [fetcher.go:117] [FETCH] 原始响应 - URL: https://api.maoyanapi.top/api.php/provide/vod?limit=5&pg=1&wd=%E5%A5%B3%E5%A3%AB%E4%BC%98%E5%85%88, Code: 1, Total: 1, ListSize: 1
+[2026-06-26 21:52:46.410] [INFO] [fetcher.go:117] [FETCH] 视频[0]原始数据 - vod_id: 156819, vod_name: 女士优先, vod_actor: , vod_director: , vod_content: , vod_pic: 
+[2026-06-26 21:52:46.410] [INFO] [fetcher.go:117] [FETCH] 原始响应 - URL: https://api.maoyanapi.top/api.php/provide/vod?limit=5&pg=1&wd=%E4%B8%96%E7%95%8C%E7%9A%84%E4%B8%BB%E4%BA%BA, Code: 1, Total: 1, ListSize: 1
+[2026-06-26 21:52:46.410] [INFO] [chart.go:378] [DoubanChart] 源站搜索结果 src=maoyanapi title=女士优先: 找到 1 条
+[2026-06-26 21:52:46.410] [INFO] [fetcher.go:117] [FETCH] 视频[0]原始数据 - vod_id: 156579, vod_name: 世界的主人, vod_actor: , vod_director: , vod_content: , vod_pic: 
+[2026-06-26 21:52:46.410] [INFO] [chart.go:378] [DoubanChart] 源站搜索结果 src=maoyanapi title=世界的主人: 找到 1 条
+[2026-06-26 21:52:46.410] [INFO] [chart.go:378] [DoubanChart] 名称匹配: "女士优先" 匹配 "女士优先" (src=maoyanapi)
+[2026-06-26 21:52:46.410] [INFO] [chart.go:378] [DoubanChart] 名称匹配: "世界的主人" 匹配 "世界的主人" (src=maoyanapi)
+[2026-06-26 21:52:46.433] [INFO] [fetcher.go:117] [FETCH] 原始响应 - URL: https://api.maoyanapi.top/api.php/provide/vod?limit=5&pg=1&wd=%E6%88%91%E7%9A%84%E5%A6%88%E8%80%B6, Code: 1, Total: 1, ListSize: 1
+[2026-06-26 21:52:46.433] [INFO] [fetcher.go:117] [FETCH] 视频[0]原始数据 - vod_id: 157001, vod_name: 我的妈耶, vod_actor: , vod_director: , vod_content: , vod_pic: 
+[2026-06-26 21:52:46.433] [INFO] [chart.go:378] [DoubanChart] 源站搜索结果 src=maoyanapi title=我的妈耶: 找到 1 条
+[2026-06-26 21:52:46.433] [INFO] [chart.go:378] [DoubanChart] 名称匹配: "我的妈耶" 匹配 "我的妈耶" (src=maoyanapi)
+[2026-06-26 21:52:46.592] [INFO] [fetcher.go:131] [FETCH] 原始响应 - URL: https://api.maoyanapi.top/api.php/provide/vod?ac=detail&ids=157001, Code: 1, Total: 1, ListSize: 1
+[2026-06-26 21:52:46.592] [INFO] [fetcher.go:131] [FETCH] 视频[0]原始数据 - vod_id: 157001, vod_name: 我的妈耶, vod_actor: 马思纯,白客,黄明昊,孙阳,梁靖康,嵇嘉禾,王天放,雷淞然,郭虹,张子贤,孔连顺, vod_director: 肖麓西, vod_content: <p>　　十一（黄明昊 饰）从小由父亲张永勋（白客 饰）独自抚养长大，自�..., vod_pic: http://www.maoyanimg.top/upload/vod/20260613-1/7e2763cc0fbd1f2e15c8ce2db44e35dc.webp
+[2026-06-26 21:52:46.592] [INFO] [chart.go:437] [CleanHTML] 输入: len=875, content=<p>　　十一（黄明昊 饰）从小由父亲张永勋（白客 饰）独自抚养长大，自�...
+[2026-06-26 21:52:46.592] [INFO] [chart.go:437] [CleanHTML] 输出: len=862, content=十一（黄明昊 饰）从小由父亲张永勋（白客 饰）独自抚养长大，自出生时�...
+[2026-06-26 21:52:46.606] [INFO] [chart.go:439] [CleanHTML] 输入: len=100, content=马思纯,白客,黄明昊,孙阳,梁靖康,嵇嘉禾,王天放,雷淞然,郭虹,张子贤,孔连顺
+[2026-06-26 21:52:46.606] [INFO] [chart.go:439] [CleanHTML] 输出: len=100, content=马思纯,白客,黄明昊,孙阳,梁靖康,嵇嘉禾,王天放,雷淞然,郭虹,张子贤,孔连顺
+[2026-06-26 21:52:46.607] [INFO] [chart.go:441] [CleanHTML] 输入: len=9, content=肖麓西
+[2026-06-26 21:52:46.607] [INFO] [chart.go:441] [CleanHTML] 输出: len=9, content=肖麓西
+[2026-06-26 21:52:46.609] [INFO] [fetcher.go:131] [FETCH] 原始响应 - URL: https://api.maoyanapi.top/api.php/provide/vod?ac=detail&ids=156999, Code: 1, Total: 1, ListSize: 1
+[2026-06-26 21:52:46.609] [INFO] [fetcher.go:131] [FETCH] 视频[0]原始数据 - vod_id: 156999, vod_name: 双喜, vod_actor: 刘冠廷,余香凝,杨贵媚,田启文,庹宗华,汤毓绮,蔡凡熙,洪群钧,晏柔中,梁皓岚,林史恩,张馨比,刘品言,李国毅,陈淑芳,朱凯柏,林在培,检场,杨丽音,洪都拉斯,于子育,李之勤,梁绮翘,黄惠卿,江家贤,黄婕菲,吴继高,陈以文,谢丽金,姜康哲,黄宣,吉冈里帆,杨乐多,游珈瑄,江澄瑄,阮凤仪,林品彤,詹镘璞,张心哲, vod_director: 许承杰, vod_content: <p>　　新郎高庭生（刘冠廷 饰）与新娘吴黛玲（余香凝 饰）在一生一次的�..., vod_pic: http://www.maoyanimg.top/upload/vod/20260612-1/2da891dd41616efa0b7c7e1aff1841a4.webp
+[2026-06-26 21:52:46.609] [INFO] [chart.go:437] [CleanHTML] 输入: len=467, content=<p>　　新郎高庭生（刘冠廷 饰）与新娘吴黛玲（余香凝 饰）在一生一次的�...
+[2026-06-26 21:52:46.609] [INFO] [chart.go:437] [CleanHTML] 输出: len=454, content=新郎高庭生（刘冠廷 饰）与新娘吴黛玲（余香凝 饰）在一生一次的大喜之�...
+[2026-06-26 21:52:46.610] [INFO] [video.go:177] [global] 精确匹配命中但类型不匹配: "我的妈耶" (现有type_id=0, 新type_id=18), 跳过
+[2026-06-26 21:52:46.611] [INFO] [video.go:177] [global] 归一化匹配命中但类型不匹配: "我的妈耶" (现有type_id=0, 新type_id=18), 跳过
+[2026-06-26 21:52:46.611] [INFO] [chart.go:439] [CleanHTML] 输入: len=389, content=刘冠廷,余香凝,杨贵媚,田启文,庹宗华,汤毓绮,蔡凡熙,洪群钧,晏柔中,梁皓岚,...
+[2026-06-26 21:52:46.611] [INFO] [chart.go:439] [CleanHTML] 输出: len=389, content=刘冠廷,余香凝,杨贵媚,田启文,庹宗华,汤毓绮,蔡凡熙,洪群钧,晏柔中,梁皓岚,...
+[2026-06-26 21:52:46.613] [INFO] [video.go:177] [global] 新建/已有条目: "我的妈耶" -> global_id=124 (type_id=18)
+[2026-06-26 21:52:46.618] [INFO] [chart.go:378] [DoubanChart] 源站采集入库成功: 我的妈耶 -> maoyanapi/157001
+[2026-06-26 21:52:46.622] [INFO] [chart.go:441] [CleanHTML] 输入: len=9, content=许承杰
+[2026-06-26 21:52:46.622] [INFO] [chart.go:441] [CleanHTML] 输出: len=9, content=许承杰
+[2026-06-26 21:52:46.622] [INFO] [video.go:177] [global] 精确匹配命中但类型不匹配: "双喜" (现有type_id=0, 新type_id=18), 跳过
+[2026-06-26 21:52:46.623] [INFO] [video.go:177] [global] 归一化匹配命中但类型不匹配: "双喜" (现有type_id=0, 新type_id=18), 跳过
+[2026-06-26 21:52:46.625] [INFO] [video.go:177] [global] 新建/已有条目: "双喜" -> global_id=125 (type_id=18)
+[2026-06-26 21:52:46.630] [INFO] [chart.go:378] [DoubanChart] 源站采集入库成功: 双喜 -> maoyanapi/156999
+[2026-06-26 21:52:46.642] [INFO] [fetcher.go:131] [FETCH] 原始响应 - URL: https://api.maoyanapi.top/api.php/provide/vod?ac=detail&ids=156909, Code: 1, Total: 1, ListSize: 1
+[2026-06-26 21:52:46.642] [INFO] [fetcher.go:131] [FETCH] 视频[0]原始数据 - vod_id: 156909, vod_name: 幽旅巫咒, vod_actor: 亚当·斯科特,大卫·威尔莫特,奥斯丁·阿梅里奥,弗洛伦丝·奥德什,彼得·库南,布伦丹·康罗伊,迈克尔·帕特里克,威尔·奥康纳,Sioux Carroll,埃兹拉·卡莱尔,Siox C,Mallory Adams, vod_director: 达米安·麦卡锡, vod_content: <p>　　性格孤僻、不近人情的小说家欧姆·鲍曼（亚当·斯科特 饰）带着父�..., vod_pic: http://www.maoyanimg.top/upload/vod/20260603-1/6cbdb89d5ebc4a47c7b0a09737129556.webp
+[2026-06-26 21:52:46.642] [INFO] [chart.go:437] [CleanHTML] 输入: len=675, content=<p>　　性格孤僻、不近人情的小说家欧姆·鲍曼（亚当·斯科特 饰）带着父�...
+[2026-06-26 21:52:46.642] [INFO] [chart.go:437] [CleanHTML] 输出: len=662, content=性格孤僻、不近人情的小说家欧姆·鲍曼（亚当·斯科特 饰）带着父母骨灰�...
+[2026-06-26 21:52:46.645] [INFO] [chart.go:439] [CleanHTML] 输入: len=220, content=亚当·斯科特,大卫·威尔莫特,奥斯丁·阿梅里奥,弗洛伦丝·奥德什,彼得·库�...
+[2026-06-26 21:52:46.645] [INFO] [chart.go:439] [CleanHTML] 输出: len=220, content=亚当·斯科特,大卫·威尔莫特,奥斯丁·阿梅里奥,弗洛伦丝·奥德什,彼得·库�...
+[2026-06-26 21:52:46.647] [INFO] [chart.go:441] [CleanHTML] 输入: len=20, content=达米安·麦卡锡
+[2026-06-26 21:52:46.647] [INFO] [chart.go:441] [CleanHTML] 输出: len=20, content=达米安·麦卡锡
+[2026-06-26 21:52:46.647] [INFO] [video.go:177] [global] 精确匹配命中但类型不匹配: "幽旅巫咒" (现有type_id=0, 新type_id=18), 跳过
+[2026-06-26 21:52:46.648] [INFO] [video.go:177] [global] 归一化匹配命中但类型不匹配: "幽旅巫咒" (现有type_id=0, 新type_id=18), 跳过
+[2026-06-26 21:52:46.651] [INFO] [video.go:177] [global] 新建/已有条目: "幽旅巫咒" -> global_id=126 (type_id=18)
+[2026-06-26 21:52:46.655] [INFO] [chart.go:378] [DoubanChart] 源站采集入库成功: 幽旅巫咒 -> maoyanapi/156909
+[2026-06-26 21:52:46.675] [INFO] [fetcher.go:131] [FETCH] 原始响应 - URL: https://api.maoyanapi.top/api.php/provide/vod?ac=detail&ids=156579, Code: 1, Total: 1, ListSize: 1
+[2026-06-26 21:52:46.675] [INFO] [fetcher.go:131] [FETCH] 视频[0]原始数据 - vod_id: 156579, vod_name: 世界的主人, vod_actor: 徐粹彬 , 张慧珍 , 金郑植 , 姜彩允 , 李宰锡 , 朴知玧 , 金艺昶 , 高旻示 , 白贤珠 , 卞重熙 , 文惠仁 , 郑恩京 , 李尚熙 , 李代延 , 金锡勋 , 林在赫, vod_director: 尹佳恩, vod_content: 世界的主人, vod_pic: http://www.maoyanimg.top/upload/vod/20260425-1/6e1085b3219e041608fa8b392c4a5c3a.jpg
+[2026-06-26 21:52:46.675] [INFO] [chart.go:437] [CleanHTML] 输入: len=15, content=世界的主人
+[2026-06-26 21:52:46.675] [INFO] [chart.go:437] [CleanHTML] 输出: len=15, content=世界的主人
+[2026-06-26 21:52:46.675] [INFO] [chart.go:439] [CleanHTML] 输入: len=189, content=徐粹彬 , 张慧珍 , 金郑植 , 姜彩允 , 李宰锡 , 朴知玧 , 金艺昶 , 高旻示 , 白�...
+[2026-06-26 21:52:46.675] [INFO] [chart.go:439] [CleanHTML] 输出: len=189, content=徐粹彬 , 张慧珍 , 金郑植 , 姜彩允 , 李宰锡 , 朴知玧 , 金艺昶 , 高旻示 , 白�...
+[2026-06-26 21:52:46.677] [INFO] [chart.go:441] [CleanHTML] 输入: len=9, content=尹佳恩
+[2026-06-26 21:52:46.677] [INFO] [chart.go:441] [CleanHTML] 输出: len=9, content=尹佳恩
+[2026-06-26 21:52:46.677] [INFO] [video.go:177] [global] 精确匹配命中但类型不匹配: "世界的主人" (现有type_id=0, 新type_id=18), 跳过
+[2026-06-26 21:52:46.678] [INFO] [video.go:177] [global] 归一化匹配命中但类型不匹配: "世界的主人" (现有type_id=0, 新type_id=18), 跳过
+[2026-06-26 21:52:46.681] [INFO] [video.go:177] [global] 新建/已有条目: "世界的主人" -> global_id=127 (type_id=18)
+[2026-06-26 21:52:46.685] [INFO] [chart.go:378] [DoubanChart] 源站采集入库成功: 世界的主人 -> maoyanapi/156579
+[2026-06-26 21:52:46.819] [INFO] [fetcher.go:131] [FETCH] 原始响应 - URL: https://api.maoyanapi.top/api.php/provide/vod?ac=detail&ids=156819, Code: 1, Total: 1, ListSize: 1
+[2026-06-26 21:52:46.819] [INFO] [fetcher.go:131] [FETCH] 视频[0]原始数据 - vod_id: 156819, vod_name: 女士优先, vod_actor: 裴淳华,萨莎·拜伦·科恩,艾米莉·莫迪默,理查德·E·格兰特,查尔斯·丹斯,费奥纳·肖,凯瑟琳·亨特,韦鲁切·欧皮亚,比尔·帕特森,保罗·查希迪,汤姆·戴维斯,玛雅·西蒙森,卡迪夫·克尔万,玛丽·罗斯科,丹尼·艾肖克,Jordan Metcalfe,Ashley Bagley,Michael Sheldon,Dani Moseley,布里吉塔·罗伊, vod_director: 西娅·夏罗克, vod_content: <p>　　一个冥顽不灵玩弄女性的风流男子（萨莎·拜伦·科恩 Sacha Baron Cohen �..., vod_pic: http://www.maoyanimg.top/upload/vod/20260523-1/e0da5f11af3003fb0afe7dcd2cccb95e.webp
+[2026-06-26 21:52:46.819] [INFO] [fetcher.go:131] [FETCH] 原始响应 - URL: https://api.maoyanapi.top/api.php/provide/vod?ac=detail&ids=156859, Code: 1, Total: 1, ListSize: 1
+[2026-06-26 21:52:46.819] [INFO] [fetcher.go:131] [FETCH] 视频[0]原始数据 - vod_id: 156859, vod_name: 大濛, vod_actor: 方郁婷,柯炜林,汤毓绮,曾敬骅,陈以文,蔡昌宪,陈竹升,詹馥瑄,胡智强,陈俊成,刘冠廷,林美秀,谢章颖,林志儒,陈季霞,王传一,林雨宣,朱德刚,黄丞邦,廖邱堃,百白,许莉廷,江澄瑄,姜予,卢尉宁,纪亮竹,王明台,李雪,林道禹,王靖惇,李国强,林泽凯,萧东意,宋芸桦,潘丽丽,周家宽, vod_director: 陈玉勋, vod_content: <p>　　1954年，一个15岁女孩，听闻哥哥在台北被枪毙的消息，独自搭火车从�..., vod_pic: http://www.maoyanimg.top/upload/vod/20260528-1/2957c4d68b3d01845a9b029339589f9d.webp
+[2026-06-26 21:52:46.819] [INFO] [chart.go:437] [CleanHTML] 输入: len=258, content=<p>　　一个冥顽不灵玩弄女性的风流男子（萨莎·拜伦·科恩 Sacha Baron Cohen �...
+[2026-06-26 21:52:46.819] [INFO] [chart.go:437] [CleanHTML] 输入: len=404, content=<p>　　1954年，一个15岁女孩，听闻哥哥在台北被枪毙的消息，独自搭火车从�...
+[2026-06-26 21:52:46.819] [INFO] [chart.go:437] [CleanHTML] 输出: len=385, content=1954年，一个15岁女孩，听闻哥哥在台北被枪毙的消息，独自搭火车从嘉义到�...
+[2026-06-26 21:52:46.819] [INFO] [chart.go:437] [CleanHTML] 输出: len=245, content=一个冥顽不灵玩弄女性的风流男子（萨莎·拜伦·科恩 Sacha Baron Cohen 饰），�...
+[2026-06-26 21:52:46.822] [INFO] [chart.go:439] [CleanHTML] 输入: len=350, content=方郁婷,柯炜林,汤毓绮,曾敬骅,陈以文,蔡昌宪,陈竹升,詹馥瑄,胡智强,陈俊成,...
+[2026-06-26 21:52:46.822] [INFO] [chart.go:439] [CleanHTML] 输出: len=350, content=方郁婷,柯炜林,汤毓绮,曾敬骅,陈以文,蔡昌宪,陈竹升,詹馥瑄,胡智强,陈俊成,...
+[2026-06-26 21:52:46.823] [INFO] [chart.go:439] [CleanHTML] 输入: len=358, content=裴淳华,萨莎·拜伦·科恩,艾米莉·莫迪默,理查德·E·格兰特,查尔斯·丹斯,费�...
+[2026-06-26 21:52:46.823] [INFO] [chart.go:439] [CleanHTML] 输出: len=358, content=裴淳华,萨莎·拜伦·科恩,艾米莉·莫迪默,理查德·E·格兰特,查尔斯·丹斯,费�...
+[2026-06-26 21:52:46.824] [INFO] [chart.go:441] [CleanHTML] 输入: len=9, content=陈玉勋
+[2026-06-26 21:52:46.824] [INFO] [chart.go:441] [CleanHTML] 输出: len=9, content=陈玉勋
+[2026-06-26 21:52:46.825] [INFO] [video.go:177] [global] 精确匹配命中但类型不匹配: "大濛" (现有type_id=0, 新type_id=18), 跳过
+[2026-06-26 21:52:46.825] [INFO] [video.go:177] [global] 归一化匹配命中但类型不匹配: "大濛" (现有type_id=0, 新type_id=18), 跳过
+[2026-06-26 21:52:46.828] [INFO] [video.go:177] [global] 新建/已有条目: "大濛" -> global_id=128 (type_id=18)
+[2026-06-26 21:52:46.834] [INFO] [chart.go:378] [DoubanChart] 源站采集入库成功: 大濛 -> maoyanapi/156859
+[2026-06-26 21:52:46.836] [INFO] [chart.go:441] [CleanHTML] 输入: len=17, content=西娅·夏罗克
+[2026-06-26 21:52:46.836] [INFO] [chart.go:441] [CleanHTML] 输出: len=17, content=西娅·夏罗克
+[2026-06-26 21:52:46.836] [INFO] [video.go:177] [global] 精确匹配命中但类型不匹配: "女士优先" (现有type_id=0, 新type_id=18), 跳过
+[2026-06-26 21:52:46.836] [INFO] [video.go:177] [global] 归一化匹配命中但类型不匹配: "女士优先" (现有type_id=0, 新type_id=18), 跳过
+[2026-06-26 21:52:46.840] [INFO] [video.go:177] [global] 新建/已有条目: "女士优先" -> global_id=129 (type_id=18)
+[2026-06-26 21:52:46.845] [INFO] [chart.go:378] [DoubanChart] 源站采集入库成功: 女士优先 -> maoyanapi/156819
+[2026-06-26 21:52:46.921] [INFO] [fetcher.go:117] [FETCH] 原始响应 - URL: https://cj.rycjapi.com/api.php/provide/vod?limit=5&pg=1&wd=%E5%90%8E%E5%AE%A4, Code: 1, Total: 1, ListSize: 1
+[2026-06-26 21:52:46.921] [INFO] [fetcher.go:117] [FETCH] 视频[0]原始数据 - vod_id: 78876, vod_name: 后室, vod_actor: , vod_director: , vod_content: , vod_pic: 
+[2026-06-26 21:52:46.921] [INFO] [chart.go:378] [DoubanChart] 源站搜索结果 src=rycjapi title=后室: 找到 1 条
+[2026-06-26 21:52:46.921] [INFO] [chart.go:378] [DoubanChart] 名称匹配: "后室" 匹配 "后室" (src=rycjapi)
+[2026-06-26 21:52:47.216] [INFO] [fetcher.go:117] [FETCH] 原始响应 - URL: https://cj.rycjapi.com/api.php/provide/vod?limit=5&pg=1&wd=%E9%87%91%E8%B0%8D%E8%A1%8C%E5%8A%A8, Code: 1, Total: 1, ListSize: 1
+[2026-06-26 21:52:47.216] [INFO] [fetcher.go:117] [FETCH] 视频[0]原始数据 - vod_id: 80004, vod_name: 金谍行动, vod_actor: , vod_director: , vod_content: , vod_pic: 
+[2026-06-26 21:52:47.216] [INFO] [fetcher.go:117] [FETCH] 原始响应 - URL: https://cj.rycjapi.com/api.php/provide/vod?limit=5&pg=1&wd=%E6%9D%80%E6%9C%A8%E6%B1%A0, Code: 1, Total: 1, ListSize: 1
+[2026-06-26 21:52:47.216] [INFO] [fetcher.go:117] [FETCH] 视频[0]原始数据 - vod_id: 79227, vod_name: 杀木池[电影解说], vod_actor: , vod_director: , vod_content: , vod_pic: 
+[2026-06-26 21:52:47.216] [INFO] [chart.go:378] [DoubanChart] 源站搜索结果 src=rycjapi title=金谍行动: 找到 1 条
+[2026-06-26 21:52:47.216] [INFO] [chart.go:378] [DoubanChart] 源站搜索结果 src=rycjapi title=杀木池: 找到 1 条
+[2026-06-26 21:52:47.216] [INFO] [chart.go:378] [DoubanChart] 名称匹配: "金谍行动" 匹配 "金谍行动" (src=rycjapi)
+[2026-06-26 21:52:47.216] [INFO] [chart.go:378] [DoubanChart] 名称匹配: "杀木池" 匹配 "杀木池[电影解说]" (src=rycjapi)
+[2026-06-26 21:52:47.216] [INFO] [fetcher.go:117] [FETCH] 原始响应 - URL: https://cj.rycjapi.com/api.php/provide/vod?limit=5&pg=1&wd=%E7%97%B4%E8%BF%B7, Code: 1, Total: 2, ListSize: 2
+[2026-06-26 21:52:47.216] [INFO] [fetcher.go:117] [FETCH] 视频[0]原始数据 - vod_id: 80118, vod_name: 痴迷2026[电影解说], vod_actor: , vod_director: , vod_content: , vod_pic: 
+[2026-06-26 21:52:47.216] [INFO] [fetcher.go:117] [FETCH] 视频[1]原始数据 - vod_id: 5965, vod_name: 痴迷2022, vod_actor: , vod_director: , vod_content: , vod_pic: 
+[2026-06-26 21:52:47.216] [INFO] [chart.go:378] [DoubanChart] 源站搜索结果 src=rycjapi title=痴迷: 找到 2 条
+[2026-06-26 21:52:47.216] [INFO] [chart.go:378] [DoubanChart] 名称匹配: "痴迷" 匹配 "痴迷2026[电影解说]" (src=rycjapi)
+[2026-06-26 21:52:47.509] [INFO] [fetcher.go:131] [FETCH] 原始响应 - URL: https://cj.rycjapi.com/api.php/provide/vod?ac=detail&ids=78876, Code: 1, Total: 1, ListSize: 1
+[2026-06-26 21:52:47.509] [INFO] [fetcher.go:131] [FETCH] 视频[0]原始数据 - vod_id: 78876, vod_name: 后室, vod_actor: 切瓦特·埃加福,雷娜特·赖因斯夫,芬恩·本尼特,卢基塔·麦克斯韦尔,马克·杜普拉斯,阿万·乔贾,罗伯特·博布罗茨基,安珀·安布罗斯,克丽丝塔·科索宁,菲利普·格兰杰,凯瑟琳·伊莎贝尔,皮特·纽,莎拉·海沃德,娜塔莉·穆恩,卡利克斯·弗雷泽, vod_director: 凯恩·帕森斯, vod_content: 深陷困境的克拉克（切瓦特·埃加福 饰）意外切入名为“后室”的神秘空间�..., vod_pic: https://ps.ryzypics.com/upload/vod/20260606-1/89553f71320f8e5dc586f1cf0dd01845.webp
+[2026-06-26 21:52:47.509] [INFO] [chart.go:437] [CleanHTML] 输入: len=294, content=深陷困境的克拉克（切瓦特·埃加福 饰）意外切入名为“后室”的神秘空间�...
+[2026-06-26 21:52:47.509] [INFO] [chart.go:437] [CleanHTML] 输出: len=294, content=深陷困境的克拉克（切瓦特·埃加福 饰）意外切入名为“后室”的神秘空间�...
+[2026-06-26 21:52:47.511] [INFO] [chart.go:439] [CleanHTML] 输入: len=314, content=切瓦特·埃加福,雷娜特·赖因斯夫,芬恩·本尼特,卢基塔·麦克斯韦尔,马克·�...
+[2026-06-26 21:52:47.511] [INFO] [chart.go:439] [CleanHTML] 输出: len=314, content=切瓦特·埃加福,雷娜特·赖因斯夫,芬恩·本尼特,卢基塔·麦克斯韦尔,马克·�...
+[2026-06-26 21:52:47.513] [INFO] [chart.go:441] [CleanHTML] 输入: len=17, content=凯恩·帕森斯
+[2026-06-26 21:52:47.513] [INFO] [chart.go:441] [CleanHTML] 输出: len=17, content=凯恩·帕森斯
+[2026-06-26 21:52:47.518] [INFO] [video.go:177] [global] 精确匹配命中但类型不匹配: "后室" (现有type_id=0, 新type_id=19), 跳过
+[2026-06-26 21:52:47.519] [INFO] [video.go:177] [global] 归一化匹配命中但类型不匹配: "后室" (现有type_id=0, 新type_id=19), 跳过
+[2026-06-26 21:52:47.522] [INFO] [video.go:177] [global] 新建/已有条目: "后室" -> global_id=130 (type_id=19)
+[2026-06-26 21:52:47.528] [INFO] [chart.go:378] [DoubanChart] 源站采集入库成功: 后室 -> rycjapi/78876
+[2026-06-26 21:52:48.007] [INFO] [fetcher.go:131] [FETCH] 原始响应 - URL: https://cj.rycjapi.com/api.php/provide/vod?ac=detail&ids=79227, Code: 1, Total: 1, ListSize: 1
+[2026-06-26 21:52:48.007] [INFO] [fetcher.go:131] [FETCH] 视频[0]原始数据 - vod_id: 79227, vod_name: 杀木池[电影解说], vod_actor: 金惠奫,李钟圆,金准韩,金永声,吴东旻,尹在灿,张多雅, vod_director: 李相玟, vod_content: 街景地图PD秀仁带领团队，前往传闻诡异的杀木池水库补拍路段画面——此�..., vod_pic: https://ps.ryzypics.com/upload/vod/20260611-1/cc137152d40459685bf54d9bce1d79a1.webp
+[2026-06-26 21:52:48.007] [INFO] [fetcher.go:131] [FETCH] 原始响应 - URL: https://cj.rycjapi.com/api.php/provide/vod?ac=detail&ids=80118, Code: 1, Total: 1, ListSize: 1
+[2026-06-26 21:52:48.007] [INFO] [fetcher.go:131] [FETCH] 视频[0]原始数据 - vod_id: 80118, vod_name: 痴迷2026[电影解说], vod_actor: 迈克尔·约翰斯顿,印达·纳瓦雷特,库珀·汤姆林森,梅根·劳利斯,安迪·里克特,黑莉·菲茨杰拉德,达林·图恩德,克洛伊·布林,安东尼·帕沃内,贾斯蒂斯,马尔科姆·凯尔纳,安东尼·卡萨比安卡,特拉维斯·贝克,凯尔·布卢门撒尔,马修·杰克逊, vod_director: 库里·巴克, vod_content: 为了赢得心上人的芳心，一个痴情的浪漫主义者折断了神秘的“许愿柳”，�..., vod_pic: https://ps.ryzypics.com/upload/vod/20260623-1/411c0c283d93574ff8d22ef519388b9f.webp
+[2026-06-26 21:52:48.007] [INFO] [chart.go:437] [CleanHTML] 输入: len=491, content=街景地图PD秀仁带领团队，前往传闻诡异的杀木池水库补拍路段画面——此�...
+[2026-06-26 21:52:48.007] [INFO] [fetcher.go:131] [FETCH] 原始响应 - URL: https://cj.rycjapi.com/api.php/provide/vod?ac=detail&ids=80004, Code: 1, Total: 1, ListSize: 1
+[2026-06-26 21:52:48.007] [INFO] [fetcher.go:131] [FETCH] 视频[0]原始数据 - vod_id: 80004, vod_name: 金谍行动, vod_actor: 亨利·卡维尔,杰克·吉伦哈尔,艾莎·冈萨雷斯,卡洛斯·巴登,迈克尔·武,费舍·史蒂芬斯,裴淳华,穆罕默德·阿勒·图尔基,科乔·阿塔,杰森·王, 埃米特·J·斯坎伦,克里斯蒂安·奥乔亚·拉维尼亚,卡洛斯·克劳曼斯莫勒,克里斯托弗·海维尤,贡萨洛·博乌萨, vod_director: 盖·里奇, vod_content: 金融公司遭十亿恶意贷款，首次讨要无果后，讨债公司老板瑞秋挺身而出。�..., vod_pic: https://ps.ryzypics.com/upload/vod/20260621-1/23eb8da79409d6f3935d5e7c1a7b4b2b.webp
+[2026-06-26 21:52:48.007] [INFO] [chart.go:437] [CleanHTML] 输入: len=204, content=为了赢得心上人的芳心，一个痴情的浪漫主义者折断了神秘的“许愿柳”，�...
+[2026-06-26 21:52:48.007] [INFO] [chart.go:437] [CleanHTML] 输出: len=491, content=街景地图PD秀仁带领团队，前往传闻诡异的杀木池水库补拍路段画面——此�...
+[2026-06-26 21:52:48.007] [INFO] [chart.go:437] [CleanHTML] 输入: len=300, content=金融公司遭十亿恶意贷款，首次讨要无果后，讨债公司老板瑞秋挺身而出。�...
+[2026-06-26 21:52:48.007] [INFO] [chart.go:437] [CleanHTML] 输出: len=204, content=为了赢得心上人的芳心，一个痴情的浪漫主义者折断了神秘的“许愿柳”，�...
+[2026-06-26 21:52:48.007] [INFO] [chart.go:437] [CleanHTML] 输出: len=300, content=金融公司遭十亿恶意贷款，首次讨要无果后，讨债公司老板瑞秋挺身而出。�...
+[2026-06-26 21:52:48.012] [INFO] [chart.go:439] [CleanHTML] 输入: len=69, content=金惠奫,李钟圆,金准韩,金永声,吴东旻,尹在灿,张多雅
+[2026-06-26 21:52:48.012] [INFO] [chart.go:439] [CleanHTML] 输出: len=69, content=金惠奫,李钟圆,金准韩,金永声,吴东旻,尹在灿,张多雅
+[2026-06-26 21:52:48.012] [INFO] [chart.go:441] [CleanHTML] 输入: len=9, content=李相玟
+[2026-06-26 21:52:48.012] [INFO] [chart.go:441] [CleanHTML] 输出: len=9, content=李相玟
+[2026-06-26 21:52:48.015] [INFO] [chart.go:439] [CleanHTML] 输入: len=309, content=迈克尔·约翰斯顿,印达·纳瓦雷特,库珀·汤姆林森,梅根·劳利斯,安迪·里克�...
+[2026-06-26 21:52:48.015] [INFO] [chart.go:439] [CleanHTML] 输出: len=309, content=迈克尔·约翰斯顿,印达·纳瓦雷特,库珀·汤姆林森,梅根·劳利斯,安迪·里克�...
+[2026-06-26 21:52:48.022] [INFO] [video.go:177] [global] 新建/已有条目: "杀木池[电影解说]" -> global_id=131 (type_id=20)
+[2026-06-26 21:52:48.024] [INFO] [chart.go:439] [CleanHTML] 输入: len=326, content=亨利·卡维尔,杰克·吉伦哈尔,艾莎·冈萨雷斯,卡洛斯·巴登,迈克尔·武,费舍�...
+[2026-06-26 21:52:48.024] [INFO] [chart.go:439] [CleanHTML] 输出: len=326, content=亨利·卡维尔,杰克·吉伦哈尔,艾莎·冈萨雷斯,卡洛斯·巴登,迈克尔·武,费舍�...
+[2026-06-26 21:52:48.026] [INFO] [chart.go:441] [CleanHTML] 输入: len=11, content=盖·里奇
+[2026-06-26 21:52:48.026] [INFO] [chart.go:441] [CleanHTML] 输出: len=11, content=盖·里奇
+[2026-06-26 21:52:48.029] [INFO] [chart.go:378] [DoubanChart] 源站采集入库成功: 杀木池 -> rycjapi/79227
+[2026-06-26 21:52:48.030] [INFO] [video.go:177] [global] 精确匹配命中但类型不匹配: "金谍行动" (现有type_id=0, 新type_id=13), 跳过
+[2026-06-26 21:52:48.030] [INFO] [video.go:177] [global] 归一化匹配命中但类型不匹配: "金谍行动" (现有type_id=0, 新type_id=13), 跳过
+[2026-06-26 21:52:48.031] [INFO] [chart.go:441] [CleanHTML] 输入: len=14, content=库里·巴克
+[2026-06-26 21:52:48.031] [INFO] [chart.go:441] [CleanHTML] 输出: len=14, content=库里·巴克
+[2026-06-26 21:52:48.033] [INFO] [video.go:177] [global] 新建/已有条目: "金谍行动" -> global_id=132 (type_id=13)
+[2026-06-26 21:52:48.080] [INFO] [chart.go:378] [DoubanChart] 源站采集入库成功: 金谍行动 -> rycjapi/80004
+[2026-06-26 21:52:48.093] [INFO] [video.go:177] [global] 新建/已有条目: "痴迷2026[电影解说]" -> global_id=133 (type_id=20)
+[2026-06-26 21:52:48.099] [INFO] [chart.go:378] [DoubanChart] 源站采集入库成功: 痴迷 -> rycjapi/80118
+[2026-06-26 21:52:48.099] [INFO] [asm_amd64.s:1771] [DoubanChart] 源站匹配完成: 成功 10/10
+[2026-06-26 21:52:56.149] [INFO] [fetcher.go:131] [FETCH] 原始响应 - URL: https://cj.rycjapi.com/api.php/provide/vod?ac=detail&ids=80118, Code: 1, Total: 1, ListSize: 1
+[2026-06-26 21:52:56.149] [INFO] [fetcher.go:131] [FETCH] 视频[0]原始数据 - vod_id: 80118, vod_name: 痴迷2026[电影解说], vod_actor: 迈克尔·约翰斯顿,印达·纳瓦雷特,库珀·汤姆林森,梅根·劳利斯,安迪·里克特,黑莉·菲茨杰拉德,达林·图恩德,克洛伊·布林,安东尼·帕沃内,贾斯蒂斯,马尔科姆·凯尔纳,安东尼·卡萨比安卡,特拉维斯·贝克,凯尔·布卢门撒尔,马修·杰克逊, vod_director: 库里·巴克, vod_content: 为了赢得心上人的芳心，一个痴情的浪漫主义者折断了神秘的“许愿柳”，�..., vod_pic: https://ps.ryzypics.com/upload/vod/20260623-1/411c0c283d93574ff8d22ef519388b9f.webp
+[2026-06-26 21:53:13.974] [INFO] [fetcher.go:131] [FETCH] 原始响应 - URL: https://api.maoyanapi.top/api.php/provide/vod?ac=detail&ids=156859, Code: 1, Total: 1, ListSize: 1
+[2026-06-26 21:53:13.974] [INFO] [fetcher.go:131] [FETCH] 视频[0]原始数据 - vod_id: 156859, vod_name: 大濛, vod_actor: 方郁婷,柯炜林,汤毓绮,曾敬骅,陈以文,蔡昌宪,陈竹升,詹馥瑄,胡智强,陈俊成,刘冠廷,林美秀,谢章颖,林志儒,陈季霞,王传一,林雨宣,朱德刚,黄丞邦,廖邱堃,百白,许莉廷,江澄瑄,姜予,卢尉宁,纪亮竹,王明台,李雪,林道禹,王靖惇,李国强,林泽凯,萧东意,宋芸桦,潘丽丽,周家宽, vod_director: 陈玉勋, vod_content: 大濛, vod_pic: http://www.maoyanimg.top/upload/vod/20260528-1/2957c4d68b3d01845a9b029339589f9d.webp
+[2026-06-26 21:53:13.975] [INFO] [video.go:177] [global] 精确匹配命中但类型不匹配: "大濛" (现有type_id=0, 新type_id=18), 跳过
+[2026-06-26 21:53:13.975] [INFO] [video.go:177] [global] 归一化匹配命中但类型不匹配: "大濛" (现有type_id=0, 新type_id=18), 跳过
+[2026-06-26 21:53:13.975] [INFO] [video.go:177] [global] 模糊+元数据匹配(100%): "大濛" -> global_id=128 ("大濛", type_id=18)
+[2026-06-26 21:53:14.403] [INFO] [asm_amd64.s:1771] [Douban] Scheduler tick triggered
+[2026-06-26 21:53:14.403] [INFO] [scheduler.go:42] [Douban] Starting batch update, batch size: 3
+[2026-06-26 21:53:14.403] [INFO] [scheduler.go:42] [Douban] Found 3 records missing subject_id
+[2026-06-26 21:53:14.403] [INFO] [scheduler.go:42] [Douban] [1/3] Filling subject_id for: 凡人修仙传
+[2026-06-26 21:53:14.403] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传 year=2025 type=国产剧 director=杨阳
+[2026-06-26 21:53:14.403] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传 (meta: year=2025 type=国产剧 director=杨阳)
+[2026-06-26 21:53:24.179] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0
+[2026-06-26 21:53:24.661] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 10.26s
+[2026-06-26 21:53:24.661] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传' (HTML len=29921)
+[2026-06-26 21:53:24.665] [INFO] [crawler.go:648] [Douban] Search cooldown activated for '凡人修仙传' (failures=27, until=2026-06-27 21:53:24)
+[2026-06-26 21:53:24.665] [WARN] [scheduler.go:42] [Douban] [1/3] FAILED to fill subject_id for '凡人修仙传': no candidates parsed for keyword: 凡人修仙传
+[2026-06-26 21:53:24.665] [INFO] [scheduler.go:42] [Douban] [2/3] Filling subject_id for: 凡人修仙传1风起天南篇
+[2026-06-26 21:53:24.665] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=凡人修仙传1风起天南篇 year=2020 type=国产动漫 director=伍镇焯,王裕仁
+[2026-06-26 21:53:24.665] [INFO] [updater.go:147] [Douban] Searching for keyword: 凡人修仙传1风起天南篇 (meta: year=2020 type=国产动漫 director=伍镇焯,王裕仁)
+[2026-06-26 21:53:34.799] [ERROR] [value.go:586] UnhandledRejection :: 未处理的 Promise 异常 — Window.On is not a function     Detail: TypeError: Window.On is not a function     at http://wails.localhost:9245/src/views/Settings.vue:681:14
+[2026-06-26 21:53:38.988] [INFO] [app.go:3173] [Updater] 当前已是最新版本: 1.1.0
+[2026-06-26 21:53:38.990] [INFO] [value.go:586] 检查更新 — 当前已是最新版本 1.1.0
+[2026-06-26 21:54:03.381] [INFO] [crawler.go:583] [Douban] Fetching URL: https://search.douban.com/movie/subject_search?cat=1002&search_text=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A01%E9%A3%8E%E8%B5%B7%E5%A4%A9%E5%8D%97%E7%AF%87
+[2026-06-26 21:54:03.918] [INFO] [crawler.go:583] [Douban] HTTP status: 200, duration: 39.25s
+[2026-06-26 21:54:03.918] [WARN] [updater.go:147] [Douban] No candidates parsed for '凡人修仙传1风起天南篇' (HTML len=20339)
+[2026-06-26 21:54:03.922] [WARN] [scheduler.go:42] [Douban] [2/3] FAILED to fill subject_id for '凡人修仙传1风起天南篇': no candidates parsed for keyword: 凡人修仙传1风起天南篇
+[2026-06-26 21:54:03.922] [INFO] [scheduler.go:42] [Douban] [3/3] Filling subject_id for: 权力的游戏第二季
+[2026-06-26 21:54:03.922] [INFO] [updater.go:99] [Douban] fillSubjectID meta: name=权力的游戏第二季 year=2012 type=欧美剧 director=阿兰·泰勒,埃里克·萨哈罗夫,大卫·彼特拉克,大卫·努特尔,尼尔·马歇尔
+[2026-06-26 21:54:03.923] [INFO] [updater.go:147] [Douban] Searching for keyword: 权力的游戏第二季 (meta: year=2012 type=欧美剧 director=阿兰·泰勒,埃里克·萨哈罗夫,大卫·彼特拉克,大卫·努特尔,尼尔·马歇尔)
+[2026-06-26 21:54:24.941] [INFO] [app.go:3282] [Douban] Stopping scheduler (graceful)...
+[2026-06-26 21:54:24.941] [INFO] [scheduler.go:62] [Douban] Updater graceful stop requested

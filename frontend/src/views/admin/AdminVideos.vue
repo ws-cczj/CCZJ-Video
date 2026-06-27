@@ -126,7 +126,7 @@ async function deleteVideo(v: any): Promise<void> {
 
 async function openDetail(v: any): Promise<void> {
   try {
-    detailRaw.value = await GetVideoDetail({ source_key: v.source_key, vod_id: v.vod_id })
+    detailRaw.value = await GetVideoDetail({ source_key: v.source_key, vod_id: v.vod_id, refresh: false })
   } catch { detailRaw.value = null }
   detailItem.value = v
   detailOpen.value = true
@@ -171,8 +171,8 @@ onMounted(async () => {
           <tbody>
             <tr v-for="v in videoList" :key="`${v.source_key}-${v.vod_id}`">
               <td><input type="checkbox" :checked="selectedVideos.has(`${v.source_key}:${v.vod_id}`)" @change="toggleSelect(v)" /></td>
-              <td class="a-tb-mono">{{ v.source_key }}</td>
-              <td class="a-tb-name" :title="v.vod_name">{{ v.vod_name }}</td>
+              <td class="a-tb-mono cczj-truncate">{{ v.source_key }}</td>
+              <td class="a-tb-name cczj-truncate" :title="v.vod_name">{{ v.vod_name }}</td>
               <td>{{ v.type_name }}</td>
               <td>{{ v.vod_year }}</td>
               <td>{{ v.vod_area }}</td>
@@ -210,7 +210,7 @@ onMounted(async () => {
         <div class="a-detail-row"><strong>评分：</strong>{{ detailItem.vod_score }}</div>
         <div class="a-detail-row"><strong>点击：</strong>{{ detailItem.vod_hits }}</div>
         <div class="a-detail-row"><strong>更新：</strong>{{ detailItem.vod_time }}</div>
-        <div v-if="detailItem.vod_pic" class="a-detail-row"><strong>封面：</strong><img :src="detailItem.vod_pic" class="a-detail-pic" /></div>
+        <div v-if="detailItem.vod_pic" class="a-detail-row"><strong>封面：</strong><img :src="detailItem.vod_pic" class="a-detail-pic" referrerpolicy="no-referrer" /></div>
         <div v-if="detailRaw" class="a-detail-row"><strong>完整数据：</strong><pre class="a-detail-json">{{ JSON.stringify(detailRaw, null, 2) }}</pre></div>
       </div>
       <template #footer><Button variant="secondary" @click="detailOpen = false">关闭</Button></template>

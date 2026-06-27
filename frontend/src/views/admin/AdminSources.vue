@@ -132,9 +132,9 @@ onMounted(() => loadSourcesAndStats())
         <tbody>
           <tr v-for="s in filteredSources" :key="s.source_key">
             <td class="a-tb-num">{{ s.id }}</td>
-            <td class="a-tb-name">{{ s.name }}</td>
-            <td class="a-tb-mono">{{ s.source_key }}</td>
-            <td class="a-tb-mono" :title="s.api_url">{{ s.api_url?.substring(0, 45) }}{{ s.api_url?.length > 45 ? '...' : '' }}</td>
+            <td class="a-tb-name cczj-truncate">{{ s.name }}</td>
+            <td class="a-tb-mono cczj-truncate">{{ s.source_key }}</td>
+            <td class="a-tb-mono cczj-truncate" :title="s.api_url">{{ s.api_url?.substring(0, 45) }}{{ s.api_url?.length > 45 ? '...' : '' }}</td>
             <td><Badge :variant="s.enabled ? 'success' : 'default'">{{ s.enabled ? '启用' : '禁用' }}</Badge></td>
             <td class="a-tb-acts">
               <Button v-if="collectStatusMap[s.source_key]?.running" variant="danger" size="sm" @click="stopCollect(s.source_key)">停止</Button>

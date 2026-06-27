@@ -207,8 +207,8 @@ onMounted(async () => {
         </thead>
         <tbody>
           <tr v-for="item in collect.schedulerStatus.source_schedules" :key="item.source_key">
-            <td class="a-tb-name">{{ item.name || item.source_key }}</td>
-            <td class="a-tb-mono">{{ item.source_key }}</td>
+            <td class="a-tb-name cczj-truncate">{{ item.name || item.source_key }}</td>
+            <td class="a-tb-mono cczj-truncate">{{ item.source_key }}</td>
             <td><Badge :variant="item.enabled ? 'success' : 'default'">{{ item.enabled ? '是' : '否' }}</Badge></td>
             <td>{{ item.mode || '-' }}</td>
             <td class="a-tb-num">{{ item.interval_min || '-' }}</td>

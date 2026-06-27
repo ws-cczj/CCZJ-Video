@@ -161,7 +161,7 @@ async function deleteSelected(): Promise<void> {
     const toDelete = filteredHistory.value.filter(h => selectedKeys.value.has(keyOf(h)))
     for (const h of toDelete) {
       try {
-        await DeleteHistoryByVideo({ source_key: h.source_key, vod_id: String(h.vod_id) })
+        await DeleteHistoryByVideo({ source_key: h.source_key, vod_id: String(h.vod_id), global_id: h.global_id || 0 })
       } catch (e) {
         console.error('删除失败:', e)
       }
@@ -262,21 +262,21 @@ function goDetail(h: HistoryItem): void {
 </script>
 
 <template>
-  <div class="history-page">
-    <div class="page-header">
-      <div class="page-header-left">
-        <h2><Icon name="clock" :size="20" /> 观看历史</h2>
-        <p class="desc" v-if="dedupedHistory.length > 0 && !manageMode">
+  <div class="history-page cczj-max-w-full cczj-text-primary">
+    <div class="page-header cczj-flex cczj-items-start cczj-justify-between cczj-gap-8 cczj-mb-12 cczj-pb-8 cczj-border-bottom">
+      <div class="page-header-left cczj-min-w-0 cczj-flex-1">
+        <h2 class="cczj-inline-flex cczj-items-center cczj-gap-5 cczj-text-primary cczj-font-bold cczj-mb-2"><Icon name="clock" :size="20" /> 观看历史</h2>
+        <p class="desc cczj-text-muted cczj-mt-1" v-if="dedupedHistory.length > 0 && !manageMode">
           最近观看了 {{ dedupedHistory.length }} 个视频{{ searchKeyword ? `（搜索结果 ${filteredHistory.length} 个）` : '' }}
         </p>
-        <p class="desc" v-else-if="manageMode">已选 {{ selectedKeys.size }} 条</p>
-        <p class="desc" v-else>还没有观看记录，去首页看看有什么精彩内容</p>
+        <p class="desc cczj-text-muted cczj-mt-1" v-else-if="manageMode">已选 {{ selectedKeys.size }} 条</p>
+        <p class="desc cczj-text-muted cczj-mt-1" v-else>还没有观看记录，去首页看看有什么精彩内容</p>
       </div>
-      <div class="page-header-actions">
+      <div class="page-header-actions cczj-flex cczj-items-center cczj-gap-2 cczj-flex-shrink-0">
         <template v-if="!manageMode">
-          <div class="search-box">
-            <Icon name="search" :size="14" />
-            <input v-model="searchKeyword" type="text" placeholder="搜索视频名称或来源..." />
+          <div class="search-box cczj-inline-flex cczj-items-center cczj-gap-4 cczj-px-3 cczj-py-2 cczj-rounded cczj-border cczj-bg-card">
+            <Icon name="search" :size="14" class="cczj-text-muted" />
+            <input v-model="searchKeyword" type="text" placeholder="搜索视频名称或来源..." class="cczj-bg-transparent cczj-outline-none cczj-flex-1 cczj-text-primary" />
           </div>
           <Button v-if="dedupedHistory.length > 0" variant="ghost" size="sm" @click="enterManageMode">
             <Icon name="settings" :size="14" />
@@ -305,7 +305,7 @@ function goDetail(h: HistoryItem): void {
     </div>
 
     <!-- 加载状态 -->
-    <div v-if="loading" class="loading-wrap">
+    <div v-if="loading" class="loading-wrap cczj-flex cczj-justify-center cczj-items-center cczj-py-12">
       <LoadingSpinner label="加载历史记录中..." />
     </div>
 
@@ -321,22 +321,22 @@ function goDetail(h: HistoryItem): void {
     </div>
 
     <!-- 历史列表（按日期分组） -->
-    <div v-else class="history-list">
-      <div v-for="group in groupedByDate" :key="group.label" class="history-group">
-        <div class="group-header">
-          <span class="group-label">{{ group.label }}</span>
-          <span class="group-count">{{ group.items.length }} 条记录</span>
+    <div v-else class="history-list cczj-flex cczj-flex-col cczj-gap-12">
+      <div v-for="group in groupedByDate" :key="group.label" class="history-group cczj-flex cczj-flex-col cczj-gap-5">
+        <div class="group-header cczj-flex cczj-items-center cczj-justify-between cczj-gap-6 cczj-mb-3 cczj-px-2">
+          <span class="group-label cczj-text-lg cczj-font-semibold cczj-text-primary">{{ group.label }}</span>
+          <span class="group-count cczj-text-sm cczj-text-muted">{{ group.items.length }} 条记录</span>
         </div>
 
-        <div class="history-cards">
+        <div class="history-cards cczj-grid cczj-gap-7">
           <div
             v-for="h in group.items"
             :key="keyOf(h)"
-            class="history-card"
+            class="history-card cczj-relative cczj-flex cczj-gap-7 cczj-p-6 cczj-rounded cczj-border cczj-bg-card cczj-transition cczj-cursor-pointer"
             :class="{ 'is-selected': manageMode && isSelected(h) }"
             @click="goDetail(h)"
           >
-            <label v-if="manageMode" class="card-checkbox" @click.stop>
+            <label v-if="manageMode" class="card-checkbox cczj-absolute cczj-top-2 cczj-left-2 cczj-z-10" @click.stop>
               <input
                 type="checkbox"
                 :checked="isSelected(h)"
@@ -345,32 +345,33 @@ function goDetail(h: HistoryItem): void {
               />
               <span class="check-mark" />
             </label>
-            <div class="poster">
+            <div class="poster cczj-relative cczj-overflow-hidden cczj-flex-shrink-0 cczj-bg-secondary cczj-border">
               <img
                 v-if="resolvePic(h)"
                 :src="resolvePic(h)"
                 :alt="resolveName(h)"
                 loading="lazy"
+                class="cczj-w-full cczj-h-full cczj-object-cover"
               />
-              <div v-else-if="isPicLoading(h)" class="poster-loading">
+              <div v-else-if="isPicLoading(h)" class="poster-loading cczj-absolute cczj-inset-0 cczj-flex cczj-items-center cczj-justify-center cczj-bg-secondary cczj-w-full cczj-h-full">
                 <LoadingSpinner size="sm" />
               </div>
-              <div v-else class="poster-placeholder">
+              <div v-else class="poster-placeholder cczj-absolute cczj-inset-0 cczj-flex cczj-items-center cczj-justify-center cczj-bg-secondary cczj-text-muted cczj-w-full cczj-h-full">
                 <Icon name="film" :size="24" />
               </div>
-              <div class="play-overlay">
-                <Icon name="play" :size="16" />
+              <div class="play-overlay cczj-absolute cczj-inset-0 cczj-flex cczj-items-center cczj-justify-center cczj-opacity-0 cczj-text-white">
+                <Icon name="play" :size="16" class="cczj-text-white" />
               </div>
             </div>
 
-            <div class="info">
-              <span class="title">{{ resolveName(h) }}</span>
-              <div class="meta-row">
+            <div class="info cczj-flex-1 cczj-flex cczj-flex-col cczj-gap-4 cczj-min-w-0">
+              <span class="title cczj-text-base cczj-font-semibold cczj-line-clamp-2 cczj-text-primary">{{ resolveName(h) }}</span>
+              <div class="meta-row cczj-flex cczj-flex-wrap cczj-gap-3">
                 <Badge variant="primary">看到第 {{ h.ep_num }} 集</Badge>
                 <Badge v-if="getWatchPct(h) > 0" variant="success">{{ getWatchPct(h) }}%</Badge>
                 <Badge>{{ h.source_key }}</Badge>
               </div>
-              <div class="time-row">
+              <div class="time-row cczj-inline-flex cczj-items-center cczj-gap-2 cczj-text-xs cczj-text-muted cczj-mt-auto cczj-pt-2">
                 <Icon name="clock" :size="11" />
                 <span>{{ formatRelativeTime(h.updated_at) }}</span>
               </div>
@@ -384,8 +385,6 @@ function goDetail(h: HistoryItem): void {
 
 <style scoped>
 .history-page {
-  max-width: 100%;
-  color: var(--text-primary);
   animation: fadeInUp 0.4s ease;
 }
 
@@ -394,51 +393,10 @@ function goDetail(h: HistoryItem): void {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* 页面头部 */
-.page-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 24px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--border);
-}
-.page-header-left {
-  min-width: 0;
-  flex: 1;
-}
-.page-header h2 {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 22px;
-  font-weight: 700;
-  margin: 0 0 4px;
-  color: var(--text-primary);
-}
-.page-header .desc {
-  font-size: 13px;
-  color: var(--text-muted);
-  margin: 0;
-}
-.page-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
 /* 搜索框 */
 .search-box {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
   padding: 8px 14px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
   border-radius: 20px;
-  color: var(--text-muted);
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 .search-box:focus-within {
@@ -447,9 +405,6 @@ function goDetail(h: HistoryItem): void {
 }
 .search-box input {
   border: none;
-  outline: none;
-  background: transparent;
-  color: var(--text-primary);
   font-size: 13px;
   font-family: inherit;
   width: 180px;
@@ -459,54 +414,25 @@ function goDetail(h: HistoryItem): void {
   opacity: 0.8;
 }
 
-.loading-wrap { padding: 40px 0; }
-
 /* 历史分组 */
-.history-list {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-.history-group {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.group-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 0 4px;
-}
 .group-header .group-label {
   font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
 }
 .group-header .group-count {
   font-size: 12px;
-  color: var(--text-muted);
 }
 
 /* 卡片网格 */
 .history-cards {
-  display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 14px;
+  min-width: 0;
+}
+
+.history-card {
+  min-width: 0;
 }
 
 /* 单张卡片 */
-.history-card {
-  display: flex;
-  gap: 14px;
-  padding: 14px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  position: relative;
-}
 .history-card:hover {
   border-color: var(--accent);
   transform: translateY(-2px);
@@ -520,7 +446,6 @@ function goDetail(h: HistoryItem): void {
 .history-card:hover .play-overlay { opacity: 1; }
 
 .card-checkbox {
-  position: absolute;
   top: 10px;
   right: 10px;
   z-index: 2;
@@ -539,9 +464,6 @@ function goDetail(h: HistoryItem): void {
   pointer-events: none;
 }
 .check-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   width: 22px;
   height: 22px;
   border-radius: 6px;
@@ -572,78 +494,22 @@ function goDetail(h: HistoryItem): void {
 
 /* 封面 */
 .poster {
-  position: relative;
   width: 90px;
   height: 130px;
-  flex-shrink: 0;
   border-radius: 8px;
-  overflow: hidden;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
   transition: border-color 0.2s ease;
 }
 .history-card:hover .poster { border-color: var(--accent); }
-.poster img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.poster-placeholder, .poster-loading {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted);
-  opacity: 0.5;
-}
+
 .play-overlay {
-  position: absolute;
-  inset: 0;
   background: linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 55%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  opacity: 0;
   transition: opacity 0.2s ease;
 }
 
 /* 信息区 */
-.info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
 .info .title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-primary);
   line-height: 1.4;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
   transition: color 0.15s ease;
 }
 .history-card:hover .info .title { color: var(--accent); }
-
-.meta-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.time-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-top: auto;
-  padding-top: 4px;
-}
 </style>

@@ -948,6 +948,14 @@ export class VideoDetailReq {
              */
             this["vod_id"] = "";
         }
+        if (!("refresh" in $$source)) {
+            /**
+             * 为 true 时先从源站拉取最新数据再返回
+             * @member
+             * @type {boolean}
+             */
+            this["refresh"] = false;
+        }
 
         Object.assign(this, $$source);
     }
