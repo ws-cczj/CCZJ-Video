@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, KeepAlive } from 'vue'
 import { useRouter } from 'vue-router'
-import { Events } from '@wailsio/runtime'
 import TitleBar from './components/TitleBar.vue'
 import Sidebar from './components/Sidebar.vue'
 import SplashScreen from './components/SplashScreen.vue'
@@ -13,7 +12,8 @@ import { useCollectStore } from './stores/collect'
 import { useErrorStore } from './stores/error'
 import { useThemeStore } from './stores/theme'
 import { useDownloadStore } from './stores/download'
-import { GetSetting, GetPendingUpdateInfo } from '../bindings/cczjVideo/app'
+import { GetSetting } from '../bindings/cczjVideo/app'
+import UpdateModal from './components/UpdateModal.vue'
 
 
 // 仅缓存"列表型"页面（Home/Search/Sources/...这些展示视频/源/下载/历史/收藏/设置的页面）。
@@ -111,21 +111,7 @@ onMounted(async () => {
   window.addEventListener('error', winErrorHandler)
   window.addEventListener('unhandledrejection', rejectHandler)
 
-  // 监听自动检查更新事件（Go 后端启动时检查到新版本）
-  Events.On('update:available', (data: any) => {
-    // 自动跳转到设置页面的关于 tab，让用户看到更新弹窗
-    router.push('/settings#about')
-  })
 
-  // 兜底：轮询检查是否有待处理更新（防止事件在前端挂载前已触发）
-  setTimeout(async () => {
-    try {
-      const pending = await GetPendingUpdateInfo()
-      if (pending && pending.has_update) {
-        router.push('/settings#about')
-      }
-    } catch { /* ignore */ }
-  }, 5000)
 })
 
 onUnmounted(() => {
@@ -173,6 +159,9 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
+
+    <!-- 全局更新弹窗 -->
+    <UpdateModal />
 
     <!-- 全局错误/消息弹窗栈（右侧从右滑入，向下堆叠） -->
     <ErrorToastStack />

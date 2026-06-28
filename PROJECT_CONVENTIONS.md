@@ -9,10 +9,9 @@
 ### 1.1 技术栈
 - **后端**: Go + Wails v3 + SQLite
 - **前端**: Vue 3 + TypeScript + Vite + Pinia + Vue Router
-- **国际化**: vue-i18n (Composition API 模式)
 - **图标**: @iconify/vue + Carbon 图标集
-- **动画**: @vueuse/motion
-- **CSS**: 自定义 cczj- 工具类系统
+- **CSS**: 自定义 cczj- 工具类系统 + UnoCSS
+- **画质增强**: Anime4K (WebGL2) + FSRCNNX (WebGL2)
 
 ### 1.2 目录结构
 ```
@@ -24,6 +23,7 @@ CCZJ Video/
 │   ├── douban/            # 豆瓣集成（爬虫、评论）
 │   ├── handler/           # 业务逻辑处理器
 │   ├── model/             # 数据模型
+│   ├── updater/           # 版本更新模块（GitHub Release 检测、下载、安装）
 │   └── util/              # 工具函数
 ├── frontend/
 │   ├── src/
@@ -36,8 +36,8 @@ CCZJ Video/
 │   │   │   └── *.vue      # 主页面
 │   │   ├── stores/        # Pinia 状态管理
 │   │   ├── event/         # 全局事件总线
-│   │   ├── locales/       # 国际化翻译文件
-│   │   ├── utils/         # 前端工具函数
+│   │   ├── locales/       # 国际化翻译文件（保留但暂未启用）
+│   │   ├── utils/         # 前端工具函数（含画质增强引擎）
 │   │   ├── styles/        # 全局样式 (cczj-utilities.css)
 │   │   └── router/        # 路由配置
 │   └── bindings/          # Wails 自动生成的 JS 绑定（勿手动修改）
@@ -116,6 +116,7 @@ CCZJ Video/
 - 伪元素样式 (::before, ::after)
 - 媒体查询 (@media)
 - 特殊的视觉设计（渐变、阴影组合）
+- 画质增强相关的 WebGL canvas 样式
 
 ❌ **不要写**:
 - 简单的 `display: flex`
@@ -156,7 +157,6 @@ CCZJ Video/
 </template>
 <style scoped>
 .card {
-  /* 只写特殊样式，如边框、阴影 */
   border: 1px solid var(--border);
   border-radius: 8px;
 }
@@ -165,79 +165,9 @@ CCZJ Video/
 
 ---
 
-## 3. 国际化规范 (vue-i18n)
+## 3. 图标规范 (@iconify/vue)
 
-### 3.1 核心原则
-**所有用户可见的文本都必须使用 `t()` 函数，禁止硬编码中文。**
-
-### 3.2 使用方式
-```typescript
-// Composition API
-import { useI18n } from 'vue-i18n'
-
-const { t } = useI18n()
-
-// 模板中使用
-<h1>{{ t('page.title') }}</h1>
-<p>{{ t('page.description', { count: 10 }) }}</p>
-
-// 脚本中使用
-const message = t('common.confirm')
-```
-
-### 3.3 翻译键命名规范
-- 使用点分隔: `namespace.key.subkey`
-- 小驼峰命名: `continueWatching` (非 `continue_watching`)
-- 通用文本放 `common.*`
-- 页面特定文本放 `pageName.*`
-
-### 3.4 翻译文件结构
-```typescript
-// locales/zh-CN.ts
-export default {
-  common: {
-    ok: '确定',
-    cancel: '取消',
-    loading: '加载中...',
-  },
-  home: {
-    title: '首页',
-    continueWatching: '继续观看',
-    noData: '暂无数据',
-  },
-  search: {
-    placeholder: '搜索视频...',
-    results: '找到 {count} 个结果',
-  },
-  // ...
-}
-```
-
-### 3.5 带参数的翻译
-```typescript
-// 翻译文件
-results: '找到 {count} 个结果'
-
-// 使用
-t('search.results', { count: 10 })  // → "找到 10 个结果"
-```
-
-### 3.6 语言切换
-```typescript
-import { setLocale } from '@/locales'
-
-// 切换到英文
-await setLocale('en')
-
-// 切换到中文
-await setLocale('zh-CN')
-```
-
----
-
-## 4. 图标规范 (@iconify/vue)
-
-### 4.1 使用方式
+### 3.1 使用方式
 ```vue
 <script setup>
 import Icon from '@/components/Icon.vue'
@@ -249,7 +179,7 @@ import Icon from '@/components/Icon.vue'
 </template>
 ```
 
-### 4.2 可用图标名
+### 3.2 可用图标名
 使用 Carbon 图标集，完整列表: https://icon-sets.iconify.design/carbon/
 
 常用图标:
@@ -259,7 +189,7 @@ import Icon from '@/components/Icon.vue'
 - `arrow-left`, `arrow-right`, `chevron-up`
 - `plus`, `minus`, `trash`, `edit`
 
-### 4.3 自定义图标
+### 3.3 自定义图标
 如需添加不在映射表中的图标，直接传入 Carbon 图标名:
 ```vue
 <Icon name="carbon:cloud-download" :size="20" />
@@ -267,51 +197,9 @@ import Icon from '@/components/Icon.vue'
 
 ---
 
-## 5. 动画规范 (@vueuse/motion)
+## 4. 事件系统规范
 
-### 5.1 路由切换动画
-已在 `App.vue` 中配置全局路由过渡:
-```vue
-<router-view v-slot="{ Component }">
-  <component :is="Component" v-motion :initial="{ opacity: 0 }" :enter="{ opacity: 1 }" />
-</router-view>
-```
-
-### 5.2 列表项动画
-```vue
-<div v-for="item in items" :key="item.id"
-     v-motion
-     :initial="{ y: 20, opacity: 0 }"
-     :enter="{ y: 0, opacity: 1 }"
-     :delay="index * 50">
-  {{ item.name }}
-</div>
-```
-
-### 5.3 模态框动画
-```vue
-<Modal v-model="show" v-motion
-       :initial="{ scale: 0.9, opacity: 0 }"
-       :enter="{ scale: 1, opacity: 1 }"
-       :leave="{ scale: 0.9, opacity: 0 }">
-  内容
-</Modal>
-```
-
-### 5.4 悬停动画
-```vue
-<div v-motion
-     :whileHover="{ scale: 1.05 }"
-     :whileTap="{ scale: 0.95 }">
-  点击我
-</div>
-```
-
----
-
-## 6. 事件系统规范
-
-### 6.1 全局事件总线
+### 4.1 全局事件总线
 使用 `window.app_event` 进行跨组件通信:
 
 ```typescript
@@ -327,31 +215,35 @@ appEvent.emit('player:play')
 appEvent.off('player:timeupdate', handler)
 ```
 
-### 6.2 Wails 事件 (后端 → 前端)
+### 4.2 Wails 事件 (后端 → 前端)
 ```typescript
 import { Events } from '@wailsio/runtime'
 
 // 监听后端事件
 Events.On('download:progress', (event) => {
   const { progress, speed } = event.data
-  // 更新 UI
 })
+
+// 更新相关事件
+Events.On('update:available', (event) => {})
+Events.On('update:download:progress', (event) => {})
+Events.On('update:version:changed', (event) => {})
 ```
 
-### 6.3 事件命名规范
-- 格式: `模块:动作` (如 `player:play`, `download:complete`)
+### 4.3 事件命名规范
+- 格式: `模块:动作` (如 `player:play`, `download:complete`, `update:available`)
 - 小写 + 冒号分隔
 - 动词使用现在时
 
 ---
 
-## 7. 状态管理规范 (Pinia)
+## 5. 状态管理规范 (Pinia)
 
-### 7.1 Store 命名
-- 文件名: `video.ts`, `user.ts`
-- Store 名: `useVideoStore`, `useUserStore`
+### 5.1 Store 命名
+- 文件名: `video.ts`, `download.ts`, `updateState.ts`
+- Store 名: `useVideoStore`, `useDownloadStore`, `useUpdateStateStore`
 
-### 7.2 使用方式
+### 5.2 使用方式
 ```typescript
 import { useVideoStore } from '@/stores/video'
 
@@ -365,11 +257,10 @@ await videoStore.loadVideos()
 
 // 监听变化
 watch(() => videoStore.currentVideo, (video) => {
-  // 处理变化
 })
 ```
 
-### 7.3 不要在组件外使用 Store
+### 5.3 不要在组件外使用 Store
 ```typescript
 // ❌ 错误
 const store = useVideoStore()
@@ -386,19 +277,38 @@ export function myFunction() {
 
 ---
 
-## 8. Go 后端规范
+## 6. Go 后端规范
 
-### 8.1 Wails 绑定
+### 6.1 Wails 绑定
 - 所有暴露给前端的方法都定义在 `app.go` 的 `App` 结构体上
 - 方法签名必须使用可 JSON 序列化的类型
 - 运行 `wails dev` 会自动生成 `frontend/bindings/` 下的 JS/TS 绑定
 
-### 8.2 数据库操作
+### 6.2 数据库操作
 - 所有数据库操作封装在 `app/db/` 包中
-- 使用 SQLite + go-sqlite3
+- 使用 SQLite + modernc.org/sqlite
 - 表名前缀: `v_` (视频表), `global_` (全局表)
 
-### 8.3 错误处理
+### 6.3 版本更新模块 (updater)
+- 更新检测逻辑封装在 `app/updater/updater.go`
+- 支持多渠道版本获取（GitHub API、GitHub Raw、jsdelivr CDN、Gitee）
+- 每个版本源最多重试 3 次
+- 版本信息缓存 5 分钟，减少网络请求
+- 下载超时时间 60 分钟
+- Windows ARM 平台自动跳过更新检查
+
+```go
+// 检查更新（reCheck: 是否强制刷新缓存）
+func CheckUpdate(reCheck bool) (*UpdateInfo, error)
+
+// 下载更新
+func DownloadUpdate(ctx context.Context, url string, savePath string) (string, error)
+
+// 安装更新
+func InstallUpdate(filePath string) error
+```
+
+### 6.4 错误处理
 ```go
 // 返回错误给前端
 func (a *App) GetVideo(id string) (*model.Video, error) {
@@ -410,7 +320,7 @@ func (a *App) GetVideo(id string) (*model.Video, error) {
 }
 ```
 
-### 8.4 日志
+### 6.5 日志
 ```go
 import "cczjVideo/app/applog"
 
@@ -420,20 +330,16 @@ applog.Error("数据库错误: %v", err)
 
 ---
 
-## 9. 组件开发规范
+## 7. 组件开发规范
 
-### 9.1 Vue 组件结构
+### 7.1 Vue 组件结构
 ```vue
 <script setup lang="ts">
 // 1. 导入
 import { ref, computed } from 'vue'
-import { useI18n } from 'vue-i18n'
 import Icon from '@/components/Icon.vue'
 
-// 2. 组合式函数
-const { t } = useI18n()
-
-// 3. Props & Emits
+// 2. Props & Emits
 const props = defineProps<{
   videoId: string
 }>()
@@ -442,14 +348,14 @@ const emit = defineEmits<{
   (e: 'update', value: string): void
 }>()
 
-// 4. 响应式状态
+// 3. 响应式状态
 const loading = ref(false)
 const data = ref<Video | null>(null)
 
-// 5. 计算属性
-const title = computed(() => data.value?.name || t('common.untitled'))
+// 4. 计算属性
+const title = computed(() => data.value?.name || '未命名')
 
-// 6. 方法
+// 5. 方法
 async function loadData() {
   loading.value = true
   try {
@@ -459,7 +365,7 @@ async function loadData() {
   }
 }
 
-// 7. 生命周期
+// 6. 生命周期
 onMounted(() => {
   loadData()
 })
@@ -467,7 +373,6 @@ onMounted(() => {
 
 <template>
   <div class="component cczj-flex cczj-flex-col cczj-gap-4">
-    <!-- 使用 cczj- 工具类 -->
     <h2 class="cczj-text-lg cczj-font-bold">{{ title }}</h2>
     <Icon name="play" :size="20" />
   </div>
@@ -475,12 +380,11 @@ onMounted(() => {
 
 <style scoped>
 .component {
-  /* 只写特殊样式 */
 }
 </style>
 ```
 
-### 9.2 UI 组件导出
+### 7.2 UI 组件导出
 所有基础 UI 组件从 `components/ui/index.ts` 统一导出:
 ```typescript
 import { Button, Modal, Input } from '@/components/ui'
@@ -488,25 +392,14 @@ import { Button, Modal, Input } from '@/components/ui'
 
 ---
 
-## 10. 性能优化规范
+## 8. 性能优化规范
 
-### 10.1 图片懒加载
+### 8.1 图片懒加载
 ```vue
 <img :src="video.poster" loading="lazy" />
 ```
 
-### 10.2 虚拟滚动
-对于长列表（>100项），使用虚拟滚动:
-```typescript
-import { useVirtual } from '@vueuse/core'
-
-const { list, containerProps, wrapperProps } = useVirtual(items, {
-  itemHeight: 80,
-  overscan: 5,
-})
-```
-
-### 10.3 防抖和节流
+### 8.2 防抖和节流
 ```typescript
 import { useDebounceFn, useThrottleFn } from '@vueuse/core'
 
@@ -521,7 +414,7 @@ const handleScroll = useThrottleFn(() => {
 }, 100)
 ```
 
-### 10.4 路由懒加载
+### 8.3 路由懒加载
 已在 `router/index.ts` 中配置，所有页面组件使用 `() => import()`:
 ```typescript
 {
@@ -530,11 +423,16 @@ const handleScroll = useThrottleFn(() => {
 }
 ```
 
+### 8.4 画质增强性能优化
+- Anime4K 使用 WebGL2 渲染，需检查 GPU 兼容性
+- FilmUpscaler 支持自动质量降级，根据帧率动态调整
+- 视频 seek 时重置缓存，避免画面撕裂
+
 ---
 
-## 11. Git 提交规范
+## 9. Git 提交规范
 
-### 11.1 提交信息格式
+### 9.1 提交信息格式
 ```
 <type>(<scope>): <subject>
 
@@ -543,7 +441,7 @@ const handleScroll = useThrottleFn(() => {
 <footer>
 ```
 
-### 11.2 Type 类型
+### 9.2 Type 类型
 - `feat`: 新功能
 - `fix`: 修复 bug
 - `refactor`: 重构
@@ -551,22 +449,22 @@ const handleScroll = useThrottleFn(() => {
 - `docs`: 文档更新
 - `chore`: 构建/工具变更
 
-### 11.3 示例
+### 9.3 示例
 ```
-feat(player): 添加豆瓣评论展示功能
+feat(player): 添加 Anime4K 画质增强功能
 
-- 新增 DoubanComments.vue 组件
-- 集成到 Player.vue 页面
-- 支持分页和排序切换
+- 新增 anime4kUpscaler.ts 超分辨率引擎
+- 支持 S/M/L 三档模型切换
+- 集成到 VideoPlayer.vue 播放器
 
 Closes #123
 ```
 
 ---
 
-## 12. 常见陷阱
+## 10. 常见陷阱
 
-### 12.1 不要在模板中调用复杂函数
+### 10.1 不要在模板中调用复杂函数
 ```vue
 <!-- ❌ 每次渲染都会执行 -->
 <div>{{ formatData(complexCalculation()) }}</div>
@@ -575,7 +473,7 @@ Closes #123
 <div>{{ formattedData }}</div>
 ```
 
-### 12.2 不要在 v-for 中使用 index 作为 key
+### 10.2 不要在 v-for 中使用 index 作为 key
 ```vue
 <!-- ❌ 列表顺序变化会导致错误 -->
 <div v-for="(item, index) in items" :key="index">
@@ -584,7 +482,7 @@ Closes #123
 <div v-for="item in items" :key="item.id">
 ```
 
-### 12.3 不要忘记清理监听器
+### 10.3 不要忘记清理监听器
 ```typescript
 // ❌ 内存泄漏
 onMounted(() => {
@@ -600,7 +498,7 @@ onUnmounted(() => {
 })
 ```
 
-### 12.4 Wails 绑定更新
+### 10.4 Wails 绑定更新
 修改 `app.go` 后必须重新运行:
 ```bash
 wails dev
@@ -609,17 +507,24 @@ wails build
 ```
 自动生成的文件在 `frontend/bindings/` 中，**不要手动修改**。
 
+### 10.5 WebGL 资源清理
+画质增强引擎使用 WebGL 资源，必须在组件销毁时调用 `destroy()` 方法:
+```typescript
+onUnmounted(() => {
+  upscaler?.destroy()
+})
+```
+
 ---
 
-## 13. 开发检查清单
+## 11. 开发检查清单
 
 ### 新功能开发
 - [ ] 使用 cczj- 工具类编写样式
-- [ ] 所有文本使用 i18n `t()` 函数
-- [ ] 添加必要的动画效果
 - [ ] 处理加载状态和错误状态
 - [ ] 考虑空数据情况
 - [ ] 响应式布局测试
+- [ ] 如果使用 WebGL，确保资源正确清理
 
 ### 提交前检查
 - [ ] `npm run build` 无错误
@@ -630,16 +535,16 @@ wails build
 
 ---
 
-## 14. 参考资源
+## 12. 参考资源
 
 - **Vue 3 文档**: https://vuejs.org/
-- **vue-i18n 文档**: https://vue-i18n.intlify.dev/
-- **@vueuse/motion 文档**: https://motion.vueuse.org/
+- **Pinia 文档**: https://pinia.vuejs.org/
 - **Carbon 图标集**: https://icon-sets.iconify.design/carbon/
 - **Wails v3 文档**: https://wails.io/docs/
-- **Pinia 文档**: https://pinia.vuejs.org/
+- **Anime4K**: https://github.com/bloc97/Anime4K
+- **FSRCNNX**: https://github.com/igv/FSRCNN-TensorFlow
 
 ---
 
-**最后更新**: 2026-01-25  
+**最后更新**: 2026-06-28  
 **维护者**: CCZJ Video 开发团队

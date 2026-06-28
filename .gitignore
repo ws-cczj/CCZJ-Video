@@ -1,3 +1,7 @@
 build/bin
 node_modules
 frontend/dist
+_update_swap.bat
+.installed_version
+*_update.exe
+*_update(2).exe

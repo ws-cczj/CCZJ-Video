@@ -3,6 +3,11 @@ version: '3'
 includes:
   common: ../Taskfile.yml
 
+vars:
+  # 从 version.json 自动提取版本号，注入到 Go 编译中
+  VERSION:
+    sh: powershell -NoProfile -Command "(Get-Content version.json | ConvertFrom-Json).version"
+
 tasks:
   build:
     summary: Build the application for Windows (release, stripped)
@@ -10,14 +15,14 @@ tasks:
       - task: common:go:mod:tidy
       - task: common:build:frontend
     cmds:
-      - go build -tags production -ldflags="-w -s -H windowsgui" -o ./bin/cczjVideo.exe
+      - go build -tags production -ldflags="-w -s -H windowsgui -X cczjVideo/app/updater.Version={{.VERSION}}" -o ./bin/cczjVideo.exe
 
   build:dev:
     summary: Build the application for Windows (development, with console + logs)
     deps:
       - task: common:go:mod:tidy
     cmds:
-      - go build -o ./bin/cczjVideo.exe
+      - go build -ldflags="-X cczjVideo/app/updater.Version={{.VERSION}}" -o ./bin/cczjVideo.exe
 
   build:prod:
     summary: Build the application for Windows (production)
@@ -25,7 +30,7 @@ tasks:
       - task: common:go:mod:tidy
       - task: common:build:frontend
     cmds:
-      - go build -tags production -ldflags="-w -s -H windowsgui" -o ./bin/cczjVideo.exe
+      - go build -tags production -ldflags="-w -s -H windowsgui -X cczjVideo/app/updater.Version={{.VERSION}}" -o ./bin/cczjVideo.exe
 
   run:
     summary: Runs the application

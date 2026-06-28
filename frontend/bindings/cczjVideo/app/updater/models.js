@@ -78,6 +78,14 @@ export class UpdateInfo {
              */
             this["published_at"] = "";
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * 从当前版本到最新版本之间的所有历史版本
+             * @member
+             * @type {VersionItem[] | undefined}
+             */
+            this["history"] = undefined;
+        }
 
         Object.assign(this, $$source);
     }
@@ -88,7 +96,53 @@ export class UpdateInfo {
      * @returns {UpdateInfo}
      */
     static createFrom($$source = {}) {
+        const $$createField9_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("history" in $$parsedSource) {
+            $$parsedSource["history"] = $$createField9_0($$parsedSource["history"]);
+        }
         return new UpdateInfo(/** @type {Partial<UpdateInfo>} */($$parsedSource));
     }
 }
+
+/**
+ * VersionItem 历史版本项
+ */
+export class VersionItem {
+    /**
+     * Creates a new VersionItem instance.
+     * @param {Partial<VersionItem>} [$$source = {}] - The source object to create the VersionItem.
+     */
+    constructor($$source = {}) {
+        if (!("version" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["version"] = "";
+        }
+        if (!("desc" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["desc"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new VersionItem instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {VersionItem}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new VersionItem(/** @type {Partial<VersionItem>} */($$parsedSource));
+    }
+}
+
+// Private type creation functions
+const $$createType0 = VersionItem.createFrom;
+const $$createType1 = $Create.Array($$createType0);

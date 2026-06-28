@@ -60,12 +60,11 @@ export function CancelDownload(taskId) {
 }
 
 /**
- * CheckUpdate 检查是否有新版本
- * @param {boolean} reCheck - 是否强制刷新缓存
+ * CheckUpdate 检查是否有新版本（每次调用都获取最新信息，无缓存）
  * @returns {$CancellablePromise<updater$0.UpdateInfo | null>}
  */
-export function CheckUpdate(reCheck) {
-    return $Call.ByID(586574094, reCheck).then(/** @type {($result: any) => any} */(($result) => {
+export function CheckUpdate() {
+    return $Call.ByID(586574094).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType1($result);
     }));
 }
@@ -249,6 +248,15 @@ export function ExportSource(sourceKey) {
 }
 
 /**
+ * FileExists 检查文件是否存在（用于前端检查已下载的更新包）
+ * @param {string} path
+ * @returns {$CancellablePromise<boolean>}
+ */
+export function FileExists(path) {
+    return $Call.ByID(2577714203, path);
+}
+
+/**
  * FindSourcesByGlobalId 通过 global_id 查找所有拥有该视频的源
  * @param {number} globalId
  * @returns {$CancellablePromise<db$0.SourceVideoRef[]>}
@@ -382,6 +390,15 @@ export function GetGlobalTypes() {
  */
 export function GetIgnoredVersion() {
     return $Call.ByID(3412429181);
+}
+
+/**
+ * GetLastStartVersion 返回上次启动时的版本号（参考 lx-music-desktop 的 getLastStartInfo）
+ * 用于检测版本升级，决定是否展示 changelog
+ * @returns {$CancellablePromise<string>}
+ */
+export function GetLastStartVersion() {
+    return $Call.ByID(2327652823);
 }
 
 /**
@@ -627,14 +644,6 @@ export function ListDownloads() {
 }
 
 /**
- * MarkUpdateChecked 标记今天已检查过更新
- * @returns {$CancellablePromise<void>}
- */
-export function MarkUpdateChecked() {
-    return $Call.ByID(803643066);
-}
-
-/**
  * @param {string} apiUrl
  * @param {string} sourceKey
  * @returns {$CancellablePromise<void>}
@@ -747,6 +756,14 @@ export function RunSourceAction(req) {
 }
 
 /**
+ * SaveLastStartVersion 保存当前版本号（启动时调用）
+ * @returns {$CancellablePromise<void>}
+ */
+export function SaveLastStartVersion() {
+    return $Call.ByID(200865936);
+}
+
+/**
  * @param {$models.HistoryReq} req
  * @returns {$CancellablePromise<void>}
  */
@@ -842,14 +859,6 @@ export function SetSourceSchedule(req) {
  */
 export function SetTitleBarTheme(theme) {
     return $Call.ByID(1752783553, theme);
-}
-
-/**
- * ShouldCheckUpdateToday 判断今天是否已经检查过更新（每天只检查一次）
- * @returns {$CancellablePromise<boolean>}
- */
-export function ShouldCheckUpdateToday() {
-    return $Call.ByID(3581516740);
 }
 
 /**

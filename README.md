@@ -2,7 +2,7 @@
 
 <p align="center">
   <strong>多源视频资源聚合桌面应用</strong><br>
-  基于 Wails v3 + Vue 3 + Go 构建的 Windows 桌面客户端
+  基于 Wails v3 + Vue 3 + Go 构建的跨平台桌面客户端
 </p>
 
 <p align="center">
@@ -25,11 +25,28 @@
 - **离线下载** — 多线程分片下载引擎，支持暂停/恢复/取消，下载进度实时展示
 - **收藏 & 历史** — 视频收藏同步、观看历史自动记录，支持断点续看
 
+### 画质增强
+
+- **Anime4K 动画增强** — 移植自 Anime4K v4.0，支持 S/M/L 三档模型的 WebGL2 CNN 实时 2× 超分辨率，为动画/动漫视频提供高质量画面增强
+- **FilmUpscaler 影视增强** — 基于 FSRCNNX 的全链路视频增强管线，包含去隔行、降噪、时间混合、HDR 色调映射、CAS 锐化
+- **智能画质模式** — 根据 GPU 性能自动调整增强质量，帧率过低时自动降级
+
 ### 自动化引擎
 
 - **采集调度器** — 后台定时自动采集，支持全量/增量模式、可配置循环间隔
 - **豆瓣数据补全** — 自动爬取豆瓣评分、封面、简介等信息，丰富视频元数据
 - **启动补采** — 应用启动时自动补采离线期间遗漏的数据
+
+### 智能推荐
+
+- **相似视频推荐** — 详情页展示同类型视频作为兜底推荐
+- **推荐页面** — 基于用户观看历史和偏好生成个性化推荐列表
+
+### 版本更新
+
+- **自动检查更新** — 每天首次启动自动检查 GitHub 版本更新
+- **多渠道版本获取** — 支持 GitHub API、GitHub Raw、jsdelivr CDN、Gitee 等多个版本信息源
+- **更新日志展示** — 版本升级后自动展示更新内容，支持历史版本查看
 
 ### 后台管理系统
 
@@ -61,20 +78,21 @@
 ## 🏗️ 技术架构
 
 ```
-┌─────────────────────────────────────────────┐
-│                  Wails v3                    │
-│  ┌───────────────┐    ┌──────────────────┐  │
-│  │   Frontend     │    │    Backend       │  │
-│  │   (WebView2)   │◄──►│    (Go)          │  │
-│  │               │    │                  │  │
-│  │  Vue 3 + TS   │    │  SQLite (modernc)│  │
-│  │  Pinia        │    │  Collect Engine  │  │
-│  │  Vue Router   │    │  Douban Crawler  │  │
-│  │  UnoCSS       │    │  Scheduler       │  │
-│  │  HLS.js       │    │  Download Engine │  │
-│  │  xgplayer     │    │  Image Proxy     │  │
-│  └───────────────┘    └──────────────────┘  │
-└─────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────┐
+│                  Wails v3                           │
+│  ┌───────────────┐    ┌────────────────────────┐  │
+│  │   Frontend     │    │    Backend            │  │
+│  │   (WebView2)   │◄──►│    (Go)               │  │
+│  │               │    │                        │  │
+│  │  Vue 3 + TS   │    │  SQLite (modernc)     │  │
+│  │  Pinia        │    │  Collect Engine       │  │
+│  │  Vue Router   │    │  Douban Crawler       │  │
+│  │  UnoCSS       │    │  Scheduler            │  │
+│  │  xgplayer     │    │  Download Engine      │  │
+│  │  Anime4K      │    │  Image Proxy          │  │
+│  │  FilmUpscaler │    │  Auto Updater         │  │
+│  └───────────────┘    └────────────────────────┘  │
+└─────────────────────────────────────────────────────┘
 ```
 
 ### 前端
@@ -83,10 +101,12 @@
 |------|------|
 | Vue 3 Composition API | UI 框架 |
 | TypeScript | 类型安全 |
-| Pinia | 状态管理（10 个 store） |
+| Pinia | 状态管理（11 个 store） |
 | Vue Router | Hash 路由 + 滚动位置恢复 |
 | UnoCSS (preset-wind) | 原子化 CSS |
 | xgplayer + hls.js | 视频播放（HLS 流） |
+| Anime4K WebGL2 | 动画画质增强 |
+| FSRCNNX WebGL2 | 影视画质增强 |
 | Vite | 构建工具 |
 
 ### 后端
@@ -113,22 +133,24 @@ CCZJ Video/
 │   ├── douban/                     # 豆瓣爬虫 + 调度器
 │   ├── handler/                    # 请求处理器（collect / scheduler / source / video）
 │   ├── model/                      # 数据模型
+│   ├── updater/                    # 版本更新模块（GitHub Release 检测、下载、安装）
 │   └── util/                       # 工具（压缩 / 加密 / ID 生成）
 ├── build/                          # 构建配置
 ├── frontend/
 │   ├── bindings/                   # Wails 自动生成的 JS 绑定
 │   ├── src/
 │   │   ├── App.vue                 # 根组件（布局 / KeepAlive / 全局事件）
-│   │   ├── components/             # 公共组件（22 个）
+│   │   ├── components/             # 公共组件（23 个）
 │   │   │   ├── TitleBar.vue        # 自定义标题栏
 │   │   │   ├── Sidebar.vue         # 侧边导航
 │   │   │   ├── VideoPlayer.vue     # HLS 播放器
 │   │   │   ├── Carousel.vue        # 轮播图
 │   │   │   ├── VideoCard.vue       # 视频卡片
 │   │   │   ├── Icon.vue            # SVG 图标系统
+│   │   │   ├── UpdateModal.vue     # 更新弹窗
 │   │   │   └── ui/                 # UI 基础组件（Button / Modal / Input / ...）
 │   │   ├── router/                 # Vue Router 配置
-│   │   ├── stores/                 # Pinia 状态管理（10 个 store）
+│   │   ├── stores/                 # Pinia 状态管理（11 个 store）
 │   │   └── views/                  # 页面视图
 │   │       ├── Home.vue            # 首页（推荐 + 轮播）
 │   │       ├── Search.vue          # 搜索
@@ -139,6 +161,8 @@ CCZJ Video/
 │   │       ├── Downloads.vue       # 下载列表
 │   │       ├── Favorites.vue       # 收藏
 │   │       ├── History.vue         # 历史
+│   │       ├── Recommendations.vue # 推荐
+│   │       ├── VideoTypes.vue      # 视频分类
 │   │       └── admin/              # 后台管理系统（12 个文件）
 │   │           ├── Admin.vue       # 父容器（侧边导航 + router-view）
 │   │           ├── AdminDashboard.vue
@@ -156,7 +180,10 @@ CCZJ Video/
 │   └── package.json
 ├── go.mod
 ├── Taskfile.yml
-└── wails.json
+├── wails.json
+├── CHANGELOG.md                    # 更新日志
+├── version.json                    # 版本信息（用于多渠道版本检测）
+└── PROJECT_CONVENTIONS.md          # 项目开发规范
 ```
 
 ---
@@ -230,6 +257,10 @@ npm run build
 2. 侧边栏「下载管理」查看进度
 3. 下载完成后点击「打开」定位文件
 
+### 启用画质增强
+
+在播放器页面点击画质增强按钮，选择 Anime4K（动画）或 Film（影视）模式。
+
 ---
 
 ## ⌨️ 开发指南
@@ -285,6 +316,18 @@ npm run build
 
 ---
 
+## 📄 更新日志
+
+详细更新历史请查看 [CHANGELOG.md](CHANGELOG.md)
+
+---
+
+## 📄 开发规范
+
+项目开发规范请查看 [PROJECT_CONVENTIONS.md](PROJECT_CONVENTIONS.md)
+
+---
+
 ## 📄 开源协议
 
 本项目仅供个人学习研究使用。
@@ -297,3 +340,5 @@ npm run build
 - [Vue.js](https://vuejs.org/) — 渐进式 JavaScript 框架
 - [xgplayer](https://github.com/bytedance/xgplayer) — 西瓜播放器
 - [hls.js](https://github.com/video-dev/hls.js) — HLS 流媒体播放
+- [Anime4K](https://github.com/bloc97/Anime4K) — 动画超分辨率算法
+- [FSRCNNX](https://github.com/igv/FSRCNN-TensorFlow) — 快速超分辨率卷积神经网络

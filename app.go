@@ -3165,13 +3165,12 @@ func (a *App) MigrateOldData(apiUrl, sourceKey string) error {
 
 // GetAppVersion 返回当前应用版本号
 func (a *App) GetAppVersion() string {
-	return updater.Version
+	return updater.EffectiveVersion()
 }
 
-// CheckUpdate 检查是否有新版本
-// reCheck: 是否强制刷新缓存（参考 lx-music-desktop 的 reCheck）
-func (a *App) CheckUpdate(reCheck bool) (*updater.UpdateInfo, error) {
-	return updater.CheckUpdate(reCheck)
+// CheckUpdate 检查是否有新版本（每次调用都获取最新信息，无缓存）
+func (a *App) CheckUpdate() (*updater.UpdateInfo, error) {
+	return updater.CheckUpdate()
 }
 
 // DownloadUpdate 下载更新包，通过事件向前端推送进度
@@ -3187,6 +3186,13 @@ func (a *App) DownloadUpdate(downloadURL string) (string, error) {
 
 // InstallUpdate 安装更新并退出当前程序
 func (a *App) InstallUpdate(filePath string) error {
+	// 记录即将安装的版本（必须在 ClearPendingUpdateInfo 之前）
+	a.pendingUpdateMu.Lock()
+	if a.pendingUpdateInfo != nil {
+		updater.RecordInstalledVersion(a.pendingUpdateInfo.LatestVer)
+		a.pendingUpdateInfo = nil // 安装后清理
+	}
+	a.pendingUpdateMu.Unlock()
 	return updater.InstallUpdate(filePath)
 }
 
@@ -3210,19 +3216,7 @@ func (a *App) GetLastStartVersion() string {
 
 // SaveLastStartVersion 保存当前版本号（启动时调用）
 func (a *App) SaveLastStartVersion() {
-	_ = db.SetSetting("last_start_version", updater.Version)
-}
-
-// ShouldCheckUpdateToday 判断今天是否已经检查过更新（每天只检查一次）
-func (a *App) ShouldCheckUpdateToday() bool {
-	lastCheck, _ := db.GetSetting("last_update_check")
-	today := time.Now().Format("2006-01-02")
-	return lastCheck != today
-}
-
-// MarkUpdateChecked 标记今天已检查过更新
-func (a *App) MarkUpdateChecked() {
-	_ = db.SetSetting("last_update_check", time.Now().Format("2006-01-02"))
+	_ = db.SetSetting("last_start_version", updater.EffectiveVersion())
 }
 
 // GetPendingUpdateInfo 返回启动时检测到的待处理更新信息
@@ -3239,34 +3233,45 @@ func (a *App) ClearPendingUpdateInfo() {
 	a.pendingUpdateInfo = nil
 }
 
-// startupCheckUpdate 启动时自动检查更新（每天一次，静默检查）
+// FileExists 检查文件是否存在（用于前端检查已下载的更新包）
+func (a *App) FileExists(path string) bool {
+	if path == "" {
+		return false
+	}
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// startupCheckUpdate 启动时自动检查更新（每次启动都检查，无缓存）
 func (a *App) startupCheckUpdate() {
+	// 启动时清理安装版本标记（二进制替换成功则无需保留）
+	effectiveVer := updater.EffectiveVersion()
+	if effectiveVer != updater.Version {
+		// EffectiveVersion > Version，说明二进制替换可能未完成，保留标记
+		applog.Info("[Updater] 安装版本标记存在 (effective=%s, compiled=%s)，保留标记", effectiveVer, updater.Version)
+	} else {
+		// 编译版本与有效版本一致，清理残留标记
+		updater.ClearInstalledVersion()
+	}
+
 	// 检测版本变化（参考 lx-music-desktop 的 changelog 展示）
 	lastVersion := a.GetLastStartVersion()
 	a.SaveLastStartVersion()
 
-	if lastVersion != "" && lastVersion != updater.Version {
+	if lastVersion != "" && lastVersion != effectiveVer {
 		// 版本发生了变化（升级或降级），推送事件告知前端
-		applog.Info("[Updater] 版本变化: %s -> %s", lastVersion, updater.Version)
+		applog.Info("[Updater] 版本变化: %s -> %s", lastVersion, effectiveVer)
 		a.app.Event.Emit("update:version:changed", map[string]string{
 			"old_version": lastVersion,
-			"new_version": updater.Version,
+			"new_version": effectiveVer,
 		})
 	}
 
-	if !a.ShouldCheckUpdateToday() {
-		return
-	}
 	// 延迟 3 秒，确保前端已挂载
 	time.Sleep(3 * time.Second)
 
-	if !a.ShouldCheckUpdateToday() {
-		return
-	}
-	a.MarkUpdateChecked()
-
 	safeGo("startupCheckUpdate", func() {
-		info, err := updater.CheckUpdate(false) // 启动时使用缓存，不强制刷新
+		info, err := updater.CheckUpdate() // 每次启动都检查，不使用缓存
 		if err != nil {
 			applog.Debug("[Updater] 启动时检查更新失败: %v", err)
 			return
