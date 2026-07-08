@@ -453,12 +453,25 @@ func GetDoubanInfoMissingSubjectID(limit int) ([]*DoubanInfoRow, error) {
 	var rows []*DoubanInfoRow
 	q := `SELECT
 		gv.id AS global_id,
-		gv.douban_id AS subject_id, gv.douban_score AS rating, gv.douban_votes AS votes,
-		gv.director, gv.writer, gv.actor, gv.genre,
-		gv.area AS country, gv.lang AS language,
-		gv.release_date, gv.season_count, gv.episode_count, gv.duration,
-		gv.aka, gv.imdb, gv.pic AS poster_url, gv.updated_at, gv.vod_name,
-		gv.year, COALESCE(gt.type_name, '') AS vod_type
+		COALESCE(gv.douban_id, '') AS subject_id,
+		COALESCE(gv.douban_score, '') AS rating,
+		COALESCE(gv.douban_votes, '') AS votes,
+		COALESCE(gv.director, '') AS director,
+		COALESCE(gv.writer, '') AS writer,
+		COALESCE(gv.actor, '') AS actor,
+		COALESCE(gv.genre, '') AS genre,
+		COALESCE(gv.area, '') AS country,
+		COALESCE(gv.lang, '') AS language,
+		COALESCE(gv.release_date, '') AS release_date,
+		COALESCE(gv.season_count, '') AS season_count,
+		COALESCE(gv.episode_count, '') AS episode_count,
+		COALESCE(gv.duration, '') AS duration,
+		COALESCE(gv.aka, '') AS aka,
+		COALESCE(gv.imdb, '') AS imdb,
+		COALESCE(gv.pic, '') AS poster_url,
+		gv.updated_at, gv.vod_name,
+		COALESCE(gv.year, '') AS year,
+		COALESCE(gt.type_name, '') AS vod_type
 		FROM global_video gv
 		LEFT JOIN global_types gt ON gv.type_id = gt.id
 		WHERE (gv.douban_id = '' OR gv.douban_id IS NULL)

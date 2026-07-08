@@ -5,7 +5,6 @@ import (
 	"cczjVideo/app/collect"
 	"cczjVideo/app/db"
 	"cczjVideo/app/model"
-	"cczjVideo/app/util"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -299,16 +298,20 @@ func StopCollect(sourceKey string) bool {
 }
 
 // ============================================================
-// SearchSource: 用 wd=keyword 去源站模糊搜索，把结果入库，并返回
+// SearchSource: 用 wd=keyword 去源站搜索指定页，返回富字段结果（不入库）
+// 入库请调用 ImportSourceVideos
 // ============================================================
 type SearchSourceResult struct {
-	Total   int           `json:"total"`
-	Videos  []*model.Video `json:"videos"`
-	From    string        `json:"from"`
-	Keyword string        `json:"keyword"`
+	Total     int            `json:"total"`
+	Page      int            `json:"page"`
+	PageCount int            `json:"page_count"`
+	PageSize  int            `json:"page_size"`
+	Videos    []*model.Video `json:"videos"`
+	From      string         `json:"from"`
+	Keyword   string         `json:"keyword"`
 }
 
-func SearchSource(sourceKey string, keyword string, limit int) (*SearchSourceResult, error) {
+func SearchSource(sourceKey string, keyword string, page int, pageSize int) (*SearchSourceResult, error) {
 	keyword = strings.TrimSpace(keyword)
 	if keyword == "" {
 		return nil, fmt.Errorf("关键词不能为空")
@@ -319,12 +322,15 @@ func SearchSource(sourceKey string, keyword string, limit int) (*SearchSourceRes
 		return nil, fmt.Errorf("获取源失败: %w", err)
 	}
 
-	if limit <= 0 {
-		advCfg := src.GetAdvConfig()
-		limit = advCfg.CollectLimit
+	if page < 1 {
+		page = 1
 	}
-	if limit <= 0 {
-		limit = 50
+	if pageSize <= 0 {
+		advCfg := src.GetAdvConfig()
+		pageSize = advCfg.CollectLimit
+	}
+	if pageSize <= 0 {
+		pageSize = 50
 	}
 
 	// Emit: 开始搜索
@@ -337,24 +343,27 @@ func SearchSource(sourceKey string, keyword string, limit int) (*SearchSourceRes
 
 	advCfg := src.GetAdvConfig()
 	opts := collect.FetchOptions{
-		Limit:        limit,
+		Limit:        pageSize,
 		Keyword:      keyword,
 		FieldMapping: advCfg.FieldMapping,
 	}
 
-	page, err := collect.FetchPageWithOpts(src.ApiUrl, 1, opts)
+	p, err := collect.FetchPageWithOpts(src.ApiUrl, page, opts)
 	if err != nil {
 		return nil, fmt.Errorf("源站搜索失败: %w", err)
 	}
-	if page == nil || len(page.List) == 0 {
-		return &SearchSourceResult{Total: 0, Videos: nil, From: sourceKey, Keyword: keyword}, nil
+	if p == nil || len(p.List) == 0 {
+		return &SearchSourceResult{
+			Total: 0, Page: page, PageCount: 0, PageSize: pageSize,
+			Videos: nil, From: sourceKey, Keyword: keyword,
+		}, nil
 	}
 
-	applog.Info("[SearchSource] 源站搜索完成 - sourceKey: %s, keyword: %s, total: %d, listSize: %d",
-		sourceKey, keyword, page.Total.Int(), len(page.List))
+	applog.Info("[SearchSource] 源站搜索完成 - sourceKey: %s, keyword: %s, page: %d, total: %d, listSize: %d",
+		sourceKey, keyword, page, p.Total.Int(), len(p.List))
 
 	// Emit: 开始获取详情
-	totalVideos := len(page.List)
+	totalVideos := len(p.List)
 	application.Get().Event.Emit("search:progress", map[string]interface{}{
 		"stage":   "fetching_details",
 		"message": fmt.Sprintf("正在获取视频详情 (0/%d)...", totalVideos),
@@ -366,31 +375,31 @@ func SearchSource(sourceKey string, keyword string, limit int) (*SearchSourceRes
 	pool := collect.NewPool(3)
 	var mu sync.Mutex
 	var completedCount int32
-	for i, v := range page.List {
+	for i, v := range p.List {
 		if v == nil || v.VodId.String() == "" {
 			continue
 		}
 		idx := i
 		vid := v
 		pool.Submit(func() {
-			detail, err := collect.FetchVideoDetail(src.ApiUrl, vid.VodId.String())
-			if err != nil || detail == nil {
-				applog.Info("[SearchSource] 获取详情失败 - vod_id: %s, error: %v", vid.VodId.String(), err)
+			detail, derr := collect.FetchVideoDetail(src.ApiUrl, vid.VodId.String())
+			if derr != nil || detail == nil {
+				applog.Info("[SearchSource] 获取详情失败 - vod_id: %s, error: %v", vid.VodId.String(), derr)
 			} else {
-				applog.Info("[SearchSource] 获取详情成功 - vod_id: %s, vod_actor: %s, vod_director: %s, vod_content: %s",
-					vid.VodId.String(), detail.VodActor, detail.VodDirector, truncate(detail.VodContent, 100))
+				applog.Info("[SearchSource] 获取详情成功 - vod_id: %s, vod_actor: %s, vod_director: %s",
+					vid.VodId.String(), detail.VodActor, detail.VodDirector)
 				mu.Lock()
-				if detail.VodActor != "" { page.List[idx].VodActor = detail.VodActor }
-				if detail.VodDirector != "" { page.List[idx].VodDirector = detail.VodDirector }
-				if detail.VodContent != "" { page.List[idx].VodContent = detail.VodContent }
-				if detail.VodPic != "" { page.List[idx].VodPic = detail.VodPic }
-				if detail.VodLang != "" { page.List[idx].VodLang = detail.VodLang }
-				if detail.VodArea != "" { page.List[idx].VodArea = detail.VodArea }
-				if detail.VodYear != "" { page.List[idx].VodYear = detail.VodYear }
-				if detail.VodPlayUrl != "" { page.List[idx].VodPlayUrl = detail.VodPlayUrl }
+				if detail.VodActor != "" { p.List[idx].VodActor = detail.VodActor }
+				if detail.VodDirector != "" { p.List[idx].VodDirector = detail.VodDirector }
+				if detail.VodContent != "" { p.List[idx].VodContent = detail.VodContent }
+				if detail.VodPic != "" { p.List[idx].VodPic = detail.VodPic }
+				if detail.VodLang != "" { p.List[idx].VodLang = detail.VodLang }
+				if detail.VodArea != "" { p.List[idx].VodArea = detail.VodArea }
+				if detail.VodYear != "" { p.List[idx].VodYear = detail.VodYear }
+				if detail.VodPlayUrl != "" { p.List[idx].VodPlayUrl = detail.VodPlayUrl }
 				mu.Unlock()
 			}
-			// Emit progress update
+			// Emit progress update + 逐条推送结果（渐进式展示）
 			current := int(atomic.AddInt32(&completedCount, 1))
 			application.Get().Event.Emit("search:progress", map[string]interface{}{
 				"stage":   "fetching_details",
@@ -398,30 +407,75 @@ func SearchSource(sourceKey string, keyword string, limit int) (*SearchSourceRes
 				"current": current,
 				"total":   totalVideos,
 			})
+			mu.Lock()
+			enriched := p.List[idx]
+			mu.Unlock()
+			if enriched != nil {
+				application.Get().Event.Emit("search:result", map[string]interface{}{
+					"source_key": sourceKey,
+					"keyword":    keyword,
+					"video":      enriched,
+				})
+			}
 		})
 	}
 	pool.Wait()
 	pool.Stop()
 
-	// Emit: 开始保存数据
+	// 完成
 	application.Get().Event.Emit("search:progress", map[string]interface{}{
-		"stage":   "saving",
-		"message": "正在保存搜索结果到本地...",
-		"current": 0,
-		"total":   0,
+		"stage":   "done",
+		"message": "搜索完成",
+		"current": totalVideos,
+		"total":   totalVideos,
 	})
 
-	// 2) 入库（合并源站数据与数据库已有数据：源站非空字段覆盖，源站空字段保留数据库值）
-	if err := db.EnsureVideoTable(sourceKey); err != nil {
-		return nil, fmt.Errorf("确保表失败: %w", err)
+	// 返回结果（不入库），分页元数据来自源站
+	pageCount := p.Pagecount.Int()
+	if pageCount <= 0 && p.Total.Int() > 0 {
+		pageCount = (p.Total.Int() + pageSize - 1) / pageSize
 	}
-	for _, v := range page.List {
+	total := p.Total.Int()
+	if total < len(p.List) {
+		total = len(p.List)
+	}
+
+	return &SearchSourceResult{
+		Total:     total,
+		Page:      page,
+		PageCount: pageCount,
+		PageSize:  pageSize,
+		Videos:    p.List,
+		From:      sourceKey,
+		Keyword:   keyword,
+	}, nil
+}
+
+// ImportSourceVideos 将用户挑选的源站搜索视频入库（压缩字段 + 合并写入）
+// 返回成功入库的条数
+func ImportSourceVideos(sourceKey string, videos []*model.Video) (int, error) {
+	if sourceKey == "" {
+		return 0, fmt.Errorf("source_key 不能为空")
+	}
+	if len(videos) == 0 {
+		return 0, nil
+	}
+
+	src, err := db.GetSourceByKey(sourceKey)
+	if err != nil {
+		return 0, fmt.Errorf("获取源失败: %w", err)
+	}
+	_ = src
+
+	if err := db.EnsureVideoTable(sourceKey); err != nil {
+		return 0, fmt.Errorf("确保表失败: %w", err)
+	}
+
+	toSave := make([]*model.Video, 0, len(videos))
+	for _, v := range videos {
 		if v == nil || v.VodName == "" {
 			continue
 		}
-		applog.Info("[SearchSource] 处理前 - vod_id: %s, vod_name: %s, vod_actor: %s, vod_director: %s, vod_content: %s",
-			v.VodId.String(), v.VodName, v.VodActor, v.VodDirector, truncate(v.VodContent, 100))
-
 		v.VodContent = collect.CleanHTML(v.VodContent)
 		v.VodContent = collect.CompressTextField(v.VodContent)
 		v.VodActor = collect.CleanHTML(v.VodActor)
@@ -430,32 +484,20 @@ func SearchSource(sourceKey string, keyword string, limit int) (*SearchSourceRes
 		v.VodDirector = collect.CompressTextField(v.VodDirector)
 		v.VodPlayUrl = collect.CompressTextField(v.VodPlayUrl)
 		v.VodDownUrl = collect.CompressTextField(v.VodDownUrl)
-
-		applog.Info("[SearchSource] 处理后 - vod_id: %s, vod_name: %s, vod_actor: %s, vod_director: %s, vod_content: %s",
-			v.VodId.String(), v.VodName, v.VodActor, v.VodDirector, truncate(v.VodContent, 100))
+		toSave = append(toSave, v)
 	}
-	if err := db.MergeVideoDetails(sourceKey, page.List); err != nil {
-		return nil, fmt.Errorf("合并视频数据失败: %w", err)
+	if len(toSave) == 0 {
+		return 0, nil
+	}
+	if err := db.MergeVideoDetails(sourceKey, toSave); err != nil {
+		return 0, fmt.Errorf("合并视频数据失败: %w", err)
 	}
 
 	// 将源数据中携带的豆瓣信息存入全局 douban_info 表
-	db.SaveDoubanInfoFromBatch(page.List)
+	db.SaveDoubanInfoFromBatch(toSave)
 
-	// 3) 从数据库读（带齐全字段）
-	videos, _, err := db.GetVideos(sourceKey, db.FilterParams{Keyword: keyword, PageSize: limit})
-	if err != nil {
-		// 回退：直接把 API 结果返回
-		return &SearchSourceResult{Total: len(page.List), Videos: page.List, From: sourceKey, Keyword: keyword}, nil
-	}
-
-	for _, v := range videos {
-		v.VodActor = util.DecompressIfNeeded(v.VodActor)
-		v.VodDirector = util.DecompressIfNeeded(v.VodDirector)
-		v.VodContent = util.DecompressIfNeeded(v.VodContent)
-		v.VodPlayUrl = util.DecompressIfNeeded(v.VodPlayUrl)
-	}
-
-	return &SearchSourceResult{Total: len(videos), Videos: videos, From: sourceKey, Keyword: keyword}, nil
+	applog.Info("[ImportSourceVideos] 入库完成 - sourceKey: %s, count: %d", sourceKey, len(toSave))
+	return len(toSave), nil
 }
 
 // ============================================================

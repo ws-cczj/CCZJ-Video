@@ -54,7 +54,15 @@ func AddSource(s *model.Source) error {
 	if existing != nil {
 		return fmt.Errorf("来源 %s 已存在", s.SourceKey)
 	}
-	return db.AddSource(s)
+	if err := db.AddSource(s); err != nil {
+		return err
+	}
+	// 当用户当前没有默认源时，自动把这个新源设为默认源
+	// 这样首次添加源后前端可以立即拿到一个可用的默认源
+	if cur, _ := db.GetSetting("default_source_key"); cur == "" {
+		_ = db.SetSetting("default_source_key", s.SourceKey)
+	}
+	return nil
 }
 
 func UpdateSource(s *model.Source) error {

@@ -488,7 +488,8 @@ export class SchedulerStatus {
 
 /**
  * ============================================================
- * SearchSource: 用 wd=keyword 去源站模糊搜索，把结果入库，并返回
+ * SearchSource: 用 wd=keyword 去源站搜索指定页，返回富字段结果（不入库）
+ * 入库请调用 ImportSourceVideos
  * ============================================================
  */
 export class SearchSourceResult {
@@ -503,6 +504,27 @@ export class SearchSourceResult {
              * @type {number}
              */
             this["total"] = 0;
+        }
+        if (!("page" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["page"] = 0;
+        }
+        if (!("page_count" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["page_count"] = 0;
+        }
+        if (!("page_size" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["page_size"] = 0;
         }
         if (!("videos" in $$source)) {
             /**
@@ -535,10 +557,10 @@ export class SearchSourceResult {
      * @returns {SearchSourceResult}
      */
     static createFrom($$source = {}) {
-        const $$createField1_0 = $$createType5;
+        const $$createField4_0 = $$createType5;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("videos" in $$parsedSource) {
-            $$parsedSource["videos"] = $$createField1_0($$parsedSource["videos"]);
+            $$parsedSource["videos"] = $$createField4_0($$parsedSource["videos"]);
         }
         return new SearchSourceResult(/** @type {Partial<SearchSourceResult>} */($$parsedSource));
     }

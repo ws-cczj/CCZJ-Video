@@ -6,7 +6,7 @@ includes:
 vars:
   # 从 version.json 自动提取版本号，注入到 Go 编译中
   VERSION:
-    sh: powershell -NoProfile -Command "(Get-Content version.json | ConvertFrom-Json).version"
+    sh: powershell -NoProfile -ExecutionPolicy Bypass -File build/get_version.ps1
 
 tasks:
   build:

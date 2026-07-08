@@ -609,6 +609,18 @@ export function ImportSourceFromBase64(filename, b64Content) {
 }
 
 /**
+ * ImportSourceVideos 将用户挑选的源站搜索视频入库（压缩字段 + 合并写入）
+ * sourceKey 用于确定入库的目标源表；videos 中携带的豆瓣信息也会写入全局 douban_info 表
+ * 返回成功入库的条数
+ * @param {string} sourceKey
+ * @param {(model$0.Video | null)[]} videos
+ * @returns {$CancellablePromise<number>}
+ */
+export function ImportSourceVideos(sourceKey, videos) {
+    return $Call.ByID(2641699521, sourceKey, videos);
+}
+
+/**
  * InstallUpdate 安装更新并退出当前程序
  * @param {string} filePath
  * @returns {$CancellablePromise<void>}
@@ -772,15 +784,18 @@ export function SaveWatchHistory(req) {
 }
 
 /**
- * SearchSource 用 wd=keyword 去指定源站模糊搜索，把结果入库，并返回
- * limit=0 时使用源的默认条数
+ * SearchSource 用 wd=keyword 去指定源站搜索指定页，返回富字段结果（不入库）
+ * page=1 开始；pageSize<=0 时使用源的默认条数
+ * 结果会通过 search:result 事件渐进式推送到前端
+ * 入库请调用 ImportSourceVideos
  * @param {string} sourceKey
  * @param {string} keyword
- * @param {number} limit
+ * @param {number} page
+ * @param {number} pageSize
  * @returns {$CancellablePromise<handler$0.SearchSourceResult | null>}
  */
-export function SearchSource(sourceKey, keyword, limit) {
-    return $Call.ByID(3286592348, sourceKey, keyword, limit).then(/** @type {($result: any) => any} */(($result) => {
+export function SearchSource(sourceKey, keyword, page, pageSize) {
+    return $Call.ByID(3286592348, sourceKey, keyword, page, pageSize).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType59($result);
     }));
 }

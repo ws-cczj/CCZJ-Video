@@ -80,11 +80,26 @@ export class UpdateInfo {
         }
         if (/** @type {any} */(false)) {
             /**
-             * 从当前版本到最新版本之间的所有历史版本
              * @member
              * @type {VersionItem[] | undefined}
              */
             this["history"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * 已下载的更新包路径（Go 端扫描）
+             * @member
+             * @type {string | undefined}
+             */
+            this["already_downloaded_path"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * 已下载的更新包版本号
+             * @member
+             * @type {string | undefined}
+             */
+            this["already_downloaded_version"] = undefined;
         }
 
         Object.assign(this, $$source);

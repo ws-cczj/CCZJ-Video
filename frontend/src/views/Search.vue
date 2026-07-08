@@ -3,7 +3,7 @@ defineOptions({ name: 'Search' })
 import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { GetSetting, GetRecentHistory, GetVideoList, SearchSource } from '../../bindings/cczjVideo/app'
+import { GetSetting, GetRecentHistory, GetVideoList, SearchSource, ImportSourceVideos } from '../../bindings/cczjVideo/app'
 import { Events } from '@wailsio/runtime'
 import { useSourceStore } from '../stores/source'
 import { useVideoStore } from '../stores/video'
@@ -31,6 +31,9 @@ const currentSearchSource = ref('')
 const keyword = ref('')
 const searchHistory = ref<string[]>(
   JSON.parse(localStorage.getItem('search_history') || '[]')
+)
+const sourceSearchMode = ref(
+  localStorage.getItem('source_search_mode') === 'true'
 )
 
 // 是否进行过搜索
@@ -317,6 +320,11 @@ function goSearchPage(p: number): void {
   videoStore.search(currentSearchSource.value!, keyword.value.trim(), p)
 }
 
+function toggleSourceSearchMode(): void {
+  sourceSearchMode.value = !sourceSearchMode.value
+  localStorage.setItem('source_search_mode', String(sourceSearchMode.value))
+}
+
 function doSearch(): void {
   const kw = keyword.value.trim()
   if (!kw || !currentSearchSource.value) return
@@ -328,7 +336,11 @@ function doSearch(): void {
   hasSearched.value = true
   searchCurrentPage.value = 1
   clearSourceResults()
-  videoStore.search(currentSearchSource.value, kw)
+  if (sourceSearchMode.value) {
+    doSourceSearch(1)
+  } else {
+    videoStore.search(currentSearchSource.value, kw)
+  }
 }
 
 function goDetail(item: RecommendItem): void {
@@ -370,14 +382,29 @@ function removeHistoryItem(kw: string): void {
 }
 
 // ========= 源站搜索（当站内无结果时，直接调用源站 API） =========
+// 结果不入库，仅展示；用户可勾选视频后一键入库
 const sourceSearching = ref(false)
 const sourceSearchResults = ref<Video[]>([])
 const sourceSearchTotal = ref(0)
+const sourceSearchPage = ref(1)
+const sourceSearchPageCount = ref(1)
+const sourceSearchPageSize = ref(50)
 const hasSourceSearched = ref(false)
+
+// 用户挑选的源站视频（vod_id 集合）
+const selectedSourceVodIds = ref<Set<string>>(new Set())
+// 已入库的 vod_id 集合（用于在卡片上标记"已入库"状态）
+const importedSourceVodIds = ref<Set<string>>(new Set())
+
+// 入库中状态 & 消息
+const importing = ref(false)
+const importMessage = ref<{ type: 'success' | 'error' | ''; text: string }>({ type: '', text: '' })
+let importMessageTimer: ReturnType<typeof setTimeout> | null = null
 
 // 搜索进度状态
 const searchProgress = ref({ stage: '', message: '', current: 0, total: 0 })
 let searchProgressListener: (() => void) | null = null
+let searchResultListener: (() => void) | null = null
 
 onMounted(() => {
   searchProgressListener = Events.On('search:progress', (event) => {
@@ -389,6 +416,22 @@ onMounted(() => {
       total: data.total || 0,
     }
   })
+  // 监听 search:result 事件：每条视频详情完成后渐进式推送到结果列表
+  searchResultListener = Events.On('search:result', (event) => {
+    const data = event.data
+    if (!data || !data.video) return
+    // 仅处理当前搜索源 + 当前关键词的结果，避免串扰
+    if (data.source_key !== currentSearchSource.value) return
+    if (data.keyword !== keyword.value.trim()) return
+    const v = data.video as Video
+    const id = String(v.vod_id ?? '')
+    if (!id) return
+    // 去重：避免同一 vod_id 被多次推送
+    const exists = sourceSearchResults.value.some(x => String(x.vod_id ?? '') === id)
+    if (!exists) {
+      sourceSearchResults.value.push(v)
+    }
+  })
 })
 
 onUnmounted(() => {
@@ -396,19 +439,68 @@ onUnmounted(() => {
     searchProgressListener()
     searchProgressListener = null
   }
+  if (searchResultListener) {
+    searchResultListener()
+    searchResultListener = null
+  }
+  if (importMessageTimer) {
+    clearTimeout(importMessageTimer)
+    importMessageTimer = null
+  }
 })
 
-async function doSourceSearch(): Promise<void> {
+// 计算分页页码范围（用于分页控件展示）
+const sourceSearchPageRange = computed(() => {
+  const total = sourceSearchPageCount.value
+  const cur = sourceSearchPage.value
+  const pages: number[] = []
+  if (total <= 1) return pages
+  const delta = 2
+  const start = Math.max(1, cur - delta)
+  const end = Math.min(total, cur + delta)
+  if (start > 1) { pages.push(1); if (start > 2) pages.push(-1) }
+  for (let i = start; i <= end; i++) pages.push(i)
+  if (end < total) { if (end < total - 1) pages.push(-1); pages.push(total) }
+  return pages
+})
+
+// 当前页是否全选
+const isAllCurrentPageSelected = computed(() => {
+  if (sourceSearchResults.value.length === 0) return false
+  return sourceSearchResults.value.every(v =>
+    selectedSourceVodIds.value.has(String(v.vod_id ?? '')) ||
+    importedSourceVodIds.value.has(String(v.vod_id ?? ''))
+  )
+})
+
+async function doSourceSearch(page: number = 1): Promise<void> {
   const kw = keyword.value.trim()
   if (!kw || !currentSearchSource.value) return
   sourceSearching.value = true
   hasSourceSearched.value = true
+  // 切换到新搜索或新页时清空当前结果（渐进式事件会重新填充）
   sourceSearchResults.value = []
+  selectedSourceVodIds.value = new Set()
+  sourceSearchPage.value = page
+  importMessage.value = { type: '', text: '' }
   searchProgress.value = { stage: '', message: '', current: 0, total: 0 }
   try {
-    const resp = (await SearchSource(currentSearchSource.value, kw, 50)) as any
-    sourceSearchTotal.value = resp?.total || 0
-    sourceSearchResults.value = (resp?.videos as Video[]) || []
+    const resp = (await SearchSource(currentSearchSource.value, kw, page, sourceSearchPageSize.value)) as any
+    // 注意：不替换 sourceSearchResults，因为它已经通过 search:result 事件渐进式填充
+    // 仅更新分页元数据
+    sourceSearchTotal.value = resp?.total || sourceSearchResults.value.length
+    const pc = resp?.page_count || 0
+    if (pc > 0) {
+      sourceSearchPageCount.value = pc
+    } else if (sourceSearchTotal.value > 0) {
+      sourceSearchPageCount.value = Math.ceil(sourceSearchTotal.value / sourceSearchPageSize.value)
+    } else {
+      sourceSearchPageCount.value = 1
+    }
+    // 兜底：如果事件未触发（例如旧版本后端），用 resp.videos 填充
+    if (sourceSearchResults.value.length === 0 && Array.isArray(resp?.videos)) {
+      sourceSearchResults.value = resp.videos as Video[]
+    }
   } catch (e) {
     console.warn(t('search.sourceSearchFailed'), e)
   } finally {
@@ -417,10 +509,134 @@ async function doSourceSearch(): Promise<void> {
   }
 }
 
+function goSourceSearchPage(p: number): void {
+  if (p < 1 || p > sourceSearchPageCount.value || p === sourceSearchPage.value) return
+  doSourceSearch(p)
+}
+
+function toggleSelectVideo(vodId: string | number | undefined): void {
+  const id = String(vodId ?? '')
+  if (!id) return
+  const newSet = new Set(selectedSourceVodIds.value)
+  if (newSet.has(id)) newSet.delete(id)
+  else newSet.add(id)
+  selectedSourceVodIds.value = newSet
+}
+
+function isVideoSelected(vodId: string | number | undefined): boolean {
+  return selectedSourceVodIds.value.has(String(vodId ?? ''))
+}
+
+function isVideoImported(vodId: string | number | undefined): boolean {
+  return importedSourceVodIds.value.has(String(vodId ?? ''))
+}
+
+function toggleSelectAllCurrentPage(): void {
+  if (isAllCurrentPageSelected.value) {
+    // 取消全选当前页（不影响已入库的）
+    const newSet = new Set(selectedSourceVodIds.value)
+    for (const v of sourceSearchResults.value) {
+      newSet.delete(String(v.vod_id ?? ''))
+    }
+    selectedSourceVodIds.value = newSet
+  } else {
+    // 全选当前页（跳过已入库的）
+    const newSet = new Set(selectedSourceVodIds.value)
+    for (const v of sourceSearchResults.value) {
+      const id = String(v.vod_id ?? '')
+      if (id && !importedSourceVodIds.value.has(id)) {
+        newSet.add(id)
+      }
+    }
+    selectedSourceVodIds.value = newSet
+  }
+}
+
 function clearSourceResults(): void {
   sourceSearchResults.value = []
   sourceSearchTotal.value = 0
+  sourceSearchPage.value = 1
+  sourceSearchPageCount.value = 1
   hasSourceSearched.value = false
+  selectedSourceVodIds.value = new Set()
+  importedSourceVodIds.value = new Set()
+  importMessage.value = { type: '', text: '' }
+}
+
+// 一键入库当前页所有视频
+async function importCurrentPage(): Promise<void> {
+  if (importing.value) return
+  // 仅入库未入库的视频
+  const toImport = sourceSearchResults.value.filter(v =>
+    !importedSourceVodIds.value.has(String(v.vod_id ?? ''))
+  )
+  if (toImport.length === 0) {
+    showImportMessage('info', t('search.alreadyImportedAll'))
+    return
+  }
+  await doImport(toImport)
+}
+
+// 入库用户挑选的视频
+async function importSelected(): Promise<void> {
+  if (importing.value || selectedSourceVodIds.value.size === 0) return
+  const selected = sourceSearchResults.value.filter(v => {
+    const id = String(v.vod_id ?? '')
+    return id && selectedSourceVodIds.value.has(id) && !importedSourceVodIds.value.has(id)
+  })
+  if (selected.length === 0) {
+    showImportMessage('info', t('search.alreadyImportedAll'))
+    return
+  }
+  await doImport(selected)
+}
+
+async function doImport(videos: Video[]): Promise<void> {
+  if (!currentSearchSource.value || videos.length === 0) return
+  importing.value = true
+  importMessage.value = { type: '', text: '' }
+  try {
+    // 使用 any 绕过前端 Video 类型与绑定生成 Video 类型之间的字段差异
+    const count = (await ImportSourceVideos(currentSearchSource.value, videos as any)) as number
+    // 标记已入库
+    const newImported = new Set(importedSourceVodIds.value)
+    for (const v of videos) {
+      const id = String(v.vod_id ?? '')
+      if (id) newImported.add(id)
+    }
+    importedSourceVodIds.value = newImported
+    // 清空选中（已入库的不需要再选）
+    selectedSourceVodIds.value = new Set()
+    showImportMessage('success', t('search.importSuccess', { count }))
+  } catch (e: any) {
+    showImportMessage('error', t('search.importFailed') + (e?.message ? `: ${e.message}` : ''))
+  } finally {
+    importing.value = false
+  }
+}
+
+function showImportMessage(type: 'success' | 'error' | 'info', text: string): void {
+  // info 类型映射到 success 颜色（仅为提示）
+  const msgType = type === 'info' ? 'success' : type
+  importMessage.value = { type: msgType as 'success' | 'error', text }
+  if (importMessageTimer) clearTimeout(importMessageTimer)
+  importMessageTimer = setTimeout(() => {
+    importMessage.value = { type: '', text: '' }
+    importMessageTimer = null
+  }, 3500)
+}
+
+// 源站搜索结果卡片点击：
+// - 已入库 → 跳转详情
+// - 未入库 → 切换选中状态
+function onSourceVideoClick(v: Video): void {
+  const id = String(v.vod_id ?? '')
+  if (!id) return
+  if (importedSourceVodIds.value.has(id)) {
+    router.push(getDetailPath(currentSearchSource.value, v))
+  } else {
+    toggleSelectVideo(id)
+  }
 }
 </script>
 
@@ -437,6 +653,15 @@ function clearSourceResults(): void {
         />
         <Icon name="source" :size="14" class="pick-icon" />
       </div>
+
+      <button
+        class="source-search-toggle cczj-flex cczj-items-center cczj-gap-1 cczj-px-2 cczj-py-1 cczj-border cczj-border-gray-300 cczj-rounded cczj-text-sm cczj-cursor-pointer cczj-transition-colors"
+        :class="{ 'cczj-bg-primary cczj-border-primary cczj-text-white': sourceSearchMode }"
+        @click="toggleSourceSearchMode"
+      >
+        <span class="checkbox-icon">{{ sourceSearchMode ? '✓' : '○' }}</span>
+        <span>{{ t('search.sourceSearch') }}</span>
+      </button>
 
       <div class="input-wrap cczj-flex-1 cczj-relative cczj-flex cczj-items-center">
         <Icon name="search" :size="16" class="input-icon" />
@@ -597,8 +822,8 @@ function clearSourceResults(): void {
       <span class="page-info cczj-text-sm cczj-text-muted">{{ searchCurrentPage }} / {{ searchTotalPages }} {{ t('search.page') }}，{{ t('search.totalItems', { count: videoStore.total }) }}</span>
     </div>
 
-    <!-- 源站搜索进度（独立展示，不受空状态组件约束） -->
-    <div v-if="sourceSearching" class="source-search-progress-section cczj-mb-6">
+    <!-- 源站搜索进度（仅在搜索中且尚未收到任何结果时独占展示） -->
+    <div v-if="sourceSearching && sourceSearchResults.length === 0" class="source-search-progress-section cczj-mb-6">
       <div class="search-progress-card">
         <!-- 步骤指示器 -->
         <div class="sp-steps">
@@ -631,13 +856,22 @@ function clearSourceResults(): void {
       </div>
     </div>
 
+    <!-- 搜索中顶部紧凑进度条（已开始出现结果后，进度条移到结果区顶部） -->
+    <div v-if="sourceSearching && sourceSearchResults.length > 0" class="source-inline-progress cczj-mb-3">
+      <div class="sip-bar">
+        <div class="sip-bar-fill" :style="{ width: searchProgress.total > 0 ? `${(searchProgress.current / searchProgress.total) * 100}%` : '70%' }"></div>
+      </div>
+      <span class="sip-msg">{{ searchProgress.message || t('search.searchingFromSource') }}</span>
+    </div>
+
     <div
       v-if="
         hasSearched &&
         !videoStore.loading &&
         videoStore.videos.length === 0 &&
         sourceStore.currentSourceKey &&
-        !sourceSearching
+        !sourceSearching &&
+        !hasSourceSearched
       "
     >
       <EmptyState
@@ -647,9 +881,8 @@ function clearSourceResults(): void {
       >
         <div class="source-search-wrap cczj-flex cczj-flex-col cczj-gap-3 cczj-items-center cczj-mt-4">
           <Button
-            v-if="!hasSourceSearched"
             variant="primary"
-            @click="doSourceSearch"
+            @click="doSourceSearch(1)"
             class="cczj-flex cczj-items-center cczj-gap-2"
           >
             <Icon name="search" :size="12" />
@@ -659,30 +892,133 @@ function clearSourceResults(): void {
       </EmptyState>
     </div>
 
-    <!-- 源站搜索结果 -->
+    <!-- 源站搜索结果（渐进式展示：搜索中也会显示已到达的结果） -->
     <div
-      v-if="hasSourceSearched && !sourceSearching && sourceSearchTotal > 0"
+      v-if="hasSourceSearched && sourceSearchResults.length > 0"
       class="source-search-results cczj-mb-4"
     >
       <div class="results-header source-search-header cczj-flex cczj-items-center cczj-justify-between cczj-gap-2 cczj-mb-3">
         <span class="results-label cczj-flex cczj-items-center cczj-gap-1">
           <Icon name="globe" :size="12" />
           {{ t('search.sourceSearchResults') }}
+          <span v-if="sourceSearching" class="cczj-text-muted cczj-text-xs cczj-ml-1">{{ t('search.loadingProgressive') }}</span>
         </span>
-        <span class="results-count cczj-text-sm cczj-text-muted">{{ t('search.totalItems', { count: sourceSearchTotal }) }}（{{ t('search.autoImported') }}）</span>
+        <span class="results-count cczj-text-sm cczj-text-muted">
+          {{ t('search.totalItems', { count: sourceSearchTotal }) }}
+          <span v-if="sourceSearchPageCount > 1" class="cczj-ml-2">· {{ t('search.pageInfo', { page: sourceSearchPage, total: sourceSearchPageCount }) }}</span>
+        </span>
       </div>
+
+      <!-- 操作工具栏：全选 / 入库按钮 / 已选计数 -->
+      <div class="source-toolbar cczj-flex cczj-items-center cczj-justify-between cczj-gap-2 cczj-mb-3 cczj-flex-wrap">
+        <div class="cczj-flex cczj-items-center cczj-gap-2">
+          <label class="select-all-check cczj-flex cczj-items-center cczj-gap-1 cczj-cursor-pointer cczj-text-sm">
+            <input
+              type="checkbox"
+              :checked="isAllCurrentPageSelected"
+              :disabled="sourceSearchResults.length === 0 || importing"
+              @change="toggleSelectAllCurrentPage"
+            />
+            <span>{{ t('search.selectAllCurrentPage') }}</span>
+          </label>
+          <span v-if="selectedSourceVodIds.size > 0" class="cczj-text-sm cczj-text-muted">
+            {{ t('search.selectedCount', { count: selectedSourceVodIds.size }) }}
+          </span>
+        </div>
+        <div class="cczj-flex cczj-items-center cczj-gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            :disabled="importing || selectedSourceVodIds.size === 0"
+            @click="importSelected"
+            class="cczj-flex cczj-items-center cczj-gap-1"
+          >
+            <Icon name="download" :size="12" />
+            <span>{{ t('search.importSelected') }}</span>
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            :disabled="importing || sourceSearchResults.length === 0"
+            @click="importCurrentPage"
+            class="cczj-flex cczj-items-center cczj-gap-1"
+          >
+            <Icon name="download" :size="12" />
+            <span>{{ importing ? t('search.importing') : t('search.importCurrentPage') }}</span>
+          </Button>
+        </div>
+      </div>
+
+      <!-- 入库结果消息 -->
+      <div v-if="importMessage.text" class="import-message cczj-mb-3" :class="importMessage.type">
+        <Icon :name="importMessage.type === 'success' ? 'check' : 'close'" :size="12" />
+        <span>{{ importMessage.text }}</span>
+      </div>
+
       <div class="video-grid cczj-grid" :style="gridStyle">
-        <VideoCard
+        <div
           v-for="v in sourceSearchResults"
           :key="`src-${v.vod_g_id ?? v.vod_id ?? v.id}`"
-          :video="v"
-          @click="goDetailVideo(v)"
-        />
+          class="source-video-card-wrap cczj-relative"
+          :class="{ selected: isVideoSelected(v.vod_id), imported: isVideoImported(v.vod_id) }"
+        >
+          <!-- 选中复选框（已入库的不显示） -->
+          <div
+            v-if="!isVideoImported(v.vod_id)"
+            class="select-checkbox cczj-absolute"
+            :class="{ checked: isVideoSelected(v.vod_id) }"
+            @click.stop="toggleSelectVideo(v.vod_id)"
+          >
+            <svg v-if="isVideoSelected(v.vod_id)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+              <path d="M5 13l4 4L19 7"/>
+            </svg>
+          </div>
+          <!-- 已入库徽章 -->
+          <div v-if="isVideoImported(v.vod_id)" class="imported-badge cczj-absolute">
+            <Icon name="check" :size="10" />
+            <span>{{ t('search.imported') }}</span>
+          </div>
+          <VideoCard
+            :video="v"
+            @click="onSourceVideoClick(v)"
+          />
+        </div>
+      </div>
+
+      <!-- 分页控件 -->
+      <div
+        v-if="!sourceSearching && sourceSearchPageCount > 1"
+        class="source-search-pagination cczj-flex cczj-items-center cczj-justify-center cczj-gap-2 cczj-my-4"
+      >
+        <button
+          class="page-btn cczj-cursor-pointer cczj-rounded"
+          :disabled="sourceSearchPage <= 1"
+          @click="goSourceSearchPage(sourceSearchPage - 1)"
+        >
+          <Icon name="back" :size="12" />
+        </button>
+        <template v-for="p in sourceSearchPageRange" :key="p">
+          <span v-if="p === -1" class="page-ellipsis">…</span>
+          <button
+            v-else
+            class="page-btn cczj-cursor-pointer cczj-rounded"
+            :class="{ active: p === sourceSearchPage }"
+            @click="goSourceSearchPage(p)"
+          >{{ p }}</button>
+        </template>
+        <button
+          class="page-btn cczj-cursor-pointer cczj-rounded"
+          :disabled="sourceSearchPage >= sourceSearchPageCount"
+          @click="goSourceSearchPage(sourceSearchPage + 1)"
+        >
+          <Icon name="chevron-right" :size="12" />
+        </button>
+        <span class="page-info cczj-text-sm cczj-text-muted">{{ t('search.pageInfo', { page: sourceSearchPage, total: sourceSearchPageCount }) }}，{{ t('search.totalItems', { count: sourceSearchTotal }) }}</span>
       </div>
     </div>
 
     <div
-      v-if="hasSourceSearched && !sourceSearching && sourceSearchTotal === 0"
+      v-if="hasSourceSearched && !sourceSearching && sourceSearchResults.length === 0"
       class="cczj-mb-4"
     >
       <EmptyState
@@ -744,6 +1080,37 @@ function clearSourceResults(): void {
   right: 10px;
   color: var(--text-muted);
   pointer-events: none;
+}
+
+.source-search-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+.source-search-toggle:hover {
+  border-color: var(--accent);
+  background: var(--bg-hover);
+}
+.source-search-toggle.cczj-bg-primary {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+  color: white !important;
+}
+.source-search-toggle .checkbox-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  font-size: 10px;
 }
 
 .input-wrap {
@@ -1202,5 +1569,150 @@ function clearSourceResults(): void {
 }
 .source-search-header {
   margin-bottom: 14px;
+}
+
+/* ============ 源站搜索工具栏 ============ */
+.source-toolbar {
+  padding: 10px 12px;
+  background: var(--bg-secondary, var(--bg-input, transparent));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.select-all-check {
+  user-select: none;
+  color: var(--text-secondary);
+}
+.select-all-check input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+/* ============ 入库消息 ============ */
+.import-message {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  animation: im-slide-in 0.25s ease;
+}
+@keyframes im-slide-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.import-message.success {
+  background: color-mix(in srgb, var(--success, #22c55e) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--success, #22c55e) 35%, transparent);
+  color: var(--success, #22c55e);
+}
+.import-message.error {
+  background: color-mix(in srgb, #ef4444 12%, transparent);
+  border: 1px solid color-mix(in srgb, #ef4444 35%, transparent);
+  color: #ef4444;
+}
+
+/* ============ 源站搜索视频卡片包装 ============ */
+.source-video-card-wrap {
+  position: relative;
+}
+.source-video-card-wrap.imported {
+  opacity: 0.65;
+}
+.source-video-card-wrap.selected .video-card {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-alpha-35);
+}
+
+/* 选中复选框（卡片左上角） */
+.select-checkbox {
+  top: 8px;
+  left: 8px;
+  z-index: 3;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1.5px solid rgba(255, 255, 255, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #fff;
+  transition: all 0.15s ease;
+  backdrop-filter: blur(4px);
+}
+.select-checkbox:hover {
+  background: rgba(0, 0, 0, 0.75);
+  border-color: #fff;
+}
+.select-checkbox.checked {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* 已入库徽章（卡片右上角） */
+.imported-badge {
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  padding: 3px 8px;
+  border-radius: 12px;
+  background: var(--success, #22c55e);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--success, #22c55e) 40%, transparent);
+}
+
+/* ============ 紧凑进度条（搜索中显示在结果区顶部） ============ */
+.source-inline-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--accent-alpha-20);
+  border-radius: 10px;
+}
+.sip-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-secondary);
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+}
+.sip-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 70%, #a78bfa));
+  border-radius: 3px;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.sip-msg {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 50%;
+}
+
+/* ============ 源站搜索分页 ============ */
+.source-search-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 16px 0 4px;
+  flex-wrap: wrap;
 }
 </style>
