@@ -15,6 +15,11 @@ import (
 // Level 日志等级
 type Level int
 
+// Fields carries stable operation metadata for logs that need to be correlated
+// across asynchronous work. Values are deliberately rendered as text so the
+// existing line-oriented log format remains backward compatible.
+type Fields map[string]any
+
 const (
 	LevelDebug Level = iota
 	LevelInfo
@@ -86,6 +91,38 @@ func Debug(format string, args ...interface{}) { Default().log(LevelDebug, 3, fo
 func Info(format string, args ...interface{})  { Default().log(LevelInfo, 3, format, args...) }
 func Warn(format string, args ...interface{})  { Default().log(LevelWarn, 3, format, args...) }
 func Error(format string, args ...interface{}) { Default().log(LevelError, 3, format, args...) }
+
+// InfoFields writes an informational message with deterministically ordered
+// operation fields, for example task_id, operation_id, or source_key.
+func InfoFields(message string, fields Fields) {
+	Default().log(LevelInfo, 3, "%s%s", message, formatFields(fields))
+}
+
+// WarnFields writes a warning message with deterministically ordered fields.
+func WarnFields(message string, fields Fields) {
+	Default().log(LevelWarn, 3, "%s%s", message, formatFields(fields))
+}
+
+// ErrorFields writes an error message with deterministically ordered fields.
+func ErrorFields(message string, fields Fields) {
+	Default().log(LevelError, 3, "%s%s", message, formatFields(fields))
+}
+
+func formatFields(fields Fields) string {
+	if len(fields) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(fields))
+	for key := range fields {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, fmt.Sprintf("%s=%q", key, fmt.Sprint(fields[key])))
+	}
+	return " fields{" + strings.Join(parts, ",") + "}"
+}
 
 func (l *Logger) log(level Level, skip int, format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
@@ -164,13 +201,13 @@ func (l *Logger) rotateIfNeeded() error {
 	if err != nil {
 		return err
 	}
-	
+
 	// 检查文件是否为空，如果是空文件则写入UTF-8 BOM标记（Windows记事本兼容）
 	info, err := f.Stat()
 	if err == nil && info.Size() == 0 {
 		_, _ = f.Write([]byte{0xEF, 0xBB, 0xBF})
 	}
-	
+
 	l.currentFile = f
 	l.currentDay = day
 	return nil

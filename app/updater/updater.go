@@ -122,11 +122,11 @@ type VersionItem struct {
 
 // GitHubRelease 表示 GitHub Release API 返回的 JSON 结构
 type GitHubRelease struct {
-	TagName     string `json:"tag_name"`
-	Name        string `json:"name"`
-	Body        string `json:"body"`
-	HTMLURL     string `json:"html_url"`
-	PublishedAt string `json:"published_at"`
+	TagName     string        `json:"tag_name"`
+	Name        string        `json:"name"`
+	Body        string        `json:"body"`
+	HTMLURL     string        `json:"html_url"`
+	PublishedAt string        `json:"published_at"`
 	Assets      []GitHubAsset `json:"assets"`
 }
 
@@ -139,18 +139,18 @@ type GitHubAsset struct {
 
 // UpdateInfo 更新信息（返回给前端）
 type UpdateInfo struct {
-	HasUpdate              bool          `json:"has_update"`
-	CurrentVer             string        `json:"current_version"`
-	LatestVer              string        `json:"latest_version"`
-	ReleaseName            string        `json:"release_name"`
-	ReleaseNotes           string        `json:"release_notes"`
-	DownloadURL            string        `json:"download_url"`
-	AssetName              string        `json:"asset_name"`
-	AssetSize              int64         `json:"asset_size"`
-	PublishedAt            string        `json:"published_at"`
-	History                []VersionItem `json:"history,omitempty"`
-	AlreadyDownloadedPath  string        `json:"already_downloaded_path,omitempty"`  // 已下载的更新包路径（Go 端扫描）
-	AlreadyDownloadedVer   string        `json:"already_downloaded_version,omitempty"` // 已下载的更新包版本号
+	HasUpdate             bool          `json:"has_update"`
+	CurrentVer            string        `json:"current_version"`
+	LatestVer             string        `json:"latest_version"`
+	ReleaseName           string        `json:"release_name"`
+	ReleaseNotes          string        `json:"release_notes"`
+	DownloadURL           string        `json:"download_url"`
+	AssetName             string        `json:"asset_name"`
+	AssetSize             int64         `json:"asset_size"`
+	PublishedAt           string        `json:"published_at"`
+	History               []VersionItem `json:"history,omitempty"`
+	AlreadyDownloadedPath string        `json:"already_downloaded_path,omitempty"`    // 已下载的更新包路径（Go 端扫描）
+	AlreadyDownloadedVer  string        `json:"already_downloaded_version,omitempty"` // 已下载的更新包版本号
 }
 
 // CheckUpdate 检查 GitHub 是否有新版本
@@ -169,10 +169,10 @@ func CheckUpdate() (*UpdateInfo, error) {
 	// 策略一：优先使用 GitHub Release API
 	release, err := fetchReleaseFromSources()
 	if err == nil && release != nil {
-	info := buildUpdateInfoFromRelease(release)
-	info.AlreadyDownloadedPath, info.AlreadyDownloadedVer = scanAlreadyDownloaded()
-	return info, nil
-}
+		info := buildUpdateInfoFromRelease(release)
+		info.AlreadyDownloadedPath, info.AlreadyDownloadedVer = scanAlreadyDownloaded()
+		return info, nil
+	}
 
 	// 策略二：通过多渠道 version.json 获取版本信息
 	applog.Info("[Updater] GitHub API 获取失败，尝试多渠道 version.json")
@@ -717,6 +717,11 @@ func uniqueSavePath(dir, filename string) string {
 // 返回 (文件路径, 版本号估计) 或 ("", "") 如果不存在
 func scanAlreadyDownloaded() (string, string) {
 	appDir := getAppDir()
+	// The current updater always stages to this stable path.
+	stablePath := filepath.Join(appDir, "CCZJ-Video-Update.exe")
+	if info, err := os.Stat(stablePath); err == nil && !info.IsDir() && info.Size() >= 1024 {
+		return stablePath, ""
+	}
 	exeName := getAppExeName()
 	ext := filepath.Ext(exeName)
 	baseName := strings.TrimSuffix(exeName, ext)
@@ -757,18 +762,13 @@ func DownloadUpdate(downloadURL string, progress DownloadProgress) (string, erro
 	applog.Info("[Updater] 应用目录: %s", appDir)
 
 	// 从 URL 提取文件名
-	filename := filepath.Base(downloadURL)
-	if idx := strings.Index(filename, "?"); idx >= 0 {
-		filename = filename[:idx]
-	}
-	if filename == "" || filename == "." {
-		filename = "CCZJ-Video-Update.exe"
-	}
-	savePath := uniqueSavePath(appDir, filename)
+	// Always use one staging name. Release asset names are allowed to change
+	// between versions; using the URL basename leaves stale update executables.
+	savePath := filepath.Join(appDir, "CCZJ-Video-Update.exe")
 	applog.Info("[Updater] 保存路径: %s", savePath)
 
 	// 如果文件已存在，删除后重新下载
-	os.Remove(savePath)
+	_ = os.Remove(savePath)
 
 	// ====== 并发测速所有下载源 ======
 	applog.Info("[Updater] 开始并发测速所有下载源...")
@@ -814,6 +814,11 @@ func DownloadUpdate(downloadURL string, progress DownloadProgress) (string, erro
 		if resp.StatusCode != http.StatusOK {
 			resp.Body.Close()
 			applog.Warn("[Updater] 源 %s HTTP %d", src.source, resp.StatusCode)
+			continue
+		}
+		if strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/html") {
+			resp.Body.Close()
+			applog.Warn("[Updater] source %s returned HTML instead of an update package", src.source)
 			continue
 		}
 

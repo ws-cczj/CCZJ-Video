@@ -6,11 +6,12 @@ import {
   GetSetting, SetSetting, GetCloseBehavior, SetCloseBehavior, RestartApp,
   WindowSetResizable, WindowGetResizable, WindowSetSize, WindowGetSize,
   GetAppVersion,
-} from '../../bindings/cczjVideo/app'
+} from '../api/app'
 import { updateController } from '../stores/updateState'
 import { useThemeStore, type CustomTheme, type ColorPalette } from '../stores/theme'
 import { useErrorStore } from '../stores/error'
 import { useConfirmStore } from '../stores/confirm'
+import { localStorageBytes } from '../platform/storage'
 import { useDownloadStore } from '../stores/download'
 import { useDevMode } from '../stores/devMode'
 import Icon from '../components/Icon.vue'
@@ -510,14 +511,8 @@ function fmtBytes(bytes: number): string {
 async function loadCacheInfo(): Promise<void> {
   cacheLoading.value = true
   try {
-    // 1. localStorage
-    let lsBytes = 0
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i)
-      if (key) {
-        lsBytes += (key.length + (localStorage.getItem(key)?.length || 0)) * 2
-      }
-    }
+    // 1. localStorage (owned by the platform adapter)
+    const lsBytes = localStorageBytes()
 
     // 2. TsCache 内存
     const tsMem = tsStats()
@@ -1217,6 +1212,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 </template>
 
 <style scoped>
+
 .settings-page {
   color: var(--text-primary);
   padding-bottom: 48px;
@@ -1659,9 +1655,8 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   background: rgba(0,0,0,0.55);
   display: flex; align-items: center; justify-content: center;
   z-index: 100;
-  animation: fadeIn 0.15s ease;
+  animation: cczj-fade-in 0.15s ease;
 }
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 .modal {
   width: min(780px, 94vw);
   max-height: 90vh;
@@ -2852,5 +2847,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   margin: 0 0 12px;
   line-height: 1.5;
 }
+
+
 
 </style>

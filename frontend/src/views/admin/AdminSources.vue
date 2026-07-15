@@ -3,7 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import {
   AddSource as AddSourceApi, UpdateSource as UpdateSourceApi, DeleteSource as DeleteSourceApi,
   RunSourceAction, ExportSource, StartCollect, StopCollect,
-} from '../../../bindings/cczjVideo/app'
+} from '../../api/app'
 import { useErrorStore } from '../../stores/error'
 import { useConfirmStore } from '../../stores/confirm'
 import Icon from '../../components/Icon.vue'

@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import {
   GetVideoList, GetVideoDetail, DeleteVideo as DeleteVideoApi, GetAllSources,
-} from '../../../bindings/cczjVideo/app'
+} from '../../api/app'
 import { useErrorStore } from '../../stores/error'
 import { useConfirmStore } from '../../stores/confirm'
 import { useVideoStore } from '../../stores/video'
@@ -217,4 +217,3 @@ onMounted(async () => {
     </Modal>
   </div>
 </template>
-

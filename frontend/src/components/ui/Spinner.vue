@@ -25,7 +25,7 @@ defineProps<{ size?: 'sm' | 'md' | 'lg'; label?: string }>()
   border: 3px solid var(--border);
   border-top-color: var(--accent);
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+  animation: cczj-spin 0.8s linear infinite;
 }
 
 .spinner-wrap.sm .spinner-ring {
@@ -50,7 +50,4 @@ defineProps<{ size?: 'sm' | 'md' | 'lg'; label?: string }>()
   color: var(--text-muted);
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
 </style>

@@ -96,20 +96,20 @@ func UpsertVideos(sourceKey string, videos []*model.Video) error {
 		":"+strings.Join(cols, ",:"))
 
 	type row struct {
-		VodId      string `db:"vod_id"`
-		TypeId     string `db:"type_id"`
-		TypeName   string `db:"type_name"`
-		VodName    string `db:"vod_name"`
-		GlobalId   int64  `db:"global_id"`
-		VodClass   string `db:"vod_class"`
-		VodRemarks string `db:"vod_remarks"`
-		VodPlayUrl string `db:"vod_play_url"`
-		VodDownUrl string `db:"vod_down_url"`
-		VodTime    string `db:"vod_time"`
+		VodId       string `db:"vod_id"`
+		TypeId      string `db:"type_id"`
+		TypeName    string `db:"type_name"`
+		VodName     string `db:"vod_name"`
+		GlobalId    int64  `db:"global_id"`
+		VodClass    string `db:"vod_class"`
+		VodRemarks  string `db:"vod_remarks"`
+		VodPlayUrl  string `db:"vod_play_url"`
+		VodDownUrl  string `db:"vod_down_url"`
+		VodTime     string `db:"vod_time"`
 		VodPlayFrom string `db:"vod_play_from"`
-		VodLetter  string `db:"vod_letter"`
-		VodSub     string `db:"vod_sub"`
-		VodEn      string `db:"vod_en"`
+		VodLetter   string `db:"vod_letter"`
+		VodSub      string `db:"vod_sub"`
+		VodEn       string `db:"vod_en"`
 	}
 	var rows []*row
 	var skipped int
@@ -255,61 +255,109 @@ func MergeVideoDetails(sourceKey string, videos []*model.Video) error {
 
 	var mergedVideos []*model.Video
 	for _, v := range videos {
-		if v == nil { continue }
+		if v == nil {
+			continue
+		}
 		vid := normalizeFlex(v.VodId)
-		if vid == "" { continue }
+		if vid == "" {
+			continue
+		}
 
 		existing, err := GetVideoById(sourceKey, vid)
 		if err == nil && existing != nil {
-			if v.VodName == "" { v.VodName = existing.VodName }
-			if flexIsZeroOrEmpty(v.TypeId) { v.TypeId = existing.TypeId }
-			if v.TypeName == "" { v.TypeName = existing.TypeName }
-			if v.VodPic == "" { v.VodPic = existing.VodPic }
-			if v.VodActor == "" { v.VodActor = existing.VodActor }
-			if v.VodDirector == "" { v.VodDirector = existing.VodDirector }
-			if v.VodContent == "" { v.VodContent = existing.VodContent }
-			if v.VodArea == "" { v.VodArea = existing.VodArea }
-			if v.VodYear == "" { v.VodYear = existing.VodYear }
-			if v.VodLang == "" { v.VodLang = existing.VodLang }
-			if v.VodRemarks == "" { v.VodRemarks = existing.VodRemarks }
-			if v.VodPlayUrl == "" { v.VodPlayUrl = existing.VodPlayUrl }
-			if v.VodDownUrl == "" { v.VodDownUrl = existing.VodDownUrl }
-			if v.VodTime == "" { v.VodTime = existing.VodTime }
-			if v.VodDoubanScore.String() == "" { v.VodDoubanScore = existing.VodDoubanScore }
-			if v.VodScore.String() == "" { v.VodScore = existing.VodScore }
-			if v.VodPlayFrom == "" { v.VodPlayFrom = existing.VodPlayFrom }
-			if v.VodLetter == "" { v.VodLetter = existing.VodLetter }
-			if v.VodTag == "" { v.VodTag = existing.VodTag }
-			if v.VodSub == "" { v.VodSub = existing.VodSub }
-			if v.VodEn == "" { v.VodEn = existing.VodEn }
+			if v.VodName == "" {
+				v.VodName = existing.VodName
+			}
+			if flexIsZeroOrEmpty(v.TypeId) {
+				v.TypeId = existing.TypeId
+			}
+			if v.TypeName == "" {
+				v.TypeName = existing.TypeName
+			}
+			if v.VodPic == "" {
+				v.VodPic = existing.VodPic
+			}
+			if v.VodActor == "" {
+				v.VodActor = existing.VodActor
+			}
+			if v.VodDirector == "" {
+				v.VodDirector = existing.VodDirector
+			}
+			if v.VodContent == "" {
+				v.VodContent = existing.VodContent
+			}
+			if v.VodArea == "" {
+				v.VodArea = existing.VodArea
+			}
+			if v.VodYear == "" {
+				v.VodYear = existing.VodYear
+			}
+			if v.VodLang == "" {
+				v.VodLang = existing.VodLang
+			}
+			if v.VodRemarks == "" {
+				v.VodRemarks = existing.VodRemarks
+			}
+			if v.VodPlayUrl == "" {
+				v.VodPlayUrl = existing.VodPlayUrl
+			}
+			if v.VodDownUrl == "" {
+				v.VodDownUrl = existing.VodDownUrl
+			}
+			if v.VodTime == "" {
+				v.VodTime = existing.VodTime
+			}
+			if v.VodDoubanScore.String() == "" {
+				v.VodDoubanScore = existing.VodDoubanScore
+			}
+			if v.VodScore.String() == "" {
+				v.VodScore = existing.VodScore
+			}
+			if v.VodPlayFrom == "" {
+				v.VodPlayFrom = existing.VodPlayFrom
+			}
+			if v.VodLetter == "" {
+				v.VodLetter = existing.VodLetter
+			}
+			if v.VodTag == "" {
+				v.VodTag = existing.VodTag
+			}
+			if v.VodSub == "" {
+				v.VodSub = existing.VodSub
+			}
+			if v.VodEn == "" {
+				v.VodEn = existing.VodEn
+			}
 		}
 		mergedVideos = append(mergedVideos, v)
 	}
 
-	if len(mergedVideos) == 0 { return nil }
+	if len(mergedVideos) == 0 {
+		return nil
+	}
 	return UpsertVideos(sourceKey, mergedVideos)
 }
 
 // rawVideoRow 仅用于 SQL 扫描，所有共享字段从 global_video JOIN 获取
 type rawVideoRow struct {
-	Id           int    `db:"id"`
-	VodId        string `db:"vod_id"`
-	TypeId       string `db:"type_id"`
-	TypeName     string `db:"type_name"`
-	VodName      string `db:"vod_name"`
-	VodPic       string `db:"vod_pic"`
-	VodRemarks   string `db:"vod_remarks"`
-	VodYear      string `db:"vod_year"`
-	VodArea      string `db:"vod_area"`
-	VodDirector  string `db:"vod_director"`
-	VodActor     string `db:"vod_actor"`
-	DoubanScore  string `db:"douban_score"`
-	DoubanId     string `db:"douban_id"`
-	VodHits      string `db:"vod_hits"`
-	VodLang      string `db:"vod_lang"`
-	VodContent   string `db:"vod_content"`
-	VodTag       string `db:"vod_tag"`
-	GlobalId     int64  `db:"global_id"`
+	Id          int    `db:"id"`
+	VodId       string `db:"vod_id"`
+	TypeId      string `db:"type_id"`
+	TypeName    string `db:"type_name"`
+	VodName     string `db:"vod_name"`
+	VodPic      string `db:"vod_pic"`
+	VodRemarks  string `db:"vod_remarks"`
+	VodYear     string `db:"vod_year"`
+	VodArea     string `db:"vod_area"`
+	VodDirector string `db:"vod_director"`
+	VodActor    string `db:"vod_actor"`
+	DoubanScore string `db:"douban_score"`
+	DoubanId    string `db:"douban_id"`
+	VodHits     string `db:"vod_hits"`
+	VodLang     string `db:"vod_lang"`
+	VodContent  string `db:"vod_content"`
+	VodTag      string `db:"vod_tag"`
+	GlobalId    int64  `db:"global_id"`
 }
 
 func rowToVideo(r rawVideoRow) *model.Video {
@@ -757,10 +805,10 @@ func GetTypes(sourceKey string) ([]*model.VType, error) {
 			continue
 		}
 		out = append(out, &model.VType{
-			Id:       r.Id,
-			TypeId:   model.FlexibleString(fmt.Sprintf("%d", r.Id)),
-			Name:     r.TypeName,
-			Sort:     r.Sort,
+			Id:     r.Id,
+			TypeId: model.FlexibleString(fmt.Sprintf("%d", r.Id)),
+			Name:   r.TypeName,
+			Sort:   r.Sort,
 		})
 	}
 	return out, nil
@@ -1291,8 +1339,9 @@ func ImportTypes(sourceKey string, rows []*ExportTypeRow) error {
 	return nil
 }
 
-// safeIdent 非常简单的标识符安全化，仅允许 [a-z0-9_]。所有表名/列名由内部拼接产生，
-// 不接受任意用户输入，这里做一道防御以避免误用。
+// safeIdent only accepts [a-z0-9_]. Invalid input is mapped to an impossible
+// sentinel instead of being stripped, so an input such as "source!" cannot be
+// silently redirected to the valid "source" table.
 func safeIdent(s string) string {
 	out := make([]byte, 0, len(s))
 	for i := 0; i < len(s); i++ {
@@ -1300,6 +1349,9 @@ func safeIdent(s string) string {
 		if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' {
 			out = append(out, c)
 		}
+	}
+	if len(out) != len(s) || len(out) == 0 {
+		return "__invalid_identifier__"
 	}
 	return string(out)
 }
@@ -1333,7 +1385,9 @@ func FindSourcesByGlobalId(globalId int64) ([]SourceVideoRef, error) {
 	}
 
 	// 获取所有 v_* 源表
-	var tables []struct{ Name string `db:"name"` }
+	var tables []struct {
+		Name string `db:"name"`
+	}
 	err := instance.Select(&tables,
 		`SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'v_%'`)
 	if err != nil {

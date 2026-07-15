@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { GetLogList, GetLogContent, GetLogDir, ClearLogs } from '../../../bindings/cczjVideo/app'
+import { GetLogList, GetLogContent, GetLogDir, ClearLogs } from '../../api/app'
 import { useErrorStore } from '../../stores/error'
 import { useConfirmStore } from '../../stores/confirm'
 import Icon from '../../components/Icon.vue'

@@ -2,8 +2,11 @@ package main
 
 import (
 	"embed"
+	"sync"
+	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
 //go:embed all:frontend/dist
@@ -26,10 +29,13 @@ func main() {
 	})
 
 	mainWindow := app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name:             "main",
-		Title:            "CCZJ Video",
-		Width:            1280,
-		Height:           800,
+		Name:   "main",
+		Title:  "CCZJ Video",
+		Width:  1280,
+		Height: 800,
+		// Keep WebView content zoom independent from the monitor DPI. Without an
+		// explicit value WebView2 can retain a 50% zoom after DPI transitions.
+		Zoom:             1.0,
 		MinWidth:         900,
 		MinHeight:        600,
 		Frameless:        true,
@@ -39,6 +45,40 @@ func main() {
 			DisableFramelessWindowDecorations: false,
 		},
 	})
+
+	// WebView2 may retain a stale zoom/raster scale after a frameless window is
+	// repeatedly minimised and restored. Let the native DPI resync finish, then
+	// normalise browser zoom and force the frontend to lay out at the final size.
+	var scaleResetMu sync.Mutex
+	var scaleResetTimer *time.Timer
+	var scaleResetGeneration uint64
+	resetWebviewScale := func(_ *application.WindowEvent) {
+		scaleResetMu.Lock()
+		scaleResetGeneration++
+		generation := scaleResetGeneration
+		if scaleResetTimer != nil {
+			scaleResetTimer.Stop()
+		}
+		scaleResetTimer = time.AfterFunc(80*time.Millisecond, func() {
+			scaleResetMu.Lock()
+			if generation != scaleResetGeneration {
+				scaleResetMu.Unlock()
+				return
+			}
+			scaleResetTimer = nil
+			scaleResetMu.Unlock()
+			// SetZoom(1) is intentional here: ZoomReset may restore WebView2's
+			// stale per-monitor value instead of CSS's 100% content scale.
+			mainWindow.SetZoom(1.0)
+			mainWindow.ExecJS("window.dispatchEvent(new Event('resize'))")
+		})
+		scaleResetMu.Unlock()
+	}
+	mainWindow.OnWindowEvent(events.Common.WindowRuntimeReady, resetWebviewScale)
+	mainWindow.OnWindowEvent(events.Common.WindowUnMinimise, resetWebviewScale)
+	mainWindow.OnWindowEvent(events.Common.WindowMaximise, resetWebviewScale)
+	mainWindow.OnWindowEvent(events.Common.WindowUnMaximise, resetWebviewScale)
+	mainWindow.OnWindowEvent(events.Common.WindowDPIChanged, resetWebviewScale)
 
 	// ========== 系统托盘 ==========
 	systray := app.SystemTray.New()

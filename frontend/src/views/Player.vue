@@ -3,8 +3,8 @@ defineOptions({ name: 'Player' })
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 
 import { useRoute, useRouter } from 'vue-router'
-import { GetRecentHistory, SaveWatchHistory, AddFavorite, RemoveFavorite, IsFavorite } from '../../bindings/cczjVideo/app'
-import * as AppMod from '../../bindings/cczjVideo/app'
+import { GetRecentHistory, SaveWatchHistory, AddFavorite, RemoveFavorite, IsFavorite } from '../api/app'
+import * as AppMod from '../api/app'
 import { useSourceStore } from '../stores/source'
 import { useVideoStore } from '../stores/video'
 import VideoPlayer from '../components/VideoPlayer.vue'
@@ -15,8 +15,9 @@ import { resolveEpisodeUrl, stripHtmlTags } from '../utils'
 import { TsCache } from '../utils/tsCache'
 import { epProgressKey, loadEpProgress, saveEpProgress, getEpProgressPct, flushEpProgress } from '../utils/episodeProgress'
 import { bumpFavoritesRefresh } from '../stores/favoritesSync'
-import { Window } from '@wailsio/runtime'
+import { Window } from '../api/runtime'
 import type { HistoryItem } from '../types'
+import { readStorage, writeStorage } from '../platform/storage'
 
 const route = useRoute()
 const router = useRouter()
@@ -298,7 +299,7 @@ const DEFAULT_SHORTCUTS: ShortcutMap = {
 
 function loadShortcuts(): ShortcutMap {
   try {
-    const raw = localStorage.getItem('cczj_shortcuts')
+    const raw = JSON.stringify(readStorage<Record<string, string[]>>('cczj_shortcuts', {}))
     if (raw) {
       const parsed = JSON.parse(raw)
       if (parsed && typeof parsed === 'object') {
@@ -444,8 +445,10 @@ function bindVideoTimeTracking(): void {
     }
     return
   }
-  try { delete (v as any).__epProgressBound } catch { /* ignore */ }
-  ; (v as any).__epProgressBound = true
+  try { (v as any).__progressAbortController?.abort() } catch { /* ignore */ }
+  const progressAbort = new AbortController()
+  ;(v as any).__progressAbortController = progressAbort
+  ;(v as any).__epProgressBound = true
   console.log('[Player] ✔ 进度追踪已绑定到 video 元素')
   v.addEventListener('timeupdate', () => {
     _epUpdateCount++
@@ -454,11 +457,11 @@ function bindVideoTimeTracking(): void {
       const k = epKeyOf(currentEpIndex.value)
       console.log(`[Player] ✔ timeupdate #${_epUpdateCount}: key="${k}", time=${v.currentTime.toFixed(1)}s, dur=${v.duration?.toFixed(1) || '?'}`)
     }
-  })
+  }, { signal: progressAbort.signal })
   v.addEventListener('loadedmetadata', () => {
     console.log(`[Player] ✔ loadedmetadata: dur=${v.duration?.toFixed(1) || '?'}`)
     updateCurrentEpProgress(v.currentTime, v.duration)
-  })
+  }, { signal: progressAbort.signal })
 }
 
 /* ==================== 收藏状态 ==================== */
@@ -475,7 +478,7 @@ const favTargetFolderId = ref<string>('default')
 
 function loadFavFolders(): void {
   try {
-    const raw = localStorage.getItem('cczj_fav_folders')
+    const raw = JSON.stringify(readStorage<unknown>('cczj_fav_folders', null))
     if (raw) {
       const parsed = JSON.parse(raw) as FavFolder[]
       if (Array.isArray(parsed) && parsed.length > 0) {
@@ -502,11 +505,11 @@ async function toggleFavorite(): Promise<void> {
       await RemoveFavorite({ source_key: sourceKey.value, vod_id: String(vodId.value), global_id: video.value?.global_id || 0 })
       const key = `${sourceKey.value}-${vodId.value}`
       try {
-        const raw = localStorage.getItem('cczj_fav_mapping')
+        const raw = JSON.stringify(readStorage<Record<string, string>>('cczj_fav_mapping', {}))
         if (raw) {
           const obj = JSON.parse(raw) as Record<string, string>
           delete obj[key]
-          localStorage.setItem('cczj_fav_mapping', JSON.stringify(obj))
+          writeStorage('cczj_fav_mapping', obj)
         }
       } catch { /* ignore */ }
       isFav.value = false
@@ -532,10 +535,10 @@ async function confirmAddToFolder(): Promise<void> {
     } as any)
     try {
       const key = `${sourceKey.value}-${vodId.value}`
-      const raw = localStorage.getItem('cczj_fav_mapping')
+      const raw = JSON.stringify(readStorage<Record<string, string>>('cczj_fav_mapping', {}))
       const obj: Record<string, string> = raw ? JSON.parse(raw) : {}
       obj[key] = favTargetFolderId.value
-      localStorage.setItem('cczj_fav_mapping', JSON.stringify(obj))
+      writeStorage('cczj_fav_mapping', obj)
     } catch { /* ignore */ }
     isFav.value = true
     bumpFavoritesRefresh()
@@ -576,6 +579,10 @@ function goToEpisode(idx: number): void {
     if (v && !isNaN(v.currentTime)) {
       syncHistoryToDb(v.currentTime, true)
     }
+  } catch { /* ignore */ }
+  try {
+    const v = document.querySelector('.native-video') as HTMLVideoElement | null
+    v && (v as any).__progressAbortController?.abort()
   } catch { /* ignore */ }
   recordHistory(idx)
   currentEpIndex.value = idx
@@ -1060,6 +1067,7 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
 </template>
 
 <style scoped>
+
 /* ============ 根层：铺满整屏 ============== */
 .player-page {
   position: fixed;
@@ -1704,14 +1712,9 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   border: 3px solid rgba(255, 255, 255, 0.08);
   border-top-color: #1890ff;
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+  animation: cczj-spin 0.8s linear infinite;
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
 
 .player-error-page {
   position: absolute;
@@ -1739,15 +1742,6 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
 
 
 
-@keyframes fadeIn {
-  from {
-    opacity: 0
-  }
-
-  to {
-    opacity: 1
-  }
-}
 
 @keyframes scaleIn {
   from {
@@ -1841,5 +1835,7 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
 .folder-name {
   min-width: 0;
 }
+
+
 
 </style>

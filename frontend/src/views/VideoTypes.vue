@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { GetGlobalTypes, SetGlobalTypeCollectEnabled, SyncGlobalTypes } from '../../bindings/cczjVideo/app'
+import { GetGlobalTypes, SetGlobalTypeCollectEnabled, SyncGlobalTypes } from '../api/app'
 import { useErrorStore } from '../stores/error'
 import Icon from '../components/Icon.vue'
 import { Button, Badge, Spinner, Empty } from '../components/ui'

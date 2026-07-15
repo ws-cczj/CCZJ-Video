@@ -1,25 +1,22 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { Events } from '@wailsio/runtime'
-import { GetSetting, SetSetting } from '../../bindings/cczjVideo/app'
+import {
+  CancelDownload,
+  GetDownloadDir,
+  GetDownloadProgress,
+  GetSetting,
+  ListDownloads,
+  OpenFileInExplorer,
+  PauseDownload,
+  RemoveDownload,
+  ResumeDownload,
+  SetDownloadDir,
+  StartVideoDownload,
+  downloadErrorCode,
+} from '../api/download'
 import { useErrorStore } from './error'
 import { appEvent } from '../event'
-
-const DIR_STORAGE_KEY = 'cczj_download_dir'
-
-// 运行时动态访问 Go 绑定（避免未生成的 TS 类型声明）
-function getApp(): any {
-  const w = window as any
-  return w?.go?.main?.App || null
-}
-
-function safeCall(name: string, args?: any[]): any {
-  const app = getApp()
-  if (!app || typeof app[name] !== 'function') {
-    throw new Error(`Go binding not available: ${name}`)
-  }
-  return args !== undefined ? app[name](...args) : app[name]()
-}
+import { onBackendEvent } from '../api/events'
 
 export interface ChunkProgress {
   id: number
@@ -94,7 +91,7 @@ export const useDownloadStore = defineStore('download', () => {
       const saved = await GetSetting('download_dir')
       if (saved && typeof saved === 'string') {
         try {
-          const ret = await safeCall('SetDownloadDir', [saved])
+          const ret = await SetDownloadDir(saved)
           if (typeof ret === 'string' && ret) dir.value = ret
         } catch {
           dir.value = saved
@@ -102,25 +99,10 @@ export const useDownloadStore = defineStore('download', () => {
       }
     } catch { /* 忽略 */ }
 
-    // 2) 如未设置，从 localStorage 载入
+    // 2) 从后端获取默认目录（兜底）
     if (!dir.value) {
       try {
-        const saved = localStorage.getItem(DIR_STORAGE_KEY)
-        if (saved) {
-          try {
-            const ret = await safeCall('SetDownloadDir', [saved])
-            if (typeof ret === 'string' && ret) dir.value = ret
-          } catch {
-            dir.value = saved
-          }
-        }
-      } catch { /* 忽略 */ }
-    }
-
-    // 3) 从后端获取默认目录（兜底）
-    if (!dir.value) {
-      try {
-        const d = await safeCall('GetDownloadDir')
+        const d = await GetDownloadDir()
         if (typeof d === 'string' && d) dir.value = d
       } catch {
         // 忽略
@@ -129,7 +111,7 @@ export const useDownloadStore = defineStore('download', () => {
 
     // 4) 历史任务列表
     try {
-      const all = await safeCall('ListDownloads')
+      const all = await ListDownloads()
       if (Array.isArray(all)) {
         for (const item of all) upsert(item)
       }
@@ -137,20 +119,16 @@ export const useDownloadStore = defineStore('download', () => {
       // 忽略
     }
 
-    if (Events) {
-      try {
-        _off = Events.On('download:progress', (ev: any) => {
-          const data = ev.data
-          upsert(data)
-          // 桥接到前端事件总线
-          const taskId = data.task_id ?? data.TaskId ?? ''
-          const downloaded = Number(data.downloaded ?? data.Downloaded ?? 0)
-          const total = Number(data.total ?? data.Total ?? 0)
-          appEvent.emit('download:progress', taskId, downloaded, total)
-        }) as unknown as (() => void) | null
-      } catch {
-        // 忽略
-      }
+    try {
+      _off = onBackendEvent<any>('download:progress', (data) => {
+        upsert(data)
+        const taskId = data.task_id ?? data.TaskId ?? ''
+        const downloaded = Number(data.downloaded ?? data.Downloaded ?? 0)
+        const total = Number(data.total ?? data.Total ?? 0)
+        appEvent.emit('download:progress', taskId, downloaded, total)
+      })
+    } catch {
+      // 忽略运行时尚未就绪的事件桥接
     }
   }
 
@@ -180,16 +158,8 @@ export const useDownloadStore = defineStore('download', () => {
     try {
       // 1) 推送到 Go 后端（设置进程内的 customDownloadDir，后端会自动持久化）
       try {
-        const ret = await safeCall('SetDownloadDir', [newDir])
+        const ret = await SetDownloadDir(newDir)
         if (typeof ret === 'string' && ret) dir.value = ret
-      } catch {
-        // 忽略
-      }
-      // 2) localStorage 作为兜底
-      try {
-        const effectiveDir = dir.value || newDir
-        if (effectiveDir) localStorage.setItem(DIR_STORAGE_KEY, effectiveDir)
-        else localStorage.removeItem(DIR_STORAGE_KEY)
       } catch {
         // 忽略
       }
@@ -228,20 +198,18 @@ export const useDownloadStore = defineStore('download', () => {
     }
     tasks.value = [initTask, ...tasks.value.filter((x) => x.task_id !== id)]
     try {
-      const res = await safeCall('StartVideoDownload', [
-        {
-          task_id: id,
-          url: opts.url,
-          filename: opts.filename,
-          save_dir: dir.value || '',
-          force: opts.force || false,
-        },
-      ])
+      const res = await StartVideoDownload({
+        task_id: id,
+        url: opts.url,
+        filename: opts.filename,
+        save_dir: dir.value || '',
+        force: opts.force || false,
+      })
       if (res) upsert(res)
       appEvent.emit('download:start', id, opts.url)
     } catch (e: any) {
       const msg: string = e?.message || String(e)
-      const isDuplicate = msg.startsWith('duplicate_url:')
+      const isDuplicate = downloadErrorCode(e) === 'DOWNLOAD_DUPLICATE'
       // 重复下载：移除临时任务并抛出错误让调用方决定
       tasks.value = tasks.value.filter((x) => x.task_id !== id)
       if (isDuplicate) {
@@ -259,7 +227,7 @@ export const useDownloadStore = defineStore('download', () => {
 
   async function refresh(taskId: string): Promise<void> {
     try {
-      const res = await safeCall('GetDownloadProgress', [taskId])
+      const res = await GetDownloadProgress(taskId)
       if (res) upsert(res)
     } catch {
       // 忽略
@@ -268,7 +236,7 @@ export const useDownloadStore = defineStore('download', () => {
 
   async function cancel(taskId: string): Promise<boolean> {
     try {
-      const ok = await safeCall('CancelDownload', [taskId])
+      const ok = await CancelDownload(taskId)
       if (ok) {
         const t = tasks.value.find((x) => x.task_id === taskId)
         if (t) t.status = 'cancelled'
@@ -281,7 +249,7 @@ export const useDownloadStore = defineStore('download', () => {
 
   async function pause(taskId: string): Promise<boolean> {
     try {
-      const ok = await safeCall('PauseDownload', [taskId])
+      const ok = await PauseDownload(taskId)
       if (ok) {
         const t = tasks.value.find((x) => x.task_id === taskId)
         if (t) {
@@ -299,7 +267,7 @@ export const useDownloadStore = defineStore('download', () => {
 
   async function resume(taskId: string): Promise<boolean> {
     try {
-      const ok = await safeCall('ResumeDownload', [taskId])
+      const ok = await ResumeDownload(taskId)
       if (ok) {
         const t = tasks.value.find((x) => x.task_id === taskId)
         if (t) t.status = 'downloading'
@@ -313,7 +281,7 @@ export const useDownloadStore = defineStore('download', () => {
 
   async function remove(taskId: string): Promise<boolean> {
     try {
-      await safeCall('RemoveDownload', [taskId])
+      await RemoveDownload(taskId)
     } catch {
       // 忽略
     }
@@ -323,7 +291,7 @@ export const useDownloadStore = defineStore('download', () => {
 
   async function openFile(path: string): Promise<boolean> {
     try {
-      return !!(await safeCall('OpenFileInExplorer', [path]))
+      return !!(await OpenFileInExplorer(path))
     } catch {
       return false
     }
@@ -353,7 +321,7 @@ export const useDownloadStore = defineStore('download', () => {
       } catch (e: any) {
         const msg: string = e?.message || String(e)
         // 重复下载：静默跳过（不报错也不阻塞后续）
-        if (msg.startsWith('duplicate_url:')) {
+        if (downloadErrorCode(e) === 'DOWNLOAD_DUPLICATE') {
           continue
         }
         if (onError) {

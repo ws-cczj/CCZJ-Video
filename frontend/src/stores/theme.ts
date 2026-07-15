@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
-import { GetSetting, SetSetting } from '../../bindings/cczjVideo/app'
+import { GetSetting, SetSetting } from '../api/app'
 import { appEvent } from '../event'
 import landingMoon from '../assets/theme_images/landingMoon.png'
 import jqbg from '../assets/theme_images/jqbg.jpg'

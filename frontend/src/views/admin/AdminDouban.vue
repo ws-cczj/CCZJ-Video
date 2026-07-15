@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import {
   DoubanStatus, DoubanGetAll, DoubanTriggerNow, DoubanUpdateVideo,
-} from '../../../bindings/cczjVideo/app'
+} from '../../api/app'
 import { useErrorStore } from '../../stores/error'
 import Icon from '../../components/Icon.vue'
 import { Button, Badge, Empty, Spinner } from '../../components/ui'

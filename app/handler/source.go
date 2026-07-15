@@ -34,6 +34,9 @@ func deriveKey(rawURL string) string {
 }
 
 func AddSource(s *model.Source) error {
+	if s == nil {
+		return fmt.Errorf("source is required")
+	}
 	if s.ApiUrl == "" {
 		return fmt.Errorf("api_url is required")
 	}
@@ -43,8 +46,8 @@ func AddSource(s *model.Source) error {
 	if s.SourceKey == "" {
 		s.SourceKey = deriveKey(s.ApiUrl)
 	}
-	if s.SourceKey == "" {
-		return fmt.Errorf("cannot derive source_key from api_url")
+	if err := model.ValidateSourceKey(s.SourceKey); err != nil {
+		return fmt.Errorf("invalid source_key: %w", err)
 	}
 	if s.Name == "" {
 		s.Name = s.SourceKey
@@ -66,10 +69,19 @@ func AddSource(s *model.Source) error {
 }
 
 func UpdateSource(s *model.Source) error {
+	if s == nil {
+		return fmt.Errorf("source is required")
+	}
+	if err := model.ValidateSourceKey(s.SourceKey); err != nil {
+		return fmt.Errorf("invalid source_key: %w", err)
+	}
 	return db.UpdateSource(s)
 }
 
 func DeleteSource(key string) error {
+	if err := model.ValidateSourceKey(key); err != nil {
+		return fmt.Errorf("invalid source_key: %w", err)
+	}
 	return db.DeleteSource(key)
 }
 
@@ -89,12 +101,12 @@ type SourceTableSummary struct {
 
 // SourceDetail 返回该源的"字段 + 示例"，用于设置页面展示
 type SourceDetail struct {
-	SourceKey string                `json:"source_key"`
-	Name      string                `json:"name"`
-	ApiUrl    string                `json:"api_url"`
-	Tables    []SourceTableSummary  `json:"tables"`
-	Samples   []*model.Video        `json:"sample_videos"`
-	Episodes  []*model.Episode      `json:"sample_episodes"`
+	SourceKey string               `json:"source_key"`
+	Name      string               `json:"name"`
+	ApiUrl    string               `json:"api_url"`
+	Tables    []SourceTableSummary `json:"tables"`
+	Samples   []*model.Video       `json:"sample_videos"`
+	Episodes  []*model.Episode     `json:"sample_episodes"`
 }
 
 func GetSourceDetail(sourceKey string) (*SourceDetail, error) {

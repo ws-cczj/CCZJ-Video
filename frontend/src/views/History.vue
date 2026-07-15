@@ -2,7 +2,7 @@
 defineOptions({ name: 'History' })
 import { ref, onMounted, onActivated, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { GetRecentHistory, DeleteHistoryByVideo, ClearAllHistory } from '../../bindings/cczjVideo/app'
+import { GetRecentHistory, DeleteHistoryByVideo, ClearAllHistory } from '../api/app'
 import { usePosterCacheStore } from '../stores/posterCache'
 import Icon from '../components/Icon.vue'
 import { Button, Badge, Spinner as LoadingSpinner, Empty as EmptyState } from '../components/ui'
@@ -385,12 +385,7 @@ function goDetail(h: HistoryItem): void {
 
 <style scoped>
 .history-page {
-  animation: fadeInUp 0.4s ease;
-}
-
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  animation: cczj-fade-in-up 0.4s ease;
 }
 
 /* 搜索框 */

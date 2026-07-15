@@ -7,6 +7,7 @@
  *   5. 开启后侧边栏出现「开发者模式」栏目
  */
 import { ref, reactive } from 'vue'
+import { readStorageBoolean, writeStorage } from '../platform/storage'
 
 const CORRECT_PASSWORD = '541688'
 
@@ -88,17 +89,13 @@ function setEnabled(val: boolean): void {
 }
 
 function persist(): void {
-  try {
-    localStorage.setItem('cczj_dev_unlocked', unlocked.value ? '1' : '0')
-    localStorage.setItem('cczj_dev_enabled', enabled.value ? '1' : '0')
-  } catch { /* ignore */ }
+  writeStorage('cczj_dev_unlocked', unlocked.value)
+  writeStorage('cczj_dev_enabled', enabled.value)
 }
 
 function restore(): void {
-  try {
-    unlocked.value = localStorage.getItem('cczj_dev_unlocked') === '1'
-    enabled.value = localStorage.getItem('cczj_dev_enabled') === '1'
-  } catch { /* ignore */ }
+  unlocked.value = readStorageBoolean('cczj_dev_unlocked')
+  enabled.value = readStorageBoolean('cczj_dev_enabled')
 }
 
 // 模块加载时从 localStorage 恢复

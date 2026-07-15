@@ -8,6 +8,7 @@
  *   4. IndexedDB 持久化：磁盘 LRU + 7 天 TTL
  */
 /* eslint-disable no-console */
+import { readStorage, writeStorage } from '../platform/storage'
 
 const LOG_PREFIX = '[TsCache]'
 
@@ -1525,9 +1526,8 @@ const _BUILTIN_AD_DOMAINS: string[] = [
 /** 当前生效的广告域名黑名单（内置 + 用户上报） */
 let AD_DOMAIN_BLACKLIST: string[] = (() => {
   try {
-    const saved = localStorage.getItem(AD_BLACKLIST_STORAGE_KEY)
-    if (saved) {
-      const userDomains: string[] = JSON.parse(saved)
+    const userDomains = readStorage<string[] | null>(AD_BLACKLIST_STORAGE_KEY, null)
+    if (userDomains) {
       return [..._BUILTIN_AD_DOMAINS, ...userDomains]
     }
   } catch {}
@@ -1544,7 +1544,7 @@ function addAdDomain(domain: string): boolean {
   if (!domain || AD_DOMAIN_BLACKLIST.includes(domain)) return false
   AD_DOMAIN_BLACKLIST.push(domain)
   try {
-    localStorage.setItem(AD_BLACKLIST_STORAGE_KEY, JSON.stringify(_getUserAdDomains()))
+    writeStorage(AD_BLACKLIST_STORAGE_KEY, _getUserAdDomains())
   } catch {}
   return true
 }

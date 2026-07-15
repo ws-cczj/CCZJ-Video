@@ -2,7 +2,27 @@ package model
 
 import (
 	"encoding/json"
+	"fmt"
+	"regexp"
+	"strings"
 )
+
+const maxSourceKeyLength = 64
+
+var sourceKeyPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_]{0,63}$`)
+
+// ValidateSourceKey validates keys used to derive SQLite table identifiers.
+// Source keys are persisted and therefore deliberately not normalized here:
+// callers must reject malformed values instead of silently changing identities.
+func ValidateSourceKey(key string) error {
+	if strings.TrimSpace(key) != key {
+		return fmt.Errorf("source_key must not contain leading or trailing whitespace")
+	}
+	if len(key) == 0 || len(key) > maxSourceKeyLength || !sourceKeyPattern.MatchString(key) {
+		return fmt.Errorf("invalid source_key %q: expected %d lowercase letters, digits, or underscores beginning with a letter or digit", key, maxSourceKeyLength)
+	}
+	return nil
+}
 
 // CollectMode 采集模式
 type CollectMode string
@@ -25,22 +45,22 @@ type AdvConfig struct {
 
 // ScheduleConfig 单个源的调度配置（存储在 sources.schedule_config 列）
 type ScheduleConfig struct {
-	Enabled  bool        `json:"enabled"`   // 是否启用后台周期采集
-	Mode     CollectMode `json:"mode"`      // 后台采集模式
-	IntervalMin int      `json:"interval_min"` // 采集间隔（分钟），最小 5 分钟
+	Enabled     bool        `json:"enabled"`      // 是否启用后台周期采集
+	Mode        CollectMode `json:"mode"`         // 后台采集模式
+	IntervalMin int         `json:"interval_min"` // 采集间隔（分钟），最小 5 分钟
 }
 
 // Source 采集源定义
 type Source struct {
-	Id             int    `json:"id" db:"id"`
-	SourceKey      string `json:"source_key" db:"source_key"`
-	Name           string `json:"name" db:"name"`
-	ApiUrl         string `json:"api_url" db:"api_url"`
-	Enabled        int    `json:"enabled" db:"enabled"`
-	CreatedAt      string `json:"created_at" db:"created_at"`
+	Id        int    `json:"id" db:"id"`
+	SourceKey string `json:"source_key" db:"source_key"`
+	Name      string `json:"name" db:"name"`
+	ApiUrl    string `json:"api_url" db:"api_url"`
+	Enabled   int    `json:"enabled" db:"enabled"`
+	CreatedAt string `json:"created_at" db:"created_at"`
 
 	// 高级配置（JSON 字符串，DB 列）
-	AdvConfigRaw   string `json:"-" db:"adv_config"`
+	AdvConfigRaw string `json:"-" db:"adv_config"`
 	// 调度配置（JSON 字符串，DB 列，null 表示使用全局默认）
 	ScheduleCfgRaw string `json:"-" db:"schedule_config"`
 	// 策略配置（JSON 字符串，DB 列，用于自定义数据源参数组合）

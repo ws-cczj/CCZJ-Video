@@ -3,8 +3,8 @@ defineOptions({ name: 'Search' })
 import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { GetSetting, GetRecentHistory, GetVideoList, SearchSource, ImportSourceVideos } from '../../bindings/cczjVideo/app'
-import { Events } from '@wailsio/runtime'
+import { GetSetting, GetRecentHistory, GetVideoList, SearchSource, ImportSourceVideos } from '../api/app'
+import { onBackendEvent } from '../api/events'
 import { useSourceStore } from '../stores/source'
 import { useVideoStore } from '../stores/video'
 import { usePosterCacheStore } from '../stores/posterCache'
@@ -12,6 +12,7 @@ import VideoCard from '../components/VideoCard.vue'
 import Icon from '../components/Icon.vue'
 import { Button, Tag, Select as SelectDropdown, Spinner as LoadingSpinner, Empty as EmptyState } from '../components/ui'
 import { getDetailPath } from '../utils'
+import { readStorage, readStorageBoolean, removeStorage, writeStorage } from '../platform/storage'
 import type { Video, HistoryItem } from '../types'
 
 const { t } = useI18n()
@@ -29,12 +30,9 @@ const sourceOptions = computed(() =>
 
 const currentSearchSource = ref('')
 const keyword = ref('')
-const searchHistory = ref<string[]>(
-  JSON.parse(localStorage.getItem('search_history') || '[]')
-)
-const sourceSearchMode = ref(
-  localStorage.getItem('source_search_mode') === 'true'
-)
+const searchHistory = ref<string[]>(readStorage<string[]>('search_history', []))
+const sourceSearchMode = ref(readStorageBoolean('source_search_mode'))
+const hasKeyword = computed(() => keyword.value.trim().length > 0)
 
 // 是否进行过搜索
 const hasSearched = ref(false)
@@ -120,6 +118,16 @@ watch(
     }
   }
 )
+
+watch(keyword, (value) => {
+  if (value.trim()) return
+  videoStore.videos.length = 0
+  videoStore.total = 0
+  videoStore.loading = false
+  hasSearched.value = false
+  clearSourceResults()
+  searchProgress.value = { stage: '', message: '', current: 0, total: 0 }
+})
 
 // 删除通知：从详情页删除视频后，自动移除本地列表中的对应项
 watch(() => videoStore.deletedVodId, (vodId) => {
@@ -322,21 +330,34 @@ function goSearchPage(p: number): void {
 
 function toggleSourceSearchMode(): void {
   sourceSearchMode.value = !sourceSearchMode.value
-  localStorage.setItem('source_search_mode', String(sourceSearchMode.value))
+  writeStorage('source_search_mode', sourceSearchMode.value)
+  if (sourceSearchMode.value) {
+    videoStore.videos.length = 0
+    videoStore.total = 0
+    videoStore.loading = false
+  } else {
+    clearSourceResults()
+  }
 }
 
 function doSearch(): void {
   const kw = keyword.value.trim()
-  if (!kw || !currentSearchSource.value) return
+  if (!kw || !currentSearchSource.value) {
+    hasSearched.value = false
+    return
+  }
   if (!searchHistory.value.includes(kw)) {
     searchHistory.value.unshift(kw)
     if (searchHistory.value.length > 10) searchHistory.value.pop()
-    localStorage.setItem('search_history', JSON.stringify(searchHistory.value))
+    writeStorage('search_history', searchHistory.value)
   }
   hasSearched.value = true
   searchCurrentPage.value = 1
   clearSourceResults()
   if (sourceSearchMode.value) {
+    videoStore.videos.length = 0
+    videoStore.total = 0
+    videoStore.loading = false
     doSourceSearch(1)
   } else {
     videoStore.search(currentSearchSource.value, kw)
@@ -367,7 +388,7 @@ function loadMore(): void {
 
 function clearHistory(): void {
   searchHistory.value = []
-  localStorage.removeItem('search_history')
+  removeStorage('search_history')
 }
 
 function removeHistoryItem(kw: string): void {
@@ -375,9 +396,9 @@ function removeHistoryItem(kw: string): void {
   if (idx < 0) return
   searchHistory.value.splice(idx, 1)
   if (searchHistory.value.length > 0) {
-    localStorage.setItem('search_history', JSON.stringify(searchHistory.value))
+    writeStorage('search_history', searchHistory.value)
   } else {
-    localStorage.removeItem('search_history')
+    removeStorage('search_history')
   }
 }
 
@@ -405,10 +426,10 @@ let importMessageTimer: ReturnType<typeof setTimeout> | null = null
 const searchProgress = ref({ stage: '', message: '', current: 0, total: 0 })
 let searchProgressListener: (() => void) | null = null
 let searchResultListener: (() => void) | null = null
+let sourceSearchGeneration = 0
 
 onMounted(() => {
-  searchProgressListener = Events.On('search:progress', (event) => {
-    const data = event.data
+  searchProgressListener = onBackendEvent<any>('search:progress', (data) => {
     searchProgress.value = {
       stage: data.stage || '',
       message: data.message || '',
@@ -417,9 +438,9 @@ onMounted(() => {
     }
   })
   // 监听 search:result 事件：每条视频详情完成后渐进式推送到结果列表
-  searchResultListener = Events.On('search:result', (event) => {
-    const data = event.data
+  searchResultListener = onBackendEvent<any>('search:result', (data) => {
     if (!data || !data.video) return
+    if (!sourceSearchMode.value || !hasSourceSearched.value || !hasKeyword.value) return
     // 仅处理当前搜索源 + 当前关键词的结果，避免串扰
     if (data.source_key !== currentSearchSource.value) return
     if (data.keyword !== keyword.value.trim()) return
@@ -476,6 +497,11 @@ const isAllCurrentPageSelected = computed(() => {
 async function doSourceSearch(page: number = 1): Promise<void> {
   const kw = keyword.value.trim()
   if (!kw || !currentSearchSource.value) return
+  const sourceKey = currentSearchSource.value
+  const generation = ++sourceSearchGeneration
+  videoStore.videos.length = 0
+  videoStore.total = 0
+  videoStore.loading = false
   sourceSearching.value = true
   hasSourceSearched.value = true
   // 切换到新搜索或新页时清空当前结果（渐进式事件会重新填充）
@@ -485,7 +511,8 @@ async function doSourceSearch(page: number = 1): Promise<void> {
   importMessage.value = { type: '', text: '' }
   searchProgress.value = { stage: '', message: '', current: 0, total: 0 }
   try {
-    const resp = (await SearchSource(currentSearchSource.value, kw, page, sourceSearchPageSize.value)) as any
+    const resp = (await SearchSource(sourceKey, kw, page, sourceSearchPageSize.value)) as any
+    if (generation !== sourceSearchGeneration || keyword.value.trim() !== kw || currentSearchSource.value !== sourceKey) return
     // 注意：不替换 sourceSearchResults，因为它已经通过 search:result 事件渐进式填充
     // 仅更新分页元数据
     sourceSearchTotal.value = resp?.total || sourceSearchResults.value.length
@@ -502,10 +529,12 @@ async function doSourceSearch(page: number = 1): Promise<void> {
       sourceSearchResults.value = resp.videos as Video[]
     }
   } catch (e) {
-    console.warn(t('search.sourceSearchFailed'), e)
+    if (generation === sourceSearchGeneration) console.warn(t('search.sourceSearchFailed'), e)
   } finally {
-    sourceSearching.value = false
-    searchProgress.value = { stage: '', message: '', current: 0, total: 0 }
+    if (generation === sourceSearchGeneration) {
+      sourceSearching.value = false
+      searchProgress.value = { stage: '', message: '', current: 0, total: 0 }
+    }
   }
 }
 
@@ -553,6 +582,8 @@ function toggleSelectAllCurrentPage(): void {
 }
 
 function clearSourceResults(): void {
+  sourceSearchGeneration++
+  sourceSearching.value = false
   sourceSearchResults.value = []
   sourceSearchTotal.value = 0
   sourceSearchPage.value = 1
@@ -767,12 +798,12 @@ function onSourceVideoClick(v: Video): void {
     </section>
 
     <!-- 搜索结果 -->
-    <div v-if="hasSearched && videoStore.loading && videoStore.videos.length === 0" class="cczj-text-center cczj-py-8">
+    <div v-if="hasKeyword && hasSearched && !sourceSearchMode && !hasSourceSearched && videoStore.loading && videoStore.videos.length === 0" class="cczj-text-center cczj-py-8">
       <LoadingSpinner :label="t('search.searching')" />
     </div>
 
     <div
-      v-else-if="hasSearched && videoStore.videos.length > 0"
+      v-else-if="hasKeyword && hasSearched && !sourceSearchMode && !hasSourceSearched && videoStore.videos.length > 0"
       class="search-results cczj-mb-4"
     >
       <div class="results-header cczj-flex cczj-items-center cczj-justify-between cczj-gap-2 cczj-mb-3">
@@ -793,7 +824,7 @@ function onSourceVideoClick(v: Video): void {
     </div>
 
     <div
-      v-if="hasSearched && videoStore.videos.length > 0 && searchTotalPages > 1"
+      v-if="hasKeyword && hasSearched && !sourceSearchMode && !hasSourceSearched && videoStore.videos.length > 0 && searchTotalPages > 1"
       class="search-pagination cczj-flex cczj-items-center cczj-justify-center cczj-gap-2 cczj-my-4"
     >
       <button
@@ -823,7 +854,7 @@ function onSourceVideoClick(v: Video): void {
     </div>
 
     <!-- 源站搜索进度（仅在搜索中且尚未收到任何结果时独占展示） -->
-    <div v-if="sourceSearching && sourceSearchResults.length === 0" class="source-search-progress-section cczj-mb-6">
+    <div v-if="hasKeyword && sourceSearching && sourceSearchResults.length === 0" class="source-search-progress-section cczj-mb-6">
       <div class="search-progress-card">
         <!-- 步骤指示器 -->
         <div class="sp-steps">
@@ -857,7 +888,7 @@ function onSourceVideoClick(v: Video): void {
     </div>
 
     <!-- 搜索中顶部紧凑进度条（已开始出现结果后，进度条移到结果区顶部） -->
-    <div v-if="sourceSearching && sourceSearchResults.length > 0" class="source-inline-progress cczj-mb-3">
+    <div v-if="hasKeyword && sourceSearching && sourceSearchResults.length > 0" class="source-inline-progress cczj-mb-3">
       <div class="sip-bar">
         <div class="sip-bar-fill" :style="{ width: searchProgress.total > 0 ? `${(searchProgress.current / searchProgress.total) * 100}%` : '70%' }"></div>
       </div>
@@ -867,6 +898,7 @@ function onSourceVideoClick(v: Video): void {
     <div
       v-if="
         hasSearched &&
+        hasKeyword &&
         !videoStore.loading &&
         videoStore.videos.length === 0 &&
         sourceStore.currentSourceKey &&
@@ -894,7 +926,7 @@ function onSourceVideoClick(v: Video): void {
 
     <!-- 源站搜索结果（渐进式展示：搜索中也会显示已到达的结果） -->
     <div
-      v-if="hasSourceSearched && sourceSearchResults.length > 0"
+      v-if="hasKeyword && hasSourceSearched && sourceSearchResults.length > 0"
       class="source-search-results cczj-mb-4"
     >
       <div class="results-header source-search-header cczj-flex cczj-items-center cczj-justify-between cczj-gap-2 cczj-mb-3">
@@ -1018,7 +1050,7 @@ function onSourceVideoClick(v: Video): void {
     </div>
 
     <div
-      v-if="hasSourceSearched && !sourceSearching && sourceSearchResults.length === 0"
+      v-if="hasKeyword && hasSourceSearched && !sourceSearching && sourceSearchResults.length === 0"
       class="cczj-mb-4"
     >
       <EmptyState
@@ -1043,15 +1075,11 @@ function onSourceVideoClick(v: Video): void {
 </template>
 
 <style scoped>
+
 .search-page {
   max-width: 100%;
   color: var(--text-primary);
-  animation: fadeInUp 0.4s ease;
-}
-
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  animation: cczj-fade-in-up 0.4s ease;
 }
 
 /* 搜索栏 */
@@ -1715,4 +1743,6 @@ function onSourceVideoClick(v: Video): void {
   padding: 16px 0 4px;
   flex-wrap: wrap;
 }
+
+
 </style>

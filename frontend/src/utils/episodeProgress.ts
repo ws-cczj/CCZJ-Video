@@ -12,6 +12,8 @@
  *   - 写入使用内存缓存 + 防抖，避免高频 timeupdate 事件造成读-改-写竞态。
  */
 
+import { readStorage, removeStorage, writeStorage } from '../platform/storage'
+
 const PROG_KEY = 'cczj_ep_prog_v1'
 const TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 天
 const FLUSH_DEBOUNCE_MS = 1000 // 写入 localStorage 的防抖间隔
@@ -33,17 +35,8 @@ let _flushTimer: ReturnType<typeof setTimeout> | null = null
 
 function _ensureCache(): EpProgressStore {
   if (_cache) return _cache
-  try {
-    const raw = localStorage.getItem(PROG_KEY)
-    if (!raw) { _cache = {}; return _cache }
-    const obj = JSON.parse(raw) as EpProgressStore
-    if (!obj || typeof obj !== 'object') { _cache = {}; return _cache }
-    _cache = obj
-    return _cache
-  } catch {
-    _cache = {}
-    return _cache
-  }
+  _cache = readStorage<EpProgressStore>(PROG_KEY, {})
+  return _cache
 }
 
 function _flushToStorage(): void {
@@ -58,7 +51,7 @@ function _flushToStorage(): void {
       if (now - (v.updatedAt || 0) > TTL_MS) { delete _cache[k]; continue }
     }
     // 始终写入（即使 _cache 为空也同步清理过期的 localStorage 数据）
-    localStorage.setItem(PROG_KEY, JSON.stringify(_cache))
+    writeStorage(PROG_KEY, _cache)
     _dirty = false // 仅在写入成功后才清除 dirty 标记，失败时下次 flush 重试
   } catch { /* 写入失败时保留 _dirty，下次 flush 会重试 */ }
 }
@@ -150,7 +143,7 @@ export function clearAllEpProgress(): void {
     clearTimeout(_flushTimer)
     _flushTimer = null
   }
-  try { localStorage.removeItem(PROG_KEY) } catch { /* ignore */ }
+  removeStorage(PROG_KEY)
 }
 
 // ==================== 窗口关闭兜底 ====================

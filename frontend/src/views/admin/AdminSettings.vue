@@ -4,7 +4,7 @@ import {
   GetSetting, SetSetting, GetCloseBehavior, SetCloseBehavior,
   WindowGetResizable, WindowSetResizable, WindowGetSize, WindowSetSize,
   RestartApp,
-} from '../../../bindings/cczjVideo/app'
+} from '../../api/app'
 import { useErrorStore } from '../../stores/error'
 import { useConfirmStore } from '../../stores/confirm'
 import { useDevMode } from '../../stores/devMode'

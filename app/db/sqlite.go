@@ -1,6 +1,7 @@
 package db
 
 import (
+	"cczjVideo/app/model"
 	"fmt"
 	"path/filepath"
 	"sync"
@@ -41,20 +42,24 @@ func InitDB(dir string) error {
 		// 写并发上限设 1（SQLite 写锁是库级的，多写连接无意义且易触发 SQLITE_BUSY），
 		// 读连接放开到较小数值即可满足列表/详情并发。
 		instance.SetMaxOpenConns(8)
-			instance.SetMaxIdleConns(4)
-			instance.SetConnMaxLifetime(0) // 长连接，避免频繁重建
-			initErr = createTables()
-			if initErr != nil {
-				return
-			}
-			// 迁移：为旧版数据库补充缺失列
-			migrateSourcesColumns()
-			migrateGlobalTypesColumns()
-			migrateGlobalVideoColumns()
-			// 去重 + 添加 vod_name 唯一约束
-			migrateGlobalVideoUniqueName()
-			// 启动时修复数据库中格式异常的 douban_id（科学计数法、浮点格式等）
-			RepairDoubanIDs()
+		instance.SetMaxIdleConns(4)
+		instance.SetConnMaxLifetime(0) // 长连接，避免频繁重建
+		if err := createTables(); err != nil {
+			initErr = err
+			return
+		}
+		// 迁移：为旧版数据库补充缺失列
+		migrateSourcesColumns()
+		migrateGlobalTypesColumns()
+		migrateGlobalVideoColumns()
+		// 去重 + 添加 vod_name 唯一约束
+		migrateGlobalVideoUniqueName()
+		// 启动时修复数据库中格式异常的 douban_id（科学计数法、浮点格式等）
+		RepairDoubanIDs()
+		if err := runSchemaMigrations(instance, func() error { return backupDatabaseBeforeMigration(instance, dbPath) }); err != nil {
+			initErr = err
+			return
+		}
 	})
 	return initErr
 }
@@ -126,7 +131,7 @@ func createTables() error {
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 		// 全局视频类型表（统一管理所有类型的采集和磁力链接获取权限）
-`CREATE TABLE IF NOT EXISTS global_types (
+		`CREATE TABLE IF NOT EXISTS global_types (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
 				type_name TEXT NOT NULL UNIQUE,
 				collect_enabled INTEGER DEFAULT 1,
@@ -340,6 +345,9 @@ func migrateSourcesColumns() {
 }
 
 func EnsureVideoTable(sourceKey string) error {
+	if err := model.ValidateSourceKey(sourceKey); err != nil {
+		return err
+	}
 	tn := "v_" + esc(sourceKey)
 	q := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -376,9 +384,10 @@ func EnsureVideoTable(sourceKey string) error {
 	return nil
 }
 
-
-
 func EnsureEpisodeTable(sourceKey string) error {
+	if err := model.ValidateSourceKey(sourceKey); err != nil {
+		return err
+	}
 	q := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS e_%s (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		vod_id INTEGER NOT NULL,
@@ -395,5 +404,5 @@ func esc(s string) string {
 	return s
 }
 
-func VideoTableName(sourceKey string) string  { return "v_" + sourceKey }
-func EpisodeTableName(sourceKey string) string { return "e_" + sourceKey }
+func VideoTableName(sourceKey string) string   { return "v_" + safeIdent(sourceKey) }
+func EpisodeTableName(sourceKey string) string { return "e_" + safeIdent(sourceKey) }

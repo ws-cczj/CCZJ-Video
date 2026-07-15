@@ -5,7 +5,7 @@ import { useSourceStore } from '../stores/source'
 import { useCollectStore } from '../stores/collect'
 import { useErrorStore } from '../stores/error'
 import type { SourceScheduleItem } from '../stores/collect'
-import { AddSource, UpdateSource, DeleteSource, GetSourceParamsDoc, ExportSource, ImportSourceFromBase64, OpenFolder } from '../../bindings/cczjVideo/app'
+import { AddSource, UpdateSource, DeleteSource, GetSourceParamsDoc, ExportSource, ImportSourceFromBase64, OpenFolder } from '../api/app'
 import Icon from '../components/Icon.vue'
 import { Button, Modal, Tag, Spinner as LoadingSpinner, Empty as EmptyState, Select as SelectDropdown } from '../components/ui'
 import { useConfirmStore } from '../stores/confirm'
@@ -808,17 +808,13 @@ function fallbackCopy(text: string): void {
 </template>
 
 <style scoped>
+
 .sources-page {
   max-width: 1280px;
   margin: 0 auto;
   color: var(--text-primary);
-  animation: fadeInUp 0.4s ease;
+  animation: cczj-fade-in-up 0.4s ease;
   padding-bottom: 40px;
-}
-
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
 }
 
 /* === 页头 === */
@@ -1477,11 +1473,7 @@ function fallbackCopy(text: string): void {
   background: var(--overlay); backdrop-filter: blur(8px);
   display: flex; align-items: center; justify-content: center;
   z-index: 200; padding: 20px;
-  animation: fadeIn 0.2s ease;
-}
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  animation: cczj-fade-in 0.2s ease;
 }
 .modal-content {
   background: var(--bg-card); padding: 24px;
@@ -1639,4 +1631,6 @@ function fallbackCopy(text: string): void {
   opacity: 0;
   transform: translateX(-50%) translateY(12px);
 }
+
+
 </style>

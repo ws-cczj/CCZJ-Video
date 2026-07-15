@@ -1,6 +1,9 @@
 build/bin
 node_modules
 frontend/dist
+frontend/vite.config.ts.timestamp-*.mjs
+bin/data/
+bin/*.exe
 _update_swap.bat
 .installed_version
 *_update.exe

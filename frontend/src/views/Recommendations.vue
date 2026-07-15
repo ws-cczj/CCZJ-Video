@@ -109,12 +109,7 @@ onMounted(async () => {
   max-width: 100%;
   color: var(--text-primary);
   padding: 0;
-  animation: fadeInUp 0.3s ease;
-}
-
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  animation: cczj-fade-in-up 0.3s ease;
 }
 
 .rec-nav {

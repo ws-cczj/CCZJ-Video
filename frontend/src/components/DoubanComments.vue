@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
-import { GetDoubanComments } from '../../bindings/cczjVideo/app'
+import { GetDoubanComments } from '../api/app'
 
 interface DoubanComment {
   id: string
@@ -268,12 +268,9 @@ watch(() => props.doubanId, (newId) => {
   border: 2px solid var(--border, #333);
   border-top-color: var(--accent, #4f46e5);
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+  animation: cczj-spin 0.8s linear infinite;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
 
 /* 错误 */
 .comments-error {

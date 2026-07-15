@@ -3,13 +3,14 @@ defineOptions({ name: 'Favorites' })
 import { ref, onMounted, computed, watch, onActivated } from 'vue'
 import { favRefreshTick } from '../stores/favoritesSync'
 import { useRouter } from 'vue-router'
-import { GetSetting, GetFavorites, GetVideoDetail, RemoveFavorite } from '../../bindings/cczjVideo/app'
+import { GetSetting, GetFavorites, GetVideoDetail, RemoveFavorite } from '../api/app'
 import VideoCard from '../components/VideoCard.vue'
 import Icon from '../components/Icon.vue'
 import { Button, Modal, Spinner as LoadingSpinner, Empty as EmptyState } from '../components/ui'
 import { getDetailPath } from '../utils'
 import { useConfirmStore } from '../stores/confirm'
 import type { Video, Favorite } from '../types'
+import { readStorage, writeStorage } from '../platform/storage'
 
 const router = useRouter()
 
@@ -34,25 +35,22 @@ const mapping = ref<Record<string, string>>({}) // favKey -> folderId
 
 function loadFoldersFromStorage(): void {
   try {
-    const raw = localStorage.getItem(FOLDERS_KEY)
-    if (raw) folders.value = JSON.parse(raw) as FavFolder[]
+    const savedFolders = readStorage<FavFolder[] | null>(FOLDERS_KEY, null)
+    if (savedFolders) folders.value = savedFolders
     // 确保至少有默认夹
     if (!folders.value.some(f => f.default)) {
       folders.value.unshift({ id: 'default', name: '默认收藏夹', default: true })
     }
   } catch { /* ignore */ }
-  try {
-    const raw2 = localStorage.getItem(MAPPING_KEY)
-    if (raw2) mapping.value = JSON.parse(raw2) as Record<string, string>
-  } catch { /* ignore */ }
+  mapping.value = readStorage<Record<string, string>>(MAPPING_KEY, {})
 }
 
 function persistFolders(): void {
-  try { localStorage.setItem(FOLDERS_KEY, JSON.stringify(folders.value)) } catch { /* ignore */ }
+  writeStorage(FOLDERS_KEY, folders.value)
 }
 
 function persistMapping(): void {
-  try { localStorage.setItem(MAPPING_KEY, JSON.stringify(mapping.value)) } catch { /* ignore */ }
+  writeStorage(MAPPING_KEY, mapping.value)
 }
 
 // 根据后端返回的 fav 推断目标 folderId；若不存在映射，归到默认夹
@@ -458,19 +456,7 @@ watch([mapping, folders], () => {
 
 <style scoped>
 .favorites-page {
-  animation: fadeInUp 0.4s ease;
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  animation: cczj-fade-in-up 0.4s ease;
 }
 
 .page-header {

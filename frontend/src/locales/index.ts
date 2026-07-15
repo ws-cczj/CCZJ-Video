@@ -1,5 +1,5 @@
 import { createI18n } from 'vue-i18n'
-import { GetSetting, SetSetting } from '../../bindings/cczjVideo/app'
+import { GetSetting, SetSetting } from '../api/app'
 import zhCN from './zh-CN'
 import en from './en'
 

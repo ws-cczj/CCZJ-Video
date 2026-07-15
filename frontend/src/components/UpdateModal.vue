@@ -4,7 +4,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import {
   CheckUpdate, DownloadUpdate, InstallUpdate, FileExists,
   IgnoreVersion, GetPendingUpdateInfo, ClearPendingUpdateInfo,
-} from '../../bindings/cczjVideo/app'
+} from '../api/app'
 import { useErrorStore } from '../stores/error'
 import {
   updateModalOpen, updateChecking,
@@ -14,12 +14,15 @@ import {
 } from '../stores/updateState'
 import Icon from './Icon.vue'
 import { Button, Modal } from './ui'
+import { onBackendEvent } from '../api/events'
 
 const errorStore = useErrorStore()
 
 // 本地状态（不共享）
 const installing = ref(false)
 const checkFailed = ref(false)
+let stopDownloadProgress: (() => void) | null = null
+let stopUpdateAvailable: (() => void) | null = null
 
 interface UpdateInfoData {
   has_update: boolean
@@ -197,9 +200,8 @@ async function checkAlreadyDownloaded(info: UpdateInfoData): Promise<void> {
 }
 
 onMounted(async () => {
-  const { Events } = await import('@wailsio/runtime')
-  Events.On('update:download:progress', onDownloadProgress)
-  Events.On('update:available', onUpdateAvailable)
+  stopDownloadProgress = onBackendEvent('update:download:progress', onDownloadProgress)
+  stopUpdateAvailable = onBackendEvent('update:available', onUpdateAvailable)
 
   // 注册全局函数
   updateController.checkUpdate = doCheckUpdate
@@ -233,10 +235,10 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  import('@wailsio/runtime').then(({ Events }) => {
-    Events.Off('update:download:progress')
-    Events.Off('update:available')
-  }).catch(() => {})
+  stopDownloadProgress?.()
+  stopUpdateAvailable?.()
+  stopDownloadProgress = null
+  stopUpdateAvailable = null
 })
 </script>
 
@@ -518,11 +520,7 @@ onUnmounted(() => {
   background: var(--accent); color: var(--accent-contrast);
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
-  animation: spin-download 2s linear infinite;
-}
-@keyframes spin-download {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  animation: cczj-spin 2s linear infinite;
 }
 .bg-download-info {
   display: flex; flex-direction: column; flex: 1; min-width: 0;

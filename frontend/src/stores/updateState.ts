@@ -3,6 +3,7 @@
  * UpdateModal.vue 和 Settings.vue 等外部组件通过此模块访问/控制更新弹窗
  */
 import { ref, reactive, computed } from 'vue'
+import { readStorage, removeStorage, writeStorage } from '../platform/storage'
 
 /** 弹窗是否打开 */
 export const updateModalOpen = ref(false)
@@ -36,25 +37,15 @@ interface DownloadState {
 }
 
 export function saveDownloadState(path: string, version: string, url: string): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ path, version, url }))
-  } catch { /* ignore */ }
+  writeStorage(STORAGE_KEY, { path, version, url })
 }
 
 export function loadDownloadState(): DownloadState | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return null
-    return JSON.parse(raw) as DownloadState
-  } catch {
-    return null
-  }
+  return readStorage<DownloadState | null>(STORAGE_KEY, null)
 }
 
 export function clearDownloadState(): void {
-  try {
-    localStorage.removeItem(STORAGE_KEY)
-  } catch { /* ignore */ }
+  removeStorage(STORAGE_KEY)
 }
 
 /** 格式化下载大小（0 显示 "0 B"，NaN/负数 显示 "未知"） */

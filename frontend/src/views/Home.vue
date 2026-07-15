@@ -3,7 +3,7 @@ defineOptions({ name: 'Home' })
 import { ref, computed, onMounted, onActivated, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { GetRecentHistory, DeleteHistoryByVideo, GetSetting, DoubanChart, DoubanChartResolve } from '../../bindings/cczjVideo/app'
+import { GetRecentHistory, DeleteHistoryByVideo, GetSetting, DoubanChart, DoubanChartResolve } from '../api/app'
 import { useSourceStore } from '../stores/source'
 import { useVideoStore, type VideoFilter } from '../stores/video'
 import { useErrorStore } from '../stores/error'
@@ -564,19 +564,7 @@ watch(
 
 <style scoped>
 .home {
-  animation: fadeInUp 0.4s ease;
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  animation: cczj-fade-in-up 0.4s ease;
 }
 
 /* ============ 推荐区域 ============ */

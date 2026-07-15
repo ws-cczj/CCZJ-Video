@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { GetVideoDetail } from '../../bindings/cczjVideo/app'
+import { GetVideoDetail } from '../api/app'
 import type { Video } from '../types'
+import { readStorage, removeStorage, writeStorage } from '../platform/storage'
 
 /**
  * 单个海报缓存项
@@ -39,10 +40,7 @@ export const usePosterCacheStore = defineStore('posterCache', () => {
   // ------- 持久化读写 -------
   function loadFromStorage(): void {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY)
-      if (raw) {
-        cache.value = JSON.parse(raw)
-      }
+      cache.value = readStorage<Record<string, PosterCacheEntry>>(STORAGE_KEY, {})
     } catch {
       cache.value = {}
     }
@@ -53,7 +51,7 @@ export const usePosterCacheStore = defineStore('posterCache', () => {
 
   function saveToStorage(): void {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(cache.value))
+      writeStorage(STORAGE_KEY, cache.value)
     } catch {
       // 存储满或失败，静默忽略
     }
@@ -256,7 +254,7 @@ export const usePosterCacheStore = defineStore('posterCache', () => {
     }
 
     try {
-      const { ProxyImage } = await import('../../bindings/cczjVideo/app')
+      const { ProxyImage } = await import('../api/app')
       const proxied = await ProxyImage(entry.vod_pic)
       if (proxied && proxied.startsWith('data:')) {
         entry.vod_pic_proxied = proxied
@@ -271,7 +269,7 @@ export const usePosterCacheStore = defineStore('posterCache', () => {
   // 暴露给外部的清理入口
   function clearAll(): void {
     cache.value = {}
-    try { localStorage.removeItem(STORAGE_KEY) } catch { /* 忽略 */ }
+    removeStorage(STORAGE_KEY)
   }
 
   return {

@@ -10,6 +10,11 @@ vars:
   VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
 
 tasks:
+  verify:
+    summary: Runs backend checks and the frontend production build
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/verify.ps1
+
   build:
     summary: Builds the application
     cmds:

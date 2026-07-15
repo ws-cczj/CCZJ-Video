@@ -2,7 +2,7 @@
 defineOptions({ name: 'Downloads' })
 import { computed, onMounted, ref } from 'vue'
 import { useDownloadStore, formatBytes, formatSpeed, formatEta, percent as pct, type ChunkProgress } from '../stores/download'
-import { GetSetting, SetSetting, GetDownloadDir } from '../../bindings/cczjVideo/app'
+import { GetSetting, SetSetting, GetDownloadDir } from '../api/app'
 import Icon from '../components/Icon.vue'
 import { Button, Tag } from '../components/ui'
 import { useErrorStore } from '../stores/error'

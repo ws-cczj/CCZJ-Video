@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount } from 'vue'
-import { Window } from '@wailsio/runtime'
-import { WindowIsMax, WindowToggleMax } from '../../bindings/cczjVideo/app'
+import { Window } from '../api/runtime'
+import { WindowIsMax, WindowToggleMax } from '../api/app'
 import Icon from './Icon.vue'
 
 const isMaximized = ref(false)

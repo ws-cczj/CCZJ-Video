@@ -12,7 +12,7 @@ import { useCollectStore } from './stores/collect'
 import { useErrorStore } from './stores/error'
 import { useThemeStore } from './stores/theme'
 import { useDownloadStore } from './stores/download'
-import { GetSetting } from '../bindings/cczjVideo/app'
+import { GetSetting } from './api/app'
 import UpdateModal from './components/UpdateModal.vue'
 
 

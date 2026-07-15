@@ -1,16 +1,20 @@
 package douban
 
 import (
+	"sync"
 	"time"
 
 	"cczjVideo/app/applog"
 )
 
 type Scheduler struct {
+	mu       sync.Mutex
 	updater  *Updater
 	interval time.Duration
 	ticker   *time.Ticker
 	running  bool
+	stopCh   chan struct{}
+	doneCh   chan struct{}
 }
 
 func NewScheduler(interval time.Duration) *Scheduler {
@@ -21,23 +25,33 @@ func NewScheduler(interval time.Duration) *Scheduler {
 }
 
 func (s *Scheduler) Start() {
+	s.mu.Lock()
 	if s.running {
+		s.mu.Unlock()
 		applog.Info("[Douban] Scheduler already running")
 		return
 	}
 
 	s.running = true
 	s.ticker = time.NewTicker(s.interval)
+	s.stopCh = make(chan struct{})
+	s.doneCh = make(chan struct{})
+	ticker := s.ticker
+	stopCh := s.stopCh
+	doneCh := s.doneCh
+	s.mu.Unlock()
 
 	applog.Info("[Douban] Scheduler started, interval: %s", s.interval)
 
 	go func() {
-		for range s.ticker.C {
-			if !s.running {
+		defer close(doneCh)
+		for {
+			select {
+			case <-stopCh:
 				applog.Info("[Douban] Scheduler ticker stopped")
-				break
+				return
+			case <-ticker.C:
 			}
-
 			applog.Info("[Douban] Scheduler tick triggered")
 			count, err := s.updater.UpdateBatch()
 			if err != nil {
@@ -52,29 +66,31 @@ func (s *Scheduler) Start() {
 }
 
 func (s *Scheduler) Stop() {
+	s.mu.Lock()
 	if !s.running {
+		s.mu.Unlock()
 		applog.Info("[Douban] Scheduler already stopped")
 		return
 	}
 
-	applog.Info("[Douban] Stopping scheduler (graceful)...")
 	s.running = false
-	s.updater.RequestStop()
-	if s.ticker != nil {
-		s.ticker.Stop()
-		s.ticker = nil
+	ticker := s.ticker
+	stopCh := s.stopCh
+	doneCh := s.doneCh
+	s.ticker = nil
+	s.stopCh = nil
+	s.doneCh = nil
+	if ticker != nil {
+		ticker.Stop()
 	}
+	close(stopCh)
+	s.mu.Unlock()
 
-	done := make(chan struct{})
-	go func() {
-		for s.updater.IsRunning() {
-			time.Sleep(100 * time.Millisecond)
-		}
-		close(done)
-	}()
+	applog.Info("[Douban] Stopping scheduler (graceful)...")
+	s.updater.RequestStop()
 
 	select {
-	case <-done:
+	case <-doneCh:
 	case <-time.After(5 * time.Second):
 	}
 
@@ -82,6 +98,8 @@ func (s *Scheduler) Stop() {
 }
 
 func (s *Scheduler) IsRunning() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.running
 }
 

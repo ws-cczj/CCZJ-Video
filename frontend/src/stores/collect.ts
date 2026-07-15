@@ -1,9 +1,9 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { StartCollect, PauseCollect, ResumeCollect, StopCollect, GetCollectSchedule, SetCollectSchedule, TriggerCollectNow, StopBackgroundCollect, SetSourceSchedule } from '../../bindings/cczjVideo/app'
+import { StartCollect, PauseCollect, ResumeCollect, StopCollect, GetCollectSchedule, SetCollectSchedule, TriggerCollectNow, StopBackgroundCollect, SetSourceSchedule } from '../api/app'
 import { useErrorStore } from './error'
-import { Events } from '@wailsio/runtime'
 import { appEvent } from '../event'
+import { onBackendEvent } from '../api/events'
 
 export interface CollectPageEvent {
   source_key: string
@@ -187,8 +187,7 @@ export const useCollectStore = defineStore('collect', () => {
   const _lastProgressAt = new Map<string, { ts: number; page: number }>()
 
   // === 事件监听（Wails 后端事件 → appEvent 桥接） ===
-  Events.On('collect:progress', (ev) => {
-    const data = ev.data as { source_key: string; current: number; total: number }
+  onBackendEvent<{ source_key: string; current: number; total: number }>('collect:progress', (data) => {
     const st = getState(data.source_key)
     st.current = data.current
     st.total = data.total
@@ -219,8 +218,7 @@ export const useCollectStore = defineStore('collect', () => {
     appEvent.emit('collect:progress', data.source_key, data.current, data.total)
   })
 
-  Events.On('collect:log', (ev) => {
-    const data = ev.data as { source_key: string; message: string }
+  onBackendEvent<{ source_key: string; message: string }>('collect:log', (data) => {
     if (data.source_key === '__scheduler__') {
       log.value.push(data.message)
       if (log.value.length > 200) log.value.shift()
@@ -238,8 +236,7 @@ export const useCollectStore = defineStore('collect', () => {
     appEvent.emit('collect:log', data.source_key, data.message)
   })
 
-  Events.On('collect:page', (ev) => {
-    const data = ev.data as CollectPageEvent
+  onBackendEvent<CollectPageEvent>('collect:page', (data) => {
     const st = getState(data.source_key)
     st.page = data.page
     st.pageNames = data.names || []
@@ -250,8 +247,7 @@ export const useCollectStore = defineStore('collect', () => {
     }
   })
 
-  Events.On('collect:done', (ev) => {
-    const data = ev.data as { source_key: string; error?: string; mode?: string }
+  onBackendEvent<{ source_key: string; error?: string; mode?: string }>('collect:done', (data) => {
     const st = getState(data.source_key)
     st.running = false
     st.paused = false

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { GetTypes, GetAllSources } from '../../../bindings/cczjVideo/app'
+import { GetTypes, GetAllSources } from '../../api/app'
 import { Empty } from '../../components/ui'
 
 interface VideoType {

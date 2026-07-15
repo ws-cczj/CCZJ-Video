@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { WriteLog, GetLogList, GetLogContent, ClearLogs, GetLogDir } from '../../bindings/cczjVideo/app'
+import { WriteLog, GetLogList, GetLogContent, ClearLogs, GetLogDir } from '../api/app'
 
 export type ErrorLevel = 'info' | 'warn' | 'error'
 

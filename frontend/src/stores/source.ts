@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { GetAllSources, GetSourceStats, GetSetting, SetSetting } from '../../bindings/cczjVideo/app'
+import { GetAllSources, GetSourceStats, GetSetting, SetSetting } from '../api/app'
 import { useErrorStore } from './error'
 import type { SourceStat } from '../types'
 

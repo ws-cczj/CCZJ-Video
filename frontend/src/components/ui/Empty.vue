@@ -20,7 +20,7 @@ defineProps<{ icon?: string; title: string; description?: string }>()
   gap: 12px;
   padding: 80px 20px;
   text-align: center;
-  animation: fadeInUp 0.4s ease-out;
+  animation: cczj-fade-in-up 0.4s ease-out;
 }
 
 .empty-icon {
@@ -43,17 +43,6 @@ defineProps<{ icon?: string; title: string; description?: string }>()
   margin: 0;
   max-width: 320px;
   line-height: 1.6;
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 @keyframes bounce {

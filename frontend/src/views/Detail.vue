@@ -3,7 +3,7 @@ defineOptions({ name: 'Detail' })
 import { ref, computed, onMounted, onBeforeUnmount, onActivated, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { GetRecentHistory, SaveWatchHistory, AddFavorite, RemoveFavorite, IsFavorite, DeleteVideo, GetSimilarVideos, DoubanUpdateVideo } from '../../bindings/cczjVideo/app'
+import { GetRecentHistory, SaveWatchHistory, AddFavorite, RemoveFavorite, IsFavorite, DeleteVideo, GetSimilarVideos, DoubanUpdateVideo } from '../api/app'
 import { useSourceStore } from '../stores/source'
 import { useVideoStore } from '../stores/video'
 import { useDownloadStore } from '../stores/download'
@@ -16,6 +16,7 @@ import { computeRecommendations, type RecommendItem, extractYear } from '../util
 import { epProgressKey, loadEpProgress, getEpProgressPct, flushEpProgress } from '../utils/episodeProgress'
 import { bumpFavoritesRefresh } from '../stores/favoritesSync'
 import type { Video, HistoryItem, Episode } from '../types'
+import { readStorage, writeStorage } from '../platform/storage'
 
 const { t } = useI18n()
 
@@ -209,7 +210,7 @@ const favTargetFolderId = ref<string>('default')
 
 function loadFavFolders(): void {
   try {
-    const raw = localStorage.getItem('cczj_fav_folders')
+    const raw = JSON.stringify(readStorage<unknown>('cczj_fav_folders', null))
     if (raw) {
       const parsed = JSON.parse(raw) as FavFolder[]
       if (Array.isArray(parsed) && parsed.length > 0) {
@@ -238,11 +239,11 @@ async function toggleFavorite(): Promise<void> {
       // 清除 mapping
       const key = `${sourceKey.value}-${vodId.value}`
       try {
-        const raw = localStorage.getItem('cczj_fav_mapping')
+        const raw = JSON.stringify(readStorage<Record<string, string>>('cczj_fav_mapping', {}))
         if (raw) {
           const obj = JSON.parse(raw) as Record<string, string>
           delete obj[key]
-          localStorage.setItem('cczj_fav_mapping', JSON.stringify(obj))
+          writeStorage('cczj_fav_mapping', obj)
         }
       } catch { /* ignore */ }
       isFav.value = false
@@ -272,10 +273,10 @@ async function confirmAddToFolder(): Promise<void> {
     // 写入 mapping：关联到选择的文件夹
     try {
       const key = `${sourceKey.value}-${vodId.value}`
-      const raw = localStorage.getItem('cczj_fav_mapping')
+      const raw = JSON.stringify(readStorage<Record<string, string>>('cczj_fav_mapping', {}))
       const obj: Record<string, string> = raw ? JSON.parse(raw) : {}
       obj[key] = favTargetFolderId.value
-      localStorage.setItem('cczj_fav_mapping', JSON.stringify(obj))
+      writeStorage('cczj_fav_mapping', obj)
     } catch { /* ignore */ }
     isFav.value = true
     bumpFavoritesRefresh()
@@ -564,7 +565,7 @@ const REFRESH_INTERVAL_MS = 5 * 60 * 1000 // 5 分钟
 function canRefresh(sourceKey: string, vodId: string): boolean {
   try {
     const key = REFRESH_KEY_PREFIX + sourceKey + '_' + vodId
-    const last = localStorage.getItem(key)
+    const last = readStorage<string | null>(key, null)
     if (!last) return true
     const elapsed = Date.now() - parseInt(last, 10)
     return elapsed >= REFRESH_INTERVAL_MS
@@ -576,7 +577,7 @@ function canRefresh(sourceKey: string, vodId: string): boolean {
 function markRefreshed(sourceKey: string, vodId: string): void {
   try {
     const key = REFRESH_KEY_PREFIX + sourceKey + '_' + vodId
-    localStorage.setItem(key, String(Date.now()))
+    writeStorage(key, String(Date.now()))
   } catch { /* ignore */ }
 }
 
@@ -1065,20 +1066,10 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+
 .detail-page {
   padding: 0;
-  animation: fadeInUp 0.3s ease;
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  animation: cczj-fade-in-up 0.3s ease;
 }
 
 /* 顶栏删除按钮 */
@@ -1181,12 +1172,7 @@ onBeforeUnmount(() => {
 }
 
 .refreshing-spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  animation: cczj-spin 1s linear infinite;
 }
 
 .tag {
@@ -1588,4 +1574,6 @@ onBeforeUnmount(() => {
   flex: 1;
   min-width: 0;
 }
+
+
 </style>

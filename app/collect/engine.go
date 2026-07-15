@@ -26,11 +26,11 @@ type Engine struct {
 	mode      model.CollectMode // 采集模式
 	timeHours int               // 增量模式的时间窗（小时）
 
-	mu       sync.Mutex
-	paused   bool
-	stop     bool
-	pageGap  time.Duration // 页间等待时长
-	ctx      context.Context
+	mu      sync.Mutex
+	paused  bool
+	stop    bool
+	pageGap time.Duration // 页间等待时长
+	ctx     context.Context
 }
 
 // EngineOption 引擎可选项
@@ -97,7 +97,7 @@ func (e *Engine) SetPageGap(gap time.Duration) {
 
 func (e *Engine) log(msg string) {
 	// 所有引擎日志同步写入 applog（文件）
-	appLogger.Info("[collect:" + e.sourceKey + "] " + msg)
+	appLogger.Info("%s", "[collect:"+e.sourceKey+"] "+msg)
 	if e.onLog != nil {
 		e.onLog(msg)
 	}
@@ -525,14 +525,30 @@ func (e *Engine) saveVideos(videos []*model.Video) error {
 					return
 				}
 				mu.Lock()
-				if detail.VodPic != "" { videos[idx].VodPic = detail.VodPic }
-				if detail.VodActor != "" { videos[idx].VodActor = detail.VodActor }
-				if detail.VodDirector != "" { videos[idx].VodDirector = detail.VodDirector }
-				if detail.VodContent != "" { videos[idx].VodContent = detail.VodContent }
-				if detail.VodLang != "" { videos[idx].VodLang = detail.VodLang }
-				if detail.VodArea != "" { videos[idx].VodArea = detail.VodArea }
-				if detail.VodYear != "" { videos[idx].VodYear = detail.VodYear }
-				if detail.VodPlayUrl != "" { videos[idx].VodPlayUrl = detail.VodPlayUrl }
+				if detail.VodPic != "" {
+					videos[idx].VodPic = detail.VodPic
+				}
+				if detail.VodActor != "" {
+					videos[idx].VodActor = detail.VodActor
+				}
+				if detail.VodDirector != "" {
+					videos[idx].VodDirector = detail.VodDirector
+				}
+				if detail.VodContent != "" {
+					videos[idx].VodContent = detail.VodContent
+				}
+				if detail.VodLang != "" {
+					videos[idx].VodLang = detail.VodLang
+				}
+				if detail.VodArea != "" {
+					videos[idx].VodArea = detail.VodArea
+				}
+				if detail.VodYear != "" {
+					videos[idx].VodYear = detail.VodYear
+				}
+				if detail.VodPlayUrl != "" {
+					videos[idx].VodPlayUrl = detail.VodPlayUrl
+				}
 				mu.Unlock()
 				e.log(fmt.Sprintf("[详情补充成功] vod_id=%s, pic=%s", vid.VodId.String(), detail.VodPic))
 			})

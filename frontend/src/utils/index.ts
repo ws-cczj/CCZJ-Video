@@ -123,20 +123,25 @@ export function humanizeBytes(bytes: number): string {
 }
 
 const imageProxyCache = new Map<string, string>()
+// Remember failed proxy attempts too. Some image CDNs return an HTML block
+// page; retrying it every time Home is mounted only adds noise and latency.
+const imageProxyFallbackCache = new Set<string>()
 
 export async function getProxiedImageUrl(originalUrl: string): Promise<string> {
   if (!originalUrl) return ''
   if (imageProxyCache.has(originalUrl)) {
     return imageProxyCache.get(originalUrl)!
   }
+  if (imageProxyFallbackCache.has(originalUrl)) return originalUrl
   try {
-    const { ProxyImage } = await import('../../bindings/cczjVideo/app')
+    const { ProxyImage } = await import('../api/app')
     const result = await ProxyImage(originalUrl)
     if (result && result.startsWith('data:')) {
       imageProxyCache.set(originalUrl, result)
       return result
     }
   } catch { }
+  imageProxyFallbackCache.add(originalUrl)
   return originalUrl
 }
 

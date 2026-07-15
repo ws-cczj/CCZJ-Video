@@ -3,7 +3,7 @@
  * 共享：源列表、统计数据、采集状态映射
  */
 import { ref, type Ref } from 'vue'
-import { GetAllSources, GetSourceStats, GetCollectStatus } from '../../../../bindings/cczjVideo/app'
+import { GetAllSources, GetSourceStats, GetCollectStatus } from '../../../api/app'
 
 // ============ 模块级单例状态 ============
 const sources: Ref<any[]> = ref([])

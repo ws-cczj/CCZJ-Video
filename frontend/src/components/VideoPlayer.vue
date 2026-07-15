@@ -6,11 +6,16 @@ import { TsCache } from '../utils/tsCache'
 import { FilmUpscaler, FILM_PRESET, checkFilmSupport } from '../utils/filmUpscaler'
 import { Anime4kUpscaler, ANIME4K_PRESET, checkAnime4kSupport } from '../utils/anime4kUpscaler'
 import type { Anime4kTier } from '../utils/anime4kUpscaler'
+import { readStorage, readStorageBoolean, removeStorage, writeStorage } from '../platform/storage'
+import { createPlayerSettings } from '../player/settings'
+import { usePlayerShortcuts } from '../player/usePlayerShortcuts'
+import { clearPlaybackTime, readPlaybackTime, savePlaybackTime } from '../player/usePlaybackProgress'
+import { useHlsEngine } from '../player/hls/useHlsEngine'
 import loadingGif from '../assets/videos/loading.gif'
 import pauseImg from '../assets/images/pause.png'
 import {
   WindowIsFs, WindowIsMax, WindowSetFullscreen, WindowToggleMax
-} from '../../bindings/cczjVideo/app'
+} from '../api/app'
 
 const props = withDefaults(defineProps<{
   url: string
@@ -36,6 +41,7 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits(['back', 'prev', 'next', 'toggleFavorite', 'toggleAutoplay', 'showComments'])
+const hlsEngine = useHlsEngine()
 
 const wrapperRef = ref<HTMLDivElement>()
 const errorMsg = ref('')
@@ -45,7 +51,13 @@ function clearNetworkErrTimer(): void {
   if (networkErrTimer) { clearTimeout(networkErrTimer); networkErrTimer = null }
   showNetworkError.value = false
 }
-function refreshPage(): void { location.reload() }
+function retryPlayback(): void {
+  const video = getVideoEl()
+  if (!video || !props.url) return
+  errorMsg.value = ''
+  showNetworkError.value = false
+  loadHls(video, props.url)
+}
 
 const playing = ref(false)
 const current = ref(0)
@@ -241,83 +253,30 @@ const SHORTCUT_ACTIONS: ShortcutAction[] = [
   { id: 'nextEp', label: '下一集', description: '切换到下一集', defaultKeys: ['N'] },
   { id: 'pip', label: '画中画', description: '切换画中画模式', defaultKeys: ['I'] },
 ]
-const shortcutMap = ref<Record<string, string[]>>({})
-const editingShortcutId = ref<string | null>(null)
-
-function loadShortcuts(): void {
-  try {
-    const raw = localStorage.getItem('cczj_shortcuts')
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      if (parsed && typeof parsed === 'object') {
-        shortcutMap.value = parsed
-        return
-      }
-    }
-  } catch { }
-  const defaults: Record<string, string[]> = {}
-  SHORTCUT_ACTIONS.forEach(a => { defaults[a.id] = [...a.defaultKeys] })
-  shortcutMap.value = defaults
-}
-function saveShortcuts(): void {
-  try { localStorage.setItem('cczj_shortcuts', JSON.stringify(shortcutMap.value)) } catch { }
-}
-function startEditShortcut(id: string): void {
-  editingShortcutId.value = id
-}
-function cancelEditShortcut(): void {
-  editingShortcutId.value = null
-}
-function onShortcutKeyDown(e: KeyboardEvent): void {
-  if (!editingShortcutId.value) return
-  e.preventDefault()
-  e.stopPropagation()
-  if (e.key === 'Escape') { cancelEditShortcut(); return }
-  let key = e.key
-  if (key === ' ') key = 'Space'
-  shortcutMap.value[editingShortcutId.value] = [key]
-  saveShortcuts()
-  editingShortcutId.value = null
-}
-function resetShortcut(id: string): void {
-  const action = SHORTCUT_ACTIONS.find(a => a.id === id)
-  if (!action) return
-  shortcutMap.value[id] = [...action.defaultKeys]
-  saveShortcuts()
-}
-function resetAllShortcuts(): void {
-  const defaults: Record<string, string[]> = {}
-  SHORTCUT_ACTIONS.forEach(a => { defaults[a.id] = [...a.defaultKeys] })
-  shortcutMap.value = defaults
-  saveShortcuts()
-}
-function fmtKey(k: string): string {
-  if (k === 'Space') return '空格'
-  if (k === 'ArrowLeft') return '←'
-  if (k === 'ArrowRight') return '→'
-  if (k === 'ArrowUp') return '↑'
-  if (k === 'ArrowDown') return '↓'
-  if (k === '[') return '['
-  if (k === ']') return ']'
-  if (k === 'Escape') return 'Esc'
-  if (k === 'Enter') return 'Enter'
-  if (k === 'Tab') return 'Tab'
-  if (k.length === 1) return k.toUpperCase()
-  return k
-}
+const {
+  shortcutMap,
+  editingShortcutId,
+  load: loadShortcuts,
+  startEditShortcut,
+  cancelEditShortcut,
+  onShortcutKeyDown,
+  resetShortcut,
+  resetAllShortcuts,
+  fmtKey,
+} = usePlayerShortcuts(SHORTCUT_ACTIONS)
 
 // 初始化快捷键
 loadShortcuts()
 
 function toggleAutoNext(): void {
   autoNextEnabled.value = !autoNextEnabled.value
-  try { localStorage.setItem('cczj_auto_next', autoNextEnabled.value ? '1' : '0') } catch { /* ignore */ }
+  try { writeStorage('cczj_auto_next', autoNextEnabled.value) } catch { /* ignore */ }
 }
 
 // 初始化自动连播设置
 try {
-  const saved = localStorage.getItem('cczj_auto_next')
-  if (saved === '0') autoNextEnabled.value = false
+  const saved = readStorageBoolean('cczj_auto_next', false)
+  if (!saved) autoNextEnabled.value = false
 } catch { /* ignore */ }
 
 // ========= 报告广告 =========
@@ -368,56 +327,7 @@ const qualityOpen = ref(false)
 
 // ⭐ 播放器设置统一存储在单个 JSON 对象中（key: 'vp_settings'），避免 localStorage 碎片化。
 // 旧版散落的 vp_* 键会在首次读取时自动迁移并清理。
-const VP_SETTINGS_KEY = 'vp_settings'
-const LEGACY_KEYS = [
-  'vp_quality_mode', 'vp_anime4k_tier', 'vp_ai_warning_accepted',
-  'vp_auto_resume_jump', 'vp_volume', 'vp_muted', 'vp_speed',
-  'vp_auto_next',
-]
-let _settingsCache: Record<string, string> | null = null
-
-function _loadSettings(): Record<string, string> {
-  if (_settingsCache) return _settingsCache
-  try {
-    const raw = localStorage.getItem(VP_SETTINGS_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      if (parsed && typeof parsed === 'object') {
-        _settingsCache = parsed
-        return _settingsCache ? _settingsCache : {}
-      }
-    }
-  } catch { /* ignore */ }
-  const migrated: Record<string, string> = {}
-  for (const oldKey of LEGACY_KEYS) {
-    const val = localStorage.getItem(oldKey)
-    if (val != null) {
-      migrated[oldKey.replace(/^vp_/, '')] = val
-      localStorage.removeItem(oldKey)
-    }
-  }
-  _settingsCache = migrated
-  if (Object.keys(migrated).length > 0) {
-    try { localStorage.setItem(VP_SETTINGS_KEY, JSON.stringify(migrated)) } catch { /* ignore */ }
-  }
-  return _settingsCache
-}
-
-function _saveSettings(): void {
-  if (!_settingsCache) return
-  try { localStorage.setItem(VP_SETTINGS_KEY, JSON.stringify(_settingsCache)) } catch { /* ignore */ }
-}
-
-function readSetting(key: string, def: string): string {
-  const s = _loadSettings()
-  return s[key] ?? def
-}
-function writeSetting(key: string, val: string): void {
-  const s = _loadSettings()
-  if (s[key] === val) return
-  s[key] = val
-  _saveSettings()
-}
+const { read: readSetting, write: writeSetting } = createPlayerSettings()
 
 // ========= 画质模式 =========
 // 模式：原高清 / 动画增强 M·L / 影视增强（M/L 直接在画质下拉框中选择）
@@ -633,7 +543,6 @@ function stopAiPipeline(): void {
 // ========= 播放进度记录 =========
 // 设置：autoResume = true 时直接跳到上次位置；false 时弹出 5 秒提示
 const SAVE_INTERVAL_MS = 3000
-const RESUME_THRESHOLD_SEC = 5  // 已播放超过 5 秒才记录
 const PROMPT_SEC = 5           // 提示存在时间
 let _saveTimer: number | null = null
 
@@ -664,24 +573,6 @@ function updateBuffer(): void {
   // 用最后一段 buffer 的结尾来表示"已缓冲到的最远位置"
   const end = buf.end(buf.length - 1)
   bufferPct.value = Math.max(0, Math.min(100, (end / v.duration) * 100))
-}
-
-function readLocalTime(videoKey: string): number {
-  try {
-    const s = localStorage.getItem('vp_t_' + videoKey)
-    const n = s ? parseFloat(s) : 0
-    return isFinite(n) ? n : 0
-  } catch { return 0 }
-}
-function writeLocalTime(videoKey: string, t: number): void {
-  try { localStorage.setItem('vp_t_' + videoKey, String(t)) } catch { /* ignore */ }
-}
-
-function saveResumeTime(videoKey: string, t: number, dur: number): void {
-  if (!videoKey) return
-  if (t <= RESUME_THRESHOLD_SEC) return
-  if (dur > 0 && t >= dur - 1) return // 已播到结尾，不保存
-  writeLocalTime(videoKey, t)
 }
 
 // 自动跳到上次播放位置的开关：由用户在"跳回并记住"时开启
@@ -998,7 +889,7 @@ async function loadHls(video: HTMLVideoElement, url: string): Promise<void> {
     _resumeAutoJump = loadAutoJumpConfig()
     // ⭐ 使用稳定 key 读取；无 videoKey 且 URL 不稳定时不恢复，避免跨集污染
     const resumeKey = stableResumeKey()
-    const t = readLocalTime(resumeKey)
+    const t = readPlaybackTime(resumeKey)
     if (t > 5) {
       savedTime.value = t
       if (_resumeAutoJump) {
@@ -1015,7 +906,7 @@ async function loadHls(video: HTMLVideoElement, url: string): Promise<void> {
     }
 
     console.log('[Player] 动态 import hls.js')
-    const { default: Hls } = await import('hls.js')
+    const Hls = await hlsEngine.loadRuntime()
     if (Hls.isSupported()) {
       // 1) 用 TsCache 解析 m3u8（文本缓存，避免重复请求 m3u8）
       //    同时激活 fetch 拦截器，hls.js 的 TS 片段下载会透明经过缓存
@@ -1074,8 +965,7 @@ async function loadHls(video: HTMLVideoElement, url: string): Promise<void> {
         loader: TsCache.TsCacheLoader,
       }
 
-      const hls = new Hls(hlsConfig)
-        ; (video as any).__hls = hls
+      const hls = hlsEngine.create(video, hlsConfig, Hls)
 
       // ⭐ v3: 注册 ABR 降级回调 —— TsCache 检测到连续慢分片时主动降码率
       TsCache.setAbrSwitchCallback((targetLevel: number) => {
@@ -1095,10 +985,10 @@ async function loadHls(video: HTMLVideoElement, url: string): Promise<void> {
       })
 
       let firstPlayTriggered = false
-      hls.on(Hls.Events.MANIFEST_PARSED, (_e, data: any) => {
+      hls.on(Hls.Events.MANIFEST_PARSED, (_e: any, data: any) => {
         console.log('[Player] ✅ manifest 解析完成，levels=', data?.levels?.length || 0)
       })
-      hls.on(Hls.Events.LEVEL_LOADED, (_e, data: any) => {
+      hls.on(Hls.Events.LEVEL_LOADED, (_e: any, data: any) => {
         // 从 hls.js 的 fragments 拿到真实 TS URL（多码率/单码率都适用）
         const frags = data?.details?.fragments || []
         const curTargetDur = data?.details?.targetduration || parsed.targetduration || 6
@@ -1127,13 +1017,13 @@ async function loadHls(video: HTMLVideoElement, url: string): Promise<void> {
           startPrebuffer()
         }
       })
-      hls.on(Hls.Events.FRAG_CHANGED, (_e, data: any) => {
+      hls.on(Hls.Events.FRAG_CHANGED, (_e: any, data: any) => {
         if (data?.frag?.url) {
           try { TsCache.notifyCurrentTs(new URL(data.frag.url, url).href) }
           catch { TsCache.notifyCurrentTs(data.frag.url) }
         }
       })
-hls.on(Hls.Events.ERROR, (_e, data: any) => {
+hls.on(Hls.Events.ERROR, (_e: any, data: any) => {
 	        if (!data) return
 	        const details = String(data.details || '')
 	        const isSoft =
@@ -1156,8 +1046,7 @@ hls.on(Hls.Events.ERROR, (_e, data: any) => {
 	            details === 'manifestLoadTimeOut'
 	          if (isManifestError) {
 	            console.log('[Player] ⚠ HLS manifest 失败，回退到直接播放')
-	            try { hls.destroy() } catch { /* ignore */ }
-	            ;(video as any).__hls = null
+            hlsEngine.dispose(video)
 	            video.src = url
 	            video.onerror = () => {
 	              errorMsg.value = '视频加载失败，请检查链接或网络'
@@ -1168,9 +1057,14 @@ hls.on(Hls.Events.ERROR, (_e, data: any) => {
             case Hls.ErrorTypes.NETWORK_ERROR:
               console.log('[Player] 网络错误，尝试恢复 startLoad()')
               try { hls.startLoad() } catch (e) { console.warn('[Player] startLoad 失败:', e) }
-              // 启动 10 秒超时计时器：若 10 秒内视频未开始播放，显示错误提示
-              if (!networkErrTimer) {
+              // 用户主动暂停时不启动故障倒计时。暂停期间没有播放进度是正常状态，
+              // 不能据此判断连接失败。
+              if (!video.paused && !video.ended && !networkErrTimer) {
                 networkErrTimer = setTimeout(() => {
+                  if (video.paused || video.ended) {
+                    networkErrTimer = null
+                    return
+                  }
                   showNetworkError.value = true
                   errorMsg.value = '播放链接超过 10 秒无法连接'
                   networkErrTimer = null
@@ -1254,12 +1148,37 @@ function setupPlayer(): void {
 
 function bindCommonVideoEvents(video: HTMLVideoElement): void {
   if ((video as any).__eventsBound) return
-    ; (video as any).__eventsBound = true
+  ;(video as any).__eventsBound = true
+  const eventController = new AbortController()
+  ;(video as any).__eventAbortController = eventController
+  const on = (name: string, listener: EventListenerOrEventListenerObject) =>
+    video.addEventListener(name, listener, { signal: eventController.signal })
   bindOsdListeners(video)
 
-  video.addEventListener('play', () => { playing.value = true; loading.value = false; videoReady.value = true; stopLoadingStats(); clearNetworkErrTimer() })
-  video.addEventListener('pause', () => { playing.value = false })
-  video.addEventListener('timeupdate', () => {
+  on('play', () => {
+    playing.value = true
+    loading.value = false
+    videoReady.value = true
+    stopLoadingStats()
+    clearNetworkErrTimer()
+
+    // 暂停较久后 HLS 可能已经停止拉流。仅在没有可播放未来帧时，
+    // 从当前位置恢复加载，避免无条件重启造成已有缓冲失效。
+    if (video.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) {
+      const hls = (video as any).__hls
+      if (hls) {
+        try { hls.startLoad(video.currentTime) }
+        catch (e) { console.warn('[Player] 恢复播放时重新拉流失败:', e) }
+      }
+    }
+  })
+  on('pause', () => {
+    playing.value = false
+    loading.value = false
+    stopLoadingStats()
+    clearNetworkErrTimer()
+  })
+  on('timeupdate', () => {
     current.value = video.currentTime
     if (video.duration) duration.value = video.duration
     updateBuffer()
@@ -1267,14 +1186,14 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
     if (_saveTimer == null) {
       _saveTimer = window.setInterval(() => {
         const key = stableResumeKey()
-        saveResumeTime(key, current.value, duration.value)
+        savePlaybackTime(key, current.value, duration.value)
         // 同时保存用户音量
         const v = getVideoEl()
         if (v) { writeSetting('volume', String(v.volume)); writeSetting('muted', v.muted ? '1' : '0') }
       }, SAVE_INTERVAL_MS)
     }
   })
-  video.addEventListener('loadedmetadata', () => {
+  on('loadedmetadata', () => {
     duration.value = video.duration
     // ⭐ 恢复用户上次的音量设置
     const savedVol = parseFloat(readSetting('volume', '1'))
@@ -1291,14 +1210,18 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
     console.log(`[Player] loadedmetadata: duration=${video.duration.toFixed(1)}s, volume=${video.volume.toFixed(2)}`)
     _aiReady = true
   })
-  video.addEventListener('progress', updateBuffer)
-  video.addEventListener('seeking', updateBuffer)
-  video.addEventListener('seeked', () => {
+  on('progress', updateBuffer)
+  on('seeking', updateBuffer)
+  on('seeked', () => {
     updateBuffer()
     if (upscaler) upscaler.onSeeked()
   })
-  video.addEventListener('waiting', () => { loading.value = true; startLoadingStats() })
-  video.addEventListener('canplay', () => {
+  on('waiting', () => {
+    if (video.paused || video.ended) return
+    loading.value = true
+    startLoadingStats()
+  })
+  on('canplay', () => {
     videoReady.value = true
     // 预缓冲阶段：不设置 loading=false，不自动播放，等待预缓冲完成
     if (preBuffering.value) {
@@ -1313,7 +1236,7 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
       safePlay(true)
     }
   })
-  video.addEventListener('volumechange', () => {
+  on('volumechange', () => {
     volume.value = video.volume
     muted.value = video.muted
     writeSetting('volume', String(video.volume))
@@ -1321,15 +1244,15 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
     // ⭐ 统一由 volumechange 触发 toast，覆盖所有场景（滚轮/键盘/按钮）
     showVolumeToastRef()
   })
-  video.addEventListener('ratechange', () => { speed.value = video.playbackRate; writeSetting('speed', String(video.playbackRate)) })
-  video.addEventListener('enterpictureinpicture', () => { isPiP.value = true })
-  video.addEventListener('leavepictureinpicture', () => { isPiP.value = false })
-  video.addEventListener('ended', () => {
+  on('ratechange', () => { speed.value = video.playbackRate; writeSetting('speed', String(video.playbackRate)) })
+  on('enterpictureinpicture', () => { isPiP.value = true })
+  on('leavepictureinpicture', () => { isPiP.value = false })
+  on('ended', () => {
     // 播放结束：移除当前进度（下次不跳回结尾）
-    try { localStorage.removeItem(stableResumeKey()) } catch { /* ignore */ }
+    clearPlaybackTime(stableResumeKey())
     if (_saveTimer != null) { window.clearInterval(_saveTimer); _saveTimer = null }
   })
-  video.addEventListener('error', () => { loading.value = false })
+  on('error', () => { loading.value = false })
 }
 
 // ====== 继续播放提示 ======
@@ -1363,16 +1286,14 @@ function jumpToSavedTime(autoRememberChoice: boolean): void {
 function destroyPlayerInternal(video: HTMLVideoElement): void {
   ++_playToken
   TsCache.setAbrSwitchCallback(null)
+  hlsEngine.dispose(video)
   try {
-    const hls = (video as any).__hls
-    if (hls) {
-      try { hls.destroy() } catch { /* ignore */ }
-      ; (video as any).__hls = null
-    }
     try { video.pause() } catch { /* ignore */ }
     try { video.removeAttribute('src') } catch { /* ignore */ }
     try { video.load() } catch { /* ignore */ }
     try { video.removeAttribute('data-autoplay-done') } catch { /* ignore */ }
+    try { (video as any).__eventAbortController?.abort() } catch { /* ignore */ }
+    try { delete (video as any).__eventAbortController } catch { /* ignore */ }
     try { delete (video as any).__eventsBound } catch { /* ignore */ }
   } catch { /* ignore */ }
   if (cacheStatsTimer != null) { window.clearInterval(cacheStatsTimer); cacheStatsTimer = null }
@@ -1977,6 +1898,7 @@ watch(() => props.url, (newUrl, oldUrl) => {
     destroyPlayer()
     return
   }
+  const restoreFullscreen = Boolean(oldUrl && oldUrl !== newUrl && isFullscreen.value)
   if (oldUrl && oldUrl !== newUrl) {
     const v = getVideoEl()
     if (v) {
@@ -1989,7 +1911,23 @@ watch(() => props.url, (newUrl, oldUrl) => {
     videoReady.value = false
     playing.value = false
   }
-  setTimeout(setupPlayer, 0)
+  setTimeout(() => {
+    setupPlayer()
+    if (!restoreFullscreen) return
+    setTimeout(async () => {
+      if ((window as any).go) {
+        try { WindowSetFullscreen(true) } catch { /* ignore */ }
+      } else if (!document.fullscreenElement && wrapperRef.value) {
+        try {
+          const el = wrapperRef.value as any
+          const request = el.requestFullscreen || el.webkitRequestFullscreen
+          if (request) await request.call(el)
+        } catch { /* non-gesture fullscreen may be rejected */ }
+      }
+      isFullscreen.value = true
+      document.body.setAttribute('data-player-fullscreen', '1')
+    }, 80)
+  }, 0)
 })
 
 // 监听 loading 状态：播放中卡顿时自动显示加载统计
@@ -2071,7 +2009,7 @@ defineExpose({ togglePiP })
       <span>⚠</span>
       <span>{{ errorMsg }}</span>
       <div v-if="showNetworkError" class="error-actions">
-        <button class="error-btn error-btn-primary" @click.stop="refreshPage()">刷新视频</button>
+        <button class="error-btn error-btn-primary" @click.stop="retryPlayback()">重试播放</button>
       </div>
     </div>
 
@@ -2452,6 +2390,7 @@ defineExpose({ togglePiP })
 </template>
 
 <style scoped>
+
 /* ========= 播放器容器 ========= */
 .player-wrapper {
   background: #000;
@@ -3829,18 +3768,9 @@ defineExpose({ togglePiP })
   align-items: center;
   justify-content: center;
   backdrop-filter: blur(4px);
-  animation: fadeIn 0.2s ease;
+  animation: cczj-fade-in 0.2s ease;
 }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-
-  to {
-    opacity: 1;
-  }
-}
 
 .ai-warning-dialog {
   background: rgba(28, 28, 36, 0.98);
@@ -4331,4 +4261,6 @@ defineExpose({ togglePiP })
 .playback-settings-link span {
   flex: 1;
 }
+
+
 </style>

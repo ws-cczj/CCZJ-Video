@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { GetVideoList, SearchVideos, GetTypes, GetYearsAndAreas, GetRecommend } from '../../bindings/cczjVideo/app'
-import * as AppMod from '../../bindings/cczjVideo/app'
+import { GetVideoList, SearchVideos, GetTypes, GetYearsAndAreas, GetRecommend } from '../api/app'
+import * as AppMod from '../api/app'
 import type { Video, Episode, VType, VideoDetailResponse } from '../types'
 import { useErrorStore } from './error'
 

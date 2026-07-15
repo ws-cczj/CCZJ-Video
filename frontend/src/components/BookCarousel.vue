@@ -70,6 +70,7 @@ function goPrev(): void {
 
 function startTransition(): void {
   isTransitioning.value = true
+  void preloadNearbyImages(pendingIndex.value)
   const direction = slideDirection.value
 
   // Incoming slide starts off-screen
@@ -151,18 +152,38 @@ async function getImgUrl(rawUrl: string): Promise<string> {
   }
 }
 
+const imageLoadToken = ref(0)
+
+async function preloadNearbyImages(extraIndex = -1): Promise<void> {
+  const slides = props.slides
+  const count = slides.length
+  if (count === 0) return
+  const token = ++imageLoadToken.value
+  const indices = new Set([
+    currentIndex.value,
+    (currentIndex.value - 1 + count) % count,
+    (currentIndex.value + 1) % count,
+  ])
+  if (extraIndex >= 0) indices.add(extraIndex)
+  await Promise.all(Array.from(indices).map(async (index) => {
+    if (slideImgUrls.value.has(index)) return
+    const url = await getImgUrl((slides[index] as any)?.vod_pic || '')
+    if (token === imageLoadToken.value) slideImgUrls.value.set(index, url)
+  }))
+}
+
 watch(() => props.slides, async (slides) => {
   slideImgUrls.value.clear()
-  proxiedUrls.value.clear()
   currentIndex.value = 0
   isTransitioning.value = false
   currentOffset.value = 0
   pendingIndex.value = -1
-  for (let i = 0; i < slides.length; i++) {
-    const url = await getImgUrl((slides[i] as any)?.vod_pic || '')
-    slideImgUrls.value.set(i, url)
-  }
+  await preloadNearbyImages()
 }, { immediate: true })
+
+watch(currentIndex, () => {
+  void preloadNearbyImages()
+})
 
 onMounted(() => {
   startAutoPlay()
