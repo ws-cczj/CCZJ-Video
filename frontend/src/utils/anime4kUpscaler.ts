@@ -201,6 +201,7 @@ export class Anime4kUpscaler {
   private fbo: WebGLFramebuffer | null = null
   private sourceVideo: HTMLVideoElement | null = null
   private animFrameId = 0
+  private videoFrameCallbackId: number | null = null
   private running = false
   private destroyed = false
   private seekFlag = false
@@ -266,7 +267,7 @@ export class Anime4kUpscaler {
     this.sourceVideo = video
     this.canvas = document.createElement('canvas')
     this.canvas.style.cssText =
-      'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;pointer-events:none;z-index:1;image-rendering:auto;display:none'
+      'position:absolute;pointer-events:none;z-index:1;image-rendering:auto;display:none'
     const container = parent ?? video.parentElement
     if (container) {
       container.style.position = container.style.position || 'relative'
@@ -391,6 +392,11 @@ export class Anime4kUpscaler {
     this.running = false; this.canvasShown = false
     if (this.canvas) this.canvas.style.display = 'none'
     if (this.animFrameId) { cancelAnimationFrame(this.animFrameId); this.animFrameId = 0 }
+    const video = this.sourceVideo as (HTMLVideoElement & { cancelVideoFrameCallback?: (id: number) => void }) | null
+    if (video && this.videoFrameCallbackId !== null && video.cancelVideoFrameCallback) {
+      video.cancelVideoFrameCallback(this.videoFrameCallbackId)
+    }
+    this.videoFrameCallbackId = null
   }
 
   /** 通知 upscaler 视频发生了 seek，强制下一帧渲染 */
@@ -417,6 +423,12 @@ export class Anime4kUpscaler {
     this.fbo = this.diagReadFbo = this.vao = this.quadBuf = this.sourceVideo = null
     // 清理诊断 canvas
     this._diagVideoCanvas = this._diagBilinCanvas = this._diagCanvasSnap = null
+  }
+
+  /** 仅渲染右侧增强画面，左侧保留原始 video，用于效果对比。 */
+  setCompareSplit(percent: number | null): void {
+    if (!this.canvas) return
+    this.canvas.style.clipPath = percent == null ? '' : `inset(0 0 0 ${Math.max(0, Math.min(100, percent))}%)`
   }
 
   updateOptions(opts: Partial<UpscalerOptions>): void {
@@ -458,7 +470,19 @@ export class Anime4kUpscaler {
 
   private renderLoop = (): void => {
     if (!this.running) return
-    this.animFrameId = requestAnimationFrame(this.renderLoop)
+    const video = this.sourceVideo as (HTMLVideoElement & {
+      requestVideoFrameCallback?: (callback: () => void) => number
+    }) | null
+    if (video?.requestVideoFrameCallback) {
+      // Match GPU work to decoded video frames rather than the display refresh
+      // rate. This keeps the model responsive without rendering duplicates.
+      this.videoFrameCallbackId = video.requestVideoFrameCallback(() => {
+        this.videoFrameCallbackId = null
+        this.renderLoop()
+      })
+    } else {
+      this.animFrameId = requestAnimationFrame(this.renderLoop)
+    }
     try {
       this.render()
     } catch (e) {
@@ -510,6 +534,7 @@ export class Anime4kUpscaler {
     }
 
     const texelX = 1 / vw, texelY = 1 / vh
+    this.syncCanvasToVideo(video, canvas)
 
     // 执行所有 pass
     for (let i = 0; i < this.passes.length; i++) {
@@ -693,6 +718,25 @@ export class Anime4kUpscaler {
       gl.bindTexture(gl.TEXTURE_2D, this.textures[i]!)
       gl.texImage2D(gl.TEXTURE_2D, 0, internal, this.texW, this.texH, 0, gl.RGBA, this.useFloatBuffer ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE, null)
     }
+  }
+
+  /** Match the canvas to the video's actual object-fit: contain box. */
+  private syncCanvasToVideo(video: HTMLVideoElement, canvas: HTMLCanvasElement): void {
+    const rect = video.getBoundingClientRect()
+    const parentRect = canvas.parentElement?.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0 || !parentRect) return
+    const videoRatio = video.videoWidth / video.videoHeight
+    const containerRatio = rect.width / rect.height
+    let width: number, height: number, x: number, y: number
+    if (videoRatio > containerRatio) {
+      width = rect.width; height = width / videoRatio; x = 0; y = (rect.height - height) / 2
+    } else {
+      height = rect.height; width = height * videoRatio; x = (rect.width - width) / 2; y = 0
+    }
+    canvas.style.left = `${rect.left - parentRect.left + x}px`
+    canvas.style.top = `${rect.top - parentRect.top + y}px`
+    canvas.style.width = `${width}px`
+    canvas.style.height = `${height}px`
   }
 
   private sampleVideoCenter(gl: WebGL2RenderingContext): number[] {

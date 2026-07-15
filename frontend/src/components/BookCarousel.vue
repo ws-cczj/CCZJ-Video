@@ -28,7 +28,14 @@ let timer: ReturnType<typeof setInterval> | null = null
 let transitionTimer: ReturnType<typeof setTimeout> | null = null
 
 const total = computed(() => props.slides.length)
-const activeSlide = computed(() => props.slides[currentIndex.value])
+// Source refreshes can mutate the slide array in place. Never let a stale
+// index turn the whole viewport into an empty carousel.
+const activeSlide = computed(() => {
+  const count = total.value
+  if (count === 0) return undefined
+  const index = ((currentIndex.value % count) + count) % count
+  return props.slides[index]
+})
 
 // Slide positions: current at 0, next at 100%, prev at -100%
 const currentOffset = ref(0) // percentage offset for current slide
@@ -100,7 +107,7 @@ function startTransition(): void {
   // After transition completes
   if (transitionTimer) clearTimeout(transitionTimer)
   transitionTimer = setTimeout(() => {
-    currentIndex.value = pendingIndex.value
+    currentIndex.value = pendingIndex.value >= 0 && pendingIndex.value < total.value ? pendingIndex.value : 0
     isTransitioning.value = false
     currentOffset.value = 0
     pendingIndex.value = -1
@@ -181,6 +188,14 @@ watch(() => props.slides, async (slides) => {
   await preloadNearbyImages()
 }, { immediate: true })
 
+watch(() => props.slides.length, (count) => {
+  if (count === 0) return
+  if (currentIndex.value >= count || currentIndex.value < 0) currentIndex.value = 0
+  if (pendingIndex.value >= count) pendingIndex.value = -1
+  void preloadNearbyImages()
+  startAutoPlay()
+})
+
 watch(currentIndex, () => {
   void preloadNearbyImages()
 })
@@ -257,8 +272,8 @@ function getSlideData(idx: number): Video | undefined {
                 <span v-if="activeSlide?.vod_remarks" class="slide-tag slide-tag-votes">{{ activeSlide.vod_remarks }}</span>
               </div>
             </div>
-            <div class="slide-actions">
-              <button class="slide-btn slide-btn-primary" @click.stop="goDetail(activeSlide)">查看详情</button>
+          <div class="slide-actions">
+              <button class="slide-btn slide-btn-primary" @click.stop="goDetail(activeSlide!)">查看详情</button>
             </div>
           </div>
         </div>
@@ -302,7 +317,7 @@ function getSlideData(idx: number): Video | undefined {
               </div>
             </div>
             <div class="slide-actions">
-              <button class="slide-btn slide-btn-primary" @click.stop="goDetail(activeSlide)">查看详情</button>
+              <button class="slide-btn slide-btn-primary" @click.stop="goDetail(getSlideData(pendingIndex)!)">查看详情</button>
             </div>
           </div>
         </div>
@@ -418,8 +433,8 @@ function getSlideData(idx: number): Video | undefined {
 .slide-badge {
   display: inline-block;
   padding: 3px 10px;
-  background: rgba(239, 68, 68, 0.9);
-  color: #fff;
+  background: var(--danger);
+  color: var(--danger-contrast);
   border-radius: 4px;
   font-size: 11px;
   font-weight: 700;
@@ -492,20 +507,22 @@ function getSlideData(idx: number): Video | undefined {
 .slide-tag {
   padding: 3px 10px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.65);
+  background: var(--bg-tag);
+  color: var(--text-secondary);
   font-size: 11px;
 }
 
 .slide-tag-score {
-  background: rgba(245, 158, 11, 0.2);
-  color: #fcd34d;
+  background: var(--warning-alpha-10);
+  color: #fff;
+  border: 1px solid var(--warning);
   font-weight: 600;
 }
 
 .slide-tag-votes {
-  background: rgba(99, 102, 241, 0.15);
-  color: rgba(165, 180, 252, 0.85);
+  background: var(--accent-alpha-20);
+  color: #fff;
+  border: 1px solid var(--accent);
 }
 
 .slide-actions {
@@ -526,13 +543,14 @@ function getSlideData(idx: number): Video | undefined {
 }
 
 .slide-btn-primary {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  color: #fff;
+  background: var(--carousel-control);
+  color: var(--carousel-control-text);
 }
 
 .slide-btn-primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+  background: var(--accent-dim);
+  box-shadow: 0 4px 12px var(--accent-alpha-35);
 }
 
 /* Navigation arrows */
@@ -545,8 +563,8 @@ function getSlideData(idx: number): Video | undefined {
   height: 40px;
   border-radius: 50%;
   border: none;
-  background: rgba(0, 0, 0, 0.5);
-  color: #fff;
+  background: var(--btn-solid);
+  color: var(--btn-solid-text);
   font-size: 24px;
   line-height: 1;
   cursor: pointer;
@@ -558,7 +576,7 @@ function getSlideData(idx: number): Video | undefined {
 }
 
 .carousel-arrow:hover {
-  background: rgba(0, 0, 0, 0.7);
+  background: var(--accent-dim);
 }
 
 .carousel-arrow-left {
@@ -597,7 +615,7 @@ function getSlideData(idx: number): Video | undefined {
 
 .carousel-indicator.active {
   width: 28px;
-  background: #10b981;
+  background: var(--btn-solid);
 }
 
 /* Loading overlay */
@@ -617,7 +635,7 @@ function getSlideData(idx: number): Video | undefined {
   width: 40px;
   height: 40px;
   border: 3px solid rgba(255, 255, 255, 0.2);
-  border-top-color: #10b981;
+  border-top-color: var(--btn-solid);
   border-radius: 50%;
   animation: carousel-spin 0.8s linear infinite;
 }

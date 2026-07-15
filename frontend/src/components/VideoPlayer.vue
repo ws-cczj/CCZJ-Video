@@ -392,7 +392,22 @@ let upscaler: Anime4kUpscaler | FilmUpscaler | null = null
 let upscalerStatsTimer: ReturnType<typeof setInterval> | null = null
 const upscalerSupported = ref(false)
 const upscalerStats = ref<{ fps: number; gpuEnabled: boolean }>({ fps: 0, gpuEnabled: false })
+const compareEnabled = ref(false)
+const compareSplit = ref(50)
 let _aiReady = false // 视频是否已就绪（loadedmetadata 之后），AI 才会启动
+
+function toggleEnhancementCompare(): void {
+  if (!upscaler) return
+  compareEnabled.value = !compareEnabled.value
+  upscaler.setCompareSplit(compareEnabled.value ? compareSplit.value : null)
+  keepVisible()
+}
+function updateEnhancementCompare(e: MouseEvent): void {
+  if (!compareEnabled.value || !wrapperRef.value || !upscaler) return
+  const rect = wrapperRef.value.getBoundingClientRect()
+  compareSplit.value = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100))
+  upscaler.setCompareSplit(compareSplit.value)
+}
 
 let _pendingQualityMode: QualityMode = 'original'
 function onQualityChange(value: string | number): void {
@@ -456,6 +471,7 @@ async function startAiPipeline(mode: 'ai_anime' | 'ai_film'): Promise<void> {
     upscaler.destroy()
     upscaler = null
   }
+  compareEnabled.value = false
 
   const v = getVideoEl()
   if (!v) return
@@ -536,6 +552,7 @@ function stopAiPipeline(): void {
     upscaler.destroy()
     upscaler = null
   }
+  compareEnabled.value = false
   upscalerStats.value = { fps: 0, gpuEnabled: false }
   console.log('[Player] AI 增强管线已停止')
 }
@@ -564,15 +581,20 @@ const progressPct = computed(() => {
 const bufferPct = ref(0)
 function updateBuffer(): void {
   const v = getVideoEl()
-  if (!v || !v.duration || v.duration <= 0) return
+  if (!v || !v.duration || v.duration <= 0) {
+    TsCache.setPlaybackBufferAhead(0)
+    return
+  }
   const buf = v.buffered
   if (!buf || buf.length === 0) {
     bufferPct.value = 0
+    TsCache.setPlaybackBufferAhead(0)
     return
   }
   // 用最后一段 buffer 的结尾来表示"已缓冲到的最远位置"
   const end = buf.end(buf.length - 1)
   bufferPct.value = Math.max(0, Math.min(100, (end / v.duration) * 100))
+  TsCache.setPlaybackBufferAhead(Math.max(0, end - v.currentTime))
 }
 
 // 自动跳到上次播放位置的开关：由用户在"跳回并记住"时开启
@@ -586,9 +608,10 @@ function saveAutoJumpConfig(on: boolean): void {
 // 缓存监控
 const cacheStats = ref<{
   hits: number; misses: number; entries: number; bytes: number; hitRate: number;
-  totalSegments: number; prefetched: number;
+  totalSegments: number; prefetched: number; prefetchTarget: number; queued: number; inflight: number;
 }>({
   hits: 0, misses: 0, entries: 0, bytes: 0, hitRate: 0, totalSegments: 0, prefetched: 0,
+  prefetchTarget: 0, queued: 0, inflight: 0,
 })
 let cacheStatsTimer: number | null = null
 function formatBytes(n: number): string {
@@ -787,6 +810,7 @@ function updateCacheStats(): void {
   cacheStats.value = {
     hits: s.hits, misses: s.misses, entries: s.entries, bytes: s.bytes,
     hitRate: s.hitRate, totalSegments: s.totalSegments, prefetched: s.entries,
+    prefetchTarget: s.prefetchTarget, queued: s.queued, inflight: s.inflight,
   }
   if (changed && (s.hits + s.misses) > 0) {
     console.log(
@@ -876,6 +900,9 @@ function safePlay(auto: boolean): void {
 async function loadHls(video: HTMLVideoElement, url: string): Promise<void> {
   console.log('[Player] 🔄 开始加载视频:', url.slice(-80))
   destroyPlayerInternal(video)
+  // 清理旧播放器会解除事件监听；必须随后重新绑定，否则 play/pause
+  // 不会同步到 playing，播放中的画面仍会显示暂停图标。
+  bindCommonVideoEvents(video)
   errorMsg.value = ''
   clearNetworkErrTimer()
   loading.value = true
@@ -1005,16 +1032,9 @@ async function loadHls(video: HTMLVideoElement, url: string): Promise<void> {
           firstPlayTriggered = true
           // ⭐ 预取策略：从 hls.js 当前 buffer 之后 +15 片开始，超前预取
           //   hls.js 自己会拉取紧接的 5-10 片，我们专注于更远处的片段
-          const hlsBufferFrags = Math.ceil(30 / Math.max(curTargetDur, 1))
-          const prefetchCount = Math.min(60, Math.max(20, Math.floor(frags.length / 2)))
-          const startIdx = Math.max(0, Math.min(frags.length - 1, hlsBufferFrags + 15))
-          const segUrls = frags.map((f: any) => {
-            try { return new URL(f.url, url).href } catch { return f.url }
-          })
-          TsCache.prefetchFromSegments(segUrls, 0, startIdx, prefetchCount)
-          console.log(`[Player] 📡 TsCache 预取: 片段 #${startIdx}+${prefetchCount} 片 (共 ${segUrls.length})`)
-          // ⭐ 启动预缓冲：等待5个TS分片或10秒超时后才开始播放
-          startPrebuffer()
+          // hls.js owns startup buffering. TsCache starts its low-priority
+          // near-playback work only after updateBuffer reports spare media.
+          updateBuffer()
         }
       })
       hls.on(Hls.Events.FRAG_CHANGED, (_e: any, data: any) => {
@@ -1135,7 +1155,6 @@ function setupPlayer(): void {
     errorMsg.value = '未获取到视频地址'
     return
   }
-  bindCommonVideoEvents(video)
   if (isHls(url)) {
     loadHls(video, url)
   } else {
@@ -1306,7 +1325,10 @@ function destroyPlayerInternal(video: HTMLVideoElement): void {
   stopLoadingStats()
   stopAiPipeline()
   _aiReady = false
-  cacheStats.value = { hits: 0, misses: 0, entries: 0, bytes: 0, hitRate: 0, totalSegments: 0, prefetched: 0 }
+  cacheStats.value = {
+    hits: 0, misses: 0, entries: 0, bytes: 0, hitRate: 0, totalSegments: 0, prefetched: 0,
+    prefetchTarget: 0, queued: 0, inflight: 0,
+  }
   loading.value = true
   videoReady.value = false
   showResumePrompt.value = false
@@ -1406,6 +1428,7 @@ function captureThumbnail(timeSec: number): void {
 
   // ⭐ 检查视频是否可 seek：readyState >= 1 (HAVE_METADATA) 才允许设置 currentTime
   if (v.readyState < 1) {
+    try { (v as any).__thumbHls?.startLoad(timeSec) } catch { /* ignore */ }
     _thumbSeekPending = false
     return
   }
@@ -1459,6 +1482,7 @@ function captureThumbnail(timeSec: number): void {
 
   v.addEventListener('seeked', onSeeked)
   try {
+    try { (v as any).__thumbHls?.startLoad(timeSec) } catch { /* ignore */ }
     v.currentTime = timeSec
   } catch {
     v.removeEventListener('seeked', onSeeked)
@@ -1511,26 +1535,21 @@ async function initThumbSampler(): Promise<void> {
         const hlsConfig: any = {
           enableWorker: false,
           lowLatencyMode: false,
-          maxBufferLength: 2,
-          maxMaxBufferLength: 3,
-          maxBufferSize: 3 * 1000 * 1000,
+          maxBufferLength: 1,
+          maxMaxBufferLength: 1,
+          maxBufferSize: 1024 * 1024,
           fragLoadingTimeOut: 8000,
           fragLoadingMaxRetry: 3,
           manifestLoadingTimeOut: 6000,
           manifestLoadingMaxRetry: 2,
-          autoStartLoad: true,
-          startLevel: -1,
+          autoStartLoad: false,
+          startLevel: 0,
           loader: TsCache.TsCacheLoader,
         }
         thumbHls = new Hls(hlsConfig)
+        ;(sampleVideo as any).__thumbHls = thumbHls
         thumbHls.loadSource(props.url)
         thumbHls.attachMedia(sampleVideo)
-        // 加载后暂停，只用于 canvas 抓帧
-        thumbHls.on(Hls.Events.MANIFEST_PARSED, () => {
-          sampleVideo.play().then(() => {
-            sampleVideo.pause()
-          }).catch(() => { })
-        })
         console.log('[Player] 🖼️ 缩略图 HLS 实例已创建')
       }
     } catch (e) {
@@ -1944,14 +1963,15 @@ defineExpose({ togglePiP })
 
 <template>
   <div class="player-wrapper" :class="{ fullscreen: isFullscreen, 'cursor-hidden': playing && !showControls, 'show-controls': showControls }"
-    ref="wrapperRef" tabindex="0" @mousemove="toggleShow(true); mouseInside = true" @mouseenter="mouseInside = true"
+    ref="wrapperRef" tabindex="0" @mousemove="toggleShow(true); mouseInside = true; updateEnhancementCompare($event)" @mouseenter="mouseInside = true"
     @mouseleave="onMouseLeave" @click="onWrapperClick" @dblclick.stop="toggleFullscreen()" @wheel.prevent="onWheel">
     <!-- 顶部栏：标题 + 缓存统计 + 收藏按钮 -->
     <div v-show="showTitleBar && (showControls || !playing)" class="player-title-bar" @click.stop @dblclick.stop>
       <span class="player-title">{{ title || url }}</span>
       <span v-if="isHls(url) && cacheStats.totalSegments > 0" class="cache-info"
-        :title="`命中: ${cacheStats.hits} 未命中: ${cacheStats.misses} 预取: ${cacheStats.entries}/${cacheStats.totalSegments} 片`">
-        预取 {{ cacheStats.entries }}/{{ cacheStats.totalSegments }} ·
+        :class="{ working: cacheStats.queued + cacheStats.inflight > 0 }"
+        :title="`命中: ${cacheStats.hits} 未命中: ${cacheStats.misses}；当前已缓存 ${cacheStats.entries} 片，预取目标 ${cacheStats.prefetchTarget} 片`">
+        缓存 {{ cacheStats.entries }} 片<span v-if="cacheStats.queued + cacheStats.inflight > 0"> · 预取中</span><span v-else> · 就绪</span> ·
         命中 {{ (cacheStats.hitRate * 100).toFixed(0) }}%
       </span>
       <button class="fav-btn-in-player" :class="{ 'is-fav': isFav }" :disabled="favBusy"
@@ -1971,6 +1991,9 @@ defineExpose({ togglePiP })
     <div v-show="mouseInside" class="player-drag-handle" title="拖拽移动窗口" />
 
     <video class="native-video" playsinline preload="auto" @click.stop="togglePlay"></video>
+    <div v-if="compareEnabled" class="enhance-compare-line" :style="{ left: compareSplit + '%' }" aria-hidden="true">
+      <span>原始</span><i></i><span>增强</span>
+    </div>
 
     <!-- 操作 OSD：快进/快退/倍速 屏幕中央提示 -->
     <transition name="osd-fade">
@@ -2163,6 +2186,11 @@ defineExpose({ togglePiP })
           </button>
         </div>
       </div>
+
+      <button v-if="qualityMode !== 'original' && upscaler" class="ctrl-btn" :class="{ active: compareEnabled }"
+        @click.stop="toggleEnhancementCompare" title="增强前后对比（移动鼠标调整分界线）">
+        <Icon name="layers" :size="16" />
+      </button>
 
       <!-- 播放设置 -->
       <div class="playback-settings-group" @click.stop>
@@ -2992,6 +3020,40 @@ defineExpose({ togglePiP })
   transition: transform 0.15s ease;
   z-index: 2;
 }
+
+.enhance-compare-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 3;
+  width: 2px;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .55), 0 0 14px rgba(255, 255, 255, .8);
+  pointer-events: none;
+}
+.enhance-compare-line i {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 14px;
+  height: 14px;
+  transform: translate(-50%, -50%);
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #1890ff;
+}
+.enhance-compare-line span {
+  position: absolute;
+  top: 12px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, .62);
+  color: #fff;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.enhance-compare-line span:first-child { right: 10px; }
+.enhance-compare-line span:last-child { left: 10px; }
 
 .progress-container:hover .progress-thumb {
   transform: translate(-50%, -50%) scale(1);

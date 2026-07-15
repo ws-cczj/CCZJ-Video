@@ -460,12 +460,12 @@ onUnmounted(() => {
 .update-file-name { color: var(--text-primary); font-family: ui-monospace, Menlo, Monaco, Consolas, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; margin-right: 12px; }
 .update-file-size { color: var(--text-muted); flex-shrink: 0; }
 .update-done-card { gap: 16px; padding: 16px 0; text-align: center; }
-.update-done-icon { width: 64px; height: 64px; border-radius: 50%; background: var(--success); color: #fff; box-shadow: 0 6px 18px var(--success-alpha-10); }
+.update-done-icon { width: 64px; height: 64px; border-radius: 50%; background: var(--success); color: var(--success-contrast); box-shadow: 0 6px 18px var(--success-alpha-10); }
 .update-done-text p { margin: 0 0 4px; font-size: 1.07rem; color: var(--text-primary); }
 .update-done-path { font-size: 0.79rem !important; color: var(--text-muted) !important; font-family: ui-monospace, Menlo, Monaco, Consolas, monospace; word-break: break-all; margin-top: 6px !important; }
 .update-done-hint { font-size: 0.86rem; color: var(--text-muted); line-height: 1.6; }
 .update-done-hint p { margin: 0 0 4px; }
-.update-fail-icon { width: 64px; height: 64px; border-radius: 50%; background: var(--warning, #f59e0b); color: #fff; box-shadow: 0 6px 18px rgba(245, 158, 11, 0.15); }
+.update-fail-icon { width: 64px; height: 64px; border-radius: 50%; background: var(--warning); color: var(--warning-contrast); box-shadow: 0 6px 18px var(--warning-alpha-10); }
 .update-fail-hint { font-size: 0.86rem; color: var(--text-muted); line-height: 1.6; text-align: left; padding: 0 8px; }
 .update-fail-hint p { margin: 0 0 4px; }
 .update-link { color: var(--accent); text-decoration: underline; cursor: pointer; }

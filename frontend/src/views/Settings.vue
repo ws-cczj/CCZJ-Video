@@ -365,6 +365,10 @@ function applyPreview(): void {
     btnHide: editing.btnHide,
     btnMin: editing.btnMin,
     btnClose: editing.btnClose,
+    actionColor: editing.actionColor,
+    tagColor: editing.tagColor,
+    episodeColor: editing.episodeColor,
+    carouselColor: editing.carouselColor,
     backgroundImage: editing.backgroundImage,
     dark: editing.dark,
     sidebarAlpha: editing.sidebarAlpha ?? 0.65,
@@ -395,6 +399,10 @@ async function saveEditing(): Promise<void> {
     btnHide: editing.btnHide,
     btnMin: editing.btnMin,
     btnClose: editing.btnClose,
+    actionColor: editing.actionColor,
+    tagColor: editing.tagColor,
+    episodeColor: editing.episodeColor,
+    carouselColor: editing.carouselColor,
     backgroundImage: editing.backgroundImage,
     dark: editing.dark,
     sidebarAlpha: editing.sidebarAlpha ?? 0.65,
@@ -425,6 +433,10 @@ function deriveFromPrimary(): void {
   editing.btnHide = derived.btnHide
   editing.btnMin = derived.btnMin
   editing.btnClose = derived.btnClose
+  editing.actionColor = derived.actionColor
+  editing.tagColor = derived.tagColor
+  editing.episodeColor = derived.episodeColor
+  editing.carouselColor = derived.carouselColor
   applyPreview()
 }
 
@@ -1169,6 +1181,14 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
           </div>
         </div>
 
+        <h4 class="group-title">全局组件配色</h4>
+        <div class="picker-grid small">
+          <div class="picker-item"><label>主操作按钮</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.actionColor" @input="applyPreview" /><span>{{ editing.actionColor }}</span></div></div>
+          <div class="picker-item"><label>标签底色</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.tagColor" @input="applyPreview" /><span>{{ editing.tagColor }}</span></div></div>
+          <div class="picker-item"><label>剧集按钮</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.episodeColor" @input="applyPreview" /><span>{{ editing.episodeColor }}</span></div></div>
+          <div class="picker-item"><label>轮播控件</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.carouselColor" @input="applyPreview" /><span>{{ editing.carouselColor }}</span></div></div>
+        </div>
+
         <div
           class="bg-drop-zone cczj-relative cczj-flex cczj-items-center cczj-justify-center cczj-overflow-hidden cczj-cursor-pointer"
           :class="{ 'has-image': !!backgroundImageUrl }"
@@ -1872,7 +1892,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   border-color: var(--danger);
   color: var(--danger);
 }
-.btn.danger:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
+.btn.danger:hover { background: var(--danger); color: var(--danger-contrast); border-color: var(--danger); }
 .btn.btn-secondary {
   background: var(--bg-secondary);
   color: var(--text-primary);
@@ -2006,7 +2026,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   color: var(--danger);
   border-color: var(--danger);
 }
-.row.actions .danger:hover { background: var(--danger); color: #fff; }
+.row.actions .danger:hover { background: var(--danger); color: var(--danger-contrast); }
 
 /* 采集调度开关样式 */
 .schedule-card .toggle-label {
@@ -2125,7 +2145,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   border-color: var(--accent);
 }
 .log-toolbar .btn.danger { color: var(--danger); border-color: var(--danger); }
-.log-toolbar .btn.danger:hover { background: var(--danger); color: #fff; }
+.log-toolbar .btn.danger:hover { background: var(--danger); color: var(--danger-contrast); }
 .log-toolbar .btn:disabled { opacity: .4; cursor: not-allowed; }
 
 .log-dir { margin: 6px 0 10px 0; font-size: 0.79rem; color: var(--text-muted); }

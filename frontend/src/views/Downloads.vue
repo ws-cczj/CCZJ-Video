@@ -391,12 +391,12 @@ function isMatchFilter(t: { status: string }): boolean {
   transition: all 0.15s;
   font-family: inherit;
 }
-.b-btn-pause { background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.4); color: #f59e0b; }
-.b-btn-pause:hover { background: rgba(245, 158, 11, 0.2); border-color: #f59e0b; }
-.b-btn-resume { background: rgba(34, 197, 94, 0.1); border-color: rgba(34, 197, 94, 0.4); color: #22c55e; }
-.b-btn-resume:hover { background: rgba(34, 197, 94, 0.2); border-color: #22c55e; }
-.b-btn-danger { background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.4); color: #ef4444; }
-.b-btn-danger:hover { background: rgba(239, 68, 68, 0.2); border-color: #ef4444; }
+.b-btn-pause { background: var(--warning-alpha-10); border-color: var(--warning); color: var(--warning-text); }
+.b-btn-pause:hover { background: var(--warning-alpha-10); border-color: var(--warning); }
+.b-btn-resume { background: var(--success-alpha-10); border-color: var(--success); color: var(--success); }
+.b-btn-resume:hover { background: var(--success-alpha-10); border-color: var(--success); }
+.b-btn-danger { background: var(--danger-alpha-10); border-color: var(--danger); color: var(--danger); }
+.b-btn-danger:hover { background: var(--danger-alpha-10); border-color: var(--danger); }
 .b-btn-remove { background: rgba(107, 114, 128, 0.1); border-color: rgba(107, 114, 128, 0.4); color: #6b7280; }
 .b-btn-remove:hover { background: rgba(107, 114, 128, 0.2); border-color: #6b7280; color: #6b7280; }
 
@@ -518,10 +518,10 @@ function isMatchFilter(t: { status: string }): boolean {
   font-weight: 500;
 }
 .status-queued { background: rgba(120, 120, 120, 0.15); color: #8a8a8a; }
-.status-downloading { background: rgba(24, 144, 255, 0.15); color: #1890ff; }
-.status-paused { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
-.status-done { background: rgba(22, 163, 74, 0.15); color: #10b981; }
-.status-error, .status-cancelled { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+.status-downloading { background: var(--info-alpha-10); color: var(--info); }
+.status-paused { background: var(--warning-alpha-10); color: var(--warning-text); }
+.status-done { background: var(--success-alpha-10); color: var(--success); }
+.status-error, .status-cancelled { background: var(--danger-alpha-10); color: var(--danger); }
 
 .task-meta-row {
   display: flex;

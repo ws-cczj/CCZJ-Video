@@ -214,23 +214,44 @@ onUnmounted(() => {
   --accent: #16a34a;
   --accent-dim: #15803d;
   --accent-contrast: #ffffff;
+  --accent-rgb: 22, 163, 74;
 
   /* 语义色 */
   --danger: #e53935;
   --danger-hover: #c62828;
+  --danger-contrast: #ffffff;
   --success: #16a34a;
+  --success-contrast: #ffffff;
   --warning: #f59e0b;
   --warning-text: #b45309;
+  --warning-contrast: #111827;
   --info: #0288d1;
+  --info-contrast: #ffffff;
 
   /* 透明度变体 */
   --accent-alpha-10: rgba(22,163,74,0.10);
   --accent-alpha-15: rgba(22,163,74,0.15);
   --accent-alpha-20: rgba(22,163,74,0.20);
   --accent-alpha-35: rgba(22,163,74,0.35);
+  --accent-alpha-40: rgba(22,163,74,0.40);
   --success-alpha-10: rgba(22,163,74,0.10);
   --danger-alpha-10: rgba(229,57,53,0.10);
   --warning-alpha-10: rgba(245,158,11,0.10);
+  --info-alpha-10: rgba(2,136,209,0.10);
+
+  /* Component tokens derived from the active palette. */
+  --bg-tag: #e8f5eb;
+  --border-light: #c5e6cf;
+  --btn-solid: #16a34a;
+  --btn-solid-text: #ffffff;
+  --btn-soft: #d1ebd8;
+  --btn-soft-text: #166534;
+  --tag-highlight-bg: rgba(22,163,74,0.18);
+  --tag-highlight-text: #166534;
+  --episode-bg: #e8f5eb;
+  --episode-text: #166534;
+  --carousel-control: #16a34a;
+  --carousel-control-text: #ffffff;
 
   /* 阴影层级 */
   --shadow-sm: 0 1px 3px rgba(31,36,48,0.06);
@@ -353,6 +374,20 @@ input, textarea, [contenteditable="true"], .allow-select, .video-description, .d
 ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 
 ::selection { background: var(--accent); color: var(--accent-contrast); }
+
+/* Shared fallback for legacy controls that have not yet migrated to a UI
+ * component.  It gives focus, links, and native form fields the active theme
+ * without changing their individual layouts. */
+a { color: var(--accent); }
+input, textarea, select {
+  color: var(--text-primary);
+  background-color: var(--bg-input);
+  border-color: var(--border);
+}
+input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 
 /* ====== 采集进度条 ====== */
 .collect-overlay {

@@ -61,8 +61,8 @@ defineProps<{
   color: var(--success);
 }
 .ui-badge--warning {
-  background: rgba(245, 158, 11, 0.1);
-  color: #b45309;
+  background: var(--warning-alpha-10);
+  color: var(--warning-text);
 }
 .ui-badge--danger {
   background: var(--danger-alpha-10);

@@ -150,7 +150,8 @@ async function refreshLastWatched(): Promise<void> {
           epNum: Number(found.ep_num),
           epIdx: idx,
           epName: formatEpisodeName(ep, idx),
-          position: found.position || 0,
+          // 后端保存的是秒数；按钮展示的是百分比，不能直接把秒数当百分比。
+          position: getEpProgressPct(loadEpProgress()[epKeyOf(ep, idx)]),
         }
         return
       }
@@ -1178,9 +1179,9 @@ onBeforeUnmount(() => {
 .tag {
   padding: 5px 12px;
   border-radius: 20px;
-  background: var(--bg-secondary);
-  border: 1px solid transparent;
-  color: var(--text-secondary);
+  background: var(--bg-tag);
+  border: 1px solid var(--border-light);
+  color: var(--text-primary);
   font-size: 12px;
   font-weight: 500;
   font-family: inherit;
@@ -1205,11 +1206,11 @@ onBeforeUnmount(() => {
 
 .meta-chip {
   padding: 5px 12px;
-  background: var(--bg-secondary);
+  background: var(--bg-tag);
   border-radius: 6px;
   font-size: 12px;
-  color: var(--text-secondary);
-  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border: 1px solid var(--border-light);
   font-family: inherit;
   cursor: default;
   transition: all 0.15s ease;
@@ -1339,9 +1340,9 @@ onBeforeUnmount(() => {
   padding: 0 8px;
   height: 40px;
   border-radius: 8px;
-  border: 1px solid var(--accent);
-  background: var(--accent-alpha-10);
-  color: var(--accent);
+  border: 1px solid var(--border-light);
+  background: var(--episode-bg);
+  color: var(--episode-text);
   cursor: pointer;
   font-size: 12px;
   font-family: inherit;
@@ -1354,9 +1355,9 @@ onBeforeUnmount(() => {
 }
 
 .episode-btn:hover {
-  border-color: var(--border);
-  color: var(--text-primary);
-  background: var(--bg-secondary);
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-alpha-15);
   transform: none;
 }
 

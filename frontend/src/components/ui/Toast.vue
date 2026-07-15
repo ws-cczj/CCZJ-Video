@@ -105,11 +105,12 @@ const levelIcon = (lvl: string) => iconMap[lvl] || 'i'
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: #fff;
+  color: var(--accent-contrast);
   background: var(--accent);
 }
 .ui-toast__icon--warn { background: var(--warning); }
-.ui-toast__icon--error { background: var(--danger); }
+.ui-toast__icon--warn { color: var(--warning-contrast); }
+.ui-toast__icon--error { background: var(--danger); color: var(--danger-contrast); }
 
 /* 正文 */
 .ui-toast__body {

@@ -297,7 +297,7 @@ export class FilmUpscaler {
   private canvas: HTMLCanvasElement | null = null
   private gl: WebGL2RenderingContext | null = null
   private video: HTMLVideoElement | null = null
-  private running = false; private rafId = 0
+  private running = false; private rafId = 0; private videoFrameCallbackId: number | null = null
   private _error: string | null = null
 
   private quadVAO: WebGLVertexArrayObject | null = null
@@ -517,7 +517,15 @@ export class FilmUpscaler {
     if (this.running || !this.gl) return
     this.running = true; this.frames = 0; this.lastFpsTime = performance.now(); this.renderLoop()
   }
-  stop(): void { this.running = false; if (this.rafId) { cancelAnimationFrame(this.rafId); this.rafId = 0 } }
+  stop(): void {
+    this.running = false
+    if (this.rafId) { cancelAnimationFrame(this.rafId); this.rafId = 0 }
+    const video = this.video as (HTMLVideoElement & { cancelVideoFrameCallback?: (id: number) => void }) | null
+    if (video && this.videoFrameCallbackId !== null && video.cancelVideoFrameCallback) {
+      video.cancelVideoFrameCallback(this.videoFrameCallbackId)
+    }
+    this.videoFrameCallbackId = null
+  }
 
   onSeeked(): void {
     if (this.prevFBO && this.gl) {
@@ -563,13 +571,30 @@ export class FilmUpscaler {
     for (const k of ks) if (opts[k] !== undefined) (this.opts as any)[k] = opts[k]
   }
 
+  /** 仅渲染右侧增强画面，左侧保留原始 video，用于效果对比。 */
+  setCompareSplit(percent: number | null): void {
+    if (!this.canvas) return
+    this.canvas.style.clipPath = percent == null ? '' : `inset(0 0 0 ${Math.max(0, Math.min(100, percent))}%)`
+  }
+
   getStats(): FilmStats {
     return { fps: this.currentFps, gpuEnabled: true, qualityScale: this._qualityScale, enhancements: this.enhancements() }
   }
 
   private renderLoop = (): void => {
     if (!this.running) return
-    this.rafId = requestAnimationFrame(this.renderLoop); this.render(); this.frames++
+    const video = this.video as (HTMLVideoElement & {
+      requestVideoFrameCallback?: (callback: () => void) => number
+    }) | null
+    if (video?.requestVideoFrameCallback) {
+      this.videoFrameCallbackId = video.requestVideoFrameCallback(() => {
+        this.videoFrameCallbackId = null
+        this.renderLoop()
+      })
+    } else {
+      this.rafId = requestAnimationFrame(this.renderLoop)
+    }
+    this.render(); this.frames++
     const now = performance.now()
     if (now - this.lastFpsTime >= 2000) {
       this.currentFps = Math.round(this.frames / ((now - this.lastFpsTime) / 1000))
@@ -602,6 +627,7 @@ export class FilmUpscaler {
     const video = this.video!, canvas = this.canvas!
     if (!video.videoWidth || !video.videoHeight) return
     const vr = video.getBoundingClientRect()
+    const parentRect = canvas.parentElement?.getBoundingClientRect()
     const cw = vr.width, ch = vr.height
     // 计算 object-fit: contain 的实际渲染区域
     const vw = video.videoWidth, vh = video.videoHeight
@@ -613,8 +639,11 @@ export class FilmUpscaler {
     } else {
       dh = ch; dw = ch * videoRatio; dx = (cw - dw) / 2; dy = 0
     }
-    canvas.style.left = (vr.left + dx) + 'px'
-    canvas.style.top = (vr.top + dy) + 'px'
+    // Canvas is positioned relative to the player wrapper, while the video
+    // rect is viewport-relative. Mixing those coordinates can place the
+    // enhanced output outside its source video in embedded player layouts.
+    canvas.style.left = (vr.left - (parentRect?.left ?? 0) + dx) + 'px'
+    canvas.style.top = (vr.top - (parentRect?.top ?? 0) + dy) + 'px'
     canvas.style.width = dw + 'px'
     canvas.style.height = dh + 'px'
   }

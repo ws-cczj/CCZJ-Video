@@ -104,6 +104,55 @@ function luminance(hex: string): number {
   return 0.299 * r + 0.587 * g + 0.114 * b
 }
 
+function hueShift(hex: string, degrees: number, lightnessDelta = 0): string {
+  const [r8, g8, b8] = hexToRgb(hex)
+  const r = r8 / 255, g = g8 / 255, b = b8 / 255
+  const max = Math.max(r, g, b), min = Math.min(r, g, b)
+  let h = 0, s = 0
+  let l = (max + min) / 2
+  const d = max - min
+  if (d !== 0) {
+    s = d / (1 - Math.abs(2 * l - 1))
+    if (max === r) h = ((g - b) / d) % 6
+    else if (max === g) h = (b - r) / d + 2
+    else h = (r - g) / d + 4
+    h *= 60
+  }
+  h = (h + degrees + 360) % 360
+  l = Math.max(0, Math.min(1, l + lightnessDelta))
+  const c = (1 - Math.abs(2 * l - 1)) * s
+  const x = c * (1 - Math.abs((h / 60) % 2 - 1))
+  const m = l - c / 2
+  let rr = 0, gg = 0, bb = 0
+  if (h < 60) [rr, gg, bb] = [c, x, 0]
+  else if (h < 120) [rr, gg, bb] = [x, c, 0]
+  else if (h < 180) [rr, gg, bb] = [0, c, x]
+  else if (h < 240) [rr, gg, bb] = [0, x, c]
+  else if (h < 300) [rr, gg, bb] = [x, 0, c]
+  else [rr, gg, bb] = [c, 0, x]
+  return rgbToHex((rr + m) * 255, (gg + m) * 255, (bb + m) * 255)
+}
+
+function relativeLuminance(hex: string): number {
+  const [r, g, b] = hexToRgb(hex).map((value) => {
+    const channel = value / 255
+    return channel <= 0.04045 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4)
+  })
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+function contrastRatio(a: string, b: string): number {
+  const [lighter, darker] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x)
+  return (lighter + 0.05) / (darker + 0.05)
+}
+
+/** Choose an accessible label colour for a user-selected accent colour. */
+function contrastText(background: string): string {
+  const white = contrastRatio(background, '#ffffff')
+  const nearBlack = contrastRatio(background, '#111827')
+  return nearBlack >= white ? '#111827' : '#ffffff'
+}
+
 // ============================================================================
 // 类型
 // ============================================================================
@@ -122,11 +171,40 @@ export interface ColorPalette {
   accentDim: string      // 暗色版强调色
   accentContrast: string // 强调色上的文字
   accentAlpha10: string
+  accentAlpha5: string
+  accentAlpha15: string
   accentAlpha20: string
+  accentAlpha25: string
+  accentAlpha30: string
   accentAlpha35: string
+  accentAlpha40: string
+  accentRGB: string
+  bgTag: string
+  borderLight: string
+  btnSolid: string
+  btnSolidText: string
+  btnSoft: string
+  btnSoftText: string
+  tagHighlightBg: string
+  tagHighlightText: string
+  episodeBg: string
+  episodeText: string
+  carouselControl: string
+  carouselControlText: string
   danger: string
+  dangerHover: string
+  dangerContrast: string
+  dangerAlpha10: string
   success: string
+  successContrast: string
+  successAlpha10: string
   warning: string
+  warningText: string
+  warningContrast: string
+  warningAlpha10: string
+  info: string
+  infoContrast: string
+  infoAlpha10: string
   shadow: string
   overlay: string
   btnHide: string
@@ -145,6 +223,10 @@ export interface CustomTheme {
   btnHide: string
   btnMin: string
   btnClose: string
+  actionColor?: string
+  tagColor?: string
+  episodeColor?: string
+  carouselColor?: string
   backgroundImage?: string
   dark: boolean
   sidebarAlpha: number   // 侧边栏/面板背景透明度 0~1（有背景图时生效）
@@ -165,6 +247,10 @@ export interface PresetTheme {
 // ============================================================================
 // 浅色模式：应用背景 = 主色的"很浅很淡"的色调；卡片 = 白色/近白
 function buildLightPalette(primary: string, overrides: Partial<ColorPalette> = {}): ColorPalette {
+  const success = hueShift(primary, 28, -0.04)
+  const warning = hueShift(primary, 72, 0.08)
+  const danger = hueShift(primary, 150, 0.02)
+  const info = hueShift(primary, -20)
   const base: ColorPalette = {
     bgApp: lighten(primary, 0.88),
     bgCard: '#ffffff',
@@ -178,24 +264,45 @@ function buildLightPalette(primary: string, overrides: Partial<ColorPalette> = {
     textMuted: '#8a92a6',
     accent: primary,
     accentDim: darken(primary, 0.15),
-    accentContrast: '#ffffff',
+    accentContrast: contrastText(primary),
+    accentRGB: hexToRgb(primary).join(', '),
+    accentAlpha5: hexToRgba(primary, 0.05),
     accentAlpha10: hexToRgba(primary, 0.1),
+    accentAlpha15: hexToRgba(primary, 0.15),
     accentAlpha20: hexToRgba(primary, 0.2),
+    accentAlpha25: hexToRgba(primary, 0.25),
+    accentAlpha30: hexToRgba(primary, 0.3),
     accentAlpha35: hexToRgba(primary, 0.35),
-    danger: '#e53935',
-    success: '#16a34a',
-    warning: '#f59e0b',
+    accentAlpha40: hexToRgba(primary, 0.4),
+    bgTag: lighten(primary, 0.9),
+    borderLight: lighten(primary, 0.8),
+    btnSolid: primary,
+    btnSolidText: contrastText(primary),
+    btnSoft: lighten(primary, 0.82),
+    btnSoftText: darken(primary, 0.22),
+    tagHighlightBg: hexToRgba(primary, 0.18),
+    tagHighlightText: darken(primary, 0.24),
+    episodeBg: lighten(primary, 0.9), episodeText: darken(primary, 0.26),
+    carouselControl: primary, carouselControlText: contrastText(primary),
+    danger, dangerHover: darken(danger, 0.15), dangerContrast: contrastText(danger), dangerAlpha10: hexToRgba(danger, 0.1),
+    success, successContrast: contrastText(success), successAlpha10: hexToRgba(success, 0.1),
+    warning, warningText: darken(warning, 0.45), warningContrast: contrastText(warning), warningAlpha10: hexToRgba(warning, 0.1),
+    info, infoContrast: contrastText(info), infoAlpha10: hexToRgba(info, 0.1),
     shadow: '0 6px 22px rgba(31, 36, 48, 0.08)',
     overlay: 'rgba(31, 36, 48, 0.45)',
-    btnHide: '#3bc2b2',
-    btnMin: '#85c43b',
-    btnClose: '#fab4a0',
+    btnHide: hueShift(primary, -24, 0.08),
+    btnMin: success,
+    btnClose: danger,
   }
   return { ...base, ...overrides }
 }
 
 // 深色模式：应用背景 = 主色的"很深很暗"的色调；卡片 = 深灰带一点主色
 function buildDarkPalette(primary: string, overrides: Partial<ColorPalette> = {}): ColorPalette {
+  const success = hueShift(primary, 28, 0.18)
+  const warning = hueShift(primary, 72, 0.2)
+  const danger = hueShift(primary, 150, 0.16)
+  const info = hueShift(primary, -20, 0.18)
   const base: ColorPalette = {
     bgApp: darken(primary, 0.82),
     bgCard: darken(primary, 0.65),
@@ -209,18 +316,35 @@ function buildDarkPalette(primary: string, overrides: Partial<ColorPalette> = {}
     textMuted: '#8a92a6',
     accent: primary,
     accentDim: lighten(primary, 0.15),
-    accentContrast: '#ffffff',
+    accentContrast: contrastText(primary),
+    accentRGB: hexToRgb(primary).join(', '),
+    accentAlpha5: hexToRgba(primary, 0.08),
     accentAlpha10: hexToRgba(primary, 0.15),
+    accentAlpha15: hexToRgba(primary, 0.2),
     accentAlpha20: hexToRgba(primary, 0.25),
+    accentAlpha25: hexToRgba(primary, 0.3),
+    accentAlpha30: hexToRgba(primary, 0.35),
     accentAlpha35: hexToRgba(primary, 0.45),
-    danger: '#ef5350',
-    success: '#4ade80',
-    warning: '#fbbf24',
+    accentAlpha40: hexToRgba(primary, 0.52),
+    bgTag: lighten(darken(primary, 0.72), 0.08),
+    borderLight: lighten(darken(primary, 0.72), 0.16),
+    btnSolid: lighten(primary, 0.1),
+    btnSolidText: contrastText(lighten(primary, 0.1)),
+    btnSoft: hexToRgba(primary, 0.26),
+    btnSoftText: lighten(primary, 0.34),
+    tagHighlightBg: hexToRgba(primary, 0.32),
+    tagHighlightText: lighten(primary, 0.38),
+    episodeBg: lighten(darken(primary, 0.72), 0.1), episodeText: lighten(primary, 0.42),
+    carouselControl: lighten(primary, 0.1), carouselControlText: contrastText(lighten(primary, 0.1)),
+    danger, dangerHover: darken(danger, 0.15), dangerContrast: contrastText(danger), dangerAlpha10: hexToRgba(danger, 0.15),
+    success, successContrast: contrastText(success), successAlpha10: hexToRgba(success, 0.15),
+    warning, warningText: lighten(warning, 0.78), warningContrast: contrastText(warning), warningAlpha10: hexToRgba(warning, 0.15),
+    info, infoContrast: contrastText(info), infoAlpha10: hexToRgba(info, 0.15),
     shadow: '0 8px 24px rgba(0, 0, 0, 0.45)',
     overlay: 'rgba(0, 0, 0, 0.7)',
-    btnHide: '#3bc2b2',
-    btnMin: '#85c43b',
-    btnClose: '#fab4a0',
+    btnHide: hueShift(primary, -24, 0.18),
+    btnMin: success,
+    btnClose: danger,
   }
   return { ...base, ...overrides }
 }
@@ -275,7 +399,7 @@ export const PRESET_THEMES: PresetTheme[] = [
       bgCard: 'rgba(227, 166, 160, 0.93)',
       bgSidebar: 'rgba(217, 136, 128, 0.90)',
       border: '#e0c4a8',
-      accentContrast: '#fff8dc',
+      accentContrast: contrastText('#c0392b'),
     }),
     bgImage: xnkl
   },
@@ -352,6 +476,14 @@ export const useThemeStore = defineStore('theme', () => {
       bgSidebar: effectiveSidebar,
       accent: c.primary,
       accentDim: c.dark ? lighten(c.primary, 0.15) : darken(c.primary, 0.15),
+      btnSolid: c.actionColor || base.btnSolid,
+      btnSolidText: contrastText(c.actionColor || base.btnSolid),
+      bgTag: c.tagColor || base.bgTag,
+      episodeBg: c.episodeColor || base.episodeBg,
+      episodeText: contrastText(c.episodeColor || base.episodeBg),
+      carouselControl: c.carouselColor || base.carouselControl,
+      carouselControlText: contrastText(c.carouselColor || base.carouselControl),
+      accentContrast: contrastText(c.primary),
       textPrimary: c.text || base.textPrimary,
       textSecondary: c.dark ? '#c2c7d0' : '#4a5166',
       textMuted: c.dark ? '#8a92a6' : '#8a92a6',
@@ -408,18 +540,26 @@ export const useThemeStore = defineStore('theme', () => {
   async function load(): Promise<void> {
     try {
       const id = await GetSetting('theme_id')
-      if (typeof id === 'string' && id) {
-        if (PRESET_THEMES.some(t => t.id === id) || customThemes.value.some(c => c.id === id)) {
-          currentId.value = id
-        }
-      }
       const customs = await GetSetting('theme_customs')
       if (typeof customs === 'string' && customs) {
         try {
           const parsed: CustomTheme[] = JSON.parse(customs)
-          // 修复每个自定义主题中可能过期的预设资源 URL
-          customThemes.value = Array.isArray(parsed) ? parsed.map(repairCustomThemeAssets) : []
+          let migrated = false
+          customThemes.value = Array.isArray(parsed)
+            ? parsed.map((theme) => {
+                const fixed = repairCustomThemeAssets(theme)
+                if (initializeComponentTokens(fixed)) migrated = true
+                return fixed
+              })
+            : []
+          // Persist the one-time migration so old themes never require users
+          // to press the derive button merely to obtain the new UI tokens.
+          if (migrated) await SetSetting('theme_customs', JSON.stringify(customThemes.value))
         } catch { /* ignore */ }
+      }
+      // Custom themes are loaded above, so their stored id can now be resolved.
+      if (typeof id === 'string' && id && (PRESET_THEMES.some(t => t.id === id) || customThemes.value.some(c => c.id === id))) {
+        currentId.value = id
       }
     } catch { /* ignore */ }
     loaded.value = true
@@ -458,13 +598,42 @@ export const useThemeStore = defineStore('theme', () => {
     set('--accent', palette.accent)
     set('--accent-dim', palette.accentDim)
     set('--accent-contrast', palette.accentContrast)
+    set('--accent-rgb', palette.accentRGB)
+    set('--accent-alpha-5', palette.accentAlpha5)
     set('--accent-alpha-10', palette.accentAlpha10)
+    set('--accent-alpha-15', palette.accentAlpha15)
     set('--accent-alpha-20', palette.accentAlpha20)
+    set('--accent-alpha-25', palette.accentAlpha25)
+    set('--accent-alpha-30', palette.accentAlpha30)
     set('--accent-alpha-35', palette.accentAlpha35)
+    set('--accent-alpha-40', palette.accentAlpha40)
+    set('--bg-tag', palette.bgTag)
+    set('--border-light', palette.borderLight)
+    set('--btn-solid', palette.btnSolid)
+    set('--btn-solid-text', palette.btnSolidText)
+    set('--btn-soft', palette.btnSoft)
+    set('--btn-soft-text', palette.btnSoftText)
+    set('--tag-highlight-bg', palette.tagHighlightBg)
+    set('--tag-highlight-text', palette.tagHighlightText)
+    set('--episode-bg', palette.episodeBg)
+    set('--episode-text', palette.episodeText)
+    set('--carousel-control', palette.carouselControl)
+    set('--carousel-control-text', palette.carouselControlText)
 
     set('--danger', palette.danger)
+    set('--danger-hover', palette.dangerHover)
+    set('--danger-contrast', palette.dangerContrast)
+    set('--danger-alpha-10', palette.dangerAlpha10)
     set('--success', palette.success)
+    set('--success-contrast', palette.successContrast)
+    set('--success-alpha-10', palette.successAlpha10)
     set('--warning', palette.warning)
+    set('--warning-text', palette.warningText)
+    set('--warning-contrast', palette.warningContrast)
+    set('--warning-alpha-10', palette.warningAlpha10)
+    set('--info', palette.info)
+    set('--info-contrast', palette.infoContrast)
+    set('--info-alpha-10', palette.infoAlpha10)
 
     set('--shadow', palette.shadow)
     set('--overlay', palette.overlay)
@@ -526,6 +695,10 @@ export const useThemeStore = defineStore('theme', () => {
       btnHide: '#3bc2b2',
       btnMin: '#85c43b',
       btnClose: '#fab4a0',
+      actionColor: '#16a34a',
+      tagColor: '#e8f5eb',
+      episodeColor: '#e8f5eb',
+      carouselColor: '#16a34a',
       dark: false,
       sidebarAlpha: 0.65,
       contentAlpha: 0.88,
@@ -546,10 +719,33 @@ export const useThemeStore = defineStore('theme', () => {
       btnHide: palette.btnHide,
       btnMin: palette.btnMin,
       btnClose: palette.btnClose,
+      actionColor: palette.btnSolid,
+      tagColor: palette.bgTag,
+      episodeColor: palette.episodeBg,
+      carouselColor: palette.carouselControl,
       dark,
       sidebarAlpha: 0.65,
       contentAlpha: 0.88,
     }
+  }
+
+  /** Add only newly introduced component tokens; never replace user choices. */
+  function initializeComponentTokens(theme: CustomTheme): boolean {
+    const derived = deriveFromPrimary(theme.primary, theme.dark)
+    let changed = false
+    const defaults: Pick<CustomTheme, 'actionColor' | 'tagColor' | 'episodeColor' | 'carouselColor'> = {
+      actionColor: derived.actionColor,
+      tagColor: derived.tagColor,
+      episodeColor: derived.episodeColor,
+      carouselColor: derived.carouselColor,
+    }
+    for (const [key, value] of Object.entries(defaults) as Array<[keyof typeof defaults, string | undefined]>) {
+      if (!theme[key] && value) {
+        theme[key] = value
+        changed = true
+      }
+    }
+    return changed
   }
 
   watch([currentId, customThemes], () => apply(), { deep: true })

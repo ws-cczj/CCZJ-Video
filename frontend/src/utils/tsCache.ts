@@ -240,6 +240,9 @@ const pendingUrls = new Set<string>()
 const queue: FetchJob[] = []
 let inflight = 0
 let debounceTimer: number | null = null
+// hls.js owns playback buffering. Background fetches start only once there is
+// sufficient media ahead, so they cannot compete with first play or recovery.
+let playbackBufferAhead = 0
 
 // ⭐ 优化：按集数级统计（避免跨集数污染），替代单一全局 hits/misses
 interface EpisodeCounter { hits: number; misses: number }
@@ -500,9 +503,9 @@ function adaptiveSpreadStep(): number {
 /** 动态并发数：根据网络状况调整同时拉取的分片数 */
 function adaptiveConcurrency(): number {
   switch (_networkMode) {
-    case 'server_congested': return 5     // 提高并发抢占带宽
-    case 'local_network_slow': return 2   // 低并发避免加剧拥塞
-    default: return 3
+    case 'server_congested': return 1
+    case 'local_network_slow': return 1
+    default: return 1
   }
 }
 
@@ -547,6 +550,7 @@ export function setEpisodes(list: EpisodeLite[]): void {
   currentSourceKey = episodes[0]?.source_key ? String(episodes[0].source_key) : ''
   currentEpIdx = -1
   currentEpKey = ''
+  playbackBufferAhead = 0
   fireListeners()
   // ⭐ 注意：此处不再调用 diskLoad() —— 避免把其他视频的缓存全量加载到内存。
   //   改为在 setCurrentEpisode 中按需调用 diskLoadForEpisode(...)。
@@ -564,6 +568,12 @@ export function setCurrentEpisode(idx: number): void {
   const newKey = epKeyFrom(ep, idx)
   if (currentEpKey === newKey) return
   currentEpKey = newKey
+  // The queued URLs belong to the old episode. Completed cache entries are
+  // still useful under LRU, but queued work must not survive an episode jump.
+  for (const job of queue) pendingUrls.delete(job.url)
+  queue.length = 0
+  epQueueCount.clear()
+  playbackBufferAhead = 0
   if (currentEpKey) {
     if (!playedSegmentsByEpisode.has(currentEpKey)) {
       playedSegmentsByEpisode.set(currentEpKey, new Set<number>())
@@ -583,6 +593,11 @@ export function setCurrentEpisode(idx: number): void {
 }
 
 export function setTargetDuration(sec: number): void { if (sec > 0 && sec <= 30) targetDuration = sec }
+
+export function setPlaybackBufferAhead(seconds: number): void {
+  playbackBufferAhead = Number.isFinite(seconds) ? Math.max(0, seconds) : 0
+  if (canPrefetch()) scheduleDrain()
+}
 
 /** 把解析好的片段列表绑定到"当前集"或 episodes[epIdx]，避免越界/无 key 的情况 */
 export function setSegments(segments: string[], epIdx?: number): void {
@@ -824,6 +839,11 @@ export function stats() {
     hitRate: total === 0 ? 0 : h / total,
     avgFetchMs: avgMs,
     prefetchCount: adaptivePrefetchCount(),
+    // 预取只维持播放窗口而非下载整集；将目标单独提供给 UI，避免把
+    // “24/813 个全片段”误显示成缓存一直未完成。
+    prefetchTarget: Math.min(adaptivePrefetchCount(), segs.length),
+    queued: queue.filter((job) => job.episodeKey === currentEpKey).length,
+    inflight,
     bufferOffset: adaptiveBufferOffset(),
     spreadStep: adaptiveSpreadStep(),
     cacheMB: totalCacheBytes / 1024 / 1024,
@@ -929,6 +949,7 @@ function scheduleDrain(): void {
 }
 
 function drainQueue(): void {
+  if (!canPrefetch()) return
   const maxConc = adaptiveConcurrency()
   while (inflight < maxConc && queue.length > 0) {
     const job = queue.shift(); if (!job) break
@@ -943,6 +964,10 @@ function drainQueue(): void {
       runOne(job).finally(() => { inflight--; drainQueue() })
     }
   }
+}
+
+function canPrefetch(): boolean {
+  return enabled && playbackBufferAhead >= Math.max(12, targetDuration * 2)
 }
 
 async function runOne(job: FetchJob): Promise<void> {
@@ -1855,7 +1880,7 @@ function prefetchFromSegments(segUrls: string[], epIdx: number, startFrom: numbe
 
 export const TsCache = {
   enable, disable, isEnabled, clear, stats,
-  setEpisodes, setCurrentEpisode, setSegments, setTargetDuration,
+  setEpisodes, setCurrentEpisode, setSegments, setTargetDuration, setPlaybackBufferAhead,
   prefetchFirst, prefetchNextEpisode, prefetchFromM3u8,
   notifyCurrentTs, notifyFragmentRequested,
   episodeProgress, getTotalEpisodes,

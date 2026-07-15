@@ -100,17 +100,17 @@ const emit = defineEmits<{
 }
 .ui-tag--success {
   background: var(--success-alpha-10);
-  border-color: rgba(22, 163, 74, 0.2);
+  border-color: var(--success-alpha-10);
   color: var(--success);
 }
 .ui-tag--warning {
-  background: rgba(245, 158, 11, 0.1);
-  border-color: rgba(245, 158, 11, 0.2);
-  color: #b45309;
+  background: var(--warning-alpha-10);
+  border-color: var(--warning-alpha-10);
+  color: var(--warning-text);
 }
 .ui-tag--danger {
   background: var(--danger-alpha-10);
-  border-color: rgba(229, 57, 53, 0.2);
+  border-color: var(--danger-alpha-10);
   color: var(--danger);
 }
 

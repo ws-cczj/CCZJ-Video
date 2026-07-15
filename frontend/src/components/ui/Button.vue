@@ -111,7 +111,7 @@ defineProps<{
 }
 .ui-btn--danger:hover {
   background: var(--danger);
-  color: #fff;
+  color: var(--danger-contrast);
   transform: translateY(-1px);
 }
 .ui-btn--danger:active { transform: translateY(0); opacity: 0.9; }
@@ -149,11 +149,11 @@ defineProps<{
   -webkit-backdrop-filter: blur(4px);
 }
 .ui-btn--overlay:hover {
-  background: rgba(255, 80, 80, 0.85);
-  color: #fff;
+  background: var(--danger);
+  color: var(--danger-contrast);
 }
 .ui-btn--overlay:active {
-  background: rgba(200, 50, 50, 0.95);
+  background: var(--danger-hover);
 }
 
 /* ========== Block / Disabled / Loading ========== */
