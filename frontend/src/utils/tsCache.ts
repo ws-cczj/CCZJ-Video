@@ -961,14 +961,20 @@ async function runOne(job: FetchJob): Promise<void> {
       const buf = await resp.arrayBuffer()
       cacheSet(job.url, buf)
       diskSave(job.url, buf, job.episodeKey).catch(() => { })
-      epQueueCount.set(job.episodeKey, (epQueueCount.get(job.episodeKey) || 0) - 1)
       const elapsed = performance.now() - t0
       recordFetchDuration(elapsed)
       updateNetworkDiagnosis()
       fireListeners()
     }
   } catch { /* 静默 */ }
-  finally { pendingUrls.delete(job.url) }
+  finally {
+    pendingUrls.delete(job.url)
+    // Release the slot for failures as well as successes. Otherwise transient
+    // errors eventually make an episode appear permanently queue-full.
+    const remaining = (epQueueCount.get(job.episodeKey) || 0) - 1
+    if (remaining > 0) epQueueCount.set(job.episodeKey, remaining)
+    else epQueueCount.delete(job.episodeKey)
+  }
 }
 
 function recordFetchDuration(ms: number): void {

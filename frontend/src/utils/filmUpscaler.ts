@@ -629,17 +629,19 @@ export class FilmUpscaler {
       this.rebuild(); return
     }
 
+    // RAF often runs faster than the source video. Skip the expensive
+    // multi-pass pipeline when no decoded frame has arrived.
+    if (video.currentTime === this.lastUploadTime) return
+
     const w = this.inputW, h = this.inputH
     const outW = Math.round(w * this._qualityScale), outH = Math.round(h * this._qualityScale)
 
     gl.bindVertexArray(this.quadVAO)
 
-    if (video.currentTime !== this.lastUploadTime) {
-      gl.activeTexture(gl.TEXTURE0)
-      gl.bindTexture(gl.TEXTURE_2D, this.videoTex)
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video)
-      this.lastUploadTime = video.currentTime
-    }
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, this.videoTex)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video)
+    this.lastUploadTime = video.currentTime
 
     const bind = (prog: WebGLProgram, tex: WebGLTexture, name: string, unit: number) => {
       gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, tex)

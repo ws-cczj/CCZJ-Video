@@ -172,6 +172,14 @@ func (s *Scheduler) startSourceTimers() {
 
 // scheduleSource 为一个源安排定时采集
 func (s *Scheduler) scheduleSource(sourceKey string, sc *model.ScheduleConfig) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	// A timer callback can race Stop. Keep this check and timer registration
+	// serialized with Stop so a stopped scheduler cannot recreate a timer.
+	if !s.running {
+		return
+	}
+
 	if sc.IntervalMin < 1 {
 		sc.IntervalMin = 1 // 最小 1 分钟
 	}
@@ -341,7 +349,7 @@ func (s *Scheduler) UpdateSourceSchedule(sourceKey string) {
 	s.mu.Lock()
 	running := s.running
 	s.mu.Unlock()
-	
+
 	if !running {
 		// 调度器已停止，重新启动
 		go s.Start()
@@ -369,17 +377,17 @@ func (s *Scheduler) UpdateSourceSchedule(sourceKey string) {
 
 // Status 调度器状态（供前端展示）
 type SchedulerStatus struct {
-	Running                bool                    `json:"running"`
-	Background             bool                    `json:"background"`
-	BackgroundEveryMinutes int                     `json:"background_every_minutes"`
-	BackgroundEverySeconds int                     `json:"background_every_seconds"`
-	SourceGapSeconds       int                     `json:"source_gap_seconds"`
-	PageGapSeconds         int                     `json:"page_gap_seconds"`
-	LastExitUnix           int64                   `json:"last_exit_unix"`
-	LastRunUnix            int64                   `json:"last_run_unix"`
-	NowUnix                int64                   `json:"now_unix"`
-	Note                   string                  `json:"note"`
-	SourceSchedules        []SourceScheduleItem    `json:"source_schedules"`
+	Running                bool                 `json:"running"`
+	Background             bool                 `json:"background"`
+	BackgroundEveryMinutes int                  `json:"background_every_minutes"`
+	BackgroundEverySeconds int                  `json:"background_every_seconds"`
+	SourceGapSeconds       int                  `json:"source_gap_seconds"`
+	PageGapSeconds         int                  `json:"page_gap_seconds"`
+	LastExitUnix           int64                `json:"last_exit_unix"`
+	LastRunUnix            int64                `json:"last_run_unix"`
+	NowUnix                int64                `json:"now_unix"`
+	Note                   string               `json:"note"`
+	SourceSchedules        []SourceScheduleItem `json:"source_schedules"`
 }
 
 // SourceScheduleItem 单个源的调度信息
@@ -500,7 +508,7 @@ func (s *Scheduler) logScheduler(msg string) {
 }
 
 var (
-	schedulerLastRun    int64
+	schedulerLastRun   int64
 	schedulerLastRunMu sync.Mutex
 )
 
