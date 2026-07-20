@@ -11,6 +11,7 @@ import { createPlayerSettings } from '../player/settings'
 import { usePlayerShortcuts } from '../player/usePlayerShortcuts'
 import { clearPlaybackTime, readPlaybackTime, savePlaybackTime } from '../player/usePlaybackProgress'
 import { useHlsEngine } from '../player/hls/useHlsEngine'
+import { proxyHlsURL } from '../player/hls/proxy'
 import loadingGif from '../assets/videos/loading.gif'
 import pauseImg from '../assets/images/pause.png'
 import {
@@ -898,6 +899,7 @@ function safePlay(auto: boolean): void {
 
 // ------ 播放器加载 ------
 async function loadHls(video: HTMLVideoElement, url: string): Promise<void> {
+	const playbackURL = proxyHlsURL(url)
   console.log('[Player] 🔄 开始加载视频:', url.slice(-80))
   destroyPlayerInternal(video)
   // 清理旧播放器会解除事件监听；必须随后重新绑定，否则 play/pause
@@ -940,7 +942,7 @@ async function loadHls(video: HTMLVideoElement, url: string): Promise<void> {
       TsCache.enable()
       let parsed: { urls: string[], variantUrls: string[], targetduration: number, isMaster: boolean, streamInfo?: StreamVariantInfo[] }
       try {
-        parsed = await TsCache.fetchAndParseM3u8(url)
+        parsed = await TsCache.fetchAndParseM3u8(playbackURL)
       } catch {
         parsed = { urls: [], variantUrls: [], targetduration: 6, isMaster: false, streamInfo: [] }
       }
@@ -1021,7 +1023,7 @@ async function loadHls(video: HTMLVideoElement, url: string): Promise<void> {
         const curTargetDur = data?.details?.targetduration || parsed.targetduration || 6
         if (frags.length > 0) {
           const absUrls = frags.map((f: any) => {
-            try { return new URL(f.url, url).href }
+            try { return new URL(f.url, playbackURL).href }
             catch { return f.url }
           })
           TsCache.setSegments(absUrls)
@@ -1039,7 +1041,7 @@ async function loadHls(video: HTMLVideoElement, url: string): Promise<void> {
       })
       hls.on(Hls.Events.FRAG_CHANGED, (_e: any, data: any) => {
         if (data?.frag?.url) {
-          try { TsCache.notifyCurrentTs(new URL(data.frag.url, url).href) }
+          try { TsCache.notifyCurrentTs(new URL(data.frag.url, playbackURL).href) }
           catch { TsCache.notifyCurrentTs(data.frag.url) }
         }
       })
@@ -1067,7 +1069,7 @@ hls.on(Hls.Events.ERROR, (_e: any, data: any) => {
 	          if (isManifestError) {
 	            console.log('[Player] ⚠ HLS manifest 失败，回退到直接播放')
             hlsEngine.dispose(video)
-	            video.src = url
+            video.src = playbackURL
 	            video.onerror = () => {
 	              errorMsg.value = '视频加载失败，请检查链接或网络'
 	            }
@@ -1104,7 +1106,7 @@ hls.on(Hls.Events.ERROR, (_e: any, data: any) => {
         }
       })
       console.log('[Player] 调用 hls.loadSource:', url.slice(-80))
-      hls.loadSource(url)
+      hls.loadSource(playbackURL)
       hls.attachMedia(video)
       // 启动缓存监控定时器（每秒更新一次）
       if (cacheStatsTimer != null) { window.clearInterval(cacheStatsTimer); cacheStatsTimer = null }
@@ -1112,7 +1114,7 @@ hls.on(Hls.Events.ERROR, (_e: any, data: any) => {
       cacheStatsTimer = window.setInterval(updateCacheStats, 1000)
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       console.log('[Player] ⚠ hls.js 不支持，回退原生 HLS')
-      video.src = url
+      video.src = playbackURL
       if (props.autoplay !== false) safePlay(true)
     } else {
       errorMsg.value = '当前环境不支持 HLS 播放'
@@ -1548,7 +1550,7 @@ async function initThumbSampler(): Promise<void> {
         }
         thumbHls = new Hls(hlsConfig)
         ;(sampleVideo as any).__thumbHls = thumbHls
-        thumbHls.loadSource(props.url)
+        thumbHls.loadSource(proxyHlsURL(props.url))
         thumbHls.attachMedia(sampleVideo)
         console.log('[Player] 🖼️ 缩略图 HLS 实例已创建')
       }

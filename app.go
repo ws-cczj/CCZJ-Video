@@ -55,6 +55,7 @@ type App struct {
 	downloads   *downloadservice.Registry[downloadTask]
 	downloadDir *downloadservice.Directory
 	proxy       *proxyservice.Service
+	hlsProxy    *proxyservice.HLSService
 }
 
 // ======================== 关闭行为 ========================
@@ -130,7 +131,17 @@ func NewApp() *App {
 	a.downloads = downloadservice.NewRegistry[downloadTask]()
 	a.downloadDir = downloadservice.NewDirectory(func(key, value string) error { return db.SetSetting(key, value) })
 	a.proxy = proxyservice.NewService()
+	a.hlsProxy = proxyservice.NewHLSService()
 	return a
+}
+
+// ServeHLSProxy handles the same-origin HLS endpoint registered in main.go.
+func (a *App) ServeHLSProxy(w http.ResponseWriter, r *http.Request) {
+	if a.hlsProxy == nil {
+		http.Error(w, "HLS proxy unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	a.hlsProxy.ServeHTTP(w, r)
 }
 
 func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {

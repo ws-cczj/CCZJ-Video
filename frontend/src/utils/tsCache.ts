@@ -270,83 +270,6 @@ const hedgeInFlight = new Set<string>()  // 正在进行对冲请求的 URL
 
 // ====== fetch 透明拦截 ======
 
-let originalFetch: typeof fetch | null = null
-
-function isTsUrl(u: string): boolean {
-  // 匹配 .ts (MPEG-TS) 或 .m4s (fMP4 segment)，忽略大小写
-  return /\.(ts|m4s)(\?|$)/i.test(u)
-}
-
-function installFetchInterceptor(): void {
-  if (originalFetch) return
-  originalFetch = window.fetch
-  let logCounter = 0
-
-  window.fetch = function (input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-    const urlStr = typeof input === 'string' ? input
-      : input instanceof URL ? input.href
-        : input instanceof Request ? input.url : String(input)
-
-    // 非 TS 片段：直接透传（m3u8、图片、API 等都走这里）
-    if (!enabled || !isTsUrl(urlStr)) {
-      return originalFetch!.call(window, input, init)
-    }
-
-    // === TS 片段请求：先走缓存 ===
-    const cached = cacheGet(urlStr)
-    if (cached) {
-      _curEpStats.hits++
-      fireListeners()
-      logCounter++
-      if (logCounter % 10 === 0) {
-        const h = _curEpStats.hits, m = _curEpStats.misses
-        const total = h + m
-        const rate = total === 0 ? 0 : h / total
-        console.log(`${LOG_PREFIX} 🎯 hit #${h} (${(rate * 100).toFixed(1)}%), cache ${lruCache.size} / ${(totalCacheBytes / 1024 / 1024).toFixed(1)} MB`)
-      }
-      return Promise.resolve(new Response(cached.slice(0), {
-        status: 200, statusText: 'OK',
-        headers: { 'Content-Type': 'video/mp2t', 'Content-Length': String(cached.byteLength), 'X-TsCache': 'hit' },
-      }))
-    }
-
-    // === 未命中：fetch 但在完成后把数据存回缓存 ===
-    _curEpStats.misses++
-    fireListeners()
-    logCounter++
-    const missT0 = performance.now()  // ⭐ v3: 记录 miss 耗时用于网络诊断
-    if (logCounter % 10 === 0) {
-      const h = _curEpStats.hits, m = _curEpStats.misses
-      const total = h + m
-      const rate = total === 0 ? 0 : h / total
-      console.log(`${LOG_PREFIX} 💫 miss #${m} (${(rate * 100).toFixed(1)}%), cache ${lruCache.size} / ${(totalCacheBytes / 1024 / 1024).toFixed(1)} MB`)
-    }
-
-    return originalFetch!.call(window, input, init).then((response) => {
-      // 只缓存 200 OK 的 TS 片段
-      if (!response.ok || response.status !== 200) return response
-
-      // ⭐ 关键：clone() 一份 response 用来缓存，原始返回给 hls.js
-      //   （Response.body 只能读一次，clone 后两边各读一份）
-      const cloned = response.clone()
-      cloned.arrayBuffer().then((buf) => {
-        if (!enabled) return
-        cacheSet(urlStr, buf)
-        diskSave(urlStr, buf).catch(() => { })
-        // ⭐ v3: 记录实际下载耗时用于网络诊断（不再是 0）
-        recordFetchDuration(performance.now() - missT0)
-        updateNetworkDiagnosis()
-        fireListeners()
-      }).catch(() => { /* clone 读取失败没关系，hls.js 还能拿到原始 response */ })
-      return response
-    })
-  }
-}
-
-function uninstallFetchInterceptor(): void {
-  if (originalFetch) { window.fetch = originalFetch; originalFetch = null }
-}
-
 // ====== 网络诊断引擎 ======
 //
 // 初始化 → 对比测速诊断
@@ -868,8 +791,11 @@ export function episodeProgress(idx: number): { total: number; cached: number } 
 }
 
 export function getTotalEpisodes(): number { return episodes.length }
-export function enable(): void { enabled = true; installFetchInterceptor() }
-export function disable(): void { enabled = false; uninstallFetchInterceptor() }
+// hls.js always uses TsCacheLoader now. Do not monkey-patch window.fetch:
+// Wails runtime RPC uses fetch too, and a global wrapper obscures its failures
+// in DevTools while providing no cache benefit to the custom HLS loader.
+export function enable(): void { enabled = true }
+export function disable(): void { enabled = false }
 export function isEnabled(): boolean { return enabled }
 
 // ⭐ v3: ABR 回调注册 —— VideoPlayer 通过此接口接收降码率信号
@@ -978,9 +904,7 @@ async function runOne(job: FetchJob): Promise<void> {
     const tid = window.setTimeout(() => ctrl.abort(), timeout)
     const init: RequestInit = { signal: ctrl.signal }
     try { (init as any).priority = 'low' } catch { /* ignore */ }
-    const resp = originalFetch
-      ? await originalFetch.call(window, job.url, init)
-      : await fetch(job.url, init)
+    const resp = await fetch(job.url, init)
     window.clearTimeout(tid)
     if (resp.ok) {
       const buf = await resp.arrayBuffer()
@@ -1020,9 +944,7 @@ function hedgeFetch(url: string): Promise<ArrayBuffer | null> {
 
   const doFetch = (signal: AbortSignal) => {
     const init: RequestInit = { signal }
-    return originalFetch
-      ? originalFetch.call(window, url, init)
-      : fetch(url, init)
+    return fetch(url, init)
   }
 
   const racePromise = new Promise<ArrayBuffer | null>((resolve, reject) => {
@@ -1343,10 +1265,7 @@ class TsCacheLoader {
       this._hedgeAbort = null
       const t0 = this.stats.loading.start
 
-      const doFetch = () => {
-        if (originalFetch) return originalFetch.call(window, url, { signal: ctrl.signal })
-        return fetch(url, { signal: ctrl.signal })
-      }
+      const doFetch = () => fetch(url, { signal: ctrl.signal })
 
       // ⭐ v3: 根据网络诊断决定使用对冲请求还是普通请求
       const useHedge = _networkMode === 'server_congested' && hedgeInFlight.size < 2
@@ -1420,10 +1339,7 @@ class TsCacheLoader {
       // 未命中 → 原生 fetch 并缓存文本（缓存原始文本，剔除广告后返回给 hls.js）
       const ctrl = new AbortController()
       this._abort = ctrl
-      const doFetch2 = () => {
-        if (originalFetch) return originalFetch.call(window, url, { signal: ctrl.signal })
-        return fetch(url, { signal: ctrl.signal })
-      }
+      const doFetch2 = () => fetch(url, { signal: ctrl.signal })
       doFetch2()
         .then(async (resp) => {
           if (this._destroyed || ctrl.signal.aborted) return
@@ -1454,10 +1370,7 @@ class TsCacheLoader {
     // === 3) 其他请求（key、证书等）：直接走原生 fetch ===
     const ctrl = new AbortController()
     this._abort = ctrl
-    const doFetch3 = () => {
-      if (originalFetch) return originalFetch.call(window, url, { signal: ctrl.signal })
-      return fetch(url, { signal: ctrl.signal })
-    }
+    const doFetch3 = () => fetch(url, { signal: ctrl.signal })
     doFetch3()
       .then(async (resp) => {
         if (this._destroyed || ctrl.signal.aborted) return

@@ -12,6 +12,7 @@ import Icon from '../components/Icon.vue'
 import { Button, Modal, Tag, Spinner as LoadingSpinner } from '../components/ui'
 import { getDetailPath, getSearchPath, getPlayerPath, humanizeBytes, buildEpisodeFilename, buildSingleFilename, sanitizeFilename, resolveEpisodeUrl, stripHtmlTags } from '../utils'
 import { TsCache } from '../utils/tsCache'
+import { proxyHlsURL } from '../player/hls/proxy'
 import { computeRecommendations, type RecommendItem, extractYear } from '../utils/recommend'
 import { epProgressKey, loadEpProgress, getEpProgressPct, flushEpProgress } from '../utils/episodeProgress'
 import { bumpFavoritesRefresh } from '../stores/favoritesSync'
@@ -450,7 +451,7 @@ function playEpisode(epIndex: number): void {
     // 预取点击剧集的 m3u8 文本（轻量，跳转到播放页时可命中缓存）
     TsCache.setCurrentEpisode(epIndex)
     const epUrl = resolveEpisodeUrl(ep)
-    if (epUrl) TsCache.fetchAndParseM3u8(epUrl).catch(() => { })
+    if (epUrl) TsCache.fetchAndParseM3u8(proxyHlsURL(epUrl)).catch(() => { })
   } catch { /* ignore */ }
   router.push(getPlayerPath(sourceKey.value, v, epIndex))
 }
@@ -657,7 +658,7 @@ async function loadDetail(): Promise<void> {
     TsCache.enable()
     // 只预取 m3u8 文本（约 10KB，几乎无成本），用户点击播放时命中文本缓存即可
     const firstUrl = resolveEpisodeUrl(eps[0])
-    if (firstUrl) TsCache.fetchAndParseM3u8(firstUrl).catch(() => { })
+    if (firstUrl) TsCache.fetchAndParseM3u8(proxyHlsURL(firstUrl)).catch(() => { })
   }
 
   // 阶段2: 后台异步刷新源站数据（不阻塞 UI）

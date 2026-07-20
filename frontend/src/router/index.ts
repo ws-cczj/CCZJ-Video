@@ -43,6 +43,7 @@ const router = createRouter({
       props: true,
     },
     {
+      name: 'player',
       path: '/player/:sourceKey/:vodId/:epIndex',
       component: () => import('../views/Player.vue'),
       props: true,

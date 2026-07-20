@@ -2,6 +2,8 @@ package main
 
 import (
 	"embed"
+	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,6 +27,20 @@ func main() {
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
+			Middleware: func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.URL.Path == "/__cczj/hls" {
+						myApp.ServeHLSProxy(w, r)
+						return
+					}
+					// Keep all application assets and Vite dev-server requests on Wails' default path.
+					if strings.HasPrefix(r.URL.Path, "/__cczj/") {
+						http.NotFound(w, r)
+						return
+					}
+					next.ServeHTTP(w, r)
+				})
+			},
 		},
 	})
 

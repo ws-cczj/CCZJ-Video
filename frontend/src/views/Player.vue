@@ -819,6 +819,17 @@ watch(currentEpIndex, (idx) => {
   try { TsCache.setCurrentEpisode(idx) } catch { }
 })
 
+// 同一视频内直接修改播放地址（例如浏览器前进/后退）时，页面实例会被保留，
+// 因此需要将路由集数同步回播放器状态。通过播放器控制条切集时，当前集已先更新，
+// 此处会自然跳过，避免重复加载。
+watch(epIndexParam, (idx) => {
+  if (!Number.isInteger(idx) || idx < 0 || idx >= episodes.value.length || idx === currentEpIndex.value) return
+  currentEpIndex.value = idx
+  _playToken.value++
+  try { TsCache.setCurrentEpisode(idx) } catch { }
+  setTimeout(() => bindVideoTimeTracking(), 300)
+})
+
 // 源切换/重新加载后，VideoPlayer 被销毁重建，需重新绑定 timeupdate 监听
 watch(loading, (val) => {
   if (!val) {

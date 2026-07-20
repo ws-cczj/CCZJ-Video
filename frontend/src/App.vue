@@ -135,7 +135,9 @@ onUnmounted(() => {
       <main class="main-content">
         <router-view v-slot="{ Component }">
             <KeepAlive :include="KEEP_ALIVE_INCLUDE">
-              <component :is="Component" :key="$route.path" />
+              <component :is="Component" :key="$route.name === 'player'
+                ? `player:${String($route.params.sourceKey || '')}:${String($route.params.vodId || '')}`
+                : $route.path" />
             </KeepAlive>
         </router-view>
       </main>
