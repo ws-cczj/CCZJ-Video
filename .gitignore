@@ -1,9 +1,30 @@
+# 构建产物
 build/bin
-node_modules
+bin/
 frontend/dist
+
+# 依赖与缓存
+node_modules
+frontend/.vite/
+frontend/.cache/
+
+# 本地开发工具（Agent skills、多模块 workspace 指针）
+.agents/
+skills-lock.json
+go.work
+go.work.sum
+
+# 临时与本地文件
+*.log
+*.tmp
+*.bak
+.env
+.env.*
 frontend/vite.config.ts.timestamp-*.mjs
-bin/data/
-bin/*.exe
+coverage.out
+coverage.html
+
+# 更新器交换残留
 _update_swap.bat
 .installed_version
 *_update.exe
