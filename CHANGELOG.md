@@ -7,24 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-09-27
+
+自 2.0.3 发布以来的全部改动，包含未单独发布过的 2.0.4。主题是把散落的运维能力收进「设置」、收敛 Go 侧目录，以及修掉一批采集与搜索的真实缺陷。
+
 ### Added
 
 - 设置页新增「诊断」分组：只读展示运行时环境、内存与协程、数据库与各表行数、采集与豆瓣调度状态、反爬静默与 302 验证题求解结果、数据健康度（缺评分 / 缺条目 ID / 冷却中 / 同豆瓣 ID 重复分组），以及采集源逐个连通性探测。
-- 设置页「基本设置」补齐可配置项：豆瓣补全轮询间隔、日志保留天数，保存即生效。
+- 设置页新增常驻「日志」分组：实时跟随输出、按级别过滤、关键字搜索、翻页查看历史文件、导出与复制；Go 侧日志补上环形缓冲与订阅，前端统一走日志 store。
+- 设置页「基本设置」补齐可配置项：豆瓣补全轮询间隔、日志保留天数、采集时是否恢复已删除条目，保存即生效。
 - 豆瓣 302 验证题改为本地解 proof-of-work，不再依赖登录 Cookie。
+- 搜索远程关键字支持子串匹配：先按源站的 `vod_name LIKE '<wd>%'` 取结果，取不到时用 `%kw%` 重试一次，解决"大臣"搜不到"是，大臣"。
 
 ### Changed
 
 - 移除独立的后台管理面板（`/dev-admin`）：它的能力与侧栏页面完全重叠，运维入口改由「设置」承载。
-- Go 侧目录收敛：根目录只保留 `main.go`（入口）与 `app.go`（装配根），原先散落的 `app_facade.go` / `app_diag.go` / `app_log.go` / `app_download.go` / `app_direct_resume.go` 全部迁入 `app/service` 包，Wails 绑定随之生成到 `frontend/bindings/cczjVideo/app/service/`。
+- Go 侧目录收敛：根目录只保留 `main.go`（入口）与 `app.go`（装配根），原先散在根目录的 `app_facade.go` / `app_download.go` 拆进 `app/service` 包并按职责分成 `app.go` / `diagnostics.go` / `logs.go` / `download.go` / `direct_resume.go`，Wails 绑定随之生成到 `frontend/bindings/cczjVideo/app/service/`。
 - 「后台采集调度」从设置页迁到「采集源」页：全局开关、采集间隔、源/页节流、启动补采与首次全量改成调度状态条下的「调度设置」面板，与每源的定时器放在同一页，设置页不再保留重复入口。
 - 豆瓣补全轮询间隔从 10 分钟放宽到 30 分钟，降低被判定为异常流量的风险。
+- 搜索页随导航保活：切走再切回不再重跑远程请求，只有在册可见性规则变化或数据刷新后才重新搜索，滚动位置也随之保留。
+- Wails 升级到 v3.0.0-beta.24；移除未使用的 `@vueuse/motion`，列表与弹窗动效改为自绘的 `MotionList` / `MotionTransition`。
+- 中英文案按命名空间对齐：采集调度相关文案从 `settings` 迁到 `sources`，脚本核对后 zh / en 键位差异与未定义引用均清零。
 - `scripts/verify.ps1` 增加根目录守卫：除 `main.go` / `app.go` 外不允许再出现散装 Go 文件。
 
 ### Fixed
 
 - `db.DoubanDuplicateGroup` 缺少 sqlx `db` tag，导致诊断页「重复豆瓣 ID」查询在真机上报 `missing destination name douban_id`；已补齐并加回归测试。
 - `LogPanel.vue` 直接 `import '@wailsio/runtime'`，绕过了前端绑定出口约束；改走 `src/api/runtime.ts`。
+- 日志面板读不出历史日志文件的内容；现在按保留天数列出并可翻页查看。
+- 采集页 `vod_total` 按字符串解析导致总数丢失，且单页保存失败被吞成"成功"；现在类型正确、失败会如实上报。
+- 采集调度器在停止与重启之间存在竞态窗口，可能同时跑起两个引擎；已加互斥并让停止等待当前页收尾。
+- 下载文件名截断时切在 UTF-8 多字节中间导致 panic；改为按 rune 边界截断。
+- 目录列表与统计未过滤软删除条目，已删除的影片仍会出现在部分视图里。
+- 列表组件存在重复加载与 `:key` 冲突，切换筛选时会闪现上一条目的数据。
+- 清理无人监听的 Wails 事件与后端遗留入口。
 
 ## [2.0.4] - 2026-07-21
 

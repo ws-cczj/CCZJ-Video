@@ -1,6 +1,6 @@
 # CCZJ Video
 
-Current release: **v2.0.4**
+Current release: **v2.1.0**
 
 <p align="center">
   <strong>多源视频资源聚合桌面应用</strong><br>
@@ -217,6 +217,16 @@ task verify         # 边界守卫 + go vet + go test ./... + 前端 vue-tsc & v
 `task build` 实际执行的链接参数是
 `-ldflags="-w -s -H windowsgui -X cczjVideo/app/updater.Version=<version.json 里的版本>"`，
 版本号唯一来源是仓库根目录的 `version.json`（由 `build/get_version.ps1` 读取）。产物在 `bin/cczjVideo.exe`。
+
+### 发布新版本
+
+1. 改 `version.json`：`version` 决定构建注入的版本号；`desc` 是更新弹窗里展示的本次说明；`history` 是历史版本说明，只有比用户当前版本更新的条目才会出现在弹窗里。
+2. 同步 `CHANGELOG.md`：把 `[Unreleased]` 落成 `## [x.y.z] - 日期`。
+3. 构建并把产物改名：`task build` 得到 `bin/cczjVideo.exe`，发布时命名为 `cczjVideo-vX.Y.Z-release.exe`（更新器按扩展名挑附件）。
+4. 打标签并创建 GitHub Release：`git tag vX.Y.Z && git push origin vX.Y.Z`。Release 正文是更新弹窗优先读取的说明来源，`version.json` 只在 Release API 全部失败时兜底。
+5. 把 `version.json` 推上 `main`：回退通道读的是 GitHub Raw / jsdelivr / Gitee 上的 `main` 分支，不推上去兜底就会拿到旧版本说明。
+
+更新检查的顺序是：GitHub Release API 直连 → `gh-proxy.org` 等三个代理（每个源最多重试 3 次）→ 多渠道 `version.json`。安装流程见「设置 → 关于」中的更新弹窗，不会自动下载，需要你手动点。
 
 ---
 
