@@ -1,9 +1,10 @@
 <script setup lang="ts">
 defineOptions({ name: 'Player' })
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { useRoute, useRouter } from 'vue-router'
-import { GetRecentHistory, SaveWatchHistory, AddFavorite, RemoveFavorite, IsFavorite } from '../api/app'
+import { GetRecentHistory, GetHistoryPosition, SaveWatchHistory, AddFavorite, RemoveFavorite, IsFavorite } from '../api/app'
 import * as AppMod from '../api/app'
 import { useSourceStore } from '../stores/source'
 import { useVideoStore } from '../stores/video'
@@ -21,15 +22,17 @@ import { readStorage, writeStorage } from '../platform/storage'
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
 const sourceStore = useSourceStore()
 const videoStore = useVideoStore()
 
 // ==================== 路由参数解析 ====================
 const vodId = computed(() => {
-  const p = route.params.vodId
+  const p = route.query.vod || route.params.vodId
   if (Array.isArray(p)) return p[0] || ''
   return String(p || route.query.id || '')
 })
+const globalId = computed(() => Number(route.params.globalId || route.query.global_id || 0))
 
 const sourceKey = computed(() => {
   const p = route.params.sourceKey
@@ -70,7 +73,7 @@ const currentEpName = computed(() => {
   if (!ep) return ''
   if (ep.ep_name) return ep.ep_name
   const num = ep.ep_num ?? (currentEpIndex.value + 1)
-  return '第' + String(num) + '集'
+  return t('detail.episode', { num })
 })
 
 const hasPrev = computed(() => currentEpIndex.value > 0)
@@ -223,6 +226,8 @@ let lastHistorySyncAt = 0
 const HISTORY_SYNC_INTERVAL_MS = 10000
 
 function syncHistoryToDb(position: number, force = false): void {
+  // 刚起播的 0~5 秒不写库：否则每次重看都会把上次记住的位置冲掉。
+  if (position <= 5) return
   if (!force) {
     const now = Date.now()
     if (now - lastHistorySyncAt < HISTORY_SYNC_INTERVAL_MS) return
@@ -238,6 +243,23 @@ function syncHistoryToDb(position: number, force = false): void {
     ep_num: ep.ep_num ?? (currentEpIndex.value + 1),
     position,
   } as any).catch(() => { })
+}
+
+/**
+ * 播放器恢复进度兜底：localStorage 按 origin 分区，独立 exe 与 dev 端口互不可见，
+ * 本地没有记录时以数据库 watch_history 为准。
+ */
+async function resolveDbResumePosition(): Promise<number> {
+  const idx = currentEpIndex.value
+  const ep = episodes.value[idx]
+  if (!sourceKey.value || !vodId.value || !ep) return 0
+  try {
+    return await GetHistoryPosition({
+      source_key: sourceKey.value,
+      vod_id: String(vodId.value),
+      ep_num: ep.ep_num ?? (idx + 1),
+    } as any) || 0
+  } catch { return 0 }
 }
 
 // 写入当前集播放时持续写入独立存储（position/duration 会在用户播放过程中不断被写入
@@ -472,7 +494,7 @@ const showCommentsModal = ref(false)
 
 interface FavFolder { id: string; name: string; default: boolean }
 const favFolders = ref<FavFolder[]>([
-  { id: 'default', name: '默认收藏夹', default: true },
+  { id: 'default', name: t('detail.defaultFolder'), default: true },
 ])
 const favTargetFolderId = ref<string>('default')
 
@@ -487,7 +509,7 @@ function loadFavFolders(): void {
       }
     }
   } catch { /* ignore */ }
-  favFolders.value = [{ id: 'default', name: '默认收藏夹', default: true }]
+  favFolders.value = [{ id: 'default', name: t('detail.defaultFolder'), default: true }]
 }
 
 async function refreshFav(): Promise<void> {
@@ -555,6 +577,8 @@ function recordHistory(idx: number): void {
   const progKey = epProgressKey(video.value?.global_id, video.value?.vod_name, epNum)
   const entry = loadEpProgress()[progKey]
   const position = entry?.position ?? 0
+  // 本地没有进度时不写库，否则会把数据库里记住的位置清零。
+  if (position <= 0) return
   lastHistorySyncAt = Date.now()
   try {
     SaveWatchHistory({
@@ -593,7 +617,8 @@ function goToEpisode(idx: number): void {
     if (v) delete (v as any).__epProgressBound
   } catch { /* ignore */ }
   setTimeout(() => bindVideoTimeTracking(), 300)
-  router.replace(`/player/${sourceKey.value}/${vodId.value}/${idx}`).catch(() => { })
+  const canonicalID = video.value?.global_id || globalId.value || vodId.value
+  router.replace(`/player/${sourceKey.value}/${canonicalID}/${idx}?vod=${encodeURIComponent(String(vodId.value))}`).catch(() => { })
 }
 function prevEpisode(): void { if (hasPrev.value) goToEpisode(currentEpIndex.value - 1) }
 function nextEpisode(): void { if (hasNext.value) goToEpisode(currentEpIndex.value + 1) }
@@ -614,12 +639,12 @@ function getHitRate(): number {
 
 // ==================== 加载流程 ====================
 async function loadData(): Promise<void> {
-  if (!sourceKey.value || !vodId.value) return
+  if (!sourceKey.value || (!vodId.value && !globalId.value)) return
   loading.value = true
   try {
     const currentVodId = video.value?.vod_id
     if (String(currentVodId || '') !== String(vodId.value)) {
-      await videoStore.loadDetail(sourceKey.value, vodId.value)
+      await videoStore.loadDetail(sourceKey.value, vodId.value, false, globalId.value)
     }
     if (!video.value) { loading.value = false; return }
 
@@ -782,7 +807,11 @@ async function loadFromSource(sk: string, vid: string): Promise<void> {
     showEpisodes.value = true
 
     // 更新路由
-    router.replace(`/player/${sk}/${vid}/${targetIdx}`).catch(() => { })
+    // The route's third segment is exclusively global_id. Source switching
+    // starts from a source vod_id, so use the freshly resolved global_id and
+    // retain vod_id in the compatibility query parameter.
+    const canonicalID = video.value?.global_id || 0
+    router.replace(`/player/${sk}/${canonicalID}/${targetIdx}?vod=${encodeURIComponent(String(vid))}`).catch(() => { })
 
     // 重新初始化 TsCache 集数映射（不清除，LRU 自动淘汰旧源的数据）
     try {
@@ -926,7 +955,7 @@ onBeforeUnmount(() => {
 function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   if (ep.ep_name) return ep.ep_name
   const num = ep.ep_num ?? (i + 1)
-  return '第' + String(num) + '集'
+  return t('detail.episode', { num })
 }
 </script>
 
@@ -934,7 +963,7 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   <div class="player-page" @mouseenter="mouseInside = true" @mouseleave="mouseInside = false">
     <div v-if="loading" class="player-loading cczj-flex cczj-items-center cczj-justify-center cczj-gap-3">
       <div class="spinner"></div>
-      <span>加载中...</span>
+      <span>{{ t('common.loading') }}</span>
     </div>
 
     <template v-else-if="currentUrl">
@@ -944,13 +973,14 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
           <VideoPlayer :url="currentUrl" :autoplay="true" :has-prev="hasPrev" :has-next="hasNext"
             :video-key="currentVideoKey" :show-title-bar="true" :title="currentEpName" :is-fav="isFav"
             :fav-busy="favBusy" :douban-id="video?.vod_douban_id || ''"
+            :resolve-resume="resolveDbResumePosition"
             @toggle-favorite="toggleFavorite" @back="goBack" @prev="prevEpisode" @next="nextEpisode"
             @show-comments="showCommentsModal = true"
             :force-play-token="_playToken" />
 
 
           <!-- 侧面板折叠/展开按钮（视频区右侧中间） -->
-          <button class="panel-toggle-btn cczj-absolute cczj-right-0 cczj-z-10 cczj-rounded-l cczj-p-2 cczj-cursor-pointer cczj-transition" :title="sidePanelCollapsed ? '展开面板' : '收起面板'"
+          <button class="panel-toggle-btn cczj-absolute cczj-right-0 cczj-z-10 cczj-rounded-l cczj-p-2 cczj-cursor-pointer cczj-transition" :title="sidePanelCollapsed ? t('player.expandPanel') : t('player.collapsePanel')"
             @click="sidePanelCollapsed = !sidePanelCollapsed">
             <Icon :name="sidePanelCollapsed ? 'chevron-left' : 'chevron-right'" :size="14" />
           </button>
@@ -961,12 +991,12 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
           <!-- 顶部卡：标题 + 年份/地区/分类 + 简介 + 收藏按钮 -->
           <div class="side-header cczj-flex cczj-flex-col cczj-gap-3 cczj-p-4 cczj-mt-0 cczj-mb-0">
             <div class="side-top-bar cczj-flex cczj-items-center cczj-justify-between cczj-gap-3">
-              <h1 class="side-title cczj-text-lg cczj-font-semibold cczj-truncate cczj-flex-1">{{ video?.vod_name || '视频播放' }}</h1>
+              <h1 class="side-title cczj-text-lg cczj-font-semibold cczj-truncate cczj-flex-1">{{ video?.vod_name || t('player.videoPlayback') }}</h1>
               <div class="side-top-actions cczj-flex cczj-items-center cczj-gap-2 cczj-flex-shrink-0">
-                <button class="close-btn-panel cczj-p-2 cczj-rounded cczj-transition cczj-cursor-pointer" title="最小化" @click="onMinimizeApp">
+                <button class="close-btn-panel cczj-p-2 cczj-rounded cczj-transition cczj-cursor-pointer" :title="t('common.minimize')" @click="onMinimizeApp">
                   <Icon name="minimize" :size="14" />
                 </button>
-                <Button variant="text" size="sm" class="close-btn-panel cczj-p-2 cczj-rounded cczj-transition cczj-cursor-pointer" title="关闭" @click="flushEpProgress(); router.back()">
+                <Button variant="text" size="sm" class="close-btn-panel cczj-p-2 cczj-rounded cczj-transition cczj-cursor-pointer" :title="t('common.close')" @click="flushEpProgress(); router.back()">
                   <Icon name="x" :size="18" />
                 </Button>
               </div>
@@ -985,10 +1015,10 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
             <div class="side-section-title cczj-flex cczj-items-center cczj-justify-between cczj-gap-2 cczj-mb-3">
               <div class="side-section-title-left cczj-flex cczj-items-center cczj-gap-2">
                 <span class="bullet cczj-w-2 cczj-h-2 cczj-rounded-full cczj-bg-accent"></span>
-                <span class="cczj-text-sm cczj-font-medium">播放源</span>
+                <span class="cczj-text-sm cczj-font-medium">{{ t('player.playSources') }}</span>
               </div>
               <div class="side-section-right">
-                <span class="side-count cczj-text-xs cczj-text-muted">{{sourceOptions.filter(s => s.hasData).length}} 个可用源</span>
+                <span class="side-count cczj-text-xs cczj-text-muted">{{ t('player.availableSources', { count: sourceOptions.filter(s => s.hasData).length }) }}</span>
               </div>
             </div>
 
@@ -1008,14 +1038,14 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
               <div class="side-section-title cczj-flex cczj-items-center cczj-justify-between cczj-gap-2 cczj-mt-4 cczj-mb-3">
                 <div class="side-section-title-left cczj-flex cczj-items-center cczj-gap-2">
                   <span class="bullet cczj-w-2 cczj-h-2 cczj-rounded-full cczj-bg-accent"></span>
-                  <span class="cczj-text-sm cczj-font-medium">选集</span>
-                  <span class="side-count cczj-text-xs cczj-text-muted">共 {{ episodes.length }} 集</span>
+                  <span class="cczj-text-sm cczj-font-medium">{{ t('detail.episodes') }}</span>
+                  <span class="side-count cczj-text-xs cczj-text-muted">{{ t('detail.totalEpisodes', { count: episodes.length }) }}</span>
                 </div>
                 <div class="side-section-right">
-                  <button class="sort-toggle-btn cczj-flex cczj-items-center cczj-gap-1 cczj-px-2 cczj-py-1 cczj-rounded cczj-transition cczj-cursor-pointer" :title="episodeSortAsc ? '当前正序，点击切换倒序' : '当前倒序，点击切换正序'"
+                  <button class="sort-toggle-btn cczj-flex cczj-items-center cczj-gap-1 cczj-px-2 cczj-py-1 cczj-rounded cczj-transition cczj-cursor-pointer" :title="episodeSortAsc ? t('detail.sortAscTip') : t('detail.sortDescTip')"
                     @click="toggleEpisodeSort">
                     <Icon :name="episodeSortAsc ? 'chevron-down' : 'chevron-up'" :size="12" />
-                    <span class="sort-label cczj-text-xs">{{ episodeSortAsc ? '正序' : '倒序' }}</span>
+                    <span class="sort-label cczj-text-xs">{{ episodeSortAsc ? t('detail.ascOrder') : t('detail.descOrder') }}</span>
                   </button>
                 </div>
               </div>
@@ -1026,7 +1056,7 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
                   watched: isWatchedEp(origIdx(i)),
                   future: origIdx(i) > currentEpIndex && !isWatchedEp(origIdx(i)),
                 }" @click="goToEpisode(origIdx(i))"
-                  :title="epLabel(origIdx(i), ep) + (getEpWatchPct(origIdx(i)) > 0 ? ' · 已观看 ' + Math.round(getEpWatchPct(origIdx(i))) + '%' : '')">
+                  :title="epLabel(origIdx(i), ep) + (getEpWatchPct(origIdx(i)) > 0 ? t('detail.watchedProgress', { pct: Math.round(getEpWatchPct(origIdx(i))) }) : '')">
                   <span class="ep-item-num cczj-truncate">{{ epLabel(origIdx(i), ep) }}</span>
                   <span v-show="origIdx(i) === currentEpIndex" class="ep-playing-badge cczj-absolute cczj-top-1 cczj-right-1 cczj-flex">
                     <span class="bar b1 cczj-bg-accent cczj-rounded"></span>
@@ -1035,20 +1065,20 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
                   </span>
                   <span v-show="isWatchedEp(origIdx(i)) && getEpWatchPct(origIdx(i)) > 0" class="ep-watched-progress cczj-absolute cczj-bottom-0 cczj-left-0 cczj-bg-accent cczj-rounded"
                     :style="{ width: getEpWatchPct(origIdx(i)) + '%' }"></span>
-                  <span v-show="isWatchedEp(origIdx(i)) && getEpWatchPct(origIdx(i)) > 0" class="ep-watched-pct cczj-absolute cczj-bottom-1 cczj-right-1 cczj-text-xs cczj-text-muted">{{
+                  <span v-show="isWatchedEp(origIdx(i)) && getEpWatchPct(origIdx(i)) > 0" class="ep-watched-pct cczj-absolute cczj-right-1 cczj-text-xs cczj-text-muted">{{
                     Math.round(getEpWatchPct(origIdx(i))) }}%</span>
                 </button>
               </div>
             </template>
-            <div v-else-if="!sourceSearchLoading" class="side-empty cczj-text-center cczj-py-8 cczj-text-muted cczj-text-sm">暂无可播放剧集</div>
+            <div v-else-if="!sourceSearchLoading" class="side-empty cczj-text-center cczj-py-8 cczj-text-muted cczj-text-sm">{{ t('player.noPlayableEpisodes') }}</div>
           </section>
         </aside>
       </div>
     </template>
 
     <div v-else class="player-error-page cczj-flex cczj-flex-col cczj-items-center cczj-justify-center cczj-gap-4">
-      <div class="error-msg cczj-text-lg cczj-text-muted">暂无播放资源</div>
-      <Button variant="text" size="md" @click="goBack"><span>返回</span></Button>
+      <div class="error-msg cczj-text-lg cczj-text-muted">{{ t('player.noPlayableMedia') }}</div>
+      <Button variant="text" size="md" @click="goBack"><span>{{ t('common.back') }}</span></Button>
     </div>
 
     <!-- 豆瓣评论弹窗 -->
@@ -1058,7 +1088,7 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
     </Modal>
 
     <!-- 收藏夹选择弹窗 -->
-    <Modal :model-value="showFavFolderModal" title="收藏到文件夹" width="420px" :show-footer="true"
+    <Modal :model-value="showFavFolderModal" :title="t('detail.favToFolder')" width="420px" :show-footer="true"
       @update:model-value="(v: boolean) => !v && (showFavFolderModal = false)">
       <div class="folder-select-list cczj-flex cczj-flex-col cczj-gap-2">
         <label v-for="folder in favFolders" :key="folder.id" class="folder-select-item cczj-flex cczj-items-center cczj-gap-2 cczj-p-3 cczj-rounded cczj-transition cczj-cursor-pointer"
@@ -1070,8 +1100,8 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
         </label>
       </div>
       <template #footer>
-        <Button variant="secondary" size="md" @click="showFavFolderModal = false">取消</Button>
-        <Button variant="primary" size="md" @click="confirmAddToFolder">确认收藏</Button>
+        <Button variant="secondary" size="md" @click="showFavFolderModal = false">{{ t('common.cancel') }}</Button>
+        <Button variant="primary" size="md" @click="confirmAddToFolder">{{ t('detail.confirmFav') }}</Button>
       </template>
     </Modal>
   </div>

@@ -1,3 +1,5 @@
+import { tr } from '../locales'
+
 const STORAGE_VERSION = 1
 
 interface VersionedValue<T> {
@@ -73,5 +75,30 @@ export function localStorageBytes(): number {
     return bytes
   } catch {
     return 0
+  }
+}
+
+const RESET_MARKER = 'cczj_database_reset_generation'
+
+// Clears browser-owned caches exactly once per destructive database reset.
+// This deliberately uses native storage only inside this adapter.
+export async function applyDatabaseResetGeneration(generation: string): Promise<void> {
+  if (!generation || readStorageString(RESET_MARKER) === generation) return
+  try {
+    const remove: string[] = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i) || ''
+      if (key === 'poster_cache_v1' || key === 'cczj_detail_cache_v1' || key === 'cczj_image_proxy_cache_v1' || key === 'cczj_douban_chart_cache_v1' || key === 'cczj_ep_prog_v1' || key === 'cczj_fav_folders' || key === 'cczj_fav_mapping' || key === 'cczj_update_download_state' || key.startsWith('cczj_video_refresh_')) remove.push(key)
+    }
+    remove.forEach(key => localStorage.removeItem(key))
+    await Promise.all(['tscache'].map(name => new Promise<void>((resolve, reject) => {
+      const req = indexedDB.deleteDatabase(name)
+      req.onsuccess = () => resolve()
+      req.onerror = () => reject(req.error || new Error(tr('errors.idbDeleteFailed', { name })))
+      req.onblocked = () => reject(new Error(tr('errors.idbBlocked', { name })))
+    })))
+    localStorage.setItem(RESET_MARKER, generation)
+  } catch {
+    // Storage can be unavailable; the next load will retry the cleanup.
   }
 }

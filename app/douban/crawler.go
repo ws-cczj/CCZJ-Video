@@ -1,15 +1,21 @@
 package douban
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
-	"io/ioutil"
+	"html"
+	"io"
 	"math/rand"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"cczjVideo/app/applog"
@@ -19,21 +25,46 @@ import (
 const (
 	searchURL = "https://search.douban.com/movie/subject_search"
 	detailURL = "https://movie.douban.com/subject/%s/"
-	userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0"
+	userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36"
 	referer   = "https://movie.douban.com/"
-	cookie    = "ll=\"118123\"; bid=WBzHblgEgfs; ap_v=0,6.0; dbcl2=\"242252407:PrkTXHxDupE\"; ck=Ket5; frodotk_db=\"4d668806270f83b5e8339812752e8b1f\"; push_noty_num=0; push_doumail_num=0"
+
+	// subjectAbstractURL 是详情页的兜底数据源。正常路径是解掉 sec.douban.com 的
+	// 验证题直接拿网页全量字段；只有在验证题解不出来（难度被调高、页面改版）时，
+	// 才退回这个 JSON 接口——它不受该防护影响，实测 200，但缺评分人数/又名/IMDb。
+	subjectAbstractURL = "https://movie.douban.com/j/subject_abstract?subject_id=%s"
 )
 
-// 豆瓣请求间隔采用随机抖动（10~30 秒），避免固定节奏被识别为爬虫，
-// 同时也不会对豆瓣服务器造成压力（每分钟最多约 2~6 次请求）。
+// 豆瓣请求间隔采用随机抖动，避免固定节奏被识别为爬虫。
+//
+// 10~30 秒的旧节奏实测会把 97% 的请求打到 sec.douban.com 验证页（2026-09-22
+// 单日 284 次抓取中 276 次被 302），说明节奏本身就在触发反爬，因此整体放缓。
+// 后台批量补全是无人值守任务，用宽间隔；用户主动点击的交互请求用窄间隔，
+// 但两者共用同一个 lastRequestTime，所以交互请求也无法插队到窄间隔以内。
 const (
-	minRequestInterval = 10 * time.Second
-	maxRequestInterval = 30 * time.Second
+	minRequestInterval = 60 * time.Second
+	maxRequestInterval = 150 * time.Second
+
+	interactiveMinRequestInterval = 15 * time.Second
+	interactiveMaxRequestInterval = 40 * time.Second
 )
+
+// batchMode 为 true 表示 Updater 正在跑无人值守的批量补全。
+var batchMode atomic.Bool
 
 var (
+	// doubanJar 保存验证通过后发放的 dbsawcv1 放行 Cookie（Max-Age 只有 120 秒）
+	// 以及常规的匿名 bid Cookie。浏览器也是这么做的：解一次题，两分钟内所有
+	// 豆瓣子域都免检；不共享 jar 的话每条请求都要重解一遍。
+	doubanJar, _ = cookiejar.New(nil)
+
 	client = &http.Client{
 		Timeout: 15 * time.Second,
+		Jar:     doubanJar,
+		// 不跟随登录/验证重定向，否则 302 会被伪装成看似正常的 200 页面。
+		// 验证跳转由 solveDoubanChallenge 显式处理。
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
 		Transport: &http.Transport{
 			MaxIdleConns:        10,
 			MaxIdleConnsPerHost: 2,
@@ -46,66 +77,156 @@ var (
 
 	// 豆瓣 ID 提取正则（支持三种格式）
 	// 格式 1：常规搜索结果 - href="https://movie.douban.com/subject/35426411/"
-	subjectIDRegex = regexp.MustCompile(`href=["']https?://movie\.douban\.com/subject/(\d+)/?["']`)
+	subjectIDRegex = regexp.MustCompile(`(?i)(?:https?://(?:www\.)?movie\.douban\.com/subject/|/subject/)(\d+)`)
 	// 格式 2：智能搜索结果 - href="https://www.douban.com/doubanapp/dispatch?uri=/tv/35426411"
 	// 只匹配 movie 和 tv 类型，排除 book（图书）和 music（音乐）
-	subjectIDRegexSmart = regexp.MustCompile(`href=["']https?://www\.douban\.com/doubanapp/dispatch\?uri=/(?:movie|tv)/(\d+)["']`)
+	subjectIDRegexSmart = regexp.MustCompile(`(?i)(?:https?://(?:www\.)?douban\.com/doubanapp/dispatch\?uri=/(?:movie|tv)/|doubanapp/dispatch\?uri=/(?:movie|tv)/)(\d+)`)
 	// 格式 3：JSON 转义的链接 - href=\"https://www.douban.com/doubanapp/dispatch?uri=/tv/35426411\"
-	subjectIDRegexJSON = regexp.MustCompile(`href=\\"https?://www\.douban\.com/doubanapp/dispatch\?uri=/(?:movie|tv)/(\d+)\\"`)
+	subjectIDRegexJSON = regexp.MustCompile(`(?i)doubanapp/dispatch\?uri=/(?:movie|tv)/(\d+)`)
 
 	// 智能搜索结果中的标题提取 - class="DouWeb-SR-subject-info-name tv">万界独尊 第一季</a>
-	smartTitleRegex = regexp.MustCompile(`class=["']DouWeb-SR-subject-info-name[^"]*["'][^>]*>([^<]+)</a>`)
+	smartTitleRegex = regexp.MustCompile(`(?is)<a\b[^>]*\bclass\s*=\s*["'][^"']*\bDouWeb-SR-subject-info-name\b[^"']*["'][^>]*>(.*?)</a>`)
 	// 常规搜索结果中的标题提取（title属性格式） - <a href="..." title="万界独尊 第一季">
-	regularTitleRegex = regexp.MustCompile(`<a[^>]*href=["']https?://movie\.douban\.com/subject/\d+/?["'][^>]*title=["']([^"']+)["']`)
+	regularTitleRegex = regexp.MustCompile(`(?is)<a\b[^>]*\bhref\s*=\s*["'][^"']*(?:movie\.douban\.com/subject/|/subject/)\d+[^"']*["'][^>]*\btitle\s*=\s*["']([^"']+)["']`)
 	// 常规搜索结果中的标题提取（文本格式） - <a ... class="title-text">权力的游戏 第一季 Game of Thrones Season 1‎ (2011)</a>
-	titleTextRegex = regexp.MustCompile(`<a[^>]*class=["']title-text["'][^>]*>([^<]+)</a>`)
+	titleTextRegex = regexp.MustCompile(`(?is)<a\b[^>]*\bclass\s*=\s*["'][^"']*\btitle-text\b[^"']*["'][^>]*>(.*?)</a>`)
 
-	directorRegex     = regexp.MustCompile(`<span class="pl">导演</span>\s*:\s*<span class="attrs">([\s\S]*?)</span></span>`)
-	writerRegex       = regexp.MustCompile(`<span class="pl">编剧</span>\s*:\s*<span class="attrs">([\s\S]*?)</span></span>`)
-	actorRegex        = regexp.MustCompile(`<span class="pl">主演</span>\s*:\s*<span class="attrs">([\s\S]*?)</span></span>`)
-	genreRegex        = regexp.MustCompile(`<span class="pl">类型:</span>\s*<span property="v:genre">([^<]+)</span>`)
-	countryRegex      = regexp.MustCompile(`<span class="pl">制片国家/地区:</span>\s*([^<]+)`)
-	languageRegex     = regexp.MustCompile(`<span class="pl">语言:</span>\s*([^<]+)`)
-	releaseDateRegex  = regexp.MustCompile(`<span class="pl">首播:</span>\s*<span property="v:initialReleaseDate"[^>]*>([^<]+)</span>`)
-	episodeCountRegex = regexp.MustCompile(`<span class="pl">集数:</span>\s*([^<]+)`)
-	seasonCountRegex  = regexp.MustCompile(`<span class="pl">季数:</span>\s*([^<]+)`)
-	durationRegex     = regexp.MustCompile(`<span class="pl">单集片长:</span>\s*([^<]+)`)
-	akaRegex          = regexp.MustCompile(`<span class="pl">又名:</span>\s*([^<]+)`)
-	imdbRegex         = regexp.MustCompile(`<span class="pl">IMDb:</span>\s*([^<]+)`)
-	ratingRegex       = regexp.MustCompile(`<strong class="ll rating_num" property="v:average">([\d.]+)</strong>`)
-	votesRegex        = regexp.MustCompile(`<span property="v:votes">(\d+)</span>`)
+	directorRegex     = regexp.MustCompile(`<span\b[^>]*\bclass\s*=\s*["'][^"']*\bpl\b[^"']*["'][^>]*>导演</span>\s*:\s*<span\b[^>]*\bclass\s*=\s*["'][^"']*\battrs\b[^"']*["'][^>]*>([\s\S]*?)</span></span>`)
+	writerRegex       = regexp.MustCompile(`<span\b[^>]*\bclass\s*=\s*["'][^"']*\bpl\b[^"']*["'][^>]*>编剧</span>\s*:\s*<span\b[^>]*\bclass\s*=\s*["'][^"']*\battrs\b[^"']*["'][^>]*>([\s\S]*?)</span></span>`)
+	actorRegex        = regexp.MustCompile(`<span\b[^>]*\bclass\s*=\s*["'][^"']*\bpl\b[^"']*["'][^>]*>主演</span>\s*:\s*<span\b[^>]*\bclass\s*=\s*["'][^"']*\battrs\b[^"']*["'][^>]*>([\s\S]*?)</span></span>`)
+	genreRegex        = regexp.MustCompile(`<span\b[^>]*\bclass\s*=\s*["'][^"']*\bpl\b[^"']*["'][^>]*>类型\s*:</span>\s*<span\b[^>]*\bproperty\s*=\s*["']v:genre["'][^>]*>([^<]+)</span>`)
+	countryRegex      = regexp.MustCompile(`<span\b[^>]*\bclass\s*=\s*["'][^"']*\bpl\b[^"']*["'][^>]*>制片国家/地区\s*:</span>\s*([^<]+)`)
+	languageRegex     = regexp.MustCompile(`<span\b[^>]*\bclass\s*=\s*["'][^"']*\bpl\b[^"']*["'][^>]*>语言\s*:</span>\s*([^<]+)`)
+	releaseDateRegex  = regexp.MustCompile(`<span\b[^>]*\bclass\s*=\s*["'][^"']*\bpl\b[^"']*["'][^>]*>首播\s*:</span>\s*<span\b[^>]*\bproperty\s*=\s*["']v:initialReleaseDate["'][^>]*>([^<]+)</span>`)
+	episodeCountRegex = regexp.MustCompile(`<span\b[^>]*\bclass\s*=\s*["'][^"']*\bpl\b[^"']*["'][^>]*>集数\s*:</span>\s*([^<]+)`)
+	seasonCountRegex  = regexp.MustCompile(`<span\b[^>]*\bclass\s*=\s*["'][^"']*\bpl\b[^"']*["'][^>]*>季数\s*:</span>\s*([^<]+)`)
+	durationRegex     = regexp.MustCompile(`<span\b[^>]*\bclass\s*=\s*["'][^"']*\bpl\b[^"']*["'][^>]*>单集片长\s*:</span>\s*([^<]+)`)
+	akaRegex          = regexp.MustCompile(`<span\b[^>]*\bclass\s*=\s*["'][^"']*\bpl\b[^"']*["'][^>]*>又名\s*:</span>\s*([^<]+)`)
+	imdbRegex         = regexp.MustCompile(`<span\b[^>]*\bclass\s*=\s*["'][^"']*\bpl\b[^"']*["'][^>]*>IMDb\s*:</span>\s*([^<]+)`)
+	ratingRegex       = regexp.MustCompile(`<strong\b[^>]*\bproperty\s*=\s*["']v:average["'][^>]*>([\d.]+)</strong>`)
+	votesRegex        = regexp.MustCompile(`<span\b[^>]*\bproperty\s*=\s*["']v:votes["'][^>]*>(\d+)</span>`)
 	// 短评数量：豆瓣详情页中 "全部 12345 条" 或 "12345 条短评" 等格式
-	shortCommentsRegex = regexp.MustCompile(`(\d[\d,]*)\s*条(?:短评|评论)?`)
-	posterRegex       = regexp.MustCompile(`<img[^>]*src=["']([^"']*doubanio[^"']*\.(?:webp|jpe?g|png))["'][^>]*alt=["']([^"']+)`)
+	shortCommentsRegex = regexp.MustCompile(`(?:全部\s*)?(\d[\d,]*)\s*条\s*(?:短评|评论)`)
+	posterRegex        = regexp.MustCompile(`(?is)<img\b[^>]*\bsrc\s*=\s*["']([^"']*doubanio[^"']*)["'][^>]*\balt\s*=\s*["']([^"']+)`)
 	// 标题提取：从 <h1> 中提取（作为 poster 提取失败时的兆底）
-	titleRegex        = regexp.MustCompile(`<span\s+property="v:itemreviewed">([^<]+)</span>`)
-	
+	titleRegex   = regexp.MustCompile(`<span\s+property="v:itemreviewed">([^<]+)</span>`)
+	ogTitleRegex = regexp.MustCompile(`(?is)<meta\b[^>]*\bproperty\s*=\s*["']og:title["'][^>]*\bcontent\s*=\s*["']([^"']+)`)
+
 	// ===== 新版搜索结果解析正则（2024+ HTML 结构）=====
 	// subject ID from data-moreurl JS param: subject_id:'35861087'
-	moreurlSubjectIDRegex = regexp.MustCompile(`subject_id:'(\d+)'`)
+	moreurlSubjectIDRegex = regexp.MustCompile(`(?i)\bsubject_id\s*[:=]\s*(?:\\?["'])?(\d+)`)
 	// title from title-text class
-	searchTitleTextRegex = regexp.MustCompile(`class="title-text">([^<]+)</a>`)
+	searchTitleTextRegex = regexp.MustCompile(`(?is)<a\b[^>]*\bclass\s*=\s*["'][^"']*\btitle-text\b[^"']*["'][^>]*>(.*?)</a>`)
 	// year from title suffix: (2025)
 	searchYearRegex = regexp.MustCompile(`\((\d{4})\)\s*$`)
 	// meta abstract divs
-	searchMetaRegex = regexp.MustCompile(`class="meta abstract_?2?">([^<]*)</div>`)
+	searchMetaRegex = regexp.MustCompile(`(?is)<(?:div|span)\b[^>]*\bclass\s*=\s*["'][^"']*\bmeta\b[^"']*["'][^>]*>(.*?)</(?:div|span)>`)
 
-	linkTextRegex = regexp.MustCompile(`<a[^>]*>([^<]+)</a>`)
+	linkTextRegex     = regexp.MustCompile(`(?is)<a\b[^>]*>([^<]+)</a>`)
+	itemRootOpenRegex = regexp.MustCompile(`(?is)<div\b[^>]*\bclass\s*=\s*["'][^"']*\bitem-root\b[^"']*["'][^>]*>`)
+	anchorRegex       = regexp.MustCompile(`(?is)<a\b[^>]*>.*?</a>`)
+	htmlAttrRegex     = regexp.MustCompile(`(?i)([a-z_:][a-z0-9_.:-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))`)
 
 	// 用于剥离季数/部数信息的正则，提高搜索命中率
 	seasonStripRegex = regexp.MustCompile(`(?i)\s*第[一二三四五六七八九十\d]+[季部季]|\s*Season\s*\d+|\s*Part\s*\d+`)
 
 	antiCrawlPatterns = []string{
-		"载入中...",
-		"加载中",
 		"验证码",
-		"请登录",
+		"请完成安全验证",
+		"Please verify",
 		"403 Forbidden",
 		"访问过于频繁",
 		"您的访问请求被拒绝",
 		"系统检测到异常请求",
 	}
 )
+
+// doubanFetchError 保留 HTTP 层的失败类型，避免把一次临时的 403/验证页
+// 当成“搜索无结果”写入数据库冷却状态。
+type doubanFetchError struct {
+	URL        string
+	StatusCode int
+	AntiCrawl  bool
+	Location   string
+}
+
+func (e *doubanFetchError) Error() string {
+	if e.AntiCrawl && e.Location != "" {
+		return fmt.Sprintf("douban anti-crawl redirect: HTTP %d -> %s", e.StatusCode, e.Location)
+	}
+	if e.Location != "" {
+		return fmt.Sprintf("douban request failed: HTTP %d redirect to %s", e.StatusCode, e.Location)
+	}
+	if e.AntiCrawl {
+		return fmt.Sprintf("douban anti-crawl page detected (HTTP %d)", e.StatusCode)
+	}
+	return fmt.Sprintf("douban request failed: HTTP %d", e.StatusCode)
+}
+
+func isDoubanChallengeURL(location string) bool {
+	lower := strings.ToLower(location)
+	return strings.Contains(lower, "sec.douban.com") ||
+		strings.Contains(lower, "captcha") ||
+		strings.Contains(lower, "accounts.douban.com")
+}
+
+// secFetchSite 按 Fetch Metadata 规范算出 Referer 与目标地址的关系。
+// 规范以注册域（douban.com）为界：movie.douban.com → search.douban.com 是
+// same-site，不是 cross-site；写错反而比不带这组头更像脚本。
+func secFetchSite(referer, host string) string {
+	if referer == "" {
+		return "none"
+	}
+	ref, err := url.Parse(referer)
+	if err != nil || ref.Host == "" {
+		return "none"
+	}
+	if strings.EqualFold(ref.Host, host) {
+		return "same-origin"
+	}
+	if registerDomain(ref.Host) == registerDomain(host) {
+		return "same-site"
+	}
+	return "cross-site"
+}
+
+// registerDomain 取主机名的后两段作为注册域近似值。豆瓣全站都是 *.douban.com，
+// 这里不需要处理 co.uk 之类的多段公共后缀。
+func registerDomain(host string) string {
+	domain := strings.ToLower(host)
+	if i := strings.LastIndexByte(domain, ':'); i >= 0 {
+		domain = domain[:i]
+	}
+	parts := strings.Split(domain, ".")
+	if len(parts) <= 2 {
+		return domain
+	}
+	return strings.Join(parts[len(parts)-2:], ".")
+}
+
+func applyDoubanHeaders(req *http.Request, requestReferer string) {
+	req.Header.Set("User-Agent", userAgent)
+	if requestReferer != "" {
+		req.Header.Set("Referer", requestReferer)
+	}
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+	// 浏览器发起文档导航时一定会带这组头，缺了就是脚本流量的明显特征。
+	req.Header.Set("Upgrade-Insecure-Requests", "1")
+	req.Header.Set("Sec-Fetch-Dest", "document")
+	req.Header.Set("Sec-Fetch-Mode", "navigate")
+	req.Header.Set("Sec-Fetch-User", "?1")
+	req.Header.Set("Sec-Fetch-Site", secFetchSite(req.Header.Get("Referer"), req.URL.Host))
+	// Cookie 必须是可选的。仓库里原先硬编码的登录 Cookie 会过期、泄露，
+	// 还可能把所有请求导向登录/验证页；需要时由部署环境显式提供。
+	cookieValue := strings.TrimSpace(os.Getenv("CCZJ_DOUBAN_COOKIE"))
+	if cookieValue == "" {
+		cookieValue = strings.TrimSpace(os.Getenv("DOUBAN_COOKIE"))
+	}
+	if cookieValue != "" {
+		req.Header.Set("Cookie", cookieValue)
+	}
+}
 
 type DoubanInfo struct {
 	SubjectID     string
@@ -131,11 +252,11 @@ type DoubanInfo struct {
 
 // SearchMeta 搜索时的视频元数据，用于智能匹配最佳候选
 type SearchMeta struct {
-	VodName   string
-	Year      string
-	VodType   string // 视频分类名（如"动漫"、"电视剧"、"电影"）
-	Director  string // 逗号分隔的导演列表
-	Actor     string // 逗号分隔的演员列表
+	VodName  string
+	Year     string
+	VodType  string // 视频分类名（如"动漫"、"电视剧"、"电影"）
+	Director string // 逗号分隔的导演列表
+	Actor    string // 逗号分隔的演员列表
 }
 
 // SearchCandidate 搜索结果中的单个候选项
@@ -157,21 +278,133 @@ func waitRateLimit() {
 	rateMu.Lock()
 	defer rateMu.Unlock()
 
+	minGap, maxGap := interactiveMinRequestInterval, interactiveMaxRequestInterval
+	if batchMode.Load() {
+		minGap, maxGap = minRequestInterval, maxRequestInterval
+	}
+
 	elapsed := time.Since(lastRequestTime)
+	if lastRequestTime.IsZero() {
+		lastRequestTime = time.Now()
+		return
+	}
 	// 基础等待：补齐到下限
-	if elapsed < minRequestInterval {
-		base := minRequestInterval - elapsed
+	if elapsed < minGap {
+		base := minGap - elapsed
 		applog.Debug("[Douban] Rate limiting: base wait %.1fs", base.Seconds())
 		time.Sleep(base)
 	}
 	// 随机抖动：在 [0, max-min) 之间取一个值，避免固定节奏
-	jitterRange := maxRequestInterval - minRequestInterval
+	jitterRange := maxGap - minGap
 	if jitterRange > 0 {
 		jitter := time.Duration(rand.Int63n(int64(jitterRange)))
 		applog.Debug("[Douban] Rate limiting: random jitter %.1fs", jitter.Seconds())
 		time.Sleep(jitter)
 	}
 	lastRequestTime = time.Now()
+}
+
+// ==================== 反爬熔断 ====================
+// 拿到 sec.douban.com 验证跳转说明这个 IP 已经被临时封禁，继续按原节奏重试
+// 只会不断续封。命中后进入静默期，静默期内所有豆瓣请求直接快速失败（不排队等待），
+// 静默时长按 5/15/60 分钟递增，任何一次正常响应立即解除。
+var (
+	blockMu      sync.Mutex
+	blockUntil   time.Time
+	blockStrikes int
+)
+
+var blockBackoffSteps = []time.Duration{
+	5 * time.Minute,
+	15 * time.Minute,
+	time.Hour,
+}
+
+// remainingBlock 返回仍在静默期内的剩余时长；不在静默期返回 0。
+// 顺带把到期的静默期清零，避免下一次 noteDoubanSuccess 之前一直误判。
+func remainingBlock() time.Duration {
+	blockMu.Lock()
+	defer blockMu.Unlock()
+	if blockUntil.IsZero() {
+		return 0
+	}
+	if left := time.Until(blockUntil); left > 0 {
+		return left
+	}
+	blockUntil = time.Time{}
+	blockStrikes = 0
+	return 0
+}
+
+// AntiCrawlState 供诊断页只读查看熔断静默期：剩余时长与连续命中次数。
+// 与 remainingBlock 不同，它不会顺手清掉到期状态，读一次不会改变抓取行为。
+func AntiCrawlState() (time.Duration, int) {
+	blockMu.Lock()
+	defer blockMu.Unlock()
+	if blockUntil.IsZero() {
+		return 0, blockStrikes
+	}
+	if left := time.Until(blockUntil); left > 0 {
+		return left, blockStrikes
+	}
+	return 0, blockStrikes
+}
+
+// noteAntiCrawl 记录一次反爬命中并把静默期推高一档。
+func noteAntiCrawl() {
+	blockMu.Lock()
+	step := blockStrikes
+	if step >= len(blockBackoffSteps) {
+		step = len(blockBackoffSteps) - 1
+	}
+	silent := blockBackoffSteps[step]
+	blockStrikes++
+	strikes := blockStrikes
+	blockUntil = time.Now().Add(silent)
+	blockMu.Unlock()
+	applog.Warn("[Douban] 触发反爬熔断：静默 %s 后再尝试（连续命中 %d 次）", silent, strikes)
+}
+
+// noteDoubanSuccess 在拿到正常响应后解除熔断。
+func noteDoubanSuccess() {
+	blockMu.Lock()
+	had := blockStrikes > 0 || !blockUntil.IsZero()
+	blockStrikes = 0
+	blockUntil = time.Time{}
+	blockMu.Unlock()
+	if had {
+		applog.Info("[Douban] 反爬熔断解除，恢复正常抓取节奏")
+	}
+}
+
+// blockedError 静默期内构造统一的失败原因，调用方按反爬错误处理即可。
+func blockedError(urlStr string, left time.Duration) error {
+	return &doubanFetchError{
+		URL:        urlStr,
+		AntiCrawl:  true,
+		StatusCode: http.StatusTooManyRequests,
+		Location:   fmt.Sprintf("本地反爬熔断静默中，剩余 %s", left.Round(time.Second)),
+	}
+}
+
+// detailChallengedUntil 记录“详情页网页连验证题都过不去”的截止时间（unix nano）。
+// 正常情况 sec.douban.com 的 proof-of-work 能被本地解掉，网页直接返回全字段；
+// 只有解题失败（豆瓣调高难度或改版）才需要退避：命中后改走 JSON 兜底，每 30
+// 分钟才重新试探一次网页，一旦放开就自动回到全字段路径。
+var detailChallengedUntil atomic.Int64
+
+const detailProbeInterval = 30 * time.Minute
+
+func detailProbeAllowed() bool {
+	return time.Now().UnixNano() >= detailChallengedUntil.Load()
+}
+
+func markDetailChallenged() {
+	detailChallengedUntil.Store(time.Now().Add(detailProbeInterval).UnixNano())
+}
+
+func clearDetailChallenged() {
+	detailChallengedUntil.Store(0)
 }
 
 func checkAntiCrawl(html string) bool {
@@ -203,43 +436,13 @@ func checkAntiCrawl(html string) bool {
 func extractAllSearchTitles(html string) []string {
 	var titles []string
 	seen := make(map[string]bool)
-	
-	// 从智能搜索结果中提取
-	smartMatches := smartTitleRegex.FindAllStringSubmatch(html, -1)
-	for _, match := range smartMatches {
-		if len(match) >= 2 {
-			title := strings.TrimSpace(match[1])
-			if title != "" && !seen[title] {
-				titles = append(titles, title)
-				seen[title] = true
-			}
+	for _, candidate := range parseSearchCandidates(html) {
+		title := strings.TrimSpace(candidate.Title)
+		if title != "" && !seen[title] {
+			titles = append(titles, title)
+			seen[title] = true
 		}
 	}
-	
-	// 从常规搜索结果中提取（title属性格式）
-	regularMatches := regularTitleRegex.FindAllStringSubmatch(html, -1)
-	for _, match := range regularMatches {
-		if len(match) >= 2 {
-			title := strings.TrimSpace(match[1])
-			if title != "" && !seen[title] {
-				titles = append(titles, title)
-				seen[title] = true
-			}
-		}
-	}
-	
-	// 从常规搜索结果中提取（title-text文本格式）
-	textMatches := titleTextRegex.FindAllStringSubmatch(html, -1)
-	for _, match := range textMatches {
-		if len(match) >= 2 {
-			title := strings.TrimSpace(match[1])
-			if title != "" && !seen[title] {
-				titles = append(titles, title)
-				seen[title] = true
-			}
-		}
-	}
-	
 	return titles
 }
 
@@ -252,6 +455,7 @@ func normalizeTitle(title string) string {
 
 // cleanTitle 去除标题中的不可见字符和年份后缀
 func cleanTitle(title string) string {
+	title = html.UnescapeString(stripHTMLTags(title))
 	// 去除不可见 Unicode 字符（LTR mark、RTL mark 等）
 	title = strings.Map(func(r rune) rune {
 		if r == '\u200E' || r == '\u200F' || r == '\u200B' || r == '\uFEFF' {
@@ -267,36 +471,127 @@ func cleanTitle(title string) string {
 
 // splitItemBlocks 将搜索结果 HTML 拆分为独立的候选项块
 func splitItemBlocks(html string) []string {
-	marker := `<div class="item-root">`
-	parts := strings.Split(html, marker)
 	var blocks []string
-	for i := 1; i < len(parts); i++ {
-		blocks = append(blocks, parts[i])
+	markers := itemRootOpenRegex.FindAllStringIndex(html, -1)
+	for i, marker := range markers {
+		start := marker[1]
+		end := len(html)
+		if i+1 < len(markers) {
+			end = markers[i+1][0]
+		}
+		if start < end {
+			blocks = append(blocks, html[start:end])
+		}
 	}
 	return blocks
+}
+
+func parseHTMLAttributes(tag string) map[string]string {
+	attrs := make(map[string]string)
+	for _, match := range htmlAttrRegex.FindAllStringSubmatch(tag, -1) {
+		if len(match) < 5 {
+			continue
+		}
+		value := match[2]
+		if value == "" {
+			value = match[3]
+		}
+		if value == "" {
+			value = match[4]
+		}
+		attrs[strings.ToLower(match[1])] = html.UnescapeString(value)
+	}
+	return attrs
+}
+
+func hasHTMLClass(classes, className string) bool {
+	for _, class := range strings.Fields(classes) {
+		if class == className {
+			return true
+		}
+	}
+	return false
+}
+
+func extractSubjectID(text string) string {
+	for _, pattern := range []*regexp.Regexp{
+		moreurlSubjectIDRegex,
+		subjectIDRegex,
+		subjectIDRegexSmart,
+		subjectIDRegexJSON,
+	} {
+		if match := pattern.FindStringSubmatch(text); len(match) >= 2 {
+			return match[1]
+		}
+	}
+	return ""
+}
+
+func extractCandidateTitle(block string) string {
+	for _, anchor := range anchorRegex.FindAllString(block, -1) {
+		openEnd := strings.Index(anchor, ">")
+		if openEnd < 0 {
+			continue
+		}
+		attrs := parseHTMLAttributes(anchor[:openEnd+1])
+		closeStart := strings.LastIndex(strings.ToLower(anchor), "</a>")
+		if closeStart < openEnd {
+			continue
+		}
+		text := strings.TrimSpace(html.UnescapeString(stripHTMLTags(anchor[openEnd+1 : closeStart])))
+		classes := attrs["class"]
+		if (hasHTMLClass(classes, "title-text") || hasHTMLClass(classes, "DouWeb-SR-subject-info-name")) && text != "" {
+			return text
+		}
+		if extractSubjectID(anchor) != "" && attrs["title"] != "" {
+			return strings.TrimSpace(html.UnescapeString(attrs["title"]))
+		}
+	}
+	return ""
+}
+
+func parseSearchCandidatesFromAnchors(html string) []SearchCandidate {
+	var candidates []SearchCandidate
+	seen := make(map[string]bool)
+	for _, anchor := range anchorRegex.FindAllString(html, -1) {
+		subjectID := extractSubjectID(anchor)
+		if subjectID == "" || seen[subjectID] {
+			continue
+		}
+		title := extractCandidateTitle(anchor)
+		if title == "" {
+			continue
+		}
+		seen[subjectID] = true
+		year := 0
+		if match := searchYearRegex.FindStringSubmatch(title); len(match) >= 2 {
+			year, _ = strconv.Atoi(match[1])
+		}
+		candidates = append(candidates, SearchCandidate{SubjectID: subjectID, Title: cleanTitle(title), Year: year})
+	}
+	return candidates
 }
 
 // parseSearchCandidates 解析搜索结果 HTML，提取所有候选项及其元数据
 func parseSearchCandidates(html string) []SearchCandidate {
 	blocks := splitItemBlocks(html)
 	if len(blocks) == 0 {
-		return nil
+		return parseSearchCandidatesFromAnchors(html)
 	}
 
 	var candidates []SearchCandidate
 	for _, block := range blocks {
 		// 提取 subject ID（从 data-moreurl 的 JS 参数中）
-		idMatch := moreurlSubjectIDRegex.FindStringSubmatch(block)
-		if len(idMatch) < 2 {
+		subjectID := extractSubjectID(block)
+		if subjectID == "" {
 			continue
 		}
 
 		// 提取标题
-		titleMatch := searchTitleTextRegex.FindStringSubmatch(block)
-		if len(titleMatch) < 2 {
+		rawTitle := extractCandidateTitle(block)
+		if rawTitle == "" {
 			continue
 		}
-		rawTitle := titleMatch[1]
 
 		// 提取年份
 		year := 0
@@ -309,20 +604,23 @@ func parseSearchCandidates(html string) []SearchCandidate {
 		metaMatches := searchMetaRegex.FindAllStringSubmatch(block, -1)
 		var meta1, meta2 string
 		if len(metaMatches) >= 1 {
-			meta1 = strings.TrimSpace(metaMatches[0][1])
+			meta1 = stripHTMLTags(metaMatches[0][1])
 		}
 		if len(metaMatches) >= 2 {
-			meta2 = strings.TrimSpace(metaMatches[1][1])
+			meta2 = stripHTMLTags(metaMatches[1][1])
 		}
 
 		// 判断是否为剧集
-		isSeries := strings.Contains(block, `[剧集]`) || strings.Contains(block, `is_tv:'1'`)
+		isSeries := strings.Contains(block, `[剧集]`) ||
+			strings.Contains(block, `is_tv:'1'`) ||
+			strings.Contains(block, `is_tv:"1"`) ||
+			strings.Contains(block, `is_tv=\"1\"`)
 
 		// 解析导演/演员（meta2 中导演在前、演员在后，用 / 分隔）
 		director, actor := parseDirectorActor(meta2)
 
 		candidates = append(candidates, SearchCandidate{
-			SubjectID: idMatch[1],
+			SubjectID: subjectID,
 			Title:     title,
 			Year:      year,
 			IsSeries:  isSeries,
@@ -456,53 +754,108 @@ func isTitleMatch(searchTitles []string, originalKeyword string) bool {
 	if len(searchTitles) == 0 || originalKeyword == "" {
 		return false
 	}
-	
+
 	normalizedKeyword := normalizeTitle(originalKeyword)
-	
+
 	for _, title := range searchTitles {
 		normalizedSearch := normalizeTitle(title)
-		
+
 		// 完全匹配
 		if normalizedSearch == normalizedKeyword {
 			return true
 		}
-		
+
 		// 搜索结果包含关键词（处理"万界独尊 第一季"包含"万界独尊"的情况）
 		if strings.Contains(normalizedSearch, normalizedKeyword) {
 			return true
 		}
-		
+
 		// 关键词包含搜索结果（处理"万界独尊"包含"万界独尊 第一季"的情况）
 		if strings.Contains(normalizedKeyword, normalizedSearch) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
 func fetchHTML(urlStr string) (string, error) {
-	startTime := time.Now()
+	return fetchDouban(urlStr, false)
+}
+
+// fetchDouban 抓取一个豆瓣地址。ignoreBlock 只跳过“本地静默期”这一道闸门：
+// 兜底的 JSON 接口是另一套防护、实测不受影响；若连它也拦掉，兜底就永远是死代码。
+// 限速和反爬计数照常生效，所以 JSON 接口一旦被封同样会续上静默期。
+//
+// 命中 sec.douban.com 验证跳转时先自解 proof-of-work 再重试，解成了就不算被封。
+func fetchDouban(urlStr string, ignoreBlock bool) (string, error) {
+	if !ignoreBlock {
+		if left := remainingBlock(); left > 0 {
+			applog.Warn("[Douban] 反爬静默中（剩余 %s），跳过请求: %s", left.Round(time.Second), urlStr)
+			return "", blockedError(urlStr, left)
+		}
+	}
 	waitRateLimit()
 
 	applog.Info("[Douban] Fetching URL: %s", urlStr)
 
+	html, challenge, err := fetchDoubanOnce(urlStr, referer)
+	if challenge != "" {
+		// 这是一道算力题而不是登录墙，所以先解题重试，只有解不出来才计入熔断。
+		// 把"能过的题"也当成封禁，会白白静默 5~60 分钟，字段也就永远补不全。
+		if solveErr := solveDoubanChallenge(challenge, urlStr); solveErr != nil {
+			applog.Warn("[Douban] 自动通过验证失败：%v", solveErr)
+			noteAntiCrawl()
+			return "", err
+		}
+		// 放行 Cookie 已在 jar 里；浏览器解题后也是带着它重新导航一次。
+		var again string
+		html, again, err = fetchDoubanOnce(urlStr, challenge)
+		if again != "" {
+			// 解完题仍被踢回验证页，说明放行没被接受（IP 被更硬地标记了）。
+			// 继续逐条解题只会把配额烧光，这里必须收手。
+			applog.Warn("[Douban] 解题后仍被导向验证页，进入反爬静默")
+			noteAntiCrawl()
+			return "", err
+		}
+	}
+	if err != nil {
+		var httpErr *doubanFetchError
+		if !errors.As(err, &httpErr) {
+			// 超时/连接失败同样该触发静默期：豆瓣对被标记的 IP 会接受连接但
+			// 一直不给响应，不收手的话每条请求都要白烧两次 15s 超时。
+			applog.Warn("[Douban] 请求未得到响应，进入反爬静默：%v", err)
+			noteAntiCrawl()
+		}
+		return "", err
+	}
+
+	// 兜底接口成功不代表详情页解封了：解除熔断会让下一条又去打一次注定被挡的
+	// 网页，静默期也就失去了省请求的意义。这里只在正常路径上解除。
+	if !ignoreBlock {
+		noteDoubanSuccess()
+	}
+	return html, nil
+}
+
+// fetchDoubanOnce 发一次 GET 并做状态/反爬判定。返回的 challenge 非空表示被
+// sec.douban.com 验证页挡住，调用方可解题后重试；此时 err 是解题失败时要
+// 原样上报的错误。
+func fetchDoubanOnce(urlStr, requestReferer string) (doc string, challenge string, err error) {
+	startTime := time.Now()
+
 	req, err := http.NewRequest("GET", urlStr, nil)
 	if err != nil {
 		applog.Error("[Douban] Failed to create request: %v", err)
-		return "", fmt.Errorf("failed to create request: %w", err)
+		return "", "", fmt.Errorf("failed to create request: %w", err)
 	}
 
-	req.Header.Set("User-Agent", userAgent)
-	req.Header.Set("Referer", referer)
-	req.Header.Set("Cookie", cookie)
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
-	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+	applyDoubanHeaders(req, requestReferer)
 
 	resp, err := client.Do(req)
 	if err != nil {
 		applog.Error("[Douban] HTTP request failed: %v", err)
-		return "", fmt.Errorf("failed to fetch: %w", err)
+		return "", "", fmt.Errorf("failed to fetch: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -510,8 +863,13 @@ func fetchHTML(urlStr string) (string, error) {
 	applog.Info("[Douban] HTTP status: %d, duration: %.2fs", resp.StatusCode, duration.Seconds())
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := ioutil.ReadAll(resp.Body)
-		if len(body) > 0 {
+		location := resp.Header.Get("Location")
+		challenged := isDoubanChallengeURL(location)
+		solvable := challenged && isSecChallengeURL(location)
+
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512*1024))
+		if len(body) > 0 && !solvable {
+			// 可解的验证跳转是正常流程的一环，别在用户可见的时间线里刷 WARN 302。
 			snippet := string(body)
 			if len(snippet) > 200 {
 				snippet = snippet[:200] + "..."
@@ -519,31 +877,46 @@ func fetchHTML(urlStr string) (string, error) {
 			applog.Warn("[Douban] HTTP %d response snippet: %s", resp.StatusCode, snippet)
 		}
 		if resp.StatusCode >= 300 && resp.StatusCode < 400 {
-			location := resp.Header.Get("Location")
-			applog.Warn("[Douban] Redirect detected: %d -> %s", resp.StatusCode, location)
-			return "", fmt.Errorf("HTTP %d redirect to %s", resp.StatusCode, location)
+			applog.Info("[Douban] Redirect detected: %d -> %s", resp.StatusCode, location)
 		}
-		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
+		if solvable {
+			return "", location, &doubanFetchError{
+				URL:        urlStr,
+				StatusCode: resp.StatusCode,
+				Location:   location,
+				AntiCrawl:  true,
+			}
+		}
+		if challenged {
+			noteAntiCrawl()
+		}
+		return "", "", &doubanFetchError{
+			URL:        urlStr,
+			StatusCode: resp.StatusCode,
+			Location:   location,
+			AntiCrawl:  challenged,
+		}
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 4*1024*1024))
 	if err != nil {
 		applog.Error("[Douban] Failed to read response body: %v", err)
-		return "", fmt.Errorf("failed to read body: %w", err)
+		return "", "", fmt.Errorf("failed to read body: %w", err)
 	}
 
-	html := string(body)
+	page := string(body)
 
-	if len(html) < 100 {
-		applog.Warn("[Douban] Suspiciously short response (len=%d): %s", len(html), html)
+	if len(page) < 100 {
+		applog.Warn("[Douban] Suspiciously short response (len=%d): %s", len(page), page)
 	}
 
-	if checkAntiCrawl(html) {
-		applog.Warn("[Douban] Anti-crawl triggered, response length: %d", len(html))
-		return "", fmt.Errorf("anti-crawl detected")
+	if checkAntiCrawl(page) {
+		applog.Warn("[Douban] Anti-crawl triggered, response length: %d", len(page))
+		noteAntiCrawl()
+		return "", "", &doubanFetchError{URL: urlStr, StatusCode: resp.StatusCode, AntiCrawl: true}
 	}
 
-	return html, nil
+	return page, "", nil
 }
 
 // stripSeasonInfo 移除关键词中的季数/部数信息，提高豆瓣搜索命中率。
@@ -570,6 +943,7 @@ func SearchSubjectID(keyword string, meta SearchMeta) (string, error) {
 	}
 
 	var lastErr error
+	hadUsableSearchResponse := false
 	for _, kw := range keywords {
 		applog.Info("[Douban] Searching for keyword: %s (meta: year=%s type=%s director=%s)",
 			kw, meta.Year, meta.VodType, meta.Director)
@@ -583,9 +957,14 @@ func SearchSubjectID(keyword string, meta SearchMeta) (string, error) {
 		html, err := fetchHTML(fullURL)
 		if err != nil {
 			applog.Error("[Douban] Search fetch failed for '%s': %v", kw, err)
+			var fetchErr *doubanFetchError
+			if errors.As(err, &fetchErr) && fetchErr.AntiCrawl {
+				applog.Warn("[Douban] '%s' returned an anti-crawl page; keeping the record retryable", kw)
+			}
 			lastErr = err
 			continue
 		}
+		hadUsableSearchResponse = true
 
 		if checkAntiCrawl(html) {
 			applog.Warn("[Douban] Anti-crawl triggered for '%s' (HTML len=%d)", kw, len(html))
@@ -644,8 +1023,13 @@ func SearchSubjectID(keyword string, meta SearchMeta) (string, error) {
 		lastErr = fmt.Errorf("no subject ID found for keyword: %s", kw)
 	}
 
-	// 所有搜索策略都失败
-	db.IncrementSearchFailures(keyword)
+	// 只有确实拿到正常搜索页、但没有找到候选时才累计“搜索无结果”。
+	// 网络错误、重定向和验证页不能触发 24 小时冷却，否则临时故障会被放大。
+	if hadUsableSearchResponse {
+		_ = db.IncrementSearchFailures(keyword)
+	} else {
+		applog.Warn("[Douban] Search failed before a usable result page; skip cooldown for '%s'", keyword)
+	}
 	return "", lastErr
 }
 
@@ -663,16 +1047,94 @@ func ExtractLinkTexts(html string) string {
 	return strings.Join(names, " / ")
 }
 
+// subjectAbstract 对应 /j/subject_abstract 的 JSON 结构，只声明会用到的字段。
+type subjectAbstract struct {
+	R       int `json:"r"`
+	Subject struct {
+		ID            string   `json:"id"`
+		Title         string   `json:"title"`
+		Rate          string   `json:"rate"`
+		Directors     []string `json:"directors"`
+		Actors        []string `json:"actors"`
+		Types         []string `json:"types"`
+		Region        string   `json:"region"`
+		Duration      string   `json:"duration"`
+		EpisodesCount string   `json:"episodes_count"`
+		ReleaseYear   string   `json:"release_year"`
+	} `json:"subject"`
+}
+
+// parseSubjectAbstract 把 JSON 兜底数据填进 DoubanInfo。
+// 评价人数、编剧、语言、又名、IMDb、海报在这个接口里没有，留空即可：
+// db.UpsertDoubanInfo 对所有空字段都是“保留数据库里的旧值”，不会把已有数据冲掉。
+func parseSubjectAbstract(subjectID, body string) (*DoubanInfo, error) {
+	var payload subjectAbstract
+	if err := json.Unmarshal([]byte(strings.TrimSpace(body)), &payload); err != nil {
+		return nil, fmt.Errorf("decode subject_abstract for %s: %w", subjectID, err)
+	}
+	s := payload.Subject
+	if s.Rate == "" && len(s.Directors) == 0 && len(s.Actors) == 0 {
+		return nil, fmt.Errorf("subject_abstract for %s has no usable fields", subjectID)
+	}
+	return &DoubanInfo{
+		SubjectID:    subjectID,
+		Title:        strings.TrimSpace(s.Title),
+		Rating:       strings.TrimSpace(s.Rate),
+		Director:     strings.Join(s.Directors, " / "),
+		Actor:        strings.Join(s.Actors, " / "),
+		Genre:        strings.Join(s.Types, "/"),
+		Country:      strings.TrimSpace(s.Region),
+		ReleaseDate:  strings.TrimSpace(s.ReleaseYear),
+		EpisodeCount: strings.TrimSpace(s.EpisodesCount),
+		Duration:     strings.TrimSpace(s.Duration),
+	}, nil
+}
+
+// fetchDetailByAbstract 在详情页被反爬拦截时改走 JSON 接口。
+// ignoreBlock 是必须的：详情页那次 302 已经给自己记了一轮静默期，
+// 若连兜底请求都被本地闸门挡住，这条路径永远不会执行。
+func fetchDetailByAbstract(subjectID string) (*DoubanInfo, error) {
+	body, err := fetchDouban(fmt.Sprintf(subjectAbstractURL, subjectID), true)
+	if err != nil {
+		return nil, err
+	}
+	info, err := parseSubjectAbstract(subjectID, body)
+	if err != nil {
+		return nil, err
+	}
+	applog.Info("[Douban] 详情页被拦截，已用 subject_abstract 兜底: %s Rating='%s' Director='%s' Actor='%s' Genre='%s'",
+		subjectID, info.Rating, truncate(info.Director, 30), truncate(info.Actor, 30), info.Genre)
+	return info, nil
+}
+
 func ParseDetail(subjectID string) (*DoubanInfo, error) {
 	applog.Info("[Douban] Parsing detail for subject ID: %s", subjectID)
+
+	if !detailProbeAllowed() {
+		applog.Info("[Douban] 详情页仍在拦截期内（每 %s 才试探一次网页），本次直接用 subject_abstract: %s", detailProbeInterval, subjectID)
+		return fetchDetailByAbstract(subjectID)
+	}
 
 	urlStr := fmt.Sprintf(detailURL, subjectID)
 
 	html, err := fetchHTML(urlStr)
 	if err != nil {
-		applog.Error("[Douban] Detail fetch failed for %s: %v", subjectID, err)
-		return nil, err
+		// /subject/<id>/ 网页层面无条件被 302 到 sec.douban.com 的 JS 验证页，
+		// 不带登录 Cookie 就永远拿不到。这里降级到同站 JSON 接口，而不是让整次
+		// 更新失败——评分/导演/演员/类型/集数这些主要字段都还能拿到。
+		var fetchErr *doubanFetchError
+		if errors.As(err, &fetchErr) && fetchErr.AntiCrawl {
+			markDetailChallenged()
+		}
+		applog.Info("[Douban] Detail page unavailable for %s (%v), falling back to subject_abstract", subjectID, err)
+		info, fallbackErr := fetchDetailByAbstract(subjectID)
+		if fallbackErr != nil {
+			applog.Warn("[Douban] Detail fetch failed for %s: %v (fallback: %v)", subjectID, err, fallbackErr)
+			return nil, err
+		}
+		return info, nil
 	}
+	clearDetailChallenged()
 
 	info := &DoubanInfo{
 		SubjectID: subjectID,
@@ -756,9 +1218,17 @@ func ParseDetail(subjectID string) (*DoubanInfo, error) {
 			info.Title = strings.TrimSpace(matches[1])
 		}
 	}
+	if info.Title == "" {
+		if matches := ogTitleRegex.FindStringSubmatch(html); len(matches) >= 2 {
+			info.Title = cleanTitle(matches[1])
+		}
+	}
 
 	// 兜底解析：如果以上正则都没匹配到关键字段，尝试从 <div id="info"> 中逐行解析
 	parseInfoDivFallback(html, info)
+	if info.Title == "" && info.Rating == "" && info.Votes == "" && info.PosterURL == "" {
+		return nil, fmt.Errorf("detail page returned no recognized fields for subject %s", subjectID)
+	}
 
 	// 计算热度：votes + short_comments + 7天内新片加权
 	info.Hotness = computeHotness(info.Votes, info.ShortComments, info.ReleaseDate)
@@ -821,7 +1291,7 @@ func parseInfoDivFallback(html string, info *DoubanInfo) {
 	block := html[idx:endIdx]
 
 	// 按 <span class="pl"> 分割，逐个处理每个标签-值对
-	plPattern := regexp.MustCompile(`<span class="pl">([^<]+)</span>`)
+	plPattern := regexp.MustCompile(`<span\b[^>]*\bclass\s*=\s*["'][^"']*\bpl\b[^"']*["'][^>]*>([^<]+)</span>`)
 	plMatches := plPattern.FindAllStringSubmatchIndex(block, -1)
 
 	for i, m := range plMatches {
@@ -831,7 +1301,7 @@ func parseInfoDivFallback(html string, info *DoubanInfo) {
 		label := strings.TrimSpace(block[m[2]:m[3]])
 		// 值的起始位置：当前 span 结束之后
 		valueStart := m[1]
-		// 值的结束位置：下一个 <span class="pl"> 或 <br> 或下一个 <span 
+		// 值的结束位置：下一个 <span class="pl"> 或 <br> 或下一个 <span
 		var valueEnd int
 		if i+1 < len(plMatches) {
 			valueEnd = plMatches[i+1][0]

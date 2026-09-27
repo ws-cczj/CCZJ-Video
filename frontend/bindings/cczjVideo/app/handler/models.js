@@ -11,6 +11,9 @@ import { Create as $Create } from "@wailsio/runtime";
 import * as db$0 from "../db/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as detail$0 from "../detail/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as model$0 from "../model/models.js";
 
 export class CollectReq {
@@ -432,6 +435,20 @@ export class SchedulerStatus {
              */
             this["page_gap_seconds"] = 0;
         }
+        if (!("startup_catchup" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["startup_catchup"] = false;
+        }
+        if (!("initial_full_collect" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["initial_full_collect"] = false;
+        }
         if (!("last_exit_unix" in $$source)) {
             /**
              * @member
@@ -477,10 +494,10 @@ export class SchedulerStatus {
      * @returns {SchedulerStatus}
      */
     static createFrom($$source = {}) {
-        const $$createField10_0 = $$createType2;
+        const $$createField12_0 = $$createType2;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("source_schedules" in $$parsedSource) {
-            $$parsedSource["source_schedules"] = $$createField10_0($$parsedSource["source_schedules"]);
+            $$parsedSource["source_schedules"] = $$createField12_0($$parsedSource["source_schedules"]);
         }
         return new SchedulerStatus(/** @type {Partial<SchedulerStatus>} */($$parsedSource));
     }
@@ -963,6 +980,13 @@ export class VideoDetailReq {
              */
             this["source_key"] = "";
         }
+        if (!("global_id" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["global_id"] = 0;
+        }
         if (!("vod_id" in $$source)) {
             /**
              * @member
@@ -1013,6 +1037,13 @@ export class VideoDetailResp {
              */
             this["episodes"] = [];
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {detail$0.Error | null | undefined}
+             */
+            this["error"] = undefined;
+        }
 
         Object.assign(this, $$source);
     }
@@ -1025,12 +1056,16 @@ export class VideoDetailResp {
     static createFrom($$source = {}) {
         const $$createField0_0 = $$createType4;
         const $$createField1_0 = $$createType10;
+        const $$createField2_0 = $$createType16;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("video" in $$parsedSource) {
             $$parsedSource["video"] = $$createField0_0($$parsedSource["video"]);
         }
         if ("episodes" in $$parsedSource) {
             $$parsedSource["episodes"] = $$createField1_0($$parsedSource["episodes"]);
+        }
+        if ("error" in $$parsedSource) {
+            $$parsedSource["error"] = $$createField2_0($$parsedSource["error"]);
         }
         return new VideoDetailResp(/** @type {Partial<VideoDetailResp>} */($$parsedSource));
     }
@@ -1048,6 +1083,13 @@ export class VideoListReq {
              * @type {string}
              */
             this["source_key"] = "";
+        }
+        if (!("recent_days" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["recent_days"] = 0;
         }
         if (!("type_id" in $$source)) {
             /**
@@ -1088,6 +1130,13 @@ export class VideoListReq {
              * @type {string}
              */
             this["sort"] = "";
+        }
+        if (!("cursor" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["cursor"] = "";
         }
         if (!("page" in $$source)) {
             /**
@@ -1138,6 +1187,22 @@ export class VideoListResp {
              */
             this["total"] = 0;
         }
+        if (!("next_cursor" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["next_cursor"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * LocalVideos carries catalog-only matches the upstream search missed,
+             * e.g. "是，大臣" for keyword "大臣" when the source API matches prefixes.
+             * @member
+             * @type {(model$0.Video | null)[] | undefined}
+             */
+            this["local_videos"] = undefined;
+        }
 
         Object.assign(this, $$source);
     }
@@ -1149,9 +1214,13 @@ export class VideoListResp {
      */
     static createFrom($$source = {}) {
         const $$createField0_0 = $$createType5;
+        const $$createField3_0 = $$createType5;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("videos" in $$parsedSource) {
             $$parsedSource["videos"] = $$createField0_0($$parsedSource["videos"]);
+        }
+        if ("local_videos" in $$parsedSource) {
+            $$parsedSource["local_videos"] = $$createField3_0($$parsedSource["local_videos"]);
         }
         return new VideoListResp(/** @type {Partial<VideoListResp>} */($$parsedSource));
     }
@@ -1268,3 +1337,5 @@ const $$createType11 = SourceParamDoc.createFrom;
 const $$createType12 = $Create.Array($$createType11);
 const $$createType13 = db$0.TableColumn.createFrom;
 const $$createType14 = $Create.Array($$createType13);
+const $$createType15 = detail$0.Error.createFrom;
+const $$createType16 = $Create.Nullable($$createType15);

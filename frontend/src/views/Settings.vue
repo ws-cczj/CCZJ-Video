@@ -6,6 +6,8 @@ import {
   GetSetting, SetSetting, GetCloseBehavior, SetCloseBehavior, RestartApp,
   WindowSetResizable, WindowGetResizable, WindowSetSize, WindowGetSize,
   GetAppVersion,
+  GetDoubanIntervalMinutes, SetDoubanIntervalMinutes,
+  GetLogKeepDays, SetLogKeepDays,
 } from '../api/app'
 import { updateController } from '../stores/updateState'
 import { useThemeStore, type CustomTheme, type ColorPalette } from '../stores/theme'
@@ -13,8 +15,10 @@ import { useErrorStore } from '../stores/error'
 import { useConfirmStore } from '../stores/confirm'
 import { localStorageBytes } from '../platform/storage'
 import { useDownloadStore } from '../stores/download'
-import { useDevMode } from '../stores/devMode'
 import Icon from '../components/Icon.vue'
+import LogPanel from '../components/LogPanel.vue'
+import DiagnosticsPanel from '../components/DiagnosticsPanel.vue'
+import DoubanQueuePanel from '../components/DoubanQueuePanel.vue'
 import { Button, Modal, Segment, Select as SelectDropdown } from '../components/ui'
 import { useI18n } from 'vue-i18n'
 import { setLocale as saveLocalePreference } from '../locales'
@@ -31,8 +35,10 @@ interface GroupItem {
 const GROUPS = computed<GroupItem[]>(() => [
   { id: 'basic',  label: t('settings.basic'), icon: 'sliders' },
   { id: 'theme',  label: t('settings.theme'), icon: 'palette' },
-  { id: 'play',   label: t('settings.playback'), icon: 'play' },
   { id: 'cache',  label: t('settings.cacheManagement'), icon: 'database' },
+  { id: 'logs',   label: t('logs.title'), icon: 'terminal' },
+  { id: 'diagnostics', label: t('settings.diagnostics'), icon: 'monitor' },
+  { id: 'advanced', label: t('advanced.title'), icon: 'shield' },
   { id: 'about',  label: t('settings.about'), icon: 'info' },
 ])
 
@@ -40,19 +46,13 @@ const themeStore = useThemeStore()
 const errorStore = useErrorStore()
 const confirmStore = useConfirmStore()
 const downloadStore = useDownloadStore()
-const devMode = useDevMode()
 const route = useRoute()
 
 const activeGroup = ref<string>('basic')
 
-const speedOptions = [0.5, 0.75, 1, 1.25, 1.5, 2].map(s => ({ value: s, label: `${s}×` }))
-
 // 通用设置
 const gridColumns = ref<number>(5)
 const layoutDensity = ref<'comfortable' | 'compact' | 'spacious'>('comfortable')
-const playbackAutoPlay = ref(true)
-const playbackAutoNext = ref(true)
-const playbackSpeed = ref<number>(1)
 
 
 // 窗口设置
@@ -166,12 +166,12 @@ async function saveCloseBehavior(): Promise<void> {
 async function restartApp(): Promise<void> {
   const hasActiveDl = downloadStore.hasActive
   const message = hasActiveDl
-    ? '确定要重启应用吗？正在进行的下载可能会中断。'
-    : '确定要重启应用吗？'
+    ? t('settings.restartMsgDl')
+    : t('settings.restartMsg')
   const yes = await confirmStore.confirm({
-    title: '重启应用',
+    title: t('settings.restartTitle'),
     message,
-    okText: '重启',
+    okText: t('settings.restartBtn'),
     level: 'warn',
   })
   if (!yes) return
@@ -179,9 +179,45 @@ async function restartApp(): Promise<void> {
   try {
     RestartApp()
   } catch (e: any) {
-    errorStore.fromError('重启失败', e, 'Settings.restartApp')
+    errorStore.fromError(t('settings.restartFailed'), e, 'Settings.restartApp')
   } finally {
     restarting.value = false
+  }
+}
+
+// ---------- 豆瓣补全轮询 ----------
+const doubanIntervalMinutes = ref(30)
+const doubanIntervalOptions = [10, 15, 20, 30, 45, 60, 90, 120].map(m => ({
+  value: m,
+  label: t('settings.doubanEvery', { n: m }),
+}))
+
+async function loadDoubanInterval(): Promise<void> {
+  try { doubanIntervalMinutes.value = await GetDoubanIntervalMinutes() } catch { /* 忽略 */ }
+}
+
+async function saveDoubanInterval(minutes: number): Promise<void> {
+  try {
+    doubanIntervalMinutes.value = await SetDoubanIntervalMinutes(Number(minutes) || 30)
+    errorStore.info(t('common.saved'), t('settings.doubanIntervalSaved', { n: doubanIntervalMinutes.value }), '', 'Settings.saveDoubanInterval')
+  } catch (e: any) {
+    errorStore.fromError(t('settings.doubanIntervalSaveFailed'), e, 'Settings.saveDoubanInterval')
+  }
+}
+
+const logKeepDays = ref(30)
+const logKeepOptions = [7, 14, 30, 60, 90].map(d => ({ value: d, label: t('settings.logKeepDays', { n: d }) }))
+
+async function loadLogKeepDays(): Promise<void> {
+  try { logKeepDays.value = await GetLogKeepDays() } catch { /* 忽略 */ }
+}
+
+async function saveLogKeepDays(days: number): Promise<void> {
+  try {
+    logKeepDays.value = await SetLogKeepDays(Number(days) || 30)
+    errorStore.info(t('common.saved'), t('settings.logRetentionSaved', { n: logKeepDays.value }), '', 'Settings.saveLogKeepDays')
+  } catch (e: any) {
+    errorStore.fromError(t('settings.logRetentionSaveFailed'), e, 'Settings.saveLogKeepDays')
   }
 }
 
@@ -190,9 +226,9 @@ const appVersion = ref('1.1.0')
 
 async function onDeleteTheme(id: string, name: string): Promise<void> {
   const yes = await confirmStore.confirm({
-    title: '删除主题',
-    message: `确定要删除主题"${name}"吗？此操作无法撤销。`,
-    okText: '删除',
+    title: t('settings.deleteTheme'),
+    message: t('settings.deleteThemeMsg', { name }),
+    okText: t('common.delete'),
     level: 'danger',
   })
   if (!yes) return
@@ -226,7 +262,7 @@ function openCreate(): void {
   const cur = themeStore.current
   Object.assign(editing, {
     id: `custom_${Date.now()}`,
-    name: cur.name + '（副本）',
+    name: cur.name + t('settings.copySuffix'),
     primary: cur.accent,
     text: colorToHex(cur.palette.textPrimary),
     background: colorToHex(cur.palette.bgApp),
@@ -356,7 +392,7 @@ function closeEditor(): void {
 function applyPreview(): void {
   const preview: CustomTheme = {
     id: '__preview__',
-    name: editing.name || '预览主题',
+    name: editing.name || t('settings.previewTheme'),
     primary: editing.primary,
     text: editing.text,
     background: editing.background,
@@ -381,7 +417,7 @@ function applyPreview(): void {
 }
 
 async function saveEditing(): Promise<void> {
-  const name = (editing.name || '我的主题').trim()
+  const name = (editing.name || t('settings.myTheme')).trim()
   const isEdit = editing.__mode === 'edit'
   const targetId = isEdit ? editing.id : `custom_${Date.now()}`
 
@@ -566,9 +602,9 @@ async function loadCacheInfo(): Promise<void> {
 
 async function doClearCache(type: string, label: string): Promise<void> {
   const yes = await confirmStore.confirm({
-    title: '清除缓存',
-    message: `确定要清除${label}吗？\n\n⚠ 注意：清除后相关数据将无法恢复。${type === 'ts_memory' ? '\n清除内存缓存不会影响已下载的磁盘缓存。' : ''}`,
-    okText: '确认清除',
+    title: t('settings.clearCacheTitle'),
+    message: `${t('settings.clearCacheMsg', { label })}${type === 'ts_memory' ? t('settings.clearCacheNote') : ''}`,
+    okText: t('settings.confirmClear'),
     level: 'warn',
   })
   if (!yes) return
@@ -581,7 +617,7 @@ async function doClearCache(type: string, label: string): Promise<void> {
     }
     await loadCacheInfo()
   } catch (e: any) {
-    errorStore.fromError('清除失败', e, 'Settings.clearCache')
+    errorStore.fromError(t('settings.clearFailed'), e, 'Settings.clearCache')
   } finally {
     cacheClearing.value = ''
   }
@@ -605,9 +641,6 @@ onMounted(async () => {
   gridColumns.value = parseInt(col, 10) || 5
   const den = await safeGet('layout_density', 'comfortable')
   layoutDensity.value = (den === 'compact' || den === 'spacious') ? den as any : 'comfortable'
-  playbackAutoPlay.value = (await safeGet('playback_auto_play', '1')) !== '0'
-  playbackAutoNext.value = (await safeGet('playback_auto_next', '1')) !== '0'
-  playbackSpeed.value = parseFloat(await safeGet('playback_speed', '1')) || 1
 
   // 加载窗口设置
   await loadWindowResizable()
@@ -627,6 +660,10 @@ onMounted(async () => {
 
   // 加载关闭行为设置
   await loadCloseBehavior()
+
+  // 加载保留策略（豆瓣补全 / 日志保留）
+  await loadDoubanInterval()
+  await loadLogKeepDays()
 })
 
 async function safeGet(key: string, fallback: string): Promise<string> {
@@ -728,7 +765,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
           <h3>{{ t('settings.gridColumns') }}</h3>
           <div class="row cczj-flex cczj-items-center cczj-gap-7">
             <input type="range" v-model.number="gridColumns" min="2" max="10" @change="save('grid_columns', gridColumns)" />
-            <span class="value">{{ gridColumns }} 列</span>
+            <span class="value">{{ t('settings.columnCount', { n: gridColumns }) }}</span>
           </div>
         </section>
 
@@ -755,16 +792,30 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
           </div>
         </section>
 
-        <!-- 开发者模式开关（密码解锁后可见） -->
-        <section v-if="devMode.unlocked" class="block block-dev">
-          <h3>开发者模式</h3>
-          <div class="row cczj-flex cczj-items-center cczj-gap-7">
-            <label class="toggle cczj-inline-flex cczj-items-center cczj-gap-4 cczj-cursor-pointer">
-              <input type="checkbox" :checked="devMode.enabled" @change="(e: any) => devMode.setEnabled(e.target.checked)" />
-              <span>打开开发者模式</span>
-            </label>
+        <!-- 豆瓣补全轮询 -->
+        <section class="block">
+          <h3>{{ t('settings.doubanPolling') }}</h3>
+          <p class="desc">{{ t('settings.doubanPollingDesc') }}</p>
+          <div class="row cczj-flex cczj-items-center cczj-gap-7 cczj-flex-wrap">
+            <Segment
+              :model-value="doubanIntervalMinutes"
+              :options="doubanIntervalOptions"
+              @update:model-value="(v: any) => saveDoubanInterval(Number(v))"
+            />
           </div>
-          <small class="desc">开启后在侧边栏显示"开发者模式"栏目，提供后台管理功能</small>
+        </section>
+
+        <!-- 日志保留 -->
+        <section class="block">
+          <h3>{{ t('settings.logRetention') }}</h3>
+          <p class="desc">{{ t('settings.logRetentionDesc') }}</p>
+          <div class="row cczj-flex cczj-items-center cczj-gap-7 cczj-flex-wrap">
+            <Segment
+              :model-value="logKeepDays"
+              :options="logKeepOptions"
+              @update:model-value="(v: any) => saveLogKeepDays(Number(v))"
+            />
+          </div>
         </section>
 
       </div>
@@ -772,38 +823,38 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
       <!-- ========== 主题外观 ========== -->
       <div v-else-if="activeGroup === 'theme'" class="panel cczj-flex cczj-flex-col cczj-gap-2">
         <section class="block">
-          <h3>主题颜色</h3>
+          <h3>{{ t('settings.themeColor') }}</h3>
 
-          <h4 class="sub-title">浅色主题</h4>
+          <h4 class="sub-title">{{ t('settings.lightThemes') }}</h4>
           <div class="theme-grid cczj-grid">
             <!-- 预设 -->
             <button
-              v-for="t in lightPresets"
-              :key="t.id"
+              v-for="preset in lightPresets"
+              :key="preset.id"
               class="theme-card cczj-flex cczj-flex-col cczj-items-center cczj-gap-5 cczj-cursor-pointer"
-              :class="{ active: isActive(t.id), hasBg: !!resolvePreset(t).bg, 'is-override': resolvePreset(t).isOverride }"
+              :class="{ active: isActive(preset.id), hasBg: !!resolvePreset(preset).bg, 'is-override': resolvePreset(preset).isOverride }"
               :style="[
-                resolvePreset(t).bg
+                resolvePreset(preset).bg
                   ? {
-                      backgroundColor: resolvePreset(t).isOverride ? resolvePreset(t).sidebarBg : 'transparent',
-                      backgroundImage: `url(${resolvePreset(t).bg})`,
+                      backgroundColor: resolvePreset(preset).isOverride ? resolvePreset(preset).sidebarBg : 'transparent',
+                      backgroundImage: `url(${resolvePreset(preset).bg})`,
                       backgroundSize: 'cover',
                       backgroundPosition: 'center',
-                      color: resolvePreset(t).textPrimary
+                      color: resolvePreset(preset).textPrimary
                     }
-                  : { background: resolvePreset(t).isOverride ? resolvePreset(t).sidebarBg : t.palette.bgSidebar, color: resolvePreset(t).textPrimary }
+                  : { background: resolvePreset(preset).isOverride ? resolvePreset(preset).sidebarBg : preset.palette.bgSidebar, color: resolvePreset(preset).textPrimary }
               ]"
-              @click="pickTheme(t.id)"
+              @click="pickTheme(preset.id)"
             >
               <span class="card-actions-top cczj-absolute cczj-flex cczj-gap-2" @click.stop>
-                <button class="mini-btn cczj-inline-flex cczj-items-center cczj-justify-center" @click="openEditPreset(t)" title="编辑主题">
+                <button class="mini-btn cczj-inline-flex cczj-items-center cczj-justify-center" @click="openEditPreset(preset)" :title="t('settings.editTheme')">
                   <Icon name="pencil" :size="12" />
                 </button>
               </span>
-              <span v-if="!resolvePreset(t).bg" class="swatch" :style="{ background: resolvePreset(t).data.primary }"></span>
-              <span v-if="resolvePreset(t).bg" class="swatch small" :style="{ background: resolvePreset(t).data.primary }"></span>
-              <span class="label cczj-truncate" :style="{ color: resolvePreset(t).textPrimary }">{{ resolvePreset(t).data.name }}</span>
-              <span v-if="isActive(t.id)" class="check cczj-inline-flex cczj-items-center cczj-justify-center"><Icon name="check" :size="12" /></span>
+              <span v-if="!resolvePreset(preset).bg" class="swatch" :style="{ background: resolvePreset(preset).data.primary }"></span>
+              <span v-if="resolvePreset(preset).bg" class="swatch small" :style="{ background: resolvePreset(preset).data.primary }"></span>
+              <span class="label cczj-truncate" :style="{ color: resolvePreset(preset).textPrimary }">{{ resolvePreset(preset).data.name }}</span>
+              <span v-if="isActive(preset.id)" class="check cczj-inline-flex cczj-items-center cczj-justify-center"><Icon name="check" :size="12" /></span>
             </button>
 
             <!-- 自定义（排除与预设同名的覆盖项，那些已通过上方预设卡显示） -->
@@ -826,7 +877,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
               @click="pickTheme(c.id)"
             >
               <span class="card-actions-top cczj-absolute cczj-flex cczj-gap-2" @click.stop>
-                <button class="mini-btn cczj-inline-flex cczj-items-center cczj-justify-center" @click="openEdit(c)" title="编辑主题">
+                <button class="mini-btn cczj-inline-flex cczj-items-center cczj-justify-center" @click="openEdit(c)" :title="t('settings.editTheme')">
                   <Icon name="pencil" :size="12" />
                 </button>
               </span>
@@ -834,7 +885,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
               <span v-if="c.backgroundImage" class="swatch small" :style="{ background: c.primary }"></span>
               <span class="label cczj-truncate" :style="{ color: c.text }">{{ c.name }}</span>
               <span class="card-actions cczj-absolute cczj-flex cczj-gap-2" @click.stop>
-                <button class="mini-btn danger" @click="onDeleteTheme(c.id, c.name)" title="删除">
+                <button class="mini-btn danger" @click="onDeleteTheme(c.id, c.name)" :title="t('common.delete')">
                   <Icon name="x" :size="12" />
                 </button>
               </span>
@@ -843,39 +894,39 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
             <!-- 添加（浅色区） -->
             <button class="theme-card add cczj-flex cczj-flex-col cczj-items-center cczj-gap-5 cczj-cursor-pointer" @click="openCreate(); applyPreview()">
               <span class="swatch plus"><Icon name="plus" :size="22" /></span>
-              <span class="label cczj-truncate">添加主题</span>
+              <span class="label cczj-truncate">{{ t('settings.addTheme') }}</span>
             </button>
           </div>
 
-          <h4 class="sub-title">深色主题</h4>
+          <h4 class="sub-title">{{ t('settings.darkThemes') }}</h4>
           <div class="theme-grid cczj-grid">
             <button
-              v-for="t in darkPresets"
-              :key="t.id"
+              v-for="preset in darkPresets"
+              :key="preset.id"
               class="theme-card cczj-flex cczj-flex-col cczj-items-center cczj-gap-5 cczj-cursor-pointer"
-              :class="{ active: isActive(t.id), hasBg: !!resolvePreset(t).bg, 'is-override': resolvePreset(t).isOverride }"
+              :class="{ active: isActive(preset.id), hasBg: !!resolvePreset(preset).bg, 'is-override': resolvePreset(preset).isOverride }"
               :style="[
-                resolvePreset(t).bg
+                resolvePreset(preset).bg
                   ? {
-                      backgroundColor: resolvePreset(t).isOverride ? resolvePreset(t).sidebarBg : 'transparent',
-                      backgroundImage: `url(${resolvePreset(t).bg})`,
+                      backgroundColor: resolvePreset(preset).isOverride ? resolvePreset(preset).sidebarBg : 'transparent',
+                      backgroundImage: `url(${resolvePreset(preset).bg})`,
                       backgroundSize: 'cover',
                       backgroundPosition: 'center',
-                      color: resolvePreset(t).textPrimary
+                      color: resolvePreset(preset).textPrimary
                     }
-                  : { background: resolvePreset(t).isOverride ? resolvePreset(t).sidebarBg : t.palette.bgSidebar, color: resolvePreset(t).textPrimary }
+                  : { background: resolvePreset(preset).isOverride ? resolvePreset(preset).sidebarBg : preset.palette.bgSidebar, color: resolvePreset(preset).textPrimary }
               ]"
-              @click="pickTheme(t.id)"
+              @click="pickTheme(preset.id)"
             >
               <span class="card-actions-top cczj-absolute cczj-flex cczj-gap-2" @click.stop>
-                <button class="mini-btn cczj-inline-flex cczj-items-center cczj-justify-center" @click="openEditPreset(t)" title="编辑主题">
+                <button class="mini-btn cczj-inline-flex cczj-items-center cczj-justify-center" @click="openEditPreset(preset)" :title="t('settings.editTheme')">
                   <Icon name="pencil" :size="12" />
                 </button>
               </span>
-              <span v-if="!resolvePreset(t).bg" class="swatch" :style="{ background: resolvePreset(t).data.primary }"></span>
-              <span v-if="resolvePreset(t).bg" class="swatch small" :style="{ background: resolvePreset(t).data.primary }"></span>
-              <span class="label cczj-truncate" :style="{ color: resolvePreset(t).textPrimary }">{{ resolvePreset(t).data.name }}</span>
-              <span v-if="isActive(t.id)" class="check cczj-inline-flex cczj-items-center cczj-justify-center"><Icon name="check" :size="12" /></span>
+              <span v-if="!resolvePreset(preset).bg" class="swatch" :style="{ background: resolvePreset(preset).data.primary }"></span>
+              <span v-if="resolvePreset(preset).bg" class="swatch small" :style="{ background: resolvePreset(preset).data.primary }"></span>
+              <span class="label cczj-truncate" :style="{ color: resolvePreset(preset).textPrimary }">{{ resolvePreset(preset).data.name }}</span>
+              <span v-if="isActive(preset.id)" class="check cczj-inline-flex cczj-items-center cczj-justify-center"><Icon name="check" :size="12" /></span>
             </button>
 
             <button
@@ -897,7 +948,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
               @click="pickTheme(c.id)"
             >
               <span class="card-actions-top cczj-absolute cczj-flex cczj-gap-2" @click.stop>
-                <button class="mini-btn cczj-inline-flex cczj-items-center cczj-justify-center" @click="openEdit(c)" title="编辑主题">
+                <button class="mini-btn cczj-inline-flex cczj-items-center cczj-justify-center" @click="openEdit(c)" :title="t('settings.editTheme')">
                   <Icon name="pencil" :size="12" />
                 </button>
               </span>
@@ -905,7 +956,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
               <span v-if="c.backgroundImage" class="swatch small" :style="{ background: c.primary }"></span>
               <span class="label cczj-truncate" :style="{ color: c.text }">{{ c.name }}</span>
               <span class="card-actions cczj-absolute cczj-flex cczj-gap-2" @click.stop>
-                <button class="mini-btn danger" @click="onDeleteTheme(c.id, c.name)" title="删除">
+                <button class="mini-btn danger" @click="onDeleteTheme(c.id, c.name)" :title="t('common.delete')">
                   <Icon name="x" :size="12" />
                 </button>
               </span>
@@ -914,117 +965,104 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
         </section>
       </div>
 
-      <!-- ========== 播放设置 ========== -->
-      <div v-else-if="activeGroup === 'play'" class="panel cczj-flex cczj-flex-col cczj-gap-2">
-        <section class="block">
-          <h3>播放行为</h3>
-          <div class="row toggles cczj-flex cczj-items-center cczj-gap-7">
-            <label class="toggle cczj-inline-flex cczj-items-center cczj-gap-4 cczj-cursor-pointer">
-              <input type="checkbox" v-model="playbackAutoPlay" @change="save('playback_auto_play', playbackAutoPlay?'1':'0')" />
-              <span>自动开始播放</span>
-            </label>
-            <label class="toggle cczj-inline-flex cczj-items-center cczj-gap-4 cczj-cursor-pointer">
-              <input type="checkbox" v-model="playbackAutoNext" @change="save('playback_auto_next', playbackAutoNext?'1':'0')" />
-              <span>播放完自动下一集</span>
-            </label>
-          </div>
-        </section>
-
-        <section class="block">
-          <h3>默认播放速度</h3>
-          <div class="row cczj-flex cczj-items-center cczj-gap-7">
-            <Segment
-              :model-value="playbackSpeed"
-              :options="speedOptions"
-              @update:model-value="(v: any) => { playbackSpeed = Number(v); save('playback_speed', String(v)) }"
-            />
-          </div>
-        </section>
-      </div>
-
       <!-- ========== 缓存管理 ========== -->
       <div v-else-if="activeGroup === 'cache'" class="panel cczj-flex cczj-flex-col cczj-gap-2">
         <section class="block">
           <div class="block-hd cczj-flex cczj-items-center cczj-justify-between">
-            <h3>缓存占用</h3>
+            <h3>{{ t('settings.cacheUsage') }}</h3>
             <Button variant="secondary" size="sm" :loading="cacheLoading" @click="loadCacheInfo">
-              <Icon name="refresh" :size="12" /> 刷新
+              <Icon name="refresh" :size="12" /> {{ t('common.refresh') }}
             </Button>
           </div>
 
           <div v-if="cacheLoading" class="cache-loading cczj-flex cczj-items-center cczj-gap-4">
-            <Icon name="spinner" :size="18" /> 正在统计...
+            <Icon name="refresh" :size="18" class="cczj-motion-spin" /> {{ t('settings.cacheLoading') }}
           </div>
           <div v-else-if="cacheInfo" class="cache-grid cczj-flex cczj-flex-col cczj-gap-6">
             <div class="cache-item cczj-flex cczj-items-center cczj-gap-7">
               <div class="cache-item-icon cczj-flex-shrink-0"><Icon name="cpu" :size="18" /></div>
               <div class="cache-item-info cczj-flex-1 cczj-min-w-0">
-                <div class="cache-item-label">TS 内存缓存</div>
+                <div class="cache-item-label">{{ t('settings.tsMemCache') }}</div>
                 <div class="cache-item-size">{{ fmtBytes(cacheInfo.tsMemoryBytes) }}</div>
-                <div class="cache-item-path">{{ cacheInfo.tsMemoryEntries }} 个片段 · 当前播放集</div>
+                <div class="cache-item-path">{{ t('settings.tsMemSegments', { count: cacheInfo.tsMemoryEntries }) }}</div>
               </div>
               <Button
                 variant="danger"
                 size="sm"
                 :disabled="cacheInfo.tsMemoryBytes <= 0"
                 :loading="cacheClearing === 'ts_memory'"
-                @click="doClearCache('ts_memory', 'TS 内存缓存')"
+                @click="doClearCache('ts_memory', t('settings.tsMemCache'))"
               >
-                清除
+                {{ t('settings.clear') }}
               </Button>
             </div>
 
             <div class="cache-item cczj-flex cczj-items-center cczj-gap-7">
               <div class="cache-item-icon cczj-flex-shrink-0"><Icon name="download" :size="18" /></div>
               <div class="cache-item-info cczj-flex-1 cczj-min-w-0">
-                <div class="cache-item-label">TS 磁盘缓存 (IndexedDB)</div>
+                <div class="cache-item-label">{{ t('settings.tsDiskCacheIdb') }}</div>
                 <div class="cache-item-size">{{ fmtBytes(cacheInfo.tsDiskBytes) }}</div>
-                <div class="cache-item-path">{{ cacheInfo.tsDiskEntries }} 个片段 · 跨会话持久化</div>
+                <div class="cache-item-path">{{ t('settings.tsDiskSegments', { count: cacheInfo.tsDiskEntries }) }}</div>
               </div>
               <Button
                 variant="danger"
                 size="sm"
                 :disabled="cacheInfo.tsDiskBytes <= 0"
                 :loading="cacheClearing === 'ts_disk'"
-                @click="doClearCache('ts_disk', 'TS 磁盘缓存')"
+                @click="doClearCache('ts_disk', t('settings.tsDiskCache'))"
               >
-                清除
+                {{ t('settings.clear') }}
               </Button>
             </div>
 
             <div class="cache-item cczj-flex cczj-items-center cczj-gap-7">
               <div class="cache-item-icon cczj-flex-shrink-0"><Icon name="database" :size="18" /></div>
               <div class="cache-item-info cczj-flex-1 cczj-min-w-0">
-                <div class="cache-item-label">IndexedDB 总计</div>
+                <div class="cache-item-label">{{ t('settings.idbTotal') }}</div>
                 <div class="cache-item-size">{{ fmtBytes(cacheInfo.indexedDBBytes) }}</div>
-                <div class="cache-item-path">浏览器分配的 IndexedDB 总占用空间</div>
+                <div class="cache-item-path">{{ t('settings.idbTotalDesc') }}</div>
               </div>
-              <div class="cache-item-note cczj-flex-shrink-0">由浏览器自动管理</div>
+              <div class="cache-item-note cczj-flex-shrink-0">{{ t('settings.idbAutoManaged') }}</div>
             </div>
 
             <div class="cache-item cczj-flex cczj-items-center cczj-gap-7">
               <div class="cache-item-icon cczj-flex-shrink-0"><Icon name="browser" :size="18" /></div>
               <div class="cache-item-info cczj-flex-1 cczj-min-w-0">
-                <div class="cache-item-label">浏览器存储 (localStorage)</div>
+                <div class="cache-item-label">{{ t('settings.localStorage') }}</div>
                 <div class="cache-item-size">{{ fmtBytes(cacheInfo.localStorageBytes) }}</div>
-                <div class="cache-item-path">主题、偏好设置、收藏夹映射等</div>
+                <div class="cache-item-path">{{ t('settings.localStorageDesc') }}</div>
               </div>
-              <div class="cache-item-note cczj-flex-shrink-0">⚠ 仅建议开发者手动清理</div>
+              <div class="cache-item-note cczj-flex-shrink-0">{{ t('settings.localStorageWarn') }}</div>
             </div>
           </div>
           <div v-else class="cache-loading cczj-flex cczj-items-center cczj-gap-4">
-            <span>点击「刷新」按钮查看缓存占用</span>
+            <span>{{ t('settings.clickRefreshHint') }}</span>
           </div>
         </section>
 
         <section class="block">
-          <h3>说明</h3>
+          <h3>{{ t('settings.cacheDescription') }}</h3>
           <div class="cache-desc">
-            <p><strong>TS 内存缓存：</strong>视频播放时缓存在内存中的 TS 片段，切换视频或关闭页面后自动释放。</p>
-            <p><strong>TS 磁盘缓存：</strong>存储在浏览器 IndexedDB 中的 TS 片段，用于跨会话加速播放。</p>
-            <p><strong>数据库文件：</strong>由后端管理，包含视频数据、收藏、历史记录等，位于应用数据目录。</p>
+            <p><strong>{{ t('settings.tsMemCacheLabel') }}</strong>{{ t('settings.tsMemCacheDesc') }}</p>
+            <p><strong>{{ t('settings.tsDiskCacheLabel') }}</strong>{{ t('settings.tsDiskCacheDesc') }}</p>
+            <p><strong>{{ t('settings.dbFileLabel') }}</strong>{{ t('settings.dbFileDesc') }}</p>
           </div>
         </section>
+      </div>
+
+      <!-- ========== 日志 ========== -->
+      <div v-else-if="activeGroup === 'logs'" class="panel cczj-flex cczj-flex-col cczj-gap-2">
+        <LogPanel />
+      </div>
+
+      <!-- ========== 诊断 ========== -->
+      <div v-else-if="activeGroup === 'diagnostics'" class="panel cczj-flex cczj-flex-col cczj-gap-2">
+        <DiagnosticsPanel />
+      </div>
+
+      <!-- ========== 高级 ========== -->
+      <div v-else-if="activeGroup === 'advanced'" class="panel cczj-flex cczj-flex-col cczj-gap-2">
+        <DoubanQueuePanel />
       </div>
 
       <!-- ========== 关于 ========== -->
@@ -1033,9 +1071,9 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
           <div class="about-card cczj-flex cczj-items-center cczj-gap-8">
             <div class="about-icon cczj-inline-flex cczj-items-center cczj-justify-center"><Icon name="film" :size="22" /></div>
             <div>
-              <h3 class="app-name-clickable" @click="devMode.clickAppName" title="点击 3 次以激活开发者模式">CCZJ Video</h3>
-              <p>版本 <strong>{{ appVersion }}</strong> · Wails + Vue 3</p>
-              <small>当前生效主题：<em>{{ themeStore.current.name }}</em>（{{ themeStore.current.mode === 'dark' ? '深色' : '浅色' }}）</small>
+              <h3>CCZJ Video</h3>
+              <p>{{ t('settings.version') }} <strong>{{ appVersion }}</strong> · Wails + Vue 3</p>
+              <small>{{ t('settings.currentTheme') }} · <em>{{ themeStore.current.name }}</em> · {{ themeStore.current.mode === 'dark' ? t('settings.dark') : t('settings.light') }}</small>
             </div>
           </div>
 
@@ -1045,7 +1083,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
               size="md"
               @click="updateController.checkUpdate?.()"
             >
-              <Icon name="refresh" :size="14" /> 检查更新
+              <Icon name="refresh" :size="14" /> {{ t('settings.checkUpdate') }}
             </Button>
             <Button
               variant="secondary"
@@ -1054,54 +1092,29 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
               :loading="restarting"
               @click="restartApp"
             >
-              <Icon name="refresh" :size="14" /> 重启应用
+              <Icon name="refresh" :size="14" /> {{ t('settings.restart') }}
             </Button>
           </div>
         </section>
 
         <section class="block">
-          <h3>使用声明</h3>
+          <h3>{{ t('settings.disclaimer') }}</h3>
           <div class="disclaimer-card cczj-flex cczj-gap-7">
             <div class="disclaimer-icon cczj-inline-flex cczj-items-center cczj-justify-center"><Icon name="shield" :size="20" /></div>
             <div class="disclaimer-content">
-              <p><strong>本软件仅供学习与研究使用</strong>，不保留任何网络资源。</p>
-              <p>所有通过本软件访问或下载的内容，观看后请自行删除，版权归原作者/原版权方所有。</p>
-              <p>请勿将本软件用于商业用途或违反当地法律法规的场景。</p>
+              <p><strong>{{ t('settings.disclaimerText') }}</strong>{{ t('settings.disclaimerNote') }}</p>
+              <p>{{ t('settings.disclaimerP2') }}</p>
+              <p>{{ t('settings.disclaimerP3') }}</p>
             </div>
           </div>
         </section>
       </div>
     </div>
 
-    <!-- ========== 开发者模式密码弹窗 ========== -->
-    <teleport to="body">
-      <div v-if="devMode.showPasswordModal" class="dev-password-overlay cczj-fixed cczj-inset-0 cczj-flex cczj-items-center cczj-justify-center" @click.self="devMode.closePasswordModal">
-        <div class="dev-password-modal">
-          <h2>开发者模式验证</h2>
-          <p class="dev-password-desc">请输入6位数字密码以启用开发者模式</p>
-          <input
-            ref="devPwdInput"
-            v-model="devMode.passwordInput"
-            type="password"
-            maxlength="6"
-            class="dev-password-input"
-            placeholder="••••••"
-            autocomplete="off"
-            @keyup.enter="devMode.verifyPassword"
-          />
-          <p v-if="devMode.passwordError" class="dev-password-error">{{ devMode.passwordError }}</p>
-          <div class="dev-password-actions cczj-flex cczj-justify-center cczj-gap-6">
-            <button class="dev-password-btn dev-password-btn--cancel" @click="devMode.closePasswordModal">取消</button>
-            <button class="dev-password-btn dev-password-btn--confirm" @click="devMode.verifyPassword">验证</button>
-          </div>
-        </div>
-      </div>
-    </teleport>
-
     <!-- ========== 主题编辑器 弹窗 ========== -->
     <Modal
       :model-value="editorOpen"
-      :title="editing.__mode === 'edit' ? '修改主题' : '新增主题'"
+      :title="editing.__mode === 'edit' ? t('settings.editTheme') : t('settings.createTheme')"
       width="min(980px, 94vw)"
       :show-footer="true"
       @update:model-value="(v: boolean) => !v && closeEditor()"
@@ -1109,55 +1122,55 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
       <div class="modal-body">
         <div class="edit-row cczj-flex cczj-flex-wrap">
           <div class="field cczj-flex cczj-flex-col cczj-gap-2">
-            <label>主题名称</label>
-            <input type="text" v-model="editing.name" placeholder="我的主题" @input="applyPreview" />
+            <label>{{ t('settings.themeName') }}</label>
+            <input type="text" v-model="editing.name" :placeholder="t('settings.myThemePlaceholder')" @input="applyPreview" />
           </div>
           <div class="flags cczj-flex cczj-items-center cczj-flex-wrap">
             <label class="toggle cczj-inline-flex cczj-items-center cczj-gap-4 cczj-cursor-pointer">
               <input type="checkbox" v-model="editing.dark" @change="applyPreview" />
-              <span>暗色主题</span>
+              <span>{{ t('settings.darkMode') }}</span>
             </label>
             <Button variant="primary" size="sm" @click="deriveFromPrimary">
-              <Icon name="sparkle" :size="13" /> 按主色派生整套配色
+              <Icon name="sparkle" :size="13" /> {{ t('settings.deriveColors') }}
             </Button>
           </div>
         </div>
 
-        <h4 class="group-title">主要颜色</h4>
+        <h4 class="group-title">{{ t('settings.mainColors') }}</h4>
         <div class="picker-grid">
           <div class="picker-item">
-            <label>主题色</label>
+            <label>{{ t('settings.accentColor') }}</label>
             <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.primary" @input="applyPreview" /><span>{{ editing.primary }}</span></div>
           </div>
           <div class="picker-item">
-            <label>字体颜色</label>
+            <label>{{ t('settings.textColor') }}</label>
             <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.text" @input="applyPreview" /><span>{{ editing.text }}</span></div>
           </div>
           <div class="picker-item">
-            <label>应用背景</label>
+            <label>{{ t('settings.bgApp') }}</label>
             <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.background" @input="applyPreview" /><span>{{ editing.background }}</span></div>
           </div>
           <div class="picker-item">
-            <label>侧边栏背景</label>
+            <label>{{ t('settings.bgSidebar') }}</label>
             <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.sidebar" @input="applyPreview" /><span>{{ editing.sidebar }}</span></div>
           </div>
           <div class="picker-item">
-            <label>内容区域背景</label>
+            <label>{{ t('settings.bgContent') }}</label>
             <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.content" @input="applyPreview" /><span>{{ editing.content }}</span></div>
           </div>
         </div>
 
-        <h4 class="group-title">背景透明度</h4>
+        <h4 class="group-title">{{ t('settings.bgAlpha') }}</h4>
         <div class="picker-grid">
           <div class="picker-item">
-            <label>侧边栏透明度</label>
+            <label>{{ t('settings.sidebarAlpha') }}</label>
             <div class="picker-cell range-cell cczj-flex cczj-items-center cczj-gap-4">
               <input type="range" v-model.number="editing.sidebarAlpha" min="0" max="1" step="0.05" @input="applyPreview" />
               <span>{{ Math.round((editing.sidebarAlpha ?? 0.65) * 100) }}%</span>
             </div>
           </div>
           <div class="picker-item">
-            <label>卡片透明度</label>
+            <label>{{ t('settings.cardAlpha') }}</label>
             <div class="picker-cell range-cell cczj-flex cczj-items-center cczj-gap-4">
               <input type="range" v-model.number="editing.contentAlpha" min="0" max="1" step="0.05" @input="applyPreview" />
               <span>{{ Math.round((editing.contentAlpha ?? 0.88) * 100) }}%</span>
@@ -1165,28 +1178,28 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
           </div>
         </div>
 
-        <h4 class="group-title">窗口控制按钮颜色</h4>
+        <h4 class="group-title">{{ t('settings.windowButtons') }}</h4>
         <div class="picker-grid small">
           <div class="picker-item">
-            <label>关闭按钮</label>
+            <label>{{ t('settings.btnClose') }}</label>
             <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.btnClose" @input="applyPreview" /><span>{{ editing.btnClose }}</span></div>
           </div>
           <div class="picker-item">
-            <label>最小化按钮</label>
+            <label>{{ t('settings.btnMin') }}</label>
             <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.btnMin" @input="applyPreview" /><span>{{ editing.btnMin }}</span></div>
           </div>
           <div class="picker-item">
-            <label>隐藏按钮</label>
+            <label>{{ t('settings.btnHide') }}</label>
             <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.btnHide" @input="applyPreview" /><span>{{ editing.btnHide }}</span></div>
           </div>
         </div>
 
-        <h4 class="group-title">全局组件配色</h4>
+        <h4 class="group-title">{{ t('settings.globalColors') }}</h4>
         <div class="picker-grid small">
-          <div class="picker-item"><label>主操作按钮</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.actionColor" @input="applyPreview" /><span>{{ editing.actionColor }}</span></div></div>
-          <div class="picker-item"><label>标签底色</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.tagColor" @input="applyPreview" /><span>{{ editing.tagColor }}</span></div></div>
-          <div class="picker-item"><label>剧集按钮</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.episodeColor" @input="applyPreview" /><span>{{ editing.episodeColor }}</span></div></div>
-          <div class="picker-item"><label>轮播控件</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.carouselColor" @input="applyPreview" /><span>{{ editing.carouselColor }}</span></div></div>
+          <div class="picker-item"><label>{{ t('settings.btnAction') }}</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.actionColor" @input="applyPreview" /><span>{{ editing.actionColor }}</span></div></div>
+          <div class="picker-item"><label>{{ t('settings.tagColor') }}</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.tagColor" @input="applyPreview" /><span>{{ editing.tagColor }}</span></div></div>
+          <div class="picker-item"><label>{{ t('settings.episodeBtnColor') }}</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.episodeColor" @input="applyPreview" /><span>{{ editing.episodeColor }}</span></div></div>
+          <div class="picker-item"><label>{{ t('settings.carouselColor') }}</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.carouselColor" @input="applyPreview" /><span>{{ editing.carouselColor }}</span></div></div>
         </div>
 
         <div
@@ -1200,15 +1213,15 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
           <button
             v-if="backgroundImageUrl"
             class="bg-remove cczj-absolute cczj-flex cczj-items-center cczj-justify-center"
-            title="移除图片"
+            :title="t('settings.removeImage')"
             @click.stop="clearBackgroundImage"
           >
             <Icon name="x" :size="14" />
           </button>
-          <img v-if="backgroundImageUrl" :src="backgroundImageUrl" alt="背景预览" />
+          <img v-if="backgroundImageUrl" :src="backgroundImageUrl" :alt="t('settings.backgroundPreview')" />
           <div v-else class="bg-drop-hint cczj-flex cczj-flex-col cczj-items-center cczj-gap-5">
             <Icon name="plus" :size="42" />
-            <span>点击或拖拽图片到此处</span>
+            <span>{{ t('settings.dropImage') }}</span>
           </div>
           <input ref="fileInputRef" type="file" accept="image/*" @change="onImageSelected" hidden />
         </div>
@@ -1216,17 +1229,15 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 
       <template #footer>
         <Button v-if="editing.__mode === 'edit'" variant="danger" size="md" @click="deleteEditing">
-          <Icon name="trash" :size="14" /> 删除
+          <Icon name="trash" :size="14" /> {{ t('common.delete') }}
         </Button>
         <span style="flex: 1"></span>
-        <Button variant="secondary" size="md" @click="closeEditor">取消</Button>
+        <Button variant="secondary" size="md" @click="closeEditor">{{ t('common.cancel') }}</Button>
         <Button variant="primary" size="md" @click="saveEditing">
-          <Icon name="save" :size="14" /> 保存主题
+          <Icon name="save" :size="14" /> {{ t('settings.saveTheme') }}
         </Button>
       </template>
     </Modal>
-
-
 
   </div>
 </template>
@@ -1375,7 +1386,6 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
 }
-
 .toggle {
   gap: 8px;
   font-size: 0.93rem;
@@ -1634,6 +1644,7 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 .about-card h3 { margin: 0 0 4px; font-size: 1.14rem; font-weight: 700; }
 .about-card p { margin: 0 0 4px; font-size: 0.93rem; color: var(--text-secondary); }
 .about-card small { color: var(--text-muted); font-size: 0.86rem; }
+
 .about-actions {
   margin-top: 16px;
   gap: 10px;
@@ -1930,23 +1941,6 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   font-size: 0.93rem;
   margin: 0 0 12px 0;
 }
-.schedule-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 16px 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.schedule-card .row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 36px;
-}
-.schedule-card .row.toggle { justify-content: flex-start; gap: 10px; }
 .row-right { display: inline-flex; align-items: center; gap: 8px; }
 .row-right.grow { flex: 1; min-width: 0; }
 .row-right.grow .select-dropdown { width: 320px; max-width: 100%; }
@@ -2027,158 +2021,6 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   border-color: var(--danger);
 }
 .row.actions .danger:hover { background: var(--danger); color: var(--danger-contrast); }
-
-/* 采集调度开关样式 */
-.schedule-card .toggle-label {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-  font-size: 1rem;
-  color: var(--text-primary);
-  user-select: none;
-}
-.schedule-card .toggle-label input { display: none; }
-.schedule-card .switch {
-  position: relative;
-  display: inline-block;
-  width: 36px;
-  height: 20px;
-  background: var(--border);
-  border-radius: 999px;
-  transition: background 0.15s ease;
-  flex-shrink: 0;
-}
-.schedule-card .switch::after {
-  content: '';
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  background: #fff;
-  border-radius: 50%;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-  transition: transform 0.15s ease;
-}
-.schedule-card .toggle-label input:checked ~ .switch { background: var(--accent); }
-.schedule-card .toggle-label input:checked ~ .switch::after { transform: translateX(16px); }
-
-.schedule-status {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 14px 18px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px 16px;
-  font-size: 0.93rem;
-  color: var(--text-primary);
-}
-.schedule-status .muted { color: var(--text-muted); margin-right: 6px; }
-.schedule-status strong.running {
-  color: var(--accent);
-  position: relative;
-  padding-left: 14px;
-}
-.schedule-status strong.running::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 8px;
-  height: 8px;
-  background: var(--accent);
-  border-radius: 50%;
-  box-shadow: 0 0 0 3px var(--accent-alpha-20);
-  animation: pulse 1.5s ease-in-out infinite;
-}
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-@media (max-width: 640px) {
-  .schedule-status { grid-template-columns: 1fr; }
-}
-
-.log-box {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 12px 14px;
-  font-family: 'SF Mono', Consolas, monospace;
-  font-size: 0.86rem;
-  color: var(--text-secondary);
-  max-height: 220px;
-  overflow-y: auto;
-}
-.log-box .log-line { line-height: 1.6; }
-
-/* ---------- 日志 viewer ---------- */
-.log-toolbar {
-  gap: 10px;
-  margin: 12px 0 8px 0;
-}
-.log-toolbar select {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 6px 10px;
-  font-size: 0.86rem;
-  outline: none;
-}
-.log-toolbar .btn {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 6px 12px;
-  font-size: 0.86rem;
-  cursor: pointer;
-  transition: background .15s, border-color .15s;
-}
-.log-toolbar .btn:hover {
-  background: var(--bg-hover);
-  border-color: var(--accent);
-}
-.log-toolbar .btn.danger { color: var(--danger); border-color: var(--danger); }
-.log-toolbar .btn.danger:hover { background: var(--danger); color: var(--danger-contrast); }
-.log-toolbar .btn:disabled { opacity: .4; cursor: not-allowed; }
-
-.log-dir { margin: 6px 0 10px 0; font-size: 0.79rem; color: var(--text-muted); }
-.log-dir code { background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px; }
-
-.log-viewer {
-  margin-top: 8px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 12px 14px;
-  max-height: 420px;
-  overflow-y: auto;
-}
-.log-viewer pre {
-  margin: 0;
-  font-size: 0.79rem;
-  line-height: 1.55;
-  color: var(--text-secondary);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.log-viewer pre + pre { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); }
-.log-session-entry { color: var(--text-primary) !important; }
-.log-empty {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 30px 0;
-  color: var(--text-muted);
-  font-size: 0.93rem;
-  justify-content: center;
-}
 
 /* ============ 数据源管理面板新增样式 ============ */
 .source-panel .source-list .source-item {
@@ -2579,232 +2421,6 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
   font-size: 0.86rem;
   color: var(--text-muted);
   margin: 0;
-}
-
-/* 日志过滤栏 */
-.log-filter-bar {
-  gap: 10px;
-  margin: 10px 0 8px 0;
-}
-.log-search {
-  flex: 1;
-  min-width: 160px;
-  padding: 7px 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  font-size: 0.93rem;
-  outline: none;
-  transition: border-color 0.15s ease;
-}
-.log-search:focus {
-  border-color: var(--accent);
-}
-.log-level-filter {
-  -webkit-appearance: none;
-  appearance: none;
-  padding: 7px 28px 7px 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-secondary) url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e") no-repeat right 8px center;
-  color: var(--text-primary);
-  font-size: 0.86rem;
-  outline: none;
-  cursor: pointer;
-  font-family: inherit;
-}
-.log-level-filter:hover {
-  border-color: var(--accent);
-}
-.log-level-filter:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-alpha-20);
-}
-.log-info {
-  font-size: 0.86rem;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-
-/* 日志查看器容器 */
-.log-viewer {
-  margin-top: 8px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 0;
-  max-height: 480px;
-  overflow-y: auto;
-  font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', Consolas, 'Courier New', monospace;
-  font-size: 0.93rem;
-  line-height: 1.7;
-}
-.log-lines {
-  padding: 8px 0;
-}
-.log-line {
-  padding: 2px 14px;
-  color: var(--text-secondary);
-  white-space: pre-wrap;
-  word-break: break-word;
-  transition: background 0.1s ease;
-}
-.log-line:hover {
-  background: var(--bg-hover);
-}
-
-/* 日志级别着色 */
-.log-line.level-error {
-  background: rgba(220, 38, 38, 0.12);
-  color: #dc2626;
-  border-left: 3px solid #dc2626;
-  font-weight: 600;
-}
-.log-line.level-error:hover {
-  background: rgba(220, 38, 38, 0.18);
-}
-.log-line.level-warn {
-  background: rgba(234, 179, 8, 0.10);
-  color: #b45309;
-  border-left: 3px solid #eab308;
-}
-.log-line.level-warn:hover {
-  background: rgba(234, 179, 8, 0.16);
-}
-.log-line.level-debug {
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 0.86rem;
-  opacity: 0.7;
-}
-.log-line.level-info {
-  background: transparent;
-  color: var(--text-secondary);
-}
-
-/* 搜索高亮 */
-.log-line mark {
-  background: #fde047;
-  color: #1e1b4b;
-  border-radius: 2px;
-  padding: 0 2px;
-  font-weight: 700;
-}
-
-.log-file-select {
-  min-width: 180px;
-}
-
-@media (max-width: 720px) {
-  .tabs { flex-wrap: wrap; }
-  .tab { padding: 6px 10px; font-size: 0.86rem; }
-}
-
-/* ====== 开发者模式密码弹窗 ====== */
-.dev-password-overlay {
-  z-index: 10000;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-}
-
-.dev-password-modal {
-  width: min(420px, 90vw);
-  background: var(--bg-card);
-  border: 1px solid var(--accent-alpha-20);
-  border-radius: var(--radius-xl);
-  padding: 32px 28px 24px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
-  text-align: center;
-}
-
-.dev-password-modal h2 {
-  margin: 0 0 8px;
-  font-size: 1.43rem;
-  color: var(--accent);
-}
-
-.dev-password-desc {
-  margin: 0 0 20px;
-  font-size: 0.93rem;
-  color: var(--text-muted);
-}
-
-.dev-password-input {
-  width: 160px;
-  padding: 10px 16px;
-  font-size: 1.57rem;
-  letter-spacing: 8px;
-  text-align: center;
-  border: 2px solid var(--border-strong);
-  border-radius: var(--radius);
-  background: var(--bg-input);
-  color: var(--text-primary);
-  outline: none;
-  font-family: monospace;
-  transition: border-color 0.2s;
-}
-
-.dev-password-input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-alpha-15);
-}
-
-.dev-password-error {
-  margin: 10px 0 0;
-  color: var(--danger);
-  font-size: 0.93rem;
-  font-weight: 500;
-}
-
-.dev-password-actions {
-  gap: 12px;
-  margin-top: 20px;
-}
-
-.dev-password-btn {
-  padding: 8px 28px;
-  border: none;
-  border-radius: var(--radius);
-  cursor: pointer;
-  font-size: 1rem;
-  font-weight: 600;
-  transition: all 0.15s;
-  font-family: inherit;
-}
-
-.dev-password-btn--cancel {
-  background: var(--bg-hover);
-  color: var(--text-secondary);
-}
-
-.dev-password-btn--cancel:hover {
-  background: var(--border);
-}
-
-.dev-password-btn--confirm {
-  background: var(--accent);
-  color: var(--accent-contrast);
-}
-
-.dev-password-btn--confirm:hover {
-  background: var(--accent-dim);
-}
-
-/* 关于应用中可点击的软件名称 */
-.app-name-clickable {
-  cursor: default;
-  user-select: none;
-}
-
-/* 基本设置中开发者模式块 */
-.block-dev .desc {
-  display: block;
-  margin-top: 6px;
-  color: var(--text-muted);
-  font-size: 0.86rem;
-  line-height: 1.5;
 }
 
 /* ============ 缓存管理 ============ */

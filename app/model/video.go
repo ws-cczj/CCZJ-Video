@@ -151,57 +151,62 @@ type Video struct {
 	VodScoreAll    FlexibleString `json:"vod_score_all" db:"vod_score_all"`
 	VodScoreNum    FlexibleString `json:"vod_score_num" db:"vod_score_num"`
 	VodIsEnd       FlexibleString `json:"vod_isend" db:"vod_isend"`
-	VodPlayFrom    string `json:"vod_play_from" db:"vod_play_from"`
-	VodPlayNote    string `json:"vod_play_note" db:"vod_play_note"`
-	VodLetter      string `json:"vod_letter" db:"vod_letter"`
-	VodTag         string `json:"vod_tag" db:"vod_tag"`
-	VodSub         string `json:"vod_sub" db:"vod_sub"`
-	VodEn          string `json:"vod_en" db:"vod_en"`
+	VodPlayFrom    string         `json:"vod_play_from" db:"vod_play_from"`
+	VodPlayNote    string         `json:"vod_play_note" db:"vod_play_note"`
+	VodLetter      string         `json:"vod_letter" db:"vod_letter"`
+	VodTag         string         `json:"vod_tag" db:"vod_tag"`
+	VodSub         string         `json:"vod_sub" db:"vod_sub"`
+	VodEn          string         `json:"vod_en" db:"vod_en"`
+
+	// 目录命中态：搜索结果已存在于本地 source_videos 时为 true。
+	// 派生字段，只用于前端标识"已入库"，不参与任何表的读写。
+	InCatalog bool `json:"in_catalog,omitempty" db:"-"`
 }
 
 // UnmarshalJSON 自定义反序列化：兼容不同源站返回的字段别名
 // 常用别名映射：
-//   vod_enname        → vod_en
-//   vod_title         → vod_name
-//   vod_poster        → vod_pic
-//   vod_thumb         → vod_pic
-//   vod_img           → vod_pic
-//   vod_cover         → vod_pic
-//   vod_keywords      → vod_tag
-//   vod_tags          → vod_tag
-//   vod_detail        → vod_content
-//   vod_description   → vod_content
-//   vod_desc          → vod_content
-//   vod_authors       → vod_actor
-//   vod_actors        → vod_actor
-//   vod_directors     → vod_director
-//   vod_total         → vod_hits
-//   vod_hits_total    → vod_hits
-//   vod_playfrom      → vod_play_from
-//   vod_playnote      → vod_play_note
+//
+//	vod_enname        → vod_en
+//	vod_title         → vod_name
+//	vod_poster        → vod_pic
+//	vod_thumb         → vod_pic
+//	vod_img           → vod_pic
+//	vod_cover         → vod_pic
+//	vod_keywords      → vod_tag
+//	vod_tags          → vod_tag
+//	vod_detail        → vod_content
+//	vod_description   → vod_content
+//	vod_desc          → vod_content
+//	vod_authors       → vod_actor
+//	vod_actors        → vod_actor
+//	vod_directors     → vod_director
+//	vod_total         → vod_hits
+//	vod_hits_total    → vod_hits
+//	vod_playfrom      → vod_play_from
+//	vod_playnote      → vod_play_note
 func (v *Video) UnmarshalJSON(data []byte) error {
-	applog.Info("[Video.UnmarshalJSON] 原始数据: %s", truncate(string(data), 500))
+	applog.Debug("[Video.UnmarshalJSON] 原始数据: %s", truncate(string(data), 500))
 
 	type Alias Video
 	aux := &struct {
-		VodEnname        string `json:"vod_enname"`
-		VodTitle         string `json:"vod_title"`
-		VodPoster        string `json:"vod_poster"`
-		VodThumb         string `json:"vod_thumb"`
-		VodImg           string `json:"vod_img"`
-		VodCover         string `json:"vod_cover"`
-		VodKeywords      string `json:"vod_keywords"`
-		VodTags          string `json:"vod_tags"`
-		VodDetail        string `json:"vod_detail"`
-		VodDescription   string `json:"vod_description"`
-		VodDesc          string `json:"vod_desc"`
-		VodAuthors       string `json:"vod_authors"`
-		VodActors        string `json:"vod_actors"`
-		VodDirectors     string `json:"vod_directors"`
-		VodTotal         string `json:"vod_total"`
-		VodHitsTotal     string `json:"vod_hits_total"`
-		VodPlayfrom      string `json:"vod_playfrom"`
-		VodPlaynote      string `json:"vod_playnote"`
+		VodEnname      string         `json:"vod_enname"`
+		VodTitle       string         `json:"vod_title"`
+		VodPoster      string         `json:"vod_poster"`
+		VodThumb       string         `json:"vod_thumb"`
+		VodImg         string         `json:"vod_img"`
+		VodCover       string         `json:"vod_cover"`
+		VodKeywords    string         `json:"vod_keywords"`
+		VodTags        string         `json:"vod_tags"`
+		VodDetail      string         `json:"vod_detail"`
+		VodDescription string         `json:"vod_description"`
+		VodDesc        string         `json:"vod_desc"`
+		VodAuthors     string         `json:"vod_authors"`
+		VodActors      string         `json:"vod_actors"`
+		VodDirectors   string         `json:"vod_directors"`
+		VodTotal       FlexibleString `json:"vod_total"`
+		VodHitsTotal   FlexibleString `json:"vod_hits_total"`
+		VodPlayfrom    string         `json:"vod_playfrom"`
+		VodPlaynote    string         `json:"vod_playnote"`
 		*Alias
 	}{
 		Alias: (*Alias)(v),
@@ -210,27 +215,63 @@ func (v *Video) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	applog.Info("[Video.UnmarshalJSON] 反序列化后 - vod_id: %s, vod_name: %s, vod_actor: %s, vod_director: %s, vod_content: %s, vod_pic: %s",
+	applog.Debug("[Video.UnmarshalJSON] 反序列化后 - vod_id: %s, vod_name: %s, vod_actor: %s, vod_director: %s, vod_content: %s, vod_pic: %s",
 		v.VodId.String(), v.VodName, v.VodActor, v.VodDirector, truncate(v.VodContent, 100), v.VodPic)
 
-	if v.VodEn == "" && aux.VodEnname != "" { v.VodEn = aux.VodEnname }
-	if v.VodName == "" && aux.VodTitle != "" { v.VodName = aux.VodTitle }
-	if v.VodPic == "" && aux.VodPoster != "" { v.VodPic = aux.VodPoster }
-	if v.VodPic == "" && aux.VodThumb != "" { v.VodPic = aux.VodThumb }
-	if v.VodPic == "" && aux.VodImg != "" { v.VodPic = aux.VodImg }
-	if v.VodPic == "" && aux.VodCover != "" { v.VodPic = aux.VodCover }
-	if v.VodTag == "" && aux.VodKeywords != "" { v.VodTag = aux.VodKeywords }
-	if v.VodTag == "" && aux.VodTags != "" { v.VodTag = aux.VodTags }
-	if v.VodContent == "" && aux.VodDetail != "" { v.VodContent = aux.VodDetail }
-	if v.VodContent == "" && aux.VodDescription != "" { v.VodContent = aux.VodDescription }
-	if v.VodContent == "" && aux.VodDesc != "" { v.VodContent = aux.VodDesc }
-	if v.VodActor == "" && aux.VodAuthors != "" { v.VodActor = aux.VodAuthors }
-	if v.VodActor == "" && aux.VodActors != "" { v.VodActor = aux.VodActors }
-	if v.VodDirector == "" && aux.VodDirectors != "" { v.VodDirector = aux.VodDirectors }
-	if v.VodHits.String() == "" && aux.VodTotal != "" { v.VodHits = FlexibleString(aux.VodTotal) }
-	if v.VodHits.String() == "" && aux.VodHitsTotal != "" { v.VodHits = FlexibleString(aux.VodHitsTotal) }
-	if v.VodPlayFrom == "" && aux.VodPlayfrom != "" { v.VodPlayFrom = aux.VodPlayfrom }
-	if v.VodPlayNote == "" && aux.VodPlaynote != "" { v.VodPlayNote = aux.VodPlaynote }
+	if v.VodEn == "" && aux.VodEnname != "" {
+		v.VodEn = aux.VodEnname
+	}
+	if v.VodName == "" && aux.VodTitle != "" {
+		v.VodName = aux.VodTitle
+	}
+	if v.VodPic == "" && aux.VodPoster != "" {
+		v.VodPic = aux.VodPoster
+	}
+	if v.VodPic == "" && aux.VodThumb != "" {
+		v.VodPic = aux.VodThumb
+	}
+	if v.VodPic == "" && aux.VodImg != "" {
+		v.VodPic = aux.VodImg
+	}
+	if v.VodPic == "" && aux.VodCover != "" {
+		v.VodPic = aux.VodCover
+	}
+	if v.VodTag == "" && aux.VodKeywords != "" {
+		v.VodTag = aux.VodKeywords
+	}
+	if v.VodTag == "" && aux.VodTags != "" {
+		v.VodTag = aux.VodTags
+	}
+	if v.VodContent == "" && aux.VodDetail != "" {
+		v.VodContent = aux.VodDetail
+	}
+	if v.VodContent == "" && aux.VodDescription != "" {
+		v.VodContent = aux.VodDescription
+	}
+	if v.VodContent == "" && aux.VodDesc != "" {
+		v.VodContent = aux.VodDesc
+	}
+	if v.VodActor == "" && aux.VodAuthors != "" {
+		v.VodActor = aux.VodAuthors
+	}
+	if v.VodActor == "" && aux.VodActors != "" {
+		v.VodActor = aux.VodActors
+	}
+	if v.VodDirector == "" && aux.VodDirectors != "" {
+		v.VodDirector = aux.VodDirectors
+	}
+	if v.VodHits.String() == "" && aux.VodTotal.String() != "" {
+		v.VodHits = FlexibleString(aux.VodTotal)
+	}
+	if v.VodHits.String() == "" && aux.VodHitsTotal.String() != "" {
+		v.VodHits = FlexibleString(aux.VodHitsTotal)
+	}
+	if v.VodPlayFrom == "" && aux.VodPlayfrom != "" {
+		v.VodPlayFrom = aux.VodPlayfrom
+	}
+	if v.VodPlayNote == "" && aux.VodPlaynote != "" {
+		v.VodPlayNote = aux.VodPlaynote
+	}
 
 	return nil
 }

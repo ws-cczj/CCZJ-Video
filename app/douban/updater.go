@@ -17,7 +17,7 @@ type Updater struct {
 
 func NewUpdater() *Updater {
 	return &Updater{
-		batchSize: 3,
+		batchSize: 2,
 		enabled:   true,
 	}
 }
@@ -72,7 +72,10 @@ func (u *Updater) UpdateBatch() (int, error) {
 	u.stopRequested = false
 	u.mu.Unlock()
 
+	// 批量补全是无人值守任务，标记后请求间隔走更宽的档位。
+	batchMode.Store(true)
 	defer func() {
+		batchMode.Store(false)
 		u.mu.Lock()
 		u.running = false
 		u.mu.Unlock()
@@ -80,6 +83,14 @@ func (u *Updater) UpdateBatch() (int, error) {
 
 	applog.Info("[Douban] Starting batch update, batch size: %d", u.batchSize)
 	totalUpdated := 0
+
+	// 步骤0: 同一 douban_id 的兄弟记录先互相继承字段，省掉重复抓取，
+	// 也解掉「有豆瓣ID却永远补不全」的饿死记录。
+	if inherited, err := db.InheritDoubanFieldsFromSiblings(); err != nil {
+		applog.Warn("[Douban] 同豆瓣ID字段继承失败: %v", err)
+	} else if inherited > 0 {
+		applog.Info("[Douban] 同豆瓣ID字段继承完成: %d 条记录补齐", inherited)
+	}
 
 	// 步骤1: 为 subject_id 为空的记录搜索豆瓣
 	missingID, err := db.GetDoubanInfoMissingSubjectID(u.batchSize)

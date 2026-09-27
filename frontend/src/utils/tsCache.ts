@@ -9,6 +9,7 @@
  */
 /* eslint-disable no-console */
 import { readStorage, writeStorage } from '../platform/storage'
+import { SegmentDiskCache, type DiskCacheInfo } from './tsCacheDisk'
 
 const LOG_PREFIX = '[TsCache]'
 
@@ -74,6 +75,7 @@ interface FetchJob {
   url: string
   episodeKey: string      // 之前是 episodeIdx (number)，改字符串可跨视频区分
   priority: number
+  generation?: number
 }
 
 interface CacheEntry {
@@ -238,11 +240,40 @@ const segmentsByEpisode = new Map<string, string[]>()
 const epQueueCount = new Map<string, number>()
 const pendingUrls = new Set<string>()
 const queue: FetchJob[] = []
-let inflight = 0
+let cacheSession = 0
+const inflightBySession = new Map<number, number>()
+const prefetchControllers = new Set<AbortController>()
 let debounceTimer: number | null = null
 // hls.js owns playback buffering. Background fetches start only once there is
 // sufficient media ahead, so they cannot compete with first play or recovery.
 let playbackBufferAhead = 0
+
+function pendingKey(url: string, generation = cacheSession): string {
+  return `${generation}:${url}`
+}
+
+function hedgeKey(url: string, generation = cacheSession): string {
+  return `${generation}:${url}`
+}
+
+function activeInflight(): number {
+  return inflightBySession.get(cacheSession) || 0
+}
+
+function finishInflight(generation: number): void {
+  const next = (inflightBySession.get(generation) || 0) - 1
+  if (next > 0) inflightBySession.set(generation, next)
+  else inflightBySession.delete(generation)
+}
+
+function beginCacheSession(): void {
+  cacheSession++
+  for (const controller of prefetchControllers) controller.abort()
+  prefetchControllers.clear()
+  for (const job of queue) pendingUrls.delete(pendingKey(job.url, job.generation))
+  queue.length = 0
+  epQueueCount.clear()
+}
 
 // ⭐ 优化：按集数级统计（避免跨集数污染），替代单一全局 hits/misses
 interface EpisodeCounter { hits: number; misses: number }
@@ -453,10 +484,8 @@ export function setEpisodes(list: EpisodeLite[]): void {
   // ⭐ 不再清空 LRU — 只清空"相对集索引"的映射
   segmentsByEpisode.clear()
   playedSegmentsByEpisode.clear()
-  epQueueCount.clear()
+  beginCacheSession()
   pendingUrls.clear()
-  queue.length = 0
-  inflight = 0
   epStats.clear()  // ⭐ 集数级统计重置
   _curEpStats = { hits: 0, misses: 0 }
   recentFetchDurations.length = 0
@@ -475,8 +504,7 @@ export function setEpisodes(list: EpisodeLite[]): void {
   currentEpKey = ''
   playbackBufferAhead = 0
   fireListeners()
-  // ⭐ 注意：此处不再调用 diskLoad() —— 避免把其他视频的缓存全量加载到内存。
-  //   改为在 setCurrentEpisode 中按需调用 diskLoadForEpisode(...)。
+  // Cache restoration is scoped to the current episode in setCurrentEpisode.
 }
 
 export function setCurrentEpisode(idx: number): void {
@@ -493,9 +521,7 @@ export function setCurrentEpisode(idx: number): void {
   currentEpKey = newKey
   // The queued URLs belong to the old episode. Completed cache entries are
   // still useful under LRU, but queued work must not survive an episode jump.
-  for (const job of queue) pendingUrls.delete(job.url)
-  queue.length = 0
-  epQueueCount.clear()
+  beginCacheSession()
   playbackBufferAhead = 0
   if (currentEpKey) {
     if (!playedSegmentsByEpisode.has(currentEpKey)) {
@@ -507,8 +533,7 @@ export function setCurrentEpisode(idx: number): void {
     _curEpStats = cs
 
     // ⭐ 按需从磁盘加载该集的缓存（只有当前集的片段才恢复到内存）
-    const segUrls = segmentsByEpisode.get(currentEpKey) || undefined
-    diskLoadForEpisode(currentEpKey, segUrls).catch(() => { })
+    diskLoadForEpisode(currentEpKey).catch(() => { })
   } else {
     _curEpStats = { hits: 0, misses: 0 }
   }
@@ -550,11 +575,9 @@ export function setSegments(segments: string[], epIdx?: number): void {
     _curEpStats = cs
   }
 
-  // ⭐ m3u8 解析完成：此时已拿到该集所有 segmentUrls，再做一次按需加载。
-  //   对 episodeKey 字段的新数据—— setCurrentEpisode 中已匹配过。
-  //   对老数据（只有 url 没有 episodeKey）—— 这里用 segmentUrls 白名单再次匹配。
+  // Records in the v2 cache are indexed by episode key. Reload after the playlist is parsed.
   if (key === currentEpKey && list.length > 0) {
-    diskLoadForEpisode(key, list).catch(() => { })
+    diskLoadForEpisode(key).catch(() => { })
   }
   fireListeners()
 }
@@ -662,20 +685,22 @@ export function notifyCurrentTs(absUrl: string): void {
       const idx = pos + offset
       if (playedSet.has(idx)) continue
       const u = segs[idx]
-      if (cacheHas(u) || pendingUrls.has(u) || hedgeInFlight.has(u)) continue
+      if (cacheHas(u) || pendingUrls.has(pendingKey(u)) || hedgeInFlight.has(hedgeKey(u))) continue
       // 对冲：双请求取最快
       hedgeAdded++
       addedCount++
-      hedgeInFlight.add(u)
+      hedgeInFlight.add(hedgeKey(u))
       const t0 = performance.now()
+      const generation = cacheSession
+      const episode = currentEpKey
       hedgeFetch(u).then((buf) => {
-        if (buf) {
+        if (buf && generation === cacheSession) {
           cacheSet(u, buf)
-          diskSave(u, buf, currentEpKey).catch(() => { })
+          diskSave(u, buf, episode).catch(() => { })
           recordFetchDuration(performance.now() - t0)
           fireListeners()
         }
-      }).finally(() => { hedgeInFlight.delete(u) })
+      }).finally(() => { hedgeInFlight.delete(hedgeKey(u, generation)) })
     }
     if (hedgeAdded > 0) {
       console.log(`${LOG_PREFIX} 🚨 紧急对冲: ${hedgeAdded} 片 (pos=${pos}, mode=${_networkMode})`)
@@ -690,7 +715,7 @@ export function notifyCurrentTs(absUrl: string): void {
     if (idx >= segs.length) break
     if (playedSet.has(idx)) continue
     const u = segs[idx]
-    if (cacheHas(u) || pendingUrls.has(u) || hedgeInFlight.has(u)) continue
+    if (cacheHas(u) || pendingUrls.has(pendingKey(u)) || hedgeInFlight.has(hedgeKey(u))) continue
     if (enqueue({ url: u, episodeKey: currentEpKey, priority: 1 })) addedCount++
   }
 
@@ -700,7 +725,7 @@ export function notifyCurrentTs(absUrl: string): void {
     const idx = pos + offset
     if (playedSet.has(idx)) continue
     const u = segs[idx]
-    if (cacheHas(u) || pendingUrls.has(u) || hedgeInFlight.has(u)) continue
+    if (cacheHas(u) || pendingUrls.has(pendingKey(u)) || hedgeInFlight.has(hedgeKey(u))) continue
     if (enqueue({ url: u, episodeKey: currentEpKey, priority: 2 })) addedCount++
   }
 
@@ -726,7 +751,7 @@ export function notifyCurrentTs(absUrl: string): void {
         const nextCount = Math.min(PREFETCH_AHEAD_NEXT_EPISODE, nextSegs.length)
         for (let i = 0; i < nextSegs.length && nextAdded < nextCount; i++) {
           if (nextPlayed && nextPlayed.has(i)) continue
-          if (cacheHas(nextSegs[i]) || pendingUrls.has(nextSegs[i])) continue
+          if (cacheHas(nextSegs[i]) || pendingUrls.has(pendingKey(nextSegs[i]))) continue
           if (enqueue({ url: nextSegs[i], episodeKey: nextEpKey, priority: 2 })) nextAdded++
         }
         if (nextAdded > 0) console.log(`${LOG_PREFIX} ⏭ 自动预取 #${currentEpIdx + 1} 集 (${nextAdded} 片)`)
@@ -766,7 +791,7 @@ export function stats() {
     // “24/813 个全片段”误显示成缓存一直未完成。
     prefetchTarget: Math.min(adaptivePrefetchCount(), segs.length),
     queued: queue.filter((job) => job.episodeKey === currentEpKey).length,
-    inflight,
+    inflight: activeInflight(),
     bufferOffset: adaptiveBufferOffset(),
     spreadStep: adaptiveSpreadStep(),
     cacheMB: totalCacheBytes / 1024 / 1024,
@@ -813,11 +838,9 @@ export function clear(): void {
   epCacheCount.clear()
   cacheClear()
   m3u8TextCache.clear()
-  epQueueCount.clear()
+  beginCacheSession()
   pendingUrls.clear()
   hedgeInFlight.clear()
-  queue.length = 0
-  inflight = 0
   epStats.clear()
   _curEpStats = { hits: 0, misses: 0 }
   recentFetchDurations.length = 0
@@ -859,13 +882,15 @@ function findSegmentIndex(segments: string[], target: string): number {
 
 function enqueue(job: FetchJob): boolean {
   if (!job?.url) return false
-  if (pendingUrls.has(job.url)) return false
+  const generation = cacheSession
+  if (pendingUrls.has(pendingKey(job.url, generation))) return false
   if (cacheHas(job.url)) return false
   const cnt = epQueueCount.get(job.episodeKey) || 0
   if (cnt >= MAX_QUEUE_PER_EPISODE) return false
-  pendingUrls.add(job.url)
+  pendingUrls.add(pendingKey(job.url, generation))
   epQueueCount.set(job.episodeKey, cnt + 1)
-  if (job.priority === 1) queue.unshift(job); else queue.push(job)
+  const scopedJob = { ...job, generation }
+  if (scopedJob.priority === 1) queue.unshift(scopedJob); else queue.push(scopedJob)
   return true
 }
 
@@ -877,17 +902,25 @@ function scheduleDrain(): void {
 function drainQueue(): void {
   if (!canPrefetch()) return
   const maxConc = adaptiveConcurrency()
-  while (inflight < maxConc && queue.length > 0) {
+  while (activeInflight() < maxConc && queue.length > 0) {
     const job = queue.shift(); if (!job) break
-    inflight++
+    const generation = job.generation ?? cacheSession
+    const active = activeInflight() + 1
+    inflightBySession.set(generation, active)
     // ⭐ 交错启动：每个分片间隔 ~1s，避免服务器敏感封禁
-    if (inflight > 1) {
-      const staggerDelay = (inflight - 1) * 1000
+    if (active > 1) {
+      const staggerDelay = (active - 1) * 1000
       window.setTimeout(() => {
-        runOne(job).finally(() => { inflight--; drainQueue() })
+        runOne(job).finally(() => {
+          finishInflight(generation)
+          if (generation === cacheSession) drainQueue()
+        })
       }, staggerDelay)
     } else {
-      runOne(job).finally(() => { inflight--; drainQueue() })
+      runOne(job).finally(() => {
+        finishInflight(generation)
+        if (generation === cacheSession) drainQueue()
+      })
     }
   }
 }
@@ -897,16 +930,21 @@ function canPrefetch(): boolean {
 }
 
 async function runOne(job: FetchJob): Promise<void> {
+  const generation = job.generation ?? cacheSession
+  if (generation !== cacheSession) return
   const t0 = performance.now()
   const timeout = adaptiveFragmentTimeout()
+  let ctrl: AbortController | null = null
+  let timeoutID: number | null = null
   try {
-    const ctrl = new AbortController()
-    const tid = window.setTimeout(() => ctrl.abort(), timeout)
+    ctrl = new AbortController()
+    prefetchControllers.add(ctrl)
+    timeoutID = window.setTimeout(() => ctrl?.abort(), timeout)
     const init: RequestInit = { signal: ctrl.signal }
     try { (init as any).priority = 'low' } catch { /* ignore */ }
     const resp = await fetch(job.url, init)
-    window.clearTimeout(tid)
-    if (resp.ok) {
+    if (timeoutID != null) window.clearTimeout(timeoutID)
+    if (resp.ok && generation === cacheSession) {
       const buf = await resp.arrayBuffer()
       cacheSet(job.url, buf)
       diskSave(job.url, buf, job.episodeKey).catch(() => { })
@@ -917,12 +955,16 @@ async function runOne(job: FetchJob): Promise<void> {
     }
   } catch { /* 静默 */ }
   finally {
-    pendingUrls.delete(job.url)
+    if (timeoutID != null) window.clearTimeout(timeoutID)
+    if (ctrl) prefetchControllers.delete(ctrl)
+    pendingUrls.delete(pendingKey(job.url, generation))
     // Release the slot for failures as well as successes. Otherwise transient
     // errors eventually make an episode appear permanently queue-full.
-    const remaining = (epQueueCount.get(job.episodeKey) || 0) - 1
-    if (remaining > 0) epQueueCount.set(job.episodeKey, remaining)
-    else epQueueCount.delete(job.episodeKey)
+    if (generation === cacheSession) {
+      const remaining = (epQueueCount.get(job.episodeKey) || 0) - 1
+      if (remaining > 0) epQueueCount.set(job.episodeKey, remaining)
+      else epQueueCount.delete(job.episodeKey)
+    }
   }
 }
 
@@ -940,222 +982,129 @@ function recordFetchDuration(ms: number): void {
 function hedgeFetch(url: string): Promise<ArrayBuffer | null> {
   const ctrl1 = new AbortController()
   const ctrl2 = new AbortController()
+  const sessionCtrl = new AbortController()
+  prefetchControllers.add(sessionCtrl)
   const timeout = adaptiveFragmentTimeout()
+  let settleRequest: ((value: ArrayBuffer | null) => void) | null = null
+  let staggerTimer: number | null = null
+  let timeoutTimer: number | null = null
 
   const doFetch = (signal: AbortSignal) => {
     const init: RequestInit = { signal }
     return fetch(url, init)
   }
 
-  const racePromise = new Promise<ArrayBuffer | null>((resolve, reject) => {
+  const racePromise = new Promise<ArrayBuffer | null>((resolve) => {
     let settled = false
     const settle = (value: ArrayBuffer | null) => {
       if (!settled) { settled = true; resolve(value) }
     }
+    settleRequest = settle
 
     // 请求1：立即发射
     doFetch(ctrl1.signal)
       .then((r) => r.ok ? r.arrayBuffer() : Promise.reject(new Error('http ' + r.status)))
       .then((buf) => { settle(buf); try { ctrl2.abort() } catch { } })
-      .catch((err) => { if (!settled && !ctrl1.signal.aborted) reject(err) })
+      .catch(() => { /* let the delayed hedge try the same segment */ })
 
     // 请求2：延迟发射（错开避免服务器压力）
-    window.setTimeout(() => {
+    staggerTimer = window.setTimeout(() => {
       if (settled || ctrl2.signal.aborted) return
       doFetch(ctrl2.signal)
         .then((r) => r.ok ? r.arrayBuffer() : Promise.reject(new Error('http ' + r.status)))
         .then((buf) => { settle(buf); try { ctrl1.abort() } catch { } })
-        .catch((err) => { if (!settled && !ctrl2.signal.aborted) reject(err) })
+        .catch(() => { if (!settled && !ctrl2.signal.aborted) settle(null) })
     }, HEDGE_STAGGER_MS)
   })
+
+  sessionCtrl.signal.addEventListener('abort', () => {
+    try { ctrl1.abort() } catch { }
+    try { ctrl2.abort() } catch { }
+    settleRequest?.(null)
+  }, { once: true })
 
   // 全局超时保护
   return Promise.race([
     racePromise,
     new Promise<ArrayBuffer | null>((resolve) => {
-      window.setTimeout(() => {
-        try { ctrl1.abort() } catch { }
-        try { ctrl2.abort() } catch { }
+      timeoutTimer = window.setTimeout(() => {
+        sessionCtrl.abort()
         resolve(null)
       }, timeout)
     }),
-  ])
+  ]).finally(() => {
+    if (staggerTimer != null) window.clearTimeout(staggerTimer)
+    if (timeoutTimer != null) window.clearTimeout(timeoutTimer)
+    prefetchControllers.delete(sessionCtrl)
+  })
 }
 
 // ====== IndexedDB 持久化 ======
 
-const DB_NAME = 'tscache', DB_VERSION = 1, STORE_NAME = 'segments'
-const MAX_DISK_BYTES = 160 * 1024 * 1024   // 磁盘上限 160 MB（≈ 8 集 × 128 片 × 约 150 KB/片）
-const DISK_TTL_MS = 2 * 24 * 3600 * 1000    // 2 天 TTL
-
-function openDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION)
-    req.onupgradeneeded = () => { req.result.createObjectStore(STORE_NAME, { keyPath: 'url' }) }
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(req.error)
-  })
-}
+const MAX_DISK_BYTES = 160 * 1024 * 1024
+const DISK_TTL_MS = 2 * 24 * 60 * 60 * 1000
+const DISK_PRUNE_DEBOUNCE_MS = 5_000
+const diskCache = new SegmentDiskCache(MAX_DISK_BYTES, DISK_TTL_MS, DISK_PRUNE_DEBOUNCE_MS)
+let diskQuotaWarned = false
 
 async function diskSave(url: string, buf: ArrayBuffer, epKey?: string): Promise<void> {
   try {
-    const db = await openDB()
-    const tx = db.transaction(STORE_NAME, 'readwrite')
-    tx.objectStore(STORE_NAME).put({ url, data: buf, ts: Date.now(), episodeKey: epKey || currentEpKey || '' })
-    await new Promise<void>((r, j) => { tx.oncomplete = () => r(); tx.onerror = () => j(tx.error) })
-    db.close(); diskPrune()
-  } catch (e: any) {
-    if (e?.name === 'QuotaExceededError' || String(e?.message || '').includes('quota')) {
-      if (!_diskQuotaWarned) { _diskQuotaWarned = true; console.warn('[TsCache] 磁盘缓存配额已满，自动清理中') }
-      diskClear().catch(() => { })
+    await diskCache.save(url, buf, epKey || currentEpKey || '')
+  } catch (error: any) {
+    if (error?.name === 'QuotaExceededError' || String(error?.message || '').includes('quota')) {
+      if (!diskQuotaWarned) {
+        diskQuotaWarned = true
+        console.warn(`${LOG_PREFIX} browser disk-cache quota is full; clearing cache`)
+      }
+      void diskCache.clear().catch(() => {})
     }
   }
 }
-let _diskQuotaWarned = false
 
-/**
- * ⭐ 按需从磁盘加载指定集的缓存 —— 只把"与当前 epKey/segmentUrls 匹配"的分片恢复到内存。
- *
- * 匹配策略（任一满足即可）：
- *   1) episodeKey === epKey                        —— 新数据（带 episodeKey 字段）
- *   2) url in segmentUrls                           —— 老数据兼容（通过 URL 匹配该集片段列表）
- *
- * 避免把其他视频的 650 片全部加载到内存。
- */
-async function diskLoadForEpisode(epKey: string, segmentUrls?: string[]): Promise<number> {
-  if (!epKey && (!segmentUrls || segmentUrls.length === 0)) return 0
+async function diskLoadForEpisode(epKey: string): Promise<number> {
+  if (!epKey) return 0
   try {
-    const db = await openDB()
-    const tx = db.transaction(STORE_NAME, 'readonly')
-    const store = tx.objectStore(STORE_NAME); const req = store.getAll()
-    await new Promise<void>((r, j) => { tx.oncomplete = () => r(); tx.onerror = () => j(tx.error) })
-    const entries: Array<{ url: string; data: ArrayBuffer; ts: number; episodeKey?: string }> = req.result || []
-    db.close()
-    const now = Date.now(); let loaded = 0
-    const urlSet = segmentUrls && segmentUrls.length > 0 ? new Set(segmentUrls) : null
-    for (const e of entries) {
-      if (now - e.ts > DISK_TTL_MS) continue
-      if (!e.data || e.data.byteLength <= 0) continue
-      // epKey 匹配（含 source_key）
-      if (epKey && e.episodeKey && e.episodeKey === epKey) { cacheSet(e.url, e.data); loaded++; continue }
-      // 老数据 fallback：通过 URL 白名单匹配
-      if (urlSet && urlSet.has(e.url)) { cacheSet(e.url, e.data); loaded++; continue }
-    }
-    if (loaded > 0) {
+    const entries = await diskCache.loadEpisode(epKey)
+    if (currentEpKey !== epKey) return 0
+    for (const entry of entries) cacheSet(entry.url, entry.data)
+    if (entries.length > 0) {
       const mb = (totalCacheBytes / 1024 / 1024).toFixed(1)
-      console.log(`${LOG_PREFIX} 💾 按需恢复 ${loaded} 片 (${mb} MB) · ep=${epKey || 'url-match'}`)
+      console.log(`${LOG_PREFIX} restored ${entries.length} segments (${mb} MB) for ${epKey}`)
     }
-    return loaded
-  } catch { return 0 }
-}
-
-/** 全量加载 —— 仅供 diskCacheInfo/调试使用，不在日常播放流程中调用 */
-async function diskLoadAll(): Promise<number> {
-  try {
-    const db = await openDB()
-    const tx = db.transaction(STORE_NAME, 'readonly')
-    const store = tx.objectStore(STORE_NAME); const req = store.getAll()
-    await new Promise<void>((r, j) => { tx.oncomplete = () => r(); tx.onerror = () => j(tx.error) })
-    const entries: Array<{ url: string; data: ArrayBuffer; ts: number }> = req.result || []
-    db.close()
-    const now = Date.now(); let loaded = 0
-    for (const e of entries) {
-      if (now - e.ts > DISK_TTL_MS) continue
-      if (e.data && e.data.byteLength > 0) { cacheSet(e.url, e.data); loaded++ }
-    }
-    if (loaded > 0) console.log(`${LOG_PREFIX} 💾 全量恢复 ${loaded} 片 (${(totalCacheBytes / 1024 / 1024).toFixed(1)} MB)`)
-    return loaded
-  } catch { return 0 }
-}
-
-// 保留旧名，便于 diskLoad() 仍可被调用（但走按需逻辑而非全量）
-async function diskLoad(): Promise<void> {
-  // 不做任何事 —— 避免被意外调用时把所有缓存全量加载
-  // 需要恢复缓存请显式调用 diskLoadForEpisode(epKey, segmentUrls)
+    return entries.length
+  } catch {
+    return 0
+  }
 }
 
 async function diskPrune(): Promise<void> {
   try {
-    const db = await openDB()
-    const tx = db.transaction(STORE_NAME, 'readwrite')
-    const store = tx.objectStore(STORE_NAME); const req = store.getAll()
-    await new Promise<void>((r, j) => { tx.oncomplete = () => r(); tx.onerror = () => j(tx.error) })
-    const entries: Array<{ url: string; data: ArrayBuffer; ts: number }> = req.result || []
-    const now = Date.now(); let totalBytes = 0
-    entries.sort((a, b) => b.ts - a.ts); const toDelete: string[] = []
-    for (const e of entries) {
-      if (now - e.ts > DISK_TTL_MS) { toDelete.push(e.url); continue }
-      totalBytes += (e.data?.byteLength || 0)
-      if (totalBytes > MAX_DISK_BYTES) toDelete.push(e.url)
-    }
-    if (toDelete.length > 0) {
-      const delTx = db.transaction(STORE_NAME, 'readwrite')
-      const delStore = delTx.objectStore(STORE_NAME)
-      for (const url of toDelete) delStore.delete(url)
-      await new Promise<void>((r, j) => { delTx.oncomplete = () => r(); delTx.onerror = () => j(delTx.error) })
-    }
-    db.close()
-  } catch { /* ignore */ }
+    await diskCache.prune()
+  } catch {
+    // Disk caching is opportunistic and must not interrupt playback.
+  }
 }
 
 async function diskClear(): Promise<void> {
-  try { const db = await openDB(); db.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).clear(); db.close() } catch { /* ignore */ }
+  try {
+    await diskCache.clear()
+  } catch {
+    // Disk caching is opportunistic and must not interrupt playback.
+  }
 }
 
-// ====== 磁盘缓存：位置与统计信息 ======
-//
-// 存储位置：浏览器 IndexedDB
-//   - 数据库名: "tscache"
-//   - 对象仓库: "segments"
-//   - key: url (字符串)
-//   - value: { url: string, data: ArrayBuffer, ts: number }
-//
-// 用户查看/清理方式：
-//   1) Chrome/Edge: F12 → Application → Storage → IndexedDB → tscache → segments
-//   2) Firefox: F12 → 存储 → IndexedDB → tscache
-//   3) 代码: TsCache.diskCacheInfo() → { count, bytes, dbName, storeName }
-//   4) 代码: TsCache.diskCacheClear() → 清空
-//   5) 代码: TsCache.diskCachePrune(maxBytes) → 只保留最近 maxBytes 大小
-
-export async function diskCacheInfo(): Promise<{ dbName: string; storeName: string; count: number; bytes: number; ttlDays: number; }> {
-  try {
-    const db = await openDB()
-    const tx = db.transaction(STORE_NAME, 'readonly')
-    const store = tx.objectStore(STORE_NAME)
-    const req = store.getAll()
-    await new Promise<void>((r, j) => { tx.oncomplete = () => r(); tx.onerror = () => j(tx.error) })
-    const entries: Array<{ url: string; data: ArrayBuffer; ts: number }> = req.result || []
-    db.close()
-    let bytes = 0; for (const e of entries) bytes += (e.data?.byteLength || 0)
-    return { dbName: DB_NAME, storeName: STORE_NAME, count: entries.length, bytes, ttlDays: DISK_TTL_MS / (24 * 3600 * 1000) }
-  } catch { return { dbName: DB_NAME, storeName: STORE_NAME, count: 0, bytes: 0, ttlDays: DISK_TTL_MS / (24 * 3600 * 1000) } }
+export async function diskCacheInfo(): Promise<DiskCacheInfo> {
+  return diskCache.info()
 }
 
 async function diskCachePrune(maxBytes: number): Promise<number> {
   try {
-    const db = await openDB()
-    const tx = db.transaction(STORE_NAME, 'readwrite')
-    const store = tx.objectStore(STORE_NAME)
-    const req = store.getAll()
-    await new Promise<void>((r, j) => { tx.oncomplete = () => r(); tx.onerror = () => j(tx.error) })
-    const entries: Array<{ url: string; data: ArrayBuffer; ts: number }> = req.result || []
-    entries.sort((a, b) => b.ts - a.ts)
-    let kept = 0; let totalSize = 0; const toDelete: string[] = []
-    for (const e of entries) {
-      const sz = e.data?.byteLength || 0
-      if (totalSize + sz > maxBytes) toDelete.push(e.url)
-      else { totalSize += sz; kept++ }
-    }
-    if (toDelete.length > 0) {
-      const delTx = db.transaction(STORE_NAME, 'readwrite')
-      const delStore = delTx.objectStore(STORE_NAME)
-      for (const u of toDelete) delStore.delete(u)
-      await new Promise<void>((r, j) => { delTx.oncomplete = () => r(); delTx.onerror = () => j(delTx.error) })
-    }
-    db.close()
-    return toDelete.length
-  } catch { return 0 }
+    return await diskCache.prune(maxBytes)
+  } catch {
+    return 0
+  }
 }
+
 
 // ====== hls.js v1.7.0-beta.1 统一 loader（TsCacheLoader）======
 //
@@ -1798,7 +1747,7 @@ export const TsCache = {
   notifyCurrentTs, notifyFragmentRequested,
   episodeProgress, getTotalEpisodes,
   onStateChange, removeListener: (cb: Listener) => listeners.delete(cb),
-  diskLoad, diskClear, diskCacheInfo, diskCachePrune,
+  diskClear, diskCacheInfo, diskCachePrune,
   // ⭐ v1.7.0-beta.1 统一 loader：hls.js 新 API，一个 loader 处理所有请求类型
   //   用法: new Hls({ loader: TsCache.TsCacheLoader })
   TsCacheLoader,

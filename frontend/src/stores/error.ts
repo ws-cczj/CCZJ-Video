@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { WriteLog, GetLogList, GetLogContent, ClearLogs, GetLogDir } from '../api/app'
+import { WriteLog } from '../api/app'
+import { tr } from '../locales'
 
 export type ErrorLevel = 'info' | 'warn' | 'error'
 
@@ -40,7 +41,7 @@ export const useErrorStore = defineStore('error', () => {
     const e: ErrorItem = {
       id: nextId(),
       level: item.level || 'error',
-      title: item.title || '错误',
+      title: item.title || tr('errors.fallbackTitle'),
       message: item.message || '',
       detail: item.detail,
       source: item.source,
@@ -109,28 +110,6 @@ export const useErrorStore = defineStore('error', () => {
     toasts.value = []
   }
 
-  // ======== 日志文件相关 ========
-  async function listLogFiles(): Promise<string[]> {
-    try {
-      return (await GetLogList()) || []
-    } catch {
-      return []
-    }
-  }
-  async function readLogFile(filename: string): Promise<string> {
-    try {
-      return (await GetLogContent(filename)) || ''
-    } catch {
-      return ''
-    }
-  }
-  async function getLogDir(): Promise<string> {
-    try { return await GetLogDir() } catch { return '' }
-  }
-  async function clearAllLogs(): Promise<number> {
-    try { return await ClearLogs() } catch { return 0 }
-  }
-
   return {
     toasts,
     history,
@@ -142,9 +121,5 @@ export const useErrorStore = defineStore('error', () => {
     fromError,
     dismiss,
     clearToasts,
-    listLogFiles,
-    readLogFile,
-    getLogDir,
-    clearAllLogs,
   }
 })

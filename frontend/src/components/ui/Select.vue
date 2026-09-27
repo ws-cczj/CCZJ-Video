@@ -1,6 +1,8 @@
 <script setup lang="ts">
 defineOptions({ name: 'SelectDropdown' })
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import MotionTransition from './MotionTransition.vue'
+import { tr } from '../../locales'
 
 interface Option {
   value: string | number
@@ -22,7 +24,7 @@ const props = withDefaults(defineProps<{
   inlineDrop?: 'up' | 'down'
 }>(), {
   modelValue: '',
-  placeholder: '请选择',
+  placeholder: '',
   disabled: false,
   size: 'md',
   inline: false,
@@ -128,7 +130,7 @@ watch(open, async (v) => {
   >
     <button class="select-trigger" type="button" :disabled="disabled" @click.stop="toggle">
       <span class="label" :class="{ placeholder: !selected }">
-        {{ selected ? selected.label : placeholder }}
+        {{ selected ? selected.label : (placeholder || tr('common.selectPlaceholder')) }}
       </span>
       <svg class="caret" viewBox="0 0 20 20" aria-hidden="true">
         <path d="M5 8 l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
@@ -138,7 +140,7 @@ watch(open, async (v) => {
     <!-- 面板：inline 模式不 Teleport（留在 scoped 作用域，避免 :deep 样式失效），
          非 inline 模式 Teleport 到 body 并用 fixed 定位。 -->
     <Teleport to="body" :disabled="inline">
-      <transition name="slide-down">
+      <MotionTransition preset="dropdown">
         <div
           v-if="open"
           class="select-panel"
@@ -157,10 +159,10 @@ watch(open, async (v) => {
               <span class="option-label">{{ opt.label }}</span>
               <span v-if="selected && selected.value === opt.value" class="check-icon" aria-hidden="true">✓</span>
             </li>
-            <li v-if="options.length === 0" class="empty">无数据</li>
+            <li v-if="options.length === 0" class="empty">{{ tr('common.noData') }}</li>
           </ul>
         </div>
-      </transition>
+      </MotionTransition>
     </Teleport>
   </div>
 </template>
@@ -191,7 +193,7 @@ watch(open, async (v) => {
   color: inherit;
   font-family: inherit;
   cursor: pointer;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
   min-height: 34px;
 }
 
@@ -238,7 +240,7 @@ watch(open, async (v) => {
   height: 14px;
   margin-left: 6px;
   color: var(--text-muted);
-  transition: transform 0.2s ease;
+  transition: transform var(--transition-fast);
 }
 
 .is-open .caret {
@@ -290,7 +292,7 @@ watch(open, async (v) => {
   align-items: center;
   justify-content: space-between;
   color: var(--text-secondary);
-  transition: background 0.12s ease, color 0.12s ease;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
   margin: 1px 0;
 }
 
@@ -325,15 +327,4 @@ watch(open, async (v) => {
   text-align: center;
 }
 
-.slide-down-enter-active,
-.slide-down-leave-active {
-  transition: opacity 0.14s ease, transform 0.14s ease;
-  transform-origin: top;
-}
-
-.slide-down-enter-from,
-.slide-down-leave-to {
-  opacity: 0;
-  transform: translateY(-4px);
-}
 </style>

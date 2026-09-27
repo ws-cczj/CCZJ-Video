@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, nextTick, onMounted, onBeforeUnmount, watch, computed } from 'vue'
 import Icon from './Icon.vue'
-import { Select as SelectDropdown } from './ui'
+import { MotionTransition, Select as SelectDropdown } from './ui'
 import { TsCache } from '../utils/tsCache'
 import { FilmUpscaler, FILM_PRESET, checkFilmSupport } from '../utils/filmUpscaler'
 import { Anime4kUpscaler, ANIME4K_PRESET, checkAnime4kSupport } from '../utils/anime4kUpscaler'
@@ -17,6 +17,8 @@ import pauseImg from '../assets/images/pause.png'
 import {
   WindowIsFs, WindowIsMax, WindowSetFullscreen, WindowToggleMax
 } from '../api/app'
+import { useI18n } from 'vue-i18n'
+import { tr } from '../locales'
 
 const props = withDefaults(defineProps<{
   url: string
@@ -29,6 +31,8 @@ const props = withDefaults(defineProps<{
   isFav?: boolean
   favBusy?: boolean
   doubanId?: string
+  /** 取当前集在后端 watch_history 里的位置（秒），本地缓存缺失时兜底 */
+  resolveResume?: () => Promise<number>
 }>(), {
   autoplay: true,
   hasPrev: false,
@@ -39,10 +43,12 @@ const props = withDefaults(defineProps<{
   isFav: false,
   favBusy: false,
   doubanId: '',
+  resolveResume: undefined,
 })
 
 const emit = defineEmits(['back', 'prev', 'next', 'toggleFavorite', 'toggleAutoplay', 'showComments'])
 const hlsEngine = useHlsEngine()
+const { t } = useI18n()
 
 const wrapperRef = ref<HTMLDivElement>()
 const errorMsg = ref('')
@@ -111,7 +117,7 @@ function startLoadingStats(): void {
         loadingSpeed.value = Math.round(speedBps / 1024) + ' KB/s'
       }
     } else if (loadingSpeed.value === '') {
-      loadingSpeed.value = '连接中...'
+      loadingSpeed.value = t('player.connecting')
     }
   }, 300)
 }
@@ -237,22 +243,22 @@ const autoNextEnabled = ref(true)
 const speedOptions = [0.5, 0.75, 1, 1.25, 1.5, 2]
 
 // ========= 快捷键设置 =========
-interface ShortcutAction { id: string; label: string; description: string; defaultKeys: string[] }
+interface ShortcutAction { id: string; labelKey: string; descriptionKey: string; defaultKeys: string[] }
 const SHORTCUT_ACTIONS: ShortcutAction[] = [
-  { id: 'togglePlay', label: '播放/暂停', description: '切换播放和暂停状态', defaultKeys: ['Space', 'K'] },
-  { id: 'seekBack', label: '快退 5s', description: '后退 5 秒', defaultKeys: ['ArrowLeft'] },
-  { id: 'seekForward', label: '快进 5s', description: '前进 5 秒', defaultKeys: ['ArrowRight'] },
-  { id: 'seekBackBig', label: '快退 30s', description: '后退 30 秒', defaultKeys: ['J'] },
-  { id: 'seekForwardBig', label: '快进 30s', description: '前进 30 秒', defaultKeys: ['L'] },
-  { id: 'volumeUp', label: '音量+', description: '音量增加 5%', defaultKeys: ['ArrowUp'] },
-  { id: 'volumeDown', label: '音量-', description: '音量减少 5%', defaultKeys: ['ArrowDown'] },
-  { id: 'mute', label: '静音', description: '切换静音', defaultKeys: ['M'] },
-  { id: 'speedUp', label: '加速', description: '播放速度 +0.25x', defaultKeys: [']'] },
-  { id: 'speedDown', label: '减速', description: '播放速度 -0.25x', defaultKeys: ['['] },
-  { id: 'fullscreen', label: '全屏', description: '切换全屏', defaultKeys: ['F'] },
-  { id: 'prevEp', label: '上一集', description: '切换到上一集', defaultKeys: ['P'] },
-  { id: 'nextEp', label: '下一集', description: '切换到下一集', defaultKeys: ['N'] },
-  { id: 'pip', label: '画中画', description: '切换画中画模式', defaultKeys: ['I'] },
+  { id: 'togglePlay', labelKey: 'player.scTogglePlay', descriptionKey: 'player.scTogglePlayDesc', defaultKeys: ['Space', 'K'] },
+  { id: 'seekBack', labelKey: 'player.scSeekBack', descriptionKey: 'player.scSeekBackDesc', defaultKeys: ['ArrowLeft'] },
+  { id: 'seekForward', labelKey: 'player.scSeekForward', descriptionKey: 'player.scSeekForwardDesc', defaultKeys: ['ArrowRight'] },
+  { id: 'seekBackBig', labelKey: 'player.scSeekBackBig', descriptionKey: 'player.scSeekBackBigDesc', defaultKeys: ['J'] },
+  { id: 'seekForwardBig', labelKey: 'player.scSeekForwardBig', descriptionKey: 'player.scSeekForwardBigDesc', defaultKeys: ['L'] },
+  { id: 'volumeUp', labelKey: 'player.scVolumeUp', descriptionKey: 'player.scVolumeUpDesc', defaultKeys: ['ArrowUp'] },
+  { id: 'volumeDown', labelKey: 'player.scVolumeDown', descriptionKey: 'player.scVolumeDownDesc', defaultKeys: ['ArrowDown'] },
+  { id: 'mute', labelKey: 'player.mute', descriptionKey: 'player.scMuteDesc', defaultKeys: ['M'] },
+  { id: 'speedUp', labelKey: 'player.scSpeedUp', descriptionKey: 'player.scSpeedUpDesc', defaultKeys: [']'] },
+  { id: 'speedDown', labelKey: 'player.scSpeedDown', descriptionKey: 'player.scSpeedDownDesc', defaultKeys: ['['] },
+  { id: 'fullscreen', labelKey: 'player.fullscreen', descriptionKey: 'player.scFullscreenDesc', defaultKeys: ['F'] },
+  { id: 'prevEp', labelKey: 'player.prev', descriptionKey: 'player.scPrevEpDesc', defaultKeys: ['P'] },
+  { id: 'nextEp', labelKey: 'player.next', descriptionKey: 'player.scNextEpDesc', defaultKeys: ['N'] },
+  { id: 'pip', labelKey: 'player.pip', descriptionKey: 'player.scPipDesc', defaultKeys: ['I'] },
 ]
 const {
   shortcutMap,
@@ -316,9 +322,9 @@ function doReportAd(domain: string): void {
   const ok = TsCache.addAdDomain(domain)
   showReportAd.value = false
   if (ok) {
-    reportAdToast.value = `已加入黑名单: ${domain}`
+    reportAdToast.value = t('player.adBlacklisted', { domain })
   } else {
-    reportAdToast.value = `域名已在黑名单中`
+    reportAdToast.value = t('player.adAlreadyBlacklisted')
   }
   if (_reportAdToastTimer != null) clearTimeout(_reportAdToastTimer)
   _reportAdToastTimer = window.setTimeout(() => { reportAdToast.value = '' }, 3000)
@@ -355,12 +361,12 @@ const qualityOptions = computed(() => {
   const tiers: Anime4kTier[] = ['S', 'M', 'L']
   const animeOptions = tiers.map(t => ({
     value: `ai_anime_${t}`,
-    label: `动画增强 ${t}${t === rec ? ' (推荐)' : ''}`,
+    label: `${tr('player.animeEnhance')} ${t}${t === rec ? tr('player.recommendSuffix') : ''}`,
   }))
   return [
-    { value: 'original', label: '原高清' },
+    { value: 'original', label: t('player.originalQuality') },
     ...animeOptions,
-    { value: 'ai_film', label: '影视增强' },
+    { value: 'ai_film', label: t('player.filmEnhance') },
   ]
 })
 // 当前下拉框选中值（根据 qualityMode + anime4kTier 计算）
@@ -438,11 +444,11 @@ function applyQualityMode(mode: QualityMode): void {
     if (_aiReady) {
       startAiPipeline(mode)
     }
-    const tierLabel = mode === 'ai_anime' ? `动画增强 ${anime4kTier.value}` : '影视增强'
-    showQualityToast(`已切换至${tierLabel}（GPU 实时增强）`)
+    const tierLabel = mode === 'ai_anime' ? `${t('player.animeEnhance')} ${anime4kTier.value}` : t('player.filmEnhance')
+    showQualityToast(t('player.qualitySwitchedGpu', { label: tierLabel }))
   } else {
     stopAiPipeline()
-    showQualityToast('已切换至原高清')
+    showQualityToast(t('player.qualitySwitchedOriginal'))
   }
 }
 
@@ -569,6 +575,8 @@ const showResumePrompt = ref(false)
 const resumeRemainSec = ref(PROMPT_SEC)
 let _resumeTimer: number | null = null
 let _resumeAutoJump = false  // 从 localStorage 读配置：是否自动跳
+// 媒体还没 attach 时设 currentTime 会被静默丢掉，先记下来等能 seek 了再落地
+let _pendingSeekSec: number | null = null
 
 // 计算进度百分比（给 CSS 用）
 const progressPct = computed(() => {
@@ -686,7 +694,7 @@ const videoInfo = computed(() => {
       const total = q.totalVideoFrames
       const rate = total > 0 ? ((total - droppedFrames) / total * 100).toFixed(0) : '100'
       const fpsNum = Math.round(total / cur)
-      if (fpsNum >= 15 && fpsNum <= 120) fps = fpsNum + ' fps (流畅度 ' + rate + '%)'
+      if (fpsNum >= 15 && fpsNum <= 120) fps = fpsNum + ' fps (' + t('player.smoothness') + ' ' + rate + '%)'
     }
   } catch { }
 
@@ -755,7 +763,7 @@ const videoInfo = computed(() => {
       bufferedSec = bufEnd - cur
       const bufPct = dur > 0 ? ((bufEnd / dur) * 100).toFixed(0) : '0'
       buffered = bufPct + '%'
-      if (bufferedSec > 0) buffered += ` (${fmt(bufferedSec)} 可用)`
+      if (bufferedSec > 0) buffered += ` (${t('player.bufferedAvailable', { time: fmt(bufferedSec) })})`
     }
   } catch { }
 
@@ -770,8 +778,8 @@ const videoInfo = computed(() => {
 
   // 缓存统计
   const cs = cacheStats.value
-  const cacheInfo = `${cs.entries}/${cs.totalSegments} 片段 · ${formatBytes(cs.bytes)} · 命中率 ${(cs.hitRate * 100).toFixed(0)}%`
-  const cacheMode = cs.totalSegments > 0 ? 'TsCache 已激活' : '未激活'
+  const cacheInfo = t('player.cacheInfoLine', { cached: cs.entries, total: cs.totalSegments, bytes: formatBytes(cs.bytes), rate: (cs.hitRate * 100).toFixed(0) })
+  const cacheMode = cs.totalSegments > 0 ? t('player.tscacheActive') : t('player.notActive')
 
   // 网络模式
   let networkMode = ''
@@ -780,7 +788,7 @@ const videoInfo = computed(() => {
   } catch { }
 
   // 画质模式
-  const qm = qualityMode.value === 'ai_anime' ? `动画增强 ${anime4kTier.value}` : qualityMode.value === 'ai_film' ? '影视增强' : '原高清'
+  const qm = qualityMode.value === 'ai_anime' ? `${t('player.animeEnhance')} ${anime4kTier.value}` : qualityMode.value === 'ai_film' ? t('player.filmEnhance') : t('player.originalQuality')
   return {
     duration: fmt(dur),
     current: fmt(cur),
@@ -883,7 +891,7 @@ function safePlay(auto: boolean): void {
         console.warn('[Player] play 被拒绝:', errName, 'auto=', auto)
         // NotSupportedError: 媒体格式不支持，静音重试无效，直接报错
         if (errName === 'NotSupportedError') {
-          errorMsg.value = '视频格式不支持，无法播放'
+          errorMsg.value = t('player.errFormatUnsupported')
           loading.value = false
           return
         }
@@ -918,15 +926,14 @@ async function loadHls(video: HTMLVideoElement, url: string): Promise<void> {
     _resumeAutoJump = loadAutoJumpConfig()
     // ⭐ 使用稳定 key 读取；无 videoKey 且 URL 不稳定时不恢复，避免跨集污染
     const resumeKey = stableResumeKey()
-    const t = readPlaybackTime(resumeKey)
+    const localTime = readPlaybackTime(resumeKey)
+    // localStorage 按 origin 分区（独立 exe 与 dev 端口互不可见），本地缺失时回退后端 watch_history。
+    const t = localTime > 5 ? localTime : (await props.resolveResume?.()) || 0
     if (t > 5) {
       savedTime.value = t
       if (_resumeAutoJump) {
-        const v = getVideoEl()
-        if (v) {
-          try { v.currentTime = Math.max(0, t - 1) } catch { /* ignore */ }
-          console.log(`[Player] ⏩ 自动跳到上次播放位置: ${t.toFixed(1)}s (key=${resumeKey})`)
-        }
+        seekWhenReady(Math.max(0, t - 1))
+        console.log(`[Player] ⏩ 自动跳到上次播放位置: ${t.toFixed(1)}s (key=${resumeKey} 来源=${localTime > 5 ? '本地' : '后端'})`)
       } else {
         startResumePrompt(t)
       }
@@ -1071,7 +1078,7 @@ hls.on(Hls.Events.ERROR, (_e: any, data: any) => {
             hlsEngine.dispose(video)
             video.src = playbackURL
 	            video.onerror = () => {
-	              errorMsg.value = '视频加载失败，请检查链接或网络'
+	              errorMsg.value = tr('player.errLoadFailed')
 	            }
 	            return
 	          }
@@ -1088,7 +1095,7 @@ hls.on(Hls.Events.ERROR, (_e: any, data: any) => {
                     return
                   }
                   showNetworkError.value = true
-                  errorMsg.value = '播放链接超过 10 秒无法连接'
+                  errorMsg.value = tr('player.errNetworkTimeout')
                   networkErrTimer = null
                 }, 10000)
               }
@@ -1098,7 +1105,7 @@ hls.on(Hls.Events.ERROR, (_e: any, data: any) => {
               try { hls.recoverMediaError() } catch (e) { console.warn('[Player] recoverMediaError 失败:', e) }
               break
             default:
-              errorMsg.value = '视频流加载失败：' + (details || data.type || '未知错误')
+              errorMsg.value = tr('player.errStreamLoadFailed', { detail: details || data.type || tr('player.unknownError') })
               console.error('[Player] ❌ 无法恢复的错误:', data)
               destroyPlayerInternal(getVideoEl() || undefined as any)
               break
@@ -1117,12 +1124,12 @@ hls.on(Hls.Events.ERROR, (_e: any, data: any) => {
       video.src = playbackURL
       if (props.autoplay !== false) safePlay(true)
     } else {
-      errorMsg.value = '当前环境不支持 HLS 播放'
+      errorMsg.value = tr('player.errHlsUnsupported')
       console.error('[Player] ❌ 当前环境不支持 HLS 播放')
     }
   } catch (e: any) {
     console.error('[Player] ❌ 异常:', e)
-    errorMsg.value = '播放器初始化失败：' + (e?.message || String(e))
+    errorMsg.value = t('player.errInitFailed', { detail: e?.message || String(e) })
   }
 }
 
@@ -1134,7 +1141,7 @@ function setupPlayer(): void {
       _retryCount++
       setTimeout(setupPlayer, 50)
     } else {
-      errorMsg.value = '无法初始化视频播放器'
+      errorMsg.value = t('player.errPlayerCreateFailed')
     }
     return
   }
@@ -1154,7 +1161,7 @@ function setupPlayer(): void {
 
   const url = props.url
   if (!url) {
-    errorMsg.value = '未获取到视频地址'
+    errorMsg.value = t('player.errNoVideoUrl')
     return
   }
   if (isHls(url)) {
@@ -1228,6 +1235,7 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
       try { video.playbackRate = savedSpeed; speed.value = savedSpeed } catch { /* ignore */ }
     }
     updateBuffer()
+    flushPendingSeek()
     console.log(`[Player] loadedmetadata: duration=${video.duration.toFixed(1)}s, volume=${video.volume.toFixed(2)}`)
     _aiReady = true
   })
@@ -1294,12 +1302,37 @@ function dismissResumePrompt(): void {
   showResumePrompt.value = false
   if (_resumeTimer != null) { window.clearInterval(_resumeTimer); _resumeTimer = null }
 }
+
+/**
+ * 恢复进度用的跳转。TsCache/hls.js 要等 attachMedia 之后才有可 seek 的媒体，
+ * 在这之前直接写 video.currentTime 会被浏览器丢掉、于是从 0 开始播，
+ * 所以不可用时先挂起，由 loadedmetadata 兜底执行。
+ */
+function seekWhenReady(sec: number): void {
+  const v = getVideoEl()
+  if (!v) return
+  if (v.readyState >= HTMLMediaElement.HAVE_METADATA && Number.isFinite(v.duration) && v.duration > 0) {
+    _pendingSeekSec = null
+    try { v.currentTime = sec } catch { /* ignore */ }
+    console.log(`[Player] ⏩ 跳到: ${sec.toFixed(1)}s`)
+    return
+  }
+  _pendingSeekSec = sec
+  console.log(`[Player] ⏳ 媒体尚未就绪，稍后跳到: ${sec.toFixed(1)}s`)
+}
+
+function flushPendingSeek(): void {
+  if (_pendingSeekSec == null) return
+  const sec = _pendingSeekSec
+  _pendingSeekSec = null
+  const v = getVideoEl()
+  if (!v) return
+  try { v.currentTime = sec; console.log(`[Player] ⏩ 补跳上次位置: ${sec.toFixed(1)}s`) } catch { /* ignore */ }
+}
+
 function jumpToSavedTime(autoRememberChoice: boolean): void {
   const t = savedTime.value
-  const v = getVideoEl()
-  if (t != null && v) {
-    try { v.currentTime = Math.max(0, t - 1); console.log(`[Player] ⏩ 跳到: ${t.toFixed(1)}s`) } catch { /* ignore */ }
-  }
+  if (t != null) seekWhenReady(Math.max(0, t - 1))
   if (autoRememberChoice) { saveAutoJumpConfig(true); console.log('[Player] ✅ 已记住：自动跳到上次播放位置') }
   dismissResumePrompt()
 }
@@ -1320,6 +1353,8 @@ function destroyPlayerInternal(video: HTMLVideoElement): void {
   if (cacheStatsTimer != null) { window.clearInterval(cacheStatsTimer); cacheStatsTimer = null }
   if (_saveTimer != null) { window.clearInterval(_saveTimer); _saveTimer = null }
   if (_resumeTimer != null) { window.clearInterval(_resumeTimer); _resumeTimer = null }
+  // 换集/换源时挂起的跳转必须作废，否则会把上一集的位置跳到新媒体上
+  _pendingSeekSec = null
   // 清理预缓冲定时器
   preBuffering.value = false
   if (prebufferCheckTimer) { clearInterval(prebufferCheckTimer); prebufferCheckTimer = null }
@@ -1972,12 +2007,12 @@ defineExpose({ togglePiP })
       <span class="player-title">{{ title || url }}</span>
       <span v-if="isHls(url) && cacheStats.totalSegments > 0" class="cache-info"
         :class="{ working: cacheStats.queued + cacheStats.inflight > 0 }"
-        :title="`命中: ${cacheStats.hits} 未命中: ${cacheStats.misses}；当前已缓存 ${cacheStats.entries} 片，预取目标 ${cacheStats.prefetchTarget} 片`">
-        缓存 {{ cacheStats.entries }} 片<span v-if="cacheStats.queued + cacheStats.inflight > 0"> · 预取中</span><span v-else> · 就绪</span> ·
-        命中 {{ (cacheStats.hitRate * 100).toFixed(0) }}%
+        :title="t('player.cacheStatsTip', { hits: cacheStats.hits, misses: cacheStats.misses, entries: cacheStats.entries, target: cacheStats.prefetchTarget })">
+        {{ t('player.cachedCountShort', { count: cacheStats.entries }) }}<span v-if="cacheStats.queued + cacheStats.inflight > 0"> · {{ t('player.prefetching') }}</span><span v-else> · {{ t('player.ready') }}</span> ·
+        {{ t('player.hitRateShort') }} {{ (cacheStats.hitRate * 100).toFixed(0) }}%
       </span>
       <button class="fav-btn-in-player" :class="{ 'is-fav': isFav }" :disabled="favBusy"
-        :title="isFav ? '取消收藏' : '加入收藏'" @click.stop="emit('toggleFavorite')">
+        :title="isFav ? t('detail.removeFav') : t('player.addFavorite')" @click.stop="emit('toggleFavorite')">
         {{ isFav ? '★' : '☆' }}
       </button>
     </div>
@@ -1990,11 +2025,11 @@ defineExpose({ togglePiP })
             的拖拽识别（参考 TitleBar.vue 的稳定写法：只设 --wails-draggable: drag）。
          3) z-index 高于 player-title-bar，保证拖拽区不被标题栏遮住；标题栏容器
             pointer-events:none，仅按钮区单独 pointer-events:auto。 -->
-    <div v-show="mouseInside" class="player-drag-handle" title="拖拽移动窗口" />
+    <div v-show="mouseInside" class="player-drag-handle" :title="t('player.dragMoveWindow')" />
 
     <video class="native-video" playsinline preload="auto" @click.stop="togglePlay"></video>
     <div v-if="compareEnabled" class="enhance-compare-line" :style="{ left: compareSplit + '%' }" aria-hidden="true">
-      <span>原始</span><i></i><span>增强</span>
+      <span>{{ t('player.compareOriginal') }}</span><i></i><span>{{ t('player.compareEnhanced') }}</span>
     </div>
 
     <!-- 操作 OSD：快进/快退/倍速 屏幕中央提示 -->
@@ -2008,24 +2043,20 @@ defineExpose({ togglePiP })
     <div v-if="loading" class="loading">
       <div class="loading-overlay">
         <!-- 加载动画 -->
-        <img :src="loadingGif" class="loading-spinner" alt="加载中..." />
+        <img :src="loadingGif" class="loading-spinner" :alt="t('common.loading')" />
         <!-- 缓冲信息 -->
-        <div class="loading-info" v-if="loadingTotal > 0">
+        <div class="loading-info">
           <div class="loading-text">
-            <template v-if="preBuffering">缓冲中 {{ loadingCached }}/{{ loadingTotal }} 片段</template>
-            <template v-else>已缓存 {{ loadingCached }}/{{ loadingTotal }} 片段</template>
+            <template v-if="loadingTotal > 0 && preBuffering">{{ t('player.bufferingSegments', { cached: loadingCached, total: loadingTotal }) }}</template>
+            <template v-else-if="loadingTotal > 0">{{ t('player.cachedSegments', { cached: loadingCached, total: loadingTotal }) }}</template>
+            <template v-else>{{ t('player.connecting') }} {{ loadingElapsed }}s</template>
           </div>
           <div class="loading-speed" v-if="loadingSpeed">{{ loadingSpeed }}</div>
-          <div class="loading-bar-wrap">
+          <div class="loading-bar-wrap" v-if="loadingTotal > 0">
             <div class="loading-bar-fill"
               :style="{ width: (loadingTotal > 0 ? loadingCached / loadingTotal * 100 : 0) + '%' }">
             </div>
           </div>
-        </div>
-        <!-- 无片段信息时显示文字提示 -->
-        <div class="loading-text" v-else-if="loadingElapsed > 0">
-          <template v-if="preBuffering">连接中... {{ loadingElapsed }}s</template>
-          <template v-else>加载中...</template>
         </div>
       </div>
     </div>
@@ -2034,17 +2065,17 @@ defineExpose({ togglePiP })
       <span>⚠</span>
       <span>{{ errorMsg }}</span>
       <div v-if="showNetworkError" class="error-actions">
-        <button class="error-btn error-btn-primary" @click.stop="retryPlayback()">重试播放</button>
+        <button class="error-btn error-btn-primary" @click.stop="retryPlayback()">{{ t('player.retryPlayback') }}</button>
       </div>
     </div>
 
     <!-- B 站风格：底部左侧继续播放提示（小胶囊，仅在有记忆时出现） -->
     <div v-if="showResumePrompt" class="resume-bili" @click.stop>
-      <span class="resume-bili-text">已为您定位至 <b>{{ savedTime != null ? fmt(savedTime) : '00:00' }}</b></span>
-      <button class="resume-bili-link" @click.stop="jumpToSavedTime(false)">跳回</button>
-      <button class="resume-bili-link" @click.stop="jumpToSavedTime(true)">跳回并记住</button>
+      <span class="resume-bili-text">{{ t('player.resumeLocatedAt') }} <b>{{ savedTime != null ? fmt(savedTime) : '00:00' }}</b></span>
+      <button class="resume-bili-link" @click.stop="jumpToSavedTime(false)">{{ t('player.jumpBack') }}</button>
+      <button class="resume-bili-link" @click.stop="jumpToSavedTime(true)">{{ t('player.jumpBackRemember') }}</button>
       <button class="resume-bili-link resume-bili-dismiss" @click.stop="dismissResumePrompt">
-        从头播放 ({{ resumeRemainSec }}s)
+        {{ t('player.playFromStart') }} ({{ resumeRemainSec }}s)
       </button>
     </div>
 
@@ -2058,32 +2089,32 @@ defineExpose({ togglePiP })
       <div class="ai-warning-dialog">
         <div class="ai-warning-header">
           <span class="ai-warning-icon">⚡</span>
-          <span>AI 画质增强</span>
+          <span>{{ t('player.aiEnhanceTitle') }}</span>
         </div>
         <div class="ai-warning-body">
-          <p>即将开启 AI 画质增强，将使用 GPU 实时处理视频帧：</p>
+          <p>{{ t('player.aiEnhanceIntro') }}</p>
           <ul>
-            <li><b>动画增强</b> — 针对动画/动漫优化：去色带、线条增强、平坦区域降噪</li>
-            <li><b>影视增强</b> — 针对真人影视优化：纹理锐化、暗部细节提升、压缩噪声抑制</li>
+            <li><b>{{ t('player.animeEnhance') }}</b> — {{ t('player.animeEnhanceDesc') }}</li>
+            <li><b>{{ t('player.filmEnhance') }}</b> — {{ t('player.filmEnhanceDesc') }}</li>
           </ul>
-          <p>注意：动画增强不适用于真人影视，反之亦然，请根据内容类型选择。</p>
+          <p>{{ t('player.aiEnhanceNotice') }}</p>
           <ul>
-            <li><b>GPU 计算负载</b> — 可能导致显卡温度升高和风扇加速</li>
-            <li><b>电池消耗</b> — 笔记本设备将显著增加耗电量</li>
-            <li><b>性能影响</b> — 低端设备可能出现卡顿或掉帧</li>
+            <li><b>{{ t('player.aiWarnGpuLoad') }}</b> — {{ t('player.aiWarnGpuLoadDesc') }}</li>
+            <li><b>{{ t('player.aiWarnBattery') }}</b> — {{ t('player.aiWarnBatteryDesc') }}</li>
+            <li><b>{{ t('player.aiWarnPerf') }}</b> — {{ t('player.aiWarnPerfDesc') }}</li>
           </ul>
-          <p class="ai-warning-note">如遇到性能问题，可随时切换回"原高清"模式。</p>
+          <p class="ai-warning-note">{{ t('player.aiEnhanceFallbackNote') }}</p>
         </div>
         <div class="ai-warning-footer">
-          <button class="ai-warning-btn ai-warning-btn--cancel" @click="cancelAiMode">取消</button>
-          <button class="ai-warning-btn ai-warning-btn--confirm" @click="confirmAiMode">确定开启</button>
+          <button class="ai-warning-btn ai-warning-btn--cancel" @click="cancelAiMode">{{ t('common.cancel') }}</button>
+          <button class="ai-warning-btn ai-warning-btn--confirm" @click="confirmAiMode">{{ t('player.confirmEnable') }}</button>
         </div>
       </div>
     </div>
 
     <!-- 暂停图标：右下角大字，仅暂停时显示 -->
     <div v-show="!playing && !loading" class="pause-overlay" @click.stop="togglePlay">
-      <img :src="pauseImg" class="pause-icon" alt="已暂停" />
+      <img :src="pauseImg" class="pause-icon" :alt="t('detail.paused')" />
     </div>
 
     <!-- 进度条（独立行，在控制条上方） -->
@@ -2120,17 +2151,17 @@ defineExpose({ togglePiP })
     <div class="ctrl-bar" v-show="showControls || !playing || qualityOpen || showVideoInfo" @click.stop @mousedown.stop
       @pointerdown.stop @dblclick.stop @wheel.stop>
       <!-- 上一集 -->
-      <button v-if="hasPrev" class="ctrl-btn" @click="emit('prev')" title="上一集">
+      <button v-if="hasPrev" class="ctrl-btn" @click="emit('prev')" :title="t('player.prev')">
         <Icon name="prev" :size="16" />
       </button>
 
       <!-- 播放/暂停（中间） -->
-      <button class="ctrl-btn play-btn" @click="togglePlay" :title="playing ? '暂停' : '播放'">
+      <button class="ctrl-btn play-btn" @click="togglePlay" :title="playing ? t('player.pause') : t('player.play')">
         <Icon :name="playing ? 'pause' : 'play'" :size="18" />
       </button>
 
       <!-- 下一集 -->
-      <button v-if="hasNext" class="ctrl-btn" @click="emit('next')" title="下一集">
+      <button v-if="hasNext" class="ctrl-btn" @click="emit('next')" :title="t('player.next')">
         <Icon name="next" :size="16" />
       </button>
 
@@ -2141,7 +2172,7 @@ defineExpose({ togglePiP })
             @keydown.escape.prevent="cancelTimeInput" @blur="jumpToTime" @click.stop @mousedown.stop />
         </template>
         <template v-else>
-          <div class="time-bar" @click="toggleTimeInput" title="点击跳转到指定时间">
+          <div class="time-bar" @click="toggleTimeInput" :title="t('player.seekTimeTip')">
             <span class="time-current">{{ fmt(current) }}</span>
             <span class="time-sep">/</span>
             <span class="time-duration">{{ fmt(duration) }}</span>
@@ -2161,7 +2192,7 @@ defineExpose({ togglePiP })
 
       <!-- 音量 + 垂直滑块弹出（纯 CSS hover；鼠标从图标移动到滑块不会消失） -->
       <div class="volume-group" @click.stop @mouseenter="showVolumePanel = true" @mouseleave="showVolumePanel = false">
-        <button class="ctrl-btn" @click.stop="toggleMute(); keepVisible()" :title="muted ? '取消静音' : '静音（M）'">
+        <button class="ctrl-btn" @click.stop="toggleMute(); keepVisible()" :title="muted ? t('player.unmute') : t('player.muteWithHotkey')">
           <Icon :name="muted ? 'volume-off' : 'volume'" :size="16" />
         </button>
         <div class="volume-popup" :class="{ show: showVolumePanel }" @click.stop>
@@ -2176,7 +2207,7 @@ defineExpose({ togglePiP })
       <!-- 倍速按钮 + 弹出垂直列表（hover 显示，点击切换） -->
       <div class="speed-group" @click.stop>
         <button class="ctrl-btn speed-btn"
-          @click="showSpeedPanel = !showSpeedPanel; showVolumePanel = false; keepVisible()" title="播放速度">
+          @click="showSpeedPanel = !showSpeedPanel; showVolumePanel = false; keepVisible()" :title="t('player.playbackSpeed')">
           <span class="speed-text">{{ speed }}x</span>
           <Icon name="chevron-down" :size="10" />
         </button>
@@ -2190,25 +2221,25 @@ defineExpose({ togglePiP })
       </div>
 
       <button v-if="qualityMode !== 'original' && upscaler" class="ctrl-btn" :class="{ active: compareEnabled }"
-        @click.stop="toggleEnhancementCompare" title="增强前后对比（移动鼠标调整分界线）">
+        @click.stop="toggleEnhancementCompare" :title="t('player.compareToggleTip')">
         <Icon name="layers" :size="16" />
       </button>
 
       <!-- 播放设置 -->
       <div class="playback-settings-group" @click.stop>
-        <button class="ctrl-btn" @click="showPlaybackSettings = !showPlaybackSettings; keepVisible()" title="播放设置">
+        <button class="ctrl-btn" @click="showPlaybackSettings = !showPlaybackSettings; keepVisible()" :title="t('settings.playback')">
           <Icon name="settings" :size="16" />
         </button>
         <div class="playback-settings-popup" :class="{ show: showPlaybackSettings }" @click.stop>
           <div class="playback-settings-item">
-            <span>自动播放</span>
+            <span>{{ t('player.autoPlay') }}</span>
             <label class="ps-toggle">
               <input type="checkbox" :checked="props.autoplay" @change="emit('toggleAutoplay')" />
               <span class="ps-switch"></span>
             </label>
           </div>
           <div class="playback-settings-item">
-            <span>自动连播</span>
+            <span>{{ t('player.autoNext') }}</span>
             <label class="ps-toggle">
               <input type="checkbox" :checked="autoNextEnabled" @change="toggleAutoNext" />
               <span class="ps-switch"></span>
@@ -2217,19 +2248,19 @@ defineExpose({ togglePiP })
           <div class="playback-settings-divider"></div>
           <button class="playback-settings-link" @click.stop="showPlaybackSettings = false; showShortcutModal = true">
             <Icon name="keyboard" :size="14" />
-            <span>快捷键设置</span>
+            <span>{{ t('player.shortcutSettings') }}</span>
             <Icon name="chevron-right" :size="12" />
           </button>
         </div>
       </div>
       <!-- 报告广告 -->
       <div class="report-ad-group" @click.stop>
-        <button class="ctrl-btn" @click.stop="toggleReportAd(); keepVisible()" title="报告广告域名">
+        <button class="ctrl-btn" @click.stop="toggleReportAd(); keepVisible()" :title="t('player.reportAdTip')">
           <Icon name="flag" :size="16" />
         </button>
         <div class="report-ad-popup" :class="{ show: showReportAd }" @click.stop>
-          <div class="report-ad-title">点击上报广告域名</div>
-          <div v-if="reportAdDomains.length === 0" class="report-ad-empty">未检测到片段域名</div>
+          <div class="report-ad-title">{{ t('player.reportAdHint') }}</div>
+          <div v-if="reportAdDomains.length === 0" class="report-ad-empty">{{ t('player.reportAdEmpty') }}</div>
           <button v-for="d in reportAdDomains" :key="d" class="report-ad-item" @click.stop="doReportAd(d)">
             <Icon name="shield" :size="13" />
             <span class="report-ad-domain">{{ d }}</span>
@@ -2238,171 +2269,174 @@ defineExpose({ togglePiP })
       </div>
       <!-- 视频信息 -->
       <div class="video-info-group" @click.stop>
-        <button class="ctrl-btn" @click.stop="showVideoInfo = !showVideoInfo; keepVisible()" title="视频信息">
+        <button class="ctrl-btn" @click.stop="showVideoInfo = !showVideoInfo; keepVisible()" :title="t('player.videoInfo')">
           <Icon name="info" :size="16" />
         </button>
       </div>
       <!-- 豆瓣评论（仅有豆瓣ID时显示） -->
-      <button v-if="doubanId" class="ctrl-btn" @click.stop="emit('showComments'); keepVisible()" title="查看豆瓣评论">
+      <button v-if="doubanId" class="ctrl-btn" @click.stop="emit('showComments'); keepVisible()" :title="t('player.doubanComments')">
         <Icon name="comment" :size="16" />
       </button>
       <!-- 画中画 -->
-      <button class="ctrl-btn" @click="togglePiP" :title="isPiP ? '退出画中画' : '画中画（I）'" :class="{ active: isPiP }">
+      <button class="ctrl-btn" @click="togglePiP" :title="isPiP ? t('player.exitPip') : t('player.pipWithHotkey')" :class="{ active: isPiP }">
         <Icon :name="isPiP ? 'pip-exit' : 'pip'" :size="16" />
       </button>
       <!-- 全屏 -->
-      <button class="ctrl-btn" @click="toggleFullscreen" :title="isFullscreen ? '退出全屏' : '全屏（F）'">
+      <button class="ctrl-btn" @click="toggleFullscreen" :title="isFullscreen ? t('player.exitFullscreen') : t('player.fullscreenHotkey')">
         <Icon :name="isFullscreen ? 'exit-fullscreen' : 'fullscreen'" :size="16" />
       </button>
     </div>
 
     <!-- 报告广告成功 toast -->
-    <transition name="fade">
+    <MotionTransition preset="fade">
       <div v-show="reportAdToast" class="report-ad-toast">
         <Icon name="check" :size="14" />
         <span>{{ reportAdToast }}</span>
       </div>
-    </transition>
+    </MotionTransition>
 
     <!-- ====== 视频信息模态框 ====== -->
-    <transition name="modal-fade">
+    <MotionTransition preset="fade">
       <div v-if="showVideoInfo" class="vp-modal-overlay" @click="showVideoInfo = false" @keydown="onShortcutKeyDown"
         @wheel.stop>
-        <div class="vp-modal vp-modal-info" @click.stop>
+        <MotionTransition preset="dialog" appear>
+          <div v-if="showVideoInfo" class="vp-modal vp-modal-info" @click.stop>
           <div class="vp-modal-header">
-            <span>视频信息</span>
+            <span>{{ t('player.videoInfo') }}</span>
             <button class="vp-modal-close" @click="showVideoInfo = false">
               <Icon name="x" :size="16" />
             </button>
           </div>
           <div class="vp-modal-body vp-modal-scroll" v-if="videoInfo">
             <!-- 基本播放信息 -->
-            <div class="vp-info-section-title">播放信息</div>
+            <div class="vp-info-section-title">{{ t('player.playbackInfo') }}</div>
             <div class="vp-info-grid">
               <div class="vp-info-item">
-                <span class="vp-info-label">时长</span>
+                <span class="vp-info-label">{{ t('player.durationLabel') }}</span>
                 <span class="vp-info-val">{{ videoInfo.duration }}</span>
               </div>
               <div class="vp-info-item">
-                <span class="vp-info-label">当前时间</span>
+                <span class="vp-info-label">{{ t('player.currentTimeLabel') }}</span>
                 <span class="vp-info-val">{{ videoInfo.current }} ({{ videoInfo.progress }})</span>
               </div>
               <div class="vp-info-item">
-                <span class="vp-info-label">播放速度</span>
+                <span class="vp-info-label">{{ t('player.playbackSpeed') }}</span>
                 <span class="vp-info-val">{{ videoInfo.speed }}</span>
               </div>
               <div class="vp-info-item">
-                <span class="vp-info-label">音量</span>
+                <span class="vp-info-label">{{ t('player.volume') }}</span>
                 <span class="vp-info-val">{{ videoInfo.volume }}</span>
               </div>
               <div v-if="videoInfo.buffered" class="vp-info-item">
-                <span class="vp-info-label">缓冲进度</span>
+                <span class="vp-info-label">{{ t('player.bufferProgress') }}</span>
                 <span class="vp-info-val">{{ videoInfo.buffered }}</span>
               </div>
             </div>
             <!-- 视频流信息 -->
-            <div class="vp-info-section-title">视频流</div>
+            <div class="vp-info-section-title">{{ t('player.videoStream') }}</div>
             <div class="vp-info-grid">
               <div v-if="videoInfo.resolution" class="vp-info-item">
-                <span class="vp-info-label">分辨率</span>
+                <span class="vp-info-label">{{ t('player.resolution') }}</span>
                 <span class="vp-info-val">{{ videoInfo.resolution }}</span>
               </div>
               <div v-if="videoInfo.fps" class="vp-info-item">
-                <span class="vp-info-label">帧率</span>
+                <span class="vp-info-label">{{ t('player.frameRate') }}</span>
                 <span class="vp-info-val">{{ videoInfo.fps }}</span>
               </div>
               <div v-if="videoInfo.droppedFrames > 0" class="vp-info-item">
-                <span class="vp-info-label">丢帧</span>
+                <span class="vp-info-label">{{ t('player.droppedFrames') }}</span>
                 <span class="vp-info-val vp-info-warn">{{ videoInfo.droppedFrames }}</span>
               </div>
               <div v-if="videoInfo.streamBitrate" class="vp-info-item">
-                <span class="vp-info-label">源码率</span>
+                <span class="vp-info-label">{{ t('player.sourceBitrate') }}</span>
                 <span class="vp-info-val vp-info-highlight">{{ videoInfo.streamBitrate }}</span>
               </div>
               <div v-if="videoInfo.currentBitrate" class="vp-info-item">
-                <span class="vp-info-label">当前码率</span>
+                <span class="vp-info-label">{{ t('player.currentBitrate') }}</span>
                 <span class="vp-info-val">{{ videoInfo.currentBitrate }}</span>
               </div>
               <div v-if="videoInfo.codec" class="vp-info-item">
-                <span class="vp-info-label">编码格式</span>
+                <span class="vp-info-label">{{ t('player.codecFormat') }}</span>
                 <span class="vp-info-val">{{ videoInfo.codec }}</span>
               </div>
               <div v-if="videoInfo.hlsLevelInfo" class="vp-info-item">
-                <span class="vp-info-label">HLS级别</span>
+                <span class="vp-info-label">{{ t('player.hlsLevel') }}</span>
                 <span class="vp-info-val">{{ videoInfo.hlsLevelInfo }}</span>
               </div>
             </div>
             <!-- 缓存 & 网络 -->
-            <div class="vp-info-section-title">缓存 & 网络</div>
+            <div class="vp-info-section-title">{{ t('player.cacheAndNetwork') }}</div>
             <div class="vp-info-grid">
               <div class="vp-info-item vp-info-full">
-                <span class="vp-info-label">缓存状态</span>
+                <span class="vp-info-label">{{ t('player.cacheStatus') }}</span>
                 <span class="vp-info-val">{{ videoInfo.cacheInfo }}</span>
               </div>
               <div class="vp-info-item">
-                <span class="vp-info-label">缓存模式</span>
+                <span class="vp-info-label">{{ t('player.cacheModeLabel') }}</span>
                 <span class="vp-info-val">{{ videoInfo.cacheMode }}</span>
               </div>
               <div v-if="videoInfo.networkMode" class="vp-info-item">
-                <span class="vp-info-label">网络模式</span>
+                <span class="vp-info-label">{{ t('player.networkModeLabel') }}</span>
                 <span class="vp-info-val">{{ videoInfo.networkMode }}</span>
               </div>
             </div>
             <!-- 增强 & 源 -->
-            <div class="vp-info-section-title">增强 & 源</div>
+            <div class="vp-info-section-title">{{ t('player.enhanceAndSource') }}</div>
             <div class="vp-info-grid">
               <div class="vp-info-item">
-                <span class="vp-info-label">画质模式</span>
+                <span class="vp-info-label">{{ t('player.qualityModeLabel') }}</span>
                 <span class="vp-info-val">{{ videoInfo.qualityMode }}</span>
               </div>
               <div v-if="videoInfo.sourceHost" class="vp-info-item vp-info-full">
-                <span class="vp-info-label">源域名</span>
+                <span class="vp-info-label">{{ t('player.sourceHost') }}</span>
                 <span class="vp-info-val vp-info-mono">{{ videoInfo.sourceHost }}</span>
               </div>
               <div v-if="videoInfo.sourceUrl" class="vp-info-item vp-info-full">
-                <span class="vp-info-label">源URL</span>
+                <span class="vp-info-label">{{ t('player.sourceUrlLabel') }}</span>
                 <span class="vp-info-val vp-info-mono vp-info-url">{{ videoInfo.sourceUrl }}</span>
               </div>
             </div>
           </div>
           <div class="vp-modal-body" v-else>
-            <p class="vp-empty-text">暂无视频信息</p>
+            <p class="vp-empty-text">{{ t('player.noVideoInfo') }}</p>
           </div>
-        </div>
+          </div>
+        </MotionTransition>
       </div>
-    </transition>
+    </MotionTransition>
 
     <!-- ====== 快捷键设置模态框 ====== -->
-    <transition name="modal-fade">
+    <MotionTransition preset="fade">
       <div v-if="showShortcutModal" class="vp-modal-overlay" @click="showShortcutModal = false"
         @keydown="onShortcutKeyDown" @wheel.stop>
-        <div class="vp-modal vp-modal-shortcut" @click.stop>
+        <MotionTransition preset="dialog" appear>
+          <div v-if="showShortcutModal" class="vp-modal vp-modal-shortcut" @click.stop>
           <div class="vp-modal-header">
-            <span>快捷键设置</span>
+            <span>{{ t('player.shortcutSettings') }}</span>
             <button class="vp-modal-close" @click="showShortcutModal = false">
               <Icon name="x" :size="16" />
             </button>
           </div>
           <div class="vp-modal-body vp-modal-scroll">
-            <p class="vp-modal-hint">点击按键可自定义，按下新的按键即可绑定。按 Esc 取消编辑。</p>
+            <p class="vp-modal-hint">{{ t('player.shortcutHint') }}</p>
             <div class="vp-shortcut-list">
               <div v-for="action in SHORTCUT_ACTIONS" :key="action.id" class="vp-shortcut-row">
-                <span class="vp-sc-label">{{ action.label }}</span>
-                <span class="vp-sc-desc">{{ action.description }}</span>
+                <span class="vp-sc-label">{{ t(action.labelKey) }}</span>
+                <span class="vp-sc-desc">{{ t(action.descriptionKey) }}</span>
                 <div class="vp-sc-actions">
                   <button class="vp-sc-btn" :class="{ editing: editingShortcutId === action.id }"
                     @click.stop="startEditShortcut(action.id)">
                     <template v-if="editingShortcutId === action.id">
-                      <span class="vp-sc-recording">按下新按键...</span>
+                      <span class="vp-sc-recording">{{ t('player.pressNewKey') }}</span>
                     </template>
                     <template v-else>
                       <span v-for="(k, ki) in (shortcutMap[action.id] || [])" :key="ki" class="vp-sc-key">{{ fmtKey(k)
                       }}</span>
                       <span v-if="!shortcutMap[action.id] || shortcutMap[action.id].length === 0"
-                        class="vp-sc-none">未设置</span>
+                        class="vp-sc-none">{{ t('player.notSet') }}</span>
                     </template>
                   </button>
-                  <button class="vp-sc-reset" @click.stop="resetShortcut(action.id)" title="还原默认">
+                  <button class="vp-sc-reset" @click.stop="resetShortcut(action.id)" :title="t('player.restoreDefault')">
                     <Icon name="reset" :size="12" />
                   </button>
                 </div>
@@ -2410,12 +2444,13 @@ defineExpose({ togglePiP })
             </div>
           </div>
           <div class="vp-modal-footer">
-            <button class="vp-btn-secondary" @click="resetAllShortcuts">重置全部</button>
-            <button class="vp-btn-primary" @click="showShortcutModal = false">完成</button>
+            <button class="vp-btn-secondary" @click="resetAllShortcuts">{{ t('player.resetAll') }}</button>
+            <button class="vp-btn-primary" @click="showShortcutModal = false">{{ t('common.done') }}</button>
           </div>
-        </div>
+          </div>
+        </MotionTransition>
       </div>
-    </transition>
+    </MotionTransition>
   </div>
 </template>
 
@@ -3762,16 +3797,6 @@ defineExpose({ togglePiP })
   font-variant-numeric: tabular-nums;
 }
 
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-
 /* ========= 画质选择器 ========= */
 .quality-group {
   flex-shrink: 0;
@@ -3929,28 +3954,6 @@ defineExpose({ togglePiP })
 .ai-warning-btn--confirm:hover {
   background: #ff9426;
   transform: translateY(-1px);
-}
-
-/* ========= 模态框通用 ========= */
-.modal-fade-enter-active,
-.modal-fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.modal-fade-enter-active .vp-modal,
-.modal-fade-leave-active .vp-modal {
-  transition: transform 0.2s ease, opacity 0.2s ease;
-}
-
-.modal-fade-enter-from,
-.modal-fade-leave-to {
-  opacity: 0;
-}
-
-.modal-fade-enter-from .vp-modal,
-.modal-fade-leave-to .vp-modal {
-  transform: scale(0.95) translateY(10px);
-  opacity: 0;
 }
 
 .vp-modal-overlay {

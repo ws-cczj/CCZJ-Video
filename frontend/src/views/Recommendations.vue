@@ -1,10 +1,12 @@
 <script setup lang="ts">
 defineOptions({ name: 'Recommendations' })
 import { ref, computed, onMounted } from 'vue'
+import { tr } from '../locales'
 import { useRoute, useRouter } from 'vue-router'
 import { useSourceStore } from '../stores/source'
 import { useVideoStore } from '../stores/video'
 import Icon from '../components/Icon.vue'
+import RemoteImage from '../components/RemoteImage.vue'
 import { Button, Spinner as LoadingSpinner } from '../components/ui'
 import { getDetailPath } from '../utils'
 import { computeRecommendations, type RecommendItem, extractYear } from '../utils/recommend'
@@ -58,21 +60,21 @@ onMounted(async () => {
     <div class="rec-nav">
       <Button variant="text" size="md" @click="goBack">
         <Icon name="back" :size="14" />
-        <span>返回</span>
+        <span>{{ tr('common.back') }}</span>
       </Button>
       <div class="rec-title">
-        <h2>「{{ vodName }}」的推荐视频</h2>
-        <span v-if="!loading" class="rec-count">共 {{ recommendations.length }} 个推荐</span>
+        <h2>{{ tr('recommendations.titleFor', { name: vodName }) }}</h2>
+        <span v-if="!loading" class="rec-count">{{ tr('recommendations.totalCount', { count: recommendations.length }) }}</span>
       </div>
     </div>
 
     <div v-if="loading" class="rec-loading">
-      <LoadingSpinner label="正在分析推荐..." />
+      <LoadingSpinner :label="tr('recommendations.analyzing')" />
     </div>
 
     <div v-else-if="recommendations.length === 0" class="rec-empty">
       <Icon name="film" :size="48" />
-      <p>暂无推荐视频</p>
+      <p>{{ tr('recommendations.empty') }}</p>
     </div>
 
     <div v-else class="rec-grid">
@@ -83,12 +85,12 @@ onMounted(async () => {
         @click="openVideo(item)"
       >
         <div class="rec-cover">
-          <img v-if="item.vod_pic" :src="item.vod_pic" :alt="item.vod_name" loading="lazy" referrerpolicy="no-referrer" />
+          <RemoteImage v-if="item.vod_pic" :src="item.vod_pic" :alt="item.vod_name" loading="lazy" />
           <div v-else class="rec-cover-empty">
             <Icon name="film" :size="28" />
           </div>
           <span v-if="item.vod_remarks" class="rec-remarks">{{ item.vod_remarks }}</span>
-          <div class="rec-score-badge" :title="'匹配度: ' + item.score">
+          <div class="rec-score-badge" :title="tr('recommendations.matchScore', { score: item.score })">
             {{ item.score }}
           </div>
           <div class="rec-overlay">

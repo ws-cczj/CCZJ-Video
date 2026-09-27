@@ -1,8 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { Tag } from './ui'
+import RemoteImage from './RemoteImage.vue'
 
-defineProps<{ video: { vod_pic?: string; vod_name?: string; vod_remarks?: string; type_name?: string } }>()
+defineProps<{
+  video: { vod_pic?: string; vod_name?: string; vod_remarks?: string; type_name?: string }
+  inCatalog?: boolean
+  catalogLabel?: string
+}>()
 
 const cardEl = ref<HTMLDivElement>()
 const visible = ref(false)
@@ -38,7 +43,7 @@ onBeforeUnmount(() => {
 <template>
   <div ref="cardEl" class="video-card cczj-bg-card cczj-rounded-lg cczj-overflow-hidden cczj-cursor-pointer cczj-border cczj-flex cczj-flex-col cczj-opacity-0" :class="{ visible }">
     <div class="poster-wrap cczj-relative cczj-bg-secondary cczj-overflow-hidden">
-      <img v-if="video.vod_pic" :src="video.vod_pic" :alt="video.vod_name" loading="lazy" referrerpolicy="no-referrer" class="cczj-w-full cczj-h-full cczj-block" />
+      <RemoteImage v-if="video.vod_pic" :src="video.vod_pic" :alt="video.vod_name" loading="lazy" class="cczj-w-full cczj-h-full cczj-block" />
       <div v-else class="poster-placeholder cczj-w-full cczj-h-full cczj-flex cczj-items-center cczj-justify-center cczj-text-muted cczj-opacity-40">
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <rect x="3" y="4" width="18" height="16" rx="2" />
@@ -46,6 +51,12 @@ onBeforeUnmount(() => {
         </svg>
       </div>
       <Tag v-if="video.vod_remarks" size="sm" class="poster-badge cczj-absolute">{{ video.vod_remarks }}</Tag>
+      <div v-if="inCatalog" class="catalog-badge cczj-absolute">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+          <path d="M5 13l4 4L19 7" />
+        </svg>
+        <span>{{ catalogLabel }}</span>
+      </div>
       <div class="overlay cczj-absolute cczj-inset-0 cczj-flex cczj-items-center cczj-justify-center cczj-opacity-0 cczj-transition-fast">
         <div class="play-btn cczj-rounded-full cczj-bg-accent cczj-flex cczj-items-center cczj-justify-center">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -109,6 +120,23 @@ onBeforeUnmount(() => {
 .overlay {
   background: linear-gradient(to top, rgba(0, 0, 0, 0.7) 0%, transparent 50%);
   z-index: 1;
+}
+
+/* 目录命中态：放在海报左下角，避开右上角的更新状态角标 */
+.catalog-badge {
+  left: 8px;
+  bottom: 8px;
+  z-index: 3;
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+  background: var(--success);
+  color: var(--success-contrast);
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  box-shadow: 0 2px 8px var(--success-alpha-10);
 }
 
 .video-card:hover .overlay {

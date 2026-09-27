@@ -3,11 +3,11 @@ package collect
 import (
 	"cczjVideo/app/applog"
 	"cczjVideo/app/model"
-	"cczjVideo/app/util"
 	"encoding/json"
 	"fmt"
 	"reflect"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -46,10 +46,6 @@ func CleanHTML(html string) string {
 	return text
 }
 
-func CompressTextField(text string) string {
-	return util.CompressIfLong(text)
-}
-
 func ProcessVideo(v *VideoData) *VideoData {
 	if v.VodName == "" || v.TypeName == "" {
 		return nil
@@ -57,24 +53,15 @@ func ProcessVideo(v *VideoData) *VideoData {
 
 	// 清理字段值前后的反引号和其他包裹字符
 	v.VodPic = cleanField(v.VodPic)
-	v.VodPlayUrl = cleanField(v.VodPlayUrl)
-	v.VodDownUrl = cleanField(v.VodDownUrl)
 	v.VodRemarks = cleanField(v.VodRemarks)
 	v.VodYear = cleanField(v.VodYear)
 	v.VodArea = cleanField(v.VodArea)
 	v.VodLang = cleanField(v.VodLang)
 
-	v.VodContent = CleanHTML(v.VodContent)
-	v.VodContent = CompressTextField(v.VodContent)
-
-	v.VodActor = CleanHTML(v.VodActor)
-	v.VodActor = CompressTextField(v.VodActor)
-
-	v.VodDirector = CleanHTML(v.VodDirector)
-	v.VodDirector = CompressTextField(v.VodDirector)
-
-	v.VodPlayUrl = CompressTextField(v.VodPlayUrl)
-	v.VodDownUrl = CompressTextField(v.VodDownUrl)
+	// Detail and playback fields are intentionally not processed or persisted
+	// during catalog collection.
+	v.VodContent, v.VodActor, v.VodDirector = "", "", ""
+	v.VodPlayUrl, v.VodDownUrl = "", ""
 
 	return v
 }
@@ -110,28 +97,28 @@ type VideoData struct {
 // DefaultFieldAliases 内置默认字段别名映射（兼容常见源站字段名）
 // 基于分析多个采集源返回格式总结，包含所有常见变体
 var DefaultFieldAliases = map[string][]string{
-	"vod_id":       {"vod_id", "id", "video_id", "vid", "videoId", "VideoId"},
-	"vod_name":     {"vod_name", "title", "vod_title", "name", "vodname", "VideoName"},
+	"vod_id":   {"vod_id", "id", "video_id", "vid", "videoId", "VideoId"},
+	"vod_name": {"vod_name", "title", "vod_title", "name", "vodname", "VideoName"},
 	// 注意：vod_pic_screenshot / vod_pic_thumb / vod_pic_slide 不放在此处，
 	// 因为 API 返回这些字段可能为空字符串，会因 map 随机迭代顺序覆盖有效的 vod_pic。
 	// 它们的回退逻辑在 ParseVideoWithMapping 的 "vod_pic 回退" 部分单独处理。
-	"vod_pic":      {"vod_pic", "poster", "vod_poster", "thumb", "vod_thumb", "cover", "vod_cover", "img", "vod_img", "pic", "image"},
-	"vod_actor":    {"vod_actor", "actor", "actors", "vod_actors", "author", "authors", "vod_authors"},
-	"vod_director": {"vod_director", "director", "directors", "vod_directors"},
-	"vod_content":  {"vod_content", "content", "desc", "description", "vod_desc", "vod_description", "detail", "vod_detail", "summary", "vod_blurb"},
-	"vod_year":     {"vod_year", "year", "vodyear", "release_year"},
-	"vod_area":     {"vod_area", "area", "vodarea", "country"},
-	"vod_lang":     {"vod_lang", "lang", "language", "vodlanguage"},
-	"vod_class":    {"vod_class", "class", "category", "type"},
-	"type_id":      {"type_id", "typeid", "category_id", "class_id", "type_id_1"},
-	"type_name":    {"type_name", "typename", "category_name", "class_name", "type"},
-	"vod_play_url": {"vod_play_url", "play_url", "playurl", "url", "vodurl", "play_urls", "source"},
-	"vod_down_url": {"vod_down_url", "down_url", "download_url", "downurl"},
-	"vod_remarks":  {"vod_remarks", "remarks", "vodremark", "note", "vod_note"},
-	"vod_tag":      {"vod_tag", "tag", "tags", "keywords", "vod_keywords", "vod_tags"},
-	"vod_en":       {"vod_en", "vod_enname", "enname", "en_name", "english_name"},
+	"vod_pic":          {"vod_pic", "poster", "vod_poster", "thumb", "vod_thumb", "cover", "vod_cover", "img", "vod_img", "pic", "image"},
+	"vod_actor":        {"vod_actor", "actor", "actors", "vod_actors"},
+	"vod_director":     {"vod_director", "director", "directors", "vod_directors"},
+	"vod_content":      {"vod_content", "content", "desc", "description", "vod_desc", "vod_description", "detail", "vod_detail", "summary", "vod_blurb"},
+	"vod_year":         {"vod_year", "year", "vodyear", "release_year"},
+	"vod_area":         {"vod_area", "area", "vodarea", "country"},
+	"vod_lang":         {"vod_lang", "lang", "language", "vodlanguage"},
+	"vod_class":        {"vod_class", "class", "category"},
+	"type_id":          {"type_id", "typeid", "category_id", "class_id", "type_id_1"},
+	"type_name":        {"type_name", "typename", "category_name", "class_name", "type"},
+	"vod_play_url":     {"vod_play_url", "play_url", "playurl", "url", "vodurl", "play_urls", "source"},
+	"vod_down_url":     {"vod_down_url", "down_url", "download_url", "downurl"},
+	"vod_remarks":      {"vod_remarks", "remarks", "vodremark", "note", "vod_note"},
+	"vod_tag":          {"vod_tag", "tag", "tags", "keywords", "vod_keywords", "vod_tags"},
+	"vod_en":           {"vod_en", "vod_enname", "enname", "en_name", "english_name"},
 	"vod_douban_id":    {"vod_douban_id", "douban_id", "doubanid", "db_id"},
-	"vod_douban_score": {"vod_douban_score", "douban_score", "douban_score", "score", "rating"},
+	"vod_douban_score": {"vod_douban_score", "douban_score", "doubanid_score"},
 	"vod_sub":          {"vod_sub", "sub", "subtitle", "vod_subtitle"},
 	"vod_status":       {"vod_status", "status"},
 	"vod_letter":       {"vod_letter", "letter"},
@@ -155,6 +142,83 @@ var DefaultFieldAliases = map[string][]string{
 
 // ParseVideoWithMapping 通用视频解析函数：支持自定义字段映射
 // 逻辑：遍历原始 JSON 的所有字段，尝试映射到 Video 结构
+// Alias precedence is declared explicitly because Go map iteration order is
+// intentionally random. Configuration mapping always wins; then an exact
+// target name wins; finally the first alias in this stable list wins.
+var defaultFieldAliasOrder = []string{
+	"vod_id", "vod_name", "vod_pic", "type_id", "type_name", "vod_class",
+	"vod_year", "vod_area", "vod_lang", "vod_remarks", "vod_score",
+	"vod_douban_score", "vod_douban_id", "vod_actor", "vod_director",
+	"vod_content", "vod_play_url", "vod_down_url", "vod_tag", "vod_en",
+	"vod_sub", "vod_status", "vod_letter", "vod_total", "vod_pubdate",
+	"vod_duration", "vod_hits", "vod_hits_day", "vod_hits_week",
+	"vod_hits_month", "vod_score_all", "vod_score_num", "vod_isend",
+	"vod_time", "vod_play_from", "vod_play_server", "vod_play_note", "vod_author",
+}
+
+type fieldAliasTarget struct {
+	field string
+	rank  int
+}
+
+var defaultFieldAliasIndex = buildDefaultFieldAliasIndex()
+
+func buildDefaultFieldAliasIndex() map[string]fieldAliasTarget {
+	index := make(map[string]fieldAliasTarget)
+	rank := 0
+	for _, target := range defaultFieldAliasOrder {
+		for _, alias := range DefaultFieldAliases[target] {
+			if _, alreadyAssigned := index[alias]; !alreadyAssigned {
+				index[alias] = fieldAliasTarget{field: target, rank: rank}
+			}
+			rank++
+		}
+	}
+	return index
+}
+
+type fieldCandidate struct {
+	source   string
+	target   string
+	value    interface{}
+	priority int
+}
+
+func collectFieldCandidates(raw map[string]interface{}, fieldMapping map[string]string) []fieldCandidate {
+	candidates := make([]fieldCandidate, 0, len(raw))
+	for source, value := range raw {
+		if value == nil {
+			continue
+		}
+		if text, ok := value.(string); ok && text == "" {
+			continue
+		}
+		if mapped, ok := fieldMapping[source]; ok && mapped != "" {
+			candidates = append(candidates, fieldCandidate{source: source, target: mapped, value: value, priority: 0})
+			continue
+		}
+		alias, ok := defaultFieldAliasIndex[source]
+		if !ok {
+			continue
+		}
+		priority := 100 + alias.rank
+		if source == alias.field {
+			priority = 1
+		}
+		candidates = append(candidates, fieldCandidate{source: source, target: alias.field, value: value, priority: priority})
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].target != candidates[j].target {
+			return candidates[i].target < candidates[j].target
+		}
+		if candidates[i].priority != candidates[j].priority {
+			return candidates[i].priority < candidates[j].priority
+		}
+		return candidates[i].source < candidates[j].source
+	})
+	return candidates
+}
+
 func ParseVideoWithMapping(rawData []byte, fieldMapping map[string]string) (*model.Video, error) {
 	var rawMap map[string]interface{}
 	if err := json.Unmarshal(rawData, &rawMap); err != nil {
@@ -165,26 +229,13 @@ func ParseVideoWithMapping(rawData []byte, fieldMapping map[string]string) (*mod
 	vType := reflect.ValueOf(v).Elem()
 	vTypeStruct := vType.Type()
 
-	for srcKey, srcValue := range rawMap {
-		if srcValue == nil {
+	assigned := make(map[string]bool)
+	for _, candidate := range collectFieldCandidates(rawMap, fieldMapping) {
+		targetFieldName := candidate.target
+		if assigned[targetFieldName] {
 			continue
 		}
-
-		var targetFieldName string
-
-		if fieldMapping != nil && len(fieldMapping) > 0 {
-			if mappedKey, ok := fieldMapping[srcKey]; ok {
-				targetFieldName = mappedKey
-			}
-		}
-
-		if targetFieldName == "" {
-			targetFieldName = findTargetField(srcKey)
-		}
-
-		if targetFieldName == "" {
-			continue
-		}
+		srcValue := candidate.value
 
 		for i := 0; i < vType.NumField(); i++ {
 			field := vType.Field(i)
@@ -200,13 +251,14 @@ func ParseVideoWithMapping(rawData []byte, fieldMapping map[string]string) (*mod
 					break
 				}
 				setFieldValue(field, srcValue)
+				assigned[targetFieldName] = true
 				break
 			}
 		}
 	}
 
 	applog.Debug("[FieldMapping] 解析结果 - vod_id: %s, vod_name: %s, vod_pic: %s, vod_actor: %s, vod_director: %s, vod_content: %s",
-			v.VodId.String(), v.VodName, v.VodPic, v.VodActor, v.VodDirector, truncate(v.VodContent, 50))
+		v.VodId.String(), v.VodName, v.VodPic, v.VodActor, v.VodDirector, truncate(v.VodContent, 50))
 
 	// vod_pic 回退：列表 API 的 vod_pic 可能为空，但 vod_pic_thumb/vod_pic_screenshot/vod_pic_slide 可能有值
 	if v.VodPic == "" {
@@ -225,12 +277,8 @@ func ParseVideoWithMapping(rawData []byte, fieldMapping map[string]string) (*mod
 
 // findTargetField 根据源字段名查找目标字段名
 func findTargetField(srcKey string) string {
-	for targetField, aliases := range DefaultFieldAliases {
-		for _, alias := range aliases {
-			if alias == srcKey {
-				return targetField
-			}
-		}
+	if target, ok := defaultFieldAliasIndex[srcKey]; ok {
+		return target.field
 	}
 	return ""
 }

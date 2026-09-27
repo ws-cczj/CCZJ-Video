@@ -3,7 +3,6 @@ package db
 import (
 	"cczjVideo/app/applog"
 	"cczjVideo/app/model"
-	"cczjVideo/app/util"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -19,33 +18,30 @@ import (
 
 // GlobalVideoRow 全局视频表行（合并原 douban_info，包含所有共享元数据）
 type GlobalVideoRow struct {
-	Id                  int    `db:"id"`
-	VodName             string `db:"vod_name"`
-	TypeId              int    `db:"type_id"`
-	Year                string `db:"year"`
-	Area                string `db:"area"`
-	Lang                string `db:"lang"`
-	Director            string `db:"director"`
-	Writer              string `db:"writer"`
-	Actor               string `db:"actor"`
-	Tag                 string `db:"tag"`
-	Content             string `db:"content"`
-	Pic                 string `db:"pic"`
-	DoubanId            string `db:"douban_id"`
-	DoubanScore         string `db:"douban_score"`
-	DoubanVotes         string `db:"douban_votes"`
-	DoubanHotness       string `db:"douban_hotness"`
-	Genre               string `db:"genre"`
-	ReleaseDate         string `db:"release_date"`
-	Duration            string `db:"duration"`
-	Aka                 string `db:"aka"`
-	Imdb                string `db:"imdb"`
-	SeasonCount         string `db:"season_count"`
-	EpisodeCount        string `db:"episode_count"`
+	Id                   int     `db:"id"`
+	VodName              string  `db:"vod_name"`
+	TypeId               int     `db:"type_id"`
+	Year                 string  `db:"year"`
+	Area                 string  `db:"area"`
+	Lang                 string  `db:"lang"`
+	Writer               string  `db:"writer"`
+	Tag                  string  `db:"tag"`
+	Pic                  string  `db:"pic"`
+	DoubanId             string  `db:"douban_id"`
+	DoubanScore          string  `db:"douban_score"`
+	DoubanVotes          string  `db:"douban_votes"`
+	DoubanHotness        string  `db:"douban_hotness"`
+	Genre                string  `db:"genre"`
+	ReleaseDate          string  `db:"release_date"`
+	Duration             string  `db:"duration"`
+	Aka                  string  `db:"aka"`
+	Imdb                 string  `db:"imdb"`
+	SeasonCount          string  `db:"season_count"`
+	EpisodeCount         string  `db:"episode_count"`
 	DoubanCooldownUntil  *string `db:"douban_cooldown_until"`
-	DoubanSearchFailures int    `db:"douban_search_failures"`
-	CreatedAt            string `db:"created_at"`
-	UpdatedAt            string `db:"updated_at"`
+	DoubanSearchFailures int     `db:"douban_search_failures"`
+	CreatedAt            string  `db:"created_at"`
+	UpdatedAt            string  `db:"updated_at"`
 }
 
 // DoubanInfoRow 豆瓣信息视图（映射到 global_video 的豆瓣相关字段，兼容 updater.go 的调用方式）
@@ -128,37 +124,28 @@ func UpsertGlobalVideo(v *model.Video) (int64, error) {
 		return 0, fmt.Errorf("vod_name is empty")
 	}
 
-	// 传入元数据前先解压缩，否则模糊匹配中的 metadataMatch 无法正确比对
-	director := util.DecompressIfNeeded(v.VodDirector)
-	actor := util.DecompressIfNeeded(v.VodActor)
-
 	// 解析类型ID
 	typeId := resolveGlobalTypeIdInt(v.TypeName)
 
 	// 使用智能匹配获取 global_id（精确→归一化→模糊+元数据）
-	globalID, err := GetOrCreateGlobalIDWithMeta(v.VodName, string(v.VodYear), director, actor, typeId)
+	globalID, err := GetOrCreateGlobalIDWithMeta(v.VodName, string(v.VodYear), typeId)
 	if err != nil {
 		return 0, err
 	}
 
 	// 合并更新非空字段（写入 global_video 的字段保持明文，不压缩）
-	content := util.DecompressIfNeeded(v.VodContent)
 	_, err = instance.Exec(`UPDATE global_video SET
 		type_id=CASE WHEN ? != 0 THEN ? ELSE type_id END,
 		pic=CASE WHEN ? != '' THEN ? ELSE pic END,
 		year=CASE WHEN ? != '' THEN ? ELSE year END,
 		area=CASE WHEN ? != '' THEN ? ELSE area END,
 		lang=CASE WHEN ? != '' THEN ? ELSE lang END,
-		director=CASE WHEN ? != '' THEN ? ELSE director END,
-		actor=CASE WHEN ? != '' THEN ? ELSE actor END,
 		tag=CASE WHEN ? != '' THEN ? ELSE tag END,
-		content=CASE WHEN ? != '' THEN ? ELSE content END,
 		updated_at=CURRENT_TIMESTAMP
 		WHERE id = ?`,
 		typeId, typeId,
 		v.VodPic, v.VodPic, v.VodYear, v.VodYear, v.VodArea, v.VodArea,
-		v.VodLang, v.VodLang, director, director, actor, actor,
-		v.VodTag, v.VodTag, content, content, globalID)
+		v.VodLang, v.VodLang, v.VodTag, v.VodTag, globalID)
 	if err != nil {
 		applog.Error("[Douban] Failed to update global_video for '%s': %v", v.VodName, err)
 		return 0, err
@@ -169,7 +156,7 @@ func UpsertGlobalVideo(v *model.Video) (int64, error) {
 // GetGlobalVideoByName 按 vod_name 查询全局视频
 func GetGlobalVideoByName(vodName string) (*GlobalVideoRow, error) {
 	var row GlobalVideoRow
-	err := instance.Get(&row, `SELECT id, vod_name, type_id, year, area, lang, director, writer, actor, tag, content, pic, douban_id, douban_score, douban_votes, genre, release_date, duration, aka, imdb, season_count, episode_count, douban_cooldown_until, douban_search_failures, created_at, updated_at FROM global_video WHERE vod_name = ? LIMIT 1`, vodName)
+	err := instance.Get(&row, `SELECT id, vod_name, type_id, year, area, lang, writer, tag, pic, douban_id, douban_score, douban_votes, genre, release_date, duration, aka, imdb, season_count, episode_count, douban_cooldown_until, douban_search_failures, created_at, updated_at FROM global_video WHERE vod_name = ? LIMIT 1`, vodName)
 	if err != nil {
 		return nil, err
 	}
@@ -196,9 +183,7 @@ func UpsertDoubanInfo(info *DoubanInfoRow) error {
 		douban_id = CASE WHEN ? != '' THEN ? ELSE douban_id END,
 		douban_score = CASE WHEN ? != '' THEN ? ELSE douban_score END,
 		douban_votes = CASE WHEN ? != '' THEN ? ELSE douban_votes END,
-		director = CASE WHEN ? != '' THEN ? ELSE director END,
 		writer = CASE WHEN ? != '' THEN ? ELSE writer END,
-		actor = CASE WHEN ? != '' THEN ? ELSE actor END,
 		genre = CASE WHEN ? != '' THEN ? ELSE genre END,
 		area = CASE WHEN ? != '' THEN ? ELSE area END,
 		lang = CASE WHEN ? != '' THEN ? ELSE lang END,
@@ -217,9 +202,7 @@ func UpsertDoubanInfo(info *DoubanInfoRow) error {
 		info.SubjectID, info.SubjectID,
 		info.Rating, info.Rating,
 		info.Votes, info.Votes,
-		info.Director, info.Director,
 		info.Writer, info.Writer,
-		info.Actor, info.Actor,
 		info.Genre, info.Genre,
 		info.Country, info.Country,
 		info.Language, info.Language,
@@ -244,7 +227,7 @@ func GetDoubanInfoByGlobalID(globalID int) (*DoubanInfoRow, error) {
 	err := instance.Get(&row, `SELECT
 		id AS global_id,
 		douban_id AS subject_id, douban_score AS rating, douban_votes AS votes,
-		director, writer, actor, genre,
+		writer, genre,
 		area AS country, lang AS language,
 		release_date, season_count, episode_count, duration,
 		aka, imdb, pic AS poster_url, updated_at, vod_name
@@ -261,11 +244,117 @@ func GetGlobalIDByDoubanSubject(subjectID string) int {
 		return 0
 	}
 	var globalID int
-	err := instance.Get(&globalID, `SELECT id FROM global_video WHERE douban_id = ? LIMIT 1`, subjectID)
+	err := instance.Get(&globalID, `
+		SELECT id
+		FROM global_video
+		WHERE douban_id = ?
+		ORDER BY created_at ASC, id ASC
+		LIMIT 1`, subjectID)
 	if err != nil {
 		return 0
 	}
 	return globalID
+}
+
+// doubanSiblingDonor 是同一条 douban_id 下已经补全过的记录，用来给缺字段的兄弟记录回填。
+type doubanSiblingDonor struct {
+	GlobalID      int64  `db:"global_id"`
+	DoubanID      string `db:"douban_id"`
+	Score         string `db:"score"`
+	Votes         string `db:"votes"`
+	Writer        string `db:"writer"`
+	Genre         string `db:"genre"`
+	Area          string `db:"area"`
+	Lang          string `db:"lang"`
+	ReleaseDate   string `db:"release_date"`
+	SeasonCount   string `db:"season_count"`
+	EpisodeCount  string `db:"episode_count"`
+	Duration      string `db:"duration"`
+	Aka           string `db:"aka"`
+	Imdb          string `db:"imdb"`
+	Pic           string `db:"pic"`
+	DoubanHotness string `db:"douban_hotness"`
+}
+
+// InheritDoubanFieldsFromSiblings 把同 douban_id 兄弟记录已有的豆瓣字段补齐给缺字段的记录。
+//
+// 归一化只比较标题，所以「求救信号」和「求救信号2026」会各自建一条 global_video；
+// 两条都被搜到同一个 subject_id 后，GetIncompleteDoubanInfo 又会用 NOT EXISTS 把
+// 后一条永久排除掉（兄弟已有数据就不必再打豆瓣），于是它永远停在缺评分的状态。
+// 这里补上缺失的那一步：不去合并本地主记录，只把兄弟的豆瓣字段抄过来。
+// 只填空、不覆盖，且不动 vod_name/type_id/year 这些采集侧字段。
+func InheritDoubanFieldsFromSiblings() (int, error) {
+	q := `SELECT
+		g.id AS global_id,
+		g.douban_id,
+		COALESCE(s.douban_score, '') AS score,
+		COALESCE(s.douban_votes, '') AS votes,
+		COALESCE(s.writer, '') AS writer,
+		COALESCE(s.genre, '') AS genre,
+		COALESCE(s.area, '') AS area,
+		COALESCE(s.lang, '') AS lang,
+		COALESCE(s.release_date, '') AS release_date,
+		COALESCE(s.season_count, '') AS season_count,
+		COALESCE(s.episode_count, '') AS episode_count,
+		COALESCE(s.duration, '') AS duration,
+		COALESCE(s.aka, '') AS aka,
+		COALESCE(s.imdb, '') AS imdb,
+		COALESCE(s.pic, '') AS pic,
+		COALESCE(s.douban_hotness, '') AS douban_hotness
+		FROM global_video g
+		JOIN global_video s ON s.id = (
+			SELECT donor.id
+			FROM global_video donor
+			WHERE donor.douban_id = g.douban_id
+			  AND donor.id != g.id
+			  AND TRIM(COALESCE(donor.douban_score, '')) != ''
+			ORDER BY donor.updated_at ASC, donor.id ASC
+			LIMIT 1
+		)
+		WHERE TRIM(COALESCE(g.douban_score, '')) = ''`
+
+	var donors []*doubanSiblingDonor
+	if err := instance.Select(&donors, q); err != nil {
+		applog.Error("[Douban] InheritDoubanFieldsFromSiblings query failed: %v", err)
+		return 0, err
+	}
+	if len(donors) == 0 {
+		return 0, nil
+	}
+
+	update := `UPDATE global_video SET
+		douban_score = CASE WHEN TRIM(COALESCE(douban_score, '')) = '' THEN ? ELSE douban_score END,
+		douban_votes = CASE WHEN TRIM(COALESCE(douban_votes, '')) = '' THEN ? ELSE douban_votes END,
+		writer = CASE WHEN TRIM(COALESCE(writer, '')) = '' THEN ? ELSE writer END,
+		genre = CASE WHEN TRIM(COALESCE(genre, '')) = '' THEN ? ELSE genre END,
+		area = CASE WHEN TRIM(COALESCE(area, '')) = '' THEN ? ELSE area END,
+		lang = CASE WHEN TRIM(COALESCE(lang, '')) = '' THEN ? ELSE lang END,
+		release_date = CASE WHEN TRIM(COALESCE(release_date, '')) = '' THEN ? ELSE release_date END,
+		season_count = CASE WHEN TRIM(COALESCE(season_count, '')) = '' THEN ? ELSE season_count END,
+		episode_count = CASE WHEN TRIM(COALESCE(episode_count, '')) = '' THEN ? ELSE episode_count END,
+		duration = CASE WHEN TRIM(COALESCE(duration, '')) = '' THEN ? ELSE duration END,
+		aka = CASE WHEN TRIM(COALESCE(aka, '')) = '' THEN ? ELSE aka END,
+		imdb = CASE WHEN TRIM(COALESCE(imdb, '')) = '' THEN ? ELSE imdb END,
+		pic = CASE WHEN TRIM(COALESCE(pic, '')) = '' THEN ? ELSE pic END,
+		douban_hotness = CASE WHEN TRIM(COALESCE(douban_hotness, '')) = '' THEN ? ELSE douban_hotness END
+		WHERE id = ?`
+
+	inherited := 0
+	for _, d := range donors {
+		if d == nil {
+			continue
+		}
+		if _, err := instance.Exec(update,
+			d.Score, d.Votes, d.Writer, d.Genre, d.Area, d.Lang, d.ReleaseDate,
+			d.SeasonCount, d.EpisodeCount, d.Duration, d.Aka, d.Imdb, d.Pic, d.DoubanHotness,
+			d.GlobalID); err != nil {
+			applog.Error("[Douban] 同豆瓣ID回填失败 global_id=%d douban_id=%s: %v", d.GlobalID, d.DoubanID, err)
+			continue
+		}
+		inherited++
+		applog.Info("[Douban] 同豆瓣ID %s：global_id=%d 继承了兄弟记录的豆瓣字段", d.DoubanID, d.GlobalID)
+	}
+	return inherited, nil
 }
 
 // UpdateDoubanHotness 直接更新某个视频的热度值
@@ -280,13 +369,43 @@ func UpdateDoubanHotness(globalID int, hotness string) error {
 	return err
 }
 
-// GetGlobalVideoByDoubanID 通过豆瓣 subject_id 查找全局视频完整信息
+// GetGlobalVideoByDoubanID 通过豆瓣 subject_id 查找最早建立的本地主记录。
+// 豆瓣 ID 只用于外部关联，不能因为另一条记录字段更完整就改变本地主记录。
 func GetGlobalVideoByDoubanID(doubanID string) (*GlobalVideoRow, error) {
 	if doubanID == "" {
 		return nil, fmt.Errorf("douban_id is empty")
 	}
 	var row GlobalVideoRow
-	err := instance.Get(&row, `SELECT * FROM global_video WHERE douban_id = ? LIMIT 1`, doubanID)
+	err := instance.Get(&row, `
+		SELECT *
+		FROM global_video
+		WHERE douban_id = ?
+		ORDER BY created_at ASC, id ASC
+		LIMIT 1`, doubanID)
+	if err != nil {
+		return nil, err
+	}
+	return &row, nil
+}
+
+// getBestGlobalVideoByDoubanID 只用于展示/回填时挑选字段最完整的副本，
+// 不参与 global_id 归属判断，也不改变本地主记录。
+func getBestGlobalVideoByDoubanID(doubanID string) (*GlobalVideoRow, error) {
+	if doubanID == "" {
+		return nil, fmt.Errorf("douban_id is empty")
+	}
+	var row GlobalVideoRow
+	err := instance.Get(&row, `
+		SELECT *
+		FROM global_video
+		WHERE douban_id = ?
+		ORDER BY
+			CASE WHEN TRIM(COALESCE(douban_score, '')) != '' THEN 0 ELSE 1 END,
+			CASE WHEN TRIM(COALESCE(douban_votes, '')) != '' THEN 0 ELSE 1 END,
+			CASE WHEN TRIM(COALESCE(pic, '')) != '' THEN 0 ELSE 1 END,
+			updated_at DESC,
+			id ASC
+		LIMIT 1`, doubanID)
 	if err != nil {
 		return nil, err
 	}
@@ -300,6 +419,27 @@ func GetRecentGlobalVideos(limit int) ([]GlobalVideoRow, error) {
 	}
 	var rows []GlobalVideoRow
 	err := instance.Select(&rows, `SELECT * FROM global_video WHERE pic != '' ORDER BY updated_at DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+// GetCachedDoubanChartVideos returns the last chart-like rows persisted by the
+// chart updater. It is intentionally a read-only fallback for when Douban is
+// temporarily unavailable or presents an anti-crawl page.
+func GetCachedDoubanChartVideos(limit int) ([]GlobalVideoRow, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	var rows []GlobalVideoRow
+	err := instance.Select(&rows, `
+		SELECT *
+		FROM global_video
+		WHERE TRIM(COALESCE(douban_id, '')) != ''
+		  AND TRIM(COALESCE(pic, '')) != ''
+		ORDER BY CAST(douban_hotness AS INTEGER) DESC, updated_at DESC, id ASC
+		LIMIT ?`, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -357,20 +497,14 @@ func SearchVideoInSourceTable(sourceKey, title string) (string, bool) {
 	if sourceKey == "" || title == "" {
 		return "", false
 	}
-	tn := VideoTableName(sourceKey)
-	if !TableExists(tn) {
-		return "", false
-	}
-
-	// 精确匹配优先
 	var vodID string
-	err := instance.Get(&vodID, fmt.Sprintf(`SELECT CAST(vod_id AS TEXT) FROM %s WHERE vod_name = ? LIMIT 1`, tn), title)
+	err := instance.Get(&vodID, `SELECT source_vod_id FROM source_videos WHERE source_key=? AND lifecycle_state='active' AND `+catalogTypeVisibilityClause("source_videos")+` AND vod_name=? LIMIT 1`, sourceKey, title)
 	if err == nil && vodID != "" {
 		return vodID, true
 	}
 
 	// 模糊匹配：标题包含
-	err = instance.Get(&vodID, fmt.Sprintf(`SELECT CAST(vod_id AS TEXT) FROM %s WHERE vod_name LIKE ? LIMIT 1`, tn), "%"+title+"%")
+	err = instance.Get(&vodID, `SELECT source_vod_id FROM source_videos WHERE source_key=? AND lifecycle_state='active' AND `+catalogTypeVisibilityClause("source_videos")+` AND vod_name LIKE ? LIMIT 1`, sourceKey, "%"+title+"%")
 	if err == nil && vodID != "" {
 		return vodID, true
 	}
@@ -384,7 +518,7 @@ func GetDoubanInfoByVodName(vodName string) (*DoubanInfoRow, error) {
 	err := instance.Get(&row, `SELECT
 		id AS global_id,
 		douban_id AS subject_id, douban_score AS rating, douban_votes AS votes,
-		director, writer, actor, genre,
+		writer, genre,
 		area AS country, lang AS language,
 		release_date, season_count, episode_count, duration,
 		aka, imdb, pic AS poster_url, updated_at, vod_name
@@ -406,7 +540,7 @@ func GetDoubanInfoByKeyword(keyword string) (*DoubanInfoRow, error) {
 	err = instance.Select(&rows, `SELECT
 		id AS global_id,
 		douban_id AS subject_id, douban_score AS rating, douban_votes AS votes,
-		director, writer, actor, genre,
+		writer, genre,
 		area AS country, lang AS language,
 		release_date, season_count, episode_count, duration,
 		aka, imdb, pic AS poster_url, updated_at, vod_name
@@ -427,13 +561,23 @@ func GetIncompleteDoubanInfo(limit int) ([]*DoubanInfoRow, error) {
 	q := `SELECT
 		id AS global_id,
 		douban_id AS subject_id, douban_score AS rating, douban_votes AS votes,
-		director, writer, actor, genre,
+		writer, genre,
 		area AS country, lang AS language,
 		release_date, season_count, episode_count, duration,
 		aka, imdb, pic AS poster_url, updated_at, vod_name
 		FROM global_video
 		WHERE douban_id != '' AND douban_id != '0'
-		AND (douban_score = '' OR director = '' OR actor = '')
+		AND douban_score = ''
+		AND NOT EXISTS (
+			SELECT 1
+			FROM global_video complete
+			WHERE complete.douban_id = global_video.douban_id
+			  AND complete.id != global_video.id
+			  AND (
+				TRIM(COALESCE(complete.douban_score, '')) != ''
+				OR TRIM(COALESCE(complete.douban_votes, '')) != ''
+			  )
+		)
 		AND (douban_cooldown_until IS NULL OR douban_cooldown_until < ?)
 		ORDER BY updated_at ASC LIMIT ?`
 	err := instance.Select(&rows, q,
@@ -456,9 +600,7 @@ func GetDoubanInfoMissingSubjectID(limit int) ([]*DoubanInfoRow, error) {
 		COALESCE(gv.douban_id, '') AS subject_id,
 		COALESCE(gv.douban_score, '') AS rating,
 		COALESCE(gv.douban_votes, '') AS votes,
-		COALESCE(gv.director, '') AS director,
 		COALESCE(gv.writer, '') AS writer,
-		COALESCE(gv.actor, '') AS actor,
 		COALESCE(gv.genre, '') AS genre,
 		COALESCE(gv.area, '') AS country,
 		COALESCE(gv.lang, '') AS language,
@@ -501,12 +643,6 @@ func EnrichVideoWithDouban(v *model.Video) {
 	if v.VodPic == "" && row.PosterURL != "" {
 		v.VodPic = row.PosterURL
 	}
-	if v.VodDirector == "" && row.Director != "" {
-		v.VodDirector = row.Director
-	}
-	if v.VodActor == "" && row.Actor != "" {
-		v.VodActor = row.Actor
-	}
 	if v.VodArea == "" && row.Country != "" {
 		v.VodArea = row.Country
 	}
@@ -536,6 +672,64 @@ func EnrichVideoWithDouban(v *model.Video) {
 	}
 }
 
+// EnrichVideoWithDoubanByGlobalID 按 catalog 的 global_id 精确回填豆瓣字段。
+// 详情按需拉取后源站数据通常不带 vod_douban_id，必须从 global_video 回填，
+// 否则播放页的豆瓣评论入口无法显示。global_id 不可用时退回按名称匹配。
+func EnrichVideoWithDoubanByGlobalID(v *model.Video, globalID int64) {
+	if v == nil || instance == nil {
+		return
+	}
+	if globalID <= 0 {
+		EnrichVideoWithDouban(v)
+		return
+	}
+	row, err := GetGlobalVideoByID(int(globalID))
+	if err != nil {
+		EnrichVideoWithDouban(v)
+		return
+	}
+	// 同一个豆瓣 subject 可能因标题标点差异产生多条 global_video 记录。
+	// 这里仍保留当前 global_id，只借用完整副本的字段供展示，不改变本地身份。
+	if row.DoubanId != "" {
+		if best, bestErr := getBestGlobalVideoByDoubanID(row.DoubanId); bestErr == nil {
+			bestCopy := *best
+			bestCopy.Id = row.Id
+			row = &bestCopy
+		}
+	}
+	if v.VodPic == "" && row.Pic != "" {
+		v.VodPic = row.Pic
+	}
+	if v.VodArea == "" && row.Area != "" {
+		v.VodArea = row.Area
+	}
+	if v.VodLang == "" && row.Lang != "" {
+		v.VodLang = row.Lang
+	}
+	genre := row.Genre
+	if genre == "" {
+		genre = row.Tag
+	}
+	if v.VodTag == "" && genre != "" {
+		v.VodTag = genre
+	}
+	if v.VodSub == "" && row.Aka != "" {
+		v.VodSub = row.Aka
+	}
+	if v.VodRemarks == "" && row.EpisodeCount != "" {
+		v.VodRemarks = "共" + row.EpisodeCount + "集"
+	}
+	if v.VodDoubanId.String() == "" && row.DoubanId != "" {
+		v.VodDoubanId = model.FlexibleString(row.DoubanId)
+	}
+	if v.VodDoubanScore.String() == "" && row.DoubanScore != "" {
+		v.VodDoubanScore = model.FlexibleString(row.DoubanScore)
+	}
+	if v.VodYear == "" && row.Year != "" {
+		v.VodYear = row.Year
+	}
+}
+
 // EnrichVideosWithDouban 批量版 enrich：用 1 次查询替代 N 次
 func EnrichVideosWithDouban(videos []*model.Video) {
 	names := make([]string, 0, len(videos))
@@ -554,7 +748,7 @@ func EnrichVideosWithDouban(videos []*model.Video) {
 	query, args, err := sqlx.In(`
 		SELECT
 			vod_name,
-			pic, director, actor, area, lang, tag AS genre,
+			pic, area, lang, tag AS genre,
 			aka, episode_count, douban_id, douban_score, release_date
 		FROM global_video
 		WHERE vod_name IN (?)`, names)
@@ -569,8 +763,6 @@ func EnrichVideosWithDouban(videos []*model.Video) {
 	type enrichRow struct {
 		VodName      string `db:"vod_name"`
 		Pic          string `db:"pic"`
-		Director     string `db:"director"`
-		Actor        string `db:"actor"`
 		Area         string `db:"area"`
 		Lang         string `db:"lang"`
 		Genre        string `db:"genre"`
@@ -604,12 +796,6 @@ func EnrichVideosWithDouban(videos []*model.Video) {
 		}
 		if v.VodPic == "" && r.Pic != "" {
 			v.VodPic = r.Pic
-		}
-		if v.VodDirector == "" && r.Director != "" {
-			v.VodDirector = r.Director
-		}
-		if v.VodActor == "" && r.Actor != "" {
-			v.VodActor = r.Actor
 		}
 		if v.VodArea == "" && r.Area != "" {
 			v.VodArea = r.Area
@@ -710,7 +896,7 @@ func GetAllDoubanInfoPaginated(page, pageSize int) ([]*DoubanInfoRow, int, error
 	query := `SELECT
 		id AS global_id,
 		douban_id AS subject_id, douban_score AS rating, douban_votes AS votes,
-		director, writer, actor, genre,
+		writer, genre,
 		area AS country, lang AS language,
 		release_date, season_count, episode_count, duration,
 		aka, imdb, pic AS poster_url, updated_at, vod_name
@@ -763,12 +949,12 @@ func removeAllWhitespace(s string) string {
 
 // normalizeFullWidth 全角标点转半角
 func normalizeFullWidth(s string) string {
-	s = strings.ReplaceAll(s, "\uFF1A", ":")  // ：→ :
-	s = strings.ReplaceAll(s, "\uFF08", "(")  // （→ (
-	s = strings.ReplaceAll(s, "\uFF09", ")")  // ）→ )
-	s = strings.ReplaceAll(s, "\uFF01", "!")  // ！→ !
-	s = strings.ReplaceAll(s, "\uFF1F", "?")  // ？→ ?
-	s = strings.ReplaceAll(s, "\u3000", "")   // 全角空格去除
+	s = strings.ReplaceAll(s, "\uFF1A", ":") // ：→ :
+	s = strings.ReplaceAll(s, "\uFF08", "(") // （→ (
+	s = strings.ReplaceAll(s, "\uFF09", ")") // ）→ )
+	s = strings.ReplaceAll(s, "\uFF01", "!") // ！→ !
+	s = strings.ReplaceAll(s, "\uFF1F", "?") // ？→ ?
+	s = strings.ReplaceAll(s, "\u3000", "")  // 全角空格去除
 	return s
 }
 
@@ -783,6 +969,23 @@ func sqlNorm(s string) string {
 	s = removeAllWhitespace(s)
 	s = normalizeFullWidth(s)
 	return strings.ToLower(s)
+}
+
+// titleAliasKey 用于识别标题的展示差异，不作为数据库唯一键。
+// 它会去掉空白和标点，但保留数字、季数、部数等语义信息：
+// “年会不能停2！”与“年会不能停！2”会得到同一个 key，
+// “权力的游戏第三季”与“权力的游戏第八季”仍然不同。
+func titleAliasKey(s string) string {
+	s = normalizeForCompare(s)
+	var result strings.Builder
+	result.Grow(len(s))
+	for _, r := range s {
+		if unicode.IsPunct(r) || unicode.IsSymbol(r) {
+			continue
+		}
+		result.WriteRune(r)
+	}
+	return result.String()
 }
 
 // editDistance 计算两个字符串的编辑距离（Levenshtein）
@@ -971,22 +1174,50 @@ func globalVideoIDAndNameWithType(whereClause string, args ...interface{}) (int6
 // 不做长度预过滤，由 nameSimilarity + metadataMatch 完成精确匹配
 func selectAllGlobalCandidates() ([]GlobalVideoRow, error) {
 	var rows []struct {
-		Id       int    `db:"id"`
-		VodName  string `db:"vod_name"`
-		TypeId   int    `db:"type_id"`
-		Year     string `db:"year"`
-		Director string `db:"director"`
-		Actor    string `db:"actor"`
+		Id      int    `db:"id"`
+		VodName string `db:"vod_name"`
+		TypeId  int    `db:"type_id"`
+		Year    string `db:"year"`
 	}
-	err := instance.Select(&rows, `SELECT id, vod_name, type_id, year, director, actor FROM global_video`)
+	err := instance.Select(&rows, `SELECT id, vod_name, type_id, year FROM global_video ORDER BY id ASC`)
 	if err != nil {
 		return nil, err
 	}
 	result := make([]GlobalVideoRow, len(rows))
 	for i, r := range rows {
-		result[i] = GlobalVideoRow{Id: r.Id, VodName: r.VodName, TypeId: r.TypeId, Year: r.Year, Director: r.Director, Actor: r.Actor}
+		result[i] = GlobalVideoRow{Id: r.Id, VodName: r.VodName, TypeId: r.TypeId, Year: r.Year}
 	}
 	return result, nil
+}
+
+// findGlobalIDByTitleAlias 只在本地身份尚未确定时使用标题别名匹配。
+// 返回最早建立的候选，保持源记录先后顺序；豆瓣 ID 不参与本地身份选择。
+func findGlobalIDByTitleAlias(vodName, year string, typeId int64) (int64, bool) {
+	aliasKey := titleAliasKey(vodName)
+	if aliasKey == "" {
+		return 0, false
+	}
+
+	candidates, err := selectAllGlobalCandidates()
+	if err != nil {
+		return 0, false
+	}
+	for _, candidate := range candidates {
+		if titleAliasKey(candidate.VodName) != aliasKey {
+			continue
+		}
+		if typeId > 0 && candidate.TypeId != 0 && int64(candidate.TypeId) != typeId {
+			continue
+		}
+		if year != "" && candidate.Year != "" && year != candidate.Year {
+			continue
+		}
+		if hasSeasonSuffix(vodName, candidate.VodName) {
+			continue
+		}
+		return int64(candidate.Id), true
+	}
+	return 0, false
 }
 
 func GetOrCreateGlobalID(vodName string, typeId int64) (int64, error) {
@@ -1015,6 +1246,10 @@ func GetOrCreateGlobalID(vodName string, typeId int64) (int64, error) {
 			applog.Info("[global] 归一化匹配: %q -> global_id=%d (原名: %q)", vodName, id, normName)
 			return id, nil
 		}
+	}
+	if id, ok := findGlobalIDByTitleAlias(vodName, "", typeId); ok {
+		applog.Info("[global] 标题别名匹配: %q -> global_id=%d", vodName, id)
+		return id, nil
 	}
 
 	// 3. 创建新条目
@@ -1049,7 +1284,7 @@ func GetOrCreateGlobalID(vodName string, typeId int64) (int64, error) {
 // GetOrCreateGlobalIDWithMeta 带元数据的智能匹配，用于采集入库时
 // 当名称 90%+ 相似且元数据（年份+导演/演员+类型）吻合时，视为同一视频
 // 注意：传入的 director/actor 应为明文（调用方负责解压缩）
-func GetOrCreateGlobalIDWithMeta(vodName, year, director, actor string, typeId int64) (int64, error) {
+func GetOrCreateGlobalIDWithMeta(vodName, year string, typeId int64) (int64, error) {
 	// typeId=0 表示「不知道类型」（如热榜/收藏/历史），此时跳过类型检查，按名称匹配即可
 	matchAnyType := typeId == 0
 
@@ -1086,6 +1321,10 @@ func GetOrCreateGlobalIDWithMeta(vodName, year, director, actor string, typeId i
 			applog.Info("[global] 归一化匹配命中但类型不匹配: %q (现有type_id=%d, 新type_id=%d), 跳过", vodName, normTypeId, typeId)
 		}
 	}
+	if id, ok := findGlobalIDByTitleAlias(vodName, year, typeId); ok {
+		applog.Info("[global] 标题别名匹配(带元数据): %q -> global_id=%d", vodName, id)
+		return id, nil
+	}
 
 	// 3. 模糊匹配（90%+ 相似度 + 元数据交叉验证），全表扫描不做长度预过滤
 	candidates, _ := selectAllGlobalCandidates()
@@ -1108,7 +1347,7 @@ func GetOrCreateGlobalIDWithMeta(vodName, year, director, actor string, typeId i
 			continue
 		}
 		// 90%+ 相似度，检查元数据
-		if metadataMatch(year, director, actor, c.Year, c.Director, c.Actor) {
+		if year == "" || c.Year == "" || year == c.Year {
 			applog.Info("[global] 模糊+元数据匹配(%.0f%%): %q -> global_id=%d (%q, type_id=%d)",
 				sim*100, vodName, c.Id, c.VodName, c.TypeId)
 			return int64(c.Id), nil

@@ -32,9 +32,6 @@ func NewService(emit EmitFunc, background BackgroundFunc) *Service {
 func (s *Service) Start(req handler.CollectReq) (*handler.CollectStatus, error) {
 	operationID := fmt.Sprintf("collect-%d", time.Now().UnixNano())
 	entry := handler.GetOrCreateEngine(req.SourceKey)
-	if entry.IsRunning() {
-		return nil, fmt.Errorf("采集源 %s 正在采集中", req.SourceKey)
-	}
 
 	mode := model.CollectMode(req.Mode)
 	if mode == "" {
@@ -75,7 +72,9 @@ func (s *Service) Start(req handler.CollectReq) (*handler.CollectStatus, error) 
 		},
 		options...,
 	)
-	entry.BindEngine(engine, string(mode))
+	if !entry.TryBindEngine(engine, string(mode)) {
+		return nil, fmt.Errorf("采集源 %s 正在采集中", req.SourceKey)
+	}
 
 	run := func(ctx context.Context) {
 		engine.SetContext(ctx)
@@ -86,7 +85,7 @@ func (s *Service) Start(req handler.CollectReq) (*handler.CollectStatus, error) 
 			"mode":         string(mode),
 			"error":        errorString(err),
 		})
-		entry.MarkDone(errorString(err))
+		entry.FinishEngine(engine, errorString(err))
 		s.emit("collect:done", map[string]any{
 			"operation_id": operationID,
 			"source_key":   req.SourceKey,
@@ -96,7 +95,7 @@ func (s *Service) Start(req handler.CollectReq) (*handler.CollectStatus, error) 
 	}
 	if s.background != nil {
 		if !s.background("collection:"+req.SourceKey, run) {
-			entry.MarkDone("application is shutting down")
+			entry.FinishEngine(engine, "application is shutting down")
 			return nil, fmt.Errorf("application is shutting down")
 		}
 	} else {

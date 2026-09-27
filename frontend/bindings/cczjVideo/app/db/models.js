@@ -7,6 +7,138 @@
 import { Create as $Create } from "@wailsio/runtime";
 
 /**
+ * DoubanDuplicateGroup 一个被拆成多条的豆瓣 ID。
+ */
+export class DoubanDuplicateGroup {
+    /**
+     * Creates a new DoubanDuplicateGroup instance.
+     * @param {Partial<DoubanDuplicateGroup>} [$$source = {}] - The source object to create the DoubanDuplicateGroup.
+     */
+    constructor($$source = {}) {
+        if (!("douban_id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["douban_id"] = "";
+        }
+        if (!("rows" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["rows"] = 0;
+        }
+        if (!("names" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["names"] = "";
+        }
+        if (!("missing" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["missing"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DoubanDuplicateGroup instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {DoubanDuplicateGroup}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new DoubanDuplicateGroup(/** @type {Partial<DoubanDuplicateGroup>} */($$parsedSource));
+    }
+}
+
+/**
+ * DoubanHealth 豆瓣数据完整性快照。
+ */
+export class DoubanHealth {
+    /**
+     * Creates a new DoubanHealth instance.
+     * @param {Partial<DoubanHealth>} [$$source = {}] - The source object to create the DoubanHealth.
+     */
+    constructor($$source = {}) {
+        if (!("total_videos" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["total_videos"] = 0;
+        }
+        if (!("with_douban_id" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["with_douban_id"] = 0;
+        }
+        if (!("missing_score" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["missing_score"] = 0;
+        }
+        if (!("missing_subject_id" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["missing_subject_id"] = 0;
+        }
+        if (!("on_cooldown" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["on_cooldown"] = 0;
+        }
+        if (!("duplicate_groups" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["duplicate_groups"] = 0;
+        }
+        if (!("duplicate_rows" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["duplicate_rows"] = 0;
+        }
+        if (!("inherit_candidates" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["inherit_candidates"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DoubanHealth instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {DoubanHealth}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new DoubanHealth(/** @type {Partial<DoubanHealth>} */($$parsedSource));
+    }
+}
+
+/**
  * DoubanInfoRow 豆瓣信息视图（映射到 global_video 的豆瓣相关字段，兼容 updater.go 的调用方式）
  */
 export class DoubanInfoRow {
@@ -317,7 +449,7 @@ export class GlobalTypeRow {
 }
 
 /**
- * SourceVideoRef 表示某个视频在特定源中的引用
+ * SourceVideoRef identifies a source catalog entry sharing a global identity.
  */
 export class SourceVideoRef {
     /**
@@ -361,9 +493,6 @@ export class SourceVideoRef {
     }
 }
 
-/**
- * TableColumn 描述某张表的一列
- */
 export class TableColumn {
     /**
      * Creates a new TableColumn instance.
@@ -424,5 +553,43 @@ export class TableColumn {
     static createFrom($$source = {}) {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new TableColumn(/** @type {Partial<TableColumn>} */($$parsedSource));
+    }
+}
+
+/**
+ * TableStat 单张用户表的行数。
+ */
+export class TableStat {
+    /**
+     * Creates a new TableStat instance.
+     * @param {Partial<TableStat>} [$$source = {}] - The source object to create the TableStat.
+     */
+    constructor($$source = {}) {
+        if (!("name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["name"] = "";
+        }
+        if (!("rows" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["rows"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TableStat instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {TableStat}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new TableStat(/** @type {Partial<TableStat>} */($$parsedSource));
     }
 }

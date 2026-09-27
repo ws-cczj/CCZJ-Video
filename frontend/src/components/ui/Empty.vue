@@ -20,14 +20,14 @@ defineProps<{ icon?: string; title: string; description?: string }>()
   gap: 12px;
   padding: 80px 20px;
   text-align: center;
-  animation: cczj-fade-in-up 0.4s ease-out;
+  animation: cczj-fade-in-up var(--cczj-motion-slow) var(--cczj-motion-ease-enter) backwards;
 }
 
 .empty-icon {
   font-size: 56px;
   line-height: 1;
   opacity: 0.7;
-  animation: bounce 2s ease-in-out infinite;
+  animation: cczj-float 2s ease-in-out infinite;
 }
 
 .empty-title {
@@ -45,8 +45,4 @@ defineProps<{ icon?: string; title: string; description?: string }>()
   line-height: 1.6;
 }
 
-@keyframes bounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
-}
 </style>

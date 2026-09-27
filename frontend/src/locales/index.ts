@@ -40,3 +40,11 @@ export async function setLocale(locale: string): Promise<void> {
 }
 
 export default i18n
+
+/**
+ * 组件之外的翻译入口（store、工具函数、prop 默认值）。
+ * 在模板里调用同样有效，并且会因为读取了 locale ref 而随语言切换重新渲染。
+ */
+export function tr(key: string, named?: Record<string, unknown>): string {
+  return named === undefined ? i18n.global.t(key) : i18n.global.t(key, named)
+}

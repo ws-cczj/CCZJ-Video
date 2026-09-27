@@ -2,6 +2,7 @@ package handler
 
 import (
 	"cczjVideo/app/db"
+	"cczjVideo/app/detail"
 	"cczjVideo/app/model"
 	"fmt"
 	"net/url"
@@ -75,7 +76,11 @@ func UpdateSource(s *model.Source) error {
 	if err := model.ValidateSourceKey(s.SourceKey); err != nil {
 		return fmt.Errorf("invalid source_key: %w", err)
 	}
-	return db.UpdateSource(s)
+	if err := db.UpdateSource(s); err != nil {
+		return err
+	}
+	detail.Default.InvalidateSource(s.SourceKey)
+	return nil
 }
 
 func DeleteSource(key string) error {
@@ -116,8 +121,7 @@ func GetSourceDetail(sourceKey string) (*SourceDetail, error) {
 	}
 
 	tables := []SourceTableSummary{
-		{TableName: db.VideoTableName(sourceKey), Role: "video"},
-		{TableName: db.EpisodeTableName(sourceKey), Role: "episode"},
+		{TableName: "source_videos", Role: "catalog"},
 		{TableName: "global_types", Role: "type"},
 	}
 	for i := range tables {
@@ -133,8 +137,8 @@ func GetSourceDetail(sourceKey string) (*SourceDetail, error) {
 		}
 	}
 
-	samples, _ := db.GetSampleVideos(sourceKey, 5)
-	episodes, _ := db.GetSampleEpisodes(sourceKey, 10)
+	samples, _, _ := db.GetCatalogVideos(sourceKey, db.FilterParams{Page: 1, PageSize: 5})
+	episodes := []*model.Episode{}
 
 	return &SourceDetail{
 		SourceKey: src.SourceKey,
@@ -156,7 +160,7 @@ func TruncateSourceData(sourceKey string) (bool, error) {
 
 // RecreateSourceTables 删除并重建该源的两张表（数据全部丢失）
 func RecreateSourceTables(sourceKey string) (bool, error) {
-	if err := db.RecreateSourceTables(sourceKey); err != nil {
+	if err := db.TruncateSource(sourceKey); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -164,7 +168,7 @@ func RecreateSourceTables(sourceKey string) (bool, error) {
 
 // DeleteSourceVideo 精确删除该源下的某一条 vod_id
 func DeleteSourceVideo(sourceKey string, vodId string) (bool, error) {
-	if err := db.DeleteByVodId(sourceKey, vodId); err != nil {
+	if err := db.DeleteCatalogVideo(sourceKey, vodId); err != nil {
 		return false, err
 	}
 	return true, nil

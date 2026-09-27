@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"cczjVideo/app/applog"
 	"cczjVideo/app/collect"
 	"cczjVideo/app/db"
 	"cczjVideo/app/model"
@@ -23,6 +24,10 @@ type Scheduler struct {
 	running bool
 	stopCh  chan struct{}
 	stopped chan struct{}
+	// generation counts Start calls. Stop() waits only briefly for the running
+	// loop, so a superseded generation must be able to notice that a new one has
+	// taken over instead of reading the replacement channel as if it were its own.
+	generation uint64
 
 	// 全局默认配置
 	sourceGap time.Duration
@@ -67,24 +72,32 @@ func (s *Scheduler) ReloadConfig() {
 //   - 根据全局配置决定是否执行启动阶段采集（全量/补采）
 //   - 然后为每个启用后台采集的源启动独立定时器
 func (s *Scheduler) Start() {
+	cfg := GetScheduleConfig()
+	if !cfg.EnableBackground {
+		s.stopAllSourceTimers()
+		return
+	}
 	s.mu.Lock()
 	if s.running {
 		s.mu.Unlock()
 		return
 	}
 	s.running = true
-	s.stopCh = make(chan struct{})
-	s.stopped = make(chan struct{})
-	cfg := GetScheduleConfig()
+	s.generation++
+	gen := s.generation
+	stopCh := make(chan struct{})
+	stopped := make(chan struct{})
+	s.stopCh = stopCh
+	s.stopped = stopped
 	s.mu.Unlock()
 
 	go func() {
-		defer close(s.stopped)
+		defer close(stopped)
 
 		// === 启动阶段 ===
 		if cfg.EnableInitialFullCollect {
 			s.logScheduler("启动阶段全量采集开始")
-			s.runAllSourcesOnce(model.CollectModeFull, 0)
+			s.runAllSourcesOnce(gen, model.CollectModeFull, 0)
 		} else if cfg.EnableStartupCatchup {
 			s.logScheduler("启动阶段补采开始")
 			// 补采：用上次退出到现在的时长作为时间窗
@@ -97,7 +110,14 @@ func (s *Scheduler) Start() {
 				}
 			}
 			s.logScheduler(fmt.Sprintf("补采时间窗: %d 小时", hours))
-			s.runAllSourcesOnce(model.CollectModeIncremental, hours)
+			s.runAllSourcesOnce(gen, model.CollectModeIncremental, hours)
+		}
+
+		// A generation that was superseded while Stop()'s wait timed out must not
+		// tear down the timers its replacement just registered.
+		if !s.isCurrentGeneration(gen) {
+			s.logScheduler("旧一代后台调度已让位，退出")
+			return
 		}
 
 		// === 后台周期循环 ===
@@ -105,7 +125,7 @@ func (s *Scheduler) Start() {
 		s.startSourceTimers()
 
 		// 主循环：等待停止信号
-		<-s.stopCh
+		<-stopCh
 		s.stopAllSourceTimers()
 		s.mu.Lock()
 		s.running = false
@@ -114,7 +134,7 @@ func (s *Scheduler) Start() {
 }
 
 // runAllSourcesOnce 采集所有源一次（启动阶段用）
-func (s *Scheduler) runAllSourcesOnce(mode model.CollectMode, hours int) {
+func (s *Scheduler) runAllSourcesOnce(gen uint64, mode model.CollectMode, hours int) {
 	sources, err := db.GetEnabledSources()
 	if err != nil {
 		s.logScheduler("读取采集源列表失败: " + err.Error())
@@ -129,19 +149,20 @@ func (s *Scheduler) runAllSourcesOnce(mode model.CollectMode, hours int) {
 
 	for i, src := range sources {
 		select {
-		case <-s.stopCh:
-			s.logScheduler("后台采集被停止")
-			return
 		case <-s.ctx.Done():
 			return
 		default:
+		}
+		if s.stoppedFor(gen) {
+			s.logScheduler("后台采集被停止")
+			return
 		}
 
 		if i > 0 {
 			s.mu.Lock()
 			gap := s.sourceGap
 			s.mu.Unlock()
-			if !s.sleepInterruptible(gap) {
+			if !s.sleepInterruptible(gen, gap) {
 				return
 			}
 		}
@@ -153,6 +174,9 @@ func (s *Scheduler) runAllSourcesOnce(mode model.CollectMode, hours int) {
 
 // startSourceTimers 为每个启用后台采集的源启动独立定时器
 func (s *Scheduler) startSourceTimers() {
+	if !GetScheduleConfig().EnableBackground {
+		return
+	}
 	sources, err := db.GetAllSources()
 	if err != nil {
 		return
@@ -172,6 +196,9 @@ func (s *Scheduler) startSourceTimers() {
 
 // scheduleSource 为一个源安排定时采集
 func (s *Scheduler) scheduleSource(sourceKey string, sc *model.ScheduleConfig) {
+	if !GetScheduleConfig().EnableBackground {
+		return
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	// A timer callback can race Stop. Keep this check and timer registration
@@ -214,10 +241,6 @@ func (s *Scheduler) scheduleSource(sourceKey string, sc *model.ScheduleConfig) {
 // runSourceCollect 执行单个源的采集
 func (s *Scheduler) runSourceCollect(sourceKey string, mode model.CollectMode, hours int) {
 	entry := GetOrCreateEngine(sourceKey)
-	if entry.IsRunning() {
-		s.logScheduler(fmt.Sprintf("[%s] 正在采集中，跳过", sourceKey))
-		return
-	}
 
 	s.mu.Lock()
 	pageGap := s.pageGap
@@ -257,7 +280,10 @@ func (s *Scheduler) runSourceCollect(sourceKey string, mode model.CollectMode, h
 	)
 	engine.SetContext(s.ctx)
 	engine.SetPageGap(pageGap)
-	entry.BindEngine(engine, string(mode))
+	if !entry.TryBindEngine(engine, string(mode)) {
+		s.logScheduler(fmt.Sprintf("[%s] 正在采集中，跳过", sourceKey))
+		return
+	}
 
 	modeLabel := string(mode)
 	s.logScheduler(fmt.Sprintf("[%s] 开始采集 (模式=%s)", sourceKey, modeLabel))
@@ -266,7 +292,7 @@ func (s *Scheduler) runSourceCollect(sourceKey string, mode model.CollectMode, h
 	go func() {
 		defer close(done)
 		_, err := engine.Run()
-		entry.MarkDone(errStrSchedule(err))
+		entry.FinishEngine(engine, errStrSchedule(err))
 		application.Get().Event.Emit("collect:done", map[string]interface{}{
 			"source_key": sourceKey,
 			"error":      errStrSchedule(err),
@@ -286,7 +312,7 @@ func (s *Scheduler) runSourceCollect(sourceKey string, mode model.CollectMode, h
 		engine.Stop()
 		<-done
 		return
-	case <-s.stopCh:
+	case <-s.stopChannel():
 		// 优雅停止：通知引擎完成当前页后停止，并等待引擎结束
 		engine.Stop()
 		<-done
@@ -331,7 +357,8 @@ func (s *Scheduler) stopAllSourceTimers() {
 
 // TriggerNow 立即触发一次全量采集（不影响定时）
 func (s *Scheduler) TriggerNow() {
-	go s.runAllSourcesOnce(model.CollectModeFull, 0)
+	gen := s.currentGeneration()
+	go s.runAllSourcesOnce(gen, model.CollectModeFull, 0)
 }
 
 // TriggerOne 立即触发单个源的采集
@@ -345,6 +372,15 @@ func (s *Scheduler) TriggerOne(sourceKey string, mode model.CollectMode, hours i
 
 // UpdateSourceSchedule 更新某个源的后台采集配置
 func (s *Scheduler) UpdateSourceSchedule(sourceKey string) {
+	if !GetScheduleConfig().EnableBackground {
+		s.sourceTimersMu.Lock()
+		if old, ok := s.sourceTimers[sourceKey]; ok {
+			old.Stop()
+			delete(s.sourceTimers, sourceKey)
+		}
+		s.sourceTimersMu.Unlock()
+		return
+	}
 	// 检查调度器是否在运行，如果没有则重启
 	s.mu.Lock()
 	running := s.running
@@ -383,6 +419,8 @@ type SchedulerStatus struct {
 	BackgroundEverySeconds int                  `json:"background_every_seconds"`
 	SourceGapSeconds       int                  `json:"source_gap_seconds"`
 	PageGapSeconds         int                  `json:"page_gap_seconds"`
+	StartupCatchup         bool                 `json:"startup_catchup"`
+	InitialFullCollect     bool                 `json:"initial_full_collect"`
 	LastExitUnix           int64                `json:"last_exit_unix"`
 	LastRunUnix            int64                `json:"last_run_unix"`
 	NowUnix                int64                `json:"now_unix"`
@@ -470,8 +508,10 @@ func (s *Scheduler) Status() SchedulerStatus {
 		BackgroundEverySeconds: everySec,
 		SourceGapSeconds:       sourceGap,
 		PageGapSeconds:         pageGap,
+		StartupCatchup:         cfg.EnableStartupCatchup,
+		InitialFullCollect:     cfg.EnableInitialFullCollect,
 		LastExitUnix:           GetLastExitUnix(),
-		LastRunUnix:            schedulerLastRun,
+		LastRunUnix:            schedulerLastRunUnix(),
 		NowUnix:                time.Now().Unix(),
 		Note:                   note,
 		SourceSchedules:        srcItems,
@@ -479,7 +519,7 @@ func (s *Scheduler) Status() SchedulerStatus {
 }
 
 // sleepInterruptible 睡眠期间可被停止
-func (s *Scheduler) sleepInterruptible(d time.Duration) bool {
+func (s *Scheduler) sleepInterruptible(gen uint64, d time.Duration) bool {
 	deadline := time.Now().Add(d)
 	for {
 		remaining := time.Until(deadline)
@@ -492,15 +532,64 @@ func (s *Scheduler) sleepInterruptible(d time.Duration) bool {
 		}
 		select {
 		case <-time.After(chunk):
-		case <-s.stopCh:
-			return false
 		case <-s.ctx.Done():
+			return false
+		}
+		if s.stoppedFor(gen) {
 			return false
 		}
 	}
 }
 
+// isCurrentGeneration reports whether gen still owns the background loop.
+func (s *Scheduler) isCurrentGeneration(gen uint64) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return gen == s.generation
+}
+
+// currentGeneration snapshots the generation counter so a manual trigger stops
+// alongside whichever background loop is live right now.
+func (s *Scheduler) currentGeneration() uint64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.generation
+}
+
+// stopChannel snapshots the current stop signal so callers never race with the
+// channel Start() installs. Returns nil when the scheduler was never started,
+// which blocks forever in a select and is therefore ignored.
+func (s *Scheduler) stopChannel() chan struct{} {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.stopCh
+}
+
+// stoppedFor reports whether generation gen was asked to stop, either by Stop()
+// closing its own channel or by a newer Start() taking over. Blocking on
+// s.stopCh directly cannot work: after a timed-out Stop the field already holds
+// the replacement channel, so the old generation would wait on the wrong signal
+// and keep collecting behind the new one.
+func (s *Scheduler) stoppedFor(gen uint64) bool {
+	s.mu.Lock()
+	stale := gen != s.generation
+	stopCh := s.stopCh
+	s.mu.Unlock()
+	if stale {
+		return true
+	}
+	select {
+	case <-stopCh:
+		return true
+	default:
+		return false
+	}
+}
+
 func (s *Scheduler) logScheduler(msg string) {
+	// 调度日志同时进入 applog，设置页的统一时间线只消费这一条流；
+	// extra=1 跳过本包装函数，caller 指回真正触发调度的那一行
+	applog.InfoAt(1, "%s", "[scheduler] "+msg)
 	application.Get().Event.Emit("collect:log", map[string]interface{}{
 		"source_key": "__scheduler__",
 		"message":    msg,
@@ -511,6 +600,12 @@ var (
 	schedulerLastRun   int64
 	schedulerLastRunMu sync.Mutex
 )
+
+func schedulerLastRunUnix() int64 {
+	schedulerLastRunMu.Lock()
+	defer schedulerLastRunMu.Unlock()
+	return schedulerLastRun
+}
 
 func setSchedulerLastRun(t int64) {
 	schedulerLastRunMu.Lock()

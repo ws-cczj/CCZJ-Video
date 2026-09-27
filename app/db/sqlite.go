@@ -1,14 +1,21 @@
 package db
 
 import (
-	"cczjVideo/app/model"
+	"database/sql"
 	"fmt"
+	"os"
 	"path/filepath"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 	_ "modernc.org/sqlite"
 )
+
+// databaseResetVersion identifies the schema generation that can be retained.
+// Older databases are archived then replaced with a fresh catalog-only store.
+const databaseResetVersion = "5"
 
 var (
 	instance *sqlx.DB
@@ -26,11 +33,33 @@ func SetLogger(fn func(level, msg string)) {
 	logFn = fn
 }
 
+func logInfo(msg string)  { safeLog("INFO", msg) }
+func logWarn(msg string)  { safeLog("WARN", msg) }
+func logError(msg string) { safeLog("ERROR", msg) }
+
+func safeLog(level, msg string) {
+	defer func() { _ = recover() }()
+	logMu.Lock()
+	fn := logFn
+	logMu.Unlock()
+	if fn != nil {
+		fn(level, msg)
+	}
+}
+
 func InitDB(dir string) error {
 	var initErr error
 	once.Do(func() {
 		dataDir = dir
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			initErr = fmt.Errorf("create data directory: %w", err)
+			return
+		}
 		dbPath := filepath.Join(dir, "cczj_video.db")
+		if err := ResetDatabaseForUpgrade(dir, dbPath); err != nil {
+			initErr = err
+			return
+		}
 		instance, initErr = sqlx.Connect("sqlite", dbPath+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(on)")
 		if initErr != nil {
 			initErr = fmt.Errorf("connect sqlite: %w", initErr)
@@ -48,20 +77,81 @@ func InitDB(dir string) error {
 			initErr = err
 			return
 		}
-		// 迁移：为旧版数据库补充缺失列
-		migrateSourcesColumns()
-		migrateGlobalTypesColumns()
-		migrateGlobalVideoColumns()
-		// 去重 + 添加 vod_name 唯一约束
-		migrateGlobalVideoUniqueName()
-		// 启动时修复数据库中格式异常的 douban_id（科学计数法、浮点格式等）
-		RepairDoubanIDs()
-		if err := runSchemaMigrations(instance, func() error { return backupDatabaseBeforeMigration(instance, dbPath) }); err != nil {
-			initErr = err
+		if err := SetSetting("database_reset_version", databaseResetVersion); err != nil {
+			initErr = fmt.Errorf("record database reset version: %w", err)
+			return
+		}
+		if err := SetSetting("database_reset_generation", databaseResetVersion); err != nil {
+			initErr = fmt.Errorf("record browser reset generation: %w", err)
 			return
 		}
 	})
 	return initErr
+}
+
+// ResetDatabaseForUpgrade archives an unsupported database through SQLite,
+// removes its files and cache, then lets normal startup create a clean store.
+// It deliberately never executes schema migrations.
+func ResetDatabaseForUpgrade(dir, dbPath string) error {
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("stat database: %w", err)
+	}
+	probe, err := sqlx.Open("sqlite", "file:"+filepath.ToSlash(dbPath)+"?mode=ro")
+	if err != nil {
+		return fmt.Errorf("open database reset probe: %w", err)
+	}
+	var version string
+	err = probe.Get(&version, `SELECT value FROM settings WHERE key='database_reset_version'`)
+	_ = probe.Close()
+	if err == nil && version == databaseResetVersion {
+		return nil
+	}
+	if err != nil && err != sql.ErrNoRows && !strings.Contains(err.Error(), "no such table") {
+		return fmt.Errorf("read database reset marker: %w", err)
+	}
+	archiveDir := filepath.Join(dir, "reset-archives")
+	if err := os.MkdirAll(archiveDir, 0755); err != nil {
+		return fmt.Errorf("create reset archive: %w", err)
+	}
+	archive := filepath.Join(archiveDir, "cczj_video_pre_reset_"+time.Now().Format("20060102_150405.000000000")+".db")
+	writer, err := sqlx.Connect("sqlite", dbPath+"?_pragma=busy_timeout(5000)")
+	if err != nil {
+		return fmt.Errorf("open database for consistent archive: %w", err)
+	}
+	var integrity string
+	if err = writer.Get(&integrity, "PRAGMA integrity_check"); err == nil && integrity != "ok" {
+		err = fmt.Errorf("integrity check: %s", integrity)
+	}
+	if err == nil {
+		err = vacuumInto(writer, archive)
+	}
+	_ = writer.Close()
+	if err != nil {
+		return fmt.Errorf("archive pre-reset database: %w", err)
+	}
+	for _, path := range []string{dbPath, dbPath + "-wal", dbPath + "-shm"} {
+		if err := removeIfExists(path); err != nil {
+			return err
+		}
+	}
+	if err := os.RemoveAll(filepath.Join(dir, "ts_cache")); err != nil {
+		return fmt.Errorf("clear disk cache: %w", err)
+	}
+	return nil
+}
+
+func removeIfExists(path string) error {
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove %s: %w", path, err)
+	}
+	return nil
+}
+
+func vacuumInto(database *sqlx.DB, destination string) error {
+	_, err := database.Exec("VACUUM INTO '" + strings.ReplaceAll(filepath.ToSlash(destination), "'", "''") + "'")
+	return err
 }
 
 func DB() *sqlx.DB {
@@ -86,9 +176,6 @@ func createTables() error {
 			source_key TEXT NOT NULL UNIQUE,
 			name TEXT NOT NULL,
 			api_url TEXT NOT NULL,
-			url_template TEXT DEFAULT '',
-			url_prefix TEXT DEFAULT '',
-			url_suffix TEXT DEFAULT '',
 			enabled INTEGER DEFAULT 0,
 			collect_limit INTEGER DEFAULT 0,
 			collect_hours INTEGER DEFAULT 0,
@@ -105,14 +192,12 @@ func createTables() error {
 		`CREATE TABLE IF NOT EXISTS global_video (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			vod_name TEXT NOT NULL DEFAULT '',
+			type_id INTEGER DEFAULT 0,
 			year TEXT DEFAULT '',
 			area TEXT DEFAULT '',
 			lang TEXT DEFAULT '',
-			director TEXT DEFAULT '',
 			writer TEXT DEFAULT '',
-			actor TEXT DEFAULT '',
 			tag TEXT DEFAULT '',
-			content TEXT DEFAULT '',
 			pic TEXT DEFAULT '',
 			douban_id TEXT DEFAULT '',
 			douban_score TEXT DEFAULT '',
@@ -158,6 +243,20 @@ func createTables() error {
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE(global_id, source_key, ep_num)
 		)`,
+		`CREATE TABLE IF NOT EXISTS source_types (
+			source_key TEXT NOT NULL, source_type_id TEXT NOT NULL, global_type_id INTEGER,
+			type_name TEXT NOT NULL DEFAULT '', updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY(source_key, source_type_id)
+		)`,
+		`CREATE TABLE IF NOT EXISTS source_videos (
+			id INTEGER PRIMARY KEY AUTOINCREMENT, source_key TEXT NOT NULL, source_vod_id TEXT NOT NULL,
+			global_id INTEGER NOT NULL, source_type_id TEXT NOT NULL DEFAULT '', global_type_id INTEGER,
+			type_name TEXT NOT NULL DEFAULT '', vod_name TEXT NOT NULL DEFAULT '', vod_pic TEXT NOT NULL DEFAULT '',
+			vod_remarks TEXT NOT NULL DEFAULT '', vod_year TEXT NOT NULL DEFAULT '', vod_area TEXT NOT NULL DEFAULT '',
+			vod_time TEXT NOT NULL DEFAULT '', lifecycle_state TEXT NOT NULL DEFAULT 'active',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(source_key, source_vod_id)
+		)`,
 	}
 
 	for _, t := range tables {
@@ -197,212 +296,3 @@ func createTables() error {
 
 	return nil
 }
-
-// migrateGlobalTypesColumns 为 global_types 表补充采集启用字段，并移除已废弃的磁力启用字段
-func migrateGlobalTypesColumns() {
-	migrations := []struct {
-		col string
-		def string
-	}{
-		{"collect_enabled", "INTEGER DEFAULT 1"},
-	}
-	for _, m := range migrations {
-		q := fmt.Sprintf("ALTER TABLE global_types ADD COLUMN %s %s", m.col, m.def)
-		if _, err := instance.Exec(q); err != nil {
-			logInfo(fmt.Sprintf("迁移 global_types 列 %s: %v (已忽略)", m.col, err))
-		} else {
-			logInfo(fmt.Sprintf("迁移 global_types 列 %s 成功", m.col))
-		}
-	}
-	// 移除已废弃的 magnet_enabled 列（SQLite 3.35.0+ 支持 DROP COLUMN）
-	if _, err := instance.Exec("ALTER TABLE global_types DROP COLUMN magnet_enabled"); err != nil {
-		logInfo(fmt.Sprintf("移除 global_types.magnet_enabled: %v (已忽略，列可能不存在)", err))
-	} else {
-		logInfo("移除 global_types.magnet_enabled 成功")
-	}
-}
-
-// migrateGlobalVideoColumns 为 global_video 表补充豆瓣冷静期相关列、type_id 列，并移除已废弃的磁力链接列
-func migrateGlobalVideoColumns() {
-	migrations := []struct {
-		col string
-		def string
-	}{
-		{"douban_cooldown_until", "DATETIME DEFAULT NULL"},
-		{"douban_search_failures", "INTEGER DEFAULT 0"},
-		{"type_id", "INTEGER DEFAULT 0"},
-		{"douban_hotness", "TEXT DEFAULT ''"},
-	}
-	for _, m := range migrations {
-		q := fmt.Sprintf("ALTER TABLE global_video ADD COLUMN %s %s", m.col, m.def)
-		if _, err := instance.Exec(q); err != nil {
-			logInfo(fmt.Sprintf("迁移 global_video 列 %s: %v (已忽略)", m.col, err))
-		} else {
-			logInfo(fmt.Sprintf("迁移 global_video 列 %s 成功", m.col))
-		}
-	}
-	// 移除已废弃的磁力链接列（SQLite 3.35.0+ 支持 DROP COLUMN）
-	dropCols := []string{"magnet_link", "magnet_cooldown_until", "magnet_search_failures"}
-	for _, col := range dropCols {
-		q := fmt.Sprintf("ALTER TABLE global_video DROP COLUMN %s", col)
-		if _, err := instance.Exec(q); err != nil {
-			logInfo(fmt.Sprintf("移除 global_video.%s: %v (已忽略，列可能不存在)", col, err))
-		} else {
-			logInfo(fmt.Sprintf("移除 global_video.%s 成功", col))
-		}
-	}
-}
-
-// migrateGlobalVideoUniqueName 去重后为 global_video 添加 vod_name UNIQUE 约束
-// SQLite 不支持 ALTER TABLE ADD CONSTRAINT，需要重建表
-func migrateGlobalVideoUniqueName() {
-	// 检查是否已有该索引（已迁移过则跳过）
-	var count int
-	instance.Get(&count, "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_global_video_vod_name_unique'")
-	if count > 0 {
-		return
-	}
-
-	logInfo("开始 global_video 去重 + 添加 UNIQUE(vod_name) 迁移...")
-
-	// 第 1 步：去重（按归一化名称保留 id 最小的记录）
-	res, err := instance.Exec(`DELETE FROM global_video WHERE id NOT IN (
-		SELECT MIN(id) FROM global_video GROUP BY
-			LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(vod_name, ' ', ''), char(9), ''), char(10), ''), char(13), ''), char(12288), ''), char(160), ''), char(65306), ':'), char(65288), '('), char(65289), ')'))
-	)`)
-	if err != nil {
-		logInfo(fmt.Sprintf("global_video 去重失败: %v", err))
-		return
-	}
-	if rows, _ := res.RowsAffected(); rows > 0 {
-		logInfo(fmt.Sprintf("global_video 去重: 删除 %d 条重复记录", rows))
-	}
-
-	// 第 2 步：重建表（SQLite 不支持 ALTER TABLE ADD UNIQUE）
-	steps := []string{
-		`DROP TABLE IF EXISTS global_video_new`,
-		`CREATE TABLE global_video_new (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			vod_name TEXT NOT NULL DEFAULT '' UNIQUE,
-			year TEXT DEFAULT '',
-			area TEXT DEFAULT '',
-			lang TEXT DEFAULT '',
-			director TEXT DEFAULT '',
-			writer TEXT DEFAULT '',
-			actor TEXT DEFAULT '',
-			tag TEXT DEFAULT '',
-			content TEXT DEFAULT '',
-			pic TEXT DEFAULT '',
-			douban_id TEXT DEFAULT '',
-			douban_score TEXT DEFAULT '',
-			douban_votes TEXT DEFAULT '',
-			douban_hotness TEXT DEFAULT '',
-			genre TEXT DEFAULT '',
-			release_date TEXT DEFAULT '',
-			duration TEXT DEFAULT '',
-			aka TEXT DEFAULT '',
-			imdb TEXT DEFAULT '',
-			season_count TEXT DEFAULT '',
-			episode_count TEXT DEFAULT '',
-			type_id INTEGER DEFAULT 0,
-			douban_cooldown_until DATETIME DEFAULT NULL,
-			douban_search_failures INTEGER DEFAULT 0,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)`,
-		`INSERT OR IGNORE INTO global_video_new SELECT * FROM global_video`,
-		`DROP TABLE global_video`,
-		`ALTER TABLE global_video_new RENAME TO global_video`,
-		`CREATE INDEX IF NOT EXISTS idx_global_video_vod_name_unique ON global_video(vod_name)`,
-	}
-	for _, sql := range steps {
-		if _, err := instance.Exec(sql); err != nil {
-			logInfo(fmt.Sprintf("global_video 迁移步骤失败: %v (sql: %s)", err, sql[:min(len(sql), 80)]))
-			return
-		}
-	}
-	logInfo("global_video UNIQUE(vod_name) 迁移完成")
-}
-
-// migrateSourcesColumns 为旧版数据库补充缺失的列
-func migrateSourcesColumns() {
-	migrations := []struct {
-		col string
-		def string
-	}{
-		{"adv_config", "TEXT DEFAULT ''"},
-		{"schedule_config", "TEXT DEFAULT ''"},
-	}
-	for _, m := range migrations {
-		q := fmt.Sprintf("ALTER TABLE sources ADD COLUMN %s %s", m.col, m.def)
-		if _, err := instance.Exec(q); err != nil {
-			// 列已存在时会报错，忽略即可
-			logInfo(fmt.Sprintf("迁移列 %s: %v (已忽略)", m.col, err))
-		} else {
-			logInfo(fmt.Sprintf("迁移列 %s 成功", m.col))
-		}
-	}
-}
-
-func EnsureVideoTable(sourceKey string) error {
-	if err := model.ValidateSourceKey(sourceKey); err != nil {
-		return err
-	}
-	tn := "v_" + esc(sourceKey)
-	q := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		vod_id TEXT NOT NULL,
-		type_id TEXT,
-		type_name TEXT,
-		vod_name TEXT,
-		global_id INTEGER NOT NULL,
-		vod_class TEXT DEFAULT '',
-		vod_remarks TEXT DEFAULT '',
-		vod_play_url TEXT DEFAULT '',
-		vod_down_url TEXT DEFAULT '',
-		vod_time TEXT DEFAULT '',
-		vod_play_from TEXT DEFAULT '',
-		vod_letter TEXT DEFAULT '',
-		vod_sub TEXT DEFAULT '',
-		vod_en TEXT DEFAULT '',
-		UNIQUE(vod_id)
-	)`, tn)
-	if _, err := instance.Exec(q); err != nil {
-		return err
-	}
-
-	indexes := []string{
-		fmt.Sprintf(`CREATE INDEX IF NOT EXISTS idx_%s_vod_time ON %s(vod_time DESC)`, tn, tn),
-		fmt.Sprintf(`CREATE INDEX IF NOT EXISTS idx_%s_type_id ON %s(type_id)`, tn, tn),
-	}
-	for _, idx := range indexes {
-		if _, err := instance.Exec(idx); err != nil {
-			logWarn(fmt.Sprintf("创建索引失败: %v", err))
-		}
-	}
-
-	return nil
-}
-
-func EnsureEpisodeTable(sourceKey string) error {
-	if err := model.ValidateSourceKey(sourceKey); err != nil {
-		return err
-	}
-	q := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS e_%s (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		vod_id INTEGER NOT NULL,
-		ep_num INTEGER NOT NULL,
-		ep_name TEXT DEFAULT '',
-		ep_url TEXT NOT NULL,
-		UNIQUE(vod_id, ep_num)
-	)`, esc(sourceKey))
-	_, err := instance.Exec(q)
-	return err
-}
-
-func esc(s string) string {
-	return s
-}
-
-func VideoTableName(sourceKey string) string   { return "v_" + safeIdent(sourceKey) }
-func EpisodeTableName(sourceKey string) string { return "e_" + safeIdent(sourceKey) }

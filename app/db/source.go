@@ -36,8 +36,8 @@ func AddSource(s *model.Source) error {
 	if err := model.ValidateSourceKey(s.SourceKey); err != nil {
 		return err
 	}
-	_, err := instance.NamedExec(`INSERT INTO sources (source_key, name, api_url, url_template, url_prefix, url_suffix, collect_limit, collect_hours, adv_config, schedule_config)
-		VALUES (:source_key, :name, :api_url, :url_template, :url_prefix, :url_suffix, :collect_limit, :collect_hours, :adv_config, :schedule_config)`, s)
+	_, err := instance.NamedExec(`INSERT INTO sources (source_key, name, api_url, enabled, collect_limit, collect_hours, adv_config, schedule_config, strategy_config)
+		VALUES (:source_key, :name, :api_url, :enabled, :collect_limit, :collect_hours, :adv_config, :schedule_config, :strategy_config)`, s)
 	return err
 }
 
@@ -48,10 +48,9 @@ func UpdateSource(s *model.Source) error {
 	if err := model.ValidateSourceKey(s.SourceKey); err != nil {
 		return err
 	}
-	_, err := instance.NamedExec(`UPDATE sources SET name=:name, api_url=:api_url,
-		url_template=:url_template, url_prefix=:url_prefix, url_suffix=:url_suffix, enabled=:enabled,
+	_, err := instance.NamedExec(`UPDATE sources SET name=:name, api_url=:api_url, enabled=:enabled,
 		collect_limit=:collect_limit, collect_hours=:collect_hours,
-		adv_config=:adv_config, schedule_config=:schedule_config
+		adv_config=:adv_config, schedule_config=:schedule_config, strategy_config=:strategy_config
 		WHERE source_key=:source_key`, s)
 	return err
 }
@@ -65,13 +64,8 @@ func DeleteSource(key string) error {
 		return fmt.Errorf("begin source deletion: %w", err)
 	}
 	defer tx.Rollback()
-	vTbl := VideoTableName(key)
-	eTbl := EpisodeTableName(key)
-	if _, err := tx.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS %s`, safeIdent(vTbl))); err != nil {
-		return fmt.Errorf("drop source video table: %w", err)
-	}
-	if _, err := tx.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS %s`, safeIdent(eTbl))); err != nil {
-		return fmt.Errorf("drop source episode table: %w", err)
+	if _, err := tx.Exec(`UPDATE source_videos SET lifecycle_state='deleted', updated_at=CURRENT_TIMESTAMP WHERE source_key=?`, key); err != nil {
+		return fmt.Errorf("retire source catalog: %w", err)
 	}
 	if _, err := tx.Exec(`DELETE FROM sources WHERE source_key = ?`, key); err != nil {
 		return fmt.Errorf("delete source record: %w", err)
@@ -80,16 +74,6 @@ func DeleteSource(key string) error {
 		return fmt.Errorf("commit source deletion: %w", err)
 	}
 	return nil
-	/*
-		// ⭐ 先删除关联的 v_* 和 e_* 数据表，避免残留数据
-		vTbl := VideoTableName(key)
-		eTbl := EpisodeTableName(key)
-		_, _ = instance.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS %s`, vTbl))
-		_, _ = instance.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS %s`, eTbl))
-		// 删除源记录
-		_, err := instance.Exec(`DELETE FROM sources WHERE source_key = ?`, key)
-		return err
-	*/
 }
 
 func GetSourceStats() ([]model.SourceStat, error) {
@@ -102,9 +86,15 @@ func GetSourceStats() ([]model.SourceStat, error) {
 		stats = append(stats, model.SourceStat{
 			SourceKey:    s.SourceKey,
 			Name:         s.Name,
-			VideoCount:   GetVideoCount(s.SourceKey),
-			EpisodeCount: GetEpisodeCount(s.SourceKey),
+			VideoCount:   catalogCount(s.SourceKey),
+			EpisodeCount: 0,
 		})
 	}
 	return stats, nil
+}
+
+func catalogCount(sourceKey string) int {
+	var count int
+	_ = instance.Get(&count, `SELECT COUNT(*) FROM source_videos WHERE source_key=? AND lifecycle_state='active'`, sourceKey)
+	return count
 }

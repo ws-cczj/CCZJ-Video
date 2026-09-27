@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,13 +33,13 @@ func (s *Service) Export(dataDir, sourceKey string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("read source: %w", err)
 	}
-	videos, err := db.ExportAllVideos(sourceKey)
+	sourceTypes, err := db.ExportSourceTypes(sourceKey)
 	if err != nil {
-		return "", fmt.Errorf("export videos: %w", err)
+		return "", fmt.Errorf("export source types: %w", err)
 	}
-	types, err := db.ExportAllTypes(sourceKey)
-	if err != nil {
-		return "", fmt.Errorf("export types: %w", err)
+	types := make([]TypePayload, 0, len(sourceTypes))
+	for _, t := range sourceTypes {
+		types = append(types, TypePayload{TypeID: t.SourceTypeID, GlobalTypeID: t.GlobalTypeID, TypeName: t.TypeName})
 	}
 
 	exportDir := filepath.Join(dataDir, "exports")
@@ -53,10 +54,8 @@ func (s *Service) Export(dataDir, sourceKey string) (string, error) {
 	defer file.Close()
 
 	writer := brotli.NewWriterLevel(file, 6)
-	encoder := json.NewEncoder(writer)
-	encoder.SetIndent("", "  ")
-	payload := Payload{Version: 1, Exported: time.Now().Format(time.RFC3339), Source: sourceModel, Videos: videos, Types: types}
-	if err := encoder.Encode(payload); err != nil {
+	videoCount, err := writeExportPayload(writer, sourceModel, types, sourceKey)
+	if err != nil {
 		_ = writer.Close()
 		_ = os.Remove(path)
 		return "", fmt.Errorf("encode source export: %w", err)
@@ -68,8 +67,62 @@ func (s *Service) Export(dataDir, sourceKey string) (string, error) {
 	if err := file.Close(); err != nil {
 		return "", fmt.Errorf("close export file: %w", err)
 	}
-	applog.InfoFields("source export complete", applog.Fields{"source_key": sourceKey, "video_count": len(videos), "type_count": len(types)})
+	applog.InfoFields("source export complete", applog.Fields{"source_key": sourceKey, "video_count": videoCount, "type_count": len(types)})
 	return path, nil
+}
+
+func writeExportPayload(writer io.Writer, sourceModel *model.Source, types []TypePayload, sourceKey string) (int, error) {
+	exported, err := json.Marshal(time.Now().Format(time.RFC3339))
+	if err != nil {
+		return 0, err
+	}
+	source, err := json.Marshal(sourceModel)
+	if err != nil {
+		return 0, err
+	}
+	if _, err := io.WriteString(writer, `{"version":2,"exported":`+string(exported)+`,"source":`+string(source)+`,"videos":[`); err != nil {
+		return 0, err
+	}
+	first := true
+	count := 0
+	if err := db.StreamCatalogExport(sourceKey, func(row db.CatalogExportRow) error {
+		video := CatalogVideo{
+			SourceVodID:  row.SourceVodID,
+			SourceTypeID: row.SourceTypeID,
+			TypeName:     row.TypeName,
+			VodName:      row.VodName,
+			VodPic:       row.VodPic,
+			VodRemarks:   row.VodRemarks,
+			VodYear:      row.VodYear,
+			VodArea:      row.VodArea,
+			VodTime:      row.VodTime,
+		}
+		encoded, err := json.Marshal(video)
+		if err != nil {
+			return err
+		}
+		if !first {
+			if _, err := io.WriteString(writer, ","); err != nil {
+				return err
+			}
+		}
+		first = false
+		if _, err := writer.Write(encoded); err != nil {
+			return err
+		}
+		count++
+		return nil
+	}); err != nil {
+		return 0, err
+	}
+	encodedTypes, err := json.Marshal(types)
+	if err != nil {
+		return 0, err
+	}
+	if _, err := io.WriteString(writer, `],"types":`+string(encodedTypes)+"}\n"); err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 
 // Import persists a validated portable source payload.
@@ -95,23 +148,43 @@ func (s *Service) Import(payload Payload, origin string) (string, error) {
 			return "", fmt.Errorf("update imported source: %w", err)
 		}
 	}
-	if err := db.ImportTypes(sourceKey, payload.Types); err != nil {
-		return "", fmt.Errorf("import source types: %w", err)
+	videos := make([]*model.Video, 0, len(payload.Videos))
+	for _, v := range payload.Videos {
+		id := v.SourceVodID
+		if id == "" {
+			id = v.VodID
+		}
+		if id != "" {
+			videos = append(videos, &model.Video{VodId: model.FlexibleString(id), TypeId: model.FlexibleString(firstNonEmpty(v.SourceTypeID, v.TypeID)), TypeName: v.TypeName, VodName: v.VodName, VodPic: v.VodPic, VodRemarks: v.VodRemarks, VodYear: v.VodYear, VodArea: v.VodArea, VodTime: v.VodTime})
+		}
 	}
-	if err := db.ImportVideos(sourceKey, payload.Videos); err != nil {
-		return "", fmt.Errorf("import source videos: %w", err)
+	// Importing a catalogue file is a deliberate user action, so deleted rows
+	// are restored regardless of the catalog_revive_deleted setting.
+	if err := db.UpsertCatalogItemsWithRevival(sourceKey, videos); err != nil {
+		return "", fmt.Errorf("import catalog videos: %w", err)
+	}
+	types := make([]db.SourceTypeExport, 0, len(payload.Types))
+	for _, t := range payload.Types {
+		types = append(types, db.SourceTypeExport{SourceTypeID: t.TypeID, GlobalTypeID: t.GlobalTypeID, TypeName: t.TypeName})
+	}
+	if err := db.ImportSourceTypes(sourceKey, types); err != nil {
+		return "", fmt.Errorf("import source types: %w", err)
 	}
 	message := fmt.Sprintf("source %q imported from %s (%d videos, %d types)", sourceKey, origin, len(payload.Videos), len(payload.Types))
 	applog.InfoFields("source import complete", applog.Fields{"source_key": sourceKey, "origin": origin, "video_count": len(payload.Videos), "type_count": len(payload.Types)})
 	return message, nil
 }
 
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
+}
+
 func mergeImportedSource(target, imported *model.Source) {
 	target.Name = imported.Name
 	target.ApiUrl = imported.ApiUrl
-	target.UrlTemplate = imported.UrlTemplate
-	target.UrlPrefix = imported.UrlPrefix
-	target.UrlSuffix = imported.UrlSuffix
 	target.AdvConfigRaw = imported.AdvConfigRaw
 	target.ScheduleCfgRaw = imported.ScheduleCfgRaw
 	config := target.GetAdvConfig()

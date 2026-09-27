@@ -9,6 +9,7 @@ import { useVideoStore } from '../stores/video'
 import { useDownloadStore } from '../stores/download'
 import { useConfirmStore } from '../stores/confirm'
 import Icon from '../components/Icon.vue'
+import RemoteImage from '../components/RemoteImage.vue'
 import { Button, Modal, Tag, Spinner as LoadingSpinner } from '../components/ui'
 import { getDetailPath, getSearchPath, getPlayerPath, humanizeBytes, buildEpisodeFilename, buildSingleFilename, sanitizeFilename, resolveEpisodeUrl, stripHtmlTags } from '../utils'
 import { TsCache } from '../utils/tsCache'
@@ -30,11 +31,12 @@ const confirmStore = useConfirmStore()
 
 // ==================== 路由参数解析 ====================
 const vodId = computed(() => {
-  const p = route.params.vodId
+  const p = route.query.vod || route.params.vodId
   if (Array.isArray(p)) return p[0] || ''
   if (p) return String(p)
   return String(route.query.id || '')
 })
+const globalId = computed(() => Number(route.params.globalId || route.query.global_id || 0))
 
 const sourceKey = computed(() => {
   const p = route.params.sourceKey
@@ -135,12 +137,13 @@ async function refreshLastWatched(): Promise<void> {
 
     let found: HistoryItem | null = null
     if (Array.isArray(history) && history.length > 0) {
-      for (const h of history) {
-        const globalMatch = video.value?.global_id ? (h.global_id === video.value.global_id) : null
-        if (globalMatch === true) { found = h; break }
-        if (globalMatch === null && String(h.vod_id) === String(vodId.value)) { found = h; break }
-        if (h.ep_num == null) continue
-      }
+      const matches = history.filter((h) => {
+        if (h.ep_num == null) return false
+        if (video.value?.global_id) return h.global_id === video.value.global_id
+        return String(h.vod_id) === String(vodId.value)
+      })
+      // 回到真正看过的那一集：history 按时间倒序，只点了几秒的记录会把"继续观看"带回片头。
+      found = matches.find((h) => Number(h.position) > 5) || matches[0] || null
     }
 
     if (found && found.ep_num != null) {
@@ -206,7 +209,7 @@ const showFavFolderModal = ref(false)
 
 interface FavFolder { id: string; name: string; default: boolean }
 const favFolders = ref<FavFolder[]>([
-  { id: 'default', name: '默认收藏夹', default: true },
+  { id: 'default', name: t('detail.defaultFolder'), default: true },
 ])
 const favTargetFolderId = ref<string>('default')
 
@@ -612,8 +615,8 @@ async function deleteThisVideo(): Promise<void> {
 }
 
 async function loadDetail(): Promise<void> {
-  if (!sourceKey.value || !vodId.value) {
-    error.value = '视频不存在或加载失败'
+  if (!sourceKey.value || (!vodId.value && !globalId.value)) {
+    error.value = t('detail.videoNotFound')
     return
   }
   loading.value = true
@@ -621,21 +624,23 @@ async function loadDetail(): Promise<void> {
   similarVideos.value = []
 
   // 检查是否允许从源站刷新数据（5 分钟内只允许刷新一次）
-  const shouldRefresh = canRefresh(sourceKey.value, vodId.value)
-  if (shouldRefresh) {
+  const mayRefresh = canRefresh(sourceKey.value, vodId.value)
+  if (mayRefresh) {
     markRefreshed(sourceKey.value, vodId.value)
   }
 
   // 阶段1: 先加载本地数据（refresh=false），立即展示
-  await videoStore.loadDetail(sourceKey.value, vodId.value, false)
+  const loadedFromCache = await videoStore.loadDetail(sourceKey.value, vodId.value, false, globalId.value)
+  // localStorage 命中时先展示缓存，再按刷新间隔在后台更新。
+  const shouldRefresh = mayRefresh && !loadedFromCache
 
   if (!video.value) {
     // 本地无数据时，强制从源站获取
-    await videoStore.loadDetail(sourceKey.value, vodId.value, true)
+    await videoStore.loadDetail(sourceKey.value, vodId.value, true, globalId.value)
   }
 
   if (!video.value) {
-    error.value = '视频不存在或加载失败'
+    error.value = t('detail.videoNotFound')
     loading.value = false
     return
   }
@@ -664,7 +669,7 @@ async function loadDetail(): Promise<void> {
   // 阶段2: 后台异步刷新源站数据（不阻塞 UI）
   if (shouldRefresh) {
     refreshing.value = true
-    videoStore.refreshDetail(sourceKey.value, vodId.value).then(() => {
+    videoStore.refreshDetail(sourceKey.value, vodId.value, globalId.value).then(() => {
       refreshing.value = false
       // 刷新后重新加载相似推荐（可能数据更丰富了）
       loadSimilar()
@@ -778,7 +783,7 @@ onBeforeUnmount(() => {
       <section class="detail-header cczj-flex cczj-gap-6 cczj-mb-6 cczj-bg-card cczj-border">
         <div class="poster-column cczj-flex cczj-flex-col cczj-gap-4 cczj-flex-shrink-0">
           <div class="poster-frame cczj-relative cczj-rounded-lg cczj-w-full cczj-overflow-hidden cczj-bg-secondary">
-            <img v-if="video.vod_pic" :src="video.vod_pic" :alt="video.vod_name" class="poster cczj-w-full cczj-h-full cczj-rounded" loading="lazy" referrerpolicy="no-referrer" />
+            <RemoteImage v-if="video.vod_pic" :src="video.vod_pic" :alt="video.vod_name" class="poster cczj-w-full cczj-h-full cczj-rounded" loading="lazy" />
             <div v-else class="poster poster-placeholder cczj-flex cczj-items-center cczj-justify-center cczj-rounded cczj-text-muted cczj-opacity-40">
               <Icon name="film" :size="64" />
             </div>
@@ -829,7 +834,7 @@ onBeforeUnmount(() => {
           </div>
 
           <div v-if="directorList.length > 0" class="meta-row cczj-flex cczj-items-start cczj-gap-2">
-            <span class="meta-label cczj-text-sm cczj-font-semibold cczj-text-muted cczj-w-16 cczj-flex-shrink-0">导演</span>
+            <span class="meta-label cczj-text-sm cczj-font-semibold cczj-text-muted cczj-w-16 cczj-flex-shrink-0">{{ t('detail.director') }}</span>
             <div class="meta-values cczj-flex cczj-flex-wrap cczj-gap-1 cczj-flex-1">
               <button v-for="(d, i) in directorList" :key="'d-' + i" class="meta-chip clickable cczj-cursor-pointer cczj-rounded cczj-px-2 cczj-py-1 cczj-text-xs cczj-bg-secondary cczj-hover-bg-accent-alpha"
                 @click="searchByKeyword(d)">{{ d }}</button>
@@ -837,7 +842,7 @@ onBeforeUnmount(() => {
           </div>
 
           <div v-if="actorList.length > 0" class="meta-row cczj-flex cczj-items-start cczj-gap-2">
-            <span class="meta-label cczj-text-sm cczj-font-semibold cczj-text-muted cczj-w-16 cczj-flex-shrink-0">演员</span>
+            <span class="meta-label cczj-text-sm cczj-font-semibold cczj-text-muted cczj-w-16 cczj-flex-shrink-0">{{ t('detail.actors') }}</span>
             <div class="meta-values cczj-flex cczj-flex-wrap cczj-gap-1 cczj-flex-1">
               <button v-for="(a, i) in actorList" :key="'a-' + i" class="meta-chip clickable cczj-cursor-pointer cczj-rounded cczj-px-2 cczj-py-1 cczj-text-xs cczj-bg-secondary cczj-hover-bg-accent-alpha"
                 @click="searchByKeyword(a)">{{ a }}</button>
@@ -845,46 +850,46 @@ onBeforeUnmount(() => {
           </div>
 
           <div v-if="hasMetaRow" class="meta-row cczj-flex cczj-items-start cczj-gap-2">
-            <span class="meta-label cczj-text-sm cczj-font-semibold cczj-text-muted cczj-w-16 cczj-flex-shrink-0">评分</span>
+            <span class="meta-label cczj-text-sm cczj-font-semibold cczj-text-muted cczj-w-16 cczj-flex-shrink-0">{{ t('detail.rating') }}</span>
             <div class="meta-values cczj-flex cczj-flex-wrap cczj-gap-2 cczj-flex-1">
               <Tag v-if="video.vod_douban_score" variant="success" size="sm" class="cczj-flex cczj-items-center cczj-gap-1">
                 <Icon name="star" :size="10" />
-                <span>豆瓣 {{ video.vod_douban_score }}</span>
+                <span>{{ t('detail.doubanScoreValue', { score: video.vod_douban_score }) }}</span>
               </Tag>
               <Tag v-if="video.vod_score" variant="primary" size="sm" class="cczj-flex cczj-items-center cczj-gap-1">
                 <Icon name="star" :size="10" />
-                <span>评分 {{ video.vod_score }}</span>
+                <span>{{ t('detail.scoreValue', { score: video.vod_score }) }}</span>
               </Tag>
               <Tag v-if="video.vod_hits" size="sm" class="cczj-flex cczj-items-center cczj-gap-1">
                 <Icon name="flame" :size="10" />
-                <span>{{ formatHits(video.vod_hits) }} 热度</span>
+                <span>{{ t('detail.hitsValue', { hits: formatHits(video.vod_hits) }) }}</span>
               </Tag>
             </div>
           </div>
 
           <div v-if="hasInfoRow" class="meta-row cczj-flex cczj-items-start cczj-gap-2">
-            <span class="meta-label cczj-text-sm cczj-font-semibold cczj-text-muted cczj-w-16 cczj-flex-shrink-0">信息</span>
+            <span class="meta-label cczj-text-sm cczj-font-semibold cczj-text-muted cczj-w-16 cczj-flex-shrink-0">{{ t('detail.info') }}</span>
             <div class="meta-values cczj-flex cczj-flex-wrap cczj-gap-2 cczj-flex-1">
               <Tag v-if="video.vod_version" size="sm">{{ video.vod_version }}</Tag>
               <Tag v-if="video.vod_state" size="sm">{{ video.vod_state }}</Tag>
-              <Tag v-if="video.vod_isend === '1'" variant="success" size="sm">已完结</Tag>
-              <Tag v-else-if="video.vod_isend" size="sm">连载中</Tag>
-              <Tag v-if="video.vod_pubdate" size="sm">上映: {{ video.vod_pubdate }}</Tag>
-              <Tag v-if="video.vod_play_from" size="sm">来源: {{ video.vod_play_from }}</Tag>
+              <Tag v-if="video.vod_isend === '1'" variant="success" size="sm">{{ t('detail.completed') }}</Tag>
+              <Tag v-else-if="video.vod_isend" size="sm">{{ t('detail.ongoing') }}</Tag>
+              <Tag v-if="video.vod_pubdate" size="sm">{{ t('detail.pubdateValue', { date: video.vod_pubdate }) }}</Tag>
+              <Tag v-if="video.vod_play_from" size="sm">{{ t('detail.sourceValue', { source: video.vod_play_from }) }}</Tag>
             </div>
           </div>
 
           <div class="overview-block cczj-flex cczj-flex-col cczj-gap-2">
             <div class="overview-label-row cczj-flex cczj-items-center cczj-justify-between">
-              <span class="overview-label cczj-text-sm cczj-font-semibold">简介</span>
+              <span class="overview-label cczj-text-sm cczj-font-semibold">{{ t('detail.summary') }}</span>
               <Button v-if="overviewText && overviewText.length > 120" variant="text" size="sm" class="expand-btn cczj-text-xs cczj-text-accent cczj-cursor-pointer"
                 @click="expandOverview = !expandOverview">
-                {{ expandOverview ? '收起' : '展开' }}
+                {{ expandOverview ? t('common.collapse') : t('common.expand') }}
               </Button>
             </div>
             <div class="overview-text cczj-text-sm cczj-text-secondary" :class="{ expanded: expandOverview }">
               <template v-if="overviewText">{{ overviewText }}</template>
-              <span v-else class="text-muted cczj-text-muted">暂无简介</span>
+              <span v-else class="text-muted cczj-text-muted">{{ t('detail.noSummary') }}</span>
             </div>
           </div>
         </div>
@@ -894,15 +899,15 @@ onBeforeUnmount(() => {
       <section v-if="videoStore.episodes.length > 0" class="episodes-section cczj-mt-6 cczj-bg-card cczj-border">
         <div class="section-head cczj-flex cczj-items-center cczj-justify-between cczj-gap-4 cczj-mb-4">
           <div class="section-head-left cczj-flex cczj-items-center cczj-gap-2">
-            <h3 class="cczj-text-lg cczj-font-semibold">{{ episodeMode === 'download' ? '选集 · 点击下载' : '选集 · 点击播放' }}</h3>
+            <h3 class="cczj-text-lg cczj-font-semibold">{{ episodeMode === 'download' ? t('detail.episodesDownloadHint') : t('detail.episodesPlayHint') }}</h3>
             <!-- 共 X 集信息（始终显示为次要信息） -->
-            <span class="cczj-text-sm cczj-text-muted">共 {{ videoStore.episodes.length }} 集</span>
+            <span class="cczj-text-sm cczj-text-muted">{{ t('detail.totalEpisodes', { count: videoStore.episodes.length }) }}</span>
           </div>
           <div class="section-head-right cczj-flex cczj-items-center cczj-gap-2">
             <Button variant="secondary" size="sm" @click="toggleEpisodeSort"
-              :title="episodeSortAsc ? '当前正序，点击切换倒序' : '当前倒序，点击切换正序'" class="cczj-flex cczj-items-center cczj-gap-1">
+              :title="episodeSortAsc ? t('detail.sortAscTip') : t('detail.sortDescTip')" class="cczj-flex cczj-items-center cczj-gap-1">
               <Icon :name="episodeSortAsc ? 'chevron-down' : 'chevron-up'" :size="14" />
-              <span>{{ episodeSortAsc ? '正序' : '倒序' }}</span>
+              <span>{{ episodeSortAsc ? t('detail.ascOrder') : t('detail.descOrder') }}</span>
             </Button>
             <Button :variant="episodeMode === 'download' ? 'primary' : 'secondary'" size="sm"
               @click="toggleEpisodeMode" class="cczj-flex cczj-items-center cczj-gap-1">
@@ -911,7 +916,7 @@ onBeforeUnmount(() => {
             </Button>
             <Button v-if="episodeMode === 'download'" variant="primary" size="sm" @click="downloadAllEpisodes" class="cczj-flex cczj-items-center cczj-gap-1">
               <Icon name="layers" :size="14" />
-              <span>批量下载</span>
+              <span>{{ t('detail.batchDownload') }}</span>
             </Button>
           </div>
         </div>
@@ -921,7 +926,7 @@ onBeforeUnmount(() => {
             'in-download': downloadingEpKeys.has(epKey(ep)),
             'watched': episodeMode !== 'download' && isWatched(ep, origIdx(i)),
           }" @click="onEpisodeClick(i, ep)"
-            :title="formatEpisodeName(ep, origIdx(i)) + (isWatched(ep, origIdx(i)) ? ' · 已观看 ' + Math.round(getEpPct(ep, origIdx(i))) + '%' : '')">
+            :title="formatEpisodeName(ep, origIdx(i)) + (isWatched(ep, origIdx(i)) ? t('detail.watchedProgress', { pct: Math.round(getEpPct(ep, origIdx(i))) }) : '')">
             <Icon v-if="episodeMode === 'download'" name="download" :size="11" />
             <span class="ep-num cczj-flex-1 cczj-truncate">{{ formatEpisodeName(ep, origIdx(i)) }}</span>
             <div v-if="episodeMode !== 'download' && getEpPct(ep, origIdx(i)) > 0" class="ep-progress-fill cczj-absolute cczj-bottom-0 cczj-left-0 cczj-bg-accent"
@@ -933,11 +938,11 @@ onBeforeUnmount(() => {
       </section>
 
       <!-- 相似推荐 -->
-      <section class="similar-section cczj-mt-6 cczj-p-4 cczj-rounded cczj-bg-card cczj-border" v-motion :initial="{ opacity: 0, y: 30 }" :visible="{ opacity: 1, y: 0, transition: { duration: 500, ease: 'easeOut' } }">
+      <section class="similar-section cczj-mt-6 cczj-p-4 cczj-rounded cczj-bg-card cczj-border cczj-motion-reveal">
         <div class="section-head cczj-flex cczj-items-center cczj-justify-between cczj-gap-2 cczj-mb-4">
           <h3 class="cczj-text-lg cczj-font-semibold">{{ t('detail.similar') }}</h3>
           <div class="section-head-right cczj-flex cczj-items-center cczj-gap-2">
-            <span v-if="similarVideos.length > 0" class="section-sub cczj-text-sm cczj-text-muted">{{ similarVideos.length }} 部</span>
+            <span v-if="similarVideos.length > 0" class="section-sub cczj-text-sm cczj-text-muted">{{ t('detail.similarCount', { count: similarVideos.length }) }}</span>
             <button v-if="hasMoreSimilar" class="show-more-btn cczj-cursor-pointer cczj-text-sm cczj-text-accent cczj-flex cczj-items-center cczj-gap-1 cczj-hover-underline" @click="goToRecommendations">
               {{ t('detail.viewMore') }}
               <span class="show-more-arrow">→</span>
@@ -946,23 +951,20 @@ onBeforeUnmount(() => {
         </div>
 
         <div v-if="similarLoading" class="similar-loading cczj-text-center cczj-py-4">
-          <LoadingSpinner size="sm" label="加载中..." />
+          <LoadingSpinner size="sm" :label="t('common.loading')" />
         </div>
 
         <div v-else-if="similarVideos.length === 0" class="similar-empty cczj-text-center cczj-py-4 cczj-text-muted">
-          <span>暂无相似推荐</span>
+          <span>{{ t('detail.noSimilar') }}</span>
         </div>
 
         <div v-else class="similar-grid cczj-grid cczj-gap-3">
-          <div v-for="(item, i) in displayedSimilar" :key="'sim-' + item.vod_id + '-' + i" class="similar-card cczj-rounded cczj-overflow-hidden cczj-cursor-pointer cczj-transition"
+          <div v-for="(item, i) in displayedSimilar" :key="'sim-' + item.vod_id + '-' + i" class="similar-card cczj-rounded cczj-overflow-hidden cczj-cursor-pointer cczj-transition cczj-motion-reveal-scale"
             @click="openSimilarVideo(item)"
-            v-motion
-            :initial="{ opacity: 0, scale: 0.85 }"
-            :visible="{ opacity: 1, scale: 1, transition: { duration: 350, delay: i * 60, ease: 'easeOut' } }"
-            :hovered="{ scale: 1.05, transition: { duration: 200 } }"
+            :style="{ '--cczj-motion-delay': `${i * 60}ms` }"
           >
             <div class="similar-cover cczj-relative cczj-rounded cczj-overflow-hidden cczj-bg-secondary cczj-border">
-              <img v-if="item.vod_pic" :src="item.vod_pic" :alt="item.vod_name" loading="lazy" referrerpolicy="no-referrer" class="cczj-w-full cczj-h-full cczj-block" />
+              <RemoteImage v-if="item.vod_pic" :src="item.vod_pic" :alt="item.vod_name" loading="lazy" class="cczj-w-full cczj-h-full cczj-block" />
               <div v-else class="similar-cover-empty cczj-flex cczj-items-center cczj-justify-center cczj-bg-secondary cczj-text-muted">
                 <Icon name="film" :size="24" />
               </div>
@@ -979,7 +981,7 @@ onBeforeUnmount(() => {
     </template>
 
     <!-- ==================== 下载弹窗 ==================== -->
-    <Modal :model-value="showDownloadModal" title="选择剧集下载" width="640px" :show-footer="true"
+    <Modal :model-value="showDownloadModal" :title="t('detail.selectEpisodeDownload')" width="640px" :show-footer="true"
       @update:model-value="(v: boolean) => !v && closeDownload()">
       <div v-if="downloadError" class="modal-error cczj-flex cczj-items-center cczj-gap-2 cczj-p-3 cczj-rounded cczj-bg-danger-alpha cczj-text-danger cczj-mb-3">
         <Icon name="alert-triangle" :size="14" />
@@ -987,15 +989,15 @@ onBeforeUnmount(() => {
       </div>
 
       <div v-if="videoStore.episodes.length === 0" class="modal-empty cczj-text-center cczj-py-6 cczj-text-muted">
-        暂无可下载的剧集
+        {{ t('detail.noEpisodes') }}
       </div>
 
       <template v-else>
         <div class="modal-toolbar cczj-flex cczj-items-center cczj-justify-between cczj-gap-2 cczj-mb-3">
-          <span class="modal-toolbar-tip cczj-text-sm cczj-text-muted">点击单集下载 · 每集独立任务</span>
+          <span class="modal-toolbar-tip cczj-text-sm cczj-text-muted">{{ t('detail.singleDownloadHint') }}</span>
           <Button variant="primary" size="sm" @click="downloadAllEpisodes" class="cczj-flex cczj-items-center cczj-gap-1">
             <Icon name="layers" :size="14" />
-            <span>全部下载 ({{ videoStore.episodes.length }})</span>
+            <span>{{ t('detail.downloadAllCount', { count: videoStore.episodes.length }) }}</span>
           </Button>
         </div>
 
@@ -1014,8 +1016,8 @@ onBeforeUnmount(() => {
       <!-- 下载任务状态 -->
       <div v-if="downloadStore.tasks.length > 0" class="modal-tasks cczj-mt-4 cczj-p-3 cczj-rounded cczj-bg-secondary cczj-border">
         <div class="modal-tasks-title cczj-flex cczj-items-center cczj-justify-between cczj-gap-2 cczj-mb-2">
-          <span class="cczj-text-sm cczj-font-semibold">下载任务</span>
-          <span class="modal-tasks-count cczj-text-xs cczj-text-muted">{{ downloadStore.tasks.length }} 个</span>
+          <span class="cczj-text-sm cczj-font-semibold">{{ t('detail.downloadTasks') }}</span>
+          <span class="modal-tasks-count cczj-text-xs cczj-text-muted">{{ t('detail.taskCount', { count: downloadStore.tasks.length }) }}</span>
         </div>
         <div class="modal-tasks-list cczj-flex cczj-flex-col cczj-gap-2">
           <div v-for="task in downloadStore.tasks.slice(0, 6)" :key="task.task_id" class="task-row cczj-flex cczj-flex-col cczj-gap-1">
@@ -1031,10 +1033,10 @@ onBeforeUnmount(() => {
                   {{ humanizeBytes(task.speed_bps || 0) }}/s ·
                   {{ task.total > 0 ? Math.round((task.downloaded / task.total) * 100) : 0 }}%
                 </template>
-                <template v-else-if="task.status === 'done'">已完成 ✓</template>
-                <template v-else-if="task.status === 'error'">失败: {{ task.error || '未知错误' }}</template>
-                <template v-else-if="task.status === 'paused'">已暂停</template>
-                <template v-else-if="task.status === 'queued'">等待中...</template>
+                <template v-else-if="task.status === 'done'">{{ t('detail.completedMark') }}</template>
+                <template v-else-if="task.status === 'error'">{{ t('common.failed') }}: {{ task.error || t('common.unknownError') }}</template>
+                <template v-else-if="task.status === 'paused'">{{ t('detail.paused') }}</template>
+                <template v-else-if="task.status === 'queued'">{{ t('detail.waiting') }}</template>
                 <template v-else>{{ task.status }}</template>
               </div>
             </div>
@@ -1043,12 +1045,12 @@ onBeforeUnmount(() => {
       </div>
 
       <template #footer>
-        <Button variant="secondary" size="md" @click="closeDownload">关闭</Button>
+        <Button variant="secondary" size="md" @click="closeDownload">{{ t('common.close') }}</Button>
       </template>
     </Modal>
 
     <!-- ==================== 选择收藏夹弹窗 ==================== -->
-    <Modal :model-value="showFavFolderModal" title="收藏到文件夹" width="420px" :show-footer="true"
+    <Modal :model-value="showFavFolderModal" :title="t('detail.favToFolder')" width="420px" :show-footer="true"
       @update:model-value="(v: boolean) => !v && (showFavFolderModal = false)">
       <div class="folder-select-list">
         <label v-for="folder in favFolders" :key="folder.id" class="folder-select-item"
@@ -1060,8 +1062,8 @@ onBeforeUnmount(() => {
         </label>
       </div>
       <template #footer>
-        <Button variant="secondary" size="md" @click="showFavFolderModal = false">取消</Button>
-        <Button variant="primary" size="md" @click="confirmAddToFolder">确认收藏</Button>
+        <Button variant="secondary" size="md" @click="showFavFolderModal = false">{{ t('common.cancel') }}</Button>
+        <Button variant="primary" size="md" @click="confirmAddToFolder">{{ t('detail.confirmFav') }}</Button>
       </template>
     </Modal>
   </div>
@@ -1446,7 +1448,7 @@ onBeforeUnmount(() => {
 }
 
 .similar-card {
-  transition: transform 0.2s ease;
+  transition: transform var(--transition);
 }
 
 .similar-card:hover {

@@ -1,314 +1,203 @@
 package collect
 
 import (
-	"fmt"
+	"cczjVideo/app/applog"
+	"cczjVideo/app/model"
+	"encoding/json"
 	"net/url"
 	"strconv"
 	"strings"
-
-	"cczjVideo/app/model"
 )
 
-// SourceStrategy 数据源策略接口
+// SourceStrategy builds one URL for one operation. Callers must never append
+// query parameters after this boundary.
 type SourceStrategy interface {
-	// BuildListUrl 构建列表接口URL
 	BuildListUrl(page int, opts FetchOptions) string
-
-	// BuildDetailUrl 构建详情接口URL
-	BuildDetailUrl(vodId string) string
-
-	// BuildSearchUrl 构建搜索接口URL
+	BuildDetailUrl(vodID string) string
 	BuildSearchUrl(keyword string, page int) string
-
-	// GetFieldMapping 获取字段映射
 	GetFieldMapping() map[string]string
-
-	// GetStrategyName 获取策略名称
 	GetStrategyName() string
 }
 
-// StrategyConfig 策略配置，定义接口参数组合
+type ParamConfig struct {
+	Action       string            `json:"action,omitempty"`
+	PageParam    string            `json:"page_param,omitempty"`
+	LimitParam   string            `json:"limit_param,omitempty"`
+	TypeParam    string            `json:"type_param,omitempty"`
+	KeywordParam string            `json:"keyword_param,omitempty"`
+	HoursParam   string            `json:"hours_param,omitempty"`
+	IDParam      string            `json:"id_param,omitempty"`
+	Extra        map[string]string `json:"extra,omitempty"`
+}
+
+// StrategyConfig is persisted JSON v2. Extras are deliberately separated by
+// operation, so a detail-only option cannot leak into list/search requests.
 type StrategyConfig struct {
-	ListParams struct {
-		PageParam    string            // 页码参数名，如 "pg", "page", "p"
-		LimitParam   string            // 条数参数名，如 "limit", "size"
-		TypeParam    string            // 分类参数名，如 "t", "type", "category"
-		KeywordParam string            // 搜索参数名，如 "wd", "keyword", "q"
-		HoursParam   string            // 时间筛选参数名，如 "h", "hours"
-		FixedParams  map[string]string // 固定参数，如 {"ac": "list"}
-	} `json:"list_params"`
-
-	DetailParams struct {
-		FixedParams map[string]string // 固定参数，如 {"ac": "videolist"}
-		IDParam     string            // ID参数名，如 "ids", "id", "vod_id"
-	} `json:"detail_params"`
-
-	SearchParams struct {
-		FixedParams map[string]string // 固定参数
-	} `json:"search_params"`
-
-	FieldMapping map[string]string `json:"field_mapping"` // 字段映射
-	ApiUrl       string            `json:"api_url"`       // 基础API URL
+	Version      int               `json:"version"`
+	Strategy     string            `json:"strategy"`
+	List         ParamConfig       `json:"list"`
+	Search       ParamConfig       `json:"search"`
+	Detail       ParamConfig       `json:"detail"`
+	FieldMapping map[string]string `json:"field_mapping,omitempty"`
+	ApiUrl       string            `json:"-"`
 }
 
-// DefaultStrategy 默认策略，兼容大部分源站
-type DefaultStrategy struct {
-	config *StrategyConfig
+type configuredStrategy struct{ cfg StrategyConfig }
+
+func defaultConfig(api string) StrategyConfig {
+	return StrategyConfig{Version: 2, Strategy: "standard_cms", ApiUrl: api,
+		List:   ParamConfig{Action: "detail", PageParam: "pg", LimitParam: "limit", TypeParam: "t", HoursParam: "h"},
+		Search: ParamConfig{Action: "detail", PageParam: "pg", LimitParam: "limit", KeywordParam: "wd"},
+		Detail: ParamConfig{Action: "detail", IDParam: "ids"}}
 }
 
-func NewDefaultStrategy(apiUrl string) *DefaultStrategy {
-	return &DefaultStrategy{
-		config: &StrategyConfig{
-			ApiUrl: apiUrl,
-			ListParams: struct {
-				PageParam    string
-				LimitParam   string
-				TypeParam    string
-				KeywordParam string
-				HoursParam   string
-				FixedParams  map[string]string
-			}{
-				PageParam:    "pg",
-				LimitParam:   "limit",
-				TypeParam:    "t",
-				KeywordParam: "wd",
-				HoursParam:   "h",
-				FixedParams:  map[string]string{"ac": "detail"},
-			},
-			DetailParams: struct {
-				FixedParams map[string]string
-				IDParam     string
-			}{
-				FixedParams: map[string]string{"ac": "detail"},
-				IDParam:     "ids",
-			},
-			SearchParams: struct {
-				FixedParams map[string]string
-			}{
-				FixedParams: map[string]string{"ac": "list"},
-			},
-			FieldMapping: nil,
-		},
+func normalizeConfig(c *StrategyConfig) {
+	d := defaultConfig(c.ApiUrl)
+	if c.Version == 0 {
+		c.Version = 2
+	}
+	if c.Strategy == "" {
+		c.Strategy = "standard_cms"
+	}
+	// cms_videolist has the same CMS response envelope but uses the legacy
+	// videolist action unless an operation explicitly overrides it.
+	if c.Strategy == "cms_videolist" {
+		if c.List.Action == "" {
+			c.List.Action = "videolist"
+		}
+		if c.Search.Action == "" {
+			c.Search.Action = "videolist"
+		}
+		if c.Detail.Action == "" {
+			c.Detail.Action = "videolist"
+		}
+	}
+	if c.List.Action == "" {
+		c.List.Action = d.List.Action
+	}
+	if c.List.PageParam == "" {
+		c.List.PageParam = d.List.PageParam
+	}
+	if c.List.LimitParam == "" {
+		c.List.LimitParam = d.List.LimitParam
+	}
+	if c.List.TypeParam == "" {
+		c.List.TypeParam = d.List.TypeParam
+	}
+	if c.List.HoursParam == "" {
+		c.List.HoursParam = d.List.HoursParam
+	}
+	if c.Search.Action == "" {
+		c.Search.Action = d.Search.Action
+	}
+	if c.Search.PageParam == "" {
+		c.Search.PageParam = d.Search.PageParam
+	}
+	if c.Search.LimitParam == "" {
+		c.Search.LimitParam = d.Search.LimitParam
+	}
+	if c.Search.KeywordParam == "" {
+		c.Search.KeywordParam = d.Search.KeywordParam
+	}
+	if c.Detail.Action == "" {
+		c.Detail.Action = d.Detail.Action
+	}
+	if c.Detail.IDParam == "" {
+		c.Detail.IDParam = d.Detail.IDParam
 	}
 }
-
-func NewDefaultStrategyWithConfig(config *StrategyConfig) *DefaultStrategy {
-	if config.ListParams.PageParam == "" {
-		config.ListParams.PageParam = "pg"
+func (s *configuredStrategy) BuildListUrl(page int, opts FetchOptions) string {
+	p := map[string]string{s.cfg.List.PageParam: strconv.Itoa(page)}
+	if opts.Limit > 0 {
+		p[s.cfg.List.LimitParam] = strconv.Itoa(opts.Limit)
 	}
-	if config.ListParams.LimitParam == "" {
-		config.ListParams.LimitParam = "limit"
+	if strings.TrimSpace(opts.TypeID) != "" {
+		p[s.cfg.List.TypeParam] = strings.TrimSpace(opts.TypeID)
 	}
-	if config.ListParams.TypeParam == "" {
-		config.ListParams.TypeParam = "t"
+	if opts.Hours > 0 {
+		p[s.cfg.List.HoursParam] = strconv.Itoa(opts.Hours)
 	}
-	if config.ListParams.KeywordParam == "" {
-		config.ListParams.KeywordParam = "wd"
-	}
-	if config.ListParams.HoursParam == "" {
-		config.ListParams.HoursParam = "h"
-	}
-	if config.DetailParams.IDParam == "" {
-		config.DetailParams.IDParam = "ids"
-	}
-	return &DefaultStrategy{config: config}
+	return buildOperationURL(s.cfg.ApiUrl, s.cfg.List, p)
 }
-
-func (s *DefaultStrategy) BuildListUrl(page int, opts FetchOptions) string {
-	return buildUrlWithParams(s.config.ApiUrl, map[string]string{
-		s.config.ListParams.PageParam: strconv.Itoa(page),
-	}, s.config.ListParams.FixedParams, map[string]string{
-		s.config.ListParams.LimitParam:   strconv.Itoa(opts.Limit),
-		s.config.ListParams.HoursParam:   strconv.Itoa(opts.Hours),
-		s.config.ListParams.KeywordParam: opts.Keyword,
-		s.config.ListParams.TypeParam:    opts.TypeID,
-	})
-}
-
-func (s *DefaultStrategy) BuildDetailUrl(vodId string) string {
-	return buildUrlWithParams(s.config.ApiUrl, map[string]string{
-		s.config.DetailParams.IDParam: vodId,
-	}, s.config.DetailParams.FixedParams, nil)
-}
-
-func (s *DefaultStrategy) BuildSearchUrl(keyword string, page int) string {
-	return buildUrlWithParams(s.config.ApiUrl, map[string]string{
-		s.config.ListParams.PageParam:    strconv.Itoa(page),
-		s.config.ListParams.KeywordParam: keyword,
-	}, s.config.SearchParams.FixedParams, nil)
-}
-
-func (s *DefaultStrategy) GetFieldMapping() map[string]string {
-	return s.config.FieldMapping
-}
-
-func (s *DefaultStrategy) GetStrategyName() string {
-	return "default"
-}
-
-// CustomStrategy 自定义策略，完全由配置驱动
-type CustomStrategy struct {
-	config *StrategyConfig
-}
-
-func NewCustomStrategy(config *StrategyConfig) *CustomStrategy {
-	return &CustomStrategy{config: config}
-}
-
-func (s *CustomStrategy) BuildListUrl(page int, opts FetchOptions) string {
-	return buildUrlWithParams(s.config.ApiUrl, map[string]string{
-		s.config.ListParams.PageParam: strconv.Itoa(page),
-	}, s.config.ListParams.FixedParams, map[string]string{
-		s.config.ListParams.LimitParam:   strconv.Itoa(opts.Limit),
-		s.config.ListParams.HoursParam:   strconv.Itoa(opts.Hours),
-		s.config.ListParams.KeywordParam: opts.Keyword,
-		s.config.ListParams.TypeParam:    opts.TypeID,
-	})
-}
-
-func (s *CustomStrategy) BuildDetailUrl(vodId string) string {
-	return buildUrlWithParams(s.config.ApiUrl, map[string]string{
-		s.config.DetailParams.IDParam: vodId,
-	}, s.config.DetailParams.FixedParams, nil)
-}
-
-func (s *CustomStrategy) BuildSearchUrl(keyword string, page int) string {
-	return buildUrlWithParams(s.config.ApiUrl, map[string]string{
-		s.config.ListParams.PageParam:    strconv.Itoa(page),
-		s.config.ListParams.KeywordParam: keyword,
-	}, s.config.SearchParams.FixedParams, nil)
-}
-
-func (s *CustomStrategy) GetFieldMapping() map[string]string {
-	return s.config.FieldMapping
-}
-
-func (s *CustomStrategy) GetStrategyName() string {
-	return "custom"
-}
-
-// buildUrlWithParams 通用URL构建函数
-func buildUrlWithParams(baseUrl string, requiredParams, fixedParams, optionalParams map[string]string) string {
-	if baseUrl == "" {
+func (s *configuredStrategy) BuildSearchUrl(keyword string, page int) string {
+	if strings.TrimSpace(keyword) == "" {
 		return ""
 	}
-
-	u, err := url.Parse(baseUrl)
-	if err != nil {
-		return fmt.Sprintf("%s?%s", baseUrl, encodeParams(requiredParams, fixedParams, optionalParams))
+	p := map[string]string{s.cfg.Search.PageParam: strconv.Itoa(page), s.cfg.Search.KeywordParam: strings.TrimSpace(keyword)}
+	return buildOperationURL(s.cfg.ApiUrl, s.cfg.Search, p)
+}
+func (s *configuredStrategy) BuildDetailUrl(id string) string {
+	if strings.TrimSpace(id) == "" {
+		return ""
 	}
+	return buildOperationURL(s.cfg.ApiUrl, s.cfg.Detail, map[string]string{s.cfg.Detail.IDParam: strings.TrimSpace(id)})
+}
+func (s *configuredStrategy) GetFieldMapping() map[string]string { return s.cfg.FieldMapping }
+func (s *configuredStrategy) GetStrategyName() string            { return s.cfg.Strategy }
 
+func buildOperationURL(base string, op ParamConfig, values map[string]string) string {
+	u, err := url.Parse(base)
+	if err != nil {
+		return ""
+	}
 	q := u.Query()
-
-	for k, v := range fixedParams {
+	// Remove all controlled names inherited from the base URL. This prevents a
+	// previous operation's ids/wd/h from surviving into this request.
+	for _, k := range []string{"ac", "pg", "limit", "t", "wd", "h", "ids", op.PageParam, op.LimitParam, op.TypeParam, op.KeywordParam, op.HoursParam, op.IDParam} {
+		if k != "" {
+			q.Del(k)
+		}
+	}
+	if op.Action != "" {
+		q.Set("ac", op.Action)
+	}
+	for k, v := range op.Extra {
 		q.Set(k, v)
 	}
-
-	for k, v := range requiredParams {
-		if v != "" {
+	for k, v := range values {
+		if k != "" {
 			q.Set(k, v)
 		}
 	}
-
-	for k, v := range optionalParams {
-		if v != "" && v != "0" {
-			q.Set(k, v)
-		}
-	}
-
 	u.RawQuery = q.Encode()
 	return u.String()
 }
 
-func encodeParams(paramsList ...map[string]string) string {
-	var parts []string
-	for _, params := range paramsList {
-		for k, v := range params {
-			if v != "" && v != "0" {
-				parts = append(parts, fmt.Sprintf("%s=%s", url.QueryEscape(k), url.QueryEscape(v)))
-			}
-		}
-	}
-	return strings.Join(parts, "&")
-}
-
-// StrategyFactory 策略工厂
 type StrategyFactory struct{}
 
-func (f *StrategyFactory) CreateStrategy(apiUrl string, config *StrategyConfig) SourceStrategy {
-	if config != nil && isCustomConfig(config) {
-		return NewCustomStrategy(config)
+func (f *StrategyFactory) CreateStrategy(api string, config *StrategyConfig) SourceStrategy {
+	c := defaultConfig(api)
+	if config != nil {
+		c = *config
+		c.ApiUrl = api
 	}
-	return NewDefaultStrategy(apiUrl)
+	normalizeConfig(&c)
+	return &configuredStrategy{c}
 }
-
 func (f *StrategyFactory) CreateStrategyFromSource(source *model.Source) SourceStrategy {
-	if source == nil || source.ApiUrl == "" {
+	if source == nil || strings.TrimSpace(source.ApiUrl) == "" {
 		return nil
 	}
-
-	if source.StrategyConfig != "" {
-		var config StrategyConfig
-		if err := parseStrategyConfig(source.StrategyConfig, &config); err == nil {
-			config.ApiUrl = source.ApiUrl
-			return NewCustomStrategy(&config)
+	c := StrategyConfig{ApiUrl: source.ApiUrl}
+	if raw := strings.TrimSpace(source.StrategyConfig); raw != "" {
+		parsed := StrategyConfig{}
+		if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+			// A hand-edited or half-written config must not brick the source for
+			// good: keep the API URL, drop the unusable params, and collect with
+			// standard CMS defaults instead.
+			applog.Warn("[Strategy] 源 %s 的 strategy_config 解析失败，已回退默认策略: %v", source.SourceKey, err)
+		} else {
+			c = parsed
+			c.ApiUrl = source.ApiUrl
 		}
 	}
-
-	return NewDefaultStrategy(source.ApiUrl)
-}
-
-func isCustomConfig(config *StrategyConfig) bool {
-	if config == nil {
-		return false
-	}
-	if len(config.FieldMapping) > 0 {
-		return true
-	}
-	if len(config.ListParams.FixedParams) > 0 && config.ListParams.FixedParams["ac"] != "detail" {
-		return true
-	}
-	if len(config.DetailParams.FixedParams) > 0 && config.DetailParams.FixedParams["ac"] != "detail" {
-		return true
-	}
-	if config.ListParams.PageParam != "" && config.ListParams.PageParam != "pg" {
-		return true
-	}
-	if config.DetailParams.IDParam != "" && config.DetailParams.IDParam != "ids" {
-		return true
-	}
-	return false
-}
-
-func parseStrategyConfig(configStr string, config *StrategyConfig) error {
-	if configStr == "" {
-		return fmt.Errorf("empty config")
-	}
-
-	u, err := url.ParseQuery(configStr)
-	if err != nil {
-		return err
-	}
-
-	config.FieldMapping = make(map[string]string)
-	for k, v := range u {
-		if len(v) > 0 {
-			parts := strings.SplitN(k, ":", 2)
-			if len(parts) == 2 {
-				config.FieldMapping[parts[0]] = parts[1]
-			}
-		}
-	}
-
-	return nil
+	normalizeConfig(&c)
+	return &configuredStrategy{c}
 }
 
 var DefaultFactory = &StrategyFactory{}
 
-func CreateStrategy(apiUrl string) SourceStrategy {
-	return DefaultFactory.CreateStrategy(apiUrl, nil)
-}
-
+func CreateStrategy(api string) SourceStrategy { return DefaultFactory.CreateStrategy(api, nil) }
 func CreateStrategyFromSource(source *model.Source) SourceStrategy {
 	return DefaultFactory.CreateStrategyFromSource(source)
 }

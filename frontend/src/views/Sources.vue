@@ -4,12 +4,13 @@ import { onMounted, ref, computed } from 'vue'
 import { useSourceStore } from '../stores/source'
 import { useCollectStore } from '../stores/collect'
 import { useErrorStore } from '../stores/error'
-import type { SourceScheduleItem } from '../stores/collect'
-import { AddSource, UpdateSource, DeleteSource, GetSourceParamsDoc, ExportSource, ImportSourceFromBase64, OpenFolder } from '../api/app'
+import type { CollectScheduleConfig, SourceScheduleItem } from '../stores/collect'
+import { AddSource, UpdateSource, DeleteSource, GetSourceParamsDoc, ExportSource, ImportSourceFromBase64, OpenFolder, RunSourceAction } from '../api/app'
 import Icon from '../components/Icon.vue'
-import { Button, Modal, Tag, Spinner as LoadingSpinner, Empty as EmptyState, Select as SelectDropdown } from '../components/ui'
+import { Button, Modal, Tag, Spinner as LoadingSpinner, Empty as EmptyState, MotionTransition, Select as SelectDropdown } from '../components/ui'
 import { useConfirmStore } from '../stores/confirm'
 import { extractDomainKey } from '../utils'
+import { tr } from '../locales'
 
 const errorStore = useErrorStore()
 
@@ -17,9 +18,6 @@ interface EditSource {
   source_key: string
   name: string
   api_url: string
-  url_template?: string
-  url_prefix?: string
-  url_suffix?: string
   collect_limit?: number
   collect_hours?: number
   enabled?: number
@@ -66,7 +64,7 @@ const filteredSources = computed(() => {
 // === 表单状态 ===
 const showForm = ref(false)
 const editing = ref<string | null>(null)
-const form = ref({ name: '', api_url: '', url_template: '', url_prefix: '', url_suffix: '', collect_limit: 0, collect_hours: 0, enabled: true })
+const form = ref({ name: '', api_url: '', collect_limit: 0, collect_hours: 0, enabled: true })
 const showAdvanced = ref(false)
 
 // === 采集模式选择（每个源独立）===
@@ -91,6 +89,7 @@ function toggleExpand(key: string): void {
     return
   }
   expandedKey.value = key
+  void collectStore.syncFromBackend(key)
 }
 
 // === 定时配置面板 ===
@@ -127,13 +126,44 @@ function scheduleStateFor(key: string): SourceScheduleItem | undefined {
   return collectStore.schedulerStatus?.source_schedules?.find((s: SourceScheduleItem) => s.source_key === key)
 }
 
+// === 全局调度配置 ===
+const globalScheduleVisible = ref(false)
+const globalSchedule = ref<CollectScheduleConfig | null>(null)
+
+const globalIntervalMinutes = computed<number>({
+  get: () => Math.max(1, Math.round((globalSchedule.value?.background_interval_seconds || 60) / 60)),
+  set: (minutes) => {
+    if (globalSchedule.value) globalSchedule.value.background_interval_seconds = Math.max(1, minutes) * 60
+  },
+})
+
+function toggleGlobalSchedule(): void {
+  globalScheduleVisible.value = !globalScheduleVisible.value
+  if (!globalScheduleVisible.value) return
+  const cfg = collectStore.scheduleConfig
+  globalSchedule.value = cfg ? { ...cfg } : null
+}
+
+async function saveGlobalSchedule(): Promise<void> {
+  const cfg = globalSchedule.value
+  if (!cfg) return
+  try {
+    await collectStore.saveSchedule(cfg)
+    const saved = collectStore.scheduleConfig
+    if (saved) globalSchedule.value = { ...saved }
+    errorStore.info(tr('common.saved'), tr('sources.scheduleSaved'), '', 'Sources.saveGlobalSchedule')
+  } catch (e) {
+    errorStore.fromError(tr('sources.scheduleSaveFailed'), e, 'Sources.saveGlobalSchedule')
+  }
+}
+
 // === 生命周期 ===
 onMounted(async () => {
   try {
     await Promise.all([
       sourceStore.loadSources().catch(e => {
         console.error('[Sources] loadSources failed:', e)
-        errorStore.fromError('加载源站列表失败', e)
+        errorStore.fromError(tr('errors.loadSourcesFailed'), e)
       }),
       collectStore.loadSchedule().catch(e => {
         console.error('[Sources] loadSchedule failed:', e)
@@ -144,13 +174,22 @@ onMounted(async () => {
   }
 })
 
+// 工具栏刷新：源列表 + 调度器 + 各源后端状态（后台采集时前端事件会漏）
+async function refreshAll(): Promise<void> {
+  await Promise.all([
+    sourceStore.loadSources().catch(() => { }),
+    collectStore.loadSchedule().catch(() => { }),
+  ])
+  await collectStore.syncAllFromBackend(sourceStore.sources.map(sk))
+}
+
 // === 添加/编辑弹窗 ===
 const autoKey = computed(() => extractDomainKey(form.value.api_url))
 
 function openAdd(): void {
   console.log('[Sources] openAdd called, showForm before:', showForm.value)
   editing.value = null
-  form.value = { name: '', api_url: '', url_template: '', url_prefix: '', url_suffix: '', collect_limit: 50, collect_hours: 0, enabled: true }
+  form.value = { name: '', api_url: '', collect_limit: 50, collect_hours: 0, enabled: true }
   showAdvanced.value = false
   showForm.value = true
   console.log('[Sources] openAdd done, showForm after:', showForm.value)
@@ -161,14 +200,11 @@ function openEdit(s: EditSource): void {
   form.value = {
     name: s.name,
     api_url: s.api_url,
-    url_template: s.url_template || '',
-    url_prefix: s.url_prefix || '',
-    url_suffix: s.url_suffix || '',
     collect_limit: s.collect_limit ?? 0,
     collect_hours: s.collect_hours ?? 0,
     enabled: (s.enabled ?? 1) === 1,
   }
-  showAdvanced.value = !!(s.url_template || s.collect_limit || s.collect_hours)
+  showAdvanced.value = !!(s.collect_limit || s.collect_hours)
   showForm.value = true
 }
 
@@ -177,9 +213,6 @@ async function save(): Promise<void> {
     source_key: editing.value || '',
     name: form.value.name,
     api_url: form.value.api_url,
-    url_template: form.value.url_template,
-    url_prefix: form.value.url_prefix,
-    url_suffix: form.value.url_suffix,
     collect_limit: Number(form.value.collect_limit) || 0,
     collect_hours: Number(form.value.collect_hours) || 0,
     enabled: form.value.enabled ? 1 : 0,
@@ -196,9 +229,9 @@ async function save(): Promise<void> {
 // === 删除 ===
 async function deleteSourceConfirm(key: string): Promise<void> {
   const yes = await confirmStore.confirm({
-    title: '删除数据源',
-    message: '确定删除此采集源？视频数据不会删除。',
-    okText: '删除',
+    title: tr('sources.deleteTitle'),
+    message: tr('sources.deleteConfirmMsg'),
+    okText: tr('common.delete'),
     level: 'danger',
   })
   if (!yes) return
@@ -210,7 +243,7 @@ function handleSetDefault(source: any): void {
   const key = sk(source)
   if (key === sourceStore.currentSourceKey) return
   sourceStore.switchSource(key)
-  errorStore.info('默认源已切换', `已将「${source.name}」设为默认数据源`)
+  errorStore.info(tr('sources.defaultSwitchedTitle'), tr('sources.defaultSwitched', { name: source.name }))
 }
 
 // === 采集操作 ===
@@ -366,17 +399,17 @@ function statusClass(key: string): string {
 }
 
 function statusText(key: string): string {
-  if (isRunning(key)) return '运行中'
-  if (isPaused(key)) return '已暂停'
-  if (hasError(key)) return '错误'
-  return '空闲'
+  if (isRunning(key)) return tr('sources.statusRunning')
+  if (isPaused(key)) return tr('sources.statusPaused')
+  if (hasError(key)) return tr('sources.statusError')
+  return tr('sources.statusIdle')
 }
 
 function modeLabel(m: string): string {
   switch (m) {
-    case 'full': return '全量'
-    case 'incremental': return '增量'
-    case 'once': return '单次'
+    case 'full': return tr('sources.modeFullShort')
+    case 'incremental': return tr('sources.modeIncrShort')
+    case 'once': return tr('sources.modeOnceShort')
     default: return m
   }
 }
@@ -398,6 +431,50 @@ function formatProgress(key: string): string {
   const st = collectStore.getState(key)
   if (st.total <= 0) return '--'
   return `${st.current}/${st.total}`
+}
+
+// === 数据维护（迁移自旧后台面板） ===
+const statusSyncing = ref('')
+const truncating = ref('')
+
+function sourceName(key: string): string {
+  const s = sourceStore.sources.find(x => sk(x) === key)
+  return s?.name || key
+}
+
+function formatSyncTime(ts: number): string {
+  if (!ts) return '--'
+  return new Date(ts).toLocaleTimeString()
+}
+
+async function refreshStatus(key: string): Promise<void> {
+  statusSyncing.value = key
+  try {
+    await collectStore.syncFromBackend(key)
+  } finally {
+    statusSyncing.value = ''
+  }
+}
+
+async function truncateSource(key: string): Promise<void> {
+  const ok = await confirmStore.confirm({
+    title: tr('sources.truncateTitle'),
+    message: tr('sources.truncateConfirm', { name: sourceName(key) }),
+    okText: tr('common.clearAll'),
+    level: 'danger',
+  })
+  if (!ok) return
+  truncating.value = key
+  try {
+    await RunSourceAction({ source_key: key, action: 'truncate', vod_id: '' })
+    errorStore.info(tr('sources.truncateDone'), tr('sources.truncateDoneMsg', { name: sourceName(key) }), '', 'Sources')
+    await sourceStore.loadSources()
+    await collectStore.syncFromBackend(key)
+  } catch (e: any) {
+    errorStore.fromError(tr('sources.truncateFailed'), e, 'Sources.truncateSource')
+  } finally {
+    truncating.value = ''
+  }
 }
 
 function copyText(text: string, label = '已复制'): void {
@@ -425,8 +502,8 @@ function fallbackCopy(text: string): void {
     <!-- 页头 -->
     <div class="page-header">
       <div class="page-title">
-        <h1>采集源管理</h1>
-        <p class="page-desc">只需提供 API 地址即可。高级参数和采集模式可针对每个源独立配置。</p>
+        <h1>{{ tr('sources.title') }}</h1>
+        <p class="page-desc">{{ tr('sources.pageDesc') }}</p>
       </div>
     </div>
 
@@ -435,25 +512,25 @@ function fallbackCopy(text: string): void {
       <div class="toolbar-left">
         <div class="search-box">
           <Icon name="search" :size="14" />
-          <input v-model="search" placeholder="搜索名称/关键字..." />
+          <input v-model="search" :placeholder="tr('sources.searchPlaceholder')" />
           <button v-if="search" class="search-clear" @click="search = ''">
             <Icon name="close" :size="10" />
           </button>
         </div>
-        <SelectDropdown v-model="statusFilter" :options="[{ value: 'all', label: '全部' }, { value: 'running', label: '运行中' }, { value: 'idle', label: '空闲' }, { value: 'error', label: '错误' }]" size="sm" />
+        <SelectDropdown v-model="statusFilter" :options="[{ value: 'all', label: tr('common.all') }, { value: 'running', label: tr('sources.statusRunning') }, { value: 'idle', label: tr('sources.statusIdle') }, { value: 'error', label: tr('sources.statusError') }]" size="sm" />
       </div>
       <div class="toolbar-right">
-        <Button variant="secondary" size="sm" @click="sourceStore.loadSources(); collectStore.loadSchedule()" title="刷新">
+        <Button variant="secondary" size="sm" @click="refreshAll" :title="tr('common.refresh')">
           <Icon name="refresh" :size="14" />
-          <span>刷新</span>
+          <span>{{ tr('common.refresh') }}</span>
         </Button>
-        <Button variant="ghost" size="sm" @click="openImportDialog" title="导入">
+        <Button variant="ghost" size="sm" @click="openImportDialog" :title="tr('common.import')">
           <Icon name="upload" :size="14" />
-          <span>导入</span>
+          <span>{{ tr('common.import') }}</span>
         </Button>
         <Button variant="primary" size="sm" @click="openAdd">
           <Icon name="plus" :size="14" />
-          <span>添加源</span>
+          <span>{{ tr('sources.addSource') }}</span>
         </Button>
       </div>
     </div>
@@ -461,33 +538,75 @@ function fallbackCopy(text: string): void {
     <!-- 全局调度器状态条 -->
     <div v-if="collectStore.schedulerStatus" class="scheduler-bar" :class="{ active: collectStore.schedulerStatus.running }">
       <div class="scheduler-indicator" :class="{ on: collectStore.schedulerStatus.running }"></div>
-      <span class="scheduler-label">后台调度</span>
-      <span class="scheduler-state">{{ collectStore.schedulerStatus.running ? '运行中' : '已停止' }}</span>
+      <span class="scheduler-label">{{ tr('sources.backendScheduler') }}</span>
+      <span class="scheduler-state">{{ collectStore.schedulerStatus.running ? tr('sources.statusRunning') : tr('sources.statusStopped') }}</span>
       <span class="scheduler-note">{{ collectStore.schedulerStatus.note }}</span>
       <div class="scheduler-actions">
         <button v-if="collectStore.schedulerStatus.running" class="mini-btn danger" @click="collectStore.stopBackground()">
-          <Icon name="stop" :size="10" /><span>停止</span>
+          <Icon name="stop" :size="10" /><span>{{ tr('common.stop') }}</span>
         </button>
         <button v-else class="mini-btn accent" @click="collectStore.triggerNow()">
-          <Icon name="play" :size="10" /><span>启动全量</span>
+          <Icon name="play" :size="10" /><span>{{ tr('sources.startFull') }}</span>
+        </button>
+        <button class="mini-btn" :class="{ accent: globalScheduleVisible }" @click="toggleGlobalSchedule">
+          <Icon name="settings" :size="10" /><span>{{ tr('sources.scheduleSettings') }}</span>
         </button>
         <button class="mini-btn" @click="collectStore.loadSchedule()">
-          <Icon name="refresh" :size="10" /><span>刷新</span>
+          <Icon name="refresh" :size="10" /><span>{{ tr('common.refresh') }}</span>
         </button>
+      </div>
+    </div>
+
+    <!-- 全局调度参数（采集相关的节奏与节流只在这一页改） -->
+    <div v-if="globalScheduleVisible && globalSchedule" class="scheduler-config">
+      <div class="sc-row">
+        <label class="sc-check">
+          <input type="checkbox" v-model="globalSchedule.enable_background" />
+          <span>{{ tr('sources.enableGlobalSchedule') }}</span>
+        </label>
+        <div class="sc-field">
+          <span class="sc-label">{{ tr('sources.scheduleInterval') }}</span>
+          <input type="range" v-model.number="globalIntervalMinutes" min="1" max="180" step="1" />
+          <span class="sc-value">{{ tr('sources.minuteCount', { n: globalIntervalMinutes }) }}</span>
+        </div>
+      </div>
+      <div class="sc-row">
+        <div class="sc-field">
+          <span class="sc-label">{{ tr('sources.scheduleSourceGap') }}</span>
+          <input class="sc-input" type="number" min="1" max="600" v-model.number="globalSchedule.source_gap_seconds" />
+        </div>
+        <div class="sc-field">
+          <span class="sc-label">{{ tr('sources.schedulePageGap') }}</span>
+          <input class="sc-input" type="number" min="1" max="600" v-model.number="globalSchedule.page_gap_seconds" />
+        </div>
+        <label class="sc-check">
+          <input type="checkbox" v-model="globalSchedule.enable_startup_catchup" />
+          <span>{{ tr('sources.scheduleStartupCatchup') }}</span>
+        </label>
+        <label class="sc-check">
+          <input type="checkbox" v-model="globalSchedule.enable_initial_full_collect" />
+          <span>{{ tr('sources.scheduleInitialFull') }}</span>
+        </label>
+      </div>
+      <div class="sc-row">
+        <Button variant="primary" size="sm" :loading="collectStore.scheduleSaving" @click="saveGlobalSchedule">
+          <Icon name="save" :size="12" /><span>{{ tr('common.save') }}</span>
+        </Button>
+        <small class="sc-hint">{{ tr('sources.scheduleHint') }}</small>
       </div>
     </div>
 
     <!-- 加载中 -->
     <div v-if="sourceStore.loading" class="content-loader">
-      <LoadingSpinner label="加载采集源..." />
+      <LoadingSpinner :label="tr('sources.loadingSources')" />
     </div>
 
     <!-- 空状态 -->
     <div v-else-if="sourceStore.sources.length === 0">
-      <EmptyState icon="📡" title="还没有采集源" description="添加第一个采集源，只需提供 API 地址即可开始">
+      <EmptyState icon="📡" :title="tr('sources.emptyTitle')" :description="tr('sources.emptyDescHint')">
         <Button variant="primary" size="sm" @click="openAdd">
           <Icon name="plus" :size="14" />
-          <span>添加采集源</span>
+          <span>{{ tr('sources.add') }}</span>
         </Button>
       </EmptyState>
     </div>
@@ -501,9 +620,9 @@ function fallbackCopy(text: string): void {
             <span class="status-dot" :class="statusClass(sk(s))"></span>
             <h3 class="card-name">{{ s.name }}</h3>
             <Tag :variant="modeTagVariant(getMode(sk(s)))" size="sm">{{ modeLabel(getMode(sk(s))) }}</Tag>
-            <span v-if="scheduleStateFor(sk(s))?.enabled" class="schedule-mini" :title="'每 ' + scheduleStateFor(sk(s))?.interval_min + ' 分钟定时'">
+            <span v-if="scheduleStateFor(sk(s))?.enabled" class="schedule-mini" :title="tr('sources.everyNMinutes', { n: scheduleStateFor(sk(s))?.interval_min })">
               <Icon name="clock" :size="10" />
-              {{ scheduleStateFor(sk(s))?.interval_min }}分
+              {{ scheduleStateFor(sk(s))?.interval_min }} {{ tr('sources.minuteUnit') }}
             </span>
           </div>
           <div class="card-header-right">
@@ -523,7 +642,7 @@ function fallbackCopy(text: string): void {
         <!-- 操作按钮行（始终可见） -->
         <div class="card-actions">
           <!-- 模式选择下拉 -->
-          <SelectDropdown :model-value="getMode(sk(s))" :options="[{ value: 'full', label: '全量采集' }, { value: 'incremental', label: '增量采集' }, { value: 'once', label: '单次采集' }]" @update:model-value="(v: any) => { selectedModes.set(sk(s), String(v)) }" :disabled="isRunning(sk(s)) || isPaused(sk(s))" size="sm" />
+          <SelectDropdown :model-value="getMode(sk(s))" :options="[{ value: 'full', label: tr('sources.fullCollect') }, { value: 'incremental', label: tr('sources.incrementalCollect') }, { value: 'once', label: tr('sources.onceCollect') }]" @update:model-value="(v: any) => { selectedModes.set(sk(s), String(v)) }" :disabled="isRunning(sk(s)) || isPaused(sk(s))" size="sm" />
           <input
             v-if="getMode(sk(s)) === 'incremental'"
             type="number"
@@ -533,41 +652,41 @@ function fallbackCopy(text: string): void {
             @input="(e: Event) => selectedHours.set(sk(s), Number((e.target as HTMLInputElement).value))"
             placeholder="h"
             :disabled="isRunning(sk(s)) || isPaused(sk(s))"
-            title="回溯小时数"
+            :title="tr('sources.lookbackHours')"
           />
-          <span v-if="getMode(sk(s)) === 'incremental'" class="hours-suffix">时</span>
+          <span v-if="getMode(sk(s)) === 'incremental'" class="hours-suffix">{{ tr('sources.hourUnit') }}</span>
 
           <div class="action-spacer"></div>
 
           <template v-if="isRunning(sk(s)) || isPaused(sk(s))">
-            <button class="icon-btn pause-btn" @click="isPaused(sk(s)) ? collectStore.resume(sk(s)) : collectStore.pause(sk(s))" :title="isPaused(sk(s)) ? '恢复' : '暂停'">
+            <button class="icon-btn pause-btn" @click="isPaused(sk(s)) ? collectStore.resume(sk(s)) : collectStore.pause(sk(s))" :title="isPaused(sk(s)) ? tr('sources.resume') : tr('sources.pause')">
               <Icon :name="isPaused(sk(s)) ? 'play' : 'pause'" :size="14" />
             </button>
-            <button class="icon-btn stop-btn" @click="collectStore.stop(sk(s))" title="停止">
+            <button class="icon-btn stop-btn" @click="collectStore.stop(sk(s))" :title="tr('common.stop')">
               <Icon name="stop" :size="14" />
             </button>
           </template>
           <template v-else>
-            <button class="icon-btn play-btn" @click="startCollect(sk(s))" title="开始采集">
+            <button class="icon-btn play-btn" @click="startCollect(sk(s))" :title="tr('sources.startCollect')">
               <Icon name="play" :size="14" />
             </button>
-            <button class="icon-btn incr-btn" @click="startCollect(sk(s), 'incremental', getHours(sk(s)) || s.collect_hours || 24)" title="增量采集">
+            <button class="icon-btn incr-btn" @click="startCollect(sk(s), 'incremental', getHours(sk(s)) || s.collect_hours || 24)" :title="tr('sources.incrementalCollect')">
               <Icon name="refresh" :size="14" />
             </button>
-            <button class="icon-btn export-btn" @click="exportSource(sk(s))" title="导出">
+            <button class="icon-btn export-btn" @click="exportSource(sk(s))" :title="tr('common.export')">
               <Icon name="download" :size="14" />
             </button>
           </template>
-          <button class="icon-btn sched-btn" @click="openSchedule(sk(s))" :title="scheduleStateFor(sk(s))?.enabled ? '定时已启用' : '定时配置'">
+          <button class="icon-btn sched-btn" @click="openSchedule(sk(s))" :title="scheduleStateFor(sk(s))?.enabled ? tr('sources.scheduleEnabledTitle') : tr('sources.scheduleConfigTitle')">
               <Icon name="clock" :size="14" />
             </button>
-            <button class="icon-btn default-btn" :class="{ active: sk(s) === sourceStore.currentSourceKey }" @click="handleSetDefault(s)" :title="sk(s) === sourceStore.currentSourceKey ? '已设为默认' : '设为默认'">
+            <button class="icon-btn default-btn" :class="{ active: sk(s) === sourceStore.currentSourceKey }" @click="handleSetDefault(s)" :title="sk(s) === sourceStore.currentSourceKey ? tr('sources.isDefault') : tr('sources.setAsDefault')">
               <Icon name="star" :size="14" />
             </button>
-            <button class="icon-btn edit-btn" @click="openEdit({ source_key: sk(s), name: s.name, api_url: s.api_url, url_template: s.url_template, url_prefix: s.url_prefix, url_suffix: s.url_suffix, collect_limit: s.collect_limit, collect_hours: s.collect_hours })" title="编辑">
+            <button class="icon-btn edit-btn" @click="openEdit({ source_key: sk(s), name: s.name, api_url: s.api_url, collect_limit: s.collect_limit, collect_hours: s.collect_hours })" :title="tr('common.edit')">
               <Icon name="edit" :size="14" />
             </button>
-            <button class="icon-btn del-btn" @click="deleteSourceConfirm(sk(s))" title="删除">
+            <button class="icon-btn del-btn" @click="deleteSourceConfirm(sk(s))" :title="tr('common.delete')">
               <Icon name="trash" :size="14" />
             </button>
         </div>
@@ -585,32 +704,32 @@ function fallbackCopy(text: string): void {
             </div>
             <div class="cp-stats">
               <div class="cp-stat">
-                <span class="cp-stat-label">页数</span>
+                <span class="cp-stat-label">{{ tr('sources.statPage') }}</span>
                 <span class="cp-stat-value">{{ collectStore.getState(sk(s)).page }}/{{ collectStore.getState(sk(s)).total || '?' }}</span>
               </div>
               <div class="cp-stat">
-                <span class="cp-stat-label">视频数</span>
+                <span class="cp-stat-label">{{ tr('sources.statVideoCount') }}</span>
                 <span class="cp-stat-value">{{ collectStore.getState(sk(s)).videoCount }}</span>
               </div>
               <div class="cp-stat">
-                <span class="cp-stat-label">速度</span>
+                <span class="cp-stat-label">{{ tr('sources.statSpeed') }}</span>
                 <span class="cp-stat-value">{{ collectStore.speedStr(sk(s)) }}</span>
               </div>
               <div class="cp-stat">
-                <span class="cp-stat-label">耗时</span>
+                <span class="cp-stat-label">{{ tr('sources.statElapsed') }}</span>
                 <span class="cp-stat-value">{{ collectStore.elapsedStr(sk(s)) }}</span>
               </div>
               <div class="cp-stat">
-                <span class="cp-stat-label">预估剩余</span>
+                <span class="cp-stat-label">{{ tr('sources.statEta') }}</span>
                 <span class="cp-stat-value">{{ collectStore.etaStr(sk(s)) }}</span>
               </div>
             </div>
             <!-- 当前页视频标签 -->
             <div v-if="collectStore.getState(sk(s)).pageNames && collectStore.getState(sk(s)).pageNames.length > 0" class="cp-page-names">
-              <span class="cp-page-names-label">第 {{ collectStore.getState(sk(s)).page }} 页 · {{ collectStore.getState(sk(s)).pageNames.length }} 个</span>
+              <span class="cp-page-names-label">{{ tr('sources.pageNamesHeader', { page: collectStore.getState(sk(s)).page, count: collectStore.getState(sk(s)).pageNames.length }) }}</span>
               <div class="cp-name-tags">
                 <span v-for="(name, idx) in collectStore.getState(sk(s)).pageNames.slice(0, 15)" :key="idx" class="cp-name-tag">{{ name }}</span>
-                <span v-if="collectStore.getState(sk(s)).pageNames.length > 15" class="cp-name-more">+{{ collectStore.getState(sk(s)).pageNames.length - 15 }} 更多</span>
+                <span v-if="collectStore.getState(sk(s)).pageNames.length > 15" class="cp-name-more">+{{ collectStore.getState(sk(s)).pageNames.length - 15 }} {{ tr('common.more') }}</span>
               </div>
             </div>
             <!-- 错误信息 -->
@@ -619,41 +738,97 @@ function fallbackCopy(text: string): void {
 
           <!-- 2. 采集日志区 -->
           <div class="collect-log-panel">
-            <div class="clog-title">采集日志 ({{ collectStore.getState(sk(s)).log.length }}条)</div>
+            <div class="clog-title">{{ tr('sources.collectLogTitle', { count: collectStore.getState(sk(s)).log.length }) }}</div>
             <div v-if="collectStore.getState(sk(s)).log.length > 0" class="clog-list">
               <div v-for="(msg, idx) in collectStore.getState(sk(s)).log.slice(-15)" :key="idx" class="clog-line">{{ msg }}</div>
             </div>
-            <div v-else class="clog-empty">暂无日志</div>
+            <div v-else class="clog-empty">{{ tr('sources.noLogs') }}</div>
           </div>
 
-          <!-- 3. 后台定时采集配置 -->
+          <!-- 3. 后端状态明细 + 数据维护 -->
+          <div class="source-ops-panel">
+            <div class="sop-header">
+              <span class="sop-title">
+                <Icon name="database" :size="12" />
+                {{ tr('sources.backendStatus') }}
+              </span>
+              <span v-if="collectStore.backendStatus[sk(s)]" class="sop-synced">
+                {{ tr('sources.statusSyncedAt', { time: formatSyncTime(collectStore.backendStatus[sk(s)].syncedAt) }) }}
+              </span>
+              <button class="mini-btn" :disabled="statusSyncing === sk(s)" @click="refreshStatus(sk(s))">
+                <Icon name="refresh" :size="11" />
+                <span>{{ statusSyncing === sk(s) ? tr('common.loading') : tr('sources.refreshStatus') }}</span>
+              </button>
+            </div>
+
+            <div v-if="collectStore.backendStatus[sk(s)]" class="sop-grid">
+              <div class="sop-cell">
+                <span class="sop-label">{{ tr('common.status') }}</span>
+                <span class="sop-value" :class="{ on: collectStore.backendStatus[sk(s)].running }">
+                  {{ collectStore.backendStatus[sk(s)].running
+                    ? (collectStore.backendStatus[sk(s)].paused ? tr('sources.statusPaused') : tr('sources.statusRunning'))
+                    : tr('sources.statusIdle') }}
+                </span>
+              </div>
+              <div class="sop-cell">
+                <span class="sop-label">{{ tr('sources.scheduleMode') }}</span>
+                <span class="sop-value">{{ collectStore.backendStatus[sk(s)].mode ? modeLabel(collectStore.backendStatus[sk(s)].mode) : '--' }}</span>
+              </div>
+              <div class="sop-cell">
+                <span class="sop-label">{{ tr('sources.statPage') }}</span>
+                <span class="sop-value">{{ collectStore.backendStatus[sk(s)].page || '--' }}</span>
+              </div>
+              <div class="sop-cell">
+                <span class="sop-label">{{ tr('sources.statProcessed') }}</span>
+                <span class="sop-value">{{ collectStore.backendStatus[sk(s)].current }} / {{ collectStore.backendStatus[sk(s)].total || '?' }}</span>
+              </div>
+              <div class="sop-cell sop-cell-wide">
+                <span class="sop-label">{{ tr('sources.lastLogLine') }}</span>
+                <span class="sop-value sop-mono" :title="collectStore.backendStatus[sk(s)].log">{{ collectStore.backendStatus[sk(s)].log || '--' }}</span>
+              </div>
+            </div>
+            <div v-else class="sop-empty">{{ tr('sources.statusNotLoaded') }}</div>
+
+            <div class="sop-danger">
+              <span class="sop-danger-label">
+                <Icon name="alert-triangle" :size="12" />
+                {{ tr('sources.dangerZone') }}
+              </span>
+              <button class="mini-btn danger" :disabled="truncating === sk(s)" @click="truncateSource(sk(s))">
+                <Icon name="trash" :size="11" />
+                <span>{{ truncating === sk(s) ? tr('sources.truncating') : tr('sources.truncateBtn') }}</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 4. 后台定时采集配置 -->
           <div class="schedule-config-panel">
             <div v-if="scheduleVisible.has(sk(s)) && scheduleForms.get(sk(s))" class="schedule-form-inline">
               <label class="sched-check">
                 <input type="checkbox" v-model="scheduleForms.get(sk(s))!.enabled" />
-                <span>启用后台定时采集</span>
+                <span>{{ tr('sources.enableSchedule') }}</span>
               </label>
               <div v-if="scheduleForms.get(sk(s))!.enabled" class="sched-options">
                 <div class="sched-row">
-                  <label>采集模式</label>
-                  <SelectDropdown v-model="scheduleForms.get(sk(s))!.mode" :options="[{ value: 'full', label: '全量采集' }, { value: 'incremental', label: '增量采集' }]" size="sm" />
+                  <label>{{ tr('sources.scheduleMode') }}</label>
+                  <SelectDropdown v-model="scheduleForms.get(sk(s))!.mode" :options="[{ value: 'full', label: tr('sources.fullCollect') }, { value: 'incremental', label: tr('sources.incrementalCollect') }]" size="sm" />
                 </div>
                 <div class="sched-row">
-                  <label>间隔（分钟）</label>
+                  <label>{{ tr('sources.intervalMinutes') }}</label>
                   <input type="number" v-model.number="scheduleForms.get(sk(s))!.interval_min" min="5" max="1440" class="sched-input" />
                 </div>
               </div>
               <div class="sched-actions">
-                <button class="mini-btn" @click="openSchedule(sk(s))">取消</button>
-                <button class="mini-btn accent" @click="saveSchedule(sk(s))">保存配置</button>
+                <button class="mini-btn" @click="openSchedule(sk(s))">{{ tr('common.cancel') }}</button>
+                <button class="mini-btn accent" @click="saveSchedule(sk(s))">{{ tr('sources.saveConfig') }}</button>
               </div>
             </div>
             <div v-else class="schedule-summary">
               <span class="schedule-status-label">
                 <Icon name="clock" :size="12" />
-                后台定时: {{ scheduleStateFor(sk(s))?.enabled ? '已启用 (' + (scheduleStateFor(sk(s))?.mode === 'full' ? '全量' : '增量') + ', 每' + scheduleStateFor(sk(s))?.interval_min + '分)' : '未启用' }}
+                {{ tr('sources.backendScheduleLabel') }}: {{ scheduleStateFor(sk(s))?.enabled ? tr('sources.scheduleOnDetail', { mode: modeLabel(scheduleStateFor(sk(s))?.mode || 'incremental'), n: scheduleStateFor(sk(s))?.interval_min }) : tr('sources.scheduleOff') }}
               </span>
-              <button class="mini-btn" @click="openSchedule(sk(s))">配置</button>
+              <button class="mini-btn" @click="openSchedule(sk(s))">{{ tr('sources.configure') }}</button>
             </div>
           </div>
 
@@ -661,42 +836,42 @@ function fallbackCopy(text: string): void {
           <div class="params-section">
             <button class="params-toggle" @click="toggleParams(sk(s), s.api_url)">
               <Icon name="info" :size="12" />
-              <span>{{ paramsDoc && expandedKey === sk(s) ? '收起参数指南' : '查看参数指南' }}</span>
+              <span>{{ paramsDoc && expandedKey === sk(s) ? tr('sources.collapseParamsGuide') : tr('sources.viewParamsGuide') }}</span>
             </button>
             <div v-if="paramsDoc && expandedKey === sk(s)" class="params-content">
-              <div v-if="paramsDocLoading" class="params-loading"><LoadingSpinner label="加载参数..." /></div>
+              <div v-if="paramsDocLoading" class="params-loading"><LoadingSpinner :label="tr('sources.loadingParams')" /></div>
               <template v-else>
                 <div class="param-block">
                   <div class="param-block-header">
-                    <span class="param-block-title">API 地址</span>
+                    <span class="param-block-title">{{ tr('sources.url') }}</span>
                     <button class="copy-btn" @click="copyText(paramsDoc.base_url)">
-                      <Icon name="copy" :size="11" /><span>复制</span>
+                      <Icon name="copy" :size="11" /><span>{{ tr('common.copy') }}</span>
                     </button>
                   </div>
                   <code class="params-code">{{ paramsDoc.base_url }}</code>
                 </div>
                 <div v-if="paramsDoc.query_ac && paramsDoc.query_ac.length > 0" class="param-block">
-                  <div class="param-block-header"><span class="param-block-title">ac 类型</span></div>
+                  <div class="param-block-header"><span class="param-block-title">{{ tr('sources.acTypes') }}</span></div>
                   <div v-for="(item, idx) in paramsDoc.query_ac" :key="'ac'+idx" class="param-row">
                     <code class="param-name">{{ item.name }}</code>
                     <span class="param-desc">{{ item.desc }}</span>
-                    <button class="copy-btn-sm" @click="copyText(item.example)">复制</button>
+                    <button class="copy-btn-sm" @click="copyText(item.example)">{{ tr('common.copy') }}</button>
                   </div>
                 </div>
                 <div v-if="paramsDoc.query_common && paramsDoc.query_common.length > 0" class="param-block">
-                  <div class="param-block-header"><span class="param-block-title">常用参数</span></div>
+                  <div class="param-block-header"><span class="param-block-title">{{ tr('sources.commonParams') }}</span></div>
                   <div v-for="(item, idx) in paramsDoc.query_common" :key="'qc'+idx" class="param-row">
                     <code class="param-name">{{ item.name }}</code>
                     <span class="param-desc">{{ item.desc }}</span>
-                    <button class="copy-btn-sm" @click="copyText(item.example)">复制</button>
+                    <button class="copy-btn-sm" @click="copyText(item.example)">{{ tr('common.copy') }}</button>
                   </div>
                 </div>
                 <div v-if="paramsDoc.query_advanced && paramsDoc.query_advanced.length > 0" class="param-block">
-                  <div class="param-block-header"><span class="param-block-title">高级参数</span></div>
+                  <div class="param-block-header"><span class="param-block-title">{{ tr('sources.advancedParams') }}</span></div>
                   <div v-for="(item, idx) in paramsDoc.query_advanced" :key="'qa'+idx" class="param-row">
                     <code class="param-name">{{ item.name }}</code>
                     <span class="param-desc">{{ item.desc }}</span>
-                    <button class="copy-btn-sm" @click="copyText(item.example)">复制</button>
+                    <button class="copy-btn-sm" @click="copyText(item.example)">{{ tr('common.copy') }}</button>
                   </div>
                 </div>
               </template>
@@ -709,61 +884,57 @@ function fallbackCopy(text: string): void {
     <!-- 新建/编辑弹窗 -->
     <Modal
       :model-value="showForm"
-      :title="editing ? '编辑采集源' : '添加采集源'"
+      :title="editing ? tr('sources.edit') : tr('sources.add')"
       width="520px"
       :show-footer="true"
       @update:model-value="(v: boolean) => !v && (showForm = false)"
     >
-      <p class="modal-desc">只需提供 API 地址，系统会自动识别来源标识和名称。</p>
+      <p class="modal-desc">{{ tr('sources.formDesc') }}</p>
       <div class="form-group">
-        <label>API 地址 <span class="required">*</span></label>
-        <input v-model="form.api_url" placeholder="https://api.yyzy-tv.vip/inc/apijson.php 或 https://api.example.com/api.php/provide/vod/?ac=detail" />
+        <label>{{ tr('sources.url') }} <span class="required">*</span></label>
+        <input v-model="form.api_url" :placeholder="tr('sources.apiUrlPlaceholder')" />
       </div>
       <div v-if="form.api_url" class="auto-info">
-        <span class="auto-label">自动识别:</span>
-        <code>{{ autoKey || '(请输入有效URL)' }}</code>
+        <span class="auto-label">{{ tr('sources.autoDetect') }}:</span>
+        <code>{{ autoKey || tr('sources.enterValidUrl') }}</code>
       </div>
       <div class="form-group" style="display:flex;align-items:center;gap:8px">
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
           <input type="checkbox" v-model="form.enabled" style="width:auto" />
-          <span>启用此采集源</span>
+          <span>{{ tr('sources.enableThisSource') }}</span>
         </label>
       </div>
       <div class="form-group">
-        <label>显示名称 <span class="optional">(可选)</span></label>
-        <input v-model="form.name" :placeholder="autoKey || '自动使用来源标识'" />
+        <label>{{ tr('sources.displayName') }} <span class="optional">{{ tr('sources.optional') }}</span></label>
+        <input v-model="form.name" :placeholder="autoKey || tr('sources.autoUseSourceKey')" />
       </div>
       <button class="toggle-advanced" @click="showAdvanced = !showAdvanced">
         <span>{{ showAdvanced ? '▾' : '▸' }}</span>
-        <span>高级选项</span>
+        <span>{{ tr('sources.advancedOptions') }}</span>
       </button>
       <div v-if="showAdvanced" class="form-group">
-        <label>URL 模板 <span class="optional">(用于压缩 m3u8 地址)</span></label>
-        <input v-model="form.url_template" placeholder="https://{host}.example.com/{prefix}/{path}/video/index.m3u8" />
-      </div>
-      <div v-if="showAdvanced" class="form-group">
-        <label>单页条数 <span class="optional">(0=使用接口默认，建议 50-100)</span></label>
+        <label>{{ tr('sources.perPageLabel') }} <span class="optional">{{ tr('sources.perPageHint') }}</span></label>
         <input type="number" min="0" max="500" v-model.number="form.collect_limit" placeholder="50" />
       </div>
       <div v-if="showAdvanced" class="form-group">
-        <label>默认时间窗（小时）<span class="optional">(增量模式默认回溯小时数)</span></label>
+        <label>{{ tr('sources.defaultHoursLabel') }}<span class="optional">{{ tr('sources.defaultHoursHint') }}</span></label>
         <input type="number" min="0" max="8760" v-model.number="form.collect_hours" placeholder="24" />
       </div>
       <template #footer>
-        <Button variant="secondary" size="md" @click="showForm = false">取消</Button>
-        <Button variant="primary" size="md" :disabled="!form.api_url" @click="save">保存</Button>
+        <Button variant="secondary" size="md" @click="showForm = false">{{ tr('common.cancel') }}</Button>
+        <Button variant="primary" size="md" :disabled="!form.api_url" @click="save">{{ tr('common.save') }}</Button>
       </template>
     </Modal>
 
     <!-- 导入弹窗 -->
     <Modal
       :model-value="importDialogOpen"
-      title="导入采集源"
+      :title="tr('sources.importTitle')"
       width="560px"
       :show-footer="true"
       @update:model-value="(v: boolean) => !v && closeImportDialog()"
     >
-      <p class="modal-desc">支持拖入 .json / .json.br / .json.gz 文件，或点击下方区域选择文件。文件将由后端解析并添加到采集源列表。</p>
+      <p class="modal-desc">{{ tr('sources.importDesc') }}</p>
       <div
         class="import-drop-zone"
         :class="{ dragging: importDragging, filled: !!importFile }"
@@ -776,34 +947,34 @@ function fallbackCopy(text: string): void {
         <template v-if="importFile">
           <Icon name="database" :size="28" />
           <p class="import-file-name">{{ importFile.name }}</p>
-          <small>{{ (importFile.size / 1024).toFixed(1) }} KB · 点击可重新选择</small>
+          <small>{{ (importFile.size / 1024).toFixed(1) }} KB · {{ tr('sources.clickToReselect') }}</small>
         </template>
         <template v-else>
           <Icon name="upload" :size="32" />
-          <p class="import-hint-main">拖入 .json / .json.br / .json.gz 文件到此处</p>
-          <p class="import-hint-sub">或点击此区域选择文件</p>
+          <p class="import-hint-main">{{ tr('sources.dropHint') }}</p>
+          <p class="import-hint-sub">{{ tr('sources.orClickToChoose') }}</p>
         </template>
       </div>
       <template #footer>
-        <Button variant="secondary" size="md" @click="closeImportDialog">取消</Button>
-        <Button variant="primary" size="md" :disabled="!importFile || importLoading" :loading="importLoading" @click="doImportSource">导入</Button>
+        <Button variant="secondary" size="md" @click="closeImportDialog">{{ tr('common.cancel') }}</Button>
+        <Button variant="primary" size="md" :disabled="!importFile || importLoading" :loading="importLoading" @click="doImportSource">{{ tr('common.import') }}</Button>
       </template>
     </Modal>
 
     <!-- 导出成功提示条 -->
-    <transition name="slide-up">
+    <MotionTransition preset="toast-bottom">
       <div v-if="exportResult" class="export-toast">
         <Icon name="check" :size="14" />
-        <span class="export-toast-text">已导出 <strong>{{ exportResult.sourceKey }}</strong> 到:</span>
+        <span class="export-toast-text">{{ tr('sources.exported') }} <strong>{{ exportResult.sourceKey }}</strong> {{ tr('sources.exportTo') }}:</span>
         <code class="export-toast-path" :title="exportResult.path">{{ exportResult.path }}</code>
         <button class="mini-btn accent" @click="openExportFolder">
-          <Icon name="folder" :size="10" /><span>打开文件夹</span>
+          <Icon name="folder" :size="10" /><span>{{ tr('sources.openFolder') }}</span>
         </button>
         <button class="mini-btn" @click="dismissExport">
           <Icon name="x" :size="10" />
         </button>
       </div>
-    </transition>
+    </MotionTransition>
   </div>
 </template>
 
@@ -974,6 +1145,33 @@ function fallbackCopy(text: string): void {
 .scheduler-state { font-weight: 600; color: var(--accent); }
 .scheduler-note { flex: 1; color: var(--text-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .scheduler-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.scheduler-config {
+  display: flex; flex-direction: column; gap: 10px;
+  margin: -8px 0 16px; padding: 12px 16px;
+  background: var(--bg-card); border: 1px solid var(--accent-alpha-30);
+  border-radius: 10px;
+}
+.sc-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.sc-field { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); }
+.sc-label { color: var(--text-muted); white-space: nowrap; }
+.sc-value { min-width: 52px; color: var(--text-primary); font-weight: 600; }
+.sc-input {
+  width: 68px; padding: 5px 8px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--bg-secondary);
+  color: var(--text-primary); font-size: 12px; outline: none;
+}
+.sc-input:hover, .sc-input:focus { border-color: var(--accent); }
+.sc-input:focus { box-shadow: 0 0 0 3px var(--accent-alpha-10); }
+.sc-input::-webkit-inner-spin-button,
+.sc-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.sc-input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
+.sc-field input[type='range'] { accent-color: var(--accent); cursor: pointer; }
+.sc-check {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--text-secondary); cursor: pointer;
+}
+.sc-check input { accent-color: var(--accent); cursor: pointer; }
+.sc-hint { color: var(--text-muted); }
 .mini-btn {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 4px 10px; border-radius: 6px;
@@ -1309,7 +1507,68 @@ function fallbackCopy(text: string): void {
   padding: 16px 0;
 }
 
-/* === 3. 定时配置 === */
+/* === 3. 后端状态与数据维护 === */
+.source-ops-panel {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sop-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sop-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.sop-synced {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+.sop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 6px 12px;
+}
+.sop-cell { display: flex; flex-direction: column; gap: 2px; }
+.sop-cell-wide { grid-column: 1 / -1; }
+.sop-label { font-size: 11px; color: var(--text-muted); }
+.sop-value { font-size: 12px; color: var(--text-primary); }
+.sop-value.on { color: var(--accent); }
+.sop-mono {
+  font-family: 'SF Mono', Consolas, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sop-empty { font-size: 12px; color: var(--text-muted); }
+.sop-danger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+.sop-danger-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--danger);
+}
+
+/* === 4. 定时配置 === */
 .schedule-config-panel {
   background: rgba(255,255,255,0.02);
   border: 1px solid rgba(76,175,80,0.2);
@@ -1615,16 +1874,5 @@ function fallbackCopy(text: string): void {
   max-width: 240px;
   font-family: 'SF Mono', Consolas, monospace;
 }
-
-.slide-up-enter-active,
-.slide-up-leave-active {
-  transition: opacity 0.25s ease, transform 0.25s ease;
-}
-.slide-up-enter-from,
-.slide-up-leave-to {
-  opacity: 0;
-  transform: translateX(-50%) translateY(12px);
-}
-
 
 </style>

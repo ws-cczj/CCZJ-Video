@@ -53,7 +53,7 @@ func (s *Service) GetInfo() (*Info, error) {
 		info.DiskCacheBytes = directorySize(info.DiskCacheDir)
 	}
 
-	info.LogFilePath = filepath.Join(dataDirectory, "logs")
+	info.LogFilePath = filepath.Join(dataDirectory, "applog")
 	if fileInfo, err := os.Stat(info.LogFilePath); err == nil && fileInfo.IsDir() {
 		info.LogFileBytes = directorySize(info.LogFilePath)
 	}
@@ -68,12 +68,12 @@ func (s *Service) Clear(cacheType string) error {
 	case "disk_cache":
 		return os.RemoveAll(filepath.Join(dataDirectory, "ts_cache"))
 	case "logs":
-		return os.RemoveAll(filepath.Join(dataDirectory, "logs"))
+		return os.RemoveAll(filepath.Join(dataDirectory, "applog"))
 	case "database":
 		return fmt.Errorf("数据库文件正在使用中，请通过「重置数据库」功能操作")
 	case "all":
 		_ = os.RemoveAll(filepath.Join(dataDirectory, "ts_cache"))
-		_ = os.RemoveAll(filepath.Join(dataDirectory, "logs"))
+		_ = os.RemoveAll(filepath.Join(dataDirectory, "applog"))
 		return nil
 	default:
 		return fmt.Errorf("未知缓存类型: %s", cacheType)

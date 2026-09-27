@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { tr } from '../locales'
 import { ref, computed } from 'vue'
 import {
   CancelDownload,
@@ -164,7 +165,7 @@ export const useDownloadStore = defineStore('download', () => {
         // 忽略
       }
     } catch (e: any) {
-      throw new Error(e?.message || '设置下载目录失败')
+      throw new Error(e?.message || tr('downloads.setDirFailed'))
     }
   }
 
@@ -260,7 +261,7 @@ export const useDownloadStore = defineStore('download', () => {
       }
       return !!ok
     } catch (e: any) {
-      useErrorStore().fromError('暂停下载任务失败', e)
+      useErrorStore().fromError(tr('errors.pauseTaskFailed'), e)
       return false
     }
   }
@@ -274,7 +275,7 @@ export const useDownloadStore = defineStore('download', () => {
       }
       return !!ok
     } catch (e: any) {
-      useErrorStore().fromError('恢复下载任务失败', e)
+      useErrorStore().fromError(tr('errors.resumeTaskFailed'), e)
       return false
     }
   }
@@ -393,9 +394,9 @@ export function formatSpeed(bps: number): string {
 
 export function formatEta(sec: number): string {
   if (!isFinite(sec) || sec <= 0) return '--'
-  if (sec < 60) return Math.ceil(sec) + ' 秒'
-  if (sec < 3600) return Math.ceil(sec / 60) + ' 分'
-  return (sec / 3600).toFixed(1) + ' 时'
+  if (sec < 60) return Math.ceil(sec) + ' ' + tr('common.unitSecond')
+  if (sec < 3600) return Math.ceil(sec / 60) + ' ' + tr('common.unitMinute')
+  return (sec / 3600).toFixed(1) + ' ' + tr('common.unitHour')
 }
 
 export function percent(t: DownloadTask): number {

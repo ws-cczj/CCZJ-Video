@@ -45,6 +45,7 @@ func NewHLSService() *HLSService {
 
 // safeDialContext validates the address at the moment it is dialled. This
 // closes the DNS-rebinding gap between ValidateTarget and Transport's lookup.
+// It is shared by both HLS and image proxy transports.
 func safeDialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
@@ -52,14 +53,14 @@ func safeDialContext(ctx context.Context, network, address string) (net.Conn, er
 	}
 	addresses, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
 	if err != nil {
-		return nil, fmt.Errorf("resolve HLS upstream: %w", err)
+		return nil, fmt.Errorf("resolve proxy upstream: %w", err)
 	}
 	if len(addresses) == 0 {
-		return nil, fmt.Errorf("HLS upstream has no address")
+		return nil, fmt.Errorf("proxy upstream has no address")
 	}
 	for _, address := range addresses {
 		if !IsPublicAddr(address) {
-			return nil, fmt.Errorf("HLS upstream resolved to a non-public address")
+			return nil, fmt.Errorf("proxy upstream resolved to a non-public address")
 		}
 	}
 	dialer := &net.Dialer{Timeout: 20 * time.Second, KeepAlive: 30 * time.Second}

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { useConfirmStore } from '../stores/confirm'
+import { tr } from '../locales'
 import { Modal, Button, Tag } from './ui'
 
 const store = useConfirmStore()
@@ -12,9 +13,9 @@ function cancel(): void { store.handle(false) }
 
 function levelLabel(): string {
   if (!current.value) return ''
-  if (current.value.level === 'danger') return '危险'
-  if (current.value.level === 'warn') return '警告'
-  return '提示'
+  if (current.value.level === 'danger') return tr('confirm.danger')
+  if (current.value.level === 'warn') return tr('confirm.warn')
+  return tr('confirm.info')
 }
 
 function levelVariant(): 'primary' | 'danger' | 'warning' {
@@ -51,8 +52,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
     :model-value="!!current"
     :title="current?.title"
     :show-footer="true"
-    :ok-text="current?.okText || '确认'"
-    :cancel-text="current?.cancelText || '取消'"
+    :ok-text="current?.okText || tr('common.confirm')"
+    :cancel-text="current?.cancelText || tr('common.cancel')"
     :mask-closable="true"
     :closable="true"
     width="420px"

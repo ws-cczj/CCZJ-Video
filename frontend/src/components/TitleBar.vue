@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { tr } from '../locales'
 import { Window } from '../api/runtime'
 import { WindowIsMax, WindowToggleMax } from '../api/app'
 import Icon from './Icon.vue'
@@ -83,16 +84,16 @@ function onQuit(): void {
       <button
         class="tb-btn minimize"
         @click="onMinimize"
-        title="最小化"
-        aria-label="最小化"
+        :title="tr('common.minimize')"
+        :aria-label="tr('common.minimize')"
       >
         <Icon name="minimize" :size="10" />
       </button>
       <button
         class="tb-btn maximize"
         @click="onToggleMax"
-        :title="isMaximized ? '还原' : '最大化'"
-        :aria-label="isMaximized ? '还原' : '最大化'"
+        :title="isMaximized ? tr('common.restore') : tr('common.maximize')"
+        :aria-label="isMaximized ? tr('common.restore') : tr('common.maximize')"
       >
         <Icon v-if="!isMaximized" name="maximize" :size="10" />
         <svg
@@ -113,8 +114,8 @@ function onQuit(): void {
       <button
         class="tb-btn close"
         @click="onQuit"
-        title="关闭"
-        aria-label="关闭"
+        :title="tr('common.close')"
+        :aria-label="tr('common.close')"
       >
         <Icon name="close" :size="10" />
       </button>
@@ -187,7 +188,6 @@ function onQuit(): void {
   align-items: center;
   justify-content: center;
   transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
-  outline: none;
   position: relative;
 }
 
@@ -200,17 +200,37 @@ function onQuit(): void {
   transform: scale(0.92);
 }
 
+.tb-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.tb-btn.minimize:hover {
+  background: var(--btn-min);
+  color: var(--btn-min-contrast);
+}
+
+.tb-btn.maximize:hover {
+  background: var(--btn-hide);
+  color: var(--btn-hide-contrast);
+}
+
 .tb-btn.close:hover {
-  background: #e81123;
-  color: #ffffff;
+  background: var(--btn-close);
+  color: var(--btn-close-contrast);
 }
 
 .tb-btn.close:active {
-  background: #c00c1e;
+  filter: brightness(0.86);
 }
 
 .restore-icon {
   display: block;
   color: currentColor;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .titlebar,
+  .tb-btn { transition: none; }
 }
 </style>

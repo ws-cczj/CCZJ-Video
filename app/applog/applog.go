@@ -2,7 +2,6 @@ package applog
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -46,6 +45,7 @@ func (l Level) String() string {
 // - 自动清理超过指定天数的旧日志
 // - 包含调用者文件:行号
 // - 时间戳精确到毫秒
+// - 每条落盘的日志同时进入内存环形缓冲，供界面实时查询（见 ring.go）
 type Logger struct {
 	mu          sync.Mutex
 	logDir      string
@@ -53,6 +53,14 @@ type Logger struct {
 	currentDay  string // YYYY-MM-DD
 	keepDays    int    // 保留最近多少天的日志
 	minLevel    Level  // 最低输出级别，低于此级别的日志被丢弃
+
+	ring    []Record // 环形缓冲，存放最近 DefaultRingSize 条
+	head    int      // 下一条写入位置（单调递增，取模使用）
+	count   int      // 缓冲内有效条数
+	seq     uint64   // 全局递增序号
+	subs    map[int]chan Record
+	subID   int
+	dropped uint64 // 订阅者来不及消费而被丢弃的条数
 }
 
 var defaultLogger *Logger
@@ -79,11 +87,19 @@ func Init(logDir string) error {
 // Default 返回已初始化的默认 logger
 func Default() *Logger {
 	if defaultLogger == nil {
-		exe, _ := os.Executable()
-		dir := filepath.Join(filepath.Dir(exe), "data", "applog")
-		_ = Init(dir)
+		_ = Init(defaultLogDir())
 	}
 	return defaultLogger
+}
+
+func defaultLogDir() string {
+	if dir, err := os.UserConfigDir(); err == nil && strings.TrimSpace(dir) != "" {
+		return filepath.Join(dir, "CCZJ Video", "applog")
+	}
+	if exe, err := os.Executable(); err == nil {
+		return filepath.Join(filepath.Dir(exe), "data", "applog")
+	}
+	return filepath.Join(".", "data", "applog")
 }
 
 // 便捷方法（带调用位置）
@@ -91,6 +107,16 @@ func Debug(format string, args ...interface{}) { Default().log(LevelDebug, 3, fo
 func Info(format string, args ...interface{})  { Default().log(LevelInfo, 3, format, args...) }
 func Warn(format string, args ...interface{})  { Default().log(LevelWarn, 3, format, args...) }
 func Error(format string, args ...interface{}) { Default().log(LevelError, 3, format, args...) }
+
+// InfoAt/WarnAt 供日志包装函数使用。包装链每多一层，caller 就会多指向上层一帧，
+// extra 传"从本函数到真实业务调用点之间隔了几层"，让日志位置指回业务代码而不是包装函数。
+func InfoAt(extra int, format string, args ...interface{}) {
+	Default().log(LevelInfo, 3+extra, format, args...)
+}
+
+func WarnAt(extra int, format string, args ...interface{}) {
+	Default().log(LevelWarn, 3+extra, format, args...)
+}
 
 // InfoFields writes an informational message with deterministically ordered
 // operation fields, for example task_id, operation_id, or source_key.
@@ -126,33 +152,22 @@ func formatFields(fields Fields) string {
 
 func (l *Logger) log(level Level, skip int, format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
-	l.writeInternal(level, msg, skip+1)
+	l.writeInternal(level, msg, skip)
 }
 
 // Write 写入一条日志（公共方法，旧 API 兼容）
 func (l *Logger) Write(level Level, msg string) {
-	l.writeInternal(level, msg, 3)
-}
-
-// SetMinLevel 设置最低日志级别，低于此级别的日志不会写入文件
-func SetMinLevel(level Level) {
-	if defaultLogger != nil {
-		defaultLogger.minLevel = level
-	}
-}
-
-// IsDebug 返回是否处于调试模式
-func IsDebug() bool {
-	return defaultLogger != nil && defaultLogger.minLevel <= LevelDebug
+	l.writeInternal(level, msg, 2)
 }
 
 func (l *Logger) writeInternal(level Level, msg string, skip int) {
-	// 级别过滤
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	// 级别过滤（与写盘同一把锁，避免 minLevel 数据竞争）
 	if level < l.minLevel {
 		return
 	}
-	l.mu.Lock()
-	defer l.mu.Unlock()
 
 	if err := l.rotateIfNeeded(); err != nil {
 		fmt.Fprintf(os.Stderr, "[applog] rotate failed: %v\n", err)
@@ -162,7 +177,8 @@ func (l *Logger) writeInternal(level Level, msg string, skip int) {
 		return
 	}
 
-	ts := time.Now().Format("2006-01-02 15:04:05.000")
+	now := time.Now()
+	ts := now.Format("2006-01-02 15:04:05.000")
 	// 获取调用者信息
 	_, file, line, ok := runtime.Caller(skip)
 	caller := ""
@@ -183,6 +199,7 @@ func (l *Logger) writeInternal(level Level, msg string, skip int) {
 	if _, err := l.currentFile.WriteString(lineStr); err != nil {
 		fmt.Fprintf(os.Stderr, "[applog] write failed: %v\n", err)
 	}
+	l.pushLocked(level, now, caller, msg)
 }
 
 // rotateIfNeeded 若当前日期变化则切换文件
@@ -253,6 +270,30 @@ func (l *Logger) Close() {
 // Dir 返回日志目录
 func (l *Logger) Dir() string { return l.logDir }
 
+// KeepDays 返回日志保留天数
+func (l *Logger) KeepDays() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.keepDays
+}
+
+// SetKeepDays 改日志保留天数，并按新值立刻清理一次旧文件。
+// cleanOld 不自己加锁（沿用 rotate 路径的约定），所以在这里持锁调用。
+func SetKeepDays(days int) int {
+	if days < 1 {
+		days = 1
+	}
+	l := Default()
+	if l == nil {
+		return 0
+	}
+	l.mu.Lock()
+	l.keepDays = days
+	l.cleanOld()
+	l.mu.Unlock()
+	return days
+}
+
 // ListFiles 返回可用的日志文件名列表（按时间倒序）
 func (l *Logger) ListFiles() []string {
 	files, err := os.ReadDir(l.logDir)
@@ -285,49 +326,6 @@ func (l *Logger) ReadFile(name string) (string, error) {
 	return string(data), nil
 }
 
-// ReadFileTail 读取日志文件末尾指定行数
-func (l *Logger) ReadFileTail(name string, tailLines int) (string, error) {
-	full, err := l.ReadFile(name)
-	if err != nil {
-		return "", err
-	}
-	if tailLines <= 0 {
-		return full, nil
-	}
-	lines := strings.Split(full, "\n")
-	if len(lines) <= tailLines {
-		return full, nil
-	}
-	return strings.Join(lines[len(lines)-tailLines:], "\n"), nil
-}
-
-// ReadFileTailBytes 读取文件末尾指定字节数
-func (l *Logger) ReadFileTailBytes(name string, maxBytes int64) (string, error) {
-	clean := filepath.Base(name)
-	p := filepath.Join(l.logDir, clean)
-	f, err := os.Open(p)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-
-	info, err := f.Stat()
-	if err != nil {
-		return "", err
-	}
-	size := info.Size()
-	if size > maxBytes {
-		if _, err := f.Seek(size-maxBytes, io.SeekStart); err != nil {
-			return "", err
-		}
-	}
-	data, err := io.ReadAll(f)
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
-}
-
 // Clear 删除所有日志文件
 func (l *Logger) Clear() int {
 	files := l.ListFiles()
@@ -349,5 +347,12 @@ func (l *Logger) Clear() int {
 			count++
 		}
 	}
+	// 清空后内存时间线也归零，seq 保持单调以免前端出现重复序号
+	l.mu.Lock()
+	for i := range l.ring {
+		l.ring[i] = Record{}
+	}
+	l.head, l.count = 0, 0
+	l.mu.Unlock()
 	return count
 }

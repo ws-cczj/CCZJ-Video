@@ -2,6 +2,7 @@ package collect
 
 import (
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -23,6 +24,8 @@ var headers = http.Header{
 	"Accept-Language": []string{"zh-CN,zh;q=0.9,en;q=0.8"},
 	"Accept-Encoding": []string{"gzip, deflate, br"},
 }
+
+const maxFetchResponseBytes = 32 << 20
 
 var client = &http.Client{
 	Timeout: 30 * time.Second,
@@ -60,6 +63,29 @@ type FetchResult struct {
 	Total     FlexInt        `json:"total"`
 	Msg       string         `json:"msg"`
 	List      []*model.Video `json:"list"`
+}
+
+// HTTPError preserves transport semantics for retry policy decisions. Callers
+// must not infer a status code by parsing an error message.
+type HTTPError struct {
+	StatusCode int
+	RetryAfter time.Duration
+	URL        string
+}
+
+func (e *HTTPError) Error() string { return fmt.Sprintf("HTTP %d for %s", e.StatusCode, e.URL) }
+
+func retryAfter(header string) time.Duration {
+	seconds, err := strconv.Atoi(strings.TrimSpace(header))
+	if err == nil && seconds > 0 {
+		return time.Duration(seconds) * time.Second
+	}
+	if when, err := http.ParseTime(header); err == nil {
+		if d := time.Until(when); d > 0 {
+			return d
+		}
+	}
+	return 0
 }
 
 // FetchOptions 可选的查询参数
@@ -138,8 +164,16 @@ func FetchVideoDetail(apiUrl string, vodId string) (*model.Video, error) {
 	return nil, fmt.Errorf("video not found: %s", vodId)
 }
 
-func fetchVideoDetailWithStrategy(detailUrl string, fieldMapping map[string]string) (*model.Video, error) {
-	result, err := doFetch(detailUrl, fieldMapping)
+// FetchVideoDetailWithURL is the operation-aware detail fetch entry point.
+// Its URL must have been produced by a SourceStrategy; it never adds params.
+func FetchVideoDetailWithURL(detailURL string, fieldMapping map[string]string) (*model.Video, error) {
+	return FetchVideoDetailWithURLContext(context.Background(), detailURL, fieldMapping)
+}
+
+// FetchVideoDetailWithURLContext lets detail callers cancel an in-flight
+// source request when the consumer has navigated away.
+func FetchVideoDetailWithURLContext(ctx context.Context, detailURL string, fieldMapping map[string]string) (*model.Video, error) {
+	result, err := doFetchContext(ctx, detailURL, fieldMapping)
 	if err != nil {
 		return nil, err
 	}
@@ -149,8 +183,20 @@ func fetchVideoDetailWithStrategy(detailUrl string, fieldMapping map[string]stri
 	return nil, fmt.Errorf("video not found")
 }
 
+// FetchPageURL consumes an operation-aware URL without adding parameters.
+func FetchPageURL(target string, fieldMapping map[string]string) (*FetchResult, error) {
+	if strings.TrimSpace(target) == "" {
+		return nil, fmt.Errorf("request URL is empty")
+	}
+	return doFetch(target, fieldMapping)
+}
+
 func doFetch(target string, fieldMapping map[string]string) (*FetchResult, error) {
-	req, err := http.NewRequest("GET", target, nil)
+	return doFetchContext(context.Background(), target, fieldMapping)
+}
+
+func doFetchContext(ctx context.Context, target string, fieldMapping map[string]string) (*FetchResult, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", target, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
@@ -165,7 +211,10 @@ func doFetch(target string, fieldMapping map[string]string) (*FetchResult, error
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("status %d for %s", resp.StatusCode, target)
+		return nil, &HTTPError{StatusCode: resp.StatusCode, RetryAfter: retryAfter(resp.Header.Get("Retry-After")), URL: target}
+	}
+	if resp.ContentLength > maxFetchResponseBytes {
+		return nil, fmt.Errorf("response exceeds %d bytes", maxFetchResponseBytes)
 	}
 
 	bodyReader, err := decompress(resp.Body, resp.Header.Get("Content-Encoding"))
@@ -173,9 +222,12 @@ func doFetch(target string, fieldMapping map[string]string) (*FetchResult, error
 		return nil, fmt.Errorf("decompress: %w", err)
 	}
 
-	body, err := io.ReadAll(bodyReader)
+	body, err := io.ReadAll(io.LimitReader(bodyReader, maxFetchResponseBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("read body: %w", err)
+	}
+	if len(body) > maxFetchResponseBytes {
+		return nil, fmt.Errorf("response exceeds %d bytes", maxFetchResponseBytes)
 	}
 
 	result := &FetchResult{}
@@ -220,7 +272,9 @@ func doFetch(target string, fieldMapping map[string]string) (*FetchResult, error
 	applog.Info("[FETCH] 原始响应 - URL: %s, Code: %d, Total: %d, ListSize: %d", target, result.Code, result.Total.Int(), len(result.List))
 	if len(result.List) > 0 {
 		for i, v := range result.List {
-			if v == nil { continue }
+			if v == nil {
+				continue
+			}
 			applog.Info("[FETCH] 视频[%d]原始数据 - vod_id: %s, vod_name: %s, vod_actor: %s, vod_director: %s, vod_content: %s, vod_pic: %s",
 				i, v.VodId.String(), v.VodName, v.VodActor, v.VodDirector, truncate(v.VodContent, 100), v.VodPic)
 		}

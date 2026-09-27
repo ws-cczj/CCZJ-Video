@@ -6,6 +6,7 @@
  */
 
 import type { Video } from '../types'
+import { tr } from '../locales'
 
 // ==================== 类型定义 ====================
 
@@ -145,8 +146,8 @@ export function computeRecommendations(
     const actorMatches = intersectValues(cur.actors, n.actors)
     if (actorMatches.length > 0) {
       const names = actorMatches.slice(0, 3).join('、')
-      const suffix = actorMatches.length > 3 ? '等' : ''
-      parts.push(`同演员：${names}${suffix}`)
+      const suffix = actorMatches.length > 3 ? tr('recommendations.etc') : ''
+      parts.push(tr('recommendations.sameActors', { names, suffix }))
       score += actorMatches.length * 5
     }
 
@@ -154,8 +155,8 @@ export function computeRecommendations(
     const dirMatches = intersectValues(cur.directors, n.directors)
     if (dirMatches.length > 0) {
       const names = dirMatches.slice(0, 3).join('、')
-      const suffix = dirMatches.length > 3 ? '等' : ''
-      parts.push(`同导演：${names}${suffix}`)
+      const suffix = dirMatches.length > 3 ? tr('recommendations.etc') : ''
+      parts.push(tr('recommendations.sameDirectors', { names, suffix }))
       score += dirMatches.length * 4
     }
 
@@ -163,18 +164,18 @@ export function computeRecommendations(
     const typeMatches = intersectValues(cur.types, n.types)
     if (typeMatches.length > 0) {
       const names = typeMatches.slice(0, 3).join('、')
-      const suffix = typeMatches.length > 3 ? '等' : ''
-      parts.push(`同类型：${names}${suffix}`)
+      const suffix = typeMatches.length > 3 ? tr('recommendations.etc') : ''
+      parts.push(tr('recommendations.sameTypes', { names, suffix }))
       score += typeMatches.length * 3
     }
 
     // --- 年份：完全相等 +2，±1 年 +1 ---
     if (cur.year !== null && n.year !== null) {
       if (cur.year === n.year) {
-        parts.push(`同年份：${cur.year}`)
+        parts.push(tr('recommendations.sameYear', { year: cur.year }))
         score += 2
       } else if (Math.abs(cur.year - n.year) === 1) {
-        parts.push(`相近年份：${cur.year} / ${n.year}`)
+        parts.push(tr('recommendations.similarYears', { yearA: cur.year, yearB: n.year }))
         score += 1
       }
     }
@@ -183,8 +184,8 @@ export function computeRecommendations(
     const areaMatches = intersectValues(cur.areas, n.areas)
     if (areaMatches.length > 0) {
       const names = areaMatches.slice(0, 3).join('、')
-      const suffix = areaMatches.length > 3 ? '等' : ''
-      parts.push(`同地区：${names}${suffix}`)
+      const suffix = areaMatches.length > 3 ? tr('recommendations.etc') : ''
+      parts.push(tr('recommendations.sameAreas', { names, suffix }))
       score += areaMatches.length * 1
     }
 
@@ -199,7 +200,7 @@ export function computeRecommendations(
   // 4. 输出结果
   return scored.map(s => ({
     vod_id: String(s.v.vod_id || ''),
-    vod_name: s.v.vod_name || '视频',
+    vod_name: s.v.vod_name || tr('recommendations.fallbackName'),
     vod_pic: s.v.vod_pic,
     vod_remarks: s.v.vod_remarks,
     score: s.score,

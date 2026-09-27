@@ -1,10 +1,11 @@
 package handler
 
 import (
+	"cczjVideo/app/applog"
 	"cczjVideo/app/collect"
 	"cczjVideo/app/db"
+	"cczjVideo/app/detail"
 	"cczjVideo/app/model"
-	"cczjVideo/app/util"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -47,37 +48,45 @@ func parseInt(raw json.RawMessage, def int) (int, error) {
 }
 
 type VideoListReq struct {
-	SourceKey string `json:"source_key"`
+	SourceKey  string `json:"source_key"`
+	RecentDays int    `json:"recent_days"`
 	// type_id 同时支持字符串与数字，保存为字符串
 	TypeId   string `json:"type_id"`
-	Year     string `json:"year"`     // 年份筛选（"all" 或具体年份）
-	Area     string `json:"area"`     // 地区筛选（"all" 或具体地区）
-	Keyword  string `json:"keyword"`  // 关键词：标题/演员/导演/备注/年份/地区/类型 模糊匹配
-	Sort     string `json:"sort"`     // "" 默认; "rating" 按评分; "hot" 按热度
+	Year     string `json:"year"`    // 年份筛选（"all" 或具体年份）
+	Area     string `json:"area"`    // 地区筛选（"all" 或具体地区）
+	Keyword  string `json:"keyword"` // 关键词：标题/演员/导演/备注/年份/地区/类型 模糊匹配
+	Sort     string `json:"sort"`    // "" 默认; "rating" 按评分; "hot" 按热度
+	Cursor   string `json:"cursor"`
 	Page     int    `json:"page"`
 	PageSize int    `json:"page_size"`
 }
 
 func (r *VideoListReq) UnmarshalJSON(data []byte) error {
 	var raw struct {
-		SourceKey string          `json:"source_key"`
-		TypeId    json.RawMessage `json:"type_id"`
-		Year      string          `json:"year"`
-		Area      string          `json:"area"`
-		Keyword   string          `json:"keyword"`
-		Sort      string          `json:"sort"`
-		Page      json.RawMessage `json:"page"`
-		PageSize  json.RawMessage `json:"page_size"`
+		SourceKey  string          `json:"source_key"`
+		RecentDays json.RawMessage `json:"recent_days"`
+		TypeId     json.RawMessage `json:"type_id"`
+		Year       string          `json:"year"`
+		Area       string          `json:"area"`
+		Keyword    string          `json:"keyword"`
+		Sort       string          `json:"sort"`
+		Cursor     string          `json:"cursor"`
+		Page       json.RawMessage `json:"page"`
+		PageSize   json.RawMessage `json:"page_size"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
 	r.SourceKey = raw.SourceKey
+	if v, err := parseInt(raw.RecentDays, 0); err == nil {
+		r.RecentDays = v
+	}
 	r.TypeId = normalizeStringId(raw.TypeId)
 	r.Year = strings.TrimSpace(raw.Year)
 	r.Area = strings.TrimSpace(raw.Area)
 	r.Keyword = strings.TrimSpace(raw.Keyword)
 	r.Sort = strings.TrimSpace(raw.Sort)
+	r.Cursor = strings.TrimSpace(raw.Cursor)
 	if v, err := parseInt(raw.Page, 1); err == nil {
 		r.Page = v
 	}
@@ -113,8 +122,12 @@ func normalizeStringId(raw json.RawMessage) string {
 }
 
 type VideoListResp struct {
-	Videos []*model.Video `json:"videos"`
-	Total  int            `json:"total"`
+	Videos     []*model.Video `json:"videos"`
+	Total      int            `json:"total"`
+	NextCursor string         `json:"next_cursor"`
+	// LocalVideos carries catalog-only matches the upstream search missed,
+	// e.g. "是，大臣" for keyword "大臣" when the source API matches prefixes.
+	LocalVideos []*model.Video `json:"local_videos,omitempty"`
 }
 
 func GetVideoList(req VideoListReq) (*VideoListResp, error) {
@@ -126,28 +139,22 @@ func GetVideoList(req VideoListReq) (*VideoListResp, error) {
 	}
 
 	filter := db.FilterParams{
-		TypeId:   req.TypeId,
-		Year:     req.Year,
-		Area:     req.Area,
-		Keyword:  req.Keyword,
-		Sort:     req.Sort,
-		Page:     req.Page,
-		PageSize: req.PageSize,
+		TypeId:     req.TypeId,
+		Year:       req.Year,
+		Area:       req.Area,
+		Keyword:    req.Keyword,
+		Sort:       req.Sort,
+		RecentDays: req.RecentDays,
+		Cursor:     req.Cursor,
+		Page:       req.Page,
+		PageSize:   req.PageSize,
 	}
-	videos, total, err := db.GetVideos(req.SourceKey, filter)
+	page, err := db.GetCatalogVideoPage(req.SourceKey, filter)
 	if err != nil {
 		return nil, fmt.Errorf("get videos: %w", err)
 	}
 
-	for _, v := range videos {
-		v.VodActor = util.DecompressIfNeeded(v.VodActor)
-		v.VodDirector = util.DecompressIfNeeded(v.VodDirector)
-		v.VodContent = util.DecompressIfNeeded(v.VodContent)
-	}
-	// 用全局豆瓣数据批量补充缺失字段（一次 JOIN 替代 N×2 次查询）
-	db.EnrichVideosWithDouban(videos)
-
-	return &VideoListResp{Videos: videos, Total: total}, nil
+	return &VideoListResp{Videos: page.Videos, Total: page.Total, NextCursor: page.NextCursor}, nil
 }
 
 // YearAreaResp 前端用于前端：返回所有可选年份 / 地区列表（用于筛选下拉框的选项）
@@ -157,51 +164,51 @@ type YearsResp struct {
 }
 
 func GetYearsAndAreas(sourceKey string) (*YearsResp, error) {
-	years, _ := db.GetDistinctYears(sourceKey)
-	areas, _ := db.GetDistinctAreas(sourceKey)
+	years, areas, err := db.GetCatalogYearsAndAreas(sourceKey)
+	if err != nil {
+		return nil, err
+	}
 	return &YearsResp{Years: years, Areas: areas}, nil
 }
 
 // GetRecommend 返回 N 条推荐视频（排除指定 id 集合中的视频）
 func GetRecommend(sourceKey string, limit int, excludeIds []string) ([]*model.Video, error) {
-	videos, err := db.GetRandomRecommend(sourceKey, limit, excludeIds)
-	if err != nil {
-		return nil, err
-	}
-	for _, v := range videos {
-		v.VodActor = util.DecompressIfNeeded(v.VodActor)
-		v.VodDirector = util.DecompressIfNeeded(v.VodDirector)
-	}
-	// 用全局豆瓣数据批量补充缺失字段（一次 JOIN 替代 N×2 次查询）
-	db.EnrichVideosWithDouban(videos)
-	return videos, nil
+	return db.GetCatalogRecommend(sourceKey, limit, excludeIds)
 }
 
 // GetSimilarVideos 返回同类型的相似视频（用于详情页推荐兜底）
 func GetSimilarVideos(sourceKey string, typeId string, limit int, excludeIds []string) ([]*model.Video, error) {
-	videos, err := db.GetRecommendByType(sourceKey, typeId, limit, excludeIds)
+	videos, _, err := db.GetCatalogVideos(sourceKey, db.FilterParams{TypeId: typeId, Page: 1, PageSize: limit})
 	if err != nil {
 		return nil, err
 	}
-	for _, v := range videos {
-		v.VodActor = util.DecompressIfNeeded(v.VodActor)
-		v.VodDirector = util.DecompressIfNeeded(v.VodDirector)
+	if len(excludeIds) == 0 {
+		return videos, nil
 	}
-	db.EnrichVideosWithDouban(videos)
-	return videos, nil
+	excluded := map[string]bool{}
+	for _, id := range excludeIds {
+		excluded[id] = true
+	}
+	out := videos[:0]
+	for _, v := range videos {
+		if !excluded[v.VodId.String()] {
+			out = append(out, v)
+		}
+	}
+	return out, nil
 }
 
 // HistoryItemWithVideo 前端可用的"继续观看"条目：含视频名+封面，便于卡片展示
 type HistoryItemWithVideo struct {
-	GlobalID  int     `json:"global_id"`
-	SourceKey string  `json:"source_key"`
-	VodId     string  `json:"vod_id"`
-	EpNum     int     `json:"ep_num"`
-	Position  float64 `json:"position"`
-	UpdatedAt string  `json:"updated_at"`
-	VodName   string  `json:"vod_name"`
-	VodPic    string  `json:"vod_pic"`
-	VodRemarks string `json:"vod_remarks"`
+	GlobalID   int     `json:"global_id"`
+	SourceKey  string  `json:"source_key"`
+	VodId      string  `json:"vod_id"`
+	EpNum      int     `json:"ep_num"`
+	Position   float64 `json:"position"`
+	UpdatedAt  string  `json:"updated_at"`
+	VodName    string  `json:"vod_name"`
+	VodPic     string  `json:"vod_pic"`
+	VodRemarks string  `json:"vod_remarks"`
 }
 
 // HydrateHistory hydrates raw history entries with additional video info from global_video
@@ -238,6 +245,7 @@ func HydrateHistory(sourceKey string, raws []db.HistEntry) []*HistoryItemWithVid
 
 type VideoDetailReq struct {
 	SourceKey string `json:"source_key"`
+	GlobalID  int64  `json:"global_id"`
 	VodId     string `json:"vod_id"`
 	Refresh   bool   `json:"refresh"` // 为 true 时先从源站拉取最新数据再返回
 }
@@ -245,6 +253,7 @@ type VideoDetailReq struct {
 func (r *VideoDetailReq) UnmarshalJSON(data []byte) error {
 	var raw struct {
 		SourceKey string          `json:"source_key"`
+		GlobalID  json.RawMessage `json:"global_id"`
 		VodId     json.RawMessage `json:"vod_id"`
 		Refresh   bool            `json:"refresh"`
 	}
@@ -252,6 +261,9 @@ func (r *VideoDetailReq) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	r.SourceKey = raw.SourceKey
+	if v, err := parseInt64(raw.GlobalID, 0); err == nil {
+		r.GlobalID = v
+	}
 	r.VodId = normalizeStringId(raw.VodId)
 	r.Refresh = raw.Refresh
 	return nil
@@ -260,47 +272,29 @@ func (r *VideoDetailReq) UnmarshalJSON(data []byte) error {
 type VideoDetailResp struct {
 	Video    *model.Video     `json:"video"`
 	Episodes []*model.Episode `json:"episodes"`
+	Error    *detail.Error    `json:"error,omitempty"`
 }
 
+// GetVideoDetail always resolves a catalog identity and fetches remote detail.
+// It intentionally has no SQLite detail write path.
 func GetVideoDetail(req VideoDetailReq) (*VideoDetailResp, error) {
-	// 刷新模式：先从源站拉取最新数据
-	if req.Refresh {
-		source, err := db.GetSourceByKey(req.SourceKey)
-		if err == nil && source != nil && source.ApiUrl != "" {
-			freshVideo, fetchErr := collect.FetchVideoDetail(source.ApiUrl, req.VodId)
-			if fetchErr == nil && freshVideo != nil {
-				// 确保 vod_id 在 upsert 时正确
-				if freshVideo.VodId.String() == "" {
-					freshVideo.VodId = model.FlexibleString(req.VodId)
-				}
-				// 更新到数据库
-				if err := db.UpsertVideos(req.SourceKey, []*model.Video{freshVideo}); err != nil {
-					// 刷新失败不阻塞，仍然返回现有数据
-					fmt.Printf("[GetVideoDetail] 刷新 upsert 失败: %v\n", err)
-				}
-			} else {
-				fmt.Printf("[GetVideoDetail] 源站拉取失败: %v\n", fetchErr)
-			}
-		}
+	if req.SourceKey == "" || (req.GlobalID <= 0 && req.VodId == "") {
+		return nil, fmt.Errorf("source_key and global_id are required")
 	}
-
-	video, err := db.GetVideoById(req.SourceKey, req.VodId)
+	var result *detail.Result
+	var err error
+	if req.GlobalID > 0 {
+		result, err = detail.Default.GetByGlobal(req.SourceKey, req.GlobalID, req.Refresh)
+	} else {
+		result, err = detail.Default.Get(req.SourceKey, req.VodId, req.Refresh)
+	}
 	if err != nil {
-		return nil, fmt.Errorf("video not found: %w", err)
+		if structured, ok := err.(*detail.Error); ok {
+			return &VideoDetailResp{Video: structured.Fallback, Error: structured}, nil
+		}
+		return nil, err
 	}
-
-	video.VodContent = util.DecompressIfNeeded(video.VodContent)
-	video.VodActor = util.DecompressIfNeeded(video.VodActor)
-	video.VodDirector = util.DecompressIfNeeded(video.VodDirector)
-	video.VodPlayUrl = util.DecompressIfNeeded(video.VodPlayUrl)
-	video.VodDownUrl = util.DecompressIfNeeded(video.VodDownUrl)
-
-	// 用全局豆瓣数据补充缺失字段
-	db.EnrichVideoWithDouban(video)
-
-	episodes, _ := db.GetEpisodes(req.SourceKey, req.VodId)
-
-	return &VideoDetailResp{Video: video, Episodes: episodes}, nil
+	return &VideoDetailResp{Video: result.Video, Episodes: result.Episodes}, nil
 }
 
 type VideoSearchReq struct {
@@ -331,6 +325,14 @@ func (r *VideoSearchReq) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// SearchVideos runs a remote keyword search and caches every hit into the
+// source catalog as a side effect, so the Home/Detail views can list them
+// without another request. Whether a cached hit resurrects a row the user
+// deleted is decided by the catalog_revive_deleted setting.
+//
+// SearchSource (源搜索) deliberately does NOT cache: it is a preview across
+// many sources, so its results only enter the catalog when the user presses
+// 入库, which goes through ImportSourceVideos and always resurrects.
 func SearchVideos(req VideoSearchReq) (*VideoListResp, error) {
 	if req.Page <= 0 {
 		req.Page = 1
@@ -338,20 +340,89 @@ func SearchVideos(req VideoSearchReq) (*VideoListResp, error) {
 	if req.PageSize <= 0 {
 		req.PageSize = 20
 	}
-
-	videos, total, err := db.SearchVideos(req.SourceKey, req.Keyword, req.Page, req.PageSize)
+	keyword := strings.TrimSpace(req.Keyword)
+	if keyword == "" {
+		return &VideoListResp{Videos: []*model.Video{}, Total: 0}, nil
+	}
+	// Search is an on-demand remote operation. Project only catalog fields when
+	// caching results locally; never enrich a search hit through detail requests.
+	source, err := db.GetSourceByKey(req.SourceKey)
 	if err != nil {
-		return nil, fmt.Errorf("search videos: %w", err)
+		return nil, fmt.Errorf("get source: %w", err)
+	}
+	strategy := collect.CreateStrategyFromSource(source)
+	if strategy == nil {
+		return nil, fmt.Errorf("source strategy unavailable")
+	}
+	fetched, err := collect.FetchSearchPage(strategy, keyword, req.Page)
+	if err != nil {
+		return nil, fmt.Errorf("remote search: %w", err)
+	}
+	fetched.List = db.FilterEnabledCollectVideos(fetched.List)
+
+	// Snapshot catalog membership before this search caches its own hits,
+	// otherwise every result would come back flagged as already stored.
+	remoteIDs := make([]string, 0, len(fetched.List))
+	for _, v := range fetched.List {
+		if v != nil {
+			remoteIDs = append(remoteIDs, v.VodId.String())
+		}
+	}
+	cached, err := db.ExistingCatalogVodIDs(req.SourceKey, remoteIDs)
+	if err != nil {
+		return nil, fmt.Errorf("check catalog membership: %w", err)
+	}
+	for _, v := range fetched.List {
+		if v != nil {
+			v.InCatalog = cached[strings.TrimSpace(v.VodId.String())]
+		}
 	}
 
-	for _, v := range videos {
-		v.VodActor = util.DecompressIfNeeded(v.VodActor)
-		v.VodDirector = util.DecompressIfNeeded(v.VodDirector)
-		v.VodContent = util.DecompressIfNeeded(v.VodContent)
+	if err := db.UpsertCatalogItems(req.SourceKey, fetched.List); err != nil {
+		return nil, fmt.Errorf("cache search catalog: %w", err)
 	}
-	// 用全局豆瓣数据批量补充缺失字段（一次 JOIN 替代 N×2 次查询）
-	db.EnrichVideosWithDouban(videos)
-	return &VideoListResp{Videos: videos, Total: total}, nil
+	for _, v := range fetched.List {
+		if v != nil {
+			v.VodContent = ""
+			v.VodActor = ""
+			v.VodDirector = ""
+			v.VodPlayUrl = ""
+			v.VodDownUrl = ""
+		}
+	}
+	resp := &VideoListResp{Videos: fetched.List, Total: fetched.Total.Int()}
+	if req.Page == 1 {
+		resp.LocalVideos = searchLocalCatalog(req.SourceKey, keyword, remoteIDs)
+	}
+	return resp, nil
+}
+
+const localSearchLimit = 24
+
+// searchLocalCatalog finds catalog rows whose title contains the keyword, which
+// covers substring matches the upstream search API does not make. Rows already
+// present in the remote result set are dropped to avoid duplicate cards.
+func searchLocalCatalog(sourceKey, keyword string, exclude []string) []*model.Video {
+	matches, err := db.SearchCatalogByTitle(sourceKey, keyword, localSearchLimit+len(exclude))
+	if err != nil {
+		applog.Warn("[SearchVideos] 本地目录补搜失败: %v", err)
+		return nil
+	}
+	excluded := make(map[string]bool, len(exclude))
+	for _, id := range exclude {
+		excluded[strings.TrimSpace(id)] = true
+	}
+	out := make([]*model.Video, 0, localSearchLimit)
+	for _, v := range matches {
+		if v == nil || excluded[strings.TrimSpace(v.VodId.String())] {
+			continue
+		}
+		out = append(out, v)
+		if len(out) == localSearchLimit {
+			break
+		}
+	}
+	return out
 }
 
 type GetTypesReq struct {
@@ -371,5 +442,5 @@ func DeleteVideo(req DeleteVideoReq) error {
 	if req.SourceKey == "" || req.VodId == "" {
 		return fmt.Errorf("参数不完整")
 	}
-	return db.DeleteVideo(req.SourceKey, req.VodId)
+	return db.DeleteCatalogVideo(req.SourceKey, req.VodId)
 }

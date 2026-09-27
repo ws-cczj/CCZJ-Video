@@ -1,7 +1,9 @@
 <script setup lang="ts">
-defineProps<{
+import { computed, useAttrs } from 'vue'
+
+const props = defineProps<{
   /** 按钮变体 */
-  variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'text' | 'overlay'
+  variant?: 'primary' | 'secondary' | 'success' | 'warning' | 'danger' | 'info' | 'ghost' | 'text' | 'overlay'
   /** 按钮尺寸 */
   size?: 'sm' | 'md' | 'lg'
   /** 是否为图标按钮（正方形） */
@@ -12,7 +14,14 @@ defineProps<{
   loading?: boolean
   /** 是否块级按钮 */
   block?: boolean
+  /** 图标按钮的无障碍名称；同时保留 title 作为可见提示。 */
+  ariaLabel?: string
 }>()
+
+const attrs = useAttrs()
+const accessibleLabel = computed(() => props.ariaLabel
+  || (typeof attrs['aria-label'] === 'string' ? attrs['aria-label'] : undefined)
+  || (typeof attrs.title === 'string' ? attrs.title : undefined))
 </script>
 
 <template>
@@ -30,6 +39,7 @@ defineProps<{
     ]"
     :disabled="disabled || loading"
     :aria-busy="loading"
+    :aria-label="accessibleLabel"
   >
     <span v-if="loading" class="ui-btn__spinner"></span>
     <span v-else class="ui-btn__content">
@@ -50,13 +60,13 @@ defineProps<{
   font-weight: 600;
   line-height: 1;
   white-space: nowrap;
-  transition: all 0.15s ease;
-  outline: none;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast), opacity var(--transition-fast);
   font-family: inherit;
   user-select: none;
   -webkit-user-select: none;
   text-decoration: none;
   cursor: pointer;
+  touch-action: manipulation;
 }
 .ui-btn:focus-visible {
   outline: 2px solid var(--accent);
@@ -74,20 +84,20 @@ defineProps<{
 
 /* ========== Variant: Primary ========== */
 .ui-btn--primary {
-  background: var(--accent);
-  color: var(--accent-contrast);
-  border-color: var(--accent);
-  box-shadow: 0 2px 8px var(--accent-alpha-20);
+  background: var(--btn-solid);
+  color: var(--btn-solid-text);
+  border-color: var(--btn-solid);
+  box-shadow: 0 2px 8px var(--btn-solid-alpha-20);
 }
 .ui-btn--primary:hover {
-  background: var(--accent-dim);
-  border-color: var(--accent-dim);
+  background: var(--btn-solid-hover);
+  border-color: var(--btn-solid-hover);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px var(--accent-alpha-35);
+  box-shadow: 0 4px 12px var(--btn-solid-alpha-35);
 }
 .ui-btn--primary:active {
   transform: translateY(0);
-  box-shadow: 0 1px 4px var(--accent-alpha-20);
+  box-shadow: 0 1px 4px var(--btn-solid-alpha-20);
 }
 
 /* ========== Variant: Secondary ========== */
@@ -102,6 +112,37 @@ defineProps<{
   border-color: var(--accent);
 }
 .ui-btn--secondary:active { background: var(--border); }
+
+/* ========== Semantic variants ========== */
+.ui-btn--success,
+.ui-btn--warning,
+.ui-btn--info {
+  color: var(--semantic-contrast);
+  background: var(--semantic-color);
+  border-color: var(--semantic-color);
+  box-shadow: 0 2px 8px var(--semantic-alpha);
+}
+.ui-btn--success {
+  --semantic-color: var(--success);
+  --semantic-contrast: var(--success-contrast);
+  --semantic-alpha: var(--success-alpha-10);
+}
+.ui-btn--success:hover { --semantic-color: var(--success-hover); transform: translateY(-1px); }
+.ui-btn--warning {
+  --semantic-color: var(--warning);
+  --semantic-contrast: var(--warning-contrast);
+  --semantic-alpha: var(--warning-alpha-10);
+}
+.ui-btn--warning:hover { --semantic-color: var(--warning-hover); transform: translateY(-1px); }
+.ui-btn--info {
+  --semantic-color: var(--info);
+  --semantic-contrast: var(--info-contrast);
+  --semantic-alpha: var(--info-alpha-10);
+}
+.ui-btn--info:hover { --semantic-color: var(--info-hover); transform: translateY(-1px); }
+.ui-btn--success:active,
+.ui-btn--warning:active,
+.ui-btn--info:active { transform: translateY(0); }
 
 /* ========== Variant: Danger ========== */
 .ui-btn--danger {
@@ -175,13 +216,13 @@ defineProps<{
   border: 2px solid currentColor;
   border-top-color: transparent;
   border-radius: 50%;
-  animation: ui-spin 0.6s linear infinite;
+  animation: cczj-spin 800ms linear infinite;
 }
-@keyframes ui-spin { to { transform: rotate(360deg); } }
 
 .ui-btn__content {
   display: inline-flex;
   align-items: center;
   gap: 6px;
 }
+
 </style>

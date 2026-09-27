@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, watch, ref } from 'vue'
+import { onMounted, onBeforeUnmount } from 'vue'
+import MotionTransition from './MotionTransition.vue'
+import { tr } from '../../locales'
 
 const props = withDefaults(defineProps<{
   /** 是否显示 */
@@ -26,8 +28,8 @@ const props = withDefaults(defineProps<{
   closable: true,
   maskClosable: true,
   showFooter: false,
-  okText: '确定',
-  cancelText: '取消',
+  okText: '',
+  cancelText: '',
 })
 
 const emit = defineEmits<{
@@ -35,22 +37,6 @@ const emit = defineEmits<{
   (e: 'ok'): void
   (e: 'cancel'): void
 }>()
-
-const animationTypes = [
-  { enter: 'modal-jack-in', leave: 'modal-slide-out-right' },
-  { enter: 'modal-flip-in-x', leave: 'modal-flip-out-x' },
-  { enter: 'modal-zoom-in-down', leave: 'modal-zoom-out-up' },
-  { enter: 'modal-slide-in-down', leave: 'modal-slide-out-down' },
-  { enter: 'modal-light-speed-in', leave: 'modal-light-speed-out' },
-]
-
-const enterClass = ref(animationTypes[0].enter)
-const leaveClass = ref(animationTypes[0].leave)
-
-function getRandomAnimation(): { enter: string; leave: string } {
-  const idx = Math.floor(Math.random() * animationTypes.length)
-  return animationTypes[idx]
-}
 
 function close(): void {
   emit('update:modelValue', false)
@@ -65,23 +51,15 @@ function onKeydown(e: KeyboardEvent): void {
   }
 }
 
-watch(() => props.modelValue, (val) => {
-  if (val) {
-    const anim = getRandomAnimation()
-    enterClass.value = anim.enter
-    leaveClass.value = anim.leave
-  }
-})
-
 onMounted(() => window.addEventListener('keydown', onKeydown))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 </script>
 
 <template>
   <Teleport to="body">
-    <Transition name="ui-modal-fade">
+    <MotionTransition preset="fade">
       <div v-if="modelValue" class="ui-modal-overlay" @click.self="maskClosable && close()">
-        <Transition :enter-active-class="enterClass" :leave-active-class="leaveClass" appear>
+        <MotionTransition preset="dialog" appear>
           <div
             v-if="modelValue"
             class="ui-modal"
@@ -100,7 +78,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
                 class="ui-modal__close"
                 type="button"
                 @click="close"
-                aria-label="关闭"
+                :aria-label="tr('common.close')"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                   <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -116,21 +94,21 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
             <!-- Footer -->
             <div v-if="showFooter" class="ui-modal__footer">
               <slot name="footer">
-                <button class="ui-btn ui-btn--secondary ui-btn--md" @click="close">{{ cancelText }}</button>
+                <button class="ui-btn ui-btn--secondary ui-btn--md" @click="close">{{ cancelText || tr('common.cancel') }}</button>
                 <button
                   class="ui-btn ui-btn--primary ui-btn--md"
                   :disabled="okDisabled"
                   @click="emit('ok')"
                 >
                   <span v-if="okLoading" class="ui-btn__spinner"></span>
-                  <span v-else>{{ okText }}</span>
+                  <span v-else>{{ okText || tr('common.ok') }}</span>
                 </button>
               </slot>
             </div>
           </div>
-        </Transition>
+        </MotionTransition>
       </div>
-    </Transition>
+    </MotionTransition>
   </Teleport>
 </template>
 
@@ -193,7 +171,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
   flex-shrink: 0;
 }
 .ui-modal__close:hover {
@@ -235,7 +213,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   font-size: 13px;
   line-height: 1;
   white-space: nowrap;
-  transition: all 0.15s ease;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast), opacity var(--transition-fast);
 }
 .ui-btn--md { padding: 8px 16px; }
 .ui-btn--primary {
@@ -264,117 +242,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   border: 2px solid currentColor;
   border-top-color: transparent;
   border-radius: 50%;
-  animation: ui-spin 0.6s linear infinite;
-}
-@keyframes ui-spin {
-  to { transform: rotate(360deg); }
-}
-
-/* Transitions */
-.ui-modal-fade-enter-active {
-  transition: opacity 0.25s ease;
-}
-.ui-modal-fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-.ui-modal-fade-enter-from,
-.ui-modal-fade-leave-to {
-  opacity: 0;
-}
-
-/* Jack In The Box */
-.modal-jack-in {
-  animation: modal-jack-in 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
-}
-@keyframes modal-jack-in {
-  0% { opacity: 0; transform: scale(0.1) rotate(30deg); }
-  50% { transform: scale(1.1) rotate(-10deg); }
-  70% { transform: scale(0.9) rotate(3deg); }
-  100% { opacity: 1; transform: scale(1) rotate(0); }
-}
-
-/* Flip In X */
-.modal-flip-in-x {
-  animation: modal-flip-in-x 0.6s cubic-bezier(0.23, 1, 0.32, 1) both;
-}
-@keyframes modal-flip-in-x {
-  0% { opacity: 0; transform: perspective(400px) rotateX(90deg); }
-  40% { transform: perspective(400px) rotateX(-10deg); }
-  70% { transform: perspective(400px) rotateX(10deg); }
-  100% { opacity: 1; transform: perspective(400px) rotateX(0); }
-}
-
-/* Flip Out X */
-.modal-flip-out-x {
-  animation: modal-flip-out-x 0.4s cubic-bezier(0.23, 1, 0.32, 1) both;
-}
-@keyframes modal-flip-out-x {
-  0% { opacity: 1; transform: perspective(400px) rotateX(0); }
-  100% { opacity: 0; transform: perspective(400px) rotateX(90deg); }
-}
-
-/* Zoom In Down */
-.modal-zoom-in-down {
-  animation: modal-zoom-in-down 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-}
-@keyframes modal-zoom-in-down {
-  0% { opacity: 0; transform: scale(0.8) translateY(-40px); }
-  100% { opacity: 1; transform: scale(1) translateY(0); }
-}
-
-/* Zoom Out Up */
-.modal-zoom-out-up {
-  animation: modal-zoom-out-up 0.3s ease both;
-}
-@keyframes modal-zoom-out-up {
-  0% { opacity: 1; transform: scale(1) translateY(0); }
-  100% { opacity: 0; transform: scale(0.9) translateY(-20px); }
-}
-
-/* Slide In Down */
-.modal-slide-in-down {
-  animation: modal-slide-in-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-@keyframes modal-slide-in-down {
-  0% { opacity: 0; transform: translateY(-40px); }
-  100% { opacity: 1; transform: translateY(0); }
-}
-
-/* Slide Out Down */
-.modal-slide-out-down {
-  animation: modal-slide-out-down 0.3s ease both;
-}
-@keyframes modal-slide-out-down {
-  0% { opacity: 1; transform: translateY(0); }
-  100% { opacity: 0; transform: translateY(20px); }
-}
-
-/* Slide Out Right */
-.modal-slide-out-right {
-  animation: modal-slide-out-right 0.3s ease both;
-}
-@keyframes modal-slide-out-right {
-  0% { opacity: 1; transform: translateX(0); }
-  100% { opacity: 0; transform: translateX(30px); }
-}
-
-/* Light Speed In */
-.modal-light-speed-in {
-  animation: modal-light-speed-in 0.5s cubic-bezier(0.23, 1, 0.32, 1) both;
-}
-@keyframes modal-light-speed-in {
-  0% { opacity: 0; transform: translateX(-100%) skewX(-10deg); }
-  60% { opacity: 1; transform: translateX(10%) skewX(5deg); }
-  80% { transform: translateX(-5%) skewX(-2deg); }
-  100% { transform: translateX(0) skewX(0); }
-}
-
-/* Light Speed Out */
-.modal-light-speed-out {
-  animation: modal-light-speed-out 0.3s ease both;
-}
-@keyframes modal-light-speed-out {
-  0% { opacity: 1; transform: translateX(0) skewX(0); }
-  100% { opacity: 0; transform: translateX(100%) skewX(10deg); }
+  animation: cczj-spin 800ms linear infinite;
 }
 </style>

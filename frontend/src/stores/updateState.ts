@@ -4,6 +4,7 @@
  */
 import { ref, reactive, computed } from 'vue'
 import { readStorage, removeStorage, writeStorage } from '../platform/storage'
+import { tr } from '../locales'
 
 /** 弹窗是否打开 */
 export const updateModalOpen = ref(false)
@@ -50,7 +51,7 @@ export function clearDownloadState(): void {
 
 /** 格式化下载大小（0 显示 "0 B"，NaN/负数 显示 "未知"） */
 export function fmtSize(bytes: number): string {
-  if (!bytes || bytes < 0) return '未知' // NaN, undefined, negative
+  if (!bytes || bytes < 0) return tr('common.unknown') // NaN, undefined, negative
   if (bytes < 1024) return bytes.toFixed(0) + ' B'
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB'

@@ -3,9 +3,9 @@ package collect
 import (
 	"cczjVideo/app/db"
 	"cczjVideo/app/model"
-	"cczjVideo/app/util"
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -84,6 +84,8 @@ func NewEngineV2(
 
 // SetContext 注入外部 context（用于等待时感知取消）
 func (e *Engine) SetContext(ctx context.Context) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.ctx = ctx
 }
 
@@ -95,9 +97,15 @@ func (e *Engine) SetPageGap(gap time.Duration) {
 	e.pageGap = gap
 }
 
-func (e *Engine) log(msg string) {
-	// 所有引擎日志同步写入 applog（文件）
-	appLogger.Info("%s", "[collect:"+e.sourceKey+"] "+msg)
+func (e *Engine) log(msg string) { e.logAt(appLogger.InfoAt, 1, msg) }
+
+// logWarn keeps a failure visible in the live progress panel while the file log
+// still records it at warn severity.
+func (e *Engine) logWarn(msg string) { e.logAt(appLogger.WarnAt, 1, msg) }
+
+func (e *Engine) logAt(emit func(extra int, format string, args ...interface{}), extra int, msg string) {
+	// 所有引擎日志同步写入 applog（文件）；+1 跳过本函数这一帧，让位置指回调用方
+	emit(extra+1, "%s", "[collect:"+e.sourceKey+"] "+msg)
 	if e.onLog != nil {
 		e.onLog(msg)
 	}
@@ -164,25 +172,36 @@ func (e *Engine) waitPaused() bool {
 	}
 }
 
-func (e *Engine) done() <-chan struct{} {
-	if e.ctx != nil {
-		return e.ctx.Done()
+func (e *Engine) context() context.Context {
+	e.mu.Lock()
+	ctx := e.ctx
+	e.mu.Unlock()
+	if ctx == nil {
+		return context.Background()
 	}
-	// 返回一个永远不会触发的 channel
-	return make(chan struct{})
+	return ctx
+}
+
+func (e *Engine) done() <-chan struct{} {
+	ctx := e.context()
+	return ctx.Done()
 }
 
 // fetchPageWithRetry 带重试的按页请求
 // 最大重试次数 3，指数退避：5s / 10s / 20s
-func fetchPageWithRetry(apiUrl string, page int, opts FetchOptions, logFn func(string)) (*FetchResult, error) {
+func fetchPageWithRetry(ctx context.Context, apiUrl string, page int, opts FetchOptions, logFn func(string)) (*FetchResult, error) {
 	const maxRetries = 3
 	var lastErr error
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if logFn != nil {
 			logFn(fmt.Sprintf("请求第 %d 页 (第 %d 次尝试)", page, attempt))
 		}
-		res, err := FetchPageWithOpts(apiUrl, page, opts)
+		// apiUrl is already operation-specific and must not be rebuilt here.
+		res, err := doFetchContext(ctx, apiUrl, opts.FieldMapping)
 		if err == nil {
 			return res, nil
 		}
@@ -195,7 +214,13 @@ func fetchPageWithRetry(apiUrl string, page int, opts FetchOptions, logFn func(s
 			if logFn != nil {
 				logFn(fmt.Sprintf("等待 %v 后重试...", backoff))
 			}
-			time.Sleep(backoff)
+			timer := time.NewTimer(backoff)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return nil, ctx.Err()
+			case <-timer.C:
+			}
 		}
 	}
 	return nil, fmt.Errorf("第 %d 页采集失败，已重试 %d 次: %w", page, maxRetries, lastErr)
@@ -275,9 +300,9 @@ func (e *Engine) Run() (int, error) {
 	if e.strategy != nil {
 		listUrl := e.strategy.BuildListUrl(1, opts)
 		opts.FieldMapping = e.strategy.GetFieldMapping()
-		firstPage, err = fetchPageWithRetry(listUrl, 1, opts, e.log)
+		firstPage, err = fetchPageWithRetry(e.context(), listUrl, 1, opts, e.log)
 	} else {
-		firstPage, err = fetchPageWithRetry(src.ApiUrl, 1, opts, e.log)
+		firstPage, err = fetchPageWithRetry(e.context(), src.ApiUrl, 1, opts, e.log)
 	}
 	if err != nil {
 		return 0, err
@@ -286,6 +311,12 @@ func (e *Engine) Run() (int, error) {
 	pc := firstPage.Pagecount.Int()
 	total := firstPage.Total.Int()
 	e.log(fmt.Sprintf("共 %d 页, 总数 %d", pc, total))
+
+	// The upstream total is only an estimate. Progress reporting must reflect what
+	// actually landed, so failures to write a page are counted and surfaced
+	// instead of being swallowed into a successful-looking run.
+	var saved int
+	var saveFailures []int
 
 	if e.onProgress != nil {
 		e.onProgress(1, pc)
@@ -296,13 +327,16 @@ func (e *Engine) Run() (int, error) {
 
 	processed := e.processVideos(firstPage.List)
 	if err := e.saveVideos(processed); err != nil {
-		e.log(fmt.Sprintf("保存第1页失败: %v", err))
+		e.logWarn(fmt.Sprintf("保存第1页失败: %v", err))
+		saveFailures = append(saveFailures, 1)
+	} else {
+		saved += len(processed)
 	}
 
 	// 单次采集模式：只采集第1页就停止（用于测试或快速预览）
 	if mode == model.CollectModeOnce {
-		e.log(fmt.Sprintf("单次采集完成, 共 %d 条视频", len(firstPage.List)))
-		return len(firstPage.List), nil
+		e.log(fmt.Sprintf("单次采集完成, 共 %d 条视频", saved))
+		return saved, saveFailureError(saveFailures, saved)
 	}
 
 	// 后续页循环：pageGap 间隔 + 暂停检查 + 停止检查 + 重试
@@ -329,9 +363,9 @@ func (e *Engine) Run() (int, error) {
 		var page *FetchResult
 		if e.strategy != nil {
 			listUrl := e.strategy.BuildListUrl(p, opts)
-			page, err = fetchPageWithRetry(listUrl, p, opts, e.log)
+			page, err = fetchPageWithRetry(e.context(), listUrl, p, opts, e.log)
 		} else {
-			page, err = fetchPageWithRetry(src.ApiUrl, p, opts, e.log)
+			page, err = fetchPageWithRetry(e.context(), src.ApiUrl, p, opts, e.log)
 		}
 		if err != nil {
 			e.log(fmt.Sprintf("跳过第%d页: %v", p, err))
@@ -345,7 +379,10 @@ func (e *Engine) Run() (int, error) {
 
 		processed := e.processVideos(page.List)
 		if err := e.saveVideos(processed); err != nil {
-			e.log(fmt.Sprintf("保存第%d页失败: %v", p, err))
+			e.logWarn(fmt.Sprintf("保存第%d页失败: %v", p, err))
+			saveFailures = append(saveFailures, p)
+		} else {
+			saved += len(processed)
 		}
 
 		// 当前页完成后检查停止，不继续下一页
@@ -355,8 +392,22 @@ func (e *Engine) Run() (int, error) {
 		}
 	}
 
-	e.log(fmt.Sprintf("采集完成, 耗时 %v, 共 %d 条视频", time.Since(startTime), total))
-	return total, nil
+	e.log(fmt.Sprintf("采集完成, 耗时 %v, 已入库 %d 条（源站总数 %d）", time.Since(startTime), saved, total))
+	return saved, saveFailureError(saveFailures, saved)
+}
+
+// saveFailureError reports pages whose catalog write failed. Partial success is
+// still reported as an error: silently dropping whole pages is how a source ends
+// up looking fully collected while the library is missing data.
+func saveFailureError(pages []int, saved int) error {
+	if len(pages) == 0 {
+		return nil
+	}
+	strs := make([]string, len(pages))
+	for i, p := range pages {
+		strs[i] = strconv.Itoa(p)
+	}
+	return fmt.Errorf("%d 页保存失败: %s（已入库 %d 条）", len(pages), strings.Join(strs, ","), saved)
 }
 
 // sleepInterruptible 睡眠期间如果被停止则返回 false，否则正常返回 true
@@ -418,62 +469,18 @@ func (e *Engine) processVideos(list []*model.Video) []*model.Video {
 
 		// 清理字段值前后的反引号和其他包裹字符（某些源站会在字段值前后加反引号）
 		v.VodPic = cleanField(v.VodPic)
-		v.VodPlayUrl = cleanField(v.VodPlayUrl)
-		v.VodDownUrl = cleanField(v.VodDownUrl)
 		v.VodRemarks = cleanField(v.VodRemarks)
 		v.VodYear = cleanField(v.VodYear)
 		v.VodArea = cleanField(v.VodArea)
 		v.VodLang = cleanField(v.VodLang)
-		v.VodActor = cleanField(v.VodActor)
-		v.VodDirector = cleanField(v.VodDirector)
-		v.VodContent = cleanField(v.VodContent)
-
-		v.VodContent = CleanHTML(v.VodContent)
-		v.VodContent = CompressTextField(v.VodContent)
-		v.VodActor = CleanHTML(v.VodActor)
-		v.VodActor = CompressTextField(v.VodActor)
-		v.VodDirector = CleanHTML(v.VodDirector)
-		v.VodDirector = CompressTextField(v.VodDirector)
-
-		v.VodPlayUrl = e.compressPlayUrl(v.VodPlayUrl)
-		v.VodDownUrl = CompressTextField(v.VodDownUrl)
+		// A list response is durable only as a catalog projection. Never retain
+		// full detail or playback fields during collection.
+		v.VodContent, v.VodActor, v.VodDirector = "", "", ""
+		v.VodPlayUrl, v.VodDownUrl, v.VodPlayFrom = "", "", ""
 
 		valid = append(valid, v)
 	}
 	return valid
-}
-
-func (e *Engine) compressPlayUrl(playUrl string) string {
-	if playUrl == "" || strings.HasPrefix(playUrl, "Br-") {
-		return playUrl
-	}
-
-	urlTpl := ""
-	if e.source != nil {
-		urlTpl = e.source.GetAdvConfig().UrlTemplate
-		// 兼容旧字段
-		if urlTpl == "" {
-			urlTpl = e.source.UrlTemplate
-		}
-	}
-	if urlTpl != "" {
-		parts := strings.Split(playUrl, "#")
-		var compressed []string
-		for _, part := range parts {
-			epParts := strings.SplitN(part, "$", 2)
-			if len(epParts) == 2 {
-				tpl, err := NewTemplate(urlTpl, epParts[1])
-				if err == nil {
-					compressed = append(compressed, epParts[0]+"$"+tpl.EncodeVars())
-					continue
-				}
-			}
-			compressed = append(compressed, part)
-		}
-		playUrl = strings.Join(compressed, "#")
-	}
-
-	return CompressTextField(playUrl)
 }
 
 func (e *Engine) saveVideos(videos []*model.Video) error {
@@ -499,67 +506,11 @@ func (e *Engine) saveVideos(videos []*model.Video) error {
 		return nil
 	}
 
-	// 补充详情：使用协程池并发请求（并发数 3，纯 HTTP 不影响 SQLite 写）
-	if e.strategy != nil {
-		pool := NewPool(3)
-		var mu sync.Mutex // 保护 videos 切片的写
-
-		for i, v := range videos {
-			if v == nil || v.VodPic != "" {
-				continue
-			}
-			// 检查停止信号
-			if e.IsStopped() {
-				break
-			}
-
-			idx := i
-			vid := v
-			pool.Submit(func() {
-				e.log(fmt.Sprintf("[详情补充] vod_id=%s, vod_name=%s", vid.VodId.String(), vid.VodName))
-				detailUrl := e.strategy.BuildDetailUrl(vid.VodId.String())
-				fieldMapping := e.strategy.GetFieldMapping()
-				detail, err := fetchVideoDetailWithStrategy(detailUrl, fieldMapping)
-				if err != nil || detail == nil {
-					e.log(fmt.Sprintf("[详情补充失败] vod_id=%s, error=%v", vid.VodId.String(), err))
-					return
-				}
-				mu.Lock()
-				if detail.VodPic != "" {
-					videos[idx].VodPic = detail.VodPic
-				}
-				if detail.VodActor != "" {
-					videos[idx].VodActor = detail.VodActor
-				}
-				if detail.VodDirector != "" {
-					videos[idx].VodDirector = detail.VodDirector
-				}
-				if detail.VodContent != "" {
-					videos[idx].VodContent = detail.VodContent
-				}
-				if detail.VodLang != "" {
-					videos[idx].VodLang = detail.VodLang
-				}
-				if detail.VodArea != "" {
-					videos[idx].VodArea = detail.VodArea
-				}
-				if detail.VodYear != "" {
-					videos[idx].VodYear = detail.VodYear
-				}
-				if detail.VodPlayUrl != "" {
-					videos[idx].VodPlayUrl = detail.VodPlayUrl
-				}
-				mu.Unlock()
-				e.log(fmt.Sprintf("[详情补充成功] vod_id=%s, pic=%s", vid.VodId.String(), detail.VodPic))
-			})
-		}
-
-		pool.Wait()
-		pool.Stop()
-	}
-
-	if err := db.UpsertVideos(e.sourceKey, videos); err != nil {
-		return fmt.Errorf("upsert videos: %w", err)
+	// Catalog collection must not fan out into detail requests. List payloads
+	// are projected directly into the durable catalog; playback data is fetched
+	// only when a user opens the detail view.
+	if err := db.UpsertCatalogItems(e.sourceKey, videos); err != nil {
+		return fmt.Errorf("upsert catalog: %w", err)
 	}
 
 	// 将源数据中携带的豆瓣信息存入全局 douban_info 表
@@ -572,7 +523,7 @@ func ParseEpisodes(playUrl string, vodId model.FlexibleString, source *model.Sou
 	if playUrl == "" {
 		return nil
 	}
-	decoded := util.DecompressIfNeeded(playUrl)
+	decoded := playUrl
 
 	vid := strings.TrimSpace(vodId.String())
 
@@ -584,9 +535,6 @@ func ParseEpisodes(playUrl string, vodId model.FlexibleString, source *model.Sou
 		epUrl := ""
 		if len(epParts) == 2 {
 			epUrl = epParts[1]
-			if source != nil && source.UrlTemplate != "" && !strings.HasPrefix(epUrl, "http") {
-				epUrl = BuildURL(source.UrlTemplate, epUrl)
-			}
 		}
 		epNum := len(episodes) + 1
 		episodes = append(episodes, &model.Episode{

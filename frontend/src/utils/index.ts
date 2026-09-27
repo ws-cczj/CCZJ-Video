@@ -1,4 +1,6 @@
 // 通用工具函数
+import { readStorage, writeStorage } from '../platform/storage'
+import { tr } from '../locales'
 
 // 格式化时间显示
 export function formatTime(dateStr: string): string {
@@ -11,10 +13,10 @@ export function formatTime(dateStr: string): string {
   const hours = Math.floor(diff / 3600000)
   const days = Math.floor(diff / 86400000)
 
-  if (minutes < 1) return '刚刚'
-  if (minutes < 60) return `${minutes} 分钟前`
-  if (hours < 24) return `${hours} 小时前`
-  if (days < 7) return `${days} 天前`
+  if (minutes < 1) return tr('common.justNow')
+  if (minutes < 60) return tr('common.minutesAgo', { n: minutes })
+  if (hours < 24) return tr('common.hoursAgo', { n: hours })
+  if (days < 7) return tr('common.daysAgo', { n: days })
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
@@ -28,17 +30,25 @@ export function getVideoId(video: { vod_g_id?: string | number; vod_id?: string 
 }
 
 // 获取视频详情路由路径
-export function getDetailPath(sourceKey: string, video: { vod_g_id?: string | number; vod_id?: string | number; id?: number }): string {
-  return `/detail/${sourceKey}/${getVideoId(video)}`
+export function getDetailPath(sourceKey: string, video: { global_id?: string | number; vod_g_id?: string | number; vod_id?: string | number; id?: number }): string {
+  const globalId = video.global_id
+  if (globalId !== undefined && globalId !== null && String(globalId) !== '') {
+    return `/detail/${sourceKey}/${globalId}?vod=${encodeURIComponent(String(getVideoId(video)))}`
+  }
+  // The path slot is always globalId. A legacy item without one remains
+  // addressable through the source+vod compatibility adapter.
+  return `/detail/${sourceKey}/0?vod=${encodeURIComponent(String(getVideoId(video)))}`
 }
 
 // 获取播放器路由路径（独立播放页面）
 export function getPlayerPath(
   sourceKey: string,
-  video: { vod_g_id?: string | number; vod_id?: string | number; id?: number },
+  video: { global_id?: string | number; vod_g_id?: string | number; vod_id?: string | number; id?: number },
   epIndex: number,
 ): string {
-  return `/player/${sourceKey}/${getVideoId(video)}/${epIndex}`
+  const globalId = video.global_id
+  const id = globalId !== undefined && globalId !== null && String(globalId) !== '' ? globalId : 0
+  return `/player/${sourceKey}/${id}/${epIndex}?vod=${encodeURIComponent(String(getVideoId(video)))}`
 }
 
 // 解析 URL 获取域名部分
@@ -82,15 +92,15 @@ export function buildEpisodeFilename(
   epName?: string,
   url?: string,
 ): string {
-  const base = sanitizeFilename(vodName || '视频')
-  const ep = epName ? ` - ${sanitizeFilename(epName)}` : ` - 第${epNum}集`
+  const base = sanitizeFilename(vodName || tr('downloads.video'))
+  const ep = epName ? ` - ${sanitizeFilename(epName)}` : ` - ${tr('detail.episode', { num: epNum })}`
   const ext = url ? guessExtFromUrl(url) : ''
   return base + ep + ext
 }
 
 // 构造单集电影文件名
 export function buildSingleFilename(vodName: string, url?: string): string {
-  const base = sanitizeFilename(vodName || '视频')
+  const base = sanitizeFilename(vodName || tr('downloads.video'))
   const ext = url ? guessExtFromUrl(url) : ''
   return base + ext
 }
@@ -123,26 +133,78 @@ export function humanizeBytes(bytes: number): string {
 }
 
 const imageProxyCache = new Map<string, string>()
-// Remember failed proxy attempts too. Some image CDNs return an HTML block
-// page; retrying it every time Home is mounted only adds noise and latency.
-const imageProxyFallbackCache = new Set<string>()
+const imageProxyPending = new Map<string, Promise<string>>()
+// A failed proxy attempt should not fall back to the remote URL: doing so lets
+// every <img> trigger another CDN request and surface a noisy 418. Keep a
+// short failure cooldown so a later mount can recover from transient outages.
+const imageProxyFallbackCache = new Map<string, number>()
+const IMAGE_PROXY_STORAGE_KEY = 'cczj_image_proxy_cache_v1'
+const IMAGE_PROXY_TTL = 7 * 24 * 60 * 60 * 1000
+const IMAGE_PROXY_MAX = 80
+const IMAGE_PROXY_FAILURE_TTL = 5 * 60 * 1000
+
+interface StoredImageProxy { value: string; accessed: number }
+
+function readStoredImageProxy(url: string): string {
+  try {
+    const all = readStorage<Record<string, StoredImageProxy>>(IMAGE_PROXY_STORAGE_KEY, {})
+    const item = all[url]
+    if (!item || Date.now() - item.accessed > IMAGE_PROXY_TTL) return ''
+    item.accessed = Date.now()
+    writeStorage(IMAGE_PROXY_STORAGE_KEY, all)
+    return item.value
+  } catch { return '' }
+}
+
+function writeStoredImageProxy(url: string, value: string): void {
+  try {
+    const all = readStorage<Record<string, StoredImageProxy>>(IMAGE_PROXY_STORAGE_KEY, {})
+    all[url] = { value, accessed: Date.now() }
+    const keys = Object.keys(all)
+    if (keys.length > IMAGE_PROXY_MAX) {
+      keys.sort((a, b) => all[a].accessed - all[b].accessed)
+        .slice(0, keys.length - IMAGE_PROXY_MAX)
+        .forEach(key => delete all[key])
+    }
+    writeStorage(IMAGE_PROXY_STORAGE_KEY, all)
+  } catch { /* localStorage is optional */ }
+}
 
 export async function getProxiedImageUrl(originalUrl: string): Promise<string> {
   if (!originalUrl) return ''
   if (imageProxyCache.has(originalUrl)) {
     return imageProxyCache.get(originalUrl)!
   }
-  if (imageProxyFallbackCache.has(originalUrl)) return originalUrl
+  const stored = readStoredImageProxy(originalUrl)
+  if (stored) {
+    imageProxyCache.set(originalUrl, stored)
+    return stored
+  }
+  const failedAt = imageProxyFallbackCache.get(originalUrl)
+  if (failedAt && Date.now() - failedAt < IMAGE_PROXY_FAILURE_TTL) return ''
+  if (failedAt) imageProxyFallbackCache.delete(originalUrl)
+  const pending = imageProxyPending.get(originalUrl)
+  if (pending) return pending
+
+  const request = (async () => {
+    try {
+      const { ProxyImage } = await import('../api/app')
+      const result = await ProxyImage(originalUrl)
+      if (result && result.startsWith('data:')) {
+        imageProxyCache.set(originalUrl, result)
+        writeStoredImageProxy(originalUrl, result)
+        return result
+      }
+    } catch { }
+    imageProxyFallbackCache.set(originalUrl, Date.now())
+    return ''
+  })()
+  imageProxyPending.set(originalUrl, request)
   try {
-    const { ProxyImage } = await import('../api/app')
-    const result = await ProxyImage(originalUrl)
-    if (result && result.startsWith('data:')) {
-      imageProxyCache.set(originalUrl, result)
-      return result
-    }
-  } catch { }
-  imageProxyFallbackCache.add(originalUrl)
-  return originalUrl
+    return await request
+  } finally {
+    imageProxyPending.delete(originalUrl)
+  }
 }
 
 /**

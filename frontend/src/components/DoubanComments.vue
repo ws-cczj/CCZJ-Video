@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 import { GetDoubanComments } from '../api/app'
+import { tr } from '../locales'
+import RemoteImage from './RemoteImage.vue'
 
 interface DoubanComment {
   id: string
@@ -36,8 +38,8 @@ const total = ref(0)
 const sort = ref<'new_score' | 'time'>('new_score')
 
 const sortOptions = [
-  { value: 'new_score' as const, label: '热门' },
-  { value: 'time' as const, label: '最新' },
+  { value: 'new_score' as const, label: tr('detail.sortHot') },
+  { value: 'time' as const, label: tr('detail.sortLatest') },
 ]
 
 async function fetchComments() {
@@ -114,8 +116,8 @@ watch(() => props.doubanId, (newId) => {
     <div class="comments-header">
       <h3 class="comments-title">
         <span class="title-icon">💬</span>
-        豆瓣评论
-        <span v-if="total > 0" class="comments-count">（约 {{ total }} 条）</span>
+        {{ tr('detail.doubanComments') }}
+        <span v-if="total > 0" class="comments-count">{{ tr('detail.commentCount', { count: total }) }}</span>
       </h3>
       <div class="sort-switcher">
         <button
@@ -133,26 +135,26 @@ watch(() => props.doubanId, (newId) => {
     <!-- 加载中 -->
     <div v-if="loading" class="comments-loading">
       <div class="loading-spinner"></div>
-      <span>正在加载评论...</span>
+      <span>{{ tr('detail.loadingComments') }}</span>
     </div>
 
     <!-- 错误 -->
     <div v-else-if="error" class="comments-error">
       <span class="error-icon">⚠️</span>
       <span>{{ error }}</span>
-      <button class="retry-btn" @click="fetchComments">重试</button>
+      <button class="retry-btn" @click="fetchComments">{{ tr('detail.retry') }}</button>
     </div>
 
     <!-- 无评论 -->
     <div v-else-if="comments.length === 0" class="comments-empty">
-      暂无评论
+      {{ tr('detail.noComments') }}
     </div>
 
     <!-- 评论列表 -->
     <div v-else class="comments-list">
       <div v-for="c in comments" :key="c.id" class="comment-item">
         <div class="comment-avatar">
-          <img :src="c.avatar" :alt="c.username" loading="lazy" referrerpolicy="no-referrer" />
+          <RemoteImage :src="c.avatar" :alt="c.username" loading="lazy" />
         </div>
         <div class="comment-body">
           <div class="comment-meta">
@@ -177,12 +179,12 @@ watch(() => props.doubanId, (newId) => {
 
     <!-- 分页 -->
     <div v-if="totalPages > 1 && !loading" class="comments-pagination">
-      <button class="page-btn" :disabled="page <= 1" @click="goToPage(page - 1)">‹ 上一页</button>
+      <button class="page-btn" :disabled="page <= 1" @click="goToPage(page - 1)">‹ {{ tr('detail.prevPage') }}</button>
       <template v-for="(p, i) in visiblePages" :key="i">
         <span v-if="p === '...'" class="page-ellipsis">…</span>
         <button v-else class="page-btn" :class="{ active: p === page }" @click="goToPage(p as number)">{{ p }}</button>
       </template>
-      <button class="page-btn" :disabled="page >= totalPages" @click="goToPage(page + 1)">下一页 ›</button>
+      <button class="page-btn" :disabled="page >= totalPages" @click="goToPage(page + 1)">{{ tr('detail.nextPage') }} ›</button>
     </div>
   </div>
 </template>

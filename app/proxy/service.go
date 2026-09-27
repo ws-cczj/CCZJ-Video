@@ -35,6 +35,12 @@ func NewService() *Service {
 			MaxIdleConns:        20,
 			IdleConnTimeout:     60 * time.Second,
 			TLSHandshakeTimeout: 15 * time.Second,
+			DialContext:         safeDialContext,
+		},
+		// Redirects must be validated one hop at a time. Let fetch do that
+		// explicitly rather than allowing net/http to follow an unchecked URL.
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
 		},
 	}}
 }
@@ -110,48 +116,65 @@ func waitContext(ctx context.Context, delay time.Duration) error {
 }
 
 func (s *Service) fetch(ctx context.Context, urlStr string) (string, error) {
-	u, err := url.Parse(urlStr)
+	current, err := url.Parse(urlStr)
 	if err != nil {
 		return "", fmt.Errorf("invalid url: %w", err)
 	}
-	if u.Scheme != "http" && u.Scheme != "https" {
-		return "", fmt.Errorf("unsupported scheme: %s", u.Scheme)
+	for redirects := 0; redirects <= 5; redirects++ {
+		if current.Scheme != "http" && current.Scheme != "https" {
+			return "", fmt.Errorf("unsupported scheme: %s", current.Scheme)
+		}
+		if err := ValidateTarget(ctx, current); err != nil {
+			return "", err
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, current.String(), nil)
+		if err != nil {
+			return "", fmt.Errorf("build request failed: %w", err)
+		}
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0")
+		req.Header.Set("Accept", "image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+		req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+		req.Header.Set("Accept-Encoding", "identity")
+		if strings.Contains(current.Host, "doubanio.com") || strings.Contains(current.Host, "douban.com") {
+			req.Header.Set("Referer", "https://movie.douban.com/")
+		}
+
+		resp, err := s.client.Do(req)
+		if err != nil {
+			return "", fmt.Errorf("fetch image failed: %w", err)
+		}
+		if resp.StatusCode >= 300 && resp.StatusCode <= 399 {
+			location, locationErr := resp.Location()
+			resp.Body.Close()
+			if locationErr != nil {
+				return "", fmt.Errorf("read redirect location: %w", locationErr)
+			}
+			next, parseErr := current.Parse(location.String())
+			if parseErr != nil {
+				return "", fmt.Errorf("parse redirect location: %w", parseErr)
+			}
+			current = next
+			continue
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return "", fmt.Errorf("HTTP %d", resp.StatusCode)
+		}
+		contentType := resp.Header.Get("Content-Type")
+		if !strings.HasPrefix(contentType, "image/") {
+			_, _ = io.Copy(io.Discard, resp.Body)
+			return "", fmt.Errorf("not an image: %s", contentType)
+		}
+		data, err := io.ReadAll(io.LimitReader(resp.Body, maxImageBytes+1))
+		if err != nil {
+			return "", fmt.Errorf("read image failed: %w", err)
+		}
+		if len(data) > maxImageBytes {
+			return "", fmt.Errorf("image response exceeds %d bytes", maxImageBytes)
+		}
+		return "data:" + contentType + ";base64," + base64.StdEncoding.EncodeToString(data), nil
 	}
-	if err := ValidateTarget(ctx, u); err != nil {
-		return "", err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlStr, nil)
-	if err != nil {
-		return "", fmt.Errorf("build request failed: %w", err)
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0")
-	req.Header.Set("Accept", "image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
-	req.Header.Set("Accept-Encoding", "identity")
-	if strings.Contains(u.Host, "doubanio.com") || strings.Contains(u.Host, "douban.com") {
-		req.Header.Set("Referer", "https://movie.douban.com/")
-	}
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("fetch image failed: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
-	}
-	contentType := resp.Header.Get("Content-Type")
-	if !strings.HasPrefix(contentType, "image/") {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		return "", fmt.Errorf("not an image: %s", contentType)
-	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxImageBytes+1))
-	if err != nil {
-		return "", fmt.Errorf("read image failed: %w", err)
-	}
-	if len(data) > maxImageBytes {
-		return "", fmt.Errorf("image response exceeds %d bytes", maxImageBytes)
-	}
-	return "data:" + contentType + ";base64," + base64.StdEncoding.EncodeToString(data), nil
+	return "", fmt.Errorf("too many redirects")
 }
 
 // ValidateTarget rejects loopback, private, link-local and CGNAT targets.

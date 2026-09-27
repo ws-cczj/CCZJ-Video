@@ -38,13 +38,17 @@ const router = createRouter({
       component: () => import('../views/Search.vue'),
     },
     {
-      path: '/detail/:sourceKey/:vodId',
+      path: '/recent',
+      component: () => import('../views/Recent.vue'),
+    },
+    {
+      path: '/detail/:sourceKey/:globalId',
       component: () => import('../views/Detail.vue'),
       props: true,
     },
     {
       name: 'player',
-      path: '/player/:sourceKey/:vodId/:epIndex',
+      path: '/player/:sourceKey/:globalId/:epIndex',
       component: () => import('../views/Player.vue'),
       props: true,
     },
@@ -75,23 +79,6 @@ const router = createRouter({
     {
       path: '/recommendations',
       component: () => import('../views/Recommendations.vue'),
-    },
-    {
-      path: '/dev-admin',
-      component: () => import('../views/admin/Admin.vue'),
-      redirect: '/dev-admin/dashboard',
-      children: [
-        { path: 'dashboard', component: () => import('../views/admin/AdminDashboard.vue') },
-        { path: 'sources', component: () => import('../views/admin/AdminSources.vue') },
-        { path: 'videos', component: () => import('../views/admin/AdminVideos.vue') },
-        { path: 'categories', component: () => import('../views/admin/AdminCategories.vue') },
-        { path: 'scheduler', component: () => import('../views/admin/AdminScheduler.vue') },
-        { path: 'downloads', component: () => import('../views/admin/AdminDownloads.vue') },
-        { path: 'douban', component: () => import('../views/admin/AdminDouban.vue') },
-        { path: 'data', component: () => import('../views/admin/AdminDataOps.vue') },
-        { path: 'logs', component: () => import('../views/admin/AdminLogs.vue') },
-        { path: 'settings', component: () => import('../views/admin/AdminSettings.vue') },
-      ],
     },
   ],
 })

@@ -25,7 +25,7 @@ defineProps<{ size?: 'sm' | 'md' | 'lg'; label?: string }>()
   border: 3px solid var(--border);
   border-top-color: var(--accent);
   border-radius: 50%;
-  animation: cczj-spin 0.8s linear infinite;
+  animation: cczj-spin 800ms linear infinite;
 }
 
 .spinner-wrap.sm .spinner-ring {

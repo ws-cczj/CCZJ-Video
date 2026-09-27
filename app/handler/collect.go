@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -40,7 +39,7 @@ type CollectStatus struct {
 	Page      int      `json:"page"`  // 当前正在采集的页码
 	Names     []string `json:"names"` // 当前页的视频名称
 	Log       string   `json:"log"`
-	Mode      string   `json:"mode"`  // 当前采集模式
+	Mode      string   `json:"mode"` // 当前采集模式
 }
 
 // CollectScheduleConfig 采集调度配置（持久化到 settings 表）
@@ -201,6 +200,23 @@ func (e *engineEntry) BindEngine(engine *collect.Engine, mode string) {
 	e.status.Mode = mode
 }
 
+// TryBindEngine makes the idle-to-running transition atomic. Callers must not
+// split IsRunning and BindEngine across goroutines, or a manual run and a
+// scheduler tick can start the same source twice.
+func (e *engineEntry) TryBindEngine(engine *collect.Engine, mode string) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.status.Running {
+		return false
+	}
+	e.engine = engine
+	e.status.Running = true
+	e.status.Paused = false
+	e.mode = mode
+	e.status.Mode = mode
+	return true
+}
+
 func (e *engineEntry) GetMode() string {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -224,6 +240,18 @@ func (e *engineEntry) UpdatePageNames(page int, names []string) {
 func (e *engineEntry) MarkDone(logMsg string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	e.status.Running = false
+	e.status.Paused = false
+	e.status.Log = logMsg
+}
+
+// FinishEngine ignores a stale callback from a previous run.
+func (e *engineEntry) FinishEngine(engine *collect.Engine, logMsg string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.engine != engine {
+		return
+	}
 	e.status.Running = false
 	e.status.Paused = false
 	e.status.Log = logMsg
@@ -311,6 +339,13 @@ type SearchSourceResult struct {
 	Keyword   string         `json:"keyword"`
 }
 
+// SearchSource is the 源搜索 path: it streams remote hits straight to the UI
+// and never writes the catalog. Nothing here resurrects soft-deleted rows,
+// because the user is only previewing a source. Persisting these hits is an
+// explicit action — see ImportSourceVideos, which always resurrects.
+//
+// This is the intentional counterpart to SearchVideos (app/handler/video.go),
+// which caches each hit as it searches.
 func SearchSource(sourceKey string, keyword string, page int, pageSize int) (*SearchSourceResult, error) {
 	keyword = strings.TrimSpace(keyword)
 	if keyword == "" {
@@ -341,14 +376,11 @@ func SearchSource(sourceKey string, keyword string, page int, pageSize int) (*Se
 		"total":   0,
 	})
 
-	advCfg := src.GetAdvConfig()
-	opts := collect.FetchOptions{
-		Limit:        pageSize,
-		Keyword:      keyword,
-		FieldMapping: advCfg.FieldMapping,
+	strategy := collect.CreateStrategyFromSource(src)
+	if strategy == nil {
+		return nil, fmt.Errorf("源站策略不可用")
 	}
-
-	p, err := collect.FetchPageWithOpts(src.ApiUrl, page, opts)
+	p, err := collect.FetchSearchPage(strategy, keyword, page)
 	if err != nil {
 		return nil, fmt.Errorf("源站搜索失败: %w", err)
 	}
@@ -362,72 +394,34 @@ func SearchSource(sourceKey string, keyword string, page int, pageSize int) (*Se
 	applog.Info("[SearchSource] 源站搜索完成 - sourceKey: %s, keyword: %s, page: %d, total: %d, listSize: %d",
 		sourceKey, keyword, page, p.Total.Int(), len(p.List))
 
-	// Emit: 开始获取详情
-	totalVideos := len(p.List)
-	application.Get().Event.Emit("search:progress", map[string]interface{}{
-		"stage":   "fetching_details",
-		"message": fmt.Sprintf("正在获取视频详情 (0/%d)...", totalVideos),
-		"current": 0,
-		"total":   totalVideos,
-	})
-
-	// 调用详情接口获取完整字段（使用协程池并发，并发数 3）
-	pool := collect.NewPool(3)
-	var mu sync.Mutex
-	var completedCount int32
-	for i, v := range p.List {
-		if v == nil || v.VodId.String() == "" {
+	p.List = db.FilterEnabledCollectVideos(p.List)
+	// Search results are transient. Only ImportSourceVideos may persist the
+	// user-selected items; otherwise every search hit would appear on Home.
+	// Membership is probed against the catalog so the UI can mark hits the user
+	// has already imported, including imports from earlier sessions.
+	ids := make([]string, 0, len(p.List))
+	for _, v := range p.List {
+		if v != nil {
+			ids = append(ids, v.VodId.String())
+		}
+	}
+	cached, err := db.ExistingCatalogVodIDs(sourceKey, ids)
+	if err != nil {
+		applog.Warn("[SearchSource] 查询入库状态失败: %v", err)
+	}
+	for _, v := range p.List {
+		if v == nil {
 			continue
 		}
-		idx := i
-		vid := v
-		pool.Submit(func() {
-			detail, derr := collect.FetchVideoDetail(src.ApiUrl, vid.VodId.String())
-			if derr != nil || detail == nil {
-				applog.Info("[SearchSource] 获取详情失败 - vod_id: %s, error: %v", vid.VodId.String(), derr)
-			} else {
-				applog.Info("[SearchSource] 获取详情成功 - vod_id: %s, vod_actor: %s, vod_director: %s",
-					vid.VodId.String(), detail.VodActor, detail.VodDirector)
-				mu.Lock()
-				if detail.VodActor != "" { p.List[idx].VodActor = detail.VodActor }
-				if detail.VodDirector != "" { p.List[idx].VodDirector = detail.VodDirector }
-				if detail.VodContent != "" { p.List[idx].VodContent = detail.VodContent }
-				if detail.VodPic != "" { p.List[idx].VodPic = detail.VodPic }
-				if detail.VodLang != "" { p.List[idx].VodLang = detail.VodLang }
-				if detail.VodArea != "" { p.List[idx].VodArea = detail.VodArea }
-				if detail.VodYear != "" { p.List[idx].VodYear = detail.VodYear }
-				if detail.VodPlayUrl != "" { p.List[idx].VodPlayUrl = detail.VodPlayUrl }
-				mu.Unlock()
-			}
-			// Emit progress update + 逐条推送结果（渐进式展示）
-			current := int(atomic.AddInt32(&completedCount, 1))
-			application.Get().Event.Emit("search:progress", map[string]interface{}{
-				"stage":   "fetching_details",
-				"message": fmt.Sprintf("正在获取视频详情 (%d/%d)...", current, totalVideos),
-				"current": current,
-				"total":   totalVideos,
-			})
-			mu.Lock()
-			enriched := p.List[idx]
-			mu.Unlock()
-			if enriched != nil {
-				application.Get().Event.Emit("search:result", map[string]interface{}{
-					"source_key": sourceKey,
-					"keyword":    keyword,
-					"video":      enriched,
-				})
-			}
-		})
+		v.InCatalog = cached[strings.TrimSpace(v.VodId.String())]
+		v.VodContent, v.VodActor, v.VodDirector = "", "", ""
+		v.VodPlayUrl, v.VodDownUrl, v.VodPlayFrom = "", "", ""
 	}
-	pool.Wait()
-	pool.Stop()
-
-	// 完成
 	application.Get().Event.Emit("search:progress", map[string]interface{}{
 		"stage":   "done",
 		"message": "搜索完成",
-		"current": totalVideos,
-		"total":   totalVideos,
+		"current": len(p.List),
+		"total":   len(p.List),
 	})
 
 	// 返回结果（不入库），分页元数据来自源站
@@ -451,12 +445,18 @@ func SearchSource(sourceKey string, keyword string, page int, pageSize int) (*Se
 	}, nil
 }
 
-// ImportSourceVideos 将用户挑选的源站搜索视频入库（压缩字段 + 合并写入）
+// ImportSourceVideos stores only catalog fields from user-selected search hits.
+// It is the 入库 button, i.e. the explicit counterpart to the automatic
+// collection/search caching paths, so it bypasses catalog_revive_deleted.
 // 返回成功入库的条数
 func ImportSourceVideos(sourceKey string, videos []*model.Video) (int, error) {
 	if sourceKey == "" {
 		return 0, fmt.Errorf("source_key 不能为空")
 	}
+	if len(videos) == 0 {
+		return 0, nil
+	}
+	videos = db.FilterEnabledCollectVideos(videos)
 	if len(videos) == 0 {
 		return 0, nil
 	}
@@ -467,34 +467,23 @@ func ImportSourceVideos(sourceKey string, videos []*model.Video) (int, error) {
 	}
 	_ = src
 
-	if err := db.EnsureVideoTable(sourceKey); err != nil {
-		return 0, fmt.Errorf("确保表失败: %w", err)
-	}
-
 	toSave := make([]*model.Video, 0, len(videos))
 	for _, v := range videos {
 		if v == nil || v.VodName == "" {
 			continue
 		}
-		v.VodContent = collect.CleanHTML(v.VodContent)
-		v.VodContent = collect.CompressTextField(v.VodContent)
-		v.VodActor = collect.CleanHTML(v.VodActor)
-		v.VodActor = collect.CompressTextField(v.VodActor)
-		v.VodDirector = collect.CleanHTML(v.VodDirector)
-		v.VodDirector = collect.CompressTextField(v.VodDirector)
-		v.VodPlayUrl = collect.CompressTextField(v.VodPlayUrl)
-		v.VodDownUrl = collect.CompressTextField(v.VodDownUrl)
+		v.VodContent, v.VodActor, v.VodDirector = "", "", ""
+		v.VodPlayUrl, v.VodDownUrl, v.VodPlayFrom = "", "", ""
 		toSave = append(toSave, v)
 	}
 	if len(toSave) == 0 {
 		return 0, nil
 	}
-	if err := db.MergeVideoDetails(sourceKey, toSave); err != nil {
-		return 0, fmt.Errorf("合并视频数据失败: %w", err)
+	// Explicit "入库": always restore soft-deleted entries, ignoring the
+	// catalog_revive_deleted setting.
+	if err := db.UpsertCatalogItemsWithRevival(sourceKey, toSave); err != nil {
+		return 0, fmt.Errorf("写入视频目录失败: %w", err)
 	}
-
-	// 将源数据中携带的豆瓣信息存入全局 douban_info 表
-	db.SaveDoubanInfoFromBatch(toSave)
 
 	applog.Info("[ImportSourceVideos] 入库完成 - sourceKey: %s, count: %d", sourceKey, len(toSave))
 	return len(toSave), nil
@@ -511,10 +500,10 @@ type SourceParamDoc struct {
 }
 
 type SourceParamsDoc struct {
-	BaseUrl    string            `json:"base_url"`
-	PathParams []SourceParamDoc  `json:"path_params"`
-	QueryAc    []SourceParamDoc  `json:"query_ac"`
-	QueryCommon []SourceParamDoc `json:"query_common"`
+	BaseUrl       string           `json:"base_url"`
+	PathParams    []SourceParamDoc `json:"path_params"`
+	QueryAc       []SourceParamDoc `json:"query_ac"`
+	QueryCommon   []SourceParamDoc `json:"query_common"`
 	QueryAdvanced []SourceParamDoc `json:"query_advanced"`
 }
 

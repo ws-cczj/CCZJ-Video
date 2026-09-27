@@ -890,3 +890,128 @@
   clip: rect(0, 0, 0, 0);
   border: 0;
 }
+
+/* ============================================================
+   20. 模板补全类（书写意图为 Tailwind 语义，尺寸/偏移按 value*4px）
+   注意：本组的 w-/h-/top-/left- 与上方"固定像素尺寸""间距"两组单位不同，
+   新增类时优先复用已有类，不要再引入第三种单位。
+   ============================================================ */
+/* 内边距（沿用第 4 节的 value*2px 间距单位） */
+.cczj-px-2 {
+  padding-left: 4px;
+  padding-right: 4px;
+}
+.cczj-px-3 {
+  padding-left: 6px;
+  padding-right: 6px;
+}
+.cczj-py-1 {
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+.cczj-py-8 {
+  padding-top: 16px;
+  padding-bottom: 16px;
+}
+.cczj-py-12 {
+  padding-top: 24px;
+  padding-bottom: 24px;
+}
+
+/* 定位偏移 */
+.cczj-top-1 {
+  top: 4px;
+}
+.cczj-top-2 {
+  top: 8px;
+}
+.cczj-right-1 {
+  right: 4px;
+}
+.cczj-right-2 {
+  right: 8px;
+}
+.cczj-bottom-1 {
+  bottom: 4px;
+}
+.cczj-left-2 {
+  left: 8px;
+}
+
+/* 尺寸 */
+.cczj-w-2 {
+  width: 8px;
+}
+.cczj-w-8 {
+  width: 32px;
+}
+.cczj-w-64 {
+  width: 256px;
+}
+.cczj-h-1\.5 {
+  height: 6px;
+}
+.cczj-h-2 {
+  height: 8px;
+}
+.cczj-min-w-48 {
+  min-width: 192px;
+}
+.cczj-max-w-72 {
+  max-width: 288px;
+}
+.cczj-max-h-64 {
+  max-height: 256px;
+}
+
+/* 层级 */
+.cczj-z-20 {
+  z-index: 20;
+}
+
+/* 字体 */
+.cczj-text-4xl {
+  font-size: 36px;
+  line-height: 1.15;
+}
+
+/* 圆角：仅左侧（与 .cczj-rounded 同半径） */
+.cczj-rounded-l {
+  border-radius: 6px 0 0 6px;
+}
+
+/* 背景与边框 */
+.cczj-bg-border {
+  background: var(--border);
+}
+.cczj-bg-danger-alpha {
+  background: var(--danger-alpha-10);
+}
+.cczj-border-dashed {
+  border-style: dashed;
+}
+.cczj-border-primary {
+  border-color: var(--primary);
+}
+.cczj-border-gray-300 {
+  border-color: var(--border);
+}
+
+/* 图像与过渡 */
+.cczj-object-cover {
+  object-fit: cover;
+}
+.cczj-transition-all {
+  transition: all 0.2s ease;
+}
+.cczj-transition-colors {
+  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+}
+
+/* 交互态 */
+.cczj-hover-underline:hover {
+  text-decoration: underline;
+}
+.cczj-hover-bg-accent-alpha:hover {
+  background: var(--accent-alpha-10);
+}

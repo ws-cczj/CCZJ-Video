@@ -5,6 +5,8 @@ import (
 	"cczjVideo/app/db"
 	"cczjVideo/app/handler"
 	"cczjVideo/app/model"
+	"database/sql"
+	"errors"
 	"fmt"
 )
 
@@ -81,20 +83,20 @@ func (s *Service) Similar(sourceKey, typeID string, limit int, excludeIDs []stri
 // AddFavorite creates a global favorite. The favorite is shared by all sources
 // with the same global_id.
 func (s *Service) AddFavorite(sourceKey, vodID string) error {
-	vodName, err := s.vodName(sourceKey, vodID)
+	globalID, err := s.catalogGlobalID(sourceKey, vodID)
 	if err != nil {
 		return err
 	}
-	return db.AddFavorite(sourceKey, vodID, vodName)
+	return db.AddFavoriteByIdentity(globalID, sourceKey, vodID)
 }
 
 // RemoveFavorite removes the global favorite shared by matching sources.
 func (s *Service) RemoveFavorite(sourceKey, vodID string) error {
-	vodName, err := s.vodName(sourceKey, vodID)
+	globalID, err := s.catalogGlobalID(sourceKey, vodID)
 	if err != nil {
 		return err
 	}
-	return db.RemoveFavorite(vodName, sourceKey)
+	return db.RemoveFavoriteByGlobalID(int(globalID), sourceKey)
 }
 
 // IsFavorite reports whether the global video is favorited.
@@ -113,11 +115,28 @@ func (s *Service) Favorites(page, pageSize int) ([]db.FavWithVideo, error) {
 
 // SaveHistory records progress for a source episode under its global video.
 func (s *Service) SaveHistory(sourceKey, vodID string, epNum int, position float64) error {
-	vodName, err := s.vodName(sourceKey, vodID)
+	globalID, err := s.catalogGlobalID(sourceKey, vodID)
 	if err != nil {
 		return err
 	}
-	return db.SaveWatchHistory(sourceKey, vodID, vodName, epNum, position)
+	return db.SaveWatchHistoryByIdentity(globalID, sourceKey, vodID, epNum, position)
+}
+
+// HistoryPosition returns the last watched position (seconds) of one episode.
+// A missing record is not an error: 0 means "no history yet".
+func (s *Service) HistoryPosition(sourceKey, vodID string, epNum int) (float64, error) {
+	globalID, err := s.catalogGlobalID(sourceKey, vodID)
+	if err != nil {
+		return 0, err
+	}
+	position, err := db.GetWatchHistoryByIdentity(globalID, sourceKey, vodID, epNum)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	return position, nil
 }
 
 // RecentHistory returns hydrated recent watch-history records.
@@ -134,15 +153,11 @@ func (s *Service) RecentHistory(limit int) ([]*handler.HistoryItemWithVideo, err
 
 // DeleteHistoryItem removes a watched episode from its global history.
 func (s *Service) DeleteHistoryItem(sourceKey, vodID string, epNum int) error {
-	vodName, err := s.vodName(sourceKey, vodID)
+	globalID, err := s.catalogGlobalID(sourceKey, vodID)
 	if err != nil {
 		return err
 	}
-	row, err := db.GetGlobalVideoByName(vodName)
-	if err != nil {
-		return err
-	}
-	return db.DeleteHistoryItem(row.Id, epNum)
+	return db.DeleteHistoryItemByIdentity(globalID, sourceKey, vodID, epNum)
 }
 
 // DeleteHistoryByVideo removes source-specific history for compatibility.
@@ -158,17 +173,20 @@ func (s *Service) ClearHistory() (int, error) {
 
 // WatchedEpisodes returns watched episode numbers for the global video.
 func (s *Service) WatchedEpisodes(sourceKey, vodID string) ([]int, error) {
-	vodName, err := s.vodName(sourceKey, vodID)
+	globalID, err := s.catalogGlobalID(sourceKey, vodID)
 	if err != nil {
 		return nil, err
 	}
-	return db.GetWatchedEpisodes(vodName)
+	return db.GetWatchedEpisodesByIdentity(globalID, sourceKey, vodID)
 }
 
-func (s *Service) vodName(sourceKey, vodID string) (string, error) {
+func (s *Service) catalogGlobalID(sourceKey, vodID string) (int64, error) {
 	v, err := db.GetVideoById(sourceKey, vodID)
 	if err != nil {
-		return "", fmt.Errorf("video not found: %w", err)
+		return 0, fmt.Errorf("video not found: %w", err)
 	}
-	return v.VodName, nil
+	if v.GlobalId <= 0 {
+		return 0, fmt.Errorf("video has no catalog global identity")
+	}
+	return v.GlobalId, nil
 }

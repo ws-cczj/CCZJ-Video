@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"cczjVideo/app/applog"
@@ -56,11 +57,15 @@ var (
 	chartCacheData []DoubanChartItem
 	chartCacheTime time.Time
 	chartCacheTTL  = 1 * time.Hour
+	// Avoid immediately repeating the same blocked request when startup
+	// preload and the Home view ask for the chart close together.
+	chartFailureTime    time.Time
+	chartFailureBackoff = 5 * time.Minute
 
 	// 热榜匹配结果缓存（subjectID -> ChartVideoItem）
-	chartMatchMu     sync.RWMutex
-	chartMatchCache  = make(map[string]*ChartVideoItem)
-	chartSearching   = make(map[string]bool) // 正在搜索中的条目
+	chartMatchMu    sync.RWMutex
+	chartMatchCache = make(map[string]*ChartVideoItem)
+	chartSearching  = make(map[string]bool) // 正在搜索中的条目
 
 	// 热榜解析正则
 	chartItemRegex   = regexp.MustCompile(`<tr class="item">([\s\S]*?)</tr>`)
@@ -70,15 +75,49 @@ var (
 	chartVotesRegex  = regexp.MustCompile(`\((\d+)人评价\)`)
 	chartTitleRegex  = regexp.MustCompile(`class="pl2"[\s\S]*?<a[^>]*href="https://movie\.douban\.com/subject/\d+/?"[^>]*>\s*([^<\n]+)`)
 	chartInfoRegex   = regexp.MustCompile(`<p>([^<]*)</p>`)
+
+	// 热榜匹配并发上限：每个条目都会对全部源发一次远程搜索，不限流就是一次风暴。
+	chartMatchSlots   = make(chan struct{}, 3)
+	chartMatchRunning atomic.Bool
 )
 
 // fetchChartHTML 热榜专用 HTTP 请求，不走全局 20-60s 限速
+// （热榜本身有 1 小时缓存 + 5 分钟失败退避，请求量极低）。
+// 但必须尊重反爬静默期：被豆瓣封禁时热榜同样拿不到内容，硬打只会续封。
 func fetchChartHTML(urlStr string) (string, error) {
+	if left := remainingBlock(); left > 0 {
+		applog.Warn("[DoubanChart] 反爬静默中（剩余 %s），跳过热榜请求", left.Round(time.Second))
+		return "", fmt.Errorf("douban 反爬静默中，剩余 %s", left.Round(time.Minute))
+	}
+
 	applog.Info("[DoubanChart] Fetching URL: %s", urlStr)
 
+	doc, location, err := chartGet(urlStr)
+	if isSecChallengeURL(location) {
+		// 和详情页是同一道题：解掉再重试，别把能过的请求记成封禁。
+		if serr := solveDoubanChallenge(location, urlStr); serr != nil {
+			applog.Warn("[DoubanChart] 自动通过验证失败：%v", serr)
+			noteAntiCrawl()
+			return "", err
+		}
+		doc, location, err = chartGet(urlStr)
+	}
+	if err != nil {
+		if isDoubanChallengeURL(location) {
+			applog.Warn("[DoubanChart] 命中验证跳转 -> %s", location)
+			noteAntiCrawl()
+		}
+		return "", err
+	}
+	noteDoubanSuccess()
+	return doc, nil
+}
+
+// chartGet 发一次热榜 GET。location 非空表示被重定向，交给调用方判断能否解题。
+func chartGet(urlStr string) (doc string, location string, err error) {
 	req, err := http.NewRequest("GET", urlStr, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
+		return "", "", fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0")
@@ -88,20 +127,20 @@ func fetchChartHTML(urlStr string) (string, error) {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to fetch: %w", err)
+		return "", "", fmt.Errorf("failed to fetch: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
+		return "", resp.Header.Get("Location"), fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("failed to read body: %w", err)
+		return "", "", fmt.Errorf("failed to read body: %w", err)
 	}
 
-	return string(body), nil
+	return string(body), "", nil
 }
 
 // FetchDoubanChart 获取豆瓣热门影视榜（带 1 小时缓存）
@@ -117,6 +156,16 @@ func FetchDoubanChart() ([]DoubanChartItem, error) {
 
 	chartCacheMu.Lock()
 	defer chartCacheMu.Unlock()
+	if !chartFailureTime.IsZero() && time.Since(chartFailureTime) < chartFailureBackoff {
+		if len(chartCacheData) > 0 {
+			return chartCacheData, nil
+		}
+		if fallback := loadPersistedChartItems(); len(fallback) > 0 {
+			chartCacheData = fallback
+			return fallback, nil
+		}
+		return nil, fmt.Errorf("豆瓣热榜暂不可用，等待重试冷却结束")
+	}
 
 	// 双重检查
 	if chartCacheData != nil && time.Since(chartCacheTime) < chartCacheTTL {
@@ -128,9 +177,15 @@ func FetchDoubanChart() ([]DoubanChartItem, error) {
 	html, err := fetchChartHTML(chartURL)
 	if err != nil {
 		applog.Error("[DoubanChart] 抓取失败: %v", err)
+		chartFailureTime = time.Now()
 		if chartCacheData != nil {
 			applog.Info("[DoubanChart] 降级返回旧缓存 (%d 条)", len(chartCacheData))
 			return chartCacheData, nil
+		}
+		if fallback := loadPersistedChartItems(); len(fallback) > 0 {
+			chartCacheData = fallback
+			applog.Info("[DoubanChart] 降级返回数据库热榜缓存 (%d 条)", len(fallback))
+			return fallback, nil
 		}
 		return nil, fmt.Errorf("抓取豆瓣热榜失败: %w", err)
 	}
@@ -138,24 +193,61 @@ func FetchDoubanChart() ([]DoubanChartItem, error) {
 	items := parseDoubanChart(html)
 	if len(items) == 0 {
 		applog.Warn("[DoubanChart] 解析结果为空 (HTML len=%d)", len(html))
+		chartFailureTime = time.Now()
 		if chartCacheData != nil {
 			return chartCacheData, nil
+		}
+		if fallback := loadPersistedChartItems(); len(fallback) > 0 {
+			chartCacheData = fallback
+			applog.Info("[DoubanChart] 解析为空，降级返回数据库热榜缓存 (%d 条)", len(fallback))
+			return fallback, nil
 		}
 		return nil, fmt.Errorf("解析豆瓣热榜失败: 未找到任何条目")
 	}
 
 	chartCacheData = items
 	chartCacheTime = time.Now()
+	chartFailureTime = time.Time{}
 	applog.Info("[DoubanChart] 抓取完成: %d 条热榜数据", len(items))
 
-	// 异步：入库 + 更新热度 + 搜索源站
+	// 异步：入库 + 更新热度 + 搜索源站。启动预加载和首页可能几乎同时触发抓取，
+	// 因此同一时刻只跑一轮匹配，后到的一轮直接放弃（缓存与匹配结果已共享）。
 	go func() {
 		upsertChartItems(items)
 		go updateChartHotness(items)
-		go asyncMatchChartItems(items)
+		if !chartMatchRunning.CompareAndSwap(false, true) {
+			applog.Info("[DoubanChart] 已有匹配在跑，跳过本轮")
+			return
+		}
+		defer chartMatchRunning.Store(false)
+		asyncMatchChartItems(items)
 	}()
 
 	return items, nil
+}
+
+func loadPersistedChartItems() []DoubanChartItem {
+	rows, err := db.GetCachedDoubanChartVideos(20)
+	if err != nil {
+		applog.Warn("[DoubanChart] 读取数据库热榜缓存失败: %v", err)
+		return nil
+	}
+	return chartItemsFromGlobalRows(rows)
+}
+
+func chartItemsFromGlobalRows(rows []db.GlobalVideoRow) []DoubanChartItem {
+	items := make([]DoubanChartItem, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, DoubanChartItem{
+			SubjectID: row.DoubanId,
+			Title:     row.VodName,
+			PosterURL: row.Pic,
+			Rating:    row.DoubanScore,
+			Votes:     row.DoubanVotes,
+			Info:      strings.Trim(strings.Join([]string{row.ReleaseDate, row.Area}, " / "), " /"),
+		})
+	}
+	return items
 }
 
 // parseDoubanChart 解析豆瓣热榜 HTML
@@ -233,14 +325,8 @@ func upsertChartItems(items []DoubanChartItem) {
 			rating = "" // 无效评分（0.0 等）置空，不写入数据库
 		}
 		year, area, releaseDate, cast := parseInfoFull(item.Info)
-		var director, actor string
-		if cast != "" {
-			parts := strings.SplitN(cast, " / ", 2)
-			director = parts[0]
-			if len(parts) > 1 {
-				actor = parts[1]
-			}
-		}
+		_ = cast
+		director := ""
 
 		// 1) 尝试归一化匹配已有记录（避免重复创建）
 		globalID, err := db.GetOrCreateGlobalID(item.Title, 0)
@@ -252,9 +338,9 @@ func upsertChartItems(items []DoubanChartItem) {
 		if globalID <= 0 {
 			// 2) 匹配不上 → 说明数据库中没有这条数据，直接新增（使用 INSERT OR IGNORE 避免 UNIQUE 冲突）
 			_, insertErr := db.DB().Exec(
-				`INSERT OR IGNORE INTO global_video (vod_name, year, area, director, actor, release_date, douban_id, douban_score, douban_votes, pic, updated_at)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-				item.Title, year, area, director, actor, releaseDate, item.SubjectID, rating, item.Votes, item.PosterURL)
+				`INSERT OR IGNORE INTO global_video (vod_name, year, area, release_date, douban_id, douban_score, douban_votes, pic, updated_at)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+				item.Title, year, area, releaseDate, item.SubjectID, rating, item.Votes, item.PosterURL)
 			if insertErr != nil {
 				applog.Warn("[DoubanChart] INSERT 新增失败 title=%s: %v", item.Title, insertErr)
 				continue
@@ -278,8 +364,6 @@ func upsertChartItems(items []DoubanChartItem) {
 				pic = CASE WHEN pic = '' AND ? != '' THEN ? ELSE pic END,
 				year = CASE WHEN year = '' AND ? != '' THEN ? ELSE year END,
 				area = CASE WHEN area = '' AND ? != '' THEN ? ELSE area END,
-				director = CASE WHEN director = '' AND ? != '' THEN ? ELSE director END,
-				actor = CASE WHEN actor = '' AND ? != '' THEN ? ELSE actor END,
 				release_date = CASE WHEN release_date = '' AND ? != '' THEN ? ELSE release_date END,
 				updated_at = CURRENT_TIMESTAMP
 				WHERE id = ?`,
@@ -289,8 +373,6 @@ func upsertChartItems(items []DoubanChartItem) {
 				item.PosterURL, item.PosterURL,
 				year, year,
 				area, area,
-				director, director,
-				actor, actor,
 				releaseDate, releaseDate,
 				globalID)
 			if err != nil {
@@ -306,8 +388,6 @@ func upsertChartItems(items []DoubanChartItem) {
 	applog.Info("[DoubanChart] 入库完成: 新增 %d + 更新 %d = 处理 %d/%d 条 (global_video: %d → %d)",
 		newCount, updateCount, newCount+updateCount, len(items), existingCount, totalCount)
 }
-
-
 
 // asyncMatchChartItems 并行匹配源站数据
 func asyncMatchChartItems(items []DoubanChartItem) {
@@ -362,9 +442,11 @@ func asyncMatchChartItems(items []DoubanChartItem) {
 		if item.SubjectID == "" || item.Title == "" {
 			continue
 		}
+		chartMatchSlots <- struct{}{}
 		wg.Add(1)
 		go func(ci DoubanChartItem) {
 			defer wg.Done()
+			defer func() { <-chartMatchSlots }()
 			matchChartItemToSource(ci, sources)
 		}(item)
 	}
@@ -426,20 +508,21 @@ func matchChartItemToSource(item DoubanChartItem, sources []*model.Source) {
 func searchAndCollectFromSource(src *model.Source, title string) (string, bool) {
 	applog.Info("[DoubanChart] 开始源站搜索 src=%s apiUrl=%s title=%s", src.SourceKey, src.ApiUrl, title)
 	// 直接通过源站 API 搜索（不走事件通知）
-	advCfg := src.GetAdvConfig()
-	opts := collect.FetchOptions{
-		Limit:        5,
-		Keyword:      title,
-		FieldMapping: advCfg.FieldMapping,
+	strategy := collect.CreateStrategyFromSource(src)
+	if strategy == nil {
+		applog.Warn("[DoubanChart] 源站策略不可用 src=%s", src.SourceKey)
+		return "", false
 	}
-	page, err := collect.FetchPageWithOpts(src.ApiUrl, 1, opts)
+	page, err := collect.FetchSearchPage(strategy, title, 1)
 	if err != nil {
 		applog.Warn("[DoubanChart] 源站搜索失败 src=%s title=%s: %v", src.SourceKey, title, err)
 		return "", false
 	}
 	if page == nil || len(page.List) == 0 {
 		total := 0
-		if page != nil { total = page.Total.Int() }
+		if page != nil {
+			total = page.Total.Int()
+		}
 		applog.Info("[DoubanChart] 源站无结果 src=%s title=%s (total=%d)", src.SourceKey, title, total)
 		return "", false
 	}
@@ -454,30 +537,10 @@ func searchAndCollectFromSource(src *model.Source, title string) (string, bool) 
 		// 名称匹配（精确或高相似度）
 		if v.VodName == title || strings.Contains(v.VodName, title) || strings.Contains(title, v.VodName) {
 			applog.Info("[DoubanChart] 名称匹配: %q 匹配 %q (src=%s)", title, v.VodName, src.SourceKey)
-			// 获取详情并入库
-			detail, detailErr := collect.FetchVideoDetail(src.ApiUrl, v.VodId.String())
-			if detailErr == nil && detail != nil {
-				if detail.VodActor != "" { v.VodActor = detail.VodActor }
-				if detail.VodDirector != "" { v.VodDirector = detail.VodDirector }
-				if detail.VodContent != "" { v.VodContent = detail.VodContent }
-				if detail.VodPic != "" { v.VodPic = detail.VodPic }
-				if detail.VodPlayUrl != "" { v.VodPlayUrl = detail.VodPlayUrl }
-			} else if detailErr != nil {
-				applog.Warn("[DoubanChart] 获取详情失败 vod_id=%s: %v (使用列表数据继续)", v.VodId, detailErr)
-			}
-			v.VodContent = collect.CleanHTML(v.VodContent)
-			v.VodContent = collect.CompressTextField(v.VodContent)
-			v.VodActor = collect.CleanHTML(v.VodActor)
-			v.VodActor = collect.CompressTextField(v.VodActor)
-			v.VodDirector = collect.CleanHTML(v.VodDirector)
-			v.VodDirector = collect.CompressTextField(v.VodDirector)
-			v.VodPlayUrl = collect.CompressTextField(v.VodPlayUrl)
-
-			if err := db.EnsureVideoTable(src.SourceKey); err != nil {
-				applog.Error("[DoubanChart] 创建视频表失败 src=%s: %v", src.SourceKey, err)
-				return "", false
-			}
-			if err := db.MergeVideoDetails(src.SourceKey, []*model.Video{v}); err != nil {
+			// A chart match is a search result: persist its catalog projection only.
+			v.VodContent, v.VodActor, v.VodDirector = "", "", ""
+			v.VodPlayUrl, v.VodDownUrl, v.VodPlayFrom = "", "", ""
+			if err := db.UpsertCatalogItems(src.SourceKey, []*model.Video{v}); err != nil {
 				applog.Error("[DoubanChart] 入库失败 src=%s title=%s: %v", src.SourceKey, v.VodName, err)
 				return "", false
 			}

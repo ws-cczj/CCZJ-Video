@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { getDetailPath, getProxiedImageUrl } from '../utils'
+import { useI18n } from 'vue-i18n'
+import { getDetailPath } from '../utils'
 import type { Video } from '../types'
-import imageNotFound from '../assets/images/image_notfound.png'
+import RemoteImage from './RemoteImage.vue'
 
 interface Props {
   slides: Video[]
@@ -13,10 +14,11 @@ interface Props {
 
 const props = defineProps<Props>()
 const router = useRouter()
+const { t } = useI18n()
 
 const PAGE_HEIGHT = 360
 const PAGE_PADDING = 20
-const SLIDE_DURATION = 500
+const SLIDE_DURATION = 420
 const AUTO_INTERVAL = 6000
 
 const currentIndex = ref(0)
@@ -77,7 +79,6 @@ function goPrev(): void {
 
 function startTransition(): void {
   isTransitioning.value = true
-  void preloadNearbyImages(pendingIndex.value)
   const direction = slideDirection.value
 
   // Incoming slide starts off-screen
@@ -120,6 +121,17 @@ function startAutoPlay(): void {
   timer = setInterval(goNext, AUTO_INTERVAL)
 }
 
+// Home is kept alive while the player is open. Pause the carousel while it is
+// hidden so a failed Douban poster is not mounted again every six seconds.
+onActivated(() => startAutoPlay())
+onDeactivated(() => {
+  stopAutoPlay()
+  if (transitionTimer) {
+    clearTimeout(transitionTimer)
+    transitionTimer = null
+  }
+})
+
 function stopAutoPlay(): void {
   if (timer) { clearInterval(timer); timer = null }
 }
@@ -144,60 +156,18 @@ async function goDetail(video: Video): Promise<void> {
 }
 
 // Image proxying
-const proxiedUrls = ref<Map<string, string>>(new Map())
-const slideImgUrls = ref<Map<number, string>>(new Map())
-
-async function getImgUrl(rawUrl: string): Promise<string> {
-  if (!rawUrl) return ''
-  if (proxiedUrls.value.has(rawUrl)) return proxiedUrls.value.get(rawUrl)!
-  try {
-    const url = await getProxiedImageUrl(rawUrl)
-    proxiedUrls.value.set(rawUrl, url)
-    return url
-  } catch {
-    return rawUrl
-  }
-}
-
-const imageLoadToken = ref(0)
-
-async function preloadNearbyImages(extraIndex = -1): Promise<void> {
-  const slides = props.slides
-  const count = slides.length
-  if (count === 0) return
-  const token = ++imageLoadToken.value
-  const indices = new Set([
-    currentIndex.value,
-    (currentIndex.value - 1 + count) % count,
-    (currentIndex.value + 1) % count,
-  ])
-  if (extraIndex >= 0) indices.add(extraIndex)
-  await Promise.all(Array.from(indices).map(async (index) => {
-    if (slideImgUrls.value.has(index)) return
-    const url = await getImgUrl((slides[index] as any)?.vod_pic || '')
-    if (token === imageLoadToken.value) slideImgUrls.value.set(index, url)
-  }))
-}
-
-watch(() => props.slides, async (slides) => {
-  slideImgUrls.value.clear()
+watch(() => props.slides, () => {
   currentIndex.value = 0
   isTransitioning.value = false
   currentOffset.value = 0
   pendingIndex.value = -1
-  await preloadNearbyImages()
 }, { immediate: true })
 
 watch(() => props.slides.length, (count) => {
   if (count === 0) return
   if (currentIndex.value >= count || currentIndex.value < 0) currentIndex.value = 0
   if (pendingIndex.value >= count) pendingIndex.value = -1
-  void preloadNearbyImages()
   startAutoPlay()
-})
-
-watch(currentIndex, () => {
-  void preloadNearbyImages()
 })
 
 onMounted(() => {
@@ -208,13 +178,6 @@ onUnmounted(() => {
   stopAutoPlay()
   if (transitionTimer) clearTimeout(transitionTimer)
 })
-
-function onImageError(evt: Event): void {
-  const img = evt.target as HTMLImageElement
-  if (img && img.src !== imageNotFound) {
-    img.src = imageNotFound
-  }
-}
 
 function onMouseEnter(): void {
   stopAutoPlay()
@@ -238,29 +201,30 @@ function getSlideData(idx: number): Video | undefined {
     <div class="carousel-viewport" :style="{ height: PAGE_HEIGHT + 'px' }">
       <!-- Current slide -->
       <div class="carousel-slide"
-        :style="{ transform: `translateX(${currentOffset}%)`, transition: isTransitioning ? `transform ${SLIDE_DURATION}ms ease-in-out` : 'none' }">
+        :class="{ 'is-transitioning': isTransitioning }"
+        :style="{ transform: `translateX(${currentOffset}%)` }">
         <div class="slide-inner" v-if="activeSlide">
           <div class="slide-image-wrap">
-            <img :src="slideImgUrls.get(currentIndex) || ''" :alt="activeSlide?.vod_name || ''"
-              class="slide-image" draggable="false" referrerpolicy="no-referrer" @error="onImageError" />
+            <RemoteImage :src="(activeSlide as any)?.vod_pic || ''" :alt="activeSlide?.vod_name || ''"
+              class="slide-image" draggable="false" loading="eager" />
             <div class="slide-image-gradient" />
           </div>
           <div class="slide-detail-wrap">
             <div class="slide-detail-bg" />
             <div class="slide-detail-content">
-              <span class="slide-badge">豆瓣热榜</span>
+              <span class="slide-badge">{{ t('home.doubanHot') }}</span>
               <h2 class="slide-title">{{ activeSlide?.vod_name || '' }}</h2>
               <div class="slide-meta">
                 <div v-if="(activeSlide as any)?.release_date" class="slide-meta-row">
-                  <span class="slide-meta-label">上映</span>
+                  <span class="slide-meta-label">{{ t('home.released') }}</span>
                   <span class="slide-meta-value">{{ (activeSlide as any).release_date }}</span>
                 </div>
                 <div v-if="(activeSlide as any)?.director" class="slide-meta-row">
-                  <span class="slide-meta-label">导演</span>
+                  <span class="slide-meta-label">{{ t('home.director') }}</span>
                   <span class="slide-meta-value">{{ (activeSlide as any).director }}</span>
                 </div>
                 <div v-if="(activeSlide as any)?.actors" class="slide-meta-row">
-                  <span class="slide-meta-label">主演</span>
+                  <span class="slide-meta-label">{{ t('home.actors') }}</span>
                   <span class="slide-meta-value slide-meta-actors">{{ (activeSlide as any).actors }}</span>
                 </div>
               </div>
@@ -268,12 +232,12 @@ function getSlideData(idx: number): Video | undefined {
                 <span v-if="(activeSlide as any)?.year" class="slide-tag">{{ (activeSlide as any).year }}</span>
                 <span v-if="(activeSlide as any)?.area" class="slide-tag">{{ (activeSlide as any).area }}</span>
                 <span v-if="activeSlide?.vod_score && Number(activeSlide.vod_score) > 0"
-                  class="slide-tag slide-tag-score">{{ activeSlide.vod_score }}分</span>
+                  class="slide-tag slide-tag-score">{{ activeSlide.vod_score }}{{ t('common.scoreUnit') }}</span>
                 <span v-if="activeSlide?.vod_remarks" class="slide-tag slide-tag-votes">{{ activeSlide.vod_remarks }}</span>
               </div>
             </div>
           <div class="slide-actions">
-              <button class="slide-btn slide-btn-primary" @click.stop="goDetail(activeSlide!)">查看详情</button>
+              <button class="slide-btn slide-btn-primary" @click.stop="goDetail(activeSlide!)">{{ t('home.viewDetail') }}</button>
             </div>
           </div>
         </div>
@@ -281,30 +245,30 @@ function getSlideData(idx: number): Video | undefined {
 
       <!-- Incoming slide (during transition) -->
       <div v-if="isTransitioning && pendingIndex >= 0 && getSlideData(pendingIndex)"
-        class="carousel-slide carousel-slide-incoming"
-        :style="{ transform: `translateX(${incomingOffset}%)`, transition: isTransitioning ? `transform ${SLIDE_DURATION}ms ease-in-out` : 'none' }">
+        class="carousel-slide carousel-slide-incoming is-transitioning"
+        :style="{ transform: `translateX(${incomingOffset}%)` }">
         <div class="slide-inner">
           <div class="slide-image-wrap">
-            <img :src="slideImgUrls.get(pendingIndex) || ''" :alt="getSlideData(pendingIndex)?.vod_name || ''"
-              class="slide-image" draggable="false" referrerpolicy="no-referrer" @error="onImageError" />
+            <RemoteImage :src="(getSlideData(pendingIndex) as any)?.vod_pic || ''" :alt="getSlideData(pendingIndex)?.vod_name || ''"
+              class="slide-image" draggable="false" loading="eager" />
             <div class="slide-image-gradient" />
           </div>
           <div class="slide-detail-wrap">
             <div class="slide-detail-bg" />
             <div class="slide-detail-content">
-              <span class="slide-badge">豆瓣热榜</span>
+              <span class="slide-badge">{{ t('home.doubanHot') }}</span>
               <h2 class="slide-title">{{ getSlideData(pendingIndex)?.vod_name || '' }}</h2>
               <div class="slide-meta">
                 <div v-if="(getSlideData(pendingIndex) as any)?.release_date" class="slide-meta-row">
-                  <span class="slide-meta-label">上映</span>
+                  <span class="slide-meta-label">{{ t('home.released') }}</span>
                   <span class="slide-meta-value">{{ (getSlideData(pendingIndex) as any).release_date }}</span>
                 </div>
                 <div v-if="(getSlideData(pendingIndex) as any)?.director" class="slide-meta-row">
-                  <span class="slide-meta-label">导演</span>
+                  <span class="slide-meta-label">{{ t('home.director') }}</span>
                   <span class="slide-meta-value">{{ (getSlideData(pendingIndex) as any).director }}</span>
                 </div>
                 <div v-if="(getSlideData(pendingIndex) as any)?.actors" class="slide-meta-row">
-                  <span class="slide-meta-label">主演</span>
+                  <span class="slide-meta-label">{{ t('home.actors') }}</span>
                   <span class="slide-meta-value slide-meta-actors">{{ (getSlideData(pendingIndex) as any).actors }}</span>
                 </div>
               </div>
@@ -312,12 +276,12 @@ function getSlideData(idx: number): Video | undefined {
                 <span v-if="(getSlideData(pendingIndex) as any)?.year" class="slide-tag">{{ (getSlideData(pendingIndex) as any).year }}</span>
                 <span v-if="(getSlideData(pendingIndex) as any)?.area" class="slide-tag">{{ (getSlideData(pendingIndex) as any).area }}</span>
                 <span v-if="getSlideData(pendingIndex)?.vod_score && Number(getSlideData(pendingIndex)!.vod_score) > 0"
-                  class="slide-tag slide-tag-score">{{ getSlideData(pendingIndex)!.vod_score }}分</span>
+                  class="slide-tag slide-tag-score">{{ getSlideData(pendingIndex)!.vod_score }}{{ t('common.scoreUnit') }}</span>
                 <span v-if="getSlideData(pendingIndex)?.vod_remarks" class="slide-tag slide-tag-votes">{{ getSlideData(pendingIndex)!.vod_remarks }}</span>
               </div>
             </div>
             <div class="slide-actions">
-              <button class="slide-btn slide-btn-primary" @click.stop="goDetail(getSlideData(pendingIndex)!)">查看详情</button>
+              <button class="slide-btn slide-btn-primary" @click.stop="goDetail(getSlideData(pendingIndex)!)">{{ t('home.viewDetail') }}</button>
             </div>
           </div>
         </div>
@@ -327,7 +291,7 @@ function getSlideData(idx: number): Video | undefined {
     <!-- Loading overlay when clicking -->
     <div v-if="clickingLoading" class="carousel-loading-overlay">
       <div class="carousel-loading-spinner" />
-      <span class="carousel-loading-text">加载中...</span>
+      <span class="carousel-loading-text">{{ t('common.loading') }}</span>
     </div>
 
     <!-- Navigation arrows -->
@@ -364,6 +328,10 @@ function getSlideData(idx: number): Video | undefined {
   overflow: hidden;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
   will-change: transform;
+}
+
+.carousel-slide.is-transitioning {
+  transition: transform var(--cczj-motion-carousel) var(--cczj-motion-ease-emphasis);
 }
 
 .carousel-slide-incoming {
@@ -539,7 +507,9 @@ function getSlideData(idx: number): Video | undefined {
   font-weight: 600;
   border: none;
   cursor: pointer;
-  transition: all 0.25s ease;
+  transition: background-color var(--cczj-motion-fast) var(--cczj-motion-ease-standard),
+              box-shadow var(--cczj-motion-fast) var(--cczj-motion-ease-standard),
+              transform var(--cczj-motion-fast) var(--cczj-motion-ease-standard);
 }
 
 .slide-btn-primary {
@@ -571,7 +541,8 @@ function getSlideData(idx: number): Video | undefined {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: background-color var(--cczj-motion-fast) var(--cczj-motion-ease-standard),
+              transform var(--cczj-motion-fast) var(--cczj-motion-ease-standard);
   padding: 0;
 }
 
@@ -603,7 +574,8 @@ function getSlideData(idx: number): Video | undefined {
   border-radius: 9999px;
   border: none;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: width var(--cczj-motion-normal) var(--cczj-motion-ease-standard),
+              background-color var(--cczj-motion-fast) var(--cczj-motion-ease-standard);
   background: rgba(255, 255, 255, 0.2);
   width: 6px;
   padding: 0;
@@ -637,11 +609,7 @@ function getSlideData(idx: number): Video | undefined {
   border: 3px solid rgba(255, 255, 255, 0.2);
   border-top-color: var(--btn-solid);
   border-radius: 50%;
-  animation: carousel-spin 0.8s linear infinite;
-}
-
-@keyframes carousel-spin {
-  to { transform: rotate(360deg); }
+  animation: cczj-spin 800ms linear infinite;
 }
 
 .carousel-loading-text {

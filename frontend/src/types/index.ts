@@ -6,9 +6,6 @@ export interface SourceInfo {
   source_key?: string
   name: string
   api_url: string
-  url_template?: string
-  url_prefix?: string
-  url_suffix?: string
   enabled?: boolean
   collect_limit?: number
   collect_hours?: number
@@ -73,6 +70,8 @@ export interface Video {
   vod_tag?: string
   vod_sub?: string
   vod_en?: string
+  // 该结果已存在于本地目录（此前已入库），用于搜索页显示"已入库"标识
+  in_catalog?: boolean
 }
 
 // 剧集
@@ -87,6 +86,7 @@ export interface Episode {
 export interface VideoDetailResponse {
   video: Video | null
   episodes: Episode[]
+  error?: { source_key: string; global_id: number; source_vod_id: string; attempts: number; retryable: boolean; message: string }
 }
 
 // 视频列表响应

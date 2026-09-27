@@ -4,12 +4,15 @@ import { GetVideoList, SearchVideos, GetTypes, GetYearsAndAreas, GetRecommend } 
 import * as AppMod from '../api/app'
 import type { Video, Episode, VType, VideoDetailResponse } from '../types'
 import { useErrorStore } from './error'
+import { tr } from '../locales'
+import { readDetailCache, writeDetailCache } from './detailCache'
 
 export interface VideoFilter {
   type_id: string | number
   year: string
   area: string
   keyword: string
+  recent_days?: number
   sort?: string // '' = 默认; 'rating' = 按评分; 'hot' = 按热度
 }
 
@@ -22,7 +25,10 @@ export const useVideoStore = defineStore('video', () => {
   const areas = ref<string[]>([])
   const total = ref(0)
   const page = ref(1)
+  const nextCursor = ref('')
   const loading = ref(false)
+  // 站内目录补搜结果：远端搜索漏掉的本地匹配项（如"大臣"命中"是，大臣"）
+  const localVideos = ref<Video[]>([])
 
   // 删除通知：当某页面删除视频后，其他列表页监听此值来移除该视频
   const deletedVodId = ref<string | null>(null)
@@ -45,6 +51,7 @@ export const useVideoStore = defineStore('video', () => {
   const errorStore = useErrorStore()
 
   async function loadVideos(sourceKey: string, filter: VideoFilter, p = 1, pageSize = 50): Promise<void> {
+    if (p > 1 && !nextCursor.value) return
     loading.value = true
     try {
       // 内部对象：强制类型断言避免 handler.VideoListReq 新字段（year/area/keyword/sort）造成 TS 报错
@@ -55,6 +62,8 @@ export const useVideoStore = defineStore('video', () => {
         area: filter.area ?? '',
         keyword: filter.keyword ?? '',
         sort: filter.sort ?? '',
+        recent_days: filter.recent_days ?? 0,
+        cursor: p > 1 ? nextCursor.value : '',
         page: p,
         page_size: pageSize,
       } as any
@@ -69,44 +78,68 @@ export const useVideoStore = defineStore('video', () => {
       }
       total.value = ttl
       page.value = p
+      nextCursor.value = typeof resp?.next_cursor === 'string' ? resp.next_cursor : ''
     } catch (e: any) {
-      errorStore.fromError('加载视频列表失败', e, 'videoStore.loadVideos')
+      errorStore.fromError(tr('errors.loadVideosFailed'), e, 'videoStore.loadVideos')
     } finally {
       loading.value = false
     }
   }
 
-  async function loadDetail(sourceKey: string, vodId: string, refresh = false): Promise<void> {
+  // Returns true only when a healthy browser-cache entry was used. A remote
+  // result, including the backend's catalog fallback on an error, never
+  // masquerades as a cache hit.
+  async function loadDetail(sourceKey: string, vodId: string, refresh = false, globalId = 0): Promise<boolean> {
     loading.value = true
     try {
-      const resp = (await (AppMod as any).GetVideoDetail({ source_key: sourceKey, vod_id: vodId, refresh })) as VideoDetailResponse
+      if (!refresh) {
+        const cached = await readDetailCache(sourceKey, vodId, globalId)
+        if (cached?.video) {
+          currentVideo.value = cached.video
+          episodes.value = cached.episodes
+          return true
+        }
+      }
+      const resp = (await (AppMod as any).GetVideoDetail({ source_key: sourceKey, vod_id: vodId, global_id: globalId, refresh })) as VideoDetailResponse
       currentVideo.value = resp?.video ?? null
       episodes.value = Array.isArray(resp?.episodes) ? resp.episodes : []
+      if (resp?.video && !resp.error) {
+        await writeDetailCache(sourceKey, vodId, resp, globalId)
+      }
+      if (resp?.error) errorStore.fromError(tr('errors.detailTempUnavailable'), new Error(resp.error.message), 'videoStore.loadDetail')
+      return false
     } catch (e: any) {
       const msg = e?.message || ''
       if (msg.includes('video not found') || msg.includes('sql: no rows')) {
         currentVideo.value = null
         episodes.value = []
       } else {
-        errorStore.fromError('加载视频详情失败', e, 'videoStore.loadDetail')
+        errorStore.fromError(tr('errors.loadDetailFailed'), e, 'videoStore.loadDetail')
         currentVideo.value = null
         episodes.value = []
       }
+      return false
     } finally {
       loading.value = false
     }
   }
 
   /** 后台刷新详情（不设置 loading，用于已有本地数据后异步更新） */
-  async function refreshDetail(sourceKey: string, vodId: string): Promise<boolean> {
+  async function refreshDetail(sourceKey: string, vodId: string, globalId = 0): Promise<boolean> {
     try {
-      const resp = (await (AppMod as any).GetVideoDetail({ source_key: sourceKey, vod_id: vodId, refresh: true })) as VideoDetailResponse
+      const resp = (await (AppMod as any).GetVideoDetail({ source_key: sourceKey, vod_id: vodId, global_id: globalId, refresh: true })) as VideoDetailResponse
       if (resp?.video) {
         currentVideo.value = resp.video
         if (Array.isArray(resp.episodes) && resp.episodes.length > 0) {
           episodes.value = resp.episodes
         }
-        return true
+        if (!resp.error) {
+          await writeDetailCache(sourceKey, vodId, {
+            video: resp.video,
+            episodes: Array.isArray(resp.episodes) ? resp.episodes : [],
+          }, globalId)
+          return true
+        }
       }
       return false
     } catch {
@@ -124,16 +157,21 @@ export const useVideoStore = defineStore('video', () => {
         page_size: 50,
       })) as any
       const list: Video[] = Array.isArray(resp?.videos) ? resp.videos : []
+      const local: Video[] = Array.isArray(resp?.local_videos) ? resp.local_videos : []
       const ttl: number = typeof resp?.total === 'number' ? resp.total : list.length
       if (p === 1) {
         videos.value = list
+        localVideos.value = local
       } else {
         videos.value.push(...list)
       }
+      // 翻页后新到达的远端项可能与首屏的本地补搜重复，统一按 vod_id 去重
+      const remoteIds = new Set(videos.value.map(v => String(v.vod_id ?? '')))
+      localVideos.value = localVideos.value.filter(v => !remoteIds.has(String(v.vod_id ?? '')))
       total.value = ttl
       page.value = p
     } catch (e: any) {
-      errorStore.fromError('搜索失败', e, 'videoStore.search')
+      errorStore.fromError(tr('errors.searchFailed'), e, 'videoStore.search')
     } finally {
       loading.value = false
     }
@@ -150,7 +188,7 @@ export const useVideoStore = defineStore('video', () => {
       }
       types.value = arr.map((t: any) => ({ type_id: t?.type_id ?? '', name: t?.name ?? '' }))
     } catch (e: any) {
-      errorStore.fromError('加载分类失败', e, 'videoStore.loadTypes')
+      errorStore.fromError(tr('errors.loadTypesFailed'), e, 'videoStore.loadTypes')
       types.value = []
     }
   }
@@ -161,7 +199,7 @@ export const useVideoStore = defineStore('video', () => {
       years.value = Array.isArray(resp?.years) ? resp.years : []
       areas.value = Array.isArray(resp?.areas) ? resp.areas : []
     } catch (e: any) {
-      errorStore.fromError('加载年份/地区选项失败', e, 'videoStore.loadYearsAndAreas')
+      errorStore.fromError(tr('errors.loadYearsAreasFailed'), e, 'videoStore.loadYearsAndAreas')
       years.value = []
       areas.value = []
     }
@@ -176,7 +214,7 @@ export const useVideoStore = defineStore('video', () => {
       })) as any
       return Array.isArray(list) ? list : []
     } catch (e: any) {
-      errorStore.fromError('加载推荐失败', e, 'videoStore.loadRecommend')
+      errorStore.fromError(tr('errors.loadRecommendFailed'), e, 'videoStore.loadRecommend')
       return []
     }
   }
@@ -190,7 +228,9 @@ export const useVideoStore = defineStore('video', () => {
     areas,
     total,
     page,
+    nextCursor,
     loading,
+    localVideos,
     loadVideos,
     loadDetail,
     refreshDetail,

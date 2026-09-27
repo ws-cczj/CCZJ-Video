@@ -7,6 +7,7 @@
  */
 import { ref, computed, onMounted } from 'vue'
 import { useThemeStore } from '../stores/theme'
+import { MotionTransition } from './ui'
 
 import splashGreen from '../assets/images/green.webp'
 import splashBitblue from '../assets/images/skyblue.webp'
@@ -71,11 +72,13 @@ onMounted(() => {
 </script>
 
 <template>
-  <div v-if="show" class="splash-wrap cczj-fixed cczj-items-center cczj-justify-center cczj-flex cczj-z-max"
-    :style="bgStyle">
-    <div class="splash-brand cczj-absolute">CCZJ Video</div>
-    <img :src="bgSrc" class="splash-img cczj-text-2xl cczj-z-10 cczj-font-medium cczj-opacity-70" />
-  </div>
+  <MotionTransition preset="fade" appear>
+    <div v-if="show" class="splash-wrap cczj-fixed cczj-items-center cczj-justify-center cczj-flex cczj-z-max"
+      :style="bgStyle">
+      <div class="splash-brand cczj-absolute">CCZJ Video</div>
+      <img :src="bgSrc" alt="" class="splash-img cczj-text-2xl cczj-z-10 cczj-font-medium cczj-opacity-70" />
+    </div>
+  </MotionTransition>
 </template>
 
 <style scoped>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 defineOptions({ name: 'Home' })
-import { ref, computed, onMounted, onActivated, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, onMounted, onActivated, onDeactivated, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { GetRecentHistory, DeleteHistoryByVideo, GetSetting, DoubanChart, DoubanChartResolve } from '../api/app'
@@ -12,6 +12,7 @@ import { Button, Tag, Spinner as LoadingSpinner, Empty as EmptyState, Select as 
 import BookCarousel from '../components/BookCarousel.vue'
 import Icon from '../components/Icon.vue'
 import { getDetailPath, getSearchPath } from '../utils'
+import { readStorage, writeStorage } from '../platform/storage'
 import type { Video } from '../types'
 
 const { t } = useI18n()
@@ -166,6 +167,35 @@ const recommendLoading = ref(false)
 const recommendGroups = ref<RecommendGroup[]>([])
 
 const carouselSlides = ref<Video[]>([])
+const DOUBAN_CHART_CACHE_KEY = 'cczj_douban_chart_cache_v1'
+const DOUBAN_CHART_TTL = 60 * 60 * 1000
+let chartLoadInFlight: Promise<any[]> | null = null
+
+async function loadDoubanChartData(): Promise<any[]> {
+  const cached = readStorage<{ cachedAt: number; items: any[] } | null>(DOUBAN_CHART_CACHE_KEY, null)
+  if (cached && Date.now() - cached.cachedAt < DOUBAN_CHART_TTL && Array.isArray(cached.items)) {
+    return cached.items
+  }
+  if (!chartLoadInFlight) {
+    chartLoadInFlight = (async () => {
+      try {
+        const chart = (await DoubanChart()) as any[]
+        if (Array.isArray(chart) && chart.length > 0) {
+          writeStorage(DOUBAN_CHART_CACHE_KEY, { cachedAt: Date.now(), items: chart })
+        }
+        return Array.isArray(chart) ? chart : []
+      } catch (error) {
+        // A stale chart is still more useful than hiding the entire carousel
+        // while Douban is rate-limiting or temporarily unavailable.
+        console.warn('加载豆瓣热榜失败，使用旧缓存:', error)
+        return cached && Array.isArray(cached.items) ? cached.items : []
+      } finally {
+        chartLoadInFlight = null
+      }
+    })()
+  }
+  return chartLoadInFlight
+}
 
 async function loadRecommendations(): Promise<void> {
   if (!sourceStore.currentSourceKey) return
@@ -258,7 +288,7 @@ async function loadRecommendations(): Promise<void> {
 
     // 0) 热榜：从豆瓣热榜获取数据用于轮播图（立即展示，带匹配状态）
     try {
-      const chart = await DoubanChart()
+      const chart = await loadDoubanChartData()
       console.log('[热榜] 原始数据:', chart?.[0])
       if (Array.isArray(chart) && chart.length > 0) {
         carouselSlides.value = chart.map((item: any) => {
@@ -268,7 +298,7 @@ async function loadRecommendations(): Promise<void> {
             vod_name: item.title || '',
             vod_pic: item.poster_url || '',
             vod_score: item.rating || '',
-            vod_remarks: item.votes ? `${item.votes} 人评价` : '',
+            vod_remarks: item.votes ? t('home.votesCount', { count: item.votes }) : '',
             vod_content: item.info || '',
             year: item.year || '',
             area: item.area || '',
@@ -313,7 +343,7 @@ function onChartSlideClick(video: Video): void {
   }
 
   if (status === 'not_found') {
-    errorStore.warn('暂无资源', '该视频暂未采集到播放源，请在“源管理”中启用采集源后刷新重试')
+    errorStore.warn(t('home.noPlayableTitle'), t('home.noPlayableMsg'))
     return
   }
 
@@ -323,12 +353,12 @@ function onChartSlideClick(video: Video): void {
       if (result?.status === 'matched' && result.source_key && result.vod_id) {
         router.push(getDetailPath(result.source_key, { vod_id: result.vod_id }))
       } else if (result?.status === 'searching') {
-        errorStore.info('正在搜索中', '后台正在采集该资源，请稍后再试')
+        errorStore.info(t('home.searchingTitle'), t('home.searchingMsg'))
       } else {
-        errorStore.warn('暂无资源', '该视频暂未采集到播放源，请在“源管理”中启用采集源后刷新重试')
+        errorStore.warn(t('home.noPlayableTitle'), t('home.noPlayableMsg'))
       }
     }).catch(() => {
-      errorStore.warn('暂无资源', '该视频暂未采集到播放源，请在“源管理”中启用采集源后刷新重试')
+      errorStore.warn(t('home.noPlayableTitle'), t('home.noPlayableMsg'))
     })
   }
 }
@@ -363,6 +393,9 @@ function goDetail(video: Video): void {
 }
 
 // ==================== 生命周期 ====================
+let homePageWasDeactivated = false
+let suppressSourceWatch = false
+
 async function loadLayoutSettings(): Promise<void> {
   try {
     const col = await GetSetting('grid_columns')
@@ -372,35 +405,43 @@ async function loadLayoutSettings(): Promise<void> {
   } catch { /* ignore */ }
 }
 
+async function refreshHomeFeed(): Promise<void> {
+  const key = sourceStore.currentSourceKey
+  if (!key) return
+  await Promise.all([
+    videoStore.loadTypes(key),
+    videoStore.loadYearsAndAreas(key),
+    videoStore.loadVideos(key, { type_id: '', year: '', area: '', keyword: '' }, 1, 50),
+  ])
+  await loadRecommendations()
+}
+
 onMounted(async () => {
+  suppressSourceWatch = true
   await loadLayoutSettings()
   await sourceStore.loadSources()
-  if (sourceStore.currentSourceKey) {
-    await Promise.all([
-      videoStore.loadTypes(sourceStore.currentSourceKey),
-      videoStore.loadYearsAndAreas(sourceStore.currentSourceKey),
-      videoStore.loadVideos(sourceStore.currentSourceKey, { type_id: '', year: '', area: '', keyword: '' }, 1, 50),
-    ])
-    await loadRecommendations()
-  }
+  await refreshHomeFeed()
+  // The currentSourceKey watcher below is for user-driven switches; loadSources()
+  // above sets that key, so hold the watcher off until those jobs have flushed.
+  await nextTick()
+  suppressSourceWatch = false
 })
 
 onBeforeUnmount(() => {
 })
 
+// KeepAlive activates right after mounting as well; gating on a real
+// deactivation keeps the first visit to a single round of requests.
 onActivated(async () => {
-  if (sourceStore.currentSourceKey) {
-    await Promise.all([
-      videoStore.loadTypes(sourceStore.currentSourceKey),
-      videoStore.loadYearsAndAreas(sourceStore.currentSourceKey),
-      videoStore.loadVideos(sourceStore.currentSourceKey, { type_id: '', year: '', area: '', keyword: '' }, 1, 50),
-    ])
-    await loadRecommendations()
-  }
+  if (!homePageWasDeactivated) return
+  homePageWasDeactivated = false
+  await refreshHomeFeed()
 })
 
+onDeactivated(() => { homePageWasDeactivated = true })
+
 watch(() => sourceStore.currentSourceKey, async (key: string) => {
-  if (!key) return
+  if (!key || suppressSourceWatch) return
   resetFilters()
   await videoStore.loadTypes(key)
   await videoStore.loadYearsAndAreas(key)

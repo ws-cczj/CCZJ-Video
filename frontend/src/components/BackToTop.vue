@@ -1,6 +1,7 @@
 <script setup lang="ts">
 defineOptions({ name: 'BackToTop' })
 import { ref, onMounted, onBeforeUnmount, onActivated, onDeactivated, computed } from 'vue'
+import { tr } from '../locales'
 
 const THRESHOLD = 400
 const visible = ref(false)
@@ -265,7 +266,7 @@ const tendril3Y = computed(() => Math.floor(vineHeight.value * 0.75))
     <div
       class="flower-click-target"
       @click="scrollToTop"
-      title="拽一下回到顶部"
+      :title="tr('common.backToTopHint')"
     >
       <svg class="flower-svg" viewBox="0 0 80 80" aria-hidden="true">
         <defs>

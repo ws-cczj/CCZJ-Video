@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { tr } from '../../locales'
 defineProps<{
   /** 标签变体 */
   variant?: 'default' | 'primary' | 'success' | 'warning' | 'danger'
@@ -36,7 +37,7 @@ const emit = defineEmits<{
       class="ui-tag__close"
       type="button"
       @click.stop="emit('close')"
-      aria-label="移除"
+      :aria-label="tr('common.remove')"
     >
       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
         <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -57,7 +58,7 @@ const emit = defineEmits<{
   font-family: inherit;
   font-weight: 500;
   white-space: nowrap;
-  transition: all 0.15s ease;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
   user-select: none;
   -webkit-user-select: none;
 }
@@ -129,7 +130,7 @@ const emit = defineEmits<{
   opacity: 0.6;
   cursor: pointer;
   border-radius: 3px;
-  transition: opacity 0.15s ease, background 0.15s ease;
+  transition: opacity var(--transition-fast), background-color var(--transition-fast);
 }
 .ui-tag__close:hover {
   opacity: 1;

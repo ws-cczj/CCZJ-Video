@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, KeepAlive } from 'vue'
 import { useRouter } from 'vue-router'
+import { tr } from './locales'
 import TitleBar from './components/TitleBar.vue'
 import Sidebar from './components/Sidebar.vue'
 import SplashScreen from './components/SplashScreen.vue'
@@ -8,6 +9,7 @@ import ErrorToastStack from './components/ErrorToastStack.vue'
 import ConfirmModal from './components/ConfirmModal.vue'
 import Icon from './components/Icon.vue'
 import BackToTop from './components/BackToTop.vue'
+import { MotionTransition } from './components/ui'
 import { useCollectStore } from './stores/collect'
 import { useErrorStore } from './stores/error'
 import { useThemeStore } from './stores/theme'
@@ -99,14 +101,14 @@ onMounted(async () => {
   // 把未捕获的 JS 错误 / Promise 拒绝都记录到日志与弹窗
   winErrorHandler = (event: ErrorEvent) => {
     if (event.error) {
-      errorStore.fromError('运行时错误', event.error, 'GlobalErrorEvent')
+      errorStore.fromError(tr('errors.runtimeError'), event.error, 'GlobalErrorEvent')
     } else if (event.message) {
-      errorStore.error('运行时错误', event.message, '', 'GlobalErrorEvent')
+      errorStore.error(tr('errors.runtimeError'), event.message, '', 'GlobalErrorEvent')
     }
   }
   rejectHandler = (event: PromiseRejectionEvent) => {
     const reason: any = event.reason
-    errorStore.fromError('未处理的 Promise 异常', reason, 'UnhandledRejection')
+    errorStore.fromError(tr('errors.unhandledRejection'), reason, 'UnhandledRejection')
   }
   window.addEventListener('error', winErrorHandler)
   window.addEventListener('unhandledrejection', rejectHandler)
@@ -134,33 +136,37 @@ onUnmounted(() => {
       <Sidebar />
       <main class="main-content">
         <router-view v-slot="{ Component }">
+          <MotionTransition preset="page" mode="out-in">
             <KeepAlive :include="KEEP_ALIVE_INCLUDE">
               <component :is="Component" :key="$route.name === 'player'
                 ? `player:${String($route.params.sourceKey || '')}:${String($route.params.vodId || '')}`
                 : $route.path" />
             </KeepAlive>
+          </MotionTransition>
         </router-view>
       </main>
     </div>
 
     <!-- 全局采集进度条 -->
-    <div v-if="collect.running || collect.done" class="collect-overlay" :class="{ done: collect.done }">
-      <div class="collect-bar-inner">
-        <div class="collect-header">
-          <span class="collect-source">{{ collect.sourceKey }}</span>
-          <span v-if="collect.running" class="collect-status running">采集中...</span>
-          <span v-else-if="collect.error" class="collect-status error">失败</span>
-          <span v-else class="collect-status success">完成</span>
-        </div>
-        <div class="progress-track">
-          <div class="progress-fill" :style="{ width: collect.progress + '%' }"></div>
-        </div>
-        <div class="collect-meta">
-          <span v-if="collect.total > 0">{{ collect.current }} / {{ collect.total }} 页</span>
-          <span class="collect-last-log">{{ collect.log[collect.log.length - 1] }}</span>
+    <MotionTransition preset="slide-up">
+      <div v-if="collect.running || collect.done" class="collect-overlay" :class="{ done: collect.done }">
+        <div class="collect-bar-inner">
+          <div class="collect-header">
+            <span class="collect-source">{{ collect.sourceKey }}</span>
+            <span v-if="collect.running" class="collect-status running">{{ tr('common.collecting') }}</span>
+            <span v-else-if="collect.error" class="collect-status error">{{ tr('common.failed') }}</span>
+            <span v-else class="collect-status success">{{ tr('common.done') }}</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" :style="{ width: collect.progress + '%' }"></div>
+          </div>
+          <div class="collect-meta">
+            <span v-if="collect.total > 0">{{ tr('common.pageOf', { current: collect.current, total: collect.total }) }}</span>
+            <span class="collect-last-log">{{ collect.log[collect.log.length - 1] }}</span>
+          </div>
         </div>
       </div>
-    </div>
+    </MotionTransition>
 
     <!-- 全局更新弹窗 -->
     <UpdateModal />
@@ -178,7 +184,7 @@ onUnmounted(() => {
       @click="router.push('/downloads')"
       @mouseenter="onFabEnter"
       @mouseleave="onFabLeave"
-      title="下载管理"
+      :title="tr('downloads.title')"
     >
       <Icon name="download" :size="18" />
       <span v-if="dl.activeCount > 0" class="fab-badge">{{ dl.activeCount }}</span>
@@ -195,6 +201,7 @@ onUnmounted(() => {
  */
 /* ====== 设计令牌 (Design Tokens) ====== */
 :root {
+  color-scheme: light;
   /* 背景 */
   --bg-primary: #e6f4ea;
   --bg-secondary: #f0f8f2;
@@ -223,11 +230,14 @@ onUnmounted(() => {
   --danger-hover: #c62828;
   --danger-contrast: #ffffff;
   --success: #16a34a;
+  --success-hover: #15803d;
   --success-contrast: #ffffff;
   --warning: #f59e0b;
+  --warning-hover: #d97706;
   --warning-text: #b45309;
   --warning-contrast: #111827;
   --info: #0288d1;
+  --info-hover: #0369a1;
   --info-contrast: #ffffff;
 
   /* 透明度变体 */
@@ -246,6 +256,9 @@ onUnmounted(() => {
   --border-light: #c5e6cf;
   --btn-solid: #16a34a;
   --btn-solid-text: #ffffff;
+  --btn-solid-hover: #15803d;
+  --btn-solid-alpha-20: rgba(22,163,74,0.20);
+  --btn-solid-alpha-35: rgba(22,163,74,0.35);
   --btn-soft: #d1ebd8;
   --btn-soft-text: #166534;
   --tag-highlight-bg: rgba(22,163,74,0.18);
@@ -293,14 +306,17 @@ onUnmounted(() => {
   --z-modal: 10001;
 
   /* 过渡 */
-  --transition-fast: 0.15s ease;
-  --transition: 0.2s ease;
-  --transition-slow: 0.3s ease;
+  --transition-fast: var(--cczj-motion-fast) var(--cczj-motion-ease-standard);
+  --transition: var(--cczj-motion-normal) var(--cczj-motion-ease-standard);
+  --transition-slow: var(--cczj-motion-slow) var(--cczj-motion-ease-standard);
 
   /* 窗口控制按钮 */
   --btn-hide: #3bc2b2;
+  --btn-hide-contrast: #111827;
   --btn-min: #85c43b;
+  --btn-min-contrast: #111827;
   --btn-close: #fab4a0;
+  --btn-close-contrast: #111827;
 
   /* 背景图 */
   --bg-image: none;

@@ -59,7 +59,7 @@ const activeIdx = computed(() => props.options.findIndex(o => o.value === props.
   left: 3px;
   background: var(--accent);
   border-radius: 7px;
-  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform var(--transition);
   z-index: 0;
 }
 
@@ -74,7 +74,7 @@ const activeIdx = computed(() => props.options.findIndex(o => o.value === props.
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: color 0.15s ease;
+  transition: color var(--transition-fast);
   white-space: nowrap;
   font-family: inherit;
 }

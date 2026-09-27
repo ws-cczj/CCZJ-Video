@@ -2,7 +2,7 @@ package douban
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"net/http"
 	"regexp"
@@ -51,9 +51,10 @@ var (
 
 	cacheTTL = 24 * time.Hour // 24小时缓存
 
-	// 评论请求独立速率限制（比爬虫短得多，因为是用户交互操作）
-	commentMinInterval = 1 * time.Second
-	commentMaxInterval = 3 * time.Second
+	// 评论请求独立速率限制（比爬虫短得多，因为是用户交互操作）。
+	// 曾经只有 1~3 秒：与爬虫共用同一个出口 IP，等于给反爬送计数。
+	commentMinInterval = 8 * time.Second
+	commentMaxInterval = 20 * time.Second
 	lastCommentTime    time.Time
 	commentRateMu      sync.Mutex
 
@@ -125,7 +126,13 @@ func fetchCommentsFromWeb(doubanID string, page int, sort string) (*DoubanCommen
 
 	applog.Info("[DoubanComments] 抓取评论: doubanID=%s, page=%d, url=%s", doubanID, page, url)
 
-	// 评论请求独立速率限制（3~8秒，不影响爬虫的全局限制）
+	// 反爬静默期内快速失败，不要让交互操作排队等 8~20 秒。
+	if left := remainingBlock(); left > 0 {
+		applog.Warn("[DoubanComments] 反爬静默中（剩余 %s），跳过评论抓取", left.Round(time.Second))
+		return nil, fmt.Errorf("douban 反爬静默中，剩余 %s", left.Round(time.Minute))
+	}
+
+	// 评论请求独立速率限制（8~20 秒，不影响爬虫的全局限制）
 	waitCommentRateLimit()
 
 	// 构造请求
@@ -134,12 +141,8 @@ func fetchCommentsFromWeb(doubanID string, page int, sort string) (*DoubanCommen
 		return nil, fmt.Errorf("创建请求失败: %w", err)
 	}
 
-	// 设置请求头
-	req.Header.Set("User-Agent", userAgent)
-	req.Header.Set("Referer", fmt.Sprintf("https://movie.douban.com/subject/%s/", doubanID))
-	req.Header.Set("Cookie", cookie)
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
-	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+	// 设置请求头；Cookie 由可选的环境变量提供，不使用仓库内的过期登录凭据。
+	applyDoubanHeaders(req, fmt.Sprintf("https://movie.douban.com/subject/%s/", doubanID))
 
 	// 发送请求
 	httpResp, err := client.Do(req)
@@ -149,10 +152,15 @@ func fetchCommentsFromWeb(doubanID string, page int, sort string) (*DoubanCommen
 	defer httpResp.Body.Close()
 
 	if httpResp.StatusCode != 200 {
+		if loc := httpResp.Header.Get("Location"); isDoubanChallengeURL(loc) {
+			applog.Warn("[DoubanComments] 命中验证跳转 %d -> %s", httpResp.StatusCode, loc)
+			noteAntiCrawl()
+		}
 		return nil, fmt.Errorf("HTTP 状态码: %d", httpResp.StatusCode)
 	}
+	noteDoubanSuccess()
 
-	body, err := ioutil.ReadAll(httpResp.Body)
+	body, err := io.ReadAll(io.LimitReader(httpResp.Body, 4*1024*1024))
 	if err != nil {
 		return nil, fmt.Errorf("读取响应失败: %w", err)
 	}
@@ -285,7 +293,7 @@ func parseTotalPages(html string, currentPage int) int {
 	return totalPages
 }
 
-// waitCommentRateLimit 评论请求独立速率限制（3~8秒随机间隔）
+// waitCommentRateLimit 评论请求独立速率限制（8~20 秒随机间隔）
 // 不影响爬虫的全局 waitRateLimit，避免用户交互操作等待过久。
 func waitCommentRateLimit() {
 	commentRateMu.Lock()

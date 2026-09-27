@@ -1,6 +1,7 @@
 <script setup lang="ts">
 defineOptions({ name: 'Favorites' })
-import { ref, onMounted, computed, watch, onActivated } from 'vue'
+import { ref, onMounted, computed, watch, onActivated, onDeactivated } from 'vue'
+import { tr } from '../locales'
 import { favRefreshTick } from '../stores/favoritesSync'
 import { useRouter } from 'vue-router'
 import { GetSetting, GetFavorites, GetVideoDetail, RemoveFavorite } from '../api/app'
@@ -29,7 +30,7 @@ interface FavFolder {
 const FOLDERS_KEY = 'cczj_fav_folders'
 const MAPPING_KEY = 'cczj_fav_mapping' // key(source-vod_id) -> folderId
 
-const folders = ref<FavFolder[]>([{ id: 'default', name: '默认收藏夹', default: true }])
+const folders = ref<FavFolder[]>([{ id: 'default', name: tr('favorites.defaultFolder'), default: true }])
 const activeFolderId = ref<string>('default')
 const mapping = ref<Record<string, string>>({}) // favKey -> folderId
 
@@ -39,7 +40,7 @@ function loadFoldersFromStorage(): void {
     if (savedFolders) folders.value = savedFolders
     // 确保至少有默认夹
     if (!folders.value.some(f => f.default)) {
-      folders.value.unshift({ id: 'default', name: '默认收藏夹', default: true })
+      folders.value.unshift({ id: 'default', name: tr('favorites.defaultFolder'), default: true })
     }
   } catch { /* ignore */ }
   mapping.value = readStorage<Record<string, string>>(MAPPING_KEY, {})
@@ -61,7 +62,7 @@ function resolveFolderId(f: { source_key: string; vod_id: string }): string {
 }
 
 function getFolderName(id: string): string {
-  return folders.value.find(f => f.id === id)?.name || '默认收藏夹'
+  return folders.value.find(f => f.id === id)?.name || tr('favorites.defaultFolder')
 }
 
 const favorites = ref<FavItem[]>([])
@@ -109,6 +110,8 @@ const gridStyle = computed(() => {
   }
 })
 
+let wasDeactivated = false
+
 onMounted(async () => {
   loadFoldersFromStorage()
   try {
@@ -122,7 +125,15 @@ onMounted(async () => {
   await loadFavorites()
 })
 
-onActivated(() => { loadFavorites() })
+// KeepAlive runs onActivated right after onMounted, so without this gate the
+// favorites list is fetched twice on first visit.
+onActivated(() => {
+  if (!wasDeactivated) return
+  wasDeactivated = false
+  loadFavorites()
+})
+
+onDeactivated(() => { wasDeactivated = true })
 
 watch(favRefreshTick, () => { loadFavorites() })
 
@@ -137,6 +148,7 @@ async function loadFavorites(): Promise<void> {
         const detail = (await GetVideoDetail({
           source_key: f.source_key,
           vod_id: String(f.vod_id),
+          global_id: 0,
           refresh: false,
         })) as { video: Video | null }
         const fav: FavItem = { ...f, video: detail?.video || null, folderId: resolveFolderId(f) }
@@ -278,9 +290,9 @@ function saveFolder(): void {
 async function deleteFolder(folder: FavFolder): Promise<void> {
   if (folder.default) return
   const yes = await confirmStore.confirm({
-    title: '删除收藏夹',
-    message: '确定删除此收藏夹？夹内的视频会移动到默认收藏夹。',
-    okText: '删除',
+    title: tr('favorites.confirmDeleteTitle'),
+    message: tr('favorites.confirmDeleteMsg'),
+    okText: tr('common.delete'),
     level: 'danger',
   })
   if (!yes) return
@@ -329,39 +341,39 @@ watch([mapping, folders], () => {
     <div class="page-header cczj-flex cczj-items-center cczj-justify-between cczj-gap-4 cczj-mb-6">
       <div>
         <h2 class="cczj-flex cczj-items-center cczj-gap-2 cczj-text-accent">
-          <Icon name="star" :size="20" /> 我的收藏
+          <Icon name="star" :size="20" /> {{ tr('favorites.title') }}
         </h2>
         <p class="desc cczj-text-muted cczj-mt-1" v-if="manageMode && hasSelection">
-          已选择 {{ selectedKeys.size }} 项
+          {{ tr('favorites.selected', { count: selectedKeys.size }) }}
         </p>
         <p class="desc cczj-text-muted cczj-mt-1" v-else-if="manageMode">
-          请选择要删除或移动的收藏
+          {{ tr('favorites.manageHint') }}
         </p>
-        <p class="desc cczj-text-muted cczj-mt-1" v-else-if="favorites.length > 0">共 {{ favorites.length }} 部精彩内容 · 当前夹「{{
-          getFolderName(activeFolderId) }}」{{ displayedFavorites.length }} 部</p>
-        <p class="desc cczj-text-muted cczj-mt-1" v-else>还没有收藏，进入视频详情页点击「收藏」即可保存</p>
+        <p class="desc cczj-text-muted cczj-mt-1" v-else-if="favorites.length > 0">{{ tr('favorites.folderSummary', { total: favorites.length, name: getFolderName(activeFolderId), count: displayedFavorites.length }) }}
+          </p>
+        <p class="desc cczj-text-muted cczj-mt-1" v-else>{{ tr('favorites.emptyHint') }}</p>
       </div>
       <div class="manage-actions cczj-flex cczj-items-center cczj-gap-2 cczj-flex-shrink-0">
         <template v-if="!manageMode">
           <Button variant="ghost" size="sm" @click="openCreateFolder">
-            <Icon name="plus" :size="14" /> 新建收藏夹
+            <Icon name="plus" :size="14" /> {{ tr('favorites.newFolder') }}
           </Button>
           <Button v-if="favorites.length > 0" variant="ghost" size="sm" @click="enterManageMode">
-            <Icon name="check" :size="14" /> 管理
+            <Icon name="check" :size="14" /> {{ tr('common.manage') }}
           </Button>
         </template>
         <template v-else>
           <Button variant="secondary" size="sm" @click="toggleSelectAll">
-            {{ isAllSelected ? '取消全选' : '全选' }}
+            {{ isAllSelected ? tr('common.cancelSelectAll') : tr('common.selectAll') }}
           </Button>
           <Button variant="secondary" size="sm" :disabled="!hasSelection" @click="openMoveSelected">
-            <Icon name="move" :size="14" /> 移动到
+            <Icon name="move" :size="14" /> {{ tr('favorites.moveTo') }}
           </Button>
           <Button variant="danger" size="sm" :disabled="!hasSelection || batchRemoving" @click="onRemoveSelected">
-            <Icon name="trash" :size="14" /> 删除所选
+            <Icon name="trash" :size="14" /> {{ tr('common.deleteSelected') }}
           </Button>
           <Button variant="primary" size="sm" @click="exitManageMode">
-            完成
+            {{ tr('favorites.done') }}
           </Button>
         </template>
       </div>
@@ -380,10 +392,10 @@ watch([mapping, folders], () => {
             }}</small>
           </div>
           <div v-if="!folder.default" class="folder-actions cczj-flex cczj-gap-1" @click.stop>
-            <Button variant="text" size="sm" icon @click="openRenameFolder(folder)" title="重命名">
+            <Button variant="text" size="sm" icon @click="openRenameFolder(folder)" :title="tr('common.rename')">
               <Icon name="edit" :size="12" />
             </Button>
-            <Button variant="text" size="sm" icon @click="deleteFolder(folder)" title="删除" class="mini-btn-danger">
+            <Button variant="text" size="sm" icon @click="deleteFolder(folder)" :title="tr('common.delete')" class="mini-btn-danger">
               <Icon name="trash" :size="12" />
             </Button>
           </div>
@@ -393,13 +405,13 @@ watch([mapping, folders], () => {
       <main class="fav-main cczj-flex-1">
         <!-- 加载状态 -->
         <div v-if="loading">
-          <LoadingSpinner label="加载收藏中..." />
+          <LoadingSpinner :label="tr('favorites.loading')" />
         </div>
 
         <!-- 空状态 -->
         <div v-else-if="displayedFavorites.length === 0">
-          <EmptyState icon="⭐" :title="`「${getFolderName(activeFolderId)}」暂无内容`" description="切换到其他收藏夹或在详情页加入新收藏">
-            <Button variant="primary" @click="router.push('/')">去发现视频</Button>
+          <EmptyState icon="⭐" :title="tr('favorites.folderEmpty', { name: getFolderName(activeFolderId) })" :description="tr('favorites.folderEmptyDesc')">
+            <Button variant="primary" @click="router.push('/')">{{ tr('favorites.discover') }}</Button>
           </EmptyState>
         </div>
 
@@ -411,7 +423,7 @@ watch([mapping, folders], () => {
             <div v-else class="placeholder-card cczj-flex cczj-items-center cczj-justify-center cczj-rounded cczj-border cczj-border-dashed cczj-bg-card cczj-cursor-pointer cczj-transition" @click="goDetail(fav)">
               <div class="placeholder-inner cczj-flex cczj-flex-col cczj-items-center cczj-gap-2 cczj-text-muted">
                 <Icon name="film" :size="32" />
-                <span>视频 #{{ fav.vod_id }}</span>
+                <span>{{ tr('favorites.videoIdLabel', { id: fav.vod_id }) }}</span>
                 <small class="source-tag cczj-text-xs">{{ fav.source_key }}</small>
               </div>
             </div>
@@ -430,15 +442,15 @@ watch([mapping, folders], () => {
     </div>
 
     <!-- 新建/重命名收藏夹弹窗 -->
-    <Modal v-model="showFolderModal" :title="folderEditTarget ? '重命名收藏夹' : '新建收藏夹'" :show-footer="true"
-      :ok-text="folderEditTarget ? '保存' : '创建'" :ok-disabled="!folderEditName.trim()" @ok="saveFolder"
+    <Modal v-model="showFolderModal" :title="folderEditTarget ? tr('favorites.renameFolder') : tr('favorites.newFolder')" :show-footer="true"
+      :ok-text="folderEditTarget ? tr('common.save') : tr('favorites.create')" :ok-disabled="!folderEditName.trim()" @ok="saveFolder"
       @cancel="showFolderModal = false" width="420px">
-      <input v-model="folderEditName" type="text" class="folder-input cczj-w-full cczj-p-3 cczj-rounded cczj-border cczj-bg-secondary" placeholder="请输入收藏夹名称" @keyup.enter="saveFolder"
+      <input v-model="folderEditName" type="text" class="folder-input cczj-w-full cczj-p-3 cczj-rounded cczj-border cczj-bg-secondary" :placeholder="tr('favorites.folderNamePlaceholder')" @keyup.enter="saveFolder"
         autofocus />
     </Modal>
 
     <!-- 移动到收藏夹弹窗 -->
-    <Modal v-model="showMoveModal" :title="`移动所选（${movePendingKeys.length}）到：`" :show-footer="true" ok-text="移动"
+    <Modal v-model="showMoveModal" :title="tr('favorites.moveTitle', { count: movePendingKeys.length })" :show-footer="true" :ok-text="tr('favorites.move')"
       @ok="moveSelectedToFolder" @cancel="showMoveModal = false" width="420px">
       <div class="folder-select-list cczj-flex cczj-flex-col cczj-gap-2">
         <label v-for="folder in folders" :key="folder.id" class="folder-select-item cczj-flex cczj-items-center cczj-gap-2 cczj-p-2 cczj-rounded cczj-cursor-pointer cczj-transition"
@@ -447,7 +459,7 @@ watch([mapping, folders], () => {
           <span class="folder-radio" />
           <Icon :name="folder.default ? 'star' : 'list'" :size="14" />
           <span class="cczj-flex-1">{{ folder.name }}</span>
-          <small class="cczj-text-muted cczj-text-xs">{{favorites.filter((f) => f.folderId === folder.id).length}} 部</small>
+          <small class="cczj-text-muted cczj-text-xs">{{ tr('favorites.videoCount', { count: favorites.filter((f) => f.folderId === folder.id).length }) }}</small>
         </label>
       </div>
     </Modal>

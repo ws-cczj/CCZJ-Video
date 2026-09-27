@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { useRouter, useRoute } from 'vue-router'
 import { useSourceStore } from '../stores/source'
-import { useDevMode } from '../stores/devMode'
 import { useI18n } from 'vue-i18n'
 import { computed } from 'vue'
 import Icon from './Icon.vue'
@@ -9,7 +8,6 @@ import Icon from './Icon.vue'
 const router = useRouter()
 const route = useRoute()
 const sourceStore = useSourceStore()
-const devMode = useDevMode()
 const { t } = useI18n()
 
 interface NavItem {
@@ -21,6 +19,7 @@ interface NavItem {
 const navItems = computed<NavItem[]>(() => [
   { path: '/', label: t('sidebar.home'), icon: 'home' },
   { path: '/search', label: t('sidebar.search'), icon: 'search' },
+  { path: '/recent', label: t('sidebar.recent'), icon: 'clock' },
   { path: '/favorites', label: t('sidebar.favorites'), icon: 'star' },
   { path: '/history', label: t('sidebar.history'), icon: 'clock' },
 ])
@@ -31,8 +30,6 @@ const toolItems = computed<NavItem[]>(() => [
   { path: '/downloads', label: t('sidebar.downloads'), icon: 'download' },
   { path: '/settings', label: t('sidebar.settings'), icon: 'settings' },
 ])
-
-const devItem = computed<NavItem>(() => ({ path: '/dev-admin', label: t('sidebar.devMode'), icon: 'code' }))
 
 function isActive(path: string): boolean {
   if (path === '/') return route.path === '/'
@@ -80,28 +77,10 @@ function isActive(path: string): boolean {
       </button>
     </nav>
 
-    <!-- 开发者模式栏目（密码解锁且手动开启后可见） -->
-    <nav v-if="devMode.enabled" class="nav-section">
-      <div class="section-label cczj-flex cczj-items-center cczj-justify-center cczj-gap-5">
-        <span class="line left cczj-flex-1"></span>
-        <span class="label-text cczj-text-sm cczj-font-bold">{{ t('sidebar.developer') }}</span>
-        <span class="line right cczj-flex-1"></span>
-      </div>
-      <button
-        class="cczj-flex cczj-items-center cczj-gap-6 cczj-w-full cczj-rounded-lg cczj-bg-transparent cczj-text-primary cczj-cursor-pointer cczj-font-semibold cczj-text-left cczj-transition-fast cczj-relative"
-        :class="['nav-item', { active: isActive(devItem.path) }]"
-        @click="router.push(devItem.path)"
-      >
-        <span class="nav-indicator cczj-absolute cczj-left-0 cczj-opacity-0 cczj-transition-fast"></span>
-        <Icon :name="devItem.icon" :size="18" />
-        <span class="nav-label">{{ devItem.label }}</span>
-      </button>
-    </nav>
-
     <div class="sidebar-footer cczj-mt-auto">
       <div class="source-info cczj-flex cczj-items-center cczj-gap-5 cczj-text-13 cczj-text-primary">
         <span class="source-dot cczj-flex-shrink-0 cczj-rounded-50 cczj-transition" :class="{ online: sourceStore.currentSource }"></span>
-        <span class="source-name cczj-truncate cczj-text-secondary cczj-font-medium" @click="devMode.clickSourceName">{{ sourceStore.currentSource?.name || t('sidebar.noSource') }}</span>
+        <span class="source-name cczj-truncate cczj-text-secondary cczj-font-medium">{{ sourceStore.currentSource?.name || t('sidebar.noSource') }}</span>
       </div>
     </div>
   </aside>

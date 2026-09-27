@@ -1,6 +1,7 @@
 <script setup lang="ts">
 defineOptions({ name: 'UpdateModal' })
 import { ref, onMounted, onUnmounted } from 'vue'
+import { tr } from '../locales'
 import {
   CheckUpdate, DownloadUpdate, InstallUpdate, FileExists,
   IgnoreVersion, GetPendingUpdateInfo, ClearPendingUpdateInfo,
@@ -13,7 +14,7 @@ import {
   saveDownloadState, loadDownloadState, clearDownloadState,
 } from '../stores/updateState'
 import Icon from './Icon.vue'
-import { Button, Modal } from './ui'
+import { Button, Modal, MotionTransition } from './ui'
 import { onBackendEvent } from '../api/events'
 
 const errorStore = useErrorStore()
@@ -53,7 +54,7 @@ async function doCheckUpdate(): Promise<void> {
       await checkAlreadyDownloaded(info)
       updateModalOpen.value = true
     } else {
-      errorStore.info('检查更新', `当前已是最新版本 ${info.current_version}`)
+      errorStore.info(tr('update.checking'), tr('update.latestVersion', { version: info.current_version }))
     }
   } catch (e: any) {
     checkFailed.value = true
@@ -82,7 +83,7 @@ async function doDownload(): Promise<void> {
       saveDownloadState(path, updateInfo.value.latest_version, updateInfo.value.download_url)
     }
   } catch (e: any) {
-    errorStore.fromError('下载更新失败', e, 'UpdateModal.downloadUpdate')
+    errorStore.fromError(tr('update.downloadFailed'), e, 'UpdateModal.downloadUpdate')
   } finally {
     updateDownloading.value = false
   }
@@ -98,7 +99,7 @@ async function doInstall(): Promise<void> {
     // Go 的 InstallUpdate 会先读取 pendingUpdateInfo 记录版本号，再清理
     await InstallUpdate(updateDownloadPath.value)
   } catch (e: any) {
-    errorStore.fromError('安装更新失败', e, 'UpdateModal.installUpdate')
+    errorStore.fromError(tr('update.installFailed'), e, 'UpdateModal.installUpdate')
     installing.value = false
   }
 }
@@ -245,7 +246,7 @@ onUnmounted(() => {
 <template>
   <Modal
     :model-value="updateModalOpen"
-    :title="checkFailed ? '获取更新信息失败' : (updateDownloaded ? '下载完成' : (updateDownloading ? '正在下载更新...' : '发现新版本'))"
+    :title="checkFailed ? tr('update.fetchFailed') : (updateDownloaded ? tr('update.downloadedTitle') : (updateDownloading ? tr('update.downloading') : tr('update.foundNew')))"
     width="min(560px, 94vw)"
     :show-footer="true"
     @update:model-value="(v: boolean) => { if (!v) onClose() }"
@@ -258,12 +259,12 @@ onUnmounted(() => {
             <Icon name="alert-circle" :size="28" />
           </div>
           <div class="update-done-text">
-            <p><strong>获取最新版本信息失败</strong></p>
-            <p>可能是无法访问 GitHub 导致的，请尝试手动检查更新。</p>
+            <p><strong>{{ tr('update.fetchFailed') }}</strong></p>
+            <p>{{ tr('update.fetchFailedHint') }}</p>
           </div>
           <div class="update-fail-hint">
-            <p>检查方法：打开 <a href="https://github.com/ws-cczj/CCZJ-Video/releases" target="_blank" class="update-link">软件发布页</a>，查看「Latest」发布的版本号与当前版本对比是否一致。</p>
-            <p>若一致则不必理会，直接关闭即可；否则请手动下载新版本更新。</p>
+            <p>{{ tr('update.howToCheck') }} <a href="https://github.com/ws-cczj/CCZJ-Video/releases" target="_blank" class="update-link">{{ tr('update.releasesPage') }}</a>{{ tr('update.howToCheckTail') }}</p>
+            <p>{{ tr('update.howToCheckEnd') }}</p>
           </div>
         </div>
       </template>
@@ -275,12 +276,12 @@ onUnmounted(() => {
             <Icon name="check" :size="28" />
           </div>
           <div class="update-done-text">
-            <p><strong>更新包已下载完成</strong></p>
+            <p><strong>{{ tr('update.downloadedTitle') }}</strong></p>
             <p class="update-done-path">{{ updateDownloadPath }}</p>
           </div>
           <div class="update-done-hint">
-            <p>点击「立即更新」将关闭当前程序并启动新版本安装程序。</p>
-            <p>也可以点击「下次启动」，下次启动应用时再安装更新。</p>
+            <p>{{ tr('update.downloadedMsg') }}</p>
+            <p>{{ tr('update.downloadedMsg2') }}</p>
           </div>
         </div>
       </template>
@@ -292,23 +293,27 @@ onUnmounted(() => {
             <Icon name="download" :size="24" />
           </div>
           <div class="update-downloading-title">
-            <p><strong>正在下载更新...</strong></p>
-            <p class="update-downloading-sub">下载完成后将提示安装，期间可继续使用软件。</p>
+            <p><strong>{{ tr('update.downloading') }}</strong></p>
+            <p class="update-downloading-sub">{{ tr('update.downloadingMsg') }}</p>
           </div>
           <!-- 进度条（始终显示） -->
           <div class="update-progress-full">
             <div class="progress-track" :class="{ indeterminate: updateDownloadProgress.total <= 0 }">
-              <div class="progress-fill" :style="updateDownloadProgress.total > 0 ? { width: updateDownloadProgress.percent + '%' } : {}"></div>
+              <div
+                class="progress-fill"
+                :class="{ 'cczj-motion-progress-indeterminate': updateDownloadProgress.total <= 0 }"
+                :style="updateDownloadProgress.total > 0 ? { width: updateDownloadProgress.percent + '%' } : {}"
+              ></div>
             </div>
             <div class="progress-meta cczj-flex cczj-justify-between">
-              <span v-if="updateDownloadProgress.downloaded === 0" class="update-connecting">
-                正在连接下载源...
+              <span v-if="updateDownloadProgress.downloaded === 0" class="update-connecting cczj-motion-pulse">
+                {{ tr('update.connecting') }}
               </span>
               <span v-else-if="updateDownloadProgress.total > 0">
                 {{ fmtSize(updateDownloadProgress.downloaded) }} / {{ fmtSize(updateDownloadProgress.total) }} ({{ updateDownloadProgress.percent }}%)
               </span>
               <span v-else>
-                已下载 {{ fmtSize(updateDownloadProgress.downloaded) }}
+                {{ tr('update.downloadedSize', { size: fmtSize(updateDownloadProgress.downloaded) }) }}
               </span>
               <span v-if="updateDownloadProgress.speed_bps > 0">{{ fmtSpeed(updateDownloadProgress.speed_bps) }}</span>
               <span v-else-if="updateDownloadProgress.downloaded > 0" class="update-speed-placeholder">—</span>
@@ -335,13 +340,13 @@ onUnmounted(() => {
 
         <!-- 更新内容 -->
         <div v-if="updateInfo.release_notes" class="update-notes">
-          <h4>更新内容</h4>
+          <h4>{{ tr('update.changelog') }}</h4>
           <div class="update-notes-body">{{ updateInfo.release_notes }}</div>
         </div>
 
         <!-- 历史版本 -->
         <div v-if="updateInfo.history && updateInfo.history.length > 0" class="update-history">
-          <h4>历史版本</h4>
+          <h4>{{ tr('update.history') }}</h4>
           <div v-for="(ver, index) in updateInfo.history" :key="index" class="update-history-item">
             <h5>v{{ ver.version }}</h5>
             <pre>{{ ver.desc }}</pre>
@@ -361,38 +366,38 @@ onUnmounted(() => {
       <template v-if="checkFailed">
         <span style="flex: 1"></span>
         <Button variant="primary" size="md" :loading="updateChecking" @click="doCheckUpdate">
-          <Icon name="refresh" :size="14" /> 重新检查更新
+          <Icon name="refresh" :size="14" /> {{ tr('update.recheck') }}
         </Button>
       </template>
 
       <!-- 下载完成界面按钮 -->
       <template v-else-if="updateDownloaded">
         <Button variant="secondary" size="md" @click="doIgnore">
-          下次启动
+          {{ tr('update.later') }}
         </Button>
         <span style="flex: 1"></span>
         <Button variant="primary" size="md" :loading="installing" @click="doInstall">
-          <Icon name="zap" :size="14" /> 立即更新
+          <Icon name="zap" :size="14" /> {{ tr('update.installNow') }}
         </Button>
       </template>
 
       <!-- 下载中界面按钮 -->
       <template v-else-if="updateDownloading">
-        <span class="bg-hint">下载将在后台继续</span>
+        <span class="bg-hint">{{ tr('update.bgNote') }}</span>
         <span style="flex: 1"></span>
         <Button variant="secondary" size="md" @click="updateModalOpen = false">
-          后台下载
+          {{ tr('update.bgDownload') }}
         </Button>
       </template>
 
       <!-- 更新信息界面按钮 -->
       <template v-else>
         <Button variant="secondary" size="md" @click="doIgnore">
-          忽略此版本
+          {{ tr('update.ignore') }}
         </Button>
         <span style="flex: 1"></span>
         <Button variant="primary" size="md" @click="doDownload">
-          <Icon name="download" :size="14" /> 下载更新
+          <Icon name="download" :size="14" /> {{ tr('update.download') }}
         </Button>
       </template>
     </template>
@@ -400,7 +405,7 @@ onUnmounted(() => {
 
   <!-- 后台下载悬浮指示器（当弹窗关闭但正在下载时显示） -->
   <Teleport to="body">
-    <Transition name="bg-download-fade">
+    <MotionTransition preset="slide-up">
       <div
         v-if="updateDownloading && !updateModalOpen"
         class="bg-download-indicator"
@@ -410,19 +415,19 @@ onUnmounted(() => {
           <Icon name="download" :size="14" />
         </div>
         <div class="bg-download-info">
-          <span class="bg-download-title">{{ updateDownloadProgress.downloaded === 0 ? '正在连接下载源...' : '正在下载更新' }}</span>
+          <span class="bg-download-title">{{ updateDownloadProgress.downloaded === 0 ? tr('update.connecting') : tr('update.downloadingShort') }}</span>
           <span v-if="updateDownloadProgress.total > 0 && updateDownloadProgress.downloaded > 0" class="bg-download-pct">{{ updateDownloadProgress.percent }}%</span>
           <span v-else class="bg-download-pct">...</span>
         </div>
         <div class="bg-download-track">
           <div
             class="bg-download-fill"
-            :class="{ indeterminate: updateDownloadProgress.total <= 0 }"
+            :class="{ 'cczj-motion-progress-indeterminate': updateDownloadProgress.total <= 0 }"
             :style="updateDownloadProgress.total > 0 ? { width: updateDownloadProgress.percent + '%' } : {}"
           ></div>
         </div>
       </div>
-    </Transition>
+    </MotionTransition>
   </Teleport>
 </template>
 
@@ -442,20 +447,11 @@ onUnmounted(() => {
 .update-progress-full .progress-track { height: 8px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; margin-bottom: 8px; position: relative; }
 .update-progress-full .progress-track.indeterminate .progress-fill {
   width: 30%;
-  animation: indeterminate-slide 1.5s ease-in-out infinite;
 }
-.update-progress-full .progress-fill { height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.3s ease; }
+.update-progress-full .progress-fill { height: 100%; background: var(--accent); border-radius: 4px; transition: width var(--cczj-motion-normal) var(--cczj-motion-ease-standard); }
 .update-progress-full .progress-meta { font-size: 0.86rem; color: var(--text-muted); }
-.update-connecting { color: var(--text-muted); animation: connecting-pulse 1.5s ease-in-out infinite; }
-@keyframes connecting-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
+.update-connecting { color: var(--text-muted); }
 .update-speed-placeholder { visibility: hidden; }
-@keyframes indeterminate-slide {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(400%); }
-}
 .update-file-info { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; font-size: 0.86rem; }
 .update-file-name { color: var(--text-primary); font-family: ui-monospace, Menlo, Monaco, Consolas, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; margin-right: 12px; }
 .update-file-size { color: var(--text-muted); flex-shrink: 0; }
@@ -520,7 +516,7 @@ onUnmounted(() => {
   background: var(--accent); color: var(--accent-contrast);
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
-  animation: cczj-spin 2s linear infinite;
+  animation: cczj-spin var(--cczj-motion-emphasis) linear infinite;
 }
 .bg-download-info {
   display: flex; flex-direction: column; flex: 1; min-width: 0;
@@ -532,15 +528,11 @@ onUnmounted(() => {
   height: 3px; background: var(--bg-secondary); border-radius: 2px; overflow: hidden;
 }
 .bg-download-fill {
-  height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.4s ease;
+  height: 100%; background: var(--accent); border-radius: 2px; transition: width var(--cczj-motion-normal) var(--cczj-motion-ease-standard);
 }
-.bg-download-fill.indeterminate {
+.bg-download-fill.cczj-motion-progress-indeterminate {
   width: 30%;
-  animation: indeterminate-slide 1.5s ease-in-out infinite;
 }
 
 /* 后台指示器过渡动画 */
-.bg-download-fade-enter-active { transition: all 0.3s ease; }
-.bg-download-fade-leave-active { transition: all 0.2s ease; }
-.bg-download-fade-enter-from, .bg-download-fade-leave-to { opacity: 0; transform: translateY(10px) scale(0.95); }
 </style>

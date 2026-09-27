@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { GetVideoDetail } from '../api/app'
+import { tr } from '../locales'
 import type { Video } from '../types'
 import { readStorage, removeStorage, writeStorage } from '../platform/storage'
 
@@ -208,6 +209,7 @@ export const usePosterCacheStore = defineStore('posterCache', () => {
         const resp = (await GetVideoDetail({
           source_key: sourceKey,
           vod_id: vodId,
+          global_id: 0,
           refresh: false,
         })) as { video?: Video | null } | null | undefined
         const v = resp?.video
@@ -230,7 +232,7 @@ export const usePosterCacheStore = defineStore('posterCache', () => {
   }
 
   /** 便利函数：仅获取名称（同步，会刷新访问时间） */
-  function getName(sourceKey: string, vodId: string, fallback = '未命名视频'): string {
+  function getName(sourceKey: string, vodId: string, fallback = tr('common.unnamedVideo')): string {
     const entry = get(sourceKey, vodId)
     return entry?.vod_name || fallback
   }

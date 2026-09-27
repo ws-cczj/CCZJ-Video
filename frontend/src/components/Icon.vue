@@ -387,6 +387,25 @@ defineProps<{ name: string; size?: number }>()
       <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
     </g>
 
+    <!-- 终端 / 日志 -->
+    <g v-else-if="name === 'terminal'">
+      <polyline points="4 17 10 11 4 5" />
+      <line x1="12" y1="19" x2="20" y2="19" />
+    </g>
+
+    <!-- 文件夹 -->
+    <g v-else-if="name === 'folder'">
+      <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
+    </g>
+
+    <!-- 文档 -->
+    <g v-else-if="name === 'file-text'">
+      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="16" y1="13" x2="8" y2="13" />
+      <line x1="16" y1="17" x2="8" y2="17" />
+    </g>
+
     <!-- fallback -->
     <g v-else>
       <circle cx="12" cy="12" r="8" />

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useErrorStore, type ErrorItem } from '../stores/error'
-import { Toast } from './ui'
+import { MotionList, Toast } from './ui'
 
 const errorStore = useErrorStore()
 
@@ -20,7 +20,7 @@ function dismiss(id: string): void {
 
 <template>
   <div v-if="visible.length > 0" class="toast-stack" aria-live="polite">
-    <transition-group name="toast" tag="div" class="toast-stack__list">
+    <MotionList preset="toast" tag="div" class="toast-stack__list">
       <Toast
         v-for="t in visible"
         :key="t.id"
@@ -32,7 +32,7 @@ function dismiss(id: string): void {
       >
         <div v-if="t.message" class="toast-message">{{ t.message }}</div>
       </Toast>
-    </transition-group>
+    </MotionList>
   </div>
 </template>
 
@@ -59,22 +59,4 @@ function dismiss(id: string): void {
   word-break: break-word;
 }
 
-/* 过渡动画 */
-.toast-enter-from {
-  opacity: 0;
-  transform: translateX(60px);
-}
-.toast-enter-active {
-  transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.2, 0.8, 0.3, 1);
-}
-.toast-leave-to {
-  opacity: 0;
-  transform: translateX(60px);
-}
-.toast-leave-active {
-  transition: opacity 0.25s ease, transform 0.25s ease;
-}
-.toast-move {
-  transition: transform 0.3s ease;
-}
 </style>

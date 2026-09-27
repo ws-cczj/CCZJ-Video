@@ -122,28 +122,6 @@ export class Source {
         }
         if (/** @type {any} */(false)) {
             /**
-             * === 以下为兼容旧字段（逐步废弃），读 DB 后自动展开到 AdvConfig ===
-             * @member
-             * @type {string | undefined}
-             */
-            this["url_template"] = undefined;
-        }
-        if (/** @type {any} */(false)) {
-            /**
-             * @member
-             * @type {string | undefined}
-             */
-            this["url_prefix"] = undefined;
-        }
-        if (/** @type {any} */(false)) {
-            /**
-             * @member
-             * @type {string | undefined}
-             */
-            this["url_suffix"] = undefined;
-        }
-        if (/** @type {any} */(false)) {
-            /**
              * @member
              * @type {number | undefined}
              */
@@ -558,6 +536,15 @@ export class Video {
              * @type {string}
              */
             this["vod_en"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * 目录命中态：搜索结果已存在于本地 source_videos 时为 true。
+             * 派生字段，只用于前端标识"已入库"，不参与任何表的读写。
+             * @member
+             * @type {boolean | undefined}
+             */
+            this["in_catalog"] = undefined;
         }
 
         Object.assign(this, $$source);

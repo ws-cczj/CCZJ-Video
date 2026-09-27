@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { tr } from '../locales'
 import { ref, computed } from 'vue'
 import { GetAllSources, GetSourceStats, GetSetting, SetSetting } from '../api/app'
 import { useErrorStore } from './error'
@@ -11,9 +12,6 @@ interface SourceRow {
   source_key?: string
   name: string
   api_url: string
-  url_template?: string
-  url_prefix?: string
-  url_suffix?: string
   collect_limit?: number
   collect_hours?: number
   enabled?: number | boolean
@@ -49,7 +47,7 @@ export const useSourceStore = defineStore('source', () => {
         }
       }
     } catch (e) {
-      useErrorStore().fromError('加载源站列表失败', e)
+      useErrorStore().fromError(tr('errors.loadSourcesFailed'), e)
     } finally {
       loading.value = false
     }

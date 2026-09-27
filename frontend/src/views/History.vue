@@ -1,12 +1,14 @@
 <script setup lang="ts">
 defineOptions({ name: 'History' })
-import { ref, onMounted, onActivated, computed } from 'vue'
+import { ref, onMounted, onActivated, onDeactivated, computed } from 'vue'
+import { tr } from '../locales'
 import { useRouter } from 'vue-router'
 import { GetRecentHistory, DeleteHistoryByVideo, ClearAllHistory } from '../api/app'
 import { usePosterCacheStore } from '../stores/posterCache'
 import Icon from '../components/Icon.vue'
+import RemoteImage from '../components/RemoteImage.vue'
 import { Button, Badge, Spinner as LoadingSpinner, Empty as EmptyState } from '../components/ui'
-import { formatTime } from '../utils'
+import { formatTime, getDetailPath } from '../utils'
 import { epProgressKey, getEpProgress, getEpProgressPct } from '../utils/episodeProgress'
 import type { HistoryItem } from '../types'
 
@@ -35,8 +37,19 @@ async function reloadHistory(): Promise<void> {
   await hydrateMissingPosters()
 }
 
+let wasDeactivated = false
+
 onMounted(() => { reloadHistory() })
-onActivated(() => { if (!manageMode.value) reloadHistory() })
+
+// KeepAlive also activates right after mounting; loading only on a real return
+// avoids fetching the history twice.
+onActivated(() => {
+  if (!wasDeactivated) return
+  wasDeactivated = false
+  if (!manageMode.value) reloadHistory()
+})
+
+onDeactivated(() => { wasDeactivated = true })
 
 /**
  * 对没有名称或封面的历史项，异步从详情接口补齐信息。
@@ -175,7 +188,7 @@ async function deleteSelected(): Promise<void> {
 }
 
 async function clearAll(): Promise<void> {
-  if (!window.confirm('确定要清空所有观看历史吗？此操作不可撤销。')) return
+  if (!window.confirm(tr('history.confirmClear'))) return
   batchRemoving.value = true
   try {
     await ClearAllHistory()
@@ -202,16 +215,16 @@ function formatDateKey(ts?: string | number): string {
 }
 
 function formatGroupLabel(key: string): string {
-  if (key === 'unknown') return '更早'
+  if (key === 'unknown') return tr('history.earlier')
   const today = new Date()
   const todayKey = formatDateKey(today.getTime() / 1000)
-  if (key === todayKey) return '今天'
+  if (key === todayKey) return tr('history.today')
   const yesterday = new Date(today.getTime() - 86400000)
   const yesterdayKey = formatDateKey(yesterday.getTime() / 1000)
-  if (key === yesterdayKey) return '昨天'
+  if (key === yesterdayKey) return tr('history.yesterday')
   const parts = key.split('-')
   if (parts.length === 3) {
-    return `${parseInt(parts[1])}月${parseInt(parts[2])}日`
+    return tr('history.monthDay', { month: parseInt(parts[1]), day: parseInt(parts[2]) })
   }
   return key
 }
@@ -227,19 +240,19 @@ function formatRelativeTime(ts?: string | number): string {
   if (isNaN(timestamp)) return ''
   const diff = Date.now() - timestamp
   const minutes = Math.floor(diff / 60000)
-  if (minutes < 1) return '刚刚'
-  if (minutes < 60) return `${minutes} 分钟前`
+  if (minutes < 1) return tr('common.justNow')
+  if (minutes < 60) return tr('common.minutesAgo', { n: minutes })
   const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours} 小时前`
+  if (hours < 24) return tr('common.hoursAgo', { n: hours })
   const days = Math.floor(hours / 24)
-  if (days < 7) return `${days} 天前`
+  if (days < 7) return tr('common.daysAgo', { n: days })
   return formatTime(String(ts))
 }
 
 function resolveName(h: HistoryItem): string {
   if (h.vod_name) return h.vod_name
   const cached = posterCache.get(h.source_key, h.vod_id)
-  return cached?.vod_name || '未命名视频'
+  return cached?.vod_name || tr('history.unnamedVideo')
 }
 
 function resolvePic(h: HistoryItem): string {
@@ -257,7 +270,7 @@ function goDetail(h: HistoryItem): void {
     return
   }
   posterCache.recordClick(h.source_key, h.vod_id)
-  router.push(`/detail/${h.source_key}/${h.vod_id}`)
+  router.push(getDetailPath(h.source_key, { global_id: h.global_id, vod_id: h.vod_id }))
 }
 </script>
 
@@ -265,40 +278,40 @@ function goDetail(h: HistoryItem): void {
   <div class="history-page cczj-max-w-full cczj-text-primary">
     <div class="page-header cczj-flex cczj-items-start cczj-justify-between cczj-gap-8 cczj-mb-12 cczj-pb-8 cczj-border-bottom">
       <div class="page-header-left cczj-min-w-0 cczj-flex-1">
-        <h2 class="cczj-inline-flex cczj-items-center cczj-gap-5 cczj-text-primary cczj-font-bold cczj-mb-2"><Icon name="clock" :size="20" /> 观看历史</h2>
+        <h2 class="cczj-inline-flex cczj-items-center cczj-gap-5 cczj-text-primary cczj-font-bold cczj-mb-2"><Icon name="clock" :size="20" /> {{ tr('history.title') }}</h2>
         <p class="desc cczj-text-muted cczj-mt-1" v-if="dedupedHistory.length > 0 && !manageMode">
-          最近观看了 {{ dedupedHistory.length }} 个视频{{ searchKeyword ? `（搜索结果 ${filteredHistory.length} 个）` : '' }}
+          {{ tr('history.viewedCount', { count: dedupedHistory.length }) }}{{ searchKeyword ? tr('history.searchResultCount', { count: filteredHistory.length }) : '' }}
         </p>
-        <p class="desc cczj-text-muted cczj-mt-1" v-else-if="manageMode">已选 {{ selectedKeys.size }} 条</p>
-        <p class="desc cczj-text-muted cczj-mt-1" v-else>还没有观看记录，去首页看看有什么精彩内容</p>
+        <p class="desc cczj-text-muted cczj-mt-1" v-else-if="manageMode">{{ tr('history.selectedCount', { count: selectedKeys.size }) }}</p>
+        <p class="desc cczj-text-muted cczj-mt-1" v-else>{{ tr('history.emptyHint') }}</p>
       </div>
       <div class="page-header-actions cczj-flex cczj-items-center cczj-gap-2 cczj-flex-shrink-0">
         <template v-if="!manageMode">
           <div class="search-box cczj-inline-flex cczj-items-center cczj-gap-4 cczj-px-3 cczj-py-2 cczj-rounded cczj-border cczj-bg-card">
             <Icon name="search" :size="14" class="cczj-text-muted" />
-            <input v-model="searchKeyword" type="text" placeholder="搜索视频名称或来源..." class="cczj-bg-transparent cczj-outline-none cczj-flex-1 cczj-text-primary" />
+            <input v-model="searchKeyword" type="text" :placeholder="tr('history.searchPlaceholder')" class="cczj-bg-transparent cczj-outline-none cczj-flex-1 cczj-text-primary" />
           </div>
           <Button v-if="dedupedHistory.length > 0" variant="ghost" size="sm" @click="enterManageMode">
             <Icon name="settings" :size="14" />
-            <span>管理</span>
+            <span>{{ tr('common.manage') }}</span>
           </Button>
         </template>
         <template v-else>
           <Button variant="secondary" size="sm" @click="toggleSelectAll">
             <Icon name="check" :size="14" />
-            <span>{{ allSelected ? '取消全选' : '全选' }}</span>
+            <span>{{ allSelected ? tr('common.cancelSelectAll') : tr('common.selectAll') }}</span>
           </Button>
           <Button variant="danger" size="sm" @click="deleteSelected" :disabled="selectedKeys.size === 0 || batchRemoving">
             <Icon name="trash" :size="14" />
-            <span>删除所选</span>
+            <span>{{ tr('common.deleteSelected') }}</span>
           </Button>
           <Button variant="ghost" size="sm" @click="clearAll" :disabled="batchRemoving">
             <Icon name="x" :size="14" />
-            <span>清空全部</span>
+            <span>{{ tr('history.clearAll') }}</span>
           </Button>
           <Button variant="primary" size="sm" @click="exitManage">
             <Icon name="check-circle" :size="14" />
-            <span>完成</span>
+            <span>{{ tr('common.done') }}</span>
           </Button>
         </template>
       </div>
@@ -306,17 +319,17 @@ function goDetail(h: HistoryItem): void {
 
     <!-- 加载状态 -->
     <div v-if="loading" class="loading-wrap cczj-flex cczj-justify-center cczj-items-center cczj-py-12">
-      <LoadingSpinner label="加载历史记录中..." />
+      <LoadingSpinner :label="tr('history.loading')" />
     </div>
 
     <!-- 空状态 -->
     <div v-else-if="dedupedHistory.length === 0">
       <EmptyState
         icon="📺"
-        title="暂无观看记录"
-        description="在视频详情页开始观看就会出现在这里"
+        :title="tr('history.emptyTitle')"
+        :description="tr('history.emptyStateDesc')"
       >
-        <Button variant="primary" @click="router.push('/')">去首页看看</Button>
+        <Button variant="primary" @click="router.push('/')">{{ tr('history.goHome') }}</Button>
       </EmptyState>
     </div>
 
@@ -325,7 +338,7 @@ function goDetail(h: HistoryItem): void {
       <div v-for="group in groupedByDate" :key="group.label" class="history-group cczj-flex cczj-flex-col cczj-gap-5">
         <div class="group-header cczj-flex cczj-items-center cczj-justify-between cczj-gap-6 cczj-mb-3 cczj-px-2">
           <span class="group-label cczj-text-lg cczj-font-semibold cczj-text-primary">{{ group.label }}</span>
-          <span class="group-count cczj-text-sm cczj-text-muted">{{ group.items.length }} 条记录</span>
+          <span class="group-count cczj-text-sm cczj-text-muted">{{ tr('history.recordCount', { count: group.items.length }) }}</span>
         </div>
 
         <div class="history-cards cczj-grid cczj-gap-7">
@@ -346,7 +359,7 @@ function goDetail(h: HistoryItem): void {
               <span class="check-mark" />
             </label>
             <div class="poster cczj-relative cczj-overflow-hidden cczj-flex-shrink-0 cczj-bg-secondary cczj-border">
-              <img
+              <RemoteImage
                 v-if="resolvePic(h)"
                 :src="resolvePic(h)"
                 :alt="resolveName(h)"
@@ -367,7 +380,7 @@ function goDetail(h: HistoryItem): void {
             <div class="info cczj-flex-1 cczj-flex cczj-flex-col cczj-gap-4 cczj-min-w-0">
               <span class="title cczj-text-base cczj-font-semibold cczj-line-clamp-2 cczj-text-primary">{{ resolveName(h) }}</span>
               <div class="meta-row cczj-flex cczj-flex-wrap cczj-gap-3">
-                <Badge variant="primary">看到第 {{ h.ep_num }} 集</Badge>
+                <Badge variant="primary">{{ tr('history.epProgress', { num: h.ep_num }) }}</Badge>
                 <Badge v-if="getWatchPct(h) > 0" variant="success">{{ getWatchPct(h) }}%</Badge>
                 <Badge>{{ h.source_key }}</Badge>
               </div>

@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
+import { tr } from '../locales'
 import { ref, computed } from 'vue'
-import { StartCollect, PauseCollect, ResumeCollect, StopCollect, GetCollectSchedule, SetCollectSchedule, TriggerCollectNow, StopBackgroundCollect, SetSourceSchedule } from '../api/app'
+import { StartCollect, PauseCollect, ResumeCollect, StopCollect, GetCollectSchedule, SetCollectSchedule, TriggerCollectNow, StopBackgroundCollect, SetSourceSchedule, GetCollectStatus } from '../api/app'
 import { useErrorStore } from './error'
 import { appEvent } from '../event'
 import { onBackendEvent } from '../api/events'
@@ -28,6 +29,8 @@ export interface SchedulerStatus {
   background_every_seconds: number
   source_gap_seconds: number
   page_gap_seconds: number
+  startup_catchup: boolean
+  initial_full_collect: boolean
   last_exit_unix: number
   last_run_unix: number
   now_unix: number
@@ -63,6 +66,20 @@ export interface SourceCollectState {
   videoTotal: number       // 预估视频总数
   speed: number            // 速度: 页/秒
   etaSeconds: number       // 预估剩余秒数
+}
+
+// 后端采集状态快照（GetCollectStatus 的原始返回 + 拉取时刻）
+export interface BackendCollectStatus {
+  source_key: string
+  running: boolean
+  paused: boolean
+  mode: string
+  current: number
+  total: number
+  page: number
+  names: string[]
+  log: string
+  syncedAt: number
 }
 
 type CollectMode = 'full' | 'incremental' | 'once'
@@ -166,7 +183,10 @@ export const useCollectStore = defineStore('collect', () => {
     total.value = st.total
     page.value = st.page
     pageNames.value = st.pageNames
-    log.value = st.log
+    // Copy rather than alias: `log.value = st.log` made the global log and the
+    // per-source log the same array, so every line the handlers below append twice
+    // showed up twice, and scheduler messages leaked into the source's own log.
+    log.value = st.log.slice()
     error.value = st.error
     done.value = st.done
     startTime.value = st.startTime
@@ -181,6 +201,53 @@ export const useCollectStore = defineStore('collect', () => {
     const st = sourceStates.value.get(key)
     if (!st || st.total <= 0) return 0
     return Math.round((st.current / st.total) * 100)
+  }
+
+  // === 后端权威状态 ===
+  // 事件流是"尽力而为"的：页面重挂载、后端单独被调度器驱动时前端会漏掉进度。
+  // 这里直连 GetCollectStatus，既用于展示明细，也用于把前端状态校正回真实值。
+  const backendStatus = ref<Record<string, BackendCollectStatus>>({})
+
+  async function syncFromBackend(key: string): Promise<BackendCollectStatus | null> {
+    if (!key) return null
+    let raw: any
+    try {
+      raw = await GetCollectStatus(key)
+    } catch {
+      return null
+    }
+    if (!raw) return null
+    const snapshot: BackendCollectStatus = {
+      source_key: raw.source_key || key,
+      running: !!raw.running,
+      paused: !!raw.paused,
+      mode: raw.mode || '',
+      current: Number(raw.current) || 0,
+      total: Number(raw.total) || 0,
+      page: Number(raw.page) || 0,
+      names: Array.isArray(raw.names) ? raw.names : [],
+      log: raw.log || '',
+      syncedAt: Date.now(),
+    }
+    backendStatus.value = { ...backendStatus.value, [key]: snapshot }
+
+    const st = getState(key)
+    st.running = snapshot.running
+    st.paused = snapshot.paused
+    st.current = snapshot.current
+    st.total = snapshot.total
+    st.page = snapshot.page
+    st.pageNames = snapshot.names
+    if (snapshot.mode) st.mode = snapshot.mode
+    if (snapshot.running && !st.startTime) st.startTime = Date.now()
+    if (!snapshot.running) st.done = false
+    syncGlobalFromState(st)
+    return snapshot
+  }
+
+  // 批量校正：事件流只覆盖"页面在线时"的推送，重进页面需拉一次权威快照
+  async function syncAllFromBackend(keys: string[]): Promise<void> {
+    await Promise.all(keys.map(k => syncFromBackend(k)))
   }
 
   // 记录上一次 progress 事件的时间和页码，用于计算速度
@@ -254,9 +321,9 @@ export const useCollectStore = defineStore('collect', () => {
     st.done = true
     st.error = data.error || ''
     if (!st.error) {
-      st.log.push('采集完成!')
+      st.log.push(tr('sources.collectDone'))
     } else {
-      st.log.push('采集出错: ' + st.error)
+      st.log.push(tr('sources.collectError', { error: st.error }))
     }
     if (data.source_key === sourceKey.value) {
       running.value = false
@@ -264,9 +331,9 @@ export const useCollectStore = defineStore('collect', () => {
       done.value = true
       error.value = data.error || ''
       if (!error.value) {
-        log.value.push('采集完成!')
+        log.value.push(tr('sources.collectDone'))
       } else {
-        log.value.push('采集出错: ' + error.value)
+        log.value.push(tr('sources.collectError', { error: error.value }))
       }
     }
 
@@ -293,7 +360,7 @@ export const useCollectStore = defineStore('collect', () => {
     st.total = 0
     st.page = 0
     st.pageNames = []
-    st.log = [`启动${modeLabel(collectMode)}...`]
+    st.log = [tr('sources.startCollecting', { mode: modeLabel(collectMode) })]
     st.error = ''
     st.startTime = Date.now()
 
@@ -305,8 +372,8 @@ export const useCollectStore = defineStore('collect', () => {
     } catch (e) {
       st.running = false
       st.paused = false
-      st.error = (e as Error)?.toString() || '未知错误'
-      st.log.push('启动失败: ' + st.error)
+      st.error = (e as Error)?.toString() || tr('sources.unknownError')
+      st.log.push(tr('sources.startFailed', { error: st.error }))
       syncGlobalFromState(st)
     }
   }
@@ -319,12 +386,12 @@ export const useCollectStore = defineStore('collect', () => {
       if (ok) {
         const st = getState(k)
         st.paused = true
-        st.log.push('已暂停')
+        st.log.push(tr('downloads.paused'))
         if (k === sourceKey.value) paused.value = true
       }
       return ok
     } catch (e) {
-      getState(k).log.push('暂停失败: ' + (e as Error).message)
+      getState(k).log.push(tr('sources.pauseFailed', { error: (e as Error).message }))
       return false
     }
   }
@@ -337,12 +404,12 @@ export const useCollectStore = defineStore('collect', () => {
       if (ok) {
         const st = getState(k)
         st.paused = false
-        st.log.push('已恢复')
+        st.log.push(tr('sources.resumed'))
         if (k === sourceKey.value) paused.value = false
       }
       return ok
     } catch (e) {
-      getState(k).log.push('恢复失败: ' + (e as Error).message)
+      getState(k).log.push(tr('sources.resumeFailed', { error: (e as Error).message }))
       return false
     }
   }
@@ -356,7 +423,7 @@ export const useCollectStore = defineStore('collect', () => {
         const st = getState(k)
         st.running = false
         st.paused = false
-        st.log.push('已停止')
+        st.log.push(tr('sources.stopped'))
         if (k === sourceKey.value) {
           running.value = false
           paused.value = false
@@ -364,7 +431,7 @@ export const useCollectStore = defineStore('collect', () => {
       }
       return ok
     } catch (e) {
-      getState(k).log.push('停止失败: ' + (e as Error).message)
+      getState(k).log.push(tr('sources.stopFailed', { error: (e as Error).message }))
       return false
     }
   }
@@ -379,13 +446,13 @@ export const useCollectStore = defineStore('collect', () => {
         enable_background: !!status.background,
         background_interval_seconds: Math.max(30, everySec),
         background_interval_minutes: Math.floor(everySec / 60),
-        enable_startup_catchup: true,
-        enable_initial_full_collect: false,
+        enable_startup_catchup: !!status.startup_catchup,
+        enable_initial_full_collect: !!status.initial_full_collect,
         source_gap_seconds: Number(status.source_gap_seconds) || 10,
         page_gap_seconds: Number(status.page_gap_seconds) || 30,
       }
     } catch (e) {
-      useErrorStore().fromError('加载采集调度配置失败', e)
+      useErrorStore().fromError(tr('errors.loadSchedulerFailed'), e)
     }
   }
 
@@ -404,23 +471,23 @@ export const useCollectStore = defineStore('collect', () => {
     try {
       await TriggerCollectNow({ source_key: sourceKey || '', mode: collectMode, hours })
       if (sourceKey) {
-        log.value.push('已触发采集: ' + sourceKey + ' (' + modeLabel(collectMode) + ')')
+        log.value.push(tr('sources.triggered', { key: sourceKey, mode: modeLabel(collectMode) }))
       } else {
-        log.value.push('已触发一次全量采集')
+        log.value.push(tr('sources.triggeredFull'))
       }
       await loadSchedule()
     } catch (e) {
-      log.value.push('触发失败: ' + (e as Error).message)
+      log.value.push(tr('sources.triggerFailed', { error: (e as Error).message }))
     }
   }
 
   async function stopBackground(): Promise<void> {
     try {
       await StopBackgroundCollect()
-      log.value.push('已停止后台周期采集')
+      log.value.push(tr('sources.stoppedBackground'))
       await loadSchedule()
     } catch (e) {
-      log.value.push('停止后台采集失败: ' + (e as Error).message)
+      log.value.push(tr('sources.stopBackgroundFailed', { error: (e as Error).message }))
     }
   }
 
@@ -428,10 +495,10 @@ export const useCollectStore = defineStore('collect', () => {
   async function saveSourceSchedule(sourceKey: string, enabled: boolean, mode: string, intervalMin: number): Promise<void> {
     try {
       await SetSourceSchedule({ source_key: sourceKey, enabled, mode, interval_min: intervalMin })
-      log.value.push(`[${sourceKey}] 后台采集配置已更新`)
+      log.value.push(tr('sources.sourceScheduleUpdated', { key: sourceKey }))
       await loadSchedule()
     } catch (e) {
-      log.value.push('配置保存失败: ' + (e as Error).message)
+      log.value.push(tr('sources.saveConfigFailed', { error: (e as Error).message }))
     }
   }
 
@@ -444,27 +511,27 @@ export const useCollectStore = defineStore('collect', () => {
 
   function elapsedStr(key: string): string {
     const s = elapsed(key)
-    if (s < 60) return s + '秒'
+    if (s < 60) return s + tr('common.unitSecond')
     const m = Math.floor(s / 60)
     const rs = s % 60
-    if (m < 60) return m + '分' + rs + '秒'
+    if (m < 60) return m + tr('common.unitMinute') + rs + tr('common.unitSecond')
     const h = Math.floor(m / 60)
-    return h + '时' + (m % 60) + '分'
+    return h + tr('common.unitHour') + (m % 60) + tr('common.unitMinute')
   }
 
   function speedStr(key: string): string {
     const st = sourceStates.value.get(key)
     if (!st || st.speed <= 0) return '--'
-    return st.speed + ' 页/秒'
+    return st.speed + ' ' + tr('common.pagesPerSecond')
   }
 
   function etaStr(key: string): string {
     const st = sourceStates.value.get(key)
     if (!st || st.etaSeconds <= 0) return '--'
     const s = st.etaSeconds
-    if (s < 60) return s + '秒'
-    if (s < 3600) return Math.floor(s / 60) + '分' + (s % 60) + '秒'
-    return Math.floor(s / 3600) + '时' + Math.floor((s % 3600) / 60) + '分'
+    if (s < 60) return s + tr('common.unitSecond')
+    if (s < 3600) return Math.floor(s / 60) + tr('common.unitMinute') + (s % 60) + tr('common.unitSecond')
+    return Math.floor(s / 3600) + tr('common.unitHour') + Math.floor((s % 3600) / 60) + tr('common.unitMinute')
   }
 
   return {
@@ -488,10 +555,13 @@ export const useCollectStore = defineStore('collect', () => {
     scheduleSaving,
     // 每源状态
     sourceStates,
+    backendStatus,
     // 方法
     startCollect,
     getState,
     progressFor,
+    syncFromBackend,
+    syncAllFromBackend,
     pause: pauseCollect,
     resume,
     stop,
@@ -511,9 +581,9 @@ export const useCollectStore = defineStore('collect', () => {
 
 function modeLabel(m: string): string {
   switch (m) {
-    case 'full': return '全量采集'
-    case 'incremental': return '增量采集'
-    case 'once': return '单次采集'
+    case 'full': return tr('sources.modeFull')
+    case 'incremental': return tr('sources.modeIncremental')
+    case 'once': return tr('sources.modeOnce')
     default: return m
   }
 }

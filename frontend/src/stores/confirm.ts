@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { tr } from '../locales'
 
 export interface ConfirmPayload {
   title?: string
@@ -23,10 +24,10 @@ export const useConfirmStore = defineStore('confirm', () => {
         active.value.resolve(false)
       }
       active.value = {
-        title: p.title || '操作确认',
+        title: p.title || tr('confirm.title'),
         message: p.message || '',
-        okText: p.okText || '确认',
-        cancelText: p.cancelText || '取消',
+        okText: p.okText || tr('common.confirm'),
+        cancelText: p.cancelText || tr('common.cancel'),
         level: p.level || 'warn',
         resolve,
       }

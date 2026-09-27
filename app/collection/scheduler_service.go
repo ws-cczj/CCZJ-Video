@@ -68,6 +68,8 @@ func (s *SchedulerService) SetConfig(cfg handler.CollectScheduleConfig) (handler
 	if cfg.EnableBackground {
 		scheduler.Stop()
 		scheduler.Start()
+	} else {
+		scheduler.Stop()
 	}
 	return handler.GetScheduleConfig(), nil
 }
@@ -137,6 +139,22 @@ func (s *SchedulerService) TriggerDouban() (int, error) {
 // DoubanStatus returns scheduler and update state.
 func (s *SchedulerService) DoubanStatus() (running, updating bool) {
 	return s.douban.IsRunning(), s.douban.Updater().IsRunning()
+}
+
+// DoubanSchedule reports the completion polling cadence: interval, whether the
+// scheduler is running, and the last/next tick. The UI needs the next tick to
+// show how long the Douban queue will stay idle.
+func (s *SchedulerService) DoubanSchedule() (interval time.Duration, running bool, lastTick, nextTick time.Time) {
+	interval, lastTick, nextTick = s.douban.Schedule()
+	return interval, s.douban.IsRunning(), lastTick, nextTick
+}
+
+// SetDoubanInterval changes the completion polling cadence at runtime and
+// returns the value actually applied (the scheduler clamps very short intervals).
+func (s *SchedulerService) SetDoubanInterval(d time.Duration) time.Duration {
+	s.douban.SetInterval(d)
+	interval, _, _ := s.douban.Schedule()
+	return interval
 }
 
 func (s *SchedulerService) collectionScheduler(ctx context.Context) *handler.Scheduler {

@@ -39,14 +39,14 @@ func TestHLSServeRewritesPlaylistAndStreamsMedia(t *testing.T) {
 		return &http.Response{StatusCode: http.StatusPartialContent, Header: http.Header{"Content-Type": []string{"video/mp2t"}, "Content-Range": []string{"bytes 0-2/3"}}, Body: io.NopCloser(strings.NewReader("abc"))}, nil
 	})
 
-	playlistRequest := httptest.NewRequest(http.MethodGet, "http://wails.localhost"+s.URL("https://example.com/index.m3u8"), nil)
+	playlistRequest := httptest.NewRequest(http.MethodGet, "http://wails.localhost"+s.URL("https://1.1.1.1/index.m3u8"), nil)
 	playlistRecorder := httptest.NewRecorder()
 	s.ServeHTTP(playlistRecorder, playlistRequest)
-	if playlistRecorder.Code != http.StatusOK || !strings.Contains(playlistRecorder.Body.String(), s.URL("https://example.com/segment.ts")) {
+	if playlistRecorder.Code != http.StatusOK || !strings.Contains(playlistRecorder.Body.String(), s.URL("https://1.1.1.1/segment.ts")) {
 		t.Fatalf("playlist was not rewritten: status=%d body=%s", playlistRecorder.Code, playlistRecorder.Body.String())
 	}
 
-	mediaRequest := httptest.NewRequest(http.MethodGet, "http://wails.localhost"+s.URL("https://example.com/segment.ts"), nil)
+	mediaRequest := httptest.NewRequest(http.MethodGet, "http://wails.localhost"+s.URL("https://1.1.1.1/segment.ts"), nil)
 	mediaRequest.Header.Set("Range", "bytes=0-2")
 	mediaRecorder := httptest.NewRecorder()
 	s.ServeHTTP(mediaRecorder, mediaRequest)

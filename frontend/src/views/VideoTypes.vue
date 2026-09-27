@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { tr } from '../locales'
 import { GetGlobalTypes, SetGlobalTypeCollectEnabled, SyncGlobalTypes } from '../api/app'
 import { useErrorStore } from '../stores/error'
+import { useVideoStore } from '../stores/video'
 import Icon from '../components/Icon.vue'
 import { Button, Badge, Spinner, Empty } from '../components/ui'
 
 const errorStore = useErrorStore()
+const videoStore = useVideoStore()
 
 const types = ref<any[]>([])
 const loading = ref(false)
@@ -26,7 +29,7 @@ async function loadTypes() {
   try {
     types.value = (await GetGlobalTypes()) || []
   } catch (e: any) {
-    errorStore.fromError('加载类型失败', e, 'VideoTypes')
+    errorStore.fromError(tr('videoTypes.loadFailed'), e, 'VideoTypes')
   } finally {
     loading.value = false
   }
@@ -39,18 +42,19 @@ async function toggleCollect(typeRow: any) {
   try {
     await SetGlobalTypeCollectEnabled({ type_name: typeRow.TypeName, enabled: newEnabled })
     typeRow.CollectEnabled = newEnabled ? 1 : 0
+    videoStore.notifyRefresh()
   } catch (e: any) {
-    errorStore.fromError(`设置 ${typeRow.TypeName} 采集状态失败`, e, 'VideoTypes')
+    errorStore.fromError(tr('videoTypes.setTypeStatusFailed', { name: typeRow.TypeName }), e, 'VideoTypes')
   }
 }
 
 async function syncTypes() {
   try {
     const count = await SyncGlobalTypes()
-    errorStore.info('同步完成', `已同步 ${count} 个类型`, '', 'VideoTypes')
+    errorStore.info(tr('videoTypes.syncDone'), tr('videoTypes.syncedCount', { count }), '', 'VideoTypes')
     await loadTypes()
   } catch (e: any) {
-    errorStore.fromError('同步失败', e, 'VideoTypes')
+    errorStore.fromError(tr('videoTypes.syncFailed'), e, 'VideoTypes')
   }
 }
 
@@ -67,11 +71,12 @@ async function toggleAllCollect(enable: boolean) {
       ok++
     } catch (e: any) {
       fail++
-      errorStore.fromError(`${t.TypeName} 设置失败`, e, 'VideoTypes')
+      errorStore.fromError(tr('videoTypes.setTypeFailed', { name: t.TypeName }), e, 'VideoTypes')
     }
   }
   if (targets.length > 0) {
-    errorStore.info('批量设置完成', `成功 ${ok} 个${fail > 0 ? `，失败 ${fail} 个` : ''}`, '', 'VideoTypes')
+    videoStore.notifyRefresh()
+    errorStore.info(tr('videoTypes.batchDone'), tr('videoTypes.batchOk', { ok }) + (fail > 0 ? tr('videoTypes.batchFail', { fail }) : ''), '', 'VideoTypes')
   }
   batchBusy.value = false
 }
@@ -86,16 +91,16 @@ onMounted(async () => {
     <!-- 状态栏 -->
     <div class="status-card">
       <div class="status-header">
-        <h3 class="status-title">视频类型管理</h3>
+        <h3 class="status-title">{{ tr('videoTypes.title') }}</h3>
         <div class="status-actions">
           <Button variant="secondary" size="sm" @click="loadTypes">
-            <Icon name="refresh" :size="12" /> 刷新
+            <Icon name="refresh" :size="12" /> {{ tr('common.refresh') }}
           </Button>
         </div>
       </div>
       <div class="status-grid">
         <div class="status-item">
-          <span class="status-label">采集启用</span>
+          <span class="status-label">{{ tr('videoTypes.collectEnabled') }}</span>
           <span class="status-value" :class="{ active: collectEnabledCount > 0 }">
             {{ collectEnabledCount }} / {{ types.length }}
           </span>
@@ -106,30 +111,30 @@ onMounted(async () => {
     <!-- 类型列表 -->
     <div class="types-card">
       <div class="types-header">
-        <h3 class="types-title">视频类型</h3>
+        <h3 class="types-title">{{ tr('videoTypes.typesTitle') }}</h3>
         <div class="types-actions">
           <div class="search-box">
             <Icon name="search" :size="14" />
-            <input v-model="searchKey" type="text" placeholder="搜索类型..." class="search-input" />
+            <input v-model="searchKey" type="text" :placeholder="tr('videoTypes.searchPlaceholder')" class="search-input" />
           </div>
           <Button variant="secondary" size="sm" @click="syncTypes" class="sync-btn">
-            <Icon name="refresh" :size="12" /> 同步
+            <Icon name="refresh" :size="12" /> {{ tr('videoTypes.sync') }}
           </Button>
           <div class="batch-actions">
-            <Button variant="secondary" size="sm" @click="toggleAllCollect(true)" :disabled="batchBusy" class="batch-btn">
-              <Icon name="check" :size="12" /> 采集全启
+            <Button variant="success" size="sm" @click="toggleAllCollect(true)" :disabled="batchBusy" class="batch-btn">
+              <Icon name="check" :size="12" /> {{ tr('videoTypes.enableAll') }}
             </Button>
-            <Button variant="secondary" size="sm" @click="toggleAllCollect(false)" :disabled="batchBusy" class="batch-btn">
-              <Icon name="x" :size="12" /> 采集全禁
+            <Button variant="warning" size="sm" @click="toggleAllCollect(false)" :disabled="batchBusy" class="batch-btn">
+              <Icon name="x" :size="12" /> {{ tr('videoTypes.disableAll') }}
             </Button>
           </div>
         </div>
       </div>
 
-      <Spinner v-if="loading" size="sm" label="加载中..." />
-      <Empty v-else-if="types.length === 0" title="暂无类型数据">
+      <Spinner v-if="loading" size="sm" :label="tr('common.loading')" />
+      <Empty v-else-if="types.length === 0" :title="tr('videoTypes.emptyTitle')">
         <template #extra>
-          <p class="empty-hint">请先采集视频数据，然后点击「同步」按钮同步类型</p>
+          <p class="empty-hint">{{ tr('videoTypes.emptyHint') }}</p>
         </template>
       </Empty>
       <div v-else class="types-grid">
@@ -146,15 +151,15 @@ onMounted(async () => {
             <button
               :class="['type-switch', 'collect-switch', { active: row.CollectEnabled === 1 }]"
               @click.stop="toggleCollect(row)"
-              title="点击切换采集状态"
+              :title="tr('videoTypes.toggleHint')"
             >
               <span class="switch-icon">{{ row.CollectEnabled === 1 ? '✓' : '' }}</span>
-              <span class="switch-label">采集</span>
+              <span class="switch-label">{{ tr('videoTypes.collect') }}</span>
             </button>
           </div>
         </div>
         <div v-if="filteredTypes.length === 0" class="types-empty">
-          无匹配类型
+          {{ tr('videoTypes.noMatch') }}
         </div>
       </div>
     </div>

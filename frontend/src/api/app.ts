@@ -5,7 +5,7 @@
  * a stable seam when bindings are regenerated or a DTO needs compatibility
  * translation.
  */
-export * from '../../bindings/cczjVideo/app'
+export * from '../../bindings/cczjVideo/app/service/app'
 
 export type ApiErrorCode =
   | 'VALIDATION'

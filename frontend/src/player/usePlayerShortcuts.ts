@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import { readStorage, writeStorage } from '../platform/storage'
+import { tr } from '../locales'
 
 export interface ShortcutDefinition {
   id: string
@@ -59,7 +60,7 @@ export function usePlayerShortcuts(actions: ShortcutDefinition[]) {
 
   function fmtKey(key: string): string {
     const names: Record<string, string> = {
-      Space: '空格', ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓',
+      Space: tr('player.keySpace'), ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓',
       Escape: 'Esc', Enter: 'Enter', Tab: 'Tab',
     }
     return names[key] ?? (key.length === 1 ? key.toUpperCase() : key)
