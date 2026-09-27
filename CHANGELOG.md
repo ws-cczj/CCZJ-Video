@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- 设置页新增「诊断」分组：只读展示运行时环境、内存与协程、数据库与各表行数、采集与豆瓣调度状态、反爬静默与 302 验证题求解结果、数据健康度（缺评分 / 缺条目 ID / 冷却中 / 同豆瓣 ID 重复分组），以及采集源逐个连通性探测。
+- 设置页「基本设置」补齐可配置项：豆瓣补全轮询间隔、日志保留天数，保存即生效。
+- 豆瓣 302 验证题改为本地解 proof-of-work，不再依赖登录 Cookie。
+
+### Changed
+
+- 移除独立的后台管理面板（`/dev-admin`）：它的能力与侧栏页面完全重叠，运维入口改由「设置」承载。
+- Go 侧目录收敛：根目录只保留 `main.go`（入口）与 `app.go`（装配根），原先散落的 `app_facade.go` / `app_diag.go` / `app_log.go` / `app_download.go` / `app_direct_resume.go` 全部迁入 `app/service` 包，Wails 绑定随之生成到 `frontend/bindings/cczjVideo/app/service/`。
+- 「后台采集调度」从设置页迁到「采集源」页：全局开关、采集间隔、源/页节流、启动补采与首次全量改成调度状态条下的「调度设置」面板，与每源的定时器放在同一页，设置页不再保留重复入口。
+- 豆瓣补全轮询间隔从 10 分钟放宽到 30 分钟，降低被判定为异常流量的风险。
+- `scripts/verify.ps1` 增加根目录守卫：除 `main.go` / `app.go` 外不允许再出现散装 Go 文件。
+
+### Fixed
+
+- `db.DoubanDuplicateGroup` 缺少 sqlx `db` tag，导致诊断页「重复豆瓣 ID」查询在真机上报 `missing destination name douban_id`；已补齐并加回归测试。
+- `LogPanel.vue` 直接 `import '@wailsio/runtime'`，绕过了前端绑定出口约束；改走 `src/api/runtime.ts`。
+
+## [2.0.4] - 2026-07-21
+
+### Added
+
+- Added persistent poster and Douban chart caches to reduce repeated requests.
+- Added a Recently Updated page with today, week, month, and type filters.
+
+### Fixed
+
+- Search results are no longer added to the library until explicitly imported.
+- Fixed the Recently Updated navigation icon.
+
 ## [1.1.1] - 2026-06-27
 
 ### 新增

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CCZJ source strategy v2",
+  "type": "object",
+  "required": ["version", "strategy"],
+  "properties": {
+    "version": { "const": 2 },
+    "strategy": { "enum": ["standard_cms", "cms_videolist", "custom"] },
+    "list": { "$ref": "#/$defs/operation" },
+    "search": { "$ref": "#/$defs/operation" },
+    "detail": { "$ref": "#/$defs/operation" },
+    "field_mapping": { "type": "object", "additionalProperties": { "type": "string" } }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "operation": {
+      "type": "object",
+      "properties": {
+        "action": { "type": "string" },
+        "page_param": { "type": "string" },
+        "limit_param": { "type": "string" },
+        "type_param": { "type": "string" },
+        "keyword_param": { "type": "string" },
+        "hours_param": { "type": "string" },
+        "id_param": { "type": "string" },
+        "extra": { "type": "object", "additionalProperties": { "type": "string" } }
+      },
+      "additionalProperties": false
+    }
+  }
+}

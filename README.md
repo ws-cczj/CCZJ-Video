@@ -1,5 +1,7 @@
 # CCZJ Video
 
+Current release: **v2.0.4**
+
 <p align="center">
   <strong>多源视频资源聚合桌面应用</strong><br>
   基于 Wails v3 + Vue 3 + Go 构建的跨平台桌面客户端
@@ -8,7 +10,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go">
   <img src="https://img.shields.io/badge/Vue-3.x-4FC08D?style=flat-square&logo=vue.js&logoColor=white" alt="Vue">
-  <img src="https://img.shields.io/badge/Wails-v3-alpha.98-EB2F2F?style=flat-square&logo=data:image/svg+xml;base64,&logoColor=white" alt="Wails">
+  <img src="https://img.shields.io/badge/Wails-v3.0.0--beta.24-EB2F2F?style=flat-square&logo=data:image/svg+xml;base64,&logoColor=white" alt="Wails">
   <img src="https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/Platform-Windows-0078D6?style=flat-square&logo=windows&logoColor=white" alt="Platform">
 </p>
@@ -48,22 +50,18 @@
 - **多渠道版本获取** — 支持 GitHub API、GitHub Raw、jsdelivr CDN、Gitee 等多个版本信息源
 - **更新日志展示** — 版本升级后自动展示更新内容，支持历史版本查看
 
-### 后台管理系统
+### 设置与诊断
 
-完整的 10 页面管理面板（`/dev-admin`），覆盖应用全生命周期：
+原先独立的后台管理面板（`/dev-admin`）已整体移除——它的每一项能力都已在侧栏页面中存在。运维能力改为集中在「设置」页的分组里：
 
-| 模块 | 功能 |
+| 分组 | 功能 |
 |------|------|
-| 仪表盘 | 统计总览、各源数据量、调度器状态、快捷采集 |
-| 采集源管理 | CRUD、采集控制（全量/增量/停止）、导出/清空 |
-| 视频数据 | 列表浏览、搜索筛选、批量删除、详情查看 |
-| 分类管理 | 按源筛选、树形层级展示 |
-| 采集调度器 | 全局配置编辑、各源独立调度、触发/停止操作 |
-| 下载管理 | 任务列表、进度条、暂停/恢复/取消/打开文件 |
-| 豆瓣数据 | 调度器状态、数据列表、单条手动补全 |
-| 数据导入导出 | 文件路径导入、按源导出（支持 .json.br / .json.gz / .json） |
-| 系统日志 | 文件选择、搜索高亮、级别过滤、一键清空 |
-| 系统设置 | 调试模式、关闭行为、窗口参数、缓存管理、开发者模式、重启 |
+| 基本设置 | 窗口尺寸、字体与语言、主题外观、关闭行为、数据入库策略；豆瓣补全轮询间隔；日志保留天数 |
+| 主题外观 | 深浅色跟随、预设与自定义主题、主色与派生色 |
+| 缓存管理 | 图片/接口缓存占用、一键清理 |
+| 日志 | 实时跟随、级别切换与过滤、关键字搜索、历史文件分页查看、导出与复制 |
+| 诊断 | 只读运行状态：版本与安装标记、运行时长、Go/Wails 运行时与平台、协程数/GC/堆内存、数据目录与可执行文件路径、后台任务计数；数据库与磁盘缓存体积、各表行数；采集调度状态与最近启停；豆瓣补全进度、反爬静默与 302 验证题求解结果；数据健康度（缺评分、缺条目 ID、冷却中、重复分组明细）；采集源逐个连通性探测 |
+| 高级 | 豆瓣补全队列统计、手动触发一轮补全 |
 
 ### 用户体验
 
@@ -87,7 +85,7 @@
 │  │  Vue 3 + TS   │    │  SQLite (modernc)     │  │
 │  │  Pinia        │    │  Collect Engine       │  │
 │  │  Vue Router   │    │  Douban Crawler       │  │
-│  │  UnoCSS       │    │  Scheduler            │  │
+│  │  cczj-* CSS   │    │  Scheduler            │  │
 │  │  xgplayer     │    │  Download Engine      │  │
 │  │  Anime4K      │    │  Image Proxy          │  │
 │  │  FilmUpscaler │    │  Auto Updater         │  │
@@ -101,9 +99,9 @@
 |------|------|
 | Vue 3 Composition API | UI 框架 |
 | TypeScript | 类型安全 |
-| Pinia | 状态管理（11 个 store） |
+| Pinia | 状态管理（12 个 store） |
 | Vue Router | Hash 路由 + 滚动位置恢复 |
-| UnoCSS (preset-wind) | 原子化 CSS |
+| CSS 变量 + `cczj-*` 工具类 | 主题与原子样式（`src/styles/cczj-utilities.css` 手写，未接入 UnoCSS/Tailwind 构建链路） |
 | xgplayer + hls.js | 视频播放（HLS 流） |
 | Anime4K WebGL2 | 动画画质增强 |
 | FSRCNNX WebGL2 | 影视画质增强 |
@@ -125,65 +123,58 @@
 
 ```
 CCZJ Video/
-├── app.go                          # 主入口，所有 Go 绑定方法
-├── app/
-│   ├── applog/                     # 日志系统（按月滚动）
+├── main.go                         # 入口：只负责 buildApp() 与 app.Run()
+├── app.go                          # 装配根：embed 前端产物、注册服务、主窗口、系统托盘
+├── app/                            # 业务代码全部在这里，根目录不再散落 app_xxx.go
+│   ├── service/                    # 唯一的 Wails 绑定服务（App 结构体）
+│   │   ├── app.go                  # App 结构体、NewApp、启停生命周期、下载 DTO
+│   │   ├── facade.go               # 85 个转发方法：只做参数校验与转调子包
+│   │   ├── diagnostics.go          # 诊断页只读快照、采集源探测
+│   │   ├── logs.go                 # 日志查询/导出/级别切换
+│   │   ├── download.go             # 下载引擎（直连多线程 + m3u8）
+│   │   └── direct_resume.go        # 断点续传清单
+│   ├── apperror/                   # 统一错误码（前端 normalizeApiError 依赖它）
+│   ├── applog/                     # 日志系统：环形缓冲 + 按天滚动 + 订阅
+│   ├── cache/                      # 缓存占用统计与清理
 │   ├── collect/                    # 采集引擎（fetcher → processor → strategy）
-│   ├── db/                         # SQLite 数据层（source / video / douban）
-│   ├── douban/                     # 豆瓣爬虫 + 调度器
+│   ├── collection/                 # 采集/豆瓣调度器
+│   ├── db/                         # SQLite 数据层（source / video / douban / catalog / diagnostics）
+│   ├── detail/                     # 详情按需补全
+│   ├── douban/                     # 豆瓣爬虫、热榜、评论、302 验证题自解
+│   ├── download/                   # 下载注册表与目录策略
+│   ├── files/                      # 文件与导入导出
 │   ├── handler/                    # 请求处理器（collect / scheduler / source / video）
+│   ├── lifecycle/                  # 后台任务组（Go/Stop/Context 统一管理）
+│   ├── media/                      # 媒体元数据处理
 │   ├── model/                      # 数据模型
-│   ├── updater/                    # 版本更新模块（GitHub Release 检测、下载、安装）
-│   └── util/                       # 工具（压缩 / 加密 / ID 生成）
-├── build/                          # 构建配置
+│   ├── proxy/                      # 图片代理与 HLS 代理
+│   ├── settings/                   # 持久化设置
+│   ├── source/                     # 数据源领域逻辑
+│   ├── update/ + updater/          # 更新服务与 GitHub Release 检测/下载/安装
+│   ├── util/                       # 压缩 / 加密 / ID 生成
+│   └── window/                     # 窗口尺寸与关闭行为
+├── build/                          # Taskfile、版本提取、图标权重脚本
+├── scripts/verify.ps1              # 边界守卫 + go vet + go test + 前端构建
 ├── frontend/
-│   ├── bindings/                   # Wails 自动生成的 JS 绑定
+│   ├── bindings/                   # Wails 自动生成的 JS 绑定（勿手改）
 │   ├── src/
-│   │   ├── App.vue                 # 根组件（布局 / KeepAlive / 全局事件）
-│   │   ├── components/             # 公共组件（23 个）
-│   │   │   ├── TitleBar.vue        # 自定义标题栏
-│   │   │   ├── Sidebar.vue         # 侧边导航
-│   │   │   ├── VideoPlayer.vue     # HLS 播放器
-│   │   │   ├── Carousel.vue        # 轮播图
-│   │   │   ├── VideoCard.vue       # 视频卡片
-│   │   │   ├── Icon.vue            # SVG 图标系统
-│   │   │   ├── UpdateModal.vue     # 更新弹窗
-│   │   │   └── ui/                 # UI 基础组件（Button / Modal / Input / ...）
-│   │   ├── router/                 # Vue Router 配置
-│   │   ├── stores/                 # Pinia 状态管理（11 个 store）
-│   │   └── views/                  # 页面视图
-│   │       ├── Home.vue            # 首页（推荐 + 轮播）
-│   │       ├── Search.vue          # 搜索
-│   │       ├── Detail.vue          # 视频详情
-│   │       ├── Player.vue          # 播放器
-│   │       ├── Sources.vue         # 数据源管理（用户侧）
-│   │       ├── Settings.vue        # 设置（用户侧）
-│   │       ├── Downloads.vue       # 下载列表
-│   │       ├── Favorites.vue       # 收藏
-│   │       ├── History.vue         # 历史
-│   │       ├── Recommendations.vue # 推荐
-│   │       ├── VideoTypes.vue      # 视频分类
-│   │       └── admin/              # 后台管理系统（12 个文件）
-│   │           ├── Admin.vue       # 父容器（侧边导航 + router-view）
-│   │           ├── AdminDashboard.vue
-│   │           ├── AdminSources.vue
-│   │           ├── AdminVideos.vue
-│   │           ├── AdminCategories.vue
-│   │           ├── AdminScheduler.vue
-│   │           ├── AdminDownloads.vue
-│   │           ├── AdminDouban.vue
-│   │           ├── AdminDataOps.vue
-│   │           ├── AdminLogs.vue
-│   │           ├── AdminSettings.vue
-│   │           └── composables/
-│   │               └── useAdminData.ts  # 后台共享数据
+│   │   ├── api/                    # 前端访问绑定/运行时/事件的唯一出口
+│   │   ├── components/             # 公共组件（16 个）+ ui/ 基础组件（11 个）
+│   │   ├── locales/                # zh-CN.ts / en.ts，键必须严格对齐
+│   │   ├── platform/               # localStorage 等平台能力封装
+│   │   ├── player/                 # 播放器控制逻辑
+│   │   ├── stores/                 # Pinia（12 个 store）
+│   │   ├── styles/                 # 主题变量与 cczj-* 工具类
+│   │   ├── utils/                  # Anime4K / FSRCNNX 着色器与权重、推荐算法
+│   │   └── views/                  # 12 个页面：Home / Search / Detail / Player /
+│   │                               #   Sources / VideoTypes / Recent / History /
+│   │                               #   Favorites / Downloads / Recommendations / Settings
 │   └── package.json
-├── go.mod
-├── Taskfile.yml
-├── wails.json
-├── CHANGELOG.md                    # 更新日志
-├── version.json                    # 版本信息（用于多渠道版本检测）
-└── PROJECT_CONVENTIONS.md          # 项目开发规范
+├── docs/adr/                       # 架构决策记录
+├── go.mod / go.sum
+├── Taskfile.yml / wails.json
+├── CHANGELOG.md
+└── version.json                    # 版本号来源，构建时注入 updater.Version
 ```
 
 ---
@@ -194,7 +185,8 @@ CCZJ Video/
 
 - **Go** 1.25+
 - **Node.js** 18+
-- **Wails v3 CLI** (`go install github.com/wailsapp/wails/v3@latest`)
+- **Wails v3 CLI**（beta.24）：`go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.24`
+- **Task**（可选，用于 `Taskfile.yml` 里的构建任务）
 - **Windows 10/11**（WebView2 运行时）
 
 ### 安装依赖
@@ -204,31 +196,27 @@ CCZJ Video/
 go mod tidy
 
 # 前端依赖
-cd frontend
-npm install
+cd frontend && npm install
 ```
 
 ### 开发模式
 
 ```bash
-# 启动开发服务器（热重载）
-wails dev
+task dev            # 等价于 wails3 dev -config ./build/config.yml -port 9245
 ```
 
-前端修改会即时热重载，Go 代码修改后自动重新编译。
+前端改动走 Vite HMR 即时生效；**Go 改动不会自动重启进程**，需要手动退出再 `task dev`。
 
 ### 构建生产版本
 
 ```bash
-# 构建可执行文件
-wails build
-
-# 或仅构建前端
-cd frontend
-npm run build
+task build          # go mod tidy -e → 前端构建 → go build 注入版本号
+task verify         # 边界守卫 + go vet + go test ./... + 前端 vue-tsc & vite build
 ```
 
-构建产物位于 `bin/` 目录。
+`task build` 实际执行的链接参数是
+`-ldflags="-w -s -H windowsgui -X cczjVideo/app/updater.Version=<version.json 里的版本>"`，
+版本号唯一来源是仓库根目录的 `version.json`（由 `build/get_version.ps1` 读取）。产物在 `bin/cczjVideo.exe`。
 
 ---
 
@@ -236,14 +224,19 @@ npm run build
 
 ### 添加数据源
 
-1. 点击侧边栏「资源管理」
+1. 点击侧边栏「采集源」
 2. 点击「添加源」，输入源名称、唯一 Key、API 地址
 3. 保存后返回首页，数据将自动加载
 
 ### 采集数据
 
-- **手动采集**：后台管理 → 采集源 → 点击「全量」或「增量」
-- **自动采集**：后台管理 → 采集调度器 → 启用后台采集并配置间隔
+- **手动采集**：侧栏「采集源」→ 源卡片上的「开始采集」或「增量采集」
+- **自动采集**：全部在「采集源」页配置。顶部调度状态条的「调度设置」管全局：启用开关、采集间隔、源/页节流、启动补采、首次全量；每个源卡片上的时钟按钮单独设置该源的定时器（定时器需全局开关启用后才会跑）
+
+### 豆瓣数据补全
+
+- 默认使用匿名请求，不依赖仓库内的登录 Cookie；网络错误、验证页和重定向不会把条目冷却 24 小时。
+- 如确有需要，可在启动程序前通过 `CCZJ_DOUBAN_COOKIE`（或 `DOUBAN_COOKIE`）提供当前有效的 Cookie。Cookie 只从运行环境读取，不应提交到仓库。
 
 ### 播放视频
 
@@ -261,13 +254,32 @@ npm run build
 
 在播放器页面点击画质增强按钮，选择 Anime4K（动画）或 Film（影视）模式。
 
+### 看日志与诊断
+
+- 应用内：「设置 → 日志」实时跟随、按级别过滤、搜关键字、翻页看历史文件、导出/复制。
+- 应用外：日志按天写在 `%APPDATA%\CCZJ Video\applog\cczj-YYYY-MM-DD.log`，保留天数在「设置 → 基本设置」里改。
+- 「设置 → 诊断」是只读快照：运行时环境、内存与协程、数据库与各表行数、采集与豆瓣调度状态、
+  反爬静默与 302 验证题求解结果、数据健康度（缺评分 / 缺条目 ID / 冷却中 / 同豆瓣 ID 重复分组）。
+  唯一的主动动作是底部的采集源逐个连通性探测。
+
 ---
 
 ## ⌨️ 开发指南
 
 ### 添加新的 Go 绑定方法
 
-在 `app.go` 中为 `App` 结构体添加方法，Wails 会自动生成前端 JS 绑定到 `frontend/bindings/`。
+1. 在 `app/service/` 里为 `App` 结构体加方法（业务实现放对应子包，`facade.go` 只做转发）。
+2. `wails3 generate bindings -clean` 重新生成绑定，输出到 `frontend/bindings/cczjVideo/app/service/`。
+3. 前端**只允许**通过 `frontend/src/api/app.ts` 访问绑定；`scripts/verify.ps1` 会拦截任何直接
+   `import 'bindings/...'` 或 `import '@wailsio/runtime'` 的组件。
+
+注意：Wails 会把服务结构体上的**每个导出方法**都暴露给 WebView，所以只想给 Go 内部用的东西
+不要写成 `App` 的导出方法（托盘引用就是包级变量 `service.SetSystemTray` 而不是方法，原因在此）。
+
+### 根目录约束
+
+根目录只保留 `main.go` 与 `app.go`。新增 Go 代码请放进 `app/<包名>/`；
+`scripts/verify.ps1` 会拒绝任何重新出现在根目录的 `app_xxx.go`。
 
 ### 前端 Store 规范
 
@@ -275,9 +287,14 @@ npm run build
 - 导出函数和 ref，组件通过 `const store = useXxxStore()` 使用
 - Go 绑定调用统一在 store 内封装，组件不直接调用绑定
 
-### 共享 CSS 变量
+### 国际化
 
-全局 CSS 变量定义在 `App.vue` 中，支持深色/浅色主题自动切换：
+`frontend/src/locales/zh-CN.ts` 与 `en.ts` 的键必须一一对应，缺一项 `vue-tsc` 阶段就会失败。
+组件内用 `t()`，模块级常量里用 `tr()`——模块作用域直接调用 `t()` 会在切换语言时冻结成旧文案。
+
+### 样式约定
+
+主题变量定义在 `App.vue`，全局 CSS 变量自适应深色/浅色：
 
 ```css
 --bg-app, --bg-secondary, --bg-card, --bg-hover
@@ -286,6 +303,9 @@ npm run build
 --border, --border-strong
 --danger, --warning, --success, --info
 ```
+
+原子类是 `src/styles/cczj-utilities.css` 里**手写**的 `cczj-*` 工具类，没有接 UnoCSS/Tailwind
+的构建链路——写一个不存在的 `cczj-xxx` 不会报错，只会静默不生效，用之前先确认已定义。
 
 ---
 
@@ -311,7 +331,7 @@ npm run build
 | `@wailsio/runtime` | Wails 运行时 API |
 | `xgplayer` / `xgplayer-hls` | 视频播放器 |
 | `hls.js` | HLS 流媒体协议支持 |
-| `unocss` | 原子化 CSS 引擎 |
+| `unocss` / `@unocss/preset-wind` | 已声明但**未接入构建链路**；实际样式是手写 `cczj-*` 工具类 |
 | `vite` | 前端构建工具 |
 
 ---
@@ -324,7 +344,7 @@ npm run build
 
 ## 📄 开发规范
 
-项目开发规范请查看 [PROJECT_CONVENTIONS.md](PROJECT_CONVENTIONS.md)
+架构边界与开发决策请参阅 [ADR 0005](docs/adr/0005-architecture-boundaries.md)。
 
 ---
 

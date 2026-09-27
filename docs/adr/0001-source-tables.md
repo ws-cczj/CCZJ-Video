@@ -1,4 +1,4 @@
-# ADR 0001: Source-keyed SQLite tables
+# ADR 0001: Shared source catalog table
 
 ## Status
 
@@ -6,21 +6,19 @@ Accepted.
 
 ## Decision
 
-The application remains a modular monolith backed by one SQLite database. Each
-source owns `v_<source_key>` and `e_<source_key>` tables. A source key is a
-stable identifier, not display text, and must satisfy
-`^[a-z0-9][a-z0-9_]{0,63}$` before it reaches any SQL identifier builder.
+The application is a modular monolith backed by one SQLite database. All
+source-local catalog rows live in `source_videos`, keyed by
+`(source_key, source_vod_id)`. Source types live in `source_types` under the
+same stable source key.
 
-All source creation, update, import, collection, rebuild, and deletion paths
-must use `model.ValidateSourceKey`. SQL identifier helpers reject invalid input
-instead of normalising it, so an invalid key can never select another source's
-tables.
+`source_key` is an internal identifier, not display text, and must satisfy
+`^[a-z0-9][a-z0-9_]{0,63}$` before persistence. User-facing source names may
+change independently.
 
 ## Consequences
 
-- Adding a source does not require a global schema migration.
-- Schema changes shared by source tables must be implemented as versioned,
-  transactional migrations.
-- Source-key changes are migrations, not in-place edits; user-facing names can
-  change independently.
-
+- Adding or editing a source never creates SQL tables dynamically.
+- A schema generation is created directly for new databases; unsupported old
+  databases are archived and reset rather than migrated at runtime.
+- Source keys are immutable once data has been collected. Create a new source
+  when an upstream identity changes.
