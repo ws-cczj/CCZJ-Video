@@ -4,7 +4,7 @@ import { ref, computed, onMounted } from 'vue'
 import { tr } from '../locales'
 import { useRoute, useRouter } from 'vue-router'
 import { useSourceStore } from '../stores/source'
-import { useVideoStore } from '../stores/video'
+import { GetVideoList } from '../api/app'
 import Icon from '../components/Icon.vue'
 import RemoteImage from '../components/RemoteImage.vue'
 import { Button, Spinner as LoadingSpinner } from '../components/ui'
@@ -15,9 +15,8 @@ import type { Video } from '../types'
 const route = useRoute()
 const router = useRouter()
 const sourceStore = useSourceStore()
-const videoStore = useVideoStore()
 
-const sourceKey = computed(() => String(route.query.sourceKey || ''))
+const sourceKey = computed(() => String(route.query.sourceKey || '') || sourceStore.currentSourceKey)
 const vodId = computed(() => String(route.query.vodId || ''))
 const vodName = computed(() => String(route.query.vodName || ''))
 
@@ -35,7 +34,21 @@ function openVideo(item: RecommendItem): void {
 async function loadRecommendations(): Promise<void> {
   loading.value = true
   try {
-    const list: Video[] = Array.isArray(videoStore.videos) ? videoStore.videos : []
+    // 候选池自己取：以前读的是别的页面留下的列表，直接进这一页（或刚重启应用）
+    // 时池子是空的，推荐结果取决于上一次恰好看过哪个列表页。
+    const resp = (await (GetVideoList as any)({
+      source_key: sourceKey.value,
+      type_id: '',
+      year: '',
+      area: '',
+      keyword: '',
+      sort: '',
+      recent_days: 0,
+      cursor: '',
+      page: 1,
+      page_size: 200,
+    })) as any
+    const list: Video[] = Array.isArray(resp?.videos) ? resp.videos : []
     const currentId = vodId.value
     const currentVideo = list.find((v) => String(v.vod_id || '') === currentId)
     const currentName = currentVideo?.vod_name || vodName.value || ''

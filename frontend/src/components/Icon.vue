@@ -406,6 +406,14 @@ defineProps<{ name: string; size?: number }>()
       <line x1="16" y1="17" x2="8" y2="17" />
     </g>
 
+    <!-- 字幕 -->
+    <g v-else-if="name === 'subtitles'">
+      <rect x="2" y="5" width="20" height="14" rx="2" />
+      <line x1="7" y1="10" x2="10" y2="10" />
+      <line x1="14" y1="10" x2="17" y2="10" />
+      <line x1="7" y1="14" x2="17" y2="14" />
+    </g>
+
     <!-- fallback -->
     <g v-else>
       <circle cx="12" cy="12" r="8" />

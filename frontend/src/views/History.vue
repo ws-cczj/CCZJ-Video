@@ -3,8 +3,9 @@ defineOptions({ name: 'History' })
 import { ref, onMounted, onActivated, onDeactivated, computed } from 'vue'
 import { tr } from '../locales'
 import { useRouter } from 'vue-router'
-import { GetRecentHistory, DeleteHistoryByVideo, ClearAllHistory } from '../api/app'
+import { GetRecentHistory, DeleteHistoryByVideo, ClearAllHistory, normalizeApiError } from '../api/app'
 import { usePosterCacheStore } from '../stores/posterCache'
+import { useErrorStore } from '../stores/error'
 import Icon from '../components/Icon.vue'
 import RemoteImage from '../components/RemoteImage.vue'
 import { Button, Badge, Spinner as LoadingSpinner, Empty as EmptyState } from '../components/ui'
@@ -14,27 +15,61 @@ import type { HistoryItem } from '../types'
 
 const router = useRouter()
 const posterCache = usePosterCacheStore()
+const errorStore = useErrorStore()
 
 const history = ref<HistoryItem[]>([])
 const loading = ref(false)
+const loadingMore = ref(false)
 const loadingPoster = ref<Set<string>>(new Set())
 const manageMode = ref(false)
 const selectedKeys = ref<Set<string>>(new Set<string>())
 const searchKeyword = ref('')
 const batchRemoving = ref(false)
 
+// GetRecentHistory 只吃一个 limit（取最近 N 条），所以「加载更多」是把窗口
+// 往后扩一格再整表重取，而不是 offset 翻页 —— 历史按时间倒序，扩窗口等价于翻页。
+const HISTORY_PAGE = 100
+const historyLimit = ref(HISTORY_PAGE)
+// 库里正好凑满一窗时，"还有更早的"是猜的：扩窗后拿不到新记录就得承认到头了，
+// 否则「加载更多」会变成一个永远点不动的哑按钮。
+const historyExhausted = ref(false)
+
+// 上一次取满了一整窗，说明库里可能还有更早的记录没显示。
+const hasMoreHistory = computed(() => !historyExhausted.value && history.value.length >= historyLimit.value)
+
 async function reloadHistory(): Promise<void> {
   loading.value = true
+  historyExhausted.value = false
   try {
-    const result = await GetRecentHistory(200)
+    const result = await GetRecentHistory(historyLimit.value)
     history.value = Array.isArray(result) ? (result as HistoryItem[]) : []
   } catch (e) {
+    const err = normalizeApiError(e)
     console.error('加载历史失败:', e)
+    errorStore.error(tr('history.loadFailed'), err.message, '', 'History')
     history.value = []
   } finally {
     loading.value = false
   }
   await hydrateMissingPosters()
+}
+
+async function loadMoreHistory(): Promise<void> {
+  if (loadingMore.value || loading.value || !hasMoreHistory.value) return
+  loadingMore.value = true
+  const prevLimit = historyLimit.value
+  historyLimit.value = prevLimit + HISTORY_PAGE
+  try {
+    await reloadHistory()
+  } finally {
+    // 扩窗后仍然取不到更多（例如取数失败）就把窗口收回去，
+    // 否则 hasMoreHistory 会一直为真，按钮永远点不完。
+    if (history.value.length <= prevLimit) {
+      historyLimit.value = prevLimit
+      historyExhausted.value = true
+    }
+    loadingMore.value = false
+  }
 }
 
 let wasDeactivated = false
@@ -136,8 +171,8 @@ function keyOf(h: HistoryItem): string {
 function getWatchPct(h: HistoryItem): number {
   const entry = getEpProgress(epProgressKey(h.global_id, h.vod_name, h.ep_num))
   if (entry) return getEpProgressPct(entry)
-  if (h.position && h.position > 0 && h.position <= 100) return Math.round(h.position)
-  return 0
+  // 库里的 position 是秒且没有时长列，算不出百分比；只能按「看过但时长未知」的同一套约定走。
+  return getEpProgressPct({ position: h.position || 0, updatedAt: 0 })
 }
 
 function enterManageMode(): void {
@@ -170,6 +205,7 @@ function toggleSelectAll(): void {
 async function deleteSelected(): Promise<void> {
   if (selectedKeys.value.size === 0 || batchRemoving.value) return
   batchRemoving.value = true
+  const failed: string[] = []
   try {
     const toDelete = filteredHistory.value.filter(h => selectedKeys.value.has(keyOf(h)))
     for (const h of toDelete) {
@@ -177,7 +213,16 @@ async function deleteSelected(): Promise<void> {
         await DeleteHistoryByVideo({ source_key: h.source_key, vod_id: String(h.vod_id), global_id: h.global_id || 0 })
       } catch (e) {
         console.error('删除失败:', e)
+        failed.push(resolveName(h))
       }
+    }
+    if (failed.length > 0) {
+      errorStore.error(
+        tr('history.deleteFailed'),
+        tr('history.deleteFailedDetail', { count: failed.length, names: failed.slice(0, 3).join('、') }),
+        '',
+        'History',
+      )
     }
     selectedKeys.value = new Set()
     manageMode.value = false
@@ -196,7 +241,9 @@ async function clearAll(): Promise<void> {
     selectedKeys.value = new Set()
     manageMode.value = false
   } catch (e) {
+    const err = normalizeApiError(e)
     console.error('清空失败:', e)
+    errorStore.error(tr('history.clearFailed'), err.message, '', 'History')
   } finally {
     batchRemoving.value = false
   }
@@ -391,6 +438,14 @@ function goDetail(h: HistoryItem): void {
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- 历史按窗口取最近 N 条，取满就承认还有更早的没显示，交给用户展开。 -->
+      <div v-if="hasMoreHistory && !manageMode" class="load-more cczj-flex cczj-justify-center cczj-pt-2">
+        <Button variant="secondary" size="sm" :disabled="loadingMore" @click="loadMoreHistory">
+          <Icon name="chevron-down" :size="14" />
+          <span>{{ loadingMore ? tr('history.loadingMore') : tr('history.loadMore') }}</span>
+        </Button>
       </div>
     </div>
   </div>

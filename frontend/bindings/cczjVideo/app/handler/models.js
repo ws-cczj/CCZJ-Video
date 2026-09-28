@@ -215,6 +215,64 @@ export class CollectStatus {
              */
             this["mode"] = "";
         }
+        if (!("saved" in $$source)) {
+            /**
+             * 上一次运行的结果：进度字段只描述"正在跑的这一次"，运行结束后必须由
+             * 这组字段说明这次到底完成了多少、哪些页没落地。
+             * @member
+             * @type {number}
+             */
+            this["saved"] = 0;
+        }
+        if (!("fetch_failures" in $$source)) {
+            /**
+             * @member
+             * @type {number[]}
+             */
+            this["fetch_failures"] = [];
+        }
+        if (!("save_failures" in $$source)) {
+            /**
+             * @member
+             * @type {number[]}
+             */
+            this["save_failures"] = [];
+        }
+        if (!("empty_pages" in $$source)) {
+            /**
+             * @member
+             * @type {number[]}
+             */
+            this["empty_pages"] = [];
+        }
+        if (!("last_error_kind" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["last_error_kind"] = "";
+        }
+        if (!("elapsed_ms" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["elapsed_ms"] = 0;
+        }
+        if (!("finished_at_unix" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["finished_at_unix"] = 0;
+        }
+        if (!("stopped" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["stopped"] = false;
+        }
 
         Object.assign(this, $$source);
     }
@@ -226,9 +284,21 @@ export class CollectStatus {
      */
     static createFrom($$source = {}) {
         const $$createField6_0 = $$createType0;
+        const $$createField10_0 = $$createType1;
+        const $$createField11_0 = $$createType1;
+        const $$createField12_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("names" in $$parsedSource) {
             $$parsedSource["names"] = $$createField6_0($$parsedSource["names"]);
+        }
+        if ("fetch_failures" in $$parsedSource) {
+            $$parsedSource["fetch_failures"] = $$createField10_0($$parsedSource["fetch_failures"]);
+        }
+        if ("save_failures" in $$parsedSource) {
+            $$parsedSource["save_failures"] = $$createField11_0($$parsedSource["save_failures"]);
+        }
+        if ("empty_pages" in $$parsedSource) {
+            $$parsedSource["empty_pages"] = $$createField12_0($$parsedSource["empty_pages"]);
         }
         return new CollectStatus(/** @type {Partial<CollectStatus>} */($$parsedSource));
     }
@@ -385,6 +455,447 @@ export class HistoryItemWithVideo {
 }
 
 /**
+ * MergeCandidatesResp 是待人工确认的疑似重复身份组。
+ */
+export class MergeCandidatesResp {
+    /**
+     * Creates a new MergeCandidatesResp instance.
+     * @param {Partial<MergeCandidatesResp>} [$$source = {}] - The source object to create the MergeCandidatesResp.
+     */
+    constructor($$source = {}) {
+        if (!("groups" in $$source)) {
+            /**
+             * @member
+             * @type {db$0.MergeCandidate[]}
+             */
+            this["groups"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new MergeCandidatesResp instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {MergeCandidatesResp}
+     */
+    static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType3;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("groups" in $$parsedSource) {
+            $$parsedSource["groups"] = $$createField0_0($$parsedSource["groups"]);
+        }
+        return new MergeCandidatesResp(/** @type {Partial<MergeCandidatesResp>} */($$parsedSource));
+    }
+}
+
+/**
+ * MergeIdentitiesReq 指定一组要合并的 global_id。一次一组，不做批量勾选：
+ * 合并会搬走收藏和观看进度，接受一次点错的代价太高。
+ */
+export class MergeIdentitiesReq {
+    /**
+     * Creates a new MergeIdentitiesReq instance.
+     * @param {Partial<MergeIdentitiesReq>} [$$source = {}] - The source object to create the MergeIdentitiesReq.
+     */
+    constructor($$source = {}) {
+        if (!("global_ids" in $$source)) {
+            /**
+             * @member
+             * @type {number[]}
+             */
+            this["global_ids"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new MergeIdentitiesReq instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {MergeIdentitiesReq}
+     */
+    static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType4;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("global_ids" in $$parsedSource) {
+            $$parsedSource["global_ids"] = $$createField0_0($$parsedSource["global_ids"]);
+        }
+        return new MergeIdentitiesReq(/** @type {Partial<MergeIdentitiesReq>} */($$parsedSource));
+    }
+}
+
+/**
+ * MergeIdentitiesResp 报告存活身份与被并掉的条数。
+ */
+export class MergeIdentitiesResp {
+    /**
+     * Creates a new MergeIdentitiesResp instance.
+     * @param {Partial<MergeIdentitiesResp>} [$$source = {}] - The source object to create the MergeIdentitiesResp.
+     */
+    constructor($$source = {}) {
+        if (!("keep_id" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["keep_id"] = 0;
+        }
+        if (!("merged" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["merged"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new MergeIdentitiesResp instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {MergeIdentitiesResp}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new MergeIdentitiesResp(/** @type {Partial<MergeIdentitiesResp>} */($$parsedSource));
+    }
+}
+
+/**
+ * PlayLineSpeedItem 是一条线路的测速结果。Error 只写日志，不下发给界面。
+ */
+export class PlayLineSpeedItem {
+    /**
+     * Creates a new PlayLineSpeedItem instance.
+     * @param {Partial<PlayLineSpeedItem>} [$$source = {}] - The source object to create the PlayLineSpeedItem.
+     */
+    constructor($$source = {}) {
+        if (!("index" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["index"] = 0;
+        }
+        if (!("name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["name"] = "";
+        }
+        if (!("ep_num" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["ep_num"] = 0;
+        }
+        if (!("ok" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["ok"] = false;
+        }
+        if (!("latency_ms" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["latency_ms"] = 0;
+        }
+        if (!("bytes_per_sec" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["bytes_per_sec"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PlayLineSpeedItem instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {PlayLineSpeedItem}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new PlayLineSpeedItem(/** @type {Partial<PlayLineSpeedItem>} */($$parsedSource));
+    }
+}
+
+/**
+ * PlayLineSpeedReq 定位一次测速。播放地址不在请求里：由服务端按同一份详情解析，
+ * 免得前端把地址传回来再解析一遍，两边口径还可能不一致。
+ */
+export class PlayLineSpeedReq {
+    /**
+     * Creates a new PlayLineSpeedReq instance.
+     * @param {Partial<PlayLineSpeedReq>} [$$source = {}] - The source object to create the PlayLineSpeedReq.
+     */
+    constructor($$source = {}) {
+        if (!("source_key" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["source_key"] = "";
+        }
+        if (!("global_id" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["global_id"] = 0;
+        }
+        if (!("vod_id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["vod_id"] = "";
+        }
+        if (!("ep_num" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["ep_num"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PlayLineSpeedReq instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {PlayLineSpeedReq}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new PlayLineSpeedReq(/** @type {Partial<PlayLineSpeedReq>} */($$parsedSource));
+    }
+}
+
+/**
+ * PlayLineSpeedResp 的 Items 已按「可用优先 → 吞吐高优先 → 延迟低优先」排好，
+ * 界面可以直接照序渲染；BestIndex 为 -1 表示没有任何一条线路可用。
+ */
+export class PlayLineSpeedResp {
+    /**
+     * Creates a new PlayLineSpeedResp instance.
+     * @param {Partial<PlayLineSpeedResp>} [$$source = {}] - The source object to create the PlayLineSpeedResp.
+     */
+    constructor($$source = {}) {
+        if (!("items" in $$source)) {
+            /**
+             * @member
+             * @type {(PlayLineSpeedItem | null)[]}
+             */
+            this["items"] = [];
+        }
+        if (!("best_index" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["best_index"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PlayLineSpeedResp instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {PlayLineSpeedResp}
+     */
+    static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType7;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("items" in $$parsedSource) {
+            $$parsedSource["items"] = $$createField0_0($$parsedSource["items"]);
+        }
+        return new PlayLineSpeedResp(/** @type {Partial<PlayLineSpeedResp>} */($$parsedSource));
+    }
+}
+
+/**
+ * RecycleListReq 是回收站分页请求。SourceKey 为空表示跨源列出全部。
+ */
+export class RecycleListReq {
+    /**
+     * Creates a new RecycleListReq instance.
+     * @param {Partial<RecycleListReq>} [$$source = {}] - The source object to create the RecycleListReq.
+     */
+    constructor($$source = {}) {
+        if (!("source_key" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["source_key"] = "";
+        }
+        if (!("page" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["page"] = 0;
+        }
+        if (!("page_size" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["page_size"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RecycleListReq instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {RecycleListReq}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new RecycleListReq(/** @type {Partial<RecycleListReq>} */($$parsedSource));
+    }
+}
+
+/**
+ * RecycleListResp 是回收站一页加总数。
+ */
+export class RecycleListResp {
+    /**
+     * Creates a new RecycleListResp instance.
+     * @param {Partial<RecycleListResp>} [$$source = {}] - The source object to create the RecycleListResp.
+     */
+    constructor($$source = {}) {
+        if (!("items" in $$source)) {
+            /**
+             * @member
+             * @type {db$0.RecycleItem[]}
+             */
+            this["items"] = [];
+        }
+        if (!("total" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["total"] = 0;
+        }
+        if (!("page" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["page"] = 0;
+        }
+        if (!("page_size" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["page_size"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RecycleListResp instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {RecycleListResp}
+     */
+    static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType9;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("items" in $$parsedSource) {
+            $$parsedSource["items"] = $$createField0_0($$parsedSource["items"]);
+        }
+        return new RecycleListResp(/** @type {Partial<RecycleListResp>} */($$parsedSource));
+    }
+}
+
+/**
+ * RecycleReq 定位一条回收站条目。回收站跨源，所以源坐标是必填的。
+ */
+export class RecycleReq {
+    /**
+     * Creates a new RecycleReq instance.
+     * @param {Partial<RecycleReq>} [$$source = {}] - The source object to create the RecycleReq.
+     */
+    constructor($$source = {}) {
+        if (!("source_key" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["source_key"] = "";
+        }
+        if (!("vod_id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["vod_id"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RecycleReq instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {RecycleReq}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new RecycleReq(/** @type {Partial<RecycleReq>} */($$parsedSource));
+    }
+}
+
+/**
+ * RecycleResult 是一次彻底删除/清空的结果。
+ */
+export class RecycleResult {
+    /**
+     * Creates a new RecycleResult instance.
+     * @param {Partial<RecycleResult>} [$$source = {}] - The source object to create the RecycleResult.
+     */
+    constructor($$source = {}) {
+        if (!("affected" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["affected"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RecycleResult instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {RecycleResult}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new RecycleResult(/** @type {Partial<RecycleResult>} */($$parsedSource));
+    }
+}
+
+/**
  * Status 调度器状态（供前端展示）
  */
 export class SchedulerStatus {
@@ -494,7 +1005,7 @@ export class SchedulerStatus {
      * @returns {SchedulerStatus}
      */
     static createFrom($$source = {}) {
-        const $$createField12_0 = $$createType2;
+        const $$createField12_0 = $$createType11;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("source_schedules" in $$parsedSource) {
             $$parsedSource["source_schedules"] = $$createField12_0($$parsedSource["source_schedules"]);
@@ -574,7 +1085,7 @@ export class SearchSourceResult {
      * @returns {SearchSourceResult}
      */
     static createFrom($$source = {}) {
-        const $$createField4_0 = $$createType5;
+        const $$createField4_0 = $$createType14;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("videos" in $$parsedSource) {
             $$parsedSource["videos"] = $$createField4_0($$parsedSource["videos"]);
@@ -644,9 +1155,9 @@ export class SourceDetail {
      * @returns {SourceDetail}
      */
     static createFrom($$source = {}) {
-        const $$createField3_0 = $$createType7;
-        const $$createField4_0 = $$createType5;
-        const $$createField5_0 = $$createType10;
+        const $$createField3_0 = $$createType16;
+        const $$createField4_0 = $$createType14;
+        const $$createField5_0 = $$createType19;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("tables" in $$parsedSource) {
             $$parsedSource["tables"] = $$createField3_0($$parsedSource["tables"]);
@@ -766,10 +1277,10 @@ export class SourceParamsDoc {
      * @returns {SourceParamsDoc}
      */
     static createFrom($$source = {}) {
-        const $$createField1_0 = $$createType12;
-        const $$createField2_0 = $$createType12;
-        const $$createField3_0 = $$createType12;
-        const $$createField4_0 = $$createType12;
+        const $$createField1_0 = $$createType21;
+        const $$createField2_0 = $$createType21;
+        const $$createField3_0 = $$createType21;
+        const $$createField4_0 = $$createType21;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("path_params" in $$parsedSource) {
             $$parsedSource["path_params"] = $$createField1_0($$parsedSource["path_params"]);
@@ -840,6 +1351,21 @@ export class SourceScheduleItem {
              * @type {boolean}
              */
             this["running"] = false;
+        }
+        if (!("covered_until_unix" in $$source)) {
+            /**
+             * 增量水位线：已覆盖到 / 最近一次尝试采集的时刻（unix 秒，0 表示没有记录）
+             * @member
+             * @type {number}
+             */
+            this["covered_until_unix"] = 0;
+        }
+        if (!("last_attempt_unix" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["last_attempt_unix"] = 0;
         }
 
         Object.assign(this, $$source);
@@ -958,12 +1484,136 @@ export class SourceTableSummary {
      * @returns {SourceTableSummary}
      */
     static createFrom($$source = {}) {
-        const $$createField3_0 = $$createType14;
+        const $$createField3_0 = $$createType23;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("columns" in $$parsedSource) {
             $$parsedSource["columns"] = $$createField3_0($$parsedSource["columns"]);
         }
         return new SourceTableSummary(/** @type {Partial<SourceTableSummary>} */($$parsedSource));
+    }
+}
+
+/**
+ * UnionListReq 是跨源合并列表的筛选条件。没有 source_key 是有意为之：
+ * 这个视图的意义就是跨源，想只看一个源请回到视频库。
+ */
+export class UnionListReq {
+    /**
+     * Creates a new UnionListReq instance.
+     * @param {Partial<UnionListReq>} [$$source = {}] - The source object to create the UnionListReq.
+     */
+    constructor($$source = {}) {
+        if (!("recent_days" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["recent_days"] = 0;
+        }
+        if (!("type_id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["type_id"] = "";
+        }
+        if (!("year" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["year"] = "";
+        }
+        if (!("area" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["area"] = "";
+        }
+        if (!("keyword" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["keyword"] = "";
+        }
+        if (!("cursor" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["cursor"] = "";
+        }
+        if (!("page_size" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["page_size"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new UnionListReq instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {UnionListReq}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new UnionListReq(/** @type {Partial<UnionListReq>} */($$parsedSource));
+    }
+}
+
+/**
+ * UnionListResp 是一页合并卡片。Total 数的是身份数而不是目录行数，
+ * 所以它会比同筛选下的单源列表小——这正是"合并"要达到的效果。
+ */
+export class UnionListResp {
+    /**
+     * Creates a new UnionListResp instance.
+     * @param {Partial<UnionListResp>} [$$source = {}] - The source object to create the UnionListResp.
+     */
+    constructor($$source = {}) {
+        if (!("videos" in $$source)) {
+            /**
+             * @member
+             * @type {(db$0.UnionVideo | null)[]}
+             */
+            this["videos"] = [];
+        }
+        if (!("total" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["total"] = 0;
+        }
+        if (!("next_cursor" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["next_cursor"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new UnionListResp instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {UnionListResp}
+     */
+    static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType26;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("videos" in $$parsedSource) {
+            $$parsedSource["videos"] = $$createField0_0($$parsedSource["videos"]);
+        }
+        return new UnionListResp(/** @type {Partial<UnionListResp>} */($$parsedSource));
     }
 }
 
@@ -1040,6 +1690,13 @@ export class VideoDetailResp {
         if (/** @type {any} */(false)) {
             /**
              * @member
+             * @type {(model$0.PlayLine | null)[] | undefined}
+             */
+            this["lines"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
              * @type {detail$0.Error | null | undefined}
              */
             this["error"] = undefined;
@@ -1054,9 +1711,10 @@ export class VideoDetailResp {
      * @returns {VideoDetailResp}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType4;
-        const $$createField1_0 = $$createType10;
-        const $$createField2_0 = $$createType16;
+        const $$createField0_0 = $$createType13;
+        const $$createField1_0 = $$createType19;
+        const $$createField2_0 = $$createType29;
+        const $$createField3_0 = $$createType31;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("video" in $$parsedSource) {
             $$parsedSource["video"] = $$createField0_0($$parsedSource["video"]);
@@ -1064,8 +1722,11 @@ export class VideoDetailResp {
         if ("episodes" in $$parsedSource) {
             $$parsedSource["episodes"] = $$createField1_0($$parsedSource["episodes"]);
         }
+        if ("lines" in $$parsedSource) {
+            $$parsedSource["lines"] = $$createField2_0($$parsedSource["lines"]);
+        }
         if ("error" in $$parsedSource) {
-            $$parsedSource["error"] = $$createField2_0($$parsedSource["error"]);
+            $$parsedSource["error"] = $$createField3_0($$parsedSource["error"]);
         }
         return new VideoDetailResp(/** @type {Partial<VideoDetailResp>} */($$parsedSource));
     }
@@ -1213,8 +1874,8 @@ export class VideoListResp {
      * @returns {VideoListResp}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType5;
-        const $$createField3_0 = $$createType5;
+        const $$createField0_0 = $$createType14;
+        const $$createField3_0 = $$createType14;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("videos" in $$parsedSource) {
             $$parsedSource["videos"] = $$createField0_0($$parsedSource["videos"]);
@@ -1323,19 +1984,34 @@ export class YearsResp {
 
 // Private type creation functions
 const $$createType0 = $Create.Array($Create.Any);
-const $$createType1 = SourceScheduleItem.createFrom;
-const $$createType2 = $Create.Array($$createType1);
-const $$createType3 = model$0.Video.createFrom;
-const $$createType4 = $Create.Nullable($$createType3);
-const $$createType5 = $Create.Array($$createType4);
-const $$createType6 = SourceTableSummary.createFrom;
+const $$createType1 = $Create.Array($Create.Any);
+const $$createType2 = db$0.MergeCandidate.createFrom;
+const $$createType3 = $Create.Array($$createType2);
+const $$createType4 = $Create.Array($Create.Any);
+const $$createType5 = PlayLineSpeedItem.createFrom;
+const $$createType6 = $Create.Nullable($$createType5);
 const $$createType7 = $Create.Array($$createType6);
-const $$createType8 = model$0.Episode.createFrom;
-const $$createType9 = $Create.Nullable($$createType8);
-const $$createType10 = $Create.Array($$createType9);
-const $$createType11 = SourceParamDoc.createFrom;
-const $$createType12 = $Create.Array($$createType11);
-const $$createType13 = db$0.TableColumn.createFrom;
+const $$createType8 = db$0.RecycleItem.createFrom;
+const $$createType9 = $Create.Array($$createType8);
+const $$createType10 = SourceScheduleItem.createFrom;
+const $$createType11 = $Create.Array($$createType10);
+const $$createType12 = model$0.Video.createFrom;
+const $$createType13 = $Create.Nullable($$createType12);
 const $$createType14 = $Create.Array($$createType13);
-const $$createType15 = detail$0.Error.createFrom;
-const $$createType16 = $Create.Nullable($$createType15);
+const $$createType15 = SourceTableSummary.createFrom;
+const $$createType16 = $Create.Array($$createType15);
+const $$createType17 = model$0.Episode.createFrom;
+const $$createType18 = $Create.Nullable($$createType17);
+const $$createType19 = $Create.Array($$createType18);
+const $$createType20 = SourceParamDoc.createFrom;
+const $$createType21 = $Create.Array($$createType20);
+const $$createType22 = db$0.TableColumn.createFrom;
+const $$createType23 = $Create.Array($$createType22);
+const $$createType24 = db$0.UnionVideo.createFrom;
+const $$createType25 = $Create.Nullable($$createType24);
+const $$createType26 = $Create.Array($$createType25);
+const $$createType27 = model$0.PlayLine.createFrom;
+const $$createType28 = $Create.Nullable($$createType27);
+const $$createType29 = $Create.Array($$createType28);
+const $$createType30 = detail$0.Error.createFrom;
+const $$createType31 = $Create.Nullable($$createType30);

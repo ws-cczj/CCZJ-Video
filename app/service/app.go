@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	goruntime "runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -87,9 +88,12 @@ func (a *App) RestartApp() {
 		attr.Files = []*os.File{os.Stdin, os.Stdout, os.Stderr}
 	}
 
-	_, err = os.StartProcess(exe, []string{exe}, attr)
+	// 带上自己的 PID：新进程会等这个 PID 消失再抢单实例锁，否则它一启动就被
+	// 判成第二实例并静默退出。
+	newArgs := []string{exe, relaunchArg(os.Getpid())}
+	_, err = os.StartProcess(exe, newArgs, attr)
 	if err != nil {
-		cmd := exec.Command(exe)
+		cmd := exec.Command(exe, relaunchArg(os.Getpid()))
 		_ = cmd.Start()
 	}
 
@@ -119,6 +123,13 @@ func NewApp() *App {
 		}
 	})
 	a.cache = cacheservice.NewService(a.getDataDir)
+	// 失效层自己不依赖 Wails，事件出口在这里接上：Go 清完自己的缓存后，前端靠这条事件
+	// 清详情/海报/TS 片段那几份（见 frontend/src/stores/cacheInvalidate.ts）。
+	cacheservice.SetEventPublisher(func(name string, data any) {
+		if a.app != nil {
+			a.app.Event.Emit(name, data)
+		}
+	})
 	a.media = mediaservice.NewService()
 	a.background = lifecycle.NewGroup()
 	a.collection = collectionservice.NewService(func(name string, data any) {
@@ -169,6 +180,21 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 		fmt.Fprintf(os.Stderr, "Failed to init applog: %v\n", err)
 	}
 
+	// 把 db 层的日志桥接到 applog（避免 db 直接依赖 applog 产生循环）。
+	// 必须排在 InitDB 之前：InitDB 里的顺序迁移就往这里写「已应用迁移 vN」「补列 …」，
+	// 晚一行等于把这些证据丢掉——升级是否原地演进、有没有退回过去的删库重建，
+	// 只能靠真机日志里这几行来确认。
+	db.SetLogger(func(level, msg string) {
+		switch level {
+		case "ERROR":
+			applog.Error("%s", msg)
+		case "WARN":
+			applog.Warn("%s", msg)
+		default:
+			applog.Info("%s", msg)
+		}
+	})
+
 	if err := db.InitDB(dataDir); err != nil {
 		panic(fmt.Sprintf("Failed to init database: %v", err))
 	}
@@ -188,18 +214,6 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 		applog.Info("日志级别为 DEBUG，将输出详细日志")
 	}
 
-	// 把 db 层的日志桥接到 applog（避免 db 直接依赖 applog 产生循环）
-	db.SetLogger(func(level, msg string) {
-		switch level {
-		case "ERROR":
-			applog.Error("%s", msg)
-		case "WARN":
-			applog.Warn("%s", msg)
-		default:
-			applog.Info("%s", msg)
-		}
-	})
-
 	util.InitSnowFlake()
 	_ = snowflake.Epoch
 
@@ -210,6 +224,11 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 	a.background.Go("schedulers", func(taskCtx context.Context) {
 		a.schedulers.Start(taskCtx)
 	})
+
+	// 源巡检：每 6 小时探一次所有启用源的列表首页，把结果记成健康度样本。
+	// 没被排上定时采集的源也需要有人发现"接口已经下线"，否则用户要等到亲手点开
+	// 那个源、看到空列表，才知道它已经废了很久。
+	a.background.Go("sourcePatrol", a.runSourcePatrol)
 
 	// 预加载豆瓣热榜缓存（异步，不阻塞启动）
 	// 注意：豆瓣热榜需要通过数据源匹配播放地址，无任何源时跳过，避免无意义请求
@@ -242,9 +261,15 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 		}
 	})
 
+	schemaVersion, schemaErr := db.SchemaVersion()
+	if schemaErr != nil {
+		schemaVersion = 0
+	}
 	a.app.Event.Emit("app:ready", map[string]string{
-		"data_dir":       dataDir,
-		"schema_version": "reset-generation-5",
+		"data_dir": dataDir,
+		// 以前这里是写死的 "reset-generation-5"——那个"升级即删库"的年代留下的。
+		// 迁移改成顺序演进之后，报真实版本才有诊断价值。
+		"schema_version": strconv.Itoa(schemaVersion),
 	})
 	applog.InfoFields("application ready", applog.Fields{
 		"data_dir":         dataDir,
@@ -328,8 +353,11 @@ type downloadTask struct {
 	paused     bool     // 是否处于暂停状态
 	segIndex   int      // 下一个要下载的分片索引（m3u8 断点恢复用）
 	segments   []string // m3u8 的分片 URL 列表
-	isM3u8     bool     // 是否 m3u8 任务
-	hasTotal   bool     // 是否已估算出 total（续传时不再重算）
+	// playlist 是带密钥/初始化段/字节区间的分片列表，落盘顺序。segments 只剩 URL 的
+	// 老任务读不出这些，所以两者并存：有 playlist 用它，否则退回 segments。
+	playlist []downloadservice.Segment
+	isM3u8   bool // 是否 m3u8 任务
+	hasTotal bool // 是否已估算出 total（续传时不再重算）
 }
 
 // persistedTask 磁盘持久化格式
@@ -344,9 +372,12 @@ type persistedTask struct {
 	SegIndex   int      `json:"seg_index"`
 	IsM3u8     bool     `json:"is_m3u8"`
 	Segments   []string `json:"segments,omitempty"`
-	StartTime  int64    `json:"start_time"`
-	ErrorMsg   string   `json:"error_msg,omitempty"`
-	HasTotal   bool     `json:"has_total"`
+	// SegmentDetails 与 Segments 同序，但带 EXT-X-KEY / EXT-X-MAP / BYTERANGE。
+	// 旧版本写不出这个字段，恢复时按纯 URL 处理。
+	SegmentDetails []downloadservice.Segment `json:"segment_details,omitempty"`
+	StartTime      int64                     `json:"start_time"`
+	ErrorMsg       string                    `json:"error_msg,omitempty"`
+	HasTotal       bool                      `json:"has_total"`
 }
 
 func sanitizeFilename(name string) string {
@@ -537,16 +568,19 @@ func errStr(err error) string {
 
 // ======================== Cache Management ========================
 
-// CacheInfo 缓存信息
+// CacheInfo 应用自己写到磁盘上的占用，外加进程内派生缓存的条目数。
+// 浏览器侧的 localStorage / IndexedDB 由前端统计，Go 报不出真实数字，
+// 以前那两只恒为 0 的字段已经删掉。
 type CacheInfo struct {
-	LocalStorageBytes int64  `json:"local_storage_bytes"`
-	IndexedDBBytes    int64  `json:"indexed_db_bytes"`
-	DatabaseBytes     int64  `json:"database_bytes"`
-	DatabasePath      string `json:"database_path"`
-	DiskCacheDir      string `json:"disk_cache_dir"`
-	DiskCacheBytes    int64  `json:"disk_cache_bytes"`
-	LogFileBytes      int64  `json:"log_file_bytes"`
-	LogFilePath       string `json:"log_file_path"`
+	DatabaseBytes int64  `json:"database_bytes"`
+	DatabasePath  string `json:"database_path"`
+	LogFileBytes  int64  `json:"log_file_bytes"`
+	LogFilePath   string `json:"log_file_path"`
+
+	DetailEntries int   `json:"detail_entries"`
+	DetailBytes   int64 `json:"detail_bytes"`
+	ChartMatches  int   `json:"chart_matches"`
+	CommentPages  int   `json:"comment_pages"`
 }
 
 // GetCacheInfo 获取缓存信息
@@ -555,38 +589,43 @@ func (a *App) GetCacheInfo() (*CacheInfo, error) {
 	if err != nil {
 		return nil, err
 	}
+	stats := cacheservice.Stats()
 	return &CacheInfo{
-		LocalStorageBytes: info.LocalStorageBytes,
-		IndexedDBBytes:    info.IndexedDBBytes,
-		DatabaseBytes:     info.DatabaseBytes,
-		DatabasePath:      info.DatabasePath,
-		DiskCacheDir:      info.DiskCacheDir,
-		DiskCacheBytes:    info.DiskCacheBytes,
-		LogFileBytes:      info.LogFileBytes,
-		LogFilePath:       info.LogFilePath,
+		DatabaseBytes: info.DatabaseBytes,
+		DatabasePath:  info.DatabasePath,
+		LogFileBytes:  info.LogFileBytes,
+		LogFilePath:   info.LogFilePath,
+
+		DetailEntries: stats.DetailEntries,
+		DetailBytes:   stats.DetailBytes,
+		ChartMatches:  stats.ChartMatches,
+		CommentPages:  stats.CommentPages,
 	}, nil
 }
 
 // ClearCacheReq 清除缓存请求
 type ClearCacheReq struct {
-	Type string `json:"type"` // "database" | "disk_cache" | "logs" | "all"
+	Type string `json:"type"` // "memory" | "logs" | "database" | "all"
 }
 
-// ClearCache 清除指定类型的缓存
+// ClearCache 清除指定类型的缓存。
+//
+// "memory" 是进程内的派生缓存（详情 / 热榜匹配 / 评论），走统一失效层；TS 片段那一份活在
+// 浏览器 IndexedDB 里，由前端自己的清除按钮负责，这里没有对应目录。
 func (a *App) ClearCache(req ClearCacheReq) (bool, error) {
-	if req.Type == "logs" {
+	switch req.Type {
+	case "memory":
+		cacheservice.InvalidateAll("用户清除缓存")
+	case "logs":
+		// 走 logger 自己的清理：正在写的日志文件在 Windows 上删不掉。
 		applog.Default().Clear()
-		return true, nil
-	}
-	if req.Type == "all" {
-		if err := a.cache.Clear("disk_cache"); err != nil {
+	case "all":
+		cacheservice.InvalidateAll("用户清除缓存")
+		applog.Default().Clear()
+	default:
+		if err := a.cache.Clear(req.Type); err != nil {
 			return false, err
 		}
-		applog.Default().Clear()
-		return true, nil
-	}
-	if err := a.cache.Clear(req.Type); err != nil {
-		return false, err
 	}
 	return true, nil
 }

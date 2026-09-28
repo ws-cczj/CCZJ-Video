@@ -1,143 +1,155 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
-import { GetVideoList, SearchVideos, GetTypes, GetYearsAndAreas, GetRecommend } from '../api/app'
+import { computed, ref } from 'vue'
+import { GetTypes, GetYearsAndAreas } from '../api/app'
 import * as AppMod from '../api/app'
-import type { Video, Episode, VType, VideoDetailResponse } from '../types'
+import type { Video, Episode, PlayLine, VType, VideoDetailResponse } from '../types'
+import { normalizePlayLines } from '../utils/playLines'
 import { useErrorStore } from './error'
 import { tr } from '../locales'
+import { useGeneration } from '../composables/useGeneration'
 import { readDetailCache, writeDetailCache } from './detailCache'
 
-export interface VideoFilter {
-  type_id: string | number
-  year: string
-  area: string
-  keyword: string
-  recent_days?: number
-  sort?: string // '' = 默认; 'rating' = 按评分; 'hot' = 按热度
+/**
+ * 删除通知。带序号而不是「一个 vodId + 清空」：列表页不止一个（首页与搜索页都被
+ * KeepAlive 常驻），先把 vodId 置空的那个 watcher 会让后面的页面永远收不到这次删除。
+ */
+export interface DeletionNotice {
+  seq: number
+  sourceKey: string
+  vodId: string
 }
 
+/**
+ * 跨视图共享的视频状态：详情页/播放页共用的当前影片，以及按源缓存的筛选项。
+ *
+ * 列表状态（videos/total/cursor/loading）不在这里 —— 它属于发起它的那个视图，
+ * 见 composables/useVideoList.ts。
+ */
 export const useVideoStore = defineStore('video', () => {
-  const videos = ref<Video[]>([])
   const currentVideo = ref<Video | null>(null)
-  const episodes = ref<Episode[]>([])
+  const lines = ref<PlayLine[]>([])
+  const activeLineIndex = ref(0)
+  const detailLoading = ref(false)
   const types = ref<VType[]>([])
   const years = ref<string[]>([])
   const areas = ref<string[]>([])
-  const total = ref(0)
-  const page = ref(1)
-  const nextCursor = ref('')
-  const loading = ref(false)
-  // 站内目录补搜结果：远端搜索漏掉的本地匹配项（如"大臣"命中"是，大臣"）
-  const localVideos = ref<Video[]>([])
 
-  // 删除通知：当某页面删除视频后，其他列表页监听此值来移除该视频
-  const deletedVodId = ref<string | null>(null)
-  const deletedSourceKey = ref<string | null>(null)
-  function notifyDeletion(sourceKey: string, vodId: string): void {
-    deletedSourceKey.value = sourceKey
-    deletedVodId.value = vodId
-  }
-  function clearDeletionNotify(): void {
-    deletedSourceKey.value = null
-    deletedVodId.value = null
-  }
+  /**
+   * 界面看到的「选集列表」始终是当前那条线路的集表。
+   *
+   * maccms 用 $$$ 并列多条线路，旧实现只取了第一条就丢掉其余，慢的 CDN 只能硬卡。
+   * 后端已经把 vod_play_url 拆成 lines，这里按 activeLineIndex 派生，切线路不需要重新请求详情。
+   */
+  const episodes = computed<Episode[]>(() => lines.value[activeLineIndex.value]?.episodes ?? [])
 
-  // 全局刷新通知：当数据被清空或重新采集后，通知所有页面刷新数据
   const refreshTrigger = ref(0)
-  function notifyRefresh(): void {
-    refreshTrigger.value++
-  }
+  const lastDeletion = ref<DeletionNotice | null>(null)
+
+  // 筛选项各自计数：首页并行加载类型与年地区，共用序号会让先发起的那个误判自己过期。
+  const detailGen = useGeneration()
+  const typesGen = useGeneration()
+  const areasGen = useGeneration()
+  let deletionSeq = 0
+  let typesCachedFor = ''
+  let areasCachedFor = ''
+  let detailKey = ''
 
   const errorStore = useErrorStore()
 
-  async function loadVideos(sourceKey: string, filter: VideoFilter, p = 1, pageSize = 50): Promise<void> {
-    if (p > 1 && !nextCursor.value) return
-    loading.value = true
-    try {
-      // 内部对象：强制类型断言避免 handler.VideoListReq 新字段（year/area/keyword/sort）造成 TS 报错
-      const req = {
-        source_key: sourceKey,
-        type_id: filter.type_id === undefined || filter.type_id === null ? '' : String(filter.type_id),
-        year: filter.year ?? '',
-        area: filter.area ?? '',
-        keyword: filter.keyword ?? '',
-        sort: filter.sort ?? '',
-        recent_days: filter.recent_days ?? 0,
-        cursor: p > 1 ? nextCursor.value : '',
-        page: p,
-        page_size: pageSize,
-      } as any
-      const resp = (await GetVideoList(req)) as any
-      const list: Video[] = Array.isArray(resp?.videos) ? resp.videos : []
-      const ttl: number = typeof resp?.total === 'number' ? resp.total : list.length
-      if (p === 1) {
-        // 先加载完新数据，再一次性替换，避免短暂空白引起布局跳动
-        videos.value = list
-      } else {
-        videos.value.push(...list)
-      }
-      total.value = ttl
-      page.value = p
-      nextCursor.value = typeof resp?.next_cursor === 'string' ? resp.next_cursor : ''
-    } catch (e: any) {
-      errorStore.fromError(tr('errors.loadVideosFailed'), e, 'videoStore.loadVideos')
-    } finally {
-      loading.value = false
-    }
+  function notifyDeletion(sourceKey: string, vodId: string): void {
+    deletionSeq += 1
+    lastDeletion.value = { seq: deletionSeq, sourceKey, vodId }
+  }
+
+  /** 数据被清空或重新采集后广播刷新，同时作废按源缓存的筛选项。 */
+  function notifyRefresh(): void {
+    dropFilterMeta()
+    refreshTrigger.value++
+  }
+
+  /** 由统一缓存失效层调用：源改过或清过之后，类型与年地区必须重新取。 */
+  function dropFilterMeta(sourceKey = ''): void {
+    if (!sourceKey || typesCachedFor === sourceKey) typesCachedFor = ''
+    if (!sourceKey || areasCachedFor === sourceKey) areasCachedFor = ''
+  }
+
+  /** 详情身份：与详情缓存键同构，用于判断「还是不是同一部影片」。 */
+  function detailIdentity(sourceKey: string, vodId: string, globalId: number): string {
+    return `${sourceKey}:${vodId || `global:${globalId}`}`
+  }
+
+  /**
+   * 载入详情并决定线路指针。
+   *
+   * 从详情页跳播放页会再取一次同一部影片的详情，重新归零就把用户刚选的线路丢了；
+   * 换影片才回到首条 —— 上一部选的第 3 条在这部里可能不存在，也可能正好是最慢的。
+   */
+  function applyDetail(resp: VideoDetailResponse | null | undefined, key = ''): void {
+    const next = normalizePlayLines(resp || {})
+    lines.value = next
+    const keep = key !== '' && key === detailKey ? activeLineIndex.value : 0
+    activeLineIndex.value = Math.min(Math.max(keep, 0), Math.max(next.length - 1, 0))
+    detailKey = key
+  }
+
+  /** 切换播放线路（按 lines 下标，不是后端给的线路序号）。 */
+  function setActiveLine(index: number): void {
+    if (index < 0 || index >= lines.value.length || index === activeLineIndex.value) return
+    activeLineIndex.value = index
   }
 
   // Returns true only when a healthy browser-cache entry was used. A remote
   // result, including the backend's catalog fallback on an error, never
   // masquerades as a cache hit.
   async function loadDetail(sourceKey: string, vodId: string, refresh = false, globalId = 0): Promise<boolean> {
-    loading.value = true
+    const my = detailGen.begin()
+    const key = detailIdentity(sourceKey, vodId, globalId)
+    detailLoading.value = true
     try {
       if (!refresh) {
         const cached = await readDetailCache(sourceKey, vodId, globalId)
+        if (!detailGen.isCurrent(my)) return false
         if (cached?.video) {
           currentVideo.value = cached.video
-          episodes.value = cached.episodes
+          applyDetail(cached, key)
           return true
         }
       }
       const resp = (await (AppMod as any).GetVideoDetail({ source_key: sourceKey, vod_id: vodId, global_id: globalId, refresh })) as VideoDetailResponse
+      if (!detailGen.isCurrent(my)) return false
       currentVideo.value = resp?.video ?? null
-      episodes.value = Array.isArray(resp?.episodes) ? resp.episodes : []
+      applyDetail(resp, key)
       if (resp?.video && !resp.error) {
         await writeDetailCache(sourceKey, vodId, resp, globalId)
       }
       if (resp?.error) errorStore.fromError(tr('errors.detailTempUnavailable'), new Error(resp.error.message), 'videoStore.loadDetail')
       return false
     } catch (e: any) {
+      if (!detailGen.isCurrent(my)) return false
       const msg = e?.message || ''
-      if (msg.includes('video not found') || msg.includes('sql: no rows')) {
-        currentVideo.value = null
-        episodes.value = []
-      } else {
+      currentVideo.value = null
+      applyDetail(null, key)
+      if (!msg.includes('video not found') && !msg.includes('sql: no rows')) {
         errorStore.fromError(tr('errors.loadDetailFailed'), e, 'videoStore.loadDetail')
-        currentVideo.value = null
-        episodes.value = []
       }
       return false
     } finally {
-      loading.value = false
+      if (detailGen.isCurrent(my)) detailLoading.value = false
     }
   }
 
   /** 后台刷新详情（不设置 loading，用于已有本地数据后异步更新） */
   async function refreshDetail(sourceKey: string, vodId: string, globalId = 0): Promise<boolean> {
+    const my = detailGen.begin()
     try {
       const resp = (await (AppMod as any).GetVideoDetail({ source_key: sourceKey, vod_id: vodId, global_id: globalId, refresh: true })) as VideoDetailResponse
+      if (!detailGen.isCurrent(my)) return false
       if (resp?.video) {
         currentVideo.value = resp.video
-        if (Array.isArray(resp.episodes) && resp.episodes.length > 0) {
-          episodes.value = resp.episodes
-        }
+        // 后台刷新只在真拿到了集表时才覆盖用户当前看到的线路，否则空响应会把界面清空。
+        if (normalizePlayLines(resp).length > 0) applyDetail(resp, detailIdentity(sourceKey, vodId, globalId))
         if (!resp.error) {
-          await writeDetailCache(sourceKey, vodId, {
-            video: resp.video,
-            episodes: Array.isArray(resp.episodes) ? resp.episodes : [],
-          }, globalId)
+          await writeDetailCache(sourceKey, vodId, resp, globalId)
           return true
         }
       }
@@ -147,39 +159,12 @@ export const useVideoStore = defineStore('video', () => {
     }
   }
 
-  async function search(sourceKey: string, keyword: string, p = 1): Promise<void> {
-    loading.value = true
-    try {
-      const resp = (await SearchVideos({
-        source_key: sourceKey,
-        keyword,
-        page: p,
-        page_size: 50,
-      })) as any
-      const list: Video[] = Array.isArray(resp?.videos) ? resp.videos : []
-      const local: Video[] = Array.isArray(resp?.local_videos) ? resp.local_videos : []
-      const ttl: number = typeof resp?.total === 'number' ? resp.total : list.length
-      if (p === 1) {
-        videos.value = list
-        localVideos.value = local
-      } else {
-        videos.value.push(...list)
-      }
-      // 翻页后新到达的远端项可能与首屏的本地补搜重复，统一按 vod_id 去重
-      const remoteIds = new Set(videos.value.map(v => String(v.vod_id ?? '')))
-      localVideos.value = localVideos.value.filter(v => !remoteIds.has(String(v.vod_id ?? '')))
-      total.value = ttl
-      page.value = p
-    } catch (e: any) {
-      errorStore.fromError(tr('errors.searchFailed'), e, 'videoStore.search')
-    } finally {
-      loading.value = false
-    }
-  }
-
   async function loadTypes(sourceKey: string): Promise<void> {
+    if (!sourceKey || typesCachedFor === sourceKey) return
+    const my = typesGen.begin()
     try {
       const raw = await GetTypes({ source_key: sourceKey })
+      if (!typesGen.isCurrent(my)) return
       let arr: any[] = []
       if (Array.isArray(raw)) arr = raw
       else if (raw && typeof raw === 'object') {
@@ -187,62 +172,49 @@ export const useVideoStore = defineStore('video', () => {
         else if ((raw as any).type_id && (raw as any).name) arr = [raw]
       }
       types.value = arr.map((t: any) => ({ type_id: t?.type_id ?? '', name: t?.name ?? '' }))
+      typesCachedFor = sourceKey
     } catch (e: any) {
+      if (!typesGen.isCurrent(my)) return
       errorStore.fromError(tr('errors.loadTypesFailed'), e, 'videoStore.loadTypes')
       types.value = []
     }
   }
 
   async function loadYearsAndAreas(sourceKey: string): Promise<void> {
+    if (!sourceKey || areasCachedFor === sourceKey) return
+    const my = areasGen.begin()
     try {
       const resp = (await GetYearsAndAreas(sourceKey)) as any
+      if (!areasGen.isCurrent(my)) return
       years.value = Array.isArray(resp?.years) ? resp.years : []
       areas.value = Array.isArray(resp?.areas) ? resp.areas : []
+      areasCachedFor = sourceKey
     } catch (e: any) {
+      if (!areasGen.isCurrent(my)) return
       errorStore.fromError(tr('errors.loadYearsAreasFailed'), e, 'videoStore.loadYearsAndAreas')
       years.value = []
       areas.value = []
     }
   }
 
-  async function loadRecommend(sourceKey: string, excludeIds: string[], limit = 12): Promise<Video[]> {
-    try {
-      const list = (await GetRecommend({
-        source_key: sourceKey,
-        limit,
-        exclude_ids: excludeIds,
-      })) as any
-      return Array.isArray(list) ? list : []
-    } catch (e: any) {
-      errorStore.fromError(tr('errors.loadRecommendFailed'), e, 'videoStore.loadRecommend')
-      return []
-    }
-  }
-
   return {
-    videos,
     currentVideo,
+    lines,
+    activeLineIndex,
     episodes,
+    detailLoading,
     types,
     years,
     areas,
-    total,
-    page,
-    nextCursor,
-    loading,
-    localVideos,
-    loadVideos,
+    lastDeletion,
+    refreshTrigger,
+    setActiveLine,
     loadDetail,
     refreshDetail,
-    search,
     loadTypes,
     loadYearsAndAreas,
-    loadRecommend,
-    deletedVodId,
-    deletedSourceKey,
+    dropFilterMeta,
     notifyDeletion,
-    clearDeletionNotify,
-    refreshTrigger,
     notifyRefresh,
   }
 })

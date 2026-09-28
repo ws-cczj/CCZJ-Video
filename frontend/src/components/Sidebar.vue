@@ -20,6 +20,7 @@ const navItems = computed<NavItem[]>(() => [
   { path: '/', label: t('sidebar.home'), icon: 'home' },
   { path: '/search', label: t('sidebar.search'), icon: 'search' },
   { path: '/recent', label: t('sidebar.recent'), icon: 'clock' },
+  { path: '/merged-library', label: t('sidebar.mergedLibrary'), icon: 'layers' },
   { path: '/favorites', label: t('sidebar.favorites'), icon: 'star' },
   { path: '/history', label: t('sidebar.history'), icon: 'clock' },
 ])
@@ -28,6 +29,7 @@ const toolItems = computed<NavItem[]>(() => [
   { path: '/sources', label: t('sidebar.sources'), icon: 'source' },
   { path: '/video-types', label: t('sidebar.videoTypes'), icon: 'tag' },
   { path: '/downloads', label: t('sidebar.downloads'), icon: 'download' },
+  { path: '/recycle', label: t('sidebar.recycle'), icon: 'trash' },
   { path: '/settings', label: t('sidebar.settings'), icon: 'settings' },
 ])
 

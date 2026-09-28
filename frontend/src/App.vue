@@ -29,7 +29,6 @@ const KEEP_ALIVE_INCLUDE = [
   'History',
   'Downloads',
   'Settings',
-  'AdminPanel',
 ]
 
 const router = useRouter()

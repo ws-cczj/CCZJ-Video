@@ -7,58 +7,6 @@
 import { Create as $Create } from "@wailsio/runtime";
 
 /**
- * DoubanDuplicateGroup 一个被拆成多条的豆瓣 ID。
- */
-export class DoubanDuplicateGroup {
-    /**
-     * Creates a new DoubanDuplicateGroup instance.
-     * @param {Partial<DoubanDuplicateGroup>} [$$source = {}] - The source object to create the DoubanDuplicateGroup.
-     */
-    constructor($$source = {}) {
-        if (!("douban_id" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["douban_id"] = "";
-        }
-        if (!("rows" in $$source)) {
-            /**
-             * @member
-             * @type {number}
-             */
-            this["rows"] = 0;
-        }
-        if (!("names" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["names"] = "";
-        }
-        if (!("missing" in $$source)) {
-            /**
-             * @member
-             * @type {number}
-             */
-            this["missing"] = 0;
-        }
-
-        Object.assign(this, $$source);
-    }
-
-    /**
-     * Creates a new DoubanDuplicateGroup instance from a string or object.
-     * @param {any} [$$source = {}]
-     * @returns {DoubanDuplicateGroup}
-     */
-    static createFrom($$source = {}) {
-        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        return new DoubanDuplicateGroup(/** @type {Partial<DoubanDuplicateGroup>} */($$parsedSource));
-    }
-}
-
-/**
  * DoubanHealth 豆瓣数据完整性快照。
  */
 export class DoubanHealth {
@@ -449,6 +397,420 @@ export class GlobalTypeRow {
 }
 
 /**
+ * MergeCandidate 一组疑似同一片的身份。
+ */
+export class MergeCandidate {
+    /**
+     * Creates a new MergeCandidate instance.
+     * @param {Partial<MergeCandidate>} [$$source = {}] - The source object to create the MergeCandidate.
+     */
+    constructor($$source = {}) {
+        if (!("reason" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["reason"] = "";
+        }
+        if (!("key" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["key"] = "";
+        }
+        if (!("rows" in $$source)) {
+            /**
+             * @member
+             * @type {MergeCandidateRow[]}
+             */
+            this["rows"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new MergeCandidate instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {MergeCandidate}
+     */
+    static createFrom($$source = {}) {
+        const $$createField2_0 = $$createType1;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("rows" in $$parsedSource) {
+            $$parsedSource["rows"] = $$createField2_0($$parsedSource["rows"]);
+        }
+        return new MergeCandidate(/** @type {Partial<MergeCandidate>} */($$parsedSource));
+    }
+}
+
+/**
+ * MergeCandidateRow 候选组里的一条 global_video。
+ */
+export class MergeCandidateRow {
+    /**
+     * Creates a new MergeCandidateRow instance.
+     * @param {Partial<MergeCandidateRow>} [$$source = {}] - The source object to create the MergeCandidateRow.
+     */
+    constructor($$source = {}) {
+        if (!("global_id" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["global_id"] = 0;
+        }
+        if (!("vod_name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["vod_name"] = "";
+        }
+        if (!("year" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["year"] = "";
+        }
+        if (!("type_name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["type_name"] = "";
+        }
+        if (!("douban_id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["douban_id"] = "";
+        }
+        if (!("douban_score" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["douban_score"] = "";
+        }
+        if (!("has_pic" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["has_pic"] = false;
+        }
+        if (!("catalog_rows" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["catalog_rows"] = 0;
+        }
+        if (!("favorite_rows" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["favorite_rows"] = 0;
+        }
+        if (!("history_rows" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["history_rows"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new MergeCandidateRow instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {MergeCandidateRow}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new MergeCandidateRow(/** @type {Partial<MergeCandidateRow>} */($$parsedSource));
+    }
+}
+
+/**
+ * RecycleItem 是回收站里的一行：被软删除（lifecycle_state='deleted'）的目录条目。
+ * 回收站跨源展示，所以每行自带源坐标，不能依赖调用方当前选中的源。
+ */
+export class RecycleItem {
+    /**
+     * Creates a new RecycleItem instance.
+     * @param {Partial<RecycleItem>} [$$source = {}] - The source object to create the RecycleItem.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["id"] = 0;
+        }
+        if (!("source_key" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["source_key"] = "";
+        }
+        if (!("vod_id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["vod_id"] = "";
+        }
+        if (!("global_id" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["global_id"] = 0;
+        }
+        if (!("vod_name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["vod_name"] = "";
+        }
+        if (!("vod_pic" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["vod_pic"] = "";
+        }
+        if (!("vod_year" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["vod_year"] = "";
+        }
+        if (!("type_name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["type_name"] = "";
+        }
+        if (!("deleted_at" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["deleted_at"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RecycleItem instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {RecycleItem}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new RecycleItem(/** @type {Partial<RecycleItem>} */($$parsedSource));
+    }
+}
+
+/**
+ * SourceHealth 是单个源的健康度汇总。RecentOnly 让汇总只看最近 N 条，
+ * 与历史列表共用同一份"新→旧"的取数口径，避免两处算出不同的成功率。
+ */
+export class SourceHealth {
+    /**
+     * Creates a new SourceHealth instance.
+     * @param {Partial<SourceHealth>} [$$source = {}] - The source object to create the SourceHealth.
+     */
+    constructor($$source = {}) {
+        if (!("source_key" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["source_key"] = "";
+        }
+        if (!("samples" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["samples"] = 0;
+        }
+        if (!("oks" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["oks"] = 0;
+        }
+        if (!("success_rate" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["success_rate"] = 0;
+        }
+        if (!("avg_latency_ms" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["avg_latency_ms"] = 0;
+        }
+        if (!("fail_streak" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["fail_streak"] = 0;
+        }
+        if (!("last_error" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["last_error"] = "";
+        }
+        if (!("last_error_unix" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["last_error_unix"] = 0;
+        }
+        if (!("last_sample_unix" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["last_sample_unix"] = 0;
+        }
+        if (!("last_ok" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["last_ok"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SourceHealth instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {SourceHealth}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new SourceHealth(/** @type {Partial<SourceHealth>} */($$parsedSource));
+    }
+}
+
+/**
+ * 源健康度样本。
+ * 
+ * 采集源是外部站点，接口今天能答明天就可能永久下线。在这之前这类信息只存在于
+ * 内存的采集状态和滚动日志里：进程一重启就归零，用户看不到"这个源其实已经连续
+ * 失败两周了"，也没法区分偶发抖动和真的失效。这里把每次运行的结果按样本落库，
+ * 于是健康度有了历史，失效巡检也有了记账的地方。
+ * 
+ * 粒度刻意是"一次运行一条"而不是"一页一条"：一次全量采集会上百页，逐页写等于
+ * 为了诊断把用户库撑大。运行级样本已经能回答唯一重要的问题——这个源还能不能用。
+ */
+export class SourceHealthSample {
+    /**
+     * Creates a new SourceHealthSample instance.
+     * @param {Partial<SourceHealthSample>} [$$source = {}] - The source object to create the SourceHealthSample.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["id"] = 0;
+        }
+        if (!("source_key" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["source_key"] = "";
+        }
+        if (!("kind" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["kind"] = "";
+        }
+        if (!("ok" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["ok"] = false;
+        }
+        if (!("latency_ms" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["latency_ms"] = 0;
+        }
+        if (!("saved" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["saved"] = 0;
+        }
+        if (!("err" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["err"] = "";
+        }
+        if (!("ts_unix" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["ts_unix"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SourceHealthSample instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {SourceHealthSample}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new SourceHealthSample(/** @type {Partial<SourceHealthSample>} */($$parsedSource));
+    }
+}
+
+/**
  * SourceVideoRef identifies a source catalog entry sharing a global identity.
  */
 export class SourceVideoRef {
@@ -593,3 +955,135 @@ export class TableStat {
         return new TableStat(/** @type {Partial<TableStat>} */($$parsedSource));
     }
 }
+
+/**
+ * UnionVideo 是合并列表里的一行。SourceKey/SourceVodID 指向代表行，
+ * 点进详情或播放就用这一对；Sources 是同一身份还在哪些源里有货。
+ */
+export class UnionVideo {
+    /**
+     * Creates a new UnionVideo instance.
+     * @param {Partial<UnionVideo>} [$$source = {}] - The source object to create the UnionVideo.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["id"] = 0;
+        }
+        if (!("global_id" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["global_id"] = 0;
+        }
+        if (!("source_key" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["source_key"] = "";
+        }
+        if (!("vod_id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["vod_id"] = "";
+        }
+        if (!("type_id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["type_id"] = "";
+        }
+        if (!("type_name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["type_name"] = "";
+        }
+        if (!("vod_name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["vod_name"] = "";
+        }
+        if (!("vod_pic" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["vod_pic"] = "";
+        }
+        if (!("vod_remarks" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["vod_remarks"] = "";
+        }
+        if (!("vod_year" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["vod_year"] = "";
+        }
+        if (!("vod_area" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["vod_area"] = "";
+        }
+        if (!("vod_time" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["vod_time"] = "";
+        }
+        if (!("source_count" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["source_count"] = 0;
+        }
+        if (!("sources" in $$source)) {
+            /**
+             * @member
+             * @type {string[]}
+             */
+            this["sources"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new UnionVideo instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {UnionVideo}
+     */
+    static createFrom($$source = {}) {
+        const $$createField13_0 = $$createType2;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("sources" in $$parsedSource) {
+            $$parsedSource["sources"] = $$createField13_0($$parsedSource["sources"]);
+        }
+        return new UnionVideo(/** @type {Partial<UnionVideo>} */($$parsedSource));
+    }
+}
+
+// Private type creation functions
+const $$createType0 = MergeCandidateRow.createFrom;
+const $$createType1 = $Create.Array($$createType0);
+const $$createType2 = $Create.Array($Create.Any);

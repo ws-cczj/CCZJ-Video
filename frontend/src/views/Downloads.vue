@@ -309,11 +309,11 @@ function isMatchFilter(t: { status: string }): boolean {
               <Icon name="pause" :size="12" /><span>{{ tr('downloads.pause') }}</span>
             </button>
             <button
-              v-if="task.status === 'paused'"
+              v-if="task.status === 'paused' || task.status === 'error'"
               class="t-btn t-btn-resume cczj-cursor-pointer cczj-rounded cczj-transition cczj-flex cczj-items-center cczj-gap-1 cczj-px-2 cczj-py-1 cczj-text-xs"
               @click="dl.resume(task.task_id)"
             >
-              <Icon name="play" :size="12" /><span>{{ tr('downloads.resume') }}</span>
+              <Icon name="play" :size="12" /><span>{{ task.status === 'error' ? tr('common.retry') : tr('downloads.resume') }}</span>
             </button>
             <button
               v-if="task.status === 'downloading' || task.status === 'queued' || task.status === 'paused'"

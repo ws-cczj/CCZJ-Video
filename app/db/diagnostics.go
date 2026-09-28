@@ -3,7 +3,6 @@ package db
 import (
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 )
 
@@ -26,14 +25,6 @@ type DoubanHealth struct {
 	DuplicateGroups   int64 `json:"duplicate_groups"`
 	DuplicateRows     int64 `json:"duplicate_rows"`
 	InheritCandidates int64 `json:"inherit_candidates"`
-}
-
-// DoubanDuplicateGroup 一个被拆成多条的豆瓣 ID。
-type DoubanDuplicateGroup struct {
-	DoubanID string `db:"douban_id" json:"douban_id"`
-	Rows     int    `db:"rows" json:"rows"`
-	Names    string `db:"names" json:"names"`
-	Missing  int    `db:"missing" json:"missing"`
 }
 
 // TableStats 返回所有用户表的行数。表名来自 sqlite_master 且做了标识符校验，
@@ -104,33 +95,4 @@ func GetDoubanHealth() (DoubanHealth, error) {
 		}
 	}
 	return h, nil
-}
-
-// ListDoubanDuplicateGroups 列出被拆成多条的豆瓣 ID，最多 limit 组。
-func ListDoubanDuplicateGroups(limit int) ([]DoubanDuplicateGroup, error) {
-	if instance == nil {
-		return nil, errors.New("database not initialized")
-	}
-	if limit <= 0 || limit > 200 {
-		limit = 50
-	}
-	var rows []DoubanDuplicateGroup
-	err := instance.Select(&rows, `
-		SELECT g.douban_id AS douban_id,
-		       COUNT(*)    AS rows,
-		       GROUP_CONCAT(g.vod_name, ' / ') AS names,
-		       SUM(CASE WHEN TRIM(COALESCE(g.douban_score, '')) = '' THEN 1 ELSE 0 END) AS missing
-		FROM global_video g
-		WHERE TRIM(COALESCE(g.douban_id, '')) <> ''
-		GROUP BY g.douban_id
-		HAVING COUNT(*) > 1
-		ORDER BY missing DESC, g.douban_id
-		LIMIT ?`, limit)
-	if err != nil {
-		return nil, err
-	}
-	for i := range rows {
-		rows[i].Names = strings.TrimSpace(rows[i].Names)
-	}
-	return rows, nil
 }

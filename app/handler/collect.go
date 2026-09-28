@@ -40,6 +40,96 @@ type CollectStatus struct {
 	Names     []string `json:"names"` // 当前页的视频名称
 	Log       string   `json:"log"`
 	Mode      string   `json:"mode"` // 当前采集模式
+
+	// 上一次运行的结果：进度字段只描述"正在跑的这一次"，运行结束后必须由
+	// 这组字段说明这次到底完成了多少、哪些页没落地。
+	Saved          int    `json:"saved"`
+	FetchFailures  []int  `json:"fetch_failures"`
+	SaveFailures   []int  `json:"save_failures"`
+	EmptyPages     []int  `json:"empty_pages"`
+	ErrorKind      string `json:"last_error_kind"`
+	ElapsedMs      int64  `json:"elapsed_ms"`
+	FinishedAtUnix int64  `json:"finished_at_unix"`
+	Stopped        bool   `json:"stopped"`
+}
+
+// RunOutcome 是引擎一次运行结束后写回状态快照的报告。
+type RunOutcome struct {
+	Log           string
+	Saved         int
+	FetchFailures []int
+	SaveFailures  []int
+	EmptyPages    []int
+	ErrorKind     string
+	ElapsedMs     int64
+	Stopped       bool
+}
+
+// OutcomeFromRun 把引擎的统计与错误压平成前端可直接消费的报告。
+func OutcomeFromRun(stats *collect.RunStats, err error) RunOutcome {
+	out := RunOutcome{
+		ErrorKind: collect.ErrorKind(err),
+	}
+	if err != nil {
+		out.Log = err.Error()
+	}
+	if stats != nil {
+		out.Saved = stats.Saved
+		out.FetchFailures = stats.FetchFailures
+		out.SaveFailures = stats.SaveFailures
+		out.EmptyPages = stats.EmptyPages
+		out.Stopped = stats.Stopped
+		out.ElapsedMs = int64(stats.ElapsedSeconds * 1000)
+	}
+	return out
+}
+
+// RecordCollectHealth 把一次采集运行记成一条源健康度样本，手动采集与定时采集共用。
+//
+// 用户手动停止直接跳过：按下停止不代表源有问题，记进去会把一个好源冤枉成坏的。
+// 样本本身只在库写坏时才会失败，而那不该影响采集，所以只落日志。
+func RecordCollectHealth(sourceKey string, outcome RunOutcome, err error) {
+	if outcome.Stopped {
+		return
+	}
+	ok, problem := classifyCollectRun(outcome, err)
+	if dbErr := db.RecordSourceHealth(
+		sourceKey, db.SourceHealthKindCollect, ok, outcome.ElapsedMs, outcome.Saved, problem, time.Now(),
+	); dbErr != nil {
+		applog.Warn("[Collect] 记录源健康度失败（不影响采集）: %v", dbErr)
+	}
+}
+
+// classifyCollectRun 判定一次运行算不算健康，以及不健康时的说法。
+//
+// 有页没落地不能记成成功：那正是"源在慢慢不行"最早的信号，也是 A1 之前被吞掉的那类失败。
+func classifyCollectRun(outcome RunOutcome, err error) (ok bool, problem string) {
+	switch {
+	case err != nil:
+		return false, err.Error()
+	case len(outcome.FetchFailures) > 0:
+		return false, fmt.Sprintf("%d 页取页失败", len(outcome.FetchFailures))
+	case len(outcome.SaveFailures) > 0:
+		return false, fmt.Sprintf("%d 页入库失败", len(outcome.SaveFailures))
+	}
+	return true, ""
+}
+
+// CollectDonePayload 是 collect:done 事件的载荷。带上失败页码与耗时，
+// 前端不必再轮询 GetCollectStatus 就能区分完成与部分失败。
+func CollectDonePayload(sourceKey, mode string, outcome RunOutcome) map[string]any {
+	return map[string]any{
+		"source_key":     sourceKey,
+		"mode":           mode,
+		"error":          outcome.Log,
+		"error_kind":     outcome.ErrorKind,
+		"saved":          outcome.Saved,
+		"fetch_failures": outcome.FetchFailures,
+		"save_failures":  outcome.SaveFailures,
+		"empty_pages":    outcome.EmptyPages,
+		"elapsed_ms":     outcome.ElapsedMs,
+		"stopped":        outcome.Stopped,
+	}
 }
 
 // CollectScheduleConfig 采集调度配置（持久化到 settings 表）
@@ -133,7 +223,8 @@ func GetLastExitUnix() int64 {
 	return v
 }
 
-// 记录最近一次周期采集的执行时间
+// 记录最近一次采集的执行时间，周期调度和手动触发都写这里，
+// 这样设置页重启后仍能看到"上次采集"，而不是随内存一起归零。
 func TouchLastRun() {
 	_ = db.SetSetting(scheduleLastRunKey, strconv.FormatInt(time.Now().Unix(), 10))
 }
@@ -168,12 +259,17 @@ func GetCollectStatus(sourceKey string) *CollectStatus {
 	engineMapMu.Lock()
 	defer engineMapMu.Unlock()
 	if e, ok := engineMap[sourceKey]; ok {
-		e.mu.Lock()
-		defer e.mu.Unlock()
-		s := *e.status // 拷贝
+		s := e.snapshotStatus() // 拷贝
 		return &s
 	}
 	return &CollectStatus{SourceKey: sourceKey}
+}
+
+// snapshotStatus 返回状态副本，调用方不会读到半更新的字段。
+func (e *engineEntry) snapshotStatus() CollectStatus {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return *e.status
 }
 
 // GetOrCreateEngine 获取或创建一个新的引擎 entry（用于启动新采集）
@@ -196,8 +292,9 @@ func (e *engineEntry) BindEngine(engine *collect.Engine, mode string) {
 	e.engine = engine
 	e.status.Running = true
 	e.status.Paused = false
-	e.mode = mode
 	e.status.Mode = mode
+	e.mode = mode
+	e.status.clearLastRunResult()
 }
 
 // TryBindEngine makes the idle-to-running transition atomic. Callers must not
@@ -212,9 +309,36 @@ func (e *engineEntry) TryBindEngine(engine *collect.Engine, mode string) bool {
 	e.engine = engine
 	e.status.Running = true
 	e.status.Paused = false
-	e.mode = mode
 	e.status.Mode = mode
+	e.mode = mode
+	e.status.clearLastRunResult()
 	return true
+}
+
+// clearLastRunResult 在新一轮开始时抹掉上一轮的结果，否则旧的失败页码会被
+// 当成这一轮的状态显示。
+func (s *CollectStatus) clearLastRunResult() {
+	s.Saved = 0
+	s.FetchFailures = nil
+	s.SaveFailures = nil
+	s.EmptyPages = nil
+	s.ErrorKind = ""
+	s.ElapsedMs = 0
+	s.FinishedAtUnix = 0
+	s.Stopped = false
+}
+
+// applyOutcome 把引擎报告写入状态快照，前端据此区分"全部落地"与"部分失败"。
+func (s *CollectStatus) applyOutcome(outcome RunOutcome) {
+	s.Log = outcome.Log
+	s.Saved = outcome.Saved
+	s.FetchFailures = outcome.FetchFailures
+	s.SaveFailures = outcome.SaveFailures
+	s.EmptyPages = outcome.EmptyPages
+	s.ErrorKind = outcome.ErrorKind
+	s.ElapsedMs = outcome.ElapsedMs
+	s.Stopped = outcome.Stopped
+	s.FinishedAtUnix = time.Now().Unix()
 }
 
 func (e *engineEntry) GetMode() string {
@@ -237,16 +361,16 @@ func (e *engineEntry) UpdatePageNames(page int, names []string) {
 	e.status.Names = names
 }
 
-func (e *engineEntry) MarkDone(logMsg string) {
+func (e *engineEntry) MarkDone(outcome RunOutcome) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.status.Running = false
 	e.status.Paused = false
-	e.status.Log = logMsg
+	e.status.applyOutcome(outcome)
 }
 
 // FinishEngine ignores a stale callback from a previous run.
-func (e *engineEntry) FinishEngine(engine *collect.Engine, logMsg string) {
+func (e *engineEntry) FinishEngine(engine *collect.Engine, outcome RunOutcome) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.engine != engine {
@@ -254,7 +378,7 @@ func (e *engineEntry) FinishEngine(engine *collect.Engine, logMsg string) {
 	}
 	e.status.Running = false
 	e.status.Paused = false
-	e.status.Log = logMsg
+	e.status.applyOutcome(outcome)
 }
 
 func (e *engineEntry) SetPaused(paused bool) {

@@ -7,6 +7,7 @@ import { GetSetting, GetRecentHistory, GetVideoList, SearchSource, ImportSourceV
 import { onBackendEvent } from '../api/events'
 import { useSourceStore } from '../stores/source'
 import { useVideoStore } from '../stores/video'
+import { useVideoList } from '../composables/useVideoList'
 import { usePosterCacheStore } from '../stores/posterCache'
 import VideoCard from '../components/VideoCard.vue'
 import RemoteImage from '../components/RemoteImage.vue'
@@ -22,6 +23,8 @@ const router = useRouter()
 const sourceStore = useSourceStore()
 const videoStore = useVideoStore()
 const posterCache = usePosterCacheStore()
+// 本页自己的列表状态：与首页各自独立，互不覆盖结果与翻页游标。
+const list = useVideoList({ onDeleted })
 
 const sourceOptions = computed(() =>
   sourceStore.sources
@@ -43,10 +46,7 @@ let suppressSourceWatch = false
 let lastSearchRefreshTrigger = 0
 
 function clearSearchResults(): void {
-  videoStore.videos.length = 0
-  videoStore.localVideos.length = 0
-  videoStore.total = 0
-  videoStore.loading = false
+  list.reset()
 }
 
 // 是否进行过搜索
@@ -165,16 +165,10 @@ watch(keyword, (value) => {
   searchProgress.value = { stage: '', message: '', current: 0, total: 0 }
 })
 
-// 删除通知：从详情页删除视频后，自动移除本地列表中的对应项
-watch(() => videoStore.deletedVodId, (vodId) => {
-  if (!vodId || videoStore.deletedSourceKey !== currentSearchSource.value) return
-  const idx = videoStore.videos.findIndex(v => String(v.vod_id) === vodId)
-  if (idx >= 0) {
-    videoStore.videos.splice(idx, 1)
-    videoStore.total = Math.max(0, videoStore.total - 1)
-  }
-  const li = videoStore.localVideos.findIndex(v => String(v.vod_id) === vodId)
-  if (li >= 0) videoStore.localVideos.splice(li, 1)
+// 删除通知：列表本身（videos / localVideos / total）由 useVideoList 按自己的
+// sourceKey 移除，这里只清理本页派生出来的结构。通知跨源也会到，先按当前源过滤。
+function onDeleted(vodId: string, sourceKey: string): void {
+  if (sourceKey !== currentSearchSource.value) return
   // 源站搜索结果
   const si = sourceSearchResults.value.findIndex(v => String(v.vod_id) === vodId)
   if (si >= 0) {
@@ -186,8 +180,7 @@ watch(() => videoStore.deletedVodId, (vodId) => {
     const gi = g.items.findIndex(i => String(i.vod_id) === vodId)
     if (gi >= 0) g.items.splice(gi, 1)
   }
-  videoStore.clearDeletionNotify()
-})
+}
 
 async function loadRecommendations(): Promise<void> {
   if (!currentSearchSource.value) return
@@ -347,7 +340,7 @@ const PAGE_SIZE = 50
 
 const searchCurrentPage = ref(1)
 const searchTotalPages = computed(() =>
-  videoStore.total > 0 ? Math.ceil(videoStore.total / PAGE_SIZE) : 1
+  list.total > 0 ? Math.ceil(list.total / PAGE_SIZE) : 1
 )
 const searchPageRange = computed(() => {
   const total = searchTotalPages.value
@@ -367,7 +360,7 @@ const searchPageRange = computed(() => {
 function goSearchPage(p: number): void {
   if (p < 1 || p > searchTotalPages.value || p === searchCurrentPage.value) return
   searchCurrentPage.value = p
-  videoStore.search(currentSearchSource.value!, keyword.value.trim(), p)
+  list.search(currentSearchSource.value!, keyword.value.trim(), p)
 }
 
 function toggleSourceSearchMode(): void {
@@ -399,8 +392,8 @@ function doSearch(): void {
     clearSearchResults()
     doSourceSearch(1)
   } else {
-    videoStore.localVideos.length = 0
-    videoStore.search(currentSearchSource.value, kw)
+    list.reset()
+    list.search(currentSearchSource.value, kw)
   }
 }
 
@@ -416,12 +409,12 @@ function goDetailVideo(v: Video): void {
 function loadMore(): void {
   if (
     currentSearchSource.value &&
-    videoStore.videos.length < videoStore.total
+    list.videos.length < list.total
   ) {
-    videoStore.search(
+    list.search(
       currentSearchSource.value,
       keyword.value.trim(),
-      videoStore.page + 1
+      list.page + 1
     )
   }
 }
@@ -541,10 +534,10 @@ async function doSourceSearch(page: number = 1): Promise<void> {
       sourceSearchPageCount.value = 1
     }
     if (Array.isArray(resp?.videos)) {
-      const list = resp.videos as Video[]
-      sourceSearchResults.value = list
+      const remoteVideos = resp.videos as Video[]
+      sourceSearchResults.value = remoteVideos
       // 后端已按本地目录标注 in_catalog，回填后跨会话也能显示"已入库"
-      markImported(list.filter(v => v.in_catalog).map(v => String(v.vod_id ?? '')).filter(Boolean))
+      markImported(remoteVideos.filter(v => v.in_catalog).map(v => String(v.vod_id ?? '')).filter(Boolean))
     }
   } catch (e) {
     if (generation === sourceSearchGeneration) console.warn(t('search.sourceSearchFailed'), e)
@@ -816,12 +809,12 @@ function onSourceVideoClick(v: Video): void {
     </section>
 
     <!-- 搜索结果 -->
-    <div v-if="hasKeyword && hasSearched && !sourceSearchMode && !hasSourceSearched && videoStore.loading && videoStore.videos.length === 0" class="cczj-text-center cczj-py-8">
+    <div v-if="hasKeyword && hasSearched && !sourceSearchMode && !hasSourceSearched && list.loading && list.videos.length === 0" class="cczj-text-center cczj-py-8">
       <LoadingSpinner :label="t('search.searching')" />
     </div>
 
     <div
-      v-else-if="hasKeyword && hasSearched && !sourceSearchMode && !hasSourceSearched && videoStore.videos.length > 0"
+      v-else-if="hasKeyword && hasSearched && !sourceSearchMode && !hasSourceSearched && list.videos.length > 0"
       class="search-results cczj-mb-4"
     >
       <div class="results-header cczj-flex cczj-items-center cczj-justify-between cczj-gap-2 cczj-mb-3">
@@ -829,11 +822,11 @@ function onSourceVideoClick(v: Video): void {
           <Icon name="search" :size="12" />
           {{ t('search.searchResults') }}
         </span>
-        <span class="results-count cczj-text-sm cczj-text-muted">{{ t('search.totalItems', { count: videoStore.total }) }}</span>
+        <span class="results-count cczj-text-sm cczj-text-muted">{{ t('search.totalItems', { count: list.total }) }}</span>
       </div>
       <div class="video-grid cczj-grid" :style="gridStyle">
         <VideoCard
-          v-for="v in videoStore.videos"
+          v-for="v in list.videos"
           :key="`${v.vod_g_id ?? v.vod_id ?? v.id}`"
           :video="v"
           :in-catalog="v.in_catalog"
@@ -844,7 +837,7 @@ function onSourceVideoClick(v: Video): void {
     </div>
 
     <div
-      v-if="hasKeyword && hasSearched && !sourceSearchMode && !hasSourceSearched && videoStore.videos.length > 0 && searchTotalPages > 1"
+      v-if="hasKeyword && hasSearched && !sourceSearchMode && !hasSourceSearched && list.videos.length > 0 && searchTotalPages > 1"
       class="search-pagination cczj-flex cczj-items-center cczj-justify-center cczj-gap-2 cczj-my-4"
     >
       <button
@@ -870,12 +863,12 @@ function onSourceVideoClick(v: Video): void {
       >
         <Icon name="chevron-right" :size="12" />
       </button>
-      <span class="page-info cczj-text-sm cczj-text-muted">{{ searchCurrentPage }} / {{ searchTotalPages }} {{ t('search.page') }} · {{ t('search.totalItems', { count: videoStore.total }) }}</span>
+      <span class="page-info cczj-text-sm cczj-text-muted">{{ searchCurrentPage }} / {{ searchTotalPages }} {{ t('search.page') }} · {{ t('search.totalItems', { count: list.total }) }}</span>
     </div>
 
     <!-- 本地库补搜：源站关键词匹配不到、但本地目录标题包含关键词 -->
     <div
-      v-if="hasKeyword && hasSearched && !sourceSearchMode && !hasSourceSearched && !videoStore.loading && videoStore.localVideos.length > 0"
+      v-if="hasKeyword && hasSearched && !sourceSearchMode && !hasSourceSearched && !list.loading && list.localVideos.length > 0"
       class="local-matches cczj-mb-4"
     >
       <div class="results-header cczj-flex cczj-items-center cczj-justify-between cczj-gap-2 cczj-mb-3">
@@ -883,11 +876,11 @@ function onSourceVideoClick(v: Video): void {
           <Icon name="database" :size="12" />
           {{ t('search.localMatches') }}
         </span>
-        <span class="results-count cczj-text-sm cczj-text-muted">{{ t('search.totalItems', { count: videoStore.localVideos.length }) }}</span>
+        <span class="results-count cczj-text-sm cczj-text-muted">{{ t('search.totalItems', { count: list.localVideos.length }) }}</span>
       </div>
       <div class="video-grid cczj-grid" :style="gridStyle">
         <VideoCard
-          v-for="v in videoStore.localVideos"
+          v-for="v in list.localVideos"
           :key="`local-${v.vod_g_id ?? v.vod_id ?? v.id}`"
           :video="v"
           :in-catalog="true"
@@ -943,9 +936,9 @@ function onSourceVideoClick(v: Video): void {
       v-if="
         hasSearched &&
         hasKeyword &&
-        !videoStore.loading &&
-        videoStore.videos.length === 0 &&
-        videoStore.localVideos.length === 0 &&
+        !list.loading &&
+        list.videos.length === 0 &&
+        list.localVideos.length === 0 &&
         sourceStore.currentSourceKey &&
         !sourceSearching &&
         !hasSourceSearched
@@ -1103,7 +1096,7 @@ function onSourceVideoClick(v: Video): void {
       />
     </div>
 
-    <div v-if="!currentSearchSource && !videoStore.loading" class="cczj-mb-4">
+    <div v-if="!currentSearchSource && !list.loading" class="cczj-mb-4">
       <EmptyState
         icon="📡"
         :title="t('search.selectSourceFirst')"

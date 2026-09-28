@@ -4,18 +4,20 @@ import { ref, onMounted, computed, watch, onActivated, onDeactivated } from 'vue
 import { tr } from '../locales'
 import { favRefreshTick } from '../stores/favoritesSync'
 import { useRouter } from 'vue-router'
-import { GetSetting, GetFavorites, GetVideoDetail, RemoveFavorite } from '../api/app'
+import { GetSetting, GetFavorites, GetVideoDetail, RemoveFavorite, normalizeApiError } from '../api/app'
 import VideoCard from '../components/VideoCard.vue'
 import Icon from '../components/Icon.vue'
 import { Button, Modal, Spinner as LoadingSpinner, Empty as EmptyState } from '../components/ui'
 import { getDetailPath } from '../utils'
 import { useConfirmStore } from '../stores/confirm'
+import { useErrorStore } from '../stores/error'
 import type { Video, Favorite } from '../types'
 import { readStorage, writeStorage } from '../platform/storage'
 
 const router = useRouter()
 
 const confirmStore = useConfirmStore()
+const errorStore = useErrorStore()
 type FavItem = Omit<Favorite, 'video'> & {
   video?: Video | null
   folderId: string
@@ -30,7 +32,8 @@ interface FavFolder {
 const FOLDERS_KEY = 'cczj_fav_folders'
 const MAPPING_KEY = 'cczj_fav_mapping' // key(source-vod_id) -> folderId
 
-const folders = ref<FavFolder[]>([{ id: 'default', name: tr('favorites.defaultFolder'), default: true }])
+// 默认夹的名字不落盘：落的是译文就会把当前语言冻进 localStorage，切语言后名字不变。
+const folders = ref<FavFolder[]>([{ id: 'default', name: '', default: true }])
 const activeFolderId = ref<string>('default')
 const mapping = ref<Record<string, string>>({}) // favKey -> folderId
 
@@ -40,7 +43,7 @@ function loadFoldersFromStorage(): void {
     if (savedFolders) folders.value = savedFolders
     // 确保至少有默认夹
     if (!folders.value.some(f => f.default)) {
-      folders.value.unshift({ id: 'default', name: tr('favorites.defaultFolder'), default: true })
+      folders.value.unshift({ id: 'default', name: '', default: true })
     }
   } catch { /* ignore */ }
   mapping.value = readStorage<Record<string, string>>(MAPPING_KEY, {})
@@ -61,13 +64,26 @@ function resolveFolderId(f: { source_key: string; vod_id: string }): string {
   return fid && folders.value.some(x => x.id === fid) ? fid : 'default'
 }
 
+// 默认夹的名字只在看的时候现取译文，切语言才会跟着变。
+function folderLabel(folder: FavFolder): string {
+  return folder.default ? tr('favorites.defaultFolder') : folder.name
+}
+
 function getFolderName(id: string): string {
-  return folders.value.find(f => f.id === id)?.name || tr('favorites.defaultFolder')
+  const folder = folders.value.find(f => f.id === id)
+  return folder ? folderLabel(folder) : tr('favorites.defaultFolder')
 }
 
 const favorites = ref<FavItem[]>([])
 const loading = ref(false)
 const removingKey = ref<string>('')
+
+// 分页状态：favPage 是已经取到的最后一页，lastFavPageCount 装满一页才算还有下一页。
+const FAV_PAGE_SIZE = 24
+const favPage = ref(1)
+const lastFavPageCount = ref(0)
+const loadingMore = ref(false)
+const hasMoreFavorites = computed(() => lastFavPageCount.value >= FAV_PAGE_SIZE)
 
 const manageMode = ref(false)
 const selectedKeys = ref<Set<string>>(new Set<string>())
@@ -137,32 +153,56 @@ onDeactivated(() => { wasDeactivated = true })
 
 watch(favRefreshTick, () => { loadFavorites() })
 
+async function fetchFavoritePage(page: number): Promise<void> {
+  const raw = await GetFavorites(page, FAV_PAGE_SIZE)
+  const favs: Favorite[] = Array.isArray(raw) ? (raw as Favorite[]) : []
+  lastFavPageCount.value = favs.length
+  const result: FavItem[] = []
+  for (const f of favs) {
+    try {
+      const detail = (await GetVideoDetail({
+        source_key: f.source_key,
+        vod_id: String(f.vod_id),
+        global_id: 0,
+        refresh: false,
+      })) as { video: Video | null }
+      const fav: FavItem = { ...f, video: detail?.video || null, folderId: resolveFolderId(f) }
+      result.push(fav)
+    } catch {
+      const fav: FavItem = { ...f, video: null, folderId: resolveFolderId(f) }
+      result.push(fav)
+    }
+  }
+  favorites.value = page === 1 ? result : favorites.value.concat(result)
+  favPage.value = page
+}
+
 async function loadFavorites(): Promise<void> {
   loading.value = true
   try {
-    const raw = await GetFavorites(1, 100)
-    const favs: Favorite[] = Array.isArray(raw) ? (raw as Favorite[]) : []
-    const result: FavItem[] = []
-    for (const f of favs) {
-      try {
-        const detail = (await GetVideoDetail({
-          source_key: f.source_key,
-          vod_id: String(f.vod_id),
-          global_id: 0,
-          refresh: false,
-        })) as { video: Video | null }
-        const fav: FavItem = { ...f, video: detail?.video || null, folderId: resolveFolderId(f) }
-        result.push(fav)
-      } catch {
-        const fav: FavItem = { ...f, video: null, folderId: resolveFolderId(f) }
-        result.push(fav)
-      }
-    }
-    favorites.value = result
+    await fetchFavoritePage(1)
   } catch (e) {
+    const err = normalizeApiError(e)
     console.error('加载收藏失败:', e)
+    errorStore.error(tr('favorites.loadFailed'), err.message, '', 'Favorites')
   } finally {
     loading.value = false
+  }
+}
+
+// 收藏过去固定取前 100 条，超出部分既不显示也不提示。
+// 现在一页 24 条，取满就承认还有下一页，把展开交给用户。
+async function loadMoreFavorites(): Promise<void> {
+  if (loading.value || loadingMore.value || !hasMoreFavorites.value) return
+  loadingMore.value = true
+  try {
+    await fetchFavoritePage(favPage.value + 1)
+  } catch (e) {
+    const err = normalizeApiError(e)
+    console.error('加载更多收藏失败:', e)
+    errorStore.error(tr('favorites.loadFailed'), err.message, '', 'Favorites')
+  } finally {
+    loadingMore.value = false
   }
 }
 
@@ -223,7 +263,9 @@ async function onRemove(fav: FavItem, evt: Event): Promise<void> {
       persistMapping()
     }
   } catch (e) {
+    const err = normalizeApiError(e)
     console.error('取消收藏失败:', e)
+    errorStore.error(tr('favorites.removeFailed'), err.message, '', 'Favorites')
   } finally {
     removingKey.value = ''
   }
@@ -232,6 +274,7 @@ async function onRemove(fav: FavItem, evt: Event): Promise<void> {
 async function onRemoveSelected(): Promise<void> {
   if (selectedKeys.value.size === 0 || batchRemoving.value) return
   batchRemoving.value = true
+  const failed: string[] = []
   try {
     const toRemove = favorites.value.filter((f) => selectedKeys.value.has(favKey(f)))
     for (const fav of toRemove) {
@@ -245,7 +288,16 @@ async function onRemoveSelected(): Promise<void> {
         if (mapping.value[k]) { delete mapping.value[k] }
       } catch (e) {
         console.error('取消收藏失败:', e)
+        failed.push(fav.video?.vod_name || fav.vod_id)
       }
+    }
+    if (failed.length > 0) {
+      errorStore.error(
+        tr('favorites.removeFailed'),
+        tr('favorites.removeFailedDetail', { count: failed.length, names: failed.slice(0, 3).join('、') }),
+        '',
+        'Favorites',
+      )
     }
     persistMapping()
     selectedKeys.value = new Set()
@@ -349,7 +401,7 @@ watch([mapping, folders], () => {
         <p class="desc cczj-text-muted cczj-mt-1" v-else-if="manageMode">
           {{ tr('favorites.manageHint') }}
         </p>
-        <p class="desc cczj-text-muted cczj-mt-1" v-else-if="favorites.length > 0">{{ tr('favorites.folderSummary', { total: favorites.length, name: getFolderName(activeFolderId), count: displayedFavorites.length }) }}
+        <p class="desc cczj-text-muted cczj-mt-1" v-else-if="favorites.length > 0">{{ tr('favorites.folderSummary', { total: favorites.length, name: getFolderName(activeFolderId), count: displayedFavorites.length }) }}<template v-if="hasMoreFavorites"> · {{ tr('favorites.moreAvailable') }}</template>
           </p>
         <p class="desc cczj-text-muted cczj-mt-1" v-else>{{ tr('favorites.emptyHint') }}</p>
       </div>
@@ -386,7 +438,7 @@ watch([mapping, folders], () => {
           :class="{ active: folder.id === activeFolderId }" @click="activeFolderId = folder.id">
           <div class="folder-name cczj-flex cczj-items-center cczj-gap-2 cczj-flex-1">
             <Icon :name="folder.default ? 'star' : 'list'" :size="14" />
-            <span>{{ folder.name }}</span>
+            <span>{{ folderLabel(folder) }}</span>
             <small class="count cczj-text-muted cczj-text-xs">{{
               favorites.filter((f) => f.folderId === folder.id).length
             }}</small>
@@ -438,6 +490,13 @@ watch([mapping, folders], () => {
             </span>
           </div>
         </div>
+
+        <div v-if="hasMoreFavorites && !loading && !manageMode" class="load-more cczj-flex cczj-justify-center cczj-pt-4">
+          <Button variant="secondary" size="sm" :disabled="loadingMore" @click="loadMoreFavorites">
+            <Icon name="chevron-down" :size="14" />
+            <span>{{ loadingMore ? tr('favorites.loadingMore') : tr('favorites.loadMore') }}</span>
+          </Button>
+        </div>
       </main>
     </div>
 
@@ -458,7 +517,7 @@ watch([mapping, folders], () => {
           <input type="radio" v-model="moveTargetFolderId" :value="folder.id" />
           <span class="folder-radio" />
           <Icon :name="folder.default ? 'star' : 'list'" :size="14" />
-          <span class="cczj-flex-1">{{ folder.name }}</span>
+          <span class="cczj-flex-1">{{ folderLabel(folder) }}</span>
           <small class="cczj-text-muted cczj-text-xs">{{ tr('favorites.videoCount', { count: favorites.filter((f) => f.folderId === folder.id).length }) }}</small>
         </label>
       </div>

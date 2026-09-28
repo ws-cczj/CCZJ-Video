@@ -14,7 +14,9 @@ import * as applog$0 from "../applog/models.js";
 import * as db$0 from "../db/models.js";
 
 /**
- * CacheInfo 缓存信息
+ * CacheInfo 应用自己写到磁盘上的占用，外加进程内派生缓存的条目数。
+ * 浏览器侧的 localStorage / IndexedDB 由前端统计，Go 报不出真实数字，
+ * 以前那两只恒为 0 的字段已经删掉。
  */
 export class CacheInfo {
     /**
@@ -22,20 +24,6 @@ export class CacheInfo {
      * @param {Partial<CacheInfo>} [$$source = {}] - The source object to create the CacheInfo.
      */
     constructor($$source = {}) {
-        if (!("local_storage_bytes" in $$source)) {
-            /**
-             * @member
-             * @type {number}
-             */
-            this["local_storage_bytes"] = 0;
-        }
-        if (!("indexed_db_bytes" in $$source)) {
-            /**
-             * @member
-             * @type {number}
-             */
-            this["indexed_db_bytes"] = 0;
-        }
         if (!("database_bytes" in $$source)) {
             /**
              * @member
@@ -50,20 +38,6 @@ export class CacheInfo {
              */
             this["database_path"] = "";
         }
-        if (!("disk_cache_dir" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["disk_cache_dir"] = "";
-        }
-        if (!("disk_cache_bytes" in $$source)) {
-            /**
-             * @member
-             * @type {number}
-             */
-            this["disk_cache_bytes"] = 0;
-        }
         if (!("log_file_bytes" in $$source)) {
             /**
              * @member
@@ -77,6 +51,34 @@ export class CacheInfo {
              * @type {string}
              */
             this["log_file_path"] = "";
+        }
+        if (!("detail_entries" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["detail_entries"] = 0;
+        }
+        if (!("detail_bytes" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["detail_bytes"] = 0;
+        }
+        if (!("chart_matches" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["chart_matches"] = 0;
+        }
+        if (!("comment_pages" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["comment_pages"] = 0;
         }
 
         Object.assign(this, $$source);
@@ -157,7 +159,7 @@ export class ClearCacheReq {
     constructor($$source = {}) {
         if (!("type" in $$source)) {
             /**
-             * "database" | "disk_cache" | "logs" | "all"
+             * "memory" | "logs" | "database" | "all"
              * @member
              * @type {string}
              */
@@ -358,13 +360,6 @@ export class DiagDouban {
              */
             this["health"] = (new db$0.DoubanHealth());
         }
-        if (!("duplicates" in $$source)) {
-            /**
-             * @member
-             * @type {db$0.DoubanDuplicateGroup[]}
-             */
-            this["duplicates"] = [];
-        }
 
         Object.assign(this, $$source);
     }
@@ -376,13 +371,9 @@ export class DiagDouban {
      */
     static createFrom($$source = {}) {
         const $$createField11_0 = $$createType0;
-        const $$createField12_0 = $$createType2;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("health" in $$parsedSource) {
             $$parsedSource["health"] = $$createField11_0($$parsedSource["health"]);
-        }
-        if ("duplicates" in $$parsedSource) {
-            $$parsedSource["duplicates"] = $$createField12_0($$parsedSource["duplicates"]);
         }
         return new DiagDouban(/** @type {Partial<DiagDouban>} */($$parsedSource));
     }
@@ -410,6 +401,13 @@ export class DiagEnv {
              * @type {string}
              */
             this["installed_marker"] = "";
+        }
+        if (!("schema_version" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["schema_version"] = 0;
         }
         if (!("wails_version" in $$source)) {
             /**
@@ -519,17 +517,17 @@ export class DiagEnv {
      * @returns {DiagEnv}
      */
     static createFrom($$source = {}) {
-        const $$createField15_0 = $$createType3;
+        const $$createField16_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("background_tasks" in $$parsedSource) {
-            $$parsedSource["background_tasks"] = $$createField15_0($$parsedSource["background_tasks"]);
+            $$parsedSource["background_tasks"] = $$createField16_0($$parsedSource["background_tasks"]);
         }
         return new DiagEnv(/** @type {Partial<DiagEnv>} */($$parsedSource));
     }
 }
 
 /**
- * DiagSourceRow 是单个采集源的目录统计。
+ * DiagSourceRow 是单个采集源的目录统计与最近一次采集结果。
  */
 export class DiagSourceRow {
     /**
@@ -572,6 +570,103 @@ export class DiagSourceRow {
              */
             this["video_count"] = 0;
         }
+        if (!("collecting" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["collecting"] = false;
+        }
+        if (!("last_saved" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["last_saved"] = 0;
+        }
+        if (!("last_fetch_failed_pages" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["last_fetch_failed_pages"] = 0;
+        }
+        if (!("last_save_failed_pages" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["last_save_failed_pages"] = 0;
+        }
+        if (!("last_error_kind" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["last_error_kind"] = "";
+        }
+        if (!("last_error" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["last_error"] = "";
+        }
+        if (!("last_elapsed_ms" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["last_elapsed_ms"] = 0;
+        }
+        if (!("last_finished_at_unix" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["last_finished_at_unix"] = 0;
+        }
+        if (!("covered_until_unix" in $$source)) {
+            /**
+             * 增量水位线：covered_until 只在完整成功的采集后推进，last_attempt 无论成败都记。
+             * @member
+             * @type {number}
+             */
+            this["covered_until_unix"] = 0;
+        }
+        if (!("last_attempt_unix" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["last_attempt_unix"] = 0;
+        }
+        if (!("collect_health" in $$source)) {
+            /**
+             * 健康度历史：采集运行与主动巡检各算各的样本。分开报是因为两者的 latency
+             * 量级完全不同（整轮运行 vs 单次请求），合成一个数就两边都读不出来。
+             * @member
+             * @type {db$0.SourceHealth}
+             */
+            this["collect_health"] = (new db$0.SourceHealth());
+        }
+        if (!("patrol_health" in $$source)) {
+            /**
+             * @member
+             * @type {db$0.SourceHealth}
+             */
+            this["patrol_health"] = (new db$0.SourceHealth());
+        }
+        if (!("recent_samples" in $$source)) {
+            /**
+             * 最近若干条样本，采集与巡检掺在一起按时间倒序。界面用它画成一小段点阵，
+             * 于是"最近好端端的，从哪一次开始连续红"是看得出来的——只看成功率一个
+             * 百分比会把"最近全红"和"很久以前红过一次"读成同一个数。
+             * @member
+             * @type {db$0.SourceHealthSample[]}
+             */
+            this["recent_samples"] = [];
+        }
 
         Object.assign(this, $$source);
     }
@@ -582,13 +677,29 @@ export class DiagSourceRow {
      * @returns {DiagSourceRow}
      */
     static createFrom($$source = {}) {
+        const $$createField15_0 = $$createType2;
+        const $$createField16_0 = $$createType2;
+        const $$createField17_0 = $$createType4;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("collect_health" in $$parsedSource) {
+            $$parsedSource["collect_health"] = $$createField15_0($$parsedSource["collect_health"]);
+        }
+        if ("patrol_health" in $$parsedSource) {
+            $$parsedSource["patrol_health"] = $$createField16_0($$parsedSource["patrol_health"]);
+        }
+        if ("recent_samples" in $$parsedSource) {
+            $$parsedSource["recent_samples"] = $$createField17_0($$parsedSource["recent_samples"]);
+        }
         return new DiagSourceRow(/** @type {Partial<DiagSourceRow>} */($$parsedSource));
     }
 }
 
 /**
- * DiagStorage 是各块磁盘占用的汇总。
+ * DiagStorage 是各块磁盘占用的汇总，外加进程内派生缓存的条目数。
+ * 
+ * 派生缓存（详情、热榜匹配、评论页）只活在内存里，以前这里报的是一个恒为 0 的
+ * "磁盘缓存" 占位 —— ts_cache 目录从来没有被创建过。改成报条目数之后，
+ * 「清除缓存」到底清掉了东西没有，在诊断页上就能直接看出来。
  */
 export class DiagStorage {
     /**
@@ -609,20 +720,6 @@ export class DiagStorage {
              * @type {number}
              */
             this["database_bytes"] = 0;
-        }
-        if (!("disk_cache_dir" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["disk_cache_dir"] = "";
-        }
-        if (!("disk_cache_bytes" in $$source)) {
-            /**
-             * @member
-             * @type {number}
-             */
-            this["disk_cache_bytes"] = 0;
         }
         if (!("log_dir" in $$source)) {
             /**
@@ -651,6 +748,34 @@ export class DiagStorage {
              * @type {number}
              */
             this["log_keep_days"] = 0;
+        }
+        if (!("detail_entries" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["detail_entries"] = 0;
+        }
+        if (!("detail_bytes" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["detail_bytes"] = 0;
+        }
+        if (!("chart_matches" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["chart_matches"] = 0;
+        }
+        if (!("comment_pages" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["comment_pages"] = 0;
         }
 
         Object.assign(this, $$source);
@@ -736,13 +861,13 @@ export class Diagnostics {
      * @returns {Diagnostics}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType4;
-        const $$createField1_0 = $$createType5;
-        const $$createField2_0 = $$createType6;
-        const $$createField3_0 = $$createType7;
-        const $$createField4_0 = $$createType9;
-        const $$createField5_0 = $$createType11;
-        const $$createField6_0 = $$createType12;
+        const $$createField0_0 = $$createType5;
+        const $$createField1_0 = $$createType6;
+        const $$createField2_0 = $$createType7;
+        const $$createField3_0 = $$createType8;
+        const $$createField4_0 = $$createType10;
+        const $$createField5_0 = $$createType12;
+        const $$createField6_0 = $$createType13;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("env" in $$parsedSource) {
             $$parsedSource["env"] = $$createField0_0($$parsedSource["env"]);
@@ -1090,7 +1215,7 @@ export class DoubanGetAllResp {
      * @returns {DoubanGetAllResp}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType15;
+        const $$createField0_0 = $$createType16;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("rows" in $$parsedSource) {
             $$parsedSource["rows"] = $$createField0_0($$parsedSource["rows"]);
@@ -1262,7 +1387,7 @@ export class ExportLogsReq {
      * @returns {ExportLogsReq}
      */
     static createFrom($$source = {}) {
-        const $$createField2_0 = $$createType12;
+        const $$createField2_0 = $$createType13;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("levels" in $$parsedSource) {
             $$parsedSource["levels"] = $$createField2_0($$parsedSource["levels"]);
@@ -1570,7 +1695,7 @@ export class LogPageReq {
      * @returns {LogPageReq}
      */
     static createFrom($$source = {}) {
-        const $$createField3_0 = $$createType12;
+        const $$createField3_0 = $$createType13;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("levels" in $$parsedSource) {
             $$parsedSource["levels"] = $$createField3_0($$parsedSource["levels"]);
@@ -1661,7 +1786,7 @@ export class LogPageResp {
      * @returns {LogPageResp}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType17;
+        const $$createField0_0 = $$createType18;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("records" in $$parsedSource) {
             $$parsedSource["records"] = $$createField0_0($$parsedSource["records"]);
@@ -1818,7 +1943,7 @@ export class RecommendReq {
      * @returns {RecommendReq}
      */
     static createFrom($$source = {}) {
-        const $$createField2_0 = $$createType12;
+        const $$createField2_0 = $$createType13;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("exclude_ids" in $$parsedSource) {
             $$parsedSource["exclude_ids"] = $$createField2_0($$parsedSource["exclude_ids"]);
@@ -1912,7 +2037,7 @@ export class SimilarReq {
      * @returns {SimilarReq}
      */
     static createFrom($$source = {}) {
-        const $$createField3_0 = $$createType12;
+        const $$createField3_0 = $$createType13;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("exclude_ids" in $$parsedSource) {
             $$parsedSource["exclude_ids"] = $$createField3_0($$parsedSource["exclude_ids"]);
@@ -2277,7 +2402,7 @@ export class VideoDownloadStatus {
      * @returns {VideoDownloadStatus}
      */
     static createFrom($$source = {}) {
-        const $$createField12_0 = $$createType19;
+        const $$createField12_0 = $$createType20;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("chunks" in $$parsedSource) {
             $$parsedSource["chunks"] = $$createField12_0($$parsedSource["chunks"]);
@@ -2326,22 +2451,23 @@ export class WindowSizeResp {
 
 // Private type creation functions
 const $$createType0 = db$0.DoubanHealth.createFrom;
-const $$createType1 = db$0.DoubanDuplicateGroup.createFrom;
-const $$createType2 = $Create.Array($$createType1);
-const $$createType3 = $Create.Map($Create.Any, $Create.Any);
-const $$createType4 = DiagEnv.createFrom;
-const $$createType5 = DiagStorage.createFrom;
-const $$createType6 = DiagDouban.createFrom;
-const $$createType7 = DiagCollect.createFrom;
-const $$createType8 = DiagSourceRow.createFrom;
-const $$createType9 = $Create.Array($$createType8);
-const $$createType10 = db$0.TableStat.createFrom;
-const $$createType11 = $Create.Array($$createType10);
-const $$createType12 = $Create.Array($Create.Any);
-const $$createType13 = db$0.DoubanInfoRow.createFrom;
-const $$createType14 = $Create.Nullable($$createType13);
-const $$createType15 = $Create.Array($$createType14);
-const $$createType16 = applog$0.Record.createFrom;
-const $$createType17 = $Create.Array($$createType16);
-const $$createType18 = ChunkProgress.createFrom;
-const $$createType19 = $Create.Array($$createType18);
+const $$createType1 = $Create.Map($Create.Any, $Create.Any);
+const $$createType2 = db$0.SourceHealth.createFrom;
+const $$createType3 = db$0.SourceHealthSample.createFrom;
+const $$createType4 = $Create.Array($$createType3);
+const $$createType5 = DiagEnv.createFrom;
+const $$createType6 = DiagStorage.createFrom;
+const $$createType7 = DiagDouban.createFrom;
+const $$createType8 = DiagCollect.createFrom;
+const $$createType9 = DiagSourceRow.createFrom;
+const $$createType10 = $Create.Array($$createType9);
+const $$createType11 = db$0.TableStat.createFrom;
+const $$createType12 = $Create.Array($$createType11);
+const $$createType13 = $Create.Array($Create.Any);
+const $$createType14 = db$0.DoubanInfoRow.createFrom;
+const $$createType15 = $Create.Nullable($$createType14);
+const $$createType16 = $Create.Array($$createType15);
+const $$createType17 = applog$0.Record.createFrom;
+const $$createType18 = $Create.Array($$createType17);
+const $$createType19 = ChunkProgress.createFrom;
+const $$createType20 = $Create.Array($$createType19);

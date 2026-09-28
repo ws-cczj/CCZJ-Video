@@ -7,6 +7,8 @@ defineProps<{
   video: { vod_pic?: string; vod_name?: string; vod_remarks?: string; type_name?: string }
   inCatalog?: boolean
   catalogLabel?: string
+  /** 合并曲库用：同一部片在几个源里有货。空串表示不显示。 */
+  sourceLabel?: string
 }>()
 
 const cardEl = ref<HTMLDivElement>()
@@ -68,6 +70,7 @@ onBeforeUnmount(() => {
     <div class="info cczj-flex-1 cczj-flex cczj-flex-col cczj-gap-2">
       <h4 class="title cczj-truncate cczj-font-semibold cczj-text-primary" :title="video.vod_name">{{ video.vod_name }}</h4>
       <div v-if="video.type_name" class="sub cczj-truncate cczj-text-13 cczj-text-muted">{{ video.type_name }}</div>
+      <div v-if="sourceLabel" class="sub cczj-truncate cczj-text-13 cczj-text-accent">{{ sourceLabel }}</div>
     </div>
   </div>
 </template>

@@ -3,9 +3,10 @@ defineOptions({ name: 'Home' })
 import { ref, computed, onMounted, onActivated, onDeactivated, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { GetRecentHistory, DeleteHistoryByVideo, GetSetting, DoubanChart, DoubanChartResolve } from '../api/app'
+import { GetRecentHistory, DeleteHistoryByVideo, GetSetting, DoubanChart, DoubanChartResolve, GetRecommend } from '../api/app'
 import { useSourceStore } from '../stores/source'
-import { useVideoStore, type VideoFilter } from '../stores/video'
+import { useVideoStore } from '../stores/video'
+import { useVideoList, type VideoFilter } from '../composables/useVideoList'
 import { useErrorStore } from '../stores/error'
 import VideoCard from '../components/VideoCard.vue'
 import { Button, Tag, Spinner as LoadingSpinner, Empty as EmptyState, Select as SelectDropdown } from '../components/ui'
@@ -21,6 +22,24 @@ const router = useRouter()
 const sourceStore = useSourceStore()
 const videoStore = useVideoStore()
 const errorStore = useErrorStore()
+
+// 首页自己的列表状态：与搜索页各持一份，互不覆盖数组、互不串游标。
+// list 是 reactive 对象，必须整体持有（解构会丢解包），模板里也写 list.videos。
+const list = useVideoList({
+  // 列表本身由 composable 处理，这里只清理派生出来的轮播图与推荐分组。
+  // 通知跨源也会到：vod_id 只在源内唯一，不按源过滤会误删同号的另一部片。
+  onDeleted(vodId: string, sourceKey: string) {
+    if (sourceKey !== sourceStore.currentSourceKey) return
+    const carIdx = carouselSlides.value.findIndex(s => String(s.vod_id) === vodId)
+    if (carIdx >= 0) {
+      carouselSlides.value.splice(carIdx, 1)
+    }
+    for (const g of recommendGroups.value) {
+      const gi = g.items.findIndex(i => String(i.vod_id) === vodId)
+      if (gi >= 0) g.items.splice(gi, 1)
+    }
+  },
+})
 
 // ==================== 网格布局设置 ====================
 const gridColumns = ref<number>(5)
@@ -78,7 +97,7 @@ function doApplyFilters(): void {
     keyword: '',
     sort: activeFilters.value.sort === 'default' ? '' : activeFilters.value.sort,
   }
-  videoStore.loadVideos(sourceStore.currentSourceKey, f, 1, 50)
+  list.load(sourceStore.currentSourceKey, f, 1, 50)
 }
 
 function resetFilters(): void {
@@ -86,7 +105,7 @@ function resetFilters(): void {
   expanded.value = false
   if (applyTimer) { clearTimeout(applyTimer); applyTimer = null }
   if (sourceStore.currentSourceKey) {
-    videoStore.loadVideos(sourceStore.currentSourceKey, {
+    list.load(sourceStore.currentSourceKey, {
       type_id: '', year: '', area: '', keyword: '', sort: '',
     }, 1, 50)
   }
@@ -243,7 +262,12 @@ async function loadRecommendations(): Promise<void> {
     // 2) 猜你喜欢（后端 GetRecommend 排除已出现的 id）
     try {
       const exclude = Array.from(usedIds)
-      const liked = await videoStore.loadRecommend(sourceStore.currentSourceKey, exclude, 24)
+      const raw = (await GetRecommend({
+        source_key: sourceStore.currentSourceKey,
+        limit: 24,
+        exclude_ids: exclude,
+      })) as unknown as Video[]
+      const liked = Array.isArray(raw) ? raw : []
       if (liked.length > 0) {
         const items: Video[] = []
         const seen = new Set<string>()
@@ -264,10 +288,12 @@ async function loadRecommendations(): Promise<void> {
           for (const id of seen) usedIds.add(id)
         }
       }
-    } catch { /* ignore */ }
+    } catch (e) {
+      errorStore.fromError(t('errors.loadRecommendFailed'), e, 'home.recommendations')
+    }
 
     // 3) 最新上线：从当前 videos 取前若干条，跳过已出现
-    const allVideos: Video[] = Array.isArray(videoStore.videos) ? videoStore.videos : []
+    const allVideos: Video[] = Array.isArray(list.videos) ? list.videos : []
     if (allVideos.length > 0) {
       const newest: Video[] = []
       const seenNew = new Set<string>()
@@ -411,7 +437,7 @@ async function refreshHomeFeed(): Promise<void> {
   await Promise.all([
     videoStore.loadTypes(key),
     videoStore.loadYearsAndAreas(key),
-    videoStore.loadVideos(key, { type_id: '', year: '', area: '', keyword: '' }, 1, 50),
+    list.load(key, { type_id: '', year: '', area: '', keyword: '' }, 1, 50),
   ])
   await loadRecommendations()
 }
@@ -446,28 +472,6 @@ watch(() => sourceStore.currentSourceKey, async (key: string) => {
   await videoStore.loadTypes(key)
   await videoStore.loadYearsAndAreas(key)
   await loadRecommendations()
-})
-
-// 删除通知：从详情页删除视频后，自动移除本地列表中的对应项
-watch(() => videoStore.deletedVodId, (vodId) => {
-  if (!vodId || videoStore.deletedSourceKey !== sourceStore.currentSourceKey) return
-  // 从视频列表中移除
-  const idx = videoStore.videos.findIndex(v => String(v.vod_id) === vodId)
-  if (idx >= 0) {
-    videoStore.videos.splice(idx, 1)
-    videoStore.total = Math.max(0, videoStore.total - 1)
-  }
-  // 从轮播图中移除
-  const carIdx = carouselSlides.value.findIndex(s => String(s.vod_id) === vodId)
-  if (carIdx >= 0) {
-    carouselSlides.value.splice(carIdx, 1)
-  }
-  // 从推荐分组中移除
-  for (const g of recommendGroups.value) {
-    const gi = g.items.findIndex(i => String(i.vod_id) === vodId)
-    if (gi >= 0) g.items.splice(gi, 1)
-  }
-  videoStore.clearDeletionNotify()
 })
 
 // ⭐ 筛选 watch：监听所有筛选条件变化，自动触发（带 debounce）
@@ -580,23 +584,23 @@ watch(
       </div>
 
       <div v-if="hasActiveFilter" class="filter-status cczj-mt-6 cczj-pt-6 cczj-text-13 cczj-text-muted">
-        {{ t('home.filteredResults', { count: videoStore.total }) }}
+        {{ t('home.filteredResults', { count: list.total }) }}
       </div>
     </section>
 
     <!-- ============ 视频网格 / 空状态 ============ -->
-    <div v-if="videoStore.loading && videoStore.videos.length === 0" class="center-pad">
+    <div v-if="list.loading && list.videos.length === 0" class="center-pad">
       <LoadingSpinner :label="t('home.loadingVideos')" />
     </div>
 
-    <div v-else-if="videoStore.videos.length === 0" class="center-pad">
+    <div v-else-if="list.videos.length === 0" class="center-pad">
       <EmptyState icon="📺" :title="t('home.noData')" :description="t('home.noDataDesc')">
         <Button variant="primary" @click="router.push('/sources')">{{ t('home.goToSources') }}</Button>
       </EmptyState>
     </div>
 
     <div v-else class="video-grid" :style="gridStyle">
-      <VideoCard v-for="(v, idx) in videoStore.videos"
+      <VideoCard v-for="(v, idx) in list.videos"
         :key="`${sourceStore.currentSourceKey}-${String((v as any).vod_id ?? '')}-${idx}`" :video="v"
         @click="goDetail(v)" />
     </div>

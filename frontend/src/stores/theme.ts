@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import { GetSetting, SetSetting } from '../api/app'
-import { appEvent } from '../event'
 import { tr } from '../locales'
 import landingMoon from '../assets/theme_images/landingMoon.png'
 import jqbg from '../assets/theme_images/jqbg.jpg'
@@ -656,8 +655,6 @@ export const useThemeStore = defineStore('theme', () => {
     currentId.value = id
     apply()
     try { await SetSetting('theme_id', id) } catch { /* ignore */ }
-    // 桥接到前端事件总线
-    appEvent.emit('theme:changed', id)
   }
 
   // ---- 把调色板写入 CSS 变量 ----

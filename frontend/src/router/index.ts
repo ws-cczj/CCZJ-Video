@@ -65,8 +65,16 @@ const router = createRouter({
       component: () => import('../views/Downloads.vue'),
     },
     {
+      path: '/recycle',
+      component: () => import('../views/RecycleBin.vue'),
+    },
+    {
       path: '/video-types',
       component: () => import('../views/VideoTypes.vue'),
+    },
+    {
+      path: '/merged-library',
+      component: () => import('../views/MergedLibrary.vue'),
     },
     {
       path: '/favorites',

@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/jmoiron/sqlx"
@@ -20,6 +19,7 @@ import (
 type GlobalVideoRow struct {
 	Id                   int     `db:"id"`
 	VodName              string  `db:"vod_name"`
+	NameNorm             string  `db:"name_norm"`
 	TypeId               int     `db:"type_id"`
 	Year                 string  `db:"year"`
 	Area                 string  `db:"area"`
@@ -83,74 +83,6 @@ func normalizeSubjectID(sid string) string {
 		return ""
 	}
 	return sid
-}
-
-// RepairDoubanIDs 启动时修复 global_video.douban_id 中格式异常的值
-func RepairDoubanIDs() {
-	rows, err := instance.Queryx(`SELECT id, douban_id FROM global_video WHERE douban_id != ''`)
-	if err != nil {
-		logError(fmt.Sprintf("RepairDoubanIDs: query failed: %v", err))
-		return
-	}
-	defer rows.Close()
-
-	fixed := 0
-	cleared := 0
-	for rows.Next() {
-		var id int
-		var sid string
-		if err := rows.Scan(&id, &sid); err != nil {
-			continue
-		}
-		cleaned := normalizeSubjectID(sid)
-		if cleaned != sid {
-			if cleaned == "" {
-				_, _ = instance.Exec(`UPDATE global_video SET douban_id = '' WHERE id = ?`, id)
-				cleared++
-			} else {
-				_, _ = instance.Exec(`UPDATE global_video SET douban_id = ? WHERE id = ?`, cleaned, id)
-				fixed++
-			}
-		}
-	}
-	if fixed > 0 || cleared > 0 {
-		logInfo(fmt.Sprintf("[Douban] RepairDoubanIDs: fixed %d, cleared %d invalid douban_ids", fixed, cleared))
-	}
-}
-
-// UpsertGlobalVideo 插入或更新全局视频记录（通过智能匹配避免重复）
-func UpsertGlobalVideo(v *model.Video) (int64, error) {
-	if v == nil || v.VodName == "" {
-		return 0, fmt.Errorf("vod_name is empty")
-	}
-
-	// 解析类型ID
-	typeId := resolveGlobalTypeIdInt(v.TypeName)
-
-	// 使用智能匹配获取 global_id（精确→归一化→模糊+元数据）
-	globalID, err := GetOrCreateGlobalIDWithMeta(v.VodName, string(v.VodYear), typeId)
-	if err != nil {
-		return 0, err
-	}
-
-	// 合并更新非空字段（写入 global_video 的字段保持明文，不压缩）
-	_, err = instance.Exec(`UPDATE global_video SET
-		type_id=CASE WHEN ? != 0 THEN ? ELSE type_id END,
-		pic=CASE WHEN ? != '' THEN ? ELSE pic END,
-		year=CASE WHEN ? != '' THEN ? ELSE year END,
-		area=CASE WHEN ? != '' THEN ? ELSE area END,
-		lang=CASE WHEN ? != '' THEN ? ELSE lang END,
-		tag=CASE WHEN ? != '' THEN ? ELSE tag END,
-		updated_at=CURRENT_TIMESTAMP
-		WHERE id = ?`,
-		typeId, typeId,
-		v.VodPic, v.VodPic, v.VodYear, v.VodYear, v.VodArea, v.VodArea,
-		v.VodLang, v.VodLang, v.VodTag, v.VodTag, globalID)
-	if err != nil {
-		applog.Error("[Douban] Failed to update global_video for '%s': %v", v.VodName, err)
-		return 0, err
-	}
-	return globalID, nil
 }
 
 // GetGlobalVideoByName 按 vod_name 查询全局视频
@@ -339,12 +271,20 @@ func InheritDoubanFieldsFromSiblings() (int, error) {
 		douban_hotness = CASE WHEN TRIM(COALESCE(douban_hotness, '')) = '' THEN ? ELSE douban_hotness END
 		WHERE id = ?`
 
+	// 一次回填可能涉及上千条兄弟记录：逐条自动提交就是上千次 fsync，
+	// 整批包进一个事务才和它「批量补数据」的身份相称。
+	tx, err := instance.Beginx()
+	if err != nil {
+		return 0, fmt.Errorf("begin sibling inherit: %w", err)
+	}
+	defer tx.Rollback()
+
 	inherited := 0
 	for _, d := range donors {
 		if d == nil {
 			continue
 		}
-		if _, err := instance.Exec(update,
+		if _, err := tx.Exec(update,
 			d.Score, d.Votes, d.Writer, d.Genre, d.Area, d.Lang, d.ReleaseDate,
 			d.SeasonCount, d.EpisodeCount, d.Duration, d.Aka, d.Imdb, d.Pic, d.DoubanHotness,
 			d.GlobalID); err != nil {
@@ -354,19 +294,145 @@ func InheritDoubanFieldsFromSiblings() (int, error) {
 		inherited++
 		applog.Info("[Douban] 同豆瓣ID %s：global_id=%d 继承了兄弟记录的豆瓣字段", d.DoubanID, d.GlobalID)
 	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("commit sibling inherit: %w", err)
+	}
 	return inherited, nil
 }
 
-// UpdateDoubanHotness 直接更新某个视频的热度值
-func UpdateDoubanHotness(globalID int, hotness string) error {
-	if globalID <= 0 || hotness == "" || hotness == "0" {
-		return nil
+// ChartDoubanUpdate 是一条热榜条目要写进 global_video 的字段。解析（评级校验、
+// info 拆分）留在 douban 包，这里只负责落库。
+type ChartDoubanUpdate struct {
+	SubjectID   string
+	Title       string
+	Year        string
+	Area        string
+	ReleaseDate string
+	Rating      string
+	Votes       string
+	PosterURL   string
+}
+
+// UpsertChartItems 一轮热榜一次入库：载入一遍 global_video 身份、开一个事务写完。
+// 以前每条各自 ResolveGlobalVideoID(nil)：热榜一百条就是把整张 global_video 读一百遍
+// 并重建一百次索引，然后摊成一百次自动提交。
+// 返回新建与写入的行数；任何一步失败都会回滚整批并报错，不留半截热榜。
+func UpsertChartItems(items []ChartDoubanUpdate) (int, int, error) {
+	if len(items) == 0 {
+		return 0, 0, nil
 	}
-	_, err := instance.Exec(`UPDATE global_video SET douban_hotness = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, hotness, globalID)
+	tx, err := instance.Beginx()
 	if err != nil {
-		applog.Error("[Douban] UpdateDoubanHotness failed for global_id=%d: %v", globalID, err)
+		return 0, 0, fmt.Errorf("begin chart upsert: %w", err)
 	}
-	return err
+	defer tx.Rollback()
+	candidates, err := loadGlobalCandidates(tx)
+	if err != nil {
+		return 0, 0, fmt.Errorf("load global video identities: %w", err)
+	}
+	index := newGlobalVideoIndex(candidates)
+	created, updated := 0, 0
+	for _, item := range items {
+		title := strings.TrimSpace(item.Title)
+		if item.SubjectID == "" || title == "" {
+			continue
+		}
+		// 类型未知时传 0：热榜条目和采集页共用同一套归一化身份阶梯。
+		id, tier, err := resolveGlobalVideoID(tx, index, title, item.Year, 0)
+		if err != nil {
+			return 0, 0, fmt.Errorf("resolve chart title %q: %w", title, err)
+		}
+		if tier == tierNew {
+			created++
+		}
+		// 已有值只填空缺，评分/票数按热榜刷新：热榜不能把详情抓回来的字段擦掉。
+		if _, err := tx.Exec(`UPDATE global_video SET
+			douban_id = CASE WHEN douban_id = '' THEN ? ELSE douban_id END,
+			douban_score = CASE WHEN ? != '' THEN ? ELSE douban_score END,
+			douban_votes = CASE WHEN ? != '' THEN ? ELSE douban_votes END,
+			pic = CASE WHEN pic = '' AND ? != '' THEN ? ELSE pic END,
+			year = CASE WHEN year = '' AND ? != '' THEN ? ELSE year END,
+			area = CASE WHEN area = '' AND ? != '' THEN ? ELSE area END,
+			release_date = CASE WHEN release_date = '' AND ? != '' THEN ? ELSE release_date END,
+			updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+			item.SubjectID,
+			item.Rating, item.Rating,
+			item.Votes, item.Votes,
+			item.PosterURL, item.PosterURL,
+			item.Year, item.Year,
+			item.Area, item.Area,
+			item.ReleaseDate, item.ReleaseDate,
+			id); err != nil {
+			return 0, 0, fmt.Errorf("write chart fields for id=%d: %w", id, err)
+		}
+		updated++
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, 0, fmt.Errorf("commit chart upsert: %w", err)
+	}
+	return created, updated, nil
+}
+
+// UpdateDoubanHotnessBatch 一轮热榜写完整表热度：先把 subject_id 一次查回
+// global_id，再在一个事务里写完。热榜每轮几十上百条，逐条查 + 逐条自动提交
+// 就是几百次往返和同样多次的 fsync。
+// 同一个 douban_id 有多条本地记录时写最早建立的那条，与 GetGlobalIDByDoubanSubject 一致。
+func UpdateDoubanHotnessBatch(hotnessBySubject map[string]string) (int, error) {
+	subjects := make([]string, 0, len(hotnessBySubject))
+	for subject, hotness := range hotnessBySubject {
+		if subject == "" || hotness == "" || hotness == "0" {
+			continue
+		}
+		subjects = append(subjects, subject)
+	}
+	if len(subjects) == 0 {
+		return 0, nil
+	}
+	args := make([]any, 0, len(subjects))
+	for _, subject := range subjects {
+		args = append(args, subject)
+	}
+	var rows []doubanHotnessRow
+	q := `SELECT id, created_at, douban_id AS subject FROM global_video WHERE douban_id IN (` +
+		strings.TrimSuffix(strings.Repeat("?,", len(subjects)), ",") + `)`
+	if err := instance.Select(&rows, q, args...); err != nil {
+		applog.Error("[Douban] UpdateDoubanHotnessBatch 查 global_id 失败: %v", err)
+		return 0, err
+	}
+	earliest := make(map[string]doubanHotnessRow, len(rows))
+	for _, row := range rows {
+		if kept, ok := earliest[row.Subject]; !ok || row.CreatedAt < kept.CreatedAt || (row.CreatedAt == kept.CreatedAt && row.ID < kept.ID) {
+			earliest[row.Subject] = row
+		}
+	}
+	if len(earliest) == 0 {
+		return 0, nil
+	}
+
+	tx, err := instance.Beginx()
+	if err != nil {
+		return 0, fmt.Errorf("begin hotness update: %w", err)
+	}
+	defer tx.Rollback()
+	updated := 0
+	for subject, row := range earliest {
+		hotness := hotnessBySubject[subject]
+		if _, err := tx.Exec(`UPDATE global_video SET douban_hotness = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, hotness, row.ID); err != nil {
+			applog.Error("[Douban] UpdateDoubanHotnessBatch 写入失败 global_id=%d: %v", row.ID, err)
+			continue
+		}
+		updated++
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("commit hotness update: %w", err)
+	}
+	return updated, nil
+}
+
+type doubanHotnessRow struct {
+	ID        int64  `db:"id"`
+	Subject   string `db:"subject"`
+	CreatedAt string `db:"created_at"`
 }
 
 // GetGlobalVideoByDoubanID 通过豆瓣 subject_id 查找最早建立的本地主记录。
@@ -446,52 +512,6 @@ func GetCachedDoubanChartVideos(limit int) ([]GlobalVideoRow, error) {
 	return rows, nil
 }
 
-// UpsertGlobalVideoFromChart 将热榜数据插入/更新到 global_video 表
-func UpsertGlobalVideoFromChart(doubanID, title, posterURL, rating, votes string) error {
-	if doubanID == "" || title == "" {
-		return fmt.Errorf("douban_id or title is empty")
-	}
-
-	// 检查是否已存在
-	var existingID int
-	err := instance.Get(&existingID, `SELECT id FROM global_video WHERE douban_id = ? LIMIT 1`, doubanID)
-	if err == nil && existingID > 0 {
-		// 已存在，更新评分和热度相关字段
-		_, err = instance.Exec(`UPDATE global_video SET 
-			douban_score = CASE WHEN ? != '' THEN ? ELSE douban_score END,
-			douban_votes = CASE WHEN ? != '' THEN ? ELSE douban_votes END,
-			pic = CASE WHEN pic = '' AND ? != '' THEN ? ELSE pic END,
-			updated_at = CURRENT_TIMESTAMP
-			WHERE id = ?`, rating, rating, votes, votes, posterURL, posterURL, existingID)
-		return err
-	}
-
-	// 不存在，使用 INSERT OR IGNORE 插入（避免 UNIQUE 冲突）
-	_, err = instance.Exec(`INSERT OR IGNORE INTO global_video (vod_name, douban_id, douban_score, douban_votes, pic, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-		title, doubanID, rating, votes, posterURL)
-	if err != nil {
-		return err
-	}
-	// 重新查询获取实际 ID（可能是已存在记录）
-	var actualID int64
-	instance.Get(&actualID, `SELECT id FROM global_video WHERE vod_name = ? LIMIT 1`, title)
-	if actualID <= 0 {
-		return fmt.Errorf("INSERT OR IGNORE 后未找到记录: %s", title)
-	}
-	// 如果实际 ID 和 existingID 不同，补充数据
-	if int64(existingID) != actualID {
-		_, err = instance.Exec(`UPDATE global_video SET 
-			douban_id = CASE WHEN douban_id = '' THEN ? ELSE douban_id END,
-			douban_score = CASE WHEN ? != '' THEN ? ELSE douban_score END,
-			douban_votes = CASE WHEN ? != '' THEN ? ELSE douban_votes END,
-			pic = CASE WHEN pic = '' AND ? != '' THEN ? ELSE pic END,
-			updated_at = CURRENT_TIMESTAMP
-			WHERE id = ?`, doubanID, rating, rating, votes, votes, posterURL, posterURL, actualID)
-	}
-	return err
-}
-
 // SearchVideoInSourceTable 在指定源的视频表中按名称搜索
 func SearchVideoInSourceTable(sourceKey, title string) (string, bool) {
 	if sourceKey == "" || title == "" {
@@ -553,6 +573,11 @@ func GetDoubanInfoByKeyword(keyword string) (*DoubanInfoRow, error) {
 
 // GetIncompleteDoubanInfo 获取豆瓣信息不完整的记录（有 douban_id 但缺评分/导演且未在冷却期内）
 // 冷却期：24小时内已尝试过且未获取到评分的记录暂不重试
+//
+// 排序按「上次被豆瓣试过」的时刻升序：SQLite 的 ASC 把 NULL 排在最前，所以从没试过
+// 的新记录优先，试过但没补上的行会自动退到队尾，下一轮才轮到别的记录。
+// 原来是按 updated_at（或 id）排，失败行不动那些列，于是每轮都取到同一批队头，
+// 后面的记录永远饿死。
 func GetIncompleteDoubanInfo(limit int) ([]*DoubanInfoRow, error) {
 	if limit <= 0 {
 		limit = 5
@@ -579,9 +604,9 @@ func GetIncompleteDoubanInfo(limit int) ([]*DoubanInfoRow, error) {
 			  )
 		)
 		AND (douban_cooldown_until IS NULL OR douban_cooldown_until < ?)
-		ORDER BY updated_at ASC LIMIT ?`
+		ORDER BY douban_last_attempt_at ASC, updated_at ASC LIMIT ?`
 	err := instance.Select(&rows, q,
-		time.Now().Format("2006-01-02 15:04:05"), limit)
+		time.Now().Format(doubanCooldownFormat), limit)
 	if err != nil {
 		applog.Error("[Douban] GetIncompleteDoubanInfo query failed: %v", err)
 		return nil, err
@@ -590,6 +615,7 @@ func GetIncompleteDoubanInfo(limit int) ([]*DoubanInfoRow, error) {
 }
 
 // GetDoubanInfoMissingSubjectID 获取 douban_id 为空的记录（排除冷却期内的记录）
+// 排序同样按「上次被豆瓣试过」的时刻轮转，理由见 GetIncompleteDoubanInfo。
 func GetDoubanInfoMissingSubjectID(limit int) ([]*DoubanInfoRow, error) {
 	if limit <= 0 {
 		limit = 5
@@ -618,9 +644,9 @@ func GetDoubanInfoMissingSubjectID(limit int) ([]*DoubanInfoRow, error) {
 		LEFT JOIN global_types gt ON gv.type_id = gt.id
 		WHERE (gv.douban_id = '' OR gv.douban_id IS NULL)
 		AND (gv.douban_cooldown_until IS NULL OR gv.douban_cooldown_until < ?)
-		ORDER BY gv.id ASC LIMIT ?`
+		ORDER BY gv.douban_last_attempt_at ASC, gv.id ASC LIMIT ?`
 	err := instance.Select(&rows, q,
-		time.Now().Format("2006-01-02 15:04:05"), limit)
+		time.Now().Format(doubanCooldownFormat), limit)
 	if err != nil {
 		applog.Error("[Douban] GetDoubanInfoMissingSubjectID query failed: %v", err)
 		return nil, err
@@ -827,56 +853,6 @@ func EnrichVideosWithDouban(videos []*model.Video) {
 	}
 }
 
-// SaveDoubanInfoFromVideo 从源视频中提取豆瓣信息存入 global_video
-func SaveDoubanInfoFromVideo(v *model.Video) {
-	if v == nil || v.VodName == "" {
-		return
-	}
-
-	globalID, err := UpsertGlobalVideo(v)
-	if err != nil {
-		applog.Error("[Douban] Failed to upsert global_video for '%s': %v", v.VodName, err)
-		return
-	}
-
-	subjectID := normalizeSubjectID(v.VodDoubanId.String())
-
-	// 更新 global_video 中的豆瓣相关字段
-	_, err = instance.Exec(`UPDATE global_video SET
-		douban_id = CASE WHEN ? != '' THEN ? ELSE douban_id END,
-		douban_score = CASE WHEN ? != '' THEN ? ELSE douban_score END,
-		genre = CASE WHEN ? != '' THEN ? ELSE genre END,
-		area = CASE WHEN ? != '' THEN ? ELSE area END,
-		lang = CASE WHEN ? != '' THEN ? ELSE lang END,
-		aka = CASE WHEN ? != '' THEN ? ELSE aka END,
-		pic = CASE WHEN ? != '' THEN ? ELSE pic END,
-		release_date = CASE WHEN ? != '' THEN ? ELSE release_date END,
-		updated_at = CURRENT_TIMESTAMP
-		WHERE id = ?`,
-		subjectID, subjectID,
-		v.VodDoubanScore.String(), v.VodDoubanScore.String(),
-		v.VodTag, v.VodTag,
-		v.VodArea, v.VodArea,
-		v.VodLang, v.VodLang,
-		v.VodSub, v.VodSub,
-		v.VodPic, v.VodPic,
-		v.VodYear, v.VodYear,
-		globalID)
-	if err != nil {
-		applog.Error("[Douban] Failed to update douban fields for '%s': %v", v.VodName, err)
-	}
-}
-
-// SaveDoubanInfoFromBatch 批量保存视频的豆瓣信息到全局表
-func SaveDoubanInfoFromBatch(videos []*model.Video) {
-	if len(videos) == 0 {
-		return
-	}
-	for _, v := range videos {
-		SaveDoubanInfoFromVideo(v)
-	}
-}
-
 // GetAllDoubanInfo 获取所有有豆瓣数据的记录
 func GetAllDoubanInfo() ([]*DoubanInfoRow, error) {
 	rows, _, err := GetAllDoubanInfoPaginated(1, 0)
@@ -926,67 +902,8 @@ func MarkDoubanInfoUpdated(globalID int) error {
 }
 
 // ==================== 字符串相似度计算 ====================
-
-// normalizeForCompare 去除所有 Unicode 空白字符 + 全角转半角 + 转小写，用于名称比对
-// 注意：此函数的逻辑必须与 SQL 索引 idx_gv_name_norm 和 sqlNorm() 完全一致
-func normalizeForCompare(s string) string {
-	s = removeAllWhitespace(s)
-	s = normalizeFullWidth(s)
-	return strings.ToLower(s)
-}
-
-// removeAllWhitespace 去除所有 Unicode 空白字符（包括全角空格、不间断空格、零宽空格）
-func removeAllWhitespace(s string) string {
-	var buf strings.Builder
-	buf.Grow(len(s))
-	for _, r := range s {
-		if !unicode.IsSpace(r) && r != '\u200B' && r != '\u00A0' {
-			buf.WriteRune(r)
-		}
-	}
-	return buf.String()
-}
-
-// normalizeFullWidth 全角标点转半角
-func normalizeFullWidth(s string) string {
-	s = strings.ReplaceAll(s, "\uFF1A", ":") // ：→ :
-	s = strings.ReplaceAll(s, "\uFF08", "(") // （→ (
-	s = strings.ReplaceAll(s, "\uFF09", ")") // ）→ )
-	s = strings.ReplaceAll(s, "\uFF01", "!") // ！→ !
-	s = strings.ReplaceAll(s, "\uFF1F", "?") // ？→ ?
-	s = strings.ReplaceAll(s, "\u3000", "")  // 全角空格去除
-	return s
-}
-
-// sqlNormExpr 返回与 normalizeForCompare 完全一致的 SQL 归一化表达式
-// 用于所有涉及 vod_name 归一化的 SQL 查询，确保与索引定义一致
-func sqlNormExpr() string {
-	return `LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(vod_name, ' ', ''), char(9), ''), char(10), ''), char(13), ''), char(12288), ''), char(160), ''), char(65306), ':'), char(65288), '('), char(65289), ')'))`
-}
-
-// sqlNorm 对字符串执行与 SQL 索引相同的归一化（用于 Go 侧计算）
-func sqlNorm(s string) string {
-	s = removeAllWhitespace(s)
-	s = normalizeFullWidth(s)
-	return strings.ToLower(s)
-}
-
-// titleAliasKey 用于识别标题的展示差异，不作为数据库唯一键。
-// 它会去掉空白和标点，但保留数字、季数、部数等语义信息：
-// “年会不能停2！”与“年会不能停！2”会得到同一个 key，
-// “权力的游戏第三季”与“权力的游戏第八季”仍然不同。
-func titleAliasKey(s string) string {
-	s = normalizeForCompare(s)
-	var result strings.Builder
-	result.Grow(len(s))
-	for _, r := range s {
-		if unicode.IsPunct(r) || unicode.IsSymbol(r) {
-			continue
-		}
-		result.WriteRune(r)
-	}
-	return result.String()
-}
+// 名称归一化只在 identity.go 的 normalizeTitle 里实现一次：Go 算出 key 存进 global_video.name_norm，
+// 索引和查询都读那一列，不再在 SQL 里重抄一遍表达式。
 
 // editDistance 计算两个字符串的编辑距离（Levenshtein）
 func editDistance(a, b string) int {
@@ -1032,11 +949,10 @@ func min3(a, b, c int) int {
 	return c
 }
 
-// nameSimilarity 计算两个名称的相似度 0.0~1.0
-// 去空格+小写后计算编辑距离
-func nameSimilarity(a, b string) float64 {
-	na := normalizeForCompare(a)
-	nb := normalizeForCompare(b)
+// normalizedSimilarity 计算两个「已归一化」名称的相似度 0.0~1.0。
+// 归一化由调用方负责（identity.go 的 normalizeTitle），这样身份阶梯里同一对
+// 字符串不会被反复归一化；公式仍是 1 - 编辑距离/最大长度。
+func normalizedSimilarity(na, nb string) float64 {
 	if na == nb {
 		return 1.0
 	}
@@ -1058,8 +974,8 @@ var seasonSuffixPattern = regexp.MustCompile(`第[一二三四五六七八九十
 // hasSeasonSuffix 检查两个名称的差异部分是否包含季/部/期等后缀
 // 如果 a 和 b 的差异仅在于季/部/期后缀不同，返回 true
 func hasSeasonSuffix(a, b string) bool {
-	na := normalizeForCompare(a)
-	nb := normalizeForCompare(b)
+	na := normalizeTitle(a)
+	nb := normalizeTitle(b)
 	if na == nb {
 		return false
 	}
@@ -1129,283 +1045,43 @@ func hasCommonToken(a, b string) bool {
 	return false
 }
 
-// GetOrCreateGlobalID 根据 vod_name 获取或创建 global_video 记录，返回 global_id
-// 匹配策略：精确 → 去空格 → 90%相似度+元数据交叉验证 → 创建新条目
-// selectGlobalID 只查 id + LIMIT 1，避免 SELECT * 因列数/行数不匹配失败
-func selectGlobalID(whereClause string, args ...interface{}) (int64, error) {
-	var id int64
-	err := instance.Get(&id, fmt.Sprintf(`SELECT id FROM global_video WHERE %s LIMIT 1`, whereClause), args...)
+// GetOrCreateGlobalID 按标题取或建 global_video 记录。阶梯只有一份实现，见 identity.go。
+func GetOrCreateGlobalID(vodName string, typeId int64) (int64, error) {
+	return GetOrCreateGlobalIDWithMeta(vodName, "", typeId)
+}
+
+// GetOrCreateGlobalIDWithMeta 带元数据的身份解析，用于采集入库、豆瓣补全、收藏与历史。
+// year 只参与别名档和相似度档的校验；typeId=0 表示「不知道类型」，此时不限类型匹配。
+func GetOrCreateGlobalIDWithMeta(vodName, year string, typeId int64) (int64, error) {
+	id, tier, err := resolveGlobalVideoID(instance, nil, vodName, year, typeId)
 	if err != nil {
 		return 0, err
+	}
+	if tier != tierNew {
+		applog.Info("[global] 身份匹配(%s): %q (year=%q, type_id=%d) -> global_id=%d", tier, vodName, year, typeId, id)
+	} else {
+		applog.Info("[global] 新建条目: %q (year=%q, type_id=%d) -> global_id=%d", vodName, year, typeId, id)
 	}
 	return id, nil
 }
 
-// globalVideoIDAndName 只查 id 和 vod_name，避免 SELECT * 因列不匹配失败
-func globalVideoIDAndName(whereClause string, args ...interface{}) (int64, string, error) {
-	type pair struct {
-		ID      int64  `db:"id"`
-		VodName string `db:"vod_name"`
-	}
-	var p pair
-	err := instance.Get(&p, fmt.Sprintf(`SELECT id, vod_name FROM global_video WHERE %s LIMIT 1`, whereClause), args...)
-	if err != nil {
-		return 0, "", err
-	}
-	return p.ID, p.VodName, nil
-}
+// doubanAttemptColumn 是「这一行上次被豆瓣队列试过」的时刻，只由 MarkDoubanAttempt 写。
+const doubanAttemptColumn = "douban_last_attempt_at"
 
-// globalVideoIDAndNameWithType 查询 id, vod_name, type_id
-func globalVideoIDAndNameWithType(whereClause string, args ...interface{}) (int64, string, int64, error) {
-	type triplet struct {
-		ID      int64  `db:"id"`
-		VodName string `db:"vod_name"`
-		TypeId  int64  `db:"type_id"`
-	}
-	var t triplet
-	err := instance.Get(&t, fmt.Sprintf(`SELECT id, vod_name, type_id FROM global_video WHERE %s LIMIT 1`, whereClause), args...)
-	if err != nil {
-		return 0, "", 0, err
-	}
-	return t.ID, t.VodName, t.TypeId, nil
-}
+// doubanCooldownFormat 是冷却/尝试时间落库的格式。SQLite 里按字符串比较，
+// 读侧解析必须用同一个布局。
+const doubanCooldownFormat = "2006-01-02 15:04:05"
 
-// selectAllGlobalCandidates 查询所有候选行（仅取 id、vod_name 和元数据字段）
-// 不做长度预过滤，由 nameSimilarity + metadataMatch 完成精确匹配
-func selectAllGlobalCandidates() ([]GlobalVideoRow, error) {
-	var rows []struct {
-		Id      int    `db:"id"`
-		VodName string `db:"vod_name"`
-		TypeId  int    `db:"type_id"`
-		Year    string `db:"year"`
-	}
-	err := instance.Select(&rows, `SELECT id, vod_name, type_id, year FROM global_video ORDER BY id ASC`)
-	if err != nil {
-		return nil, err
-	}
-	result := make([]GlobalVideoRow, len(rows))
-	for i, r := range rows {
-		result[i] = GlobalVideoRow{Id: r.Id, VodName: r.VodName, TypeId: r.TypeId, Year: r.Year}
-	}
-	return result, nil
-}
+// doubanCooldownHours 是一次「确定没查到」之后搁置多久。查无此片的记录不该每轮批量都
+// 去撞一次豆瓣；但也不能永久否决——豆瓣随时可能收录。
+const doubanCooldownHours = 24
 
-// findGlobalIDByTitleAlias 只在本地身份尚未确定时使用标题别名匹配。
-// 返回最早建立的候选，保持源记录先后顺序；豆瓣 ID 不参与本地身份选择。
-func findGlobalIDByTitleAlias(vodName, year string, typeId int64) (int64, bool) {
-	aliasKey := titleAliasKey(vodName)
-	if aliasKey == "" {
-		return 0, false
-	}
+// searchFailureCooldownThreshold 是累计多少次正常页无结果才进冷却（沿用旧策略）。
+const searchFailureCooldownThreshold = 5
 
-	candidates, err := selectAllGlobalCandidates()
-	if err != nil {
-		return 0, false
-	}
-	for _, candidate := range candidates {
-		if titleAliasKey(candidate.VodName) != aliasKey {
-			continue
-		}
-		if typeId > 0 && candidate.TypeId != 0 && int64(candidate.TypeId) != typeId {
-			continue
-		}
-		if year != "" && candidate.Year != "" && year != candidate.Year {
-			continue
-		}
-		if hasSeasonSuffix(vodName, candidate.VodName) {
-			continue
-		}
-		return int64(candidate.Id), true
-	}
-	return 0, false
-}
-
-func GetOrCreateGlobalID(vodName string, typeId int64) (int64, error) {
-	// 1. 精确匹配
-	row, err := GetGlobalVideoByName(vodName)
-	if err == nil {
-		if typeId == 0 || int64(row.TypeId) == typeId {
-			return int64(row.Id), nil
-		}
-		// 类型不匹配，继续尝试
-	}
-
-	// 2. 归一化匹配（去除所有空白字符 + 小写）
-	normalized := sqlNorm(vodName)
-	if typeId > 0 {
-		id, _, _, err := globalVideoIDAndNameWithType(
-			fmt.Sprintf(`%s = ? AND type_id = ?`, sqlNormExpr()), normalized, typeId)
-		if err == nil {
-			applog.Info("[global] 归一化匹配: %q -> global_id=%d (type_id=%d)", vodName, id, typeId)
-			return id, nil
-		}
-	} else {
-		id, normName, err := globalVideoIDAndName(
-			fmt.Sprintf(`%s = ?`, sqlNormExpr()), normalized)
-		if err == nil {
-			applog.Info("[global] 归一化匹配: %q -> global_id=%d (原名: %q)", vodName, id, normName)
-			return id, nil
-		}
-	}
-	if id, ok := findGlobalIDByTitleAlias(vodName, "", typeId); ok {
-		applog.Info("[global] 标题别名匹配: %q -> global_id=%d", vodName, id)
-		return id, nil
-	}
-
-	// 3. 创建新条目
-	normVal := sqlNorm(vodName)
-	_, _ = instance.Exec(`INSERT OR IGNORE INTO global_video (vod_name, type_id, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)`, vodName, typeId)
-	// 通过归一化 SELECT 获取 ID
-	if typeId > 0 {
-		if id, _, _, e := globalVideoIDAndNameWithType(
-			fmt.Sprintf(`%s = ? AND type_id = ?`, sqlNormExpr()), normVal, typeId); e == nil && id > 0 {
-			return id, nil
-		}
-	} else {
-		if id, _, e := globalVideoIDAndName(
-			fmt.Sprintf(`%s = ?`, sqlNormExpr()), normVal); e == nil && id > 0 {
-			return id, nil
-		}
-	}
-	// 回退：精确名称查询
-	if id, e := selectGlobalID(`vod_name = ?`, vodName); e == nil && id > 0 {
-		return id, nil
-	}
-	// 最终回退
-	res, insertErr := instance.Exec(`INSERT OR IGNORE INTO global_video (vod_name, type_id, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)`, vodName, typeId)
-	if insertErr == nil {
-		if lid, err := res.LastInsertId(); err == nil && lid > 0 {
-			return lid, nil
-		}
-	}
-	return 0, fmt.Errorf("INSERT OR IGNORE 后仍未找到条目: %s", vodName)
-}
-
-// GetOrCreateGlobalIDWithMeta 带元数据的智能匹配，用于采集入库时
-// 当名称 90%+ 相似且元数据（年份+导演/演员+类型）吻合时，视为同一视频
-// 注意：传入的 director/actor 应为明文（调用方负责解压缩）
-func GetOrCreateGlobalIDWithMeta(vodName, year string, typeId int64) (int64, error) {
-	// typeId=0 表示「不知道类型」（如热榜/收藏/历史），此时跳过类型检查，按名称匹配即可
-	matchAnyType := typeId == 0
-
-	// 1. 精确匹配
-	row, err := GetGlobalVideoByName(vodName)
-	if err == nil {
-		// ⭐ 如果已有记录的 type_id=0（轮播图等无类型数据），视为占位符，允许匹配
-		if matchAnyType || int64(row.TypeId) == typeId || row.TypeId == 0 {
-			return int64(row.Id), nil
-		}
-		// ⭐ 类型不匹配：同名但不同类型，视为不同视频
-		applog.Info("[global] 精确匹配命中但类型不匹配: %q (现有type_id=%d, 新type_id=%d), 跳过", vodName, row.TypeId, typeId)
-	}
-
-	// 2. 归一化匹配（去除所有空白字符 + 小写）
-	normalized := sqlNorm(vodName)
-	if matchAnyType {
-		// typeId 未知时，只按归一化名称匹配，不限制 type_id
-		id, normName, err := globalVideoIDAndName(
-			fmt.Sprintf(`%s = ?`, sqlNormExpr()), normalized)
-		if err == nil {
-			applog.Info("[global] 归一化匹配(无类型约束): %q -> global_id=%d (%q)", vodName, id, normName)
-			return id, nil
-		}
-	} else {
-		id, normName, normTypeId, err := globalVideoIDAndNameWithType(
-			fmt.Sprintf(`%s = ?`, sqlNormExpr()), normalized)
-		if err == nil {
-			// ⭐ 如果已有记录的 type_id=0（轮播图等无类型数据），视为占位符，允许匹配
-			if normTypeId == typeId || normTypeId == 0 {
-				applog.Info("[global] 归一化匹配: %q -> global_id=%d (%q, type_id=%d)", vodName, id, normName, normTypeId)
-				return id, nil
-			}
-			applog.Info("[global] 归一化匹配命中但类型不匹配: %q (现有type_id=%d, 新type_id=%d), 跳过", vodName, normTypeId, typeId)
-		}
-	}
-	if id, ok := findGlobalIDByTitleAlias(vodName, year, typeId); ok {
-		applog.Info("[global] 标题别名匹配(带元数据): %q -> global_id=%d", vodName, id)
-		return id, nil
-	}
-
-	// 3. 模糊匹配（90%+ 相似度 + 元数据交叉验证），全表扫描不做长度预过滤
-	candidates, _ := selectAllGlobalCandidates()
-
-	var bestMatch *GlobalVideoRow
-	var bestSim float64
-
-	for i := range candidates {
-		c := &candidates[i]
-		// ⭐ 类型预检：typeId=0 时不做类型过滤，已有记录 type_id=0 也允许匹配
-		if !matchAnyType && int64(c.TypeId) != typeId && c.TypeId != 0 {
-			continue
-		}
-		sim := nameSimilarity(vodName, c.VodName)
-		if sim < 0.90 {
-			continue
-		}
-		// 防止不同季/部/期被误判为同一视频（如“权力的游戏 第一季” vs “权力的游戏 第二季”）
-		if hasSeasonSuffix(vodName, c.VodName) {
-			continue
-		}
-		// 90%+ 相似度，检查元数据
-		if year == "" || c.Year == "" || year == c.Year {
-			applog.Info("[global] 模糊+元数据匹配(%.0f%%): %q -> global_id=%d (%q, type_id=%d)",
-				sim*100, vodName, c.Id, c.VodName, c.TypeId)
-			return int64(c.Id), nil
-		}
-		// 95%+ 相似度但元数据不匹配（可能是同一视频但元数据不完整）
-		if sim >= 0.95 && sim > bestSim {
-			bestSim = sim
-			bestMatch = c
-		}
-	}
-
-	// 如果名称极度相似(≥95%)且没有元数据冲突，视为同一视频
-	if bestMatch != nil {
-		applog.Info("[global] 高相似度回退(%.0f%%): %q -> global_id=%d (%q, type_id=%d)",
-			bestSim*100, vodName, bestMatch.Id, bestMatch.VodName, bestMatch.TypeId)
-		return int64(bestMatch.Id), nil
-	}
-
-	// 4. 创建新条目（使用 INSERT OR IGNORE 避免 UNIQUE 冲突报错，包含 type_id）
-	normVal := sqlNorm(vodName)
-	_, _ = instance.Exec(`INSERT OR IGNORE INTO global_video (vod_name, type_id, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)`, vodName, typeId)
-	// 通过归一化 SELECT 获取 ID（同时考虑 type_id=0 的占位记录）
-	if matchAnyType {
-		if id, _, e := globalVideoIDAndName(
-			fmt.Sprintf(`%s = ?`, sqlNormExpr()), normVal); e == nil && id > 0 {
-			applog.Info("[global] 新建/已有条目(无类型约束): %q -> global_id=%d", vodName, id)
-			return id, nil
-		}
-	} else {
-		if id, _, _, e := globalVideoIDAndNameWithType(
-			fmt.Sprintf(`%s = ?`, sqlNormExpr()), normVal); e == nil && id > 0 {
-			applog.Info("[global] 新建/已有条目: %q -> global_id=%d", vodName, id)
-			return id, nil
-		}
-	}
-	// 回退：精确名称查询
-	if id, e := selectGlobalID(`vod_name = ?`, vodName); e == nil && id > 0 {
-		return id, nil
-	}
-	// 最终回退：重新 INSERT 并取 lastInsertId
-	res, insertErr := instance.Exec(`INSERT OR IGNORE INTO global_video (vod_name, type_id, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)`, vodName, typeId)
-	if insertErr == nil {
-		if lid, err := res.LastInsertId(); err == nil && lid > 0 {
-			applog.Info("[global] 新建条目(lastInsertId): %q -> global_id=%d (type_id=%d)", vodName, lid, typeId)
-			return lid, nil
-		}
-	}
-	return 0, fmt.Errorf("INSERT OR IGNORE 后仍未找到条目: %s", vodName)
-}
-
-// timeNowMinus30Min 返回30分钟前的时间字符串
-func timeNowMinus30Min() string {
-	return time.Now().Add(-30 * time.Minute).Format("2006-01-02 15:04:05")
-}
-
-// SetDoubanCooldown 为指定 global_id 设置24小时冷静期（用于搜索失败或详情无评分）
+// SetDoubanCooldown 为指定 global_id 设置24小时冷静期（用于详情拿到但无评分）
 func SetDoubanCooldown(globalID int) error {
-	cooldownUntil := time.Now().Add(24 * time.Hour).Format("2006-01-02 15:04:05")
+	cooldownUntil := time.Now().Add(doubanCooldownHours * time.Hour).Format(doubanCooldownFormat)
 	_, err := instance.Exec(`UPDATE global_video SET douban_cooldown_until = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
 		cooldownUntil, globalID)
 	if err != nil {
@@ -1414,72 +1090,97 @@ func SetDoubanCooldown(globalID int) error {
 	return err
 }
 
-// SetDoubanCooldownByVodName 通过 vod_name 设置冷静期
-func SetDoubanCooldownByVodName(vodName string) error {
-	cooldownUntil := time.Now().Add(24 * time.Hour).Format("2006-01-02 15:04:05")
-	_, err := instance.Exec(`UPDATE global_video SET douban_cooldown_until = ?, updated_at = CURRENT_TIMESTAMP WHERE vod_name = ?`,
-		cooldownUntil, vodName)
+// MarkDoubanAttempt 记下「这一行刚试过」。
+//
+// 空跑也必须打点：批量队列按最近尝试时间轮转，只在成功时打点等于让持续失败的行
+// 永远霸占队头。刻意不动 updated_at——那一列是兄弟记录继承和列表排序的依据。
+func MarkDoubanAttempt(globalID int) error {
+	if globalID <= 0 {
+		return nil
+	}
+	_, err := instance.Exec(`UPDATE global_video SET `+doubanAttemptColumn+` = ? WHERE id = ?`,
+		time.Now().Format(doubanCooldownFormat), globalID)
 	if err != nil {
-		applog.Error("[Douban] SetDoubanCooldownByVodName failed for '%s': %v", vodName, err)
+		applog.Error("[Douban] MarkDoubanAttempt failed for global_id=%d: %v", globalID, err)
 	}
 	return err
 }
 
-// IncrementSearchFailures 增加搜索失败计数，达到上限时设置冷静期
-func IncrementSearchFailures(vodName string) error {
-	// 使用智能匹配获取 global_id（避免直接 INSERT 导致唯一索引冲突）
-	globalID, err := GetOrCreateGlobalID(vodName, 0)
+// doubanFailuresRow 只带失败计数：冷却时刻留在库里比，不读到 Go 再解析（见
+// IsDoubanSearchOnCooldown）。
+type doubanFailuresRow struct {
+	Failures int `db:"douban_search_failures"`
+}
+
+// IsDoubanSearchOnCooldown 检查这一行是否还在搜索冷却期内。
+// globalID <= 0（没有行身份，例如用户在界面上手搜）视为不在冷却期。
+//
+// 比较必须在 SQL 里做完，不能把 douban_cooldown_until 读进 Go 再 time.Parse：
+// 那一列声明成 DATETIME，modernc 驱动按 decltype 把读回的值当日期处理，扫进
+// *string 得到的是 "2026-09-29T01:50:25Z"，而不是写进去的 "2026-09-29 01:50:25"，
+// 解析永远失败。以前这里解析失败就静默 return false，于是 24 小时冷却一次也没生效过，
+// 查无此片的记录每轮批量都重新去撞豆瓣。库里存的就是文本，和写侧同一个布局，
+// SQL 的字符串比较即时间先后。
+func IsDoubanSearchOnCooldown(globalID int) bool {
+	if globalID <= 0 {
+		return false
+	}
+	var onCooldown int
+	// NULL > ? 落到 CASE 的 ELSE，所以「没冷却」和「冷却已过」共用一条语句。
+	err := instance.Get(&onCooldown, `SELECT CASE WHEN douban_cooldown_until > ? THEN 1 ELSE 0 END
+		FROM global_video WHERE id = ?`, time.Now().Format(doubanCooldownFormat), globalID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false
+	}
 	if err != nil {
-		applog.Error("[Douban] IncrementSearchFailures GetOrCreateGlobalID failed for '%s': %v", vodName, err)
+		applog.Error("[Douban] IsDoubanSearchOnCooldown global_id=%d 查询失败，按未冷却处理: %v", globalID, err)
+		return false
+	}
+	return onCooldown == 1
+}
+
+// MarkDoubanSearchFailure 给这一行累计一次「正常页但没认出头」的失败，达到阈值进冷却。
+//
+// 调用方必须已经确认拿到过正常搜索页——网络错误或验证页不该走到这里。
+// 这里也不再 GetOrCreateGlobalID：为一次失败的搜索去新建 global_video 行，
+// 等于让采集结果凭空多出一条永远补不全的记录。
+func MarkDoubanSearchFailure(globalID int) error {
+	if globalID <= 0 {
+		return nil
+	}
+	var row doubanFailuresRow
+	if err := instance.Get(&row, `SELECT COALESCE(douban_search_failures, 0) AS douban_search_failures
+		FROM global_video WHERE id = ?`, globalID); err != nil {
 		return err
 	}
-
-	// 获取当前计数
-	var currentFailures int
-	_ = instance.Get(&currentFailures, `SELECT douban_search_failures FROM global_video WHERE id = ?`, globalID)
-
-	newCount := currentFailures + 1
-	if newCount >= 5 {
-		cooldownUntil := time.Now().Add(24 * time.Hour).Format("2006-01-02 15:04:05")
-		_, err = instance.Exec(`UPDATE global_video SET douban_search_failures = ?, douban_cooldown_until = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-			newCount, cooldownUntil, globalID)
-		if err != nil {
-			applog.Error("[Douban] IncrementSearchFailures cooldown failed for '%s': %v", vodName, err)
-		}
-		applog.Info("[Douban] Search cooldown activated for '%s' (failures=%d, until=%s)", vodName, newCount, cooldownUntil)
-	} else {
-		_, err = instance.Exec(`UPDATE global_video SET douban_search_failures = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-			newCount, globalID)
-		if err != nil {
-			applog.Error("[Douban] IncrementSearchFailures update failed for '%s': %v", vodName, err)
-		}
+	newCount := row.Failures + 1
+	cooldownUntil := ""
+	if newCount >= searchFailureCooldownThreshold {
+		cooldownUntil = time.Now().Add(doubanCooldownHours * time.Hour).Format(doubanCooldownFormat)
 	}
-	return err
+	_, err := instance.Exec(`UPDATE global_video SET douban_search_failures = ?, douban_cooldown_until = COALESCE(NULLIF(?, ''), douban_cooldown_until) WHERE id = ?`,
+		newCount, cooldownUntil, globalID)
+	if err != nil {
+		applog.Error("[Douban] MarkDoubanSearchFailure failed for global_id=%d: %v", globalID, err)
+		return err
+	}
+	if cooldownUntil != "" {
+		applog.Info("[Douban] 搜索冷却生效 global_id=%d (failures=%d, until=%s)", globalID, newCount, cooldownUntil)
+	}
+	return nil
 }
 
-// ClearSearchFailures 清除搜索失败记录（搜索成功时调用）
-func ClearSearchFailures(vodName string) error {
-	_, err := instance.Exec(`UPDATE global_video SET douban_search_failures = 0, douban_cooldown_until = NULL, updated_at = CURRENT_TIMESTAMP WHERE vod_name = ?`, vodName)
+// ClearDoubanSearchFailure 搜索成功时清掉本行的失败计数与冷却。
+// 只清这一行：同名的其它记录各有各的尝试结果，不该跟着一起放行。
+func ClearDoubanSearchFailure(globalID int) error {
+	if globalID <= 0 {
+		return nil
+	}
+	_, err := instance.Exec(`UPDATE global_video SET douban_search_failures = 0, douban_cooldown_until = NULL WHERE id = ?`, globalID)
 	if err != nil {
-		applog.Error("[Douban] ClearSearchFailures failed for '%s': %v", vodName, err)
+		applog.Error("[Douban] ClearDoubanSearchFailure failed for global_id=%d: %v", globalID, err)
 	}
 	return err
-}
-
-// IsDoubanOnCooldown 检查指定 vod_name 是否在冷却期内
-func IsDoubanOnCooldown(vodName string) bool {
-	row, err := GetGlobalVideoByName(vodName)
-	if err != nil {
-		return false
-	}
-	if row.DoubanCooldownUntil == nil {
-		return false
-	}
-	cooldownTime, err := time.Parse("2006-01-02 15:04:05", *row.DoubanCooldownUntil)
-	if err != nil {
-		return false
-	}
-	return time.Now().Before(cooldownTime)
 }
 
 // ErrDoubanNotFound 错误

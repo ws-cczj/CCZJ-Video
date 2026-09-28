@@ -8,6 +8,8 @@ import {
   GetAppVersion,
   GetDoubanIntervalMinutes, SetDoubanIntervalMinutes,
   GetLogKeepDays, SetLogKeepDays,
+  GetAllowPrivateNetwork, SetAllowPrivateNetwork,
+  ClearCache,
 } from '../api/app'
 import { updateController } from '../stores/updateState'
 import { useThemeStore, type CustomTheme, type ColorPalette } from '../stores/theme'
@@ -19,6 +21,7 @@ import Icon from '../components/Icon.vue'
 import LogPanel from '../components/LogPanel.vue'
 import DiagnosticsPanel from '../components/DiagnosticsPanel.vue'
 import DoubanQueuePanel from '../components/DoubanQueuePanel.vue'
+import DataBackupPanel from '../components/DataBackupPanel.vue'
 import { Button, Modal, Segment, Select as SelectDropdown } from '../components/ui'
 import { useI18n } from 'vue-i18n'
 import { setLocale as saveLocalePreference } from '../locales'
@@ -218,6 +221,31 @@ async function saveLogKeepDays(days: number): Promise<void> {
     errorStore.info(t('common.saved'), t('settings.logRetentionSaved', { n: logKeepDays.value }), '', 'Settings.saveLogKeepDays')
   } catch (e: any) {
     errorStore.fromError(t('settings.logRetentionSaveFailed'), e, 'Settings.saveLogKeepDays')
+  }
+}
+
+// ---------- 播放代理：内网放行 ----------
+// 默认关闭：代理只出公网，这是 SSRF 闸门的一部分。开关落在 Go 侧的即时生效语义，
+// 所以这里失败必须报出来——静默吞掉会让用户以为已经放开，然后继续排查「为什么还放不出来」。
+const allowPrivateNetwork = ref(false)
+
+async function loadAllowPrivateNetwork(): Promise<void> {
+  try { allowPrivateNetwork.value = await GetAllowPrivateNetwork() } catch { /* 忽略 */ }
+}
+
+async function saveAllowPrivateNetwork(): Promise<void> {
+  const next = allowPrivateNetwork.value
+  try {
+    await SetAllowPrivateNetwork(next)
+    errorStore.info(
+      t('common.saved'),
+      next ? t('advanced.proxyAllowPrivateOn') : t('advanced.proxyAllowPrivateOff'),
+      '',
+      'Settings.saveAllowPrivateNetwork',
+    )
+  } catch (e: any) {
+    allowPrivateNetwork.value = !next
+    errorStore.fromError(t('advanced.proxyAllowPrivateFailed'), e, 'Settings.saveAllowPrivateNetwork')
   }
 }
 
@@ -547,6 +575,7 @@ interface CacheInfo {
 const cacheInfo = ref<CacheInfo | null>(null)
 const cacheLoading = ref(false)
 const cacheClearing = ref('')
+const allClearing = ref(false)
 
 function fmtBytes(bytes: number): string {
   if (bytes <= 0) return '0 B'
@@ -623,6 +652,32 @@ async function doClearCache(type: string, label: string): Promise<void> {
   }
 }
 
+/**
+ * 一次清掉两侧的全部派生缓存。
+ *
+ * 只调 Go 的 "memory"：Go 清完自己的详情/热榜匹配/评论缓存后会广播 cache:invalidate(all)，
+ * 前端的详情、海报、TS 片段由 stores/cacheInvalidate.ts 跟着清。这里再各自调一遍的话，
+ * 两边的清理范围就会分叉 —— 那正是这次要修的毛病。
+ */
+async function clearAllCaches(): Promise<void> {
+  const yes = await confirmStore.confirm({
+    title: t('settings.clearCacheTitle'),
+    message: t('settings.clearAllCachesMsg'),
+    okText: t('settings.confirmClear'),
+    level: 'warn',
+  })
+  if (!yes) return
+  allClearing.value = true
+  try {
+    await ClearCache({ type: 'memory' })
+    await loadCacheInfo()
+  } catch (e: any) {
+    errorStore.fromError(t('settings.clearFailed'), e, 'Settings.clearAllCaches')
+  } finally {
+    allClearing.value = false
+  }
+}
+
 // ---------- 启动 ----------
 onMounted(async () => {
   const hash = (route.hash || '').replace('#', '').trim()
@@ -664,6 +719,7 @@ onMounted(async () => {
   // 加载保留策略（豆瓣补全 / 日志保留）
   await loadDoubanInterval()
   await loadLogKeepDays()
+  await loadAllowPrivateNetwork()
 })
 
 async function safeGet(key: string, fallback: string): Promise<string> {
@@ -970,9 +1026,14 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
         <section class="block">
           <div class="block-hd cczj-flex cczj-items-center cczj-justify-between">
             <h3>{{ t('settings.cacheUsage') }}</h3>
-            <Button variant="secondary" size="sm" :loading="cacheLoading" @click="loadCacheInfo">
-              <Icon name="refresh" :size="12" /> {{ t('common.refresh') }}
-            </Button>
+            <div class="cczj-flex cczj-items-center cczj-gap-4">
+              <Button variant="danger" size="sm" :loading="allClearing" @click="clearAllCaches">
+                <Icon name="trash" :size="12" /> {{ t('settings.clearAllCaches') }}
+              </Button>
+              <Button variant="secondary" size="sm" :loading="cacheLoading" @click="loadCacheInfo">
+                <Icon name="refresh" :size="12" /> {{ t('common.refresh') }}
+              </Button>
+            </div>
           </div>
 
           <div v-if="cacheLoading" class="cache-loading cczj-flex cczj-items-center cczj-gap-4">
@@ -1062,6 +1123,20 @@ async function save(key: string, val: string | number | boolean): Promise<void> 
 
       <!-- ========== 高级 ========== -->
       <div v-else-if="activeGroup === 'advanced'" class="panel cczj-flex cczj-flex-col cczj-gap-2">
+        <section class="block">
+          <h3>{{ t('advanced.proxy') }}</h3>
+          <p class="desc">{{ t('advanced.proxyDesc') }}</p>
+          <div class="row cczj-flex cczj-items-center cczj-gap-7">
+            <label class="toggle cczj-inline-flex cczj-items-center cczj-gap-4 cczj-cursor-pointer">
+              <input type="checkbox" v-model="allowPrivateNetwork" @change="saveAllowPrivateNetwork" />
+              <span>{{ t('advanced.proxyAllowPrivate') }}</span>
+            </label>
+          </div>
+          <p class="desc">{{ t('advanced.proxyAllowPrivateDesc') }}</p>
+        </section>
+
+        <DataBackupPanel />
+
         <DoubanQueuePanel />
       </div>
 

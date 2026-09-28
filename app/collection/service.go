@@ -3,6 +3,7 @@ package collection
 
 import (
 	"cczjVideo/app/applog"
+	"cczjVideo/app/cache"
 	"cczjVideo/app/collect"
 	"cczjVideo/app/handler"
 	"cczjVideo/app/model"
@@ -78,24 +79,30 @@ func (s *Service) Start(req handler.CollectReq) (*handler.CollectStatus, error) 
 
 	run := func(ctx context.Context) {
 		engine.SetContext(ctx)
-		_, err := engine.Run()
+		stats, err := engine.Run()
+		outcome := handler.OutcomeFromRun(stats, err)
 		applog.InfoFields("collection finished", applog.Fields{
 			"operation_id": operationID,
 			"source_key":   req.SourceKey,
 			"mode":         string(mode),
-			"error":        errorString(err),
+			"saved":        outcome.Saved,
+			"error_kind":   outcome.ErrorKind,
+			"error":        outcome.Log,
 		})
-		entry.FinishEngine(engine, errorString(err))
-		s.emit("collect:done", map[string]any{
-			"operation_id": operationID,
-			"source_key":   req.SourceKey,
-			"error":        errorString(err),
-			"mode":         string(mode),
-		})
+		entry.FinishEngine(engine, outcome)
+		handler.RecordCollectHealth(req.SourceKey, outcome, err)
+		// 只有真的写进库才需要失效缓存：定时任务每轮都会跑，空跑一次就把整源缓存清光
+		// 只会让下一次点开详情多打一趟采集接口。
+		if outcome.Saved > 0 {
+			cache.InvalidateSource(req.SourceKey, fmt.Sprintf("采集写入 %d 条", outcome.Saved))
+		}
+		payload := handler.CollectDonePayload(req.SourceKey, string(mode), outcome)
+		payload["operation_id"] = operationID
+		s.emit("collect:done", payload)
 	}
 	if s.background != nil {
 		if !s.background("collection:"+req.SourceKey, run) {
-			entry.FinishEngine(engine, "application is shutting down")
+			entry.FinishEngine(engine, handler.RunOutcome{Log: "application is shutting down"})
 			return nil, fmt.Errorf("application is shutting down")
 		}
 	} else {
@@ -123,11 +130,4 @@ func (s *Service) Stop(sourceKey string) bool {
 // Status returns the current state for a source collection run.
 func (s *Service) Status(sourceKey string) *handler.CollectStatus {
 	return handler.GetCollectStatus(sourceKey)
-}
-
-func errorString(err error) string {
-	if err == nil {
-		return ""
-	}
-	return err.Error()
 }

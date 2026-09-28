@@ -4,12 +4,14 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useRoute, useRouter } from 'vue-router'
-import { GetRecentHistory, GetHistoryPosition, SaveWatchHistory, AddFavorite, RemoveFavorite, IsFavorite } from '../api/app'
+import { GetRecentHistory, GetHistoryPosition, SaveWatchHistory, AddFavorite, RemoveFavorite, IsFavorite, normalizeApiError } from '../api/app'
 import * as AppMod from '../api/app'
 import { useSourceStore } from '../stores/source'
 import { useVideoStore } from '../stores/video'
+import { useErrorStore } from '../stores/error'
 import VideoPlayer from '../components/VideoPlayer.vue'
 import Icon from '../components/Icon.vue'
+import PlayLinePicker from '../components/PlayLinePicker.vue'
 import DoubanComments from '../components/DoubanComments.vue'
 import { Button, Modal } from '../components/ui'
 import { resolveEpisodeUrl, stripHtmlTags } from '../utils'
@@ -25,6 +27,7 @@ const router = useRouter()
 const { t } = useI18n()
 const sourceStore = useSourceStore()
 const videoStore = useVideoStore()
+const errorStore = useErrorStore()
 
 // ==================== 路由参数解析 ====================
 const vodId = computed(() => {
@@ -623,6 +626,39 @@ function goToEpisode(idx: number): void {
 function prevEpisode(): void { if (hasPrev.value) goToEpisode(currentEpIndex.value - 1) }
 function nextEpisode(): void { if (hasNext.value) goToEpisode(currentEpIndex.value + 1) }
 
+/**
+ * 切到另一条播放线路：同一部影片的另一份集表，不用重新请求详情。
+ *
+ * 先记住当前集的 ep_num，切过去后按它找回同一集（找不到才回到首集）。ep_url 变了
+ * VideoPlayer 会自己重建播放器并保住全屏，进度仍按 ep_num 从历史里续。
+ */
+function onLineChange(index: number): void {
+  const prevEpNum = episodes.value[currentEpIndex.value]?.ep_num
+  videoStore.setActiveLine(index)
+  if (videoStore.activeLineIndex !== index) return
+  const list = episodes.value
+  if (list.length === 0) return
+  const matched = prevEpNum == null ? -1 : list.findIndex((ep) => Number(ep.ep_num) === Number(prevEpNum))
+  const targetIdx = matched >= 0 ? matched : 0
+  currentEpIndex.value = targetIdx
+  _playToken.value++
+  try {
+    TsCache.setEpisodes(
+      list.map((ep) => ({
+        source_key: sourceKey.value,
+        vod_id: String(vodId.value),
+        ep_url: resolveEpisodeUrl(ep),
+        ep_name: ep.ep_name || '',
+        ep_num: ep.ep_num ?? 0,
+      })),
+    )
+    TsCache.setCurrentEpisode(targetIdx)
+  } catch { /* 缓存映射失败不该挡住切线路 */ }
+  setTimeout(() => bindVideoTimeTracking(), 300)
+  const canonicalID = video.value?.global_id || globalId.value || vodId.value
+  router.replace(`/player/${sourceKey.value}/${canonicalID}/${targetIdx}?vod=${encodeURIComponent(String(vodId.value))}`).catch(() => { })
+}
+
 function goBack(): void {
   router.back()
 }
@@ -770,6 +806,8 @@ async function switchToSource(sk: string): Promise<void> {
     const match = findBestMatch(list, vodName)
     if (!match?.vod_id) {
       console.log(`[Player] ❗ 源 "${sk}" 中未找到 "${vodName}"`)
+      // 点了源却停在原源，用户看不出发生了什么，必须给出可见结论。
+      errorStore.warn(t('player.sourceNotFound'), t('player.sourceNotFoundDetail', { source: sk }), '', 'Player')
       return
     }
     const idx = sourceOptions.value.findIndex((s) => s.source_key === sk)
@@ -780,6 +818,7 @@ async function switchToSource(sk: string): Promise<void> {
     await loadFromSource(sk, String(match.vod_id))
   } catch (e) {
     console.error('[Player] 切换源失败:', e)
+    errorStore.error(t('player.switchSourceFailed'), normalizeApiError(e).message, '', 'Player')
   } finally {
     sourceSearchLoading.value = false
   }
@@ -793,6 +832,7 @@ async function loadFromSource(sk: string, vid: string): Promise<void> {
     await videoStore.loadDetail(sk, vid)
     if (!video.value || !episodes.value.length) {
       loading.value = false
+      errorStore.warn(t('player.sourceNoEpisodes'), t('player.sourceNoEpisodesDetail', { source: sk }), '', 'Player')
       return
     }
 
@@ -833,6 +873,7 @@ async function loadFromSource(sk: string, vid: string): Promise<void> {
     if (targetIdx >= 0) recordHistory(targetIdx)
   } catch (e) {
     console.error('[Player] loadFromSource 失败:', e)
+    errorStore.error(t('player.sourceLoadFailed'), normalizeApiError(e).message, '', 'Player')
   } finally {
     loading.value = false
   }
@@ -1032,6 +1073,12 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
                   class="source-loading-dot cczj-text-muted">…</span>
               </button>
             </div>
+
+            <PlayLinePicker v-if="videoStore.lines.length > 1" class="cczj-mt-4" :lines="videoStore.lines"
+              :model-value="videoStore.activeLineIndex" :source-key="sourceKey" :vod-id="String(vodId)"
+              :global-id="Number(video?.global_id || globalId || 0)"
+              :ep-num="Number(episodes[currentEpIndex]?.ep_num || 0)"
+              @update:model-value="onLineChange(Number($event))" />
 
             <!-- 选集区（仅当有剧集时显示） -->
             <template v-if="episodes.length > 0">

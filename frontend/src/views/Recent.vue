@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useSourceStore } from '../stores/source'
 import { useVideoStore } from '../stores/video'
+import { useVideoList } from '../composables/useVideoList'
 import VideoCard from '../components/VideoCard.vue'
 import Icon from '../components/Icon.vue'
 import { Tag, Spinner as LoadingSpinner, Empty as EmptyState } from '../components/ui'
@@ -14,6 +15,7 @@ const { t } = useI18n()
 const router = useRouter()
 const sourceStore = useSourceStore()
 const videoStore = useVideoStore()
+const list = useVideoList()
 const period = ref(7)
 const typeId = ref('')
 const periods = computed(() => [
@@ -25,7 +27,7 @@ const typeOptions = computed(() => [{ type_id: '', name: t('home.allTypes') }, .
 
 async function load(): Promise<void> {
   if (!sourceStore.currentSourceKey) return
-  await videoStore.loadVideos(sourceStore.currentSourceKey, { type_id: typeId.value, year: '', area: '', keyword: '', sort: '', recent_days: period.value }, 1, 50)
+  await list.load(sourceStore.currentSourceKey, { type_id: typeId.value, year: '', area: '', keyword: '', sort: '', recent_days: period.value }, 1, 50)
 }
 function goDetail(video: any): void {
   if (sourceStore.currentSourceKey) router.push(getDetailPath(sourceStore.currentSourceKey, video))
@@ -46,9 +48,9 @@ onActivated(() => { void load() })
       <span class="cczj-text-sm cczj-text-muted">{{ t('home.type') }}</span>
       <Tag v-for="item in typeOptions" :key="item.type_id || 'all'" :active="typeId === item.type_id" @click="typeId = item.type_id; load()">{{ item.name }}</Tag>
     </div>
-    <LoadingSpinner v-if="videoStore.loading" size="sm" :label="t('common.loading')" />
-    <EmptyState v-else-if="videoStore.videos.length === 0" :title="t('recent.empty')" />
-    <div v-else class="recent-grid"><VideoCard v-for="video in videoStore.videos" :key="`${video.global_id}-${video.vod_id}`" :video="video" @click="goDetail(video)" /></div>
+    <LoadingSpinner v-if="list.loading" size="sm" :label="t('common.loading')" />
+    <EmptyState v-else-if="list.videos.length === 0" :title="t('recent.empty')" />
+    <div v-else class="recent-grid"><VideoCard v-for="video in list.videos" :key="`${video.global_id}-${video.vod_id}`" :video="video" @click="goDetail(video)" /></div>
   </div>
 </template>
 

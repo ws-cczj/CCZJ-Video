@@ -3,9 +3,15 @@ import { readStorage, writeStorage } from '../platform/storage'
 import { tr } from '../locales'
 
 // 格式化时间显示
+// 数据库里的时间戳是 UTC 裸串（SQLite CURRENT_TIMESTAMP，形如 '2026-09-28 03:41:00'）。
+// new Date() 对不带时区标识的 ISO 串按本地时区解析，相对时间会整体偏移，
+// 因此这里给缺少时区标识的串补 'Z' 再解析；已自带 Z / ±hh:mm 的原样解析，不重复加。
 export function formatTime(dateStr: string): string {
   if (!dateStr) return ''
-  const d = new Date(dateStr.replace(' ', 'T'))
+  const normalized = dateStr.replace(' ', 'T')
+  const hasTz = /(?:z|[+-]\d{2}:?\d{2})$/i.test(normalized)
+  const hasTime = /\d{2}:\d{2}/.test(normalized)
+  const d = new Date(!hasTz && hasTime ? `${normalized}Z` : normalized)
   if (isNaN(d.getTime())) return dateStr.replace('T', ' ').slice(0, 16)
   const now = new Date()
   const diff = now.getTime() - d.getTime()
@@ -105,9 +111,10 @@ export function buildSingleFilename(vodName: string, url?: string): string {
   return base + ext
 }
 
-// 解析下载 URL（优先 down_url，其次 play_url）
-export function resolveEpisodeUrl(ep: { ep_url: string; ep_down_url?: string }): string {
-  return ep.ep_down_url || ep.ep_url || ''
+// 取一集的播放地址。后端已经把 $$$ 多线路拆成 PlayLine，每集只剩一个 ep_url，
+// 这里不再猜下载字段。
+export function resolveEpisodeUrl(ep: { ep_url?: string }): string {
+  return ep.ep_url || ''
 }
 
 // 构造搜索路由路径（用于类型/导演/演员/年份标签跳转）

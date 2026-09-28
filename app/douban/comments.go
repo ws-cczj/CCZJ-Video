@@ -3,7 +3,6 @@ package douban
 import (
 	"fmt"
 	"io"
-	"math/rand"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -51,12 +50,8 @@ var (
 
 	cacheTTL = 24 * time.Hour // 24小时缓存
 
-	// 评论请求独立速率限制（比爬虫短得多，因为是用户交互操作）。
-	// 曾经只有 1~3 秒：与爬虫共用同一个出口 IP，等于给反爬送计数。
-	commentMinInterval = 8 * time.Second
-	commentMaxInterval = 20 * time.Second
-	lastCommentTime    time.Time
-	commentRateMu      sync.Mutex
+	// 每条缓存是一整页评论（含正文），长时间翻页只增不减会一直占着内存。
+	maxCommentCacheEntries = 200
 
 	// 评论页 HTML 解析正则
 	commentItemRegex = regexp.MustCompile(`<div class="comment-item"[^>]*data-cid="(\d+)"[\s\S]*?</div>\s*</div>`)
@@ -113,9 +108,25 @@ func FetchComments(doubanID string, page int, sort string) (*DoubanCommentsResp,
 		data:      resp,
 		fetchedAt: time.Now(),
 	}
+	evictOldestCommentsLocked()
 	commentsCache.Unlock()
 
 	return resp, nil
+}
+
+// evictOldestCommentsLocked 超出容量时淘汰最早抓取的一页；调用方需持有 commentsCache 写锁。
+// 过期项的 fetchedAt 同样最旧，所以淘汰顺带把 24h 之外的条目清掉。
+func evictOldestCommentsLocked() {
+	for len(commentsCache.entries) > maxCommentCacheEntries {
+		var oldest string
+		var at time.Time
+		for key, entry := range commentsCache.entries {
+			if oldest == "" || entry.fetchedAt.Before(at) {
+				oldest, at = key, entry.fetchedAt
+			}
+		}
+		delete(commentsCache.entries, oldest)
+	}
 }
 
 // fetchCommentsFromWeb 从豆瓣网页抓取评论
@@ -126,14 +137,18 @@ func fetchCommentsFromWeb(doubanID string, page int, sort string) (*DoubanCommen
 
 	applog.Info("[DoubanComments] 抓取评论: doubanID=%s, page=%d, url=%s", doubanID, page, url)
 
-	// 反爬静默期内快速失败，不要让交互操作排队等 8~20 秒。
+	// 反爬静默期内快速失败，不要让交互操作排在静默期后面。
 	if left := remainingBlock(); left > 0 {
 		applog.Warn("[DoubanComments] 反爬静默中（剩余 %s），跳过评论抓取", left.Round(time.Second))
 		return nil, fmt.Errorf("douban 反爬静默中，剩余 %s", left.Round(time.Minute))
 	}
 
-	// 评论请求独立速率限制（8~20 秒，不影响爬虫的全局限制）
-	waitCommentRateLimit()
+	// 和搜索/详情/热榜共用一个间隔闸门：豆瓣按 IP 计数，评论这条独立时钟留 8~20 秒
+	// 等于给整体节奏开了个后门，实测的「搜索访问太频繁」就是这么攒出来的。
+	// 等得起就等，等不起（批量补全在跑）就快速失败，上层有评论缓存兜着。
+	if _, ok := awaitDoubanSlot("评论", uiWaitBudget); !ok {
+		return nil, fmt.Errorf("douban 限速中，稍后重试评论")
+	}
 
 	// 构造请求
 	req, err := http.NewRequest("GET", url, nil)
@@ -293,31 +308,17 @@ func parseTotalPages(html string, currentPage int) int {
 	return totalPages
 }
 
-// waitCommentRateLimit 评论请求独立速率限制（8~20 秒随机间隔）
-// 不影响爬虫的全局 waitRateLimit，避免用户交互操作等待过久。
-func waitCommentRateLimit() {
-	commentRateMu.Lock()
-	defer commentRateMu.Unlock()
-
-	elapsed := time.Since(lastCommentTime)
-	if elapsed < commentMinInterval {
-		base := commentMinInterval - elapsed
-		applog.Debug("[DoubanComments] Rate limiting: base wait %.1fs", base.Seconds())
-		time.Sleep(base)
-	}
-	jitterRange := commentMaxInterval - commentMinInterval
-	if jitterRange > 0 {
-		jitter := time.Duration(rand.Int63n(int64(jitterRange)))
-		applog.Debug("[DoubanComments] Rate limiting: jitter %.1fs", jitter.Seconds())
-		time.Sleep(jitter)
-	}
-	lastCommentTime = time.Now()
-}
-
 // ClearCommentsCache 清除评论缓存（可选，用于调试）
 func ClearCommentsCache() {
 	commentsCache.Lock()
 	commentsCache.entries = make(map[string]commentCacheEntry)
 	commentsCache.Unlock()
 	applog.Info("[DoubanComments] 缓存已清除")
+}
+
+// CommentCacheCount 返回评论缓存条目数，供诊断台展示。
+func CommentCacheCount() int {
+	commentsCache.RLock()
+	defer commentsCache.RUnlock()
+	return len(commentsCache.entries)
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cczjVideo/app/applog"
 	"cczjVideo/app/service"
 	"embed"
 	"net/http"
@@ -23,8 +24,25 @@ var appIcon []byte
 func buildApp() *application.App {
 	myApp := service.NewApp()
 
+	// 单实例回调要在窗口创建前声明，Options 只能用闭包引用它。
+	var mainWindow *application.WebviewWindow
+
 	app := application.New(application.Options{
 		Name: "CCZJ Video",
+		// 强制单实例：桌面上重复图标只会把已在跑的窗口叫到前台。两份进程会同时写
+		// 同一份 SQLite、同一个缓存目录与同一个豆瓣限速闸门，那些状态都是按进程算的。
+		SingleInstance: &application.SingleInstanceOptions{
+			UniqueID: "com.cczj.video",
+			OnSecondInstanceLaunch: func(application.SecondInstanceData) {
+				if mainWindow == nil {
+					return
+				}
+				applog.Info("[SingleInstance] 检测到重复启动，已激活现有窗口")
+				mainWindow.Show()
+				mainWindow.UnMinimise()
+				mainWindow.Focus()
+			},
+		},
 		Services: []application.Service{
 			application.NewService(myApp),
 		},
@@ -47,7 +65,7 @@ func buildApp() *application.App {
 		},
 	})
 
-	mainWindow := app.Window.NewWithOptions(application.WebviewWindowOptions{
+	mainWindow = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:   "main",
 		Title:  "CCZJ Video",
 		Width:  1280,

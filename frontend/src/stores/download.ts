@@ -16,7 +16,6 @@ import {
   downloadErrorCode,
 } from '../api/download'
 import { useErrorStore } from './error'
-import { appEvent } from '../event'
 import { onBackendEvent } from '../api/events'
 
 export interface ChunkProgress {
@@ -126,7 +125,6 @@ export const useDownloadStore = defineStore('download', () => {
         const taskId = data.task_id ?? data.TaskId ?? ''
         const downloaded = Number(data.downloaded ?? data.Downloaded ?? 0)
         const total = Number(data.total ?? data.Total ?? 0)
-        appEvent.emit('download:progress', taskId, downloaded, total)
       })
     } catch {
       // 忽略运行时尚未就绪的事件桥接
@@ -207,7 +205,6 @@ export const useDownloadStore = defineStore('download', () => {
         force: opts.force || false,
       })
       if (res) upsert(res)
-      appEvent.emit('download:start', id, opts.url)
     } catch (e: any) {
       const msg: string = e?.message || String(e)
       const isDuplicate = downloadErrorCode(e) === 'DOWNLOAD_DUPLICATE'

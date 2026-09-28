@@ -37,10 +37,11 @@ const totalPages = ref(1)
 const total = ref(0)
 const sort = ref<'new_score' | 'time'>('new_score')
 
-const sortOptions = [
+// computed 而不是常量：setup 里直接求值会把译文冻在挂载时的语言上。
+const sortOptions = computed(() => [
   { value: 'new_score' as const, label: tr('detail.sortHot') },
   { value: 'time' as const, label: tr('detail.sortLatest') },
-]
+])
 
 async function fetchComments() {
   if (!props.doubanId) return

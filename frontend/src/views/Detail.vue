@@ -3,12 +3,14 @@ defineOptions({ name: 'Detail' })
 import { ref, computed, onMounted, onBeforeUnmount, onActivated, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { GetRecentHistory, SaveWatchHistory, AddFavorite, RemoveFavorite, IsFavorite, DeleteVideo, GetSimilarVideos, DoubanUpdateVideo } from '../api/app'
+import { GetRecentHistory, SaveWatchHistory, AddFavorite, RemoveFavorite, IsFavorite, DeleteVideo, GetVideoList, GetSimilarVideos, DoubanUpdateVideo, normalizeApiError, FindSourcesByGlobalId } from '../api/app'
 import { useSourceStore } from '../stores/source'
 import { useVideoStore } from '../stores/video'
 import { useDownloadStore } from '../stores/download'
 import { useConfirmStore } from '../stores/confirm'
+import { useErrorStore } from '../stores/error'
 import Icon from '../components/Icon.vue'
+import PlayLinePicker from '../components/PlayLinePicker.vue'
 import RemoteImage from '../components/RemoteImage.vue'
 import { Button, Modal, Tag, Spinner as LoadingSpinner } from '../components/ui'
 import { getDetailPath, getSearchPath, getPlayerPath, humanizeBytes, buildEpisodeFilename, buildSingleFilename, sanitizeFilename, resolveEpisodeUrl, stripHtmlTags } from '../utils'
@@ -28,6 +30,7 @@ const sourceStore = useSourceStore()
 const videoStore = useVideoStore()
 const downloadStore = useDownloadStore()
 const confirmStore = useConfirmStore()
+const errorStore = useErrorStore()
 
 // ==================== 路由参数解析 ====================
 const vodId = computed(() => {
@@ -253,8 +256,10 @@ async function toggleFavorite(): Promise<void> {
       } catch { /* ignore */ }
       isFav.value = false
       bumpFavoritesRefresh()
-    } catch { /* ignore */ }
-    finally {
+    } catch (e) {
+      // 点「取消收藏」却什么都没发生，是最容易被当成软件坏了的静默失败。
+      errorStore.error(t('detail.favRemoveFailed'), normalizeApiError(e).message, '', 'Detail')
+    } finally {
       favBusy.value = false
     }
     return
@@ -285,8 +290,9 @@ async function confirmAddToFolder(): Promise<void> {
     } catch { /* ignore */ }
     isFav.value = true
     bumpFavoritesRefresh()
-  } catch { /* ignore */ }
-  finally {
+  } catch (e) {
+    errorStore.error(t('detail.favAddFailed'), normalizeApiError(e).message, '', 'Detail')
+  } finally {
     favBusy.value = false
   }
 }
@@ -312,7 +318,7 @@ const hasMetaRow = computed(() => {
 const hasInfoRow = computed(() => {
   const v = video.value
   if (!v) return false
-  return !!(v.vod_version || v.vod_state || v.vod_isend || v.vod_pubdate || v.vod_play_from)
+  return !!(v.vod_version || v.vod_state || v.vod_isend || v.vod_pubdate || videoStore.lines.length > 1)
 })
 
 function formatHits(raw: string | undefined | null): string {
@@ -514,7 +520,22 @@ async function loadSimilar(): Promise<void> {
   if (!sourceKey.value || !video.value) return
   similarLoading.value = true
   try {
-    const list: Video[] = Array.isArray(videoStore.videos) ? videoStore.videos : []
+    // 候选池自己取同类型的一页：原先读的是别的列表页留下的 videoStore.videos，
+    // 从哪个页面进来就推荐那个页面的内容，直接打开详情页则什么都没有。
+    const typeId = video.value.type_id ? String(video.value.type_id) : ''
+    const pool = (await (GetVideoList as any)({
+      source_key: sourceKey.value,
+      type_id: typeId,
+      year: '',
+      area: '',
+      keyword: '',
+      sort: '',
+      recent_days: 0,
+      cursor: '',
+      page: 1,
+      page_size: 100,
+    })) as any
+    const list: Video[] = Array.isArray(pool?.videos) ? pool.videos : []
     const currentId = String(video.value.vod_id || '')
     const currentName = video.value.vod_name || ''
     const year = extractYear(video.value.vod_year)
@@ -525,7 +546,6 @@ async function loadSimilar(): Promise<void> {
     // 2. 如果前端推荐为空，调用后端兜底（按类型推荐）
     if (results.length === 0) {
       try {
-        const typeId = video.value.type_id ? String(video.value.type_id) : ''
         const similar = await GetSimilarVideos({
           source_key: sourceKey.value,
           type_id: typeId,
@@ -546,12 +566,16 @@ async function loadSimilar(): Promise<void> {
         }
       } catch (e) {
         console.warn('后端相似推荐失败', e)
+        // 前端算不出推荐、后端兜底又失败时，推荐区只是一片空白，
+        // 用户分不清"没有可推荐"和"推荐没加载出来"。
+        errorStore.warn(t('detail.recommendFailed'), normalizeApiError(e).message, '', 'Detail')
       }
     }
     
     similarVideos.value = results
-  } catch {
+  } catch (e) {
     similarVideos.value = []
+    errorStore.warn(t('detail.recommendFailed'), normalizeApiError(e).message, '', 'Detail')
   } finally {
     similarLoading.value = false
   }
@@ -614,6 +638,42 @@ async function deleteThisVideo(): Promise<void> {
   }
 }
 
+// ==================== 同一部片在其它源（F7）====================
+interface OtherSourceRef {
+  sourceKey: string
+  name: string
+  vodId: string
+}
+
+const currentGlobalId = computed(() => Number(video.value?.global_id || globalId.value || 0))
+const otherSources = ref<OtherSourceRef[]>([])
+
+/**
+ * 只按 global_id 查本地关联，不碰网络：一次 SELECT 就能给出「换源看」入口。
+ * 取不到就留空 —— 这是补充入口，缺它不影响详情页本身，因此不打扰用户。
+ */
+async function loadOtherSources(): Promise<void> {
+  otherSources.value = []
+  const gid = currentGlobalId.value
+  if (!gid) return
+  try {
+    const refs = (await FindSourcesByGlobalId(gid)) as any[]
+    otherSources.value = (Array.isArray(refs) ? refs : [])
+      .filter((r: any) => r?.source_key && r.source_key !== sourceKey.value)
+      .map((r: any) => ({
+        sourceKey: String(r.source_key),
+        vodId: String(r.vod_id || ''),
+        name: String(sourceStore.sources.find((s: any) => s.source_key === r.source_key)?.name || r.source_key),
+      }))
+  } catch {
+    otherSources.value = []
+  }
+}
+
+function openOnOtherSource(item: OtherSourceRef): void {
+  router.push(getDetailPath(item.sourceKey, { global_id: currentGlobalId.value, vod_id: item.vodId }))
+}
+
 async function loadDetail(): Promise<void> {
   if (!sourceKey.value || (!vodId.value && !globalId.value)) {
     error.value = t('detail.videoNotFound')
@@ -648,6 +708,7 @@ async function loadDetail(): Promise<void> {
   loading.value = false // 本地数据已就绪，关闭 loading
 
   loadSimilar()
+  loadOtherSources()
   // 仅注册剧集列表 + 预取第一集 m3u8 文本（轻量），
   // 真正的 TS 片段预取交给播放器页面处理（避免预取错误集数）
   const eps = videoStore.episodes
@@ -734,8 +795,9 @@ watch(() => route.fullPath, (newPath, oldPath) => {
   }
 })
 
-watch(vodId, async () => {
-  if (vodId.value) {
+// 源也要进依赖：「换源看同一部」时两源的 vod_id 可能相同，只盯 vodId 就不重载。
+watch([sourceKey, vodId], async () => {
+  if (vodId.value || globalId.value) {
     await loadDetail()
     refreshFav().catch(() => { })
   }
@@ -875,7 +937,7 @@ onBeforeUnmount(() => {
               <Tag v-if="video.vod_isend === '1'" variant="success" size="sm">{{ t('detail.completed') }}</Tag>
               <Tag v-else-if="video.vod_isend" size="sm">{{ t('detail.ongoing') }}</Tag>
               <Tag v-if="video.vod_pubdate" size="sm">{{ t('detail.pubdateValue', { date: video.vod_pubdate }) }}</Tag>
-              <Tag v-if="video.vod_play_from" size="sm">{{ t('detail.sourceValue', { source: video.vod_play_from }) }}</Tag>
+              <Tag v-if="videoStore.lines.length > 1" size="sm">{{ t('playLine.count', { count: videoStore.lines.length }) }}</Tag>
             </div>
           </div>
 
@@ -920,6 +982,9 @@ onBeforeUnmount(() => {
             </Button>
           </div>
         </div>
+        <PlayLinePicker v-if="video && videoStore.lines.length > 1" class="cczj-mb-4" :lines="videoStore.lines"
+          :model-value="videoStore.activeLineIndex" :source-key="sourceKey" :vod-id="String(vodId)"
+          :global-id="Number(video.global_id || 0)" @update:model-value="videoStore.setActiveLine(Number($event))" />
         <div class="episodes-grid cczj-grid cczj-gap-2">
           <button v-for="(ep, i) in sortedEpisodes" :key="'ep-' + (ep.ep_num || i)" class="episode-btn cczj-relative cczj-rounded cczj-px-3 cczj-py-2 cczj-cursor-pointer cczj-flex cczj-items-center cczj-gap-1 cczj-text-sm cczj-transition" :class="{
             'download-mode': episodeMode === 'download',
@@ -933,6 +998,21 @@ onBeforeUnmount(() => {
               :style="{ width: getEpPct(ep, origIdx(i)) + '%' }"></div>
             <span v-if="episodeMode !== 'download' && getEpPct(ep, origIdx(i)) > 0" class="ep-progress-pct cczj-text-xs cczj-text-accent">{{
               Math.round(getEpPct(ep, origIdx(i))) }}%</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- 同一部片在其它源：只列本地已采到的，点进去换一条源看 -->
+      <section v-if="otherSources.length" class="other-sources-section cczj-mt-6 cczj-p-4 cczj-rounded cczj-bg-card cczj-border cczj-motion-reveal">
+        <div class="section-head cczj-flex cczj-items-center cczj-gap-2 cczj-mb-4">
+          <h3 class="cczj-text-lg cczj-font-semibold">{{ t('detail.otherSources') }}</h3>
+        </div>
+        <div class="other-sources-row cczj-flex cczj-flex-wrap cczj-gap-2">
+          <button v-for="item in otherSources" :key="item.sourceKey"
+            class="other-source-btn cczj-flex cczj-items-center cczj-gap-1 cczj-rounded cczj-px-3 cczj-py-2 cczj-text-sm cczj-cursor-pointer cczj-transition-fast"
+            @click="openOnOtherSource(item)">
+            <Icon name="globe" :size="13" />
+            <span class="cczj-truncate">{{ item.name }}</span>
           </button>
         </div>
       </section>
@@ -1297,6 +1377,19 @@ onBeforeUnmount(() => {
 }
 
 /* 查看更多按钮 */
+.other-source-btn {
+  max-width: 200px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.other-source-btn:hover {
+  border-color: var(--accent);
+  background: var(--accent-alpha-10);
+  color: var(--accent);
+}
+
 .show-more-btn {
   padding: 5px 12px;
   font-size: 12px;

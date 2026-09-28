@@ -10,16 +10,16 @@ import (
 // DataDirectory returns the application data directory.
 type DataDirectory func() string
 
-// Info describes the storage used by application-managed caches.
+// Info describes the storage used by application-owned caches.
+//
+// 浏览器侧的 localStorage / IndexedDB 不在这个结构里：那部分由前端自己统计，Go 只能报出
+// 一个恒为 0 的占位数（以前的 ts_cache 就是这样：目录从来没有被创建过，诊断台却一直显示
+// "磁盘缓存 0 B" 加一条不存在的路径）。
 type Info struct {
-	LocalStorageBytes int64  `json:"local_storage_bytes"`
-	IndexedDBBytes    int64  `json:"indexed_db_bytes"`
-	DatabaseBytes     int64  `json:"database_bytes"`
-	DatabasePath      string `json:"database_path"`
-	DiskCacheDir      string `json:"disk_cache_dir"`
-	DiskCacheBytes    int64  `json:"disk_cache_bytes"`
-	LogFileBytes      int64  `json:"log_file_bytes"`
-	LogFilePath       string `json:"log_file_path"`
+	DatabaseBytes int64  `json:"database_bytes"`
+	DatabasePath  string `json:"database_path"`
+	LogFileBytes  int64  `json:"log_file_bytes"`
+	LogFilePath   string `json:"log_file_path"`
 }
 
 // Service owns paths and deletion policy for application cache directories.
@@ -48,11 +48,6 @@ func (s *Service) GetInfo() (*Info, error) {
 	}
 	info.DatabasePath = databasePath
 
-	info.DiskCacheDir = filepath.Join(dataDirectory, "ts_cache")
-	if fileInfo, err := os.Stat(info.DiskCacheDir); err == nil && fileInfo.IsDir() {
-		info.DiskCacheBytes = directorySize(info.DiskCacheDir)
-	}
-
 	info.LogFilePath = filepath.Join(dataDirectory, "applog")
 	if fileInfo, err := os.Stat(info.LogFilePath); err == nil && fileInfo.IsDir() {
 		info.LogFileBytes = directorySize(info.LogFilePath)
@@ -62,19 +57,14 @@ func (s *Service) GetInfo() (*Info, error) {
 }
 
 // Clear deletes the requested cache category without deleting the active database.
+// 只管写到磁盘上的目录：进程内的派生缓存由 invalidate.go 负责。
 func (s *Service) Clear(cacheType string) error {
 	dataDirectory := s.directory()
 	switch cacheType {
-	case "disk_cache":
-		return os.RemoveAll(filepath.Join(dataDirectory, "ts_cache"))
 	case "logs":
 		return os.RemoveAll(filepath.Join(dataDirectory, "applog"))
 	case "database":
 		return fmt.Errorf("数据库文件正在使用中，请通过「重置数据库」功能操作")
-	case "all":
-		_ = os.RemoveAll(filepath.Join(dataDirectory, "ts_cache"))
-		_ = os.RemoveAll(filepath.Join(dataDirectory, "applog"))
-		return nil
 	default:
 		return fmt.Errorf("未知缓存类型: %s", cacheType)
 	}

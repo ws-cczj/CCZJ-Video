@@ -19,9 +19,21 @@ func TestFormatFieldsOrdersKeys(t *testing.T) {
 	}
 }
 
-// tempLogger 把包级单例改指向临时目录。
-// Init 被 sync.Once 保护，而 Default() 在单例为空时会拿生产目录把它建出来——
-// 测试里只要先碰到 Default()，日志就直接落进用户真实的 %APPDATA% 日志文件了。
+// TestDefaultLogDirAvoidsUserConfigInTests 钉住「跑测试不碰用户真实日志」这条约定。
+// 生产二进制里 testing.Testing() 恒为 false，所以这条只保护开发者机器上的日志洁净度。
+func TestDefaultLogDirAvoidsUserConfigInTests(t *testing.T) {
+	dir := defaultLogDir()
+	if user, err := os.UserConfigDir(); err == nil && strings.Contains(dir, user) {
+		t.Fatalf("测试二进制的日志目录 = %q，落在用户配置目录 %q 里，会污染真实日志", dir, user)
+	}
+	if !strings.Contains(dir, "cczj-applog-test") {
+		t.Fatalf("测试二进制的日志目录 = %q，期望是专用的临时目录", dir)
+	}
+}
+
+// tempLogger 把包级单例改指向临时目录，用例之间互不串台、退出时能关掉句柄。
+// defaultLogDir 已经把测试二进制整体挪出 %APPDATA%，但那只管「没人 Init」的兜底路径：
+// 想断言文件内容或按用例隔离，仍然要显式换掉单例。
 func tempLogger(t *testing.T) *Logger {
 	t.Helper()
 	l := &Logger{logDir: t.TempDir(), keepDays: 30}

@@ -3,7 +3,6 @@ import { tr } from '../locales'
 import { ref, computed } from 'vue'
 import { StartCollect, PauseCollect, ResumeCollect, StopCollect, GetCollectSchedule, SetCollectSchedule, TriggerCollectNow, StopBackgroundCollect, SetSourceSchedule, GetCollectStatus } from '../api/app'
 import { useErrorStore } from './error'
-import { appEvent } from '../event'
 import { onBackendEvent } from '../api/events'
 
 export interface CollectPageEvent {
@@ -66,7 +65,10 @@ export interface SourceCollectState {
   videoTotal: number       // 预估视频总数
   speed: number            // 速度: 页/秒
   etaSeconds: number       // 预估剩余秒数
+  lastRun: LastRunInfo     // 上一次运行的落地结果
 }
+
+export type LastRunState = 'none' | 'ok' | 'partial' | 'failed'
 
 // 后端采集状态快照（GetCollectStatus 的原始返回 + 拉取时刻）
 export interface BackendCollectStatus {
@@ -79,7 +81,91 @@ export interface BackendCollectStatus {
   page: number
   names: string[]
   log: string
+  lastRun: LastRunInfo
   syncedAt: number
+}
+
+// 一次采集运行的结果。整页取不到或写不进去都必须显示成 partial/failed，
+// 不能因为"其他页正常"就报绿色完成。
+export interface LastRunInfo {
+  state: LastRunState
+  errorKind: string
+  saved: number
+  fetchFailedPages: number
+  saveFailedPages: number
+  emptyPages: number
+  elapsedMs: number
+  finishedAt: number
+  stopped: boolean
+  error: string
+}
+
+function emptyLastRun(): LastRunInfo {
+  return {
+    state: 'none',
+    errorKind: '',
+    saved: 0,
+    fetchFailedPages: 0,
+    saveFailedPages: 0,
+    emptyPages: 0,
+    elapsedMs: 0,
+    finishedAt: 0,
+    stopped: false,
+    error: '',
+  }
+}
+
+function toLastRun(raw: any): LastRunInfo {
+  const info = emptyLastRun()
+  if (!raw) return info
+  const num = (v: unknown) => Number(v) || 0
+  const len = (v: unknown) => (Array.isArray(v) ? v.length : 0)
+  info.errorKind = String(raw.last_error_kind ?? raw.error_kind ?? '')
+  info.saved = num(raw.saved)
+  info.fetchFailedPages = len(raw.fetch_failures)
+  info.saveFailedPages = len(raw.save_failures)
+  info.emptyPages = len(raw.empty_pages)
+  info.elapsedMs = num(raw.elapsed_ms)
+  info.finishedAt = num(raw.finished_at_unix)
+  info.stopped = !!raw.stopped
+  info.error = String(raw.error ?? raw.log ?? '')
+  if (info.errorKind === 'fatal') {
+    info.state = 'failed'
+  } else if (info.errorKind === 'fetch' || info.errorKind === 'save' || info.errorKind === 'partial') {
+    info.state = 'partial'
+  } else if (info.finishedAt > 0) {
+    info.state = 'ok'
+  }
+  return info
+}
+
+// collect:done 事件载荷，与后端 handler.CollectDonePayload 一一对应。
+export interface CollectDoneEvent {
+  source_key: string
+  operation_id?: string
+  mode?: string
+  error?: string
+  error_kind?: string
+  saved?: number
+  fetch_failures?: number[]
+  save_failures?: number[]
+  empty_pages?: number[]
+  elapsed_ms?: number
+  stopped?: boolean
+}
+
+function describeRunFinish(info: LastRunInfo, error: string): string {
+  if (info.state === 'partial') {
+    return tr('sources.collectPartial', {
+      saved: info.saved,
+      fetch: info.fetchFailedPages,
+      save: info.saveFailedPages,
+    })
+  }
+  if (info.state === 'failed') {
+    return tr('sources.collectError', { error })
+  }
+  return tr('sources.collectDone')
 }
 
 type CollectMode = 'full' | 'incremental' | 'once'
@@ -140,6 +226,7 @@ function makeState(sourceKey: string): SourceCollectState {
     videoTotal: 0,
     speed: 0,
     etaSeconds: 0,
+    lastRun: emptyLastRun(),
   }
 }
 
@@ -227,6 +314,7 @@ export const useCollectStore = defineStore('collect', () => {
       page: Number(raw.page) || 0,
       names: Array.isArray(raw.names) ? raw.names : [],
       log: raw.log || '',
+      lastRun: toLastRun(raw),
       syncedAt: Date.now(),
     }
     backendStatus.value = { ...backendStatus.value, [key]: snapshot }
@@ -238,6 +326,7 @@ export const useCollectStore = defineStore('collect', () => {
     st.total = snapshot.total
     st.page = snapshot.page
     st.pageNames = snapshot.names
+    st.lastRun = snapshot.lastRun
     if (snapshot.mode) st.mode = snapshot.mode
     if (snapshot.running && !st.startTime) st.startTime = Date.now()
     if (!snapshot.running) st.done = false
@@ -253,7 +342,7 @@ export const useCollectStore = defineStore('collect', () => {
   // 记录上一次 progress 事件的时间和页码，用于计算速度
   const _lastProgressAt = new Map<string, { ts: number; page: number }>()
 
-  // === 事件监听（Wails 后端事件 → appEvent 桥接） ===
+  // === 事件监听（Wails 后端事件 → store 状态） ===
   onBackendEvent<{ source_key: string; current: number; total: number }>('collect:progress', (data) => {
     const st = getState(data.source_key)
     st.current = data.current
@@ -280,9 +369,6 @@ export const useCollectStore = defineStore('collect', () => {
       current.value = data.current
       total.value = data.total
     }
-
-    // 桥接到前端事件总线
-    appEvent.emit('collect:progress', data.source_key, data.current, data.total)
   })
 
   onBackendEvent<{ source_key: string; message: string }>('collect:log', (data) => {
@@ -298,9 +384,6 @@ export const useCollectStore = defineStore('collect', () => {
       log.value.push(data.message)
       if (log.value.length > 200) log.value.shift()
     }
-
-    // 桥接到前端事件总线
-    appEvent.emit('collect:log', data.source_key, data.message)
   })
 
   onBackendEvent<CollectPageEvent>('collect:page', (data) => {
@@ -314,31 +397,33 @@ export const useCollectStore = defineStore('collect', () => {
     }
   })
 
-  onBackendEvent<{ source_key: string; error?: string; mode?: string }>('collect:done', (data) => {
+  onBackendEvent<CollectDoneEvent>('collect:done', (data) => {
     const st = getState(data.source_key)
     st.running = false
     st.paused = false
     st.done = true
     st.error = data.error || ''
-    if (!st.error) {
-      st.log.push(tr('sources.collectDone'))
-    } else {
-      st.log.push(tr('sources.collectError', { error: st.error }))
-    }
+    st.lastRun = toLastRun({
+      last_error_kind: data.error_kind,
+      saved: data.saved,
+      fetch_failures: data.fetch_failures,
+      save_failures: data.save_failures,
+      empty_pages: data.empty_pages,
+      elapsed_ms: data.elapsed_ms,
+      finished_at_unix: Math.floor(Date.now() / 1000),
+      error: data.error,
+    })
+    const message = describeRunFinish(st.lastRun, st.error)
+    st.log.push(message)
     if (data.source_key === sourceKey.value) {
       running.value = false
       paused.value = false
       done.value = true
-      error.value = data.error || ''
-      if (!error.value) {
-        log.value.push(tr('sources.collectDone'))
-      } else {
-        log.value.push(tr('sources.collectError', { error: error.value }))
-      }
+      error.value = st.error
+      log.value.push(message)
+      if (log.value.length > 200) log.value.shift()
     }
 
-    // 桥接到前端事件总线
-    appEvent.emit('collect:done', data.source_key, data.error)
 
     setTimeout(() => {
       st.done = false
@@ -362,13 +447,13 @@ export const useCollectStore = defineStore('collect', () => {
     st.pageNames = []
     st.log = [tr('sources.startCollecting', { mode: modeLabel(collectMode) })]
     st.error = ''
+    st.lastRun = emptyLastRun()
     st.startTime = Date.now()
 
     syncGlobalFromState(st)
 
     try {
       await StartCollect({ source_key: key, mode: collectMode, hours })
-      appEvent.emit('collect:start', key, collectMode)
     } catch (e) {
       st.running = false
       st.paused = false
@@ -503,6 +588,10 @@ export const useCollectStore = defineStore('collect', () => {
   }
 
   // === 速度/ETA 辅助 ===
+  function lastRunOf(key: string): LastRunInfo {
+    return sourceStates.value.get(key)?.lastRun ?? emptyLastRun()
+  }
+
   function elapsed(key: string): number {
     const st = sourceStates.value.get(key)
     if (!st || !st.startTime) return 0
@@ -571,6 +660,7 @@ export const useCollectStore = defineStore('collect', () => {
     stopBackground,
     saveSourceSchedule,
     // 速度/ETA 辅助
+    lastRunOf,
     elapsed,
     elapsedStr,
     speedStr,

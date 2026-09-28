@@ -62,6 +62,57 @@ export class Episode {
  */
 
 /**
+ * PlayLine 是一条播放线路。maccms 用 $$$ 在 vod_play_url 里并列多条“同名集表”，
+ * 线路名取自 vod_play_from 的同序分段；源站没给名字时 Name 为空，由前端按序号兜底，
+ * 免得中文占位文案被写死进 Go 再传到界面。
+ */
+export class PlayLine {
+    /**
+     * Creates a new PlayLine instance.
+     * @param {Partial<PlayLine>} [$$source = {}] - The source object to create the PlayLine.
+     */
+    constructor($$source = {}) {
+        if (!("index" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["index"] = 0;
+        }
+        if (!("name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["name"] = "";
+        }
+        if (!("episodes" in $$source)) {
+            /**
+             * @member
+             * @type {(Episode | null)[]}
+             */
+            this["episodes"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PlayLine instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {PlayLine}
+     */
+    static createFrom($$source = {}) {
+        const $$createField2_0 = $$createType2;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("episodes" in $$parsedSource) {
+            $$parsedSource["episodes"] = $$createField2_0($$parsedSource["episodes"]);
+        }
+        return new PlayLine(/** @type {Partial<PlayLine>} */($$parsedSource));
+    }
+}
+
+/**
  * Source 采集源定义
  */
 export class Source {
@@ -560,3 +611,8 @@ export class Video {
         return new Video(/** @type {Partial<Video>} */($$parsedSource));
     }
 }
+
+// Private type creation functions
+const $$createType0 = Episode.createFrom;
+const $$createType1 = $Create.Nullable($$createType0);
+const $$createType2 = $Create.Array($$createType1);

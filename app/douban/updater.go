@@ -146,6 +146,7 @@ func (u *Updater) UpdateBatch() (int, error) {
 
 func (u *Updater) fillSubjectID(row *db.DoubanInfoRow) error {
 	meta := SearchMeta{
+		GlobalID: row.GlobalID,
 		VodName:  row.VodName,
 		Year:     row.Year,
 		VodType:  row.VodType,
@@ -154,6 +155,10 @@ func (u *Updater) fillSubjectID(row *db.DoubanInfoRow) error {
 	}
 	applog.Info("[Douban] fillSubjectID meta: name=%s year=%s type=%s director=%s",
 		meta.VodName, meta.Year, meta.VodType, meta.Director)
+
+	// 打点在请求之前：队列按「上次被试过」轮转，只在成功时打点等于让一直失败的行
+	// 永远霸占队头，后面的记录一次也轮不到。
+	_ = db.MarkDoubanAttempt(row.GlobalID)
 
 	subjectID, err := SearchSubjectID(row.VodName, meta)
 	if err != nil {
@@ -167,6 +172,8 @@ func (u *Updater) fillSubjectID(row *db.DoubanInfoRow) error {
 }
 
 func (u *Updater) fillDetail(row *db.DoubanInfoRow) error {
+	_ = db.MarkDoubanAttempt(row.GlobalID)
+
 	info, err := ParseDetail(row.SubjectID)
 	if err != nil {
 		return err

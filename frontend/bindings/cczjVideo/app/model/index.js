@@ -4,6 +4,7 @@
 
 export {
     Episode,
+    PlayLine,
     Source,
     SourceStat,
     VType,

@@ -4,11 +4,15 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from './Icon.vue'
 import { Button } from './ui'
-import { GetDiagnostics, ProbeSources } from '../api/app'
+import { GetDiagnostics, ProbeSources, ListIdentityMergeCandidates, MergeGlobalVideoIdentities } from '../api/app'
 import { useErrorStore } from '../stores/error'
+import { useConfirmStore } from '../stores/confirm'
+import { useVideoStore } from '../stores/video'
 
 const { t } = useI18n()
 const errorStore = useErrorStore()
+const confirmStore = useConfirmStore()
+const videoStore = useVideoStore()
 
 const diag = ref<Record<string, any> | null>(null)
 const probes = ref<Record<string, any>[]>([])
@@ -23,12 +27,68 @@ const health = computed(() => douban.value.health || {})
 const collect = computed(() => diag.value?.collect || {})
 const sources = computed<Record<string, any>[]>(() => diag.value?.sources || [])
 const tables = computed<Record<string, any>[]>(() => diag.value?.tables || [])
-const duplicates = computed<Record<string, any>[]>(() => douban.value.duplicates || [])
 const notes = computed<string[]>(() => diag.value?.notes || [])
 const backgroundTasks = computed(() => {
   const tasks = env.value.background_tasks || {}
   return Object.keys(tasks).map(name => ({ name, count: tasks[name] }))
 })
+
+// 身份合并队列单独拉：诊断快照是只读统计，候选组要能被用户一条条消化掉。
+const CANDIDATE_LIMIT = 60
+const candidates = ref<Record<string, any>[]>([])
+const candidatesLoading = ref(false)
+const mergingKey = ref('')
+
+function candidateKey(group: Record<string, any>): string {
+  return `${group.reason}:${group.key}`
+}
+
+function reasonLabel(reason: string): string {
+  return reason === 'douban_id' ? t('diagnostics.mergeReasonDoubanId') : t('diagnostics.mergeReasonSameName')
+}
+
+async function loadCandidates(): Promise<void> {
+  candidatesLoading.value = true
+  try {
+    const resp = (await ListIdentityMergeCandidates(CANDIDATE_LIMIT)) as unknown as Record<string, any> | null
+    candidates.value = resp && Array.isArray(resp.groups) ? resp.groups : []
+  } catch (e: any) {
+    candidates.value = []
+    errorStore.fromError(t('diagnostics.mergeLoadFailed'), e, 'DiagnosticsPanel.loadCandidates')
+  } finally {
+    candidatesLoading.value = false
+  }
+}
+
+/**
+ * 一次只并一组，并且必须用户点头：候选是「疑似」，机器不敢替人决定。
+ * 合并改的是 global_id 归属，收藏/历史/目录引用都会被搬走，所以成功后要广播刷新。
+ */
+async function mergeGroup(group: Record<string, any>): Promise<void> {
+  const rows = Array.isArray(group.rows) ? group.rows : []
+  const ids = rows.map((r: any) => Number(r.global_id) || 0).filter((n: number) => n > 0)
+  if (ids.length < 2) return
+  const key = candidateKey(group)
+  if (mergingKey.value) return
+  const ok = await confirmStore.confirm({
+    title: t('diagnostics.mergeConfirmTitle'),
+    message: t('diagnostics.mergeConfirm', { names: rows.map((r: any) => r.vod_name).join(' / ') }),
+    level: 'warn',
+  })
+  if (!ok) return
+  mergingKey.value = key
+  try {
+    await MergeGlobalVideoIdentities({ global_ids: ids } as any)
+    errorStore.info(t('diagnostics.mergeDone'), '', '', 'DiagnosticsPanel.mergeGroup')
+    videoStore.notifyRefresh()
+    await load()
+  } catch (e: any) {
+    errorStore.fromError(t('diagnostics.mergeFailed'), e, 'DiagnosticsPanel.mergeGroup')
+  } finally {
+    mergingKey.value = ''
+  }
+}
+
 
 // 探测结果按源键索引，方便和统计表并排显示。
 const probeByKey = computed<Record<string, Record<string, any>>>(() => {
@@ -40,7 +100,9 @@ const probeByKey = computed<Record<string, Record<string, any>>>(() => {
 async function load(): Promise<void> {
   loading.value = true
   try {
-    diag.value = (await GetDiagnostics()) as unknown as Record<string, any> | null
+    // 候选队列跟着一起刷新：合并完不重拉，队列里还会留着刚被并掉的那组。
+    const [snapshot] = await Promise.all([GetDiagnostics(), loadCandidates()])
+    diag.value = snapshot as unknown as Record<string, any> | null
     updatedAt.value = Date.now()
   } catch (e: any) {
     errorStore.fromError(t('diagnostics.loadFailed'), e, 'DiagnosticsPanel.load')
@@ -53,6 +115,8 @@ async function probe(): Promise<void> {
   probing.value = true
   try {
     probes.value = (await ProbeSources()) as unknown as Record<string, any>[] || []
+    // 探测现在会落一条巡检样本，不重新拉一次诊断数据，健康度列就还是旧的。
+    await load()
   } catch (e: any) {
     probes.value = []
     errorStore.fromError(t('diagnostics.probeFailed'), e, 'DiagnosticsPanel.probe')
@@ -84,6 +148,102 @@ function fmtTime(unix: number): string {
 
 function fmtNumber(value: number): string {
   return (Number(value) || 0).toLocaleString()
+}
+
+interface LastCollectTag { cls: string; text: string; title: string }
+
+// 缺整页的采集不能被显示成一次干净的完成，否则少数据只藏在日志里看不出来。
+function lastCollectTag(source: Record<string, any>): LastCollectTag {
+  const kind = String(source.last_error_kind || '')
+  const secs = Math.round((Number(source.last_elapsed_ms) || 0) / 1000)
+  const saved = fmtNumber(Number(source.last_saved) || 0)
+  if (kind === 'partial') {
+    return {
+      cls: 'warn',
+      text: t('sources.lastRunPartialShort'),
+      title: t('sources.lastRunPartial', {
+        saved,
+        fetch: Number(source.last_fetch_failed_pages) || 0,
+        save: Number(source.last_save_failed_pages) || 0,
+        secs,
+      }),
+    }
+  }
+  if (kind) {
+    return { cls: 'bad', text: t('sources.lastRunFailedShort'), title: String(source.last_error || '') }
+  }
+  if (!source.last_finished_at_unix) return { cls: 'muted', text: '—', title: '' }
+  return {
+    cls: 'ok',
+    text: t('sources.lastRunOk', { saved, secs }),
+    title: fmtTime(Number(source.last_finished_at_unix)),
+  }
+}
+
+// 水位线代表"增量采集已经覆盖到哪一刻"。看不到它就无法判断停机这段时间会不会被补上，
+// 所以它必须和上次采集结果并排显示。
+function watermarkText(source: Record<string, any>): string {
+  const covered = Number(source.covered_until_unix) || 0
+  if (!covered) return t('diagnostics.watermarkNone')
+  return t('diagnostics.watermarkCovered', { time: fmtTime(covered) })
+}
+
+function watermarkHint(source: Record<string, any>): string {
+  const attempt = Number(source.last_attempt_unix) || 0
+  if (!attempt) return ''
+  return t('diagnostics.watermarkLastAttempt', { time: fmtTime(attempt) })
+}
+
+// 采集与巡检两种样本共用一条时间线，靠形状区分。
+const patrolKind = 'patrol'
+
+// 样本按"新→旧"下发，画成时间线必须反过来，
+// 否则用户读到的最近一次永远在最左边。
+function healthDots(source: Record<string, any>): Record<string, any>[] {
+  const samples = (source.recent_samples || []) as Record<string, any>[]
+  return [...samples].reverse()
+}
+
+function sampleTitle(sample: Record<string, any>): string {
+  const kind = sample.kind === patrolKind
+    ? t('diagnostics.healthKindPatrol')
+    : t('diagnostics.healthKindCollect')
+  const head = t('diagnostics.healthDot', { kind, time: fmtTime(Number(sample.ts_unix) || 0) })
+  if (!sample.ok) return `${head} · ${String(sample.err || '')}`
+  if (sample.kind === patrolKind) return `${head} · ${Number(sample.latency_ms) || 0}ms`
+  return `${head} · ${t('diagnostics.healthDotSaved', { n: fmtNumber(Number(sample.saved) || 0) })}`
+}
+
+interface HealthTag { cls: string; text: string; title: string }
+
+// 采集与巡检的成功率必须各算各的：一轮全量采集是几十秒、上百页，
+// 一次巡检是几十毫秒的一个请求，混成一个数就什么都看不出来。
+function gradeHealth(health: Record<string, any> | null | undefined, text: () => string): HealthTag {
+  const sample = health || {}
+  if (!(Number(sample.samples) || 0)) {
+    return { cls: 'muted', text: t('diagnostics.healthNone'), title: t('diagnostics.healthHint') }
+  }
+  const streak = Number(sample.fail_streak) || 0
+  const rate = Number(sample.success_rate) || 0
+  return {
+    cls: streak > 0 ? 'bad' : rate >= 100 ? 'ok' : rate >= 50 ? 'warn' : 'bad',
+    text: streak > 0 ? `${text()} · ${t('diagnostics.healthStreak', { n: streak })}` : text(),
+    title: String(sample.last_error || ''),
+  }
+}
+
+function collectHealthTag(health: Record<string, any> | null | undefined): HealthTag {
+  return gradeHealth(health, () => t('diagnostics.healthCollect', { rate: Number((health || {}).success_rate) || 0 }))
+}
+
+function patrolHealthTag(health: Record<string, any> | null | undefined): HealthTag {
+  const sample = health || {}
+  const rate = Number(sample.success_rate) || 0
+  const ms = Number(sample.avg_latency_ms) || 0
+  // 平均延迟只统计成功的那几次：一次都没成功时它是 0，写成"0ms"会被读成"接口飞快"。
+  return gradeHealth(sample, () => (ms > 0
+    ? t('diagnostics.healthPatrolMs', { rate, ms })
+    : t('diagnostics.healthPatrol', { rate })))
 }
 
 onMounted(() => { void load() })
@@ -175,12 +335,16 @@ onMounted(() => { void load() })
         <div class="diag-card">
           <div class="diag-label">{{ t('diagnostics.database') }}</div>
           <div class="diag-value">{{ fmtBytes(storage.database_bytes) }}</div>
-          <div class="diag-note-inline cczj-truncate" :title="storage.database_path">{{ storage.database_path || '—' }}</div>
+          <div class="diag-note-inline cczj-truncate" :title="storage.database_path">{{ t('diagnostics.schemaVersion', { v: env.schema_version ?? 0 }) }} · {{ storage.database_path || '—' }}</div>
         </div>
         <div class="diag-card">
-          <div class="diag-label">{{ t('diagnostics.diskCache') }}</div>
-          <div class="diag-value">{{ fmtBytes(storage.disk_cache_bytes) }}</div>
-          <div class="diag-note-inline cczj-truncate" :title="storage.disk_cache_dir">{{ storage.disk_cache_dir || '—' }}</div>
+          <div class="diag-label">{{ t('diagnostics.memoryCache') }}</div>
+          <div class="diag-value">{{ fmtBytes(storage.detail_bytes ?? 0) }}</div>
+          <div class="diag-note-inline">{{ t('diagnostics.memoryCacheNote', {
+            entries: storage.detail_entries ?? 0,
+            chart: storage.chart_matches ?? 0,
+            comments: storage.comment_pages ?? 0,
+          }) }}</div>
         </div>
         <div class="diag-card">
           <div class="diag-label">{{ t('diagnostics.logFiles') }}</div>
@@ -297,25 +461,45 @@ onMounted(() => { void load() })
         </div>
       </div>
 
-      <div v-if="duplicates.length" class="diag-table-wrap">
-        <table class="diag-table">
-          <thead>
-            <tr>
-              <th>{{ t('diagnostics.doubanId') }}</th>
-              <th class="num">{{ t('diagnostics.rows') }}</th>
-              <th class="num">{{ t('diagnostics.missing') }}</th>
-              <th>{{ t('diagnostics.names') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="group in duplicates" :key="group.douban_id">
-              <td class="mono">{{ group.douban_id }}</td>
-              <td class="num">{{ group.rows }}</td>
-              <td class="num">{{ group.missing }}</td>
-              <td class="cczj-truncate" :title="group.names">{{ group.names }}</td>
-            </tr>
-          </tbody>
-        </table>
+      <div class="diag-sub cczj-flex cczj-items-center cczj-justify-between">
+        <span>{{ t('diagnostics.mergeQueue') }}</span>
+        <Button variant="secondary" size="sm" :loading="candidatesLoading" @click="loadCandidates">
+          <Icon name="refresh" :size="12" /> {{ t('common.refresh') }}
+        </Button>
+      </div>
+      <p class="desc">{{ t('diagnostics.mergeQueueNote') }}</p>
+      <div v-if="!candidates.length" class="diag-empty">{{ t('diagnostics.mergeQueueEmpty') }}</div>
+      <div v-else class="merge-groups cczj-flex cczj-flex-col cczj-gap-3">
+        <div v-for="group in candidates" :key="candidateKey(group)" class="merge-group cczj-rounded cczj-p-3 cczj-flex cczj-flex-col cczj-gap-2">
+          <div class="merge-group-hd cczj-flex cczj-items-center cczj-justify-between cczj-gap-2">
+            <span class="merge-reason cczj-truncate cczj-text-xs">{{ reasonLabel(String(group.reason)) }} · {{ group.key }}</span>
+            <Button variant="primary" size="sm" :loading="mergingKey === candidateKey(group)" :disabled="!!mergingKey" @click="mergeGroup(group)">
+              <Icon name="check" :size="12" /> {{ t('diagnostics.mergeAction') }}
+            </Button>
+          </div>
+          <div class="diag-table-wrap">
+            <table class="diag-table">
+              <thead>
+                <tr>
+                  <th class="num">{{ t('diagnostics.mergeGlobalId') }}</th>
+                  <th>{{ t('common.name') }}</th>
+                  <th>{{ t('diagnostics.mergeType') }}</th>
+                  <th>{{ t('diagnostics.doubanId') }}</th>
+                  <th class="num" :title="t('diagnostics.mergeRefsNote')">{{ t('diagnostics.mergeRefs') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in group.rows" :key="row.global_id">
+                  <td class="num mono">{{ row.global_id }}</td>
+                  <td class="cczj-truncate" :title="row.vod_name">{{ row.vod_name }}</td>
+                  <td class="cczj-truncate">{{ row.type_name || '—' }}</td>
+                  <td class="mono">{{ row.douban_id || '—' }}</td>
+                  <td class="num">{{ row.catalog_rows }} / {{ row.favorite_rows }} / {{ row.history_rows }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -335,6 +519,8 @@ onMounted(() => { void load() })
             <tr>
               <th>{{ t('common.name') }}</th>
               <th class="num">{{ t('diagnostics.catalog') }}</th>
+              <th>{{ t('diagnostics.lastCollect') }}</th>
+              <th :title="t('diagnostics.healthHint')">{{ t('diagnostics.health') }}</th>
               <th>{{ t('diagnostics.probeResult') }}</th>
               <th>{{ t('diagnostics.api') }}</th>
             </tr>
@@ -346,6 +532,29 @@ onMounted(() => { void load() })
                 <span v-if="!source.enabled" class="diag-tag muted">{{ t('common.disabled') }}</span>
               </td>
               <td class="num">{{ fmtNumber(source.video_count) }}</td>
+              <td>
+                <span
+                  class="diag-tag"
+                  :class="lastCollectTag(source).cls"
+                  :title="lastCollectTag(source).title"
+                >{{ lastCollectTag(source).text }}</span>
+                <div class="diag-watermark" :title="watermarkHint(source)">{{ watermarkText(source) }}</div>
+              </td>
+              <td>
+                <div class="diag-dots">
+                  <span v-for="sample in healthDots(source)" :key="sample.id"
+                        class="diag-dot"
+                        :class="[sample.kind === patrolKind ? 'round' : '', sample.ok ? 'ok' : 'bad']"
+                        :title="sampleTitle(sample)"></span>
+                  <span v-if="!healthDots(source).length" class="muted">—</span>
+                </div>
+                <div class="diag-health">
+                  <span class="diag-tag" :class="collectHealthTag(source.collect_health).cls"
+                        :title="collectHealthTag(source.collect_health).title">{{ collectHealthTag(source.collect_health).text }}</span>
+                  <span class="diag-tag" :class="patrolHealthTag(source.patrol_health).cls"
+                        :title="patrolHealthTag(source.patrol_health).title">{{ patrolHealthTag(source.patrol_health).text }}</span>
+                </div>
+              </td>
               <td>
                 <span v-if="!probeByKey[source.source_key]" class="muted">—</span>
                 <span v-else-if="probeByKey[source.source_key].ok" class="diag-tag ok">
@@ -485,6 +694,13 @@ onMounted(() => { void load() })
   color: var(--text-muted);
   font-size: 0.9rem;
 }
+.merge-group {
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+.merge-reason {
+  color: var(--text-muted);
+}
 .diag-tag {
   display: inline-block;
   margin-left: 6px;
@@ -496,6 +712,31 @@ onMounted(() => { void load() })
 }
 .diag-tag.ok { background: rgba(34, 197, 94, 0.16); color: var(--success, #22c55e); }
 .diag-tag.bad { background: rgba(239, 68, 68, 0.16); color: var(--danger); }
+.diag-tag.warn { background: rgba(245, 158, 11, 0.16); color: var(--warning); }
 .diag-tag.muted { background: var(--bg-secondary); color: var(--text-muted); }
 .muted { color: var(--text-muted); }
+.diag-watermark {
+  margin-top: 3px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.diag-dots {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 10px;
+}
+.diag-dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 2px;
+  background: var(--text-muted);
+}
+/* 采集与巡检的样本混在同一条时间线上，靠形状区分。 */
+.diag-dot.round { border-radius: 50%; }
+.diag-dot.ok { background: var(--success, #22c55e); }
+.diag-dot.bad { background: var(--danger); }
+.diag-health { margin-top: 4px; }
+.diag-health .diag-tag { margin-left: 0; margin-right: 4px; }
 </style>

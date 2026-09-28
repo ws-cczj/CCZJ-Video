@@ -14,6 +14,7 @@ export interface BackendEventPayloads {
   'collect:log': { operation_id?: string; source_key?: string; message?: string }
   'collect:page': { operation_id?: string; source_key?: string; page?: number; names?: string[] }
   'app:ready': { data_dir?: string; schema_version?: string }
+  'cache:invalidate': { scope?: string; source_key?: string; vod_ids?: string[]; reason?: string }
 }
 
 /**

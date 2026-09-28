@@ -1,21 +1,15 @@
 package db
 
 import (
-	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 	_ "modernc.org/sqlite"
 )
-
-// databaseResetVersion identifies the schema generation that can be retained.
-// Older databases are archived then replaced with a fresh catalog-only store.
-const databaseResetVersion = "5"
 
 var (
 	instance *sqlx.DB
@@ -56,20 +50,18 @@ func InitDB(dir string) error {
 			return
 		}
 		dbPath := filepath.Join(dir, "cczj_video.db")
-		if err := ResetDatabaseForUpgrade(dir, dbPath); err != nil {
-			initErr = err
-			return
-		}
 		instance, initErr = sqlx.Connect("sqlite", dbPath+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(on)")
 		if initErr != nil {
 			initErr = fmt.Errorf("connect sqlite: %w", initErr)
 			return
 		}
-		// 连接池策略：WAL 模式下允许并发读 + 串行写。
-		// 之前 SetMaxOpenConns(1) 把所有读写串行化，导致采集（写）和前端列表查询（读）
-		// 互相阻塞。WAL 允许多个读连接并发，写连接通过 busy_timeout 排队。
-		// 写并发上限设 1（SQLite 写锁是库级的，多写连接无意义且易触发 SQLITE_BUSY），
-		// 读连接放开到较小数值即可满足列表/详情并发。
+		// 连接池策略：8 条连接由读和写共用，并没有一套单独的「写连接上限 1」。
+		// SQLite 的写锁本来就是库级的，WAL 下同一时刻仍只有一个写事务能推进，
+		// 抢不到锁的连接靠 busy_timeout(5000) 排队而不是立刻返回 SQLITE_BUSY。
+		// 早先的 SetMaxOpenConns(1) 会把读也一起串行化，采集写入时前端列表就卡住，
+		// 所以才放开到 8；代价是写方必须自己把批量改动包进一个事务
+		// （见 upsertCatalogItems / InheritDoubanFieldsFromSiblings），
+		// 用「少而长的写事务」代替「几十次抢锁 + fsync 的短写」。
 		instance.SetMaxOpenConns(8)
 		instance.SetMaxIdleConns(4)
 		instance.SetConnMaxLifetime(0) // 长连接，避免频繁重建
@@ -77,76 +69,37 @@ func InitDB(dir string) error {
 			initErr = err
 			return
 		}
-		if err := SetSetting("database_reset_version", databaseResetVersion); err != nil {
-			initErr = fmt.Errorf("record database reset version: %w", err)
-			return
-		}
-		if err := SetSetting("database_reset_generation", databaseResetVersion); err != nil {
-			initErr = fmt.Errorf("record browser reset generation: %w", err)
-			return
-		}
+		initErr = runMigrations()
 	})
 	return initErr
 }
 
-// ResetDatabaseForUpgrade archives an unsupported database through SQLite,
-// removes its files and cache, then lets normal startup create a clean store.
-// It deliberately never executes schema migrations.
-func ResetDatabaseForUpgrade(dir, dbPath string) error {
-	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-		return nil
-	} else if err != nil {
-		return fmt.Errorf("stat database: %w", err)
-	}
-	probe, err := sqlx.Open("sqlite", "file:"+filepath.ToSlash(dbPath)+"?mode=ro")
+// runMigrations 先备份再改 schema：拿不到备份就宁可启动失败，也不在无兜底的情况下
+// 动用户的库。没有待执行迁移时直接返回，避免每次启动都复制一遍数据库。
+func runMigrations() error {
+	current, err := schemaVersion(instance)
 	if err != nil {
-		return fmt.Errorf("open database reset probe: %w", err)
+		return err
 	}
-	var version string
-	err = probe.Get(&version, `SELECT value FROM settings WHERE key='database_reset_version'`)
-	_ = probe.Close()
-	if err == nil && version == databaseResetVersion {
-		return nil
-	}
-	if err != nil && err != sql.ErrNoRows && !strings.Contains(err.Error(), "no such table") {
-		return fmt.Errorf("read database reset marker: %w", err)
-	}
-	archiveDir := filepath.Join(dir, "reset-archives")
-	if err := os.MkdirAll(archiveDir, 0755); err != nil {
-		return fmt.Errorf("create reset archive: %w", err)
-	}
-	archive := filepath.Join(archiveDir, "cczj_video_pre_reset_"+time.Now().Format("20060102_150405.000000000")+".db")
-	writer, err := sqlx.Connect("sqlite", dbPath+"?_pragma=busy_timeout(5000)")
-	if err != nil {
-		return fmt.Errorf("open database for consistent archive: %w", err)
-	}
-	var integrity string
-	if err = writer.Get(&integrity, "PRAGMA integrity_check"); err == nil && integrity != "ok" {
-		err = fmt.Errorf("integrity check: %s", integrity)
-	}
-	if err == nil {
-		err = vacuumInto(writer, archive)
-	}
-	_ = writer.Close()
-	if err != nil {
-		return fmt.Errorf("archive pre-reset database: %w", err)
-	}
-	for _, path := range []string{dbPath, dbPath + "-wal", dbPath + "-shm"} {
-		if err := removeIfExists(path); err != nil {
-			return err
+	pending := 0
+	for _, m := range migrations {
+		if m.version > current {
+			pending++
 		}
 	}
-	if err := os.RemoveAll(filepath.Join(dir, "ts_cache")); err != nil {
-		return fmt.Errorf("clear disk cache: %w", err)
+	if pending == 0 {
+		return nil
 	}
-	return nil
-}
-
-func removeIfExists(path string) error {
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("remove %s: %w", path, err)
+	backup, err := backupBeforeMigrations(instance, dataDir, pending)
+	if err != nil {
+		return err
 	}
-	return nil
+	logInfo(fmt.Sprintf("迁移前已备份数据库: %s", backup))
+	if _, err := migrateToLatest(instance); err != nil {
+		return err
+	}
+	// 建表时写下的索引可能引用了迁移新增的列，迁移后重建一次才不会出现半套索引。
+	return createIndexes()
 }
 
 func vacuumInto(database *sqlx.DB, destination string) error {
@@ -192,6 +145,7 @@ func createTables() error {
 		`CREATE TABLE IF NOT EXISTS global_video (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			vod_name TEXT NOT NULL DEFAULT '',
+			name_norm TEXT NOT NULL DEFAULT '',
 			type_id INTEGER DEFAULT 0,
 			year TEXT DEFAULT '',
 			area TEXT DEFAULT '',
@@ -212,6 +166,7 @@ func createTables() error {
 			episode_count TEXT DEFAULT '',
 			douban_cooldown_until DATETIME DEFAULT NULL,
 			douban_search_failures INTEGER DEFAULT 0,
+			douban_last_attempt_at DATETIME DEFAULT NULL,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
@@ -269,24 +224,76 @@ func createTables() error {
 	_, _ = instance.Exec(`DROP TABLE IF EXISTS douban_info`)
 	_, _ = instance.Exec(`DROP TABLE IF EXISTS id_mappings`)
 
-	// 先删除旧版归一化索引（索引表达式已更新，需重建）
-	_, _ = instance.Exec(`DROP INDEX IF EXISTS idx_gv_name_norm`)
-	_, _ = instance.Exec(`DROP INDEX IF EXISTS idx_gv_name_type_norm`)
+	// 旧版归一化索引由迁移 v3 负责删除并重建，这里不再每次启动都 drop 重建。
 
+	return createIndexes()
+}
+
+// createIndexes 建出当前 schema 需要的全部索引，可重复执行。
+func createIndexes() error {
 	// 创建索引（IF NOT EXISTS 确保幂等）
-	// global_video: 名称+类型归一化唯一索引，允许同名但不同类型共存
+	// global_video: 名称归一化唯一索引。name_norm 由 Go 侧那一份归一化实现写入，
+	// 不再用 SQL 表达式建函数索引——那份表达式和 Go 的实现各自漂移过，
+	// 同一部片因此能插进两条记录。允许同名但不同类型共存。
+	// 部分索引：空标题的行没有可比的身份，让它们互相冲突只会挡住正常插入。
+	//
+	// 下面每条都对照过 EXPLAIN QUERY PLAN（见 indexes_test.go）：只建真被
+	// 选中、并且确实消掉了扫表或临时排序的索引，多余的索引只会拖慢采集写入。
 	indexes := []string{
-		fmt.Sprintf(`CREATE UNIQUE INDEX IF NOT EXISTS idx_gv_name_type_norm
-			ON global_video (%s, type_id)`, sqlNormExpr()),
-		// global_video: douban_id 索引（加速豆瓣信息查询）
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_gv_name_type_norm
+			ON global_video (name_norm, type_id) WHERE name_norm <> ''`,
+		// global_video: 按豆瓣 ID 查。不能建成局部索引：查询是 douban_id = ?，
+		// SQLite 证明不了占位符非空，加了 WHERE 反而全程扫表。
 		`CREATE INDEX IF NOT EXISTS idx_gv_douban_id
-			ON global_video (douban_id) WHERE douban_id != ''`,
+			ON global_video (douban_id)`,
+		// global_video: 按标题查（收藏、历史、详情补充都走 vod_name）
+		`CREATE INDEX IF NOT EXISTS idx_gv_vod_name
+			ON global_video (vod_name)`,
+		// global_video: 首页「最近在看/最近入库」一类按 updated_at 倒序取 N 条
+		`CREATE INDEX IF NOT EXISTS idx_gv_updated
+			ON global_video (updated_at)`,
+		// 豆瓣补全队列的 douban_last_attempt_at 刻意不建索引：EXPLAIN 显示两条队列的
+		// 筛选各自走 NOT EXISTS 子查询和 MULTI-INDEX OR，都不选这条索引，临时排序照旧；
+		// 队列每轮只取几行、命中集很小，为一列每轮都在变的时钟建索引只是多付一次写入。
+		// source_videos: 目录浏览/搜索的主路径。前缀是 source_key + lifecycle_state，
+		// 后缀按 vod_time、id 降序，翻页因此能顺着索引走并在 LIMIT 处停下，
+		// 不再把整个源读进临时 B 树排序。
+		`CREATE INDEX IF NOT EXISTS idx_sv_key_lifecycle_time
+			ON source_videos (source_key, lifecycle_state, vod_time DESC, id DESC)`,
+		// source_videos: 跨源合并视图没有时间前缀可以用，排序只能按
+		// (lifecycle_state, vod_time DESC, id DESC) 顺着走并在 LIMIT 处停下；
+		// 少了这条，合并列表每一页都要把整库读进临时 B 树排序。
+		`CREATE INDEX IF NOT EXISTS idx_sv_lifecycle_time
+			ON source_videos (lifecycle_state, vod_time DESC, id DESC)`,
+		// source_videos: 按源内某个全局身份取最近一条
+		`CREATE INDEX IF NOT EXISTS idx_sv_key_global_updated
+			ON source_videos (source_key, global_id, updated_at DESC)`,
+		// source_videos: 跨源同片列表（一部片在哪些源里有）
+		`CREATE INDEX IF NOT EXISTS idx_sv_global_key
+			ON source_videos (global_id, source_key)`,
+		`CREATE INDEX IF NOT EXISTS idx_sv_key_year
+			ON source_videos (source_key, vod_year)`,
+		`CREATE INDEX IF NOT EXISTS idx_sv_key_area
+			ON source_videos (source_key, vod_area)`,
 		// watch_history: global_id + ep_num 复合索引（加速观看历史查询）
 		`CREATE INDEX IF NOT EXISTS idx_wh_global_ep
 			ON watch_history (global_id, ep_num)`,
-		// favorites: global_id 索引
-		`CREATE INDEX IF NOT EXISTS idx_fav_global
-			ON favorites (global_id)`,
+		// watch_history: 首页"最近观看"按 updated_at 倒序取 N 条
+		`CREATE INDEX IF NOT EXISTS idx_wh_updated
+			ON watch_history (updated_at DESC)`,
+		// watch_history: 按源内 vod_id 清理历史（DeleteHistoryByVideo 这条绑定接口）
+		`CREATE INDEX IF NOT EXISTS idx_wh_source_vod
+			ON watch_history (source_key, vod_id, ep_num)`,
+		// favorites: 收藏列表按加入时间倒序分页
+		`CREATE INDEX IF NOT EXISTS idx_fav_created
+			ON favorites (created_at DESC)`,
+		// source_health: 健康度取数永远是"某个源、按时间倒序、只要最近 N 条"
+		// （汇总、历史列表、淘汰旧样本三处都是这个形状）。索引把这三条都变成
+		// 顺着 B 树走并在 LIMIT 处停下，而不是每次打开诊断页就全表扫。
+		`CREATE INDEX IF NOT EXISTS idx_sh_key_time
+			ON source_health (source_key, ts_unix DESC, id DESC)`,
+		// favorites 按 global_id 查走 UNIQUE(global_id, source_key, vod_id)
+		// 自动索引的左前缀，不需要再建一条。
 	}
 	for _, idx := range indexes {
 		if _, err := instance.Exec(idx); err != nil {

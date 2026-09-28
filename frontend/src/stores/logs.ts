@@ -317,9 +317,11 @@ export const useLogsStore = defineStore('logs', () => {
   }
 
   // ===== 导出 =====
-  async function exportToFile(path: string, options: { filename?: string; format: string; sinceSeq?: number }): Promise<{ path: string; lines: number; bytes: number }> {
+  // 导出不再传路径：WebView2 的原生另存为窗口点了没反应也不报错，文件一律由后端落在
+  // 数据目录 exports/logs 下，返回实际路径。
+  async function exportToFile(options: { filename?: string; format: string; sinceSeq?: number }): Promise<{ path: string; lines: number; bytes: number }> {
     const result = (await ExportLogs({
-      path,
+      path: '',
       filename: options.filename || '',
       format: options.format,
       levels: levelFilter.value.slice(),

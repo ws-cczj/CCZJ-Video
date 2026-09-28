@@ -331,13 +331,10 @@ func (a *App) collectFileRecords(name string, levels map[string]bool, query stri
 	return out, truncated, nil
 }
 
-// ExportLogs 按筛选条件把日志写到用户选定的路径。
-// 目标路径由前端 Dialogs.SaveFile 选取，这里只校验扩展名与大小。
+// ExportLogs 按筛选条件导出日志。path 为空时落到数据目录 exports/logs 下并返回实际路径：
+// WebView2 里原生「另存为」点了既不弹窗口也不报错，不能把它当必经步骤。目录单独分一层
+// 是为了躲开备份文件列表——那个列表会把 exports 顶层的 .json 当成可导入的备份。
 func (a *App) ExportLogs(req ExportLogsReq) (*ExportLogsResult, error) {
-	target := strings.TrimSpace(req.Path)
-	if target == "" {
-		return nil, fmt.Errorf("未选择导出路径")
-	}
 	format := strings.ToLower(strings.TrimSpace(req.Format))
 	if format == "" {
 		format = "log"
@@ -345,6 +342,13 @@ func (a *App) ExportLogs(req ExportLogsReq) (*ExportLogsResult, error) {
 	ext := map[string]string{"log": ".log", "csv": ".csv", "json": ".json"}[format]
 	if ext == "" {
 		return nil, fmt.Errorf("不支持的导出格式: %s", format)
+	}
+	target := strings.TrimSpace(req.Path)
+	if target == "" {
+		target = filepath.Join(a.getDataDir(), "exports", "logs", time.Now().Format("cczj-logs-20060102-150405")+ext)
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return nil, fmt.Errorf("创建导出目录失败: %w", err)
+		}
 	}
 	if !strings.HasSuffix(strings.ToLower(target), ext) {
 		target += ext

@@ -26,28 +26,6 @@ func resolveGlobalTypeIdInt(typeName string) int64 {
 	return id
 }
 
-// upsertGlobalVideo maintains only catalog-safe global metadata. Remote detail
-// fields (description, cast, crew, playback and download URLs) are deliberately
-// not persisted by the catalog path.
-func upsertGlobalVideo(v *model.Video) (int64, error) {
-	if v == nil || strings.TrimSpace(v.VodName) == "" {
-		return 0, fmt.Errorf("vod_name is empty")
-	}
-	typeID := resolveGlobalTypeIdInt(v.TypeName)
-	id, err := GetOrCreateGlobalIDWithMeta(v.VodName, string(v.VodYear), typeID)
-	if err != nil {
-		return 0, err
-	}
-	_, err = instance.Exec(`UPDATE global_video SET
-		type_id=CASE WHEN ? != 0 THEN ? ELSE type_id END,
-		year=CASE WHEN ? != '' THEN ? ELSE year END,
-		area=CASE WHEN ? != '' THEN ? ELSE area END,
-		pic=CASE WHEN ? != '' THEN ? ELSE pic END,
-		updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-		typeID, typeID, v.VodYear, v.VodYear, v.VodArea, v.VodArea, v.VodPic, v.VodPic, id)
-	return id, err
-}
-
 // GetVideoById projects a catalog item into the legacy model used by handlers.
 func GetVideoById(sourceKey, vodID string) (*model.Video, error) {
 	catalog, err := GetCatalogItem(sourceKey, vodID)
@@ -124,12 +102,24 @@ func GetTableColumns(tableName string) ([]TableColumn, error) {
 }
 
 // TruncateSource removes the source-owned catalog projection and its type map.
+// 清空目录必须连水位线一起作废并整体成功：只删了一半却留着旧游标，下一轮增量
+// 会认为自己已经覆盖过这段时间，被清掉的数据就永远补不回来了。
 func TruncateSource(sourceKey string) error {
-	if _, err := instance.Exec(`DELETE FROM source_types WHERE source_key=?`, sourceKey); err != nil {
+	tx, err := instance.Beginx()
+	if err != nil {
+		return fmt.Errorf("begin source truncate: %w", err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`DELETE FROM source_types WHERE source_key=?`, sourceKey); err != nil {
 		return err
 	}
-	_, err := instance.Exec(`DELETE FROM source_videos WHERE source_key=?`, sourceKey)
-	return err
+	if _, err := tx.Exec(`DELETE FROM source_videos WHERE source_key=?`, sourceKey); err != nil {
+		return err
+	}
+	if err := ResetCollectCursor(tx, sourceKey); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // SourceVideoRef identifies a source catalog entry sharing a global identity.

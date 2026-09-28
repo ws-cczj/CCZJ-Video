@@ -5,6 +5,7 @@ import (
 	"cczjVideo/app/applog"
 	downloadservice "cczjVideo/app/download"
 	fileservice "cczjVideo/app/files"
+	proxyservice "cczjVideo/app/proxy"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -147,11 +148,7 @@ func (a *App) runDownload(ctx context.Context, task *downloadTask) {
 // isM3u8URL 检测是否为 m3u8 播放列表
 func (a *App) downloadDirect(ctx context.Context, task *downloadTask, urlStr, savePath string) {
 	tmpPath := savePath + ".part"
-	defer func() {
-		if task.snapshot().Status != "done" {
-			// 保留 .part 文件，以便断点续传
-		}
-	}()
+	referer := proxyservice.RefererOrigin(urlStr)
 
 	// ========== 1) 探测文件大小 & Range 支持 ==========
 	probeReq, err := http.NewRequestWithContext(ctx, http.MethodHead, urlStr, nil)
@@ -159,6 +156,9 @@ func (a *App) downloadDirect(ctx context.Context, task *downloadTask, urlStr, sa
 		probeReq, _ = http.NewRequestWithContext(ctx, http.MethodGet, urlStr, nil)
 	}
 	probeReq.Header.Set("User-Agent", "Mozilla/5.0 CCZJ-Video-Downloader/1.0")
+	if referer != "" {
+		probeReq.Header.Set("Referer", referer)
+	}
 	probeReq.Header.Set("Range", "bytes=0-0")
 	probeResp, err := task.httpClient.Do(probeReq)
 	if err == nil {
@@ -253,9 +253,35 @@ func (a *App) downloadDirect(ctx context.Context, task *downloadTask, urlStr, sa
 	useParallel := supportsRange && total > 0 && remaining > minParallelSize && (existingBytes == 0 || parallelManifest)
 
 	if useParallel {
-		a.downloadDirectParallel(ctx, task, urlStr, tmpPath, total, numConnections)
+		a.downloadDirectParallel(ctx, task, urlStr, tmpPath, total, numConnections, referer)
 	} else {
-		a.downloadDirectSingle(ctx, task, urlStr, tmpPath, total, existingBytes)
+		// 长连接被 CDN 中途掐掉是常态，而 .part 的尾部就是续传点：只要这一轮真的往前
+		// 写了字节，就退避后接着下，最多 directResumeAttempts 次。字节没动（404、上游
+		// 不认 Range）说明不是抖动，立刻把错误交出去，别把一次失败拖成四次。
+		for attempt := 0; ; attempt++ {
+			err := a.downloadDirectSingle(ctx, task, urlStr, tmpPath, total, existingBytes, referer)
+			if err == nil {
+				break
+			}
+			snap := task.snapshot()
+			info, statErr := os.Stat(tmpPath)
+			if snap.Status == "paused" || snap.Status == "cancelled" || ctx.Err() != nil ||
+				statErr != nil || attempt >= directResumeAttempts-1 || info.Size() <= existingBytes {
+				task.setError(err.Error())
+				a.savePersistedTasks()
+				a.emitProgress(task)
+				return
+			}
+			applog.Warn("download interrupted, resuming from %d bytes: %v", info.Size(), err)
+			existingBytes = info.Size()
+			timer := time.NewTimer(time.Duration(500<<uint(attempt)) * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return
+			case <-timer.C:
+			}
+		}
 	}
 
 	// ========== 5) 完成（如果内部函数没有处理）==========
@@ -270,24 +296,28 @@ func (a *App) downloadDirect(ctx context.Context, task *downloadTask, urlStr, sa
 	}
 }
 
-// downloadDirectSingle 单连接下载（回退方案）
-func (a *App) downloadDirectSingle(ctx context.Context, task *downloadTask, urlStr, tmpPath string, total, existingBytes int64) {
+// directResumeAttempts 是单连接下载一轮失败后最多自动续传的次数（含第一轮）。
+const directResumeAttempts = 4
+
+// downloadDirectSingle 单连接下载（回退方案）。返回非 nil 表示这一轮中断了，
+// 调用方可以拿着 .part 的尾部再来一轮；返回 nil 且状态为 done/cancelled/paused
+// 表示不需要再来。
+func (a *App) downloadDirectSingle(ctx context.Context, task *downloadTask, urlStr, tmpPath string, total, existingBytes int64, referer string) error {
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, urlStr, nil)
 	if err != nil {
-		task.setError("build request failed: " + err.Error())
-		a.emitProgress(task)
-		return
+		return fmt.Errorf("build request failed: %w", err)
 	}
 	httpReq.Header.Set("User-Agent", "Mozilla/5.0 CCZJ-Video-Downloader/1.0")
+	if referer != "" {
+		httpReq.Header.Set("Referer", referer)
+	}
 	if existingBytes > 0 {
 		httpReq.Header.Set("Range", fmt.Sprintf("bytes=%d-", existingBytes))
 	}
 
 	resp, err := task.httpClient.Do(httpReq)
 	if err != nil {
-		task.setError("request failed: " + err.Error())
-		a.emitProgress(task)
-		return
+		return fmt.Errorf("request failed: %w", err)
 	}
 	if existingBytes > 0 {
 		if resp.StatusCode == http.StatusOK {
@@ -295,27 +325,20 @@ func (a *App) downloadDirectSingle(ctx context.Context, task *downloadTask, urlS
 			// full body to the partial file.
 			resp.Body.Close()
 			if err := os.Truncate(tmpPath, 0); err != nil {
-				task.setError("reset partial file failed: " + err.Error())
-				a.emitProgress(task)
-				return
+				return fmt.Errorf("reset partial file failed: %w", err)
 			}
 			task.mu.Lock()
 			task.status.Downloaded = 0
 			task.mu.Unlock()
-			a.downloadDirectSingle(ctx, task, urlStr, tmpPath, total, 0)
-			return
+			return a.downloadDirectSingle(ctx, task, urlStr, tmpPath, total, 0, referer)
 		}
 		if _, rangeErr := validateResumeContent(resp, existingBytes, total); rangeErr != nil {
 			resp.Body.Close()
-			task.setError("invalid resume response: " + rangeErr.Error())
-			a.emitProgress(task)
-			return
+			return fmt.Errorf("invalid resume response: %w", rangeErr)
 		}
 	} else if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		resp.Body.Close()
-		task.setError("HTTP " + strconv.Itoa(resp.StatusCode))
-		a.emitProgress(task)
-		return
+		return fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 	defer resp.Body.Close()
 
@@ -347,9 +370,7 @@ func (a *App) downloadDirectSingle(ctx context.Context, task *downloadTask, urlS
 	}
 	out, err := os.OpenFile(tmpPath, flag, 0644)
 	if err != nil {
-		task.setError("open file failed: " + err.Error())
-		a.emitProgress(task)
-		return
+		return fmt.Errorf("open file failed: %w", err)
 	}
 
 	var (
@@ -368,23 +389,21 @@ func (a *App) downloadDirectSingle(ctx context.Context, task *downloadTask, urlS
 				task.setCancel()
 			}
 			a.emitProgress(task)
-			return
+			return nil
 		default:
 		}
 
 		if task.isPaused() {
 			out.Close()
 			a.emitProgress(task)
-			return
+			return nil
 		}
 
 		n, rerr := resp.Body.Read(buf)
 		if n > 0 {
 			if _, werr := out.Write(buf[:n]); werr != nil {
 				out.Close()
-				task.setError("write file failed: " + werr.Error())
-				a.emitProgress(task)
-				return
+				return fmt.Errorf("write file failed: %w", werr)
 			}
 			downloaded += int64(n)
 			task.mu.Lock()
@@ -413,21 +432,15 @@ func (a *App) downloadDirectSingle(ctx context.Context, task *downloadTask, urlS
 				break
 			}
 			out.Close()
-			task.setError("read failed: " + rerr.Error())
-			a.emitProgress(task)
-			return
+			return fmt.Errorf("read failed: %w", rerr)
 		}
 	}
 
 	if cerr := out.Close(); cerr != nil {
-		task.setError("close file failed: " + cerr.Error())
-		a.emitProgress(task)
-		return
+		return fmt.Errorf("close file failed: %w", cerr)
 	}
 	if total > 0 && downloaded != total {
-		task.setError(fmt.Sprintf("incomplete response: got %d of %d bytes", downloaded, total))
-		a.emitProgress(task)
-		return
+		return fmt.Errorf("incomplete response: got %d of %d bytes", downloaded, total)
 	}
 
 	task.mu.Lock()
@@ -441,9 +454,10 @@ func (a *App) downloadDirectSingle(ctx context.Context, task *downloadTask, urlS
 	task.status.Downloaded = downloaded
 	task.mu.Unlock()
 	a.emitProgress(task)
+	return nil
 }
 
-func (a *App) downloadDirectParallel(ctx context.Context, task *downloadTask, urlStr, tmpPath string, total int64, numConnections int) {
+func (a *App) downloadDirectParallel(ctx context.Context, task *downloadTask, urlStr, tmpPath string, total int64, numConnections int, referer string) {
 	manifestPath := directManifestPath(tmpPath)
 	manifest, err := loadDirectDownloadManifest(manifestPath, urlStr, total)
 	if err != nil {
@@ -546,6 +560,9 @@ func (a *App) downloadDirectParallel(ctx context.Context, task *downloadTask, ur
 				return
 			}
 			req.Header.Set("User-Agent", "Mozilla/5.0 CCZJ-Video-Downloader/1.0")
+			if referer != "" {
+				req.Header.Set("Referer", referer)
+			}
 			req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, chunk.End))
 			resp, respErr := task.httpClient.Do(req)
 			if respErr != nil {
@@ -687,6 +704,163 @@ func (a *App) downloadDirectParallel(ctx context.Context, task *downloadTask, ur
 	a.emitProgress(task)
 }
 
+// resolvePlaylist 拿到落盘顺序的片段列表。
+//
+// 优先用内存/持久化里带密钥与字节区间的版本；只剩纯 URL 的老任务（旧版本写的
+// downloads.json）退回按明文整文件处理 —— 那正是旧版本的行为，不能假装知道密钥。
+// 两者都没有才去抓播放列表。
+func (a *App) resolvePlaylist(ctx context.Context, task *downloadTask, m3u8URL, referer string) ([]downloadservice.Segment, error) {
+	task.mu.Lock()
+	planned := append([]downloadservice.Segment(nil), task.playlist...)
+	legacy := append([]string(nil), task.segments...)
+	task.mu.Unlock()
+	if len(planned) > 0 {
+		return planned, nil
+	}
+	if len(legacy) > 0 {
+		return downloadservice.SegmentsFromURLs(legacy), nil
+	}
+
+	playlist, err := downloadservice.HTTPGetText(ctx, task.httpClient, m3u8URL, referer)
+	if err != nil {
+		return nil, fmt.Errorf("fetch m3u8 failed: %w", err)
+	}
+	parsed := downloadservice.ParsePlaylist(m3u8URL, playlist)
+	// 主列表：广告过滤后的第一条若还是 m3u8，它就是变体地址，跟着再解一层。
+	if len(parsed.Segments) > 0 && downloadservice.IsHLSURL(parsed.Segments[0].URL) {
+		variant := parsed.Segments[0].URL
+		sub, subErr := downloadservice.HTTPGetText(ctx, task.httpClient, variant, referer)
+		if subErr != nil {
+			return nil, fmt.Errorf("fetch sub m3u8 failed: %w", subErr)
+		}
+		parsed = downloadservice.ParsePlaylist(variant, sub)
+	}
+	if len(parsed.Segments) == 0 {
+		return nil, fmt.Errorf("no segments found in m3u8")
+	}
+	sequence, seqIssues := downloadservice.WriteSequence(parsed.Segments)
+	issues := append(append([]string(nil), parsed.Unsupported...), seqIssues...)
+	if len(issues) > 0 {
+		// 拼接一份解不了的列表只会得到一个「大小正常但放不出来」的文件，用户等完
+		// 一整场才发现，比下载前直接报错难查得多。
+		return nil, fmt.Errorf("playlist uses unsupported tags: %s", strings.Join(issues, "; "))
+	}
+	task.mu.Lock()
+	task.playlist = append([]downloadservice.Segment(nil), sequence...)
+	task.segments = segmentURLs(parsed.Segments)
+	task.mu.Unlock()
+	a.savePersistedTasks()
+	return sequence, nil
+}
+
+// segmentURLs 只取明文列表里的片段地址，不含下载序列插入的初始化段。
+func segmentURLs(segments []downloadservice.Segment) []string {
+	out := make([]string, 0, len(segments))
+	for _, seg := range segments {
+		if seg.Init {
+			continue
+		}
+		out = append(out, seg.URL)
+	}
+	return out
+}
+
+// keyCache 按 URI 缓存 HLS 密钥。一个播放列表通常只有一把密钥，但密钥服务经常是
+// 整条链路上最容易被打挂的一方，逐片取会把请求量翻几十倍。
+//
+// 5 个下载 worker 是同时起步的，所以光有缓存不够：未命中的那几个并发请求要收敛到
+// 同一次取密钥上（single-flight），否则头几片照样会打出 5 次。
+type keyCache struct {
+	mu      sync.Mutex
+	client  *http.Client
+	referer string
+	calls   map[string]*keyCall
+}
+
+type keyCall struct {
+	done chan struct{}
+	data []byte
+	err  error
+}
+
+func (k *keyCache) get(ctx context.Context, uri string) ([]byte, error) {
+	k.mu.Lock()
+	call, pending := k.calls[uri]
+	if !pending {
+		call = &keyCall{done: make(chan struct{})}
+		k.calls[uri] = call
+	}
+	k.mu.Unlock()
+
+	if !pending {
+		call.data, call.err = k.fetch(ctx, uri)
+		close(call.done)
+	} else {
+		<-call.done
+	}
+	if call.err != nil {
+		k.discard(uri, call)
+		return nil, call.err
+	}
+	return call.data, nil
+}
+
+// discard 丢掉失败的这次调用：密钥服务整条链路最容易 5xx，把错误永久缓存下来会让
+// 续传也解不开，而重试时密钥可能已经恢复。
+func (k *keyCache) discard(uri string, call *keyCall) {
+	k.mu.Lock()
+	if k.calls[uri] == call {
+		delete(k.calls, uri)
+	}
+	k.mu.Unlock()
+}
+
+func (k *keyCache) fetch(ctx context.Context, uri string) ([]byte, error) {
+	data, err := downloadservice.Get(ctx, k.client, uri, k.referer, "", 4096)
+	if err != nil {
+		return nil, fmt.Errorf("fetch key failed: %w", err)
+	}
+	if len(data) != 16 {
+		return nil, fmt.Errorf("key must be 16 bytes, got %d", len(data))
+	}
+	return data, nil
+}
+
+// fetchSegment 取一个片段并按需解密、按需只取字节区间。
+func (a *App) fetchSegment(ctx context.Context, task *downloadTask, seg downloadservice.Segment, referer string, keys *keyCache, maxBytes int64) ([]byte, error) {
+	rangeHeader := ""
+	if seg.Range != nil {
+		rangeHeader = seg.Range.Header()
+	}
+	data, err := downloadservice.Get(ctx, task.httpClient, seg.URL, referer, rangeHeader, maxBytes)
+	if err != nil {
+		return nil, err
+	}
+	if seg.Range != nil && int64(len(data)) != seg.Range.Length {
+		return nil, fmt.Errorf("range returned %d bytes, want %d", len(data), seg.Range.Length)
+	}
+	if seg.Key == nil {
+		return data, nil
+	}
+	key, keyErr := keys.get(ctx, seg.Key.URI)
+	if keyErr != nil {
+		return nil, keyErr
+	}
+	plain, decErr := downloadservice.DecryptAES128(key, downloadservice.SegmentIV(seg.Key, seg.Seq), data)
+	if decErr != nil {
+		return nil, fmt.Errorf("decrypt segment %d: %w", seg.Seq, decErr)
+	}
+	return plain, nil
+}
+
+func (a *App) failSegmentTask(task *downloadTask, err error) {
+	task.setError(err.Error())
+	// 进度落盘：失败位置之后的片段还没写，segIndex 停在断点上是用户点「继续」
+	// 能接着下的唯一依据。
+	a.savePersistedTasks()
+	a.emitProgress(task)
+}
+
 func (a *App) downloadM3u8(ctx context.Context, task *downloadTask, m3u8URL, savePath string) {
 	const (
 		workers                = 5
@@ -695,41 +869,21 @@ func (a *App) downloadM3u8(ctx context.Context, task *downloadTask, m3u8URL, sav
 		maxDownloadSegmentSize = 64 << 20
 	)
 	tmpPath := savePath + ".part"
+	// 引用页取任务自己那条 URL 的域：不少 CDN 会拿它当鉴权依据，裸请求直接 403。
+	referer := proxyservice.RefererOrigin(m3u8URL)
 
-	task.mu.Lock()
-	segments := append([]string(nil), task.segments...)
-	hasCachedSegments := len(segments) > 0
-	isResume := task.hasTotal && task.segIndex > 0
-	task.mu.Unlock()
-	if !hasCachedSegments {
-		playlist, err := downloadservice.HTTPGetText(ctx, task.httpClient, m3u8URL)
-		if err != nil {
-			task.setError("fetch m3u8 failed: " + err.Error())
-			a.emitProgress(task)
-			return
-		}
-		segments = downloadservice.ParseM3U8Segments(m3u8URL, playlist)
-		if len(segments) > 0 && downloadservice.IsHLSURL(segments[0]) {
-			playlist, err = downloadservice.HTTPGetText(ctx, task.httpClient, segments[0])
-			if err != nil {
-				task.setError("fetch sub m3u8 failed: " + err.Error())
-				a.emitProgress(task)
-				return
-			}
-			segments = downloadservice.ParseM3U8Segments(segments[0], playlist)
-		}
-		if len(segments) == 0 {
-			task.setError("no segments found in m3u8")
-			a.emitProgress(task)
-			return
-		}
-		task.mu.Lock()
-		task.segments = append([]string(nil), segments...)
-		task.mu.Unlock()
+	segments, err := a.resolvePlaylist(ctx, task, m3u8URL, referer)
+	if err != nil {
+		a.failSegmentTask(task, err)
+		return
 	}
 
+	task.mu.Lock()
+	isResume := task.hasTotal && task.segIndex > 0
+	task.mu.Unlock()
+
 	var existingBytes int64
-	if info, err := os.Stat(tmpPath); err == nil {
+	if info, statErr := os.Stat(tmpPath); statErr == nil {
 		existingBytes = info.Size()
 	}
 	startIdx := task.nextSegIdx()
@@ -747,8 +901,7 @@ func (a *App) downloadM3u8(ctx context.Context, task *downloadTask, m3u8URL, sav
 	}
 	out, err := os.OpenFile(tmpPath, flags, 0644)
 	if err != nil {
-		task.setError("open file failed: " + err.Error())
-		a.emitProgress(task)
+		a.failSegmentTask(task, fmt.Errorf("open file failed: %w", err))
 		return
 	}
 	defer out.Close()
@@ -760,6 +913,7 @@ func (a *App) downloadM3u8(ctx context.Context, task *downloadTask, m3u8URL, sav
 	}
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	keys := &keyCache{client: task.httpClient, referer: referer, calls: make(map[string]*keyCall)}
 	jobs := make(chan int, window)
 	results := make(chan segmentResult, window)
 	var wait sync.WaitGroup
@@ -775,50 +929,13 @@ func (a *App) downloadM3u8(ctx context.Context, task *downloadTask, m3u8URL, sav
 					if !ok {
 						return
 					}
-					req, reqErr := http.NewRequestWithContext(runCtx, http.MethodGet, segments[index], nil)
-					if reqErr != nil {
-						select {
-						case results <- segmentResult{index: index, err: reqErr}:
-						case <-runCtx.Done():
-						}
-						continue
-					}
-					req.Header.Set("User-Agent", "Mozilla/5.0 CCZJ-Video-Downloader/1.0")
-					resp, fetchErr := task.httpClient.Do(req)
+					data, fetchErr := a.fetchSegment(runCtx, task, segments[index], referer, keys, maxDownloadSegmentSize)
 					if fetchErr != nil {
 						if runCtx.Err() == nil {
 							select {
 							case results <- segmentResult{index: index, err: fmt.Errorf("segment %d: %w", index+1, fetchErr)}:
 							case <-runCtx.Done():
 							}
-						}
-						continue
-					}
-					if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-						resp.Body.Close()
-						select {
-						case results <- segmentResult{index: index, err: fmt.Errorf("segment %d HTTP %d", index+1, resp.StatusCode)}:
-						case <-runCtx.Done():
-						}
-						continue
-					}
-					if resp.ContentLength > maxDownloadSegmentSize {
-						resp.Body.Close()
-						select {
-						case results <- segmentResult{index: index, err: fmt.Errorf("segment %d exceeds size limit", index+1)}:
-						case <-runCtx.Done():
-						}
-						continue
-					}
-					data, readErr := io.ReadAll(io.LimitReader(resp.Body, maxDownloadSegmentSize+1))
-					resp.Body.Close()
-					if readErr != nil || len(data) > maxDownloadSegmentSize {
-						if readErr == nil {
-							readErr = fmt.Errorf("segment exceeds size limit")
-						}
-						select {
-						case results <- segmentResult{index: index, err: fmt.Errorf("read segment %d: %w", index+1, readErr)}:
-						case <-runCtx.Done():
 						}
 						continue
 					}
@@ -878,8 +995,8 @@ func (a *App) downloadM3u8(ctx context.Context, task *downloadTask, m3u8URL, sav
 		case result := <-results:
 			if result.err != nil {
 				shutdown()
-				task.setError(result.err.Error())
-				a.emitProgress(task)
+				task.setSegIdx(nextExpected)
+				a.failSegmentTask(task, result.err)
 				return
 			}
 			pending[result.index] = result.data
@@ -890,8 +1007,7 @@ func (a *App) downloadM3u8(ctx context.Context, task *downloadTask, m3u8URL, sav
 				}
 				if _, writeErr := out.Write(data); writeErr != nil {
 					shutdown()
-					task.setError("write segment failed: " + writeErr.Error())
-					a.emitProgress(task)
+					a.failSegmentTask(task, fmt.Errorf("write segment failed: %w", writeErr))
 					return
 				}
 				delete(pending, nextExpected)
@@ -940,13 +1056,11 @@ func (a *App) downloadM3u8(ctx context.Context, task *downloadTask, m3u8URL, sav
 	}
 	shutdown()
 	if err := out.Close(); err != nil {
-		task.setError("close file failed: " + err.Error())
-		a.emitProgress(task)
+		a.failSegmentTask(task, fmt.Errorf("close file failed: %w", err))
 		return
 	}
 	if err := os.Rename(tmpPath, savePath); err != nil {
-		task.setError("rename failed: " + err.Error())
-		a.emitProgress(task)
+		a.failSegmentTask(task, fmt.Errorf("rename failed: %w", err))
 		return
 	}
 	task.mu.Lock()
@@ -956,6 +1070,7 @@ func (a *App) downloadM3u8(ctx context.Context, task *downloadTask, m3u8URL, sav
 	task.status.Downloaded = downloaded
 	task.status.SpeedBps = 0
 	task.status.EtaSec = 0
+	task.playlist = nil
 	task.mu.Unlock()
 	a.emitProgress(task)
 	a.savePersistedTasks()
@@ -1057,19 +1172,20 @@ func (a *App) toPersisted(t *downloadTask) persistedTask {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return persistedTask{
-		TaskId:     t.status.TaskId,
-		Url:        t.status.Url,
-		Filename:   t.status.Filename,
-		SavePath:   t.status.SavePath,
-		Total:      t.status.Total,
-		Downloaded: t.status.Downloaded,
-		Status:     t.status.Status,
-		SegIndex:   t.segIndex,
-		IsM3u8:     t.isM3u8,
-		Segments:   t.segments,
-		StartTime:  t.status.StartTime,
-		ErrorMsg:   t.status.Error,
-		HasTotal:   t.hasTotal,
+		TaskId:         t.status.TaskId,
+		Url:            t.status.Url,
+		Filename:       t.status.Filename,
+		SavePath:       t.status.SavePath,
+		Total:          t.status.Total,
+		Downloaded:     t.status.Downloaded,
+		Status:         t.status.Status,
+		SegIndex:       t.segIndex,
+		IsM3u8:         t.isM3u8,
+		Segments:       t.segments,
+		SegmentDetails: t.playlist,
+		StartTime:      t.status.StartTime,
+		ErrorMsg:       t.status.Error,
+		HasTotal:       t.hasTotal,
 	}
 }
 
@@ -1126,6 +1242,8 @@ func (a *App) loadPersistedTasks() {
 			},
 			segIndex: it.SegIndex,
 			segments: it.Segments,
+			// 有结构化列表就用它：断点位置是按它编号的，只拿 URL 列表会把加密流当成明文。
+			playlist: it.SegmentDetails,
 			isM3u8:   it.IsM3u8,
 			hasTotal: it.HasTotal,
 			paused:   true,
@@ -1166,18 +1284,23 @@ func (a *App) PauseDownload(taskId string) bool {
 	return true
 }
 
-// ResumeDownload 恢复一个暂停的下载任务
+// ResumeDownload 恢复一个暂停或失败的下载任务
 func (a *App) ResumeDownload(taskId string) bool {
 	t, ok := a.downloads.Get(taskId)
 	if !ok {
 		return false
 	}
 	s := t.snapshot()
-	if s.Status != "paused" {
+	// 失败的任务也走这里：自动重试打到上限后状态停在 error，而 .part 和断点索引还在，
+	// 用户点「重试」就是接着下，没有理由要求他重启应用才能救回一次下载。
+	if s.Status != "paused" && s.Status != "error" {
 		return false
 	}
 	// 更新状态 + 启动新的 goroutine 继续下载
 	t.setPaused(false)
+	t.mu.Lock()
+	t.status.Error = ""
+	t.mu.Unlock()
 	// 为新的下载周期创建新的 context（因为之前的可能已被 cancel 关联）
 	ctx, cancel := context.WithCancel(a.background.Context())
 	t.mu.Lock()

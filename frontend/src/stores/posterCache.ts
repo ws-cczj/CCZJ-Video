@@ -26,6 +26,10 @@ const CONCURRENT_FETCH_LIMIT = 6
 // 正在加载中的请求，防止重复请求
 const loadingPromises = new Map<string, Promise<void>>()
 
+// 失效代数：dropSource 每调一次加一。进行中的 ensureLoaded 在发请求前记下当前值，
+// 回来时如果已经变了，说明这份响应是失效之前的旧内容，不能再把它写回缓存。
+let dropGeneration = 0
+
 function cacheKey(sourceKey: string, vodId: string): string {
   return `${sourceKey}:${vodId}`
 }
@@ -204,6 +208,8 @@ export const usePosterCacheStore = defineStore('posterCache', () => {
       return cached
     }
 
+    const generation = dropGeneration
+
     const promise = (async () => {
       try {
         const resp = (await GetVideoDetail({
@@ -213,7 +219,7 @@ export const usePosterCacheStore = defineStore('posterCache', () => {
           refresh: false,
         })) as { video?: Video | null } | null | undefined
         const v = resp?.video
-        if (v) {
+        if (v && generation === dropGeneration) {
           set(sourceKey, vodId, {
             vod_name: v.vod_name,
             vod_pic: v.vod_pic,
@@ -270,8 +276,30 @@ export const usePosterCacheStore = defineStore('posterCache', () => {
 
   // 暴露给外部的清理入口
   function clearAll(): void {
+    dropGeneration++
     cache.value = {}
     removeStorage(STORAGE_KEY)
+  }
+
+  /**
+   * 让某个源的海报缓存作废：vodIds 给定时只删这些条目，不给时删该源全部。
+   * 与 Go 侧统一失效层的 video / source 两个作用域一一对应（all 由 clearAll 负责）。
+   */
+  function dropSource(sourceKey: string, vodIds?: string[]): number {
+    if (!sourceKey) return 0
+    ensureInit()
+    // 抬一代：正在飞的 ensureLoaded 会发现自己的结果已经不该落盘了。
+    // 不抬这一代，删片或重采恰好撞上一次海报抓取时，旧响应会把刚清掉的条目写回来。
+    dropGeneration++
+    const keys = vodIds?.length
+      ? vodIds.map((vodId) => cacheKey(sourceKey, vodId))
+      : Object.keys(cache.value).filter((key) => key.startsWith(`${sourceKey}:`))
+    let removed = 0
+    for (const key of keys) {
+      if (delete cache.value[key]) removed++
+    }
+    if (removed > 0) saveToStorage()
+    return removed
   }
 
   return {
@@ -287,6 +315,7 @@ export const usePosterCacheStore = defineStore('posterCache', () => {
     getName,
     getPic,
     getProxiedPic,
+    dropSource,
     clearAll,
   }
 })

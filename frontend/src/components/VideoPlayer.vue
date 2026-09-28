@@ -3,6 +3,7 @@ import { ref, nextTick, onMounted, onBeforeUnmount, watch, computed } from 'vue'
 import Icon from './Icon.vue'
 import { MotionTransition, Select as SelectDropdown } from './ui'
 import { TsCache } from '../utils/tsCache'
+import { findActiveCue, parseSubtitle, type SubtitleCue } from '../utils/subtitles'
 import { FilmUpscaler, FILM_PRESET, checkFilmSupport } from '../utils/filmUpscaler'
 import { Anime4kUpscaler, ANIME4K_PRESET, checkAnime4kSupport } from '../utils/anime4kUpscaler'
 import type { Anime4kTier } from '../utils/anime4kUpscaler'
@@ -329,6 +330,54 @@ function doReportAd(domain: string): void {
   if (_reportAdToastTimer != null) clearTimeout(_reportAdToastTimer)
   _reportAdToastTimer = window.setTimeout(() => { reportAdToast.value = '' }, 3000)
 }
+// ========= 外挂字幕 =========
+// 源站几乎不附送字幕轨，所以这里只做「本地 .srt/.vtt 文件叠加」：自绘一层文字而不是用
+// <track>，因为画质增强会把画面盖在 WebGL canvas 上，原生字幕轨会被 canvas 挡住。
+const showSubtitlePanel = ref(false)
+const subtitleCues = ref<SubtitleCue[]>([])
+const subtitleName = ref('')
+const subtitleVisible = ref(true)
+const subtitleFileRef = ref<HTMLInputElement | null>(null)
+const subtitleError = ref('')
+
+const activeSubtitle = computed(() => {
+  if (!subtitleVisible.value || subtitleCues.value.length === 0) return ''
+  const cue = findActiveCue(subtitleCues.value, current.value)
+  return cue ? cue.text : ''
+})
+
+function openSubtitlePicker(): void {
+  subtitleFileRef.value?.click()
+}
+
+async function onSubtitleFileChosen(e: Event): Promise<void> {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  subtitleError.value = ''
+  try {
+    const text = await file.text()
+    const cues = parseSubtitle(text)
+    if (cues.length === 0) {
+      subtitleError.value = t('player.subtitleEmptyFile')
+      return
+    }
+    subtitleCues.value = cues
+    subtitleName.value = file.name
+    subtitleVisible.value = true
+  } catch {
+    subtitleError.value = t('player.subtitleReadFailed')
+  }
+}
+
+function clearSubtitle(): void {
+  subtitleCues.value = []
+  subtitleName.value = ''
+  subtitleError.value = ''
+  subtitleVisible.value = true
+}
+
 // 画质下拉框是否展开 —— 展开期间锁定控制条可见，避免全屏下 2.5s 自动隐藏导致面板错位
 const qualityOpen = ref(false)
 
@@ -402,6 +451,11 @@ const upscalerStats = ref<{ fps: number; gpuEnabled: boolean }>({ fps: 0, gpuEna
 const compareEnabled = ref(false)
 const compareSplit = ref(50)
 let _aiReady = false // 视频是否已就绪（loadedmetadata 之后），AI 才会启动
+// 用户希望启用的增强模式，跨换集/换源保持（换源时 destroyPlayerInternal 只销毁管线，不动这个）。
+// 初始化类瞬时失败（例如 WebGL 上下文名额被占满）不清它，下一条媒体的 loadedmetadata 会自动重试；
+// 只有能力检查判定本机永久不支持、或用户主动切回原高清才清掉。
+let _desiredAiMode: 'ai_anime' | 'ai_film' | null =
+  (isAiMode(qualityMode.value) && aiWarningAccepted.value) ? qualityMode.value : null
 
 function toggleEnhancementCompare(): void {
   if (!upscaler) return
@@ -441,12 +495,14 @@ function applyQualityMode(mode: QualityMode): void {
   qualityMode.value = mode
   writeSetting('quality_mode', mode)
   if (isAiMode(mode)) {
+    _desiredAiMode = mode
     if (_aiReady) {
       startAiPipeline(mode)
     }
     const tierLabel = mode === 'ai_anime' ? `${t('player.animeEnhance')} ${anime4kTier.value}` : t('player.filmEnhance')
     showQualityToast(t('player.qualitySwitchedGpu', { label: tierLabel }))
   } else {
+    _desiredAiMode = null
     stopAiPipeline()
     showQualityToast(t('player.qualitySwitchedOriginal'))
   }
@@ -461,11 +517,28 @@ function confirmAiMode(): void {
 
 function cancelAiMode(): void {
   showAiWarning.value = false
+  _desiredAiMode = null
   qualityMode.value = 'original'
   writeSetting('quality_mode', 'original')
 }
 
 // AI 增强管线：动画模式用 Anime4K CNN 超分，影视模式用 FSRCNNX + CAS
+
+/**
+ * 回退到原高清。
+ *
+ * permanent 表示本机能力不支持（没有 WebGL2、GPU 不支持浮点渲染目标）—— 这种条件重启也不会变，
+ * 落盘并丢掉重试意图，免得每次换集重复试探。初始化过程中的瞬时失败（例如 Chromium 每页约 16 个
+ * WebGL 上下文的名额被临时占满）只回退本次画面：偏好留在盘上、_desiredAiMode 也留着，
+ * 下一条媒体的 loadedmetadata 会再试一次。
+ */
+function fallBackToOriginal(permanent: boolean): void {
+  qualityMode.value = 'original'
+  if (!permanent) return
+  _desiredAiMode = null
+  writeSetting('quality_mode', 'original')
+}
+
 async function startAiPipeline(mode: 'ai_anime' | 'ai_film'): Promise<void> {
   // 先清除旧的统计定时器（避免切换模式时泄漏）
   if (upscalerStatsTimer) {
@@ -486,28 +559,29 @@ async function startAiPipeline(mode: 'ai_anime' | 'ai_film'): Promise<void> {
   // 动画模式：Anime4K CNN 超分
   if (mode === 'ai_anime') {
     const a4kSupport = checkAnime4kSupport()
-    if (a4kSupport.recommended) {
-      upscaler = new Anime4kUpscaler({ ...ANIME4K_PRESET, tier: anime4kTier.value })
-      const ok = await upscaler.init(v, wrapperRef.value ?? undefined)
-      if (ok) {
-        upscaler.start()
-        console.log(`[Player] Anime4K CNN 2x 超分管线已启动 (${anime4kTier.value} 档, WebGL2)`)
-        upscalerStatsTimer = setInterval(() => {
-          if (!upscaler) { if (upscalerStatsTimer) { clearInterval(upscalerStatsTimer); upscalerStatsTimer = null }; return }
-          const s = upscaler.getStats()
-          upscalerStats.value = { fps: s.fps, gpuEnabled: s.gpuEnabled }
-        }, 2000)
-        return
-      }
-      console.warn('[Player] Anime4K 初始化失败:', upscaler.error)
-      upscaler.destroy()
-      upscaler = null
-    } else {
+    if (!a4kSupport.recommended) {
       console.warn('[Player] Anime4K 不可用:', a4kSupport.message)
+      fallBackToOriginal(true)
+      return
     }
-    // Anime4K 不可用或初始化失败 → 回退到原高清
-    qualityMode.value = 'original'
-    writeSetting('quality_mode', 'original')
+    upscaler = new Anime4kUpscaler({ ...ANIME4K_PRESET, tier: anime4kTier.value })
+    const ok = await upscaler.init(v, wrapperRef.value ?? undefined)
+    if (ok) {
+      // 上次瞬时失败时界面显示的是原高清，这次重建成功要把画质标签恢复成用户实际享有的模式。
+      qualityMode.value = mode
+      upscaler.start()
+      console.log(`[Player] Anime4K CNN 2x 超分管线已启动 (${anime4kTier.value} 档, WebGL2)`)
+      upscalerStatsTimer = setInterval(() => {
+        if (!upscaler) { if (upscalerStatsTimer) { clearInterval(upscalerStatsTimer); upscalerStatsTimer = null }; return }
+        const s = upscaler.getStats()
+        upscalerStats.value = { fps: s.fps, gpuEnabled: s.gpuEnabled }
+      }, 2000)
+      return
+    }
+    // init() 失败时已自行销毁并归还 WebGL 上下文，这里只需丢掉引用。
+    console.warn('[Player] Anime4K 初始化失败:', upscaler.error)
+    upscaler = null
+    fallBackToOriginal(false)
     return
   }
 
@@ -517,8 +591,7 @@ async function startAiPipeline(mode: 'ai_anime' | 'ai_film'): Promise<void> {
 
   if (!filmSupport.supported) {
     console.warn('[Player] 影视增强不可用:', filmSupport.message)
-    qualityMode.value = 'original'
-    writeSetting('quality_mode', 'original')
+    fallBackToOriginal(true)
     return
   }
 
@@ -526,14 +599,14 @@ async function startAiPipeline(mode: 'ai_anime' | 'ai_film'): Promise<void> {
 
   const ok = await upscaler.init(v, wrapperRef.value ?? undefined)
   if (!ok) {
+    // 同上：init() 的 catch 分支已经走完 destroy()，上下文不会泄漏。
     console.error('[Player] FSRCNNX 影视增强初始化失败:', upscaler.error)
-    upscaler.destroy()
     upscaler = null
-    qualityMode.value = 'original'
-    writeSetting('quality_mode', 'original')
+    fallBackToOriginal(false)
     return
   }
 
+  qualityMode.value = mode
   upscaler.start()
   console.log('[Player] FSRCNNX + CAS 影视增强管线已启动 (WebGL2 多 Pass GPU 加速)')
 
@@ -1238,6 +1311,10 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
     flushPendingSeek()
     console.log(`[Player] loadedmetadata: duration=${video.duration.toFixed(1)}s, volume=${video.volume.toFixed(2)}`)
     _aiReady = true
+    // ⭐ 换集/换源后自动重建 AI 增强：destroyPlayerInternal 会 stopAiPipeline() 把 WebGL 上下文
+    // 还掉，而元数据就绪是唯一安全的挂点（要有 videoWidth/Height 才能建管线）。冷启动时
+    // quality_mode 只是从设置里读回来的偏好，以前没人据此启动管线，现在也走这里。
+    if (_desiredAiMode && !upscaler) startAiPipeline(_desiredAiMode)
   })
   on('progress', updateBuffer)
   on('seeking', updateBuffer)
@@ -1966,6 +2043,8 @@ watch(() => props.url, (newUrl, oldUrl) => {
     loading.value = true
     videoReady.value = false
     playing.value = false
+    // 字幕文件是对着某一集配的，换集后时间轴基本必然错位，直接清掉比留着误导人好
+    clearSubtitle()
   }
   setTimeout(() => {
     setupPlayer()
@@ -2028,6 +2107,9 @@ defineExpose({ togglePiP })
     <div v-show="mouseInside" class="player-drag-handle" :title="t('player.dragMoveWindow')" />
 
     <video class="native-video" playsinline preload="auto" @click.stop="togglePlay"></video>
+    <div v-show="activeSubtitle" class="vp-subtitle" :class="{ 'with-controls': showControls }">
+      <span>{{ activeSubtitle }}</span>
+    </div>
     <div v-if="compareEnabled" class="enhance-compare-line" :style="{ left: compareSplit + '%' }" aria-hidden="true">
       <span>{{ t('player.compareOriginal') }}</span><i></i><span>{{ t('player.compareEnhanced') }}</span>
     </div>
@@ -2253,6 +2335,38 @@ defineExpose({ togglePiP })
           </button>
         </div>
       </div>
+      <!-- 外挂字幕 -->
+      <div class="subtitle-group" @click.stop>
+        <button class="ctrl-btn" :class="{ active: subtitleCues.length > 0 }"
+          @click.stop="showSubtitlePanel = !showSubtitlePanel; keepVisible()" :title="t('player.subtitle')">
+          <Icon name="subtitles" :size="16" />
+        </button>
+        <div class="subtitle-popup" :class="{ show: showSubtitlePanel }" @click.stop>
+          <div class="subtitle-title">{{ t('player.subtitleTitle') }}</div>
+          <div v-if="subtitleName" class="subtitle-current">
+            <span class="subtitle-name" :title="subtitleName">{{ subtitleName }}</span>
+            <span class="subtitle-count">{{ t('player.subtitleCount', { count: subtitleCues.length }) }}</span>
+          </div>
+          <div v-if="subtitleError" class="subtitle-error">{{ subtitleError }}</div>
+          <button class="subtitle-item" @click.stop="openSubtitlePicker()">
+            <Icon name="folder" :size="13" />
+            <span>{{ subtitleCues.length > 0 ? t('player.subtitleReplace') : t('player.subtitleLoad') }}</span>
+          </button>
+          <button v-if="subtitleCues.length > 0" class="subtitle-item"
+            @click.stop="subtitleVisible = !subtitleVisible; keepVisible()">
+            <Icon name="subtitles" :size="13" />
+            <span>{{ subtitleVisible ? t('player.subtitleHide') : t('player.subtitleShow') }}</span>
+          </button>
+          <button v-if="subtitleCues.length > 0" class="subtitle-item subtitle-item--danger"
+            @click.stop="clearSubtitle(); keepVisible()">
+            <Icon name="trash" :size="13" />
+            <span>{{ t('player.subtitleRemove') }}</span>
+          </button>
+          <div class="subtitle-hint">{{ t('player.subtitleHint') }}</div>
+        </div>
+      </div>
+      <input ref="subtitleFileRef" type="file" accept=".srt,.vtt,text/plain" class="subtitle-file-input"
+        @change="onSubtitleFileChosen" />
       <!-- 报告广告 -->
       <div class="report-ad-group" @click.stop>
         <button class="ctrl-btn" @click.stop="toggleReportAd(); keepVisible()" :title="t('player.reportAdTip')">
@@ -3660,6 +3774,146 @@ defineExpose({ togglePiP })
   z-index: 25;
   pointer-events: none;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+/* ========= 外挂字幕 ========= */
+.vp-subtitle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 20px;
+  display: flex;
+  justify-content: center;
+  padding: 0 6%;
+  box-sizing: border-box;
+  /* 只作显示，不吞掉点击（点击视频要能暂停/播放） */
+  pointer-events: none;
+  z-index: 6;
+}
+
+.vp-subtitle.with-controls {
+  bottom: 64px;
+}
+
+.vp-subtitle span {
+  max-width: 100%;
+  padding: 3px 12px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-size: 15px;
+  line-height: 1.45;
+  text-align: center;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.player-wrapper.fullscreen .vp-subtitle span {
+  font-size: 26px;
+}
+
+.subtitle-group {
+  position: relative;
+}
+
+.subtitle-file-input {
+  display: none;
+}
+
+.subtitle-popup {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  right: 0;
+  background: rgba(20, 20, 20, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 230px;
+  max-width: 320px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(6px);
+  transition: all 0.18s ease;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  z-index: 10;
+}
+
+.subtitle-popup.show {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.subtitle-title {
+  padding: 6px 12px 4px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.75rem;
+  user-select: none;
+}
+
+.subtitle-current {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 12px 8px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.subtitle-name {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subtitle-count {
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.72rem;
+}
+
+.subtitle-error {
+  padding: 6px 12px;
+  color: #ff6b6b;
+  font-size: 0.75rem;
+}
+
+.subtitle-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.82rem;
+  border-radius: 6px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+}
+
+.subtitle-item:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.subtitle-item--danger:hover {
+  background: rgba(255, 77, 77, 0.15);
+  color: #ff6b6b;
+}
+
+.subtitle-hint {
+  padding: 8px 12px 4px;
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 0.72rem;
+  line-height: 1.5;
 }
 
 /* ========= B 站风格：底部左侧继续播放小提示 ========= */

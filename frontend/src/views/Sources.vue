@@ -395,6 +395,10 @@ function statusClass(key: string): string {
   if (isRunning(key)) return 'running'
   if (isPaused(key)) return 'paused'
   if (hasError(key)) return 'error'
+  // 空闲时也要能看出上一次是不是有整页没落地，否则缺数据只藏在日志里。
+  const state = collectStore.lastRunOf(key).state
+  if (state === 'failed') return 'error'
+  if (state === 'partial') return 'warning'
   return 'idle'
 }
 
@@ -402,7 +406,36 @@ function statusText(key: string): string {
   if (isRunning(key)) return tr('sources.statusRunning')
   if (isPaused(key)) return tr('sources.statusPaused')
   if (hasError(key)) return tr('sources.statusError')
+  const state = collectStore.lastRunOf(key).state
+  if (state === 'failed') return tr('sources.lastRunFailedShort')
+  if (state === 'partial') return tr('sources.lastRunPartialShort')
   return tr('sources.statusIdle')
+}
+
+function lastRunText(key: string): string {
+  const info = collectStore.lastRunOf(key)
+  if (info.state === 'none') return '--'
+  const secs = Math.round(info.elapsedMs / 1000)
+  if (info.state === 'failed') return info.error || tr('sources.lastRunFailedShort')
+  if (info.state === 'partial') {
+    return tr('sources.lastRunPartial', {
+      saved: info.saved,
+      fetch: info.fetchFailedPages,
+      save: info.saveFailedPages,
+      secs,
+    })
+  }
+  if (info.stopped) {
+    return tr('sources.lastRunStopped', { saved: info.saved, secs })
+  }
+  return tr('sources.lastRunOk', { saved: info.saved, secs })
+}
+
+function lastRunClass(key: string): string {
+  const state = collectStore.lastRunOf(key).state
+  if (state === 'failed') return 'bad'
+  if (state === 'partial') return 'warn'
+  return ''
 }
 
 function modeLabel(m: string): string {
@@ -781,6 +814,10 @@ function fallbackCopy(text: string): void {
               <div class="sop-cell">
                 <span class="sop-label">{{ tr('sources.statProcessed') }}</span>
                 <span class="sop-value">{{ collectStore.backendStatus[sk(s)].current }} / {{ collectStore.backendStatus[sk(s)].total || '?' }}</span>
+              </div>
+              <div class="sop-cell sop-cell-wide">
+                <span class="sop-label">{{ tr('sources.lastRunTitle') }}</span>
+                <span class="sop-value sop-mono" :class="lastRunClass(sk(s))" :title="lastRunText(sk(s))">{{ lastRunText(sk(s)) }}</span>
               </div>
               <div class="sop-cell sop-cell-wide">
                 <span class="sop-label">{{ tr('sources.lastLogLine') }}</span>
@@ -1259,6 +1296,7 @@ function fallbackCopy(text: string): void {
   50% { box-shadow: 0 0 14px rgba(76, 175, 80, 0.8); }
 }
 .status-dot.paused { background: var(--warning); box-shadow: 0 0 6px var(--warning-alpha-10); }
+.status-dot.warning { background: var(--warning); opacity: 0.75; }
 .status-dot.error { background: var(--danger); box-shadow: 0 0 6px var(--danger-alpha-10); }
 .status-dot.idle { background: var(--text-muted); }
 .card-name {
@@ -1545,6 +1583,8 @@ function fallbackCopy(text: string): void {
 .sop-label { font-size: 11px; color: var(--text-muted); }
 .sop-value { font-size: 12px; color: var(--text-primary); }
 .sop-value.on { color: var(--accent); }
+.sop-value.warn { color: var(--warning); }
+.sop-value.bad { color: var(--danger); }
 .sop-mono {
   font-family: 'SF Mono', Consolas, monospace;
   white-space: nowrap;

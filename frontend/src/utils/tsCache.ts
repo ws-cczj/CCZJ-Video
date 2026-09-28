@@ -5,7 +5,7 @@
  *   1. fetch 拦截：透明拦截 hls.js 的 .ts 请求，命中 LRU 直接返回 ArrayBuffer
  *   2. 自适应预取：根据网速动态调整预取窗口大小和起始偏移
  *   3. 详情页预取：自行 fetch + 解析 m3u8，不等播放器
- *   4. IndexedDB 持久化：磁盘 LRU + 7 天 TTL
+ *   4. IndexedDB 持久化：磁盘 LRU + 2 天 TTL
  */
 /* eslint-disable no-console */
 import { readStorage, writeStorage } from '../platform/storage'
@@ -14,9 +14,9 @@ import { SegmentDiskCache, type DiskCacheInfo } from './tsCacheDisk'
 const LOG_PREFIX = '[TsCache]'
 
 // ====== 可调参数 ======
-// ⭐ 用户建议：不要粗暴清空，用"单集上限 + 全局上限 + 权重分配"的 LRU 调度
-//   - 单集最多 64 片（超出就优先淘汰该集的旧片段）
-//   - 全局最多 1024 片 / 512 MB（超出就按权重淘汰最老 / 最没用的）
+// ⭐ 用户建议：不要粗暴清空，用"单集上限 + 全局上限 + 最近最少使用"的 LRU 调度
+//   - 单集最多 64 片（超出就淘汰该集最久没被读到的片段）
+//   - 全局最多 1024 片 / 512 MB（超出就淘汰全局最久没被读到的片段）
 //   - 这样切换到已看过的集，缓存仍能命中；而长期不用的片段会自然被淘汰
 const DEFAULT_PREFETCH_SECONDS = 60
 const MIN_PREFETCH_COUNT = 4
@@ -81,10 +81,85 @@ interface FetchJob {
 interface CacheEntry {
   buffer: ArrayBuffer
   size: number
-  url: string
-  ts: number              // 最后一次访问时间（Date.now）
-  segIdx: number          // 在所属集中的片段索引 (-1 表示未知)
+  cacheKey: string        // 在 lruCache 中的键（= segmentCacheKey(原始 URL)，不是原始 URL）
+  ts: number              // 最后一次访问时间（Date.now），淘汰只看这一个字段
   episodeKey: string      // 所属集稳定 key (空字符串 = 未知)
+  fetchMs: number         // 当初真下载这些字节用了多久（0 = 未知），命中时据此回报耗时
+}
+
+// ====== 缓存键归一化 ======
+//
+// CDN 给同一个分片每次下发的 URL 都换一个时效签名（?sign=…&t=…&token=…）。
+// 用原始 URL 当缓存键的话，播放列表每刷新一次就集体未命中：同一份字节在内存里
+// 存 N 份、在 IndexedDB 里存 N 份，彼此把对方挤出上限——缓存越大命中率反而越低。
+//
+// 因此缓存键只保留「资源身份」：协议+主机+路径+那些无法证明与内容无关的参数。
+// 拿不准的参数一律留在键里（宁可漏命中，也不能把两个不同分片当成同一个返回内容）。
+//
+// 播放链路上 hls.js 看到的其实是本机代理地址（/__cczj/hls?u=<base64 上游 URL>），
+// 时效签名藏在 base64 里面，所以必须先把上游 URL 解出来再归一化，否则归一化对
+// 真实播放流量完全不起作用。解不出来就退回原始 URL —— 只是没有命中收益，不会错命中。
+const VOLATILE_SEGMENT_PARAMS: string[] = [
+  'sign', 'signature', 'token', 'access_token', 'expires', 'expire', 'expiry',
+  'timestamp', 'time', 't', 'ts', 'auth_key', 'wssecret', 'wstime', 'deadline',
+  'userticket',
+]
+
+const HLS_PROXY_PATH = '/__cczj/hls'
+
+/** 从本机 HLS 代理地址里取出真正的上游 URL；不是代理地址则返回 null。 */
+function decodeHlsProxyUpstream(url: string): string | null {
+  const pathAt = url.indexOf(HLS_PROXY_PATH + '?')
+  if (pathAt < 0) return null
+  const query = url.slice(pathAt + HLS_PROXY_PATH.length + 1)
+  const encoded = new URLSearchParams(query).get('u')
+  if (!encoded) return null
+  try {
+    const b64 = encoded.replace(/-/g, '+').replace(/_/g, '/')
+    const binary = atob(b64.padEnd(Math.ceil(b64.length / 4) * 4, '='))
+    const bytes = Uint8Array.from(binary, (ch) => ch.charCodeAt(0))
+    const upstream = new TextDecoder().decode(bytes)
+    return /^https?:\/\//i.test(upstream) ? upstream : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 分片缓存键。`range` 来自 hls.js 的 #EXT-X-BYTERANGE 片段：同一个文件的
+ * 不同字节段必须分开缓存，否则第二段会拿到第一段的内容。
+ */
+export function segmentCacheKey(url: string, range?: string | null): string {
+  const upstream = decodeHlsProxyUpstream(url) ?? url
+  let parsed: URL
+  try {
+    parsed = new URL(upstream)
+  } catch {
+    return range ? `${upstream}#r=${range}` : upstream
+  }
+  for (const param of VOLATILE_SEGMENT_PARAMS) parsed.searchParams.delete(param)
+  const query = parsed.searchParams.toString()
+  const base = `${parsed.origin}${parsed.pathname}` + (query ? `?${query}` : '')
+  return range ? `${base}#r=${range}` : base
+}
+
+/**
+ * hls.js 把 #EXT-X-BYTERANGE 的区间放在 `context.rangeStart / rangeEnd`（end 是开区间），
+ * 同一个文件的多个字节段共用一个 URL。这里既用来分开缓存键，也用来发 Range 头，
+ * 语义与 hls.js 自带 loader 一致：`bytes=start-(end-1)`。
+ */
+function byteRangeOf(context: any): string | null {
+  const start: number = context?.rangeStart || 0
+  const end: number = context?.rangeEnd || 0
+  if (end <= start) return null
+  return `${start}-${end - 1}`
+}
+
+/** `bytes=start-end`（闭区间）的长度；解析不出来时返回 0。 */
+function rangeLength(range: string): number {
+  const [start, end] = range.split('-').map(Number)
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return 0
+  return end - start + 1
 }
 
 // ====== LRU 内存缓存 ======
@@ -92,7 +167,7 @@ interface CacheEntry {
 const lruCache = new Map<string, CacheEntry>()
 let totalCacheBytes = 0
 
-// ⭐ 优化：维护每集缓存数量，避免每次 cacheSet/findOldestEntry 都 O(n) 遍历
+// 每集缓存条数：单集上限是硬约束，靠它把「该集是否超限」从 O(n) 遍历降成一次查表
 const epCacheCount = new Map<string, number>()
 
 function _incEpCount(epKey: string): void {
@@ -106,123 +181,90 @@ function _decEpCount(epKey: string): void {
   }
 }
 
-function cacheGet(url: string): ArrayBuffer | null {
-  const entry = lruCache.get(url)
+function cacheGet(url: string, range?: string | null): CacheEntry | null {
+  const entry = lruCache.get(segmentCacheKey(url, range))
   if (!entry) return null
   entry.ts = Date.now()
-  return entry.buffer
+  return entry
 }
 
-function cacheSet(url: string, buf: ArrayBuffer): void {
+/**
+ * 把片段写入内存缓存。
+ *
+ * `episodeKey` 由调用方给出（预取任务知道自己取的是哪一集），不再靠「拿 URL 去
+ * segmentsByEpisode 里逐条比对」反推 —— 那个反推一旦因为签名轮换而比不中，条目就
+ * 变成无主条目，既不受单集上限约束，也就永远不会被该上限淘汰。
+ *
+ * `fetchMs` 是这次下载真实花掉的时间，命中时要原样回报给 hls.js（见 loader）。
+ */
+function cacheSet(
+  url: string,
+  buf: ArrayBuffer,
+  episodeKey?: string,
+  range?: string | null,
+  fetchMs?: number
+): void {
+  const key = segmentCacheKey(url, range)
   const size = buf.byteLength
+  const epKey = episodeKey || currentEpKey || ''
 
-  // ---- 1) 先算 segIdx 与所属 epKey（用于权重分配）----
-  let segIdx = -1
-  let epKey = ''
-  if (currentEpKey) {
-    const segs = segmentsByEpisode.get(currentEpKey) || []
-    for (let i = 0; i < segs.length; i++) {
-      if (segs[i] === url) { segIdx = i; epKey = currentEpKey; break }
-    }
-  }
+  // 同一份内容重写（时效签名换了、缓存键没换）：先把旧条目摘掉，否则同一份字节
+  // 会被 totalCacheBytes 计两次，上限越管越松。
+  const prevEntry = lruCache.get(key)
+  if (prevEntry) evict(prevEntry)
 
-  // 如果已经命中（同一 url 重写），先扣 size + 更新计数
-  const prevEntry = lruCache.get(url)
-  if (prevEntry) {
-    totalCacheBytes -= prevEntry.size
-    if (prevEntry.episodeKey) _decEpCount(prevEntry.episodeKey)
-    lruCache.delete(url)
-  }
-
-  // ---- 2) 硬约束：单集最多 "min(MAX_PER_EPISODE, 实际片段数)" 片 ----
+  // ---- 1) 硬约束：单集最多 "min(MAX_PER_EPISODE, 实际片段数)" 片 ----
   if (epKey) {
     const totalSegsForEp = segmentsByEpisode.get(epKey)?.length ?? 0
     const hardLimit = Math.min(MAX_PER_EPISODE, totalSegsForEp > 0 ? totalSegsForEp : MAX_PER_EPISODE)
-    const epCount = epCacheCount.get(epKey) || 0
-
-    if (epCount >= hardLimit) {
-      // 找该集最旧的条目淘汰（O(n) 遍历仍需要，但只在该集超限时）
-      let oldestOfEp: CacheEntry | null = null
-      for (const entry of lruCache.values()) {
-        if (entry.episodeKey === epKey) {
-          if (!oldestOfEp || entry.ts < oldestOfEp.ts) oldestOfEp = entry
-        }
-      }
-      if (oldestOfEp) {
-        totalCacheBytes -= oldestOfEp.size
-        if (oldestOfEp.episodeKey) _decEpCount(oldestOfEp.episodeKey)
-        lruCache.delete(oldestOfEp.url)
-      }
+    if ((epCacheCount.get(epKey) || 0) >= hardLimit) {
+      const oldestOfEp = findLeastUsedEntry(epKey)
+      if (oldestOfEp) evict(oldestOfEp)
     }
   }
 
-  // ---- 3) 全局 LRU / 字节上限 ----
+  // ---- 2) 全局条数 / 字节上限 ----
   while (lruCache.size >= MAX_CACHED_SEGMENTS || totalCacheBytes + size > MAX_CACHED_BYTES) {
-    const oldest = findOldestEntry()
+    const oldest = findLeastUsedEntry()
     if (!oldest) break
-    totalCacheBytes -= oldest.size
-    if (oldest.episodeKey) _decEpCount(oldest.episodeKey)
-    lruCache.delete(oldest.url)
+    evict(oldest)
   }
 
-  lruCache.set(url, { buffer: buf, size, url, ts: Date.now(), segIdx, episodeKey: epKey })
+  lruCache.set(key, {
+    buffer: buf,
+    size,
+    cacheKey: key,
+    ts: Date.now(),
+    episodeKey: epKey,
+    fetchMs: fetchMs && fetchMs > 0 ? Math.round(fetchMs) : 0,
+  })
   totalCacheBytes += size
   if (epKey) _incEpCount(epKey)
 }
 
-function findOldestEntry(): CacheEntry | null {
-  // 当前播放位置：从 playedSegmentsByEpisode 取最大已播放索引
-  let currentPos = -1
-  if (currentEpKey) {
-    const playedSet = playedSegmentsByEpisode.get(currentEpKey)
-    if (playedSet && playedSet.size > 0) {
-      for (const idx of playedSet) if (idx > currentPos) currentPos = idx
-    }
-  }
-
-  let worstEntry: CacheEntry | null = null
-  let worstScore = -1
-
-  for (const entry of lruCache.values()) {
-    let score: number
-    const hoursStale = Math.max(0, (Date.now() - entry.ts) / 3600000)
-    const secondsStale = Math.max(0, (Date.now() - entry.ts) / 1000)
-
-    // ==== 0) "该集已超单集上限" → 最高优先级淘汰 ====
-    if (entry.episodeKey) {
-      const totalSegsForEp = segmentsByEpisode.get(entry.episodeKey)?.length ?? MAX_PER_EPISODE
-      const hardLimit = Math.min(MAX_PER_EPISODE, totalSegsForEp > 0 ? totalSegsForEp : MAX_PER_EPISODE)
-      const ec = epCacheCount.get(entry.episodeKey) || 0
-      if (ec > hardLimit) {
-        score = 5000 + secondsStale
-        if (score > worstScore) { worstScore = score; worstEntry = entry }
-        continue
-      }
-    }
-
-    // ==== 1) 其他集 → 按陈旧度递增淘汰 ====
-    if (entry.episodeKey && entry.episodeKey !== currentEpKey) {
-      score = 1000 + hoursStale * 200 + secondsStale
-    }
-    // ==== 2) 当前集：距离当前播放位置越近越保留 ====
-    else if (entry.segIdx >= 0 && currentPos >= 0) {
-      const distance = entry.segIdx - currentPos
-      if (distance <= 0) score = 500 + Math.abs(distance) + hoursStale * 50
-      else if (distance <= 30) score = 10 + hoursStale
-      else if (distance <= 60) score = 50 + hoursStale * 2
-      else if (distance <= 120) score = 150 + hoursStale * 3
-      else score = 300 + (distance - 120) + hoursStale * 5
-    } else {
-      // segIdx 未知的条目按中等优先级处理
-      score = 300 + hoursStale * 5 + secondsStale * 0.1
-    }
-
-    if (score > worstScore) { worstScore = score; worstEntry = entry }
-  }
-  return worstEntry
+function evict(entry: CacheEntry): void {
+  totalCacheBytes -= entry.size
+  if (entry.episodeKey) _decEpCount(entry.episodeKey)
+  lruCache.delete(entry.cacheKey)
 }
 
-function cacheHas(url: string): boolean { return lruCache.has(url) }
+/**
+ * 真正的 LRU：谁最久没被读到就淘汰谁。
+ *
+ * 读一次就刷新 ts（见 cacheGet），所以「刚播过的、正在播的、刚预取完等着播的」
+ * 天然排在尾部。这里不再用按距离/陈旧度加权的手工分数——那种权重会互相反超，
+ * 结果是把刚插入的片段判得比一小时没人碰的片段更该淘汰。
+ */
+function findLeastUsedEntry(onlyEpisodeKey?: string): CacheEntry | null {
+  let worst: CacheEntry | null = null
+  for (const entry of lruCache.values()) {
+    if (onlyEpisodeKey !== undefined && entry.episodeKey !== onlyEpisodeKey) continue
+    if (!worst || entry.ts < worst.ts) worst = entry
+  }
+  return worst
+}
+
+function cacheHas(url: string, range?: string | null): boolean { return lruCache.has(segmentCacheKey(url, range)) }
 function cacheClear(): void { lruCache.clear(); totalCacheBytes = 0; epCacheCount.clear() }
 
 // ====== 全局状态 ======
@@ -248,12 +290,13 @@ let debounceTimer: number | null = null
 // sufficient media ahead, so they cannot compete with first play or recovery.
 let playbackBufferAhead = 0
 
+// 去重键也走归一化：签名换了但内容没换的片段，不该被当成两个不同的下载任务。
 function pendingKey(url: string, generation = cacheSession): string {
-  return `${generation}:${url}`
+  return `${generation}:${segmentCacheKey(url)}`
 }
 
 function hedgeKey(url: string, generation = cacheSession): string {
-  return `${generation}:${url}`
+  return `${generation}:${segmentCacheKey(url)}`
 }
 
 function activeInflight(): number {
@@ -279,6 +322,8 @@ function beginCacheSession(): void {
 interface EpisodeCounter { hits: number; misses: number }
 const epStats = new Map<string, EpisodeCounter>()
 const recentFetchDurations: number[] = []
+// 与 recentFetchDurations 一一对应的字节数：只有耗时算不出速率，也就无法判断命中该折算成多久
+const recentFetchBytes: number[] = []
 // 为当前集使用一个可变引用，减少每次查找
 let _curEpStats: EpisodeCounter = { hits: 0, misses: 0 }
 
@@ -489,6 +534,7 @@ export function setEpisodes(list: EpisodeLite[]): void {
   epStats.clear()  // ⭐ 集数级统计重置
   _curEpStats = { hits: 0, misses: 0 }
   recentFetchDurations.length = 0
+  recentFetchBytes.length = 0
   // ⭐ v3: 重置网络诊断状态（新视频 = 新网络环境）
   _networkMode = 'normal'
   _downloadAvgMs = 0
@@ -695,9 +741,10 @@ export function notifyCurrentTs(absUrl: string): void {
       const episode = currentEpKey
       hedgeFetch(u).then((buf) => {
         if (buf && generation === cacheSession) {
-          cacheSet(u, buf)
+          const elapsed = performance.now() - t0
+          cacheSet(u, buf, episode, null, elapsed)
           diskSave(u, buf, episode).catch(() => { })
-          recordFetchDuration(performance.now() - t0)
+          recordFetchDuration(elapsed, buf.byteLength)
           fireListeners()
         }
       }).finally(() => { hedgeInFlight.delete(hedgeKey(u, generation)) })
@@ -820,8 +867,6 @@ export function getTotalEpisodes(): number { return episodes.length }
 // Wails runtime RPC uses fetch too, and a global wrapper obscures its failures
 // in DevTools while providing no cache benefit to the custom HLS loader.
 export function enable(): void { enabled = true }
-export function disable(): void { enabled = false }
-export function isEnabled(): boolean { return enabled }
 
 // ⭐ v3: ABR 回调注册 —— VideoPlayer 通过此接口接收降码率信号
 export function setAbrSwitchCallback(cb: ((targetLevel: number) => void) | null): void {
@@ -844,6 +889,7 @@ export function clear(): void {
   epStats.clear()
   _curEpStats = { hits: 0, misses: 0 }
   recentFetchDurations.length = 0
+  recentFetchBytes.length = 0
   // ⭐ v3: 重置网络诊断状态
   _networkMode = 'normal'
   _downloadAvgMs = 0
@@ -853,6 +899,60 @@ export function clear(): void {
   _consecutiveSlowSegs = 0
   _abrSwitchCallback = null
   if (debounceTimer != null) { window.clearTimeout(debounceTimer); debounceTimer = null }
+  fireListeners()
+}
+
+// ====== 统一失效层的前端落点 ======
+//
+// Go 侧清完自己的缓存后发 cache:invalidate，这里按同一粒度丢掉片段缓存：内存 LRU、
+// 该集的片段清单、IndexedDB 落盘副本。
+//
+// 刻意不碰 episodes / currentEpIdx 这类会话状态：用户可能正在看同源的另一个视频，
+// 后台每写一次库就把播放器重置一遍，代价比留下几片旧片段大得多。
+
+async function dropCacheByPrefixes(prefixes: string[]): Promise<void> {
+  for (const entry of Array.from(lruCache.values())) {
+    if (entry.episodeKey && prefixes.some((p) => entry.episodeKey.startsWith(p))) evict(entry)
+  }
+  for (const key of Array.from(segmentsByEpisode.keys())) {
+    if (!prefixes.some((p) => key.startsWith(p))) continue
+    segmentsByEpisode.delete(key)
+    playedSegmentsByEpisode.delete(key)
+    epStats.delete(key)
+    epCacheCount.delete(key)
+  }
+  // 正在播的这一集被失效了：进行中的预取必须断掉，否则它们会把旧片段清单里的 URL
+  // 重新填回刚清空的缓存。
+  if (currentEpKey && prefixes.some((p) => currentEpKey.startsWith(p))) beginCacheSession()
+  try {
+    await diskCache.dropByEpisodePrefixes(prefixes)
+  } catch { /* IndexedDB 打不开：内存侧已经失效，落盘副本最坏等到 TTL 自己走 */ }
+  fireListeners()
+}
+
+/** 丢掉某一部剧全部集的片段缓存。 */
+export function dropVideoCache(sourceKey: string, vodId: string): Promise<void> {
+  if (!sourceKey || !vodId) return Promise.resolve()
+  return dropCacheByPrefixes([`ep_${sourceKey}_${vodId}_`])
+}
+
+/** 丢掉某个采集源全部片的片段缓存。 */
+export function dropSourceCache(sourceKey: string): Promise<void> {
+  if (!sourceKey) return Promise.resolve()
+  return dropCacheByPrefixes([`ep_${sourceKey}_`])
+}
+
+/** 用户显式清除：所有片段缓存与 m3u8 文本缓存一起丢掉，当前会话的剧集清单保留。 */
+export async function dropAllSegmentCache(): Promise<void> {
+  cacheClear()
+  segmentsByEpisode.clear()
+  playedSegmentsByEpisode.clear()
+  epCacheCount.clear()
+  epStats.clear()
+  m3u8TextCache.clear()
+  try {
+    await diskCache.clear()
+  } catch { /* 同上 */ }
   fireListeners()
 }
 
@@ -946,10 +1046,10 @@ async function runOne(job: FetchJob): Promise<void> {
     if (timeoutID != null) window.clearTimeout(timeoutID)
     if (resp.ok && generation === cacheSession) {
       const buf = await resp.arrayBuffer()
-      cacheSet(job.url, buf)
-      diskSave(job.url, buf, job.episodeKey).catch(() => { })
       const elapsed = performance.now() - t0
-      recordFetchDuration(elapsed)
+      cacheSet(job.url, buf, job.episodeKey, null, elapsed)
+      diskSave(job.url, buf, job.episodeKey).catch(() => { })
+      recordFetchDuration(elapsed, buf.byteLength)
       updateNetworkDiagnosis()
       fireListeners()
     }
@@ -968,9 +1068,45 @@ async function runOne(job: FetchJob): Promise<void> {
   }
 }
 
-function recordFetchDuration(ms: number): void {
+function recordFetchDuration(ms: number, bytes: number): void {
   recentFetchDurations.push(ms)
-  if (recentFetchDurations.length > SPEED_SAMPLE_COUNT) recentFetchDurations.shift()
+  recentFetchBytes.push(bytes)
+  if (recentFetchDurations.length > SPEED_SAMPLE_COUNT) {
+    recentFetchDurations.shift()
+    recentFetchBytes.shift()
+  }
+}
+
+/**
+ * 最近若干次「真实网络下载」折算出的速率（bits/s）；一次都没有时返回 0。
+ *
+ * 缓存命中必须拿它做参照：hls.js 用 (parsing.end - loading.start) 给 ABR 采样，
+ * 并把时长下限兜到 50ms，所以一个 1 MB 的命中片段如果报「0 ms 下完」，就会被算成
+ * ~160 Mbps 写进 EWMA。命中越多、估计值越高，最后自适应码率一路钉在最高档，
+ * 而实际网络根本没那么快 —— 表现为换个集就开始卡。
+ */
+function measuredNetworkBps(): number {
+  const n = recentFetchDurations.length
+  if (n === 0) return 0
+  let bytes = 0
+  let ms = 0
+  for (let i = 0; i < n; i++) {
+    bytes += recentFetchBytes[i] || 0
+    ms += recentFetchDurations[i]
+  }
+  if (bytes <= 0 || ms <= 0) return 0
+  return (bytes * 8) / (ms / 1000)
+}
+
+/**
+ * 把「从缓存拿到」折算成一段假想的网络耗时，让 ABR 采样结果与这次真的去下载
+ * 基本一致 —— 也就是对码率决策保持中性，既不因为命中而升档，也不伪造一条带宽记录。
+ * 还没有任何真实样本时返回 0（调用方保持原样上报）。
+ */
+function cacheHitShapingMs(bytes: number): number {
+  const bps = measuredNetworkBps()
+  if (bps <= 0) return 0
+  return (bytes * 8 * 1000) / bps
 }
 
 // ====== 对冲请求（Hedge Fetch）======
@@ -1047,9 +1183,10 @@ const DISK_PRUNE_DEBOUNCE_MS = 5_000
 const diskCache = new SegmentDiskCache(MAX_DISK_BYTES, DISK_TTL_MS, DISK_PRUNE_DEBOUNCE_MS)
 let diskQuotaWarned = false
 
-async function diskSave(url: string, buf: ArrayBuffer, epKey?: string): Promise<void> {
+async function diskSave(url: string, buf: ArrayBuffer, epKey?: string, range?: string | null): Promise<void> {
   try {
-    await diskCache.save(url, buf, epKey || currentEpKey || '')
+    // 与内存层用同一个归一化键：签名轮换时否则同一片段在磁盘上堆积成多份。
+    await diskCache.save(segmentCacheKey(url, range), buf, epKey || currentEpKey || '')
   } catch (error: any) {
     if (error?.name === 'QuotaExceededError' || String(error?.message || '').includes('quota')) {
       if (!diskQuotaWarned) {
@@ -1066,7 +1203,7 @@ async function diskLoadForEpisode(epKey: string): Promise<number> {
   try {
     const entries = await diskCache.loadEpisode(epKey)
     if (currentEpKey !== epKey) return 0
-    for (const entry of entries) cacheSet(entry.url, entry.data)
+    for (const entry of entries) cacheSet(entry.url, entry.data, epKey)
     if (entries.length > 0) {
       const mb = (totalCacheBytes / 1024 / 1024).toFixed(1)
       console.log(`${LOG_PREFIX} restored ${entries.length} segments (${mb} MB) for ${epKey}`)
@@ -1180,23 +1317,29 @@ class TsCacheLoader {
 
     // === 1) TS 片段：先走 LRU 缓存 ===
     if (isFragment) {
-      const cached = cacheGet(url)
-      if (cached) {
+      const range = byteRangeOf(context)
+      const hit = cacheGet(url, range)
+      if (hit) {
         _curEpStats.hits++
         fireListeners()
+        const size = hit.size
+        // 这批字节当初真下载用了多久：优先取写入时记录的时长，其次按实测速率折算
+        const loadMs = hit.fetchMs > 0 ? hit.fetchMs : cacheHitShapingMs(size)
         // 异步回调 onSuccess（模拟 fetch 的 async 行为）
         Promise.resolve().then(() => {
           if (this._destroyed) return
           const now = performance.now()
-          this.stats.loading.first = Math.max(now, this.stats.loading.start)
-          this.stats.loading.end = Math.max(this.stats.loading.first, now)
-          this.stats.loaded = this.stats.total = cached.byteLength
-          // 缓存命中：极高带宽估计值，hls.js ABR 会选择较高码率
-          this.stats.bwEstimate = Math.round((cached.byteLength * 8 * 1000) / Math.max(1, now - this.stats.loading.start))
+          // hls.js 用 (parsing.end - loading.start) 给 ABR 采样，时长还被兜到最少 50ms。
+          // 命中若按「0 ms 拿到」上报，1 MB 就会被当成 ~160 Mbps：命中越多估计值越高，
+          // 码率一路钉在最高档，换个集就开始卡。所以把起点回拨成真实下载用时 —— 数据
+          // 照样即时返回，只是这次采样和「真的去下一遍」基本等价，对码率决策保持中性。
+          const start = now - loadMs
+          this.stats.loading = { start, first: start + 1, end: now }
+          this.stats.loaded = this.stats.total = size
           this.stats.chunkCount = 1
           if (callbacks?.onSuccess) {
             callbacks.onSuccess(
-              { url, data: cached.slice(0), code: 200 },
+              { url, data: hit.buffer.slice(0), code: 200 },
               this.stats,
               context,
               null
@@ -1214,27 +1357,45 @@ class TsCacheLoader {
       this._hedgeAbort = null
       const t0 = this.stats.loading.start
 
-      const doFetch = () => fetch(url, { signal: ctrl.signal })
+      // BYTERANGE 片段必须按区间取：整个文件当成其中一段返回会直接解出花屏。
+      // 预取路径没有区间概念，所以带区间的片段不参与对冲。
+      const init: RequestInit = { signal: ctrl.signal }
+      if (range) init.headers = { Range: `bytes=${range}` }
+      const doFetch = () => fetch(url, init)
 
       // ⭐ v3: 根据网络诊断决定使用对冲请求还是普通请求
-      const useHedge = _networkMode === 'server_congested' && hedgeInFlight.size < 2
+      const useHedge = !range && _networkMode === 'server_congested' && hedgeInFlight.size < 2
       const fetchPromise = useHedge
         ? hedgeFetch(url).then((buf) => buf ? { buf, hedged: true as const, resp: null as Response | null } : Promise.reject(new Error('hedge timeout')))
         : doFetch().then(async (resp) => {
           if (this._destroyed || ctrl.signal.aborted) throw new Error('aborted')
           if (!resp.ok) throw new Error('HTTP ' + resp.status)
-          const buf = await resp.arrayBuffer()
+          let buf = await resp.arrayBuffer()
+          if (range) {
+            const want = rangeLength(range)
+            if (want > 0 && buf.byteLength !== want) {
+              // 上游忽略了 Range 头：整份文件当一片交给 hls.js 只会解出花屏，
+              // 能自己截就截，截不出来说明响应本身就不完整。
+              const from = Number(range.slice(0, range.indexOf('-')))
+              if (buf.byteLength >= from + want) {
+                console.warn(`${LOG_PREFIX} ⚠ 未按 Range bytes=${range} 返回（收到 ${buf.byteLength} 字节），已本地截取`)
+                buf = buf.slice(from, from + want)
+              } else {
+                console.warn(`${LOG_PREFIX} ⚠ Range bytes=${range} 只拿到 ${buf.byteLength} 字节（期望 ${want}）`)
+              }
+            }
+          }
           return { buf, hedged: false as const, resp: resp as Response | null }
         })
 
       fetchPromise
         .then(({ buf, hedged, resp }) => {
           if (this._destroyed) return
-          // 写入缓存
-          cacheSet(url, buf)
-          diskSave(url, buf).catch(() => { })
           const elapsed = performance.now() - t0
-          recordFetchDuration(elapsed)
+          // 写入缓存
+          cacheSet(url, buf, undefined, range, elapsed)
+          diskSave(url, buf, undefined, range).catch(() => { })
+          recordFetchDuration(elapsed, buf.byteLength)
           updateNetworkDiagnosis()
           fireListeners()
           // 统计
@@ -1260,7 +1421,7 @@ class TsCacheLoader {
 
     // === 2) m3u8 播放列表：走文本缓存（避免重复请求同一个 m3u8）===
     if (isPlaylist) {
-      const cachedText = m3u8TextCache.get(url)
+      const cachedText = getM3u8FromCache(url)
       if (cachedText) {
         // ⭐ 剔除广告后返回给 hls.js
         const cleanText = stripAdFromM3u8Text(cachedText, url)
@@ -1271,7 +1432,6 @@ class TsCacheLoader {
           this.stats.loading.first = Math.max(now, this.stats.loading.start)
           this.stats.loading.end = Math.max(this.stats.loading.first, now)
           this.stats.loaded = this.stats.total = cleanText.length
-          this.stats.bwEstimate = 100000000
           this.stats.chunkCount = 1
           if (callbacks?.onSuccess) {
             callbacks.onSuccess(
@@ -1295,7 +1455,7 @@ class TsCacheLoader {
           if (!resp.ok) throw new Error('HTTP ' + resp.status)
           const rawText = await resp.text()
           if (this._destroyed) return
-          m3u8TextCache.set(url, rawText) // 缓存原始文本
+          setM3u8Cache(url, rawText) // 缓存原始文本
           const cleanText = stripAdFromM3u8Text(rawText, url) // ⭐ 剔除广告
           const now = performance.now()
           this.stats.loading.first = Math.max(this.stats.loading.start + 1, this.stats.loading.start)
@@ -1741,13 +1901,14 @@ function prefetchFromSegments(segUrls: string[], epIdx: number, startFrom: numbe
 }
 
 export const TsCache = {
-  enable, disable, isEnabled, clear, stats,
+  enable, clear, stats,
   setEpisodes, setCurrentEpisode, setSegments, setTargetDuration, setPlaybackBufferAhead,
   prefetchFirst, prefetchNextEpisode, prefetchFromM3u8,
   notifyCurrentTs, notifyFragmentRequested,
   episodeProgress, getTotalEpisodes,
   onStateChange, removeListener: (cb: Listener) => listeners.delete(cb),
   diskClear, diskCacheInfo, diskCachePrune,
+  dropVideoCache, dropSourceCache, dropAllSegmentCache,
   // ⭐ v1.7.0-beta.1 统一 loader：hls.js 新 API，一个 loader 处理所有请求类型
   //   用法: new Hls({ loader: TsCache.TsCacheLoader })
   TsCacheLoader,

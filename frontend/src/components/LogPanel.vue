@@ -3,7 +3,6 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from './Icon.vue'
 import { Button } from './ui'
-import { Dialogs } from '../api/runtime'
 import { GetLogContent, OpenFileInExplorer, OpenFolder } from '../api/app'
 import { useConfirmStore } from '../stores/confirm'
 import { useErrorStore } from '../stores/error'
@@ -26,6 +25,7 @@ type PanelTab = 'live' | 'file' | 'raw'
 const tab = ref<PanelTab>('live')
 const autoScroll = ref(true)
 const exportFormat = ref<'log' | 'csv' | 'json'>('log')
+const lastExportPath = ref('')
 const selected = ref<LogRecord | null>(null)
 
 // ---------- 实时时间线：定高窗口化渲染 ----------
@@ -165,30 +165,21 @@ async function revealLogFile(): Promise<void> {
 }
 
 async function doExport(): Promise<void> {
-  const stamp = new Date()
-  const pad = (n: number) => String(n).padStart(2, '0')
-  const base = `cczj-logs-${stamp.getFullYear()}${pad(stamp.getMonth() + 1)}${pad(stamp.getDate())}-${pad(stamp.getHours())}${pad(stamp.getMinutes())}`
-  let path = ''
   try {
-    path = await Dialogs.SaveFile({
-      Title: t('logs.exportTitle'),
-      Filename: `${base}.${exportFormat.value}`,
-      CanCreateDirectories: true,
-      Filters: [{ DisplayName: exportFormat.value.toUpperCase(), Pattern: `*.${exportFormat.value}` }],
-    })
-  } catch {
-    return
-  }
-  if (!path) return
-  try {
-    const result = await logs.exportToFile(path, {
+    const result = await logs.exportToFile({
       filename: tab.value === 'live' ? '' : (currentFile.value || logs.currentFileLabel),
       format: exportFormat.value,
     })
+    lastExportPath.value = result.path
     errorStore.info(t('logs.exportOkTitle'), t('logs.exportOk', { lines: result.lines, path: result.path }))
   } catch (e: any) {
     errorStore.fromError(t('logs.exportFailed'), e, 'LogPanel')
   }
+}
+
+async function revealExport(): Promise<void> {
+  if (!lastExportPath.value) return
+  try { await OpenFolder(lastExportPath.value) } catch (e: any) { errorStore.fromError(t('logs.openDirFailed'), e, 'LogPanel') }
 }
 
 async function doClear(): Promise<void> {
@@ -402,6 +393,9 @@ onBeforeUnmount(() => {
           >{{ fmt.toUpperCase() }}</button>
           <Button variant="primary" size="sm" @click="doExport">
             <Icon name="download" :size="12" /> {{ t('logs.export') }}
+          </Button>
+          <Button v-if="lastExportPath" variant="secondary" size="sm" @click="revealExport">
+            <Icon name="folder" :size="12" /> {{ t('logs.revealExport') }}
           </Button>
         </div>
         <Button variant="danger" size="sm" @click="doClear">

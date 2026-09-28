@@ -2,6 +2,7 @@ package douban
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -28,18 +29,31 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// resetBlock 保存/还原熔断全局状态，避免用例之间互相影响。
+// resetBlock 保存/还原豆瓣的两个全局时钟（熔断静默期 + 限速基准），避免用例之间互相影响。
 func resetBlock(t *testing.T) {
 	t.Helper()
 	blockMu.Lock()
 	until, strikes := blockUntil, blockStrikes
 	blockMu.Unlock()
+	rateMu.Lock()
+	rate := lastRequestTime
+	rateMu.Unlock()
 	t.Cleanup(func() {
 		blockMu.Lock()
 		blockUntil, blockStrikes = until, strikes
 		blockMu.Unlock()
+		rateMu.Lock()
+		lastRequestTime = rate
+		rateMu.Unlock()
 		batchMode.Store(false)
 	})
+}
+
+// clearRateClock 把限速基准清空，用例从「闸门空闲」这个起点开始。
+func clearRateClock() {
+	rateMu.Lock()
+	lastRequestTime = time.Time{}
+	rateMu.Unlock()
 }
 
 func TestAntiCrawlBreakerEscalatesAndClears(t *testing.T) {
@@ -88,6 +102,80 @@ func TestExpiredBlockIsClearedOnRead(t *testing.T) {
 	}
 }
 
+// 限速单一闸门：搜索/详情、评论、热榜共用 reserveDoubanSlot 这一个基准，
+// 所以「任何两次豆瓣请求之间至少隔一个 minGap」只能在这里钉住。
+// 只断言落档，不断言具体抖动值——随机值不可复现，区间才是约定。
+
+func TestReserveDoubanSlotKeepsInteractiveGap(t *testing.T) {
+	resetBlock(t)
+	clearRateClock()
+	batchMode.Store(false)
+
+	first := reserveDoubanSlot()
+	if wait := time.Until(first); wait > time.Second {
+		t.Fatalf("闸门空闲时首次预约需要等 %v，期望立即放行", wait)
+	}
+	second := reserveDoubanSlot()
+	if gap := second.Sub(first); gap < interactiveMinRequestInterval || gap >= interactiveMaxRequestInterval {
+		t.Fatalf("连续两次预约间隔 %v，落在交互档 [%v, %v) 之外",
+			gap, interactiveMinRequestInterval, interactiveMaxRequestInterval)
+	}
+}
+
+func TestReserveDoubanSlotWidensGapInBatchMode(t *testing.T) {
+	resetBlock(t)
+	clearRateClock()
+	batchMode.Store(true)
+
+	first := reserveDoubanSlot()
+	second := reserveDoubanSlot()
+	// 批量补全是无人值守任务，间隔必须显著宽于交互档；调小等于放宽对豆瓣的礼貌。
+	if gap := second.Sub(first); gap < minRequestInterval || gap >= maxRequestInterval {
+		t.Fatalf("批量模式间隔 %v，落在批量档 [%v, %v) 之外",
+			gap, minRequestInterval, maxRequestInterval)
+	}
+}
+
+func TestAwaitDoubanSlotRunsImmediatelyWhenGateIdle(t *testing.T) {
+	resetBlock(t)
+	clearRateClock()
+	batchMode.Store(false)
+
+	started := time.Now()
+	wait, ok := awaitDoubanSlot("搜索/详情", uiWaitBudget)
+	if !ok {
+		t.Fatalf("闸门空闲且预算为正，awaitDoubanSlot 不应放弃（wait=%v）", wait)
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("闸门空闲时耗时 %v，不应排队", elapsed)
+	}
+}
+
+func TestAwaitDoubanSlotGivesUpInsteadOfBypassingGate(t *testing.T) {
+	resetBlock(t)
+	// 模拟批量补全刚出发：闸门已把下一个槽订在 60 秒之后。交互请求此刻来，
+	// 无论怎么排都超出 45 秒预算，正确行为是放弃而不是插队。
+	rateMu.Lock()
+	lastRequestTime = time.Now().Add(minRequestInterval)
+	rateMu.Unlock()
+
+	started := time.Now()
+	wait, ok := awaitDoubanSlot("评论", uiWaitBudget)
+	if ok {
+		t.Fatalf("批量节奏下的交互请求应当放弃，却返回可以（wait=%v）", wait)
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("放弃时耗时 %v，应当快速失败而不是睡满", elapsed)
+	}
+	// 放弃也要把槽占掉：下一次预约必须排在更晚的位置，退让才真正让限速生效。
+	rateMu.Lock()
+	booked := lastRequestTime
+	rateMu.Unlock()
+	if left := time.Until(booked); left < minRequestInterval {
+		t.Fatalf("放弃后闸门只留到 %v，期望至少还占着批量间隔 %v", left.Round(time.Second), minRequestInterval)
+	}
+}
+
 func TestFetchHTMLFailsFastWhileBlocked(t *testing.T) {
 	resetBlock(t)
 	noteAntiCrawl()
@@ -106,6 +194,35 @@ func TestFetchHTMLFailsFastWhileBlocked(t *testing.T) {
 	var fetchErr *doubanFetchError
 	if !errors.As(err, &fetchErr) || !fetchErr.AntiCrawl {
 		t.Fatalf("错误类型 = %v，期望按反爬错误处理，以便记录保持可重试", err)
+	}
+	// AntiCrawl 只用来标记「这不是查无此条」；Local 才区分「我们没问过豆瓣」。
+	// 少了 Local，静默期里的一次放弃会被当成豆瓣封禁，把详情页降档 30 分钟。
+	if !fetchErr.Local {
+		t.Error("本地闸门拦下的请求没被标记成 Local，会被误读成豆瓣真的回了反爬页")
+	}
+	if isRemoteAntiCrawl(err) {
+		t.Error("本地闸门拦下的请求被判成了远端封禁")
+	}
+}
+
+// 本地闸门和真被封必须分开处置：前者只是「现在不该问」，等就行；后者才需要把详情页
+// 路径降档 30 分钟。混为一谈会自锁——队列越闲、越没人真的问过豆瓣，详情页却一直被降档。
+func TestIsRemoteAntiCrawlDistinguishesLocalGateFromRealBlock(t *testing.T) {
+	if isRemoteAntiCrawl(blockedError("https://movie.douban.com/subject/1292052/", "反爬熔断静默中")) {
+		t.Error("本地闸门拦下的请求被判成了远端封禁")
+	}
+	remote := &doubanFetchError{AntiCrawl: true, StatusCode: 403}
+	if !isRemoteAntiCrawl(remote) {
+		t.Error("豆瓣真的回了反爬页却没有触发详情页降档")
+	}
+	if !isRemoteAntiCrawl(fmt.Errorf("解析详情失败: %w", remote)) {
+		t.Error("错误被包装后分类丢了")
+	}
+	if isRemoteAntiCrawl(errors.New("context deadline exceeded")) {
+		t.Error("普通传输错误不该按反爬处理")
+	}
+	if isRemoteAntiCrawl(&doubanFetchError{StatusCode: 404}) {
+		t.Error("普通的 404 不该按反爬处理")
 	}
 }
 

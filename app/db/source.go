@@ -6,9 +6,7 @@ import (
 )
 
 func GetAllSources() ([]*model.Source, error) {
-	var sources []*model.Source
-	err := instance.Select(&sources, `SELECT * FROM sources ORDER BY id`)
-	return sources, err
+	return ReadSources(instance)
 }
 
 func GetEnabledSources() ([]*model.Source, error) {
@@ -69,6 +67,12 @@ func DeleteSource(key string) error {
 	}
 	if _, err := tx.Exec(`DELETE FROM sources WHERE source_key = ?`, key); err != nil {
 		return fmt.Errorf("delete source record: %w", err)
+	}
+	if err := ResetCollectCursor(tx, key); err != nil {
+		return err
+	}
+	if err := ResetSourceHealth(tx, key); err != nil {
+		return err
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit source deletion: %w", err)

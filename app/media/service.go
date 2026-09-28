@@ -28,6 +28,11 @@ func (s *Service) Detail(req handler.VideoDetailReq) (*handler.VideoDetailResp, 
 	return handler.GetVideoDetail(req)
 }
 
+// SpeedTestPlayLines probes every play line of one video and ranks them.
+func (s *Service) SpeedTestPlayLines(req handler.PlayLineSpeedReq) (*handler.PlayLineSpeedResp, error) {
+	return handler.SpeedTestPlayLines(req)
+}
+
 // Search returns videos matching a keyword within a source.
 func (s *Service) Search(req handler.VideoSearchReq) (*handler.VideoListResp, error) {
 	return handler.SearchVideos(req)
@@ -48,14 +53,54 @@ func (s *Service) Types(req handler.GetTypesReq) ([]*model.VType, error) {
 	return handler.GetTypes(req)
 }
 
-// Delete removes a source video and its associated records.
+// Delete soft-deletes a source video, moving it to the recycle bin.
 func (s *Service) Delete(req handler.DeleteVideoReq) error {
 	return handler.DeleteVideo(req)
+}
+
+// RecycleBin lists soft-deleted catalog entries across sources.
+func (s *Service) RecycleBin(req handler.RecycleListReq) (*handler.RecycleListResp, error) {
+	return handler.ListRecycleBin(req)
+}
+
+// Restore puts one recycle-bin entry back into the library.
+func (s *Service) Restore(req handler.RecycleReq) error {
+	return handler.RestoreVideo(req)
+}
+
+// Purge permanently deletes one recycle-bin entry.
+func (s *Service) Purge(req handler.RecycleReq) (*handler.RecycleResult, error) {
+	return handler.PurgeVideo(req)
+}
+
+// ClearRecycleBin purges every entry in the recycle bin.
+func (s *Service) ClearRecycleBin(req handler.RecycleListReq) (*handler.RecycleResult, error) {
+	return handler.ClearRecycleBin(req)
 }
 
 // YearsAndAreas returns filter values available for a source.
 func (s *Service) YearsAndAreas(sourceKey string) (*handler.YearsResp, error) {
 	return handler.GetYearsAndAreas(sourceKey)
+}
+
+// UnionList returns a page of the cross-source library: one card per identity.
+func (s *Service) UnionList(req handler.UnionListReq) (*handler.UnionListResp, error) {
+	return handler.GetUnionVideoList(req)
+}
+
+// UnionYearsAndAreas returns filter values available across every source.
+func (s *Service) UnionYearsAndAreas() (*handler.YearsResp, error) {
+	return handler.GetUnionYearsAndAreas()
+}
+
+// MergeCandidates returns identities that look like duplicates of each other.
+func (s *Service) MergeCandidates(limit int) (*handler.MergeCandidatesResp, error) {
+	return handler.ListMergeCandidates(limit)
+}
+
+// MergeIdentities merges user-confirmed duplicate identities.
+func (s *Service) MergeIdentities(req handler.MergeIdentitiesReq) (*handler.MergeIdentitiesResp, error) {
+	return handler.MergeIdentities(req)
 }
 
 // Recommend returns recommended videos after normalizing optional arguments.

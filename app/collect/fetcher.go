@@ -134,10 +134,6 @@ func BuildQueryUrl(apiUrl string, page int, opts FetchOptions) string {
 	return u.String()
 }
 
-func FetchPage(apiUrl string, page int) (*FetchResult, error) {
-	return FetchPageWithOpts(apiUrl, page, FetchOptions{})
-}
-
 func FetchPageWithOpts(apiUrl string, page int, opts FetchOptions) (*FetchResult, error) {
 	target := BuildQueryUrl(apiUrl, page, opts)
 	return doFetch(target, opts.FieldMapping)
@@ -299,30 +295,6 @@ func decompress(r io.Reader, encoding string) (io.Reader, error) {
 	default:
 		return io.NopCloser(r), nil
 	}
-}
-
-func FetchAll(apiUrl string, progress func(current, total int)) (*FetchResult, error) {
-	first, err := FetchPage(apiUrl, 1)
-	if err != nil {
-		return nil, err
-	}
-	all := first
-	if progress != nil {
-		progress(1, first.Pagecount.Int())
-	}
-
-	for p := 2; p <= first.Pagecount.Int(); p++ {
-		page, err := FetchPage(apiUrl, p)
-		if err != nil {
-			return nil, fmt.Errorf("fetch page %d: %w", p, err)
-		}
-		all.List = append(all.List, page.List...)
-		if progress != nil {
-			progress(p, first.Pagecount.Int())
-		}
-		time.Sleep(2 * time.Second)
-	}
-	return all, nil
 }
 
 func truncate(s string, maxLen int) string {

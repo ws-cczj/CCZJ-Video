@@ -5,6 +5,7 @@
  * 性能自适应：根据 GPU 帧率动态降级
  */
 import fsrcnnxSource from './FSRCNNX_x2_8-0-4-1.glsl?raw'
+import { loseGlContext } from './anime4kUpscaler'
 
 export interface FilmUpscalerOptions {
   sharpness?: number; casStrength?: number
@@ -396,7 +397,8 @@ export class FilmUpscaler {
       return true
     } catch (e: any) {
       this._error = e.message || String(e); console.error('[FilmUpscaler] init:', this._error)
-      if (this.canvas?.parentElement) this.canvas.parentElement.removeChild(this.canvas)
+      // 失败也要走完整销毁：只摘 canvas 会留着 this.gl 引用，上下文既没法用又不会被回收。
+      this.destroy()
       return false
     }
   }
@@ -554,6 +556,7 @@ export class FilmUpscaler {
       if (this.quadVBO) gl.deleteBuffer(this.quadVBO)
       if (this.quadVAO) gl.deleteVertexArray(this.quadVAO)
       this.ulocs.clear()
+      loseGlContext(gl)
     }
     this.passProgs = []; this.passDefs = []; this.fboReg.clear()
     this.preFBO = null; this.midFBO = null; this.casFBO = null; this.tempFBO = null; this.hdrFBO = null
@@ -844,6 +847,7 @@ export function checkFilmSupport(): { supported: boolean; message: string } {
   try {
     const c = document.createElement('canvas'); const gl = c.getContext('webgl2')
     if (!gl) return { supported: false, message: 'WebGL2 不可用' }
+    loseGlContext(gl) // 探测 canvas 同样占上下文名额，用完就还
     return { supported: true, message: 'FSRCNNX + 全链路增强可用' }
   } catch { return { supported: false, message: 'WebGL2 检测失败' } }
 }

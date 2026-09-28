@@ -2,6 +2,7 @@ package handler
 
 import (
 	"cczjVideo/app/applog"
+	"cczjVideo/app/cache"
 	"cczjVideo/app/collect"
 	"cczjVideo/app/db"
 	"cczjVideo/app/model"
@@ -69,11 +70,11 @@ func (s *Scheduler) ReloadConfig() {
 }
 
 // Start 启动调度器
-//   - 根据全局配置决定是否执行启动阶段采集（全量/补采）
-//   - 然后为每个启用后台采集的源启动独立定时器
+//   - 启动阶段（全量 / 按水位线补采）只看自己的开关，不被后台总开关连带短路
+//   - 后台总开关打开时，再为每个启用后台采集的源启动独立定时器
 func (s *Scheduler) Start() {
 	cfg := GetScheduleConfig()
-	if !cfg.EnableBackground {
+	if !cfg.EnableBackground && !cfg.EnableInitialFullCollect && !cfg.EnableStartupCatchup {
 		s.stopAllSourceTimers()
 		return
 	}
@@ -92,25 +93,33 @@ func (s *Scheduler) Start() {
 	s.mu.Unlock()
 
 	go func() {
-		defer close(stopped)
+		finished := func() {
+			s.mu.Lock()
+			if s.generation == gen {
+				s.running = false
+			}
+			s.mu.Unlock()
+		}
+		defer func() {
+			finished()
+			close(stopped)
+		}()
 
 		// === 启动阶段 ===
 		if cfg.EnableInitialFullCollect {
 			s.logScheduler("启动阶段全量采集开始")
 			s.runAllSourcesOnce(gen, model.CollectModeFull, 0)
 		} else if cfg.EnableStartupCatchup {
-			s.logScheduler("启动阶段补采开始")
-			// 补采：用上次退出到现在的时长作为时间窗
-			lastExit := GetLastExitUnix()
-			hours := 0
-			if lastExit > 0 {
-				hours = int(time.Since(time.Unix(lastExit, 0)).Hours())
-				if hours < 1 {
-					hours = 1
-				}
-			}
-			s.logScheduler(fmt.Sprintf("补采时间窗: %d 小时", hours))
-			s.runAllSourcesOnce(gen, model.CollectModeIncremental, hours)
+			// 补采窗口由每个源自己的水位线算出：停机多久就补多久，
+			// 不再依赖一个全局退出时刻把所有源压成同一个小时数。
+			s.logScheduler("启动阶段按各源水位线补采开始")
+			s.runAllSourcesOnce(gen, model.CollectModeIncremental, 0)
+		}
+
+		if !cfg.EnableBackground {
+			// 补采跑完就收工：后台总开关关着，不该留下任何定时器。
+			s.stopAllSourceTimers()
+			return
 		}
 
 		// A generation that was superseded while Stop()'s wait timed out must not
@@ -127,9 +136,7 @@ func (s *Scheduler) Start() {
 		// 主循环：等待停止信号
 		<-stopCh
 		s.stopAllSourceTimers()
-		s.mu.Lock()
-		s.running = false
-		s.mu.Unlock()
+		finished()
 	}()
 }
 
@@ -144,8 +151,6 @@ func (s *Scheduler) runAllSourcesOnce(gen uint64, mode model.CollectMode, hours 
 		s.logScheduler("没有可用的采集源，跳过")
 		return
 	}
-
-	setSchedulerLastRun(time.Now().Unix())
 
 	for i, src := range sources {
 		select {
@@ -284,6 +289,8 @@ func (s *Scheduler) runSourceCollect(sourceKey string, mode model.CollectMode, h
 		s.logScheduler(fmt.Sprintf("[%s] 正在采集中，跳过", sourceKey))
 		return
 	}
+	// 持久化"最近一次采集"，设置页重启后仍能看到；只存活在内存里会一重启就归零。
+	TouchLastRun()
 
 	modeLabel := string(mode)
 	s.logScheduler(fmt.Sprintf("[%s] 开始采集 (模式=%s)", sourceKey, modeLabel))
@@ -291,17 +298,19 @@ func (s *Scheduler) runSourceCollect(sourceKey string, mode model.CollectMode, h
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		_, err := engine.Run()
-		entry.FinishEngine(engine, errStrSchedule(err))
-		application.Get().Event.Emit("collect:done", map[string]interface{}{
-			"source_key": sourceKey,
-			"error":      errStrSchedule(err),
-			"mode":       modeLabel,
-		})
+		stats, err := engine.Run()
+		outcome := OutcomeFromRun(stats, err)
+		entry.FinishEngine(engine, outcome)
+		RecordCollectHealth(sourceKey, outcome, err)
+		application.Get().Event.Emit("collect:done", CollectDonePayload(sourceKey, modeLabel, outcome))
+		// 定时采集跑完同样是"库里的数据变了"，缓存必须跟着作废；空跑不动，理由见 collection.Service。
+		if outcome.Saved > 0 {
+			cache.InvalidateSource(sourceKey, fmt.Sprintf("定时采集写入 %d 条", outcome.Saved))
+		}
 		if err != nil {
-			s.logScheduler(fmt.Sprintf("[%s] 采集失败: %v", sourceKey, err))
+			s.logScheduler(fmt.Sprintf("[%s] 采集未完成: %v", sourceKey, err))
 		} else {
-			s.logScheduler(fmt.Sprintf("[%s] 采集完成", sourceKey))
+			s.logScheduler(fmt.Sprintf("[%s] 采集完成 (入库 %d 条)", sourceKey, outcome.Saved))
 		}
 	}()
 
@@ -436,6 +445,9 @@ type SourceScheduleItem struct {
 	Mode        string `json:"mode"`         // full | incremental
 	IntervalMin int    `json:"interval_min"` // 定时间隔（分钟）
 	Running     bool   `json:"running"`      // 是否正在采集
+	// 增量水位线：已覆盖到 / 最近一次尝试采集的时刻（unix 秒，0 表示没有记录）
+	CoveredUntilUnix int64 `json:"covered_until_unix"`
+	LastAttemptUnix  int64 `json:"last_attempt_unix"`
 }
 
 // Status 返回当前调度器状态
@@ -466,10 +478,13 @@ func (s *Scheduler) Status() SchedulerStatus {
 	for _, src := range sources {
 		sc := src.GetScheduleConfig()
 		entry := GetCollectStatus(src.SourceKey)
+		cursor, _ := db.GetCollectCursor(src.SourceKey)
 		item := SourceScheduleItem{
-			SourceKey: src.SourceKey,
-			Name:      src.Name,
-			Running:   entry.Running,
+			SourceKey:        src.SourceKey,
+			Name:             src.Name,
+			Running:          entry.Running,
+			CoveredUntilUnix: cursor.CoveredUntilUnix,
+			LastAttemptUnix:  cursor.LastAttemptUnix,
 		}
 		if sc != nil && sc.Enabled {
 			item.Enabled = true
@@ -511,7 +526,7 @@ func (s *Scheduler) Status() SchedulerStatus {
 		StartupCatchup:         cfg.EnableStartupCatchup,
 		InitialFullCollect:     cfg.EnableInitialFullCollect,
 		LastExitUnix:           GetLastExitUnix(),
-		LastRunUnix:            schedulerLastRunUnix(),
+		LastRunUnix:            GetLastRunUnix(),
 		NowUnix:                time.Now().Unix(),
 		Note:                   note,
 		SourceSchedules:        srcItems,
@@ -594,28 +609,4 @@ func (s *Scheduler) logScheduler(msg string) {
 		"source_key": "__scheduler__",
 		"message":    msg,
 	})
-}
-
-var (
-	schedulerLastRun   int64
-	schedulerLastRunMu sync.Mutex
-)
-
-func schedulerLastRunUnix() int64 {
-	schedulerLastRunMu.Lock()
-	defer schedulerLastRunMu.Unlock()
-	return schedulerLastRun
-}
-
-func setSchedulerLastRun(t int64) {
-	schedulerLastRunMu.Lock()
-	defer schedulerLastRunMu.Unlock()
-	schedulerLastRun = t
-}
-
-func errStrSchedule(err error) string {
-	if err == nil {
-		return ""
-	}
-	return err.Error()
 }

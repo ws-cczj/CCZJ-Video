@@ -81,3 +81,55 @@ func TestWaitContextCancels(t *testing.T) {
 		t.Fatalf("waitContext() = %v, want context.Canceled", err)
 	}
 }
+
+// TestAllowPrivateTargetsDefaultsToDeny 钉住两件事：默认必须拒绝私网，
+// 以及放开后确实是同一份判定在放行（而不是另一条没人看的分支）。
+func TestAllowPrivateTargetsDefaultsToDeny(t *testing.T) {
+	private := []string{
+		"http://127.0.0.1:8080/index.m3u8",
+		"http://192.168.1.10/video/x.m3u8",
+		"http://10.0.0.5/x.ts",
+		"http://[::1]/x.m3u8",
+		"http://localhost:9999/x.m3u8",
+		"http://nas.local:5000/x.m3u8",
+	}
+	if AllowPrivateTargets() {
+		t.Fatal("内网放行默认就是开的，SSRF 闸门等于没有")
+	}
+	for _, raw := range private {
+		u, err := url.Parse(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := ValidateTarget(context.Background(), u); err == nil {
+			t.Errorf("默认策略放行了 %s", raw)
+		}
+	}
+
+	SetAllowPrivateTargets(true)
+	t.Cleanup(func() { SetAllowPrivateTargets(false) })
+	for _, raw := range private {
+		u, err := url.Parse(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := ValidateTarget(context.Background(), u); err != nil {
+			t.Errorf("开关打开后仍然拒绝 %s: %v", raw, err)
+		}
+	}
+	// 空主机名不是「私网」问题，开关再开也不该放过。
+	if _, err := url.Parse("http:///x.m3u8"); err == nil {
+		if err := ValidateTarget(context.Background(), mustParse(t, "http:///x.m3u8")); err == nil {
+			t.Error("放行私网后，没有主机名的地址也被放过了")
+		}
+	}
+}
+
+func mustParse(t *testing.T, raw string) *url.URL {
+	t.Helper()
+	u, err := url.Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return u
+}

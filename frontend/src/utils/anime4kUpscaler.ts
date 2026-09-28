@@ -186,6 +186,17 @@ function getModelStructure(tier: Anime4kTier): ModelStructure {
 
 // ==================== WebGL2 引擎 ====================
 
+/**
+ * 立刻把 WebGL 上下文还给浏览器。
+ *
+ * Chromium 一个页面只容约 16 个上下文，丢弃画布并不会马上回收，要等 GC；播放器每次
+ * 换集都建一个，很快就连 getContext 都返回 null。显式 loseContext() 是唯一即时释放的方式。
+ */
+export function loseGlContext(gl: WebGLRenderingContext | WebGL2RenderingContext | null): void {
+  if (!gl) return
+  try { gl.getExtension('WEBGL_lose_context')?.loseContext() } catch { /* ignore */ }
+}
+
 interface UniformMap {
   [key: string]: WebGLUniformLocation | null | (WebGLUniformLocation | null)[]
 }
@@ -259,6 +270,22 @@ export class Anime4kUpscaler {
   }
 
   async init(video: HTMLVideoElement, parent?: HTMLElement): Promise<boolean> {
+    try {
+      const ok = await this.initPipeline(video, parent)
+      // 失败也必须把画布和上下文还回去：initPipeline 里有十来个中途 return false 的分支，
+      // 每个都已经在建好上下文之后，漏一个就等于永久占掉一个 GL 上下文。
+      if (!ok) this.destroy()
+      return ok
+    } catch (e) {
+      // GL 调用中途抛异常同样算失败（FilmUpscaler 就是这么处理的）：吞掉并销毁，
+      // 让调用方只看返回值，别让半初始化的实例带着上下文继续挂着。
+      this.error = e instanceof Error ? e.message : String(e)
+      this.destroy()
+      return false
+    }
+  }
+
+  private async initPipeline(video: HTMLVideoElement, parent?: HTMLElement): Promise<boolean> {
     // 防止重复初始化泄漏
     if (this.canvas) {
       this.destroy()
@@ -415,6 +442,7 @@ export class Anime4kUpscaler {
       if (this.diagReadFbo) gl.deleteFramebuffer(this.diagReadFbo)
       if (this.vao) gl.deleteVertexArray(this.vao)
       if (this.quadBuf) gl.deleteBuffer(this.quadBuf)
+      loseGlContext(gl)
     }
     if (this.canvas?.parentNode) this.canvas.parentNode.removeChild(this.canvas)
     this.canvas = this.gl = null
@@ -884,6 +912,8 @@ export function checkAnime4kSupport(): {
     return { webgl2: false, floatBuffer: false, recommended: false, message: 'WebGL2 不可用，Anime4K 无法运行' }
   }
   const hasFloat = !!(gl2.getExtension('EXT_color_buffer_float') || gl2.getExtension('EXT_color_buffer_half_float'))
+  // 探测用完就还：这些一次性 canvas 也各占一个上下文名额，攒够十来个就让真正的管线拿不到。
+  loseGlContext(gl2)
   if (!hasFloat) {
     return { webgl2: true, floatBuffer: false, recommended: false, message: 'GPU 不支持浮点渲染目标，Anime4K 不可用' }
   }

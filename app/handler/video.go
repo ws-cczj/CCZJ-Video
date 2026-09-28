@@ -2,6 +2,7 @@ package handler
 
 import (
 	"cczjVideo/app/applog"
+	"cczjVideo/app/cache"
 	"cczjVideo/app/collect"
 	"cczjVideo/app/db"
 	"cczjVideo/app/detail"
@@ -270,9 +271,10 @@ func (r *VideoDetailReq) UnmarshalJSON(data []byte) error {
 }
 
 type VideoDetailResp struct {
-	Video    *model.Video     `json:"video"`
-	Episodes []*model.Episode `json:"episodes"`
-	Error    *detail.Error    `json:"error,omitempty"`
+	Video    *model.Video      `json:"video"`
+	Episodes []*model.Episode  `json:"episodes"`
+	Lines    []*model.PlayLine `json:"lines,omitempty"`
+	Error    *detail.Error     `json:"error,omitempty"`
 }
 
 // GetVideoDetail always resolves a catalog identity and fetches remote detail.
@@ -294,7 +296,7 @@ func GetVideoDetail(req VideoDetailReq) (*VideoDetailResp, error) {
 		}
 		return nil, err
 	}
-	return &VideoDetailResp{Video: result.Video, Episodes: result.Episodes}, nil
+	return &VideoDetailResp{Video: result.Video, Episodes: result.Episodes, Lines: result.Lines}, nil
 }
 
 type VideoSearchReq struct {
@@ -442,5 +444,6 @@ func DeleteVideo(req DeleteVideoReq) error {
 	if req.SourceKey == "" || req.VodId == "" {
 		return fmt.Errorf("参数不完整")
 	}
-	return db.DeleteCatalogVideo(req.SourceKey, req.VodId)
+	// 走缓存层而不是直接删库：删除后这条视频的所有派生缓存都必须作废。
+	return cache.DeleteCatalogVideo(req.SourceKey, req.VodId, "视频已删除")
 }

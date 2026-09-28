@@ -46,52 +46,12 @@ func CleanHTML(html string) string {
 	return text
 }
 
-func ProcessVideo(v *VideoData) *VideoData {
-	if v.VodName == "" || v.TypeName == "" {
-		return nil
-	}
-
-	// 清理字段值前后的反引号和其他包裹字符
-	v.VodPic = cleanField(v.VodPic)
-	v.VodRemarks = cleanField(v.VodRemarks)
-	v.VodYear = cleanField(v.VodYear)
-	v.VodArea = cleanField(v.VodArea)
-	v.VodLang = cleanField(v.VodLang)
-
-	// Detail and playback fields are intentionally not processed or persisted
-	// during catalog collection.
-	v.VodContent, v.VodActor, v.VodDirector = "", "", ""
-	v.VodPlayUrl, v.VodDownUrl = "", ""
-
-	return v
-}
-
 // cleanField 清理字段值前后的反引号、引号、空格等包裹字符
 func cleanField(s string) string {
 	if s == "" {
 		return s
 	}
 	return strings.Trim(s, "`\"' \t\n\r")
-}
-
-type VideoData struct {
-	Id          int    `json:"id"`
-	VodId       int    `json:"vod_id"`
-	TypeId      int    `json:"type_id"`
-	TypeName    string `json:"type_name"`
-	VodName     string `json:"vod_name"`
-	VodClass    string `json:"vod_class"`
-	VodLang     string `json:"vod_lang"`
-	VodActor    string `json:"vod_actor"`
-	VodArea     string `json:"vod_area"`
-	VodContent  string `json:"vod_content"`
-	VodPic      string `json:"vod_pic"`
-	VodDirector string `json:"vod_director"`
-	VodRemarks  string `json:"vod_remarks"`
-	VodYear     string `json:"vod_year"`
-	VodPlayUrl  string `json:"vod_play_url"`
-	VodDownUrl  string `json:"vod_down_url"`
-	VodTime     string `json:"vod_time"`
 }
 
 // DefaultFieldAliases 内置默认字段别名映射（兼容常见源站字段名）

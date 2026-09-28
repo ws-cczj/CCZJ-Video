@@ -25,8 +25,10 @@ type Error struct {
 func (e *Error) Error() string { return e.Message }
 
 type Result struct {
-	Video    *model.Video
+	Video *model.Video
+	// Episodes 是 Lines 首条线路的集表，保留给只认单线路的旧调用方；界面应按 Lines 选线路。
 	Episodes []*model.Episode
+	Lines    []*model.PlayLine
 	Catalog  *db.CatalogItem
 }
 type cacheEntry struct {
@@ -70,6 +72,38 @@ func (s *Service) InvalidateSource(sourceKey string) {
 			s.cacheBytes -= entry.bytes
 		}
 	}
+}
+
+// InvalidateVideo drops the cached detail of one specific title. The key is the
+// identity-normalised sourceKey:global_id, so callers that only hold a vod_id have
+// to resolve it through cache.InvalidateVideo.
+func (s *Service) InvalidateVideo(sourceKey string, globalID int64) {
+	if globalID <= 0 {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := fmt.Sprintf("%s:%d", sourceKey, globalID)
+	if entry, ok := s.cache[key]; ok {
+		delete(s.cache, key)
+		s.cacheBytes -= entry.bytes
+	}
+}
+
+// Clear drops every cached detail; used by the "clear caches" action where the
+// user explicitly asks to throw away all derived state.
+func (s *Service) Clear() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cache = map[string]cacheEntry{}
+	s.cacheBytes = 0
+}
+
+// Stats reports how much live data the cache holds, for the diagnostics panel.
+func (s *Service) Stats() (entries int, bytes int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.cache), s.cacheBytes
 }
 
 // GetByGlobal is the canonical detail operation. The legacy source+vod helper
@@ -208,7 +242,8 @@ func (s *Service) fetchContext(ctx context.Context, catalog *db.CatalogItem) (*R
 			video.GlobalId = catalog.GlobalID
 			// 源站详情不带豆瓣字段，从 global_video 回填（评论入口依赖 vod_douban_id）。
 			db.EnrichVideoWithDoubanByGlobalID(video, catalog.GlobalID)
-			return &Result{video, collect.ParseEpisodes(video.VodPlayUrl, video.VodId, nil), catalog}, nil
+			lines := collect.ParsePlayLines(video.VodPlayUrl, video.VodPlayFrom, video.VodId)
+			return &Result{Video: video, Episodes: firstLineEpisodes(lines), Lines: lines, Catalog: catalog}, nil
 		}
 		last = fetchErr
 		retryable = isRetryable(fetchErr)
@@ -231,6 +266,15 @@ func (s *Service) fetchContext(ctx context.Context, catalog *db.CatalogItem) (*R
 	db.EnrichVideoWithDoubanByGlobalID(fallback, catalog.GlobalID)
 	return &Result{Video: fallback, Catalog: catalog}, &Error{SourceKey: catalog.SourceKey, GlobalID: catalog.GlobalID, SourceVodID: catalog.SourceVodID, Attempts: attempts, Retryable: retryable, Message: fmt.Sprintf("detail request failed: %v", last), Fallback: fallback}
 }
+
+// firstLineEpisodes 取首条线路的集表，填进 Result.Episodes 兼容只认单线路的调用方。
+func firstLineEpisodes(lines []*model.PlayLine) []*model.Episode {
+	if len(lines) == 0 {
+		return nil
+	}
+	return lines[0].Episodes
+}
+
 func isRetryable(err error) bool {
 	if err == nil {
 		return false

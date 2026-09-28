@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -177,10 +178,35 @@ func (s *Service) fetch(ctx context.Context, urlStr string) (string, error) {
 	return "", fmt.Errorf("too many redirects")
 }
 
+// allowPrivateTargets 是「放行私网」开关，默认关闭。
+//
+// 关掉时代理只能访问公网：这是一台桌面应用里的开放代理（前端给什么 URL 就取什么），
+// 不挡住回环/私网就等于让本机任何能访问这个 loopback 端口的进程借它去够内网服务。
+// 打开它又是真实需求：片源放在 NAS、局域网自建的缓存代理、本地起的 m3u8 调试服务，
+// 地址全在私网段内，一律会被默认策略拒掉。
+//
+// 所以这必须是一个由用户显式打开、且默认关闭的开关，不能在「探测到播放失败」时自动放开。
+var allowPrivateTargets atomic.Bool
+
+// SetAllowPrivateTargets 由设置层在启动时和每次改动时调用。图片代理和 HLS 代理共用
+// 这一份判定：两者的目标地址来自同一处前端可写的 URL，放开一半只会让行为更难解释。
+func SetAllowPrivateTargets(allow bool) { allowPrivateTargets.Store(allow) }
+
+// AllowPrivateTargets 暴露当前取值，供诊断页回显「实际生效的策略」。
+func AllowPrivateTargets() bool { return allowPrivateTargets.Load() }
+
 // ValidateTarget rejects loopback, private, link-local and CGNAT targets.
 func ValidateTarget(ctx context.Context, u *url.URL) error {
 	host := strings.TrimSuffix(strings.ToLower(u.Hostname()), ".")
-	if host == "" || host == "localhost" || strings.HasSuffix(host, ".localhost") {
+	if host == "" {
+		return fmt.Errorf("proxy target host is not allowed")
+	}
+	if allowPrivateTargets.Load() {
+		// 地址范围不再是拒绝理由，但 scheme 仍由调用方（parsePublicHTTPURL /
+		// Service.fetch）限死在 http/https，所以放开私网不会顺带打开 file://。
+		return nil
+	}
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
 		return fmt.Errorf("proxy target host is not allowed")
 	}
 	if ip, err := netip.ParseAddr(host); err == nil {

@@ -1,8 +1,8 @@
 package handler
 
 import (
+	"cczjVideo/app/cache"
 	"cczjVideo/app/db"
-	"cczjVideo/app/detail"
 	"cczjVideo/app/model"
 	"fmt"
 	"net/url"
@@ -79,7 +79,7 @@ func UpdateSource(s *model.Source) error {
 	if err := db.UpdateSource(s); err != nil {
 		return err
 	}
-	detail.Default.InvalidateSource(s.SourceKey)
+	cache.InvalidateSource(s.SourceKey, "采集源配置已修改")
 	return nil
 }
 
@@ -87,7 +87,11 @@ func DeleteSource(key string) error {
 	if err := model.ValidateSourceKey(key); err != nil {
 		return fmt.Errorf("invalid source_key: %w", err)
 	}
-	return db.DeleteSource(key)
+	if err := db.DeleteSource(key); err != nil {
+		return err
+	}
+	cache.InvalidateSource(key, "采集源已删除")
+	return nil
 }
 
 func GetSourceStats() ([]model.SourceStat, error) {
@@ -155,6 +159,7 @@ func TruncateSourceData(sourceKey string) (bool, error) {
 	if err := db.TruncateSource(sourceKey); err != nil {
 		return false, err
 	}
+	cache.InvalidateSource(sourceKey, "源数据已清空")
 	return true, nil
 }
 
@@ -163,12 +168,13 @@ func RecreateSourceTables(sourceKey string) (bool, error) {
 	if err := db.TruncateSource(sourceKey); err != nil {
 		return false, err
 	}
+	cache.InvalidateSource(sourceKey, "源表已重建")
 	return true, nil
 }
 
 // DeleteSourceVideo 精确删除该源下的某一条 vod_id
 func DeleteSourceVideo(sourceKey string, vodId string) (bool, error) {
-	if err := db.DeleteCatalogVideo(sourceKey, vodId); err != nil {
+	if err := cache.DeleteCatalogVideo(sourceKey, vodId, "源内删除单条"); err != nil {
 		return false, err
 	}
 	return true, nil

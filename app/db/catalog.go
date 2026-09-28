@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/jmoiron/sqlx"
@@ -51,7 +52,7 @@ func ReviveDeletedCatalogItems() bool {
 }
 
 func UpsertCatalogItems(sourceKey string, videos []*model.Video) error {
-	return upsertCatalogItems(sourceKey, videos, ReviveDeletedCatalogItems())
+	return upsertCatalogItems(nil, sourceKey, videos, ReviveDeletedCatalogItems())
 }
 
 // UpsertCatalogItemsWithRevival ignores the setting and always restores deleted
@@ -59,10 +60,18 @@ func UpsertCatalogItems(sourceKey string, videos []*model.Video) error {
 // so a previous deletion (usually produced by the same import earlier) must not
 // keep it hidden.
 func UpsertCatalogItemsWithRevival(sourceKey string, videos []*model.Video) error {
-	return upsertCatalogItems(sourceKey, videos, true)
+	return upsertCatalogItems(nil, sourceKey, videos, true)
 }
 
-func upsertCatalogItems(sourceKey string, videos []*model.Video, revive bool) error {
+// UpsertCatalogItemsBatch works like UpsertCatalogItems but reuses the identity
+// indexes carried by batch, so a multi-page collection run reads global_video
+// once instead of once per page. Callers that loop over pages must pass a batch;
+// one-off writes keep using UpsertCatalogItems.
+func UpsertCatalogItemsBatch(batch *CatalogBatch, sourceKey string, videos []*model.Video) error {
+	return upsertCatalogItems(batch, sourceKey, videos, ReviveDeletedCatalogItems())
+}
+
+func upsertCatalogItems(batch *CatalogBatch, sourceKey string, videos []*model.Video, revive bool) (err error) {
 	if err := model.ValidateSourceKey(sourceKey); err != nil {
 		return err
 	}
@@ -70,15 +79,16 @@ func upsertCatalogItems(sourceKey string, videos []*model.Video, revive bool) er
 	if len(videos) == 0 {
 		return nil
 	}
+	resolver, err := batch.begin()
+	if err != nil {
+		return fmt.Errorf("load catalog identities: %w", err)
+	}
+	defer func() { batch.end(err) }()
 	tx, err := instance.Beginx()
 	if err != nil {
 		return fmt.Errorf("begin catalog upsert: %w", err)
 	}
 	defer tx.Rollback()
-	resolver, err := newCatalogIdentityResolver(tx)
-	if err != nil {
-		return fmt.Errorf("load catalog identities: %w", err)
-	}
 	// Spelled out in SQL instead of bound per row: sqlite's ON CONFLICT DO
 	// UPDATE cannot read the target column through a placeholder without
 	// disturbing the VALUES binding order, and both branches are literals here.
@@ -95,7 +105,7 @@ func upsertCatalogItems(sourceKey string, videos []*model.Video, revive bool) er
 		if v == nil || strings.TrimSpace(v.VodId.String()) == "" || strings.TrimSpace(v.VodName) == "" {
 			continue
 		}
-		gid, gtid, err := resolver.upsertVideo(v)
+		gid, gtid, err := resolver.upsertVideo(tx, v)
 		if err != nil {
 			return fmt.Errorf("catalog identity for %q: %w", v.VodName, err)
 		}
@@ -156,81 +166,86 @@ type catalogTypeCandidate struct {
 	Name string `db:"type_name"`
 }
 
-type catalogVideoCandidate struct {
-	ID      int64  `db:"id"`
-	VodName string `db:"vod_name"`
-	TypeID  int64  `db:"type_id"`
-	Year    string `db:"year"`
-}
-
-// catalogIdentityResolver confines one collection batch's type and video
-// identity work to the transaction.  Its in-memory indexes remove repeated
-// full-table lookups for duplicate items and previously resolved type names.
+// catalogIdentityResolver 持有一轮采集的身份状态（类型表、global_video 索引、
+// 已解析标题）。它不属于任何单个事务，所以写入用的事务由方法参数传进来。
 type catalogIdentityResolver struct {
-	tx              *sqlx.Tx
 	types           []catalogTypeCandidate
-	videos          []catalogVideoCandidate
 	typesByExact    map[string]int64
-	videosByExact   map[string][]catalogVideoCandidate
-	videosByNorm    map[string][]catalogVideoCandidate
+	videoIndex      *globalVideoIndex
 	resolvedVideoID map[string]int64
 }
 
-func newCatalogIdentityResolver(tx *sqlx.Tx) (*catalogIdentityResolver, error) {
+// CatalogBatch 让一轮采集（几十上百页）只载入一遍 global_video 与 global_types。
+// 之前每页 upsert 都新建解析器并重读全表：库里三万条身份时，一次整轮采集就是
+// 上万次重复载入和索引重建。
+//
+// 批次自带互斥，多个 goroutine 共用同一批次是安全的（热榜匹配就是这么用的）。
+// 锁一律在 Beginx 之前取得、提交之后释放，不会和 SQLite 写锁形成环等待。
+// 任何一页写失败都会作废批次：内存索引里不能留着已回滚事务建出的 global_id。
+type CatalogBatch struct {
+	mu    sync.Mutex
+	ident *catalogIdentityResolver
+}
+
+func NewCatalogBatch() *CatalogBatch { return &CatalogBatch{} }
+
+// begin 取锁并按需载入身份；nil 批次表示调用方只写一次，用后即丢。
+func (b *CatalogBatch) begin() (*catalogIdentityResolver, error) {
+	if b == nil {
+		return newCatalogIdentityResolver(instance)
+	}
+	b.mu.Lock()
+	if b.ident == nil {
+		ident, err := newCatalogIdentityResolver(instance)
+		if err != nil {
+			b.mu.Unlock()
+			return nil, err
+		}
+		b.ident = ident
+	}
+	return b.ident, nil
+}
+
+// end 释放锁；err 非空说明这一页的事务没走完，作废整批内存身份。
+func (b *CatalogBatch) end(err error) {
+	if b == nil {
+		return
+	}
+	if err != nil {
+		b.ident = nil
+	}
+	b.mu.Unlock()
+}
+
+func newCatalogIdentityResolver(exec sqlx.Ext) (*catalogIdentityResolver, error) {
 	r := &catalogIdentityResolver{
-		tx:              tx,
 		typesByExact:    make(map[string]int64),
-		videosByExact:   make(map[string][]catalogVideoCandidate),
-		videosByNorm:    make(map[string][]catalogVideoCandidate),
 		resolvedVideoID: make(map[string]int64),
 	}
-	if err := tx.Select(&r.types, `SELECT id,type_name FROM global_types`); err != nil {
+	if err := sqlx.Select(exec, &r.types, `SELECT id,type_name FROM global_types`); err != nil {
 		return nil, err
 	}
 	for _, candidate := range r.types {
 		r.typesByExact[candidate.Name] = candidate.ID
 	}
-	if err := tx.Select(&r.videos, `SELECT id,vod_name,type_id,year FROM global_video`); err != nil {
+	candidates, err := loadGlobalCandidates(exec)
+	if err != nil {
 		return nil, err
 	}
-	for _, candidate := range r.videos {
-		r.indexVideo(candidate)
-	}
+	r.videoIndex = newGlobalVideoIndex(candidates)
 	return r, nil
 }
 
-func (r *catalogIdentityResolver) indexVideo(candidate catalogVideoCandidate) {
-	r.videosByExact[candidate.VodName] = append(r.videosByExact[candidate.VodName], candidate)
-	normalized := sqlNorm(candidate.VodName)
-	r.videosByNorm[normalized] = append(r.videosByNorm[normalized], candidate)
-}
-
-func (r *catalogIdentityResolver) refreshVideoCandidate(id, typeID int64, year string) {
-	dirtyIndexes := false
-	for i := range r.videos {
-		if r.videos[i].ID != id {
-			continue
-		}
-		if typeID != 0 && r.videos[i].TypeID != typeID {
-			dirtyIndexes = true
-			r.videos[i].TypeID = typeID
-		}
-		if year != "" && r.videos[i].Year != year {
-			r.videos[i].Year = year
-		}
-		break
-	}
-	if !dirtyIndexes {
+// syncVideoIndex 在批次把 type_id/year 补进已有行之后同步内存候选，
+// 下一批之前的同名记录才不会又走一遍插入。
+func (r *catalogIdentityResolver) syncVideoIndex(id, typeID int64, year string) {
+	if r.videoIndex == nil {
 		return
 	}
-	r.videosByExact = make(map[string][]catalogVideoCandidate, len(r.videosByExact))
-	r.videosByNorm = make(map[string][]catalogVideoCandidate, len(r.videosByNorm))
-	for _, candidate := range r.videos {
-		r.indexVideo(candidate)
-	}
+	r.videoIndex.update(id, typeID, year)
 }
 
-func (r *catalogIdentityResolver) resolveTypeID(typeName string) (int64, error) {
+func (r *catalogIdentityResolver) resolveTypeID(exec sqlx.Ext, typeName string) (int64, error) {
 	typeName = strings.TrimSpace(typeName)
 	if typeName == "" {
 		return 0, nil
@@ -253,13 +268,13 @@ func (r *catalogIdentityResolver) resolveTypeID(typeName string) (int64, error) 
 			return candidate.ID, nil
 		}
 	}
-	result, err := r.tx.Exec(`INSERT OR IGNORE INTO global_types(type_name) VALUES (?)`, typeName)
+	result, err := exec.Exec(`INSERT OR IGNORE INTO global_types(type_name) VALUES (?)`, typeName)
 	if err != nil {
 		return 0, err
 	}
 	id, err := result.LastInsertId()
 	if err != nil || id == 0 {
-		if err := r.tx.Get(&id, `SELECT id FROM global_types WHERE type_name=?`, typeName); err != nil {
+		if err := sqlx.Get(exec, &id, `SELECT id FROM global_types WHERE type_name=?`, typeName); err != nil {
 			return 0, err
 		}
 	}
@@ -269,93 +284,60 @@ func (r *catalogIdentityResolver) resolveTypeID(typeName string) (int64, error) 
 	return id, nil
 }
 
-func (r *catalogIdentityResolver) upsertVideo(video *model.Video) (int64, int64, error) {
-	typeID, err := r.resolveTypeID(video.TypeName)
+func (r *catalogIdentityResolver) upsertVideo(exec sqlx.Ext, video *model.Video) (int64, int64, error) {
+	typeID, err := r.resolveTypeID(exec, video.TypeName)
 	if err != nil {
 		return 0, 0, err
 	}
 	identityKey := video.VodName + "\x00" + video.VodYear + "\x00" + fmt.Sprint(typeID)
 	id := r.resolvedVideoID[identityKey]
 	if id == 0 {
-		id, err = r.resolveVideoID(video.VodName, video.VodYear, typeID)
+		id, _, err = resolveGlobalVideoID(exec, r.videoIndex, video.VodName, video.VodYear, typeID)
 		if err != nil {
 			return 0, 0, err
 		}
 		r.resolvedVideoID[identityKey] = id
 	}
-	if _, err := r.tx.Exec(`UPDATE global_video SET
+	// 采集侧带的一切可覆盖字段都在这一条语句里落库，包括源站自己塞进列表的豆瓣
+	// ID 和评分。过去这后半截由采集结束后的第二趟 SaveDoubanInfoFromBatch 逐条
+	// 另开事务写：同一页数据既重走一遍身份阶梯，又摊成几十次 fsync。
+	//
+	// 豆瓣两个字段是例外，只做「空位填空」：源站的 vod_douban_id 是从别处抄来的
+	// 脏数据，没人验证过，而库里已有的 ID 来自过了 doubanMatchThreshold 的匹配、
+	// 或人工修复。让前者覆盖后者，等于用一个错误 ID 换掉一个正确 ID，还会顺着
+	// 兄弟记录继承把错挂复制到更多行上。评分同理：它属于它自己那个 ID，
+	// 与库里已有 ID 不一致时一并作废。
+	srcDoubanID := normalizeSubjectID(video.VodDoubanId.String())
+	if _, err := exec.Exec(`UPDATE global_video SET
 		type_id=CASE WHEN ? != 0 THEN ? ELSE type_id END,
 		year=CASE WHEN ? != '' THEN ? ELSE year END,
 		area=CASE WHEN ? != '' THEN ? ELSE area END,
+		lang=CASE WHEN ? != '' THEN ? ELSE lang END,
+		tag=CASE WHEN ? != '' THEN ? ELSE tag END,
 		pic=CASE WHEN ? != '' THEN ? ELSE pic END,
+		genre=CASE WHEN ? != '' THEN ? ELSE genre END,
+		aka=CASE WHEN ? != '' THEN ? ELSE aka END,
+		release_date=CASE WHEN ? != '' THEN ? ELSE release_date END,
+		douban_id=CASE WHEN COALESCE(douban_id, '') = '' AND ? != '' THEN ? ELSE douban_id END,
+		douban_score=CASE WHEN COALESCE(douban_score, '') = '' AND ? != ''
+			AND (COALESCE(douban_id, '') = '' OR douban_id = ?) THEN ? ELSE douban_score END,
 		updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-		typeID, typeID, video.VodYear, video.VodYear, video.VodArea, video.VodArea, video.VodPic, video.VodPic, id); err != nil {
+		typeID, typeID,
+		video.VodYear, video.VodYear,
+		video.VodArea, video.VodArea,
+		video.VodLang, video.VodLang,
+		video.VodTag, video.VodTag,
+		video.VodPic, video.VodPic,
+		video.VodTag, video.VodTag,
+		video.VodSub, video.VodSub,
+		video.VodYear, video.VodYear,
+		srcDoubanID, srcDoubanID,
+		video.VodDoubanScore.String(), srcDoubanID, video.VodDoubanScore.String(),
+		id); err != nil {
 		return 0, 0, err
 	}
-	r.refreshVideoCandidate(id, typeID, video.VodYear)
+	r.syncVideoIndex(id, typeID, video.VodYear)
 	return id, typeID, nil
-}
-
-func (r *catalogIdentityResolver) resolveVideoID(vodName, year string, typeID int64) (int64, error) {
-	matchAnyType := typeID == 0
-	if id := matchingCatalogVideo(r.videosByExact[vodName], typeID, matchAnyType); id > 0 {
-		return id, nil
-	}
-	normalized := sqlNorm(vodName)
-	if id := matchingCatalogVideo(r.videosByNorm[normalized], typeID, matchAnyType); id > 0 {
-		return id, nil
-	}
-	var best *catalogVideoCandidate
-	bestSimilarity := 0.0
-	for i := range r.videos {
-		candidate := &r.videos[i]
-		if !matchAnyType && candidate.TypeID != typeID && candidate.TypeID != 0 {
-			continue
-		}
-		similarity := nameSimilarity(vodName, candidate.VodName)
-		if similarity < 0.90 || hasSeasonSuffix(vodName, candidate.VodName) {
-			continue
-		}
-		if year == "" || candidate.Year == "" || year == candidate.Year {
-			return candidate.ID, nil
-		}
-		if similarity >= 0.95 && similarity > bestSimilarity {
-			bestSimilarity = similarity
-			best = candidate
-		}
-	}
-	if best != nil {
-		return best.ID, nil
-	}
-
-	result, err := r.tx.Exec(`INSERT OR IGNORE INTO global_video(vod_name,type_id,updated_at) VALUES (?,?,CURRENT_TIMESTAMP)`, vodName, typeID)
-	if err != nil {
-		return 0, err
-	}
-	id, _ := result.LastInsertId()
-	if id == 0 {
-		if err := r.tx.Get(&id, fmt.Sprintf(`SELECT id FROM global_video WHERE %s=? AND type_id=? LIMIT 1`, sqlNormExpr()), normalized, typeID); err != nil || id == 0 {
-			if err := r.tx.Get(&id, fmt.Sprintf(`SELECT id FROM global_video WHERE %s=? AND type_id=0 LIMIT 1`, sqlNormExpr()), normalized); err != nil {
-				return 0, err
-			}
-		}
-	}
-	if id <= 0 {
-		return 0, fmt.Errorf("resolve inserted global video %q", vodName)
-	}
-	candidate := catalogVideoCandidate{ID: id, VodName: vodName, TypeID: typeID, Year: year}
-	r.videos = append(r.videos, candidate)
-	r.indexVideo(candidate)
-	return id, nil
-}
-
-func matchingCatalogVideo(candidates []catalogVideoCandidate, typeID int64, matchAnyType bool) int64 {
-	for _, candidate := range candidates {
-		if matchAnyType || candidate.TypeID == typeID || candidate.TypeID == 0 {
-			return candidate.ID
-		}
-	}
-	return 0
 }
 
 // ExistingCatalogVodIDs reports which of the given upstream vod_ids already have
@@ -712,11 +694,28 @@ func ExportSourceTypes(sourceKey string) ([]SourceTypeExport, error) {
 	err := instance.Select(&out, `SELECT source_type_id,COALESCE(global_type_id,0) global_type_id,type_name FROM source_types WHERE source_key=? ORDER BY source_type_id`, sourceKey)
 	return out, err
 }
+
+// ImportSourceTypes 覆盖导入某个源的类型映射。整批包进一个事务：逐条自动提交
+// 不但每次导入都要抢一遍库级写锁，中途失败还会留下半新半旧的映射。
 func ImportSourceTypes(sourceKey string, rows []SourceTypeExport) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	tx, err := instance.Beginx()
+	if err != nil {
+		return fmt.Errorf("begin source type import: %w", err)
+	}
+	defer tx.Rollback()
+	params := make([]sourceTypeUpsertRow, 0, len(rows))
 	for _, r := range rows {
-		if _, err := instance.Exec(`INSERT INTO source_types(source_key,source_type_id,global_type_id,type_name,updated_at) VALUES(?,?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(source_key,source_type_id) DO UPDATE SET global_type_id=excluded.global_type_id,type_name=excluded.type_name,updated_at=CURRENT_TIMESTAMP`, sourceKey, r.SourceTypeID, r.GlobalTypeID, r.TypeName); err != nil {
-			return err
-		}
+		params = append(params, sourceTypeUpsertRow{SourceKey: sourceKey, SourceTypeID: r.SourceTypeID, GlobalTypeID: r.GlobalTypeID, TypeName: r.TypeName})
+	}
+	if _, err := tx.NamedExec(`INSERT INTO source_types(source_key,source_type_id,global_type_id,type_name,updated_at) VALUES (:source_key,:source_type_id,:global_type_id,:type_name,CURRENT_TIMESTAMP)
+		ON CONFLICT(source_key,source_type_id) DO UPDATE SET global_type_id=excluded.global_type_id,type_name=excluded.type_name,updated_at=CURRENT_TIMESTAMP`, params); err != nil {
+		return fmt.Errorf("import source types: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit source type import: %w", err)
 	}
 	return nil
 }

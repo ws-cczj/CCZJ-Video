@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"regexp"
 	"strings"
@@ -15,6 +16,9 @@ import (
 )
 
 const maxPlaylistBytes = 8 << 20
+
+// maxRefBytes 限制调用方塞进来的引用页长度。超长直接忽略，退回按上游 URL 自己推导。
+const maxRefBytes = 1024
 
 var playlistURIAttribute = regexp.MustCompile(`URI="([^"]+)"`)
 
@@ -26,9 +30,15 @@ type HLSService struct {
 
 // NewHLSService creates a handler mounted by Wails' same-origin asset server.
 func NewHLSService() *HLSService {
+	// jar 让「发片段的第二跳」带上第一跳拿到的 Set-Cookie：不少 CDN 先在同一批
+	// 请求里下个会话 cookie，再在后续片段上校验它。cookiejar 按标准域名作用域
+	// 存取消协，不会把 A 站的 cookie 发给 B 站；而响应侧永远不把上游的 Set-Cookie
+	// 转回 WebView（见 copyStreamHeaders 的白名单），避免上游把 cookie 写进本地。
+	jar, _ := cookiejar.New(nil)
 	s := &HLSService{}
 	s.client = &http.Client{
 		Timeout: 45 * time.Second,
+		Jar:     jar,
 		Transport: &http.Transport{
 			MaxIdleConns:        64,
 			MaxIdleConnsPerHost: 12,
@@ -59,7 +69,7 @@ func safeDialContext(ctx context.Context, network, address string) (net.Conn, er
 		return nil, fmt.Errorf("proxy upstream has no address")
 	}
 	for _, address := range addresses {
-		if !IsPublicAddr(address) {
+		if !allowPrivateTargets.Load() && !IsPublicAddr(address) {
 			return nil, fmt.Errorf("proxy upstream resolved to a non-public address")
 		}
 	}
@@ -77,7 +87,29 @@ func safeDialContext(ctx context.Context, network, address string) (net.Conn, er
 
 // URL returns a stable same-origin proxy URL for an upstream HLS resource.
 func (s *HLSService) URL(raw string) string {
-	return "/__cczj/hls?u=" + base64.RawURLEncoding.EncodeToString([]byte(raw))
+	return s.urlFor(raw, "")
+}
+
+// urlFor 把引用页一起编进代理地址：改写播放列表时，列表里每个子资源都要知道
+// 「是谁把我拉下来的」，否则重写成裸 URL 后只能拿子资源自己的域当 Referer，
+// 而鉴权看的通常是父播放列表的域。
+func (s *HLSService) urlFor(raw, referer string) string {
+	out := "/__cczj/hls?u=" + base64.RawURLEncoding.EncodeToString([]byte(raw))
+	if referer != "" {
+		out += "&ref=" + base64.RawURLEncoding.EncodeToString([]byte(referer))
+	}
+	return out
+}
+
+// RefererOrigin 只保留 scheme://host/。路径、query、任何 userinfo 一律丢掉：
+// 域正是 CDN 引用页校验要看的部分，而截断成 origin 让这个参数不能被用来
+// 冒充任意 URL 的引用页。
+func RefererOrigin(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host + "/"
 }
 
 // ServeHTTP serves playlists and segments through the Wails asset middleware.
@@ -102,25 +134,52 @@ func (s *HLSService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid upstream URL", http.StatusBadRequest)
 		return
 	}
-	resp, finalURL, err := s.fetch(r.Context(), upstream, r.Header.Get("Range"))
+	referer := ""
+	if enc := r.URL.Query().Get("ref"); enc != "" && len(enc) <= maxRefBytes {
+		if decoded, decErr := base64.RawURLEncoding.DecodeString(enc); decErr == nil {
+			referer = RefererOrigin(string(decoded))
+		}
+	}
+	if referer == "" {
+		referer = RefererOrigin(upstream.String())
+	}
+	resp, finalURL, err := s.fetch(r.Context(), upstream, segmentRange(r, upstream), referer)
 	if err != nil {
 		http.Error(w, "upstream request failed", http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()
 
-	if isPlaylist(finalURL, resp.Header.Get("Content-Type")) && r.Method == http.MethodGet && resp.StatusCode >= 200 && resp.StatusCode < 300 {
+	rewrites := isPlaylist(finalURL, resp.Header.Get("Content-Type")) && r.Method == http.MethodGet &&
+		resp.StatusCode >= 200 && resp.StatusCode < 300
+	if rewrites && resp.StatusCode != http.StatusOK {
+		// 上游按 Range 回了半张播放列表。重写必须基于完整列表，否则会发布一张
+		// 尾部集数被截掉的「合法」列表，用户看到的是能放但少几集——比直接报错更难查。
+		// 不带 Range 重取一次；再拿不到 200 就放弃重写，走下面的原样转发。
+		resp.Body.Close()
+		resp, finalURL, err = s.fetch(r.Context(), upstream, "", referer)
+		if err != nil {
+			http.Error(w, "upstream request failed", http.StatusBadGateway)
+			return
+		}
+		defer resp.Body.Close()
+		rewrites = resp.StatusCode == http.StatusOK &&
+			isPlaylist(finalURL, resp.Header.Get("Content-Type"))
+	}
+	if rewrites {
 		body, err := io.ReadAll(io.LimitReader(resp.Body, maxPlaylistBytes+1))
 		if err != nil || len(body) > maxPlaylistBytes {
 			http.Error(w, "playlist response too large", http.StatusBadGateway)
 			return
 		}
 		if bytes.HasPrefix(bytes.TrimSpace(body), []byte("#EXTM3U")) {
-			body = []byte(s.rewritePlaylist(string(body), finalURL))
+			body = []byte(s.rewritePlaylist(string(body), finalURL, referer))
 			w.Header().Set("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8")
 			w.Header().Set("Cache-Control", "no-store")
 			w.Header().Set("Content-Length", fmt.Sprint(len(body)))
-			w.WriteHeader(resp.StatusCode)
+			// 重写过就一定是完整体，状态必须回到 200：留着 206 而不带
+			// Content-Range，是一份自相矛盾的响应。
+			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write(body)
 			return
 		}
@@ -132,7 +191,16 @@ func (s *HLSService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *HLSService) fetch(ctx context.Context, initial *url.URL, rangeHeader string) (*http.Response, *url.URL, error) {
+// segmentRange 取出客户端要的字节区间。播放列表刻意忽略它：一张列表动辄几十 KB，
+// 分段取只会换来「截断的列表」，没有收益。
+func segmentRange(r *http.Request, upstream *url.URL) string {
+	if strings.HasSuffix(strings.ToLower(upstream.Path), ".m3u8") {
+		return ""
+	}
+	return r.Header.Get("Range")
+}
+
+func (s *HLSService) fetch(ctx context.Context, initial *url.URL, rangeHeader, referer string) (*http.Response, *url.URL, error) {
 	current := initial
 	for redirects := 0; redirects <= 5; redirects++ {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, current.String(), nil)
@@ -142,6 +210,9 @@ func (s *HLSService) fetch(ctx context.Context, initial *url.URL, rangeHeader st
 		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0 Safari/537.36")
 		req.Header.Set("Accept", "*/*")
 		req.Header.Set("Accept-Encoding", "identity")
+		if referer != "" {
+			req.Header.Set("Referer", referer)
+		}
 		if rangeHeader != "" {
 			req.Header.Set("Range", rangeHeader)
 		}
@@ -166,13 +237,13 @@ func (s *HLSService) fetch(ctx context.Context, initial *url.URL, rangeHeader st
 	return nil, nil, fmt.Errorf("too many redirects")
 }
 
-func (s *HLSService) rewritePlaylist(playlist string, base *url.URL) string {
+func (s *HLSService) rewritePlaylist(playlist string, base *url.URL, referer string) string {
 	proxyURI := func(raw string) string {
 		u, err := base.Parse(strings.TrimSpace(raw))
 		if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
 			return raw
 		}
-		return s.URL(u.String())
+		return s.urlFor(u.String(), referer)
 	}
 	lines := strings.Split(playlist, "\n")
 	for i, line := range lines {

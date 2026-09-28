@@ -48,6 +48,15 @@ const (
 	interactiveMaxRequestInterval = 40 * time.Second
 )
 
+// 等待预算。搜索/详情属于「这次不发出去任务就完不成」，所以等到底；评论和热榜结果
+// 摆在界面上，等不起就快速失败，让上层用缓存或下次刷新补上。后台批量补全期间闸门会
+// 被推到 60~150 秒，那时后两者直接放弃——给批量任务让路正是应该发生的事。
+// uiWaitBudget 略高于交互上限，保证纯交互时永远只需要等、不需要失败。
+const (
+	crawlerWaitBudget = 30 * time.Minute
+	uiWaitBudget      = 45 * time.Second
+)
+
 // batchMode 为 true 表示 Updater 正在跑无人值守的批量补全。
 var batchMode atomic.Bool
 
@@ -119,6 +128,9 @@ var (
 	searchTitleTextRegex = regexp.MustCompile(`(?is)<a\b[^>]*\bclass\s*=\s*["'][^"']*\btitle-text\b[^"']*["'][^>]*>(.*?)</a>`)
 	// year from title suffix: (2025)
 	searchYearRegex = regexp.MustCompile(`\((\d{4})\)\s*$`)
+	// 采集源里也有把年份直接跟在片名后面的：「战狼 2015」。豆瓣不给这种写法，
+	// 所以两边都要在归一化前摘掉，否则它会被后面的规则当成季号。
+	bareYearSuffixRegex = regexp.MustCompile(`\s+(?:19|20)\d{2}\s*$`)
 	// meta abstract divs
 	searchMetaRegex = regexp.MustCompile(`(?is)<(?:div|span)\b[^>]*\bclass\s*=\s*["'][^"']*\bmeta\b[^"']*["'][^>]*>(.*?)</(?:div|span)>`)
 
@@ -143,14 +155,21 @@ var (
 
 // doubanFetchError 保留 HTTP 层的失败类型，避免把一次临时的 403/验证页
 // 当成“搜索无结果”写入数据库冷却状态。
+//
+// Local 表示这次请求根本没有发出去——是本地闸门（静默期或限速排队）拦下的。
+// 它和豆瓣真的回了反爬页是两回事：前者要的是等，后者才需要把详情页路径降档。
 type doubanFetchError struct {
 	URL        string
 	StatusCode int
 	AntiCrawl  bool
+	Local      bool
 	Location   string
 }
 
 func (e *doubanFetchError) Error() string {
+	if e.Local {
+		return fmt.Sprintf("douban request skipped locally: %s", e.Location)
+	}
 	if e.AntiCrawl && e.Location != "" {
 		return fmt.Sprintf("douban anti-crawl redirect: HTTP %d -> %s", e.StatusCode, e.Location)
 	}
@@ -252,6 +271,9 @@ type DoubanInfo struct {
 
 // SearchMeta 搜索时的视频元数据，用于智能匹配最佳候选
 type SearchMeta struct {
+	// GlobalID 是 global_video 的行 ID，冷却/失败计数只按它读写本行。
+	// 手动搜索没有对应行，留 0 即天然不受冷却约束（见 db.IsDoubanSearchOnCooldown）。
+	GlobalID int
 	VodName  string
 	Year     string
 	VodType  string // 视频分类名（如"动漫"、"电视剧"、"电影"）
@@ -270,11 +292,16 @@ type SearchCandidate struct {
 	Actor     string // 逗号分隔
 }
 
-// waitRateLimit 在每次请求前调用，确保两次请求之间的间隔落在
-// [minRequestInterval, maxRequestInterval] 区间内（随机抖动）。
-// 算法：先保证距上次请求至少 minRequestInterval，再叠加一个
-// [0, maxRequestInterval-minRequestInterval) 的随机抖动。
-func waitRateLimit() {
+// reserveDoubanSlot 是所有豆瓣 HTTP 请求唯一的限速入口：在锁内算出「这次最早可以
+// 出发的时刻」并把它登记为下一次间隔的基准，调用方自己决定等到那时候还是放弃。
+//
+// 以前这里有三套时钟：搜索/详情走 lastRequestTime（15~40s / 批量 60~150s）、评论走
+// 独立的 lastCommentTime（8~20s）、热榜完全不限速（只尊重静默期）。豆瓣按 IP 计数，
+// 不区分这三条路径，于是实际间隔是三者取最小——同一秒里搜索、评论、热榜各发一次
+// 完全合法，这正是要出「搜索访问太频繁」的节奏。合并成一个基准之后，任何两次豆瓣
+// 请求之间都至少隔一个 minGap；抖动的用意是打散连续请求的节奏，所以照旧无条件叠加，
+// 空闲很久之后也不抹掉它（宁可等，不可抢）。
+func reserveDoubanSlot() time.Time {
 	rateMu.Lock()
 	defer rateMu.Unlock()
 
@@ -282,26 +309,41 @@ func waitRateLimit() {
 	if batchMode.Load() {
 		minGap, maxGap = minRequestInterval, maxRequestInterval
 	}
+	jitter := time.Duration(0)
+	if jitterRange := maxGap - minGap; jitterRange > 0 {
+		jitter = time.Duration(rand.Int63n(int64(jitterRange)))
+	}
 
-	elapsed := time.Since(lastRequestTime)
-	if lastRequestTime.IsZero() {
-		lastRequestTime = time.Now()
-		return
+	next := time.Now()
+	if !lastRequestTime.IsZero() {
+		// 基准取「上一次出发时刻 + 最小间隔」和「现在」的较大者，再无条件叠一次抖动，
+		// 与旧实现逐位等价：空闲很久也不会把抖动省掉。
+		if earliest := lastRequestTime.Add(minGap); earliest.After(next) {
+			next = earliest
+		}
+		next = next.Add(jitter)
 	}
-	// 基础等待：补齐到下限
-	if elapsed < minGap {
-		base := minGap - elapsed
-		applog.Debug("[Douban] Rate limiting: base wait %.1fs", base.Seconds())
-		time.Sleep(base)
+	lastRequestTime = next
+	return next
+}
+
+// awaitDoubanSlot 睡到领到的时间槽，budget 是这次愿意等的上限。
+// 返回的时长是这次实际需要等多久（负数表示无需等待），供调用方写进失败原因。
+//
+// ok 为 false 表示等不起：直接放弃这次请求，而不是绕过闸门硬打——退让本身就是让限速生效。
+// 注意放弃时槽位已经占掉了，下一次请求会因此等得更久，这个方向是安全的。
+func awaitDoubanSlot(caller string, budget time.Duration) (wait time.Duration, ok bool) {
+	wait = time.Until(reserveDoubanSlot())
+	if wait > budget {
+		applog.Warn("[Douban] %s 需要等 %s，超出可等待的 %s，本次放弃",
+			caller, wait.Round(time.Second), budget)
+		return wait, false
 	}
-	// 随机抖动：在 [0, max-min) 之间取一个值，避免固定节奏
-	jitterRange := maxGap - minGap
-	if jitterRange > 0 {
-		jitter := time.Duration(rand.Int63n(int64(jitterRange)))
-		applog.Debug("[Douban] Rate limiting: random jitter %.1fs", jitter.Seconds())
-		time.Sleep(jitter)
+	if wait > 0 {
+		applog.Debug("[Douban] %s 限速等待 %.1fs", caller, wait.Seconds())
+		time.Sleep(wait)
 	}
-	lastRequestTime = time.Now()
+	return wait, true
 }
 
 // ==================== 反爬熔断 ====================
@@ -377,13 +419,17 @@ func noteDoubanSuccess() {
 	}
 }
 
-// blockedError 静默期内构造统一的失败原因，调用方按反爬错误处理即可。
-func blockedError(urlStr string, left time.Duration) error {
+// blockedError 本地闸门拦下请求时构造统一的失败原因：静默期未过，或者限速排队等不起。
+// reason 必须写实际原因——这两种情况在诊断里是不同的处置方式，不能都印成"熔断静默中"。
+// AntiCrawl 恒为 true：这不是"这个关键词查无此条"，记录要保持可重试。
+// Local 同时置位，让调用方分清"我们没问过豆瓣"和"豆瓣回了反爬页"。
+func blockedError(urlStr, reason string) error {
 	return &doubanFetchError{
 		URL:        urlStr,
 		AntiCrawl:  true,
+		Local:      true,
 		StatusCode: http.StatusTooManyRequests,
-		Location:   fmt.Sprintf("本地反爬熔断静默中，剩余 %s", left.Round(time.Second)),
+		Location:   reason,
 	}
 }
 
@@ -397,6 +443,14 @@ const detailProbeInterval = 30 * time.Minute
 
 func detailProbeAllowed() bool {
 	return time.Now().UnixNano() >= detailChallengedUntil.Load()
+}
+
+// isRemoteAntiCrawl 只有「豆瓣自己回了反爬页」才算。本地闸门（静默期未过、限速
+// 排队等不起）拦下的请求根本没发出去，把它当成被封会产出一个自锁：队列越闲、
+// 越没人真的问过豆瓣，详情页却被降档 30 分钟。
+func isRemoteAntiCrawl(err error) bool {
+	var fetchErr *doubanFetchError
+	return errors.As(err, &fetchErr) && fetchErr.AntiCrawl && !fetchErr.Local
 }
 
 func markDetailChallenged() {
@@ -413,6 +467,13 @@ func checkAntiCrawl(html string) bool {
 	// 确实包含"加载中"，但那不是反爬，而是 JS 占位文本。
 	// 改为：只有当页面既包含反爬关键词，又没有任何 subject/tv/movie 链接时，
 	// 才判定为反爬（真正反爬页不会带正常结果链接）。
+	//
+	// 新版搜索页把候选全塞进 __DATA__ 的内嵌 JSON，并且整页非 ASCII 都转义成 \u、
+	// 斜杠转义成 \/：上面的链接正则和下面的明文中文关键词对这种页都是瞎的。
+	// JSON 里有候选就一定是正常页——反爬页不会替你准备好搜索结果。
+	if payload, ok := decodeSearchPage(html); ok && len(payload.Items) > 0 {
+		return false
+	}
 	hasResultLink := subjectIDRegex.MatchString(html) ||
 		subjectIDRegexSmart.MatchString(html) ||
 		subjectIDRegexJSON.MatchString(html) ||
@@ -432,27 +493,6 @@ func checkAntiCrawl(html string) bool {
 	return false
 }
 
-// extractAllSearchTitles 从搜索结果 HTML 中提取所有视频标题
-func extractAllSearchTitles(html string) []string {
-	var titles []string
-	seen := make(map[string]bool)
-	for _, candidate := range parseSearchCandidates(html) {
-		title := strings.TrimSpace(candidate.Title)
-		if title != "" && !seen[title] {
-			titles = append(titles, title)
-			seen[title] = true
-		}
-	}
-	return titles
-}
-
-// normalizeTitle 标准化标题用于比较（去除空格、季数后缀等）
-func normalizeTitle(title string) string {
-	title = cleanTitle(title)
-	title = strings.ToLower(title)
-	return title
-}
-
 // cleanTitle 去除标题中的不可见字符和年份后缀
 func cleanTitle(title string) string {
 	title = html.UnescapeString(stripHTMLTags(title))
@@ -465,6 +505,7 @@ func cleanTitle(title string) string {
 	}, title)
 	// 去除年份后缀
 	title = searchYearRegex.ReplaceAllString(title, "")
+	title = bareYearSuffixRegex.ReplaceAllString(title, "")
 	title = strings.TrimSpace(title)
 	return title
 }
@@ -572,8 +613,13 @@ func parseSearchCandidatesFromAnchors(html string) []SearchCandidate {
 	return candidates
 }
 
-// parseSearchCandidates 解析搜索结果 HTML，提取所有候选项及其元数据
+// parseSearchCandidates 解析搜索结果，提取所有候选项及其元数据。
+// 优先读页面内嵌的 window.__DATA__（当前豆瓣搜索页唯一的候选来源），
+// 拿不到再退回去 node 节点的老 HTML 路径。
 func parseSearchCandidates(html string) []SearchCandidate {
+	if candidates := parseSearchCandidatesFromJSON(html); len(candidates) > 0 {
+		return candidates
+	}
 	blocks := splitItemBlocks(html)
 	if len(blocks) == 0 {
 		return parseSearchCandidatesFromAnchors(html)
@@ -656,17 +702,24 @@ func parseDirectorActor(meta2 string) (string, string) {
 // scoreCandidate 计算候选项与搜索元数据的匹配分数
 // 注意：豆瓣的「剧集/电影」标签不属于类型，类型比较由 global_types 层负责
 func scoreCandidate(c *SearchCandidate, meta SearchMeta) int {
-	score := 0
-
 	normTitle := normalizeTitle(c.Title)
 	normKeyword := normalizeTitle(meta.VodName)
+	candBase, candSeason, candPart := splitSeasonTag(normTitle)
+	metaBase, metaSeason, metaPart := splitSeasonTag(normKeyword)
 
-	// 标题匹配（最高权重）
-	if normTitle == normKeyword {
-		score += 100
-	} else if strings.Contains(normTitle, normKeyword) || strings.Contains(normKeyword, normTitle) {
-		score += 50
+	// 片名是门槛，不是加分项：对不上就直接零分，年份/导演/演员都不再参与。
+	// 否则「同年 + 同导演×2 + 同演员」足以把一部片名无关的候选抬过阈值。
+	score := titleMatchScore(normTitle, normKeyword, candBase, metaBase)
+	if score == 0 {
+		return 0
 	}
+	// 季号冲突走同一条路：短路，而不是扣分。同一部剧各季的片名、导演、演员几乎
+	// 全都相同，扣掉的分能被旁证加回来，而挂错季会连带污染评分、海报和兄弟继承。
+	delta, conflict := seasonMatchDelta(metaSeason, metaPart, candSeason, candPart)
+	if conflict {
+		return seasonConflictScore
+	}
+	score += delta
 
 	// 年份匹配
 	if meta.Year != "" && c.Year > 0 {
@@ -748,37 +801,6 @@ func bestMatch(candidates []SearchCandidate, meta SearchMeta) (*SearchCandidate,
 	return best, bestScore
 }
 
-// isTitleMatch 检查搜索结果标题列表中是否有任何一个与原始关键词匹配
-// 返回 true 表示匹配，false 表示不匹配
-func isTitleMatch(searchTitles []string, originalKeyword string) bool {
-	if len(searchTitles) == 0 || originalKeyword == "" {
-		return false
-	}
-
-	normalizedKeyword := normalizeTitle(originalKeyword)
-
-	for _, title := range searchTitles {
-		normalizedSearch := normalizeTitle(title)
-
-		// 完全匹配
-		if normalizedSearch == normalizedKeyword {
-			return true
-		}
-
-		// 搜索结果包含关键词（处理"万界独尊 第一季"包含"万界独尊"的情况）
-		if strings.Contains(normalizedSearch, normalizedKeyword) {
-			return true
-		}
-
-		// 关键词包含搜索结果（处理"万界独尊"包含"万界独尊 第一季"的情况）
-		if strings.Contains(normalizedKeyword, normalizedSearch) {
-			return true
-		}
-	}
-
-	return false
-}
-
 func fetchHTML(urlStr string) (string, error) {
 	return fetchDouban(urlStr, false)
 }
@@ -792,10 +814,13 @@ func fetchDouban(urlStr string, ignoreBlock bool) (string, error) {
 	if !ignoreBlock {
 		if left := remainingBlock(); left > 0 {
 			applog.Warn("[Douban] 反爬静默中（剩余 %s），跳过请求: %s", left.Round(time.Second), urlStr)
-			return "", blockedError(urlStr, left)
+			return "", blockedError(urlStr, fmt.Sprintf("本地反爬熔断静默中，剩余 %s", left.Round(time.Second)))
 		}
 	}
-	waitRateLimit()
+	if wait, ok := awaitDoubanSlot("搜索/详情", crawlerWaitBudget); !ok {
+		return "", blockedError(urlStr, fmt.Sprintf(
+			"本地限速需等待 %s，超过本次可等待的 %s", wait.Round(time.Second), crawlerWaitBudget))
+	}
 
 	applog.Info("[Douban] Fetching URL: %s", urlStr)
 
@@ -928,10 +953,40 @@ func stripSeasonInfo(keyword string) string {
 	return s
 }
 
+// doubanMatchThreshold 是「敢把这个 subject_id 挂到这部片上」的最低分，刻度见
+// scoreCandidate：片名对不上直接零分（门槛，不是加分项），折叠后完全同名 100、
+// 摘掉季号后片名一致 90、包含关系 50，年份 +30、导演每人 +20、演员最多 +15，
+// 季号一致 +25，季号冲突则短路成 seasonConflictScore。
+//
+// 定在 70 的用意：只认「片名基本对上」或「片名沾边 + 至少一项硬元数据佐证」。
+// 光靠包含关系（50）不足以区分「爱情」和「爱情公寓」，宁可这部片没有豆瓣信息，
+// 也不能挂一个别人的条目——挂错的 id 会连带把评分、海报、热榜和兄弟记录继承
+// 一起带偏，而且再也没有第二条路径会发现它错了。
+const doubanMatchThreshold = 70
+
+// uniqueFallbackSubjectID 在整页只指向一个豆瓣 subject 时返回它。
+// 同一部片在页面上会被标题和海报各链接一次，所以按去重后的个数判断。
+func uniqueFallbackSubjectID(html string) (string, bool) {
+	var only string
+	seen := make(map[string]bool, 2)
+	for _, m := range subjectIDRegex.FindAllStringSubmatch(html, -1) {
+		id := m[1]
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		only = id
+		if len(seen) > 1 {
+			return "", false
+		}
+	}
+	return only, only != ""
+}
+
 func SearchSubjectID(keyword string, meta SearchMeta) (string, error) {
-	// 检查是否在搜索冷却期
-	if db.IsDoubanOnCooldown(keyword) {
-		applog.Debug("[Douban] Skipping search for '%s' (in cooldown period)", keyword)
+	// 冷却是按行记的：写和读都只认 global_id，不再靠 vod_name 猜行。
+	if db.IsDoubanSearchOnCooldown(meta.GlobalID) {
+		applog.Debug("[Douban] Skipping search for '%s' (id=%d in cooldown period)", keyword, meta.GlobalID)
 		return "", fmt.Errorf("search cooldown active for '%s'", keyword)
 	}
 
@@ -957,12 +1012,21 @@ func SearchSubjectID(keyword string, meta SearchMeta) (string, error) {
 		html, err := fetchHTML(fullURL)
 		if err != nil {
 			applog.Error("[Douban] Search fetch failed for '%s': %v", kw, err)
-			var fetchErr *doubanFetchError
-			if errors.As(err, &fetchErr) && fetchErr.AntiCrawl {
+			if isRemoteAntiCrawl(err) {
 				applog.Warn("[Douban] '%s' returned an anti-crawl page; keeping the record retryable", kw)
 			}
 			lastErr = err
 			continue
+		}
+		if payload, ok := decodeSearchPage(html); ok && payload.ErrorInfo != "" && len(payload.Items) == 0 {
+			// 豆瓣把限流写在 __DATA__ 的 error_info 里，配一个 200 和结构完整的正常页。
+			// 这既不是验证页（checkAntiCrawl 匹配不到 \u 转义后的中文），也不是「这部片
+			// 查无此条」：当成后者的话，每个关键词都要白挨一次「搜索无结果」冷却，
+			// 而真正的解法只是全体停下来等。限流是 IP 级信号，够格触发全局静默。
+			applog.Warn("[Douban] 搜索页回限流提示 %q，进入反爬静默: %s", payload.ErrorInfo, kw)
+			noteAntiCrawl()
+			lastErr = fmt.Errorf("douban search throttled for %s: %s", kw, payload.ErrorInfo)
+			break // 换关键词再打一次只会把静默期推得更高
 		}
 		hadUsableSearchResponse = true
 
@@ -976,12 +1040,12 @@ func SearchSubjectID(keyword string, meta SearchMeta) (string, error) {
 		candidates := parseSearchCandidates(html)
 
 		if len(candidates) == 0 {
-			// 兆底：尝试旧版正则提取
-			fallbackIDs := subjectIDRegex.FindAllStringSubmatch(html, 3)
-			if len(fallbackIDs) > 0 {
-				applog.Info("[Douban] New parser found 0 candidates, fallback regex found %d IDs for '%s'", len(fallbackIDs), kw)
-				db.ClearSearchFailures(keyword)
-				return fallbackIDs[0][1], nil
+			// 兜底：旧版正则只能确认「整页只指向一个 subject」时才敢用。
+			// 多个 ID 时取第一个等于抽签，页面顺序一变就挂到另一部片上。
+			if id, ok := uniqueFallbackSubjectID(html); ok {
+				applog.Info("[Douban] New parser found 0 candidates, page points at exactly one subject %s for '%s'", id, kw)
+				db.ClearDoubanSearchFailure(meta.GlobalID)
+				return id, nil
 			}
 			applog.Warn("[Douban] No candidates parsed for '%s' (HTML len=%d)", kw, len(html))
 			if len(html) > 500 {
@@ -1007,17 +1071,18 @@ func SearchSubjectID(keyword string, meta SearchMeta) (string, error) {
 			applog.Info("[Douban] Best match for '%s': id=%s title=%q year=%d score=%d",
 				keyword, match.SubjectID, match.Title, match.Year, score)
 
-			// 分数 >= 40 表示有足够的匹配度
-			if score >= 40 {
-				db.ClearSearchFailures(keyword)
+			if score >= doubanMatchThreshold {
+				db.ClearDoubanSearchFailure(meta.GlobalID)
 				return match.SubjectID, nil
 			}
 
-			// 分数低但仍选择最佳候选（避免永远失败）
-			applog.Warn("[Douban] Low confidence match for '%s': best score=%d (title=%q), accepting anyway",
-				keyword, score, match.Title)
-			db.ClearSearchFailures(keyword)
-			return match.SubjectID, nil
+			// 分数不够就真的不要了。过去这里「低置信度也接受」，等于阈值只是
+			// 日志里的装饰：错挂的 subject_id 一旦落库，评分、海报、热榜和
+			// 兄弟继承都会把它复制到更多行上。
+			applog.Warn("[Douban] Rejected match for '%s': score=%d < %d (best title=%q)",
+				keyword, score, doubanMatchThreshold, match.Title)
+			lastErr = fmt.Errorf("best match for %s scored %d, below threshold %d", keyword, score, doubanMatchThreshold)
+			continue
 		}
 
 		lastErr = fmt.Errorf("no subject ID found for keyword: %s", kw)
@@ -1026,7 +1091,7 @@ func SearchSubjectID(keyword string, meta SearchMeta) (string, error) {
 	// 只有确实拿到正常搜索页、但没有找到候选时才累计“搜索无结果”。
 	// 网络错误、重定向和验证页不能触发 24 小时冷却，否则临时故障会被放大。
 	if hadUsableSearchResponse {
-		_ = db.IncrementSearchFailures(keyword)
+		_ = db.MarkDoubanSearchFailure(meta.GlobalID)
 	} else {
 		applog.Warn("[Douban] Search failed before a usable result page; skip cooldown for '%s'", keyword)
 	}
@@ -1122,8 +1187,7 @@ func ParseDetail(subjectID string) (*DoubanInfo, error) {
 		// /subject/<id>/ 网页层面无条件被 302 到 sec.douban.com 的 JS 验证页，
 		// 不带登录 Cookie 就永远拿不到。这里降级到同站 JSON 接口，而不是让整次
 		// 更新失败——评分/导演/演员/类型/集数这些主要字段都还能拿到。
-		var fetchErr *doubanFetchError
-		if errors.As(err, &fetchErr) && fetchErr.AntiCrawl {
+		if isRemoteAntiCrawl(err) {
 			markDetailChallenged()
 		}
 		applog.Info("[Douban] Detail page unavailable for %s (%v), falling back to subject_abstract", subjectID, err)
@@ -1372,12 +1436,10 @@ func truncate(s string, maxLen int) string {
 	return s[:maxLen] + "..."
 }
 
+// FetchDoubanInfo 先搜 subject_id 再抓详情页。
+// 这里不再重复查冷却：SearchSubjectID 已经按 global_id 查过本行了，第二次查
+// 只能按关键词查，等于给同一条记录套上两套不同的冷却口径。
 func FetchDoubanInfo(keyword string, meta SearchMeta) (*DoubanInfo, error) {
-	if db.IsDoubanOnCooldown(keyword) {
-		applog.Debug("[Douban] Skipping fetch for '%s' (in cooldown period)", keyword)
-		return nil, fmt.Errorf("search cooldown active for '%s'", keyword)
-	}
-
 	applog.Info("[Douban] Fetching complete info for keyword: %s", keyword)
 
 	subjectID, err := SearchSubjectID(keyword, meta)

@@ -18,10 +18,10 @@ export interface ErrorItem {
 }
 
 const MAX_TOAST = 10 // 最多同时显示 10 个弹窗
-const AUTO_DISMISS_MS_DEFAULT = 5000
-const AUTO_DISMISS_MS_INFO = 5000
-const AUTO_DISMISS_MS_WARN = 5000
-const AUTO_DISMISS_MS_ERROR = 5000
+// 停留时长按严重程度分档：越严重读起来越慢，不能一律 5 秒把错误和提示一起收走。
+const AUTO_DISMISS_MS_INFO = 3000
+const AUTO_DISMISS_MS_WARN = 6000
+const AUTO_DISMISS_MS_ERROR = 12000
 
 let seq = 0
 function nextId(): string {
@@ -66,7 +66,7 @@ export const useErrorStore = defineStore('error', () => {
       }).catch(() => { /* ignore */ })
     } catch { /* ignore */ }
 
-    // 自动关闭：默认按级别分别 5s，调用方可以用 autoDismiss 覆盖
+    // 自动关闭：默认按级别分档，调用方可以用 autoDismiss 覆盖
     let ms: number
     if (typeof item.autoDismiss === 'number') {
       ms = item.autoDismiss
@@ -92,7 +92,6 @@ export const useErrorStore = defineStore('error', () => {
     return push({ level: 'warn', title, message, detail, source })
   }
   function error(title: string, message = '', detail = '', source = ''): ErrorItem {
-    // error 也走 5s 自动消失（由 push 内 level 判断）
     return push({ level: 'error', title, message, detail, source })
   }
   function fromError(title: string, err: unknown, source = ''): ErrorItem {

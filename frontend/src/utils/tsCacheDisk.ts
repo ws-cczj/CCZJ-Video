@@ -136,6 +136,42 @@ export class SegmentDiskCache {
     }
   }
 
+  /**
+   * 按 episodeKey 前缀丢掉落盘片段，返回删掉的记录数。
+   *
+   * 前缀而不是精确 key：失效事件只给到「哪一部剧」（ep_src_vid_）或「哪个源」
+   * （ep_src_），一集有多少个片段、片段 URL 长什么样都不在事件里，而 meta 表只有
+   * 元数据、扫一遍很便宜。删的是 url 主键上的两份记录，不会留下孤儿 blob。
+   */
+  async dropByEpisodePrefixes(prefixes: string[]): Promise<number> {
+    const wanted = prefixes.filter(Boolean)
+    if (wanted.length === 0) return 0
+    const db = await openDatabase()
+    try {
+      const readTransaction = db.transaction(META_STORE_NAME, 'readonly')
+      const request = readTransaction.objectStore(META_STORE_NAME).getAll()
+      const entries = await waitForRequest(request) as DiskSegmentMeta[]
+      await waitForTransaction(readTransaction)
+
+      const urls = entries
+        .filter((entry) => wanted.some((prefix) => entry.episodeKey.startsWith(prefix)))
+        .map((entry) => entry.url)
+      if (urls.length === 0) return 0
+
+      const deleteTransaction = db.transaction([STORE_NAME, META_STORE_NAME], 'readwrite')
+      const segmentStore = deleteTransaction.objectStore(STORE_NAME)
+      const metadataStore = deleteTransaction.objectStore(META_STORE_NAME)
+      for (const url of urls) {
+        segmentStore.delete(url)
+        metadataStore.delete(url)
+      }
+      await waitForTransaction(deleteTransaction)
+      return urls.length
+    } finally {
+      db.close()
+    }
+  }
+
   async info(): Promise<DiskCacheInfo> {
     try {
       const db = await openDatabase()

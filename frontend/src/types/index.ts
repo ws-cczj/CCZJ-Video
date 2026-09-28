@@ -79,14 +79,38 @@ export interface Episode {
   ep_num: number
   ep_name?: string
   ep_url: string
-  ep_down_url?: string
+}
+
+// 一条播放线路。maccms 用 $$$ 在 vod_play_url 里并列多条同名集表，线路名取自
+// vod_play_from 的同序分段；源站没给名字时 name 为空，界面按序号显示。
+export interface PlayLine {
+  index: number
+  name?: string
+  episodes: Episode[]
 }
 
 // 视频详情响应
 export interface VideoDetailResponse {
   video: Video | null
   episodes: Episode[]
+  lines?: PlayLine[]
   error?: { source_key: string; global_id: number; source_vod_id: string; attempts: number; retryable: boolean; message: string }
+}
+
+// 一条线路的测速结果。bytes_per_sec 为 0 表示「下载快过本机时钟精度、量不出速度」，
+// 后端已把它排在最前面，界面只当没有速度值显示。
+export interface PlayLineSpeedItem {
+  index: number
+  name?: string
+  ep_num: number
+  ok: boolean
+  latency_ms: number
+  bytes_per_sec: number
+}
+
+export interface PlayLineSpeedResponse {
+  items: PlayLineSpeedItem[]
+  best_index: number
 }
 
 // 视频列表响应

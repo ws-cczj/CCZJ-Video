@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 )
 
@@ -92,7 +93,16 @@ func Default() *Logger {
 	return defaultLogger
 }
 
+// defaultLogDir 决定「未经 Init 就被 Default() 懒建」时日志落在哪儿。
+//
+// 测试二进制必须避开 %APPDATA%：多数包的测试不调 Init，只要代码路径碰到一次
+// applog.Info，就会把测试数据写进用户真实正在看的日志文件里（设置页的日志面板
+// 跟着一起脏），也让「看真机日志验证」这条通道不可信。落到临时目录即可，
+// 需要断言文件内容的测试仍用自己的 t.TempDir() 显式 Init。
 func defaultLogDir() string {
+	if testing.Testing() {
+		return filepath.Join(os.TempDir(), "cczj-applog-test")
+	}
 	if dir, err := os.UserConfigDir(); err == nil && strings.TrimSpace(dir) != "" {
 		return filepath.Join(dir, "CCZJ Video", "applog")
 	}

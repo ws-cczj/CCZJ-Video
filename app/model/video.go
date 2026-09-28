@@ -299,6 +299,15 @@ type Episode struct {
 	EpUrl  string         `json:"ep_url" db:"ep_url"`
 }
 
+// PlayLine 是一条播放线路。maccms 用 $$$ 在 vod_play_url 里并列多条“同名集表”，
+// 线路名取自 vod_play_from 的同序分段；源站没给名字时 Name 为空，由前端按序号兜底，
+// 免得中文占位文案被写死进 Go 再传到界面。
+type PlayLine struct {
+	Index    int        `json:"index"`
+	Name     string     `json:"name"`
+	Episodes []*Episode `json:"episodes"`
+}
+
 type Favorite struct {
 	Id        int    `json:"id"`
 	SourceKey string `json:"source_key"`

@@ -75,6 +75,16 @@ type FavWithVideo struct {
 	CreatedAt string `json:"created_at" db:"created_at"`
 }
 
+// catalogProjectionFilter 决定一条收藏/历史还能不能在列表里出现。
+//
+// 收藏与历史按 global_id 存，源坐标只是"从哪打开"的线索，所以三种情况都要放过：
+// 该坐标压根没被采集进目录（只有全局元数据，仍然可以看）、目录行活着且类型可见。
+// 反过来，被软删进回收站的目录行必须把条目一起藏掉 —— 过去这里只查了类型可见性，
+// 没查 lifecycle_state，删掉的视频继续挂在收藏和历史里。
+func catalogProjectionFilter(alias string) string {
+	return alias + ".id IS NULL OR (" + alias + ".lifecycle_state = 'active' AND " + catalogTypeVisibilityClause(alias) + ")"
+}
+
 // GetFavorites 分页获取收藏列表（JOIN global_video）
 func GetFavorites(page, pageSize int) ([]FavWithVideo, error) {
 	var results []FavWithVideo
@@ -82,7 +92,7 @@ func GetFavorites(page, pageSize int) ([]FavWithVideo, error) {
 		FROM favorites f
 		JOIN global_video g ON f.global_id = g.id
 		LEFT JOIN source_videos sv ON sv.source_key = f.source_key AND sv.source_vod_id = f.vod_id
-		WHERE sv.id IS NULL OR ` + catalogTypeVisibilityClause("sv") + `
+		WHERE ` + catalogProjectionFilter("sv") + `
 		ORDER BY f.created_at DESC LIMIT ? OFFSET ?`
 	err := instance.Select(&results, q, pageSize, (page-1)*pageSize)
 	return results, err
@@ -174,7 +184,7 @@ func GetRecentHistory(limit int) ([]HistEntry, error) {
 		FROM watch_history h
 		JOIN global_video g ON h.global_id = g.id
 		LEFT JOIN source_videos sv ON sv.source_key = h.source_key AND sv.source_vod_id = h.vod_id
-		WHERE sv.id IS NULL OR ` + catalogTypeVisibilityClause("sv") + `
+		WHERE ` + catalogProjectionFilter("sv") + `
 		ORDER BY h.updated_at DESC LIMIT ?`
 	err := instance.Select(&entries, q, limit)
 	return entries, err
@@ -234,14 +244,4 @@ func GetWatchedEpisodesByIdentity(globalID int64, sourceKey, vodID string) ([]in
 	var epNums []int
 	err := instance.Select(&epNums, `SELECT ep_num FROM watch_history WHERE global_id=? AND source_key=? AND vod_id=? ORDER BY ep_num ASC`, globalID, sourceKey, vodID)
 	return epNums, err
-}
-
-// GetWatchedEpisodesBySrc 兼容旧 API（按 source_key+vod_id）
-func GetWatchedEpisodesBySrc(sourceKey string, vodId string) ([]int, error) {
-	var epNums []int
-	err := instance.Select(&epNums, `SELECT ep_num FROM watch_history WHERE source_key = ? AND vod_id = ? ORDER BY ep_num ASC`, sourceKey, vodId)
-	if err != nil {
-		return nil, err
-	}
-	return epNums, nil
 }

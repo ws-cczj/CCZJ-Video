@@ -3,11 +3,13 @@ package service
 import (
 	"bytes"
 	"cczjVideo/app/applog"
+	backupservice "cczjVideo/app/backup"
 	"cczjVideo/app/db"
 	"cczjVideo/app/douban"
 	fileservice "cczjVideo/app/files"
 	"cczjVideo/app/handler"
 	"cczjVideo/app/model"
+	"cczjVideo/app/proxy"
 	sourceservice "cczjVideo/app/source"
 	"compress/gzip"
 	"encoding/base64"
@@ -33,6 +35,11 @@ func (a *App) GetVideoList(req handler.VideoListReq) (*handler.VideoListResp, er
 
 func (a *App) GetVideoDetail(req handler.VideoDetailReq) (*handler.VideoDetailResp, error) {
 	return a.media.Detail(req)
+}
+
+// SpeedTestPlayLines 并发测量一个视频各条播放线路的速度，返回按快慢排好的结果。
+func (a *App) SpeedTestPlayLines(req handler.PlayLineSpeedReq) (*handler.PlayLineSpeedResp, error) {
+	return a.media.SpeedTestPlayLines(req)
 }
 
 // CompressDetailJSONBrotli and DecompressDetailJSONBrotli are small transport
@@ -83,14 +90,58 @@ func (a *App) GetTypes(req handler.GetTypesReq) ([]*model.VType, error) {
 	return a.media.Types(req)
 }
 
-// DeleteVideo 删除指定源中的视频（同时清理收藏和历史）
+// DeleteVideo 把指定源里的一条视频移入回收站（软删除）。收藏和历史不删，
+// 只是跟着目录行一起隐藏，恢复后原样回来。
 func (a *App) DeleteVideo(req handler.DeleteVideoReq) error {
 	return a.media.Delete(req)
+}
+
+// GetRecycleBin 列出回收站（软删除）的目录条目，source_key 留空表示跨源。
+func (a *App) GetRecycleBin(req handler.RecycleListReq) (*handler.RecycleListResp, error) {
+	return a.media.RecycleBin(req)
+}
+
+// RestoreVideo 把一条回收站条目放回视频库。
+func (a *App) RestoreVideo(req handler.RecycleReq) error {
+	return a.media.Restore(req)
+}
+
+// PurgeVideo 彻底删除一条回收站条目。
+func (a *App) PurgeVideo(req handler.RecycleReq) (*handler.RecycleResult, error) {
+	return a.media.Purge(req)
+}
+
+// ClearRecycleBin 清空回收站。
+func (a *App) ClearRecycleBin(req handler.RecycleListReq) (*handler.RecycleResult, error) {
+	return a.media.ClearRecycleBin(req)
 }
 
 // GetYearsAndAreas 返回当前源下所有可选的年份/地区，供前端筛选下拉框使用
 func (a *App) GetYearsAndAreas(sourceKey string) (*handler.YearsResp, error) {
 	return a.media.YearsAndAreas(sourceKey)
+}
+
+// GetMergedLibraryList 返回跨源合并后的曲库一页：一张卡片对应一个 global_id，
+// 卡片上带这部片在哪些源里有货。
+func (a *App) GetMergedLibraryList(req handler.UnionListReq) (*handler.UnionListResp, error) {
+	return a.media.UnionList(req)
+}
+
+// GetMergedLibraryYearsAndAreas 返回跨源汇总的年份/地区选项。
+func (a *App) GetMergedLibraryYearsAndAreas() (*handler.YearsResp, error) {
+	return a.media.UnionYearsAndAreas()
+}
+
+// ListIdentityMergeCandidates 列出疑似重复的身份组，供设置页诊断分组人工确认。
+// 这些组不会自动合并：剩下的都是"标题差个年份/清晰度"或"同名挂在不同类型下"的情况，
+// 判断错了要搬走收藏和观看进度，所以只列出来等人点。
+func (a *App) ListIdentityMergeCandidates(limit int) (*handler.MergeCandidatesResp, error) {
+	return a.media.MergeCandidates(limit)
+}
+
+// MergeGlobalVideoIdentities 合并用户确认的一组身份，返回存活 id 和被并掉的条数。
+func (a *App) MergeGlobalVideoIdentities(req handler.MergeIdentitiesReq) (*handler.MergeIdentitiesResp, error) {
+	return a.media.MergeIdentities(req)
 }
 
 // GetRecommend 返回 N 条推荐视频（会排除 excludeIds 中的 vod_id，避免"猜你喜欢"和"继续观看"重复）
@@ -262,6 +313,44 @@ func (a *App) ImportSourceFromBase64(filename string, b64Content string) (string
 
 func (a *App) persistImportedSource(payload sourceExportPayload, origin string) (string, error) {
 	return sourceservice.NewService().Import(payload, origin)
+}
+
+// ======================== 全量备份：设置 / 收藏 / 历史 / 迁移归档恢复 ========================
+
+// BackupExport writes settings, favorites, watch history and the metadata they
+// point at into one Brotli-compressed JSON file. An empty destination puts the
+// file under dataDir/exports and returns that path.
+func (a *App) BackupExport(destination string) (string, error) {
+	return backupservice.NewService().Export(a.getDataDir(), destination)
+}
+
+// BackupImportFromBase64 merges a backup chosen in the browser. Merge only ever
+// adds or refreshes: it never deletes local rows.
+func (a *App) BackupImportFromBase64(filename string, b64Content string) (backupservice.Result, error) {
+	return backupservice.NewService().ImportBase64(filename, b64Content)
+}
+
+// BackupArchives lists the pre-migration snapshots the app keeps on disk.
+func (a *App) BackupArchives() ([]backupservice.ArchiveInfo, error) {
+	return backupservice.NewService().Archives(a.getDataDir())
+}
+
+// BackupRestoreArchive merges one snapshot by file name; the path is rebuilt
+// under dataDir/schema-backups so only the archive directory is reachable.
+func (a *App) BackupRestoreArchive(name string) (backupservice.Result, error) {
+	return backupservice.NewService().RestoreArchive(a.getDataDir(), name)
+}
+
+// BackupExports lists the backup files already in dataDir/exports, newest first.
+// The UI offers these as one-click imports because the WebView2 file dialogs are
+// not dependable, and because that is exactly where BackupExport just wrote to.
+func (a *App) BackupExports() ([]backupservice.ArchiveInfo, error) {
+	return backupservice.NewService().Exports(a.getDataDir())
+}
+
+// BackupImportFile merges one file from dataDir/exports by name.
+func (a *App) BackupImportFile(name string) (backupservice.Result, error) {
+	return backupservice.NewService().ImportFile(a.getDataDir(), name)
 }
 
 func (a *App) OpenFolder(path string) (string, error) {
@@ -487,6 +576,8 @@ func (a *App) DoubanSearch(req DoubanSearchReq) (*DoubanSearchResp, error) {
 	if req.Keyword == "" {
 		return nil, fmt.Errorf("关键词不能为空")
 	}
+	// GlobalID 留空：这是用户在界面上主动发起的搜索，不该被某条记录的 24 小时
+	// 「查无此片」冷却挡住；反过来说它的失败结果也不该写进任何一行的冷却。
 	id, err := douban.SearchSubjectID(req.Keyword, douban.SearchMeta{VodName: req.Keyword})
 	if err != nil {
 		return nil, err
@@ -891,6 +982,30 @@ func (a *App) GetSetting(key string) (string, error) {
 
 func (a *App) SetSetting(key, value string) error {
 	return a.settings.Set(key, value)
+}
+
+// settingAllowPrivateNetwork 打开后，媒体与图片代理允许访问私网/回环地址
+// （NAS、局域网里的源、本机起的缓存代理）。缺省关闭，理由见 proxy.ValidateTarget。
+const settingAllowPrivateNetwork = "proxy_allow_private_network"
+
+// SetAllowPrivateNetwork 落库并立刻生效。改完不用重启是刻意的：用户多半是在
+// 「某个源放不出来」时来翻这个开关，必须当场试播才知道是不是它的问题。
+func (a *App) SetAllowPrivateNetwork(allow bool) error {
+	value := "0"
+	if allow {
+		value = "1"
+	}
+	if err := a.settings.Set(settingAllowPrivateNetwork, value); err != nil {
+		return err
+	}
+	proxy.SetAllowPrivateTargets(allow)
+	applog.Warn("[Proxy] 内网放行开关已改为 %v", allow)
+	return nil
+}
+
+func (a *App) GetAllowPrivateNetwork() bool {
+	raw, err := a.settings.Get(settingAllowPrivateNetwork)
+	return err == nil && strings.TrimSpace(raw) == "1"
 }
 
 // ======================== Window / Title Bar ========================

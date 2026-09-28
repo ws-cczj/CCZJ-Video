@@ -1,6 +1,7 @@
 import * as AppMod from '../api/app'
 import { readStorage, writeStorage } from '../platform/storage'
-import type { Episode, Video, VideoDetailResponse } from '../types'
+import { normalizePlayLines } from '../utils/playLines'
+import type { Episode, PlayLine, Video, VideoDetailResponse } from '../types'
 
 /**
  * The detail cache is intentionally separate from the Pinia video store:
@@ -14,9 +15,12 @@ interface StoredDetailEntry {
   chunks: string[]
 }
 
-// v2: 详情响应新增了 global_video 豆瓣字段回填（vod_douban_id 等），旧缓存缺字段需整体失效
-const STORAGE_KEY = 'cczj_detail_cache_v2'
-const MAX_ENTRIES = 20
+// v3: 详情新增了 $$$ 多线路拆分后的 lines，且 v2 条目里的集表是旧解析器把整条多线路
+// 串当一集存下来的脏地址，必须整体失效而不是继续复用。
+const STORAGE_KEY = 'cczj_detail_cache_v3'
+// 一条多线路影片的条目现在装着每线路的完整集表，体积按线路数翻倍；条目数相应下调，
+// 否则超出浏览器配额时 writeStorage 只会静默丢缓存。
+const MAX_ENTRIES = 12
 const CHUNK_SIZE = 16 * 1024
 const LARGE_JSON_SIZE = 64 * 1024
 const LARGE_M3U8_URL = 2048
@@ -60,17 +64,19 @@ function saveEntries(entries: Record<string, StoredDetailEntry>): void {
 }
 
 function hasLargeM3u8(response: VideoDetailResponse, rawSize: number): boolean {
-  const urls = (response.episodes || [])
-    .map((ep) => String(ep.ep_url || ep.ep_down_url || ''))
+  const urls = normalizePlayLines(response)
+    .flatMap((line) => line.episodes)
+    .map((ep) => String(ep.ep_url || ''))
     .filter((url) => /\.m3u8(?:\?|$)/i.test(url) || url.length >= LARGE_M3U8_URL)
   const total = urls.reduce((sum, url) => sum + url.length, 0)
   return rawSize >= LARGE_JSON_SIZE || urls.some((url) => url.length >= LARGE_M3U8_URL) || total >= LARGE_M3U8_TOTAL
 }
 
 async function encode(response: VideoDetailResponse): Promise<StoredDetailEntry> {
+  // 只存 lines：episodes 本来就是首条线路的集表，两份都写会让多线路影片的缓存翻倍。
   const payload = JSON.stringify({
     video: response.video || null,
-    episodes: Array.isArray(response.episodes) ? response.episodes : [],
+    lines: normalizePlayLines(response),
   })
   const now = Date.now()
 
@@ -105,10 +111,12 @@ async function decode(entry: StoredDetailEntry): Promise<VideoDetailResponse | n
   }
 
   try {
-    const parsed = JSON.parse(json) as { video?: Video | null; episodes?: Episode[] }
+    const parsed = JSON.parse(json) as { video?: Video | null; lines?: PlayLine[]; episodes?: Episode[] }
+    const lines = normalizePlayLines(parsed)
     return {
       video: parsed?.video || null,
-      episodes: Array.isArray(parsed?.episodes) ? parsed.episodes : [],
+      episodes: lines[0]?.episodes ?? [],
+      lines,
     }
   } catch {
     return null
@@ -159,5 +167,30 @@ export async function writeDetailCache(
   entries[makeKey(sourceKey, vodId, globalId)] = await encode(response)
   trim(entries)
   saveEntries(entries)
+}
+
+/**
+ * 让某个源的详情缓存作废：vodIds 给定时只删这些条目，不给定时删掉该源全部条目。
+ *
+ * 键是 `source_key:vod_id`（vod_id 缺失时才是 `source_key:global:<id>`），所以按前缀
+ * 切能干净地把一个源摘掉。返回值用于日志，调用方不依赖它。
+ */
+export function dropDetailCache(sourceKey: string, vodIds?: string[]): number {
+  if (!sourceKey) return 0
+  const entries = readEntries()
+  const keys = vodIds?.length
+    ? vodIds.map((vodId) => makeKey(sourceKey, vodId))
+    : Object.keys(entries).filter((key) => key.startsWith(`${sourceKey}:`))
+  let removed = 0
+  for (const key of keys) {
+    if (delete entries[key]) removed++
+  }
+  if (removed > 0) saveEntries(entries)
+  return removed
+}
+
+/** 清掉全部详情缓存（用户显式「清除缓存」）。 */
+export function dropAllDetailCache(): void {
+  saveEntries({})
 }
 

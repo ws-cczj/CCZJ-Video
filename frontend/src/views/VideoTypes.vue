@@ -133,9 +133,7 @@ onMounted(async () => {
 
       <Spinner v-if="loading" size="sm" :label="tr('common.loading')" />
       <Empty v-else-if="types.length === 0" :title="tr('videoTypes.emptyTitle')">
-        <template #extra>
-          <p class="empty-hint">{{ tr('videoTypes.emptyHint') }}</p>
-        </template>
+        <p class="empty-hint">{{ tr('videoTypes.emptyHint') }}</p>
       </Empty>
       <div v-else class="types-grid">
         <div

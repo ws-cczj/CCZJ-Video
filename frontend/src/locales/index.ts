@@ -1,3 +1,4 @@
+import { watch } from 'vue'
 import { createI18n } from 'vue-i18n'
 import { GetSetting, SetSetting } from '../api/app'
 import zhCN from './zh-CN'
@@ -18,6 +19,14 @@ const i18n = createI18n({
 })
 
 let _loaded = false
+
+// <html lang> 必须跟着 locale 走：无障碍朗读、字体回退和 WebView 的语言检测都读它，
+// 而 index.html 里的是静态值。
+watch(
+  () => i18n.global.locale.value,
+  (locale) => { document.documentElement.lang = locale === 'en' ? 'en' : 'zh-CN' },
+  { immediate: true },
+)
 
 /** 从 Go 后端加载语言设置 */
 export async function loadLocale(): Promise<void> {
