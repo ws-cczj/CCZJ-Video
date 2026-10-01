@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bytes"
+	"cczjVideo/app/netstats"
 	"context"
 	"encoding/base64"
 	"fmt"
@@ -39,13 +40,15 @@ func NewHLSService() *HLSService {
 	s.client = &http.Client{
 		Timeout: 45 * time.Second,
 		Jar:     jar,
-		Transport: &http.Transport{
+		// 计数层贴在真正干活的 Transport 外面：播放流量（m3u8 + 分片）是诊断页
+		// 「网络吞吐」里最该被看见的一类，而分片是流式转发，只有在读路径上才数得准。
+		Transport: netstats.WrapTransport(netstats.CategoryPlayback, &http.Transport{
 			MaxIdleConns:        64,
 			MaxIdleConnsPerHost: 12,
 			IdleConnTimeout:     90 * time.Second,
 			TLSHandshakeTimeout: 15 * time.Second,
 			DialContext:         safeDialContext,
-		},
+		}),
 		CheckRedirect: func(req *http.Request, _ []*http.Request) error {
 			return http.ErrUseLastResponse
 		},

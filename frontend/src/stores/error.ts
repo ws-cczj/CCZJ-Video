@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { WriteLog } from '../api/app'
+import { WriteLog, normalizeApiError } from '../api/app'
 import { tr } from '../locales'
 
 export type ErrorLevel = 'info' | 'warn' | 'error'
@@ -95,9 +95,12 @@ export const useErrorStore = defineStore('error', () => {
     return push({ level: 'error', title, message, detail, source })
   }
   function fromError(title: string, err: unknown, source = ''): ErrorItem {
-    const msg = err instanceof Error ? err.message : String(err)
+    // 后端带码错误一律渲染成「CODE: 消息: 原因」（见 app/apperror），而这条是几乎所有
+    // 界面提示的唯一出口：码在这里剥掉，界面就只显示人话那半句，不至于每加一个错误码
+    // 就多一类把 STORAGE / UNAVAILABLE 甩给用户看的噪声。认不出码的整句照原样显示。
+    const { message } = normalizeApiError(err)
     const detail = err instanceof Error && err.stack ? err.stack : ''
-    return error(title, msg, detail, source)
+    return error(title, message, detail, source)
   }
 
   // 从数组中移除 —— 让 transition-group 正确触发 leave 动画

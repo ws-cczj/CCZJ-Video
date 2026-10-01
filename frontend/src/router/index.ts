@@ -73,10 +73,6 @@ const router = createRouter({
       component: () => import('../views/VideoTypes.vue'),
     },
     {
-      path: '/merged-library',
-      component: () => import('../views/MergedLibrary.vue'),
-    },
-    {
       path: '/favorites',
       component: () => import('../views/Favorites.vue'),
     },

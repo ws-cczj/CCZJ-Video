@@ -1,0 +1,20 @@
+{
+  "manifest_version": 1,
+  "id": "shader-soft-sharpen",
+  "version": "1.0.0",
+  "name": { "zh-CN": "柔和锐化", "en": "Soft Sharpen" },
+  "description": {
+    "zh-CN": "同分辨率非锐化掩模，走播放器画质增强的自定义档位。",
+    "en": "Unsharp mask at source resolution."
+  },
+  "author": "cczj-video",
+  "icon": "icon.png",
+  "kind": "shader",
+  "shader": {
+    "id": "soft_sharpen",
+    "name": { "zh-CN": "柔和锐化", "en": "Soft Sharpen" },
+    "entry": "shader.glsl",
+    "scale": 2,
+    "category": "film"
+  }
+}

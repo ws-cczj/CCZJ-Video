@@ -33,6 +33,10 @@ var migrations = []migration{
 	{version: 4, note: "作废旧索引，交给 createIndexes 按 EXPLAIN 结果重建", apply: migrateRebuildIndexes},
 	{version: 5, note: "global_video 补 douban_last_attempt_at：豆瓣队列改为轮转", apply: migrateDoubanAttemptClock},
 	{version: 6, note: "源健康度样本表：采集与巡检结果从此有历史", apply: migrateSourceHealth},
+	{version: 7, note: "地区写法归一：中国大陆/内地→大陆、中国香港→香港、美国网络→美国", apply: migrateNormalizeAreaValues},
+	{version: 8, note: "标题归一化去掉画质尾巴，重算 name_norm 并合并因此撞车的身份", apply: migrateRetitleGlobalVideo},
+	{version: 9, note: "同一个豆瓣条目被拆成两条身份时按 douban_id 合并（跨类型）", apply: migrateMergeSameDoubanIdentity},
+	{version: 10, note: "sources 补 auto_disabled_at：区分自动停用与手动关闭，到期后允许重试", apply: migrateSourceAutoDisable},
 }
 
 // migrateDoubanAttemptClock 给豆瓣补全队列加一个「最近一次尝试」时钟。

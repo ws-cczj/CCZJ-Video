@@ -14,6 +14,5 @@ export {
     SourceHealthSample,
     SourceVideoRef,
     TableColumn,
-    TableStat,
-    UnionVideo
+    TableStat
 } from "./models.js";

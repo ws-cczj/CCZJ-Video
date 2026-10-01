@@ -1,6 +1,9 @@
 package collect
 
-import "strings"
+import (
+	"context"
+	"strings"
+)
 
 // Collection APIs usually resolve the keyword with `vod_name LIKE '<wd>%'`, so a
 // literal keyword only ever matches title prefixes: "大臣" misses "是，大臣" even
@@ -31,7 +34,10 @@ func FetchSearchPage(strategy SourceStrategy, keyword string, page int) (*FetchR
 }
 
 func fetchSearchPage(strategy SourceStrategy, keyword string, page int) (*FetchResult, error) {
-	return FetchPageURL(strategy.BuildSearchUrl(keyword, page), strategy.GetFieldMapping())
+	// FetchWithStrategy decodes through the strategy's own envelope, so a
+	// declarative source searches out of data.list while a CMS source keeps
+	// reading the flat top-level list.
+	return FetchWithStrategy(context.Background(), strategy, strategy.BuildSearchUrl(keyword, page))
 }
 
 // substringRewritable reports whether a keyword can be wrapped without letting

@@ -1,0 +1,17 @@
+{
+  "manifest_version": 1,
+  "id": "script-ui-tweaks",
+  "version": "1.0.0",
+  "name": { "zh-CN": "扩展包自检台", "en": "Pack Inspector" },
+  "description": {
+    "zh-CN": "演示 script 段能做什么：注入样式、加一个侧边栏页面、包住应用自己的方法、订阅后端事件。",
+    "en": "Shows what a script section can do: inject CSS, add a sidebar page, wrap an app method, subscribe to backend events."
+  },
+  "author": "CCZJ Video",
+  "kind": "script",
+  "icon": "icon.png",
+  "script": {
+    "entry": "main.js",
+    "styles": ["inspector.css"]
+  }
+}

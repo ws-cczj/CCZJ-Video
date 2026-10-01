@@ -1,10 +1,12 @@
 <script setup lang="ts">
 defineOptions({ name: 'Favorites' })
 import { ref, onMounted, computed, watch, onActivated, onDeactivated } from 'vue'
+import { storeToRefs } from 'pinia'
 import { tr } from '../locales'
 import { favRefreshTick } from '../stores/favoritesSync'
 import { useRouter } from 'vue-router'
-import { GetSetting, GetFavorites, GetVideoDetail, RemoveFavorite, normalizeApiError } from '../api/app'
+import { GetFavorites, RemoveFavorite, normalizeApiError } from '../api/app'
+import { useLayoutStore } from '../stores/layout'
 import VideoCard from '../components/VideoCard.vue'
 import Icon from '../components/Icon.vue'
 import { Button, Modal, Spinner as LoadingSpinner, Empty as EmptyState } from '../components/ui'
@@ -112,32 +114,16 @@ const isAllSelected = computed(() => {
 
 const hasSelection = computed(() => selectedKeys.value.size > 0)
 
-const gridColumns = ref(5)
-const layoutDensity = ref<'comfortable' | 'compact' | 'spacious'>('comfortable')
-const gridStyle = computed(() => {
-  const density = layoutDensity.value
-  const gap = density === 'compact' ? '10px' : density === 'spacious' ? '20px' : '16px'
-  const minWidth = density === 'compact' ? '120px' : density === 'spacious' ? '180px' : '150px'
-  
-  return {
-    display: 'grid',
-    gridTemplateColumns: `repeat(${gridColumns.value}, minmax(${minWidth}, 1fr))`,
-    gap: gap
-  }
-})
+// 列数与密度走 layout store：这一页在 KeepAlive 下不会重挂，跟着同一份状态
+// 才能在设置页改完立刻看见。
+const layoutStore = useLayoutStore()
+const { gridStyle } = storeToRefs(layoutStore)
 
 let wasDeactivated = false
 
 onMounted(async () => {
   loadFoldersFromStorage()
-  try {
-    const col = await GetSetting('grid_columns')
-    if (col) gridColumns.value = parseInt(col as string, 10) || 5
-    const den = await GetSetting('layout_density')
-    if (den === 'compact' || den === 'spacious') layoutDensity.value = den as any
-  } catch {
-    // 忽略
-  }
+  await layoutStore.load()
   await loadFavorites()
 })
 
@@ -157,22 +143,22 @@ async function fetchFavoritePage(page: number): Promise<void> {
   const raw = await GetFavorites(page, FAV_PAGE_SIZE)
   const favs: Favorite[] = Array.isArray(raw) ? (raw as Favorite[]) : []
   lastFavPageCount.value = favs.length
-  const result: FavItem[] = []
-  for (const f of favs) {
-    try {
-      const detail = (await GetVideoDetail({
-        source_key: f.source_key,
-        vod_id: String(f.vod_id),
-        global_id: 0,
-        refresh: false,
-      })) as { video: Video | null }
-      const fav: FavItem = { ...f, video: detail?.video || null, folderId: resolveFolderId(f) }
-      result.push(fav)
-    } catch {
-      const fav: FavItem = { ...f, video: null, folderId: resolveFolderId(f) }
-      result.push(fav)
-    }
-  }
+  // 卡片字段直接来自 GetFavorites 的那一条 JOIN：以前这里对每条收藏串行 await
+  // GetVideoDetail，24 条就是一串远程请求，整页 loading 要等最后一条回来。
+  const result: FavItem[] = favs.map((f) => ({
+    ...f,
+    video: {
+      vod_id: f.vod_id,
+      global_id: f.global_id,
+      vod_name: f.vod_name || '',
+      vod_pic: f.vod_pic || '',
+      type_name: f.type_name || '',
+      vod_remarks: f.vod_remarks || '',
+      vod_year: f.vod_year || '',
+      vod_area: f.vod_area || '',
+    },
+    folderId: resolveFolderId(f),
+  }))
   favorites.value = page === 1 ? result : favorites.value.concat(result)
   favPage.value = page
 }
@@ -288,7 +274,7 @@ async function onRemoveSelected(): Promise<void> {
         if (mapping.value[k]) { delete mapping.value[k] }
       } catch (e) {
         console.error('取消收藏失败:', e)
-        failed.push(fav.video?.vod_name || fav.vod_id)
+        failed.push(fav.vod_name || fav.vod_id)
       }
     }
     if (failed.length > 0) {
@@ -471,7 +457,8 @@ watch([mapping, folders], () => {
         <div v-else class="fav-grid cczj-grid" :style="gridStyle">
           <div v-for="fav in displayedFavorites" :key="favKey(fav)" class="fav-card cczj-relative cczj-transition cczj-rounded"
             :class="{ 'is-selected': selectedKeys.has(favKey(fav)), 'is-manage': manageMode, 'is-removing': removingKey === favKey(fav) }">
-            <VideoCard v-if="fav.video" :video="fav.video" @click="goDetail(fav)" />
+            <!-- 卡片字段现在由 GetFavorites 一次给齐，占位卡留给"全局库里连名字和封面都没有"的残缺条目。 -->
+            <VideoCard v-if="fav.video?.vod_name || fav.video?.vod_pic" :video="fav.video" @click="goDetail(fav)" />
             <div v-else class="placeholder-card cczj-flex cczj-items-center cczj-justify-center cczj-rounded cczj-border cczj-border-dashed cczj-bg-card cczj-cursor-pointer cczj-transition" @click="goDetail(fav)">
               <div class="placeholder-inner cczj-flex cczj-flex-col cczj-items-center cczj-gap-2 cczj-text-muted">
                 <Icon name="film" :size="32" />
@@ -525,346 +512,4 @@ watch([mapping, folders], () => {
   </div>
 </template>
 
-<style scoped>
-.favorites-page {
-  animation: cczj-fade-in-up 0.4s ease;
-}
-
-.page-header {
-  margin-bottom: 24px;
-  gap: 16px;
-}
-
-.page-header h2 {
-  gap: 10px;
-  font-size: 22px;
-  font-weight: 700;
-  margin: 0 0 4px;
-  color: var(--accent);
-}
-
-.page-header .desc {
-  font-size: 13px;
-  margin: 0;
-}
-
-.fav-grid {
-  gap: 18px;
-}
-
-.fav-card {
-  border-radius: 12px;
-}
-
-.fav-card:hover {
-  transform: none;
-}
-
-.fav-card.is-manage:hover {
-  transform: none;
-}
-
-.fav-card.is-selected {
-  box-shadow: 0 0 0 2px var(--accent);
-}
-
-.fav-card.is-manage {
-  cursor: pointer;
-}
-
-.placeholder-card {
-  aspect-ratio: 2 / 3;
-  background: var(--bg-card);
-  border: 1px dashed var(--border);
-}
-
-.placeholder-card:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.placeholder-inner {
-  gap: 8px;
-  font-size: 13px;
-  opacity: 0.7;
-}
-
-.source-tag {
-  font-size: 11px;
-  padding: 2px 10px;
-  border-radius: 10px;
-  background: var(--bg-hover);
-  color: var(--text-muted);
-}
-
-.fav-checkbox {
-  top: 8px;
-  left: 8px;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  z-index: 4;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.fav-checkbox input {
-  position: absolute;
-  opacity: 0;
-  width: 0;
-  height: 0;
-  pointer-events: none;
-}
-
-.check-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.9);
-  border: 2px solid var(--accent);
-  transition: all 0.15s ease;
-  position: relative;
-}
-
-.check-mark::after {
-  content: '';
-  display: none;
-  width: 6px;
-  height: 11px;
-  border: solid var(--accent);
-  border-width: 0 2.5px 2.5px 0;
-  transform: rotate(45deg) translate(-1px, -1px);
-}
-
-.fav-checkbox input:checked+.check-mark {
-  background: var(--accent);
-}
-
-.fav-checkbox input:checked+.check-mark::after {
-  display: block;
-  border-color: #ffffff;
-}
-
-.fav-checkbox input:disabled+.check-mark {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* 两栏布局：左侧文件夹列表 + 右侧内容 */
-.fav-layout {
-  gap: 20px;
-  align-items: flex-start;
-}
-
-.fav-folders {
-  flex-shrink: 0;
-  width: 220px;
-  gap: 6px;
-  padding: 16px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  position: sticky;
-  top: 16px;
-}
-
-.folder-row {
-  gap: 8px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  transition: all 0.15s ease;
-  background: var(--accent-alpha-10);
-  border: 1px solid var(--accent);
-  color: var(--accent);
-  font-weight: 500;
-}
-
-.folder-row:hover {
-  background: var(--bg-card);
-  border-color: var(--border);
-  color: var(--text-primary);
-  font-weight: 500;
-}
-
-.folder-row.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-contrast);
-  font-weight: 600;
-}
-
-.folder-name {
-  gap: 8px;
-  font-size: 13px;
-  color: inherit;
-  min-width: 0;
-}
-
-.folder-row.active .folder-name {
-  color: inherit;
-}
-
-.folder-name .count {
-  margin-left: auto;
-  font-size: 11px;
-  color: var(--text-muted);
-  font-weight: 500;
-  padding: 2px 8px;
-  border-radius: 10px;
-  background: var(--bg-card);
-}
-
-.folder-row.active .folder-name .count {
-  background: rgba(255, 255, 255, 0.22);
-  color: var(--accent-contrast);
-}
-
-.folder-actions {
-  gap: 4px;
-  flex-shrink: 0;
-}
-
-.folder-actions :deep(.ui-btn) {
-  width: 24px !important;
-  height: 24px !important;
-  min-width: 24px !important;
-  padding: 0 !important;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--bg-card);
-  color: var(--text-secondary);
-}
-
-.folder-actions :deep(.ui-btn):hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.mini-btn-danger:hover {
-  border-color: #ff5a5f !important;
-  color: #ff5a5f !important;
-}
-
-.fav-main {
-  min-width: 0;
-}
-
-/* 选择中的卡片 loading */
-.fav-card.is-removing {
-  opacity: 0.5;
-  pointer-events: none;
-}
-
-.fav-loading {
-  top: 8px;
-  right: 8px;
-  z-index: 3;
-}
-
-.folder-input {
-  width: 100%;
-  padding: 10px 14px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  font-size: 13px;
-  font-family: inherit;
-  outline: none;
-  transition: border-color 0.15s ease;
-}
-
-.folder-input:focus {
-  border-color: var(--accent);
-}
-
-/* 文件夹选择列表 */
-.folder-select-list {
-  gap: 8px;
-}
-
-.folder-select-item {
-  gap: 10px;
-  padding: 10px 14px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  font-size: 13px;
-  color: var(--text-primary);
-  transition: all 0.15s ease;
-  position: relative;
-}
-
-.folder-select-item small {
-  font-size: 11px;
-  color: var(--text-muted);
-  font-weight: 500;
-  padding: 2px 8px;
-  border-radius: 10px;
-  background: var(--bg-secondary);
-}
-
-.folder-select-item:hover {
-  border-color: var(--accent);
-  background: var(--accent-alpha-10);
-}
-
-.folder-select-item.active {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--accent-contrast);
-  font-weight: 600;
-}
-
-.folder-select-item.active small {
-  color: var(--accent-contrast);
-  background: rgba(255, 255, 255, 0.22);
-}
-
-.folder-select-item input {
-  position: absolute;
-  opacity: 0;
-  width: 0;
-  height: 0;
-  pointer-events: none;
-}
-
-.folder-radio {
-  flex-shrink: 0;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  border: 2px solid var(--border-strong);
-  background: var(--bg-card);
-  transition: all 0.15s ease;
-  position: relative;
-}
-
-.folder-select-item.active .folder-radio {
-  border-color: var(--accent-contrast);
-  background: var(--accent-contrast);
-}
-
-.folder-select-item.active .folder-radio::after {
-  content: '';
-  position: absolute;
-  inset: 3px;
-  border-radius: 50%;
-  background: var(--accent);
-}
-
-@media (max-width: 720px) {
-  .fav-layout {
-    flex-direction: column;
-  }
-
-  .fav-folders {
-    width: 100%;
-    position: static;
-  }
-}
-</style>
+<style scoped src="../styles/views/favorites.css"></style>

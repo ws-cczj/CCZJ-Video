@@ -10,6 +10,7 @@ import {
   ResumeDownload,
   SetDownloadDir,
   StartVideoDownload,
+  normalizeApiError,
 } from './app'
 
 export {
@@ -28,7 +29,7 @@ export {
 
 export type DownloadErrorCode = 'DOWNLOAD_DUPLICATE' | 'UNKNOWN'
 
+// 拆码只有一个入口（normalizeApiError），这里只做「是不是覆盖确认」这一件事。
 export function downloadErrorCode(error: unknown): DownloadErrorCode {
-  const message = error instanceof Error ? error.message : String(error ?? '')
-  return message.startsWith('DOWNLOAD_DUPLICATE:') ? 'DOWNLOAD_DUPLICATE' : 'UNKNOWN'
+  return normalizeApiError(error).code === 'DOWNLOAD_DUPLICATE' ? 'DOWNLOAD_DUPLICATE' : 'UNKNOWN'
 }

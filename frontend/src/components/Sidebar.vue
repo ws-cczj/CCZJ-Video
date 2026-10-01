@@ -4,6 +4,8 @@ import { useSourceStore } from '../stores/source'
 import { useI18n } from 'vue-i18n'
 import { computed } from 'vue'
 import Icon from './Icon.vue'
+import { MotionList } from './ui'
+import { pluginNavItems } from '../plugins/registry'
 
 const router = useRouter()
 const route = useRoute()
@@ -20,7 +22,6 @@ const navItems = computed<NavItem[]>(() => [
   { path: '/', label: t('sidebar.home'), icon: 'home' },
   { path: '/search', label: t('sidebar.search'), icon: 'search' },
   { path: '/recent', label: t('sidebar.recent'), icon: 'clock' },
-  { path: '/merged-library', label: t('sidebar.mergedLibrary'), icon: 'layers' },
   { path: '/favorites', label: t('sidebar.favorites'), icon: 'star' },
   { path: '/history', label: t('sidebar.history'), icon: 'clock' },
 ])
@@ -30,6 +31,13 @@ const toolItems = computed<NavItem[]>(() => [
   { path: '/video-types', label: t('sidebar.videoTypes'), icon: 'tag' },
   { path: '/downloads', label: t('sidebar.downloads'), icon: 'download' },
   { path: '/recycle', label: t('sidebar.recycle'), icon: 'trash' },
+  // 注入型扩展包加的页面排在「管理」区末尾：它们和这些条目是同一种东西——工具，
+  // 不是内容。label 是函数时在这里求值，所以包能用 cczj.i18n.t 跟着语言切换走。
+  ...pluginNavItems.value.map(item => ({
+    path: item.path,
+    label: typeof item.label === 'function' ? item.label() : item.label,
+    icon: item.icon,
+  })),
   { path: '/settings', label: t('sidebar.settings'), icon: 'settings' },
 ])
 
@@ -66,17 +74,21 @@ function isActive(path: string): boolean {
         <span class="label-text cczj-text-sm cczj-font-bold">{{ t('sidebar.manage') }}</span>
         <span class="line right cczj-flex-1"></span>
       </div>
-      <button
-        v-for="item in toolItems"
-        :key="item.path"
-        class="cczj-flex cczj-items-center cczj-gap-6 cczj-w-full cczj-rounded-lg cczj-bg-transparent cczj-text-primary cczj-cursor-pointer cczj-font-semibold cczj-text-left cczj-transition-fast cczj-relative"
-        :class="['nav-item', { active: isActive(item.path) }]"
-        @click="router.push(item.path)"
-      >
-        <span class="nav-indicator cczj-absolute cczj-left-0 cczj-opacity-0 cczj-transition-fast"></span>
-        <Icon :name="item.icon" :size="18" />
-        <span class="nav-label">{{ item.label }}</span>
-      </button>
+      <!-- 这一区会随扩展包的启停增删条目。用 list 过渡包起来，新条目是淡入落位、
+           后面的条目平滑让位，而不是整列瞬间弹一格。 -->
+      <MotionList preset="list">
+        <button
+          v-for="item in toolItems"
+          :key="item.path"
+          class="cczj-flex cczj-items-center cczj-gap-6 cczj-w-full cczj-rounded-lg cczj-bg-transparent cczj-text-primary cczj-cursor-pointer cczj-font-semibold cczj-text-left cczj-transition-fast cczj-relative"
+          :class="['nav-item', { active: isActive(item.path) }]"
+          @click="router.push(item.path)"
+        >
+          <span class="nav-indicator cczj-absolute cczj-left-0 cczj-opacity-0 cczj-transition-fast"></span>
+          <Icon :name="item.icon" :size="18" />
+          <span class="nav-label">{{ item.label }}</span>
+        </button>
+      </MotionList>
     </nav>
 
     <div class="sidebar-footer cczj-mt-auto">

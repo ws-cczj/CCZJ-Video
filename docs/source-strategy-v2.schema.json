@@ -5,10 +5,11 @@
   "required": ["version", "strategy"],
   "properties": {
     "version": { "const": 2 },
-    "strategy": { "enum": ["standard_cms", "cms_videolist", "custom"] },
+    "strategy": { "enum": ["standard_cms", "cms_videolist", "declarative", "custom"] },
     "list": { "$ref": "#/$defs/operation" },
     "search": { "$ref": "#/$defs/operation" },
     "detail": { "$ref": "#/$defs/operation" },
+    "response": { "$ref": "#/$defs/response" },
     "field_mapping": { "type": "object", "additionalProperties": { "type": "string" } }
   },
   "additionalProperties": false,
@@ -17,6 +18,7 @@
       "type": "object",
       "properties": {
         "action": { "type": "string" },
+        "action_param": { "type": "string" },
         "page_param": { "type": "string" },
         "limit_param": { "type": "string" },
         "type_param": { "type": "string" },
@@ -24,6 +26,19 @@
         "hours_param": { "type": "string" },
         "id_param": { "type": "string" },
         "extra": { "type": "object", "additionalProperties": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "response": {
+      "type": "object",
+      "properties": {
+        "list_path": { "type": "string" },
+        "code_path": { "type": "string" },
+        "ok_codes": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "msg_path": { "type": "string" },
+        "page_path": { "type": "string" },
+        "pagecount_path": { "type": "string" },
+        "total_path": { "type": "string" }
       },
       "additionalProperties": false
     }

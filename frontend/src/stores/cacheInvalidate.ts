@@ -1,8 +1,8 @@
 import { onBackendEvent } from '../api/events'
-import { dropDetailCache, dropAllDetailCache } from './detailCache'
+import { dropDetailCache } from './detailCache'
 import { usePosterCacheStore } from './posterCache'
 import { useVideoStore } from './video'
-import { dropAllSegmentCache, dropSourceCache, dropVideoCache } from '../utils/tsCache'
+import { dropSourceCache, dropVideoCache } from '../utils/tsCache'
 
 /**
  * Go 侧统一失效层（app/cache/invalidate.go）在前端的订阅端。
@@ -31,12 +31,6 @@ function applyInvalidate(payload: { scope?: string; source_key?: string; vod_ids
   const video = useVideoStore()
 
   switch (scope) {
-    case 'all':
-      dropAllDetailCache()
-      poster.clearAll()
-      video.dropFilterMeta()
-      void dropAllSegmentCache()
-      return
     case 'source':
       if (!sourceKey) return
       dropDetailCache(sourceKey)

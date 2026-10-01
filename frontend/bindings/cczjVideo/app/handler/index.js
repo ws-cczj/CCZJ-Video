@@ -27,8 +27,6 @@ export {
     SourceScheduleItem,
     SourceScheduleReq,
     SourceTableSummary,
-    UnionListReq,
-    UnionListResp,
     VideoDetailReq,
     VideoDetailResp,
     VideoListReq,

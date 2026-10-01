@@ -4,6 +4,7 @@ import (
 	"cczjVideo/app/collect"
 	"cczjVideo/app/db"
 	"cczjVideo/app/model"
+	"context"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -43,7 +44,7 @@ func TestDetailRequestDoesNotPersistDetailFields(t *testing.T) {
 	s.requestFn = func(*db.CatalogItem) (*model.Video, error) {
 		return &model.Video{VodId: "v1", VodName: "Title", VodContent: "detail", VodActor: "actor", VodDirector: "director", VodPlayUrl: "play", VodDownUrl: "download"}, nil
 	}
-	if _, err := s.Get(src.SourceKey, "v1"); err != nil {
+	if _, err := s.GetContext(context.Background(), src.SourceKey, "v1"); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.DB().Select(&columns, `SELECT name FROM pragma_table_info('global_video') WHERE name IN ('content','actor','director')`); err != nil {

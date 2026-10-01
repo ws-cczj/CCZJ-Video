@@ -39,7 +39,7 @@ func TestValidateTargetRejectsLocalhost(t *testing.T) {
 }
 
 func TestFetchRejectsOversizedImage(t *testing.T) {
-	service := NewService()
+	service := NewService(nil)
 	service.client.Transport = roundTripperFunc(func(*http.Request) (*http.Response, error) {
 		return &http.Response{
 			StatusCode: http.StatusOK,
@@ -48,13 +48,13 @@ func TestFetchRejectsOversizedImage(t *testing.T) {
 		}, nil
 	})
 
-	if _, err := service.fetch(context.Background(), "https://1.1.1.1/image.png"); err == nil {
+	if _, _, err := service.fetch(context.Background(), "https://1.1.1.1/image.png"); err == nil {
 		t.Fatal("expected oversized image to be rejected")
 	}
 }
 
 func TestFetchRejectsRedirectToPrivateTarget(t *testing.T) {
-	service := NewService()
+	service := NewService(nil)
 	requests := 0
 	service.client.Transport = roundTripperFunc(func(request *http.Request) (*http.Response, error) {
 		requests++
@@ -66,7 +66,7 @@ func TestFetchRejectsRedirectToPrivateTarget(t *testing.T) {
 		}, nil
 	})
 
-	if _, err := service.fetch(context.Background(), "https://1.1.1.1/image.png"); err == nil {
+	if _, _, err := service.fetch(context.Background(), "https://1.1.1.1/image.png"); err == nil {
 		t.Fatal("expected redirect to private target to be rejected")
 	}
 	if requests != 1 {
@@ -132,4 +132,54 @@ func mustParse(t *testing.T, raw string) *url.URL {
 		t.Fatal(err)
 	}
 	return u
+}
+
+// TestDoubanPosterMirror 只盯主机与路径的判定：img9 换成镜像，其余一律不碰。
+// 换错了会把好图换成 404，所以「不该换」的分支比「该换」更值得钉住。
+func TestDoubanPosterMirror(t *testing.T) {
+	cases := []struct {
+		name string
+		url  string
+		want string
+	}{
+		{"img9 海报换镜像", "https://img9.doubanio.com/view/photo/l_ratio_poster/public/p2933198755.jpg", "https://img1.doubanio.com/view/photo/l_ratio_poster/public/p2933198755.jpg"},
+		{"大写主机也认", "https://IMG9.DOUBANIO.COM/view/photo/s_ratio_poster/public/p1.jpg", "https://img1.doubanio.com/view/photo/s_ratio_poster/public/p1.jpg"},
+		{"本来就能抓的 img2 不动", "https://img2.doubanio.com/view/photo/s_ratio_poster/public/p1.jpg", ""},
+		{"img9 的非海报路径不动", "https://img9.doubanio.com/icon/u123.jpg", ""},
+		{"后缀冒充 img9 不动", "https://img9.doubanio.com.evil.net/view/photo/s_ratio_poster/public/p1.jpg", ""},
+		{"带端口的不动", "https://img9.doubanio.com:8443/view/photo/s_ratio_poster/public/p1.jpg", ""},
+	}
+	for _, tc := range cases {
+		if got := doubanPosterMirror(tc.url); got != tc.want {
+			t.Errorf("%s: got %q want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+// TestPosterCandidates 盯住「先试谁」：img9 第一次就撞镜像，非豆瓣 URL 一个候选都不多。
+// 多出来的每个候选都占着 minRequestGap，顺序错了就是整条图片队列跟着慢。
+func TestPosterCandidates(t *testing.T) {
+	t.Run("img9 先镜像再回退", func(t *testing.T) {
+		got := posterCandidates("https://img9.doubanio.com/view/photo/l_ratio_poster/public/p1.jpg", "https://img9.doubanio.com/view/photo/s_ratio_poster/public/p1.jpg")
+		want := []string{
+			"https://img1.doubanio.com/view/photo/l_ratio_poster/public/p1.jpg",
+			"https://img9.doubanio.com/view/photo/l_ratio_poster/public/p1.jpg",
+			"https://img9.doubanio.com/view/photo/s_ratio_poster/public/p1.jpg",
+		}
+		if strings.Join(got, "|") != strings.Join(want, "|") {
+			t.Fatalf("got %v want %v", got, want)
+		}
+	})
+	t.Run("可抓的豆瓣主机仍走高清到原图", func(t *testing.T) {
+		got := posterCandidates("https://img3.doubanio.com/view/photo/l_ratio_poster/public/p1.jpg", "https://img3.doubanio.com/view/photo/s_ratio_poster/public/p1.jpg")
+		if len(got) != 2 || got[0] != "https://img3.doubanio.com/view/photo/l_ratio_poster/public/p1.jpg" {
+			t.Fatalf("got %v", got)
+		}
+	})
+	t.Run("非豆瓣只有一个候选", func(t *testing.T) {
+		got := posterCandidates("https://1.1.1.1/a.jpg", "https://1.1.1.1/a.jpg")
+		if len(got) != 1 || got[0] != "https://1.1.1.1/a.jpg" {
+			t.Fatalf("got %v", got)
+		}
+	})
 }

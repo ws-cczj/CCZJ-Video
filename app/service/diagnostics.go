@@ -14,11 +14,14 @@ import (
 	"sync"
 	"time"
 
+	"cczjVideo/app/apperror"
 	"cczjVideo/app/applog"
 	cacheservice "cczjVideo/app/cache"
 	"cczjVideo/app/db"
 	"cczjVideo/app/douban"
+	"cczjVideo/app/handler"
 	"cczjVideo/app/model"
+	"cczjVideo/app/netstats"
 	"cczjVideo/app/proxy"
 	"cczjVideo/app/updater"
 )
@@ -26,9 +29,9 @@ import (
 // ======================== 诊断台 ========================
 //
 // 设置页「诊断」分组的数据源。GetDiagnostics 全部只读：不写库、不改配置、
-// 不触发抓取。主动发请求的只有源巡检（ProbeSources 与后台的 runSourcePatrol），
+// 不触发抓取。主动发请求的只有采集源页上的探测（ProbeSource 与 ProbeSources），
 // 发的又是采集源本来就该应答的列表首页，等价于手动点一次「采集第 1 页」；
-// 每次探测顺带在 source_health 留一条样本，健康度历史就是这么攒起来的。
+// 每次探测顺带在 source_health 留一条样本，健康度历史和点阵就是这么攒起来的。
 
 // appStartedAt 用于计算运行时长，进程启动时定一次即可。
 var appStartedAt = time.Now()
@@ -46,21 +49,25 @@ const (
 	sourceProbeTimeout     = 10 * time.Second
 	sourceProbeSampleBytes = 4096
 
-	// sourcePatrolInterval 是后台巡检的节奏。一轮巡检每个启用的源只发一个列表首页
-	// 请求——与手动点一次「探测」完全等量的流量。6 小时一天四趟，是"源悄悄下线了
-	// 但没人采它所以永远没人知道"和"给源站添负担"之间偏保守的那一侧。
-	sourcePatrolInterval = 6 * time.Hour
-	// sourcePatrolFirstDelay 把启动后的第一趟巡检推后一点，避开启动阶段可能在跑的
-	// 全量采集/补采，也让应用先把界面开出来。
-	sourcePatrolFirstDelay = 45 * time.Second
+	// sourceProbeMinInterval 是同一个源两次探测之间的最小间隔。一次探测等价于
+	// 手动点一次「采集第 1 页」，源站并不希望它被反复戳；5 分钟也和采集调度
+	// 允许的最小间隔同量级，界面上连点不会变成对源站的压力。
+	//
+	// 它同时是界面点阵一个圆点覆盖的时间窗：一个点 = 一次探测机会。
+	sourceProbeMinInterval = 5 * time.Minute
+
+	// sourceProbeSlotCount 是探测点阵画多少个点。10 个点铺开最近 50 分钟，
+	// 够回答"这个源是刚坏还是这半小时一直不通"，也还塞得进卡片头部。
+	sourceProbeSlotCount = 10
+
 	// sourceHealthWindow 是诊断页汇总健康度时看的样本条数。取 20 条是因为每个源
 	// 保留的样本本就很少（见 db.sourceHealthKeep），再短就把偶发抖动读成趋势。
 	sourceHealthWindow = 20
 	// sourceHealthRecentDots 是界面上那条点阵历史画多少个点。
 	sourceHealthRecentDots = 12
-	// sourceDeadStreak 是连败多少次算"可能已失效"。一次失败可能是网络抖动，
-	// 三次意味着跨过了至少一轮巡检，值得单独提示。
-	sourceDeadStreak = 3
+	// sourceDeadStreak 引用策略层的阈值，不另写一份。判定"源可能已失效"和
+	// 自动停用必须是同一个数字，否则诊断页提示的连败次数和实际停用条件对不上。
+	sourceDeadStreak = handler.SourceDeadStreak
 )
 
 // DiagEnv 是构建与运行环境，出问题时报备用的最小集合。
@@ -84,11 +91,8 @@ type DiagEnv struct {
 	BackgroundTasks map[string]int `json:"background_tasks"`
 }
 
-// DiagStorage 是各块磁盘占用的汇总，外加进程内派生缓存的条目数。
-//
-// 派生缓存（详情、热榜匹配、评论页）只活在内存里，以前这里报的是一个恒为 0 的
-// "磁盘缓存" 占位 —— ts_cache 目录从来没有被创建过。改成报条目数之后，
-// 「清除缓存」到底清掉了东西没有，在诊断页上就能直接看出来。
+// DiagStorage 是各块磁盘占用的汇总。进程内缓存不在这里，它们归 Diagnostics.Cache：
+// 条目数和命中率要成对读才有意义，拆在两个区块里只会让人找不到。
 type DiagStorage struct {
 	DatabasePath  string `json:"database_path"`
 	DatabaseBytes int64  `json:"database_bytes"`
@@ -96,11 +100,20 @@ type DiagStorage struct {
 	LogBytes      int64  `json:"log_bytes"`
 	LogFiles      int    `json:"log_files"`
 	LogKeepDays   int    `json:"log_keep_days"`
+}
 
-	DetailEntries int   `json:"detail_entries"`
-	DetailBytes   int64 `json:"detail_bytes"`
-	ChartMatches  int   `json:"chart_matches"`
-	CommentPages  int   `json:"comment_pages"`
+// DiagNetwork 是这一趟进程的出网账本，来自 netstats 的计数 RoundTripper。
+//
+// 速率不是测速软件的读数，而是真实请求算出来的：播放中继、测速取样、更新包的 Range
+// 探测各自贡献自己的字节与耗时。没跑过的类别是 0，界面对应行直接不画。
+//
+// AllowPrivateTargets 放在这里是因为它会改变上面所有数字的可比性：放行私网后，
+// 同一类流量可能来自局域网 NAS，速度和公网源站完全不是一个量级。
+type DiagNetwork struct {
+	SinceUnix           int64           `json:"since_unix"`
+	TotalBytes          int64           `json:"total_bytes"`
+	AllowPrivateTargets bool            `json:"allow_private_targets"`
+	Categories          []netstats.Stat `json:"categories"`
 }
 
 // DiagDouban 是豆瓣补全的调度节奏、反爬状态与数据完整性。
@@ -167,13 +180,43 @@ type DiagSourceRow struct {
 // Diagnostics 是诊断页一次拉全的载荷。Notes 收集分项失败原因，
 // 单项取不到时整页仍然可用，界面对应区块标灰，而不是报「诊断失败」。
 type Diagnostics struct {
-	Env     DiagEnv         `json:"env"`
-	Storage DiagStorage     `json:"storage"`
-	Douban  DiagDouban      `json:"douban"`
-	Collect DiagCollect     `json:"collect"`
-	Sources []DiagSourceRow `json:"sources"`
-	Tables  []db.TableStat  `json:"tables"`
-	Notes   []string        `json:"notes"`
+	Env     DiagEnv            `json:"env"`
+	Storage DiagStorage        `json:"storage"`
+	Network DiagNetwork        `json:"network"`
+	Cache   []cacheservice.Row `json:"cache"`
+	Douban  DiagDouban         `json:"douban"`
+	Collect DiagCollect        `json:"collect"`
+	Sources []DiagSourceRow    `json:"sources"`
+	Tables  []db.TableStat     `json:"tables"`
+	Notes   []string           `json:"notes"`
+}
+
+// RuntimeMetrics 是界面每隔两三秒轮一次的轻量快照：只有内存里的计数器读数，
+// 不查库、不遍历目录、不做全表 COUNT。真实使用中的网络与缓存数字一直在涨，
+// 手动刷新一次的快照看不到趋势，所以把这两块单独开一个便宜口。
+type RuntimeMetrics struct {
+	UptimeSeconds int64              `json:"uptime_seconds"`
+	Goroutines    int                `json:"goroutines"`
+	Network       DiagNetwork        `json:"network"`
+	Cache         []cacheservice.Row `json:"cache"`
+}
+
+func (a *App) runtimeNetwork() DiagNetwork {
+	return DiagNetwork{
+		SinceUnix:           netstats.SinceUnix(),
+		TotalBytes:          netstats.TotalBytes(),
+		AllowPrivateTargets: proxy.AllowPrivateTargets(),
+		Categories:          netstats.Snapshot(),
+	}
+}
+
+func (a *App) GetRuntimeMetrics() *RuntimeMetrics {
+	return &RuntimeMetrics{
+		UptimeSeconds: int64(time.Since(appStartedAt).Seconds()),
+		Goroutines:    runtime.NumGoroutine(),
+		Network:       a.runtimeNetwork(),
+		Cache:         cacheservice.Stats(),
+	}
 }
 
 // GetDiagnostics 汇总环境、存储、豆瓣、采集调度、源统计与表行数。
@@ -208,11 +251,8 @@ func (a *App) GetDiagnostics() (*Diagnostics, error) {
 	} else {
 		note("存储占用统计失败: %v", err)
 	}
-	cacheStats := cacheservice.Stats()
-	d.Storage.DetailEntries = cacheStats.DetailEntries
-	d.Storage.DetailBytes = cacheStats.DetailBytes
-	d.Storage.ChartMatches = cacheStats.ChartMatches
-	d.Storage.CommentPages = cacheStats.CommentPages
+	d.Network = a.runtimeNetwork()
+	d.Cache = cacheservice.Stats()
 	if stats, err := a.GetLogStats(); err == nil {
 		d.Storage.LogFiles = stats.Files
 		d.Storage.LogKeepDays = stats.KeepDays
@@ -390,9 +430,31 @@ func (a *App) diagnosticsCollect(note func(string, ...any)) DiagCollect {
 // ProbeSources 逐个探测采集源接口能否应答：带 ac=videolist&pg=1 发一次 GET，
 // 记录状态码与首包耗时。只读前 4KB 用于判断返回的是不是列表结构，
 // 不把整个响应灌进内存。结果会落一条巡检样本进 source_health，
-// 所以手动点一次「探测」与后台自动巡检共用同一份历史。
+// 所以手动点一次「探测」和页面自动探到的那一次是同一份历史。
+//
+// 每个源最多 sourceProbeMinInterval 探一次：还在冷却里的源直接不发请求，
+// 把上一条巡检样本和还需等待的秒数回给界面。
 func (a *App) ProbeSources() ([]SourceProbe, error) {
 	return a.probeAllSources(a.background.Context())
+}
+
+// ProbeSource 探测单个采集源。与「探测全部」共用同一道闸门、同一份巡检样本，
+// 所以单独点某一个源不会绕过节流，也不会让健康度历史分成两套口径。
+func (a *App) ProbeSource(sourceKey string) (*SourceProbe, error) {
+	source, err := db.GetSourceByKey(sourceKey)
+	if err != nil {
+		return nil, err
+	}
+	last, retryAfter, allowed := admitSourceProbe(source.SourceKey, time.Now())
+	if !allowed {
+		probe := coolingProbe(source, last, retryAfter)
+		return &probe, nil
+	}
+	client := &http.Client{Timeout: sourceProbeTimeout, Transport: netstats.WrapTransport(netstats.CategoryCollect, nil)}
+	ctx := a.background.Context()
+	probe := probeSource(ctx, client, source)
+	recordPatrolSample(ctx, probe)
+	return &probe, nil
 }
 
 // probeAllSources 跑一轮探测并记账。ctx 取消时正在飞的请求立刻断开，
@@ -409,10 +471,17 @@ func (a *App) probeAllSources(ctx context.Context) ([]SourceProbe, error) {
 		}
 	}
 	out := make([]SourceProbe, len(enabled))
-	client := &http.Client{Timeout: sourceProbeTimeout}
+	client := &http.Client{Timeout: sourceProbeTimeout, Transport: netstats.WrapTransport(netstats.CategoryCollect, nil)}
 	sem := make(chan struct{}, sourceProbeConcurrency)
 	var wg sync.WaitGroup
 	for i := range enabled {
+		// 取决策在派发之前：冷却中的源连信号量都不占，一轮"探测全部"点的
+		// 越快越不会给源站叠请求。
+		last, retryAfter, allowed := admitSourceProbe(enabled[i].SourceKey, time.Now())
+		if !allowed {
+			out[i] = coolingProbe(enabled[i], last, retryAfter)
+			continue
+		}
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
@@ -423,10 +492,7 @@ func (a *App) probeAllSources(ctx context.Context) ([]SourceProbe, error) {
 			}
 			defer func() { <-sem }()
 			out[i] = probeSource(ctx, client, enabled[i])
-			if dbErr := db.RecordSourceHealth(out[i].SourceKey, db.SourceHealthKindPatrol, out[i].OK,
-				out[i].LatencyMS, 0, out[i].Error, time.Now()); dbErr != nil {
-				applog.Warn("[Diag] 记录巡检样本失败（不影响探测结果）: %v", dbErr)
-			}
+			recordPatrolSample(ctx, out[i])
 		}(i)
 	}
 	wg.Wait()
@@ -438,51 +504,176 @@ func (a *App) probeAllSources(ctx context.Context) ([]SourceProbe, error) {
 	return out, nil
 }
 
-// runSourcePatrol 是后台巡检循环。停在这里等 ctx 取消，所以它和调度器一样
-// 由 lifecycle.Group 统一收尾，不需要额外的停止接口。
-func (a *App) runSourcePatrol(ctx context.Context) {
-	timer := time.NewTimer(sourcePatrolFirstDelay)
-	defer timer.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-timer.C:
-			probes, err := a.probeAllSources(ctx)
-			if err != nil {
-				applog.Warn("[Diag] 源巡检未完成: %v", err)
-			} else {
-				failed := 0
-				for _, p := range probes {
-					if !p.OK {
-						failed++
-					}
-				}
-				applog.Info("[Diag] 源巡检完成：%d 个源，%d 个不应答", len(probes), failed)
-			}
-			timer.Reset(sourcePatrolInterval)
-		}
+// recordPatrolSample 把一次真实探测落成巡检样本。记账失败只写日志：
+// 探测结果本身已经拿到，不该因为观测面写不进去让调用方以为探测失败了。
+// 连败到阈值时的自动停用由 handler 那侧统一判定，采集与巡检共用一套阈值。
+//
+// ctx 已取消时一条都不落：关停窗口里没跑完的探测会在 client.Do 上返回
+// "context canceled"，记成失败就等于"开着采集源页退出三次"能把一个正常源判成死源。
+func recordPatrolSample(ctx context.Context, probe SourceProbe) {
+	if ctx.Err() != nil {
+		return
 	}
+	handler.RecordSourceHealthSample(probe.SourceKey, db.SourceHealthKindPatrol, probe.OK,
+		probe.LatencyMS, 0, probe.Error)
+}
+
+// SourceProbeSlot 是探测点阵里的一个时间窗。窗口宽度就是节流间隔，
+// 所以「没探测」不是失败，只是这段时间里没人戳过它——界面要能分清这两种灰色。
+type SourceProbeSlot struct {
+	BucketUnix int64  `json:"bucket_unix"`
+	Probed     bool   `json:"probed"`
+	OK         bool   `json:"ok"`
+	LatencyMS  int64  `json:"latency_ms"`
+	TsUnix     int64  `json:"ts_unix"`
+	Error      string `json:"error"`
+}
+
+// SourceProbeTimeline 是一个源最近 sourceProbeSlotCount 个时间窗的探测记录，
+// 按时间从旧到新排列。
+type SourceProbeTimeline struct {
+	SourceKey string            `json:"source_key"`
+	SlotSecs  int64             `json:"slot_secs"`
+	Slots     []SourceProbeSlot `json:"slots"`
+}
+
+// SourceProbeTimeline 把已落库的巡检样本铺成点阵给界面画。纯读库、不发请求：
+// 真正发请求的是 ProbeSources / ProbeSource，而它们只在采集源页被打开时才调，
+// 所以离开这一页就不会再有任何探测流量。
+func (a *App) SourceProbeTimeline() ([]SourceProbeTimeline, error) {
+	sources, err := db.GetAllSources()
+	if err != nil {
+		return nil, err
+	}
+	slotSecs := int64(sourceProbeMinInterval / time.Second)
+	firstBucket := time.Now().Unix()/slotSecs - int64(sourceProbeSlotCount-1)
+	out := make([]SourceProbeTimeline, 0, len(sources))
+	for _, src := range sources {
+		// 取两倍条数：同一格里挤进多条时，后来的旧样本仍要把格子填上。
+		samples, err := db.ListSourceHealth(src.SourceKey, db.SourceHealthKindPatrol, sourceProbeSlotCount*2)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, SourceProbeTimeline{
+			SourceKey: src.SourceKey,
+			SlotSecs:  slotSecs,
+			Slots:     bucketProbeSamples(samples, firstBucket, slotSecs, sourceProbeSlotCount),
+		})
+	}
+	return out, nil
+}
+
+// bucketProbeSamples 把「新→旧」的巡检样本铺进 count 个等宽时间窗。
+// 单独拆出来是为了可测：分桶边界（同一格取最新那条、窗口外的样本要丢掉）
+// 是点阵唯一会读错的地方，不该只在真机上看。
+func bucketProbeSamples(samples []db.SourceHealthSample, firstBucket, slotSecs int64, count int) []SourceProbeSlot {
+	slots := make([]SourceProbeSlot, count)
+	for i := range slots {
+		slots[i].BucketUnix = (firstBucket + int64(i)) * slotSecs
+	}
+	for _, sample := range samples {
+		idx := int(sample.TsUnix/slotSecs - firstBucket)
+		if idx < 0 || idx >= count || slots[idx].Probed {
+			continue
+		}
+		slots[idx].Probed = true
+		slots[idx].OK = sample.OK
+		slots[idx].LatencyMS = sample.LatencyMS
+		slots[idx].TsUnix = sample.TsUnix
+		slots[idx].Error = sample.Err
+	}
+	return slots
 }
 
 // SourceProbe 是单个采集源的一次连通性探测结果。
+//
+// Skipped 为真表示这次没发请求（该源还在冷却里），此时 OK/Error/ProbeTimeUnix
+// 沿用上一条巡检样本，RetryAfterSec 告诉界面还要等多久。
 type SourceProbe struct {
-	SourceKey  string `json:"source_key"`
-	Name       string `json:"name"`
-	Enabled    bool   `json:"enabled"`
-	URL        string `json:"url"`
-	OK         bool   `json:"ok"`
-	StatusCode int    `json:"status_code"`
-	LatencyMS  int64  `json:"latency_ms"`
-	SampleKB   int    `json:"sample_kb"`
-	Error      string `json:"error"`
+	SourceKey     string `json:"source_key"`
+	Name          string `json:"name"`
+	Enabled       bool   `json:"enabled"`
+	URL           string `json:"url"`
+	OK            bool   `json:"ok"`
+	StatusCode    int    `json:"status_code"`
+	LatencyMS     int64  `json:"latency_ms"`
+	SampleKB      int    `json:"sample_kb"`
+	Error         string `json:"error"`
+	Skipped       bool   `json:"skipped"`
+	RetryAfterSec int    `json:"retry_after_sec"`
+	ProbeTimeUnix int64  `json:"probe_time_unix"`
+}
+
+var (
+	// sourceProbeMu 保护闸门：连点两次「探测」时，两个调用必须看到同一份"已经开始"
+	// 记录，否则都会判定冷却已过、各发一遍请求。
+	sourceProbeMu sync.Mutex
+	// sourceProbeStartedAt 记住本轮探测的开始时刻。它和 source_health 里最后一条
+	// 巡检样本取较后者：前者挡住同一毫秒内的并发，后者让节流跨过重启仍然成立。
+	sourceProbeStartedAt = map[string]time.Time{}
+)
+
+// admitSourceProbe 判定某源此刻能否发探测请求。允许时顺手登记开始时间，
+// 所以判定与登记是同一把锁里的一次动作。
+func admitSourceProbe(sourceKey string, now time.Time) (db.SourceHealth, int, bool) {
+	sourceProbeMu.Lock()
+	defer sourceProbeMu.Unlock()
+
+	var last db.SourceHealth
+	if health, err := db.GetSourceHealth(sourceKey, db.SourceHealthKindPatrol, 1); err == nil {
+		last = health
+	}
+	lastProbe := sourceProbeStartedAt[sourceKey]
+	if sample := last.LastSampleUnix; sample > 0 {
+		if at := time.Unix(sample, 0); at.After(lastProbe) {
+			lastProbe = at
+		}
+	}
+	retryAfter, allowed := probeRetryAfter(now, lastProbe, sourceProbeMinInterval)
+	if !allowed {
+		return last, retryAfter, false
+	}
+	sourceProbeStartedAt[sourceKey] = now
+	return last, 0, true
+}
+
+// probeRetryAfter 是纯判定：lastProbe 为零值表示从没探过，直接放行；
+// 否则不足最小间隔时向上取整返回还需等待的秒数。
+func probeRetryAfter(now, lastProbe time.Time, minInterval time.Duration) (int, bool) {
+	if lastProbe.IsZero() {
+		return 0, true
+	}
+	elapsed := now.Sub(lastProbe)
+	if elapsed >= minInterval {
+		return 0, true
+	}
+	remaining := minInterval - elapsed
+	seconds := int((remaining + time.Second - 1) / time.Second)
+	return seconds, false
+}
+
+// coolingProbe 给冷却中的源拼一条结果：不发请求，所以没有状态码和延迟，
+// 但把上次探到的结果和时间带上，界面上不会出现"刚点过却什么都看不到"。
+func coolingProbe(source *model.Source, last db.SourceHealth, retryAfterSec int) SourceProbe {
+	return SourceProbe{
+		SourceKey:     source.SourceKey,
+		Name:          source.Name,
+		Enabled:       source.Enabled == 1,
+		URL:           collectProbeURL(source.ApiUrl),
+		OK:            last.LastOK,
+		Error:         last.LastError,
+		Skipped:       true,
+		RetryAfterSec: retryAfterSec,
+		ProbeTimeUnix: last.LastSampleUnix,
+	}
 }
 
 func probeSource(ctx context.Context, client *http.Client, source *model.Source) SourceProbe {
 	probe := SourceProbe{
-		SourceKey: source.SourceKey,
-		Name:      source.Name,
-		Enabled:   source.Enabled == 1,
+		SourceKey:     source.SourceKey,
+		Name:          source.Name,
+		Enabled:       source.Enabled == 1,
+		ProbeTimeUnix: time.Now().Unix(),
 	}
 	target := collectProbeURL(source.ApiUrl)
 	probe.URL = target
@@ -561,7 +752,7 @@ func (a *App) SetDoubanIntervalMinutes(minutes int) (int, error) {
 		minutes = effective
 	}
 	if err := db.SetSetting(settingDoubanIntervalMinutes, strconv.Itoa(minutes)); err != nil {
-		return minutes, fmt.Errorf("间隔已生效但保存失败: %w", err)
+		return minutes, apperror.Wrap(apperror.Storage, err, "间隔已生效但保存失败")
 	}
 	applog.Info("豆瓣补全轮询间隔设为 %d 分钟", minutes)
 	return minutes, nil
@@ -576,7 +767,7 @@ func (a *App) GetLogKeepDays() int {
 func (a *App) SetLogKeepDays(days int) (int, error) {
 	applied := applog.SetKeepDays(days)
 	if err := db.SetSetting(settingLogKeepDays, strconv.Itoa(applied)); err != nil {
-		return applied, fmt.Errorf("保留天数已生效但保存失败: %w", err)
+		return applied, apperror.Wrap(apperror.Storage, err, "保留天数已生效但保存失败")
 	}
 	applog.Info("日志保留天数设为 %d 天", applied)
 	return applied, nil

@@ -1,0 +1,291 @@
+.ext-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ext-hd {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.ext-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.ext-count {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--bg-hover);
+  border-radius: 10px;
+  padding: 1px 8px;
+}
+.ext-acts {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+.ext-desc {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+.ext-dir {
+  /* 这行就是「把文件夹放哪儿」的答案：等宽、可选中，点一下等价于工具栏的复制。 */
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 9px;
+  cursor: pointer;
+  user-select: text;
+  overflow-wrap: anywhere;
+}
+.ext-error {
+  font-size: 12px;
+  color: var(--danger);
+}
+.ext-note {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.ext-item {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  /* 开关一个包会把这一行的透明度在 0.66 和 1 之间换一次。不声明过渡的话整块卡片
+     会「啪」地亮/暗一下——那正是扩展面板上最显眼的一次闪。 */
+  transition: opacity var(--cczj-motion-normal) var(--cczj-motion-ease-standard);
+}
+.ext-item.is-disabled {
+  opacity: 0.66;
+}
+.ext-item.is-invalid {
+  border-color: var(--danger-alpha-10, var(--border));
+}
+.ext-item-hd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ext-item-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.ext-item-icon {
+  /* 32px 图标位：包自带的图占满这一格，没有图才退化成 kind 形状。方角和真实应用
+     的图标不一样大，一眼就能扫出「哪些包有图、哪些没有」。 */
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-hover);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: var(--text-secondary);
+}
+.ext-item-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.ext-item-icon.is-plain {
+  border-style: dashed;
+}
+.ext-item-side {
+  /* 卸载和启用贴右：这两个动作都要改变这一行的状态，放在名字后面容易被误点。 */
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.ext-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.ext-item-desc {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.ext-reason {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  background: var(--bg-hover);
+  border-left: 3px solid var(--danger);
+  border-radius: 6px;
+  padding: 7px 9px;
+}
+.ext-reason-code,
+.ext-reason-text {
+  /* 机器码与人话都用等宽：这是要被人抄下来去查的东西， proportional 字体里下划线和连字符会糊成一片。 */
+  font-family: ui-monospace, Consolas, monospace;
+  color: var(--danger);
+  overflow-wrap: anywhere;
+}
+.ext-reason-text {
+  color: var(--text-secondary);
+}
+.ext-extra {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.ext-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.ext-broken {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  background: var(--bg-hover);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+.ext-perms {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 9px;
+}
+.ext-perms-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.ext-perm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 11px;
+}
+.ext-perm-name {
+  color: var(--text-secondary);
+}
+.ext-broken-name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.ext-broken-msg {
+  /* GL 的报错是一整段，截断就等于没报：等宽 + 允许换行，让它自己摊开。 */
+  font-family: ui-monospace, Consolas, monospace;
+  color: var(--danger);
+  flex: 1;
+  min-width: 200px;
+  overflow-wrap: anywhere;
+}
+/* 拖放态由 Wails 运行时打的类驱动：指针带着文件掠过投放区时它给元素加
+   file-drop-target-active，松手或离开再摘掉。自己数 dragenter 只会和它抢同一次拖放。 */
+.ext-card.file-drop-target-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-alpha-20);
+}
+.ext-drop {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  border: 1px dashed var(--border-strong, var(--border));
+  border-radius: 8px;
+  padding: 7px 9px;
+  /* 拖放时这条既要能看见又不能吃事件：指针穿过它才会触发 drop。 */
+  pointer-events: none;
+}
+.ext-card.file-drop-target-active .ext-drop,
+.ext-drop.is-busy {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-alpha-10);
+}
+.ext-results {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ext-result {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  border-radius: 8px;
+  padding: 6px 9px;
+}
+.ext-result.is-ok {
+  background: var(--accent-alpha-10);
+}
+.ext-result.is-fail {
+  background: var(--danger-alpha-10, var(--bg-hover));
+}
+.ext-result-text {
+  color: var(--text-primary);
+}
+.ext-result.is-fail .ext-result-text {
+  color: var(--danger);
+}
+.ext-result-detail {
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.ext-result-code {
+  font-family: ui-monospace, Consolas, monospace;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+.ext-results-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.ext-results-note {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-right: auto;
+}
+.ext-foot {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+  padding-top: 9px;
+}
+.ext-foot svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}

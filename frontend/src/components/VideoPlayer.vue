@@ -3,13 +3,14 @@ import { ref, nextTick, onMounted, onBeforeUnmount, watch, computed } from 'vue'
 import Icon from './Icon.vue'
 import { MotionTransition, Select as SelectDropdown } from './ui'
 import { TsCache } from '../utils/tsCache'
-import { findActiveCue, parseSubtitle, type SubtitleCue } from '../utils/subtitles'
-import { FilmUpscaler, FILM_PRESET, checkFilmSupport } from '../utils/filmUpscaler'
-import { Anime4kUpscaler, ANIME4K_PRESET, checkAnime4kSupport } from '../utils/anime4kUpscaler'
-import type { Anime4kTier } from '../utils/anime4kUpscaler'
+import { usePerfStore } from '../stores/perf'
 import { readStorage, readStorageBoolean, removeStorage, writeStorage } from '../platform/storage'
 import { createPlayerSettings } from '../player/settings'
 import { usePlayerShortcuts } from '../player/usePlayerShortcuts'
+import { usePlayerOsd } from '../player/usePlayerOsd'
+import { useSubtitles } from '../player/useSubtitles'
+import { useThumbnailScrubber } from '../player/useThumbnailScrubber'
+import { useVideoQuality } from '../player/useVideoQuality'
 import { clearPlaybackTime, readPlaybackTime, savePlaybackTime } from '../player/usePlaybackProgress'
 import { useHlsEngine } from '../player/hls/useHlsEngine'
 import { proxyHlsURL } from '../player/hls/proxy'
@@ -50,6 +51,64 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits(['back', 'prev', 'next', 'toggleFavorite', 'toggleAutoplay', 'showComments'])
 const hlsEngine = useHlsEngine()
 const { t } = useI18n()
+const perf = usePerfStore()
+
+// ------ 播放质量取样 ------
+// 解码器的帧计数是「这个元素从建起来到现在」的累计值，换集时元素会重建，所以每次装载
+// 都重新对齐一次基准，否则上一集的帧数会被算进这一集。
+let _perfFramesRaw = 0
+let _perfDroppedRaw = 0
+let _perfClockRaw = 0
+let _stallSince = 0
+
+function hostOf(u: string): string {
+  try { return new URL(u).hostname } catch { return '' }
+}
+
+function resetPerfBaseline(video: HTMLVideoElement): void {
+  const q = video.getVideoPlaybackQuality?.()
+  _perfFramesRaw = q ? q.totalVideoFrames : 0
+  _perfDroppedRaw = q ? q.droppedVideoFrames : 0
+  _perfClockRaw = video.currentTime
+  _stallSince = 0
+}
+
+// 每秒一次（跟着缓存监控定时器走）：累计解码帧与丢帧、真实观看时长和当前规格。
+// 观看时长按 currentTime 增量算，超过 2 秒的增量一定是 seek 或卡顿，不算「看了」，
+// 于是拖进度条不会虚增时长，卡顿也不会被记成观看。
+function samplePerf(video: HTMLVideoElement): void {
+  const q = video.getVideoPlaybackQuality?.()
+  if (q) {
+    perf.addFrames(q.totalVideoFrames - _perfFramesRaw, q.droppedVideoFrames - _perfDroppedRaw)
+    _perfFramesRaw = q.totalVideoFrames
+    _perfDroppedRaw = q.droppedVideoFrames
+  }
+  if (!video.paused && !video.ended) {
+    const delta = video.currentTime - _perfClockRaw
+    if (delta > 0 && delta <= 2) perf.addWatched(delta)
+  }
+  _perfClockRaw = video.currentTime
+
+  let bitrate = 0
+  try {
+    const hls = (video as any).__hls
+    const idx = hls && hls.currentLevel >= 0 ? hls.currentLevel : hls?.nextAutoLevel
+    const lvl = hls?.levels?.[idx] || hls?.levels?.[hls.levels.length - 1]
+    bitrate = lvl?.bitrate || 0
+  } catch { bitrate = 0 }
+  if (!bitrate) bitrate = extractBitrateFromUrl(props.url) || extractBitrateFromCachedTs()
+  const w = video.videoWidth || 0
+  const h = video.videoHeight || 0
+  perf.setMedia(w && h ? `${w}x${h}` : '', bitrate)
+}
+
+// 卡顿结算：waiting 到恢复出声之间就是用户看到的「转圈」。seek 也算，
+// 因为对播放器来说那同样是一段没有画面的等待。
+function endStall(): void {
+  if (!_stallSince) return
+  perf.addStall(performance.now() - _stallSince)
+  _stallSince = 0
+}
 
 const wrapperRef = ref<HTMLDivElement>()
 const errorMsg = ref('')
@@ -331,311 +390,50 @@ function doReportAd(domain: string): void {
   _reportAdToastTimer = window.setTimeout(() => { reportAdToast.value = '' }, 3000)
 }
 // ========= 外挂字幕 =========
-// 源站几乎不附送字幕轨，所以这里只做「本地 .srt/.vtt 文件叠加」：自绘一层文字而不是用
-// <track>，因为画质增强会把画面盖在 WebGL canvas 上，原生字幕轨会被 canvas 挡住。
-const showSubtitlePanel = ref(false)
-const subtitleCues = ref<SubtitleCue[]>([])
-const subtitleName = ref('')
-const subtitleVisible = ref(true)
 const subtitleFileRef = ref<HTMLInputElement | null>(null)
-const subtitleError = ref('')
-
-const activeSubtitle = computed(() => {
-  if (!subtitleVisible.value || subtitleCues.value.length === 0) return ''
-  const cue = findActiveCue(subtitleCues.value, current.value)
-  return cue ? cue.text : ''
-})
-
-function openSubtitlePicker(): void {
-  subtitleFileRef.value?.click()
-}
-
-async function onSubtitleFileChosen(e: Event): Promise<void> {
-  const input = e.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''
-  if (!file) return
-  subtitleError.value = ''
-  try {
-    const text = await file.text()
-    const cues = parseSubtitle(text)
-    if (cues.length === 0) {
-      subtitleError.value = t('player.subtitleEmptyFile')
-      return
-    }
-    subtitleCues.value = cues
-    subtitleName.value = file.name
-    subtitleVisible.value = true
-  } catch {
-    subtitleError.value = t('player.subtitleReadFailed')
-  }
-}
-
-function clearSubtitle(): void {
-  subtitleCues.value = []
-  subtitleName.value = ''
-  subtitleError.value = ''
-  subtitleVisible.value = true
-}
-
-// 画质下拉框是否展开 —— 展开期间锁定控制条可见，避免全屏下 2.5s 自动隐藏导致面板错位
-const qualityOpen = ref(false)
+const {
+  showSubtitlePanel,
+  subtitleCues,
+  subtitleName,
+  subtitleVisible,
+  subtitleError,
+  activeSubtitle,
+  openSubtitlePicker,
+  onSubtitleFileChosen,
+  clearSubtitle,
+} = useSubtitles({ current, fileInput: subtitleFileRef })
 
 // ⭐ 播放器设置统一存储在单个 JSON 对象中（key: 'vp_settings'），避免 localStorage 碎片化。
 // 旧版散落的 vp_* 键会在首次读取时自动迁移并清理。
 const { read: readSetting, write: writeSetting } = createPlayerSettings()
 
-// ========= 画质模式 =========
-// 模式：原高清 / 动画增强 M·L / 影视增强（M/L 直接在画质下拉框中选择）
-// 兼容旧版 localStorage 中存的 'ai_frame_interp' 和 'ai_enhance' 值。
-type QualityMode = 'original' | 'ai_anime' | 'ai_film'
-const qualityMode = ref<QualityMode>(normalizeQualityMode(readSetting('quality_mode', 'original')))
-
-const anime4kTier = ref<Anime4kTier>(
-  (readSetting('anime4k_tier', 'M') as Anime4kTier) || 'M'
-)
-
-/** 根据视频分辨率推荐最佳档位 */
-const recommendedTier = computed<Anime4kTier>(() => {
-  const h = (getVideoEl()?.videoHeight) || 0
-  if (h <= 0) return 'M'        // 元数据未就绪，默认 M
-  if (h >= 1080) return 'S'
-  if (h >= 720) return 'M'
-  return 'L'
+// ========= 画质模式与增强管线 =========
+// 模式：原高清 / 动画增强 M·L / 影视增强 / 扩展包着色器档位（useVideoQuality）。
+const {
+  qualityOpen,
+  qualityMode,
+  qualityOptions,
+  qualityDropdownValue,
+  onQualityChange,
+  showAiWarning,
+  confirmAiMode,
+  cancelAiMode,
+  qualityToastText,
+  compareEnabled,
+  compareSplit,
+  toggleEnhancementCompare,
+  updateEnhancementCompare,
+  qualityLabel,
+  onMediaReady,
+  notifySeeked,
+  resetPipeline,
+  hasPipeline,
+} = useVideoQuality({
+  getVideoEl,
+  wrapperRef,
+  settings: { read: readSetting, write: writeSetting },
+  keepVisible,
 })
-
-// 画质下拉框（原高清 + 动画增强三档(含推荐) + 影视增强）
-const qualityOptions = computed(() => {
-  const rec = recommendedTier.value
-  const tiers: Anime4kTier[] = ['S', 'M', 'L']
-  const animeOptions = tiers.map(t => ({
-    value: `ai_anime_${t}`,
-    label: `${tr('player.animeEnhance')} ${t}${t === rec ? tr('player.recommendSuffix') : ''}`,
-  }))
-  return [
-    { value: 'original', label: t('player.originalQuality') },
-    ...animeOptions,
-    { value: 'ai_film', label: t('player.filmEnhance') },
-  ]
-})
-// 当前下拉框选中值（根据 qualityMode + anime4kTier 计算）
-const qualityDropdownValue = computed(() => {
-  if (qualityMode.value === 'ai_anime') return `ai_anime_${anime4kTier.value}`
-  return qualityMode.value
-})
-function normalizeQualityMode(v: string): QualityMode {
-  if (v === 'ai_frame_interp' || v === 'ai_enhance') return 'ai_anime' // 旧版统一迁移
-  if (v === 'ai_anime' || v === 'ai_film') return v
-  return 'original'
-}
-function isAiMode(mode: string): mode is 'ai_anime' | 'ai_film' {
-  return mode === 'ai_anime' || mode === 'ai_film'
-}
-const showAiWarning = ref(false)
-const aiWarningAccepted = ref(readSetting('ai_warning_accepted', '0') === '1')
-
-// 切换画质时的短暂提示（左下角）
-const qualityToastText = ref('')
-let qualityToastTimer: ReturnType<typeof setTimeout> | null = null
-function showQualityToast(text: string): void {
-  qualityToastText.value = text
-  if (qualityToastTimer) clearTimeout(qualityToastTimer)
-  qualityToastTimer = setTimeout(() => { qualityToastText.value = '' }, 1500)
-}
-
-// 画质增强管线（WebGL2 实时增强：锐化/对比度/边缘/去色带）
-let upscaler: Anime4kUpscaler | FilmUpscaler | null = null
-let upscalerStatsTimer: ReturnType<typeof setInterval> | null = null
-const upscalerSupported = ref(false)
-const upscalerStats = ref<{ fps: number; gpuEnabled: boolean }>({ fps: 0, gpuEnabled: false })
-const compareEnabled = ref(false)
-const compareSplit = ref(50)
-let _aiReady = false // 视频是否已就绪（loadedmetadata 之后），AI 才会启动
-// 用户希望启用的增强模式，跨换集/换源保持（换源时 destroyPlayerInternal 只销毁管线，不动这个）。
-// 初始化类瞬时失败（例如 WebGL 上下文名额被占满）不清它，下一条媒体的 loadedmetadata 会自动重试；
-// 只有能力检查判定本机永久不支持、或用户主动切回原高清才清掉。
-let _desiredAiMode: 'ai_anime' | 'ai_film' | null =
-  (isAiMode(qualityMode.value) && aiWarningAccepted.value) ? qualityMode.value : null
-
-function toggleEnhancementCompare(): void {
-  if (!upscaler) return
-  compareEnabled.value = !compareEnabled.value
-  upscaler.setCompareSplit(compareEnabled.value ? compareSplit.value : null)
-  keepVisible()
-}
-function updateEnhancementCompare(e: MouseEvent): void {
-  if (!compareEnabled.value || !wrapperRef.value || !upscaler) return
-  const rect = wrapperRef.value.getBoundingClientRect()
-  compareSplit.value = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100))
-  upscaler.setCompareSplit(compareSplit.value)
-}
-
-let _pendingQualityMode: QualityMode = 'original'
-function onQualityChange(value: string | number): void {
-  const raw = String(value)
-  // 解析合并选项值：ai_anime_M / ai_anime_L / ai_film / original
-  let mode: QualityMode
-  if (raw.startsWith('ai_anime_')) {
-    mode = 'ai_anime'
-    const tier = raw.slice('ai_anime_'.length) as Anime4kTier
-    anime4kTier.value = tier
-    writeSetting('anime4k_tier', tier)
-  } else {
-    mode = raw as QualityMode
-  }
-  if (isAiMode(mode) && !aiWarningAccepted.value) {
-    _pendingQualityMode = mode
-    showAiWarning.value = true
-    return
-  }
-  applyQualityMode(mode)
-}
-
-function applyQualityMode(mode: QualityMode): void {
-  qualityMode.value = mode
-  writeSetting('quality_mode', mode)
-  if (isAiMode(mode)) {
-    _desiredAiMode = mode
-    if (_aiReady) {
-      startAiPipeline(mode)
-    }
-    const tierLabel = mode === 'ai_anime' ? `${t('player.animeEnhance')} ${anime4kTier.value}` : t('player.filmEnhance')
-    showQualityToast(t('player.qualitySwitchedGpu', { label: tierLabel }))
-  } else {
-    _desiredAiMode = null
-    stopAiPipeline()
-    showQualityToast(t('player.qualitySwitchedOriginal'))
-  }
-}
-
-function confirmAiMode(): void {
-  aiWarningAccepted.value = true
-  writeSetting('ai_warning_accepted', '1')
-  showAiWarning.value = false
-  applyQualityMode(_pendingQualityMode)
-}
-
-function cancelAiMode(): void {
-  showAiWarning.value = false
-  _desiredAiMode = null
-  qualityMode.value = 'original'
-  writeSetting('quality_mode', 'original')
-}
-
-// AI 增强管线：动画模式用 Anime4K CNN 超分，影视模式用 FSRCNNX + CAS
-
-/**
- * 回退到原高清。
- *
- * permanent 表示本机能力不支持（没有 WebGL2、GPU 不支持浮点渲染目标）—— 这种条件重启也不会变，
- * 落盘并丢掉重试意图，免得每次换集重复试探。初始化过程中的瞬时失败（例如 Chromium 每页约 16 个
- * WebGL 上下文的名额被临时占满）只回退本次画面：偏好留在盘上、_desiredAiMode 也留着，
- * 下一条媒体的 loadedmetadata 会再试一次。
- */
-function fallBackToOriginal(permanent: boolean): void {
-  qualityMode.value = 'original'
-  if (!permanent) return
-  _desiredAiMode = null
-  writeSetting('quality_mode', 'original')
-}
-
-async function startAiPipeline(mode: 'ai_anime' | 'ai_film'): Promise<void> {
-  // 先清除旧的统计定时器（避免切换模式时泄漏）
-  if (upscalerStatsTimer) {
-    clearInterval(upscalerStatsTimer)
-    upscalerStatsTimer = null
-  }
-  // 先销毁旧实例（切换模式时）
-  if (upscaler) {
-    upscaler.stop()
-    upscaler.destroy()
-    upscaler = null
-  }
-  compareEnabled.value = false
-
-  const v = getVideoEl()
-  if (!v) return
-
-  // 动画模式：Anime4K CNN 超分
-  if (mode === 'ai_anime') {
-    const a4kSupport = checkAnime4kSupport()
-    if (!a4kSupport.recommended) {
-      console.warn('[Player] Anime4K 不可用:', a4kSupport.message)
-      fallBackToOriginal(true)
-      return
-    }
-    upscaler = new Anime4kUpscaler({ ...ANIME4K_PRESET, tier: anime4kTier.value })
-    const ok = await upscaler.init(v, wrapperRef.value ?? undefined)
-    if (ok) {
-      // 上次瞬时失败时界面显示的是原高清，这次重建成功要把画质标签恢复成用户实际享有的模式。
-      qualityMode.value = mode
-      upscaler.start()
-      console.log(`[Player] Anime4K CNN 2x 超分管线已启动 (${anime4kTier.value} 档, WebGL2)`)
-      upscalerStatsTimer = setInterval(() => {
-        if (!upscaler) { if (upscalerStatsTimer) { clearInterval(upscalerStatsTimer); upscalerStatsTimer = null }; return }
-        const s = upscaler.getStats()
-        upscalerStats.value = { fps: s.fps, gpuEnabled: s.gpuEnabled }
-      }, 2000)
-      return
-    }
-    // init() 失败时已自行销毁并归还 WebGL 上下文，这里只需丢掉引用。
-    console.warn('[Player] Anime4K 初始化失败:', upscaler.error)
-    upscaler = null
-    fallBackToOriginal(false)
-    return
-  }
-
-  // 影视模式：FSRCNNX + CAS
-  const filmSupport = checkFilmSupport()
-  upscalerSupported.value = filmSupport.supported
-
-  if (!filmSupport.supported) {
-    console.warn('[Player] 影视增强不可用:', filmSupport.message)
-    fallBackToOriginal(true)
-    return
-  }
-
-  upscaler = new FilmUpscaler({ ...FILM_PRESET })
-
-  const ok = await upscaler.init(v, wrapperRef.value ?? undefined)
-  if (!ok) {
-    // 同上：init() 的 catch 分支已经走完 destroy()，上下文不会泄漏。
-    console.error('[Player] FSRCNNX 影视增强初始化失败:', upscaler.error)
-    upscaler = null
-    fallBackToOriginal(false)
-    return
-  }
-
-  qualityMode.value = mode
-  upscaler.start()
-  console.log('[Player] FSRCNNX + CAS 影视增强管线已启动 (WebGL2 多 Pass GPU 加速)')
-
-  // 定期更新性能统计
-  upscalerStatsTimer = setInterval(() => {
-    if (!upscaler) {
-      if (upscalerStatsTimer) clearInterval(upscalerStatsTimer)
-      upscalerStatsTimer = null
-      return
-    }
-    const s = upscaler.getStats()
-    upscalerStats.value = { fps: s.fps, gpuEnabled: s.gpuEnabled }
-  }, 2000)
-}
-
-function stopAiPipeline(): void {
-  if (upscalerStatsTimer) {
-    clearInterval(upscalerStatsTimer)
-    upscalerStatsTimer = null
-  }
-  if (upscaler) {
-    upscaler.stop()
-    upscaler.destroy()
-    upscaler = null
-  }
-  compareEnabled.value = false
-  upscalerStats.value = { fps: 0, gpuEnabled: false }
-  console.log('[Player] AI 增强管线已停止')
-}
 
 // ========= 播放进度记录 =========
 // 设置：autoResume = true 时直接跳到上次位置；false 时弹出 5 秒提示
@@ -861,7 +659,7 @@ const videoInfo = computed(() => {
   } catch { }
 
   // 画质模式
-  const qm = qualityMode.value === 'ai_anime' ? `${t('player.animeEnhance')} ${anime4kTier.value}` : qualityMode.value === 'ai_film' ? t('player.filmEnhance') : t('player.originalQuality')
+  const qm = qualityLabel(qualityMode.value)
   return {
     duration: fmt(dur),
     current: fmt(cur),
@@ -900,6 +698,9 @@ function updateCacheStats(): void {
       `已缓存 ${s.entries} 片 / ${formatBytes(s.bytes)}`
     )
   }
+  // 播放质量跟着这条已有的 1s 定时器取样，不再另开一个计时器。
+  const v = getVideoEl()
+  if (v) samplePerf(v)
 }
 
 // ------ 工具 ------
@@ -979,10 +780,19 @@ function safePlay(auto: boolean): void {
 }
 
 // ------ 播放器加载 ------
+// 一次 loadHls 里最多有三处 await（取续播位置、拉 hls.js、解析 m3u8），换集/换源只要
+// 落在这些 await 上，旧的那次就会在停播之后继续往下跑：它会新建第二个 hls 实例挂到
+// 同一个 video 上（hlsEngine 只认得后一个，前一个再也不被 dispose）、把上一集的片段表
+// 灌进 TsCache、并把缓存统计定时器重复起一遍。用代号把这些半途醒来的调用一次性作废。
+let _loadToken = 0
 async function loadHls(video: HTMLVideoElement, url: string): Promise<void> {
 	const playbackURL = proxyHlsURL(url)
   console.log('[Player] 🔄 开始加载视频:', url.slice(-80))
+  // 首播耗时从这一刻开始量：它包含读进度、拉运行时、解析列表，也就是用户感知的等待。
+  perf.beginLoad(hostOf(url))
+  resetPerfBaseline(video)
   destroyPlayerInternal(video)
+  const token = ++_loadToken
   // 清理旧播放器会解除事件监听；必须随后重新绑定，否则 play/pause
   // 不会同步到 playing，播放中的画面仍会显示暂停图标。
   bindCommonVideoEvents(video)
@@ -1001,7 +811,12 @@ async function loadHls(video: HTMLVideoElement, url: string): Promise<void> {
     const resumeKey = stableResumeKey()
     const localTime = readPlaybackTime(resumeKey)
     // localStorage 按 origin 分区（独立 exe 与 dev 端口互不可见），本地缺失时回退后端 watch_history。
-    const t = localTime > 5 ? localTime : (await props.resolveResume?.()) || 0
+    let t = localTime
+    if (t <= 5) {
+      t = (await props.resolveResume?.()) || 0
+      // 这一趟出网回来时用户可能已经换集了，位置不能再往新媒体上跳。
+      if (token !== _loadToken) return
+    }
     if (t > 5) {
       savedTime.value = t
       if (_resumeAutoJump) {
@@ -1016,6 +831,7 @@ async function loadHls(video: HTMLVideoElement, url: string): Promise<void> {
 
     console.log('[Player] 动态 import hls.js')
     const Hls = await hlsEngine.loadRuntime()
+    if (token !== _loadToken) return
     if (Hls.isSupported()) {
       // 1) 用 TsCache 解析 m3u8（文本缓存，避免重复请求 m3u8）
       //    同时激活 fetch 拦截器，hls.js 的 TS 片段下载会透明经过缓存
@@ -1026,6 +842,7 @@ async function loadHls(video: HTMLVideoElement, url: string): Promise<void> {
       } catch {
         parsed = { urls: [], variantUrls: [], targetduration: 6, isMaster: false, streamInfo: [] }
       }
+      if (token !== _loadToken) return
 
       // 存储 m3u8 流信息供视频信息弹窗使用
       if (parsed.streamInfo && parsed.streamInfo.length > 0) {
@@ -1138,6 +955,9 @@ hls.on(Hls.Events.ERROR, (_e: any, data: any) => {
 	        }
 	        const fatalFlag = data.fatal ? '🔴 FATAL ' : ''
 	        console.log(`[Player] ${fatalFlag}ERROR type=${data.type} details=${details} err=${data.err || ''}`)
+	        // 只记 fatal：软错误（缓冲波动、seek 空洞）在卡顿计数里已经算过一次，
+	        // 记两遍会让「错误」变成噪音而不是故障信号。
+	        if (data.fatal) perf.noteError(details || String(data.type || ''), hostOf(props.url))
 
 	        if (data.fatal) {
 	          // ⭐ 非 m3u8 URL 回退：manifest 加载/解析失败 → 尝试直接 video.src
@@ -1207,12 +1027,13 @@ hls.on(Hls.Events.ERROR, (_e: any, data: any) => {
 }
 
 let _retryCount = 0
+let _setupRetryTimer: number | null = null
 function setupPlayer(): void {
   const video = getVideoEl()
   if (!video) {
     if (_retryCount < 8) {
       _retryCount++
-      setTimeout(setupPlayer, 50)
+      _setupRetryTimer = window.setTimeout(setupPlayer, 50)
     } else {
       errorMsg.value = t('player.errPlayerCreateFailed')
     }
@@ -1237,14 +1058,9 @@ function setupPlayer(): void {
     errorMsg.value = t('player.errNoVideoUrl')
     return
   }
-  if (isHls(url)) {
-    loadHls(video, url)
-  } else {
-    destroyPlayerInternal(video)
-    // ⭐ 修复：非 m3u8 后缀的 URL 可能是重定向到 HLS 的短链接（如 hn.bfvvs.com/play/xxx）
-    // 直接尝试用 hls.js 加载，如果解析到有效 m3u8 就播放，失败则回退到 video.src
-    loadHls(video, url)
-  }
+  // 非 .m3u8 后缀也走这条路：短链常 302 到 HLS，loadHls 先拆旧实例、按 m3u8 解析，
+  // 拿不到清单再回退 video.src，两条分支本来就汇到同一个调用。
+  loadHls(video, url)
 }
 
 function bindCommonVideoEvents(video: HTMLVideoElement): void {
@@ -1254,7 +1070,7 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
   ;(video as any).__eventAbortController = eventController
   const on = (name: string, listener: EventListenerOrEventListenerObject) =>
     video.addEventListener(name, listener, { signal: eventController.signal })
-  bindOsdListeners(video)
+  bindOsdListeners(video, eventController.signal)
 
   on('play', () => {
     playing.value = true
@@ -1310,25 +1126,31 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
     updateBuffer()
     flushPendingSeek()
     console.log(`[Player] loadedmetadata: duration=${video.duration.toFixed(1)}s, volume=${video.volume.toFixed(2)}`)
-    _aiReady = true
-    // ⭐ 换集/换源后自动重建 AI 增强：destroyPlayerInternal 会 stopAiPipeline() 把 WebGL 上下文
-    // 还掉，而元数据就绪是唯一安全的挂点（要有 videoWidth/Height 才能建管线）。冷启动时
-    // quality_mode 只是从设置里读回来的偏好，以前没人据此启动管线，现在也走这里。
-    if (_desiredAiMode && !upscaler) startAiPipeline(_desiredAiMode)
+    // ⭐ 换集/换源后自动重建 AI 增强：destroyPlayerInternal 会 resetPipeline() 把 WebGL 上下文
+    // 还掉，而元数据就绪是唯一安全的挂点（要有 videoWidth/Height 才能建管线）。要不要重试由
+    // useVideoQuality 自己判断（它记得用户想要的档位）。
+    onMediaReady()
   })
   on('progress', updateBuffer)
   on('seeking', updateBuffer)
   on('seeked', () => {
     updateBuffer()
-    if (upscaler) upscaler.onSeeked()
+    notifySeeked()
   })
   on('waiting', () => {
     if (video.paused || video.ended) return
+    if (!_stallSince) _stallSince = performance.now()
     loading.value = true
     startLoadingStats()
   })
+  on('playing', () => {
+    perf.markFirstFrame()
+    endStall()
+  })
   on('canplay', () => {
     videoReady.value = true
+    perf.markFirstFrame()
+    endStall()
     // 预缓冲阶段：不设置 loading=false，不自动播放，等待预缓冲完成
     if (preBuffering.value) {
       console.log('[Player] canplay 但预缓冲尚未完成，等待中...')
@@ -1358,7 +1180,13 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
     clearPlaybackTime(stableResumeKey())
     if (_saveTimer != null) { window.clearInterval(_saveTimer); _saveTimer = null }
   })
-  on('error', () => { loading.value = false })
+  on('error', () => {
+    loading.value = false
+    // 媒体元素自己的错误只在换源回退直连时出现（hls.js 路径的错误走 Hls.Events.ERROR）。
+    // 首播耗时不结算：这次装载根本没有出画，记它会把它算成一次成功的快。
+    endStall()
+    perf.noteError(String(video.error?.code ?? ''), hostOf(props.url))
+  })
 }
 
 // ====== 继续播放提示 ======
@@ -1416,6 +1244,8 @@ function jumpToSavedTime(autoRememberChoice: boolean): void {
 
 function destroyPlayerInternal(video: HTMLVideoElement): void {
   ++_playToken
+  // 拆实例的同时作废所有在途的 loadHls，见 _loadToken。
+  ++_loadToken
   TsCache.setAbrSwitchCallback(null)
   hlsEngine.dispose(video)
   try {
@@ -1437,8 +1267,7 @@ function destroyPlayerInternal(video: HTMLVideoElement): void {
   if (prebufferCheckTimer) { clearInterval(prebufferCheckTimer); prebufferCheckTimer = null }
   if (prebufferTimeout) { clearTimeout(prebufferTimeout); prebufferTimeout = null }
   stopLoadingStats()
-  stopAiPipeline()
-  _aiReady = false
+  resetPipeline()
   cacheStats.value = {
     hits: 0, misses: 0, entries: 0, bytes: 0, hitRate: 0, totalSegments: 0, prefetched: 0,
     prefetchTarget: 0, queued: 0, inflight: 0,
@@ -1521,187 +1350,23 @@ function showVolumeToastRef(): void {
 }
 
 const progressContainerRef = ref<HTMLDivElement>()
-const progressHoverPct = ref(-1) // 鼠标悬停在进度条上的百分比位置（-1 表示不显示）
-const progressHoverTime = ref(-1) // 悬停时间（秒），用于显示时间预览
-const thumbPreviewImg = ref('') // 缩略图 dataURL
-const thumbPreviewVisible = ref(false)
-
-// 缩略图采样：用一个隐藏的 <video> 元素 seek + canvas 抓帧
-const thumbVideoRef = ref<HTMLVideoElement | null>(null)
 const thumbCanvasRef = ref<HTMLCanvasElement | null>(null)
-let _thumbLastSeekTime = 0 // 节流：上次 seek 时间戳
-const THUMB_SEEK_THROTTLE_MS = 150 // 至少 150ms 间隔才触发新 seek
-let _thumbSeekPending = false
-
-function captureThumbnail(timeSec: number): void {
-  const v = thumbVideoRef.value
-  const canvas = thumbCanvasRef.value
-  if (!v || !canvas) { _thumbSeekPending = false; return }
-  const ctx = canvas.getContext('2d')
-  if (!ctx) { _thumbSeekPending = false; return }
-
-  // ⭐ 检查视频是否可 seek：readyState >= 1 (HAVE_METADATA) 才允许设置 currentTime
-  if (v.readyState < 1) {
-    try { (v as any).__thumbHls?.startLoad(timeSec) } catch { /* ignore */ }
-    _thumbSeekPending = false
-    return
-  }
-
-  // 实际抓帧逻辑
-  const doCapture = () => {
-    try {
-      const vw = v.videoWidth || 160
-      const vh = v.videoHeight || 90
-      if (vw <= 0 || vh <= 0) {
-        thumbPreviewVisible.value = false
-        _thumbSeekPending = false
-        return
-      }
-      const scale = Math.min(160 / vw, 90 / vh, 1)
-      const tw = Math.round(vw * scale)
-      const th = Math.round(vh * scale)
-      canvas.width = tw
-      canvas.height = th
-      ctx.drawImage(v, 0, 0, tw, th)
-      thumbPreviewImg.value = canvas.toDataURL('image/jpeg', 0.7)
-      thumbPreviewVisible.value = true
-    } catch {
-      thumbPreviewVisible.value = false
-    }
-    _thumbSeekPending = false
-  }
-
-  // ⭐ 超时保护：500ms 后强制重置 _thumbSeekPending，防止 seeked 事件永不触发导致卡死
-  let timedOut = false
-  const timeoutId = setTimeout(() => {
-    timedOut = true
-    _thumbSeekPending = false
-  }, 500)
-
-  // seeked 事件回调
-  const onSeeked = () => {
-    v.removeEventListener('seeked', onSeeked)
-    if (timedOut) return
-    clearTimeout(timeoutId)
-    doCapture()
-  }
-
-  // ⭐ 如果已接近目标时间（差距 < 0.5s），无需 seek，直接抓帧
-  if (Math.abs(v.currentTime - timeSec) <= 0.5) {
-    clearTimeout(timeoutId)
-    _thumbSeekPending = false
-    doCapture()
-    return
-  }
-
-  v.addEventListener('seeked', onSeeked)
-  try {
-    try { (v as any).__thumbHls?.startLoad(timeSec) } catch { /* ignore */ }
-    v.currentTime = timeSec
-  } catch {
-    v.removeEventListener('seeked', onSeeked)
-    clearTimeout(timeoutId)
-    _thumbSeekPending = false
-  }
-}
-
-async function initThumbSampler(): Promise<void> {
-  const mainVideo = getVideoEl()
-  if (!mainVideo) return
-  // 创建隐藏的采样 video（同源，静音，不播放）
-  const sampleVideo = document.createElement('video')
-  sampleVideo.muted = true
-  sampleVideo.preload = 'auto'
-  sampleVideo.playsInline = true
-  sampleVideo.style.display = 'none'
-  sampleVideo.style.position = 'absolute'
-  sampleVideo.style.visibility = 'hidden'
-  sampleVideo.style.pointerEvents = 'none'
-  sampleVideo.setAttribute('tabindex', '-1')
-  wrapperRef.value?.appendChild(sampleVideo)
-  thumbVideoRef.value = sampleVideo
-
-  // 创建 canvas（隐藏）
-  const canvas = document.createElement('canvas')
-  canvas.style.display = 'none'
-  wrapperRef.value?.appendChild(canvas)
-  thumbCanvasRef.value = canvas
-
-  let thumbHls: any = null
-
-  // 主 video 元素销毁时清理
-  const cleanup = () => {
-    try { thumbHls?.destroy() } catch { }
-    try { sampleVideo.remove() } catch { }
-    try { canvas.remove() } catch { }
-    thumbVideoRef.value = null
-    thumbCanvasRef.value = null
-    thumbPreviewImg.value = ''
-    thumbPreviewVisible.value = false
-  }
-    ; (mainVideo as any).__thumbCleanup = cleanup
-
-  // ⭐ HLS 流：用第二个 hls.js 小实例加载同源流（低缓冲，仅用于 seek + 抓帧）
-  if (isHls(props.url)) {
-    try {
-      const { default: Hls } = await import('hls.js')
-      if (Hls.isSupported()) {
-        const hlsConfig: any = {
-          enableWorker: false,
-          lowLatencyMode: false,
-          maxBufferLength: 1,
-          maxMaxBufferLength: 1,
-          maxBufferSize: 1024 * 1024,
-          fragLoadingTimeOut: 8000,
-          fragLoadingMaxRetry: 3,
-          manifestLoadingTimeOut: 6000,
-          manifestLoadingMaxRetry: 2,
-          autoStartLoad: false,
-          startLevel: 0,
-          loader: TsCache.TsCacheLoader,
-        }
-        thumbHls = new Hls(hlsConfig)
-        ;(sampleVideo as any).__thumbHls = thumbHls
-        thumbHls.loadSource(proxyHlsURL(props.url))
-        thumbHls.attachMedia(sampleVideo)
-        console.log('[Player] 🖼️ 缩略图 HLS 实例已创建')
-      }
-    } catch (e) {
-      console.warn('[Player] 缩略图 HLS 初始化失败，回退到纯时间预览:', e)
-    }
-  } else {
-    // 非 HLS：直接用 src
-    sampleVideo.src = mainVideo.src || (mainVideo.querySelector('source') as HTMLSourceElement)?.src || ''
-  }
-
-  // 当主视频 url 变化时，重新加载缩略图采样视频
-  const origUrl = props.url
-  const urlWatch = watch(() => props.url, (newUrl) => {
-    if (newUrl !== origUrl) {
-      cleanup()
-      setTimeout(() => initThumbSampler(), 500)
-    }
-  })
-    ; (mainVideo as any).__thumbUrlWatch = urlWatch
-}
-
-function destroyThumbSampler(): void {
-  const v = getVideoEl()
-  if (v) {
-    try { (v as any).__thumbCleanup?.() } catch { }
-    try { (v as any).__thumbUrlWatch?.() } catch { }
-  }
-  if (thumbVideoRef.value) {
-    try { thumbVideoRef.value.remove() } catch { }
-    thumbVideoRef.value = null
-  }
-  if (thumbCanvasRef.value) {
-    try { thumbCanvasRef.value.remove() } catch { }
-    thumbCanvasRef.value = null
-  }
-  thumbPreviewImg.value = ''
-  thumbPreviewVisible.value = false
-}
+const {
+  progressHoverPct,
+  progressHoverTime,
+  thumbPreviewImg,
+  thumbPreviewVisible,
+  initThumbSampler,
+  destroyThumbSampler,
+  onProgressHover,
+} = useThumbnailScrubber({
+  wrapperRef,
+  progressContainerRef,
+  thumbCanvasRef,
+  getVideoEl,
+  getUrl: () => props.url,
+  isHlsUrl: isHls,
+})
 
 function seek(e: Event): void {
   const v = getVideoEl()
@@ -1739,63 +1404,8 @@ function onProgressMouseDown(e: MouseEvent): void {
   wrapperRef.value?.focus?.()
 }
 
-// 进度条悬停：计算百分比位置 + 显示时间预览 + 缩略图
-function onProgressHover(e: MouseEvent): void {
-  if (!progressContainerRef.value) return
-  const rect = progressContainerRef.value.getBoundingClientRect()
-  const pct = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100))
-  progressHoverPct.value = pct
-  const v = getVideoEl()
-  if (v && v.duration) {
-    progressHoverTime.value = (pct / 100) * v.duration
-    // 节流触发缩略图抓帧
-    const now = performance.now()
-    if (now - _thumbLastSeekTime >= THUMB_SEEK_THROTTLE_MS && !_thumbSeekPending) {
-      _thumbLastSeekTime = now
-      _thumbSeekPending = true
-      captureThumbnail(progressHoverTime.value)
-    }
-  }
-}
-
 // ========= 操作 OSD（屏幕中央提示：快进/快退/音量/倍速） =========
-const osdText = ref('')
-const osdIcon = ref('')
-let _osdTimer: ReturnType<typeof setTimeout> | null = null
-
-function showOsd(icon: string, text: string, duration = 800): void {
-  osdIcon.value = icon
-  osdText.value = text
-  if (_osdTimer) clearTimeout(_osdTimer)
-  _osdTimer = setTimeout(() => { osdText.value = ''; osdIcon.value = '' }, duration)
-}
-
-// 监听视频 seek 事件（来自键盘快捷键或进度条拖动）
-function bindOsdListeners(video: HTMLVideoElement): void {
-  if ((video as any).__osdBound) return
-    ; (video as any).__osdBound = true
-
-  let _lastSeekTime = -1
-  video.addEventListener('seeking', () => {
-    const now = Date.now()
-    // 只在短时间内连续 seek 时更新（避免进度条拖动时疯狂闪烁）
-    if (now - _lastSeekTime > 300) {
-      _lastSeekTime = now
-    }
-  })
-  video.addEventListener('volumechange', () => {
-    const pct = Math.round(video.volume * 100)
-    showOsd(video.muted ? '🔇' : '🔊', `${pct}%`)
-  })
-
-  // 自定义 seek OSD 事件（由 Player.vue 键盘快捷键派发）
-  video.addEventListener('cczj-seek-osd', ((e: CustomEvent) => {
-    const { delta } = e.detail
-    const icon = delta > 0 ? '⏩' : '⏪'
-    const absSec = Math.abs(delta)
-    showOsd(icon, `${delta > 0 ? '+' : '-'}${absSec}s`)
-  }) as EventListener)
-}
+const { osdText, osdIcon, bindOsdListeners, clearOsdTimer } = usePlayerOsd()
 
 function changeSpeed(s: number): void {
   const v = getVideoEl()
@@ -1985,6 +1595,10 @@ function onWrapperClick(): void {
   showSpeedPanel.value = false
 }
 
+// 挂载后那两件事（抢焦点、建缩略图采样器）都排在 100ms 之后，快速进出播放页时这个
+// 定时器会跑到卸载之后的组件上，所以和 setupPlayer 的重试定时器一起记账、离开工件时清掉。
+let _bootTimer: number | null = null
+
 onMounted(async () => {
   await nextTick()
   setupPlayer()
@@ -1992,10 +1606,16 @@ onMounted(async () => {
   document.addEventListener('webkitfullscreenchange', onFsChange)
   document.addEventListener('keydown', onKeyDown)
   // 让播放器区域自动获得键盘焦点（上下键调节音量等）
-  setTimeout(() => { wrapperRef.value?.focus?.(); initThumbSampler() }, 100)
+  _bootTimer = window.setTimeout(() => {
+    _bootTimer = null
+    wrapperRef.value?.focus?.()
+    initThumbSampler()
+  }, 100)
 })
 
 onBeforeUnmount(() => {
+  if (_bootTimer !== null) { window.clearTimeout(_bootTimer); _bootTimer = null }
+  if (_setupRetryTimer !== null) { window.clearTimeout(_setupRetryTimer); _setupRetryTimer = null; _retryCount = 0 }
   destroyPlayer()
   destroyThumbSampler()
   clearNetworkErrTimer()
@@ -2023,7 +1643,7 @@ onBeforeUnmount(() => {
     } catch { }
   }
   document.body.removeAttribute('data-player-fullscreen')
-  if (_osdTimer) { clearTimeout(_osdTimer); _osdTimer = null }
+  clearOsdTimer()
 })
 
 watch(() => props.url, (newUrl, oldUrl) => {
@@ -2091,6 +1711,7 @@ defineExpose({ togglePiP })
         {{ t('player.hitRateShort') }} {{ (cacheStats.hitRate * 100).toFixed(0) }}%
       </span>
       <button class="fav-btn-in-player" :class="{ 'is-fav': isFav }" :disabled="favBusy"
+        :aria-label="isFav ? t('detail.removeFav') : t('player.addFavorite')"
         :title="isFav ? t('detail.removeFav') : t('player.addFavorite')" @click.stop="emit('toggleFavorite')">
         {{ isFav ? '★' : '☆' }}
       </button>
@@ -2233,17 +1854,18 @@ defineExpose({ togglePiP })
     <div class="ctrl-bar" v-show="showControls || !playing || qualityOpen || showVideoInfo" @click.stop @mousedown.stop
       @pointerdown.stop @dblclick.stop @wheel.stop>
       <!-- 上一集 -->
-      <button v-if="hasPrev" class="ctrl-btn" @click="emit('prev')" :title="t('player.prev')">
+      <button v-if="hasPrev" class="ctrl-btn" @click="emit('prev')" :aria-label="t('player.prev')" :title="t('player.prev')">
         <Icon name="prev" :size="16" />
       </button>
 
       <!-- 播放/暂停（中间） -->
-      <button class="ctrl-btn play-btn" @click="togglePlay" :title="playing ? t('player.pause') : t('player.play')">
+      <button class="ctrl-btn play-btn" @click="togglePlay"
+        :aria-label="playing ? t('player.pause') : t('player.play')" :title="playing ? t('player.pause') : t('player.play')">
         <Icon :name="playing ? 'pause' : 'play'" :size="18" />
       </button>
 
       <!-- 下一集 -->
-      <button v-if="hasNext" class="ctrl-btn" @click="emit('next')" :title="t('player.next')">
+      <button v-if="hasNext" class="ctrl-btn" @click="emit('next')" :aria-label="t('player.next')" :title="t('player.next')">
         <Icon name="next" :size="16" />
       </button>
 
@@ -2274,7 +1896,8 @@ defineExpose({ togglePiP })
 
       <!-- 音量 + 垂直滑块弹出（纯 CSS hover；鼠标从图标移动到滑块不会消失） -->
       <div class="volume-group" @click.stop @mouseenter="showVolumePanel = true" @mouseleave="showVolumePanel = false">
-        <button class="ctrl-btn" @click.stop="toggleMute(); keepVisible()" :title="muted ? t('player.unmute') : t('player.muteWithHotkey')">
+        <button class="ctrl-btn" @click.stop="toggleMute(); keepVisible()"
+          :aria-label="muted ? t('player.unmute') : t('player.muteWithHotkey')" :title="muted ? t('player.unmute') : t('player.muteWithHotkey')">
           <Icon :name="muted ? 'volume-off' : 'volume'" :size="16" />
         </button>
         <div class="volume-popup" :class="{ show: showVolumePanel }" @click.stop>
@@ -2302,14 +1925,14 @@ defineExpose({ togglePiP })
         </div>
       </div>
 
-      <button v-if="qualityMode !== 'original' && upscaler" class="ctrl-btn" :class="{ active: compareEnabled }"
-        @click.stop="toggleEnhancementCompare" :title="t('player.compareToggleTip')">
+      <button v-if="qualityMode !== 'original' && hasPipeline()" class="ctrl-btn" :class="{ active: compareEnabled }"
+        @click.stop="toggleEnhancementCompare" :aria-label="t('player.compareToggleTip')" :title="t('player.compareToggleTip')">
         <Icon name="layers" :size="16" />
       </button>
 
       <!-- 播放设置 -->
       <div class="playback-settings-group" @click.stop>
-        <button class="ctrl-btn" @click="showPlaybackSettings = !showPlaybackSettings; keepVisible()" :title="t('settings.playback')">
+        <button class="ctrl-btn" @click="showPlaybackSettings = !showPlaybackSettings; keepVisible()" :aria-label="t('settings.playback')" :title="t('settings.playback')">
           <Icon name="settings" :size="16" />
         </button>
         <div class="playback-settings-popup" :class="{ show: showPlaybackSettings }" @click.stop>
@@ -2338,7 +1961,7 @@ defineExpose({ togglePiP })
       <!-- 外挂字幕 -->
       <div class="subtitle-group" @click.stop>
         <button class="ctrl-btn" :class="{ active: subtitleCues.length > 0 }"
-          @click.stop="showSubtitlePanel = !showSubtitlePanel; keepVisible()" :title="t('player.subtitle')">
+          @click.stop="showSubtitlePanel = !showSubtitlePanel; keepVisible()" :aria-label="t('player.subtitle')" :title="t('player.subtitle')">
           <Icon name="subtitles" :size="16" />
         </button>
         <div class="subtitle-popup" :class="{ show: showSubtitlePanel }" @click.stop>
@@ -2369,7 +1992,7 @@ defineExpose({ togglePiP })
         @change="onSubtitleFileChosen" />
       <!-- 报告广告 -->
       <div class="report-ad-group" @click.stop>
-        <button class="ctrl-btn" @click.stop="toggleReportAd(); keepVisible()" :title="t('player.reportAdTip')">
+        <button class="ctrl-btn" @click.stop="toggleReportAd(); keepVisible()" :aria-label="t('player.reportAdTip')" :title="t('player.reportAdTip')">
           <Icon name="flag" :size="16" />
         </button>
         <div class="report-ad-popup" :class="{ show: showReportAd }" @click.stop>
@@ -2383,20 +2006,20 @@ defineExpose({ togglePiP })
       </div>
       <!-- 视频信息 -->
       <div class="video-info-group" @click.stop>
-        <button class="ctrl-btn" @click.stop="showVideoInfo = !showVideoInfo; keepVisible()" :title="t('player.videoInfo')">
+        <button class="ctrl-btn" @click.stop="showVideoInfo = !showVideoInfo; keepVisible()" :aria-label="t('player.videoInfo')" :title="t('player.videoInfo')">
           <Icon name="info" :size="16" />
         </button>
       </div>
       <!-- 豆瓣评论（仅有豆瓣ID时显示） -->
-      <button v-if="doubanId" class="ctrl-btn" @click.stop="emit('showComments'); keepVisible()" :title="t('player.doubanComments')">
+      <button v-if="doubanId" class="ctrl-btn" @click.stop="emit('showComments'); keepVisible()" :aria-label="t('player.doubanComments')" :title="t('player.doubanComments')">
         <Icon name="comment" :size="16" />
       </button>
       <!-- 画中画 -->
-      <button class="ctrl-btn" @click="togglePiP" :title="isPiP ? t('player.exitPip') : t('player.pipWithHotkey')" :class="{ active: isPiP }">
+      <button class="ctrl-btn" @click="togglePiP" :aria-label="isPiP ? t('player.exitPip') : t('player.pipWithHotkey')" :title="isPiP ? t('player.exitPip') : t('player.pipWithHotkey')" :class="{ active: isPiP }">
         <Icon :name="isPiP ? 'pip-exit' : 'pip'" :size="16" />
       </button>
       <!-- 全屏 -->
-      <button class="ctrl-btn" @click="toggleFullscreen" :title="isFullscreen ? t('player.exitFullscreen') : t('player.fullscreenHotkey')">
+      <button class="ctrl-btn" @click="toggleFullscreen" :aria-label="isFullscreen ? t('player.exitFullscreen') : t('player.fullscreenHotkey')" :title="isFullscreen ? t('player.exitFullscreen') : t('player.fullscreenHotkey')">
         <Icon :name="isFullscreen ? 'exit-fullscreen' : 'fullscreen'" :size="16" />
       </button>
     </div>
@@ -2417,7 +2040,7 @@ defineExpose({ togglePiP })
           <div v-if="showVideoInfo" class="vp-modal vp-modal-info" @click.stop>
           <div class="vp-modal-header">
             <span>{{ t('player.videoInfo') }}</span>
-            <button class="vp-modal-close" @click="showVideoInfo = false">
+            <button class="vp-modal-close" @click="showVideoInfo = false" :aria-label="t('common.close')">
               <Icon name="x" :size="16" />
             </button>
           </div>
@@ -2527,7 +2150,7 @@ defineExpose({ togglePiP })
           <div v-if="showShortcutModal" class="vp-modal vp-modal-shortcut" @click.stop>
           <div class="vp-modal-header">
             <span>{{ t('player.shortcutSettings') }}</span>
-            <button class="vp-modal-close" @click="showShortcutModal = false">
+            <button class="vp-modal-close" @click="showShortcutModal = false" :aria-label="t('common.close')">
               <Icon name="x" :size="16" />
             </button>
           </div>
@@ -2550,7 +2173,7 @@ defineExpose({ togglePiP })
                         class="vp-sc-none">{{ t('player.notSet') }}</span>
                     </template>
                   </button>
-                  <button class="vp-sc-reset" @click.stop="resetShortcut(action.id)" :title="t('player.restoreDefault')">
+                  <button class="vp-sc-reset" @click.stop="resetShortcut(action.id)" :aria-label="t('player.restoreDefault')" :title="t('player.restoreDefault')">
                     <Icon name="reset" :size="12" />
                   </button>
                 </div>
@@ -2568,2020 +2191,4 @@ defineExpose({ togglePiP })
   </div>
 </template>
 
-<style scoped>
-
-/* ========= 播放器容器 ========= */
-.player-wrapper {
-  background: #000;
-  color: #fff;
-  width: 100%;
-  height: 100%;
-  position: relative;
-  overflow: hidden;
-  outline: none;
-  /* 键盘焦点时不显示默认 outline */
-}
-
-.player-wrapper.cursor-hidden {
-  cursor: none;
-}
-
-.player-wrapper.cursor-hidden .native-video {
-  cursor: none;
-}
-
-.player-wrapper.fullscreen {
-  width: 100vw;
-  height: 100vh;
-  border-radius: 0;
-  box-shadow: none;
-  margin: 0;
-  padding: 0;
-}
-
-/* ====== 系统级全屏时的全局样式覆盖 ======
-   当 Wails WindowFullscreen 把整个应用窗口全屏时，让父级的弹窗/遮罩/容器
-   也一起扩展到整个窗口，让视频真正铺满整个屏幕（而非局限于弹窗尺寸） */
-:global(body[data-player-fullscreen='1']) {
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-}
-
-:global(body[data-player-fullscreen='1'] #app),
-:global(body[data-player-fullscreen='1'] .app-shell),
-:global(body[data-player-fullscreen='1'] .app-body),
-:global(body[data-player-fullscreen='1'] .main-content),
-:global(body[data-player-fullscreen='1'] .player-page) {
-  width: 100vw !important;
-  height: 100vh !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  overflow: hidden !important;
-}
-
-:global(body[data-player-fullscreen='1'] .player-modal-mask),
-:global(body[data-player-fullscreen='1'] .modal-backdrop) {
-  background: #000;
-  padding: 0;
-}
-
-:global(body[data-player-fullscreen='1'] .player-modal),
-:global(body[data-player-fullscreen='1'] .modal-box) {
-  width: 100vw !important;
-  height: 100vh !important;
-  max-width: 100vw !important;
-  max-height: 100vh !important;
-  border-radius: 0 !important;
-  margin: 0 !important;
-  border: none !important;
-  box-shadow: none !important;
-}
-
-:global(body[data-player-fullscreen='1'] .player-modal-top),
-:global(body[data-player-fullscreen='1'] .modal-head) {
-  display: none;
-}
-
-:global(body[data-player-fullscreen='1'] .player-modal-body) {
-  padding: 0;
-}
-
-:global(body[data-player-fullscreen='1'] .player-col-main),
-:global(body[data-player-fullscreen='1'] .player-box),
-:global(body[data-player-fullscreen='1'] .player-wrap),
-:global(body[data-player-fullscreen='1'] .player-section) {
-  width: 100vw;
-  height: 100vh;
-  padding: 0;
-  margin: 0;
-}
-
-:global(body[data-player-fullscreen='1'] .player-col-side) {
-  display: none;
-}
-
-/* 顶部栏：标题 + 缓存统计 + 关闭按钮（右）
-   容器设为 pointer-events:none，让拖拽事件穿透到下层的 player-drag-handle；
-   内部需要交互的元素（收藏按钮等）单独 pointer-events:auto。 */
-.player-title-bar {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0));
-  color: #fff;
-  font-size: 13px;
-  z-index: 24;
-  box-sizing: border-box;
-  pointer-events: none;
-}
-
-/* 标题栏内所有可点击元素恢复交互 */
-.player-title-bar button,
-.player-title-bar .fav-btn-in-player {
-  pointer-events: auto;
-}
-
-/* 拖拽遮罩条：鼠标经过视频顶部时浮现，可拖拽移动整个窗口。
-   z-index 高于 player-title-bar(24)，确保拖拽区不被遮住。 */
-.player-drag-handle {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 34px;
-  z-index: 30;
-  cursor: grab;
-  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.25), transparent);
-  /* Wails v3 在 Windows WebView2 下使用 --wails-draggable: drag 来实现窗口拖拽。
-     放在 CSS 而非 inline style，避免被 Vue 的 style 绑定覆盖。 */
-  --wails-draggable: drag;
-  transition: opacity 0.2s ease, background 0.2s ease;
-}
-
-.player-drag-handle:hover {
-  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.35), transparent);
-}
-
-.player-drag-handle:active {
-  cursor: grabbing;
-}
-
-.player-title {
-  color: #fff;
-  font-size: 13px;
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-  min-width: 0;
-}
-
-@keyframes fav-bounce {
-  0% { transform: scale(1); }
-  30% { transform: scale(1.35); }
-  60% { transform: scale(0.85); }
-  100% { transform: scale(1); }
-}
-
-.fav-btn-in-player {
-  flex-shrink: 0;
-  width: 32px;
-  height: 26px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-  font-size: 16px;
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
-}
-
-.fav-btn-in-player:hover {
-  background: rgba(255, 255, 255, 0.22);
-  transform: scale(1.08);
-}
-
-.fav-btn-in-player:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.fav-btn-in-player.is-fav {
-  color: #fbbf24;
-  background: rgba(251, 191, 36, 0.18);
-  animation: fav-bounce 0.4s ease;
-}
-
-.fav-btn-in-player.is-fav:hover {
-  background: rgba(251, 191, 36, 0.3);
-}
-
-.player-url {
-  color: rgba(255, 255, 255, 0.45);
-  font-size: 11px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-  min-width: 0;
-}
-
-.cache-info {
-  flex: none;
-  color: #7ee2b8;
-  font-size: 11px;
-  padding: 3px 10px;
-  background: rgba(126, 226, 184, 0.12);
-  border: 1px solid rgba(126, 226, 184, 0.3);
-  border-radius: 999px;
-  white-space: nowrap;
-}
-
-/* ========= 视频元素 ========= */
-.native-video {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  width: 100%;
-  height: 100%;
-  background: #000;
-  display: block;
-  object-fit: contain;
-  outline: none;
-}
-
-.player-wrapper.fullscreen .native-video {
-  /* 全屏时仍然保持比例，避免裁切画面 */
-  object-fit: contain;
-  width: 100vw;
-  height: 100vh;
-}
-
-/* ========= 加载动画 ========= */
-.loading {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-  z-index: 3;
-}
-
-.loading-overlay {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  padding: 28px 36px;
-  background: rgba(0, 0, 0, 0.55);
-  border-radius: 12px;
-  backdrop-filter: blur(6px);
-  min-width: 220px;
-}
-
-.loading-spinner {
-  width: 64px;
-  height: 64px;
-  object-fit: contain;
-}
-
-.loading-info {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-}
-
-.loading-text {
-  color: #fff;
-  font-size: 14px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.loading-speed {
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-}
-
-.loading-bar-wrap {
-  width: 100%;
-  height: 4px;
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.loading-bar-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #1890ff 0%, #40a9ff 100%);
-  border-radius: 2px;
-  transition: width 0.4s ease;
-  box-shadow: 0 0 6px rgba(24, 144, 255, 0.5);
-}
-
-/* ========= 错误提示 ========= */
-.player-error {
-  position: absolute;
-  z-index: 4;
-  bottom: 80px;
-  left: 16px;
-  right: 16px;
-  padding: 10px 14px;
-  background: rgba(220, 53, 69, 0.92);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  font-size: 13px;
-  border-radius: 8px;
-  z-index: 4;
-}
-
-.error-actions {
-  display: flex;
-  gap: 8px;
-  margin-left: auto;
-}
-
-.error-btn {
-  padding: 4px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  border-radius: 4px;
-  background: transparent;
-  color: #fff;
-  font-size: 12px;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.error-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.error-btn-primary {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: #fff;
-}
-
-/* ========= 暂停图标（右下角） ========= */
-.pause-overlay {
-  position: absolute;
-  right: 24px;
-  bottom: 90px;
-  z-index: 6;
-  cursor: pointer;
-  pointer-events: auto;
-  animation: pause-fade-in 0.3s ease;
-  opacity: 0.85;
-  transition: opacity 0.2s ease, transform 0.2s ease;
-}
-
-.pause-overlay:hover {
-  opacity: 1;
-  transform: scale(1.05);
-}
-
-.pause-icon {
-  width: 80px;
-  height: 80px;
-  object-fit: contain;
-  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.6));
-}
-
-@keyframes pause-fade-in {
-  from {
-    opacity: 0;
-    transform: scale(0.85);
-  }
-
-  to {
-    opacity: 0.85;
-    transform: scale(1);
-  }
-}
-
-/* ========= 进度条独立行（控制条上方） ========= */
-/* z-index 低于 ctrl-bar(8)，确保 ctrl-bar 的弹出面板（音量/倍速/画质）
-   始终在进度条上方，不会发生"点画质却点到进度条"的问题。 */
-.progress-bar-wrapper {
-  position: absolute;
-  bottom: 52px;
-  left: 0;
-  right: 0;
-  display: flex;
-  align-items: center;
-  padding: 4px 16px;
-  z-index: 4;
-  height: 28px;
-  box-sizing: border-box;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0) 100%);
-}
-
-/* B站风格时间显示 */
-.time-display {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  color: rgba(255, 255, 255, 0.8);
-  flex-shrink: 0;
-  white-space: nowrap;
-  line-height: 1;
-}
-
-.time-bar {
-  cursor: text;
-  padding: 2px 4px;
-  border-radius: 3px;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-
-.time-bar:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-}
-
-.time-current {
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.time-sep {
-  color: rgba(255, 255, 255, 0.4);
-  font-size: 11px;
-}
-
-.time-duration {
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.time-input {
-  width: 60px;
-  padding: 2px 6px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 4px;
-  background: rgba(0, 0, 0, 0.6);
-  color: #fff;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-  outline: none;
-  font-family: inherit;
-}
-
-.time-input:focus {
-  border-color: var(--accent, #1890ff);
-  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
-}
-
-/* ========= 控制条 ========= */
-/* z-index 高于 progress-bar-wrapper(4)，保证所有弹出面板在进度条上方。
-   各弹出面板按钮组（volume-group, speed-group）各自定义 ::before 桥接区，
-   不在此处设置全局桥接，避免阻碍进度条的悬停交互。 */
-.ctrl-bar {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px 12px 16px;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.6) 60%, rgba(0, 0, 0, 0) 100%);
-  color: #fff;
-  font-size: 12px;
-  user-select: none;
-  z-index: 8;
-  box-sizing: border-box;
-  flex-wrap: nowrap;
-  cursor: pointer;
-}
-
-.ctrl-btn {
-  background: transparent;
-  border: none;
-  color: #fff;
-  height: 32px;
-  padding: 0 6px;
-  min-width: 32px;
-  border-radius: 6px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  transition: all 0.15s;
-  flex-shrink: 0;
-  font-size: 11px;
-  font-family: inherit;
-}
-
-.ctrl-btn:hover:not(:disabled) {
-  background: rgba(24, 144, 255, 0.25);
-  color: #40a9ff;
-}
-
-.ctrl-btn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-.ctrl-btn.active {
-  color: #40a9ff;
-  background: rgba(24, 144, 255, 0.3);
-}
-
-.play-btn {
-  /* 播放按钮略大一点，视觉上是中心 */
-  height: 36px;
-  min-width: 36px;
-}
-
-.play-btn:hover:not(:disabled) {
-  background: rgba(24, 144, 255, 0.35);
-}
-
-.time {
-  font-variant-numeric: tabular-nums;
-  min-width: 100px;
-  text-align: center;
-  flex-shrink: 0;
-  color: rgba(255, 255, 255, 0.85);
-  display: none;
-  /* 时间已移到进度条行 */
-}
-
-/* ============ 进度条（三层轨道 + 独特滑块） ============ */
-.progress-container {
-  position: relative;
-  flex: 1;
-  height: 24px;
-  /* 更大的点击热区，避免误触 */
-  display: flex;
-  align-items: center;
-  cursor: pointer;
-  user-select: none;
-}
-
-.progress-track-bg,
-.progress-buffer,
-.progress-played {
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  height: 5px;
-  border-radius: 3px;
-  transition: height 0.15s ease;
-  pointer-events: none;
-}
-
-.progress-container:hover .progress-track-bg,
-.progress-container:hover .progress-buffer,
-.progress-container:hover .progress-played {
-  height: 7px;
-  /* 悬停时变粗，给用户反馈 */
-}
-
-.progress-track-bg {
-  width: 100%;
-  background: rgba(255, 255, 255, 0.18);
-}
-
-/* 缓冲层（灰色/淡色）—— 代表已经下载到的位置 */
-.progress-buffer {
-  background: rgba(255, 255, 255, 0.42);
-  width: 0;
-  transition: width 0.35s ease;
-}
-
-/* 已播放（蓝色渐变） */
-.progress-played {
-  background: linear-gradient(90deg, #1890ff 0%, #40a9ff 60%, #69c0ff 100%);
-  width: 0;
-  box-shadow: 0 0 6px rgba(64, 169, 255, 0.6);
-  transition: width 0.12s linear;
-}
-
-/* 独特的当前播放位置滑块（白色核心 + 蓝色外圈 + 外部光晕） */
-.progress-thumb {
-  position: absolute;
-  top: 50%;
-  width: 14px;
-  height: 14px;
-  transform: translate(-50%, -50%) scale(0.85);
-  pointer-events: none;
-  transition: transform 0.15s ease;
-  z-index: 2;
-}
-
-.enhance-compare-line {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  z-index: 3;
-  width: 2px;
-  background: #fff;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, .55), 0 0 14px rgba(255, 255, 255, .8);
-  pointer-events: none;
-}
-.enhance-compare-line i {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 14px;
-  height: 14px;
-  transform: translate(-50%, -50%);
-  border: 2px solid #fff;
-  border-radius: 50%;
-  background: #1890ff;
-}
-.enhance-compare-line span {
-  position: absolute;
-  top: 12px;
-  padding: 3px 6px;
-  border-radius: 4px;
-  background: rgba(0, 0, 0, .62);
-  color: #fff;
-  font-size: 11px;
-  white-space: nowrap;
-}
-.enhance-compare-line span:first-child { right: 10px; }
-.enhance-compare-line span:last-child { left: 10px; }
-
-.progress-container:hover .progress-thumb {
-  transform: translate(-50%, -50%) scale(1);
-}
-
-.thumb-core {
-  position: absolute;
-  inset: 4px;
-  background: #fff;
-  border-radius: 50%;
-  box-shadow: 0 0 4px rgba(255, 255, 255, 0.9);
-}
-
-.thumb-ring {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  border: 2px solid #40a9ff;
-  box-shadow: 0 0 0 1px rgba(24, 144, 255, 0.5);
-}
-
-.thumb-halo {
-  position: absolute;
-  inset: -4px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(64, 169, 255, 0.35) 0%, transparent 70%);
-  opacity: 0.9;
-}
-
-/* 播放中：外层光环轻微呼吸 */
-.progress-thumb.playing .thumb-halo {
-  animation: thumb-breathe 1.8s ease-in-out infinite;
-}
-
-@keyframes thumb-breathe {
-
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 0.6;
-  }
-
-  50% {
-    transform: scale(1.2);
-    opacity: 1;
-  }
-}
-
-/* 透明 range input 覆盖在整个容器上 —— 只负责交互（拖动），不显示默认外观 */
-.progress-slider {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  padding: 0;
-  background: transparent;
-  border: none;
-  outline: none;
-  appearance: none;
-  -webkit-appearance: none;
-  cursor: pointer;
-  z-index: 3;
-}
-
-.progress-slider::-webkit-slider-runnable-track {
-  background: transparent;
-  height: 100%;
-}
-
-.progress-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 16px;
-  height: 16px;
-  background: transparent;
-  border: none;
-  margin-top: 0;
-  cursor: pointer;
-}
-
-.progress-slider::-moz-range-track {
-  background: transparent;
-}
-
-.progress-slider::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-}
-
-/* 进度条悬停预览线 */
-.progress-hover-line {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: rgba(255, 255, 255, 0.5);
-  pointer-events: none;
-  z-index: 1;
-  transform: translateX(-50%);
-}
-
-/* 时间预览（悬停时显示） */
-.progress-time-preview {
-  position: absolute;
-  bottom: 100%;
-  transform: translateX(-50%);
-  margin-bottom: 8px;
-  pointer-events: none;
-  z-index: 20;
-  border-radius: 4px;
-  background: rgba(0, 0, 0, 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  padding: 0;
-  overflow: hidden;
-  min-width: 56px;
-  text-align: center;
-}
-
-/* 缩略图图片（B站风格） */
-.progress-time-preview .preview-thumb-img {
-  display: block;
-  width: 160px;
-  height: 90px;
-  object-fit: cover;
-  border-radius: 4px 4px 0 0;
-}
-
-.progress-time-preview .preview-time {
-  display: block;
-  text-align: center;
-  font-size: 12px;
-  font-weight: 500;
-  color: #fff;
-  font-variant-numeric: tabular-nums;
-  padding: 2px 8px;
-  background: rgba(0, 0, 0, 0.85);
-}
-
-/* 操作 OSD（快进/快退/倍速/音量 屏幕中央提示） */
-.action-osd {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 20px;
-  background: rgba(0, 0, 0, 0.7);
-  border-radius: 8px;
-  pointer-events: none;
-  z-index: 50;
-  backdrop-filter: blur(4px);
-}
-
-.action-osd-icon {
-  font-size: 20px;
-}
-
-.action-osd-text {
-  font-size: 18px;
-  font-weight: 600;
-  color: #fff;
-  font-variant-numeric: tabular-nums;
-}
-
-.osd-fade-enter-active,
-.osd-fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.osd-fade-enter-from,
-.osd-fade-leave-to {
-  opacity: 0;
-}
-
-/* ========= 音量组（垂直弹出滑块） ========= */
-/* 总体策略：在 .volume-popup 中放一个"旋转容器"（120px 高），
-   里面的 <input type="range"> 是水平的，宽 120px，旋转 90° 后
-   变成高度 120px 的垂直滑块。百分比数字在下方固定显示。
-   不依赖 padding 撑开，尺寸明确可靠。 */
-.volume-group {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-}
-
-/* 桥接区：仅覆盖按钮与 popup 之间的 6px 缝隙，不延伸到进度条区域 */
-.volume-group::before {
-  content: '';
-  position: absolute;
-  left: -4px;
-  right: -4px;
-  top: -8px;
-  height: 10px;
-  pointer-events: auto;
-  z-index: 1;
-}
-
-.volume-group:hover .volume-popup,
-.volume-popup.show {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateX(-50%) translateY(0);
-}
-
-.volume-popup {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%) translateY(6px);
-  width: 60px;
-  height: 170px;
-  background: rgba(20, 20, 20, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
-  padding: 12px 0 10px 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.18s ease, transform 0.18s ease;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55);
-  z-index: 15;
-}
-
-.volume-slider-wrap {
-  position: relative;
-  width: 32px;
-  height: 120px;
-  /* 垂直滑块轨道高度 */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.volume-slider-v {
-  width: 120px;
-  height: 6px;
-  background: rgba(255,255,255,0.2);
-  border-radius: 3px;
-  outline: none;
-  transform: rotate(-90deg);
-  transform-origin: center center;
-  cursor: pointer;
-  accent-color:  #1890ff;
-}
-
-.volume-slider-v::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #1890ff;
-  border: 2px solid #fff;
-  box-shadow: 0 0 0 4px rgba(24, 144, 255, 0.18);
-  cursor: pointer;
-}
-
-.volume-slider-v::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #1890ff;
-  border: 2px solid #fff;
-  cursor: pointer;
-}
-
-.volume-label {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.85);
-  font-variant-numeric: tabular-nums;
-  min-width: 28px;
-  text-align: center;
-}
-
-/* ========= 倍速组（带垂直弹出列表） ========= */
-.speed-group {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-}
-
-/* 桥接区：仅覆盖按钮与 popup 之间的缝隙，不延伸到进度条区域 */
-.speed-group::before {
-  content: '';
-  position: absolute;
-  left: -4px;
-  right: -4px;
-  top: -8px;
-  height: 10px;
-  pointer-events: auto;
-  z-index: 1;
-}
-
-.speed-group:hover .speed-popup,
-.speed-popup.show {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateY(0);
-}
-
-.speed-btn {
-  min-width: 52px;
-  padding: 0 8px;
-}
-
-.speed-text {
-  font-weight: 600;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-}
-
-.speed-popup {
-  position: absolute;
-  bottom: calc(100% + 10px);
-  right: 0;
-  background: rgba(20, 20, 20, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  padding: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 92px;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(6px);
-  transition: all 0.18s ease;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
-  z-index: 10;
-}
-
-.speed-popup.show {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateY(0);
-}
-
-.speed-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  padding: 8px 12px;
-  background: transparent;
-  border: none;
-  color: rgba(255, 255, 255, 0.75);
-  font-size: 12px;
-  font-family: inherit;
-  border-radius: 6px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.1s ease;
-  font-variant-numeric: tabular-nums;
-}
-
-.speed-item:hover {
-  background: rgba(24, 144, 255, 0.18);
-  color: #fff;
-}
-
-.speed-item.active {
-  background: rgba(24, 144, 255, 0.3);
-  color: #40a9ff;
-  font-weight: 600;
-}
-
-/* ========= 播放设置弹出面板 ========= */
-.playback-settings-group {
-  position: relative;
-}
-
-.playback-settings-popup {
-  position: absolute;
-  bottom: calc(100% + 10px);
-  right: 0;
-  background: rgba(20, 20, 20, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  padding: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 180px;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(6px);
-  transition: all 0.18s ease;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
-  z-index: 10;
-}
-
-.playback-settings-popup.show {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateY(0);
-}
-
-.playback-settings-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  color: rgba(255, 255, 255, 0.75);
-  font-size: 0.86rem;
-  border-radius: 6px;
-  gap: 12px;
-}
-
-.playback-settings-item:hover {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.ps-toggle {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  cursor: pointer;
-}
-
-.ps-toggle input {
-  display: none;
-}
-
-.ps-switch {
-  position: relative;
-  width: 32px;
-  height: 18px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 999px;
-  transition: background 0.2s;
-  flex-shrink: 0;
-}
-
-.ps-switch::after {
-  content: '';
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 14px;
-  height: 14px;
-  background: #fff;
-  border-radius: 50%;
-  transition: transform 0.2s;
-}
-
-.ps-toggle input:checked~.ps-switch {
-  background: #1890ff;
-}
-
-.ps-toggle input:checked~.ps-switch::after {
-  transform: translateX(14px);
-}
-
-.ps-select {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  color: #fff;
-  padding: 3px 6px;
-  font-size: 0.79rem;
-  font-family: inherit;
-  cursor: pointer;
-  outline: none;
-}
-
-.ps-select:hover {
-  border-color: rgba(255, 255, 255, 0.3);
-}
-
-.ps-select option {
-  background: #1a1a1a;
-  color: #fff;
-}
-
-/* ========= 报告广告 ========= */
-.report-ad-group {
-  position: relative;
-}
-
-.report-ad-popup {
-  position: absolute;
-  bottom: calc(100% + 10px);
-  right: 0;
-  background: rgba(20, 20, 20, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  padding: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 220px;
-  max-width: 340px;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(6px);
-  transition: all 0.18s ease;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
-  z-index: 10;
-}
-
-.report-ad-popup.show {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateY(0);
-}
-
-.report-ad-title {
-  padding: 6px 12px 4px;
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 0.75rem;
-  user-select: none;
-}
-
-.report-ad-empty {
-  padding: 8px 12px;
-  color: rgba(255, 255, 255, 0.4);
-  font-size: 0.82rem;
-}
-
-.report-ad-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 12px;
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 0.82rem;
-  border-radius: 6px;
-  cursor: pointer;
-  background: none;
-  border: none;
-  width: 100%;
-  text-align: left;
-  font-family: inherit;
-}
-
-.report-ad-item:hover {
-  background: rgba(255, 77, 77, 0.15);
-  color: #ff6b6b;
-}
-
-.report-ad-domain {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.report-ad-toast {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 18px;
-  background: rgba(0, 0, 0, 0.85);
-  color: #4ade80;
-  border-radius: 10px;
-  font-size: 0.85rem;
-  z-index: 25;
-  pointer-events: none;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-}
-
-/* ========= 外挂字幕 ========= */
-.vp-subtitle {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 20px;
-  display: flex;
-  justify-content: center;
-  padding: 0 6%;
-  box-sizing: border-box;
-  /* 只作显示，不吞掉点击（点击视频要能暂停/播放） */
-  pointer-events: none;
-  z-index: 6;
-}
-
-.vp-subtitle.with-controls {
-  bottom: 64px;
-}
-
-.vp-subtitle span {
-  max-width: 100%;
-  padding: 3px 12px;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.5);
-  color: #fff;
-  font-size: 15px;
-  line-height: 1.45;
-  text-align: center;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.player-wrapper.fullscreen .vp-subtitle span {
-  font-size: 26px;
-}
-
-.subtitle-group {
-  position: relative;
-}
-
-.subtitle-file-input {
-  display: none;
-}
-
-.subtitle-popup {
-  position: absolute;
-  bottom: calc(100% + 10px);
-  right: 0;
-  background: rgba(20, 20, 20, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  padding: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 230px;
-  max-width: 320px;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(6px);
-  transition: all 0.18s ease;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
-  z-index: 10;
-}
-
-.subtitle-popup.show {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateY(0);
-}
-
-.subtitle-title {
-  padding: 6px 12px 4px;
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 0.75rem;
-  user-select: none;
-}
-
-.subtitle-current {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 6px 12px 8px;
-  margin-bottom: 2px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.subtitle-name {
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 0.8rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.subtitle-count {
-  color: rgba(255, 255, 255, 0.45);
-  font-size: 0.72rem;
-}
-
-.subtitle-error {
-  padding: 6px 12px;
-  color: #ff6b6b;
-  font-size: 0.75rem;
-}
-
-.subtitle-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 12px;
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 0.82rem;
-  border-radius: 6px;
-  cursor: pointer;
-  background: none;
-  border: none;
-  width: 100%;
-  text-align: left;
-  font-family: inherit;
-}
-
-.subtitle-item:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-}
-
-.subtitle-item--danger:hover {
-  background: rgba(255, 77, 77, 0.15);
-  color: #ff6b6b;
-}
-
-.subtitle-hint {
-  padding: 8px 12px 4px;
-  color: rgba(255, 255, 255, 0.38);
-  font-size: 0.72rem;
-  line-height: 1.5;
-}
-
-/* ========= B 站风格：底部左侧继续播放小提示 ========= */
-.resume-bili {
-  position: absolute;
-  left: 12px;
-  bottom: 52px;
-  /* 放在控制条上方 */
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 12px;
-  background: rgba(0, 0, 0, 0.72);
-  color: #fff;
-  border-radius: 8px;
-  font-size: 12px;
-  z-index: 14;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  animation: slideInLeft 0.3s ease;
-}
-
-@keyframes slideInLeft {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.resume-bili-text b {
-  color: #40a9ff;
-  font-weight: 600;
-  margin: 0 2px;
-}
-
-.resume-bili-link {
-  background: transparent;
-  color: #40a9ff;
-  border: none;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 12px;
-  cursor: pointer;
-  font-family: inherit;
-  transition: all 0.15s;
-}
-
-.resume-bili-link:hover {
-  background: rgba(24, 144, 255, 0.2);
-  color: #fff;
-}
-
-.resume-bili-dismiss {
-  color: rgba(255, 255, 255, 0.65);
-}
-
-.resume-bili-dismiss:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
-}
-
-/* ========= 画质切换 toast（左下角 1.5 秒提示） ========= */
-.quality-toast {
-  position: absolute;
-  left: 12px;
-  bottom: 90px;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 14px;
-  background: rgba(0, 0, 0, 0.78);
-  color: #fff;
-  border-radius: 8px;
-  font-size: 13px;
-  z-index: 30;
-  pointer-events: none;
-  animation: quality-toast-in 0.3s ease;
-  border-left: 3px solid #40a9ff;
-}
-
-@keyframes quality-toast-in {
-  from {
-    opacity: 0;
-    transform: translateX(-10px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-/* ========= 音量 toast（键盘调节音量 1 秒显示） ========= */
-.volume-toast {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  background: rgba(0, 0, 0, 0.55);
-  color: #fff;
-  padding: 14px 20px;
-  border-radius: 10px;
-  pointer-events: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  min-width: 200px;
-  z-index: 20;
-  backdrop-filter: blur(6px);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-}
-
-.volume-toast-bar {
-  width: 100%;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.volume-toast-fill {
-  height: 100%;
-  background: #1890ff;
-  transition: width 0.18s ease;
-}
-
-.volume-toast-text {
-  font-size: 16px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-/* ========= 画质选择器 ========= */
-.quality-group {
-  flex-shrink: 0;
-  margin: 0 2px;
-}
-
-.quality-group :deep(.select-dropdown) {
-  min-width: 100px;
-}
-
-.quality-group :deep(.select-trigger) {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.75);
-  font-size: 11px;
-  padding: 3px 8px;
-  min-height: 26px;
-  border-radius: 4px;
-}
-
-.quality-group :deep(.select-trigger:hover) {
-  border-color: rgba(24, 144, 255, 0.5);
-  color: #fff;
-  background: rgba(24, 144, 255, 0.15);
-}
-
-.quality-group :deep(.select-panel) {
-  background: rgba(20, 20, 20, 0.96);
-  border-color: rgba(255, 255, 255, 0.1);
-  font-size: 12px;
-  border-radius: 6px;
-  min-width: 120px;
-}
-
-.quality-group :deep(.option) {
-  color: rgba(255, 255, 255, 0.75);
-  padding: 6px 10px;
-  font-size: 12px;
-}
-
-.quality-group :deep(.option:hover) {
-  background: rgba(24, 144, 255, 0.15);
-  color: #fff;
-}
-
-.quality-group :deep(.option.is-selected) {
-  background: rgba(24, 144, 255, 0.25);
-  color: #40a9ff;
-}
-
-/* ========= 画质增强提示弹窗 ========= */
-.ai-warning-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 100;
-  background: rgba(0, 0, 0, 0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  backdrop-filter: blur(4px);
-  animation: cczj-fade-in 0.2s ease;
-}
-
-
-.ai-warning-dialog {
-  background: rgba(28, 28, 36, 0.98);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  padding: 24px;
-  max-width: 440px;
-  width: 90%;
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
-  color: #fff;
-}
-
-.ai-warning-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 17px;
-  font-weight: 700;
-  margin-bottom: 16px;
-  color: #ffa940;
-}
-
-.ai-warning-icon {
-  font-size: 22px;
-}
-
-.ai-warning-body {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.75);
-  line-height: 1.6;
-}
-
-.ai-warning-body p {
-  margin: 0 0 8px;
-}
-
-.ai-warning-body ul {
-  margin: 0 0 12px;
-  padding-left: 20px;
-}
-
-.ai-warning-body li {
-  margin-bottom: 6px;
-}
-
-.ai-warning-body b {
-  color: #ffa940;
-  font-weight: 600;
-}
-
-.ai-warning-note {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.5);
-  margin-top: 8px;
-}
-
-.ai-warning-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.ai-warning-btn {
-  padding: 8px 20px;
-  border-radius: 4px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  border: none;
-  font-family: inherit;
-  transition: all 0.15s ease;
-}
-
-.ai-warning-btn--cancel {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.6);
-}
-
-.ai-warning-btn--cancel:hover {
-  background: rgba(255, 255, 255, 0.15);
-  color: #fff;
-}
-
-.ai-warning-btn--confirm {
-  background: #ff7a00;
-  color: #fff;
-}
-
-.ai-warning-btn--confirm:hover {
-  background: #ff9426;
-  transform: translateY(-1px);
-}
-
-.vp-modal-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-}
-
-.vp-modal {
-  background: rgba(28, 28, 32, 0.97);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 14px;
-  min-width: 320px;
-  max-width: 90vw;
-  width: 440px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  max-height: 85vh;
-}
-
-.vp-modal-info {
-  max-width: 480px;
-  min-width: 360px;
-  width: 480px;
-}
-
-.vp-modal-shortcut {
-  max-width: 90vw;
-  min-width: 380px;
-  width: 520px;
-}
-
-.vp-modal-shortcut .vp-modal-body {
-  max-height: calc(85vh - 140px);
-}
-
-.vp-modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 18px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: 15px;
-  font-weight: 600;
-  color: #fff;
-}
-
-.vp-modal-close {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  border: none;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.5);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s;
-}
-
-.vp-modal-close:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-}
-
-.vp-modal-body {
-  padding: 14px 18px;
-  max-height: calc(85vh - 120px);
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
-}
-
-.vp-modal-body::-webkit-scrollbar {
-  width: 5px;
-}
-
-.vp-modal-body::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 3px;
-}
-
-.vp-modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 12px 18px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.vp-btn-primary,
-.vp-btn-secondary {
-  padding: 6px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  border: 1px solid transparent;
-  transition: all 0.15s;
-  font-family: inherit;
-}
-
-.vp-btn-primary {
-  background: var(--accent, #1890ff);
-  color: #fff;
-}
-
-.vp-btn-primary:hover {
-  filter: brightness(1.1);
-}
-
-.vp-btn-secondary {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.7);
-  border-color: rgba(255, 255, 255, 0.12);
-}
-
-.vp-btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.14);
-  color: #fff;
-}
-
-.vp-modal-hint {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.45);
-  margin: 0 0 12px;
-  line-height: 1.5;
-}
-
-.vp-empty-text {
-  text-align: center;
-  color: rgba(255, 255, 255, 0.4);
-  padding: 20px 0;
-  font-size: 13px;
-}
-
-/* 视频信息 - 网格布局 */
-.vp-info-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px 20px;
-}
-
-.vp-info-item {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.vp-info-label {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.4);
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-}
-
-.vp-info-val {
-  font-size: 14px;
-  color: #fff;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  word-break: break-all;
-}
-
-.vp-info-val.vp-info-warn {
-  color: #ff6b6b;
-}
-
-.vp-info-val.vp-info-highlight {
-  color: #40a9ff;
-  font-weight: 600;
-}
-
-.vp-info-val.vp-info-mono {
-  font-size: 12px;
-  font-family: 'Consolas', 'Monaco', monospace;
-}
-
-.vp-info-val.vp-info-url {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.6);
-  line-height: 1.4;
-}
-
-.vp-info-item.vp-info-full {
-  grid-column: 1 / -1;
-}
-
-.vp-info-section-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.55);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin: 16px 0 8px;
-  padding-bottom: 4px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.vp-info-section-title:first-child {
-  margin-top: 0;
-}
-
-/* 快捷键列表 */
-.vp-shortcut-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.vp-shortcut-row {
-  display: flex;
-  align-items: center;
-  padding: 8px 12px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  gap: 10px;
-  transition: border-color 0.15s;
-}
-
-.vp-shortcut-row:hover {
-  border-color: rgba(255, 255, 255, 0.12);
-}
-
-.vp-sc-label {
-  font-size: 13px;
-  font-weight: 500;
-  color: #fff;
-  min-width: 55px;
-}
-
-.vp-sc-desc {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.4);
-  flex: 1;
-  min-width: 0;
-}
-
-.vp-sc-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-.vp-sc-btn {
-  padding: 4px 12px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 12px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 65px;
-  justify-content: center;
-  transition: all 0.15s;
-  font-family: inherit;
-}
-
-.vp-sc-btn:hover {
-  border-color: rgba(255, 255, 255, 0.28);
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.vp-sc-btn.editing {
-  border-color: var(--accent, #1890ff);
-  color: var(--accent, #1890ff);
-  animation: vp-blink 0.8s ease infinite;
-}
-
-@keyframes vp-blink {
-
-  0%,
-  100% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: 0.5;
-  }
-}
-
-.vp-sc-key {
-  display: inline-block;
-  padding: 2px 7px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1.4;
-}
-
-.vp-sc-key+.vp-sc-key {
-  margin-left: 3px;
-}
-
-.vp-sc-none {
-  color: rgba(255, 255, 255, 0.3);
-  font-size: 11px;
-}
-
-.vp-sc-recording {
-  font-size: 12px;
-  color: var(--accent, #1890ff);
-}
-
-.vp-sc-reset {
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  border: none;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.3);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s;
-  opacity: 0;
-}
-
-.vp-shortcut-row:hover .vp-sc-reset {
-  opacity: 1;
-}
-
-.vp-sc-reset:hover {
-  color: var(--accent, #1890ff);
-  background: rgba(255, 255, 255, 0.08);
-}
-
-/* 播放设置弹窗 - 分隔线 + 快捷键入口 */
-.playback-settings-divider {
-  height: 1px;
-  background: rgba(255, 255, 255, 0.08);
-  margin: 4px 0;
-}
-
-.playback-settings-link {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 6px;
-  border: none;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 13px;
-  cursor: pointer;
-  transition: background 0.12s;
-  font-family: inherit;
-  width: 100%;
-  text-align: left;
-}
-
-.playback-settings-link:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
-}
-
-.playback-settings-link span {
-  flex: 1;
-}
-
-
-</style>
+<style scoped src="../styles/components/player.css"></style>

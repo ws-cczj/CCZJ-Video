@@ -1,12 +1,12 @@
 package backup
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
+	"cczjVideo/app/apperror"
 	"cczjVideo/app/applog"
 )
 
@@ -23,7 +23,7 @@ func (s *Service) Exports(dataDir string) ([]ArchiveInfo, error) {
 		if os.IsNotExist(err) {
 			return []ArchiveInfo{}, nil
 		}
-		return nil, fmt.Errorf("read export directory: %w", err)
+		return nil, apperror.Wrap(apperror.Storage, err, "read export directory")
 	}
 	files := make([]ArchiveInfo, 0, len(entries))
 	for _, entry := range entries {
@@ -53,7 +53,7 @@ func (s *Service) ImportFile(dataDir, name string) (Result, error) {
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return Result{}, fmt.Errorf("read backup file: %w", err)
+		return Result{}, apperror.Wrap(apperror.Storage, err, "read backup file")
 	}
 	applog.InfoFields("importing backup file", applog.Fields{"file": name, "bytes": len(raw)})
 	return s.ImportBytes(name, raw, "exports:"+name)
@@ -62,19 +62,19 @@ func (s *Service) ImportFile(dataDir, name string) (Result, error) {
 func (s *Service) exportPath(dataDir, name string) (string, error) {
 	cleaned := strings.TrimSpace(filepath.Base(name))
 	if cleaned == "" || cleaned != name || !isBackupFileName(cleaned) {
-		return "", fmt.Errorf("invalid backup file name: %q", name)
+		return "", apperror.Newf(apperror.Validation, "invalid backup file name: %q", name)
 	}
 	dir := filepath.Join(dataDir, exportDirName)
 	path := filepath.Join(dir, cleaned)
 	if !withinDir(path, dir) {
-		return "", fmt.Errorf("backup file is outside the export directory")
+		return "", apperror.New(apperror.Validation, "backup file is outside the export directory")
 	}
 	info, err := os.Stat(path)
 	if err != nil {
-		return "", fmt.Errorf("backup file not found: %w", err)
+		return "", apperror.Wrap(apperror.NotFound, err, "backup file not found")
 	}
 	if info.IsDir() || info.Size() == 0 {
-		return "", fmt.Errorf("backup file is empty")
+		return "", apperror.New(apperror.Corrupt, "backup file is empty")
 	}
 	return path, nil
 }

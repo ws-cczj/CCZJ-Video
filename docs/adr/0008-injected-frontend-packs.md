@@ -1,0 +1,157 @@
+# ADR 0008: Injected frontend packs
+
+## Status
+
+Accepted. Amends ADR 0007 — the clause "a pack never contributes code" no longer holds.
+
+## Context
+
+ADR 0007 shipped extension packs as pure data: `plugin.json` plus JSON/GLSL/images,
+interpreted by engines already in the application. The stated reason for refusing
+pack code was that running pack code in the webview "would give zero isolation".
+
+That reasoning does not fit this product. CCZJ Video is single-user desktop software;
+the "user" and the "attacker" are the same person, and that person already owns the
+machine, the exe and the data directory. The restriction therefore protected nobody
+while blocking the extensions the user actually wanted — every UI tweak needed a new
+declarative `kind`, i.e. a new engine plus a release.
+
+The requirement, restated: the user may modify anything the interface can express,
+as long as the kernel stays intact.
+
+## Decision
+
+Add a fourth pack kind, `script`, and a cross-cutting `script` section any kind may
+also carry. It names an entry file (`.js`/`.mjs`, ≤ 2 MiB) and optional stylesheets
+(`.css`), both resolved inside the pack directory by the same path rules as every
+other kind.
+
+The frontend injects them after `app.mount('#app')`:
+
+- Stylesheets become `<style>` elements in `document.head`.
+- The entry is fetched as text through the existing `ReadPluginFile` binding and run
+  as an ES module via a dynamic `import()` of a `blob:` URL. There is no CSP in this
+  app and adding one is not on the roadmap, so this needs no relaxation. It is
+  preferred over `eval` because the module gets a real module scope, and a fresh URL
+  per pass means a rescan always observes edited source.
+- The module's `setup` (or `default` function, or `default.setup`) receives a `cczj`
+  object: the Wails binding namespace, the router, the Vue runtime exports, the nine
+  Pinia stores, i18n (`t` / `merge` / `locale`), backend event subscription, a namespaced
+  localStorage, the app log timeline, and five mount points — `nav`, `route`, `css`,
+  `settingsTab`, `intercept`. `cczj.components` hands out the app's own `LogPanel` and
+  `DiagnosticsPanel` so a pack can mount an existing panel instead of rebuilding one.
+
+`intercept` is what makes "modify, not just extend" real: a pack can wrap a store
+action and change behaviour, including not calling the original.
+
+Four boundaries keep this off the kernel:
+
+1. **Nothing reaches Go.** Packs run in the webview and can only call bindings that
+   are already exported. ADR 0001 (table ownership, `source_key`) and every storage
+   invariant are enforced server-side and stay enforced.
+2. **Built-in routes cannot be overridden.** `route()` throws if the path already
+   belongs to an app page. Replacing core UI requires editing core UI.
+3. **Built-in settings groups cannot be claimed.** `settingsTab()` throws on the five
+   ids the app owns (`basic` / `theme` / `extensions` / `advanced` / `about`); a pack
+   adds a group, it does not seize one.
+4. **Failure degrades to one pack.** A pack that throws has everything it registered
+   this pass undone (routes, nav entries, styles, patches, subscriptions), is recorded
+   as broken in `localStorage`, is skipped on later passes until the user hits retry,
+   and writes one `ERROR` line to the log timeline. Other packs and built-in features
+   are untouched. Every pass disposes the previous pass first, so a pack that vanished
+   from disk cannot linger on screen.
+
+## Consent, not isolation
+
+Writes and outbound requests go through a prompt (`docs/plugins.md` §2.1). A pack
+declares `write` and `network` in its manifest; Go validates the declaration and stores
+nothing about consent. The gate lives in the frontend runtime:
+
+- `cczj.bindings` is handed out behind a Proxy. Names that read (`Get…`, `List…`,
+  `Search…`, plus an explicit list) pass through; everything else is a write and needs
+  `write`. Callers still get a Promise, so no pack has to be rewritten.
+- `fetch` is patched globally, but acts only when the current call stack contains a blob
+  URL the runtime claimed for a pack **and** the target is not the app's own host.
+  Requests to `wails.localhost` always pass: that is where Wails sends every binding call,
+  so a pack calling any binding would otherwise be reported as "trying to reach the network"
+  — that false positive blocked three packs on the first real run. The player's segment
+  loop and every other app request is untouched, and the claim table is emptied when no
+  pack is loaded so the common path costs nothing.
+- `WebSocket` is deliberately not patched. Wrapping a native constructor means copying its
+  statics, and `CONNECTING` is a non-writable data property inherited through the prototype
+  chain — the assignment throws in strict mode, which is exactly how the first pack to
+  trigger the install got isolated. Nothing in the pack API needs sockets, so it is out.
+- Undeclared capability: refused without asking. Declared: one prompt on first use, then
+  the answer is remembered in the settings KV (`plugin_permissions`) and shown on the
+  extensions card, where revoking it returns that capability to "not asked yet".
+  Every decision writes one line to the log timeline.
+
+This is a consent mechanism, deliberately not a sandbox, and it is documented as such.
+`XMLHttpRequest` is left alone because the playback engine uses it and gating it would
+put the player behind a permission dialog; a pack determined to misbehave can also build
+its own blob module and escape attribution, or reach the same writes through `cczj.stores`
+— an app action imports its bindings directly and never passes through the proxy. What the
+gate buys is that nothing reaches the library or the network without the user having seen
+which pack did it — and that a sloppy pack fails loudly at the first call instead of
+quietly rewriting the database.
+
+## Dogfooding: the app's own panels are packs
+
+Three packs ship inside the binary — `motion-effects`, `logs-panel` and
+`diagnostics-panel` — and the Settings page no longer hardcodes those groups. The panel
+components stay compiled into the app; the packs only call `settingsTab()` to hang them
+on the group bar. The point is ownership of the decision: an item the user cannot remove
+is a feature, one they can delete with the folder is a preference.
+
+`motion-effects` goes one step further and carries a CSS layer (`motion.css`) holding the
+app-wide motion tokens, so the knobs of the animation system live on disk where the user
+can edit them. The reduced-motion fallback deliberately stays in the app: a switch the
+pack exposes must not be stranded by turning the pack off.
+
+Seed semantics are what makes that honest, and they are load-bearing:
+
+- Built-in packs are written to `<dataDir>/plugins` **once**, guarded by a version
+  marker file. Re-seeding on every start would make "delete the folder = uninstall"
+  false for exactly the two packs the user is most likely to want gone.
+- An existing pack directory is never overwritten, even when the marker is bumped, so
+  editing a built-in pack survives — the app does not write into pack directories,
+  built-in or otherwise.
+- A version bump therefore only fills in packs that are genuinely missing.
+
+Installing is now the same conversation in reverse: dropping a folder on the extensions
+card reads the files in the webview, stages them under `<dataDir>/plugin-staging`, runs
+the full manifest validation there, and only renames into `plugins/` if the pack is
+`ready`. A failed drop leaves nothing behind, and a same-id pack is swapped with a
+rollback path rather than clobbered. The drag is a convenience, not a bypass — every
+rule in ADR 0007 still applies to what arrives.
+
+## Consequences
+
+- ADR 0007's "no sandbox, no permission model" consequence still holds in the sense that
+  matters: nothing here contains a pack. `script` packs add a consent gate over the two
+  actions the user can actually care about — changing app data and talking to the network
+  — while everything inside the webview remains the user's own trust decision.
+- Pack code is not isolated from pack code. Two packs may patch the same action;
+  undo order (last registered, first undone) keeps a stack of wrappers from being
+  torn down half-applied, but a pack that mutates another pack's output is the user's
+  business, not something the runtime arbitrates.
+- The runtime-only Vue build means packs cannot use `<template>` or SFCs; components
+  are `h()` render functions, and the module cannot `import` anything. The `cczj`
+  argument is deliberately wide so no gap forces a release.
+- Production builds drop `console.log`, so `cczj.log` and the settings log panel are
+  the observable channel for pack behaviour; injection failures are written there for
+  the same reason.
+- The declarative layer is unchanged: `source` / `shader` / `theme` still ship no code,
+  so the copy-paste-and-go path stays available for anyone who does not want to write JS.
+- Pack settings groups share one ordering scale with the built-in ones (10–70), so the
+  two groups that became packs kept their positions and the Settings layout did not
+  move. The group bar is reactive: if a pack disappears on rescan while the user is
+  sitting on its group, the page falls back to `basic` rather than showing an empty panel.
+- Uninstalling is a real delete: the card's button calls `UninstallPlugin`, which runs
+  `os.RemoveAll` on the pack directory after a confirm dialog — no recycle bin, no
+  backup copy kept by the app. The directory path comes from the scanned registry, and
+  the call additionally requires the target to be a direct child of the plugins root
+  containing a `plugin.json`, so a stale cache entry cannot be aimed at something else.
+  Built-in packs are excluded by directory name on both sides: no button in the UI, and
+  a refusal in Go. Removing one is still possible — by hand, from the folder — which is
+  what keeps the seed semantics above honest.

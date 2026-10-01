@@ -1,6 +1,7 @@
 package model
 
 import (
+	"cczjVideo/app/apperror"
 	"cczjVideo/app/applog"
 	"database/sql/driver"
 	"encoding/json"
@@ -48,7 +49,7 @@ func (f FlexibleString) String() string { return string(f) }
 // Scan 实现 database/sql.Scanner：支持 int64 / float64 / string / []byte / nil
 func (f *FlexibleString) Scan(value interface{}) error {
 	if f == nil {
-		return fmt.Errorf("model.FlexibleString: Scan on nil pointer")
+		return apperror.New(apperror.Internal, "model.FlexibleString: Scan on nil pointer")
 	}
 	if value == nil {
 		*f = ""

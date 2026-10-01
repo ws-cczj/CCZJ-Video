@@ -180,15 +180,23 @@ func GetSourceHealth(sourceKey, kind string, window int) (SourceHealth, error) {
 		h.LastError = lastErr.Err
 	}
 	// 连败次数是"失效"最直接的读数：从最后一次成功之后累计的失败。
-	// 用 ts 比较而不是行号，因为同一毫秒内的样本顺序由 id 决定，这里宁可
-	// 多算一条也不能漏——巡检判定只看量级，不区分并列的那一次。
-	var lastOK struct {
+	//
+	// 边界按 (ts_unix, id) 取，和读取样本用的同一套排序。只比 ts 是不够的：
+	// ts_unix 精确到秒，同一秒里的样本要靠 id 分先后，而"这一秒之前失败的"和
+	// "这一秒之后成功的"会摊成同一个 ts，早于成功的失败被算进连败。这个数以前
+	// 只是界面上的一行字，现在它直接决定停不停用，多算一条就会冤枉一个刚回来的源。
+	type failBoundary struct {
 		Ts int64 `db:"ts"`
+		ID int64 `db:"id"`
 	}
-	if err := instance.Get(&lastOK, `SELECT COALESCE(MAX(ts_unix), 0) AS ts FROM source_health
-		WHERE source_key = ? AND kind = ? AND ok = 1`, sourceKey, kind); err == nil {
-		_ = instance.Get(&h.FailStreak, `SELECT COUNT(*) FROM source_health
-			WHERE source_key = ? AND kind = ? AND ok = 0 AND ts_unix >= ?`, sourceKey, kind, lastOK.Ts)
+	boundary := failBoundary{Ts: -1} // 从没成功过：全部失败都算连败
+	if err := instance.Get(&boundary, `SELECT ts_unix AS ts, id FROM source_health
+		WHERE source_key = ? AND kind = ? AND ok = 1 ORDER BY ts_unix DESC, id DESC LIMIT 1`, sourceKey, kind); err != nil {
+		boundary = failBoundary{Ts: -1}
 	}
+	_ = instance.Get(&h.FailStreak, `SELECT COUNT(*) FROM source_health
+		WHERE source_key = ? AND kind = ? AND ok = 0
+			AND (ts_unix > ? OR (ts_unix = ? AND id > ?))`,
+		sourceKey, kind, boundary.Ts, boundary.Ts, boundary.ID)
 	return h, nil
 }

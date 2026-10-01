@@ -52,25 +52,36 @@ func SetGlobalTypeCollectEnabled(typeName string, enabled bool) error {
 	return err
 }
 
-// normalizeTypeName 类型名归一化：去空白 + 小写 + 去常见后缀 + 同义词映射
+// typeNameSynonyms 是同义类型名。键必须写成「剥完后缀之后」的样子，因为归一化
+// 是先剥后缀再查表：「连续剧」剥成「连续」，所以表里存的是「连续」。
+//
+// 顺序很关键。原先的实现先剥后缀、再查一张键为「连续剧」「电视」「动画」「记录片」
+// 的表，而那些键自己早就被同一次剥后缀啃掉了（「连续」「电」「动」「记录」），
+// 于是映射永远命中不了，同义词表形同虚设，同一个类型在不同源站手里各建各的
+// global_types 行。
+var typeNameSynonyms = map[string]string{
+	"连续": "电视",
+	"动画": "动漫",
+	"记录": "纪录",
+}
+
+// normalizeTypeName 类型名归一化：去空白 + 小写 + 去常见后缀 + 同义词映射。
+// 归一化结果只用于「是不是同一个类型」的判定，写库的仍是用户看到的原名。
 func normalizeTypeName(s string) string {
-	s = strings.TrimSpace(s)
-	s = strings.Join(strings.Fields(s), "")
-	s = strings.ToLower(s)
-	// 去除常见后缀/修饰词
-	s = strings.TrimSuffix(s, "类")
-	s = strings.TrimSuffix(s, "片")
-	s = strings.TrimSuffix(s, "剧")
-	// 同义词映射
-	synonyms := map[string]string{
-		"连续剧": "电视剧",
-		"电视":  "电视剧",
-		"动画":  "动漫",
-		"电影":  "电影",
-		"记录片": "纪录片",
+	s = strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(s)), ""))
+	s = stripTypeNameSuffixes(s)
+	if canonical, ok := typeNameSynonyms[s]; ok {
+		return canonical
 	}
-	if v, ok := synonyms[s]; ok {
-		return v
+	return s
+}
+
+// stripTypeNameSuffixes 剥掉「类/片/剧」这一类纯修饰后缀，每个至多剥一次：
+// 「电视剧类」剥成「电视」，「卡通片」剥成「卡通」。再往下就要把词根啃掉了，
+// 所以「电」「动」这种不在这条路上。
+func stripTypeNameSuffixes(s string) string {
+	for _, suffix := range []string{"类", "片", "剧"} {
+		s = strings.TrimSuffix(s, suffix)
 	}
 	return s
 }

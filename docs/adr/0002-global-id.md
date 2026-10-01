@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted.
+Accepted. Amended 2026-10-01: normalization changes are now applied to
+released databases by an ordered migration, not by resetting the store.
 
 ## Decision
 
@@ -21,5 +22,9 @@ identity.
 - Cross-source lookup uses `global_id`.
 - Playback and episode progress remain keyed by `source_key`, `vod_id`, and
   episode number.
-- Normalization changes require a new database reset generation and regression
-  coverage; released databases are not transformed in place.
+- Normalization changes ship as a migration that rewrites `name_norm` and
+  merges the identities that therefore collide (`migrateGlobalVideoNameNorm`,
+  `migrateDedupeGlobalVideo`, `migrateRetitleGlobalVideo`,
+  `migrateMergeSameDoubanIdentity`), repointing favorites, history, and catalog
+  rows. Re-keying released data in place is the accepted cost of having one
+  identity per title; a snapshot is taken before the migration runs.

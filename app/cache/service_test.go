@@ -23,10 +23,4 @@ func TestLogCacheUsesApplicationLogDirectory(t *testing.T) {
 	if info.LogFilePath != logDir || info.LogFileBytes != 3 {
 		t.Fatalf("log info = %+v", info)
 	}
-	if err := service.Clear("logs"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(logDir); !os.IsNotExist(err) {
-		t.Fatalf("log directory still exists: %v", err)
-	}
 }

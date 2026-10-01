@@ -1,6 +1,7 @@
 package collection
 
 import (
+	"cczjVideo/app/apperror"
 	"cczjVideo/app/db"
 	"cczjVideo/app/douban"
 	"cczjVideo/app/handler"
@@ -25,9 +26,13 @@ func NewSchedulerService(interval time.Duration) *SchedulerService {
 
 // Start starts collection and Douban schedulers using the application context.
 func (s *SchedulerService) Start(ctx context.Context) {
+	scheduler := handler.GetScheduler()
+	// 应用上下文只在这里注入：调度器可能在更早的一次只读查询里就被建出来，
+	// 那一刻它挂在的是"永不取消"。取消信号送不到采集引擎，退出时那一轮就会
+	// 继续往已经关掉的库里写。
+	scheduler.SetContext(ctx)
 	s.mu.Lock()
-	s.scheduler = handler.GetScheduler(ctx)
-	scheduler := s.scheduler
+	s.scheduler = scheduler
 	doubanScheduler := s.douban
 	s.mu.Unlock()
 	scheduler.Start()
@@ -53,7 +58,7 @@ func (s *SchedulerService) Stop() {
 
 // Status returns collection scheduler state.
 func (s *SchedulerService) Status() *handler.SchedulerStatus {
-	scheduler := s.collectionScheduler(context.Background())
+	scheduler := s.collectionScheduler()
 	status := scheduler.Status()
 	return &status
 }
@@ -63,7 +68,7 @@ func (s *SchedulerService) SetConfig(cfg handler.CollectScheduleConfig) (handler
 	if err := handler.SetScheduleConfig(cfg); err != nil {
 		return cfg, err
 	}
-	scheduler := s.collectionScheduler(context.Background())
+	scheduler := s.collectionScheduler()
 	scheduler.ReloadConfig()
 	if cfg.EnableBackground {
 		scheduler.Stop()
@@ -76,7 +81,7 @@ func (s *SchedulerService) SetConfig(cfg handler.CollectScheduleConfig) (handler
 
 // Trigger starts collection work immediately without changing schedules.
 func (s *SchedulerService) Trigger(sourceKey, mode string, hours int) {
-	scheduler := s.collectionScheduler(context.Background())
+	scheduler := s.collectionScheduler()
 	collectMode := model.CollectMode(mode)
 	if collectMode == "" {
 		collectMode = model.CollectModeFull
@@ -92,7 +97,7 @@ func (s *SchedulerService) Trigger(sourceKey, mode string, hours int) {
 func (s *SchedulerService) SetSourceSchedule(req handler.SourceScheduleReq) error {
 	source, err := db.GetSourceByKey(req.SourceKey)
 	if err != nil {
-		return fmt.Errorf("source does not exist: %s", req.SourceKey)
+		return apperror.Wrap(apperror.NotFound, err, fmt.Sprintf("采集源 %s 不存在", req.SourceKey))
 	}
 	interval := req.IntervalMin
 	if interval < 1 {
@@ -106,13 +111,13 @@ func (s *SchedulerService) SetSourceSchedule(req handler.SourceScheduleReq) erro
 	if err := db.UpdateSource(source); err != nil {
 		return err
 	}
-	s.collectionScheduler(context.Background()).UpdateSourceSchedule(req.SourceKey)
+	s.collectionScheduler().UpdateSourceSchedule(req.SourceKey)
 	return nil
 }
 
 // IsRunning reports whether collection, active collection engines, or Douban work is active.
 func (s *SchedulerService) IsRunning() bool {
-	if s.collectionScheduler(context.Background()).IsRunning() {
+	if s.collectionScheduler().IsRunning() {
 		return true
 	}
 	sources, err := handler.GetAllSources()
@@ -157,11 +162,11 @@ func (s *SchedulerService) SetDoubanInterval(d time.Duration) time.Duration {
 	return interval
 }
 
-func (s *SchedulerService) collectionScheduler(ctx context.Context) *handler.Scheduler {
+func (s *SchedulerService) collectionScheduler() *handler.Scheduler {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.scheduler == nil {
-		s.scheduler = handler.GetScheduler(ctx)
+		s.scheduler = handler.GetScheduler()
 	}
 	return s.scheduler
 }

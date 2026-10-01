@@ -1,0 +1,50 @@
+{
+  "manifest_version": 1,
+  "id": "source-adapter-demo",
+  "version": "1.0.0",
+  "name": { "zh-CN": "采集源适配示例", "en": "Source Adapter Demo" },
+  "description": {
+    "zh-CN": "演示声明式采集策略：只描述怎么拼 URL、怎么读返回信封。",
+    "en": "Example declarative collection adapter."
+  },
+  "author": "cczj-video",
+  "icon": "icon.png",
+  "kind": "source",
+  "source": {
+    "adapters": [
+      {
+        "id": "demo_cms",
+        "name": { "zh-CN": "示例 CMS 适配", "en": "Demo CMS" },
+        "strategy": {
+          "version": 2,
+          "strategy": "declarative",
+          "list": {
+            "action": "videolist",
+            "page_param": "pg",
+            "limit_param": "limit",
+            "extra": { "ac": "videolist" }
+          },
+          "search": {
+            "action": "videolist",
+            "keyword_param": "wd",
+            "page_param": "pg"
+          },
+          "detail": {
+            "action": "detail",
+            "id_param": "ids"
+          },
+          "response": {
+            "list_path": "list",
+            "code_path": "code",
+            "ok_codes": ["1"],
+            "pagecount_path": "pagecount"
+          },
+          "field_mapping": {
+            "vod_name": "name",
+            "vod_pic": "cover"
+          }
+        }
+      }
+    ]
+  }
+}

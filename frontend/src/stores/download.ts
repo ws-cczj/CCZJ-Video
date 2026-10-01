@@ -16,6 +16,7 @@ import {
   downloadErrorCode,
 } from '../api/download'
 import { useErrorStore } from './error'
+import { normalizeApiError } from '../api/app'
 import { onBackendEvent } from '../api/events'
 
 export interface ChunkProgress {
@@ -46,28 +47,32 @@ export interface DownloadTask {
   chunks?: ChunkProgress[]
 }
 
+// Go 侧 VideoDownloadStatus 序列化出来的形状：字段名只有 snake_case 一套，
+// 早先那种 raw.task_id ?? raw.TaskId 里的大写分支从来没命中过。
+type DownloadStatusWire = Omit<Partial<DownloadTask>, 'status'> & { status?: string }
+
 export const useDownloadStore = defineStore('download', () => {
   const tasks = ref<DownloadTask[]>([])
   const dir = ref<string>('')
   let _off: (() => void) | null = null
   let _inited = false
 
-  function upsert(raw: any): void {
+  function upsert(raw: DownloadStatusWire | null | undefined): void {
     if (!raw) return
     const t: DownloadTask = {
-      task_id: raw.task_id ?? raw.TaskId ?? '',
-      url: raw.url ?? raw.Url ?? '',
-      filename: raw.filename ?? raw.Filename ?? '',
-      save_path: raw.save_path ?? raw.SavePath ?? '',
-      total: Number(raw.total ?? raw.Total ?? 0),
-      downloaded: Number(raw.downloaded ?? raw.Downloaded ?? 0),
-      speed_bps: Number(raw.speed_bps ?? raw.SpeedBps ?? 0),
-      eta_sec: Number(raw.eta_sec ?? raw.EtaSec ?? 0),
-      status: (raw.status ?? raw.Status ?? 'queued') as any,
-      error: raw.error ?? raw.Error,
-      start_time: Number(raw.start_time ?? raw.StartTime ?? 0),
-      end_time: raw.end_time ?? raw.EndTime ?? undefined,
-      chunks: raw.chunks ?? raw.Chunks ?? undefined,
+      task_id: raw.task_id ?? '',
+      url: raw.url ?? '',
+      filename: raw.filename ?? '',
+      save_path: raw.save_path ?? '',
+      total: Number(raw.total ?? 0),
+      downloaded: Number(raw.downloaded ?? 0),
+      speed_bps: Number(raw.speed_bps ?? 0),
+      eta_sec: Number(raw.eta_sec ?? 0),
+      status: (raw.status ?? 'queued') as DownloadTask['status'],
+      error: raw.error,
+      start_time: Number(raw.start_time ?? 0),
+      end_time: raw.end_time,
+      chunks: raw.chunks,
     }
     // ⭐ O(n) 优化：使用 findIndex + splice 代替 filter 重建数组
     const idx = tasks.value.findIndex((x) => x.task_id === t.task_id)
@@ -120,12 +125,7 @@ export const useDownloadStore = defineStore('download', () => {
     }
 
     try {
-      _off = onBackendEvent<any>('download:progress', (data) => {
-        upsert(data)
-        const taskId = data.task_id ?? data.TaskId ?? ''
-        const downloaded = Number(data.downloaded ?? data.Downloaded ?? 0)
-        const total = Number(data.total ?? data.Total ?? 0)
-      })
+      _off = onBackendEvent<DownloadStatusWire>('download:progress', upsert)
     } catch {
       // 忽略运行时尚未就绪的事件桥接
     }
@@ -206,7 +206,7 @@ export const useDownloadStore = defineStore('download', () => {
       })
       if (res) upsert(res)
     } catch (e: any) {
-      const msg: string = e?.message || String(e)
+      const msg: string = normalizeApiError(e).message
       const isDuplicate = downloadErrorCode(e) === 'DOWNLOAD_DUPLICATE'
       // 重复下载：移除临时任务并抛出错误让调用方决定
       tasks.value = tasks.value.filter((x) => x.task_id !== id)
@@ -317,7 +317,7 @@ export const useDownloadStore = defineStore('download', () => {
         const id = await startDownload(item)
         started.push(id)
       } catch (e: any) {
-        const msg: string = e?.message || String(e)
+        const msg: string = normalizeApiError(e).message
         // 重复下载：静默跳过（不报错也不阻塞后续）
         if (downloadErrorCode(e) === 'DOWNLOAD_DUPLICATE') {
           continue

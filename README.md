@@ -1,6 +1,6 @@
 # CCZJ Video
 
-Current release: **v2.1.0**
+Current release: **v2.2.0**
 
 <p align="center">
   <strong>多源视频资源聚合桌面应用</strong><br>
@@ -11,7 +11,7 @@ Current release: **v2.1.0**
   <img src="https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go">
   <img src="https://img.shields.io/badge/Vue-3.x-4FC08D?style=flat-square&logo=vue.js&logoColor=white" alt="Vue">
   <img src="https://img.shields.io/badge/Wails-v3.0.0--beta.24-EB2F2F?style=flat-square&logo=data:image/svg+xml;base64,&logoColor=white" alt="Wails">
-  <img src="https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript">
+  <img src="https://img.shields.io/badge/TypeScript-4.9-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/Platform-Windows-0078D6?style=flat-square&logo=windows&logoColor=white" alt="Platform">
 </p>
 
@@ -22,15 +22,15 @@ Current release: **v2.1.0**
 ### 核心功能
 
 - **多源聚合** — 支持添加多个视频 API 数据源，统一管理所有资源
-- **在线播放** — 内置 HLS 播放器（基于 xgplayer），支持多集连播、播放进度记忆、同一部片的多条线路切换与测速
+- **在线播放** — 自研播放器（`<video>` + hls.js），支持多集连播、播放进度记忆、同一部片的多条线路切换与测速
 - **字幕** — 播放器手动加载本地 `.srt` / `.vtt` 文件并自己叠加渲染，支持显示/隐藏/更换/移除；不支持 `.ass`/`.ssa`，也不从源站取内嵌轨
 - **智能搜索** — 全局关键词搜索 + 源内模糊搜索 + 分类/年份/地区多维筛选
 - **离线下载** — 多线程分片下载引擎，支持暂停/恢复/取消，下载进度实时展示
 - **收藏 & 历史** — 视频收藏同步、观看历史自动记录，支持断点续看
-- **跨源合并影片库** — 同一个身份（豆瓣 ID 或归一化标题+年份+类型）在多个源里的多份记录并成一张卡片，卡片上标「N 个源有货」，详情页可换源看同一部
+- **跨源同片** — 同一个身份（豆瓣 ID 或归一化标题+年份+类型）在多个源里的多份记录会被认成同一部片，详情页可换源看同一部；独立的「合并影片库」页面已下线
 - **数据备份与恢复** — 收藏、历史、设置、采集源定义和已补全的全局元数据打包成单个文件导出，换机/重装后导入合并；升级前的数据库快照也能直接读回来（详见「设置与诊断」的高级分组）
 - **回收站** — 删除视频只是挪进回收站，收藏和历史跟着隐藏不丢，随时恢复；确认无误再彻底删除
-- **源健康度巡检** — 每轮采集收尾和后台每 6 小时的主动巡检各给每个源记一条样本（成功率、延迟、连败次数），「设置 → 诊断」用点阵展示并按连败阈值提示「可能已失效」。巡检只请求 `sources.api_url` 的一页列表，不会逐个校验影片的播放地址
+- **源健康度巡检** — 每轮采集收尾自动给该源记一条样本；「采集源」页的探测由你点一下才发起，同一个源 5 分钟内只认一次。样本记成功率、延迟、连败次数，「设置 → 诊断」用点阵展示并按连败阈值提示「可能已失效」，连败到阈值还会自动停用该源。巡检只请求 `sources.api_url` 的一页列表，不会逐个校验影片的播放地址，也没有任何后台定时器会自己出去探测
 
 ### 画质增强
 
@@ -38,6 +38,33 @@ Current release: **v2.1.0**
 - **Film 影视增强** — WebGL2 上的 FSRCNNX 卷积超分 + CAS 自适应锐化，这两步总是执行。着色器里另外写了去隔行、降噪、时间混合、HDR 色调映射四段，但播放器用 `FILM_PRESET`（这四项默认关闭、且运行期没有任何入口能改）实例化，所以 Film 模式现在只做「超分 + 锐化」，那四段是待接线的半成品
 - **换集自动重建** — 切集/切线路时增强管线会被销毁并重启，同时显式归还 WebGL 上下文（每个页面的上下文数量有上限，不还就会静默拿不到新上下文）
 - 两个增强器都实现了 `updateOptions`，`FilmUpscaler` 还有按帧率降级的 `adaptQuality`；三者在当前 UI 里都没有调用点，`autoQuality` 恒为 false
+
+### 扩展包
+
+规范在 [`docs/plugins.md`](docs/plugins.md)，理由记录在 ADR 0007（声明式那一层）与 ADR 0008（放开脚本这一步）。
+四类包，前三类只提供配置与素材、由内置引擎解释，第四类带前端 JS/CSS、由应用在界面挂载之后注入：
+
+- **采集适配包** — 声明「怎么拼 URL、怎么读返回信封、字段叫什么」，在「采集源 → 编辑 → 高级选项 → 采集适配」里选中，
+  写进该源的 `strategy_config`；包删了已配置好的源照旧可用。
+- **着色器包** — mpv hook 语法的 `.glsl`，进播放器「画质增强」下拉成为自定义档位；只做同分辨率处理，
+  想改分辨率的 pass 在校验阶段就被拒；编译失败只隔离这一档并回落原高清。
+- **主题包** — 追加主题预设与包内背景图，配色仍由内置派生算法算，`tint` 只覆盖明确指定的通道。
+- **前端注入包** — `script.entry` 指向的 JS 拿到一份 `cczj` 接口：加页面、加侧边栏入口、加设置页分组、
+  注入全局样式、订阅后端事件、调任意后端能力，还能用 `intercept` 包住应用自己的方法改行为。这是个人使用的软件，
+  界面随你改；边界是内核不动——包碰不到 Go 侧，也覆盖不了内置页面或内置分组（撞路名、撞分组 id 都直接报错）。
+- **改动数据与出网要先授权** — `plugin.json` 里声明 `permissions: ["write", "network"]`，包第一次真去调非只读的
+  后端绑定、或往应用外面 `fetch` 时弹一次确认；允许还是拒绝记进设置，重启后仍在，「设置 → 扩展包」那一行
+  能撤销（回到「还没问过」，下次用到再问）。没声明的权限一律拦掉并写日志；应用自己的请求不算出网——播放取分片、
+  探测、图片代理，连 Wails 那条递给应用自己的 IPC（`fetch` 到 `wails.localhost`）都不经过闸门。这只回答「谁能动手」，**不是沙箱**：
+  包 JS 跑在应用自己的权限里，`XMLHttpRequest` / `WebSocket` 那类旁路没拦（播放器正在用它拉分片），细节见 [`docs/plugins.md`](docs/plugins.md) §2.1。
+- **设置页的「动画」「日志」「诊断」本身就是三个随应用自带的包**（`app/plugin/builtin/`）。它们只在第一次启动时落进
+  `plugins\` 一次，之后应用不再碰：删掉那几个文件夹，设置页就真的少了那几项。「动画」那一份还带着全应用
+  的动效时长与缓动（`motion.css`），改它就能把动画调快调慢；设置 → 动画里另有「开启动画 / 关闭动画」总开关，
+  关掉之后所有过渡退化成直接切换。
+- **卸载有两条路**：卡片上的「卸载」按钮直接把那个包目录删掉（不进回收站、不留备份），或者自己删文件夹。
+  上面那三个内置包不给这个按钮，Go 侧也拒绝删它们。
+- 校验失败整包判 `invalid`，设置页直接展开机器可读的原因码与人话说明；单个坏包不影响其他包，也不影响内置功能。
+  脚本包跑挂了更彻底：它这一轮注册的东西全部撤销，本机记下原因并停用，改好脚本点「重试」再注入一次。
 
 ### 自动化引擎
 
@@ -65,9 +92,9 @@ Current release: **v2.1.0**
 |------|------|
 | 基本设置 | 窗口尺寸、字体与语言、主题外观、关闭行为、数据入库策略；豆瓣补全轮询间隔；日志保留天数 |
 | 主题外观 | 深浅色跟随、预设与自定义主题、主色与派生色 |
-| 缓存管理 | 四栏占用：TS 片段内存缓存、TS 磁盘缓存（IndexedDB）、IndexedDB 总量、localStorage——数字全部由前端统计，Go 侧的 `GetCacheInfo` 目前没有调用点。分类清理只给「TS 内存」「TS 磁盘」两项；「一键清理」调 Go 的 `ClearCache(memory)`，Go 清完自己的详情/热榜/评论缓存后广播 `cache:invalidate`，前端的详情、海报、TS 片段跟着一起清 |
+| 扩展包 | 列出 `%APPDATA%\CCZJ Video\plugins` 下扫到的包、把包文件夹拖到卡片上即装（先校验后落位，逐个给回执）、按包启停、「卸载」直接删掉那个包目录（应用自带的三个包不给卸载按钮）、显示校验失败的原因码与说明、包声明的 `write`/`network` 权限与授权状态（可撤销，撤销后下次用到再问）、脚本包跑挂时的隔离原因与「重试」、图标与「几个文件 · 多大 · 最后改动」、复制/打开目录、手动重扫 |
 | 日志 | 实时跟随、级别切换与过滤、关键字搜索、历史文件分页查看、导出与复制 |
-| 诊断 | 运行状态快照，默认只读：版本与安装标记、运行时长、Go/Wails 运行时与平台、协程数/GC/堆内存、数据目录与可执行文件路径、后台任务计数；数据库与磁盘缓存体积、各表行数；采集调度状态与最近启停；豆瓣补全进度、反爬静默与 302 验证题求解结果；数据健康度（缺评分、缺条目 ID、冷却中、重复分组——重复分组可以在这一页直接发起合并）；每个源的健康度点阵与「失效」提示。两个动作是例外：底部「探测采集源」会真的发请求（并把样本记进巡检健康度），合并会写库，两者动手前都弹确认 |
+| 诊断 | 两层读数。**实时**（每 2 秒读一次内存计数器）：本次会话的播放效果（首播等待、卡顿时长、丢帧率、当前线路规格、实际观看时长、播放错误）、按用途拆分的出网吞吐（请求数、失败、字节、均耗时、峰值速率）、Go 与前端各缓存的命中率（详情线路、豆瓣热榜、豆瓣评论、热榜匹配、TS 分片、海报、图片代理）。**快照**（点「刷新」才跑）：版本与安装标记、运行时长、Go/Wails 运行时与平台、协程数/GC/堆内存、数据目录与可执行文件路径、后台任务计数、数据库体积与日志占用、各表行数；采集调度状态与最近启停；豆瓣补全进度、反爬静默与 302 验证题求解结果；数据健康度（缺评分、缺条目 ID、冷却中、重复分组）；每个源的健康度点阵与「失效」提示。唯一的写动作是「疑似重复身份」的合并，动手前弹确认；探测采集源在「采集源」页 |
 | 高级 | 数据备份与恢复（导出/导入备份文件、迁移前快照恢复）、豆瓣补全队列统计、手动触发一轮补全、图片代理私网放行开关 |
 
 ### 用户体验
@@ -93,7 +120,7 @@ Current release: **v2.1.0**
 │  │  Pinia        │    │  Collect Engine       │  │
 │  │  Vue Router   │    │  Douban Crawler       │  │
 │  │  cczj-* CSS   │    │  Scheduler            │  │
-│  │  xgplayer     │    │  Download Engine      │  │
+│  │  hls.js       │    │  Download Engine      │  │
 │  │  Anime4K      │    │  Image Proxy          │  │
 │  │  FilmUpscaler │    │  Auto Updater         │  │
 │  └───────────────┘    └────────────────────────┘  │
@@ -109,7 +136,7 @@ Current release: **v2.1.0**
 | Pinia | 状态管理（只放跨页面共享的状态） |
 | Vue Router | Hash 路由 + 滚动位置恢复 |
 | CSS 变量 + `cczj-*` 工具类 | 主题与原子样式（`src/styles/cczj-utilities.css` 手写，未接入 UnoCSS/Tailwind 构建链路） |
-| xgplayer + hls.js | 视频播放（HLS 流） |
+| hls.js | HLS 流媒体播放（挂在原生 `<video>` 上，播放器 UI 自研） |
 | Anime4K WebGL2 | 动画画质增强 |
 | FSRCNNX WebGL2 | 影视画质增强 |
 | Vite | 构建工具 |
@@ -122,7 +149,6 @@ Current release: **v2.1.0**
 | Wails v3 | 桌面应用框架 |
 | SQLite (modernc) | 纯 Go 嵌入式数据库 |
 | Brotli / Gzip | 数据压缩（导入导出） |
-| Snowflake | 分布式 ID 生成 |
 
 ---
 
@@ -134,32 +160,36 @@ CCZJ Video/
 ├── app.go                          # 装配根：embed 前端产物、注册服务、主窗口、系统托盘
 ├── app/                            # 业务代码全部在这里，根目录不再散落 app_xxx.go
 │   ├── service/                    # 唯一的 Wails 绑定服务（App 结构体）
-│   │   ├── app.go                  # App 结构体、NewApp、启停生命周期、下载 DTO
-│   │   ├── facade.go               # 转发方法：只做参数校验与转调子包
-│   │   ├── diagnostics.go          # 诊断页只读快照、采集源探测
+│   │   ├── app.go                  # App 结构体、NewApp、启停生命周期
+│   │   ├── facade.go               # 分区索引 + 跨域的 JSON 参数助手
+│   │   ├── facade_*.go             # 绑定方法按域一分一文件（video / source / douban / plugin …）
+│   │   ├── diagnostics.go          # 诊断页快照与实时指标、采集源探测
 │   │   ├── logs.go                 # 日志查询/导出/级别切换
-│   │   ├── download.go             # 下载引擎（直连多线程 + m3u8）
+│   │   ├── download.go             # 下载任务生命周期：启动/暂停/续传/取消/进度与持久化
+│   │   ├── download_http.go        # 直连下载：多线程分片 + 断点重试
+│   │   ├── download_hls.go         # m3u8 下载：解析、密钥获取、分片并发
 │   │   └── direct_resume.go        # 断点续传清单
 │   ├── apperror/                   # 统一错误码（前端 normalizeApiError 依赖它）
 │   ├── applog/                     # 日志系统：环形缓冲 + 按天滚动 + 订阅
 │   ├── backup/                     # 全量备份导出、导入合并、迁移前快照恢复
-│   ├── cache/                      # 统一缓存失效层（写库后按视频/整源广播）与占用统计
+│   ├── cache/                      # 统一缓存失效层（写库后按视频/整源广播）与各缓存的命中率读数
 │   ├── collect/                    # 采集引擎（fetcher → processor → strategy）
 │   ├── collection/                 # 采集/豆瓣调度器
 │   ├── db/                         # SQLite 数据层（source / video / douban / catalog / recycle / diagnostics）
 │   ├── detail/                     # 详情按需补全
 │   ├── douban/                     # 豆瓣爬虫、热榜、评论、302 验证题自解
 │   ├── download/                   # 下载注册表与目录策略
-│   ├── files/                      # 文件与导入导出
+│   ├── files/                      # 落盘路径策略（保存目录越界写/删的守卫）
 │   ├── handler/                    # 请求处理器（collect / scheduler / source / video）
 │   ├── lifecycle/                  # 后台任务组（Go/Stop/Context 统一管理）
 │   ├── media/                      # 媒体元数据处理
 │   ├── model/                      # 数据模型
-│   ├── proxy/                      # 图片代理与 HLS 代理
+│   ├── netstats/                   # 出网计数层：按用途统计请求数、失败、字节与速率，供诊断页读
+│   ├── plugin/                     # 扩展包：扫描与校验、注册表、拖放安装与卸载、权限闸门；builtin/ 是随应用自带的三个包
+│   ├── proxy/                      # HLS 播放代理、线路测速、海报图片磁盘缓存
 │   ├── settings/                   # 持久化设置
 │   ├── source/                     # 数据源领域逻辑
-│   ├── update/ + updater/          # 更新服务与 GitHub Release 检测/下载/安装
-│   ├── util/                       # 压缩 / 加密 / ID 生成
+│   └── update/ + updater/          # 更新服务与 GitHub Release 检测/下载/安装
 │   └── window/                     # 窗口尺寸与关闭行为
 ├── build/                          # Taskfile、版本提取、图标权重脚本
 ├── scripts/verify.ps1              # 边界守卫 + go vet + go test + 前端构建
@@ -169,17 +199,23 @@ CCZJ Video/
 │   ├── src/
 │   │   ├── api/                    # 前端访问绑定/运行时/事件的唯一出口
 │   │   ├── components/             # 公共组件 + ui/ 基础组件
+│   │   ├── composables/            # 按视图持有的列表状态与请求竞态
 │   │   ├── locales/                # zh-CN.ts / en.ts，键必须严格对齐
 │   │   ├── platform/               # localStorage 等平台能力封装
-│   │   ├── player/                 # 播放器控制逻辑
+│   │   ├── player/                 # 播放器控制逻辑（hls/、设置、进度、快捷键、缩略图拖拽）
+│   │   ├── plugins/                # 扩展包前端侧：注入运行时、cczj API、权限闸门、拖放安装
+│   │   ├── router/                 # Hash 路由与滚动恢复
 │   │   ├── stores/                 # Pinia
-│   │   ├── styles/                 # 主题变量与 cczj-* 工具类
-│   │   ├── utils/                  # Anime4K / FSRCNNX 着色器与权重、推荐算法、字幕解析
-│   │   └── views/                  # Home / Search / Recent / MergedLibrary / Detail / Player /
+│   │   ├── styles/                 # 主题变量、cczj-* 工具类，以及大页面的 scoped CSS
+│   │   │                           #   （views/ 与 components/ 一一对应，SFC 用 <style scoped src> 引回去）
+│   │   ├── types/                  # 共享类型
+│   │   ├── utils/                  # Anime4K / FSRCNNX 着色器与权重、推荐算法、字幕解析、TS 缓存
+│   │   └── views/                  # Home / Search / Recent / Detail / Player /
 │   │                               #   Sources / VideoTypes / Favorites / History /
 │   │                               #   Downloads / Recommendations / RecycleBin / Settings
 │   └── package.json
-├── docs/adr/                       # 架构决策记录
+├── docs/                           # plugins.md（扩展包规范）、source-strategy-v2.schema.json、
+│                                   #   examples/（四类样例包）、adr/（架构决策记录）
 ├── go.mod / go.sum
 ├── Taskfile.yml / wails.json
 ├── CHANGELOG.md
@@ -231,9 +267,17 @@ task verify         # 边界守卫 + go vet + go test ./... + 前端 vue-tsc & v
 
 1. 改 `version.json`：`version` 决定构建注入的版本号；`desc` 是更新弹窗里展示的本次说明；`history` 是历史版本说明，只有比用户当前版本更新的条目才会出现在弹窗里。
 2. 同步 `CHANGELOG.md`：把 `[Unreleased]` 落成 `## [x.y.z] - 日期`。
-3. 构建并把产物改名：`task build` 得到 `bin/cczjVideo.exe`，发布时命名为 `cczjVideo-vX.Y.Z-release.exe`（更新器按扩展名挑附件）。
-4. 打标签并创建 GitHub Release：`git tag vX.Y.Z && git push origin vX.Y.Z`。Release 正文是更新弹窗优先读取的说明来源，`version.json` 只在 Release API 全部失败时兜底。
-5. 把 `version.json` 推上 `main`：回退通道读的是 GitHub Raw / jsdelivr / Gitee 上的 `main` 分支，不推上去兜底就会拿到旧版本说明。
+3. 打包：`task package`（= `build/windows/package.ps1`）。它先要求 `frontend/dist` 不比源码旧，
+   再产出三件东西到 `dist/`——裸 exe `cczjVideo-windows-<arch>-<版本>.exe`、同名 portable zip、
+   `checksums.txt`（coreutils 格式的 SHA-256 清单）。裸 exe 的名字里必须带平台标记：更新器按
+   扩展名挑附件，认不出就会去下 zip。
+4. 核对版本资源：`task windows:check` 会把版本号从编好的 exe 里读回来（`scripts/verify.ps1`
+   也会静态检查 `build/windows/info.json` 的语言键与 FileVersion/ProductVersion 字符串）。
+5. 打标签并创建 GitHub Release：`git tag vX.Y.Z && git push origin vX.Y.Z`。Release 正文是更新弹窗
+   优先读取的说明来源，`version.json` 只在 Release API 全部失败时兜底。
+6. **三个产物都要传到那个 Release 上**，包括 `checksums.txt`：下载完会按它校验，取不到清单或
+   校验不过都不装。
+7. 把 `version.json` 推上 `main`：回退通道读的是 GitHub Raw / jsdelivr / Gitee 上的 `main` 分支，不推上去兜底就会拿到旧版本说明。
 
 更新检查的顺序是：GitHub Release API 直连 → `gh-proxy.org` 等三个代理（每个源最多重试 3 次）→ 多渠道 `version.json`。安装流程见「设置 → 关于」中的更新弹窗，不会自动下载，需要你手动点。
 
@@ -259,7 +303,7 @@ task verify         # 边界守卫 + go vet + go test ./... + 前端 vue-tsc & v
 
 ### 播放视频
 
-1. 首页浏览、搜索页搜关键词，或在「合并影片库」按身份翻整库
+1. 首页浏览或搜索页搜关键词
 2. 点击进入详情页查看简介、选集
 3. 选择集数进入播放器
 
@@ -291,15 +335,12 @@ maccms 类源站用 `$$$` 在 `vod_play_url` 里并列多条「同名集表」�
 - 字幕由播放器自己叠加一层 div 渲染，不走原生 `<track>`——画质增强开着时画面上盖的是 WebGL canvas，原生轨会被挡住
 - **换集/换线路会清掉字幕**：字幕文件是对着某一集的时间轴配的，换集后必然错位，留着比清掉更误导人，需要重新加载
 
-### 合并影片库
+### 跨源同片
 
-入口在侧栏「合并影片库」（`/merged-library`），读路径是 `app/db/catalog_union.go` 的 `GetCatalogUnionPage`。
+侧栏的「合并影片库」页面已下线，跨源同片现在只在详情页体现：一次按 `global_id` 的本地查询就能给出「换源看」入口，不碰网络。
 
-- **一张卡片 = 一个身份**。身份是豆瓣 ID，没有豆瓣 ID 时是「归一化标题 + 年份 + 类型」；同一身份
-  在 N 个源里的 N 行目录并成一张卡，卡片标「N 个源有货」，`N` 取 `COUNT(DISTINCT source_key)` 且不数软删除行
-- **卡片显示哪一行的元数据**：取该身份 `vod_time` 最新的那一行——也就是"哪个源最近更新过这部"，
-  不是按源健康度或评分优选。类型筛选按 `global_type_id` 整数走，年份/地区是跨源去重后的并集
-- **详情页换源**：`/detail/:sourceKey/:globalId`，同一身份有多个源时详情页出现「其它源」列表，
+- **一个身份 = 豆瓣 ID**，没有豆瓣 ID 时是「归一化标题 + 年份 + 类型」；同一身份在 N 个源里的 N 行目录算作同一部片
+- **详情页换源**：`/detail/:sourceKey/:globalId`，同一身份有多个源时详情页出现「其它源也有这部」列表，
   点它换源重开；单源库（本机现状）这块整块隐藏
 - **身份合并**：确实该并却没并上的（同豆瓣 ID 或同名同年重复建了身份）在「设置 → 诊断 → 重复分组」
   列出来，可以在那一页直接发起合并。合并复用迁移 v2 的存活行选择逻辑，收藏与观看历史一并迁移到存活身份，
@@ -318,13 +359,50 @@ maccms 类源站用 `$$$` 在 `vod_play_url` 里并列多条「同名集表」�
 开着增强时可以用对比滑块看左右两侧的差异。Film 模式现在只做 FSRCNNX 超分 + CAS 锐化（「画质增强」
 一节写了哪几段着色器还没接线），换集时管线会重建。
 
+### 装一个扩展包
+
+最省事的一种：把包文件夹从资源管理器**直接拖进应用窗口**——整窗都是投放区，正在看视频时
+也能拖，不必先跑去设置页。应用按被拖文件夹的绝对路径读进临时目录、按规范整份校验，通过了
+才放进 `plugins\`——拖进去一个写坏的包等于什么都没装，「设置 → 扩展包」会给这一拖一条回执
+（成功还是失败、为什么失败）；一次拖多个文件夹会逐个装，一个坏掉不影响其余。
+
+不想用拖的就把目录整个拷进 `%APPDATA%\CCZJ Video\plugins\`（例：`plugins\theme-dusk\plugin.json`），
+到「设置 → 扩展包」点「重新扫描」就会列出——不用重启。两种装法走同一套规则，目录名要和 `plugin.json`
+里的 `id` 一致，一层深度，只认 `plugins/<目录>/plugin.json`。
+
+**卸载有两条路**：卡片上的「卸载」按钮（点下去直接删掉那个包目录，不进回收站），或者自己删那个文件夹；
+只想临时关掉请点同一行的「停用」。应用自带的 `motion-effects` / `logs-panel` / `diagnostics-panel` 不给卸载按钮，Go 侧也
+拒绝删它们——那是应用自己的东西，不想看到就点「停用」。这几个包只在第一次启动时落盘一次，之后只往里
+补应用新带的文件（比如图标），改过的不覆盖、删掉的不复活。
+
+**一个包要动数据或出网，得先声明再授权**：`plugin.json` 里写 `"permissions": ["write", "network"]`，包第一次真去调
+写入类的后端绑定、或往应用外面 `fetch` 时弹一次确认，允许还是拒绝记进设置，重启后照旧生效；没声明的那一类
+直接拦掉并写日志。递给应用自己那一跳不算出网（调后端绑定就是 `fetch` 到 `wails.localhost`），播放器取分片那一类应用请求也完全不拦。
+只做界面、只读数据的包什么都不用写。卡片上会列出这个包声明了哪几项、当前是「已允许 / 已拒绝 /
+还没问过」，点「撤销」回到还没问过——那不是永久拉黑，下次用到时再问一次。
+
+每张卡片显示图标（`manifest.icon` 指向包内那张图，不写这一行时包根的 `icon.png` 也自动认）以及从磁盘上
+真数出来的「几个文件 · 多大 · 最后改动」，校验失败的包同样给这行数字——那正是用来对照「我改的文件到底
+进去了没有」的。四类包（采集适配 / 着色器 / 主题 / 前端注入）各自的字段与边界、以及全部校验规则见
+[`docs/plugins.md`](docs/plugins.md)；`docs/examples/` 下有六份可直接拷走的样例，六份都带着自己的图标：
+`script-ui-tweaks` 是一个「扩展包自检台」页面，把注入型包的能力各用了一遍；`ai-assistant` 是那套能力的
+上限样本——一整页 AI 助手，把既有后端绑定当成模型的工具表来调，应用侧不改一行；`icon-gallery` 那一份专门为
+看图标而写——卡片图标 + 包目录里 26 枚 PNG，整个文件夹拖进去就能一次验完「拖拽安装 → 校验 → 图标显示」。
+
+写错了不会静默失效：整包判「校验失败」，卡片上直接展开原因码和人话说明，改好再点重扫即可。一个坏包不影响其他包，
+也不影响内置功能。
+
 ### 看日志与诊断
 
 - 应用内：「设置 → 日志」实时跟随、按级别过滤、搜关键字、翻页看历史文件、导出/复制。
 - 应用外：日志按天写在 `%APPDATA%\CCZJ Video\applog\cczj-YYYY-MM-DD.log`，保留天数在「设置 → 基本设置」里改。
-- 「设置 → 诊断」是运行状态快照：运行时环境、内存与协程、数据库与各表行数、采集与豆瓣调度状态、
-  反爬静默与 302 验证题求解结果、数据健康度（缺评分 / 缺条目 ID / 冷却中 / 重复分组，重复分组可以在这里合并）、
-  每个源的采集与巡检健康度点阵。除了「探测采集源」和「合并」这两个会弹确认的动作，这里不发请求也不写库。
+- 「设置 → 诊断」的**实时性能**每 2 秒读一次 Go 侧内存计数器（`GetRuntimeMetrics`：不查库、不遍历目录、
+  不做全表 COUNT，也不碰 `ReadMemStats`，那个会 STW），摆的是播放效果、按用途拆分的出网吞吐和各缓存命中率。
+  出网数字来自计数用的 `http.RoundTripper`（`app/netstats`），速率一律由实测字节与耗时派生，没跑过的用途是空白而不是猜测值；
+  TS 分片、海报、图片代理这三块缓存在 WebView 里，Go 侧只看得见它们的未命中，所以由前端自己报数。
+- 其余分组是点「刷新」才生成的**快照**：运行时环境、内存与协程、数据库与各表行数、采集与豆瓣调度状态、
+  反爬静默与 302 验证题求解结果、数据健康度（缺评分 / 缺条目 ID / 冷却中 / 重复分组）、每个源的采集与巡检健康度点阵。
+  除了「合并重复身份」这个会弹确认的写库动作，诊断页不往外发请求；探测采集源在「采集源」页做。
 - 诊断面板上的 schema 版本号读的是 `GetDiagnostics` 返回的 `env.schema_version`。Go 侧 `app:ready` 事件
   也带了 `schema_version`，但前端只在 `api/events.ts` 声明了类型、没有订阅——要拿启动期的 schema 版本得自己接。
 
@@ -370,7 +448,8 @@ maccms 类源站用 `$$$` 在 `vod_play_url` 里并列多条「同名集表」�
 
 ### 添加新的 Go 绑定方法
 
-1. 在 `app/service/` 里为 `App` 结构体加方法（业务实现放对应子包，`facade.go` 只做转发）。
+1. 在 `app/service/` 里为 `App` 结构体加方法：绑定方法按域写进对应的 `facade_<域>.go`（video / source /
+   douban / plugin …），业务实现放子包，`facade.go` 只留分区索引和跨域共用的 JSON 参数助手。
 2. `wails3 generate bindings -clean` 重新生成绑定，输出到 `frontend/bindings/cczjVideo/app/service/`。
 3. 前端**只允许**通过 `frontend/src/api/app.ts` 访问绑定；`scripts/verify.ps1` 会拦截任何直接
    `import 'bindings/...'` 或 `import '@wailsio/runtime'` 的组件。
@@ -430,7 +509,6 @@ maccms 类源站用 `$$$` 在 `vod_play_url` 里并列多条「同名集表」�
 | `modernc.org/sqlite` | 纯 Go SQLite 驱动 |
 | `github.com/jmoiron/sqlx` | SQL 扩展 |
 | `github.com/andybalholm/brotli` | Brotli 压缩 |
-| `github.com/bwmarrin/snowflake` | 分布式 ID |
 
 ### 前端依赖
 
@@ -440,10 +518,10 @@ maccms 类源站用 `$$$` 在 `vod_play_url` 里并列多条「同名集表」�
 | `vue-router` | 路由管理 |
 | `pinia` | 状态管理 |
 | `@wailsio/runtime` | Wails 运行时 API |
-| `xgplayer` / `xgplayer-hls` | 视频播放器 |
-| `hls.js` | HLS 流媒体协议支持 |
-| `unocss` / `@unocss/preset-wind` | 已声明但**未接入构建链路**；实际样式是手写 `cczj-*` 工具类 |
+| `hls.js` | HLS 流媒体播放（唯一播放器依赖，UI 与控件自研） |
 | `vite` | 前端构建工具 |
+
+界面图标是手写的内联 SVG（`components/Icon.vue`），不依赖图标库。
 
 ---
 
@@ -455,7 +533,13 @@ maccms 类源站用 `$$$` 在 `vod_play_url` 里并列多条「同名集表」�
 
 ## 📄 开发规范
 
-架构边界与开发决策请参阅 [ADR 0005](docs/adr/0005-architecture-boundaries.md)。
+架构边界与开发决策都在 [`docs/adr/`](docs/adr)：0001~0006 是数据与服务层的既有决定（0001 / 0002 / 0005 / 0006
+在 2026-10-01 按当前实现修订过），0007 / 0008 解释扩展包为什么分成「声明式」与「注入 JS」两层，
+0009 是错误码的唯一口径——界面上要分支的错误一律走 `app/apperror` 的码，不许按 `err.Error()` 的文本猜。
+
+- [ADR 0005](docs/adr/0005-architecture-boundaries.md) — 前端绑定出口、存储归属与 `app/service` 分层
+- [ADR 0009](docs/adr/0009-coded-errors.md) — 错误码边界：什么错误带码、什么错误只串链
+- [`docs/plugins.md`](docs/plugins.md) — 扩展包规范与原因码表
 
 ---
 
@@ -469,7 +553,6 @@ maccms 类源站用 `$$$` 在 `vod_play_url` 里并列多条「同名集表」�
 
 - [Wails](https://wails.io/) — 优秀的 Go + Web 桌面应用框架
 - [Vue.js](https://vuejs.org/) — 渐进式 JavaScript 框架
-- [xgplayer](https://github.com/bytedance/xgplayer) — 西瓜播放器
 - [hls.js](https://github.com/video-dev/hls.js) — HLS 流媒体播放
 - [Anime4K](https://github.com/bloc97/Anime4K) — 动画超分辨率算法
 - [FSRCNNX](https://github.com/igv/FSRCNN-TensorFlow) — 快速超分辨率卷积神经网络

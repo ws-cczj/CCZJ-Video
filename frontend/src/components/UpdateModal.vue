@@ -516,7 +516,8 @@ onUnmounted(() => {
   background: var(--accent); color: var(--accent-contrast);
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
-  animation: cczj-spin var(--cczj-motion-emphasis) linear infinite;
+  /* 反馈型转圈不吃时长令牌：动画关掉时它得继续转，否则看不出还在下载。 */
+  animation: cczj-spin 800ms linear infinite;
 }
 .bg-download-info {
   display: flex; flex-direction: column; flex: 1; min-width: 0;

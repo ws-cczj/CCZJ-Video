@@ -1,8 +1,8 @@
 package model
 
 import (
+	"cczjVideo/app/apperror"
 	"encoding/json"
-	"fmt"
 	"regexp"
 	"strings"
 )
@@ -16,10 +16,10 @@ var sourceKeyPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_]{0,63}$`)
 // callers must reject malformed values instead of silently changing identities.
 func ValidateSourceKey(key string) error {
 	if strings.TrimSpace(key) != key {
-		return fmt.Errorf("source_key must not contain leading or trailing whitespace")
+		return apperror.New(apperror.Validation, "source_key must not contain leading or trailing whitespace")
 	}
 	if len(key) == 0 || len(key) > maxSourceKeyLength || !sourceKeyPattern.MatchString(key) {
-		return fmt.Errorf("invalid source_key %q: expected %d lowercase letters, digits, or underscores beginning with a letter or digit", key, maxSourceKeyLength)
+		return apperror.Newf(apperror.Validation, "invalid source_key %q: expected %d lowercase letters, digits, or underscores beginning with a letter or digit", key, maxSourceKeyLength)
 	}
 	return nil
 }
@@ -55,6 +55,11 @@ type Source struct {
 	ApiUrl    string `json:"api_url" db:"api_url"`
 	Enabled   int    `json:"enabled" db:"enabled"`
 	CreatedAt string `json:"created_at" db:"created_at"`
+
+	// AutoDisabledAt 是这个源被自动停用（连续失败到阈值）时的 Unix 秒，0 表示不是。
+	// 用户手动关掉的源留 0，所以冷却到期时只会自动恢复机器做掉的停用，不会擅自
+	// 打开用户明确关掉的东西。
+	AutoDisabledAt int64 `json:"auto_disabled_at,omitempty" db:"auto_disabled_at"`
 
 	// 高级配置（JSON 字符串，DB 列）
 	AdvConfigRaw string `json:"-" db:"adv_config"`

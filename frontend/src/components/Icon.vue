@@ -182,6 +182,11 @@ defineProps<{ name: string; size?: number }>()
       <line x1="9" y1="9" x2="15" y2="15" />
     </g>
 
+    <g v-else-if="name === 'ban'">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+    </g>
+
     <g v-else-if="name === 'code'">
       <polyline points="16 18 22 12 16 6" />
       <polyline points="8 6 2 12 8 18" />

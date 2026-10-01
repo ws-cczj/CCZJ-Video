@@ -2,6 +2,7 @@
 package collection
 
 import (
+	"cczjVideo/app/apperror"
 	"cczjVideo/app/applog"
 	"cczjVideo/app/cache"
 	"cczjVideo/app/collect"
@@ -22,11 +23,14 @@ type BackgroundFunc func(name string, fn func(context.Context)) bool
 type Service struct {
 	emit       EmitFunc
 	background BackgroundFunc
+	// appCtx 是应用生命周期上下文（lifecycle.Group 的那一个，创建后不再更换）。
+	// 采集引擎要在登记给界面之前挂上它，理由见 Start。
+	appCtx context.Context
 }
 
 // NewService constructs a collection service.
-func NewService(emit EmitFunc, background BackgroundFunc) *Service {
-	return &Service{emit: emit, background: background}
+func NewService(emit EmitFunc, background BackgroundFunc, appCtx context.Context) *Service {
+	return &Service{emit: emit, background: background, appCtx: appCtx}
 }
 
 // Start begins a manual collection run for a source.
@@ -73,12 +77,15 @@ func (s *Service) Start(req handler.CollectReq) (*handler.CollectStatus, error) 
 		},
 		options...,
 	)
+	// 上下文先挂再登记：TryBindEngine 一发布，"停止采集"和退出清理就都能立刻拿到
+	// 这个引擎。等后台任务真正开跑才 SetContext 的话，中间那段窗口里取消信号
+	// 无处可去，退出时这一趟采集会继续往已经关掉的库里写。
+	engine.SetContext(s.appCtx)
 	if !entry.TryBindEngine(engine, string(mode)) {
-		return nil, fmt.Errorf("采集源 %s 正在采集中", req.SourceKey)
+		return nil, apperror.Newf(apperror.Conflict, "采集源 %s 正在采集中", req.SourceKey)
 	}
 
-	run := func(ctx context.Context) {
-		engine.SetContext(ctx)
+	run := func(context.Context) {
 		stats, err := engine.Run()
 		outcome := handler.OutcomeFromRun(stats, err)
 		applog.InfoFields("collection finished", applog.Fields{
@@ -100,13 +107,9 @@ func (s *Service) Start(req handler.CollectReq) (*handler.CollectStatus, error) 
 		payload["operation_id"] = operationID
 		s.emit("collect:done", payload)
 	}
-	if s.background != nil {
-		if !s.background("collection:"+req.SourceKey, run) {
-			entry.FinishEngine(engine, handler.RunOutcome{Log: "application is shutting down"})
-			return nil, fmt.Errorf("application is shutting down")
-		}
-	} else {
-		go run(context.Background())
+	if !s.background("collection:"+req.SourceKey, run) {
+		entry.FinishEngine(engine, handler.RunOutcome{Log: "application is shutting down"})
+		return nil, apperror.New(apperror.Cancelled, "application is shutting down")
 	}
 
 	return handler.GetCollectStatus(req.SourceKey), nil

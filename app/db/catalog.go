@@ -110,8 +110,8 @@ func upsertCatalogItems(batch *CatalogBatch, sourceKey string, videos []*model.V
 			return fmt.Errorf("catalog identity for %q: %w", v.VodName, err)
 		}
 		row := catalogUpsertRow{SourceKey: sourceKey, SourceVodID: strings.TrimSpace(v.VodId.String()), GlobalID: gid,
-			SourceTypeID: strings.TrimSpace(v.TypeId.String()), GlobalTypeID: gtid, TypeName: v.TypeName,
-			VodName: v.VodName, VodPic: v.VodPic, VodRemarks: v.VodRemarks, VodYear: v.VodYear, VodArea: v.VodArea, VodTime: v.VodTime}
+			SourceTypeID: strings.TrimSpace(v.TypeId.String()), GlobalTypeID: gtid, TypeName: strings.TrimSpace(v.TypeName),
+			VodName: v.VodName, VodPic: v.VodPic, VodRemarks: v.VodRemarks, VodYear: v.VodYear, VodArea: normalizeArea(v.VodArea), VodTime: v.VodTime}
 		rows = append(rows, row)
 		if row.SourceTypeID != "" {
 			typeRows[row.SourceTypeID] = sourceTypeUpsertRow{SourceKey: sourceKey, SourceTypeID: row.SourceTypeID, GlobalTypeID: row.GlobalTypeID, TypeName: row.TypeName}
@@ -308,6 +308,7 @@ func (r *catalogIdentityResolver) upsertVideo(exec sqlx.Ext, video *model.Video)
 	// 兄弟记录继承把错挂复制到更多行上。评分同理：它属于它自己那个 ID，
 	// 与库里已有 ID 不一致时一并作废。
 	srcDoubanID := normalizeSubjectID(video.VodDoubanId.String())
+	srcArea := normalizeArea(video.VodArea)
 	if _, err := exec.Exec(`UPDATE global_video SET
 		type_id=CASE WHEN ? != 0 THEN ? ELSE type_id END,
 		year=CASE WHEN ? != '' THEN ? ELSE year END,
@@ -324,7 +325,7 @@ func (r *catalogIdentityResolver) upsertVideo(exec sqlx.Ext, video *model.Video)
 		updated_at=CURRENT_TIMESTAMP WHERE id=?`,
 		typeID, typeID,
 		video.VodYear, video.VodYear,
-		video.VodArea, video.VodArea,
+		srcArea, srcArea,
 		video.VodLang, video.VodLang,
 		video.VodTag, video.VodTag,
 		video.VodPic, video.VodPic,

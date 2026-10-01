@@ -2,6 +2,7 @@ package service
 
 import (
 	"bufio"
+	"cczjVideo/app/apperror"
 	"cczjVideo/app/applog"
 	"cczjVideo/app/db"
 	"context"
@@ -156,7 +157,7 @@ func parseLogLevel(level string) (applog.Level, error) {
 	case "error", "err":
 		return applog.LevelError, nil
 	default:
-		return applog.LevelInfo, fmt.Errorf("未知的日志级别: %q", level)
+		return applog.LevelInfo, apperror.Newf(apperror.Validation, "未知的日志级别: %q", level)
 	}
 }
 
@@ -221,7 +222,7 @@ func (a *App) ReadLogPage(req LogPageReq) (*LogPageResp, error) {
 	logger := applog.Default()
 	path := filepath.Join(logger.Dir(), filepath.Base(name))
 	if _, err := os.Stat(path); err != nil {
-		return nil, fmt.Errorf("日志文件不可读: %s", filepath.Base(name))
+		return nil, apperror.Newf(apperror.NotFound, "日志文件不可读: %s", filepath.Base(name))
 	}
 	limit := req.Limit
 	if limit <= 0 || limit > 2000 {
@@ -341,13 +342,13 @@ func (a *App) ExportLogs(req ExportLogsReq) (*ExportLogsResult, error) {
 	}
 	ext := map[string]string{"log": ".log", "csv": ".csv", "json": ".json"}[format]
 	if ext == "" {
-		return nil, fmt.Errorf("不支持的导出格式: %s", format)
+		return nil, apperror.Newf(apperror.Unsupported, "不支持的导出格式: %s", format)
 	}
 	target := strings.TrimSpace(req.Path)
 	if target == "" {
 		target = filepath.Join(a.getDataDir(), "exports", "logs", time.Now().Format("cczj-logs-20060102-150405")+ext)
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-			return nil, fmt.Errorf("创建导出目录失败: %w", err)
+			return nil, apperror.Wrap(apperror.Storage, err, "创建导出目录失败")
 		}
 	}
 	if !strings.HasSuffix(strings.ToLower(target), ext) {
@@ -373,14 +374,14 @@ func (a *App) ExportLogs(req ExportLogsReq) (*ExportLogsResult, error) {
 			return nil, err
 		}
 		if truncated {
-			return nil, fmt.Errorf("日志文件过大，请追加关键词或级别筛选后再导出")
+			return nil, apperror.New(apperror.Validation, "日志文件过大，请追加关键词或级别筛选后再导出")
 		}
 		records = fileRecords
 	}
 
 	out, err := os.Create(target)
 	if err != nil {
-		return nil, fmt.Errorf("创建导出文件失败: %w", err)
+		return nil, apperror.Wrap(apperror.Storage, err, "创建导出文件失败")
 	}
 	defer out.Close()
 
@@ -417,7 +418,7 @@ func (a *App) ExportLogs(req ExportLogsReq) (*ExportLogsResult, error) {
 	}
 	data := []byte(buf.String())
 	if int64(len(data)) > maxExportBytes {
-		return nil, fmt.Errorf("导出内容过大（%d MB），请缩小筛选范围", len(data)>>20)
+		return nil, apperror.Newf(apperror.Validation, "导出内容过大（%d MB），请缩小筛选范围", len(data)>>20)
 	}
 	if _, err := out.Write(data); err != nil {
 		return nil, err
@@ -458,7 +459,7 @@ func (a *App) StartLogStream() (bool, error) {
 		cancel()
 		logStream.count--
 		logStream.cancel = nil
-		return false, fmt.Errorf("应用尚未就绪")
+		return false, apperror.New(apperror.Unavailable, "应用尚未就绪")
 	}
 	go func() {
 		defer cancel()

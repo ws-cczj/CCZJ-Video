@@ -27,7 +27,6 @@ const InvalidateEvent = "cache:invalidate"
 const (
 	ScopeVideo  = "video"
 	ScopeSource = "source"
-	ScopeAll    = "all"
 )
 
 // InvalidateEventPayload 描述一次失效的作用域。
@@ -160,33 +159,40 @@ func InvalidateSource(sourceKey, reason string) {
 	emit(InvalidateEventPayload{Scope: ScopeSource, SourceKey: sourceKey, Reason: reason})
 }
 
-// InvalidateAll 是用户显式"清除缓存"的入口：把所有本机派生缓存清干净，包括那些要靠
-// 重新请求才能补回来的（评论、热榜匹配）。榜单正文仍然保留 —— 它唯一的取回代价是一次
-// 限流下的豆瓣抓取，且与本库数据无关。
-func InvalidateAll(reason string) {
-	detail.Default.Clear()
-	douban.ClearChartMatchCache()
-	douban.ClearCommentsCache()
-	applog.Info("[Cache] 已清除全部本机派生缓存 原因=%s", reason)
-	emit(InvalidateEventPayload{Scope: ScopeAll, Reason: reason})
+// Row 是一块 Go 侧进程内缓存的读数。键（detail/chart/comments/match）是给界面查文案用的
+// 稳定标识，不是中文标题——文案由前端 i18n 出，中英才可能对得上。
+//
+// 只统计「我们自己的」缓存：前端那几块（TS 片段、海报、图片代理）只有浏览器知道命中没有，
+// 由界面自己报，所以这里的出网计数看不见它们。
+type Row struct {
+	Key       string `json:"key"`
+	Entries   int    `json:"entries"`
+	Bytes     int64  `json:"bytes"`
+	Hits      int64  `json:"hits"`
+	StaleHits int64  `json:"stale_hits"`
+	Misses    int64  `json:"misses"`
+	FetchOK   int64  `json:"fetch_ok"`
+	FetchFail int64  `json:"fetch_fail"`
+	Skipped   int64  `json:"skipped"`
 }
 
-// CacheStats 是失效层能观测到的全部内存缓存，诊断台用它确认失效真的发生了。
-type CacheStats struct {
-	DetailEntries int   `json:"detail_entries"`
-	DetailBytes   int64 `json:"detail_bytes"`
-	ChartMatches  int   `json:"chart_matches"`
-	CommentPages  int   `json:"comment_pages"`
-}
-
-// Stats 汇总当前存活缓存条目数。
-func Stats() CacheStats {
-	entries, bytes := detail.Default.Stats()
-	return CacheStats{
-		DetailEntries: entries,
-		DetailBytes:   bytes,
-		ChartMatches:  douban.ChartMatchCount(),
-		CommentPages:  douban.CommentCacheCount(),
+// Stats 汇总当前存活的缓存条目与读法计数。热榜匹配只是「查过一次就记住」的映射，
+// 没有新鲜度概念，所以它只有条目数——它存在的意义是让用户确认「清除缓存」真的清到了东西。
+func Stats() []Row {
+	detailStats := detail.Default.Stats()
+	chart := douban.ChartCacheStats()
+	comments := douban.CommentCacheStats()
+	return []Row{
+		{
+			Key: "detail", Entries: detailStats.Entries, Bytes: detailStats.Bytes,
+			Hits: detailStats.Hits, StaleHits: detailStats.StaleHits, Misses: detailStats.Misses,
+			FetchOK: detailStats.FetchOK, FetchFail: detailStats.FetchFail,
+		},
+		{Key: "chart", Entries: chart.Entries, Hits: chart.Hits, StaleHits: chart.StaleHits,
+			Misses: chart.Misses, FetchOK: chart.FetchOK, FetchFail: chart.FetchFail, Skipped: chart.Skipped},
+		{Key: "comments", Entries: comments.Entries, Hits: comments.Hits, StaleHits: comments.StaleHits,
+			Misses: comments.Misses, FetchOK: comments.FetchOK, FetchFail: comments.FetchFail, Skipped: comments.Skipped},
+		{Key: "match", Entries: douban.ChartMatchCount()},
 	}
 }
 

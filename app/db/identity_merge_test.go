@@ -6,7 +6,7 @@ import (
 )
 
 func TestMergeCandidatesGroupSplitDoubanRows(t *testing.T) {
-	database := useUnionTestDB(t)
+	database := useMigratedTestDB(t)
 	if _, err := database.Exec(`
 		INSERT INTO global_video (id, vod_name, name_norm, type_id, year, douban_id, douban_score) VALUES
 			(401, '长津湖', '长津湖', 0, '2021', 'd-1001', ''),
@@ -40,7 +40,7 @@ func TestMergeCandidatesGroupSplitDoubanRows(t *testing.T) {
 
 // 同名但年份对不上的是两部片，绝不能进候选队列。
 func TestMergeCandidatesSkipSameNameDifferentYear(t *testing.T) {
-	database := useUnionTestDB(t)
+	database := useMigratedTestDB(t)
 	if _, err := database.Exec(`
 		INSERT INTO global_video (id, vod_name, name_norm, type_id, year) VALUES
 			(411, '大白鲨', '大白鲨', 1, '1975'), (412, '大白鲨', '大白鲨', 2, '2023');
@@ -58,7 +58,7 @@ func TestMergeCandidatesSkipSameNameDifferentYear(t *testing.T) {
 }
 
 func TestMergeGlobalVideoIdentitiesRepointsEveryReference(t *testing.T) {
-	database := useUnionTestDB(t)
+	database := useMigratedTestDB(t)
 	if _, err := database.Exec(`
 		INSERT INTO global_video (id, vod_name, name_norm, type_id, year, douban_id, douban_score, douban_search_failures, douban_cooldown_until) VALUES
 			(421, '甲', '甲', 0, '', '', '', 3, '2099-01-01 00:00:00'),
@@ -122,17 +122,21 @@ func TestMergeGlobalVideoIdentitiesRepointsEveryReference(t *testing.T) {
 	}
 
 	// 合并后 422 在两个源里都有货（src-a 有两条目录行也只算一个源）。
-	page, err := GetCatalogUnionPage(FilterParams{PageSize: 10})
+	crossRefs, err := FindSourcesByGlobalId(422)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if page.Total != 1 || page.Videos[0].SourceCount != 2 {
-		t.Errorf("合并后卡片=%d 源数=%d, want 1/2", page.Total, page.Videos[0].SourceCount)
+	sourceSet := make(map[string]bool, len(crossRefs))
+	for _, ref := range crossRefs {
+		sourceSet[ref.SourceKey] = true
+	}
+	if len(crossRefs) != 3 || len(sourceSet) != 2 {
+		t.Errorf("合并后换源列表=%d 条 / %d 个源, want 3 条 2 个源：%+v", len(crossRefs), len(sourceSet), crossRefs)
 	}
 }
 
 func TestMergeGlobalVideoIdentitiesRejectsBadGroups(t *testing.T) {
-	database := useUnionTestDB(t)
+	database := useMigratedTestDB(t)
 	if _, err := database.Exec(`
 		INSERT INTO global_video (id, vod_name, name_norm, type_id, douban_id) VALUES
 			(431, '甲', '甲', 0, 'd-1'), (432, '乙', '乙', 0, 'd-2'), (433, '甲', '甲！', 0, '');

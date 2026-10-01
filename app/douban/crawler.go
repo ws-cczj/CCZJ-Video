@@ -1,10 +1,8 @@
 package douban
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"html"
 	"io"
 	"math/rand"
 	"net/http"
@@ -12,14 +10,15 @@ import (
 	"net/url"
 	"os"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"cczjVideo/app/apperror"
 	"cczjVideo/app/applog"
 	"cczjVideo/app/db"
+	"cczjVideo/app/netstats"
 )
 
 const (
@@ -74,11 +73,11 @@ var (
 		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
-		Transport: &http.Transport{
+		Transport: netstats.WrapTransport(netstats.CategoryDouban, &http.Transport{
 			MaxIdleConns:        10,
 			MaxIdleConnsPerHost: 2,
 			IdleConnTimeout:     30 * time.Second,
-		},
+		}),
 	}
 
 	lastRequestTime time.Time
@@ -346,461 +345,6 @@ func awaitDoubanSlot(caller string, budget time.Duration) (wait time.Duration, o
 	return wait, true
 }
 
-// ==================== 反爬熔断 ====================
-// 拿到 sec.douban.com 验证跳转说明这个 IP 已经被临时封禁，继续按原节奏重试
-// 只会不断续封。命中后进入静默期，静默期内所有豆瓣请求直接快速失败（不排队等待），
-// 静默时长按 5/15/60 分钟递增，任何一次正常响应立即解除。
-var (
-	blockMu      sync.Mutex
-	blockUntil   time.Time
-	blockStrikes int
-)
-
-var blockBackoffSteps = []time.Duration{
-	5 * time.Minute,
-	15 * time.Minute,
-	time.Hour,
-}
-
-// remainingBlock 返回仍在静默期内的剩余时长；不在静默期返回 0。
-// 顺带把到期的静默期清零，避免下一次 noteDoubanSuccess 之前一直误判。
-func remainingBlock() time.Duration {
-	blockMu.Lock()
-	defer blockMu.Unlock()
-	if blockUntil.IsZero() {
-		return 0
-	}
-	if left := time.Until(blockUntil); left > 0 {
-		return left
-	}
-	blockUntil = time.Time{}
-	blockStrikes = 0
-	return 0
-}
-
-// AntiCrawlState 供诊断页只读查看熔断静默期：剩余时长与连续命中次数。
-// 与 remainingBlock 不同，它不会顺手清掉到期状态，读一次不会改变抓取行为。
-func AntiCrawlState() (time.Duration, int) {
-	blockMu.Lock()
-	defer blockMu.Unlock()
-	if blockUntil.IsZero() {
-		return 0, blockStrikes
-	}
-	if left := time.Until(blockUntil); left > 0 {
-		return left, blockStrikes
-	}
-	return 0, blockStrikes
-}
-
-// noteAntiCrawl 记录一次反爬命中并把静默期推高一档。
-func noteAntiCrawl() {
-	blockMu.Lock()
-	step := blockStrikes
-	if step >= len(blockBackoffSteps) {
-		step = len(blockBackoffSteps) - 1
-	}
-	silent := blockBackoffSteps[step]
-	blockStrikes++
-	strikes := blockStrikes
-	blockUntil = time.Now().Add(silent)
-	blockMu.Unlock()
-	applog.Warn("[Douban] 触发反爬熔断：静默 %s 后再尝试（连续命中 %d 次）", silent, strikes)
-}
-
-// noteDoubanSuccess 在拿到正常响应后解除熔断。
-func noteDoubanSuccess() {
-	blockMu.Lock()
-	had := blockStrikes > 0 || !blockUntil.IsZero()
-	blockStrikes = 0
-	blockUntil = time.Time{}
-	blockMu.Unlock()
-	if had {
-		applog.Info("[Douban] 反爬熔断解除，恢复正常抓取节奏")
-	}
-}
-
-// blockedError 本地闸门拦下请求时构造统一的失败原因：静默期未过，或者限速排队等不起。
-// reason 必须写实际原因——这两种情况在诊断里是不同的处置方式，不能都印成"熔断静默中"。
-// AntiCrawl 恒为 true：这不是"这个关键词查无此条"，记录要保持可重试。
-// Local 同时置位，让调用方分清"我们没问过豆瓣"和"豆瓣回了反爬页"。
-func blockedError(urlStr, reason string) error {
-	return &doubanFetchError{
-		URL:        urlStr,
-		AntiCrawl:  true,
-		Local:      true,
-		StatusCode: http.StatusTooManyRequests,
-		Location:   reason,
-	}
-}
-
-// detailChallengedUntil 记录“详情页网页连验证题都过不去”的截止时间（unix nano）。
-// 正常情况 sec.douban.com 的 proof-of-work 能被本地解掉，网页直接返回全字段；
-// 只有解题失败（豆瓣调高难度或改版）才需要退避：命中后改走 JSON 兜底，每 30
-// 分钟才重新试探一次网页，一旦放开就自动回到全字段路径。
-var detailChallengedUntil atomic.Int64
-
-const detailProbeInterval = 30 * time.Minute
-
-func detailProbeAllowed() bool {
-	return time.Now().UnixNano() >= detailChallengedUntil.Load()
-}
-
-// isRemoteAntiCrawl 只有「豆瓣自己回了反爬页」才算。本地闸门（静默期未过、限速
-// 排队等不起）拦下的请求根本没发出去，把它当成被封会产出一个自锁：队列越闲、
-// 越没人真的问过豆瓣，详情页却被降档 30 分钟。
-func isRemoteAntiCrawl(err error) bool {
-	var fetchErr *doubanFetchError
-	return errors.As(err, &fetchErr) && fetchErr.AntiCrawl && !fetchErr.Local
-}
-
-func markDetailChallenged() {
-	detailChallengedUntil.Store(time.Now().Add(detailProbeInterval).UnixNano())
-}
-
-func clearDetailChallenged() {
-	detailChallengedUntil.Store(0)
-}
-
-func checkAntiCrawl(html string) bool {
-	// 精确反爬检测：真正的反爬/验证页面有明确特征。
-	// 之前的"加载中"误判率很高——豆瓣搜索页初始 HTML（smart-box 占位）
-	// 确实包含"加载中"，但那不是反爬，而是 JS 占位文本。
-	// 改为：只有当页面既包含反爬关键词，又没有任何 subject/tv/movie 链接时，
-	// 才判定为反爬（真正反爬页不会带正常结果链接）。
-	//
-	// 新版搜索页把候选全塞进 __DATA__ 的内嵌 JSON，并且整页非 ASCII 都转义成 \u、
-	// 斜杠转义成 \/：上面的链接正则和下面的明文中文关键词对这种页都是瞎的。
-	// JSON 里有候选就一定是正常页——反爬页不会替你准备好搜索结果。
-	if payload, ok := decodeSearchPage(html); ok && len(payload.Items) > 0 {
-		return false
-	}
-	hasResultLink := subjectIDRegex.MatchString(html) ||
-		subjectIDRegexSmart.MatchString(html) ||
-		subjectIDRegexJSON.MatchString(html) ||
-		moreurlSubjectIDRegex.MatchString(html) ||
-		strings.Contains(html, "movie.douban.com/subject/") ||
-		strings.Contains(html, "doubanapp/dispatch?uri=/tv/") ||
-		strings.Contains(html, "doubanapp/dispatch?uri=/movie/")
-	if hasResultLink {
-		return false
-	}
-	for _, pattern := range antiCrawlPatterns {
-		if strings.Contains(html, pattern) {
-			applog.Warn("[Douban] Anti-crawl detected: pattern '%s' matched (page len=%d)", pattern, len(html))
-			return true
-		}
-	}
-	return false
-}
-
-// cleanTitle 去除标题中的不可见字符和年份后缀
-func cleanTitle(title string) string {
-	title = html.UnescapeString(stripHTMLTags(title))
-	// 去除不可见 Unicode 字符（LTR mark、RTL mark 等）
-	title = strings.Map(func(r rune) rune {
-		if r == '\u200E' || r == '\u200F' || r == '\u200B' || r == '\uFEFF' {
-			return -1 // 删除
-		}
-		return r
-	}, title)
-	// 去除年份后缀
-	title = searchYearRegex.ReplaceAllString(title, "")
-	title = bareYearSuffixRegex.ReplaceAllString(title, "")
-	title = strings.TrimSpace(title)
-	return title
-}
-
-// splitItemBlocks 将搜索结果 HTML 拆分为独立的候选项块
-func splitItemBlocks(html string) []string {
-	var blocks []string
-	markers := itemRootOpenRegex.FindAllStringIndex(html, -1)
-	for i, marker := range markers {
-		start := marker[1]
-		end := len(html)
-		if i+1 < len(markers) {
-			end = markers[i+1][0]
-		}
-		if start < end {
-			blocks = append(blocks, html[start:end])
-		}
-	}
-	return blocks
-}
-
-func parseHTMLAttributes(tag string) map[string]string {
-	attrs := make(map[string]string)
-	for _, match := range htmlAttrRegex.FindAllStringSubmatch(tag, -1) {
-		if len(match) < 5 {
-			continue
-		}
-		value := match[2]
-		if value == "" {
-			value = match[3]
-		}
-		if value == "" {
-			value = match[4]
-		}
-		attrs[strings.ToLower(match[1])] = html.UnescapeString(value)
-	}
-	return attrs
-}
-
-func hasHTMLClass(classes, className string) bool {
-	for _, class := range strings.Fields(classes) {
-		if class == className {
-			return true
-		}
-	}
-	return false
-}
-
-func extractSubjectID(text string) string {
-	for _, pattern := range []*regexp.Regexp{
-		moreurlSubjectIDRegex,
-		subjectIDRegex,
-		subjectIDRegexSmart,
-		subjectIDRegexJSON,
-	} {
-		if match := pattern.FindStringSubmatch(text); len(match) >= 2 {
-			return match[1]
-		}
-	}
-	return ""
-}
-
-func extractCandidateTitle(block string) string {
-	for _, anchor := range anchorRegex.FindAllString(block, -1) {
-		openEnd := strings.Index(anchor, ">")
-		if openEnd < 0 {
-			continue
-		}
-		attrs := parseHTMLAttributes(anchor[:openEnd+1])
-		closeStart := strings.LastIndex(strings.ToLower(anchor), "</a>")
-		if closeStart < openEnd {
-			continue
-		}
-		text := strings.TrimSpace(html.UnescapeString(stripHTMLTags(anchor[openEnd+1 : closeStart])))
-		classes := attrs["class"]
-		if (hasHTMLClass(classes, "title-text") || hasHTMLClass(classes, "DouWeb-SR-subject-info-name")) && text != "" {
-			return text
-		}
-		if extractSubjectID(anchor) != "" && attrs["title"] != "" {
-			return strings.TrimSpace(html.UnescapeString(attrs["title"]))
-		}
-	}
-	return ""
-}
-
-func parseSearchCandidatesFromAnchors(html string) []SearchCandidate {
-	var candidates []SearchCandidate
-	seen := make(map[string]bool)
-	for _, anchor := range anchorRegex.FindAllString(html, -1) {
-		subjectID := extractSubjectID(anchor)
-		if subjectID == "" || seen[subjectID] {
-			continue
-		}
-		title := extractCandidateTitle(anchor)
-		if title == "" {
-			continue
-		}
-		seen[subjectID] = true
-		year := 0
-		if match := searchYearRegex.FindStringSubmatch(title); len(match) >= 2 {
-			year, _ = strconv.Atoi(match[1])
-		}
-		candidates = append(candidates, SearchCandidate{SubjectID: subjectID, Title: cleanTitle(title), Year: year})
-	}
-	return candidates
-}
-
-// parseSearchCandidates 解析搜索结果，提取所有候选项及其元数据。
-// 优先读页面内嵌的 window.__DATA__（当前豆瓣搜索页唯一的候选来源），
-// 拿不到再退回去 node 节点的老 HTML 路径。
-func parseSearchCandidates(html string) []SearchCandidate {
-	if candidates := parseSearchCandidatesFromJSON(html); len(candidates) > 0 {
-		return candidates
-	}
-	blocks := splitItemBlocks(html)
-	if len(blocks) == 0 {
-		return parseSearchCandidatesFromAnchors(html)
-	}
-
-	var candidates []SearchCandidate
-	for _, block := range blocks {
-		// 提取 subject ID（从 data-moreurl 的 JS 参数中）
-		subjectID := extractSubjectID(block)
-		if subjectID == "" {
-			continue
-		}
-
-		// 提取标题
-		rawTitle := extractCandidateTitle(block)
-		if rawTitle == "" {
-			continue
-		}
-
-		// 提取年份
-		year := 0
-		if ym := searchYearRegex.FindStringSubmatch(rawTitle); len(ym) >= 2 {
-			year, _ = strconv.Atoi(ym[1])
-		}
-		title := cleanTitle(rawTitle)
-
-		// 提取所有 meta abstract 内容
-		metaMatches := searchMetaRegex.FindAllStringSubmatch(block, -1)
-		var meta1, meta2 string
-		if len(metaMatches) >= 1 {
-			meta1 = stripHTMLTags(metaMatches[0][1])
-		}
-		if len(metaMatches) >= 2 {
-			meta2 = stripHTMLTags(metaMatches[1][1])
-		}
-
-		// 判断是否为剧集
-		isSeries := strings.Contains(block, `[剧集]`) ||
-			strings.Contains(block, `is_tv:'1'`) ||
-			strings.Contains(block, `is_tv:"1"`) ||
-			strings.Contains(block, `is_tv=\"1\"`)
-
-		// 解析导演/演员（meta2 中导演在前、演员在后，用 / 分隔）
-		director, actor := parseDirectorActor(meta2)
-
-		candidates = append(candidates, SearchCandidate{
-			SubjectID: subjectID,
-			Title:     title,
-			Year:      year,
-			IsSeries:  isSeries,
-			Meta:      meta1,
-			Director:  director,
-			Actor:     actor,
-		})
-	}
-	return candidates
-}
-
-// parseDirectorActor 从 meta2 字符串中分离导演和演员
-// 豆瓣搜索结果 meta2 格式：导演 / 导演 / 演员 / 演员 / ...
-// 第一个 / 之前的部分是导演，其余是演员
-func parseDirectorActor(meta2 string) (string, string) {
-	if meta2 == "" {
-		return "", ""
-	}
-	parts := strings.Split(meta2, "/")
-	for i := range parts {
-		parts[i] = strings.TrimSpace(parts[i])
-	}
-	// 豆瓣搜索页 meta2 中导演通常在前，用第一个非空分隔
-	// 实际观察：导演有1-2个，后面全是演员
-	// 简单策略：前2个为导演，其余为演员（如果总数<=2则全是导演）
-	if len(parts) <= 2 {
-		return strings.Join(parts, ","), ""
-	}
-	// 取前2个为导演，其余为演员
-	return strings.Join(parts[:2], ","), strings.Join(parts[2:], ",")
-}
-
-// scoreCandidate 计算候选项与搜索元数据的匹配分数
-// 注意：豆瓣的「剧集/电影」标签不属于类型，类型比较由 global_types 层负责
-func scoreCandidate(c *SearchCandidate, meta SearchMeta) int {
-	normTitle := normalizeTitle(c.Title)
-	normKeyword := normalizeTitle(meta.VodName)
-	candBase, candSeason, candPart := splitSeasonTag(normTitle)
-	metaBase, metaSeason, metaPart := splitSeasonTag(normKeyword)
-
-	// 片名是门槛，不是加分项：对不上就直接零分，年份/导演/演员都不再参与。
-	// 否则「同年 + 同导演×2 + 同演员」足以把一部片名无关的候选抬过阈值。
-	score := titleMatchScore(normTitle, normKeyword, candBase, metaBase)
-	if score == 0 {
-		return 0
-	}
-	// 季号冲突走同一条路：短路，而不是扣分。同一部剧各季的片名、导演、演员几乎
-	// 全都相同，扣掉的分能被旁证加回来，而挂错季会连带污染评分、海报和兄弟继承。
-	delta, conflict := seasonMatchDelta(metaSeason, metaPart, candSeason, candPart)
-	if conflict {
-		return seasonConflictScore
-	}
-	score += delta
-
-	// 年份匹配
-	if meta.Year != "" && c.Year > 0 {
-		if strconv.Itoa(c.Year) == meta.Year {
-			score += 30
-		} else {
-			score -= 15 // 年份不匹配扣分
-		}
-	}
-
-	// 导演匹配（豆瓣用 / 分隔，本地数据可能用 , 或 、 分隔）
-	if meta.Director != "" && c.Director != "" {
-		metaDirectors := splitCSV(meta.Director)
-		cDirectors := splitCSV(c.Director)
-		for _, md := range metaDirectors {
-			for _, cd := range cDirectors {
-				if md != "" && cd != "" && md == cd {
-					score += 20
-				}
-			}
-		}
-	}
-
-	// 演员匹配（最多 +15 分）
-	if meta.Actor != "" && c.Actor != "" {
-		metaActors := splitCSV(meta.Actor)
-		cActors := splitCSV(c.Actor)
-		actorScore := 0
-		for _, ma := range metaActors {
-			for _, ca := range cActors {
-				if ma != "" && ca != "" && ma == ca {
-					actorScore += 5
-					if actorScore >= 15 {
-						break
-					}
-				}
-			}
-			if actorScore >= 15 {
-				break
-			}
-		}
-		score += actorScore
-	}
-
-	return score
-}
-
-// splitCSV 将各种分隔符（逗号、斜杠、顿号、全角逗号等）拆分为列表
-func splitCSV(s string) []string {
-	// 统一分隔符：将 / 、 ， 全部替换为英文逗号
-	s = strings.ReplaceAll(s, "/", ",")
-	s = strings.ReplaceAll(s, "、", ",")
-	s = strings.ReplaceAll(s, "\uff0c", ",") // 全角逗号
-	parts := strings.Split(s, ",")
-	var result []string
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			result = append(result, p)
-		}
-	}
-	return result
-}
-
-// bestMatch 从候选列表中选择最佳匹配
-func bestMatch(candidates []SearchCandidate, meta SearchMeta) (*SearchCandidate, int) {
-	if len(candidates) == 0 {
-		return nil, 0
-	}
-	best := &candidates[0]
-	bestScore := scoreCandidate(&candidates[0], meta)
-	for i := 1; i < len(candidates); i++ {
-		s := scoreCandidate(&candidates[i], meta)
-		if s > bestScore {
-			bestScore = s
-			best = &candidates[i]
-		}
-	}
-	return best, bestScore
-}
-
 func fetchHTML(urlStr string) (string, error) {
 	return fetchDouban(urlStr, false)
 }
@@ -872,7 +416,7 @@ func fetchDoubanOnce(urlStr, requestReferer string) (doc string, challenge strin
 	req, err := http.NewRequest("GET", urlStr, nil)
 	if err != nil {
 		applog.Error("[Douban] Failed to create request: %v", err)
-		return "", "", fmt.Errorf("failed to create request: %w", err)
+		return "", "", apperror.Wrap(apperror.Unavailable, err, "failed to create request")
 	}
 
 	applyDoubanHeaders(req, requestReferer)
@@ -880,7 +424,7 @@ func fetchDoubanOnce(urlStr, requestReferer string) (doc string, challenge strin
 	resp, err := client.Do(req)
 	if err != nil {
 		applog.Error("[Douban] HTTP request failed: %v", err)
-		return "", "", fmt.Errorf("failed to fetch: %w", err)
+		return "", "", apperror.Wrap(apperror.Unavailable, err, "failed to fetch")
 	}
 	defer resp.Body.Close()
 
@@ -926,7 +470,7 @@ func fetchDoubanOnce(urlStr, requestReferer string) (doc string, challenge strin
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 4*1024*1024))
 	if err != nil {
 		applog.Error("[Douban] Failed to read response body: %v", err)
-		return "", "", fmt.Errorf("failed to read body: %w", err)
+		return "", "", apperror.Wrap(apperror.Unavailable, err, "failed to read body")
 	}
 
 	page := string(body)
@@ -987,7 +531,7 @@ func SearchSubjectID(keyword string, meta SearchMeta) (string, error) {
 	// 冷却是按行记的：写和读都只认 global_id，不再靠 vod_name 猜行。
 	if db.IsDoubanSearchOnCooldown(meta.GlobalID) {
 		applog.Debug("[Douban] Skipping search for '%s' (id=%d in cooldown period)", keyword, meta.GlobalID)
-		return "", fmt.Errorf("search cooldown active for '%s'", keyword)
+		return "", apperror.Newf(apperror.Unavailable, "search cooldown active for '%s'", keyword)
 	}
 
 	// 多层搜索策略：先用原始关键词，失败后尝试去掉季数信息
@@ -1055,7 +599,7 @@ func SearchSubjectID(keyword string, meta SearchMeta) (string, error) {
 				}
 				applog.Debug("[Douban] HTML snippet: %s", snippet)
 			}
-			lastErr = fmt.Errorf("no candidates parsed for keyword: %s", kw)
+			lastErr = apperror.Newf(apperror.NotFound, "no candidates parsed for keyword: %s", kw)
 			continue
 		}
 
@@ -1081,11 +625,11 @@ func SearchSubjectID(keyword string, meta SearchMeta) (string, error) {
 			// 兄弟继承都会把它复制到更多行上。
 			applog.Warn("[Douban] Rejected match for '%s': score=%d < %d (best title=%q)",
 				keyword, score, doubanMatchThreshold, match.Title)
-			lastErr = fmt.Errorf("best match for %s scored %d, below threshold %d", keyword, score, doubanMatchThreshold)
+			lastErr = apperror.Newf(apperror.NotFound, "best match for %s scored %d, below threshold %d", keyword, score, doubanMatchThreshold)
 			continue
 		}
 
-		lastErr = fmt.Errorf("no subject ID found for keyword: %s", kw)
+		lastErr = apperror.Newf(apperror.NotFound, "no subject ID found for keyword: %s", kw)
 	}
 
 	// 只有确实拿到正常搜索页、但没有找到候选时才累计“搜索无结果”。
@@ -1096,357 +640,4 @@ func SearchSubjectID(keyword string, meta SearchMeta) (string, error) {
 		applog.Warn("[Douban] Search failed before a usable result page; skip cooldown for '%s'", keyword)
 	}
 	return "", lastErr
-}
-
-func ExtractLinkTexts(html string) string {
-	links := linkTextRegex.FindAllStringSubmatch(html, -1)
-	var names []string
-	for _, link := range links {
-		if len(link) >= 2 {
-			name := strings.TrimSpace(link[1])
-			if name != "" {
-				names = append(names, name)
-			}
-		}
-	}
-	return strings.Join(names, " / ")
-}
-
-// subjectAbstract 对应 /j/subject_abstract 的 JSON 结构，只声明会用到的字段。
-type subjectAbstract struct {
-	R       int `json:"r"`
-	Subject struct {
-		ID            string   `json:"id"`
-		Title         string   `json:"title"`
-		Rate          string   `json:"rate"`
-		Directors     []string `json:"directors"`
-		Actors        []string `json:"actors"`
-		Types         []string `json:"types"`
-		Region        string   `json:"region"`
-		Duration      string   `json:"duration"`
-		EpisodesCount string   `json:"episodes_count"`
-		ReleaseYear   string   `json:"release_year"`
-	} `json:"subject"`
-}
-
-// parseSubjectAbstract 把 JSON 兜底数据填进 DoubanInfo。
-// 评价人数、编剧、语言、又名、IMDb、海报在这个接口里没有，留空即可：
-// db.UpsertDoubanInfo 对所有空字段都是“保留数据库里的旧值”，不会把已有数据冲掉。
-func parseSubjectAbstract(subjectID, body string) (*DoubanInfo, error) {
-	var payload subjectAbstract
-	if err := json.Unmarshal([]byte(strings.TrimSpace(body)), &payload); err != nil {
-		return nil, fmt.Errorf("decode subject_abstract for %s: %w", subjectID, err)
-	}
-	s := payload.Subject
-	if s.Rate == "" && len(s.Directors) == 0 && len(s.Actors) == 0 {
-		return nil, fmt.Errorf("subject_abstract for %s has no usable fields", subjectID)
-	}
-	return &DoubanInfo{
-		SubjectID:    subjectID,
-		Title:        strings.TrimSpace(s.Title),
-		Rating:       strings.TrimSpace(s.Rate),
-		Director:     strings.Join(s.Directors, " / "),
-		Actor:        strings.Join(s.Actors, " / "),
-		Genre:        strings.Join(s.Types, "/"),
-		Country:      strings.TrimSpace(s.Region),
-		ReleaseDate:  strings.TrimSpace(s.ReleaseYear),
-		EpisodeCount: strings.TrimSpace(s.EpisodesCount),
-		Duration:     strings.TrimSpace(s.Duration),
-	}, nil
-}
-
-// fetchDetailByAbstract 在详情页被反爬拦截时改走 JSON 接口。
-// ignoreBlock 是必须的：详情页那次 302 已经给自己记了一轮静默期，
-// 若连兜底请求都被本地闸门挡住，这条路径永远不会执行。
-func fetchDetailByAbstract(subjectID string) (*DoubanInfo, error) {
-	body, err := fetchDouban(fmt.Sprintf(subjectAbstractURL, subjectID), true)
-	if err != nil {
-		return nil, err
-	}
-	info, err := parseSubjectAbstract(subjectID, body)
-	if err != nil {
-		return nil, err
-	}
-	applog.Info("[Douban] 详情页被拦截，已用 subject_abstract 兜底: %s Rating='%s' Director='%s' Actor='%s' Genre='%s'",
-		subjectID, info.Rating, truncate(info.Director, 30), truncate(info.Actor, 30), info.Genre)
-	return info, nil
-}
-
-func ParseDetail(subjectID string) (*DoubanInfo, error) {
-	applog.Info("[Douban] Parsing detail for subject ID: %s", subjectID)
-
-	if !detailProbeAllowed() {
-		applog.Info("[Douban] 详情页仍在拦截期内（每 %s 才试探一次网页），本次直接用 subject_abstract: %s", detailProbeInterval, subjectID)
-		return fetchDetailByAbstract(subjectID)
-	}
-
-	urlStr := fmt.Sprintf(detailURL, subjectID)
-
-	html, err := fetchHTML(urlStr)
-	if err != nil {
-		// /subject/<id>/ 网页层面无条件被 302 到 sec.douban.com 的 JS 验证页，
-		// 不带登录 Cookie 就永远拿不到。这里降级到同站 JSON 接口，而不是让整次
-		// 更新失败——评分/导演/演员/类型/集数这些主要字段都还能拿到。
-		if isRemoteAntiCrawl(err) {
-			markDetailChallenged()
-		}
-		applog.Info("[Douban] Detail page unavailable for %s (%v), falling back to subject_abstract", subjectID, err)
-		info, fallbackErr := fetchDetailByAbstract(subjectID)
-		if fallbackErr != nil {
-			applog.Warn("[Douban] Detail fetch failed for %s: %v (fallback: %v)", subjectID, err, fallbackErr)
-			return nil, err
-		}
-		return info, nil
-	}
-	clearDetailChallenged()
-
-	info := &DoubanInfo{
-		SubjectID: subjectID,
-	}
-
-	if matches := ratingRegex.FindStringSubmatch(html); len(matches) >= 2 {
-		info.Rating = strings.TrimSpace(matches[1])
-	}
-
-	if matches := votesRegex.FindStringSubmatch(html); len(matches) >= 2 {
-		info.Votes = strings.TrimSpace(matches[1])
-	}
-
-	// 解析短评数量
-	if matches := shortCommentsRegex.FindStringSubmatch(html); len(matches) >= 2 {
-		info.ShortComments = strings.ReplaceAll(strings.TrimSpace(matches[1]), ",", "")
-	}
-	// 短评数量备选：从 "全部 XX 条短评" 格式提取
-	if info.ShortComments == "" {
-		if matches := regexp.MustCompile(`全部\s*(\d[\d,]*)\s*条`).FindStringSubmatch(html); len(matches) >= 2 {
-			info.ShortComments = strings.ReplaceAll(strings.TrimSpace(matches[1]), ",", "")
-		}
-	}
-
-	if matches := directorRegex.FindStringSubmatch(html); len(matches) >= 2 {
-		info.Director = ExtractLinkTexts(matches[1])
-	}
-
-	if matches := writerRegex.FindStringSubmatch(html); len(matches) >= 2 {
-		info.Writer = ExtractLinkTexts(matches[1])
-	}
-
-	if matches := actorRegex.FindStringSubmatch(html); len(matches) >= 2 {
-		info.Actor = ExtractLinkTexts(matches[1])
-	}
-
-	if matches := genreRegex.FindStringSubmatch(html); len(matches) >= 2 {
-		info.Genre = strings.TrimSpace(matches[1])
-	}
-
-	if matches := countryRegex.FindStringSubmatch(html); len(matches) >= 2 {
-		info.Country = strings.TrimSpace(matches[1])
-	}
-
-	if matches := languageRegex.FindStringSubmatch(html); len(matches) >= 2 {
-		info.Language = strings.TrimSpace(matches[1])
-	}
-
-	if matches := releaseDateRegex.FindStringSubmatch(html); len(matches) >= 2 {
-		info.ReleaseDate = strings.TrimSpace(matches[1])
-	}
-
-	if matches := episodeCountRegex.FindStringSubmatch(html); len(matches) >= 2 {
-		info.EpisodeCount = strings.TrimSpace(matches[1])
-	}
-
-	if matches := seasonCountRegex.FindStringSubmatch(html); len(matches) >= 2 {
-		info.SeasonCount = strings.TrimSpace(matches[1])
-	}
-
-	if matches := durationRegex.FindStringSubmatch(html); len(matches) >= 2 {
-		info.Duration = strings.TrimSpace(matches[1])
-	}
-
-	if matches := akaRegex.FindStringSubmatch(html); len(matches) >= 2 {
-		info.Aka = strings.TrimSpace(matches[1])
-	}
-
-	if matches := imdbRegex.FindStringSubmatch(html); len(matches) >= 2 {
-		info.IMDb = strings.TrimSpace(matches[1])
-	}
-
-	if matches := posterRegex.FindStringSubmatch(html); len(matches) >= 3 {
-		info.PosterURL = strings.TrimSpace(matches[1])
-		info.Title = strings.TrimSpace(matches[2])
-	}
-
-	// 兜底标题提取：从 <h1> 中的 <span property="v:itemreviewed"> 提取
-	if info.Title == "" {
-		if matches := titleRegex.FindStringSubmatch(html); len(matches) >= 2 {
-			info.Title = strings.TrimSpace(matches[1])
-		}
-	}
-	if info.Title == "" {
-		if matches := ogTitleRegex.FindStringSubmatch(html); len(matches) >= 2 {
-			info.Title = cleanTitle(matches[1])
-		}
-	}
-
-	// 兜底解析：如果以上正则都没匹配到关键字段，尝试从 <div id="info"> 中逐行解析
-	parseInfoDivFallback(html, info)
-	if info.Title == "" && info.Rating == "" && info.Votes == "" && info.PosterURL == "" {
-		return nil, fmt.Errorf("detail page returned no recognized fields for subject %s", subjectID)
-	}
-
-	// 计算热度：votes + short_comments + 7天内新片加权
-	info.Hotness = computeHotness(info.Votes, info.ShortComments, info.ReleaseDate)
-
-	applog.Info("[Douban] Parsed detail for %s: Title='%s', Rating='%s', Votes='%s', ShortComments='%s', Hotness='%s', Director='%s', Actor='%s', Genre='%s'",
-		subjectID, info.Title, info.Rating, info.Votes, info.ShortComments, info.Hotness, truncate(info.Director, 30), truncate(info.Actor, 30), info.Genre)
-
-	return info, nil
-}
-
-// computeHotness 计算热度分数
-// 公式：votes + short_comments_count + 7天内新片加杈100 + 30天内新片加权50
-func computeHotness(votesStr, shortCommentsStr, releaseDateStr string) string {
-	hotness := 0
-	if v, err := strconv.Atoi(votesStr); err == nil {
-		hotness += v
-	}
-	if sc, err := strconv.Atoi(shortCommentsStr); err == nil {
-		hotness += sc
-	}
-	// 时间加权：解析首播日期判断是否为新片
-	if releaseDateStr != "" {
-		// 尝试解析日期：格式如 "2026-06-20(中国大陆)" 或 "2026-05-15"
-		dateStr := releaseDateStr
-		// 取第一个日期
-		if idx := strings.Index(dateStr, "("); idx > 0 {
-			dateStr = dateStr[:idx]
-		}
-		dateStr = strings.TrimSpace(dateStr)
-		// 尝试多种日期格式
-		for _, layout := range []string{"2006-01-02", "2006/01/02", "2006.01.02"} {
-			if t, err := time.Parse(layout, dateStr); err == nil {
-				days := time.Since(t).Hours() / 24
-				if days < 7 {
-					hotness += 100
-				} else if days < 30 {
-					hotness += 50
-				}
-				break
-			}
-		}
-	}
-	return strconv.Itoa(hotness)
-}
-
-// parseInfoDivFallback 从 <div id="info"> 中逐行解析，处理嵌套 span 标签等复杂结构
-func parseInfoDivFallback(html string, info *DoubanInfo) {
-	idx := strings.Index(html, `<div id="info">`)
-	if idx < 0 {
-		return
-	}
-	// 找到 info div 的结束位置
-	endMarkers := []string{`<div id="interest_sectl">`, `<script type="text/javascript">`}
-	endIdx := len(html)
-	for _, marker := range endMarkers {
-		if i := strings.Index(html[idx:], marker); i > 0 && idx+i < endIdx {
-			endIdx = idx + i
-		}
-	}
-	block := html[idx:endIdx]
-
-	// 按 <span class="pl"> 分割，逐个处理每个标签-值对
-	plPattern := regexp.MustCompile(`<span\b[^>]*\bclass\s*=\s*["'][^"']*\bpl\b[^"']*["'][^>]*>([^<]+)</span>`)
-	plMatches := plPattern.FindAllStringSubmatchIndex(block, -1)
-
-	for i, m := range plMatches {
-		if len(m) < 4 {
-			continue
-		}
-		label := strings.TrimSpace(block[m[2]:m[3]])
-		// 值的起始位置：当前 span 结束之后
-		valueStart := m[1]
-		// 值的结束位置：下一个 <span class="pl"> 或 <br> 或下一个 <span
-		var valueEnd int
-		if i+1 < len(plMatches) {
-			valueEnd = plMatches[i+1][0]
-		} else {
-			valueEnd = len(block)
-		}
-		rawValue := block[valueStart:valueEnd]
-
-		// 截断到第一个 <br> 或 <script 标签
-		if brIdx := strings.Index(rawValue, "<br"); brIdx >= 0 {
-			rawValue = rawValue[:brIdx]
-		}
-		if scriptIdx := strings.Index(rawValue, "<script"); scriptIdx >= 0 {
-			rawValue = rawValue[:scriptIdx]
-		}
-
-		// 剥离所有 HTML 标签，提取纯文本值
-		value := stripHTMLTags(rawValue)
-		value = strings.TrimSpace(value)
-		if value == "" {
-			continue
-		}
-
-		switch {
-		case strings.Contains(label, "导演") && info.Director == "":
-			info.Director = value
-		case strings.Contains(label, "编剧") && info.Writer == "":
-			info.Writer = value
-		case strings.Contains(label, "主演") && info.Actor == "":
-			info.Actor = value
-		case strings.Contains(label, "类型") && info.Genre == "":
-			info.Genre = value
-		case strings.Contains(label, "制片国家/地区") && info.Country == "":
-			info.Country = value
-		case strings.Contains(label, "语言") && info.Language == "":
-			info.Language = value
-		case strings.Contains(label, "首播") && info.ReleaseDate == "":
-			info.ReleaseDate = value
-		case strings.Contains(label, "集数") && info.EpisodeCount == "":
-			info.EpisodeCount = value
-		case strings.Contains(label, "季数") && info.SeasonCount == "":
-			info.SeasonCount = value
-		case strings.Contains(label, "单集片长") && info.Duration == "":
-			info.Duration = value
-		case strings.Contains(label, "又名") && info.Aka == "":
-			info.Aka = value
-		case strings.Contains(label, "IMDb") && info.IMDb == "":
-			info.IMDb = value
-		}
-	}
-}
-
-// stripHTMLTags 去除字符串中的所有 HTML 标签，返回纯文本
-func stripHTMLTags(s string) string {
-	// 移除所有 <...> 标签
-	tagRegex := regexp.MustCompile(`<[^>]*>`)
-	result := tagRegex.ReplaceAllString(s, "")
-	// 将多个空白字符压缩为一个空格
-	spaceRegex := regexp.MustCompile(`\s+`)
-	result = spaceRegex.ReplaceAllString(result, " ")
-	return strings.TrimSpace(result)
-}
-
-func truncate(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
-}
-
-// FetchDoubanInfo 先搜 subject_id 再抓详情页。
-// 这里不再重复查冷却：SearchSubjectID 已经按 global_id 查过本行了，第二次查
-// 只能按关键词查，等于给同一条记录套上两套不同的冷却口径。
-func FetchDoubanInfo(keyword string, meta SearchMeta) (*DoubanInfo, error) {
-	applog.Info("[Douban] Fetching complete info for keyword: %s", keyword)
-
-	subjectID, err := SearchSubjectID(keyword, meta)
-	if err != nil {
-		applog.Error("[Douban] FetchDoubanInfo failed at search step for '%s': %v", keyword, err)
-		return nil, err
-	}
-
-	return ParseDetail(subjectID)
 }

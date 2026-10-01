@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"cczjVideo/app/apperror"
 	"cczjVideo/app/applog"
 	"cczjVideo/app/db"
 
@@ -36,7 +37,7 @@ func (s *Service) Archives(dataDir string) ([]ArchiveInfo, error) {
 		if os.IsNotExist(err) {
 			return []ArchiveInfo{}, nil
 		}
-		return nil, fmt.Errorf("read archive directory: %w", err)
+		return nil, apperror.Wrap(apperror.Storage, err, "read archive directory")
 	}
 	archives := make([]ArchiveInfo, 0, len(entries))
 	for _, entry := range entries {
@@ -82,19 +83,19 @@ func (s *Service) archivePath(dataDir, name string) (string, error) {
 	if cleaned == "" || cleaned != name || filepath.Ext(cleaned) == "" ||
 		!strings.EqualFold(filepath.Ext(cleaned), ".db") ||
 		strings.ContainsAny(cleaned, `/\`) || cleaned == "." || cleaned == ".." {
-		return "", fmt.Errorf("invalid archive name: %q", name)
+		return "", apperror.Newf(apperror.Validation, "invalid archive name: %q", name)
 	}
 	dir := filepath.Join(dataDir, archiveDirName)
 	path := filepath.Join(dir, cleaned)
 	if !withinDir(path, dir) {
-		return "", fmt.Errorf("archive is outside the snapshot directory")
+		return "", apperror.New(apperror.Validation, "archive is outside the snapshot directory")
 	}
 	info, err := os.Stat(path)
 	if err != nil {
-		return "", fmt.Errorf("archive not found: %w", err)
+		return "", apperror.Wrap(apperror.NotFound, err, "archive not found")
 	}
 	if info.IsDir() || info.Size() == 0 {
-		return "", fmt.Errorf("archive is not a database file")
+		return "", apperror.New(apperror.Corrupt, "archive is not a database file")
 	}
 	return path, nil
 }
@@ -114,7 +115,7 @@ func withinDir(path, dir string) bool {
 func readArchive(path string) (Payload, error) {
 	scratchDir := filepath.Join(filepath.Dir(path), ".restore-scratch")
 	if err := os.MkdirAll(scratchDir, 0755); err != nil {
-		return Payload{}, fmt.Errorf("create scratch directory: %w", err)
+		return Payload{}, apperror.Wrap(apperror.Storage, err, "create scratch directory")
 	}
 	defer os.RemoveAll(scratchDir)
 
@@ -126,32 +127,32 @@ func readArchive(path string) (Payload, error) {
 	}
 	database, err := sqlx.Connect("sqlite", scratch+"?_pragma=busy_timeout(3000)&_pragma=query_only(TRUE)")
 	if err != nil {
-		return Payload{}, fmt.Errorf("open archive read-only: %w", err)
+		return Payload{}, apperror.Wrap(apperror.Corrupt, err, "open archive read-only")
 	}
 	defer database.Close()
 
 	payload := Payload{Kind: payloadKind, Version: payloadVersion, Exported: time.Now().Format(time.RFC3339)}
 	settings, err := db.ReadAllSettings(database)
 	if err != nil {
-		return Payload{}, fmt.Errorf("archive has no readable settings table: %w", err)
+		return Payload{}, apperror.Wrap(apperror.Corrupt, err, "archive has no readable settings table")
 	}
 	favorites, err := db.ReadFavorites(database)
 	if err != nil {
-		return Payload{}, fmt.Errorf("archive has no readable favorites: %w", err)
+		return Payload{}, apperror.Wrap(apperror.Corrupt, err, "archive has no readable favorites")
 	}
 	history, err := db.ReadHistory(database)
 	if err != nil {
-		return Payload{}, fmt.Errorf("archive has no readable history: %w", err)
+		return Payload{}, apperror.Wrap(apperror.Corrupt, err, "archive has no readable history")
 	}
 	videos, err := db.ReadLinkedVideoMeta(database)
 	if err != nil {
-		return Payload{}, fmt.Errorf("archive has no readable metadata: %w", err)
+		return Payload{}, apperror.Wrap(apperror.Corrupt, err, "archive has no readable metadata")
 	}
 	// 归档里的源只有定义没有目录，且合并阶段对本机已有的源不动，
 	// 所以这里读的是归档自己的 sources 表。
 	sources, err := db.ReadSources(database)
 	if err != nil {
-		return Payload{}, fmt.Errorf("archive has no readable sources: %w", err)
+		return Payload{}, apperror.Wrap(apperror.Corrupt, err, "archive has no readable sources")
 	}
 	payload.Settings = settings
 	payload.Favorites = favorites
@@ -170,16 +171,16 @@ func copyFile(from, to string) error {
 		return nil
 	}
 	if err != nil {
-		return fmt.Errorf("open %s: %w", from, err)
+		return apperror.Wrap(apperror.Storage, err, fmt.Sprintf("open %s", from))
 	}
 	defer source.Close()
 	target, err := os.OpenFile(to, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
-		return fmt.Errorf("create %s: %w", to, err)
+		return apperror.Wrap(apperror.Storage, err, fmt.Sprintf("create %s", to))
 	}
 	if _, err := io.Copy(target, source); err != nil {
 		_ = target.Close()
-		return fmt.Errorf("copy %s: %w", from, err)
+		return apperror.Wrap(apperror.Storage, err, fmt.Sprintf("copy %s", from))
 	}
 	return target.Close()
 }

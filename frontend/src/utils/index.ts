@@ -1,5 +1,6 @@
 // 通用工具函数
-import { readStorage, writeStorage } from '../platform/storage'
+import { readStorage } from '../platform/storage'
+import { createDebouncedWriter } from '../platform/debouncedWrite'
 import { tr } from '../locales'
 
 // 格式化时间显示
@@ -146,45 +147,96 @@ const imageProxyPending = new Map<string, Promise<string>>()
 // short failure cooldown so a later mount can recover from transient outages.
 const imageProxyFallbackCache = new Map<string, number>()
 const IMAGE_PROXY_STORAGE_KEY = 'cczj_image_proxy_cache_v1'
-const IMAGE_PROXY_TTL = 7 * 24 * 60 * 60 * 1000
+// 与海报缓存同寿命：键是原始 URL，同一个 URL 的代理结果不会变，过期只会带来一次重取。
+// 而且重取现在不出网：Go 侧还有一层按 URL 记账的磁盘副本（app/proxy/imagestore.go），
+// 这里被 LRU 挤掉的那 80 条只是省掉一次 IPC，不再是省掉一次 CDN 请求。
+const IMAGE_PROXY_TTL = 30 * 24 * 60 * 60 * 1000
 const IMAGE_PROXY_MAX = 80
+// 内存层以前不设上限，整场会话看过的 data URL 全留着（单条几十~几百 KB），是实打实的内存泄漏。
+// 这里同样封顶：被挤掉的条目还能从 IMAGE_PROXY_MAX 条持久副本读回，最多回 Go 磁盘缓存重取一次。
+const IMAGE_PROXY_MEMORY_MAX = 80
 const IMAGE_PROXY_FAILURE_TTL = 5 * 60 * 1000
 
 interface StoredImageProxy { value: string; accessed: number }
 
-function readStoredImageProxy(url: string): string {
-  try {
+// 这张 map 存的是 data URL，80 条就是好几 MB。以前每读一个新 URL 都要把整张 parse 一遍、
+// 再为了刷新 accessed 把整张 stringify 写回去——首屏铺几十张海报就是几十轮全量序列化。
+// 现在常驻内存一份，落盘合并成防抖一次（见 createDebouncedWriter）。
+// imageProxyCache 与这份持久副本各自封顶（IMAGE_PROXY_MEMORY_MAX / IMAGE_PROXY_MAX），内存有上界。
+let memStoredProxy: Record<string, StoredImageProxy> | null = null
+
+function storedProxies(): Record<string, StoredImageProxy> {
+  if (!memStoredProxy) {
     const all = readStorage<Record<string, StoredImageProxy>>(IMAGE_PROXY_STORAGE_KEY, {})
-    const item = all[url]
-    if (!item || Date.now() - item.accessed > IMAGE_PROXY_TTL) return ''
-    item.accessed = Date.now()
-    writeStorage(IMAGE_PROXY_STORAGE_KEY, all)
-    return item.value
-  } catch { return '' }
+    memStoredProxy = all && typeof all === 'object' ? all : {}
+  }
+  return memStoredProxy
+}
+
+const persistStoredProxy = createDebouncedWriter(IMAGE_PROXY_STORAGE_KEY, storedProxies)
+
+// 诊断页要回答「海报到底有没有走缓存」，所以这里记下三类读数：内存命中、持久命中、真的出网。
+// Go 侧的出网账本只看得见最后那一类（命中缓存时根本不发请求），两边合起来才是完整画面。
+const imageProxyCounters = { memoryHits: 0, storedHits: 0, fetches: 0, failures: 0 }
+
+export function imageProxyStats(): {
+  entries: number; memoryHits: number; storedHits: number; fetches: number; failures: number;
+} {
+  return {
+    entries: imageProxyCache.size,
+    memoryHits: imageProxyCounters.memoryHits,
+    storedHits: imageProxyCounters.storedHits,
+    fetches: imageProxyCounters.fetches,
+    failures: imageProxyCounters.failures,
+  }
+}
+
+function readStoredImageProxy(url: string): string {
+  const all = storedProxies()
+  const item = all[url]
+  if (!item || Date.now() - item.accessed > IMAGE_PROXY_TTL) return ''
+  item.accessed = Date.now()
+  persistStoredProxy.schedule()
+  return item.value
 }
 
 function writeStoredImageProxy(url: string, value: string): void {
-  try {
-    const all = readStorage<Record<string, StoredImageProxy>>(IMAGE_PROXY_STORAGE_KEY, {})
-    all[url] = { value, accessed: Date.now() }
-    const keys = Object.keys(all)
-    if (keys.length > IMAGE_PROXY_MAX) {
-      keys.sort((a, b) => all[a].accessed - all[b].accessed)
-        .slice(0, keys.length - IMAGE_PROXY_MAX)
-        .forEach(key => delete all[key])
-    }
-    writeStorage(IMAGE_PROXY_STORAGE_KEY, all)
-  } catch { /* localStorage is optional */ }
+  const all = storedProxies()
+  all[url] = { value, accessed: Date.now() }
+  const keys = Object.keys(all)
+  if (keys.length > IMAGE_PROXY_MAX) {
+    keys.sort((a, b) => all[a].accessed - all[b].accessed)
+      .slice(0, keys.length - IMAGE_PROXY_MAX)
+      .forEach(key => delete all[key])
+  }
+  persistStoredProxy.schedule()
+}
+
+// Map 插入序即访问序：新写入落尾部，命中时由调用方 delete+set 挪回尾部，队首永远是最久没用的。
+// 超过 IMAGE_PROXY_MEMORY_MAX 就从队首挤掉，把内存层也钉在固定条数上。
+function rememberProxiedImage(url: string, value: string): void {
+  imageProxyCache.set(url, value)
+  while (imageProxyCache.size > IMAGE_PROXY_MEMORY_MAX) {
+    const oldest = imageProxyCache.keys().next().value
+    if (oldest === undefined) break
+    imageProxyCache.delete(oldest)
+  }
 }
 
 export async function getProxiedImageUrl(originalUrl: string): Promise<string> {
   if (!originalUrl) return ''
-  if (imageProxyCache.has(originalUrl)) {
-    return imageProxyCache.get(originalUrl)!
+  const cached = imageProxyCache.get(originalUrl)
+  if (cached !== undefined) {
+    imageProxyCounters.memoryHits++
+    // 命中即移到尾部，维持「队首=最久未用」，让上面的容量上限淘汰的是真正的冷条目
+    imageProxyCache.delete(originalUrl)
+    imageProxyCache.set(originalUrl, cached)
+    return cached
   }
   const stored = readStoredImageProxy(originalUrl)
   if (stored) {
-    imageProxyCache.set(originalUrl, stored)
+    imageProxyCounters.storedHits++
+    rememberProxiedImage(originalUrl, stored)
     return stored
   }
   const failedAt = imageProxyFallbackCache.get(originalUrl)
@@ -194,15 +246,17 @@ export async function getProxiedImageUrl(originalUrl: string): Promise<string> {
   if (pending) return pending
 
   const request = (async () => {
+    imageProxyCounters.fetches++
     try {
       const { ProxyImage } = await import('../api/app')
       const result = await ProxyImage(originalUrl)
       if (result && result.startsWith('data:')) {
-        imageProxyCache.set(originalUrl, result)
+        rememberProxiedImage(originalUrl, result)
         writeStoredImageProxy(originalUrl, result)
         return result
       }
     } catch { }
+    imageProxyCounters.failures++
     imageProxyFallbackCache.set(originalUrl, Date.now())
     return ''
   })()

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 defineOptions({ name: 'SelectDropdown' })
-import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick, useId } from 'vue'
 import MotionTransition from './MotionTransition.vue'
 import { tr } from '../../locales'
 
@@ -37,21 +37,76 @@ const open = ref(false)
 const rootRef = ref<HTMLElement | null>(null)
 const panelStyle = ref<Record<string, string>>({})
 
+// 同页可能有多个 Select，id 必须实例唯一，aria-controls / aria-activedescendant 才有有效指向
+const uid = useId()
+const listId = `${uid}-listbox`
+const optionId = (idx: number): string => `${uid}-option-${idx}`
+
+// 键盘导航始终让焦点留在 trigger 上，靠 aria-activedescendant 指向高亮项：
+// 面板会被 Teleport 到 body，把焦点移进去既会多出浏览器默认焦点框，也会让 Escape 归还焦点的逻辑变复杂。
+const activeIndex = ref(-1)
+const activeDescendant = computed(() => (props.options[activeIndex.value] ? optionId(activeIndex.value) : undefined))
+
 const selected = computed(() => {
   const found = props.options.find((o) => o.value === props.modelValue)
   return found || null
 })
 
+function scrollHighlightIntoView(): void {
+  const el = activeIndex.value >= 0 ? document.getElementById(optionId(activeIndex.value)) : null
+  el?.scrollIntoView({ block: 'nearest' })
+}
+
+function setHighlight(idx: number): void {
+  activeIndex.value = idx
+  // 高亮项可能在滚动面板的视口外，等这一帧 DOM 更新完再滚到可见
+  nextTick(scrollHighlightIntoView)
+}
+
+/** 跳过 disabled 项循环移动高亮；全部禁用或空列表时保持原状 */
+function moveHighlight(delta: number): void {
+  const total = props.options.length
+  if (total === 0) return
+  let idx = activeIndex.value < 0 ? (delta > 0 ? -1 : total) : activeIndex.value
+  for (let step = 0; step < total; step += 1) {
+    idx = (idx + delta + total) % total
+    if (!props.options[idx]?.disabled) {
+      setHighlight(idx)
+      return
+    }
+  }
+}
+
+function syncHighlightToSelection(): void {
+  setHighlight(props.options.findIndex((o) => o.value === props.modelValue && !o.disabled))
+}
+
+function chooseHighlighted(): void {
+  const opt = activeIndex.value >= 0 ? props.options[activeIndex.value] : undefined
+  if (!opt || opt.disabled) return
+  choose(opt.value)
+}
+
+function openPanel(): void {
+  if (props.disabled || open.value) return
+  open.value = true
+  emit('open-change', true)
+  // 打开即把高亮对齐到当前选中项，方向键才有一段合理的起点
+  syncHighlightToSelection()
+}
+
 function toggle(): void {
   if (props.disabled) return
-  open.value = !open.value
-  emit('open-change', open.value)
+  if (open.value) {
+    closePanel()
+    return
+  }
+  openPanel()
 }
 
 function choose(value: string | number): void {
   if (props.disabled) return
-  open.value = false
-  emit('open-change', false)
+  closePanel()
   if (value !== props.modelValue) {
     emit('update:modelValue', value)
     emit('change', value)
@@ -62,6 +117,36 @@ function closePanel(): void {
   if (!open.value) return
   open.value = false
   emit('open-change', false)
+}
+
+function onTriggerKeydown(e: KeyboardEvent): void {
+  if (props.disabled) return
+  const key = e.key
+  if (key === 'ArrowDown' || key === 'ArrowUp') {
+    // 折叠态按方向键等价于「打开并定位到当前选中项」，展开态则移动高亮
+    e.preventDefault()
+    const delta = key === 'ArrowDown' ? 1 : -1
+    if (!open.value) {
+      openPanel()
+      if (activeIndex.value < 0) moveHighlight(delta)
+    } else {
+      moveHighlight(delta)
+    }
+    return
+  }
+  if (key === 'Enter' || key === ' ') {
+    // 展开时 Enter/Space 落在高亮项上，必须拦掉原生 button 的激活（否则会被 toggle 直接关掉）
+    if (open.value) {
+      e.preventDefault()
+      if (activeIndex.value < 0) moveHighlight(1)
+      chooseHighlighted()
+    }
+    return
+  }
+  if (key === 'Escape' && open.value) {
+    e.preventDefault()
+    closePanel()
+  }
 }
 
 function onDocClick(e: MouseEvent): void {
@@ -118,7 +203,9 @@ watch(open, async (v) => {
   if (v) {
     await nextTick()
     updatePanelPosition()
+    return
   }
+  activeIndex.value = -1
 })
 </script>
 
@@ -128,7 +215,19 @@ watch(open, async (v) => {
     :class="{ 'is-disabled': disabled, 'is-open': open, [`size-${size}`]: true }"
     ref="rootRef"
   >
-    <button class="select-trigger" type="button" :disabled="disabled" @click.stop="toggle">
+    <button
+      class="select-trigger"
+      type="button"
+      :disabled="disabled"
+      role="combobox"
+      aria-haspopup="listbox"
+      :aria-expanded="open ? 'true' : 'false'"
+      :aria-controls="open ? listId : undefined"
+      :aria-owns="open ? listId : undefined"
+      :aria-activedescendant="activeDescendant"
+      @keydown="onTriggerKeydown"
+      @click.stop="toggle"
+    >
       <span class="label" :class="{ placeholder: !selected }">
         {{ selected ? selected.label : (placeholder || tr('common.selectPlaceholder')) }}
       </span>
@@ -148,18 +247,22 @@ watch(open, async (v) => {
           :style="panelStyle"
           @click.stop
         >
-          <ul class="option-list">
+          <ul :id="listId" class="option-list" role="listbox">
             <li
-              v-for="opt in options"
+              v-for="(opt, i) in options"
               :key="String(opt.value)"
+              :id="optionId(i)"
               class="option"
-              :class="{ 'is-selected': selected && selected.value === opt.value, 'is-disabled': opt.disabled }"
+              role="option"
+              :aria-selected="selected && selected.value === opt.value ? 'true' : 'false'"
+              :aria-disabled="opt.disabled ? 'true' : undefined"
+              :class="{ 'is-selected': selected && selected.value === opt.value, 'is-disabled': opt.disabled, 'is-active': activeIndex === i }"
               @click="!opt.disabled && choose(opt.value)"
             >
               <span class="option-label">{{ opt.label }}</span>
               <span v-if="selected && selected.value === opt.value" class="check-icon" aria-hidden="true">✓</span>
             </li>
-            <li v-if="options.length === 0" class="empty">{{ tr('common.noData') }}</li>
+            <li v-if="options.length === 0" class="empty" role="presentation">{{ tr('common.noData') }}</li>
           </ul>
         </div>
       </MotionTransition>
@@ -297,6 +400,13 @@ watch(open, async (v) => {
 }
 
 .option:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* 键盘高亮用和 hover 同一层底色：方向键选中的那行要看得见，
+   但不引入第三种颜色——焦点在触发按钮上，选项本身拿不到 :focus。 */
+.option.is-active {
   background: var(--bg-hover);
   color: var(--text-primary);
 }

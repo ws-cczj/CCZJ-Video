@@ -70,7 +70,11 @@ func TestRecycleBinRestoreKeepsFavorites(t *testing.T) {
 	seedRecycleRow(t, recycleSource, "keep-1", recycleName)
 	seedRecycleRow(t, recycleOther, "gone-2", recycleNameTwo)
 
-	if err := AddFavorite(recycleSource, "gone-1", recycleName); err != nil {
+	globalID, err := GetOrCreateGlobalID(recycleName, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := AddFavoriteByIdentity(globalID, recycleSource, "gone-1"); err != nil {
 		t.Fatal(err)
 	}
 	if got := visibleFavorites(t, recycleSource); got != 1 {

@@ -1,0 +1,25 @@
+{
+  "manifest_version": 1,
+  "id": "theme-dusk",
+  "version": "1.0.0",
+  "name": { "zh-CN": "暮色", "en": "Dusk" },
+  "description": {
+    "zh-CN": "一套紫色调的暗色主题，带一张包内背景图。",
+    "en": "A dark violet theme with a bundled background image."
+  },
+  "author": "cczj-video",
+  "icon": "icon.png",
+  "kind": "theme",
+  "theme": {
+    "presets": [
+      {
+        "id": "dusk",
+        "name": { "zh-CN": "暮色", "en": "Dusk" },
+        "primary": "#6b4fbb",
+        "mode": "dark",
+        "tint": { "bgApp": "#141018", "bgSidebar": "#191325", "border": "#2a2036" },
+        "bg_image": "dusk.png"
+      }
+    ]
+  }
+}

@@ -1,7 +1,15 @@
 # 构建产物
+# *.exe 是兜底：bin/ 只挡住子目录，历史上根目录散落的 app.exe / cczjVideo.exe
+# 每个 30~40MB，提交过就永久留在历史里，仓库被撑到 450MB 且无法靠删除文件挽回。
+*.exe
 build/bin
 bin/
 frontend/dist
+
+# 发布产物与生成物：.syso 必须留在源码树外，否则会被后续每次 go build 链进去
+dist/
+*.syso
+build/windows/info.generated.json
 
 # 依赖与缓存
 node_modules

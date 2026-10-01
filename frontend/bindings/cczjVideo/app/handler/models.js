@@ -1493,130 +1493,6 @@ export class SourceTableSummary {
     }
 }
 
-/**
- * UnionListReq 是跨源合并列表的筛选条件。没有 source_key 是有意为之：
- * 这个视图的意义就是跨源，想只看一个源请回到视频库。
- */
-export class UnionListReq {
-    /**
-     * Creates a new UnionListReq instance.
-     * @param {Partial<UnionListReq>} [$$source = {}] - The source object to create the UnionListReq.
-     */
-    constructor($$source = {}) {
-        if (!("recent_days" in $$source)) {
-            /**
-             * @member
-             * @type {number}
-             */
-            this["recent_days"] = 0;
-        }
-        if (!("type_id" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["type_id"] = "";
-        }
-        if (!("year" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["year"] = "";
-        }
-        if (!("area" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["area"] = "";
-        }
-        if (!("keyword" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["keyword"] = "";
-        }
-        if (!("cursor" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["cursor"] = "";
-        }
-        if (!("page_size" in $$source)) {
-            /**
-             * @member
-             * @type {number}
-             */
-            this["page_size"] = 0;
-        }
-
-        Object.assign(this, $$source);
-    }
-
-    /**
-     * Creates a new UnionListReq instance from a string or object.
-     * @param {any} [$$source = {}]
-     * @returns {UnionListReq}
-     */
-    static createFrom($$source = {}) {
-        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        return new UnionListReq(/** @type {Partial<UnionListReq>} */($$parsedSource));
-    }
-}
-
-/**
- * UnionListResp 是一页合并卡片。Total 数的是身份数而不是目录行数，
- * 所以它会比同筛选下的单源列表小——这正是"合并"要达到的效果。
- */
-export class UnionListResp {
-    /**
-     * Creates a new UnionListResp instance.
-     * @param {Partial<UnionListResp>} [$$source = {}] - The source object to create the UnionListResp.
-     */
-    constructor($$source = {}) {
-        if (!("videos" in $$source)) {
-            /**
-             * @member
-             * @type {(db$0.UnionVideo | null)[]}
-             */
-            this["videos"] = [];
-        }
-        if (!("total" in $$source)) {
-            /**
-             * @member
-             * @type {number}
-             */
-            this["total"] = 0;
-        }
-        if (!("next_cursor" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["next_cursor"] = "";
-        }
-
-        Object.assign(this, $$source);
-    }
-
-    /**
-     * Creates a new UnionListResp instance from a string or object.
-     * @param {any} [$$source = {}]
-     * @returns {UnionListResp}
-     */
-    static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType26;
-        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        if ("videos" in $$parsedSource) {
-            $$parsedSource["videos"] = $$createField0_0($$parsedSource["videos"]);
-        }
-        return new UnionListResp(/** @type {Partial<UnionListResp>} */($$parsedSource));
-    }
-}
-
 export class VideoDetailReq {
     /**
      * Creates a new VideoDetailReq instance.
@@ -1713,8 +1589,8 @@ export class VideoDetailResp {
     static createFrom($$source = {}) {
         const $$createField0_0 = $$createType13;
         const $$createField1_0 = $$createType19;
-        const $$createField2_0 = $$createType29;
-        const $$createField3_0 = $$createType31;
+        const $$createField2_0 = $$createType26;
+        const $$createField3_0 = $$createType28;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("video" in $$parsedSource) {
             $$parsedSource["video"] = $$createField0_0($$parsedSource["video"]);
@@ -2007,11 +1883,8 @@ const $$createType20 = SourceParamDoc.createFrom;
 const $$createType21 = $Create.Array($$createType20);
 const $$createType22 = db$0.TableColumn.createFrom;
 const $$createType23 = $Create.Array($$createType22);
-const $$createType24 = db$0.UnionVideo.createFrom;
+const $$createType24 = model$0.PlayLine.createFrom;
 const $$createType25 = $Create.Nullable($$createType24);
 const $$createType26 = $Create.Array($$createType25);
-const $$createType27 = model$0.PlayLine.createFrom;
+const $$createType27 = detail$0.Error.createFrom;
 const $$createType28 = $Create.Nullable($$createType27);
-const $$createType29 = $Create.Array($$createType28);
-const $$createType30 = detail$0.Error.createFrom;
-const $$createType31 = $Create.Nullable($$createType30);

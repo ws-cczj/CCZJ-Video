@@ -41,6 +41,57 @@ func TestNormalizeTitleDropsWhitespaceAndFullWidthPunctuation(t *testing.T) {
 	}
 }
 
+// 源站把清晰度/封装格式拼在标题末尾，留进 name_norm 就是给同一部片另立身份。
+// 剥尾巴有两道边界：不能啃掉拉丁单词的尾巴（Palermo 的 rm），也不能把整串剥成空
+// （真有一部片叫 Cam）；语言与字幕标记属于另一回事，剥掉会把用户当两部收的并成一部。
+func TestStripQualityNoiseOnlyRemovesTrailingFormatTags(t *testing.T) {
+	cases := []struct {
+		input string
+		want  string
+	}{
+		{"雷神4：爱与雷霆_1080P_", "雷神4：爱与雷霆"},
+		{"某某某 1080P", "某某某"},
+		{"某某某_HD", "某某某"},
+		{"疯狂原始人2_蓝光", "疯狂原始人2"},
+		{"某片_1080P_x264", "某片"},
+		{"冰与火之歌 4K", "冰与火之歌"},
+		{"大侦探波洛.avi", "大侦探波洛"},
+		// 整串就是个画质词：留着原样，剥成空串等于这条记录没有身份。
+		{"Cam", "Cam"},
+		{"1080P", "1080P"},
+		// 不是画质尾的写法一律不动。
+		{"Palermo", "Palermo"},
+		{"速度与激情5", "速度与激情5"},
+		{"老友记 粤语", "老友记 粤语"},
+		{"某片 中文字幕", "某片 中文字幕"},
+		{"", ""},
+	}
+	for _, c := range cases {
+		if got := stripQualityNoise(c.input); got != c.want {
+			t.Errorf("stripQualityNoise(%q) = %q, want %q", c.input, got, c.want)
+		}
+	}
+}
+
+// 画质尾巴与干净标题必须归一到同一个键，否则唯一索引拦不住第二次入库。
+func TestNormalizeTitleCollapsesQualityTailWithCleanTitle(t *testing.T) {
+	pairs := [][2]string{
+		{"雷神4：爱与雷霆_1080P_", "雷神4：爱与雷霆"},
+		{"疯狂原始人2 蓝光", "疯狂原始人2"},
+		{" Palermo ", "Palermo"},
+	}
+	for _, pair := range pairs {
+		if normalizeTitle(pair[0]) != normalizeTitle(pair[1]) {
+			t.Errorf("%q 与 %q 归一后不同: %q vs %q",
+				pair[0], pair[1], normalizeTitle(pair[0]), normalizeTitle(pair[1]))
+		}
+	}
+	// 反过来：画质词不同的两个发行版本不该被这条规则误并。
+	if normalizeTitle("某片 粤语") == normalizeTitle("某片") {
+		t.Error("语言标记不该被当成画质尾巴剥掉")
+	}
+}
+
 func TestGlobalVideoIndexMatchLadderTiers(t *testing.T) {
 	index := newGlobalVideoIndex([]globalCandidate{
 		{ID: 1, VodName: "阿凡达：水之道", TypeID: 3, Year: "2022"},

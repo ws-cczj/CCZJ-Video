@@ -1,7 +1,7 @@
 package collect
 
 import (
-	"fmt"
+	"cczjVideo/app/apperror"
 	"strings"
 )
 
@@ -18,7 +18,7 @@ func NewTemplate(template, concrete string) (*TemplateURL, error) {
 	tplParts := tokenize(template)
 
 	if len(parts) != len(tplParts) {
-		return nil, fmt.Errorf("url parts mismatch: template has %d, concrete has %d", len(tplParts), len(parts))
+		return nil, apperror.Newf(apperror.Validation, "url parts mismatch: template has %d, concrete has %d", len(tplParts), len(parts))
 	}
 
 	vars := make(map[string]string)
@@ -26,7 +26,7 @@ func NewTemplate(template, concrete string) (*TemplateURL, error) {
 		if isVar(tp) {
 			vars[tp] = parts[i]
 		} else if tp != parts[i] {
-			return nil, fmt.Errorf("mismatch at part %d: expected %q got %q", i, tp, parts[i])
+			return nil, apperror.Newf(apperror.Validation, "mismatch at part %d: expected %q got %q", i, tp, parts[i])
 		}
 	}
 	return &TemplateURL{Template: template, Vars: vars}, nil

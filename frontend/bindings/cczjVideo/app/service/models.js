@@ -11,89 +11,13 @@ import { Create as $Create } from "@wailsio/runtime";
 import * as applog$0 from "../applog/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as cache$0 from "../cache/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as db$0 from "../db/models.js";
-
-/**
- * CacheInfo 应用自己写到磁盘上的占用，外加进程内派生缓存的条目数。
- * 浏览器侧的 localStorage / IndexedDB 由前端统计，Go 报不出真实数字，
- * 以前那两只恒为 0 的字段已经删掉。
- */
-export class CacheInfo {
-    /**
-     * Creates a new CacheInfo instance.
-     * @param {Partial<CacheInfo>} [$$source = {}] - The source object to create the CacheInfo.
-     */
-    constructor($$source = {}) {
-        if (!("database_bytes" in $$source)) {
-            /**
-             * @member
-             * @type {number}
-             */
-            this["database_bytes"] = 0;
-        }
-        if (!("database_path" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["database_path"] = "";
-        }
-        if (!("log_file_bytes" in $$source)) {
-            /**
-             * @member
-             * @type {number}
-             */
-            this["log_file_bytes"] = 0;
-        }
-        if (!("log_file_path" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["log_file_path"] = "";
-        }
-        if (!("detail_entries" in $$source)) {
-            /**
-             * @member
-             * @type {number}
-             */
-            this["detail_entries"] = 0;
-        }
-        if (!("detail_bytes" in $$source)) {
-            /**
-             * @member
-             * @type {number}
-             */
-            this["detail_bytes"] = 0;
-        }
-        if (!("chart_matches" in $$source)) {
-            /**
-             * @member
-             * @type {number}
-             */
-            this["chart_matches"] = 0;
-        }
-        if (!("comment_pages" in $$source)) {
-            /**
-             * @member
-             * @type {number}
-             */
-            this["comment_pages"] = 0;
-        }
-
-        Object.assign(this, $$source);
-    }
-
-    /**
-     * Creates a new CacheInfo instance from a string or object.
-     * @param {any} [$$source = {}]
-     * @returns {CacheInfo}
-     */
-    static createFrom($$source = {}) {
-        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        return new CacheInfo(/** @type {Partial<CacheInfo>} */($$parsedSource));
-    }
-}
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as netstats$0 from "../netstats/models.js";
 
 /**
  * ChunkProgress 单个并发连接的分块进度
@@ -145,38 +69,6 @@ export class ChunkProgress {
     static createFrom($$source = {}) {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new ChunkProgress(/** @type {Partial<ChunkProgress>} */($$parsedSource));
-    }
-}
-
-/**
- * ClearCacheReq 清除缓存请求
- */
-export class ClearCacheReq {
-    /**
-     * Creates a new ClearCacheReq instance.
-     * @param {Partial<ClearCacheReq>} [$$source = {}] - The source object to create the ClearCacheReq.
-     */
-    constructor($$source = {}) {
-        if (!("type" in $$source)) {
-            /**
-             * "memory" | "logs" | "database" | "all"
-             * @member
-             * @type {string}
-             */
-            this["type"] = "";
-        }
-
-        Object.assign(this, $$source);
-    }
-
-    /**
-     * Creates a new ClearCacheReq instance from a string or object.
-     * @param {any} [$$source = {}]
-     * @returns {ClearCacheReq}
-     */
-    static createFrom($$source = {}) {
-        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        return new ClearCacheReq(/** @type {Partial<ClearCacheReq>} */($$parsedSource));
     }
 }
 
@@ -527,6 +419,68 @@ export class DiagEnv {
 }
 
 /**
+ * DiagNetwork 是这一趟进程的出网账本，来自 netstats 的计数 RoundTripper。
+ * 
+ * 速率不是测速软件的读数，而是真实请求算出来的：播放中继、测速取样、更新包的 Range
+ * 探测各自贡献自己的字节与耗时。没跑过的类别是 0，界面对应行直接不画。
+ * 
+ * AllowPrivateTargets 放在这里是因为它会改变上面所有数字的可比性：放行私网后，
+ * 同一类流量可能来自局域网 NAS，速度和公网源站完全不是一个量级。
+ */
+export class DiagNetwork {
+    /**
+     * Creates a new DiagNetwork instance.
+     * @param {Partial<DiagNetwork>} [$$source = {}] - The source object to create the DiagNetwork.
+     */
+    constructor($$source = {}) {
+        if (!("since_unix" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["since_unix"] = 0;
+        }
+        if (!("total_bytes" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["total_bytes"] = 0;
+        }
+        if (!("allow_private_targets" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["allow_private_targets"] = false;
+        }
+        if (!("categories" in $$source)) {
+            /**
+             * @member
+             * @type {netstats$0.Stat[]}
+             */
+            this["categories"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DiagNetwork instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {DiagNetwork}
+     */
+    static createFrom($$source = {}) {
+        const $$createField3_0 = $$createType3;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("categories" in $$parsedSource) {
+            $$parsedSource["categories"] = $$createField3_0($$parsedSource["categories"]);
+        }
+        return new DiagNetwork(/** @type {Partial<DiagNetwork>} */($$parsedSource));
+    }
+}
+
+/**
  * DiagSourceRow 是单个采集源的目录统计与最近一次采集结果。
  */
 export class DiagSourceRow {
@@ -677,9 +631,9 @@ export class DiagSourceRow {
      * @returns {DiagSourceRow}
      */
     static createFrom($$source = {}) {
-        const $$createField15_0 = $$createType2;
-        const $$createField16_0 = $$createType2;
-        const $$createField17_0 = $$createType4;
+        const $$createField15_0 = $$createType4;
+        const $$createField16_0 = $$createType4;
+        const $$createField17_0 = $$createType6;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("collect_health" in $$parsedSource) {
             $$parsedSource["collect_health"] = $$createField15_0($$parsedSource["collect_health"]);
@@ -695,11 +649,8 @@ export class DiagSourceRow {
 }
 
 /**
- * DiagStorage 是各块磁盘占用的汇总，外加进程内派生缓存的条目数。
- * 
- * 派生缓存（详情、热榜匹配、评论页）只活在内存里，以前这里报的是一个恒为 0 的
- * "磁盘缓存" 占位 —— ts_cache 目录从来没有被创建过。改成报条目数之后，
- * 「清除缓存」到底清掉了东西没有，在诊断页上就能直接看出来。
+ * DiagStorage 是各块磁盘占用的汇总。进程内缓存不在这里，它们归 Diagnostics.Cache：
+ * 条目数和命中率要成对读才有意义，拆在两个区块里只会让人找不到。
  */
 export class DiagStorage {
     /**
@@ -749,34 +700,6 @@ export class DiagStorage {
              */
             this["log_keep_days"] = 0;
         }
-        if (!("detail_entries" in $$source)) {
-            /**
-             * @member
-             * @type {number}
-             */
-            this["detail_entries"] = 0;
-        }
-        if (!("detail_bytes" in $$source)) {
-            /**
-             * @member
-             * @type {number}
-             */
-            this["detail_bytes"] = 0;
-        }
-        if (!("chart_matches" in $$source)) {
-            /**
-             * @member
-             * @type {number}
-             */
-            this["chart_matches"] = 0;
-        }
-        if (!("comment_pages" in $$source)) {
-            /**
-             * @member
-             * @type {number}
-             */
-            this["comment_pages"] = 0;
-        }
 
         Object.assign(this, $$source);
     }
@@ -815,6 +738,20 @@ export class Diagnostics {
              * @type {DiagStorage}
              */
             this["storage"] = (new DiagStorage());
+        }
+        if (!("network" in $$source)) {
+            /**
+             * @member
+             * @type {DiagNetwork}
+             */
+            this["network"] = (new DiagNetwork());
+        }
+        if (!("cache" in $$source)) {
+            /**
+             * @member
+             * @type {cache$0.Row[]}
+             */
+            this["cache"] = [];
         }
         if (!("douban" in $$source)) {
             /**
@@ -861,13 +798,15 @@ export class Diagnostics {
      * @returns {Diagnostics}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType5;
-        const $$createField1_0 = $$createType6;
-        const $$createField2_0 = $$createType7;
-        const $$createField3_0 = $$createType8;
-        const $$createField4_0 = $$createType10;
-        const $$createField5_0 = $$createType12;
-        const $$createField6_0 = $$createType13;
+        const $$createField0_0 = $$createType7;
+        const $$createField1_0 = $$createType8;
+        const $$createField2_0 = $$createType9;
+        const $$createField3_0 = $$createType11;
+        const $$createField4_0 = $$createType12;
+        const $$createField5_0 = $$createType13;
+        const $$createField6_0 = $$createType15;
+        const $$createField7_0 = $$createType17;
+        const $$createField8_0 = $$createType18;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("env" in $$parsedSource) {
             $$parsedSource["env"] = $$createField0_0($$parsedSource["env"]);
@@ -875,20 +814,26 @@ export class Diagnostics {
         if ("storage" in $$parsedSource) {
             $$parsedSource["storage"] = $$createField1_0($$parsedSource["storage"]);
         }
+        if ("network" in $$parsedSource) {
+            $$parsedSource["network"] = $$createField2_0($$parsedSource["network"]);
+        }
+        if ("cache" in $$parsedSource) {
+            $$parsedSource["cache"] = $$createField3_0($$parsedSource["cache"]);
+        }
         if ("douban" in $$parsedSource) {
-            $$parsedSource["douban"] = $$createField2_0($$parsedSource["douban"]);
+            $$parsedSource["douban"] = $$createField4_0($$parsedSource["douban"]);
         }
         if ("collect" in $$parsedSource) {
-            $$parsedSource["collect"] = $$createField3_0($$parsedSource["collect"]);
+            $$parsedSource["collect"] = $$createField5_0($$parsedSource["collect"]);
         }
         if ("sources" in $$parsedSource) {
-            $$parsedSource["sources"] = $$createField4_0($$parsedSource["sources"]);
+            $$parsedSource["sources"] = $$createField6_0($$parsedSource["sources"]);
         }
         if ("tables" in $$parsedSource) {
-            $$parsedSource["tables"] = $$createField5_0($$parsedSource["tables"]);
+            $$parsedSource["tables"] = $$createField7_0($$parsedSource["tables"]);
         }
         if ("notes" in $$parsedSource) {
-            $$parsedSource["notes"] = $$createField6_0($$parsedSource["notes"]);
+            $$parsedSource["notes"] = $$createField8_0($$parsedSource["notes"]);
         }
         return new Diagnostics(/** @type {Partial<Diagnostics>} */($$parsedSource));
     }
@@ -1215,7 +1160,7 @@ export class DoubanGetAllResp {
      * @returns {DoubanGetAllResp}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType16;
+        const $$createField0_0 = $$createType21;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("rows" in $$parsedSource) {
             $$parsedSource["rows"] = $$createField0_0($$parsedSource["rows"]);
@@ -1387,7 +1332,7 @@ export class ExportLogsReq {
      * @returns {ExportLogsReq}
      */
     static createFrom($$source = {}) {
-        const $$createField2_0 = $$createType13;
+        const $$createField2_0 = $$createType18;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("levels" in $$parsedSource) {
             $$parsedSource["levels"] = $$createField2_0($$parsedSource["levels"]);
@@ -1695,7 +1640,7 @@ export class LogPageReq {
      * @returns {LogPageReq}
      */
     static createFrom($$source = {}) {
-        const $$createField3_0 = $$createType13;
+        const $$createField3_0 = $$createType18;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("levels" in $$parsedSource) {
             $$parsedSource["levels"] = $$createField3_0($$parsedSource["levels"]);
@@ -1786,7 +1731,7 @@ export class LogPageResp {
      * @returns {LogPageResp}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType18;
+        const $$createField0_0 = $$createType23;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("records" in $$parsedSource) {
             $$parsedSource["records"] = $$createField0_0($$parsedSource["records"]);
@@ -1943,12 +1888,74 @@ export class RecommendReq {
      * @returns {RecommendReq}
      */
     static createFrom($$source = {}) {
-        const $$createField2_0 = $$createType13;
+        const $$createField2_0 = $$createType18;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("exclude_ids" in $$parsedSource) {
             $$parsedSource["exclude_ids"] = $$createField2_0($$parsedSource["exclude_ids"]);
         }
         return new RecommendReq(/** @type {Partial<RecommendReq>} */($$parsedSource));
+    }
+}
+
+/**
+ * RuntimeMetrics 是界面每隔两三秒轮一次的轻量快照：只有内存里的计数器读数，
+ * 不查库、不遍历目录、不做全表 COUNT。真实使用中的网络与缓存数字一直在涨，
+ * 手动刷新一次的快照看不到趋势，所以把这两块单独开一个便宜口。
+ */
+export class RuntimeMetrics {
+    /**
+     * Creates a new RuntimeMetrics instance.
+     * @param {Partial<RuntimeMetrics>} [$$source = {}] - The source object to create the RuntimeMetrics.
+     */
+    constructor($$source = {}) {
+        if (!("uptime_seconds" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["uptime_seconds"] = 0;
+        }
+        if (!("goroutines" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["goroutines"] = 0;
+        }
+        if (!("network" in $$source)) {
+            /**
+             * @member
+             * @type {DiagNetwork}
+             */
+            this["network"] = (new DiagNetwork());
+        }
+        if (!("cache" in $$source)) {
+            /**
+             * @member
+             * @type {cache$0.Row[]}
+             */
+            this["cache"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RuntimeMetrics instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {RuntimeMetrics}
+     */
+    static createFrom($$source = {}) {
+        const $$createField2_0 = $$createType9;
+        const $$createField3_0 = $$createType11;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("network" in $$parsedSource) {
+            $$parsedSource["network"] = $$createField2_0($$parsedSource["network"]);
+        }
+        if ("cache" in $$parsedSource) {
+            $$parsedSource["cache"] = $$createField3_0($$parsedSource["cache"]);
+        }
+        return new RuntimeMetrics(/** @type {Partial<RuntimeMetrics>} */($$parsedSource));
     }
 }
 
@@ -2037,7 +2044,7 @@ export class SimilarReq {
      * @returns {SimilarReq}
      */
     static createFrom($$source = {}) {
-        const $$createField3_0 = $$createType13;
+        const $$createField3_0 = $$createType18;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("exclude_ids" in $$parsedSource) {
             $$parsedSource["exclude_ids"] = $$createField3_0($$parsedSource["exclude_ids"]);
@@ -2095,6 +2102,9 @@ export class SourceActionReq {
 
 /**
  * SourceProbe 是单个采集源的一次连通性探测结果。
+ * 
+ * Skipped 为真表示这次没发请求（该源还在冷却里），此时 OK/Error/ProbeTimeUnix
+ * 沿用上一条巡检样本，RetryAfterSec 告诉界面还要等多久。
  */
 export class SourceProbe {
     /**
@@ -2165,6 +2175,27 @@ export class SourceProbe {
              */
             this["error"] = "";
         }
+        if (!("skipped" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["skipped"] = false;
+        }
+        if (!("retry_after_sec" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["retry_after_sec"] = 0;
+        }
+        if (!("probe_time_unix" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["probe_time_unix"] = 0;
+        }
 
         Object.assign(this, $$source);
     }
@@ -2177,6 +2208,123 @@ export class SourceProbe {
     static createFrom($$source = {}) {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new SourceProbe(/** @type {Partial<SourceProbe>} */($$parsedSource));
+    }
+}
+
+/**
+ * SourceProbeSlot 是探测点阵里的一个时间窗。窗口宽度就是节流间隔，
+ * 所以「没探测」不是失败，只是这段时间里没人戳过它——界面要能分清这两种灰色。
+ */
+export class SourceProbeSlot {
+    /**
+     * Creates a new SourceProbeSlot instance.
+     * @param {Partial<SourceProbeSlot>} [$$source = {}] - The source object to create the SourceProbeSlot.
+     */
+    constructor($$source = {}) {
+        if (!("bucket_unix" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["bucket_unix"] = 0;
+        }
+        if (!("probed" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["probed"] = false;
+        }
+        if (!("ok" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["ok"] = false;
+        }
+        if (!("latency_ms" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["latency_ms"] = 0;
+        }
+        if (!("ts_unix" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["ts_unix"] = 0;
+        }
+        if (!("error" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["error"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SourceProbeSlot instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {SourceProbeSlot}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new SourceProbeSlot(/** @type {Partial<SourceProbeSlot>} */($$parsedSource));
+    }
+}
+
+/**
+ * SourceProbeTimeline 是一个源最近 sourceProbeSlotCount 个时间窗的探测记录，
+ * 按时间从旧到新排列。
+ */
+export class SourceProbeTimeline {
+    /**
+     * Creates a new SourceProbeTimeline instance.
+     * @param {Partial<SourceProbeTimeline>} [$$source = {}] - The source object to create the SourceProbeTimeline.
+     */
+    constructor($$source = {}) {
+        if (!("source_key" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["source_key"] = "";
+        }
+        if (!("slot_secs" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["slot_secs"] = 0;
+        }
+        if (!("slots" in $$source)) {
+            /**
+             * @member
+             * @type {SourceProbeSlot[]}
+             */
+            this["slots"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SourceProbeTimeline instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {SourceProbeTimeline}
+     */
+    static createFrom($$source = {}) {
+        const $$createField2_0 = $$createType25;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("slots" in $$parsedSource) {
+            $$parsedSource["slots"] = $$createField2_0($$parsedSource["slots"]);
+        }
+        return new SourceProbeTimeline(/** @type {Partial<SourceProbeTimeline>} */($$parsedSource));
     }
 }
 
@@ -2402,7 +2550,7 @@ export class VideoDownloadStatus {
      * @returns {VideoDownloadStatus}
      */
     static createFrom($$source = {}) {
-        const $$createField12_0 = $$createType20;
+        const $$createField12_0 = $$createType27;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("chunks" in $$parsedSource) {
             $$parsedSource["chunks"] = $$createField12_0($$parsedSource["chunks"]);
@@ -2452,22 +2600,29 @@ export class WindowSizeResp {
 // Private type creation functions
 const $$createType0 = db$0.DoubanHealth.createFrom;
 const $$createType1 = $Create.Map($Create.Any, $Create.Any);
-const $$createType2 = db$0.SourceHealth.createFrom;
-const $$createType3 = db$0.SourceHealthSample.createFrom;
-const $$createType4 = $Create.Array($$createType3);
-const $$createType5 = DiagEnv.createFrom;
-const $$createType6 = DiagStorage.createFrom;
-const $$createType7 = DiagDouban.createFrom;
-const $$createType8 = DiagCollect.createFrom;
-const $$createType9 = DiagSourceRow.createFrom;
-const $$createType10 = $Create.Array($$createType9);
-const $$createType11 = db$0.TableStat.createFrom;
-const $$createType12 = $Create.Array($$createType11);
-const $$createType13 = $Create.Array($Create.Any);
-const $$createType14 = db$0.DoubanInfoRow.createFrom;
-const $$createType15 = $Create.Nullable($$createType14);
-const $$createType16 = $Create.Array($$createType15);
-const $$createType17 = applog$0.Record.createFrom;
-const $$createType18 = $Create.Array($$createType17);
-const $$createType19 = ChunkProgress.createFrom;
-const $$createType20 = $Create.Array($$createType19);
+const $$createType2 = netstats$0.Stat.createFrom;
+const $$createType3 = $Create.Array($$createType2);
+const $$createType4 = db$0.SourceHealth.createFrom;
+const $$createType5 = db$0.SourceHealthSample.createFrom;
+const $$createType6 = $Create.Array($$createType5);
+const $$createType7 = DiagEnv.createFrom;
+const $$createType8 = DiagStorage.createFrom;
+const $$createType9 = DiagNetwork.createFrom;
+const $$createType10 = cache$0.Row.createFrom;
+const $$createType11 = $Create.Array($$createType10);
+const $$createType12 = DiagDouban.createFrom;
+const $$createType13 = DiagCollect.createFrom;
+const $$createType14 = DiagSourceRow.createFrom;
+const $$createType15 = $Create.Array($$createType14);
+const $$createType16 = db$0.TableStat.createFrom;
+const $$createType17 = $Create.Array($$createType16);
+const $$createType18 = $Create.Array($Create.Any);
+const $$createType19 = db$0.DoubanInfoRow.createFrom;
+const $$createType20 = $Create.Nullable($$createType19);
+const $$createType21 = $Create.Array($$createType20);
+const $$createType22 = applog$0.Record.createFrom;
+const $$createType23 = $Create.Array($$createType22);
+const $$createType24 = SourceProbeSlot.createFrom;
+const $$createType25 = $Create.Array($$createType24);
+const $$createType26 = ChunkProgress.createFrom;
+const $$createType27 = $Create.Array($$createType26);

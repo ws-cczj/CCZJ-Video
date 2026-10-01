@@ -2,7 +2,6 @@
 package cache
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -54,20 +53,6 @@ func (s *Service) GetInfo() (*Info, error) {
 	}
 
 	return info, nil
-}
-
-// Clear deletes the requested cache category without deleting the active database.
-// 只管写到磁盘上的目录：进程内的派生缓存由 invalidate.go 负责。
-func (s *Service) Clear(cacheType string) error {
-	dataDirectory := s.directory()
-	switch cacheType {
-	case "logs":
-		return os.RemoveAll(filepath.Join(dataDirectory, "applog"))
-	case "database":
-		return fmt.Errorf("数据库文件正在使用中，请通过「重置数据库」功能操作")
-	default:
-		return fmt.Errorf("未知缓存类型: %s", cacheType)
-	}
 }
 
 func (s *Service) directory() string {

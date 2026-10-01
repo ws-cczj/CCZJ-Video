@@ -100,31 +100,9 @@ type dupGlobalVideoRow struct {
 // 最后按最小 id；被并掉行的空字段会补进存活行，观看进度逐集取更大的一侧。
 // 整个过程在迁移事务里执行，任何一步失败都整体回滚。
 func migrateDedupeGlobalVideo(tx *sqlx.Tx) error {
-	exists, err := tableExists(tx, "global_video")
-	if err != nil || !exists {
-		return err
-	}
-	// 空标题的行不参与合并：它们没有可比的身份，并起来只会凭空造出一条无名字的记录。
-	var groups []globalVideoDupGroup
-	err = tx.Select(&groups, `SELECT name_norm, type_id FROM global_video
-		WHERE name_norm <> '' GROUP BY name_norm, type_id HAVING COUNT(*) > 1 ORDER BY name_norm, type_id`)
+	merged, err := mergeDuplicateGlobalVideos(tx)
 	if err != nil {
-		return fmt.Errorf("find duplicate global video groups: %w", err)
-	}
-	merged := 0
-	for _, group := range groups {
-		rows, err := loadDupGroup(tx, group.NameNorm, group.TypeID)
-		if err != nil {
-			return err
-		}
-		if len(rows) < 2 {
-			continue
-		}
-		count, err := mergeDupGroup(tx, rows)
-		if err != nil {
-			return err
-		}
-		merged += count
+		return err
 	}
 	if merged > 0 {
 		logInfo(fmt.Sprintf("合并了 %d 条重复的 global_video 记录", merged))
@@ -132,6 +110,38 @@ func migrateDedupeGlobalVideo(tx *sqlx.Tx) error {
 	// 这里不建索引：v2 已经把旧的函数索引删掉，(name_norm, type_id) 上的
 	// 新唯一索引由迁移结束后 runMigrations 里的 createIndexes 在同一批里建回来。
 	return nil
+}
+
+// mergeDuplicateGlobalVideos 把归一化后同名的多条记录并成一条，并把收藏、
+// 历史、目录引用一起改指向存活行。返回被并掉的条数。
+func mergeDuplicateGlobalVideos(tx *sqlx.Tx) (int, error) {
+	exists, err := tableExists(tx, "global_video")
+	if err != nil || !exists {
+		return 0, err
+	}
+	// 空标题的行不参与合并：它们没有可比的身份，并起来只会凭空造出一条无名字的记录。
+	var groups []globalVideoDupGroup
+	err = tx.Select(&groups, `SELECT name_norm, type_id FROM global_video
+		WHERE name_norm <> '' GROUP BY name_norm, type_id HAVING COUNT(*) > 1 ORDER BY name_norm, type_id`)
+	if err != nil {
+		return 0, fmt.Errorf("find duplicate global video groups: %w", err)
+	}
+	merged := 0
+	for _, group := range groups {
+		rows, err := loadDupGroup(tx, group.NameNorm, group.TypeID)
+		if err != nil {
+			return merged, err
+		}
+		if len(rows) < 2 {
+			continue
+		}
+		count, err := mergeDupGroup(tx, rows)
+		if err != nil {
+			return merged, err
+		}
+		merged += count
+	}
+	return merged, nil
 }
 
 func loadDupGroup(tx *sqlx.Tx, nameNorm string, typeID int64) ([]dupGlobalVideoRow, error) {

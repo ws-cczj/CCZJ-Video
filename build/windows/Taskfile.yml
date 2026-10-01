@@ -7,15 +7,45 @@ vars:
   # 从 version.json 自动提取版本号，注入到 Go 编译中
   VERSION:
     sh: powershell -NoProfile -ExecutionPolicy Bypass -File build/get_version.ps1
+  ARCH:
+    sh: go env GOARCH
+  # 资源文件必须落在主包（仓库根）才会被 Go 链接器捡起；构建完立刻删掉，否则残留
+  # 旧版本号的 .syso 会被之后的每次开发构建链进二进制，且它会进 git。
+  SYSO: wails_windows_{{.ARCH}}.syso
 
 tasks:
+  generate:icons:
+    summary: Generate build/windows/icon.ico from build/appicon.png
+    cmds:
+      - wails3 generate icons -input build/appicon.png -windowsfilename build/windows/icon.ico
+
+  generate:syso:
+    summary: Generate the Windows resource .syso (icon + manifest + version info)
+    deps:
+      - task: generate:icons
+    cmds:
+      # info.json 的语言键必须是真实 langID（0409）。写成 0000 时 winres 照样产出
+      # 自洽的 StringFileInfo\000004b0 块，但 Win32 按语言查表会跳过它，于是
+      # Explorer 和 FileVersionInfo 都报告这个 exe 没有版本信息。
+      - powershell -NoProfile -ExecutionPolicy Bypass -File build/windows/sync_info.ps1 -Version {{.VERSION}}
+      - wails3 generate syso -arch {{.ARCH}} -icon build/windows/icon.ico -manifest build/windows/wails.exe.manifest -info build/windows/info.generated.json -out {{.SYSO}}
+
+  clean:syso:
+    summary: Remove the generated resource file from the source tree
+    cmds:
+      - powershell -NoProfile -Command "Remove-Item -LiteralPath '{{.SYSO}}' -ErrorAction SilentlyContinue"
+
   build:
     summary: Build the application for Windows (release, stripped)
     deps:
       - task: common:go:mod:tidy
       - task: common:build:frontend
+      - task: generate:syso
     cmds:
       - go build -tags production -ldflags="-w -s -H windowsgui -X cczjVideo/app/updater.Version={{.VERSION}}" -o ./bin/cczjVideo.exe
+      - task: clean:syso
+      # go build 链不到 .syso 也照样成功，只是二进制没有图标和版本，所以要读回来验证。
+      - task: check
 
   build:dev:
     summary: Build the application for Windows (development, with console + logs)
@@ -26,11 +56,21 @@ tasks:
 
   build:prod:
     summary: Build the application for Windows (production)
+    cmds:
+      - task: build
+
+  check:
+    summary: Read the version resource back out of bin/cczjVideo.exe
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -File build/windows/check_exe.ps1 -Path ./bin/cczjVideo.exe -ExpectVersion {{.VERSION}}
+
+  package:
+    summary: Build and stage a shippable release in dist/ (exe, portable zip, checksums.txt)
     deps:
       - task: common:go:mod:tidy
       - task: common:build:frontend
     cmds:
-      - go build -tags production -ldflags="-w -s -H windowsgui -X cczjVideo/app/updater.Version={{.VERSION}}" -o ./bin/cczjVideo.exe
+      - powershell -NoProfile -ExecutionPolicy Bypass -File build/windows/package.ps1 -Version {{.VERSION}} -Arch {{.ARCH}}
 
   run:
     summary: Runs the application

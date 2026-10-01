@@ -6,12 +6,12 @@
 package handler
 
 import (
+	"cczjVideo/app/apperror"
 	"cczjVideo/app/detail"
 	"cczjVideo/app/model"
 	"cczjVideo/app/proxy"
 	"context"
 	"encoding/json"
-	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -72,20 +72,23 @@ type PlayLineSpeedResp struct {
 }
 
 // SpeedTestPlayLines 并发探测一个视频的全部播放线路。
-func SpeedTestPlayLines(req PlayLineSpeedReq) (*PlayLineSpeedResp, error) {
+//
+// ctx 是应用生命周期上下文：退出时这一轮最多 24 秒的并发探测必须能立刻断开，
+// 否则窗口已经关了，测速还在给源站发请求。
+func SpeedTestPlayLines(ctx context.Context, req PlayLineSpeedReq) (*PlayLineSpeedResp, error) {
 	if req.SourceKey == "" || (req.GlobalID <= 0 && req.VodId == "") {
-		return nil, fmt.Errorf("source_key and global_id are required")
+		return nil, apperror.New(apperror.Validation, "source_key and global_id are required")
 	}
-	result, err := resolveDetail(req)
+	result, err := resolveDetail(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 	lines := usableLines(result.Lines)
 	if len(lines) == 0 {
-		return nil, fmt.Errorf("该视频没有可测速的播放线路")
+		return nil, apperror.New(apperror.NotFound, "该视频没有可测速的播放线路")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), lineSpeedTotalBudget)
+	probeCtx, cancel := context.WithTimeout(ctx, lineSpeedTotalBudget)
 	defer cancel()
 
 	items := make([]*PlayLineSpeedItem, len(lines))
@@ -99,7 +102,7 @@ func SpeedTestPlayLines(req PlayLineSpeedReq) (*PlayLineSpeedResp, error) {
 		wg.Add(1)
 		go func(i int, line *model.PlayLine, episode *model.Episode) {
 			defer wg.Done()
-			items[i] = probeLine(ctx, line, episode)
+			items[i] = probeLine(probeCtx, line, episode)
 		}(i, line, episode)
 	}
 	wg.Wait()
@@ -107,11 +110,11 @@ func SpeedTestPlayLines(req PlayLineSpeedReq) (*PlayLineSpeedResp, error) {
 	return rankLineSpeed(items), nil
 }
 
-func resolveDetail(req PlayLineSpeedReq) (*detail.Result, error) {
+func resolveDetail(ctx context.Context, req PlayLineSpeedReq) (*detail.Result, error) {
 	if req.GlobalID > 0 {
-		return detail.Default.GetByGlobal(req.SourceKey, req.GlobalID)
+		return detail.Default.GetByGlobalContext(ctx, req.SourceKey, req.GlobalID)
 	}
-	return detail.Default.Get(req.SourceKey, req.VodId)
+	return detail.Default.GetContext(ctx, req.SourceKey, req.VodId)
 }
 
 // usableLines 丢掉没有线路序号或集表为空的解析残留，测速不该为它们发请求。

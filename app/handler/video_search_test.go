@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"cczjVideo/app/applog"
 	"cczjVideo/app/db"
 	"cczjVideo/app/model"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -12,10 +14,16 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
+	// 日志单例必须抢在第一次 applog 调用之前绑到临时目录：applog.Default() 会在
+	// 单例为空时用 %APPDATA% 的生产目录建出来，采集/调度路径一打日志就进了用户真机日志。
+	if err := applog.Init(filepath.Join(dir, "applog")); err != nil {
+		panic(err)
+	}
 	if err := db.InitDB(dir); err != nil {
 		panic(err)
 	}
 	code := m.Run()
+	applog.Default().Close()
 	db.Close()
 	_ = os.RemoveAll(dir)
 	os.Exit(code)

@@ -991,7 +991,7 @@
   border-style: dashed;
 }
 .cczj-border-primary {
-  border-color: var(--primary);
+  border-color: var(--accent);
 }
 .cczj-border-gray-300 {
   border-color: var(--border);

@@ -4,7 +4,6 @@ go 1.25.0
 
 require (
 	github.com/andybalholm/brotli v1.2.1
-	github.com/bwmarrin/snowflake v0.3.0
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/wailsapp/wails/v3 v3.0.0-beta.24
 	modernc.org/sqlite v1.52.0

@@ -1,7 +1,7 @@
 package douban
 
 import (
-	"fmt"
+	"encoding/json"
 	"io/ioutil"
 	"net/http"
 	"regexp"
@@ -11,10 +11,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"cczjVideo/app/apperror"
 	"cczjVideo/app/applog"
-	"cczjVideo/app/collect"
 	"cczjVideo/app/db"
-	"cczjVideo/app/model"
 )
 
 // ======================== 豆瓣热榜 ========================
@@ -81,18 +80,22 @@ var (
 	chartMatchRunning atomic.Bool
 )
 
+// fetchChartPage 是「取回热榜页面」这一步的替身位：stale-first 的行为必须能在不真打豆瓣的
+// 前提下验证，所以抓取入口留一个可替换的包级变量。
+var fetchChartPage = fetchChartHTML
+
 // fetchChartHTML 热榜专用 HTTP 请求：静默期和全局限速闸门都必须走，
 // 等不起就直接跳过这次刷新，首页继续用旧热榜。
 func fetchChartHTML(urlStr string) (string, error) {
 	if left := remainingBlock(); left > 0 {
 		applog.Warn("[DoubanChart] 反爬静默中（剩余 %s），跳过热榜请求", left.Round(time.Second))
-		return "", fmt.Errorf("douban 反爬静默中，剩余 %s", left.Round(time.Minute))
+		return "", apperror.Newf(apperror.Unavailable, "douban 反爬静默中，剩余 %s", left.Round(time.Minute))
 	}
 	// 热榜以前只尊重静默期、不限速，理由是「一小时缓存 + 失败退避，请求量极低」。
 	// 但缓存一过期撞上批量补全的间隙，就是一次裸请求插在两条搜索之间——豆瓣按 IP
 	// 计数，不认得谁是谁。
 	if _, ok := awaitDoubanSlot("热榜", uiWaitBudget); !ok {
-		return "", fmt.Errorf("douban 限速中，跳过热榜刷新")
+		return "", apperror.New(apperror.Unavailable, "douban 限速中，跳过热榜刷新")
 	}
 
 	applog.Info("[DoubanChart] Fetching URL: %s", urlStr)
@@ -122,7 +125,7 @@ func fetchChartHTML(urlStr string) (string, error) {
 func chartGet(urlStr string) (doc string, location string, err error) {
 	req, err := http.NewRequest("GET", urlStr, nil)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to create request: %w", err)
+		return "", "", apperror.Wrap(apperror.Unavailable, err, "failed to create request")
 	}
 
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0")
@@ -132,92 +135,185 @@ func chartGet(urlStr string) (doc string, location string, err error) {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to fetch: %w", err)
+		return "", "", apperror.Wrap(apperror.Unavailable, err, "failed to fetch")
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", resp.Header.Get("Location"), fmt.Errorf("HTTP %d", resp.StatusCode)
+		return "", resp.Header.Get("Location"), apperror.Newf(apperror.Unavailable, "HTTP %d", resp.StatusCode)
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to read body: %w", err)
+		return "", "", apperror.Wrap(apperror.Unavailable, err, "failed to read body")
 	}
 
 	return string(body), "", nil
 }
 
-// FetchDoubanChart 获取豆瓣热门影视榜（带 1 小时缓存）
+// chartStaleCeiling 是「一份旧榜单还值得直接摆上首页」的年龄上限。豆瓣限速可能连着几轮都
+// 抢不到槽位，而热榜本身变化很慢——首页宁可显示昨天的榜单，也不要空着等一次网络。超过这个
+// 年龄就当没有，回到「手里没东西、只能等一次实抓」的老路。
+const chartStaleCeiling = 7 * 24 * time.Hour
+
+// chartFetchMu 只把真正的抓取串起来。它和 chartCacheMu 分开是有意的：以前抓取一路握着缓存
+// 写锁，于是一份过期榜单的读要跟着在限速闸门后面等上半分钟；现在读缓存从不被抓取挡住。
+var chartFetchMu sync.Mutex
+
+// FetchDoubanChart 获取豆瓣热门影视榜。有能看的旧榜单就立刻返回，过期只决定「要不要在后台
+// 补一轮」，绝不把等待压到调用方（首页轮播、启动预加载）身上。
 func FetchDoubanChart() ([]DoubanChartItem, error) {
-	chartCacheMu.RLock()
-	if chartCacheData != nil && time.Since(chartCacheTime) < chartCacheTTL {
-		items := chartCacheData
-		chartCacheMu.RUnlock()
-		applog.Debug("[DoubanChart] 命中缓存 (%d 条, 缓存时间: %s)", len(items), chartCacheTime.Format("15:04:05"))
+	items, at, ok := chartDisplayable()
+	if ok && time.Since(at) < chartCacheTTL {
+		chartCounters.hits.Add(1)
+		applog.Debug("[DoubanChart] 命中缓存 (%d 条, 缓存时间: %s)", len(items), at.Format("15:04:05"))
 		return items, nil
 	}
-	chartCacheMu.RUnlock()
+	if ok {
+		// 先出旧榜单，后台悄悄补：抓不到（限速排队、反爬静默、解析为空）就继续用旧的。
+		chartCounters.staleHits.Add(1)
+		go func() { _, _ = refreshChart(false) }()
+		return items, nil
+	}
+	chartCounters.misses.Add(1)
+	return refreshChart(true)
+}
 
+// chartDisplayable 取出一份还能摆上首页的榜单：内存优先，再看落库快照。快照读回来就填进内存，
+// 免得后续每次读都戳一遍 settings。
+func chartDisplayable() ([]DoubanChartItem, time.Time, bool) {
+	if items, at, ok := chartMemory(); ok && time.Since(at) < chartStaleCeiling {
+		return items, at, true
+	}
+	items, at, ok := loadChartSnapshot()
+	if !ok {
+		return nil, time.Time{}, false
+	}
 	chartCacheMu.Lock()
-	defer chartCacheMu.Unlock()
-	if !chartFailureTime.IsZero() && time.Since(chartFailureTime) < chartFailureBackoff {
-		if len(chartCacheData) > 0 {
-			return chartCacheData, nil
+	chartCacheData, chartCacheTime = items, at
+	chartCacheMu.Unlock()
+	return items, at, true
+}
+
+// chartMemory 读内存里那份榜单。没数据、或者时间戳不明（降级路径塞进来的）都算不可展示。
+func chartMemory() ([]DoubanChartItem, time.Time, bool) {
+	chartCacheMu.RLock()
+	defer chartCacheMu.RUnlock()
+	if len(chartCacheData) == 0 || chartCacheTime.IsZero() {
+		return nil, time.Time{}, false
+	}
+	return chartCacheData, chartCacheTime, true
+}
+
+func chartStaleData() []DoubanChartItem {
+	chartCacheMu.RLock()
+	defer chartCacheMu.RUnlock()
+	return chartCacheData
+}
+
+// setChartCacheFallback 只塞数据、不动时间戳：来源不明的数据库缓存可以继续兜底，但不能
+// 冒充一份「刚抓来的新鲜榜单」把后面的刷新都免掉。
+func setChartCacheFallback(items []DoubanChartItem) {
+	chartCacheMu.Lock()
+	chartCacheData = items
+	chartCacheMu.Unlock()
+}
+
+func noteChartFailure() {
+	chartCacheMu.Lock()
+	chartFailureTime = time.Now()
+	chartCacheMu.Unlock()
+}
+
+// refreshChart 抓一趟热榜。wait=true 是调用方手里什么都没有、只能等到底；wait=false 是后台
+// 静默刷新——已经有一趟在跑就跳过这一轮，绝不排队。抓取本身在 fetchChartHTML 里还有一次
+// 「等不起就放弃」，所以豆瓣限速期间首页只是继续用旧榜单，不会积压请求。
+func refreshChart(wait bool) ([]DoubanChartItem, error) {
+	if wait {
+		chartFetchMu.Lock()
+	} else if !chartFetchMu.TryLock() {
+		chartCounters.skipped.Add(1)
+		applog.Debug("[DoubanChart] 已有一轮刷新在跑，跳过本轮后台刷新")
+		return nil, nil
+	}
+	defer chartFetchMu.Unlock()
+	// 排队期间另一趟可能刚把榜单补齐，别重复打豆瓣。
+	if items, at, ok := chartMemory(); ok && time.Since(at) < chartCacheTTL {
+		chartCounters.skipped.Add(1)
+		return items, nil
+	}
+	return fetchAndStoreChart()
+}
+
+// fetchAndStoreChart 真正抓一趟并落缓存与快照，由 refreshChart 在 chartFetchMu 之下调用。
+func fetchAndStoreChart() ([]DoubanChartItem, error) {
+	chartCacheMu.RLock()
+	failureAt, cooldownStale := chartFailureTime, chartCacheData
+	chartCacheMu.RUnlock()
+	if !failureAt.IsZero() && time.Since(failureAt) < chartFailureBackoff {
+		chartCounters.skipped.Add(1)
+		if len(cooldownStale) > 0 {
+			return cooldownStale, nil
 		}
 		if fallback := loadPersistedChartItems(); len(fallback) > 0 {
-			chartCacheData = fallback
+			setChartCacheFallback(fallback)
 			return fallback, nil
 		}
-		return nil, fmt.Errorf("豆瓣热榜暂不可用，等待重试冷却结束")
-	}
-
-	// 双重检查
-	if chartCacheData != nil && time.Since(chartCacheTime) < chartCacheTTL {
-		return chartCacheData, nil
+		return nil, apperror.New(apperror.Unavailable, "豆瓣热榜暂不可用，等待重试冷却结束")
 	}
 
 	applog.Info("[DoubanChart] 缓存过期或为空，开始抓取热榜...")
 
-	html, err := fetchChartHTML(chartURL)
+	html, err := fetchChartPage(chartURL)
 	if err != nil {
+		chartCounters.fetchFail.Add(1)
 		applog.Error("[DoubanChart] 抓取失败: %v", err)
-		chartFailureTime = time.Now()
-		if chartCacheData != nil {
-			applog.Info("[DoubanChart] 降级返回旧缓存 (%d 条)", len(chartCacheData))
-			return chartCacheData, nil
+		noteChartFailure()
+		if stale := chartStaleData(); len(stale) > 0 {
+			applog.Info("[DoubanChart] 降级返回旧缓存 (%d 条)", len(stale))
+			return stale, nil
 		}
 		if fallback := loadPersistedChartItems(); len(fallback) > 0 {
-			chartCacheData = fallback
+			setChartCacheFallback(fallback)
 			applog.Info("[DoubanChart] 降级返回数据库热榜缓存 (%d 条)", len(fallback))
 			return fallback, nil
 		}
-		return nil, fmt.Errorf("抓取豆瓣热榜失败: %w", err)
+		return nil, apperror.Wrap(apperror.Unavailable, err, "抓取豆瓣热榜失败")
 	}
 
 	items := parseDoubanChart(html)
 	if len(items) == 0 {
+		chartCounters.fetchFail.Add(1)
 		applog.Warn("[DoubanChart] 解析结果为空 (HTML len=%d)", len(html))
-		chartFailureTime = time.Now()
-		if chartCacheData != nil {
-			return chartCacheData, nil
+		noteChartFailure()
+		if stale := chartStaleData(); len(stale) > 0 {
+			return stale, nil
 		}
 		if fallback := loadPersistedChartItems(); len(fallback) > 0 {
-			chartCacheData = fallback
+			setChartCacheFallback(fallback)
 			applog.Info("[DoubanChart] 解析为空，降级返回数据库热榜缓存 (%d 条)", len(fallback))
 			return fallback, nil
 		}
-		return nil, fmt.Errorf("解析豆瓣热榜失败: 未找到任何条目")
+		return nil, apperror.New(apperror.Corrupt, "解析豆瓣热榜失败: 未找到任何条目")
 	}
 
-	chartCacheData = items
-	chartCacheTime = time.Now()
+	chartCacheMu.Lock()
+	chartCacheData, chartCacheTime = items, time.Now()
 	chartFailureTime = time.Time{}
+	fetchedAt := chartCacheTime
+	chartCacheMu.Unlock()
+	chartCounters.fetchOK.Add(1)
+	saveChartSnapshot(items, fetchedAt)
 	applog.Info("[DoubanChart] 抓取完成: %d 条热榜数据", len(items))
 
 	// 异步：入库 + 更新热度 + 搜索源站。启动预加载和首页可能几乎同时触发抓取，
 	// 因此同一时刻只跑一轮匹配，后到的一轮直接放弃（缓存与匹配结果已共享）。
 	go func() {
+		// 这一趟脱离了调用方的请求，句柄可能根本还没开（或已经关掉）。sqlx 在 nil 句柄上
+		// 是 panic 而不是 error，而在裸 goroutine 里 panic 会带走整个进程，所以先确认在位。
+		if db.DB() == nil {
+			return
+		}
 		upsertChartItems(items)
 		go updateChartHotness(items)
 		if !chartMatchRunning.CompareAndSwap(false, true) {
@@ -229,6 +325,47 @@ func FetchDoubanChart() ([]DoubanChartItem, error) {
 	}()
 
 	return items, nil
+}
+
+// chartSnapshotKey 把一次成功抓取的热榜原样存进 settings。
+//
+// 热榜缓存原先只有内存一份，进程一重启就归零，于是"每次打开应用必然打豆瓣一次"——
+// 一小时 TTL 只对同一个进程内有效。豆瓣按 IP 计数，落库之后 TTL 才真的跨启动生效。
+const chartSnapshotKey = "douban_chart_snapshot"
+
+type chartSnapshot struct {
+	FetchedAt int64             `json:"fetched_at"`
+	Items     []DoubanChartItem `json:"items"`
+}
+
+// loadChartSnapshot 读回上次抓到的热榜。判定的是「还能不能摆上首页」，不是「新不新鲜」：
+// 新鲜与否由 FetchDoubanChart 拿 chartCacheTTL 比，过期的这份会先展示、后台再去补。
+// 缺数据、读坏、老过 chartStaleCeiling 才算未命中——那种榜单已经没有参考价值了。
+func loadChartSnapshot() ([]DoubanChartItem, time.Time, bool) {
+	raw, err := db.GetSetting(chartSnapshotKey)
+	if err != nil || raw == "" {
+		return nil, time.Time{}, false
+	}
+	var snap chartSnapshot
+	if json.Unmarshal([]byte(raw), &snap) != nil || snap.FetchedAt <= 0 || len(snap.Items) == 0 {
+		return nil, time.Time{}, false
+	}
+	at := time.Unix(snap.FetchedAt, 0)
+	if time.Since(at) >= chartStaleCeiling {
+		return nil, time.Time{}, false
+	}
+	return snap.Items, at, true
+}
+
+// saveChartSnapshot 写快照。失败只记日志：缓存没落成，下次顶多多抓一趟。
+func saveChartSnapshot(items []DoubanChartItem, at time.Time) {
+	raw, err := json.Marshal(chartSnapshot{FetchedAt: at.Unix(), Items: items})
+	if err != nil {
+		return
+	}
+	if err := db.SetSetting(chartSnapshotKey, string(raw)); err != nil {
+		applog.Warn("[DoubanChart] 热榜快照落库失败（下次启动会重新抓取）: %v", err)
+	}
 }
 
 func loadPersistedChartItems() []DoubanChartItem {
@@ -253,62 +390,6 @@ func chartItemsFromGlobalRows(rows []db.GlobalVideoRow) []DoubanChartItem {
 		})
 	}
 	return items
-}
-
-// parseDoubanChart 解析豆瓣热榜 HTML
-func parseDoubanChart(html string) []DoubanChartItem {
-	blocks := chartItemRegex.FindAllStringSubmatch(html, -1)
-	var items []DoubanChartItem
-	seen := make(map[string]bool)
-
-	for _, block := range blocks {
-		if len(block) < 2 {
-			continue
-		}
-		content := block[1]
-
-		idMatch := chartLinkRegex.FindStringSubmatch(content)
-		if len(idMatch) < 2 {
-			continue
-		}
-		subjectID := idMatch[1]
-		if seen[subjectID] {
-			continue
-		}
-		seen[subjectID] = true
-
-		item := DoubanChartItem{SubjectID: subjectID}
-
-		if m := chartTitleRegex.FindStringSubmatch(content); len(m) >= 2 {
-			item.Title = strings.TrimSpace(m[1])
-		}
-		if m := chartPosterRegex.FindStringSubmatch(content); len(m) >= 2 {
-			item.PosterURL = strings.TrimSpace(m[1])
-		}
-		if m := chartRatingRegex.FindStringSubmatch(content); len(m) >= 2 {
-			item.Rating = strings.TrimSpace(m[1])
-		}
-		if m := chartVotesRegex.FindStringSubmatch(content); len(m) >= 2 {
-			item.Votes = strings.TrimSpace(m[1])
-		}
-		if m := chartInfoRegex.FindStringSubmatch(content); len(m) >= 2 {
-			item.Info = strings.TrimSpace(m[1])
-		}
-
-		items = append(items, item)
-	}
-	return items
-}
-
-// upsertChartItems 将热榜数据插入 global_video 表
-// 逻辑：归一化匹配已有记录 → 匹配成功则更新，匹配不上则新增（绝不跳过）
-// isValidRating 检查评分是否为有效正数（排除 "0"、"0.0" 等无效值）
-func isValidRating(s string) bool {
-	if s == "" {
-		return false
-	}
-	f, err := strconv.ParseFloat(s, 64)
-	return err == nil && f > 0
 }
 
 func upsertChartItems(items []DoubanChartItem) {
@@ -357,198 +438,12 @@ func upsertChartItems(items []DoubanChartItem) {
 		newCount, updateCount, newCount+updateCount, len(items), existingCount, totalCount)
 }
 
-// asyncMatchChartItems 并行匹配源站数据
-func asyncMatchChartItems(items []DoubanChartItem) {
-	sources, err := db.GetEnabledSources()
-	if err != nil {
-		applog.Warn("[DoubanChart] 获取采集源失败: %v", err)
-	}
-
-	// 诊断日志：打印所有源状态，便于排查为什么 sources=0
-	allSources, allErr := db.GetAllSources()
-	if allErr != nil {
-		applog.Warn("[DoubanChart] 查询所有源失败: %v", allErr)
-	} else {
-		for _, s := range allSources {
-			applog.Info("[DoubanChart] 源状态: key=%s name=%s enabled=%d apiUrl=%s", s.SourceKey, s.Name, s.Enabled, s.ApiUrl[:min(len(s.ApiUrl), 60)])
-		}
-		applog.Info("[DoubanChart] 源统计: 总共 %d 个, 启用 %d 个", len(allSources), len(sources))
-	}
-
-	if len(sources) == 0 {
-		// Fallback: 没有显式启用的源时，使用所有源（避免因前端保存时 enabled 丢失导致完全无法匹配）
-		allSources, allErr := db.GetAllSources()
-		if allErr != nil || len(allSources) == 0 {
-			applog.Info("[DoubanChart] 没有可用的采集源，无法匹配视频资源。请在[源管理]中添加至少一个采集源。")
-			markAllNotFound(items)
-			return
-		}
-		applog.Info("[DoubanChart] 没有显式启用的采集源，自动使用全部 %d 个源进行匹配（建议在源管理中启用常用源）", len(allSources))
-		sources = allSources
-	}
-
-	// 获取用户设置的默认源，将其排到最前面优先匹配
-	defaultKey, _ := db.GetSetting("default_source_key")
-	if defaultKey != "" {
-		reordered := make([]*model.Source, 0, len(sources))
-		for _, s := range sources {
-			if s.SourceKey == defaultKey {
-				reordered = append([]*model.Source{s}, reordered...)
-			} else {
-				reordered = append(reordered, s)
-			}
-		}
-		sources = reordered
-		applog.Info("[DoubanChart] 默认源 %s 已优先排序", defaultKey)
-	}
-
-	applog.Info("[DoubanChart] 开始源站匹配: %d 个热榜条目, %d 个采集源", len(items), len(sources))
-
-	var wg sync.WaitGroup
-	matched := 0
-	// 整轮匹配共用一个身份批次：每个条目只入库一条，逐个重读 global_video 全表
-	// 是这轮匹配里最贵的一段。批次自带互斥，多个 goroutine 并发用是安全的。
-	batch := db.NewCatalogBatch()
-	for _, item := range items {
-		if item.SubjectID == "" || item.Title == "" {
-			continue
-		}
-		chartMatchSlots <- struct{}{}
-		wg.Add(1)
-		go func(ci DoubanChartItem) {
-			defer wg.Done()
-			defer func() { <-chartMatchSlots }()
-			matchChartItemToSource(ci, sources, batch)
-		}(item)
-	}
-	wg.Wait()
-	// 统计匹配结果
-	chartMatchMu.RLock()
-	for _, ci := range items {
-		if cached, ok := chartMatchCache[ci.SubjectID]; ok && cached.Status == "matched" {
-			matched++
-		}
-	}
-	chartMatchMu.RUnlock()
-	applog.Info("[DoubanChart] 源站匹配完成: 成功 %d/%d", matched, len(items))
-}
-
-// matchChartItemToSource 匹配单个热榜条目到源站（本地搜索 + 源站搜索）
-func matchChartItemToSource(item DoubanChartItem, sources []*model.Source, batch *db.CatalogBatch) {
-	title := item.Title
-
-	// 标记为搜索中
-	chartMatchMu.Lock()
-	if existing, ok := chartMatchCache[item.SubjectID]; ok && existing.Status == "matched" {
-		chartMatchMu.Unlock()
-		return
-	}
-	chartSearching[item.SubjectID] = true
-	chartMatchMu.Unlock()
-
-	// 1. 先查本地数据库（通过视频名称在各源表中搜索）
-	for _, src := range sources {
-		vodID, found := db.SearchVideoInSourceTable(src.SourceKey, title)
-		if found {
-			applog.Info("[DoubanChart] 本地匹配成功: %s -> %s/%s", title, src.SourceKey, vodID)
-			saveMatchResult(item, src.SourceKey, vodID)
-			return
-		}
-	}
-	applog.Debug("[DoubanChart] 本地无匹配，尝试源站搜索: %s (%d个源)", title, len(sources))
-
-	// 2. 本地无数据，尝试从第一个可用源站搜索
-	for _, src := range sources {
-		vodID, found := searchAndCollectFromSource(src, title, batch)
-		if found {
-			saveMatchResult(item, src.SourceKey, vodID)
-			return
-		}
-	}
-
-	// 3. 源站也无数据
-	chartMatchMu.Lock()
-	delete(chartSearching, item.SubjectID)
-	built := buildChartItem(item, "not_found", "", "")
-	chartMatchCache[item.SubjectID] = &built
-	chartMatchMu.Unlock()
-	applog.Debug("[DoubanChart] 源站无数据: %s", title)
-}
-
-// searchAndCollectFromSource 从源站搜索视频并入库，返回匹配的 vod_id
-func searchAndCollectFromSource(src *model.Source, title string, batch *db.CatalogBatch) (string, bool) {
-	applog.Info("[DoubanChart] 开始源站搜索 src=%s apiUrl=%s title=%s", src.SourceKey, src.ApiUrl, title)
-	// 直接通过源站 API 搜索（不走事件通知）
-	strategy := collect.CreateStrategyFromSource(src)
-	if strategy == nil {
-		applog.Warn("[DoubanChart] 源站策略不可用 src=%s", src.SourceKey)
-		return "", false
-	}
-	page, err := collect.FetchSearchPage(strategy, title, 1)
-	if err != nil {
-		applog.Warn("[DoubanChart] 源站搜索失败 src=%s title=%s: %v", src.SourceKey, title, err)
-		return "", false
-	}
-	if page == nil || len(page.List) == 0 {
-		total := 0
-		if page != nil {
-			total = page.Total.Int()
-		}
-		applog.Info("[DoubanChart] 源站无结果 src=%s title=%s (total=%d)", src.SourceKey, title, total)
-		return "", false
-	}
-	applog.Info("[DoubanChart] 源站搜索结果 src=%s title=%s: 找到 %d 条", src.SourceKey, title, len(page.List))
-
-	// 查找名称匹配的结果
-	for _, v := range page.List {
-		if v == nil || v.VodName == "" {
-			continue
-		}
-		applog.Debug("[DoubanChart] 候选视频: vod_id=%s vod_name=%q (匹配目标: %q)", v.VodId, v.VodName, title)
-		// 名称匹配（精确或高相似度）
-		if v.VodName == title || strings.Contains(v.VodName, title) || strings.Contains(title, v.VodName) {
-			applog.Info("[DoubanChart] 名称匹配: %q 匹配 %q (src=%s)", title, v.VodName, src.SourceKey)
-			// A chart match is a search result: persist its catalog projection only.
-			v.VodContent, v.VodActor, v.VodDirector = "", "", ""
-			v.VodPlayUrl, v.VodDownUrl, v.VodPlayFrom = "", "", ""
-			if err := db.UpsertCatalogItemsBatch(batch, src.SourceKey, []*model.Video{v}); err != nil {
-				applog.Error("[DoubanChart] 入库失败 src=%s title=%s: %v", src.SourceKey, v.VodName, err)
-				return "", false
-			}
-			applog.Info("[DoubanChart] 源站采集入库成功: %s -> %s/%s", title, src.SourceKey, v.VodId.String())
-			return v.VodId.String(), true
-		}
-	}
-	applog.Debug("[DoubanChart] 源站有结果但无名称匹配 src=%s title=%s", src.SourceKey, title)
-	return "", false
-}
-
-// saveMatchResult 保存匹配结果到缓存
-func saveMatchResult(item DoubanChartItem, sourceKey, vodID string) {
-	built := buildChartItem(item, "matched", sourceKey, vodID)
-	chartMatchMu.Lock()
-	chartMatchCache[item.SubjectID] = &built
-	delete(chartSearching, item.SubjectID)
-	chartMatchMu.Unlock()
-	applog.Debug("[DoubanChart] 匹配成功: %s -> %s/%s", item.Title, sourceKey, vodID)
-}
-
-// markAllNotFound 标记所有条目为 not_found
-func markAllNotFound(items []DoubanChartItem) {
-	chartMatchMu.Lock()
-	defer chartMatchMu.Unlock()
-	for _, item := range items {
-		built := buildChartItem(item, "not_found", "", "")
-		chartMatchCache[item.SubjectID] = &built
-	}
-}
-
 // GetChartVideos 获取热榜视频列表（立即返回，带匹配状态）
 func GetChartVideos() ([]ChartVideoItem, error) {
 	// 1. 获取热榜数据
 	chartItems, err := FetchDoubanChart()
 	if err != nil {
-		return nil, fmt.Errorf("获取热榜失败: %w", err)
+		return nil, apperror.Wrap(apperror.Unavailable, err, "获取热榜失败")
 	}
 	if len(chartItems) == 0 {
 		return nil, nil
@@ -603,7 +498,7 @@ func buildChartItem(ci DoubanChartItem, status, sourceKey, vodID string) ChartVi
 // ResolveChartVideo 用户点击时解析热榜视频（实时检查匹配状态）
 func ResolveChartVideo(subjectID string) (*ChartVideoItem, error) {
 	if subjectID == "" {
-		return nil, fmt.Errorf("subject_id 不能为空")
+		return nil, apperror.New(apperror.Validation, "subject_id 不能为空")
 	}
 
 	chartMatchMu.RLock()
@@ -663,100 +558,6 @@ func ResolveChartVideo(subjectID string) (*ChartVideoItem, error) {
 	return &ChartVideoItem{SubjectID: subjectID, Title: title, Status: "not_found"}, nil
 }
 
-// parseInfoFields 从 Info 字段解析 year、area
-// Info 格式: "2025-09-05(多伦多电影节) / 2026-05-15(美国) / 克里斯·埃文斯 / ..."
-func parseInfoFields(info string) (year, area string) {
-	year, area, _, _ = parseInfoFull(info)
-	return
-}
-
-// parseInfoFull 从 Info 字段完整解析 year、area、releaseDate、cast
-func parseInfoFull(info string) (year, area, releaseDate, cast string) {
-	if info == "" {
-		return "", "", "", ""
-	}
-	parts := strings.Split(info, "/")
-	var names []string
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p == "" {
-			continue
-		}
-
-		// 尝试解析为日期
-		dateStr := p
-		if idx := strings.Index(dateStr, "("); idx > 0 {
-			dateStr = dateStr[:idx]
-		}
-		dateStr = strings.TrimSpace(dateStr)
-		isDate := false
-		for _, layout := range []string{"2006-01-02", "2006/01/02", "2006.01.02", "2006"} {
-			if t, err := time.Parse(layout, dateStr); err == nil {
-				isDate = true
-				if year == "" {
-					year = fmt.Sprintf("%d", t.Year())
-				}
-				if releaseDate == "" {
-					releaseDate = dateStr
-				}
-				break
-			}
-		}
-		if isDate {
-			// 尝试从括号中提取地区
-			if area == "" && strings.Contains(p, "(") {
-				start := strings.Index(p, "(")
-				end := strings.Index(p, ")")
-				if start > 0 && end > start {
-					candidate := p[start+1 : end]
-					if len([]rune(candidate)) <= 10 && !strings.Contains(candidate, "节") && !strings.Contains(candidate, "展") {
-						area = candidate
-					}
-				}
-			}
-			continue
-		}
-
-		// 不是日期，视为人名
-		names = append(names, p)
-	}
-	if len(names) > 0 {
-		// 第一个人名视为导演，其余为演员
-		if len(names) > 1 {
-			director := names[0]
-			actors := strings.Join(names[1:], " / ")
-			if len([]rune(actors)) > 60 {
-				actors = string([]rune(actors)[:60]) + "..."
-			}
-			cast = director + " / " + actors
-		} else {
-			cast = names[0]
-		}
-	}
-	return
-}
-
-// parseReleaseDate 从 Info 字段解析最早发布日期
-func parseReleaseDate(info string) time.Time {
-	if info == "" {
-		return time.Time{}
-	}
-	firstPart := info
-	if idx := strings.Index(info, "/"); idx > 0 {
-		firstPart = info[:idx]
-	}
-	if idx := strings.Index(firstPart, "("); idx > 0 {
-		firstPart = firstPart[:idx]
-	}
-	firstPart = strings.TrimSpace(firstPart)
-	for _, layout := range []string{"2006-01-02", "2006/01/02", "2006.01.02", "2006"} {
-		if t, err := time.Parse(layout, firstPart); err == nil {
-			return t
-		}
-	}
-	return time.Time{}
-}
-
 // updateChartHotness 异步更新热榜条目的热度到数据库
 func updateChartHotness(items []DoubanChartItem) {
 	hotnessBySubject := make(map[string]string, len(items))
@@ -806,6 +607,8 @@ func ClearChartCache() {
 	chartCacheData = nil
 	chartCacheTime = time.Time{}
 	chartCacheMu.Unlock()
+	// 落库快照也要一起丢，否则清完下一次启动又把它读回来，等于没清。
+	_ = db.SetSetting(chartSnapshotKey, "")
 
 	ClearChartMatchCache()
 	applog.Info("[DoubanChart] 缓存已清除")

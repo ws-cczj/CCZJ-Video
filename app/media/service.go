@@ -2,12 +2,13 @@
 package media
 
 import (
+	"cczjVideo/app/apperror"
 	"cczjVideo/app/db"
 	"cczjVideo/app/handler"
 	"cczjVideo/app/model"
+	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 )
 
 // Service provides media-facing application operations.
@@ -24,13 +25,13 @@ func (s *Service) List(req handler.VideoListReq) (*handler.VideoListResp, error)
 }
 
 // Detail returns one video and its episodes.
-func (s *Service) Detail(req handler.VideoDetailReq) (*handler.VideoDetailResp, error) {
-	return handler.GetVideoDetail(req)
+func (s *Service) Detail(ctx context.Context, req handler.VideoDetailReq) (*handler.VideoDetailResp, error) {
+	return handler.GetVideoDetail(ctx, req)
 }
 
 // SpeedTestPlayLines probes every play line of one video and ranks them.
-func (s *Service) SpeedTestPlayLines(req handler.PlayLineSpeedReq) (*handler.PlayLineSpeedResp, error) {
-	return handler.SpeedTestPlayLines(req)
+func (s *Service) SpeedTestPlayLines(ctx context.Context, req handler.PlayLineSpeedReq) (*handler.PlayLineSpeedResp, error) {
+	return handler.SpeedTestPlayLines(ctx, req)
 }
 
 // Search returns videos matching a keyword within a source.
@@ -81,16 +82,6 @@ func (s *Service) ClearRecycleBin(req handler.RecycleListReq) (*handler.RecycleR
 // YearsAndAreas returns filter values available for a source.
 func (s *Service) YearsAndAreas(sourceKey string) (*handler.YearsResp, error) {
 	return handler.GetYearsAndAreas(sourceKey)
-}
-
-// UnionList returns a page of the cross-source library: one card per identity.
-func (s *Service) UnionList(req handler.UnionListReq) (*handler.UnionListResp, error) {
-	return handler.GetUnionVideoList(req)
-}
-
-// UnionYearsAndAreas returns filter values available across every source.
-func (s *Service) UnionYearsAndAreas() (*handler.YearsResp, error) {
-	return handler.GetUnionYearsAndAreas()
 }
 
 // MergeCandidates returns identities that look like duplicates of each other.
@@ -228,10 +219,10 @@ func (s *Service) WatchedEpisodes(sourceKey, vodID string) ([]int, error) {
 func (s *Service) catalogGlobalID(sourceKey, vodID string) (int64, error) {
 	v, err := db.GetVideoById(sourceKey, vodID)
 	if err != nil {
-		return 0, fmt.Errorf("video not found: %w", err)
+		return 0, apperror.Wrap(apperror.NotFound, err, "video not found")
 	}
 	if v.GlobalId <= 0 {
-		return 0, fmt.Errorf("video has no catalog global identity")
+		return 0, apperror.New(apperror.Internal, "video has no catalog global identity")
 	}
 	return v.GlobalId, nil
 }

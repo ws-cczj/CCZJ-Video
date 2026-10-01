@@ -1,22 +1,26 @@
-// 前端约定守卫：i18n 中英键位对齐 + 键引用有效性 + cczj-* 工具类存在性。
+// 前端约定守卫：i18n 中英键位对齐 + 键引用有效性 + cczj-* 工具类存在性 + 行内样式体量。
 // 独立成脚本的原因：locales 是 `export default {}` 的无类型对象，vue-tsc 看不出缺键；
 // cczj-* 是手写 CSS，类名写错只会静默不生效。两者都只能靠静态扫描。
-import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, posix, relative } from 'node:path'
 
 const ROOT = process.argv[2] ?? process.cwd()
 const SRC = join(ROOT, 'frontend', 'src')
+// 内置扩展包（设置页的「日志」「诊断」分组）在 Go 侧的 embed 目录里，
+// 它们的 main.js 用 cczj.i18n.t(...) 引用同一批 locale 键。只扫 frontend/src
+// 会把那两个键误判成「没人用」，而删掉键的人看不到任何报错——正是这个脚本要防的静默失效。
+const BUILTIN_PACKS = join(ROOT, 'app', 'plugin', 'builtin')
 const SKIPPED_DIRS = new Set(['node_modules', 'dist'])
 
 const problems = []
 const fail = (msg) => problems.push(msg)
 
-function walk(dir, files = []) {
+function walk(dir, files = [], pattern = /\.(ts|vue)$/) {
   for (const entry of readdirSync(dir)) {
     if (entry.startsWith('.') || SKIPPED_DIRS.has(entry)) continue
     const path = join(dir, entry)
-    if (statSync(path).isDirectory()) walk(path, files)
-    else if (/\.(ts|vue)$/.test(entry)) files.push(path)
+    if (statSync(path).isDirectory()) walk(path, files, pattern)
+    else if (pattern.test(entry)) files.push(path)
   }
   return files
 }
@@ -138,7 +142,10 @@ const namespaces = new Set([...keySets['zh-CN']].map((key) => key.split('.')[0])
 const mentioned = new Set()
 const KEY_LIKE = /(['"])((?:[a-z][a-zA-Z0-9]*)(?:\.[a-zA-Z0-9_]+)+)\1/g
 
-for (const file of walk(SRC)) {
+const referenceFiles = walk(SRC)
+if (existsSync(BUILTIN_PACKS)) referenceFiles.push(...walk(BUILTIN_PACKS, [], /\.js$/))
+
+for (const file of referenceFiles) {
   const rel = relTo(SRC, file)
   const text = readFileSync(file, 'utf8')
   if (rel.startsWith('locales')) continue
@@ -230,6 +237,20 @@ const undefinedClasses = [...usedClasses].filter(([name, where]) => {
 if (undefinedClasses.length) {
   fail('用了未定义的 cczj-*/bc-* 类（手写 CSS，只会静默不生效）：\n' +
     undefinedClasses.map(([name, where]) => `  ${name}  ← ${where}`).join('\n'))
+}
+
+// ---------- 4. 单个 SFC 的行内 scoped 样式体量 ----------
+// 一个 700 行的 <style scoped> 会把模板和逻辑挤出可审阅范围，也正是这一轮拆分的起因。
+// 规则只管 scoped：App.vue 那份全局样式本来就该留在入口文件里。
+const INLINE_STYLE_LIMIT = 260
+for (const file of walk(SRC, [], /\.vue$/)) {
+  const text = readFileSync(file, 'utf8')
+  const open = text.lastIndexOf('\n<style scoped>')
+  if (open === -1) continue // 已经搬出去的写成 <style scoped src="...">，不会命中这里
+  const lines = text.slice(open).split('\n').length
+  if (lines > INLINE_STYLE_LIMIT) {
+    fail(`${relTo(ROOT, file)} 的行内 <style scoped> 有 ${lines} 行，搬到 styles/ 下再用 <style scoped src> 引回来`)
+  }
 }
 
 // ---------- 输出 ----------

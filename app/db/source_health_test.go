@@ -283,3 +283,41 @@ func TestSourceHealthFailStreakAccumulatesAndClearsOnSuccess(t *testing.T) {
 		t.Fatalf("另一类的成功不该清零，got %d", got)
 	}
 }
+
+// 连败边界的第二个读法：同一秒里的样本要靠 id 分先后。
+//
+// 这条不是学术情形——自动停用现在直接读这个数，而测试、脚本导入、同一轮里
+// 连续几条样本都会挤在同一秒。只比 ts 会把"早于成功的失败"也算进连败，
+// 于是刚恢复的源被立刻再停用。
+func TestFailStreakOrdersSameSecondSamplesByRowID(t *testing.T) {
+	dir := t.TempDir()
+	database := openFreshSQLite(t, dir)
+	prevInstance, prevDir := instance, dataDir
+	instance, dataDir = database, dir
+	t.Cleanup(func() { instance, dataDir = prevInstance, prevDir })
+	if err := createTables(); err != nil {
+		t.Fatal(err)
+	}
+	if err := runMigrations(); err != nil {
+		t.Fatal(err)
+	}
+
+	const sourceKey = "same_second_streak"
+	at := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	for _, ok := range []bool{false, false, true, false} {
+		if err := RecordSourceHealth(sourceKey, SourceHealthKindCollect, ok, 10, 0, "取页失败", at); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	health, err := GetSourceHealth(sourceKey, SourceHealthKindCollect, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if health.FailStreak != 1 {
+		t.Fatalf("同一秒内的连败 = %d, want 1（成功之前的两条失败不能算进来）", health.FailStreak)
+	}
+	if health.LastOK {
+		t.Fatal("最后一条是失败，LastOK 不该为真")
+	}
+}

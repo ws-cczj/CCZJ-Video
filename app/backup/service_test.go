@@ -39,17 +39,38 @@ func resetUserTables(t *testing.T) {
 	}
 }
 
+// favoriteByTitle / historyByTitle 是测试夹具：产品代码只按已解析的目录身份写收藏与
+// 历史，这里用标题换一次 global_id，只为省掉每条用例手工建 global_video 行的样板。
+func favoriteByTitle(t *testing.T, sourceKey, vodID, name string) {
+	t.Helper()
+	globalID, err := db.GetOrCreateGlobalID(name, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AddFavoriteByIdentity(globalID, sourceKey, vodID); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func historyByTitle(t *testing.T, sourceKey, vodID, name string, epNum int, position float64) int64 {
+	t.Helper()
+	globalID, err := db.GetOrCreateGlobalID(name, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SaveWatchHistoryByIdentity(globalID, sourceKey, vodID, epNum, position); err != nil {
+		t.Fatal(err)
+	}
+	return globalID
+}
+
 func TestBackupExportImportRoundTrip(t *testing.T) {
 	resetUserTables(t)
 	if err := db.AddSource(&model.Source{SourceKey: "src_a", Name: "A", ApiUrl: "https://example.com/api.php"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AddFavorite("src_a", "vod-1", "备份测试片"); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.SaveWatchHistory("src_a", "vod-1", "备份测试片", 3, 42.5); err != nil {
-		t.Fatal(err)
-	}
+	favoriteByTitle(t, "src_a", "vod-1", "备份测试片")
+	historyByTitle(t, "src_a", "vod-1", "备份测试片", 3, 42.5)
 	if err := db.SetSetting("theme_id", "dark"); err != nil {
 		t.Fatal(err)
 	}
@@ -113,12 +134,8 @@ func TestBackupImportNeverDeletesAndKeepsNewerProgress(t *testing.T) {
 	if err := db.AddSource(&model.Source{SourceKey: "src_a", Name: "A", ApiUrl: "https://example.com/api.php"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AddFavorite("src_a", "vod-old", "本机保留"); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.SaveWatchHistory("src_a", "vod-x", "同一部片", 1, 10); err != nil {
-		t.Fatal(err)
-	}
+	favoriteByTitle(t, "src_a", "vod-old", "本机保留")
+	historyID := historyByTitle(t, "src_a", "vod-x", "同一部片", 1, 10)
 
 	service := NewService()
 	path, err := service.Export(testDirs.data, "")
@@ -166,7 +183,7 @@ func TestBackupImportNeverDeletesAndKeepsNewerProgress(t *testing.T) {
 	if err != nil || len(favorites) != 2 {
 		t.Fatalf("favorites = %+v, %v", favorites, err)
 	}
-	position, err := db.GetWatchHistory("同一部片", 1)
+	position, err := db.GetWatchHistoryByIdentity(historyID, "src_a", "vod-x", 1)
 	if err != nil || position != 10 {
 		t.Fatalf("position = %v, %v", position, err)
 	}
@@ -177,12 +194,8 @@ func TestRestoreArchiveMergesWithoutReplacing(t *testing.T) {
 	if err := db.AddSource(&model.Source{SourceKey: "src_a", Name: "A", ApiUrl: "https://example.com/api.php"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AddFavorite("src_a", "vod-1", "归档里的收藏"); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.SaveWatchHistory("src_a", "vod-1", "归档里的收藏", 2, 5); err != nil {
-		t.Fatal(err)
-	}
+	favoriteByTitle(t, "src_a", "vod-1", "归档里的收藏")
+	historyByTitle(t, "src_a", "vod-1", "归档里的收藏", 2, 5)
 
 	archiveDir := filepath.Join(testDirs.data, archiveDirName)
 	if err := os.MkdirAll(archiveDir, 0755); err != nil {
@@ -248,9 +261,7 @@ func TestExportsListAndImportByName(t *testing.T) {
 	if err := db.AddSource(&model.Source{SourceKey: "src_a", Name: "A", ApiUrl: "https://example.com/api.php"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AddFavorite("src_a", "vod-9", "备份清单片"); err != nil {
-		t.Fatal(err)
-	}
+	favoriteByTitle(t, "src_a", "vod-9", "备份清单片")
 
 	service := NewService()
 	path, err := service.Export(testDirs.data, "")

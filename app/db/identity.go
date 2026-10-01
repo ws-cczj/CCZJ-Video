@@ -3,6 +3,7 @@ package db
 import (
 	"fmt"
 	"math/bits"
+	"regexp"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -19,10 +20,50 @@ import (
 // global_video.name_norm，唯一索引和所有查询都读这一列。
 
 // normalizeTitle 去掉所有空白、全角标点转半角并转小写，是标题归一化的唯一版本。
+//
+// 先去画质尾巴再归一化：源站习惯把清晰度/封装格式拼在标题末尾
+// （「雷神4：爱与雷霆_1080P_」），留进 name_norm 就等于给同一部片另立一个身份，
+// 唯一索引 (name_norm, type_id) 挡不住它，收藏与历史因此挂在两个 id 上。
 func normalizeTitle(s string) string {
+	s = stripQualityNoise(s)
 	s = removeAllWhitespace(s)
 	s = normalizeFullWidth(s)
 	return strings.ToLower(s)
+}
+
+// qualityNoiseMaxStrips 限制尾巴最多剥几层，防止病态输入把循环拖住。
+// 三层已经覆盖「_1080P_蓝光」这类叠写，再多就不再像是画质标记了。
+const qualityNoiseMaxStrips = 3
+
+// qualityNoiseTail 匹配标题结尾的画质/格式标记。
+//
+// 只认写死的这几个词，并且锚在结尾：片名里出现「4」或「TS」不该被动到，
+// 「速度与激情5」剥完还是「速度与激情5」。标记前必须是非拉丁字母数字的字符
+// （分隔符、汉字或串首），否则 "Palermo" 这种以 rm 收尾的单词会被啃掉两个字母。
+// 语言/字幕类标记（粤语、中字）刻意不剥——那是不同的发行版本，剥掉会把用户
+// 当两部片收藏的东西并成一部。
+var qualityNoiseTail = regexp.MustCompile("(?i)(^|[^A-Za-z0-9])(?:1080p|1080i|720p|480p|2160p|4k|8k|hd|sd|bd|dvd|ts|tc|" +
+	"cam|webrip|web-?dl|x264|x265|h264|h265|hevc|avc|mkv|mp4|avi|rmvb|rm|blu-?ray)[ _\\.\\-·、,，|/]*$")
+
+// qualityNoiseCNTail 是中文画质词：它们不会和拉丁单词撞车，所以不要求分隔符。
+var qualityNoiseCNTail = regexp.MustCompile(`[ _\.\-·、,，|/]*(?:蓝光|高清|超清|标清|流畅|无删减|完整版)[ _\.\-·、,，|/]*$`)
+
+// trailingNoiseSeparators 是剥掉尾巴之后残留的分隔符（"_1080P_" 结尾那个下划线）。
+var trailingNoiseSeparators = regexp.MustCompile(`[ _\.\-·、,，|/]+$`)
+
+func stripQualityNoise(s string) string {
+	for i := 0; i < qualityNoiseMaxStrips; i++ {
+		next := qualityNoiseCNTail.ReplaceAllString(qualityNoiseTail.ReplaceAllString(s, "$1"), "")
+		next = strings.TrimSpace(trailingNoiseSeparators.ReplaceAllString(next, ""))
+		// 剥到什么都不留，说明整串就是个画质词而不是片名（真有一部片叫 Cam）。
+		// 宁可留着这个尾巴，也不能把标题归一成空串——空 name_norm 不参与唯一索引，
+		// 等于这条记录从此没有身份。
+		if next == "" || next == s {
+			break
+		}
+		s = next
+	}
+	return s
 }
 
 const (

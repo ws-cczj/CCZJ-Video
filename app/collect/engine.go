@@ -1,6 +1,7 @@
 package collect
 
 import (
+	"cczjVideo/app/apperror"
 	"cczjVideo/app/db"
 	"cczjVideo/app/model"
 	"context"
@@ -49,21 +50,6 @@ func WithTimeHours(hours int) EngineOption {
 	return func(e *Engine) { e.timeHours = hours }
 }
 
-func NewEngine(sourceKey string, onLog func(string), onProgress func(int, int), opts ...EngineOption) *Engine {
-	e := &Engine{
-		sourceKey:    sourceKey,
-		onLog:        onLog,
-		onProgress:   onProgress,
-		pageGap:      30 * time.Second,
-		mode:         model.CollectModeFull,
-		catalogBatch: db.NewCatalogBatch(),
-	}
-	for _, o := range opts {
-		o(e)
-	}
-	return e
-}
-
 // NewEngineV2 额外接收 onPageNames 回调（可选）
 func NewEngineV2(
 	sourceKey string,
@@ -99,7 +85,17 @@ func (e *Engine) SetPageGap(gap time.Duration) {
 	if gap <= 0 {
 		gap = 30 * time.Second
 	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.pageGap = gap
+}
+
+// currentPageGap 读当前页间隔。采集循环每页之间都要读它，而调度器可能在别的
+// 线程改设置，裸读是一次真数据竞争。
+func (e *Engine) currentPageGap() time.Duration {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.pageGap
 }
 
 func (e *Engine) log(msg string) { e.logAt(appLogger.InfoAt, 1, msg) }
@@ -206,7 +202,7 @@ func fetchPageWithRetry(ctx context.Context, apiUrl string, page int, opts Fetch
 			logFn(fmt.Sprintf("请求第 %d 页 (第 %d 次尝试)", page, attempt))
 		}
 		// apiUrl is already operation-specific and must not be rebuilt here.
-		res, err := doFetchContext(ctx, apiUrl, opts.FieldMapping)
+		res, err := doFetchShape(ctx, apiUrl, opts.FieldMapping, opts.Response)
 		if err == nil {
 			return res, nil
 		}
@@ -228,7 +224,7 @@ func fetchPageWithRetry(ctx context.Context, apiUrl string, page int, opts Fetch
 			}
 		}
 	}
-	return nil, fmt.Errorf("第 %d 页采集失败，已重试 %d 次: %w", page, maxRetries, lastErr)
+	return nil, apperror.Wrap(apperror.Unavailable, lastErr, fmt.Sprintf("第 %d 页采集失败，已重试 %d 次", page, maxRetries))
 }
 
 // RunStats 记录一次采集真正做完了什么。源站返回的总页数/总数只是估计，
@@ -322,7 +318,7 @@ func (e *Engine) Run() (*RunStats, error) {
 
 	src, err := db.GetSourceByKey(e.sourceKey)
 	if err != nil {
-		return finish(fmt.Errorf("获取采集源配置失败: %w", err))
+		return finish(apperror.Wrap(apperror.Storage, err, "获取采集源配置失败"))
 	}
 	e.source = src
 
@@ -412,8 +408,11 @@ func (e *Engine) Run() (*RunStats, error) {
 	// 拉取第 1 页（带重试）
 	var firstPage *FetchResult
 	if e.strategy != nil {
-		listUrl := e.strategy.BuildListUrl(1, opts)
+		// The strategy owns both the field names and, for declarative sources,
+		// the envelope they arrive in; the fetcher decodes with what it is given.
 		opts.FieldMapping = e.strategy.GetFieldMapping()
+		opts.Response = shapeOfStrategy(e.strategy)
+		listUrl := e.strategy.BuildListUrl(1, opts)
 		firstPage, err = fetchPageWithRetry(e.context(), listUrl, 1, opts, e.log)
 	} else {
 		firstPage, err = fetchPageWithRetry(e.context(), src.ApiUrl, 1, opts, e.log)
@@ -425,6 +424,10 @@ func (e *Engine) Run() (*RunStats, error) {
 
 	pc := firstPage.Pagecount.Int()
 	total := firstPage.Total.Int()
+	// The loop below only ever runs to pc, and a declared envelope that carries
+	// no pagecount decodes to 0 — so a source whose paging field is missing,
+	// misnamed or non-numeric collects the first page and stops instead of
+	// paging forever.
 	e.log(fmt.Sprintf("共 %d 页, 总数 %d", pc, total))
 	stats.PagesTotal = pc
 	stats.SourceTotal = total
@@ -448,7 +451,7 @@ func (e *Engine) Run() (*RunStats, error) {
 	// 后续页循环：pageGap 间隔 + 暂停检查 + 停止检查 + 重试
 	for p := 2; p <= pc; p++ {
 		// pageGap 间隔（可被暂停/停止打断）
-		if !e.sleepInterruptible(e.pageGap) {
+		if !e.sleepInterruptible(e.currentPageGap()) {
 			e.log("采集已被停止")
 			stats.Stopped = true
 			break

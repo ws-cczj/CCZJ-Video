@@ -184,6 +184,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   padding: 20px;
   overflow-y: auto;
   flex: 1;
+  /* flex 子项默认 min-height:auto，长表单下会顶破 .ui-modal 的 max-height，
+     结果是页脚（保存/取消）被裁掉且滚不动。 */
+  min-height: 0;
 }
 
 /* Footer */

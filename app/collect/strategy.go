@@ -11,6 +11,11 @@ import (
 
 // SourceStrategy builds one URL for one operation. Callers must never append
 // query parameters after this boundary.
+//
+// The interface is the seam between the collector and every source shape, so it
+// stays frozen: strategies that can read a non-MAC-CMS envelope advertise it
+// through the optional ResponseShaper capability below, which the fetch path
+// type-asserts. No implementation is forced to change to support one.
 type SourceStrategy interface {
 	BuildListUrl(page int, opts FetchOptions) string
 	BuildDetailUrl(vodID string) string
@@ -19,15 +24,25 @@ type SourceStrategy interface {
 	GetStrategyName() string
 }
 
+// ResponseShaper is the narrow optional capability a SourceStrategy implements
+// when the source's envelope differs from MAC CMS. ok is false for strategies
+// that did not declare a "response" block, which keeps the historical decoder
+// path in charge.
+type ResponseShaper interface {
+	ResponseShape() (*ResponseShape, bool)
+}
+
 type ParamConfig struct {
-	Action       string            `json:"action,omitempty"`
-	PageParam    string            `json:"page_param,omitempty"`
-	LimitParam   string            `json:"limit_param,omitempty"`
-	TypeParam    string            `json:"type_param,omitempty"`
-	KeywordParam string            `json:"keyword_param,omitempty"`
-	HoursParam   string            `json:"hours_param,omitempty"`
-	IDParam      string            `json:"id_param,omitempty"`
-	Extra        map[string]string `json:"extra,omitempty"`
+	Action       string `json:"action,omitempty"`
+	ActionParam  string `json:"action_param,omitempty"`
+	PageParam    string `json:"page_param,omitempty"`
+	LimitParam   string `json:"limit_param,omitempty"`
+	TypeParam    string `json:"type_param,omitempty"`
+	KeywordParam string `json:"keyword_param,omitempty"`
+	HoursParam   string `json:"hours_param,omitempty"`
+	IDParam      string `json:"id_param,omitempty"`
+	// Extra holds fixed parameters that belong to this operation only.
+	Extra map[string]string `json:"extra,omitempty"`
 }
 
 // StrategyConfig is persisted JSON v2. Extras are deliberately separated by
@@ -38,6 +53,7 @@ type StrategyConfig struct {
 	List         ParamConfig       `json:"list"`
 	Search       ParamConfig       `json:"search"`
 	Detail       ParamConfig       `json:"detail"`
+	Response     *ResponseShape    `json:"response,omitempty"`
 	FieldMapping map[string]string `json:"field_mapping,omitempty"`
 	ApiUrl       string            `json:"-"`
 }
@@ -50,6 +66,10 @@ func defaultConfig(api string) StrategyConfig {
 		Search: ParamConfig{Action: "detail", PageParam: "pg", LimitParam: "limit", KeywordParam: "wd"},
 		Detail: ParamConfig{Action: "detail", IDParam: "ids"}}
 }
+
+// defaultActionParam is the MAC-CMS query key that carries an operation's action
+// value. Declarative sources that spell it differently set "action_param".
+const defaultActionParam = "ac"
 
 func normalizeConfig(c *StrategyConfig) {
 	d := defaultConfig(c.ApiUrl)
@@ -72,8 +92,22 @@ func normalizeConfig(c *StrategyConfig) {
 			c.Detail.Action = "videolist"
 		}
 	}
-	if c.List.Action == "" {
-		c.List.Action = d.List.Action
+	// declarative is the pack-authored driver: it emits what it declares. It
+	// still inherits the MAC-CMS *parameter names* below (pg/limit/t/h/wd/ids,
+	// action key ac) so a pack that only describes an envelope keeps working,
+	// but it gets no action value for free: an unset "action" must produce no
+	// action parameter at all, otherwise a non-MAC endpoint would be sent a
+	// bogus ac=detail that no pack can switch off.
+	if c.Strategy != "declarative" {
+		if c.List.Action == "" {
+			c.List.Action = d.List.Action
+		}
+		if c.Search.Action == "" {
+			c.Search.Action = d.Search.Action
+		}
+		if c.Detail.Action == "" {
+			c.Detail.Action = d.Detail.Action
+		}
 	}
 	if c.List.PageParam == "" {
 		c.List.PageParam = d.List.PageParam
@@ -87,9 +121,6 @@ func normalizeConfig(c *StrategyConfig) {
 	if c.List.HoursParam == "" {
 		c.List.HoursParam = d.List.HoursParam
 	}
-	if c.Search.Action == "" {
-		c.Search.Action = d.Search.Action
-	}
 	if c.Search.PageParam == "" {
 		c.Search.PageParam = d.Search.PageParam
 	}
@@ -99,11 +130,16 @@ func normalizeConfig(c *StrategyConfig) {
 	if c.Search.KeywordParam == "" {
 		c.Search.KeywordParam = d.Search.KeywordParam
 	}
-	if c.Detail.Action == "" {
-		c.Detail.Action = d.Detail.Action
-	}
 	if c.Detail.IDParam == "" {
 		c.Detail.IDParam = d.Detail.IDParam
+	}
+	// A missing response block stays nil: the envelope then keeps being decoded
+	// the way it always has been.
+	if c.Response != nil {
+		c.Response = c.Response.withDefaults()
+	}
+	if c.Strategy == "declarative" {
+		c.FieldMapping = canonicalizeFieldMapping(c.FieldMapping)
 	}
 }
 func (s *configuredStrategy) BuildListUrl(page int, opts FetchOptions) string {
@@ -135,6 +171,25 @@ func (s *configuredStrategy) BuildDetailUrl(id string) string {
 func (s *configuredStrategy) GetFieldMapping() map[string]string { return s.cfg.FieldMapping }
 func (s *configuredStrategy) GetStrategyName() string            { return s.cfg.Strategy }
 
+// ResponseShape satisfies the optional ResponseShaper capability. The shape is
+// copied so no fetch can write back into the strategy's own config.
+func (s *configuredStrategy) ResponseShape() (*ResponseShape, bool) {
+	if s.cfg.Response == nil {
+		return nil, false
+	}
+	return s.cfg.Response.withDefaults(), true
+}
+
+// actionParamName is the query key carrying this operation's action value.
+// Unset means the MAC-CMS "ac", which keeps every pre-declarative config
+// producing the byte-for-byte query string it produced before.
+func (op ParamConfig) actionParamName() string {
+	if name := strings.TrimSpace(op.ActionParam); name != "" {
+		return name
+	}
+	return defaultActionParam
+}
+
 func buildOperationURL(base string, op ParamConfig, values map[string]string) string {
 	u, err := url.Parse(base)
 	if err != nil {
@@ -142,14 +197,16 @@ func buildOperationURL(base string, op ParamConfig, values map[string]string) st
 	}
 	q := u.Query()
 	// Remove all controlled names inherited from the base URL. This prevents a
-	// previous operation's ids/wd/h from surviving into this request.
-	for _, k := range []string{"ac", "pg", "limit", "t", "wd", "h", "ids", op.PageParam, op.LimitParam, op.TypeParam, op.KeywordParam, op.HoursParam, op.IDParam} {
+	// previous operation's ids/wd/h from surviving into this request. The action
+	// key is only scrubbed when it is actually this operation's action key, so a
+	// declarative source whose base URL carries an unrelated ac= stays intact.
+	for _, k := range []string{"pg", "limit", "t", "wd", "h", "ids", op.actionParamName(), op.PageParam, op.LimitParam, op.TypeParam, op.KeywordParam, op.HoursParam, op.IDParam} {
 		if k != "" {
 			q.Del(k)
 		}
 	}
 	if op.Action != "" {
-		q.Set("ac", op.Action)
+		q.Set(op.actionParamName(), op.Action)
 	}
 	for k, v := range op.Extra {
 		q.Set(k, v)

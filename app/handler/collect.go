@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"cczjVideo/app/apperror"
 	"cczjVideo/app/applog"
 	"cczjVideo/app/collect"
 	"cczjVideo/app/db"
@@ -87,17 +88,12 @@ func OutcomeFromRun(stats *collect.RunStats, err error) RunOutcome {
 // RecordCollectHealth 把一次采集运行记成一条源健康度样本，手动采集与定时采集共用。
 //
 // 用户手动停止直接跳过：按下停止不代表源有问题，记进去会把一个好源冤枉成坏的。
-// 样本本身只在库写坏时才会失败，而那不该影响采集，所以只落日志。
 func RecordCollectHealth(sourceKey string, outcome RunOutcome, err error) {
 	if outcome.Stopped {
 		return
 	}
 	ok, problem := classifyCollectRun(outcome, err)
-	if dbErr := db.RecordSourceHealth(
-		sourceKey, db.SourceHealthKindCollect, ok, outcome.ElapsedMs, outcome.Saved, problem, time.Now(),
-	); dbErr != nil {
-		applog.Warn("[Collect] 记录源健康度失败（不影响采集）: %v", dbErr)
-	}
+	RecordSourceHealthSample(sourceKey, db.SourceHealthKindCollect, ok, outcome.ElapsedMs, outcome.Saved, problem)
 }
 
 // classifyCollectRun 判定一次运行算不算健康，以及不健康时的说法。
@@ -245,7 +241,6 @@ func GetLastRunUnix() int64 {
 type engineEntry struct {
 	engine *collect.Engine
 	status *CollectStatus
-	mode   string
 	mu     sync.Mutex
 }
 
@@ -286,19 +281,8 @@ func GetOrCreateEngine(sourceKey string) *engineEntry {
 	return entry
 }
 
-func (e *engineEntry) BindEngine(engine *collect.Engine, mode string) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	e.engine = engine
-	e.status.Running = true
-	e.status.Paused = false
-	e.status.Mode = mode
-	e.mode = mode
-	e.status.clearLastRunResult()
-}
-
 // TryBindEngine makes the idle-to-running transition atomic. Callers must not
-// split IsRunning and BindEngine across goroutines, or a manual run and a
+// split the running check and the bind across goroutines, or a manual run and a
 // scheduler tick can start the same source twice.
 func (e *engineEntry) TryBindEngine(engine *collect.Engine, mode string) bool {
 	e.mu.Lock()
@@ -310,7 +294,6 @@ func (e *engineEntry) TryBindEngine(engine *collect.Engine, mode string) bool {
 	e.status.Running = true
 	e.status.Paused = false
 	e.status.Mode = mode
-	e.mode = mode
 	e.status.clearLastRunResult()
 	return true
 }
@@ -341,12 +324,6 @@ func (s *CollectStatus) applyOutcome(outcome RunOutcome) {
 	s.FinishedAtUnix = time.Now().Unix()
 }
 
-func (e *engineEntry) GetMode() string {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	return e.mode
-}
-
 func (e *engineEntry) UpdateProgress(current, total int) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -359,14 +336,6 @@ func (e *engineEntry) UpdatePageNames(page int, names []string) {
 	defer e.mu.Unlock()
 	e.status.Page = page
 	e.status.Names = names
-}
-
-func (e *engineEntry) MarkDone(outcome RunOutcome) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	e.status.Running = false
-	e.status.Paused = false
-	e.status.applyOutcome(outcome)
 }
 
 // FinishEngine ignores a stale callback from a previous run.
@@ -473,12 +442,12 @@ type SearchSourceResult struct {
 func SearchSource(sourceKey string, keyword string, page int, pageSize int) (*SearchSourceResult, error) {
 	keyword = strings.TrimSpace(keyword)
 	if keyword == "" {
-		return nil, fmt.Errorf("关键词不能为空")
+		return nil, apperror.New(apperror.Validation, "关键词不能为空")
 	}
 
 	src, err := db.GetSourceByKey(sourceKey)
 	if err != nil {
-		return nil, fmt.Errorf("获取源失败: %w", err)
+		return nil, apperror.Wrap(apperror.NotFound, err, "获取源失败")
 	}
 
 	if page < 1 {
@@ -502,11 +471,11 @@ func SearchSource(sourceKey string, keyword string, page int, pageSize int) (*Se
 
 	strategy := collect.CreateStrategyFromSource(src)
 	if strategy == nil {
-		return nil, fmt.Errorf("源站策略不可用")
+		return nil, apperror.New(apperror.Unsupported, "源站策略不可用")
 	}
 	p, err := collect.FetchSearchPage(strategy, keyword, page)
 	if err != nil {
-		return nil, fmt.Errorf("源站搜索失败: %w", err)
+		return nil, apperror.Wrap(apperror.Unavailable, err, "源站搜索失败")
 	}
 	if p == nil || len(p.List) == 0 {
 		return &SearchSourceResult{
@@ -575,7 +544,7 @@ func SearchSource(sourceKey string, keyword string, page int, pageSize int) (*Se
 // 返回成功入库的条数
 func ImportSourceVideos(sourceKey string, videos []*model.Video) (int, error) {
 	if sourceKey == "" {
-		return 0, fmt.Errorf("source_key 不能为空")
+		return 0, apperror.New(apperror.Validation, "source_key 不能为空")
 	}
 	if len(videos) == 0 {
 		return 0, nil
@@ -587,7 +556,7 @@ func ImportSourceVideos(sourceKey string, videos []*model.Video) (int, error) {
 
 	src, err := db.GetSourceByKey(sourceKey)
 	if err != nil {
-		return 0, fmt.Errorf("获取源失败: %w", err)
+		return 0, apperror.Wrap(apperror.NotFound, err, "获取源失败")
 	}
 	_ = src
 
@@ -606,7 +575,7 @@ func ImportSourceVideos(sourceKey string, videos []*model.Video) (int, error) {
 	// Explicit "入库": always restore soft-deleted entries, ignoring the
 	// catalog_revive_deleted setting.
 	if err := db.UpsertCatalogItemsWithRevival(sourceKey, toSave); err != nil {
-		return 0, fmt.Errorf("写入视频目录失败: %w", err)
+		return 0, apperror.Wrap(apperror.Storage, err, "写入视频目录失败")
 	}
 
 	applog.Info("[ImportSourceVideos] 入库完成 - sourceKey: %s, count: %d", sourceKey, len(toSave))
@@ -666,11 +635,4 @@ func GetSourceParamsDoc(sourceKey string) (*SourceParamsDoc, error) {
 			{Name: "vod_letter", Type: "string", Desc: "首字母筛选（拼音首字母）", Example: "vod_letter=W"},
 		},
 	}, nil
-}
-
-func truncate(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
 }

@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { tr } from '../locales'
 import { ref, computed } from 'vue'
-import { StartCollect, PauseCollect, ResumeCollect, StopCollect, GetCollectSchedule, SetCollectSchedule, TriggerCollectNow, StopBackgroundCollect, SetSourceSchedule, GetCollectStatus } from '../api/app'
+import { StartCollect, PauseCollect, ResumeCollect, StopCollect, GetCollectSchedule, SetCollectSchedule, TriggerCollectNow, StopBackgroundCollect, SetSourceSchedule, GetCollectStatus, normalizeApiError } from '../api/app'
 import { useErrorStore } from './error'
 import { onBackendEvent } from '../api/events'
 
@@ -457,7 +457,7 @@ export const useCollectStore = defineStore('collect', () => {
     } catch (e) {
       st.running = false
       st.paused = false
-      st.error = (e as Error)?.toString() || tr('sources.unknownError')
+      st.error = normalizeApiError(e as unknown).message || tr('sources.unknownError')
       st.log.push(tr('sources.startFailed', { error: st.error }))
       syncGlobalFromState(st)
     }

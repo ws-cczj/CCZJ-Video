@@ -7,13 +7,13 @@ import (
 	"compress/gzip"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"cczjVideo/app/apperror"
 	"cczjVideo/app/applog"
 	"cczjVideo/app/db"
 	"cczjVideo/app/model"
@@ -83,23 +83,23 @@ var machineLocalSettings = map[string]bool{
 func (s *Service) buildPayload(dataDir string) (Payload, error) {
 	settings, err := db.ReadAllSettings(db.DB())
 	if err != nil {
-		return Payload{}, fmt.Errorf("read settings: %w", err)
+		return Payload{}, apperror.Wrap(apperror.Storage, err, "read settings")
 	}
 	favorites, err := db.ReadFavorites(db.DB())
 	if err != nil {
-		return Payload{}, fmt.Errorf("read favorites: %w", err)
+		return Payload{}, apperror.Wrap(apperror.Storage, err, "read favorites")
 	}
 	history, err := db.ReadHistory(db.DB())
 	if err != nil {
-		return Payload{}, fmt.Errorf("read history: %w", err)
+		return Payload{}, apperror.Wrap(apperror.Storage, err, "read history")
 	}
 	videos, err := db.ReadLinkedVideoMeta(db.DB())
 	if err != nil {
-		return Payload{}, fmt.Errorf("read linked metadata: %w", err)
+		return Payload{}, apperror.Wrap(apperror.Storage, err, "read linked metadata")
 	}
 	sources, err := db.GetAllSources()
 	if err != nil {
-		return Payload{}, fmt.Errorf("read sources: %w", err)
+		return Payload{}, apperror.Wrap(apperror.Storage, err, "read sources")
 	}
 	return Payload{
 		Kind:      payloadKind,
@@ -127,7 +127,7 @@ func (s *Service) Export(dataDir, destination string) (string, error) {
 	}
 	encoded, err := json.Marshal(payload)
 	if err != nil {
-		return "", fmt.Errorf("encode backup: %w", err)
+		return "", apperror.Wrap(apperror.Internal, err, "encode backup")
 	}
 	if err := writeCompressed(path, encoded); err != nil {
 		return "", err
@@ -147,18 +147,18 @@ func (s *Service) destinationPath(dataDir, destination string) (string, error) {
 	if strings.TrimSpace(destination) == "" {
 		exportDir := filepath.Join(dataDir, exportDirName)
 		if err := os.MkdirAll(exportDir, 0755); err != nil {
-			return "", fmt.Errorf("create export directory: %w", err)
+			return "", apperror.Wrap(apperror.Storage, err, "create export directory")
 		}
 		return filepath.Join(exportDir, "backup_"+time.Now().Format(defaultExportAt)+".json.br"), nil
 	}
 	if _, err := os.Stat(destination); err == nil {
 		info, statErr := os.Stat(destination)
 		if statErr == nil && info.IsDir() {
-			return "", fmt.Errorf("destination is a directory: %s", destination)
+			return "", apperror.Newf(apperror.Validation, "destination is a directory: %s", destination)
 		}
 	}
 	if err := os.MkdirAll(filepath.Dir(destination), 0755); err != nil {
-		return "", fmt.Errorf("create destination directory: %w", err)
+		return "", apperror.Wrap(apperror.Storage, err, "create destination directory")
 	}
 	return destination, nil
 }
@@ -166,22 +166,22 @@ func (s *Service) destinationPath(dataDir, destination string) (string, error) {
 func writeCompressed(path string, encoded []byte) error {
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
-		return fmt.Errorf("create backup file: %w", err)
+		return apperror.Wrap(apperror.Storage, err, "create backup file")
 	}
 	writer := brotli.NewWriterLevel(file, 6)
 	if _, err := writer.Write(encoded); err != nil {
 		_ = writer.Close()
 		_ = file.Close()
 		_ = os.Remove(path)
-		return fmt.Errorf("write backup file: %w", err)
+		return apperror.Wrap(apperror.Storage, err, "write backup file")
 	}
 	if err := writer.Close(); err != nil {
 		_ = file.Close()
 		_ = os.Remove(path)
-		return fmt.Errorf("close backup file: %w", err)
+		return apperror.Wrap(apperror.Storage, err, "close backup file")
 	}
 	if err := file.Close(); err != nil {
-		return fmt.Errorf("close backup file: %w", err)
+		return apperror.Wrap(apperror.Storage, err, "close backup file")
 	}
 	return nil
 }
@@ -189,11 +189,11 @@ func writeCompressed(path string, encoded []byte) error {
 // ImportBase64 decodes a backup chosen in the browser and merges it.
 func (s *Service) ImportBase64(filename, b64Content string) (Result, error) {
 	if strings.TrimSpace(b64Content) == "" {
-		return Result{}, fmt.Errorf("backup content is empty")
+		return Result{}, apperror.New(apperror.Validation, "backup content is empty")
 	}
 	raw, err := base64.StdEncoding.DecodeString(b64Content)
 	if err != nil {
-		return Result{}, fmt.Errorf("decode base64: %w", err)
+		return Result{}, apperror.Wrap(apperror.Validation, err, "decode base64")
 	}
 	return s.ImportBytes(filename, raw, "base64")
 }
@@ -202,7 +202,7 @@ func (s *Service) ImportBase64(filename, b64Content string) (Result, error) {
 // merges the payload.
 func (s *Service) ImportBytes(filename string, raw []byte, origin string) (Result, error) {
 	if len(raw) > maxBackupBytes {
-		return Result{}, fmt.Errorf("backup too large: limit %d MiB", maxBackupBytes>>20)
+		return Result{}, apperror.Newf(apperror.Validation, "backup too large: limit %d MiB", maxBackupBytes>>20)
 	}
 	decoded, err := decompress(filename, raw)
 	if err != nil {
@@ -210,7 +210,7 @@ func (s *Service) ImportBytes(filename string, raw []byte, origin string) (Resul
 	}
 	var payload Payload
 	if err := json.Unmarshal(decoded, &payload); err != nil {
-		return Result{}, fmt.Errorf("parse backup JSON: %w", err)
+		return Result{}, apperror.Wrap(apperror.Corrupt, err, "parse backup JSON")
 	}
 	return s.Import(payload, origin)
 }
@@ -224,7 +224,7 @@ func decompress(filename string, raw []byte) ([]byte, error) {
 	case strings.HasSuffix(strings.ToLower(filename), ".gz"):
 		gzReader, err := gzip.NewReader(source)
 		if err != nil {
-			return nil, fmt.Errorf("gunzip backup: %w", err)
+			return nil, apperror.Wrap(apperror.Corrupt, err, "gunzip backup")
 		}
 		defer gzReader.Close()
 		reader = gzReader
@@ -232,7 +232,7 @@ func decompress(filename string, raw []byte) ([]byte, error) {
 		if len(raw) >= 2 && raw[0] == 0x1f && raw[1] == 0x8b {
 			gzReader, err := gzip.NewReader(source)
 			if err != nil {
-				return nil, fmt.Errorf("gunzip backup: %w", err)
+				return nil, apperror.Wrap(apperror.Corrupt, err, "gunzip backup")
 			}
 			defer gzReader.Close()
 			reader = gzReader
@@ -240,10 +240,10 @@ func decompress(filename string, raw []byte) ([]byte, error) {
 	}
 	decoded, err := io.ReadAll(io.LimitReader(reader, maxBackupBytes+1))
 	if err != nil {
-		return nil, fmt.Errorf("read backup: %w", err)
+		return nil, apperror.Wrap(apperror.Corrupt, err, "read backup")
 	}
 	if len(decoded) > maxBackupBytes {
-		return nil, fmt.Errorf("backup too large after decompression: limit %d MiB", maxBackupBytes>>20)
+		return nil, apperror.Newf(apperror.Validation, "backup too large after decompression: limit %d MiB", maxBackupBytes>>20)
 	}
 	return decoded, nil
 }
@@ -252,14 +252,14 @@ func decompress(filename string, raw []byte) ([]byte, error) {
 // rows: a backup is an addition, and the user's own data always wins a conflict.
 func (s *Service) Import(payload Payload, origin string) (Result, error) {
 	if payload.Kind != payloadKind {
-		return Result{}, fmt.Errorf("not a CCZJ backup file (kind=%q)", payload.Kind)
+		return Result{}, apperror.Newf(apperror.Corrupt, "not a CCZJ backup file (kind=%q)", payload.Kind)
 	}
 	if payload.Version != payloadVersion {
-		return Result{}, fmt.Errorf("unsupported backup version %d (this build reads %d)", payload.Version, payloadVersion)
+		return Result{}, apperror.Newf(apperror.Unsupported, "unsupported backup version %d (this build reads %d)", payload.Version, payloadVersion)
 	}
 	items := len(payload.Favorites) + len(payload.History) + len(payload.Videos)
 	if items > maxBackupItems {
-		return Result{}, fmt.Errorf("backup holds %d entries, limit is %d", items, maxBackupItems)
+		return Result{}, apperror.Newf(apperror.Validation, "backup holds %d entries, limit is %d", items, maxBackupItems)
 	}
 	var result Result
 	s.mergeSources(payload.Sources, &result)

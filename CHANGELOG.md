@@ -5,19 +5,88 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+2.2.0 之后一直在工作树里的那一批：扩展包体系落地、发布链路与安全补齐、错误处理与生命周期收拢，
+以及把几个三四千行的巨型文件拆开。数据库继续走顺序迁移（新增 v7~v10），启动时自动补齐并在迁移前留快照。
+
+### Added
+
+- **扩展包**：`%APPDATA%\CCZJ Video\plugins` 下的文件夹即包。四类——采集适配（声明 URL 拼法、信封与字段名）、
+  着色器（mpv hook 语法的 `.glsl` 进画质增强下拉）、主题（追加预设与包内背景图）、前端注入
+  （`script.entry` 拿到 `cczj` 接口：加页面、加侧栏入口、加设置分组、注入样式、订阅事件、`intercept` 应用自己的方法）。
+  边界是内核不动：碰不到 Go 侧，也覆盖不了内置页面与内置分组。规范见 `docs/plugins.md`，理由见 ADR 0007 / 0008。
+- **改数据与出网要先授权**：`permissions: ["write", "network"]` 的包第一次真去调非只读绑定或往外 `fetch` 时弹一次确认，
+  允许与拒绝记进设置、重启仍在、可撤销。应用自己的请求与 Wails IPC 不算出网；这是授权闸门，不是沙箱。
+- **拖放安装与卸载**：把包文件夹拖到扩展卡片上即装（先校验后落位，逐个给回执），失败整包判 `invalid` 并展开机器可读的原因码；
+  「卸载」删掉那个目录，应用自带的三个包不给按钮、Go 侧也拒绝删。
+- **日志、诊断、动画改成三个内置包**：删掉那几个文件夹，设置页就真的少了那几项；`motion.css` 带着全应用的动效时长与缓动，
+  另有「开启动画 / 关闭动画」总开关。
+- **缓存改为过期先展示**：详情、豆瓣热榜、评论、首页轮播与推荐都是 stale-while-revalidate——旧数据立刻给界面，
+  新数据在后台取，抢不到限速名额就跳过这一轮；「设置 → 基本」新增数据新鲜度档位，改完下一次读就生效。
+- **海报改本地磁盘缓存**（TTL 7 天淘汰），豆瓣 img9 失败时改走镜像主机，前端加载改淡入不再硬切。
+- **诊断面板加三块实时读数**：本次会话的播放质量、按用途拆分的出网吞吐与耗时、Go 与前端各缓存的命中率（新增 `app/netstats` 计数层）。
+- **发布链路补齐**：`build/windows/package.ps1` 产出带图标的 exe 与 `checksums.txt`，`build/windows/info.json` 的版本资源
+  经校验（语言键、FileVersion/ProductVersion 字符串），更新下载后按 SHA-256 校验清单才安装。
+- **迁移 v7~v10**：地区写法归一、标题去画质尾巴后重算身份、同豆瓣 ID 跨类型合并、`sources.auto_disabled_at`
+  区分自动停用与手动关闭。
+
+### Changed
+
+- 错误统一到 `app/apperror` 的少量稳定码（ADR 0009）：只有离开包边界的错误带码，包内继续 `%w` 串链，
+  分类只走 `CodeOf` / `errors.Is` / `errors.As`。`scripts/verify.ps1` 加守卫，禁止再按 `err.Error()` 文本分支。
+- 取消上下文贯通采集、下载与豆瓣补全；关停不再提前关库，`RestartApp` 等旧进程退出再接管。
+- SQLite WAL 在关停时 checkpoint 并设 `journal_size_limit`，日志文件不再无限增长。
+- 生产构建剥离 `console.*`；前端补可访问性（Select 键盘导航与 ARIA、可点击 div 补 `role`/`tabindex`、图标按钮补 `aria-label`）。
+- 巨型文件按域拆分。Go 侧只做同包整块搬移，逐行核对过内容与行数：`app/douban/crawler.go` 1454 行拆成
+  crawler（抓取与搜索）/ anticrawl（退避与静默）/ parse（HTML 解析与打分）/ detail（详情解析）四份，最大 646 行；
+  `chart.go` 971 → 634 + chart_parse / chart_match；`app/service/download.go` 1394 → 任务生命周期 614 + download_http（直连多线程）
+  / download_hls（m3u8）；`app/db/douban.go` 1180 → 294 + douban_chart / enrich / match / cooldown；
+  `app/updater/updater.go` 1052 → 454 + speedtest / update_download / install。
+- 前端同样拆开：`app/service/facade.go` 一域一文件，`VideoPlayer.vue` / `Settings.vue` / `Sources.vue` / `tsCache.ts` 的
+  视图逻辑收进 `frontend/src/player` 与 `frontend/src/utils` 下的小模块；超过 250 行的行内 `<style scoped>` 搬到
+  `frontend/src/styles/{views,components}/*.css`，SFC 用 `<style scoped src>` 引回来（scoped 哈希照旧，只是文件分家）——
+  Player.vue 2043 → 1266、Search.vue 1779 → 1124、Detail.vue 1678 → 1154、Settings.vue 与 LogPanel / Favorites /
+  Downloads / BookCarousel / ExtensionsPanel / BackToTop / DoubanComments 同批处理。
+- 撤掉从未接线的图标依赖：`unplugin-icons` 的 vite 插件与 `@iconify-json/carbon` / `@iconify/vue`（28 个包），
+  界面图标一直是 `components/Icon.vue` 里手写的内联 SVG。
+- 清掉一批无人调用的代码（逐项对过 HEAD 与当前）：`app/db` 里按片名取物的 9 个旧查询
+  （`GetGlobalVideoByName` / `GetWatchHistory` / `GetWatchHistoryByVod` / `GetWatchedEpisodes` /
+  `Add·Remove·IsFavorite` / `SaveWatchHistory` / `DeleteHistoryByVodName`）、`collect.NewEngine`（只留 `NewEngineV2`）、
+  handler 的 `GetMode` / `MarkDone`、`proxy` 的无上下文取图入口，以及整个 `app/util` 包与随之而来的 snowflake 依赖。
+- `scripts/verify.ps1` 与前端约定脚本各加一条体量守卫，防止拆完重新长回去：非测试 Go 文件不超过 900 行，
+  SFC 的行内 `<style scoped>` 不超过 260 行。
+- 补测试：`app/cache` 从 0% 到 89.7%（回收站/恢复/彻底删除/清空/身份合并各自发出的失效事件契约、无发布者时不炸、
+  统计行键稳定），`app/handler` 从 16.2% 到 27.5%（采集调度配置的脏值回落与钳制、时间戳读写、事件载荷键名、
+  暂停/恢复/停止在无引擎时的返回值）。
+
+### Fixed
+
+- 播放器的换集/换源竞态与生命周期（多次 `loadHls` 交叠、上下文归还不及时）。
+- 设置项不生效（窗口尺寸与布局类改动没落到 layout store）。
+- 权限闸门把脚本包的第一个分片请求打死（WebSocket 补丁误伤）。
+- 启用/停用扩展包时界面闪烁与抖动。
+- 轮播图自动播放时缺起始帧导致硬切；详情页一次打开抓两趟远程；`Recent` 页的 `onActivated` 是死代码。
+- 豆瓣评论缓存后台刷新落地的测试竞态（替身位先返回再写缓存，偶发读到旧的一页）。
+- 设置页分组改成「挂载一次 + `v-show`」：切走再切回来不再丢掉主题编辑器改到一半的草稿和打开着的弹窗，
+  各分组的取数也不会从「每次进页面一遍」变成「每次切 tab 一遍」。删掉正在看的扩展包分组会退回「基本」，不再留一块空白面板。
+- 深色主题下「新建主题」卡片是白的（写死的浅灰底与虚线边框，不看当前主题）。
+- 视频卡片只能用鼠标点：补 `role="button"` / `tabindex` 与 Enter / 空格打开（空格原先会把整个网格往下滚），
+  键盘聚焦时画出描边。
+
 ## [2.2.0] - 2026-09-28
 
 按评审清单做的一轮系统性修复，覆盖数据完整性、查询与写入性能、豆瓣抓取、播放代理与缓存、前端架构，以及一批功能补齐。
 
 ### Added
 
-- **跨源合并影片库**：新增「合并影片库」页。同一身份（豆瓣 ID，或归一化后的标题+年份+类型）在各源里的多份记录并成一张卡片，卡片标「N 个源有货」，详情页可换源看同一部。诊断页可发起身份合并（2~8 个一组，迁移收藏与历史，动手前弹确认）。
+- **跨源同片识别**：同一身份（豆瓣 ID，或归一化后的标题+年份+类型）在各源里的多份记录会被认成同一部片，详情页可换源看同一部。诊断页可发起身份合并（2~8 个一组，迁移收藏与历史，动手前弹确认）。
 - **回收站**：删除影片改为软删除并进入回收站，收藏和历史跟着隐藏不丢，可随时恢复；确认无误再彻底删除。
 - **数据备份与恢复**：收藏、历史、设置、采集源定义和已补全的全局元数据打包成单个文件导出，换机/重装后导入合并；迁移前自动留的数据库快照也能从这里读回来（设置 → 高级）。
 - **多线路与测速选源**：解析源站用 `$$$` 打包的多条播放线路，播放页可切线路并对各线路并发测速，按实测结果推荐。
 - **字幕**：播放器手动加载本地 `.srt` / `.vtt` 并自己叠加渲染（画质增强开启时 WebGL canvas 会盖住原生 `<track>`），支持显示/隐藏/更换/移除。
 - **季/集结构化**：从集名解析真实集号（S01E05、第 X 集/话/期/章/卷、EP05、纯数字，含全半角与中文数字归一），认不出才回落列表序号。播放进度、TS 缓存键、下载与换线续播统一按集号认集。
-- **源健康度历史与巡检**：每轮采集收尾和后台每 6 小时的主动巡检各给每个源记一条样本（成功率、延迟、连败次数），设置 → 诊断用点阵展示并按连败阈值提示「可能已失效」。
+- **源健康度历史与巡检**：每轮采集收尾自动给该源记一条样本，采集源页的探测由用户点一下才发起（同一个源 5 分钟内只认一次），设置 → 诊断用点阵展示并按连败阈值提示「可能已失效」；连败到阈值自动停用该源，到期允许重试。
 - **数据库顺序迁移**：以 `PRAGMA user_version` 记版本 + 有序迁移列表（v1~v6：采集游标表、`name_norm` 回填、重复身份合并、索引重建、豆瓣轮转时钟、源健康度表），启动时自动补齐落后版本，替代过去"版本标记不匹配就归档删库"。迁移前自动留快照。
 - **关键索引**：补 `(source_key, lifecycle, vod_time)`、`global_id`、`douban_id`、`(global_id, ep_num)`、`source_health(key,time)` 等，并用 `EXPLAIN QUERY PLAN` 回归测试钉住。
 - **前端约定守卫**：新增 `scripts/check-frontend-conventions.mjs`，把 `verify.ps1` 里此前只写在文档上的约定变成真检查——i18n 中英键位对齐、`t()` 键引用有效、`cczj-*` 工具类确实存在。
@@ -98,7 +167,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Search results are no longer added to the library until explicitly imported.
 - Fixed the Recently Updated navigation icon.
 
-## [1.1.1] - 2026-06-27
+## [2.0.0] - 2026-06-27
+
+> 这一节原先误记为 `1.1.1`：对应的 git tag 是 `v2.0.0`，`version.json` 的更新历史也记作 2.0.0。
+> 中间的 `2.0.1` 只在 `version.json` 里留过说明，`2.0.3` 只打过 tag、两边都没有条目；
+> 2.1.0 的原文就是「自 2.0.3 发布以来的全部改动」，那之后的改动记在那里。
 
 ### 新增
 
@@ -128,7 +201,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 其他
 
-- 更新版本号至 1.1.1
+- 更新版本号至 2.0.0
 
 ## [1.1.0] - 2026-06-20
 
@@ -151,5 +224,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 项目初始化，基于 Wails 3 + Vue 3 + Go 技术栈
 
-[1.1.1]: https://github.com/ws-cczj/CCZJ-Video/compare/v1.1.0...v1.1.1
+[Unreleased]: https://github.com/ws-cczj/CCZJ-Video/compare/v2.2.0...HEAD
+[2.2.0]: https://github.com/ws-cczj/CCZJ-Video/compare/v2.0.3...v2.2.0
+[2.0.0]: https://github.com/ws-cczj/CCZJ-Video/compare/v1.1.0...v2.0.0
 [1.1.0]: https://github.com/ws-cczj/CCZJ-Video/releases/tag/v1.1.0

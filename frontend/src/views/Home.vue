@@ -1,11 +1,13 @@
 <script setup lang="ts">
 defineOptions({ name: 'Home' })
 import { ref, computed, onMounted, onActivated, onDeactivated, onBeforeUnmount, watch, nextTick } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { GetRecentHistory, DeleteHistoryByVideo, GetSetting, DoubanChart, DoubanChartResolve, GetRecommend } from '../api/app'
+import { GetRecentHistory, DeleteHistoryByVideo, DoubanChart, DoubanChartResolve, GetRecommend } from '../api/app'
 import { useSourceStore } from '../stores/source'
 import { useVideoStore } from '../stores/video'
+import { useLayoutStore } from '../stores/layout'
 import { useVideoList, type VideoFilter } from '../composables/useVideoList'
 import { useErrorStore } from '../stores/error'
 import VideoCard from '../components/VideoCard.vue'
@@ -42,21 +44,11 @@ const list = useVideoList({
 })
 
 // ==================== 网格布局设置 ====================
-const gridColumns = ref<number>(5)
-const layoutDensity = ref<'comfortable' | 'compact' | 'spacious'>('comfortable')
-
-const gridStyle = computed(() => {
-  const density = layoutDensity.value
-  const gap = density === 'compact' ? '10px' : density === 'spacious' ? '20px' : '16px'
-  const minWidth = density === 'compact' ? '120px' : density === 'spacious' ? '180px' : '150px'
-  const cols = gridColumns.value
-  
-  return {
-    display: 'grid',
-    gridTemplateColumns: `repeat(${cols}, minmax(${minWidth}, 1fr))`,
-    gap: gap
-  }
-})
+// 列数与密度都在 layout store 里：这一页挂在 KeepAlive 下，设置页改完不会重挂，
+// 只有跟着同一份状态走才能立刻看见。storeToRefs 保住的是那份 computed，直接取
+// layoutStore.gridStyle 拿到的是当次的普通对象，之后就再也不跟着变了。
+const layoutStore = useLayoutStore()
+const { gridStyle } = storeToRefs(layoutStore)
 
 // ==================== 筛选状态 ====================
 interface ActiveFilters {
@@ -187,39 +179,94 @@ const recommendGroups = ref<RecommendGroup[]>([])
 
 const carouselSlides = ref<Video[]>([])
 const DOUBAN_CHART_CACHE_KEY = 'cczj_douban_chart_cache_v1'
+// 与 Go 侧 chartCacheTTL 同值：这一小时内连绑定都不用发。
 const DOUBAN_CHART_TTL = 60 * 60 * 1000
+// 过了 TTL 不等于不能看，只代表该悄悄换新的了。上限之内一律先上屏，
+// 只有首次（或榜单已经老到没有参考价值）才真的让首页等一次网络。
+const DOUBAN_CHART_STALE_CEILING = 7 * 24 * 60 * 60 * 1000
 let chartLoadInFlight: Promise<any[]> | null = null
+let chartSignatureValue = ''
+
+function readChartCache(): { items: any[]; age: number } | null {
+  const cached = readStorage<{ cachedAt: number; items: any[] } | null>(DOUBAN_CHART_CACHE_KEY, null)
+  if (!cached || !Array.isArray(cached.items) || cached.items.length === 0) return null
+  return { items: cached.items, age: Date.now() - (cached.cachedAt || 0) }
+}
+
+// 榜单条目 + 后端异步补上的匹配状态。签名不变就别重新赋值轮播：
+// BookCarousel 换 slides 会重置翻页动画和当前页，静默刷新不该打断正在看的那一张。
+function chartSignature(chart: any[]): string {
+  return chart
+    .map((i: any) => `${i.subject_id}|${i.rating}|${i.votes}|${i.status}|${i.source_key}|${i.vod_id}`)
+    .join(';')
+}
+
+function applyChart(chart: any[]): void {
+  if (!Array.isArray(chart) || chart.length === 0) return
+  const sig = chartSignature(chart)
+  if (sig === chartSignatureValue) return
+  chartSignatureValue = sig
+  carouselSlides.value = chart.map((item: any) => ({
+    global_id: item.global_id || 0,
+    vod_id: item.subject_id || '',
+    vod_name: item.title || '',
+    vod_pic: item.poster_url || '',
+    vod_score: item.rating || '',
+    vod_remarks: item.votes ? t('home.votesCount', { count: item.votes }) : '',
+    vod_content: item.info || '',
+    year: item.year || '',
+    area: item.area || '',
+    director: item.director || '',
+    actors: item.actors || '',
+    release_date: item.release_date || '',
+    chart_status: item.status || 'searching',
+    chart_source_key: item.source_key || '',
+    chart_vod_id: item.vod_id || '',
+  })) as Video[]
+}
+
+// 请求一趟热榜并写缓存。同一时刻只跑一趟；后台那一趟回来时也会自己 applyChart，
+// 所以调用方不必等它。
+function refreshChartCache(): Promise<any[]> {
+  if (chartLoadInFlight) return chartLoadInFlight
+  chartLoadInFlight = (async () => {
+    try {
+      const chart = (await DoubanChart()) as any[]
+      if (Array.isArray(chart) && chart.length > 0) {
+        writeStorage(DOUBAN_CHART_CACHE_KEY, { cachedAt: Date.now(), items: chart })
+        applyChart(chart)
+        return chart
+      }
+      return []
+    } catch (error) {
+      // 抓不到就继续用旧榜单，别把整个轮播藏起来。
+      console.warn('加载豆瓣热榜失败，使用旧缓存:', error)
+      return readChartCache()?.items || []
+    } finally {
+      chartLoadInFlight = null
+    }
+  })()
+  return chartLoadInFlight
+}
 
 async function loadDoubanChartData(): Promise<any[]> {
-  const cached = readStorage<{ cachedAt: number; items: any[] } | null>(DOUBAN_CHART_CACHE_KEY, null)
-  if (cached && Date.now() - cached.cachedAt < DOUBAN_CHART_TTL && Array.isArray(cached.items)) {
+  const cached = readChartCache()
+  if (cached && cached.age < DOUBAN_CHART_TTL) return cached.items
+  if (cached) {
+    // 旧的先摆上，新的悄悄换。这里不等，等就等于把「缓存过期」又变回一次转圈。
+    void refreshChartCache()
     return cached.items
   }
-  if (!chartLoadInFlight) {
-    chartLoadInFlight = (async () => {
-      try {
-        const chart = (await DoubanChart()) as any[]
-        if (Array.isArray(chart) && chart.length > 0) {
-          writeStorage(DOUBAN_CHART_CACHE_KEY, { cachedAt: Date.now(), items: chart })
-        }
-        return Array.isArray(chart) ? chart : []
-      } catch (error) {
-        // A stale chart is still more useful than hiding the entire carousel
-        // while Douban is rate-limiting or temporarily unavailable.
-        console.warn('加载豆瓣热榜失败，使用旧缓存:', error)
-        return cached && Array.isArray(cached.items) ? cached.items : []
-      } finally {
-        chartLoadInFlight = null
-      }
-    })()
-  }
-  return chartLoadInFlight
+  return refreshChartCache()
 }
 
 async function loadRecommendations(): Promise<void> {
   if (!sourceStore.currentSourceKey) return
   recommendLoading.value = true
-  recommendGroups.value = []
+  // 不清空 recommendGroups：这些是本地库查询，重跑一次通常几十毫秒。先把上一页留着，
+  // 结尾整体替换，首页就不会每次刷新都白一下。
+  // 冷启动时这一趟和下面的历史/推荐并行发，谁先回来谁先上屏。
+  const chartPromise = loadDoubanChartData()
 
   try {
     const usedIds = new Set<string>()
@@ -314,31 +361,7 @@ async function loadRecommendations(): Promise<void> {
 
     // 0) 热榜：从豆瓣热榜获取数据用于轮播图（立即展示，带匹配状态）
     try {
-      const chart = await loadDoubanChartData()
-      console.log('[热榜] 原始数据:', chart?.[0])
-      if (Array.isArray(chart) && chart.length > 0) {
-        carouselSlides.value = chart.map((item: any) => {
-          const mapped = {
-            global_id: item.global_id || 0,
-            vod_id: item.subject_id || '',
-            vod_name: item.title || '',
-            vod_pic: item.poster_url || '',
-            vod_score: item.rating || '',
-            vod_remarks: item.votes ? t('home.votesCount', { count: item.votes }) : '',
-            vod_content: item.info || '',
-            year: item.year || '',
-            area: item.area || '',
-            director: item.director || '',
-            actors: item.actors || '',
-            release_date: item.release_date || '',
-            chart_status: item.status || 'searching',
-            chart_source_key: item.source_key || '',
-            chart_vod_id: item.vod_id || '',
-          }
-          console.log('[热榜] 映射后:', mapped.vod_name, '状态:', mapped.chart_status)
-          return mapped
-        })
-      }
+      applyChart(await chartPromise)
     } catch (e) {
       console.warn('加载豆瓣热榜失败:', e)
     }
@@ -422,15 +445,6 @@ function goDetail(video: Video): void {
 let homePageWasDeactivated = false
 let suppressSourceWatch = false
 
-async function loadLayoutSettings(): Promise<void> {
-  try {
-    const col = await GetSetting('grid_columns')
-    if (col) gridColumns.value = parseInt(col, 10) || 5
-    const den = await GetSetting('layout_density')
-    if (den === 'compact' || den === 'spacious') layoutDensity.value = den as any
-  } catch { /* ignore */ }
-}
-
 async function refreshHomeFeed(): Promise<void> {
   const key = sourceStore.currentSourceKey
   if (!key) return
@@ -444,7 +458,7 @@ async function refreshHomeFeed(): Promise<void> {
 
 onMounted(async () => {
   suppressSourceWatch = true
-  await loadLayoutSettings()
+  await layoutStore.load()
   await sourceStore.loadSources()
   await refreshHomeFeed()
   // The currentSourceKey watcher below is for user-driven switches; loadSources()
@@ -488,7 +502,8 @@ watch(
     <!-- ============ 推荐区域（仅在无内容筛选时展示，排序不影响） ============ -->
     <section v-if="!hasContentFilter && (carouselSlides.length > 0 || recommendGroups.length > 0 || recommendLoading)"
       class="recommend-section cczj-mb-10 cczj-rounded-md">
-      <div v-if="recommendLoading" class="recommend-loading cczj-text-center">
+      <!-- 有内容可看时不再叠一层转圈：转圈一消失整块内容就要跳一次位。 -->
+      <div v-if="recommendLoading && recommendGroups.length === 0" class="recommend-loading cczj-text-center">
         <LoadingSpinner size="sm" :label="t('home.loadingRecommendations')" />
       </div>
 

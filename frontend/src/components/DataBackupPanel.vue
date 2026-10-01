@@ -272,6 +272,15 @@ onMounted(() => {
 </template>
 
 <style scoped>
+/* 卡片外框由 Settings 的 .panel.group-card 统一画（本组件是多根 fragment，父级只能用
+   :deep 将外框压平），这里只留标题排版——h3 不是组件根节点，拿不到父级 scope id，
+   Settings 里的 .block h3 落不到它身上。 */
+.block h3 {
+  font-size: 0.97rem;
+  font-weight: 700;
+  margin: 0 0 12px;
+  letter-spacing: 0.3px;
+}
 .hidden-input {
   display: none;
 }

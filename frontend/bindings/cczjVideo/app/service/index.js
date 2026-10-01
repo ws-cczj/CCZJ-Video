@@ -8,12 +8,11 @@ export {
 };
 
 export {
-    CacheInfo,
     ChunkProgress,
-    ClearCacheReq,
     DiagCollect,
     DiagDouban,
     DiagEnv,
+    DiagNetwork,
     DiagSourceRow,
     DiagStorage,
     Diagnostics,
@@ -35,10 +34,13 @@ export {
     LogPageResp,
     LogStats,
     RecommendReq,
+    RuntimeMetrics,
     SetGlobalTypeCollectEnabledReq,
     SimilarReq,
     SourceActionReq,
     SourceProbe,
+    SourceProbeSlot,
+    SourceProbeTimeline,
     TriggerCollectReq,
     VideoDownloadReq,
     VideoDownloadStatus,

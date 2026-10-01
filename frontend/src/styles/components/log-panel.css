@@ -1,0 +1,328 @@
+.log-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+.log-card {
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  min-width: 0;
+}
+.log-card-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--accent-contrast);
+}
+.log-card-icon.lvl-info { background: rgba(96, 165, 250, 0.85); }
+.log-card-icon.lvl-accent { background: var(--accent); }
+.log-card-icon.lvl-warn { background: rgba(245, 158, 11, 0.85); }
+.log-card-icon.lvl-pink { background: rgba(236, 72, 153, 0.8); }
+.log-card-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+.log-card-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.log-card-path {
+  font-size: 11px;
+  color: var(--text-primary);
+  font-family: ui-monospace, Consolas, monospace;
+  cursor: pointer;
+}
+.log-card-path:hover { color: var(--accent); text-decoration: underline; }
+.log-card-note {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.log-levels {
+  margin-top: 12px;
+  gap: 6px;
+}
+.log-levels-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.log-seg {
+  padding: 3px 10px;
+  font-size: 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.log-seg.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+.log-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.log-levels-hint {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.log-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.log-live.on { color: var(--accent); }
+.log-search {
+  gap: 6px;
+  padding: 0 10px;
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-input);
+  color: var(--text-muted);
+}
+.log-search input {
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12px;
+  width: 190px;
+}
+.log-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  font-size: 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.log-chip.active {
+  border-color: var(--accent);
+  background: var(--accent-alpha-10);
+  color: var(--text-primary);
+}
+.log-chip em {
+  font-style: normal;
+  color: var(--text-muted);
+}
+/* 计数为 0 的来源点了也不会出结果，直接压暗禁用，避免误以为筛选器坏了 */
+.log-chip:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+/* 来源筛选和级别计数分处同一行，用底色把两组语义分开 */
+.log-chip-origin {
+  background: var(--bg-secondary);
+}
+.log-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+}
+.log-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.log-dot.lvl-debug { background: #94a3b8; }
+.log-dot.lvl-info { background: #60a5fa; }
+.log-dot.lvl-warn { background: #f59e0b; }
+.log-dot.lvl-error { background: #ef4444; }
+.log-view { padding-bottom: 12px; }
+/* Settings.vue 里的 .tabs/.tab 是 scoped 的，不会穿透到本组件，必须自带一套 */
+.log-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.log-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.log-tab:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.log-tab.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: 0 4px 14px var(--accent-alpha-20);
+}
+.log-file-picker { margin-left: auto; }
+.log-select {
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  height: 26px;
+  font-size: 12px;
+  padding: 0 6px;
+}
+.log-list {
+  height: 46vh;
+  min-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-secondary);
+  font-family: ui-monospace, Consolas, 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 26px;
+}
+.log-row {
+  gap: 8px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.log-row:hover { background: var(--bg-hover); }
+.log-row.row-error { background: rgba(239, 68, 68, 0.07); }
+.log-row.row-warn { background: rgba(245, 158, 11, 0.06); }
+/* 必须在 row-error/row-warn 之后：同为双类选择器，靠后的才不会被行底色吃掉 */
+.log-row.picked,
+.log-row.row-error.picked,
+.log-row.row-warn.picked {
+  background: var(--accent-alpha-10);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.log-ts {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+.log-lvl {
+  width: 46px;
+  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.4px;
+}
+.log-lvl.lvl-debug { color: #94a3b8; }
+.log-lvl.lvl-info { color: #60a5fa; }
+.log-lvl.lvl-warn { color: #f59e0b; }
+.log-lvl.lvl-error { color: #ef4444; }
+.log-origin {
+  flex-shrink: 0;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+.log-msg {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-primary);
+}
+.log-msg .hit {
+  background: var(--accent-alpha-35);
+  border-radius: 3px;
+  color: var(--text-primary);
+}
+.log-caller {
+  flex-shrink: 0;
+  max-width: 240px;
+  text-align: right;
+  color: var(--text-muted);
+}
+.log-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  color: var(--text-muted);
+}
+.log-more {
+  width: 100%;
+  padding: 8px;
+  font-size: 12px;
+  color: var(--accent);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+.log-raw-wrap {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-secondary);
+  overflow: hidden;
+}
+.log-raw-hd {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.log-raw {
+  margin: 0;
+  padding: 10px;
+  height: 46vh;
+  min-height: 260px;
+  overflow: auto;
+  font-family: ui-monospace, Consolas, 'Courier New', monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.log-detail {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-card);
+  gap: 12px;
+}
+.log-detail-meta {
+  gap: 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.log-detail-msg {
+  margin-top: 6px;
+  font-family: ui-monospace, Consolas, 'Courier New', monospace;
+  font-size: 12px;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+@media (max-width: 1100px) {
+  .log-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

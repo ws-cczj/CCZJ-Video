@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { GetTypes, GetYearsAndAreas } from '../api/app'
+import { GetTypes, GetYearsAndAreas, normalizeApiError } from '../api/app'
 import * as AppMod from '../api/app'
 import type { Video, Episode, PlayLine, VType, VideoDetailResponse } from '../types'
 import { normalizePlayLines } from '../utils/playLines'
@@ -126,10 +126,11 @@ export const useVideoStore = defineStore('video', () => {
       return false
     } catch (e: any) {
       if (!detailGen.isCurrent(my)) return false
-      const msg = e?.message || ''
+      const { code } = normalizeApiError(e)
       currentVideo.value = null
       applyDetail(null, key)
-      if (!msg.includes('video not found') && !msg.includes('sql: no rows')) {
+      // 「这一条本来就不存在」是正常分支（切到源站命中源、目录缺行），不该弹错。
+      if (code !== 'NOT_FOUND') {
         errorStore.fromError(tr('errors.loadDetailFailed'), e, 'videoStore.loadDetail')
       }
       return false

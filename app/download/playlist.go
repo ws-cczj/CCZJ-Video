@@ -2,6 +2,7 @@
 package download
 
 import (
+	"cczjVideo/app/apperror"
 	"context"
 	"fmt"
 	"io"
@@ -491,7 +492,7 @@ func Get(ctx context.Context, client *http.Client, rawURL, referer, rangeHeader 
 			return nil, err
 		}
 	}
-	return nil, fmt.Errorf("%s: 重试 %d 次仍失败", lastErr, attempts)
+	return nil, apperror.Newf(apperror.Unavailable, "%s: 重试 %d 次仍失败", lastErr, attempts)
 }
 
 func getOnce(ctx context.Context, client *http.Client, rawURL, referer, rangeHeader string, maxBytes int64) ([]byte, bool, error) {
@@ -515,15 +516,15 @@ func getOnce(ctx context.Context, client *http.Client, rawURL, referer, rangeHea
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, permanentStatus(resp.StatusCode), fmt.Errorf("HTTP %d", resp.StatusCode)
+		return nil, permanentStatus(resp.StatusCode), apperror.Newf(apperror.Unavailable, "HTTP %d", resp.StatusCode)
 	}
 	if rangeHeader != "" && resp.StatusCode != http.StatusPartialContent {
 		// 上游收了 Range 却回了 200：整份资源会被当成一个片段写进文件，后面的字节全
 		// 错位。重试也只会拿到同样的整份响应，所以直接判定失败。
-		return nil, false, fmt.Errorf("range request returned HTTP %d, upstream ignores Range", resp.StatusCode)
+		return nil, false, apperror.Newf(apperror.Unsupported, "range request returned HTTP %d, upstream ignores Range", resp.StatusCode)
 	}
 	if maxBytes > 0 && resp.ContentLength > maxBytes {
-		return nil, false, fmt.Errorf("exceeds size limit of %d bytes", maxBytes)
+		return nil, false, apperror.Newf(apperror.Corrupt, "exceeds size limit of %d bytes", maxBytes)
 	}
 	if maxBytes > 0 {
 		data, readErr := io.ReadAll(io.LimitReader(resp.Body, maxBytes+1))
@@ -531,7 +532,7 @@ func getOnce(ctx context.Context, client *http.Client, rawURL, referer, rangeHea
 			return nil, true, readErr
 		}
 		if int64(len(data)) > maxBytes {
-			return nil, false, fmt.Errorf("exceeds size limit of %d bytes", maxBytes)
+			return nil, false, apperror.Newf(apperror.Corrupt, "exceeds size limit of %d bytes", maxBytes)
 		}
 		return data, false, nil
 	}

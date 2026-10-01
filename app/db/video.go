@@ -1,6 +1,7 @@
 package db
 
 import (
+	"cczjVideo/app/apperror"
 	"cczjVideo/app/model"
 	"database/sql"
 	"errors"
@@ -54,10 +55,16 @@ func GetTypes(sourceKey string) ([]*model.VType, error) {
 	}
 	out := make([]*model.VType, 0, len(rows))
 	for _, r := range rows {
-		if !isGlobalTypeCollectEnabled(r.GlobalTypeID, r.TypeName) {
+		// 源站偶尔会把 type_name 给成一串空格（库里已经存下来的历史行也在）。这种名字到了
+		// 界面上就是一个说不出是什么、又点得动的空标签，所以读的时候一并修：trim 后为空就不出。
+		name := strings.TrimSpace(r.TypeName)
+		if name == "" {
 			continue
 		}
-		out = append(out, &model.VType{TypeId: model.FlexibleString(r.SourceTypeID), Name: r.TypeName})
+		if !isGlobalTypeCollectEnabled(r.GlobalTypeID, name) {
+			continue
+		}
+		out = append(out, &model.VType{TypeId: model.FlexibleString(r.SourceTypeID), Name: name})
 	}
 	return out, nil
 }
@@ -69,6 +76,9 @@ func TableExists(name string) bool {
 }
 
 func GetSetting(key string) (string, error) {
+	if instance == nil {
+		return "", ErrDBNotOpen
+	}
 	var value string
 	err := instance.Get(&value, `SELECT value FROM settings WHERE key=?`, key)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -78,6 +88,9 @@ func GetSetting(key string) (string, error) {
 }
 
 func SetSetting(key, value string) error {
+	if instance == nil {
+		return ErrDBNotOpen
+	}
 	_, err := instance.Exec(`INSERT OR REPLACE INTO settings(key,value) VALUES (?,?)`, key, value)
 	return err
 }
@@ -129,11 +142,21 @@ type SourceVideoRef struct {
 	VodName   string `json:"vod_name" db:"vod_name"`
 }
 
+// GetGlobalIdForVideo 取某源某集对应的 global_id。
+//
+// 「没有这一条」和「查询失败」必须分开：以前两者都回一句 global_id not found，
+// 库锁了、列缺了都会被当成"这条还没采集"，界面显示空结果，日志里什么都没有。
 func GetGlobalIdForVideo(sourceKey, vodID string) (int64, error) {
 	var id int64
 	err := instance.Get(&id, `SELECT global_id FROM source_videos WHERE source_key=? AND source_vod_id=? AND lifecycle_state='active' AND `+catalogTypeVisibilityClause("source_videos"), sourceKey, vodID)
-	if err != nil || id == 0 {
-		return 0, fmt.Errorf("global_id not found")
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, apperror.Newf(apperror.NotFound, "global_id not found: %s/%s", sourceKey, vodID)
+	}
+	if err != nil {
+		return 0, apperror.Wrap(apperror.Storage, err, "查询 global_id 失败")
+	}
+	if id == 0 {
+		return 0, apperror.Newf(apperror.NotFound, "global_id not found: %s/%s", sourceKey, vodID)
 	}
 	return id, nil
 }

@@ -1,0 +1,151 @@
+/**
+ * script-ui-tweaks 的包内样式：由 manifest 的 script.styles 声明，注入时机的确在入口脚本之前。
+ *
+ * 注入的样式是全局的，所以这一份的每一条选择器都从 .pk-ins 起手——那是本包那个页面自己的根类。
+ * 想改应用界面的话得先想清楚：写在这里的规则会在每次启动都生效，删掉包才会没有。
+ *
+ * 颜色一律用应用的主题变量，这样用户换主题（包括别的包带的主题预设）时这一页不会变成一块白板。
+ */
+
+.pk-ins {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 860px;
+}
+
+.pk-ins-lead {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.pk-ins-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.pk-ins-section-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.pk-ins-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.pk-ins-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 6px 14px;
+}
+
+.pk-ins-field {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.pk-ins-label {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.pk-ins-value {
+  /* 路径和版本号是要抄下来对照的东西，等宽比 proportional 好认。 */
+  font-family: ui-monospace, Consolas, monospace;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.pk-ins-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pk-ins-btn {
+  padding: 5px 11px;
+  font-size: 12px;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.pk-ins-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+}
+
+.pk-ins-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pk-ins-row,
+.pk-ins-pack {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 6px 8px;
+  background: var(--bg-hover);
+  border-radius: var(--radius);
+}
+
+.pk-ins-pack-name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.pk-ins-tag {
+  padding: 1px 7px;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+}
+
+.pk-ins-tag--ready {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.pk-ins-tag--invalid {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.pk-ins-empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.pk-ins-warn {
+  margin: 0;
+  font-size: 11px;
+  color: var(--danger);
+}

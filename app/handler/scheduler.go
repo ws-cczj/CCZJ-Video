@@ -44,20 +44,45 @@ var (
 	globalSchedulerMu sync.Mutex
 )
 
-// GetScheduler 返回全局调度器（懒初始化）
-func GetScheduler(ctx context.Context) *Scheduler {
+// GetScheduler 返回全局调度器（懒初始化）。
+//
+// ctx 不是这里的参数：调度器必须挂在应用生命周期上，而第一个走到这里的常常是
+// 设置页的一次只读查询。谁先来谁定死，等于让"退出时能不能取消采集"取决于用户
+// 先点了哪个按钮 —— 应用上下文由 Start 之前的 SetContext 显式注入。
+func GetScheduler() *Scheduler {
 	globalSchedulerMu.Lock()
 	defer globalSchedulerMu.Unlock()
 	if globalScheduler == nil {
 		cfg := GetScheduleConfig()
 		globalScheduler = &Scheduler{
-			ctx:          ctx,
+			ctx:          context.Background(),
 			sourceGap:    time.Duration(cfg.SourceGapSeconds) * time.Second,
 			pageGap:      time.Duration(cfg.PageGapSeconds) * time.Second,
 			sourceTimers: make(map[string]*time.Timer),
 		}
 	}
 	return globalScheduler
+}
+
+// SetContext 采用应用生命周期上下文。只在调度器还没跑起来时替换：已经在跑的循环
+// 按旧上下文判断取消，中途换掉会让那一轮的"取消即停"失去依据。
+func (s *Scheduler) SetContext(ctx context.Context) {
+	if ctx == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.running {
+		return
+	}
+	s.ctx = ctx
+}
+
+// appContext 取当前应用上下文。读写都在 s.mu 下：SetContext 与采集协程可以并发。
+func (s *Scheduler) appContext() context.Context {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.ctx
 }
 
 // ReloadConfig 重新读取配置
@@ -77,6 +102,10 @@ func (s *Scheduler) Start() {
 	if !cfg.EnableBackground && !cfg.EnableInitialFullCollect && !cfg.EnableStartupCatchup {
 		s.stopAllSourceTimers()
 		return
+	}
+	// 冷却到期的自动停用源先放回采集池，再决定这轮采谁、给谁配定时器。
+	if n := RecoverAutoDisabledSources(); n > 0 {
+		s.logScheduler(fmt.Sprintf("%d 个自动停用的采集源冷却到期，已重新放回采集池", n))
 	}
 	s.mu.Lock()
 	if s.running {
@@ -154,7 +183,7 @@ func (s *Scheduler) runAllSourcesOnce(gen uint64, mode model.CollectMode, hours 
 
 	for i, src := range sources {
 		select {
-		case <-s.ctx.Done():
+		case <-s.appContext().Done():
 			return
 		default:
 		}
@@ -184,6 +213,9 @@ func (s *Scheduler) startSourceTimers() {
 	}
 	sources, err := db.GetAllSources()
 	if err != nil {
+		// 这里必须出声：读不到源列表等于一个定时采集都没安排上，而界面只会显示
+		// "调度器在跑"。静默 return 的话，用户以为后台在补数据，其实一天都没采。
+		s.logScheduler("安排定时采集时读取采集源列表失败: " + err.Error())
 		return
 	}
 
@@ -250,6 +282,7 @@ func (s *Scheduler) runSourceCollect(sourceKey string, mode model.CollectMode, h
 	s.mu.Lock()
 	pageGap := s.pageGap
 	s.mu.Unlock()
+	appCtx := s.appContext()
 
 	var engineOpts []collect.EngineOption
 	engineOpts = append(engineOpts, collect.WithCollectMode(mode))
@@ -283,7 +316,7 @@ func (s *Scheduler) runSourceCollect(sourceKey string, mode model.CollectMode, h
 		},
 		engineOpts...,
 	)
-	engine.SetContext(s.ctx)
+	engine.SetContext(appCtx)
 	engine.SetPageGap(pageGap)
 	if !entry.TryBindEngine(engine, string(mode)) {
 		s.logScheduler(fmt.Sprintf("[%s] 正在采集中，跳过", sourceKey))
@@ -317,7 +350,7 @@ func (s *Scheduler) runSourceCollect(sourceKey string, mode model.CollectMode, h
 	select {
 	case <-done:
 		return
-	case <-s.ctx.Done():
+	case <-appCtx.Done():
 		engine.Stop()
 		<-done
 		return
@@ -410,7 +443,13 @@ func (s *Scheduler) UpdateSourceSchedule(sourceKey string) {
 	s.sourceTimersMu.Unlock()
 
 	src, err := db.GetSourceByKey(sourceKey)
-	if err != nil || src.Enabled != 1 {
+	if err != nil {
+		// 查不到这个源和「这个源关了后台采集」是两回事：前者要留在日志里，
+		// 否则改完设置不生效时没有任何线索。
+		s.logScheduler(fmt.Sprintf("[%s] 重排定时采集时读取采集源失败: %v", sourceKey, err))
+		return
+	}
+	if src.Enabled != 1 {
 		return
 	}
 	sc := src.GetScheduleConfig()
@@ -535,6 +574,7 @@ func (s *Scheduler) Status() SchedulerStatus {
 
 // sleepInterruptible 睡眠期间可被停止
 func (s *Scheduler) sleepInterruptible(gen uint64, d time.Duration) bool {
+	appCtx := s.appContext()
 	deadline := time.Now().Add(d)
 	for {
 		remaining := time.Until(deadline)
@@ -547,7 +587,7 @@ func (s *Scheduler) sleepInterruptible(gen uint64, d time.Duration) bool {
 		}
 		select {
 		case <-time.After(chunk):
-		case <-s.ctx.Done():
+		case <-appCtx.Done():
 			return false
 		}
 		if s.stoppedFor(gen) {

@@ -1,0 +1,14 @@
+{
+  "manifest_version": 1,
+  "id": "diagnostics-panel",
+  "version": "1.0.0",
+  "name": { "zh-CN": "诊断面板", "en": "Diagnostics Panel" },
+  "description": {
+    "zh-CN": "设置页顶部的「诊断」分组：采集源健康度、缓存体积、豆瓣队列这些运行数据。删掉这个文件夹，那一项就没了。",
+    "en": "The Diagnostics group on the Settings page: source health, cache size, Douban queue. Delete the folder and the tab goes away."
+  },
+  "author": "CCZJ Video",
+  "icon": "icon.png",
+  "kind": "script",
+  "script": { "entry": "main.js" }
+}

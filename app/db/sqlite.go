@@ -1,14 +1,24 @@
 package db
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/jmoiron/sqlx"
 	_ "modernc.org/sqlite"
+)
+
+const (
+	// walTruncateBytes 是 -wal 文件的上限：归并时若超过它就截回去。采集一轮能写下
+	// 上万行，不设上限的话库看着没变大、-wal 却长期占几十 MB。
+	walTruncateBytes = 64 * 1024 * 1024
+	// walAutoCheckpointPages 就是 SQLite 的默认值，显式写出来是为了让每条连接一致。
+	walAutoCheckpointPages = 1000
 )
 
 var (
@@ -18,6 +28,11 @@ var (
 
 	logMu sync.Mutex
 	logFn func(level, msg string)
+
+	// ErrDBNotOpen 表示还没有 InitDB（或已经 Close）。设置项如今会被详情、热榜这类
+	// 缓存路径在运行期读取，那里不能假定数据库一定在位：返回错误让调用方退回默认值，
+	// 而不是空指针 panic 带走整个进程。
+	ErrDBNotOpen = errors.New("db: 数据库未初始化")
 )
 
 // SetLogger 允许外部注入日志实现，避免 db 依赖 applog
@@ -41,6 +56,23 @@ func safeLog(level, msg string) {
 	}
 }
 
+// sqliteDSN 把库文件和一组 pragma 拼成连接串。
+//
+// 三条 pragma 必须写在 DSN 里，而不是连上之后再 PRAGMA：连接池有 8 条连接，事后
+// 设置只对「当时借到的那一条」生效，其余连接仍按默认值跑，表现就是 WAL 有时收得住、
+// 有时收不住。
+//   - journal_size_limit：-wal 超过这个上限才会在归并时截回去。没有它，-wal 只增
+//     不减，采集一轮攒下的几十 MB 就一直躺在数据目录里。
+//   - wal_autocheckpoint：显式钉住默认值（约 4MB 触发一次被动归并）。
+//   - busy_timeout：抢不到写锁时排队，而不是立刻把 SQLITE_BUSY 冒到界面上。
+func sqliteDSN(dbPath string) string {
+	return dbPath + "?_pragma=journal_mode(WAL)" +
+		"&_pragma=busy_timeout(5000)" +
+		"&_pragma=journal_size_limit(" + strconv.Itoa(walTruncateBytes) + ")" +
+		"&_pragma=wal_autocheckpoint(" + strconv.Itoa(walAutoCheckpointPages) + ")" +
+		"&_pragma=foreign_keys(on)"
+}
+
 func InitDB(dir string) error {
 	var initErr error
 	once.Do(func() {
@@ -49,8 +81,15 @@ func InitDB(dir string) error {
 			initErr = fmt.Errorf("create data directory: %w", err)
 			return
 		}
-		dbPath := filepath.Join(dir, "cczj_video.db")
-		instance, initErr = sqlx.Connect("sqlite", dbPath+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(on)")
+		// 三条 pragma 都写在 DSN 里，而不是连上之后再 PRAGMA：连接池有 8 条连接，
+		// 事后设置只对「当时借到的那一条」生效，其余连接仍按默认值跑，表现就是
+		// WAL 有时收得住、有时收不住。写进 DSN 则每条新连接都一样。
+		//   journal_size_limit：WAL 超过这个上限才会在归并时截回去。没有它，-wal
+		//     只增不减，采集一轮攒下的几十 MB 就一直躺在数据目录里。
+		//   wal_autocheckpoint：显式钉住默认值（约 4MB 触发一次被动归并），免得
+		//     某条连接被人单独调大后写放大悄悄回来了。
+		//   busy_timeout：抢不到写锁时排队，而不是立刻把 SQLITE_BUSY 冒到界面上。
+		instance, initErr = sqlx.Connect("sqlite", sqliteDSN(filepath.Join(dir, "cczj_video.db")))
 		if initErr != nil {
 			initErr = fmt.Errorf("connect sqlite: %w", initErr)
 			return
@@ -115,10 +154,33 @@ func DataDir() string {
 	return dataDir
 }
 
+// Close 退出前先把 WAL 排空再断开。
 func Close() {
-	if instance != nil {
-		instance.Close()
+	if instance == nil {
+		return
 	}
+	var busy, logPages, moved int
+	switch err := walCheckpoint(&busy, &logPages, &moved); {
+	case err != nil:
+		logWarn(fmt.Sprintf("退出时 WAL 归并失败: %v", err))
+	case busy != 0:
+		// 还有连接在读旧快照，WAL 截不掉。不算错误，但不说出来的话会让人以为
+		// 退出时库已经收干净了。
+		logWarn(fmt.Sprintf("退出时 WAL 未能截断：-wal 仍 %d 页在等读者，本轮归并 %d 页", logPages, moved))
+	}
+	if err := instance.Close(); err != nil {
+		logWarn(fmt.Sprintf("关闭数据库连接时报错: %v", err))
+	}
+}
+
+// walCheckpoint 做一次 TRUNCATE 归并：把 -wal 里的页写回主库，再把 -wal 截到 0 字节。
+//
+// 不这么做的话，写入会一直留在 -wal 里 —— SQLite 只在攒够 wal_autocheckpoint 页时
+// 才被动归并，进程直接退出就没人补这一刀，下次启动得先重放一遍才能读到最新数据，
+// 中间崩一次还可能整段回滚。抢不到独占锁时它不返回错误，而是在结果行第一列给 1，
+// 所以三个数都得读出来才知道到底收干净了没有。
+func walCheckpoint(busy, logPages, moved *int) error {
+	return instance.QueryRow("PRAGMA wal_checkpoint(TRUNCATE)").Scan(busy, logPages, moved)
 }
 
 func createTables() error {
@@ -135,6 +197,7 @@ func createTables() error {
 			adv_config TEXT DEFAULT '',
 			schedule_config TEXT DEFAULT '',
 			strategy_config TEXT DEFAULT '',
+			auto_disabled_at INTEGER NOT NULL DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE TABLE IF NOT EXISTS settings (
@@ -297,9 +360,31 @@ func createIndexes() error {
 	}
 	for _, idx := range indexes {
 		if _, err := instance.Exec(idx); err != nil {
-			logInfo(fmt.Sprintf("创建索引失败(已忽略): %v", err))
+			// 索引建不起来不会让功能坏掉，但会让本该走 B 树的查询退化成全表扫，
+			// 库越大越明显。以前这行只写进 INFO 且标成「已忽略」，等于某天开始变慢
+			// 却查不出为什么。报出来，并带上是哪条索引。
+			logWarn(fmt.Sprintf("索引 %s 创建失败，相关查询将退化为全表扫描: %v", indexName(idx), err))
 		}
 	}
 
 	return nil
+}
+
+// indexName 从建索引语句里只取索引名：日志里贴整条 SQL 读不动，而排查「某天开始变慢」
+// 需要的恰好是这个名字 —— 执行计划里出现的要么是它，要么是它的缺失。
+func indexName(statement string) string {
+	fields := strings.Fields(statement)
+	for i, field := range fields {
+		if !strings.EqualFold(field, "INDEX") {
+			continue
+		}
+		for j := i + 1; j < len(fields); j++ {
+			switch strings.ToUpper(fields[j]) {
+			case "IF", "NOT", "EXISTS":
+				continue
+			}
+			return strings.Trim(fields[j], "`\"")
+		}
+	}
+	return "未知索引"
 }

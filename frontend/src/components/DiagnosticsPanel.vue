@@ -1,23 +1,27 @@
 <script setup lang="ts">
 defineOptions({ name: 'DiagnosticsPanel' })
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from './Icon.vue'
 import { Button } from './ui'
-import { GetDiagnostics, ProbeSources, ListIdentityMergeCandidates, MergeGlobalVideoIdentities } from '../api/app'
+import { GetDiagnostics, GetRuntimeMetrics, ListIdentityMergeCandidates, MergeGlobalVideoIdentities } from '../api/app'
 import { useErrorStore } from '../stores/error'
 import { useConfirmStore } from '../stores/confirm'
 import { useVideoStore } from '../stores/video'
+import { usePerfStore } from '../stores/perf'
+import { usePosterCacheStore } from '../stores/posterCache'
+import { imageProxyStats } from '../utils'
+import { TsCache } from '../utils/tsCache'
 
 const { t } = useI18n()
 const errorStore = useErrorStore()
 const confirmStore = useConfirmStore()
 const videoStore = useVideoStore()
+const perf = usePerfStore()
+const posterCache = usePosterCacheStore()
 
 const diag = ref<Record<string, any> | null>(null)
-const probes = ref<Record<string, any>[]>([])
 const loading = ref(false)
-const probing = ref(false)
 const updatedAt = ref(0)
 
 const env = computed(() => diag.value?.env || {})
@@ -32,6 +36,198 @@ const backgroundTasks = computed(() => {
   const tasks = env.value.background_tasks || {}
   return Object.keys(tasks).map(name => ({ name, count: tasks[name] }))
 })
+
+// ========== 实时指标 ==========
+// GetDiagnostics 要逐表 COUNT、遍历日志目录，只能手动点一次；这一路读的全是内存计数器，
+// 所以每 2 秒轮一次。真实使用中流量和命中率一直在涨，静态快照看不出趋势。
+const LIVE_INTERVAL_MS = 2000
+const live = ref<Record<string, any> | null>(null)
+const liveFailed = ref(false)
+let liveTimer: number | null = null
+
+const liveNetwork = computed<Record<string, any>>(() => live.value?.network || {})
+const liveCategories = computed<Record<string, any>[]>(() =>
+  ((liveNetwork.value.categories || []) as Record<string, any>[])
+    .filter(row => (Number(row.requests) || 0) > 0),
+)
+
+// 没跑过的类别全是 0，列在表里只会被读成「这条路坏了」；Go 侧刻意不猜速率，
+// 所以界面也只摆真正有过请求的那几行。
+const liveEmpty = computed(() => liveCategories.value.length === 0)
+
+// 运行时长与协程数每两秒就在变，取实时快照的读数；快照还没回来时才退回手动那一份。
+const uptimeSeconds = computed(() => Number(live.value?.uptime_seconds ?? env.value.uptime_seconds) || 0)
+const goroutineCount = computed(() => Number(live.value?.goroutines ?? env.value.goroutines) || 0)
+
+// 类别与缓存键都是稳定标识，标签在渲染时翻译，切语言才会跟着变。
+const CATEGORY_LABEL_KEYS: Record<string, string> = {
+  playback: 'diagnostics.netPlayback',
+  lineprobe: 'diagnostics.netLineProbe',
+  collect: 'diagnostics.netCollect',
+  douban: 'diagnostics.netDouban',
+  image: 'diagnostics.netImage',
+  update: 'diagnostics.netUpdate',
+  download: 'diagnostics.netDownload',
+}
+function categoryLabel(key: string): string {
+  return t(CATEGORY_LABEL_KEYS[key] || 'diagnostics.netUnknown')
+}
+
+const CACHE_LABEL_KEYS: Record<string, string> = {
+  detail: 'diagnostics.cacheDetail',
+  chart: 'diagnostics.cacheChart',
+  comments: 'diagnostics.cacheComments',
+  match: 'diagnostics.cacheMatch',
+  ts: 'diagnostics.cacheTs',
+  poster: 'diagnostics.cachePoster',
+  image: 'diagnostics.cacheImage',
+}
+
+// 三块前端缓存（TS 分片 / 海报 / 图片代理）不在 Go 进程里，Go 的出网账本只看得见
+// 它们的未命中，所以读数由界面自己报。null 表示这块缓存没有这个概念，渲染成「—」，
+// 不拿 0 冒充一个测过但恰好为零的结果。
+const diskCache = ref<Record<string, any> | null>(null)
+
+function frontendCacheRows(): Record<string, any>[] {
+  const ts = TsCache.stats()
+  const poster = posterCache.stats()
+  const image = imageProxyStats()
+  // 字段名对齐 Go 的 JSON，表格只需要一种行形状；null 表示这块缓存没有这个概念。
+  return [
+    {
+      key: 'ts', entries: ts.totalEntries, bytes: ts.bytes,
+      hits: ts.hits, stale_hits: null, misses: ts.misses,
+      fetch_ok: null, fetch_fail: null, skipped: null, avg_fetch_ms: ts.avgFetchMs,
+    },
+    {
+      key: 'poster', entries: poster.entries, bytes: 0,
+      hits: poster.hits, stale_hits: null, misses: poster.misses,
+      fetch_ok: poster.fetchOK, fetch_fail: poster.fetchFail, skipped: null,
+    },
+    {
+      // 图片代理的「过期命中」是从 localStorage 读回的旧 data URL：省掉一次代理请求，
+      // 代价是收藏时存下的那张图可能已经换了。
+      key: 'image', entries: image.entries, bytes: 0,
+      hits: image.memoryHits, stale_hits: image.storedHits, misses: image.fetches,
+      fetch_ok: Math.max(0, image.fetches - image.failures), fetch_fail: image.failures, skipped: null,
+    },
+  ]
+}
+
+const cacheRows = computed<Record<string, any>[]>(() => [
+  ...((live.value?.cache || []) as Record<string, any>[]),
+  ...frontendCacheRows(),
+])
+
+// 一次都没读过的缓存，计数器全摆成 0 会被读成「命中率 0%，坏了」；
+// 那种情况整列留空，只保留条目数——条目数是真实存在的。
+function readsOf(row: Record<string, any>): number {
+  return (Number(row.hits) || 0) + (Number(row.stale_hits) || 0) + (Number(row.misses) || 0)
+}
+
+function counterCell(row: Record<string, any>, field: string): string {
+  if (!readsOf(row)) return '—'
+  const value = row[field]
+  if (value === null || value === undefined) return '—'
+  return fmtNumber(Number(value))
+}
+
+function bytesCell(row: Record<string, any>): string {
+  const bytes = Number(row.bytes) || 0
+  return bytes > 0 ? fmtBytes(bytes) : '—'
+}
+
+function hitRateOf(row: Record<string, any>): number {
+  const reads = readsOf(row)
+  if (!reads) return 0
+  return Math.round(((reads - (Number(row.misses) || 0)) / reads) * 100)
+}
+
+function entriesCell(row: Record<string, any>): string {
+  return fmtNumber(Number(row.entries) || 0)
+}
+
+// 「抓取」把成功与失败并排：后台静默刷新最容易坏在只有失败的那一侧，
+// 只看成功数会以为一切正常。
+function fetchCell(row: Record<string, any>): string {
+  if (!readsOf(row)) return '—'
+  const ok = row.fetch_ok
+  if (ok === null || ok === undefined) return '—'
+  return `${Number(ok) || 0} / ${Number(row.fetch_fail) || 0}`
+}
+
+function cacheTitle(row: Record<string, any>): string {
+  const parts: string[] = []
+  const bytes = Number(row.bytes) || 0
+  if (bytes > 0) parts.push(t('diagnostics.cacheBytes', { size: fmtBytes(bytes) }))
+  if (Number(row.avg_fetch_ms) || 0) parts.push(t('diagnostics.netAvgMs', { ms: Math.round(Number(row.avg_fetch_ms)) }))
+  return parts.join(' · ')
+}
+
+function hitRateCell(row: Record<string, any>): string {
+  return readsOf(row) ? `${hitRateOf(row)}%` : '—'
+}
+
+// 分类别的速率标签：这一类跑过多少请求、搬了多少字节、最快多快。
+function categoryTitle(row: Record<string, any>): string {
+  const parts = [
+    t('diagnostics.netRequests', { n: fmtNumber(Number(row.requests) || 0) }),
+    t('diagnostics.netFailed', { n: Number(row.fails) || 0 }),
+    fmtBytes(Number(row.bytes) || 0),
+    t('diagnostics.netAvgMs', { ms: Math.round(Number(row.avg_ms) || 0) }),
+    `${fmtRate(Number(row.avg_bytes_per_sec) || 0)}/s`,
+    `${fmtRate(Number(row.peak_bytes_per_sec) || 0)}/s`,
+  ]
+  if (row.last_error) parts.push(String(row.last_error))
+  if (row.last_at_unix) parts.push(fmtTime(Number(row.last_at_unix)))
+  return parts.join(' · ')
+}
+
+function fmtRate(bytesPerSec: number): string {
+  if (!bytesPerSec) return '0 B/s'
+  return `${fmtBytes(bytesPerSec)}/s`
+}
+
+function fmtMs(ms: number): string {
+  const value = Math.max(0, Math.round(Number(ms) || 0))
+  if (value < 1000) return `${value} ms`
+  return `${(value / 1000).toFixed(1)} s`
+}
+
+function fmtBitrate(bps: number): string {
+  if (!bps) return '—'
+  return `${(bps / 1_000_000).toFixed(1)} Mbps`
+}
+
+async function pollLive(): Promise<void> {
+  try {
+    live.value = await GetRuntimeMetrics() as unknown as Record<string, any> | null
+    liveFailed.value = false
+  } catch {
+    // 轮询失败不弹窗：它 2 秒一次，弹窗会变成轰炸。停掉定时器、在面板上说明状态，
+    // 用户点「刷新」时再试一次。
+    liveFailed.value = true
+    stopLive()
+  }
+}
+
+function startLive(): void {
+  stopLive()
+  liveTimer = window.setInterval(() => { void pollLive() }, LIVE_INTERVAL_MS)
+}
+
+function stopLive(): void {
+  if (liveTimer != null) { window.clearInterval(liveTimer); liveTimer = null }
+}
+
+// 落盘分片缓存要 IndexedDB 查询，比其它读数贵一档，跟着手动刷新走就够了。
+async function loadDiskCache(): Promise<void> {
+  try {
+    diskCache.value = await TsCache.diskCacheInfo() as unknown as Record<string, any>
+  } catch {
+    diskCache.value = null
+  }
+}
 
 // 身份合并队列单独拉：诊断快照是只读统计，候选组要能被用户一条条消化掉。
 const CANDIDATE_LIMIT = 60
@@ -90,38 +286,20 @@ async function mergeGroup(group: Record<string, any>): Promise<void> {
 }
 
 
-// 探测结果按源键索引，方便和统计表并排显示。
-const probeByKey = computed<Record<string, Record<string, any>>>(() => {
-  const map: Record<string, Record<string, any>> = {}
-  for (const probe of probes.value) map[probe.source_key] = probe
-  return map
-})
-
+// 手动刷新走重快照：逐表 COUNT 与日志目录遍历都在这一次里，所以不放进轮询。
 async function load(): Promise<void> {
   loading.value = true
   try {
     // 候选队列跟着一起刷新：合并完不重拉，队列里还会留着刚被并掉的那组。
-    const [snapshot] = await Promise.all([GetDiagnostics(), loadCandidates()])
+    const [snapshot] = await Promise.all([GetDiagnostics(), loadCandidates(), loadDiskCache()])
     diag.value = snapshot as unknown as Record<string, any> | null
     updatedAt.value = Date.now()
+    // 实时轮询可能因为一次失败停掉了，手动刷新时重新接上。
+    startLive()
   } catch (e: any) {
     errorStore.fromError(t('diagnostics.loadFailed'), e, 'DiagnosticsPanel.load')
   } finally {
     loading.value = false
-  }
-}
-
-async function probe(): Promise<void> {
-  probing.value = true
-  try {
-    probes.value = (await ProbeSources()) as unknown as Record<string, any>[] || []
-    // 探测现在会落一条巡检样本，不重新拉一次诊断数据，健康度列就还是旧的。
-    await load()
-  } catch (e: any) {
-    probes.value = []
-    errorStore.fromError(t('diagnostics.probeFailed'), e, 'DiagnosticsPanel.probe')
-  } finally {
-    probing.value = false
   }
 }
 
@@ -246,7 +424,23 @@ function patrolHealthTag(health: Record<string, any> | null | undefined): Health
     : t('diagnostics.healthPatrol', { rate })))
 }
 
-onMounted(() => { void load() })
+// 播放质量全部来自本次会话：没有播过就不摆一排 0，只说一句话。
+const hasPlayback = computed(() =>
+  perf.loads > 0 || perf.firstFrame.count > 0 || perf.stalls.count > 0 || perf.frames.total > 0 || perf.errors.count > 0)
+
+const playbackStream = computed(() => {
+  const c = perf.current
+  const parts = [c.host, c.resolution, c.bitrateBps ? fmtBitrate(c.bitrateBps) : ''].filter(Boolean)
+  return parts.length ? parts.join(' · ') : '—'
+})
+
+onMounted(() => {
+  void pollLive()
+  startLive()
+  void load()
+})
+// 面板不在视野里就不轮询：这些计数器在 Go 进程里一直在累加，重新挂载会读到同一份账。
+onUnmounted(() => { stopLive() })
 </script>
 
 <template>
@@ -271,99 +465,130 @@ onMounted(() => { void load() })
       </div>
     </section>
 
-    <!-- ========== 运行环境 ========== -->
+    <!-- ========== 实时性能 ========== -->
     <section class="block">
-      <h3>{{ t('diagnostics.env') }}</h3>
-      <div class="diag-grid cczj-grid">
+      <div class="block-hd cczj-flex cczj-items-center cczj-justify-between">
+        <h3>{{ t('diagnostics.live') }}</h3>
+        <small class="hint">{{ liveFailed ? t('diagnostics.livePaused') : t('diagnostics.liveEvery', { sec: LIVE_INTERVAL_MS / 1000 }) }}</small>
+      </div>
+      <p class="desc">{{ t('diagnostics.liveNote', { sec: LIVE_INTERVAL_MS / 1000 }) }}</p>
+
+      <!-- ① 播放效果：本次会话实测，来源是媒体事件和解码器帧计数 -->
+      <div class="diag-sub">{{ t('diagnostics.playback') }}</div>
+      <p v-if="!hasPlayback" class="desc">{{ t('diagnostics.playbackEmpty') }}</p>
+      <div v-else class="diag-grid cczj-grid">
         <div class="diag-card">
-          <div class="diag-label">{{ t('diagnostics.appVersion') }}</div>
-          <div class="diag-value">{{ env.app_version || '—' }}</div>
-          <div class="diag-note-inline">{{ env.installed_marker ? t('diagnostics.installedFrom', { v: env.installed_marker }) : '' }}</div>
+          <div class="diag-label">{{ t('diagnostics.firstFrame') }}</div>
+          <div class="diag-value">{{ fmtMs(perf.avgFirstFrameMs) }}</div>
+          <div class="diag-note-inline">{{ t('diagnostics.firstFrameNote', { n: perf.firstFrame.count, max: fmtMs(perf.firstFrame.maxMs), loads: perf.loads }) }}</div>
+        </div>
+        <div class="diag-card" :class="{ warn: perf.stalls.count > 0 }">
+          <div class="diag-label">{{ t('diagnostics.stalls') }}</div>
+          <div class="diag-value">{{ fmtMs(perf.stalls.totalMs) }}</div>
+          <div class="diag-note-inline">{{ t('diagnostics.stallsNote', { n: perf.stalls.count }) }}</div>
+        </div>
+        <div class="diag-card" :class="{ warn: perf.dropRate > 2 }">
+          <div class="diag-label">{{ t('diagnostics.drops') }}</div>
+          <div class="diag-value">{{ perf.dropRate.toFixed(1) }}%</div>
+          <div class="diag-note-inline">{{ t('diagnostics.dropsNote', { dropped: perf.frames.dropped, total: fmtNumber(perf.frames.total) }) }}</div>
         </div>
         <div class="diag-card">
-          <div class="diag-label">{{ t('diagnostics.uptime') }}</div>
-          <div class="diag-value">{{ fmtSeconds(env.uptime_seconds) }}</div>
-          <div class="diag-note-inline">{{ t('diagnostics.startedAt', { time: fmtTime(env.started_at_unix) }) }}</div>
+          <div class="diag-label">{{ t('diagnostics.stream') }}</div>
+          <div class="diag-value cczj-truncate" :title="playbackStream">{{ perf.current.resolution || '—' }}</div>
+          <div class="diag-note-inline cczj-truncate">{{ playbackStream }}</div>
         </div>
         <div class="diag-card">
-          <div class="diag-label">{{ t('diagnostics.runtime') }}</div>
-          <div class="diag-value">{{ env.go_version || '—' }}</div>
-          <div class="diag-note-inline">Wails {{ env.wails_version || '—' }}</div>
+          <div class="diag-label">{{ t('diagnostics.watched') }}</div>
+          <div class="diag-value">{{ fmtSeconds(perf.watchedSec) }}</div>
+          <div class="diag-note-inline">{{ t('diagnostics.watchedNote') }}</div>
         </div>
-        <div class="diag-card">
-          <div class="diag-label">{{ t('diagnostics.platform') }}</div>
-          <div class="diag-value">{{ env.goos || '—' }} / {{ env.goarch || '—' }}</div>
-          <div class="diag-note-inline">{{ t('diagnostics.cpuCount', { n: env.num_cpu || 0 }) }}</div>
-        </div>
-        <div class="diag-card">
-          <div class="diag-label">{{ t('diagnostics.goroutines') }}</div>
-          <div class="diag-value">{{ env.goroutines ?? 0 }}</div>
-          <div class="diag-note-inline">{{ t('diagnostics.gcCycles', { n: env.num_gc ?? 0 }) }}</div>
-        </div>
-        <div class="diag-card">
-          <div class="diag-label">{{ t('diagnostics.memory') }}</div>
-          <div class="diag-value">{{ fmtBytes((env.heap_alloc_kb || 0) * 1024) }}</div>
-          <div class="diag-note-inline">{{ t('diagnostics.memorySys', { size: fmtBytes((env.sys_mem_kb || 0) * 1024) }) }}</div>
+        <div class="diag-card" :class="{ warn: perf.errors.count > 0 }">
+          <div class="diag-label">{{ t('diagnostics.playErrors') }}</div>
+          <div class="diag-value">{{ perf.errors.count }}</div>
+          <div class="diag-note-inline cczj-truncate">{{ perf.errors.count
+            ? t('diagnostics.playErrorsNote', { kind: perf.errors.lastKind || '—', host: perf.errors.lastHost || '—' })
+            : t('diagnostics.playErrorsClear') }}</div>
         </div>
       </div>
 
+      <!-- ② 网络吞吐：Go 侧出网账本，速率由实测字节与耗时派生 -->
+      <div class="diag-sub">{{ t('diagnostics.network') }}</div>
       <div class="diag-kv cczj-flex cczj-flex-col">
         <div class="diag-kv-row">
-          <span class="k">{{ t('diagnostics.dataDir') }}</span>
-          <span class="v cczj-truncate" :title="env.data_dir">{{ env.data_dir || '—' }}</span>
+          <span class="k">{{ t('diagnostics.networkTotal') }}</span>
+          <span class="v">{{ fmtBytes(Number(liveNetwork.total_bytes) || 0) }}</span>
         </div>
         <div class="diag-kv-row">
-          <span class="k">{{ t('diagnostics.executable') }}</span>
-          <span class="v cczj-truncate" :title="env.executable">{{ env.executable || '—' }}</span>
+          <span class="k">{{ t('diagnostics.networkSince') }}</span>
+          <span class="v">{{ liveNetwork.since_unix ? fmtTime(Number(liveNetwork.since_unix)) : '—' }}</span>
         </div>
         <div class="diag-kv-row">
-          <span class="k">{{ t('diagnostics.backgroundTasks') }}</span>
-          <span class="v">
-            <template v-if="backgroundTasks.length">
-              <span v-for="task in backgroundTasks" :key="task.name" class="diag-tag">{{ task.name }} · {{ task.count }}</span>
-            </template>
-            <template v-else>—</template>
-          </span>
+          <span class="k">{{ t('diagnostics.networkPrivate') }}</span>
+          <span class="v">{{ liveNetwork.allow_private_targets ? t('diagnostics.networkPrivateOn') : t('diagnostics.networkPrivateOff') }}</span>
         </div>
       </div>
-    </section>
-
-    <!-- ========== 存储 ========== -->
-    <section class="block">
-      <h3>{{ t('diagnostics.storage') }}</h3>
-      <div class="diag-grid cczj-grid">
-        <div class="diag-card">
-          <div class="diag-label">{{ t('diagnostics.database') }}</div>
-          <div class="diag-value">{{ fmtBytes(storage.database_bytes) }}</div>
-          <div class="diag-note-inline cczj-truncate" :title="storage.database_path">{{ t('diagnostics.schemaVersion', { v: env.schema_version ?? 0 }) }} · {{ storage.database_path || '—' }}</div>
-        </div>
-        <div class="diag-card">
-          <div class="diag-label">{{ t('diagnostics.memoryCache') }}</div>
-          <div class="diag-value">{{ fmtBytes(storage.detail_bytes ?? 0) }}</div>
-          <div class="diag-note-inline">{{ t('diagnostics.memoryCacheNote', {
-            entries: storage.detail_entries ?? 0,
-            chart: storage.chart_matches ?? 0,
-            comments: storage.comment_pages ?? 0,
-          }) }}</div>
-        </div>
-        <div class="diag-card">
-          <div class="diag-label">{{ t('diagnostics.logFiles') }}</div>
-          <div class="diag-value">{{ storage.log_files ?? 0 }} · {{ fmtBytes(storage.log_bytes) }}</div>
-          <div class="diag-note-inline">{{ t('diagnostics.keepDays', { days: storage.log_keep_days ?? 0 }) }}</div>
-        </div>
-      </div>
-
-      <div class="diag-sub">{{ t('diagnostics.tables') }}</div>
-      <div class="diag-table-wrap">
+      <div v-if="liveEmpty" class="diag-empty">{{ t('diagnostics.networkEmpty') }}</div>
+      <div v-else class="diag-table-wrap">
         <table class="diag-table">
+          <thead>
+            <tr>
+              <th>{{ t('diagnostics.networkColUse') }}</th>
+              <th class="num">{{ t('diagnostics.networkColRequests') }}</th>
+              <th class="num">{{ t('diagnostics.networkColFailed') }}</th>
+              <th class="num">{{ t('diagnostics.networkColBytes') }}</th>
+              <th class="num">{{ t('diagnostics.networkColAvg') }}</th>
+              <th class="num" :title="t('diagnostics.networkColPeakNote')">{{ t('diagnostics.networkColPeak') }}</th>
+            </tr>
+          </thead>
           <tbody>
-            <tr v-for="table in tables" :key="table.name">
-              <td class="name">{{ table.name }}</td>
-              <td class="num">{{ fmtNumber(table.rows) }}</td>
+            <tr v-for="row in liveCategories" :key="`net-${row.category}`" :title="categoryTitle(row)">
+              <td>{{ categoryLabel(String(row.category)) }}</td>
+              <td class="num">{{ fmtNumber(Number(row.requests) || 0) }}</td>
+              <td class="num" :class="{ danger: (Number(row.fails) || 0) > 0 }">{{ Number(row.fails) || 0 }}</td>
+              <td class="num">{{ fmtBytes(Number(row.bytes) || 0) }}</td>
+              <td class="num">{{ fmtMs(Number(row.avg_ms) || 0) }}</td>
+              <td class="num">{{ fmtRate(Number(row.peak_bytes_per_sec) || 0) }}</td>
             </tr>
           </tbody>
         </table>
       </div>
+
+      <!-- ③ 缓存命中率：Go 侧三块 + 前端三块，读法分开统计 -->
+      <div class="diag-sub">{{ t('diagnostics.cacheHit') }}</div>
+      <p class="desc">{{ t('diagnostics.cacheHitNote') }}</p>
+      <div class="diag-table-wrap">
+        <table class="diag-table">
+          <thead>
+            <tr>
+              <th>{{ t('diagnostics.cacheColName') }}</th>
+              <th class="num">{{ t('diagnostics.cacheColEntries') }}</th>
+              <th class="num" :title="t('diagnostics.cacheRateNote')">{{ t('diagnostics.cacheColRate') }}</th>
+              <th class="num">{{ t('diagnostics.cacheColHits') }}</th>
+              <th class="num" :title="t('diagnostics.cacheStaleNote')">{{ t('diagnostics.cacheColStale') }}</th>
+              <th class="num">{{ t('diagnostics.cacheColMiss') }}</th>
+              <th class="num" :title="t('diagnostics.cacheSkipNote')">{{ t('diagnostics.cacheColSkip') }}</th>
+              <th class="num" :title="t('diagnostics.cacheFetchNote')">{{ t('diagnostics.cacheColFetch') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in cacheRows" :key="`cache-${row.key}`" :title="cacheTitle(row)">
+              <td>{{ t(CACHE_LABEL_KEYS[row.key] || 'diagnostics.netUnknown') }}</td>
+              <td class="num">{{ entriesCell(row) }}</td>
+              <td class="num">{{ hitRateCell(row) }}</td>
+              <td class="num">{{ counterCell(row, 'hits') }}</td>
+              <td class="num">{{ counterCell(row, 'stale_hits') }}</td>
+              <td class="num">{{ counterCell(row, 'misses') }}</td>
+              <td class="num">{{ counterCell(row, 'skipped') }}</td>
+              <td class="num">{{ fetchCell(row) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p v-if="diskCache" class="desc">{{ t('diagnostics.diskCacheNote', {
+        count: diskCache.count ?? 0,
+        size: fmtBytes(Number(diskCache.bytes) || 0),
+        days: diskCache.ttlDays ?? 0,
+      }) }}</p>
     </section>
 
     <!-- ========== 采集调度 ========== -->
@@ -503,15 +728,89 @@ onMounted(() => { void load() })
       </div>
     </section>
 
+    <!-- ========== 运行环境与存储 ========== -->
+    <section class="block">
+      <h3>{{ t('diagnostics.runtimeStorage') }}</h3>
+      <div class="diag-grid cczj-grid">
+        <div class="diag-card">
+          <div class="diag-label">{{ t('diagnostics.appVersion') }}</div>
+          <div class="diag-value">{{ env.app_version || '—' }}</div>
+          <div class="diag-note-inline">{{ env.installed_marker ? t('diagnostics.installedFrom', { v: env.installed_marker }) : '' }}</div>
+        </div>
+        <div class="diag-card">
+          <div class="diag-label">{{ t('diagnostics.uptime') }}</div>
+          <div class="diag-value">{{ fmtSeconds(uptimeSeconds) }}</div>
+          <div class="diag-note-inline">{{ t('diagnostics.startedAt', { time: fmtTime(env.started_at_unix) }) }}</div>
+        </div>
+        <div class="diag-card">
+          <div class="diag-label">{{ t('diagnostics.runtime') }}</div>
+          <div class="diag-value">{{ env.go_version || '—' }}</div>
+          <div class="diag-note-inline">Wails {{ env.wails_version || '—' }}</div>
+        </div>
+        <div class="diag-card">
+          <div class="diag-label">{{ t('diagnostics.platform') }}</div>
+          <div class="diag-value">{{ env.goos || '—' }} / {{ env.goarch || '—' }}</div>
+          <div class="diag-note-inline">{{ t('diagnostics.cpuCount', { n: env.num_cpu || 0 }) }}</div>
+        </div>
+        <div class="diag-card">
+          <div class="diag-label">{{ t('diagnostics.goroutines') }}</div>
+          <div class="diag-value">{{ goroutineCount }}</div>
+          <div class="diag-note-inline">{{ t('diagnostics.gcCycles', { n: env.num_gc ?? 0 }) }}</div>
+        </div>
+        <div class="diag-card">
+          <div class="diag-label">{{ t('diagnostics.memory') }}</div>
+          <div class="diag-value">{{ fmtBytes((env.heap_alloc_kb || 0) * 1024) }}</div>
+          <div class="diag-note-inline">{{ t('diagnostics.memorySys', { size: fmtBytes((env.sys_mem_kb || 0) * 1024) }) }}</div>
+        </div>
+        <div class="diag-card">
+          <div class="diag-label">{{ t('diagnostics.database') }}</div>
+          <div class="diag-value">{{ fmtBytes(storage.database_bytes) }}</div>
+          <div class="diag-note-inline cczj-truncate" :title="storage.database_path">{{ t('diagnostics.schemaVersion', { v: env.schema_version ?? 0 }) }} · {{ storage.database_path || '—' }}</div>
+        </div>
+        <div class="diag-card">
+          <div class="diag-label">{{ t('diagnostics.logFiles') }}</div>
+          <div class="diag-value">{{ storage.log_files ?? 0 }} · {{ fmtBytes(storage.log_bytes) }}</div>
+          <div class="diag-note-inline cczj-truncate" :title="storage.log_dir">{{ t('diagnostics.keepDays', { days: storage.log_keep_days ?? 0 }) }}</div>
+        </div>
+      </div>
+
+      <div class="diag-kv cczj-flex cczj-flex-col">
+        <div class="diag-kv-row">
+          <span class="k">{{ t('diagnostics.dataDir') }}</span>
+          <span class="v cczj-truncate" :title="env.data_dir">{{ env.data_dir || '—' }}</span>
+        </div>
+        <div class="diag-kv-row">
+          <span class="k">{{ t('diagnostics.executable') }}</span>
+          <span class="v cczj-truncate" :title="env.executable">{{ env.executable || '—' }}</span>
+        </div>
+        <div class="diag-kv-row">
+          <span class="k">{{ t('diagnostics.backgroundTasks') }}</span>
+          <span class="v">
+            <template v-if="backgroundTasks.length">
+              <span v-for="task in backgroundTasks" :key="task.name" class="diag-tag">{{ task.name }} · {{ task.count }}</span>
+            </template>
+            <template v-else>—</template>
+          </span>
+        </div>
+      </div>
+
+      <div class="diag-sub">{{ t('diagnostics.tables') }}</div>
+      <div class="diag-table-wrap">
+        <table class="diag-table">
+          <tbody>
+            <tr v-for="table in tables" :key="table.name">
+              <td class="name">{{ table.name }}</td>
+              <td class="num">{{ fmtNumber(table.rows) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <!-- ========== 采集源 ========== -->
     <section class="block">
-      <div class="block-hd cczj-flex cczj-items-center cczj-justify-between">
-        <h3>{{ t('diagnostics.sources') }}</h3>
-        <Button variant="secondary" size="sm" :loading="probing" @click="probe">
-          <Icon name="globe" :size="12" /> {{ t('diagnostics.probe') }}
-        </Button>
-      </div>
-      <p class="desc">{{ t('diagnostics.probeNote') }}</p>
+      <h3>{{ t('diagnostics.sources') }}</h3>
+      <p class="desc">{{ t('diagnostics.healthHint') }}</p>
       <div v-if="!sources.length" class="diag-empty">{{ t('diagnostics.noSources') }}</div>
       <div v-else class="diag-table-wrap">
         <table class="diag-table">
@@ -521,7 +820,6 @@ onMounted(() => { void load() })
               <th class="num">{{ t('diagnostics.catalog') }}</th>
               <th>{{ t('diagnostics.lastCollect') }}</th>
               <th :title="t('diagnostics.healthHint')">{{ t('diagnostics.health') }}</th>
-              <th>{{ t('diagnostics.probeResult') }}</th>
               <th>{{ t('diagnostics.api') }}</th>
             </tr>
           </thead>
@@ -554,15 +852,6 @@ onMounted(() => { void load() })
                   <span class="diag-tag" :class="patrolHealthTag(source.patrol_health).cls"
                         :title="patrolHealthTag(source.patrol_health).title">{{ patrolHealthTag(source.patrol_health).text }}</span>
                 </div>
-              </td>
-              <td>
-                <span v-if="!probeByKey[source.source_key]" class="muted">—</span>
-                <span v-else-if="probeByKey[source.source_key].ok" class="diag-tag ok">
-                  {{ probeByKey[source.source_key].status_code }} · {{ probeByKey[source.source_key].latency_ms }}ms
-                </span>
-                <span v-else class="diag-tag bad" :title="probeByKey[source.source_key].error">
-                  {{ probeByKey[source.source_key].status_code || t('common.failed') }} · {{ probeByKey[source.source_key].error }}
-                </span>
               </td>
               <td class="cczj-truncate" :title="source.api_url">{{ source.api_url }}</td>
             </tr>
@@ -688,6 +977,7 @@ onMounted(() => { void load() })
 }
 .diag-table td.num,
 .diag-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.diag-table td.danger { color: var(--danger); }
 .diag-table .mono { font-family: var(--font-mono, monospace); }
 .diag-empty {
   margin-top: 10px;

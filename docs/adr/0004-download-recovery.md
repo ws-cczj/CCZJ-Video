@@ -4,6 +4,9 @@
 
 Accepted.
 
+Amended 2026-10-01: both transports referenced below are now implemented, so the
+state contract is no longer forward-looking.
+
 ## Decision
 
 Download tasks have one backend-owned registry and persisted snapshots. Valid

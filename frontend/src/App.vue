@@ -27,6 +27,7 @@ const KEEP_ALIVE_INCLUDE = [
   'Sources',
   'Favorites',
   'History',
+  'Recent',
   'Downloads',
   'Settings',
 ]
@@ -126,7 +127,10 @@ onUnmounted(() => {
   <!-- 启动画面 -->
   <SplashScreen />
 
-  <div class="app-shell">
+  <!-- data-file-drop-target 是 Wails 运行时找的那个标记：带着文件掠过窗口时，它只在
+       命中这个标记（或其子孙）的场合把 dropEffect 设成 copy，否则一律 none——也就是
+       鼠标上那个禁止符号。整窗挂一个，等于「拖到哪儿都能装」。 -->
+  <div class="app-shell" data-file-drop-target>
     <!-- 自定义标题栏：最顶部一条，背景色与页面主背景一致 -->
     <TitleBar />
 
@@ -267,10 +271,10 @@ onUnmounted(() => {
   --carousel-control: #16a34a;
   --carousel-control-text: #ffffff;
 
-  /* 阴影层级 */
-  --shadow-sm: 0 1px 3px rgba(31,36,48,0.06);
+  /* 阴影层级（默认主题 green 的派生值；apply() 会按当前主题覆写） */
+  --shadow-sm: 0 1px 3px rgba(13, 98, 44, 0.14);
   --shadow: 0 6px 22px rgba(31,36,48,0.08);
-  --shadow-lg: 0 12px 48px rgba(0,0,0,0.35);
+  --shadow-lg: 0 12px 48px rgba(9, 65, 30, 0.24);
   --shadow-button: 0 2px 8px var(--accent-alpha-20);
 
   /* 圆角 */
@@ -366,6 +370,22 @@ input, textarea, [contenteditable="true"], .allow-select, .video-description, .d
   flex-direction: column;
   transition: background 0.3s;
 }
+/* 拖放态：整个窗口都是投放区，Wails 运行时在文件进出时给根节点加/摘这个类。
+   描边画在内侧——窗口无边框，往外描就等于描到桌面上去了。 */
+.app-shell.file-drop-target-active {
+  outline: 2px dashed var(--accent);
+  outline-offset: -4px;
+}
+/* 指针落在 Teleport 到 body 的浮层上时，命中的标记是 body 本身。body 的高度不保证铺满
+   窗口，所以这层反馈用固定定位的伪元素画，且不吃鼠标——否则它自己就成了新的命中物。 */
+body.file-drop-target-active::after {
+  content: '';
+  position: fixed;
+  inset: 2px;
+  border: 2px dashed var(--accent);
+  pointer-events: none;
+  z-index: 9999;
+}
 .app-body {
   display: flex;
   flex: 1;
@@ -375,6 +395,9 @@ input, textarea, [contenteditable="true"], .allow-select, .video-description, .d
 .main-content {
   flex: 1;
   overflow-y: auto;
+  /* 滚动条占 8px 且是经典式（挤版心）。启用一个扩展包常把内容顶过一屏，滚动条就在这时出现，
+     整页版心窄 8px、每一行重排——用户看到的正是那一下「抖」。留出常驻槽位，出现与否不再改宽度。 */
+  scrollbar-gutter: stable;
   padding: 20px 24px 24px;
   color: var(--text-primary);
   transition: background 0.3s;

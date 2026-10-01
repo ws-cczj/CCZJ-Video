@@ -1,12 +1,14 @@
 package handler
 
 import (
+	"cczjVideo/app/apperror"
 	"cczjVideo/app/applog"
 	"cczjVideo/app/cache"
 	"cczjVideo/app/collect"
 	"cczjVideo/app/db"
 	"cczjVideo/app/detail"
 	"cczjVideo/app/model"
+	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -152,7 +154,7 @@ func GetVideoList(req VideoListReq) (*VideoListResp, error) {
 	}
 	page, err := db.GetCatalogVideoPage(req.SourceKey, filter)
 	if err != nil {
-		return nil, fmt.Errorf("get videos: %w", err)
+		return nil, apperror.Wrap(apperror.Storage, err, "get videos")
 	}
 
 	return &VideoListResp{Videos: page.Videos, Total: page.Total, NextCursor: page.NextCursor}, nil
@@ -279,16 +281,16 @@ type VideoDetailResp struct {
 
 // GetVideoDetail always resolves a catalog identity and fetches remote detail.
 // It intentionally has no SQLite detail write path.
-func GetVideoDetail(req VideoDetailReq) (*VideoDetailResp, error) {
+func GetVideoDetail(ctx context.Context, req VideoDetailReq) (*VideoDetailResp, error) {
 	if req.SourceKey == "" || (req.GlobalID <= 0 && req.VodId == "") {
-		return nil, fmt.Errorf("source_key and global_id are required")
+		return nil, apperror.New(apperror.Validation, "source_key and global_id are required")
 	}
 	var result *detail.Result
 	var err error
 	if req.GlobalID > 0 {
-		result, err = detail.Default.GetByGlobal(req.SourceKey, req.GlobalID, req.Refresh)
+		result, err = detail.Default.GetByGlobalContext(ctx, req.SourceKey, req.GlobalID, req.Refresh)
 	} else {
-		result, err = detail.Default.Get(req.SourceKey, req.VodId, req.Refresh)
+		result, err = detail.Default.GetContext(ctx, req.SourceKey, req.VodId, req.Refresh)
 	}
 	if err != nil {
 		if structured, ok := err.(*detail.Error); ok {
@@ -350,15 +352,15 @@ func SearchVideos(req VideoSearchReq) (*VideoListResp, error) {
 	// caching results locally; never enrich a search hit through detail requests.
 	source, err := db.GetSourceByKey(req.SourceKey)
 	if err != nil {
-		return nil, fmt.Errorf("get source: %w", err)
+		return nil, apperror.Wrap(apperror.NotFound, err, "get source")
 	}
 	strategy := collect.CreateStrategyFromSource(source)
 	if strategy == nil {
-		return nil, fmt.Errorf("source strategy unavailable")
+		return nil, apperror.New(apperror.Unsupported, "source strategy unavailable")
 	}
 	fetched, err := collect.FetchSearchPage(strategy, keyword, req.Page)
 	if err != nil {
-		return nil, fmt.Errorf("remote search: %w", err)
+		return nil, apperror.Wrap(apperror.Unavailable, err, "remote search")
 	}
 	fetched.List = db.FilterEnabledCollectVideos(fetched.List)
 
@@ -372,7 +374,7 @@ func SearchVideos(req VideoSearchReq) (*VideoListResp, error) {
 	}
 	cached, err := db.ExistingCatalogVodIDs(req.SourceKey, remoteIDs)
 	if err != nil {
-		return nil, fmt.Errorf("check catalog membership: %w", err)
+		return nil, apperror.Wrap(apperror.Storage, err, "check catalog membership")
 	}
 	for _, v := range fetched.List {
 		if v != nil {
@@ -381,7 +383,7 @@ func SearchVideos(req VideoSearchReq) (*VideoListResp, error) {
 	}
 
 	if err := db.UpsertCatalogItems(req.SourceKey, fetched.List); err != nil {
-		return nil, fmt.Errorf("cache search catalog: %w", err)
+		return nil, apperror.Wrap(apperror.Storage, err, "cache search catalog")
 	}
 	for _, v := range fetched.List {
 		if v != nil {
@@ -442,7 +444,7 @@ type DeleteVideoReq struct {
 
 func DeleteVideo(req DeleteVideoReq) error {
 	if req.SourceKey == "" || req.VodId == "" {
-		return fmt.Errorf("参数不完整")
+		return apperror.New(apperror.Validation, "参数不完整")
 	}
 	// 走缓存层而不是直接删库：删除后这条视频的所有派生缓存都必须作废。
 	return cache.DeleteCatalogVideo(req.SourceKey, req.VodId, "视频已删除")

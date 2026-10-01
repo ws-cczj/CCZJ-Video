@@ -105,6 +105,12 @@ var DefaultFieldAliases = map[string][]string{
 // Alias precedence is declared explicitly because Go map iteration order is
 // intentionally random. Configuration mapping always wins; then an exact
 // target name wins; finally the first alias in this stable list wins.
+//
+// The same three-level order applies to objects found under a declared
+// response.list_path, which need not be MAC-CMS-shaped at all: an entry in
+// field_mapping is resolved by collectFieldCandidates with priority 0, so it
+// beats every DefaultFieldAliases hit (priority 1 / 100+rank) regardless of the
+// key spelling the source uses.
 var defaultFieldAliasOrder = []string{
 	"vod_id", "vod_name", "vod_pic", "type_id", "type_name", "vod_class",
 	"vod_year", "vod_area", "vod_lang", "vod_remarks", "vod_score",
@@ -271,6 +277,110 @@ func ParseVideosWithMapping(rawData []byte, fieldMapping map[string]string) ([]*
 		videos = append(videos, v)
 	}
 	return videos, nil
+}
+
+// parseVideosFromValue 解析 response.list_path 取到的节点。
+//
+// 列表元素不再假定是 MAC CMS 的形状：任何 JSON 对象都能解析，字段名由
+// field_mapping（优先级最高，见 collectFieldCandidates）或内置别名表决定。
+// 单个对象按一条记录处理，方便详情接口复用同一个路径声明。
+// 解析不了的单条记录只跳过并告警，与 ParseVideosWithMapping 一致。
+func parseVideosFromValue(node any, fieldMapping map[string]string) ([]*model.Video, error) {
+	items, err := videoValueItems(node)
+	if err != nil {
+		return nil, err
+	}
+	videos := make([]*model.Video, 0, len(items))
+	for i, item := range items {
+		raw, err := json.Marshal(item)
+		if err != nil {
+			applog.Warn("[FieldMapping] 序列化第 %d 条视频失败: %v", i, err)
+			continue
+		}
+		v, err := ParseVideoWithMapping(raw, fieldMapping)
+		if err != nil {
+			applog.Warn("[FieldMapping] 解析第 %d 条视频失败: %v", i, err)
+			continue
+		}
+		videos = append(videos, v)
+	}
+	return videos, nil
+}
+
+// videoValueItems turns the node a list path resolved to into records.
+func videoValueItems(node any) ([]any, error) {
+	switch items := node.(type) {
+	case []any:
+		return items, nil
+	case map[string]any:
+		return []any{items}, nil
+	case nil:
+		// "list": null is a legitimately empty page, not a broken document.
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("%w: expected an array or object of records, got %s", ErrPathType, jsonKindName(node))
+	}
+}
+
+// canonicalVideoFields are the JSON names model.Video exposes AND that the
+// mapping loop can actually assign (string and FlexibleString fields). A
+// declarative pack may name its fields either way round, and this set is what
+// makes the two readings distinguishable without a hint from the caller: names
+// the parser cannot fill, such as "id" or "global_id", are deliberately left out
+// so {"vod_id":"id"} reads as "the source calls the id field id" instead of
+// silently targeting an int field nothing writes to.
+var canonicalVideoFields = buildCanonicalVideoFields()
+
+func buildCanonicalVideoFields() map[string]bool {
+	fields := make(map[string]bool)
+	structType := reflect.TypeOf(model.Video{})
+	for i := 0; i < structType.NumField(); i++ {
+		field := structType.Field(i)
+		if field.Type.Kind() != reflect.String {
+			continue
+		}
+		tag := field.Tag.Get("json")
+		if tag == "" || tag == "-" {
+			continue
+		}
+		if name := strings.Split(tag, ",")[0]; name != "" {
+			fields[name] = true
+		}
+	}
+	return fields
+}
+
+// canonicalizeFieldMapping folds a declarative pack's field_mapping into the
+// one direction the parser understands: source key -> canonical video field.
+//
+// Packs written against the schema naturally say {"vod_name":"name"} (canonical
+// field -> source key), while adv_config and the legacy paths have always meant
+// {"name":"vod_name"}. A pair is read in the declared direction whenever its
+// value names a field the parser can fill, and rotated only when the key is the
+// canonical side; a pair that is canonical on both sides keeps its declared
+// reading, so {"vod_name":"vod_actor"} still means "fill vod_actor from vod_name".
+func canonicalizeFieldMapping(fieldMapping map[string]string) map[string]string {
+	if len(fieldMapping) == 0 {
+		return fieldMapping
+	}
+	out := make(map[string]string, len(fieldMapping))
+	for source, target := range fieldMapping {
+		target = strings.TrimSpace(target)
+		source = strings.TrimSpace(source)
+		switch {
+		case target == "" || source == "":
+			continue
+		case canonicalVideoFields[target]:
+			out[source] = target
+		case canonicalVideoFields[source]:
+			out[target] = source
+		default:
+			// Unknown on both sides: keep it verbatim so the parser simply
+			// ignores it instead of inventing a target.
+			out[source] = target
+		}
+	}
+	return out
 }
 
 func setFieldValue(field reflect.Value, value interface{}) {

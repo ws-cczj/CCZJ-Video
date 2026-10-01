@@ -1,0 +1,19 @@
+{
+	"fixed": {
+		"file_version": "0.0.0.0",
+		"product_version": "0.0.0.0",
+		"type": "APP"
+	},
+	"info": {
+		"0409": {
+			"FileVersion": "0.0.0.0",
+			"ProductVersion": "0.0.0",
+			"CompanyName": "cczj",
+			"FileDescription": "CCZJ Video",
+			"LegalCopyright": "© cczj",
+			"OriginalFilename": "cczjVideo.exe",
+			"ProductName": "CCZJ Video",
+			"Comments": "Local video library, collector and player built with Wails v3"
+		}
+	}
+}

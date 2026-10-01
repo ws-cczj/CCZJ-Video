@@ -1,5 +1,6 @@
 import * as AppMod from '../api/app'
-import { readStorage, writeStorage } from '../platform/storage'
+import { readStorage } from '../platform/storage'
+import { createDebouncedWriter } from '../platform/debouncedWrite'
 import { normalizePlayLines } from '../utils/playLines'
 import type { Episode, PlayLine, Video, VideoDetailResponse } from '../types'
 
@@ -54,14 +55,21 @@ async function joinChunks(chunks: string[]): Promise<string> {
   return value
 }
 
-function readEntries(): Record<string, StoredDetailEntry> {
-  const entries = readStorage<Record<string, StoredDetailEntry>>(STORAGE_KEY, {})
-  return entries && typeof entries === 'object' ? entries : {}
+// map 常驻内存，只在第一次用到时解析一次；落盘合并成防抖一次。见 createDebouncedWriter：
+// 这张 map 装的是最多 12 条多线路详情 payload，以前每次命中都要整张 parse + stringify，
+// 而那正好落在详情页/播放页挂载的主线程上。代价是这些 payload 会占着内存到关窗为止，
+// 上限由 MAX_ENTRIES 和 localStorage 配额一起兜住。
+let memEntries: Record<string, StoredDetailEntry> | null = null
+
+function detailEntries(): Record<string, StoredDetailEntry> {
+  if (!memEntries) {
+    const stored = readStorage<Record<string, StoredDetailEntry>>(STORAGE_KEY, {})
+    memEntries = stored && typeof stored === 'object' ? stored : {}
+  }
+  return memEntries
 }
 
-function saveEntries(entries: Record<string, StoredDetailEntry>): void {
-  writeStorage(STORAGE_KEY, entries)
-}
+const persistDetails = createDebouncedWriter(STORAGE_KEY, detailEntries)
 
 function hasLargeM3u8(response: VideoDetailResponse, rawSize: number): boolean {
   const urls = normalizePlayLines(response)
@@ -138,7 +146,7 @@ export async function readDetailCache(
   globalId = 0,
 ): Promise<VideoDetailResponse | null> {
   if (!sourceKey || (!vodId && !globalId)) return null
-  const entries = readEntries()
+  const entries = detailEntries()
   const key = makeKey(sourceKey, vodId, globalId)
   const entry = entries[key]
   if (!entry) return null
@@ -146,13 +154,13 @@ export async function readDetailCache(
   const detail = await decode(entry)
   if (!detail?.video) {
     delete entries[key]
-    saveEntries(entries)
+    persistDetails.schedule()
     return null
   }
 
   // A hit refreshes recency and is therefore the LRU signal.
   entry.accessedAt = Date.now()
-  saveEntries(entries)
+  persistDetails.schedule()
   return detail
 }
 
@@ -163,10 +171,10 @@ export async function writeDetailCache(
   globalId = 0,
 ): Promise<void> {
   if (!sourceKey || (!vodId && !globalId) || !response.video) return
-  const entries = readEntries()
+  const entries = detailEntries()
   entries[makeKey(sourceKey, vodId, globalId)] = await encode(response)
   trim(entries)
-  saveEntries(entries)
+  persistDetails.schedule()
 }
 
 /**
@@ -177,7 +185,7 @@ export async function writeDetailCache(
  */
 export function dropDetailCache(sourceKey: string, vodIds?: string[]): number {
   if (!sourceKey) return 0
-  const entries = readEntries()
+  const entries = detailEntries()
   const keys = vodIds?.length
     ? vodIds.map((vodId) => makeKey(sourceKey, vodId))
     : Object.keys(entries).filter((key) => key.startsWith(`${sourceKey}:`))
@@ -185,12 +193,7 @@ export function dropDetailCache(sourceKey: string, vodIds?: string[]): number {
   for (const key of keys) {
     if (delete entries[key]) removed++
   }
-  if (removed > 0) saveEntries(entries)
+  if (removed > 0) persistDetails.schedule()
   return removed
-}
-
-/** 清掉全部详情缓存（用户显式「清除缓存」）。 */
-export function dropAllDetailCache(): void {
-  saveEntries({})
 }
 

@@ -9,9 +9,9 @@
 package handler
 
 import (
+	"cczjVideo/app/apperror"
 	"cczjVideo/app/cache"
 	"cczjVideo/app/db"
-	"fmt"
 )
 
 // RecycleListReq 是回收站分页请求。SourceKey 为空表示跨源列出全部。
@@ -42,7 +42,7 @@ type RecycleResult struct {
 
 func (req RecycleReq) validate() error {
 	if req.SourceKey == "" || req.VodId == "" {
-		return fmt.Errorf("参数不完整")
+		return apperror.New(apperror.Validation, "参数不完整")
 	}
 	return nil
 }

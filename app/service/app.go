@@ -10,11 +10,11 @@ import (
 	"cczjVideo/app/handler"
 	"cczjVideo/app/lifecycle"
 	mediaservice "cczjVideo/app/media"
+	pluginservice "cczjVideo/app/plugin"
 	proxyservice "cczjVideo/app/proxy"
 	"cczjVideo/app/settings"
 	updateservice "cczjVideo/app/update"
 	"cczjVideo/app/updater"
-	"cczjVideo/app/util"
 	windowservice "cczjVideo/app/window"
 	"context"
 	"fmt"
@@ -26,36 +26,44 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
-	"github.com/bwmarrin/snowflake"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 const (
 	maxSourceImportBytes       = 64 << 20
 	maxSourceImportBase64Bytes = 86 << 20
+	// shutdownDrainTimeout 给后台任务留出收尾时间：采集引擎在上下文取消后最多还跑
+	// 完当前这一页的提交，下载则立刻断开。真正的判据是"db.Close 必须落在这里之后"，
+	// 否则正在提交的那一批会写到已经关掉的句柄上。
+	shutdownDrainTimeout = 15 * time.Second
+	// shutdownHardStop 只在优雅退出确实卡死时对进程动手。远大于 drain 时限，
+	// 正常重启与装更新走到的都是 shutdownDone 那条分支。
+	shutdownHardStop = 60 * time.Second
 )
 
 // 图片代理限速：避免对同一CDN连续快速请求导致被限流
 type App struct {
-	app         *application.App
-	collectMu   sync.Mutex
-	forceQuit   atomic.Bool
-	settings    *settings.Service
-	window      *windowservice.Service
-	update      *updateservice.Service
-	cache       *cacheservice.Service
-	media       *mediaservice.Service
-	collection  *collectionservice.Service
-	schedulers  *collectionservice.SchedulerService
-	background  *lifecycle.Group
-	downloads   *downloadservice.Registry[downloadTask]
-	downloadDir *downloadservice.Directory
-	proxy       *proxyservice.Service
-	hlsProxy    *proxyservice.HLSService
+	app        *application.App
+	settings   *settings.Service
+	plugins    *pluginservice.Service
+	window     *windowservice.Service
+	update     *updateservice.Service
+	cache      *cacheservice.Service
+	media      *mediaservice.Service
+	collection *collectionservice.Service
+	schedulers *collectionservice.SchedulerService
+	background *lifecycle.Group
+	// shutdownDone 在 ServiceShutdown 收尾时关闭。RestartApp 用它判断优雅退出
+	// 是否真的走完，只有没走完才允许自己 os.Exit。
+	shutdownDone chan struct{}
+	shutdownOnce sync.Once
+	downloads    *downloadservice.Registry[downloadTask]
+	downloadDir  *downloadservice.Directory
+	proxy        *proxyservice.Service
+	hlsProxy     *proxyservice.HLSService
 }
 
 // ======================== 关闭行为 ========================
@@ -74,10 +82,15 @@ func (a *App) SetCloseBehavior(minimize bool) {
 	a.window.SetCloseBehavior(minimize)
 }
 
-// RestartApp 重启应用
+// RestartApp 重启应用：先把新进程拉起来，再请求退出。
+//
+// 这里以前是 sleep(200ms) + os.Exit(0)：整个关停流程被跳过 —— 记录退出时刻
+// （下次启动的补采窗口按它算）、取消并等待采集与下载收尾、关日志、关库一个都没执行。
+// 留下的结果就是"重启一次，库就脏一点"。现在只请求退出，进程由 app.Run() 正常返回
+// 来结束；硬超时兜底只在优雅退出真的卡死时才对进程动手。
 func (a *App) RestartApp() {
 	exe, err := os.Executable()
-	if err != nil {
+	if err != nil || a.app == nil {
 		return
 	}
 
@@ -97,20 +110,39 @@ func (a *App) RestartApp() {
 		_ = cmd.Start()
 	}
 
-	a.forceQuit.Store(true)
+	a.quitGracefully()
+}
 
-	time.Sleep(200 * time.Millisecond)
-
-	go func() {
+// quitGracefully 请求应用退出，并只在优雅退出真的走不通时对进程动手。
+//
+// 退出必须由 app.Run() 正常返回来收尾：ServiceShutdown 会取消并等待后台任务，
+// 然后才关日志和关库。重启和用户点装的更新包都从这里退 —— 调用方要的是"一定会退"，
+// 不是"立刻退"，所以留一个远大于收尾时限的兜底，防止界面卡在退出中。
+func (a *App) quitGracefully() {
+	if a.app == nil {
+		applog.Warn("应用尚未启动，退出请求直接结束进程")
 		os.Exit(0)
-	}()
+		return
+	}
 
+	quitting := a.shutdownDone
 	a.app.Quit()
+	go func() {
+		select {
+		case <-quitting:
+		case <-time.After(shutdownHardStop):
+			applog.Warn("优雅退出在 %s 内没有完成，强制结束进程", shutdownHardStop)
+			os.Exit(0)
+		}
+	}()
 }
 
 func NewApp() *App {
-	a := &App{}
+	a := &App{shutdownDone: make(chan struct{})}
 	a.settings = settings.NewService()
+	// 扩展包注册表只要一个「取数据目录」的函数：它在扫描时才被调用，
+	// 所以构造它可以早于数据库打开（启用状态才需要读库）。
+	a.plugins = pluginservice.NewService(a.getDataDir)
 	a.window = windowservice.NewService(func() application.Window {
 		if a.app == nil {
 			return nil
@@ -122,6 +154,10 @@ func NewApp() *App {
 			a.app.Event.Emit(name, data)
 		}
 	})
+	// 装更新时 updater 要让当前进程退场，替换脚本才好覆盖 exe。退出通道在这里递进去：
+	// 走应用的关停流程（取消并等待采集与下载、关日志、关库），而不是 updater 自己
+	// os.Exit —— 那样整个收尾会被跳过，丢的是正在提交的那一批数据。
+	updater.SetQuitHook(a.quitGracefully)
 	a.cache = cacheservice.NewService(a.getDataDir)
 	// 失效层自己不依赖 Wails，事件出口在这里接上：Go 清完自己的缓存后，前端靠这条事件
 	// 清详情/海报/TS 片段那几份（见 frontend/src/stores/cacheInvalidate.ts）。
@@ -136,7 +172,7 @@ func NewApp() *App {
 		if a.app != nil {
 			a.app.Event.Emit(name, data)
 		}
-	}, a.background.Go)
+	}, a.background.Go, a.background.Context())
 	// 这个间隔只作用于豆瓣补全调度（采集调度器另有生命周期管理）。
 	// 一批 2+2 条在 60~150s 随机间隔下要约 7 分钟跑完：10 分钟一轮等于全天
 	// 七成时间都在抓着豆瓣不放，容易被判定为异常流量；放宽到 30 分钟后
@@ -144,7 +180,7 @@ func NewApp() *App {
 	a.schedulers = collectionservice.NewSchedulerService(30 * time.Minute)
 	a.downloads = downloadservice.NewRegistry[downloadTask]()
 	a.downloadDir = downloadservice.NewDirectory(func(key, value string) error { return db.SetSetting(key, value) })
-	a.proxy = proxyservice.NewService()
+	a.proxy = proxyservice.NewService(a.getDataDir)
 	a.hlsProxy = proxyservice.NewHLSService()
 	return a
 }
@@ -214,8 +250,12 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 		applog.Info("日志级别为 DEBUG，将输出详细日志")
 	}
 
-	util.InitSnowFlake()
-	_ = snowflake.Epoch
+	// 把内置扩展包落进 <dataDir>/plugins：设置页的「日志」「诊断」两个分组由它们提供，
+	// 用户删掉那个文件夹就是不想要这一项，下次启动不会复活它。必须排在任何扫描之前，
+	// 否则首次启动的扩展包面板看不到这两项。失败不影响启动——面板会照常列出磁盘上的包。
+	if err := a.plugins.SeedBuiltin(); err != nil {
+		applog.Warn("内置扩展包落盘失败: %v", err)
+	}
 
 	// 恢复诊断页可改的持久化设置（豆瓣轮询间隔、日志保留天数），再启动调度器。
 	a.applyPersistedDiagnosticsSettings()
@@ -225,10 +265,9 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 		a.schedulers.Start(taskCtx)
 	})
 
-	// 源巡检：每 6 小时探一次所有启用源的列表首页，把结果记成健康度样本。
-	// 没被排上定时采集的源也需要有人发现"接口已经下线"，否则用户要等到亲手点开
-	// 那个源、看到空列表，才知道它已经废了很久。
-	a.background.Go("sourcePatrol", a.runSourcePatrol)
+	// 源探测不再常驻后台：只有停在「采集源」页时界面才会去戳源站，
+	// 每个源最多 5 分钟一次（见 service.sourceProbeMinInterval）。
+	// 代价是没人打开那一页时不会自动发现接口下线，换来的是不挂着后台给源站添流量。
 
 	// 预加载豆瓣热榜缓存（异步，不阻塞启动）
 	// 注意：豆瓣热榜需要通过数据源匹配播放地址，无任何源时跳过，避免无意义请求
@@ -531,13 +570,17 @@ func (a *App) ServiceShutdown() error {
 
 	// 记录退出时间（下次启动"补采"可使用）
 	handler.TouchLastExit()
-	// 停止调度器的后台循环
-	a.background.Stop(5 * time.Second)
+	// 取消并等待后台任务收尾：采集引擎收到取消后最多还跑完当前页的提交，下载立刻断开。
+	// db.Close 必须排在这个等待之后 —— 否则正在提交的那一批会写到已经关掉的句柄上，
+	// 日志里只是一行 "database is closed"，实际丢掉的是整页采集结果。
+	a.background.Stop(shutdownDrainTimeout)
 
 	applog.Info("应用正常退出")
-	// 关闭日志文件
-	applog.Default().Close()
+	// 库先关、日志最后关：关库时 WAL 归并可能失败并要报出来，日志要是先关了，
+	// 丢掉的恰好是唯一那条「这次退出没收干净」的记录。
 	db.Close()
+	applog.Default().Close()
+	a.shutdownOnce.Do(func() { close(a.shutdownDone) })
 
 	return nil
 }
@@ -549,9 +592,7 @@ func (a *App) IsSchedulerRunning() bool {
 
 // ConfirmShutdown 确认退出：触发应用退出，清理由 ServiceShutdown 统一处理
 func (a *App) ConfirmShutdown() {
-	if a.app != nil {
-		a.app.Quit()
-	}
+	a.quitGracefully()
 }
 
 // GracefulShutdown 优雅关闭：等待所有采集任务完成当前页后退出
@@ -564,70 +605,6 @@ func errStr(err error) string {
 		return ""
 	}
 	return err.Error()
-}
-
-// ======================== Cache Management ========================
-
-// CacheInfo 应用自己写到磁盘上的占用，外加进程内派生缓存的条目数。
-// 浏览器侧的 localStorage / IndexedDB 由前端统计，Go 报不出真实数字，
-// 以前那两只恒为 0 的字段已经删掉。
-type CacheInfo struct {
-	DatabaseBytes int64  `json:"database_bytes"`
-	DatabasePath  string `json:"database_path"`
-	LogFileBytes  int64  `json:"log_file_bytes"`
-	LogFilePath   string `json:"log_file_path"`
-
-	DetailEntries int   `json:"detail_entries"`
-	DetailBytes   int64 `json:"detail_bytes"`
-	ChartMatches  int   `json:"chart_matches"`
-	CommentPages  int   `json:"comment_pages"`
-}
-
-// GetCacheInfo 获取缓存信息
-func (a *App) GetCacheInfo() (*CacheInfo, error) {
-	info, err := a.cache.GetInfo()
-	if err != nil {
-		return nil, err
-	}
-	stats := cacheservice.Stats()
-	return &CacheInfo{
-		DatabaseBytes: info.DatabaseBytes,
-		DatabasePath:  info.DatabasePath,
-		LogFileBytes:  info.LogFileBytes,
-		LogFilePath:   info.LogFilePath,
-
-		DetailEntries: stats.DetailEntries,
-		DetailBytes:   stats.DetailBytes,
-		ChartMatches:  stats.ChartMatches,
-		CommentPages:  stats.CommentPages,
-	}, nil
-}
-
-// ClearCacheReq 清除缓存请求
-type ClearCacheReq struct {
-	Type string `json:"type"` // "memory" | "logs" | "database" | "all"
-}
-
-// ClearCache 清除指定类型的缓存。
-//
-// "memory" 是进程内的派生缓存（详情 / 热榜匹配 / 评论），走统一失效层；TS 片段那一份活在
-// 浏览器 IndexedDB 里，由前端自己的清除按钮负责，这里没有对应目录。
-func (a *App) ClearCache(req ClearCacheReq) (bool, error) {
-	switch req.Type {
-	case "memory":
-		cacheservice.InvalidateAll("用户清除缓存")
-	case "logs":
-		// 走 logger 自己的清理：正在写的日志文件在 Windows 上删不掉。
-		applog.Default().Clear()
-	case "all":
-		cacheservice.InvalidateAll("用户清除缓存")
-		applog.Default().Clear()
-	default:
-		if err := a.cache.Clear(req.Type); err != nil {
-			return false, err
-		}
-	}
-	return true, nil
 }
 
 // ProxyImage proxies a remote image through the constrained proxy service.

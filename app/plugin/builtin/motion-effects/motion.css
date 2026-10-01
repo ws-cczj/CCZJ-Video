@@ -1,0 +1,34 @@
+/*
+ * 这套动效的参数层。
+ *
+ * 应用自己带着一份同样的基线（frontend/src/styles/animations.css），这个文件注入在
+ * <head> 末尾，同为 :root 时后写的赢，所以包在用期间由这里说了算。改下面的数字就能
+ * 把全应用的动画调快调慢，不必重新编译应用。
+ *
+ * 两条别踩的线：
+ * - 「关闭动画」的退化规则不在这里，在应用基线里。停用这个包只会让这层参数消失，
+ *   开关和系统减弱动效的退化照常生效。
+ * - 真要「没有动画」请用设置页的关闭开关，别把时长写成 0。0 会被浏览器当成没有过渡，
+ *   海报淡入这类先等图再过渡的路径就退回了硬切，而开关走的是统一的 1ms 直切。
+ */
+:root {
+  /* 即时反馈：hover、按压、小开关滑块。 */
+  --cczj-motion-fast: 140ms;
+  /* 默认档：面板开合、页面切换、图片淡入。 */
+  --cczj-motion-normal: 220ms;
+  /* 大位移：抽屉、展开区、跨列的移动。 */
+  --cczj-motion-slow: 360ms;
+  /* 需要看一眼的强调入场：弹窗、Toast。 */
+  --cczj-motion-emphasis: 480ms;
+  /* 轮播翻页单独一档，比默认慢一点才看得清内容换没换。 */
+  --cczj-motion-carousel: 420ms;
+
+  /* 缓动曲线。standard 通用，enter 收尾柔和，exit 起手快，emphasis 冲得更狠。 */
+  --cczj-motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --cczj-motion-ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --cczj-motion-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --cczj-motion-ease-emphasis: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* 逐项入场之间要不要错开一点；调大会让长列表像在下饺子。 */
+  --cczj-motion-delay: 0ms;
+}

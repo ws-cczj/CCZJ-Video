@@ -3,7 +3,8 @@ import { ref } from 'vue'
 import { GetVideoDetail } from '../api/app'
 import { tr } from '../locales'
 import type { Video } from '../types'
-import { readStorage, removeStorage, writeStorage } from '../platform/storage'
+import { readStorage, removeStorage } from '../platform/storage'
+import { createDebouncedWriter } from '../platform/debouncedWrite'
 
 /**
  * 单个海报缓存项
@@ -12,14 +13,17 @@ import { readStorage, removeStorage, writeStorage } from '../platform/storage'
 export interface PosterCacheEntry {
   vod_name?: string
   vod_pic?: string
-  vod_pic_proxied?: string
   cached_at: number      // 首次缓存时间 (ms)
   last_accessed: number  // 最后访问/点击时间 (ms)
   click_count: number    // 点击频次
 }
 
 const STORAGE_KEY = 'poster_cache_v1'
-const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000
+// 收藏和历史里的片名/海报由本机数据库给出，不会自己变；改片名或换海报时 Go 侧的统一
+// 失效层会推 cache:invalidate 过来（dropSource / clearAll）。所以这里可以按「月」而不
+// 是「周」来留——留久的代价只是 localStorage 里几条字符串，留短的代价是每次翻收藏
+// 都要重发一遍 GetVideoDetail。30 天是不指望失效兜底时的上限。
+const STALE_MS = 30 * 24 * 60 * 60 * 1000
 const MAX_CACHED_ITEMS = 500   // 最大缓存条目数
 const CONCURRENT_FETCH_LIMIT = 6
 
@@ -42,6 +46,15 @@ export const usePosterCacheStore = defineStore('posterCache', () => {
   const cache = ref<Record<string, PosterCacheEntry>>({})
   const initialized = ref(false)
 
+  // 诊断页的读数：命中=缓存里已有可用内容，未命中=这一眼只能去取详情。
+  // 它是普通对象而不是 ref：只有诊断面板轮询时会读一次，不该让每次海报渲染都触发响应式。
+  const counters = { hits: 0, misses: 0, fetchOK: 0, fetchFail: 0 }
+
+  // 这张 map 最多 500 条、装着片名和 data URL，整张 stringify 一次并不便宜；而命中一条海报、
+  // 点一次封面都要重写全部。落盘因此走防抖（见 createDebouncedWriter），铺满一屏的几十次
+  // set/recordClick 合并成一次写，卸载前补写。
+  const persist = createDebouncedWriter(STORAGE_KEY, () => cache.value)
+
   // ------- 持久化读写 -------
   function loadFromStorage(): void {
     try {
@@ -55,17 +68,13 @@ export const usePosterCacheStore = defineStore('posterCache', () => {
   }
 
   function saveToStorage(): void {
-    try {
-      writeStorage(STORAGE_KEY, cache.value)
-    } catch {
-      // 存储满或失败，静默忽略
-    }
+    persist.schedule()
   }
 
   // ------- 清理策略 -------
-  /** 清理 7 天未访问的条目 */
+  /** 清理长期未访问的条目 */
   function cleanupExpired(): void {
-    const cutoff = nowMs() - SEVEN_DAYS_MS
+    const cutoff = nowMs() - STALE_MS
     let removed = 0
     for (const key of Object.keys(cache.value)) {
       if (cache.value[key].last_accessed < cutoff) {
@@ -116,12 +125,17 @@ export const usePosterCacheStore = defineStore('posterCache', () => {
     const entry = cache.value[key]
     if (!entry) return null
 
+    const now = nowMs()
     // 检查是否已过期
-    if (nowMs() - entry.last_accessed > SEVEN_DAYS_MS) {
+    if (now - entry.last_accessed > STALE_MS) {
       delete cache.value[key]
       saveToStorage()
       return null
     }
+    // 兑现「每次访问刷新 last_accessed」：收藏里天天看、却从没点过的条目不该被 TTL/淘汰当成冷数据清掉。
+    // last_accessed 没有任何渲染依赖它（模板只读 vod_name/vod_pic），所以在这里就地续期不会触发重渲染。
+    entry.last_accessed = now
+    saveToStorage()
     return entry
   }
 
@@ -140,16 +154,12 @@ export const usePosterCacheStore = defineStore('posterCache', () => {
     if (existing) {
       // 保留原有点击计数和时间，只更新内容
       if (data.vod_name) existing.vod_name = data.vod_name
-      if (data.vod_pic) {
-        existing.vod_pic = data.vod_pic
-        existing.vod_pic_proxied = undefined
-      }
+      if (data.vod_pic) existing.vod_pic = data.vod_pic
       existing.last_accessed = now
     } else {
       cache.value[key] = {
         vod_name: data.vod_name,
         vod_pic: data.vod_pic,
-        vod_pic_proxied: undefined,
         cached_at: now,
         last_accessed: now,
         click_count: 1,
@@ -193,12 +203,15 @@ export const usePosterCacheStore = defineStore('posterCache', () => {
     const cached = get(sourceKey, vodId)
     if (cached && (cached.vod_pic || cached.vod_name)) {
       // 已有缓存，直接返回
+      counters.hits++
       return cached
     }
 
     // 检查是否已有加载中的请求
     const pending = loadingPromises.get(key)
     if (pending) {
+      // 去重省掉了一次请求，但界面仍然在等那趟网络，所以按未命中算。
+      counters.misses++
       await pending
       return get(sourceKey, vodId)
     }
@@ -208,6 +221,7 @@ export const usePosterCacheStore = defineStore('posterCache', () => {
       return cached
     }
 
+    counters.misses++
     const generation = dropGeneration
 
     const promise = (async () => {
@@ -220,12 +234,14 @@ export const usePosterCacheStore = defineStore('posterCache', () => {
         })) as { video?: Video | null } | null | undefined
         const v = resp?.video
         if (v && generation === dropGeneration) {
+          counters.fetchOK++
           set(sourceKey, vodId, {
             vod_name: v.vod_name,
             vod_pic: v.vod_pic,
           })
         }
       } catch {
+        counters.fetchFail++
         // 忽略失败
       } finally {
         loadingPromises.delete(key)
@@ -249,41 +265,18 @@ export const usePosterCacheStore = defineStore('posterCache', () => {
     return entry?.vod_pic || ''
   }
 
-  /**
-   * 获取代理后的图片 URL（异步，会缓存代理结果）
-   */
-  async function getProxiedPic(sourceKey: string, vodId: string): Promise<string> {
-    ensureInit()
-    const entry = get(sourceKey, vodId)
-    if (!entry?.vod_pic) return ''
-    
-    if (entry.vod_pic_proxied) {
-      return entry.vod_pic_proxied
-    }
-
-    try {
-      const { ProxyImage } = await import('../api/app')
-      const proxied = await ProxyImage(entry.vod_pic)
-      if (proxied && proxied.startsWith('data:')) {
-        entry.vod_pic_proxied = proxied
-        saveToStorage()
-        return proxied
-      }
-    } catch { }
-    
-    return entry.vod_pic
-  }
-
   // 暴露给外部的清理入口
   function clearAll(): void {
     dropGeneration++
     cache.value = {}
+    // 待写的防抖任务必须撤掉，否则它会把清空前抓到的快照整张写回来。
+    persist.cancel()
     removeStorage(STORAGE_KEY)
   }
 
   /**
    * 让某个源的海报缓存作废：vodIds 给定时只删这些条目，不给时删该源全部。
-   * 与 Go 侧统一失效层的 video / source 两个作用域一一对应（all 由 clearAll 负责）。
+   * 与 Go 侧统一失效层的 video / source 两个作用域一一对应。
    */
   function dropSource(sourceKey: string, vodIds?: string[]): number {
     if (!sourceKey) return 0
@@ -302,6 +295,17 @@ export const usePosterCacheStore = defineStore('posterCache', () => {
     return removed
   }
 
+  // 诊断页读数：条目数按当前缓存算，计数按本次会话累计。
+  function stats() {
+    return {
+      entries: Object.keys(cache.value).length,
+      hits: counters.hits,
+      misses: counters.misses,
+      fetchOK: counters.fetchOK,
+      fetchFail: counters.fetchFail,
+    }
+  }
+
   return {
     cache,
     initialized,
@@ -314,8 +318,8 @@ export const usePosterCacheStore = defineStore('posterCache', () => {
     ensureLoaded,
     getName,
     getPic,
-    getProxiedPic,
     dropSource,
     clearAll,
+    stats,
   }
 })

@@ -72,15 +72,28 @@ func buildApp() *application.App {
 		Height: 800,
 		// Keep WebView content zoom independent from the monitor DPI. Without an
 		// explicit value WebView2 can retain a 50% zoom after DPI transitions.
-		Zoom:             1.0,
-		MinWidth:         900,
-		MinHeight:        600,
-		Frameless:        true,
+		Zoom:      1.0,
+		MinWidth:  900,
+		MinHeight: 600,
+		Frameless: true,
+		// 扩展包靠「从资源管理器拖一个文件夹进来」安装。不开这个开关，Wails 的运行时
+		// 会对所有外部文件拖放强制 dropEffect=none——鼠标变成一个禁止符号，什么都进不来。
+		EnableFileDrop:   true,
 		BackgroundColour: application.RGBA{Red: 20, Green: 20, Blue: 40, Alpha: 255},
 		Windows: application.WindowsWindow{
 			Theme:                             application.Dark,
 			DisableFramelessWindowDecorations: false,
 		},
+	})
+
+	// 原生拖放交给应用的只有被拖条目的绝对路径（WebView2 的 File 对象读不出目录内容），
+	// 所以这里只把路径转给界面：装哪个、失败怎么报由扩展包面板决定，落盘闸门在 app/plugin。
+	mainWindow.OnWindowEvent(events.Common.WindowFilesDropped, func(event *application.WindowEvent) {
+		paths := event.Context().DroppedFiles()
+		if len(paths) == 0 {
+			return
+		}
+		app.Event.Emit("plugin:filedrop", paths)
 	})
 
 	// WebView2 may retain a stale zoom/raster scale after a frameless window is

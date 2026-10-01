@@ -23,38 +23,11 @@ func AddFavoriteByIdentity(globalID int64, sourceKey, vodID string) error {
 
 // --- Favorites (基于 global_id) ---
 
-// AddFavorite 添加收藏：通过 vod_name 获取 global_id，然后写入 favorites 表
-func AddFavorite(sourceKey string, vodId string, vodName string) error {
-	globalID, err := GetOrCreateGlobalID(vodName, 0)
-	if err != nil {
-		return err
-	}
-	return AddFavoriteByIdentity(globalID, sourceKey, vodId)
-}
-
 // RemoveFavoriteByGlobalID 按 global_id 删除所有源的收藏
 func RemoveFavoriteByGlobalID(globalID int, sourceKey string) error {
 	_ = sourceKey // retained for generated binding compatibility
 	_, err := instance.Exec(`DELETE FROM favorites WHERE global_id = ?`, globalID)
 	return err
-}
-
-// RemoveFavorite 按 vod_name 删除收藏
-func RemoveFavorite(vodName string, sourceKey string) error {
-	row, err := GetGlobalVideoByName(vodName)
-	if err != nil {
-		return err
-	}
-	return RemoveFavoriteByGlobalID(row.Id, sourceKey)
-}
-
-// IsFavorite 按 vod_name 检查是否已收藏（跨所有源）
-func IsFavorite(vodName string, sourceKey string) bool {
-	row, err := GetGlobalVideoByName(vodName)
-	if err != nil {
-		return false
-	}
-	return IsFavoriteByGlobalID(row.Id)
 }
 
 // IsFavoriteByGlobalID 按 global_id 检查是否已收藏（跨所有源）
@@ -65,14 +38,22 @@ func IsFavoriteByGlobalID(globalID int) bool {
 }
 
 // FavWithVideo 收藏条目（含视频信息）
+//
+// 字段按"卡片要显示什么"来选，不是按收藏表有什么：前端收藏页以前对每条收藏再发一次
+// GetVideoDetail 才拿到片名/封面/备注，24 条就是 24 次串行远程请求，页面一直转圈。
+// 这些字段 global_video 和 source_videos 里本来就有，一条 JOIN 就够。
 type FavWithVideo struct {
-	Id        int    `json:"id" db:"id"`
-	GlobalID  int    `json:"global_id" db:"global_id"`
-	SourceKey string `json:"source_key" db:"source_key"`
-	VodId     string `json:"vod_id" db:"vod_id"`
-	VodName   string `json:"vod_name" db:"vod_name"`
-	VodPic    string `json:"vod_pic" db:"vod_pic"`
-	CreatedAt string `json:"created_at" db:"created_at"`
+	Id         int    `json:"id" db:"id"`
+	GlobalID   int    `json:"global_id" db:"global_id"`
+	SourceKey  string `json:"source_key" db:"source_key"`
+	VodId      string `json:"vod_id" db:"vod_id"`
+	VodName    string `json:"vod_name" db:"vod_name"`
+	VodPic     string `json:"vod_pic" db:"vod_pic"`
+	TypeName   string `json:"type_name" db:"type_name"`
+	VodRemarks string `json:"vod_remarks" db:"vod_remarks"`
+	VodYear    string `json:"vod_year" db:"vod_year"`
+	VodArea    string `json:"vod_area" db:"vod_area"`
+	CreatedAt  string `json:"created_at" db:"created_at"`
 }
 
 // catalogProjectionFilter 决定一条收藏/历史还能不能在列表里出现。
@@ -85,10 +66,17 @@ func catalogProjectionFilter(alias string) string {
 	return alias + ".id IS NULL OR (" + alias + ".lifecycle_state = 'active' AND " + catalogTypeVisibilityClause(alias) + ")"
 }
 
-// GetFavorites 分页获取收藏列表（JOIN global_video）
+// GetFavorites 分页获取收藏列表（JOIN global_video + source_videos，一次给齐卡片字段）
 func GetFavorites(page, pageSize int) ([]FavWithVideo, error) {
 	var results []FavWithVideo
-	q := `SELECT f.id, f.global_id, f.source_key, f.vod_id, g.vod_name, g.pic as vod_pic, f.created_at
+	q := `SELECT f.id, f.global_id, f.source_key, f.vod_id,
+		CASE WHEN g.vod_name <> '' THEN g.vod_name ELSE COALESCE(sv.vod_name, '') END as vod_name,
+		CASE WHEN g.pic <> '' THEN g.pic ELSE COALESCE(sv.vod_pic, '') END as vod_pic,
+		COALESCE(sv.type_name, '') as type_name,
+		COALESCE(sv.vod_remarks, '') as vod_remarks,
+		COALESCE(sv.vod_year, '') as vod_year,
+		COALESCE(sv.vod_area, '') as vod_area,
+		f.created_at
 		FROM favorites f
 		JOIN global_video g ON f.global_id = g.id
 		LEFT JOIN source_videos sv ON sv.source_key = f.source_key AND sv.source_vod_id = f.vod_id
@@ -100,7 +88,6 @@ func GetFavorites(page, pageSize int) ([]FavWithVideo, error) {
 
 // --- Watch History (基于 global_id) ---
 
-// SaveWatchHistory 保存观看进度
 // SaveWatchHistoryByIdentity saves a source episode under an already resolved
 // catalog identity. The unique key is source-aware, so all read/delete paths
 // use the same complete coordinate.
@@ -122,47 +109,6 @@ func GetWatchHistoryByIdentity(globalID int64, sourceKey, vodID string, epNum in
 	var position float64
 	err := instance.Get(&position, `SELECT position FROM watch_history WHERE global_id=? AND source_key=? AND vod_id=? AND ep_num=?`, globalID, sourceKey, vodID, epNum)
 	return position, err
-}
-
-func SaveWatchHistory(sourceKey string, vodId string, vodName string, epNum int, position float64) error {
-	globalID, err := GetOrCreateGlobalID(vodName, 0)
-	if err != nil {
-		return err
-	}
-	return SaveWatchHistoryByIdentity(globalID, sourceKey, vodId, epNum, position)
-}
-
-// GetWatchHistory 获取某视频某集的观看位置
-func GetWatchHistory(vodName string, epNum int) (float64, error) {
-	row, err := GetGlobalVideoByName(vodName)
-	if err != nil {
-		return 0, err
-	}
-	var pos float64
-	err = instance.Get(&pos, `SELECT position FROM watch_history WHERE global_id = ? AND ep_num = ?`, row.Id, epNum)
-	return pos, err
-}
-
-// GetWatchHistoryByVod 获取某视频所有集的观看位置
-func GetWatchHistoryByVod(vodName string) (map[int]float64, error) {
-	row, err := GetGlobalVideoByName(vodName)
-	if err != nil {
-		return nil, err
-	}
-	type entry struct {
-		EpNum    int     `db:"ep_num"`
-		Position float64 `db:"position"`
-	}
-	var entries []entry
-	err = instance.Select(&entries, `SELECT ep_num, position FROM watch_history WHERE global_id = ? ORDER BY ep_num`, row.Id)
-	if err != nil {
-		return nil, err
-	}
-	result := make(map[int]float64)
-	for _, e := range entries {
-		result[e.EpNum] = e.Position
-	}
-	return result, nil
 }
 
 // HistEntry 观看历史条目
@@ -201,16 +147,6 @@ func DeleteHistoryItemByIdentity(globalID int64, sourceKey, vodID string, epNum 
 	return err
 }
 
-// DeleteHistoryByVodName 删除某个视频的全部观看历史
-func DeleteHistoryByVodName(vodName string) error {
-	row, err := GetGlobalVideoByName(vodName)
-	if err != nil {
-		return err
-	}
-	_, err = instance.Exec(`DELETE FROM watch_history WHERE global_id = ?`, row.Id)
-	return err
-}
-
 // DeleteHistoryByVideo 按 source_key+vod_id 删除（兼容旧调用）
 func DeleteHistoryByVideo(sourceKey string, vodId string) error {
 	_, err := instance.Exec(`DELETE FROM watch_history WHERE source_key = ? AND vod_id = ?`, sourceKey, vodId)
@@ -224,20 +160,6 @@ func ClearAllHistory() (int64, error) {
 		return 0, err
 	}
 	return res.RowsAffected()
-}
-
-// GetWatchedEpisodes 返回指定视频已观看的所有集数列表
-func GetWatchedEpisodes(vodName string) ([]int, error) {
-	row, err := GetGlobalVideoByName(vodName)
-	if err != nil {
-		return nil, err
-	}
-	var epNums []int
-	err = instance.Select(&epNums, `SELECT ep_num FROM watch_history WHERE global_id = ? ORDER BY ep_num ASC`, row.Id)
-	if err != nil {
-		return nil, err
-	}
-	return epNums, nil
 }
 
 func GetWatchedEpisodesByIdentity(globalID int64, sourceKey, vodID string) ([]int, error) {

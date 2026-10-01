@@ -33,23 +33,30 @@ let _cache: EpProgressStore | null = null
 let _dirty = false
 let _flushTimer: ReturnType<typeof setTimeout> | null = null
 
+function _pruneExpired(): void {
+  if (!_cache) return
+  const now = Date.now()
+  for (const k of Object.keys(_cache)) {
+    const v = _cache[k]
+    if (!v || typeof v !== 'object') { delete _cache[k]; _dirty = true; continue }
+    if (now - (v.updatedAt || 0) > TTL_MS) { delete _cache[k]; _dirty = true; continue }
+  }
+}
+
 function _ensureCache(): EpProgressStore {
   if (_cache) return _cache
   _cache = readStorage<EpProgressStore>(PROG_KEY, {})
+  // 整表扫描只在首次载入做一次；之后的过期判定走 getEpProgress 的逐键 O(1) 比较。
+  // TTL 是 30 天，一条过期记录多活到下一次写回才消失没有影响。
+  _pruneExpired()
+  if (_dirty) _scheduleFlush()
   return _cache
 }
 
 function _flushToStorage(): void {
   if (!_dirty || !_cache) return
   try {
-    // 淘汰过期条目后再写入
-    const now = Date.now()
-    const keys = Object.keys(_cache)
-    for (const k of keys) {
-      const v = _cache[k]
-      if (!v || typeof v !== 'object') { delete _cache[k]; continue }
-      if (now - (v.updatedAt || 0) > TTL_MS) { delete _cache[k]; continue }
-    }
+    _pruneExpired()
     // 始终写入（即使 _cache 为空也同步清理过期的 localStorage 数据）
     writeStorage(PROG_KEY, _cache)
     _dirty = false // 仅在写入成功后才清除 dirty 标记，失败时下次 flush 重试
@@ -80,20 +87,9 @@ export function epProgressKey(globalId: number | undefined | null, vodName: stri
   return `${prefix}-${String(epNum ?? '')}`
 }
 
-/** 读取并清理过期数据。始终返回对象（可能为空）。 */
+/** 读取全部进度（内存镜像，过期条目已在首次载入时清掉）。始终返回对象（可能为空）。 */
 export function loadEpProgress(): EpProgressStore {
-  _ensureCache()
-  // 每次读取时顺便清理过期条目（在内存中清理，防抖写回 localStorage）
-  const now = Date.now()
-  const cache = _cache!
-  for (const k of Object.keys(cache)) {
-    const v = cache[k]
-    if (!v || typeof v !== 'object') { delete cache[k]; _dirty = true; continue }
-    if (now - (v.updatedAt || 0) > TTL_MS) { delete cache[k]; _dirty = true; continue }
-  }
-  // 如果清理了过期数据，调度一次写入确保清理同步到 localStorage
-  if (_dirty) _scheduleFlush()
-  return cache
+  return _ensureCache()
 }
 
 /** 写入单条进度（内存缓存 + 防抖写回 localStorage）。 */
@@ -118,8 +114,10 @@ export function saveEpProgress(
 
 /** 读取单条进度（会做过期校验）。不存在返回 undefined。 */
 export function getEpProgress(key: string): EpProgressEntry | undefined {
-  const store = loadEpProgress()
-  return store[key]
+  const entry = loadEpProgress()[key]
+  if (!entry || typeof entry !== 'object') return undefined
+  if (Date.now() - (entry.updatedAt || 0) > TTL_MS) return undefined
+  return entry
 }
 
 /** 计算进度百分比 0-100。条目存在即表示"已开始观看"，position=0 时返回 1%；position>0 但无 duration 时返回 15%。 */

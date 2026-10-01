@@ -1,0 +1,17 @@
+{
+  "manifest_version": 1,
+  "id": "icon-gallery",
+  "version": "1.0.0",
+  "name": { "zh-CN": "图标画廊", "en": "Icon Gallery" },
+  "description": {
+    "zh-CN": "专门用来验图标的包：扩展包卡片上那枚来自本目录的 icon.png，页面里的 26 枚图标也全部从 icons/ 现读现画。把整个文件夹拖进设置页 → 扩展包，就能一次验完拖拽安装和图标显示。",
+    "en": "A pack for checking icons: the card icon is this folder's icon.png and all 26 tiles are read from icons/ at runtime. Drag the folder onto Settings > Extensions to test install."
+  },
+  "author": "CCZJ Video",
+  "kind": "script",
+  "icon": "icon.png",
+  "script": {
+    "entry": "main.js",
+    "styles": ["gallery.css"]
+  }
+}

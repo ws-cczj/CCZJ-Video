@@ -1,0 +1,14 @@
+{
+  "manifest_version": 1,
+  "id": "motion-effects",
+  "version": "1.0.0",
+  "name": { "zh-CN": "动画效果", "en": "Motion Effects" },
+  "description": {
+    "zh-CN": "设置页的「动画」分组，以及这套动效此刻生效的时长与缓动。改 motion.css 就能调全应用动画的快慢；删掉这个文件夹，界面退回应用自带的基线节奏。",
+    "en": "The Motion group on Settings, plus the durations and easings in use. Edit motion.css to retune motion app-wide; delete the folder to fall back to baseline."
+  },
+  "author": "CCZJ Video",
+  "icon": "icon.png",
+  "kind": "script",
+  "script": { "entry": "main.js", "styles": ["motion.css"] }
+}

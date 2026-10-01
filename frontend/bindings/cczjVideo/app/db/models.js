@@ -266,6 +266,10 @@ export class DoubanInfoRow {
 
 /**
  * FavWithVideo 收藏条目（含视频信息）
+ * 
+ * 字段按"卡片要显示什么"来选，不是按收藏表有什么：前端收藏页以前对每条收藏再发一次
+ * GetVideoDetail 才拿到片名/封面/备注，24 条就是 24 次串行远程请求，页面一直转圈。
+ * 这些字段 global_video 和 source_videos 里本来就有，一条 JOIN 就够。
  */
 export class FavWithVideo {
     /**
@@ -314,6 +318,34 @@ export class FavWithVideo {
              * @type {string}
              */
             this["vod_pic"] = "";
+        }
+        if (!("type_name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["type_name"] = "";
+        }
+        if (!("vod_remarks" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["vod_remarks"] = "";
+        }
+        if (!("vod_year" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["vod_year"] = "";
+        }
+        if (!("vod_area" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["vod_area"] = "";
         }
         if (!("created_at" in $$source)) {
             /**
@@ -956,134 +988,6 @@ export class TableStat {
     }
 }
 
-/**
- * UnionVideo 是合并列表里的一行。SourceKey/SourceVodID 指向代表行，
- * 点进详情或播放就用这一对；Sources 是同一身份还在哪些源里有货。
- */
-export class UnionVideo {
-    /**
-     * Creates a new UnionVideo instance.
-     * @param {Partial<UnionVideo>} [$$source = {}] - The source object to create the UnionVideo.
-     */
-    constructor($$source = {}) {
-        if (!("id" in $$source)) {
-            /**
-             * @member
-             * @type {number}
-             */
-            this["id"] = 0;
-        }
-        if (!("global_id" in $$source)) {
-            /**
-             * @member
-             * @type {number}
-             */
-            this["global_id"] = 0;
-        }
-        if (!("source_key" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["source_key"] = "";
-        }
-        if (!("vod_id" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["vod_id"] = "";
-        }
-        if (!("type_id" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["type_id"] = "";
-        }
-        if (!("type_name" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["type_name"] = "";
-        }
-        if (!("vod_name" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["vod_name"] = "";
-        }
-        if (!("vod_pic" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["vod_pic"] = "";
-        }
-        if (!("vod_remarks" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["vod_remarks"] = "";
-        }
-        if (!("vod_year" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["vod_year"] = "";
-        }
-        if (!("vod_area" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["vod_area"] = "";
-        }
-        if (!("vod_time" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["vod_time"] = "";
-        }
-        if (!("source_count" in $$source)) {
-            /**
-             * @member
-             * @type {number}
-             */
-            this["source_count"] = 0;
-        }
-        if (!("sources" in $$source)) {
-            /**
-             * @member
-             * @type {string[]}
-             */
-            this["sources"] = [];
-        }
-
-        Object.assign(this, $$source);
-    }
-
-    /**
-     * Creates a new UnionVideo instance from a string or object.
-     * @param {any} [$$source = {}]
-     * @returns {UnionVideo}
-     */
-    static createFrom($$source = {}) {
-        const $$createField13_0 = $$createType2;
-        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        if ("sources" in $$parsedSource) {
-            $$parsedSource["sources"] = $$createField13_0($$parsedSource["sources"]);
-        }
-        return new UnionVideo(/** @type {Partial<UnionVideo>} */($$parsedSource));
-    }
-}
-
 // Private type creation functions
 const $$createType0 = MergeCandidateRow.createFrom;
 const $$createType1 = $Create.Array($$createType0);
-const $$createType2 = $Create.Array($Create.Any);

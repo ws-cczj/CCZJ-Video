@@ -18,20 +18,20 @@ export interface FilmStats {
   qualityScale: number; enhancements: string[]
 }
 
-interface PassDef {
+export interface PassDef {
   desc: string; body: string; bindNames: string[]; saveName: string
   components: number; isAggregation: boolean; lumaBind: boolean
 }
 
 // ==================== 着色器 ====================
 
-const VERTEX_SRC = `#version 300 es
+export const VERTEX_SRC = `#version 300 es
 in vec2 a_pos;
 out vec2 v_uv;
 void main() { gl_Position = vec4(a_pos, 0.0, 1.0); v_uv = a_pos * 0.5 + 0.5; }`
 
 // canvas 输出专用：翻转 Y 以匹配 DOM 坐标系
-const VERTEX_FLIP_SRC = `#version 300 es
+export const VERTEX_FLIP_SRC = `#version 300 es
 in vec2 a_pos;
 out vec2 v_uv;
 void main() { gl_Position = vec4(a_pos.x, -a_pos.y, 0.0, 1.0); v_uv = a_pos * 0.5 + 0.5; }`
@@ -182,7 +182,7 @@ void main() {
 
 // ==================== mpv parser ====================
 
-function parseMpvShader(src: string): PassDef[] {
+export function parseMpvShader(src: string): PassDef[] {
   const blocks = src.split(/^\/\/!HOOK /m).slice(1)
   const passes: PassDef[] = []
   for (const block of blocks) {
@@ -212,7 +212,7 @@ function parseMpvShader(src: string): PassDef[] {
   return passes
 }
 
-function buildPassShader(pass: PassDef, iw: number, ih: number): string {
+export function buildPassShader(pass: PassDef, iw: number, ih: number): string {
   const px = (1 / iw).toFixed(15), py = (1 / ih).toFixed(15)
   const samplers = pass.bindNames.map(n => `uniform sampler2D u_${n};`).join('\n')
   const defs = pass.bindNames.filter(n => !(pass.lumaBind && n === 'LUMA'))
@@ -250,7 +250,7 @@ void main() {
 
 // ==================== WebGL2 工具 ====================
 
-function compileShader(gl: WebGL2RenderingContext, type: number, src: string): WebGLShader | null {
+export function compileShader(gl: WebGL2RenderingContext, type: number, src: string): WebGLShader | null {
   const s = gl.createShader(type); if (!s) return null
   gl.shaderSource(s, src); gl.compileShader(s)
   if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
@@ -260,7 +260,7 @@ function compileShader(gl: WebGL2RenderingContext, type: number, src: string): W
   return s
 }
 
-function linkProgram(gl: WebGL2RenderingContext, vs: WebGLShader, fs: WebGLShader): WebGLProgram | null {
+export function linkProgram(gl: WebGL2RenderingContext, vs: WebGLShader, fs: WebGLShader): WebGLProgram | null {
   const p = gl.createProgram(); if (!p) return null
   gl.attachShader(p, vs); gl.attachShader(p, fs); gl.linkProgram(p)
   if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
@@ -270,9 +270,9 @@ function linkProgram(gl: WebGL2RenderingContext, vs: WebGLShader, fs: WebGLShade
   return p
 }
 
-interface FBOEntry { tex: WebGLTexture; fbo: WebGLFramebuffer; w: number; h: number }
+export interface FBOEntry { tex: WebGLTexture; fbo: WebGLFramebuffer; w: number; h: number }
 
-function createFBO(gl: WebGL2RenderingContext, w: number, h: number, filter?: number): FBOEntry {
+export function createFBO(gl: WebGL2RenderingContext, w: number, h: number, filter?: number): FBOEntry {
   const tex = gl.createTexture()!
   gl.bindTexture(gl.TEXTURE_2D, tex)
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null)
@@ -287,8 +287,33 @@ function createFBO(gl: WebGL2RenderingContext, w: number, h: number, filter?: nu
   return { tex, fbo, w, h }
 }
 
-function deleteFBO(gl: WebGL2RenderingContext, f: FBOEntry | null): void {
+export function deleteFBO(gl: WebGL2RenderingContext, f: FBOEntry | null): void {
   if (f) { gl.deleteTexture(f.tex); gl.deleteFramebuffer(f.fbo) }
+}
+
+/**
+ * 把覆盖画布对齐到视频的真实成像区域（object-fit: contain 会留黑边）。
+ * 画布相对播放器 wrapper 定位，而 video 的 rect 是视口坐标，两者混用会让增强画面
+ * 偏移出原画面，所以两个引擎共用这一段换算。
+ */
+export function layoutCanvasToVideo(video: HTMLVideoElement, canvas: HTMLCanvasElement): void {
+  if (!video.videoWidth || !video.videoHeight) return
+  const vr = video.getBoundingClientRect()
+  const parentRect = canvas.parentElement?.getBoundingClientRect()
+  const cw = vr.width, ch = vr.height
+  const vw = video.videoWidth, vh = video.videoHeight
+  const videoRatio = vw / vh
+  const containerRatio = cw / ch
+  let dw: number, dh: number, dx: number, dy: number
+  if (videoRatio > containerRatio) {
+    dw = cw; dh = cw / videoRatio; dx = 0; dy = (ch - dh) / 2
+  } else {
+    dh = ch; dw = ch * videoRatio; dx = (cw - dw) / 2; dy = 0
+  }
+  canvas.style.left = (vr.left - (parentRect?.left ?? 0) + dx) + 'px'
+  canvas.style.top = (vr.top - (parentRect?.top ?? 0) + dy) + 'px'
+  canvas.style.width = dw + 'px'
+  canvas.style.height = dh + 'px'
 }
 
 // ==================== FilmUpscaler ====================
@@ -627,28 +652,7 @@ export class FilmUpscaler {
   }
 
   private syncCanvasToVideo(): void {
-    const video = this.video!, canvas = this.canvas!
-    if (!video.videoWidth || !video.videoHeight) return
-    const vr = video.getBoundingClientRect()
-    const parentRect = canvas.parentElement?.getBoundingClientRect()
-    const cw = vr.width, ch = vr.height
-    // 计算 object-fit: contain 的实际渲染区域
-    const vw = video.videoWidth, vh = video.videoHeight
-    const videoRatio = vw / vh
-    const containerRatio = cw / ch
-    let dw: number, dh: number, dx: number, dy: number
-    if (videoRatio > containerRatio) {
-      dw = cw; dh = cw / videoRatio; dx = 0; dy = (ch - dh) / 2
-    } else {
-      dh = ch; dw = ch * videoRatio; dx = (cw - dw) / 2; dy = 0
-    }
-    // Canvas is positioned relative to the player wrapper, while the video
-    // rect is viewport-relative. Mixing those coordinates can place the
-    // enhanced output outside its source video in embedded player layouts.
-    canvas.style.left = (vr.left - (parentRect?.left ?? 0) + dx) + 'px'
-    canvas.style.top = (vr.top - (parentRect?.top ?? 0) + dy) + 'px'
-    canvas.style.width = dw + 'px'
-    canvas.style.height = dh + 'px'
+    layoutCanvasToVideo(this.video!, this.canvas!)
   }
 
   private render(): void {

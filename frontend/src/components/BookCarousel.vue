@@ -42,6 +42,8 @@ const activeSlide = computed(() => {
 // Slide positions: current at 0, next at 100%, prev at -100%
 const currentOffset = ref(0) // percentage offset for current slide
 const incomingOffset = ref(0) // percentage offset for incoming slide
+/** 来片节点本身：过渡开始前要对它强制一次样式计算，收尾要按它的实际时长等。 */
+const incomingEl = ref<HTMLElement | null>(null)
 
 function goTo(idx: number): void {
   if (isTransitioning.value || total.value <= 1 || idx === currentIndex.value) return
@@ -92,8 +94,13 @@ function startTransition(): void {
     incomingOffset.value = -100
   }
 
-  // Force reflow then animate
   nextTick(() => {
+    const el = incomingEl.value
+    if (!el) { finish(); return }
+    // 来片是 v-if 刚建出来的节点，起始偏移必须先真的被算一次样式，浏览器才有「从哪儿动」可比。
+    // 原来这里只有 nextTick + 单层 rAF（注释一直写着 force reflow，代码却没有）：那一帧新节点
+    // 还没算过样式，来片第一帧就落在 0% 上盖住旧片——用户看到的「图片瞬间变换」就是这个。
+    el.getBoundingClientRect()
     requestAnimationFrame(() => {
       if (direction === 'left') {
         currentOffset.value = -100
@@ -102,17 +109,28 @@ function startTransition(): void {
         currentOffset.value = 100
         incomingOffset.value = 0
       }
+      if (transitionTimer) clearTimeout(transitionTimer)
+      transitionTimer = setTimeout(finish, slideMs(el))
     })
   })
+}
 
-  // After transition completes
-  if (transitionTimer) clearTimeout(transitionTimer)
-  transitionTimer = setTimeout(() => {
-    currentIndex.value = pendingIndex.value >= 0 && pendingIndex.value < total.value ? pendingIndex.value : 0
-    isTransitioning.value = false
-    currentOffset.value = 0
-    pendingIndex.value = -1
-  }, SLIDE_DURATION)
+/** 过渡跑完的收场：把来片转成正式的当前页，叠加的临时节点随之消失。 */
+function finish(): void {
+  currentIndex.value = pendingIndex.value >= 0 && pendingIndex.value < total.value ? pendingIndex.value : 0
+  isTransitioning.value = false
+  currentOffset.value = 0
+  pendingIndex.value = -1
+}
+
+/**
+ * 等多久由 CSS 那条 transition 自己说了算：动效时长现在归 motion 扩展包管，JS 里再抄一份
+ * 420 就会把调慢了的过渡从中间截断。关掉动画时算出 0ms，正好立刻收场，不留悬挂状态。
+ */
+function slideMs(el: HTMLElement): number {
+  const parsed = Number.parseFloat(getComputedStyle(el).transitionDuration)
+  if (!Number.isFinite(parsed)) return SLIDE_DURATION
+  return Math.round(parsed * 1000) + 16
 }
 
 function startAutoPlay(): void {
@@ -245,6 +263,7 @@ function getSlideData(idx: number): Video | undefined {
 
       <!-- Incoming slide (during transition) -->
       <div v-if="isTransitioning && pendingIndex >= 0 && getSlideData(pendingIndex)"
+        ref="incomingEl"
         class="carousel-slide carousel-slide-incoming is-transitioning"
         :style="{ transform: `translateX(${incomingOffset}%)` }">
         <div class="slide-inner">
@@ -306,315 +325,4 @@ function getSlideData(idx: number): Video | undefined {
   </div>
 </template>
 
-<style scoped>
-.carousel {
-  position: relative;
-  width: 100%;
-  user-select: none;
-  box-sizing: border-box;
-}
-
-.carousel-viewport {
-  position: relative;
-  width: 100%;
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.carousel-slide {
-  position: absolute;
-  inset: 0;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
-  will-change: transform;
-}
-
-.carousel-slide.is-transitioning {
-  transition: transform var(--cczj-motion-carousel) var(--cczj-motion-ease-emphasis);
-}
-
-.carousel-slide-incoming {
-  z-index: 2;
-}
-
-.slide-inner {
-  position: relative;
-  height: 100%;
-  display: flex;
-}
-
-.slide-image-wrap {
-  position: relative;
-  overflow: hidden;
-  background: #0a0a0f;
-  border-radius: 12px 0 0 12px;
-  flex-shrink: 0;
-  width: 220px;
-  min-width: 160px;
-  max-width: 30%;
-}
-
-.slide-image {
-  height: 100%;
-  object-fit: contain;
-  display: block;
-}
-
-.slide-image-gradient {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to right,
-      transparent 0%,
-      rgba(10, 10, 15, 0.05) 30%,
-      rgba(10, 10, 15, 0.15) 60%,
-      rgba(10, 10, 15, 0.25) 100%);
-  pointer-events: none;
-}
-
-.slide-detail-wrap {
-  flex: 1;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 24px;
-  padding-top: 28px;
-  overflow: hidden;
-}
-
-.slide-detail-bg {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to right,
-      rgba(10, 10, 15, 0.9) 0%,
-      rgba(10, 10, 15, 0.95) 35%,
-      rgba(8, 8, 12, 0.98) 50%);
-  z-index: -1;
-}
-
-.slide-detail-content {
-  position: relative;
-  z-index: 2;
-}
-
-.slide-badge {
-  display: inline-block;
-  padding: 3px 10px;
-  background: var(--danger);
-  color: var(--danger-contrast);
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 700;
-  margin-bottom: 12px;
-  letter-spacing: 0.5px;
-}
-
-.slide-title {
-  font-size: 20px;
-  font-weight: 700;
-  color: #fff;
-  line-height: 1.3;
-  margin: 0 0 12px 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-.slide-desc {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.55);
-  line-height: 1.6;
-  margin: 0 0 14px 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-}
-
-.slide-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 14px;
-}
-
-.slide-meta-row {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.slide-meta-label {
-  color: rgba(255, 255, 255, 0.4);
-  flex-shrink: 0;
-  min-width: 32px;
-}
-
-.slide-meta-value {
-  color: rgba(255, 255, 255, 0.75);
-}
-
-.slide-meta-actors {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.slide-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.slide-tag {
-  padding: 3px 10px;
-  border-radius: 4px;
-  background: var(--bg-tag);
-  color: var(--text-secondary);
-  font-size: 11px;
-}
-
-.slide-tag-score {
-  background: var(--warning-alpha-10);
-  color: #fff;
-  border: 1px solid var(--warning);
-  font-weight: 600;
-}
-
-.slide-tag-votes {
-  background: var(--accent-alpha-20);
-  color: #fff;
-  border: 1px solid var(--accent);
-}
-
-.slide-actions {
-  display: flex;
-  gap: 12px;
-  position: relative;
-  z-index: 2;
-}
-
-.slide-btn {
-  padding: 8px 20px;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  border: none;
-  cursor: pointer;
-  transition: background-color var(--cczj-motion-fast) var(--cczj-motion-ease-standard),
-              box-shadow var(--cczj-motion-fast) var(--cczj-motion-ease-standard),
-              transform var(--cczj-motion-fast) var(--cczj-motion-ease-standard);
-}
-
-.slide-btn-primary {
-  background: var(--carousel-control);
-  color: var(--carousel-control-text);
-}
-
-.slide-btn-primary:hover {
-  transform: translateY(-1px);
-  background: var(--accent-dim);
-  box-shadow: 0 4px 12px var(--accent-alpha-35);
-}
-
-/* Navigation arrows */
-.carousel-arrow {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 10;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: none;
-  background: var(--btn-solid);
-  color: var(--btn-solid-text);
-  font-size: 24px;
-  line-height: 1;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color var(--cczj-motion-fast) var(--cczj-motion-ease-standard),
-              transform var(--cczj-motion-fast) var(--cczj-motion-ease-standard);
-  padding: 0;
-}
-
-.carousel-arrow:hover {
-  background: var(--accent-dim);
-}
-
-.carousel-arrow-left {
-  left: 28px;
-}
-
-.carousel-arrow-right {
-  right: 28px;
-}
-
-/* Indicators */
-.carousel-indicators {
-  position: absolute;
-  bottom: 28px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 30;
-  display: flex;
-  gap: 8px;
-}
-
-.carousel-indicator {
-  height: 6px;
-  border-radius: 9999px;
-  border: none;
-  cursor: pointer;
-  transition: width var(--cczj-motion-normal) var(--cczj-motion-ease-standard),
-              background-color var(--cczj-motion-fast) var(--cczj-motion-ease-standard);
-  background: rgba(255, 255, 255, 0.2);
-  width: 6px;
-  padding: 0;
-}
-
-.carousel-indicator:hover {
-  background: rgba(255, 255, 255, 0.4);
-}
-
-.carousel-indicator.active {
-  width: 28px;
-  background: var(--btn-solid);
-}
-
-/* Loading overlay */
-.carousel-loading-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.6);
-  z-index: 20;
-  border-radius: 12px;
-}
-
-.carousel-loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid rgba(255, 255, 255, 0.2);
-  border-top-color: var(--btn-solid);
-  border-radius: 50%;
-  animation: cczj-spin 800ms linear infinite;
-}
-
-.carousel-loading-text {
-  margin-top: 12px;
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 14px;
-}
-</style>
+<style scoped src="../styles/components/book-carousel.css"></style>

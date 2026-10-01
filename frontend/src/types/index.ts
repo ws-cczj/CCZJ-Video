@@ -122,9 +122,17 @@ export interface VideoListResponse {
 // 收藏
 export interface Favorite {
   id: number
+  global_id?: number
   source_key: string
   vod_id: string
   vod_name?: string
+  // 后端一次 JOIN 就把卡片要用的字段给齐了（app/db/mapping.go FavWithVideo）。
+  // 以前收藏页只取这里的 source_key/vod_id，再对每条收藏发一次远程详情请求补片名封面。
+  vod_pic?: string
+  type_name?: string
+  vod_remarks?: string
+  vod_year?: string
+  vod_area?: string
   video?: Video
   created_at?: string
 }

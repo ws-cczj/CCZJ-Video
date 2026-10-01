@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bytes"
+	"cczjVideo/app/netstats"
 	"context"
 	"fmt"
 	"io"
@@ -41,13 +42,15 @@ type PlayURLSample struct {
 // 共享连接池和 cookie jar 只会让线路之间互相污染。
 var lineProbeClient = &http.Client{
 	Timeout: lineProbeTimeout,
-	Transport: &http.Transport{
+	// 每次取样最多拉 1MB 真实媒体字节，所以这一类的峰值就是「这条 CDN 实际能跑多快」——
+	// 诊断页的吞吐数字来自它，而不是任何估算。
+	Transport: netstats.WrapTransport(netstats.CategoryLineProbe, &http.Transport{
 		MaxIdleConns:        32,
 		MaxIdleConnsPerHost: 4,
 		IdleConnTimeout:     30 * time.Second,
 		TLSHandshakeTimeout: 8 * time.Second,
 		DialContext:         safeDialContext,
-	},
+	}),
 	CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 }
 

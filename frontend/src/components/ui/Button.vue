@@ -41,10 +41,9 @@ const accessibleLabel = computed(() => props.ariaLabel
     :aria-busy="loading"
     :aria-label="accessibleLabel"
   >
+    <!-- 内容始终留在原位，spinner 盖在正中：见下面 .ui-btn--loading 那段。 -->
+    <span class="ui-btn__content"><slot /></span>
     <span v-if="loading" class="ui-btn__spinner"></span>
-    <span v-else class="ui-btn__content">
-      <slot />
-    </span>
   </button>
 </template>
 
@@ -201,18 +200,24 @@ const accessibleLabel = computed(() => props.ariaLabel
 .ui-btn--block { width: 100%; }
 .ui-btn--disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
 
-/* loading 状态需要 position:relative 给 spinner 定位，overflow:hidden 裁剪 spinner 动画 */
+/* loading 绝不能把内容换成 spinner：按钮会从七八十字宽塌成 14px，同一排的别的按钮和
+   标签跟着重排，用户点一下开关就看见整行抖一下。内容留在原位撑住宽度，spinner 盖在正中。 */
 .ui-btn--loading {
   cursor: wait;
   pointer-events: none;
   position: relative;
-  overflow: hidden;
+}
+.ui-btn--loading .ui-btn__content {
+  visibility: hidden;
 }
 
 .ui-btn__spinner {
-  display: inline-block;
+  position: absolute;
+  left: 50%;
+  top: 50%;
   width: 14px;
   height: 14px;
+  margin: -7px 0 0 -7px;
   border: 2px solid currentColor;
   border-top-color: transparent;
   border-radius: 50%;

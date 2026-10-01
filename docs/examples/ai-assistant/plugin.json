@@ -1,0 +1,15 @@
+{
+  "manifest_version": 1,
+  "id": "ai-assistant",
+  "version": "1.0.0",
+  "name": { "zh-CN": "AI 助手", "en": "AI Assistant" },
+  "description": {
+    "zh-CN": "侧边栏多一个「AI 助手」页：用自然语言查片库、看采集与下载状态、开关扩展包、启停采集。模型走 OpenAI 兼容接口，由包自己直连，应用不新增任何后端能力。",
+    "en": "Adds an AI Assistant page: query the library, read collect and download status, toggle packs, start or stop collection in natural language. Talks to an OpenAI-compatible endpoint itself."
+  },
+  "author": "CCZJ Video",
+  "icon": "icon.png",
+  "kind": "script",
+  "permissions": ["write", "network"],
+  "script": { "entry": "main.js" }
+}

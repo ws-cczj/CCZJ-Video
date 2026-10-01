@@ -1,7 +1,7 @@
 package download
 
 import (
-	"fmt"
+	"cczjVideo/app/apperror"
 	"os"
 	"path/filepath"
 	"strings"
@@ -45,13 +45,13 @@ func (d *Directory) Set(directory string) (string, error) {
 	directory = strings.TrimSpace(directory)
 	if directory != "" {
 		if info, err := os.Stat(directory); err == nil && !info.IsDir() {
-			return d.Get(), fmt.Errorf("download path is not a directory")
+			return d.Get(), apperror.New(apperror.Validation, "download path is not a directory")
 		} else if os.IsNotExist(err) {
 			if err := os.MkdirAll(directory, 0755); err != nil {
-				return d.Get(), fmt.Errorf("create download directory: %w", err)
+				return d.Get(), apperror.Wrap(apperror.Storage, err, "create download directory")
 			}
 		} else if err != nil {
-			return d.Get(), fmt.Errorf("inspect download directory: %w", err)
+			return d.Get(), apperror.Wrap(apperror.Storage, err, "inspect download directory")
 		}
 	}
 
@@ -60,7 +60,7 @@ func (d *Directory) Set(directory string) (string, error) {
 	d.mu.Unlock()
 	if d.save != nil {
 		if err := d.save("download_dir", directory); err != nil {
-			return d.Get(), fmt.Errorf("persist download directory: %w", err)
+			return d.Get(), apperror.Wrap(apperror.Storage, err, "persist download directory")
 		}
 	}
 	return d.Get(), nil

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 defineOptions({ name: 'Recent' })
-import { computed, onActivated, onMounted, ref } from 'vue'
+import { computed, onActivated, onDeactivated, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useSourceStore } from '../stores/source'
@@ -32,8 +32,25 @@ async function load(): Promise<void> {
 function goDetail(video: any): void {
   if (sourceStore.currentSourceKey) router.push(getDetailPath(sourceStore.currentSourceKey, video))
 }
-onMounted(async () => { await sourceStore.loadSources(); if (sourceStore.currentSourceKey) await videoStore.loadTypes(sourceStore.currentSourceKey); await load() })
-onActivated(() => { void load() })
+
+// 这一页进了 KeepAlive 名单，onActivated 从此真的会触发。
+// 首次挂载由 onMounted 负责，所以用 wasDeactivated 把"刚激活"和"回访激活"分开：
+// 回访时重新拉一遍列表，否则用户离开再回来看到的还是旧数据。
+// 重拉的成本已经很低——源列表和分类都做了会话缓存，只有 recent 列表本身走一次 IPC。
+async function bootstrap(): Promise<void> {
+  await sourceStore.loadSources()
+  const key = sourceStore.currentSourceKey
+  if (key) await videoStore.loadTypes(key)
+  await load()
+}
+let wasDeactivated = false
+onMounted(bootstrap)
+onActivated(() => {
+  if (!wasDeactivated) return
+  wasDeactivated = false
+  void bootstrap()
+})
+onDeactivated(() => { wasDeactivated = true })
 </script>
 
 <template>

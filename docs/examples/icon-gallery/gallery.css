@@ -1,0 +1,158 @@
+/**
+ * icon-gallery 的包内样式：由 manifest 的 script.styles 声明，注入时机在入口脚本之前。
+ *
+ * 注入的样式是全局的，所以每条选择器都从 .pk-ig 起手——那是本包那个页面自己的根类。
+ * 颜色一律用应用的主题变量：用户换主题（包括别的包带的主题预设）时这一页不会变成一块白板。
+ */
+
+.pk-ig {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 900px;
+}
+
+.pk-ig-lead {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.pk-ig-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.pk-ig-input {
+  flex: 1 1 200px;
+  min-width: 160px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--text-primary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  outline: none;
+}
+
+.pk-ig-input:focus {
+  border-color: var(--accent);
+}
+
+.pk-ig-count {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.pk-ig-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+}
+
+.pk-ig-cell {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.pk-ig-img {
+  /* 图标本身是透明底，垫一层 bg-hover 让浅色主题下的细线条也看得见。 */
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  background: var(--bg-hover);
+  border-radius: var(--radius);
+}
+
+.pk-ig-caption {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  text-align: center;
+}
+
+.pk-ig-name {
+  font-size: 11px;
+  color: var(--text-primary);
+}
+
+.pk-ig-file {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.pk-ig-missing {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  font-size: 10px;
+  color: var(--danger);
+  background: var(--bg-hover);
+  border-radius: var(--radius);
+}
+
+.pk-ig-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.pk-ig-card-img {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  object-fit: contain;
+  background: var(--bg-hover);
+  border-radius: var(--radius);
+}
+
+.pk-ig-note {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pk-ig-note-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.pk-ig-note-hint,
+.pk-ig-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.pk-ig-empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.pk-ig-fail {
+  margin: 0;
+  font-size: 11px;
+  color: var(--danger);
+}

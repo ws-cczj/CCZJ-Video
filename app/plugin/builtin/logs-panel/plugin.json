@@ -1,0 +1,14 @@
+{
+  "manifest_version": 1,
+  "id": "logs-panel",
+  "version": "1.0.0",
+  "name": { "zh-CN": "日志面板", "en": "Log Panel" },
+  "description": {
+    "zh-CN": "设置页顶部的「日志」分组。界面代码还在应用里，这个包只负责把它挂上设置页：删掉这个文件夹，那一项就没了。",
+    "en": "The Logs group on the Settings page. The UI still lives in the app; this pack only mounts it. Delete the folder and the tab goes away."
+  },
+  "author": "CCZJ Video",
+  "icon": "icon.png",
+  "kind": "script",
+  "script": { "entry": "main.js" }
+}
