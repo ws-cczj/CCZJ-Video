@@ -1008,6 +1008,15 @@ export function PurgeVideo(req) {
 }
 
 /**
+ * QuitApp 退出应用：与 RestartApp 的差别只在于不拉起新进程。
+ * 首启条款闸门的「不同意就走」走这里 —— 那条路径不该顺带把应用再开一次。
+ * @returns {$CancellablePromise<void>}
+ */
+export function QuitApp() {
+    return $Call.ByID(1474877555);
+}
+
+/**
  * ReadLogPage 从指定日志文件按行读取一页结构化记录，支持级别过滤与关键词检索。
  * 逐行流式扫描，内存占用与页大小相关而与文件大小无关。
  * @param {$models.LogPageReq} req
@@ -1067,7 +1076,12 @@ export function RescanPlugins() {
 }
 
 /**
- * RestartApp 重启应用
+ * RestartApp 重启应用：先把新进程拉起来，再请求退出。
+ * 
+ * 这里以前是 sleep(200ms) + os.Exit(0)：整个关停流程被跳过 —— 记录退出时刻
+ * （下次启动的补采窗口按它算）、取消并等待采集与下载收尾、关日志、关库一个都没执行。
+ * 留下的结果就是"重启一次，库就脏一点"。现在只请求退出，进程由 app.Run() 正常返回
+ * 来结束；硬超时兜底只在优雅退出真的卡死时才对进程动手。
  * @returns {$CancellablePromise<void>}
  */
 export function RestartApp() {

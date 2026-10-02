@@ -57,9 +57,23 @@ func scanAlreadyDownloaded() (string, string) {
 			continue
 		}
 		for _, m := range matches {
+			// 摘要凭据不是产物：名字同样以前缀开头，别把它当更新包递出去。
+			if strings.HasSuffix(strings.ToLower(m), digestSuffix) {
+				continue
+			}
 			info, err := os.Stat(m)
 			if err != nil || info.IsDir() || info.Size() < 1024 {
 				continue // 跳过无效/太小的文件
+			}
+			// 没有凭据就是没被校验过的字节（写盘失败、进程被杀留下的半截包，或者
+			// 老版本下载的包）。InstallUpdate 装之前会拒绝它，这里就别把它当"已下载"
+			// 递给前端——按钮点了必然失败，比没有按钮更糟。
+			if !hasDigestRecord(m) {
+				// 顺手清掉：装不上的包留在应用目录里只是占着 C 盘的 31MB。
+				applog.Info("[Updater] 清理没有摘要记录的产物: %s", m)
+				_ = os.Remove(m)
+				clearDigestRecord(m)
+				continue
 			}
 			applog.Info("[Updater] 发现已下载的更新包: %s (%d bytes)", m, info.Size())
 			return m, "" // 版本号未知，由前端根据 pendingInfo 判断
@@ -88,8 +102,17 @@ func DownloadUpdate(downloadURL string, progress DownloadProgress) (string, erro
 	savePath := filepath.Join(appDir, updateStagingName(downloadURL))
 	applog.Info("[Updater] 保存路径: %s", savePath)
 
-	// 如果文件已存在，删除后重新下载
+	// 如果文件已存在，删除后重新下载。凭据一起删：这一次还没校验过任何东西，
+	// 留着上一次的摘要等于给新落盘的字节预先盖章。
 	_ = os.Remove(savePath)
+	clearDigestRecord(savePath)
+
+	// 每一条失败分支都要产物和凭据一起消失：留着半截文件，下一次的"已下载"入口就会
+	// 把一个永远装不上的东西递到用户面前（写盘失败那一条以前就是直接 return 的）。
+	discardArtifact := func() {
+		_ = os.Remove(savePath)
+		clearDigestRecord(savePath)
+	}
 
 	// ====== 并发测速所有下载源 ======
 	applog.Info("[Updater] 开始并发测速所有下载源...")
@@ -164,13 +187,14 @@ func DownloadUpdate(downloadURL string, progress DownloadProgress) (string, erro
 
 		for {
 			if time.Since(startTime) > DownloadTimeout {
-				os.Remove(savePath)
+				discardArtifact()
 				return "", apperror.Newf(apperror.Timeout, "下载超时（超过 %v）", DownloadTimeout)
 			}
 
 			n, readErr := resp.Body.Read(buf)
 			if n > 0 {
 				if _, werr := out.Write(buf[:n]); werr != nil {
+					discardArtifact()
 					return "", apperror.Wrap(apperror.Storage, werr, "写入文件失败")
 				}
 				downloaded += int64(n)
@@ -189,14 +213,14 @@ func DownloadUpdate(downloadURL string, progress DownloadProgress) (string, erro
 				if readErr == io.EOF {
 					break
 				}
-				os.Remove(savePath)
+				discardArtifact()
 				return "", apperror.Wrap(apperror.Corrupt, readErr, "读取失败")
 			}
 		}
 
 		// 先落盘再校验：out 上挂着 defer Close，显式 Close 保证数据已刷出去。
 		if cerr := out.Close(); cerr != nil {
-			os.Remove(savePath)
+			discardArtifact()
 			return "", apperror.Wrap(apperror.Storage, cerr, "关闭文件失败")
 		}
 
@@ -209,14 +233,21 @@ func DownloadUpdate(downloadURL string, progress DownloadProgress) (string, erro
 		// 于是半截 exe 会一路走到 InstallUpdate 覆盖掉应用本体。
 		if total > 0 && downloaded != total {
 			applog.Warn("[Updater] 源 %s 下载不完整: %d/%d", src.source, downloaded, total)
-			os.Remove(savePath)
+			discardArtifact()
 			continue
 		}
 
 		if err := verifyArtifact(savePath, expectedSHA); err != nil {
 			applog.Error("[Updater] 校验失败，删除产物: %v", err)
-			os.Remove(savePath)
+			discardArtifact()
 			return "", apperror.Wrap(apperror.Corrupt, err, "更新包校验失败")
+		}
+
+		// 校验通过的这一刻才记下凭据：InstallUpdate 装之前会拿它再哈希一次，
+		// "已下载"入口也只认带凭据的产物。
+		if err := recordDigest(savePath, expectedSHA); err != nil {
+			discardArtifact()
+			return "", apperror.Wrap(apperror.Storage, err, "记录更新包摘要失败")
 		}
 
 		applog.Info("[Updater] 下载完成并校验通过: %s (%d 字节) 源: %s", savePath, downloaded, src.source)

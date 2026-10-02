@@ -1252,7 +1252,7 @@ function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
           <input type="radio" v-model="favTargetFolderId" :value="folder.id" class="cczj-hidden" />
           <span class="folder-radio cczj-rounded-full cczj-border cczj-flex cczj-items-center cczj-justify-center" />
           <Icon :name="folder.default ? 'star' : 'list'" :size="14" />
-          <span class="folder-name cczj-flex-1 cczj-truncate">{{ folder.name }}</span>
+          <span class="folder-name cczj-flex-1 cczj-truncate">{{ folder.default ? t('detail.defaultFolder') : folder.name }}</span>
         </label>
       </div>
       <template #footer>

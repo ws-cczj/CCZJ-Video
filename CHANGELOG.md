@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **诊断面板加三块实时读数**：本次会话的播放质量、按用途拆分的出网吞吐与耗时、Go 与前端各缓存的命中率（新增 `app/netstats` 计数层）。
 - **发布链路补齐**：`build/windows/package.ps1` 产出带图标的 exe 与 `checksums.txt`，`build/windows/info.json` 的版本资源
   经校验（语言键、FileVersion/ProductVersion 字符串），更新下载后按 SHA-256 校验清单才安装。
+- **使用许可与首启同意闸门**：新增根目录 `LICENSE`（条款版本 1.0，个人学习非商业、禁止收费分发与去署名）。
+  首次启动弹条款摘要并征求同意，同意状态写进设置键 `license_terms_version`；该键被列入「不随备份导入」，
+  免得用一份已同意的备份替别人跳过确认。不同意走新增的 `QuitApp` 绑定直接退出，不重启。设置 → 关于 可复看条款。
 - **迁移 v7~v10**：地区写法归一、标题去画质尾巴后重算身份、同豆瓣 ID 跨类型合并、`sources.auto_disabled_at`
   区分自动停用与手动关闭。
 

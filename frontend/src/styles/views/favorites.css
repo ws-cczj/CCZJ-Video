@@ -170,11 +170,23 @@
   font-weight: 600;
 }
 
+/* 拖拽归类的目标态：虚线填充加一圈光晕，和纯选中态区分开。
+   与 .active 同为双类选择器，靠顺序在后赢过它。 */
+.folder-row.drop-target {
+  border-style: dashed;
+  box-shadow: 0 0 0 2px var(--accent-alpha-35);
+}
+
 .folder-name {
   gap: 8px;
   font-size: 13px;
   color: inherit;
   min-width: 0;
+}
+
+/* 拖拽归类的源卡片：拖出去的那张压暗，表示"正在被搬走"。 */
+.fav-card.is-dragging {
+  opacity: 0.45;
 }
 
 .folder-row.active .folder-name {

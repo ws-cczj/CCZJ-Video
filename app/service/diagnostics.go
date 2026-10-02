@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"runtime"
 	"runtime/debug"
 	"strconv"
@@ -227,8 +226,10 @@ func (a *App) GetDiagnostics() (*Diagnostics, error) {
 	}
 
 	d.Env = a.diagnosticsEnv()
-	if marker, err := os.ReadFile(filepath.Join(a.getDataDir(), ".installed_version")); err == nil {
-		d.Env.InstalledMarker = strings.TrimSpace(string(marker))
+	// 标记在应用目录（exe 旁边），且启动时读一次就被清掉，所以取本进程记下的那个值。
+	// 以前这里去数据目录找同名文件，那个位置从来没人写过，字段永远空着。
+	if marker := updater.InstalledMarkerSeenThisRun(); marker != "" {
+		d.Env.InstalledMarker = marker
 	}
 	// schema 版本落后说明迁移没跑完，这比任何单项统计都优先，因为后面的读写
 	// 可能已经踩在不存在的列上。

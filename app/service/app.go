@@ -17,7 +17,9 @@ import (
 	"cczjVideo/app/updater"
 	windowservice "cczjVideo/app/window"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -110,6 +112,12 @@ func (a *App) RestartApp() {
 		_ = cmd.Start()
 	}
 
+	a.quitGracefully()
+}
+
+// QuitApp 退出应用：与 RestartApp 的差别只在于不拉起新进程。
+// 首启条款闸门的「不同意就走」走这里 —— 那条路径不该顺带把应用再开一次。
+func (a *App) QuitApp() {
 	a.quitGracefully()
 }
 
@@ -231,6 +239,9 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 		}
 	})
 
+	// 必须排在 InitDB 之前：库一打开就定了归属，晚一步就已经对着空库建表了。
+	migrateLegacyDatabase(legacyDataDir(), dataDir)
+
 	if err := db.InitDB(dataDir); err != nil {
 		panic(fmt.Sprintf("Failed to init database: %v", err))
 	}
@@ -345,6 +356,76 @@ func (a *App) getDataDir() string {
 		return filepath.Join(filepath.Dir(exe), "data")
 	}
 	return filepath.Join(".", "data")
+}
+
+// legacyDataDir 返回 2.1.0 及更早版本的数据落点：<exe 所在目录>\data。
+func legacyDataDir() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = resolved
+	}
+	return filepath.Join(filepath.Dir(exe), "data")
+}
+
+// migrateLegacyDatabase 在「旧落点有库、新落点没库」时把数据库复制过来。
+//
+// 为什么需要它：数据目录从 exe 旁边改到了用户配置目录，而更新是原地热替换 exe。
+// 替换成功后，同一个图标启动起来读的是另一个空目录，用户看到的就是「更新完数据没了」。
+// 只复制不删除：旧目录留着当免费备份，也方便用户自己回去核对。
+func migrateLegacyDatabase(oldDir, newDir string) {
+	if oldDir == "" || filepath.Clean(oldDir) == filepath.Clean(newDir) {
+		return
+	}
+	oldDB := filepath.Join(oldDir, "cczj_video.db")
+	if _, err := os.Stat(oldDB); err != nil {
+		return // 没有旧库，正常的首次安装
+	}
+	newDB := filepath.Join(newDir, "cczj_video.db")
+	if _, err := os.Stat(newDB); err == nil {
+		// 两处都有库。这里必须什么都不做——猜错方向就会覆盖掉用户这一侧的数据。
+		applog.Warn("[DataDir] 新旧两处都有数据库，保留新目录 %s，未改动 %s", newDir, oldDir)
+		return
+	}
+	if err := copyDatabaseFiles(oldDir, newDir); err != nil {
+		applog.Error("[DataDir] 迁移旧数据库失败: %v（旧目录: %s）", err, oldDir)
+		return
+	}
+	applog.Info("[DataDir] 已迁移旧数据库: %s -> %s", oldDir, newDir)
+}
+
+// copyDatabaseFiles 连同 WAL/SHM 一起复制：只搬 .db 会把尚未 checkpoint 的已提交
+// 事务留在旧目录里，用户拿到的就是一个少了最近一段的库。
+func copyDatabaseFiles(fromDir, toDir string) error {
+	for _, suffix := range []string{".db", ".db-wal", ".db-shm"} {
+		src := filepath.Join(fromDir, "cczj_video"+suffix)
+		if err := copyFile(src, filepath.Join(toDir, "cczj_video"+suffix)); err != nil {
+			if suffix != ".db" && errors.Is(err, os.ErrNotExist) {
+				continue // WAL/SHM 本来就可能不存在
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		return err
+	}
+	return out.Close()
 }
 
 // ======================== Video Download ========================

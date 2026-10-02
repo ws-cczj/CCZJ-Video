@@ -15,10 +15,35 @@ import (
 // directResumeAttempts 是单连接下载一轮失败后最多自动续传的次数（含第一轮）。
 const directResumeAttempts = 4
 
+// minParallelSize 低于这个字节数就单连接下：开 6 条连接的握手开销比省下的时间更值钱。
+const minParallelSize = 2 * 1024 * 1024
+
+// useParallelDirectDownload 决定这次走多连接还是单连接。
+//
+// 带 manifest 的 .part 是稀疏文件，必须一直留在并行分支：manifest 记录的进度是各分片
+// 完成量之和，既不是文件大小也不是连续前缀，交给单连接分支会拿它当 offset 去
+// os.O_APPEND，字节全写进文件尾部，中间的空洞没人再补，最后"字节数等于 total"照样
+// 判定成功并把文件改名成成品。
+func useParallelDirectDownload(supportsRange, parallelManifest bool, remaining int64) bool {
+	if !supportsRange {
+		return false
+	}
+	if parallelManifest {
+		return true
+	}
+	return remaining > minParallelSize
+}
+
 // downloadDirectSingle 单连接下载（回退方案）。返回非 nil 表示这一轮中断了，
 // 调用方可以拿着 .part 的尾部再来一轮；返回 nil 且状态为 done/cancelled/paused
 // 表示不需要再来。
 func (a *App) downloadDirectSingle(ctx context.Context, task *downloadTask, urlStr, tmpPath string, total, existingBytes int64, referer string) error {
+	// 单连接没有分片。任务可能先走过并行分支（或这次被判定不能续传要整条重来），
+	// 留着上一轮的 chunks 会让下载页把早已作废的分片进度画成"正在分 6 段下"。
+	task.mu.Lock()
+	task.status.Chunks = nil
+	task.mu.Unlock()
+
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, urlStr, nil)
 	if err != nil {
 		return fmt.Errorf("build request failed: %w", err)

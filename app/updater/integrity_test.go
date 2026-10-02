@@ -213,3 +213,61 @@ func TestScanAlreadyDownloadedFindsStagedArtifact(t *testing.T) {
 		t.Fatalf("glob matched %v, want %v", matches[0], staged)
 	}
 }
+
+// "已下载"入口可以绕过整个下载校验层：产物名字对、文件存在，就直接递给 InstallUpdate
+// 执行。所以校验过的字节必须留下一张凭据，装之前再核一遍——核不过就什么都不许动。
+func TestDigestRecordGatesInstall(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, stagingPrefix+".exe")
+	if err := os.WriteFile(path, []byte("payload"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256([]byte("payload"))
+	good := hex.EncodeToString(sum[:])
+
+	if err := verifyRecordedArtifact(path); err == nil {
+		t.Fatal("没有摘要记录时必须拒绝安装，不能只凭文件名就 exec")
+	}
+	if hasDigestRecord(path) {
+		t.Fatal("还没写过凭据不该被认作有凭据")
+	}
+
+	if err := recordDigest(path, good); err != nil {
+		t.Fatal(err)
+	}
+	if !hasDigestRecord(path) {
+		t.Fatal("凭据已写入，hasDigestRecord 应认")
+	}
+	if err := verifyRecordedArtifact(path); err != nil {
+		t.Fatalf("凭据相符应通过: %v", err)
+	}
+
+	// 产物被换过（下载截断、别的程序改写）之后，旧凭据不能继续给它背书。
+	if err := os.WriteFile(path, []byte("trunc"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyRecordedArtifact(path); err == nil {
+		t.Fatal("内容与凭据不符时应拒绝安装")
+	}
+
+	clearDigestRecord(path)
+	if hasDigestRecord(path) || fileExists(digestRecordPath(path)) {
+		t.Fatal("清理后不该留下凭据")
+	}
+
+	// 凭据格式不对等于没有：半截摘要既不能通过也不能被当成"跳过校验"。
+	if err := os.WriteFile(digestRecordPath(path), []byte("not-a-digest\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if hasDigestRecord(path) {
+		t.Fatal("非法摘要记录不该被认作凭据")
+	}
+	if err := verifyRecordedArtifact(path); err == nil {
+		t.Fatal("非法摘要记录应拒绝安装")
+	}
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}

@@ -1140,7 +1140,7 @@ onBeforeUnmount(() => {
           <input type="radio" v-model="favTargetFolderId" :value="folder.id" />
           <span class="folder-radio" />
           <Icon :name="folder.default ? 'star' : 'list'" :size="14" />
-          <span class="folder-name">{{ folder.name }}</span>
+          <span class="folder-name">{{ folder.default ? t('detail.defaultFolder') : folder.name }}</span>
         </label>
       </div>
       <template #footer>

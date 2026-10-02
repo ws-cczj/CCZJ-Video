@@ -158,6 +158,59 @@ func verifyArtifact(path, expected string) error {
 	return nil
 }
 
+// digestSuffix 是"这个产物已经被校验过"的凭据文件后缀。
+//
+// 只有摘要在下载完成时算过一次、装的时候却不再核一遍，等于给"已下载"入口开了个
+// 免检通道：更新包被截断、被别的程序改过、或者干脆是上一次安装到一半留下的残骸，
+// 都能直接换掉应用本体。凭据写在产物旁边，随产物一起生灭。
+const digestSuffix = ".sha256"
+
+func digestRecordPath(path string) string { return path + digestSuffix }
+
+// recordDigest 在 verifyArtifact 通过之后调用，把期望摘要落到凭据文件里。
+func recordDigest(path, digest string) error {
+	return os.WriteFile(digestRecordPath(path), []byte(digest+"\n"), 0644)
+}
+
+// clearDigestRecord 删凭据。凡是删产物的分支都要一起删，否则旧凭据会给一个
+// 全新（还没校验过）的同名产物盖章。
+func clearDigestRecord(path string) { _ = os.Remove(digestRecordPath(path)) }
+
+func loadDigestRecord(path string) (string, error) {
+	data, err := os.ReadFile(digestRecordPath(path))
+	if err != nil {
+		return "", err
+	}
+	digest := strings.ToLower(strings.TrimSpace(string(data)))
+	if len(digest) != sha256.Size*2 {
+		return "", fmt.Errorf("摘要记录长度不对：%d 而不是 %d", len(digest), sha256.Size*2)
+	}
+	if _, err := hex.DecodeString(digest); err != nil {
+		return "", fmt.Errorf("摘要记录不是十六进制")
+	}
+	return digest, nil
+}
+
+// hasDigestRecord 只做存在性与格式检查，不读产物内容：给扫描入口用，
+// 免得为了判断"能不能装"在启动路径上哈希一个 31MB 的文件。
+func hasDigestRecord(path string) bool {
+	_, err := loadDigestRecord(path)
+	return err == nil
+}
+
+// verifyRecordedArtifact 是安装前的最后一道：拿下载时记下的摘要重新哈希一遍。
+// 没有凭据（旧版本下载的包、手工放进应用目录的文件）一律拒绝。
+func verifyRecordedArtifact(path string) error {
+	expected, err := loadDigestRecord(path)
+	if err != nil {
+		return apperror.Wrap(apperror.Corrupt, err, "更新包没有可信的摘要记录，请重新下载")
+	}
+	if err := verifyArtifact(path, expected); err != nil {
+		return apperror.Wrap(apperror.Corrupt, err, "更新包与下载时记录的摘要不一致，请重新下载")
+	}
+	return nil
+}
+
 // updateStagingName 给下载产物定一个稳定的暂存名，但保留真实扩展名。
 //
 // 扩展名不能写死成 .exe：资源可能是 .zip/.msi，而 InstallUpdate 是按扩展名分派的。

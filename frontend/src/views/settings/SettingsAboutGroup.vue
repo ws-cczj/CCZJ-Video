@@ -6,16 +6,17 @@
  * 不管当前停在哪一组，进页面就把它取好了），这里只负责展示与两个动作。
  */
 defineOptions({ name: 'SettingsAboutGroup' })
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '../../components/Icon.vue'
 import { Button } from '../../components/ui'
 import { updateController } from '../../stores/updateState'
+import { licenseModalOpen } from '../../stores/licenseState'
 import { useThemeStore } from '../../stores/theme'
 import { useErrorStore } from '../../stores/error'
 import { useConfirmStore } from '../../stores/confirm'
 import { useDownloadStore } from '../../stores/download'
-import { RestartApp } from '../../api/app'
+import { GetSetting, RestartApp } from '../../api/app'
 
 defineProps<{ appVersion: string }>()
 
@@ -24,6 +25,16 @@ const themeStore = useThemeStore()
 const errorStore = useErrorStore()
 const confirmStore = useConfirmStore()
 const downloadStore = useDownloadStore()
+
+// 已同意的条款版本读自设置表本身：界面要说的是"这台机器上记下的是什么"，
+// 拿常量冒充会掩盖未同意或写入失败的情况。
+const acceptedTerms = ref('')
+
+onMounted(async () => {
+  try {
+    acceptedTerms.value = await GetSetting('license_terms_version')
+  } catch { /* 读不到就显示未同意 */ }
+})
 
 // 重启
 const restarting = ref(false)
@@ -90,6 +101,18 @@ async function restartApp(): Promise<void> {
         <div class="disclaimer-content">
           <p>{{ t('settings.disclaimerText') }}</p>
         </div>
+      </div>
+    </section>
+
+    <section class="block">
+      <h3>{{ t('license.entryTitle') }}</h3>
+      <div class="license-row cczj-flex cczj-gap-7">
+        <p class="license-row-text">
+          {{ acceptedTerms ? t('license.termsVersion', { v: acceptedTerms }) : t('license.termsPending') }}
+        </p>
+        <Button variant="secondary" size="sm" @click="licenseModalOpen = true">
+          {{ t('license.viewTerms') }}
+        </Button>
       </div>
     </section>
   </div>
@@ -159,4 +182,24 @@ async function restartApp(): Promise<void> {
   color: var(--text-secondary);
 }
 .disclaimer-content p:last-child { margin-bottom: 0; }
+
+/* ============ 使用许可 ============ */
+.license-row {
+  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  padding: 14px 18px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.license-row-text {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.89rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
 </style>

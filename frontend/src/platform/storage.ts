@@ -24,11 +24,15 @@ export function readStorage<T>(key: string, fallback: T): T {
   return readRaw<T>(key) ?? fallback
 }
 
-export function writeStorage<T>(key: string, value: T): void {
+export function writeStorage<T>(key: string, value: T): boolean {
   try {
     localStorage.setItem(key, JSON.stringify({ version: STORAGE_VERSION, value }))
-  } catch {
-    // Browser storage is an optional UI cache; callers retain in-memory state.
+    return true
+  } catch (e) {
+    // 配额写满是真实会发生的：某个缓存键长到几 MB 就会顶满整个源的额度。
+    // 以前这里连日志都不留，用户拿到的就是「界面说成功了，重启后什么都没有」。
+    console.warn(`[storage] 写入失败 ${key}`, e)
+    return false
   }
 }
 

@@ -248,12 +248,19 @@ func (a *App) downloadDirect(ctx context.Context, task *downloadTask, urlStr, sa
 
 	// ========== 4) 判断走哪个分支：多连接并行 OR 单连接 ==========
 	const numConnections = 6
-	const minParallelSize = 2 * 1024 * 1024 // 小于 2MB 没必要并行
 	remaining := total - existingBytes
-
-	// Legacy .part files do not carry a range manifest. Resume those through
-	// one verified connection; only new or manifest-backed tasks may be sparse.
-	useParallel := supportsRange && total > 0 && remaining > minParallelSize && (existingBytes == 0 || parallelManifest)
+	if parallelManifest && !supportsRange {
+		// 上游这次不认 Range 了（换 CDN 节点是常态）。稀疏 .part 的进度只有 manifest 说得出
+		// 来，单连接只会拿文件大小当连续前缀往尾部追加：补够字节数就判定成功，把中间的空洞
+		// 改名成成品。宁可整条重来，也不续写一个没法验证的文件。
+		applog.Warn("下载 %s：稀疏文件还剩 %d 字节但上游不再支持 Range，从头开始", filepath.Base(savePath), remaining)
+		_ = os.Remove(directManifestPath(tmpPath))
+		_ = os.Truncate(tmpPath, 0)
+		parallelManifest = false
+		existingBytes = 0
+		remaining = total
+	}
+	useParallel := useParallelDirectDownload(supportsRange, parallelManifest, remaining)
 
 	if useParallel {
 		a.downloadDirectParallel(ctx, task, urlStr, tmpPath, total, numConnections, referer)
@@ -552,10 +559,9 @@ func (a *App) RemoveDownload(taskId string) bool {
 		if t != nil && t.cancel != nil {
 			t.cancel()
 		}
-		if t != nil {
-			s := t.snapshot()
-			_ = os.Remove(directManifestPath(s.SavePath + ".part"))
-		}
+		// 只动记录，磁盘上的 .part 与它的 ranges manifest 必须原样成对留下。单独删掉
+		// manifest 会留下一个中间有空洞的稀疏文件，而文件大小看着像连续前缀：下一次同
+		// 链接下载会从尾部追加，补齐字节数后判定成功，把带空洞的文件改名成成品。
 		a.savePersistedTasks()
 		return true
 	}

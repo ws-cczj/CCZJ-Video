@@ -152,23 +152,60 @@ const IMAGE_PROXY_STORAGE_KEY = 'cczj_image_proxy_cache_v1'
 // 这里被 LRU 挤掉的那 80 条只是省掉一次 IPC，不再是省掉一次 CDN 请求。
 const IMAGE_PROXY_TTL = 30 * 24 * 60 * 60 * 1000
 const IMAGE_PROXY_MAX = 80
+// 条数上限挡不住体积：一条 data URL 几十到几百 KB，80 条就是好几 MB。整个源的
+// localStorage 额度只有 ~10MB（Chromium 按 UTF-16 记账，实际还要翻倍），实测有用户
+// 单这一个键就长到 4.97MB，把额度吃满后所有 setItem 一起抛 QuotaExceededError。
+// 症状落在毫不相干的功能上：新建收藏夹说成功了，重启后什么都没有。
+const IMAGE_PROXY_MAX_BYTES = 1024 * 1024
 // 内存层以前不设上限，整场会话看过的 data URL 全留着（单条几十~几百 KB），是实打实的内存泄漏。
-// 这里同样封顶：被挤掉的条目还能从 IMAGE_PROXY_MAX 条持久副本读回，最多回 Go 磁盘缓存重取一次。
+// 这里同样封顶：被挤掉的条目还能从持久副本读回，最多回 Go 磁盘缓存重取一次。
 const IMAGE_PROXY_MEMORY_MAX = 80
 const IMAGE_PROXY_FAILURE_TTL = 5 * 60 * 1000
 
 interface StoredImageProxy { value: string; accessed: number }
 
-// 这张 map 存的是 data URL，80 条就是好几 MB。以前每读一个新 URL 都要把整张 parse 一遍、
-// 再为了刷新 accessed 把整张 stringify 写回去——首屏铺几十张海报就是几十轮全量序列化。
-// 现在常驻内存一份，落盘合并成防抖一次（见 createDebouncedWriter）。
-// imageProxyCache 与这份持久副本各自封顶（IMAGE_PROXY_MEMORY_MAX / IMAGE_PROXY_MAX），内存有上界。
+// 这张 map 存的是 data URL，所以必须按字节钉住（见 IMAGE_PROXY_MAX_BYTES）。
+// 以前每读一个新 URL 都要把整张 parse 一遍、再为了刷新 accessed 把整张 stringify 写回去
+// ——首屏铺几十张海报就是几十轮全量序列化。现在常驻内存一份，落盘合并成防抖一次。
 let memStoredProxy: Record<string, StoredImageProxy> | null = null
+
+function proxyEntrySize(entry: StoredImageProxy): number {
+  // data URL 是 base64，字符数即字节数量级；键本身也占额度。
+  return entry.value.length + 64
+}
+
+// 两个上限一起收敛：先按条数，再按字节，都从最久未访问的冷条目开始丢。
+function trimStoredProxies(all: Record<string, StoredImageProxy>): boolean {
+  const keys = Object.keys(all)
+  if (keys.length <= IMAGE_PROXY_MAX) {
+    let bytes = 0
+    for (const k of keys) bytes += proxyEntrySize(all[k])
+    if (bytes <= IMAGE_PROXY_MAX_BYTES) return false
+  }
+  keys.sort((a, b) => all[a].accessed - all[b].accessed)
+  let dropped = false
+  while (keys.length > IMAGE_PROXY_MAX) {
+    delete all[keys.shift()!]
+    dropped = true
+  }
+  let bytes = 0
+  for (const k of keys) bytes += proxyEntrySize(all[k])
+  while (bytes > IMAGE_PROXY_MAX_BYTES && keys.length > 0) {
+    const k = keys.shift()!
+    bytes -= proxyEntrySize(all[k])
+    delete all[k]
+    dropped = true
+  }
+  return dropped
+}
 
 function storedProxies(): Record<string, StoredImageProxy> {
   if (!memStoredProxy) {
     const all = readStorage<Record<string, StoredImageProxy>>(IMAGE_PROXY_STORAGE_KEY, {})
     memStoredProxy = all && typeof all === 'object' ? all : {}
+    // 载入即收敛：已经攒肥的老副本会在下一次防抖写入时缩水，额度随之释放，
+    // 被挤掉的其他写入（收藏夹、设置）才能重新落盘。不需要用户手动清缓存。
+    if (trimStoredProxies(memStoredProxy)) persistStoredProxy.schedule()
   }
   return memStoredProxy
 }
@@ -201,14 +238,11 @@ function readStoredImageProxy(url: string): string {
 }
 
 function writeStoredImageProxy(url: string, value: string): void {
+  // 单条就超预算的不进持久层：内存层照旧留着，本次会话仍然命中。
+  if (value.length > IMAGE_PROXY_MAX_BYTES) return
   const all = storedProxies()
   all[url] = { value, accessed: Date.now() }
-  const keys = Object.keys(all)
-  if (keys.length > IMAGE_PROXY_MAX) {
-    keys.sort((a, b) => all[a].accessed - all[b].accessed)
-      .slice(0, keys.length - IMAGE_PROXY_MAX)
-      .forEach(key => delete all[key])
-  }
+  trimStoredProxies(all)
   persistStoredProxy.schedule()
 }
 

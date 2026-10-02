@@ -13,6 +13,7 @@ import {
   updateController, fmtSize, fmtSpeed,
   saveDownloadState, loadDownloadState, clearDownloadState,
 } from '../stores/updateState'
+import { licensePending } from '../stores/licenseState'
 import Icon from './Icon.vue'
 import { Button, Modal, MotionTransition } from './ui'
 import { onBackendEvent } from '../api/events'
@@ -156,6 +157,8 @@ function onDownloadProgress(ev: any): void {
 function onUpdateAvailable(ev: any): void {
   const data = ev.data
   if (data && data.has_update) {
+    // 条款还没同意时不抢先弹更新窗：一次只问用户一个必须回答的问题。
+    if (licensePending.value) return
     updateInfo.value = data
     // 检查是否有已下载的安装包
     checkAlreadyDownloaded(data).then(() => {
@@ -214,6 +217,11 @@ onMounted(async () => {
   const pollInterval = 5000
 
   const pollPending = async () => {
+    // 条款还没同意时不弹更新窗，也不消耗重试次数：等用户答复完再接着轮。
+    if (licensePending.value) {
+      setTimeout(pollPending, pollInterval)
+      return
+    }
     if (updateModalOpen.value || pollRetries >= maxPollRetries) return
     pollRetries++
     try {
@@ -396,7 +404,15 @@ onUnmounted(() => {
           {{ tr('update.ignore') }}
         </Button>
         <span style="flex: 1"></span>
-        <Button variant="primary" size="md" @click="doDownload">
+        <!-- 走 version.json 兜底时拿不到 download_url，点下去只会静默返回。
+             与其给一个按不动的按钮，不如把原因写在按钮上。 -->
+        <Button
+          variant="primary"
+          size="md"
+          :disabled="!updateInfo?.download_url"
+          :title="updateInfo?.download_url ? '' : tr('update.noDownloadUrl')"
+          @click="doDownload"
+        >
           <Icon name="download" :size="14" /> {{ tr('update.download') }}
         </Button>
       </template>

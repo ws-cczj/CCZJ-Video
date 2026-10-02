@@ -180,6 +180,15 @@ export class Info {
              */
             this["icon"] = undefined;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * Permissions 是 manifest 声明要用哪几条能力（见 packPermissions）。声明只说明
+             * 「这个包会用到」；用户给没给记在注入运行时那一本账里，两者分得很开。
+             * @member
+             * @type {string[] | undefined}
+             */
+            this["permissions"] = undefined;
+        }
         if (!("files" in $$source)) {
             /**
              * Files / Bytes / Updated 是扫描时从包目录实际数出来的，不来自 manifest：
@@ -229,6 +238,7 @@ export class Info {
         const $$createField11_0 = $$createType4;
         const $$createField12_0 = $$createType6;
         const $$createField13_0 = $$createType8;
+        const $$createField15_0 = $$createType9;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("name" in $$parsedSource) {
             $$parsedSource["name"] = $$createField3_0($$parsedSource["name"]);
@@ -247,6 +257,9 @@ export class Info {
         }
         if ("script" in $$parsedSource) {
             $$parsedSource["script"] = $$createField13_0($$parsedSource["script"]);
+        }
+        if ("permissions" in $$parsedSource) {
+            $$parsedSource["permissions"] = $$createField15_0($$parsedSource["permissions"]);
         }
         return new Info(/** @type {Partial<Info>} */($$parsedSource));
     }

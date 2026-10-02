@@ -51,12 +51,17 @@ function loadFoldersFromStorage(): void {
   mapping.value = readStorage<Record<string, string>>(MAPPING_KEY, {})
 }
 
-function persistFolders(): void {
-  writeStorage(FOLDERS_KEY, folders.value)
+function persistFolders(): boolean {
+  if (writeStorage(FOLDERS_KEY, folders.value)) return true
+  // 写失败以前完全没有痕迹，用户看到的就是「建夹成功，重启后没了」。
+  errorStore.error(tr('favorites.saveFailed'), tr('favorites.saveFailedDetail'), '', 'Favorites')
+  return false
 }
 
-function persistMapping(): void {
-  writeStorage(MAPPING_KEY, mapping.value)
+function persistMapping(): boolean {
+  if (writeStorage(MAPPING_KEY, mapping.value)) return true
+  errorStore.error(tr('favorites.saveFailed'), tr('favorites.saveFailedDetail'), '', 'Favorites')
+  return false
 }
 
 // 根据后端返回的 fav 推断目标 folderId；若不存在映射，归到默认夹
@@ -122,7 +127,6 @@ const { gridStyle } = storeToRefs(layoutStore)
 let wasDeactivated = false
 
 onMounted(async () => {
-  loadFoldersFromStorage()
   await layoutStore.load()
   await loadFavorites()
 })
@@ -166,6 +170,9 @@ async function fetchFavoritePage(page: number): Promise<void> {
 async function loadFavorites(): Promise<void> {
   loading.value = true
   try {
+    // 文件夹映射是详情页/播放页直接写 localStorage 的，而这一页在 KeepAlive 下不会重挂。
+    // 不重新读盘，刚从详情页归进某个夹的收藏就会按旧映射落回默认夹——看起来像"收藏没显示"。
+    loadFoldersFromStorage()
     await fetchFavoritePage(1)
   } catch (e) {
     const err = normalizeApiError(e)
@@ -349,12 +356,7 @@ async function deleteFolder(folder: FavFolder): Promise<void> {
 
 function moveSelectedToFolder(): void {
   const target = moveTargetFolderId.value || 'default'
-  const keys = Array.from(selectedKeys.value)
-  for (const fav of favorites.value) {
-    if (selectedKeys.value.has(favKey(fav))) fav.folderId = target
-  }
-  for (const k of keys) mapping.value[k] = target
-  persistMapping()
+  moveKeysToFolder(Array.from(selectedKeys.value), target)
   showMoveModal.value = false
   exitManageMode()
 }
@@ -364,6 +366,74 @@ function openMoveSelected(): void {
   movePendingKeys.value = Array.from(selectedKeys.value)
   moveTargetFolderId.value = activeFolderId.value === 'default' ? 'default' : 'default'
   showMoveModal.value = true
+}
+
+// ============== 拖拽归类 ==============
+// 只认本页自己发起的拖拽。扩展包那套原生文件拖放带的是 Files，
+// 在这里无条件 preventDefault 会把"往窗口里丢文件夹"整条链路吃掉。
+const draggingKeys = ref<string[]>([])
+const dropTargetId = ref<string>('')
+
+function onCardDragStart(fav: FavItem, e: DragEvent): void {
+  const key = favKey(fav)
+  draggingKeys.value = selectedKeys.value.has(key) ? Array.from(selectedKeys.value) : [key]
+  const transfer = e.dataTransfer
+  if (!transfer) return
+  transfer.effectAllowed = 'move'
+  // 不 setData 的话 Gecko 根本不启动这次拖拽；标题也比自定义类型更适合当拖拽标签。
+  transfer.setData('text/plain', fav.video?.vod_name || key)
+}
+
+function onCardDragEnd(): void {
+  draggingKeys.value = []
+  dropTargetId.value = ''
+}
+
+function onFolderDragOver(folder: FavFolder, e: DragEvent): void {
+  if (draggingKeys.value.length === 0) return
+  e.preventDefault()
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+  dropTargetId.value = folder.id
+}
+
+function onFolderDragLeave(folder: FavFolder, e: DragEvent): void {
+  if (dropTargetId.value !== folder.id) return
+  // 掠过夹名、图标、计数这些子元素也会报 dragleave，游标还在本夹内就不该灭高亮。
+  const next = e.relatedTarget
+  if (next instanceof Node && e.currentTarget instanceof Node && e.currentTarget.contains(next)) return
+  dropTargetId.value = ''
+}
+
+function onFolderDrop(folder: FavFolder, e: DragEvent): void {
+  if (draggingKeys.value.length === 0) return
+  e.preventDefault()
+  const keys = draggingKeys.value
+  draggingKeys.value = []
+  dropTargetId.value = ''
+  moveKeysToFolder(keys, folder.id)
+}
+
+function moveKeysToFolder(keys: string[], folderId: string): void {
+  // 已经在目标夹的不算一次移动，否则拖到自己身上也会弹「已移动 1 部」。
+  const moved = keys.filter((k) => (mapping.value[k] || 'default') !== folderId)
+  if (moved.length === 0) return
+  for (const k of moved) mapping.value[k] = folderId
+  for (const fav of favorites.value) {
+    if (moved.includes(favKey(fav))) fav.folderId = folderId
+  }
+  if (manageMode.value) {
+    // 整组拖走时，被搬走的卡片已经不在这一夹里了，勾选计数不能继续算着它们。
+    const rest = new Set(selectedKeys.value)
+    for (const k of moved) rest.delete(k)
+    selectedKeys.value = rest
+  }
+  if (!persistMapping()) return
+  errorStore.info(
+    tr('favorites.movedTitle'),
+    tr('favorites.movedTo', { count: moved.length, name: getFolderName(folderId) }),
+    '',
+    'Favorites',
+  )
 }
 
 // 当映射或收藏夹列表变化时，同步 favorites 上的 folderId 派生值
@@ -421,7 +491,10 @@ watch([mapping, folders], () => {
     <div class="fav-layout cczj-flex cczj-gap-6">
       <aside class="fav-folders cczj-flex cczj-flex-col cczj-gap-2 cczj-w-64">
         <div v-for="folder in folders" :key="folder.id" class="folder-row cczj-flex cczj-items-center cczj-justify-between cczj-p-2 cczj-rounded cczj-transition cczj-cursor-pointer"
-          :class="{ active: folder.id === activeFolderId }" @click="activeFolderId = folder.id">
+          :class="{ active: folder.id === activeFolderId, 'drop-target': dropTargetId === folder.id }"
+          :title="tr('favorites.dragHint')" @click="activeFolderId = folder.id"
+          @dragover="onFolderDragOver(folder, $event)" @dragleave="onFolderDragLeave(folder, $event)"
+          @drop="onFolderDrop(folder, $event)">
           <div class="folder-name cczj-flex cczj-items-center cczj-gap-2 cczj-flex-1">
             <Icon :name="folder.default ? 'star' : 'list'" :size="14" />
             <span>{{ folderLabel(folder) }}</span>
@@ -456,7 +529,9 @@ watch([mapping, folders], () => {
         <!-- 视频网格 -->
         <div v-else class="fav-grid cczj-grid" :style="gridStyle">
           <div v-for="fav in displayedFavorites" :key="favKey(fav)" class="fav-card cczj-relative cczj-transition cczj-rounded"
-            :class="{ 'is-selected': selectedKeys.has(favKey(fav)), 'is-manage': manageMode, 'is-removing': removingKey === favKey(fav) }">
+            draggable="true"
+            :class="{ 'is-selected': selectedKeys.has(favKey(fav)), 'is-manage': manageMode, 'is-removing': removingKey === favKey(fav), 'is-dragging': draggingKeys.includes(favKey(fav)) }"
+            @dragstart="onCardDragStart(fav, $event)" @dragend="onCardDragEnd">
             <!-- 卡片字段现在由 GetFavorites 一次给齐，占位卡留给"全局库里连名字和封面都没有"的残缺条目。 -->
             <VideoCard v-if="fav.video?.vod_name || fav.video?.vod_pic" :video="fav.video" @click="goDetail(fav)" />
             <div v-else class="placeholder-card cczj-flex cczj-items-center cczj-justify-center cczj-rounded cczj-border cczj-border-dashed cczj-bg-card cczj-cursor-pointer cczj-transition" @click="goDetail(fav)">

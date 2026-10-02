@@ -53,7 +53,11 @@ func ClearInstalledVersion() {
 	os.Remove(fpath)
 }
 
-// getInstalledVersion 读取已安装的版本号
+// getInstalledVersion 读取已安装的版本号。读到的值留在 lastInstalledMarker 里：
+// 标记紧接着就会被启动流程清掉，而诊断台要拿它回答"上一次安装声称换成了哪个版本"
+// —— 那是判断"装上了没有"的唯一现场证据。
+var lastInstalledMarker string
+
 func getInstalledVersion() string {
 	appDir := getAppDir()
 	fpath := filepath.Join(appDir, installedVersionFile)
@@ -61,8 +65,16 @@ func getInstalledVersion() string {
 	if err != nil {
 		return ""
 	}
-	return strings.TrimSpace(string(data))
+	marker := strings.TrimSpace(string(data))
+	if marker != "" {
+		lastInstalledMarker = marker
+	}
+	return marker
 }
+
+// InstalledMarkerSeenThisRun 返回本进程读到过的最后一次安装标记（清空之前的值）。
+// 标记文件在应用目录、不在数据目录，路径由本包独占，别让调用方猜。
+func InstalledMarkerSeenThisRun() string { return lastInstalledMarker }
 
 // semverRegex 用于从 tag 名称中提取语义化版本号（如 release-v1.0.0 → 1.0.0）
 var semverRegex = regexp.MustCompile(`(\d+\.\d+\.\d+(?:-[\w.]+)?)`)

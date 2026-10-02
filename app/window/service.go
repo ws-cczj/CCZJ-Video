@@ -59,7 +59,9 @@ func (s *Service) SetCloseBehavior(minimize bool) {
 // LoadCloseBehavior restores the persisted close behavior while preserving the default on first run.
 func (s *Service) LoadCloseBehavior() {
 	value, err := s.settings.Get("close_to_tray")
-	if err != nil {
+	if err != nil || value == "" {
+		// 缺键在库层返回的是 ("", nil)，只看 err 会把「没存过」当成「存了 false」，
+		// 于是每个新装用户第一次点关闭就直接退出程序，而默认值本来是缩到托盘。
 		return
 	}
 	s.minimizeToTray.Store(value == "1")

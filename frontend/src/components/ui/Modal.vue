@@ -47,6 +47,9 @@ function onKeydown(e: KeyboardEvent): void {
   if (!props.modelValue) return
   if (e.key === 'Escape') {
     e.preventDefault()
+    // closable=false 的模态不该被 ESC 绕过：它是除关闭按钮和遮罩之外的第三条关闭路径，
+    // 首启条款闸门要拦的就是「所有」关闭路径。
+    if (!props.closable) return
     close()
   }
 }

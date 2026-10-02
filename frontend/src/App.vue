@@ -16,6 +16,7 @@ import { useThemeStore } from './stores/theme'
 import { useDownloadStore } from './stores/download'
 import { GetSetting } from './api/app'
 import UpdateModal from './components/UpdateModal.vue'
+import LicenseGate from './components/LicenseGate.vue'
 
 
 // 仅缓存"列表型"页面（Home/Search/Sources/...这些展示视频/源/下载/历史/收藏/设置的页面）。
@@ -173,6 +174,9 @@ onUnmounted(() => {
 
     <!-- 全局更新弹窗 -->
     <UpdateModal />
+
+    <!-- 首启许可条款闸门：没同意当前版本时盖在所有弹窗之上（挂在后面，同 z-index 下后画的赢） -->
+    <LicenseGate />
 
     <!-- 全局错误/消息弹窗栈（右侧从右滑入，向下堆叠） -->
     <ErrorToastStack />

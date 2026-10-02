@@ -76,6 +76,9 @@ var machineLocalSettings = map[string]bool{
 	"database_reset_version":              true,
 	"database_reset_generation":           true,
 	"collect.schedule.last_exit_unix_sec": true,
+	// 同意条款是对「这台机器上的这份安装」作出的意思表示。跟着备份导入走，
+	// 一份已同意的备份就能替别人跳过首启确认，闸门形同虚设。
+	"license_terms_version": true,
 }
 
 // exportableSources 决定备份里是否带上源定义。源带着 API 地址，收藏与历史

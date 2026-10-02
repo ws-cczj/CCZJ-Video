@@ -165,6 +165,16 @@ export class Source {
         }
         if (/** @type {any} */(false)) {
             /**
+             * AutoDisabledAt 是这个源被自动停用（连续失败到阈值）时的 Unix 秒，0 表示不是。
+             * 用户手动关掉的源留 0，所以冷却到期时只会自动恢复机器做掉的停用，不会擅自
+             * 打开用户明确关掉的东西。
+             * @member
+             * @type {number | undefined}
+             */
+            this["auto_disabled_at"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
              * 策略配置（JSON 字符串，DB 列，用于自定义数据源参数组合）
              * @member
              * @type {string | undefined}
