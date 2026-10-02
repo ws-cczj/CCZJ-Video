@@ -540,6 +540,8 @@ maccms 类源站用 `$$$` 在 `vod_play_url` 里并列多条「同名集表」�
 - [ADR 0005](docs/adr/0005-architecture-boundaries.md) — 前端绑定出口、存储归属与 `app/service` 分层
 - [ADR 0009](docs/adr/0009-coded-errors.md) — 错误码边界：什么错误带码、什么错误只串链
 - [`docs/plugins.md`](docs/plugins.md) — 扩展包规范与原因码表
+- [`docs/pending-decisions.md`](docs/pending-decisions.md) — 待拍板事项：已经查清、但方向要人定的记录。
+  与 ADR 相反，这里只放没决定的；拍板之后挪进 `docs/adr/` 或直接改代码，再从这里删掉。
 
 ---
 

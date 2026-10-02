@@ -363,8 +363,8 @@ function kindGlyph(pack: PluginInfo): string {
     <div class="ext-dir" :title="dirText" @click="copyDir">{{ dirText }}</div>
     <div v-if="pluginStore.registryError" class="ext-error">{{ pluginStore.registryError }}</div>
 
-    <!-- 拖放区是整个窗口（投放标记在 App.vue），这张卡片自己也带一份，指针掠过时
-         运行时给它加 file-drop-target-active，于是这一条只需要说「能拖」。 -->
+    <!-- 这一张卡片是全应用唯一的投放区，所以指针掠过它时运行时才会给出可放置的反馈；
+         这一条只需要说「能拖」。 -->
     <div class="ext-drop" :class="{ 'is-busy': installing }">
       <Icon :name="installing ? 'refresh' : 'download'" :size="13" />
       <span>{{ installing ? t('settings.extensionsInstalling') : t('settings.extensionsDropHint') }}</span>

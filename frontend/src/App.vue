@@ -128,10 +128,9 @@ onUnmounted(() => {
   <!-- 启动画面 -->
   <SplashScreen />
 
-  <!-- data-file-drop-target 是 Wails 运行时找的那个标记：带着文件掠过窗口时，它只在
-       命中这个标记（或其子孙）的场合把 dropEffect 设成 copy，否则一律 none——也就是
-       鼠标上那个禁止符号。整窗挂一个，等于「拖到哪儿都能装」。 -->
-  <div class="app-shell" data-file-drop-target>
+  <!-- 投放标记刻意不在这一层：带着它整窗都是投放区，拖到播放器上也会静默装一个扩展包。
+       现在只有「设置 → 扩展包」那张卡片带 data-file-drop-target。 -->
+  <div class="app-shell">
     <!-- 自定义标题栏：最顶部一条，背景色与页面主背景一致 -->
     <TitleBar />
 
@@ -374,22 +373,8 @@ input, textarea, [contenteditable="true"], .allow-select, .video-description, .d
   flex-direction: column;
   transition: background 0.3s;
 }
-/* 拖放态：整个窗口都是投放区，Wails 运行时在文件进出时给根节点加/摘这个类。
-   描边画在内侧——窗口无边框，往外描就等于描到桌面上去了。 */
-.app-shell.file-drop-target-active {
-  outline: 2px dashed var(--accent);
-  outline-offset: -4px;
-}
-/* 指针落在 Teleport 到 body 的浮层上时，命中的标记是 body 本身。body 的高度不保证铺满
-   窗口，所以这层反馈用固定定位的伪元素画，且不吃鼠标——否则它自己就成了新的命中物。 */
-body.file-drop-target-active::after {
-  content: '';
-  position: fixed;
-  inset: 2px;
-  border: 2px dashed var(--accent);
-  pointer-events: none;
-  z-index: 9999;
-}
+/* 拖放态的描边不再由这里画：投放区收到只有扩展包那张卡片那么大，
+   高亮跟着卡片走（styles/components/extensions-panel.css）。 */
 .app-body {
   display: flex;
   flex: 1;

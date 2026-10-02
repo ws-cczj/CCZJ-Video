@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **扩展包的拖放安装只认「设置 → 扩展包」这一页**：投放标记原先挂在 `<body>` 和 `.app-shell` 上，
+  等于整窗都是投放区——正在播放视频时拖一个文件夹进来也会静默装上。现在标记只剩扩展包那张卡片，
+  卡片不在视野里就投不进去（运行时把指针下的其余位置判为 `dropEffect=none`），
+  前端另外加了一道「投放区不可见就不装」。拖放态的高亮跟着卡片走，不再给整个窗口描边。
+- ≤2.1.0 的客户端往这一版跳，需要手动覆盖一次 exe：旧替换脚本把绝对路径写进 .bat 正文，
+  中文目录会被 cmd 按 OEM 代码页重解而换不动。2.3.0 起的脚本改为纯 ASCII 正文 + 参数传路径，
+  此后 2.3.x 之间的自动更新不再受路径字符影响。
+
 ## [2.3.0] - 2026-10-02
 
 2.2.0 之后一直在工作树里的那一批：扩展包体系落地、发布链路与安全补齐、错误处理与生命周期收拢，
@@ -227,7 +239,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 项目初始化，基于 Wails 3 + Vue 3 + Go 技术栈
 
-[Unreleased]: https://github.com/ws-cczj/CCZJ-Video/compare/v2.2.0...HEAD
+[Unreleased]: https://github.com/ws-cczj/CCZJ-Video/compare/v2.3.0...HEAD
+[2.3.0]: https://github.com/ws-cczj/CCZJ-Video/releases/tag/v2.3.0
 [2.2.0]: https://github.com/ws-cczj/CCZJ-Video/compare/v2.0.3...v2.2.0
 [2.0.0]: https://github.com/ws-cczj/CCZJ-Video/compare/v1.1.0...v2.0.0
 [1.1.0]: https://github.com/ws-cczj/CCZJ-Video/releases/tag/v1.1.0

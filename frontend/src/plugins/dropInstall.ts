@@ -36,14 +36,28 @@ export const installing = ref(false)
 let detach: (() => void) | null = null
 
 /**
- * 挂上原生拖放。整窗都是投放区（App.vue 的根节点带 data-file-drop-target），
- * 所以在任何页面拖进来都会装：正在看视频时想加一个包，不该要求先跑去设置页。
+ * 挂上原生拖放。投放区只有「设置 → 扩展包」那张卡片（唯一的 data-file-drop-target），
+ * 分组切走时它是 display:none，所以拖到别处不该装包。
+ *
+ * 订阅仍挂在应用生命周期上而不是面板里：Go 的 WindowFilesDropped 是窗口级事件，
+ * 一次拖放只发一遍，晚挂就漏。放不放行由下面 dropZoneVisible 判。
  */
 export function startDropWatch(): void {
   if (detach) return
   detach = onBackendEvent<string[]>('plugin:filedrop', paths => {
+    if (!dropZoneVisible()) return
     void installDroppedPaths(paths ?? [])
   })
+}
+
+/**
+ * 投放区此刻真的在屏幕上吗。运行时会把落在标记外的拖放强制成 dropEffect=none，
+ * 正常走不到「收得到事件但区域不可见」；留这一道是因为装扩展包的副作用用户完全
+ * 看不见——正在放视频的人不会明白窗口为什么突然多出一个侧栏条目。
+ */
+function dropZoneVisible(): boolean {
+  const zone = document.querySelector('[data-file-drop-target]')
+  return zone instanceof HTMLElement && zone.offsetParent !== null
 }
 
 /**

@@ -11,11 +11,6 @@ import { useMotionStore } from './stores/motion'
 import { syncPluginScripts } from './plugins/runtime'
 import { startDropWatch } from './plugins/dropInstall'
 
-// 弹窗、下拉、播放器浮层都是 Teleport 到 <body> 的，不在 .app-shell 里。运行时找不到
-// [data-file-drop-target] 就把 dropEffect 强制成 none（鼠标变禁止符号），于是「拖到弹窗上
-// 就装不了」。标记打在 body 上兜底：近处没有别的标记时，命中的永远是这一层。
-document.body.setAttribute('data-file-drop-target', '')
-
 const app = createApp(App)
 app.use(createPinia())
 app.use(router)
@@ -36,7 +31,7 @@ Promise.all([loadLocale(), motion.load()]).finally(() => {
   // 有的还会立刻 push 路由——太早跑的话 <router-view> 还没就位，导航会被静默吞掉。
   // 不 await：坏包不该挡住应用启动，注入结果由日志面板和扩展面板各自汇报。
   void syncPluginScripts()
-  // 拖放安装要在任何页面都收：Go 只会把被拖文件夹的绝对路径发上来一次，错过就没了，
-  // 所以订阅挂在应用生命周期上，而不是设置页打开时才挂。
+  // 拖放安装的订阅全程挂着，但放行只在扩展包页：Go 只会把被拖文件夹的绝对路径发上来
+  // 一次，晚挂就漏，所以不在面板挂载时才订阅；是不是该装由 dropInstall 自己判。
   startDropWatch()
 })
