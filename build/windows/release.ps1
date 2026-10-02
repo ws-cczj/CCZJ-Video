@@ -21,6 +21,8 @@ param(
     [string] $OutDir = "dist",
     # Only regenerate the notes and the checklist. Skips the build, so bin/ is untouched.
     [switch] $SkipBuild,
+    # Ship even if version.json's "desc" still looks like the previous release's text.
+    [switch] $AllowStaleDesc,
     # Do not launch Explorer or the browser (used by automated runs).
     [switch] $NoOpen
 )
@@ -67,6 +69,24 @@ if ($Version -ne $jsonVersion) {
 if (-not $Title) { $Title = "v$Version" }
 $tag = "v$Version"
 Write-Host "release: $tag  (version.json agrees)"
+
+# ------------------------------------------------------- in-app update text
+# version.json's "desc" is the text installed copies show in their update dialog, read
+# from raw.githubusercontent. It is the one release input this script cannot write for
+# you, and forgetting it is the quiet failure: the binary ships fine and every user is
+# told the previous release's news. So stop instead of publishing.
+$vj = [IO.File]::ReadAllText((Join-Path $root "version.json"), [Text.Encoding]::UTF8) | ConvertFrom-Json
+$desc = "$($vj.desc)"
+$prevDesc = ""
+if ($vj.history -and $vj.history.Count -gt 0) { $prevDesc = "$($vj.history[0].desc)" }
+# "dai tian" (to be filled) as a codepoint escape, so this file stays ASCII-only.
+$placeholder = [regex]::Unescape('\u5f85\u586b')
+if ($desc.Trim().Length -eq 0) { throw "version.json desc is empty - write the update text users will see." }
+if ($desc -like "*$placeholder*" -or $desc -match '(?i)\bTODO\b') { throw "version.json desc is still a placeholder: $desc" }
+if ($prevDesc -and $desc -eq $prevDesc) { throw "version.json desc is identical to history[0] ($($vj.history[0].version)) - it still describes the previous release." }
+if ($desc -notlike "*$Version*" -and -not $AllowStaleDesc) {
+    throw "version.json desc never mentions $Version. Pass -AllowStaleDesc if that is deliberate."
+}
 
 # ---------------------------------------------------------------- notes
 $notes = Get-ChangeLogSection (Join-Path $root "CHANGELOG.md") $Version
@@ -135,8 +155,9 @@ Write-Host "Still yours to do:"
 Write-Host "  1. Commit version.json + CHANGELOG.md to main. The in-app update dialog reads"
 Write-Host "     version.json from raw.githubusercontent, so an unpushed file means users see"
 Write-Host "     the previous release's notes."
-Write-Host "  2. Move the old version.json 'desc' into 'history' and write the new one - that"
-Write-Host "     is prose, not something worth generating."
+Write-Host "  2. version.json 'desc' is the update-dialog text. Rotating the old one into"
+Write-Host "     'history' is done; the new prose is yours - this script stops while it still"
+Write-Host "     reads as a placeholder or repeats the previous release."
 Write-Host "  3. Tick 'Set as the latest release' unless this is a pre-release."
 if (-not (Get-Item -LiteralPath (Join-Path $distPath $expected[2]) -ErrorAction SilentlyContinue)) {
     Write-Host "  4. NOTE: without checksums.txt the in-app updater refuses to install this"

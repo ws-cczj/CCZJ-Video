@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-10-02
+
 2.2.0 之后一直在工作树里的那一批：扩展包体系落地、发布链路与安全补齐、错误处理与生命周期收拢，
 以及把几个三四千行的巨型文件拆开。数据库继续走顺序迁移（新增 v7~v10），启动时自动补齐并在迁移前留快照。
 
