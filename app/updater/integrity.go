@@ -10,7 +10,9 @@ import (
 	"path/filepath"
 	"regexp"
 	goruntime "runtime"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"cczjVideo/app/apperror"
@@ -74,16 +76,37 @@ func parseChecksums(body []byte) map[string]string {
 	return out
 }
 
-// fetchReleaseChecksums 读取某个 tag 下的校验清单。
+// checksumChannel 是一个能取回 checksums.txt 的通道。
 //
-// 这里刻意只用不带代理的直连地址：清单如果和产物走同一个第三方代理，那个代理就能
-// 同时替换产物和它的哈希，校验就退化成只能防损坏。防不住的是 GitHub 账号被盗或
-// api.github.com 被 TLS 层中间人——那需要代码签名，不是这里能解决的。
-func fetchReleaseChecksums(owner, repo, tag string) (map[string]string, error) {
-	if owner != repoOwner || repo != repoName {
-		return nil, fmt.Errorf("资源不属于本应用仓库 %s/%s", repoOwner, repoName)
+// party 是运营商标识：gh-proxy.org 与它的 v4/v6 子域是同一家，凑在一起只算一票——
+// 「两处一致」若能让一家自问自答，就等于没有这道确认。
+type checksumChannel struct {
+	prefix string // 直连通道为空串
+	party  string
+}
+
+// checksumChannels 按可信度排序：github.com 是唯一由我们自己发布内容的通道，
+// 第三方加速站只在它取不回来时补位，而且必须互相印证。
+//
+// 清单不能只走直连：产物下载本身就是靠这些加速站兜住大陆网络的（speedTestSources），
+// 让清单唯一可选的通道是这条最常见的路上最先断掉的，结果就是所有人都在第一步被挡住。
+func checksumChannels() []checksumChannel {
+	return []checksumChannel{
+		{prefix: "", party: "github.com"},
+		{prefix: "https://gh-proxy.org/", party: "gh-proxy.org"},
+		{prefix: "https://v4.gh-proxy.org/", party: "gh-proxy.org"},
+		{prefix: "https://v6.gh-proxy.org/", party: "gh-proxy.org"},
+		{prefix: "https://gh-proxy.com/", party: "gh-proxy.com"},
+		{prefix: "https://githubproxy.cc/", party: "githubproxy.cc"},
+		{prefix: "https://ghproxy.net/", party: "ghproxy.net"},
 	}
-	url := fmt.Sprintf("https://github.com/%s/%s/releases/download/%s/%s", owner, repo, tag, checksumsAssetName)
+}
+
+// requiredParties 是代理清单要被采信所需的独立运营商数量。
+const requiredParties = 2
+
+// fetchChecksums 从单个完整 URL 取回并解析清单。
+func fetchChecksums(url string) (map[string]string, error) {
 	client := &http.Client{
 		Timeout:   20 * time.Second,
 		Transport: netstats.WrapTransport(netstats.CategoryUpdate, nil),
@@ -105,6 +128,131 @@ func fetchReleaseChecksums(owner, repo, tag string) (map[string]string, error) {
 		return nil, fmt.Errorf("%s 内容为空或格式不认识", checksumsAssetName)
 	}
 	return checksums, nil
+}
+
+// checksumVote 是一家运营商对同一个清单的回答。
+type checksumVote struct {
+	party string
+	sums  map[string]string
+	err   error
+}
+
+// canonicalChecksums 把清单压成一个可比较的串：名字与摘要都已在 parseChecksums 里归一，
+// 排序只是为了同一家不同子域、或不同家的写法差异不会误判成分歧。
+func canonicalChecksums(sums map[string]string) string {
+	keys := make([]string, 0, len(sums))
+	for name := range sums {
+		keys = append(keys, name)
+	}
+	sort.Strings(keys)
+	var sb strings.Builder
+	for _, name := range keys {
+		sb.WriteString(name)
+		sb.WriteByte(' ')
+		sb.WriteString(sums[name])
+		sb.WriteByte('\n')
+	}
+	return sb.String()
+}
+
+// decideChecksums 是要紧的判定，与网络无关：
+// 直连拿到就用直连；否则要求至少 requiredParties 家内部无分歧的运营商给出逐字一致的清单。
+//
+// 残余风险说清楚：两家勾结的加速站仍然能同时替换产物和清单。这一层防得住的是单点损坏
+// 和单家投毒，防不住整条链路合谋——那需要代码签名，不是这里能解决的。
+func decideChecksums(direct map[string]string, directErr error, votes []checksumVote) (map[string]string, string, error) {
+	if directErr == nil {
+		return direct, "github.com", nil
+	}
+
+	// party -> 该家给过的不同清单。同一家先后给出不一致的两份，这家整体作废。
+	seen := make(map[string]map[string]bool)
+	sumsByKey := make(map[string]map[string]string)
+	for _, vote := range votes {
+		if vote.err != nil || len(vote.sums) == 0 {
+			continue
+		}
+		key := canonicalChecksums(vote.sums)
+		if seen[vote.party] == nil {
+			seen[vote.party] = make(map[string]bool)
+		}
+		seen[vote.party][key] = true
+		sumsByKey[key] = vote.sums
+	}
+
+	voters := make(map[string][]string)
+	for party, keys := range seen {
+		if len(keys) != 1 {
+			continue
+		}
+		for key := range keys {
+			voters[key] = append(voters[key], party)
+		}
+	}
+	if len(voters) == 0 {
+		return nil, "", apperror.Wrap(apperror.Unavailable, directErr,
+			"直连与加速站都没能取回校验清单，请到发布页手动下载")
+	}
+
+	// 票数多的先；同票按清单内容排序，保证同一网络环境下每次选的是同一份。
+	bestKey, bestParties := "", []string(nil)
+	for key, parties := range voters {
+		sort.Strings(parties)
+		if len(parties) > len(bestParties) || (len(parties) == len(bestParties) && key < bestKey) {
+			bestKey, bestParties = key, parties
+		}
+	}
+	if len(bestParties) < requiredParties {
+		return nil, "", apperror.Newf(apperror.Unavailable,
+			"只有 %d 处加速站给出校验清单，凑不出两处一致，为防产物被替换已停止下载（直连失败：%v）；可稍后重试或到发布页手动下载",
+			len(bestParties), directErr)
+	}
+	return sumsByKey[bestKey], strings.Join(bestParties, "+"), nil
+}
+
+// fetchReleaseChecksums 读取某个 tag 下的校验清单：直连优先，取不回来时才由多家加速站互相印证。
+func fetchReleaseChecksums(owner, repo, tag string) (map[string]string, error) {
+	if owner != repoOwner || repo != repoName {
+		return nil, apperror.Newf(apperror.Validation, "资源不属于本应用仓库 %s/%s", repoOwner, repoName)
+	}
+	base := fmt.Sprintf("https://github.com/%s/%s/releases/download/%s/%s", owner, repo, tag, checksumsAssetName)
+
+	// 代理与直连同时发车：直连在这条路上是慢的那一个，串行试完再回退等于把
+	// 「点下载」到「开始传字节」的时间全花在一次注定超时的等待上。
+	channels := checksumChannels()
+	var wg sync.WaitGroup
+	votesCh := make(chan checksumVote, len(channels)-1)
+	for _, ch := range channels[1:] {
+		wg.Add(1)
+		go func(ch checksumChannel) {
+			defer wg.Done()
+			sums, err := fetchChecksums(ch.prefix + base)
+			// 通道容量够所有 goroutine 写完，没人读也不会把它们挂住。
+			votesCh <- checksumVote{party: ch.party, sums: sums, err: err}
+		}(ch)
+	}
+
+	direct, directErr := fetchChecksums(channels[0].prefix + base)
+	if directErr == nil {
+		wg.Wait()
+		applog.Info("[Updater] 校验清单来源: %s", channels[0].party)
+		return direct, nil
+	}
+	applog.Warn("[Updater] 校验清单直连失败: %v，改问加速站", directErr)
+
+	wg.Wait()
+	close(votesCh)
+	var votes []checksumVote
+	for vote := range votesCh {
+		votes = append(votes, vote)
+	}
+
+	sums, party, err := decideChecksums(direct, directErr, votes)
+	if err != nil {
+		return nil, err
+	}
+	applog.Info("[Updater] 校验清单来源: %s", party)
+	return sums, nil
 }
 
 // fileSHA256 计算文件摘要。
@@ -132,7 +280,9 @@ func requireArtifact(rawURL string) (string, error) {
 	}
 	checksums, err := fetchReleaseChecksums(owner, repo, tag)
 	if err != nil {
-		return "", apperror.Wrap(apperror.Unavailable, err, "发布缺少可信校验清单，请到发布页手动下载")
+		// fetchReleaseChecksums 给的是带码错误，话里已经说清是直连没通还是各家对不上；
+		// 再套一层只会把两句话拼成一句更长的。
+		return "", err
 	}
 	digest, found := checksums[strings.ToLower(file)]
 	if !found {

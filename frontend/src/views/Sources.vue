@@ -172,7 +172,13 @@ async function deleteSourceConfirm(key: string): Promise<void> {
     level: 'danger',
   })
   if (!yes) return
-  await DeleteSource(key)
+  try {
+    await DeleteSource(key)
+  } catch (e: any) {
+    // 裸 await 时 Go 侧报错就是「点了没反应」，删掉的源看着还留着。
+    errorStore.fromError(tr('sources.deleteFailed'), e, 'Sources.deleteSource')
+    return
+  }
   await sourceStore.loadSources(true)
 }
 

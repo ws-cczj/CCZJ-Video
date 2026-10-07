@@ -46,9 +46,9 @@ func TestTakeInstallResultWithoutFile(t *testing.T) {
 // 脚本写结论、Go 侧读结论，两边必须落在同一个路径上；各写各的就等于没有通道。
 // 正文里一个路径字面量都没有（全部走参数），所以断言针对的是 %变量名。
 func TestBuildSwapScriptReportsEveryOutcome(t *testing.T) {
-	script := buildSwapScript()
+	script := buildSwapScript(true)
 
-	for _, wire := range []string{`set "OLD=%~1"`, `set "NEW=%~2"`, `set "RESULT=%~3"`, `set "BASE=%~4"`} {
+	for _, wire := range []string{`set "OLD=%~1"`, `set "NEW=%~2"`, `set "RESULT=%~3"`, `set "BASE=%~4"`, `set "HANDOFF=%~5"`} {
 		if !strings.Contains(script, wire) {
 			t.Fatalf("脚本缺少参数接线 %q:\n%s", wire, script)
 		}
@@ -66,6 +66,16 @@ func TestBuildSwapScriptReportsEveryOutcome(t *testing.T) {
 	// 回归：绝不先删旧 exe，换不回去要把名字还回来。
 	if strings.Contains(script, `del /f /q "%OLD%"`) {
 		t.Fatalf("脚本在替换前删除了旧 exe:\n%s", script)
+	}
+	// 回归：动手之前先给正在跑的 exe 留一份 .old。换入用的是 move，它把旧字节直接
+	// 盖掉——没有这一步，「退回上一版」永远没有原料，那个按钮就只能一直是灰的。
+	snapshotAt := strings.Index(script, `copy /y "%OLD%" "%OLD%.old" >NUL 2>&1`)
+	firstMoveAt := strings.Index(script, `move /y "%NEW%" "%OLD%"`)
+	if snapshotAt < 0 {
+		t.Fatalf("脚本没有为旧 exe 留回滚副本:\n%s", script)
+	}
+	if firstMoveAt >= 0 && snapshotAt > firstMoveAt {
+		t.Fatalf("回滚副本的抄写排在换入之后，旧字节已经被盖掉:\n%s", script)
 	}
 	if !strings.Contains(script, `ren "%OLD%.old" "%BASE%"`) {
 		t.Fatalf("换入失败时没有把旧 exe 改回原名:\n%s", script)
@@ -96,7 +106,7 @@ func TestBuildSwapScriptReportsEveryOutcome(t *testing.T) {
 // timeout 撞上非控制台 stdin 会立刻报错返回（脚本由 Go 以独立进程启动，stdin 是 NUL），
 // 于是"每次等 2 秒、最多 30 次"变成几百毫秒烧完，本进程还没让位就开始改名。
 func TestBuildSwapScriptActuallyWaits(t *testing.T) {
-	script := buildSwapScript()
+	script := buildSwapScript(true)
 	if strings.Contains(script, "timeout") {
 		t.Fatalf("脚本用 timeout 等待，独立进程下它不会真等:\n%s", script)
 	}
@@ -109,7 +119,7 @@ func TestBuildSwapScriptActuallyWaits(t *testing.T) {
 // 整条"先改名再换入"的补救分支等于不存在——而那是唯一还能装上新版的分支。
 func TestBuildSwapScriptRenameTargetsAreBareNames(t *testing.T) {
 	found := 0
-	for _, line := range strings.Split(buildSwapScript(), "\r\n") {
+	for _, line := range strings.Split(buildSwapScript(true), "\r\n") {
 		trimmed := strings.TrimSpace(line)
 		if !strings.HasPrefix(trimmed, "ren ") {
 			continue
@@ -133,7 +143,7 @@ func TestBuildSwapScriptRenameTargetsAreBareNames(t *testing.T) {
 // 点"安装"之后本进程退场，脚本无论成败都得把应用交回用户手里；
 // 成功分支也不能顺手删掉 .old——那是新版本起不来时唯一的退路。
 func TestBuildSwapScriptHandsTheAppBack(t *testing.T) {
-	script := buildSwapScript()
+	script := buildSwapScript(true)
 	if got := strings.Count(script, `start "" "%OLD%"`); got < 3 {
 		t.Fatalf("start 旧 exe 出现 %d 次，期望至少 3 次（成功 + 两种失败）:\n%s", got, script)
 	}
@@ -143,8 +153,69 @@ func TestBuildSwapScriptHandsTheAppBack(t *testing.T) {
 			t.Fatalf("%s 分支没有把应用交回用户:\n%s", label, block)
 		}
 	}
+	assertEveryStartHandsOff(t, script)
 	if strings.Contains(scriptBlock(script, ":START_NEW"), `del /f /q "%OLD%.old"`) {
 		t.Fatalf("成功分支删掉了 .old 回滚副本:\n%s", script)
+	}
+}
+
+// 「退出时安装」那一档不能启动应用：用户点它就是要关掉程序，脚本把他刚关的窗口
+// 再开回来等于替他改了主意。
+func TestBuildSwapScriptOnExitTierNeverStarts(t *testing.T) {
+	script := buildSwapScript(false)
+	if strings.Contains(script, `start "" "%OLD%"`) {
+		t.Fatalf("退出时安装的脚本仍然会启动应用:\n%s", script)
+	}
+	// 不 start 不等于不说话：这一档的成败只能靠结论文件在下次启动呈现（见 #195）。
+	for _, line := range []string{
+		`echo ok>"%RESULT%"`,
+		`echo swap_failed>"%RESULT%"`,
+		`echo verify_failed>"%RESULT%"`,
+	} {
+		if !strings.Contains(script, line) {
+			t.Fatalf("退出时安装的脚本缺少回执 %q:\n%s", line, script)
+		}
+	}
+	// 脚本自己还是得消失，不然程序目录里每次退出都留一个 _update_swap.bat。
+	if !strings.Contains(script, `del /f /q "%~f0"`) {
+		t.Fatalf("退出时安装的脚本没有自删:\n%s", script)
+	}
+}
+
+// 两档共用同一条梯子：重试、改名让位、回执、自删这些我们已经在真机上验过的行，
+// 不能因为多了一档就悄悄变成另一份代码——那份没被验过。
+func TestBuildSwapScriptTiersDifferOnlyByStart(t *testing.T) {
+	var withoutStart []string
+	for _, line := range strings.Split(buildSwapScript(true), "\r\n") {
+		if strings.Contains(line, `start "" "%OLD%"`) {
+			continue
+		}
+		withoutStart = append(withoutStart, line)
+	}
+	// split 留下的末尾空串正好还原出脚本结尾那个 CRLF，所以这里只 join、不再补分隔符。
+	got := buildSwapScript(false)
+	if got != strings.Join(withoutStart, "\r\n") {
+		t.Fatalf("退出时安装那一档与立即安装差的不只是 start 行:\n%s", got)
+	}
+}
+
+// assertEveryStartHandsOff 钉住「脚本里每一行 start 都带单实例锁的交接参数」。
+// 漏一行的后果不是报错，是"程序关了再也没回来"而回执写着 ok：新进程抢在旧进程释放
+// 互斥体之前起来，会被 Wails 判成第二实例并静默退出（见 buildSwapScript 第 6 条）。
+func assertEveryStartHandsOff(t *testing.T, script string) {
+	t.Helper()
+	starts := 0
+	for _, line := range strings.Split(script, "\r\n") {
+		if !strings.Contains(line, `start "" `) {
+			continue
+		}
+		starts++
+		if !strings.HasSuffix(line, "%HANDOFF%") {
+			t.Errorf("这行 start 没带交接参数，新实例会撞在单实例锁上: %q", line)
+		}
+	}
+	if starts == 0 {
+		t.Error("脚本里一行 start 都没有，交还应用这一步整条都丢了")
 	}
 }
 

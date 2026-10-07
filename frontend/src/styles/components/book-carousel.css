@@ -25,10 +25,6 @@
   transition: transform var(--cczj-motion-carousel) var(--cczj-motion-ease-emphasis);
 }
 
-.carousel-slide-incoming {
-  z-index: 2;
-}
-
 .slide-inner {
   position: relative;
   height: 100%;
@@ -214,31 +210,42 @@
   box-shadow: 0 4px 12px var(--accent-alpha-35);
 }
 
-/* Navigation arrows */
+/* Navigation arrows —— 指针进入整块轮播才淡入，移开淡出。底与字都用固定值，不走 --btn-solid
+   那一组主题 token：跟 token 走时浅色主题下圆底会和海报亮部糊成一片。pointer-events 跟着
+   opacity 一起收放，看不见的时候不该挡住海报上的点击。 */
 .carousel-arrow {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
   z-index: 10;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
-  border: none;
-  background: var(--btn-solid);
-  color: var(--btn-solid-text);
-  font-size: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(10, 10, 15, 0.55);
+  color: #ffffff;
+  font-size: 26px;
   line-height: 1;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background-color var(--cczj-motion-fast) var(--cczj-motion-ease-standard),
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--cczj-motion-fast) var(--cczj-motion-ease-standard),
+              background-color var(--cczj-motion-fast) var(--cczj-motion-ease-standard),
               transform var(--cczj-motion-fast) var(--cczj-motion-ease-standard);
   padding: 0;
 }
 
+.carousel:hover .carousel-arrow,
+.carousel:focus-within .carousel-arrow {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 .carousel-arrow:hover {
-  background: var(--accent-dim);
+  background: rgba(10, 10, 15, 0.82);
 }
 
 .carousel-arrow-left {

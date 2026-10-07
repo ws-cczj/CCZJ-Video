@@ -113,23 +113,11 @@ func withinDir(path, dir string) bool {
 // (a WAL snapshot cannot be opened read-only without touching its -shm file),
 // and a copy is the only way to be sure the snapshot itself is never written.
 func readArchive(path string) (Payload, error) {
-	scratchDir := filepath.Join(filepath.Dir(path), ".restore-scratch")
-	if err := os.MkdirAll(scratchDir, 0755); err != nil {
-		return Payload{}, apperror.Wrap(apperror.Storage, err, "create scratch directory")
-	}
-	defer os.RemoveAll(scratchDir)
-
-	scratch := filepath.Join(scratchDir, "read-"+fmt.Sprintf("%d", time.Now().UnixNano())+".db")
-	for _, suffix := range []string{"", "-wal", "-shm"} {
-		if err := copyFile(path+suffix, scratch+suffix); err != nil {
-			return Payload{}, err
-		}
-	}
-	database, err := sqlx.Connect("sqlite", scratch+"?_pragma=busy_timeout(3000)&_pragma=query_only(TRUE)")
+	database, closeDatabase, err := readOnlyCopy(path)
 	if err != nil {
-		return Payload{}, apperror.Wrap(apperror.Corrupt, err, "open archive read-only")
+		return Payload{}, err
 	}
-	defer database.Close()
+	defer closeDatabase()
 
 	payload := Payload{Kind: payloadKind, Version: payloadVersion, Exported: time.Now().Format(time.RFC3339)}
 	settings, err := db.ReadAllSettings(database)
@@ -160,6 +148,32 @@ func readArchive(path string) (Payload, error) {
 	payload.Videos = videos
 	payload.Sources = sources
 	return payload, nil
+}
+
+// readOnlyCopy 把源库连同 WAL/SHM 复制成一份临时副本，再以 query_only 打开。
+// 返回的关闭函数负责关掉句柄并删掉副本：副本落在源文件旁边的 .restore-scratch 里，
+// 用完不留下第二份库。
+func readOnlyCopy(path string) (*sqlx.DB, func(), error) {
+	scratchDir := filepath.Join(filepath.Dir(path), ".restore-scratch")
+	if err := os.MkdirAll(scratchDir, 0755); err != nil {
+		return nil, nil, apperror.Wrap(apperror.Storage, err, "create scratch directory")
+	}
+	scratch := filepath.Join(scratchDir, "read-"+fmt.Sprintf("%d", time.Now().UnixNano())+".db")
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		if err := copyFile(path+suffix, scratch+suffix); err != nil {
+			_ = os.RemoveAll(scratchDir)
+			return nil, nil, err
+		}
+	}
+	database, err := sqlx.Connect("sqlite", scratch+"?_pragma=busy_timeout(3000)&_pragma=query_only(TRUE)")
+	if err != nil {
+		_ = os.RemoveAll(scratchDir)
+		return nil, nil, apperror.Wrap(apperror.Corrupt, err, "open copy read-only")
+	}
+	return database, func() {
+		_ = database.Close()
+		_ = os.RemoveAll(scratchDir)
+	}, nil
 }
 
 func copyFile(from, to string) error {

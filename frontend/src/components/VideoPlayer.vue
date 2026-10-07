@@ -340,11 +340,8 @@ function toggleAutoNext(): void {
   try { writeStorage('cczj_auto_next', autoNextEnabled.value) } catch { /* ignore */ }
 }
 
-// 初始化自动连播设置
-try {
-  const saved = readStorageBoolean('cczj_auto_next', false)
-  if (!saved) autoNextEnabled.value = false
-} catch { /* ignore */ }
+// 没勾过就按开走：这一项的默认语义是「播完接下一集」
+autoNextEnabled.value = readStorageBoolean('cczj_auto_next', true)
 
 // ========= 报告广告 =========
 function toggleReportAd(): void {
@@ -1179,6 +1176,8 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
     // 播放结束：移除当前进度（下次不跳回结尾）
     clearPlaybackTime(stableResumeKey())
     if (_saveTimer != null) { window.clearInterval(_saveTimer); _saveTimer = null }
+    // 「自动连播」原先是个没有接线的开关：勾上了也没有任何代码消费它。
+    if (autoNextEnabled.value && props.hasNext) emit('next')
   })
   on('error', () => {
     loading.value = false

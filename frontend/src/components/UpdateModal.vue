@@ -1,10 +1,11 @@
 <script setup lang="ts">
 defineOptions({ name: 'UpdateModal' })
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { tr } from '../locales'
 import {
   CheckUpdate, DownloadUpdate, InstallUpdate, FileExists,
-  IgnoreVersion, GetPendingUpdateInfo, ClearPendingUpdateInfo,
+  IgnoreVersion, GetPendingUpdateInfo, ClearPendingUpdateInfo, GetLastInstallReport,
+  ScheduleInstallOnExit, CancelInstallOnExit, GetPendingInstall,
 } from '../api/app'
 import { useErrorStore } from '../stores/error'
 import {
@@ -23,6 +24,9 @@ const errorStore = useErrorStore()
 // 本地状态（不共享）
 const installing = ref(false)
 const checkFailed = ref(false)
+// 「退出时安装」这份安排的现场状态：按钮写「退出时安装」还是「取消安排」取决于它。
+const onExitPlanned = ref(false)
+const scheduling = ref(false)
 let stopDownloadProgress: (() => void) | null = null
 let stopUpdateAvailable: (() => void) | null = null
 
@@ -90,12 +94,15 @@ async function doDownload(): Promise<void> {
   }
 }
 
-// ---------- 安装更新 ----------
+// ---------- 安装更新（档位一：立即安装） ----------
 async function doInstall(): Promise<void> {
   if (!updateDownloadPath.value) return
   installing.value = true
   try {
     clearDownloadState()
+    // Go 那边一进 Install 就取代退出时安装的安排，所以不论这次成不成，界面都不该再
+    // 显示「取消安排」。
+    onExitPlanned.value = false
     // 注意：不要在这里调用 ClearPendingUpdateInfo()！
     // Go 的 InstallUpdate 会先读取 pendingUpdateInfo 记录版本号，再清理
     await InstallUpdate(updateDownloadPath.value)
@@ -105,12 +112,101 @@ async function doInstall(): Promise<void> {
   }
 }
 
+// ---------- 安装更新（档位二：退出时安装） ----------
+// 这一档只在退出那一刻换程序：安排落在 Go 侧的持久记录里，界面这边只反映「有没有安排」。
+// 安排是针对某一份包立的。界面上现在摊着的是另一份包时，按钮不能沿用上一条安排的状态，
+// 否则用户点下去以为取消的是眼前这个。路径大小写不敏感（Windows）。
+function plannedForThisArtifact(plan: any): boolean {
+  const path = String(plan?.path ?? '')
+  return !!plan?.available && !!path && !!updateDownloadPath.value
+    && path.toLowerCase() === updateDownloadPath.value.toLowerCase()
+}
+
+async function refreshOnExitPlan(): Promise<void> {
+  if (!updateDownloaded.value || !updateDownloadPath.value) {
+    onExitPlanned.value = false
+    return
+  }
+  try {
+    onExitPlanned.value = plannedForThisArtifact(await GetPendingInstall())
+  } catch {
+    // 问不到就当没安排：按钮写「退出时安装」，点下去仍然会正确地安排或报错。
+    onExitPlanned.value = false
+  }
+}
+
+async function doScheduleOnExit(): Promise<void> {
+  if (!updateDownloadPath.value || scheduling.value) return
+  scheduling.value = true
+  const wasPlanned = onExitPlanned.value
+  try {
+    if (wasPlanned) {
+      await CancelInstallOnExit()
+      onExitPlanned.value = false
+      errorStore.info(tr('update.onExitCancelledTitle'), tr('update.onExitCancelledMsg'), '', 'UpdateModal')
+    } else {
+      await ScheduleInstallOnExit(updateDownloadPath.value, updateInfo.value?.latest_version || '')
+      onExitPlanned.value = true
+      const version = updateInfo.value?.latest_version
+      errorStore.info(
+        tr('update.onExitTitle'),
+        tr('update.onExitMsg'),
+        version ? tr('update.onExitTarget', { version }) : '',
+        'UpdateModal',
+      )
+    }
+  } catch (e: any) {
+    errorStore.fromError(
+      wasPlanned ? tr('update.onExitCancelFailed') : tr('update.onExitFailed'),
+      e,
+      'UpdateModal.scheduleOnExit',
+    )
+  } finally {
+    scheduling.value = false
+  }
+}
+
+// ---------- 上次安装的现场回执 ----------
+// 结论文件在 Go 启动时就被读掉了，这份报告只活在这次会话里：错过就再没人知道
+// 「点了安装、程序自己关了、重开还是老版本」这件事发生过。
+let installReportRead = false
+
+async function reportLastInstall(): Promise<void> {
+  if (installReportRead) return
+  installReportRead = true
+  let report: any = null
+  try {
+    report = await GetLastInstallReport()
+  } catch {
+    return // 问不到回执就闭嘴：凭空说「上次更新失败」比沉默更糟
+  }
+  if (!report?.failed) return
+  // 认不出的回执原样留在日志里，界面只说这件已经确定的事：没换成。
+  const details: Record<string, string> = {
+    swap_failed: tr('update.installReportSwap'),
+    verify_failed: tr('update.installReportVerify'),
+    rollback_failed: tr('update.installReportRollback'),
+  }
+  errorStore.info(
+    tr('update.installReportTitle'),
+    tr('update.installReportBody', { version: report.running || tr('common.unknown') }),
+    details[String(report.result ?? '')] ?? '',
+    'UpdateModal',
+  )
+}
+
 // ---------- 忽略版本 ----------
 async function doIgnore(): Promise<void> {
   if (!updateInfo.value?.latest_version) return
   try {
     await IgnoreVersion(updateInfo.value.latest_version)
     await ClearPendingUpdateInfo()
+    // 忽略这个版本就不该再在退出时偷偷换上它：安排是隐形的（只在关停那一刻兑现），
+    // 界面既然已经接受了「这个版本不要了」，就顺手把它撤掉。
+    if (onExitPlanned.value) {
+      await CancelInstallOnExit()
+      onExitPlanned.value = false
+    }
     // 清理已下载的安装包状态
     const state = loadDownloadState()
     if (state && state.version === updateInfo.value.latest_version) {
@@ -202,6 +298,13 @@ async function checkAlreadyDownloaded(info: UpdateInfoData): Promise<void> {
     clearDownloadState()
   }
 }
+
+// 条款还没签时提示条会被闸门压在下面，所以等它让开再说这一次。
+watch(licensePending, (pending) => { if (!pending) void reportLastInstall() }, { immediate: true })
+
+// 手上一份包变成另一份包（下载完成、或后端扫出已下载的包）时重新问一次安排状态。
+// immediate 是因为下载状态可能在这个组件挂载前就被恢复了，那种情况下也得显示对。
+watch([updateDownloaded, updateDownloadPath], () => { void refreshOnExitPlan() }, { immediate: true })
 
 onMounted(async () => {
   stopDownloadProgress = onBackendEvent('update:download:progress', onDownloadProgress)
@@ -378,10 +481,13 @@ onUnmounted(() => {
         </Button>
       </template>
 
-      <!-- 下载完成界面按钮 -->
+      <!-- 下载完成界面按钮：两条安装档位，加上「这次先不管」 -->
       <template v-else-if="updateDownloaded">
         <Button variant="secondary" size="md" @click="doIgnore">
-          {{ tr('update.later') }}
+          {{ tr('update.ignore') }}
+        </Button>
+        <Button variant="secondary" size="md" :loading="scheduling" @click="doScheduleOnExit">
+          <Icon name="clock" :size="14" /> {{ onExitPlanned ? tr('update.cancelOnExit') : tr('update.installOnExit') }}
         </Button>
         <span style="flex: 1"></span>
         <Button variant="primary" size="md" :loading="installing" @click="doInstall">

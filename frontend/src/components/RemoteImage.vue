@@ -28,8 +28,23 @@ const resolvedSrc = ref(props.fallback)
  * 那时淡的是空气，只会白等一次时长。
  */
 const phase = ref<'hidden' | 'dip' | 'shown'>('hidden')
+/**
+ * src 已经换了、但手上这张还是上一张：resolveImage 在等代理回话，或者正卡在淡出里。
+ * 这一段 phase 仍是 'shown'（旧图还亮着），所以只看 phase / 只看 opacity 都认不出来——
+ * 轮播交棒的闸门要的正是"新图落好了没"，光看屏幕看不出来。
+ *
+ * 已知边角：上一张的 @load 如果正好落在"新请求已发出、还没轮到它赋值"这一格里，会提前
+ * 把它放开一次。要堵它得给赋值也记一个请求号（现在只有请求 src 那边有），代价是这套
+ * 记账翻倍；先留着，闸门本身有 1.5 秒上限兜底。
+ */
+const settling = ref(false)
 const requestToken = ref(0)
 let dipTimer: number | null = null
+
+/** 交棒闸门问的就是这一格：新图解完码并且淡进来了，才算可以往台前滑。 */
+defineExpose({
+  ready: computed(() => phase.value === 'shown' && !settling.value),
+})
 
 // 淡入淡出走 animation 而不是 transition：transition 是一条整体属性，写进 style 会把
 // 调用方给图片自己的过渡（比如 VideoCard 的悬停放大）整条顶掉。animation 没人占用，
@@ -53,6 +68,7 @@ function show(next: string): void {
   clearDip()
   if (next === resolvedSrc.value) {
     phase.value = 'shown'
+    settling.value = false
     return
   }
   const dip = motion.dipMs()
@@ -70,6 +86,7 @@ function show(next: string): void {
 async function resolveImage(rawSrc: string | null | undefined): Promise<void> {
   const token = ++requestToken.value
   const source = String(rawSrc || '').trim()
+  settling.value = true
   if (!source) {
     if (token === requestToken.value) show(props.fallback)
     return
@@ -87,6 +104,7 @@ async function resolveImage(rawSrc: string | null | undefined): Promise<void> {
 
 function onImageLoad(): void {
   phase.value = 'shown'
+  settling.value = false
 }
 
 function onImageError(): void {
@@ -96,6 +114,7 @@ function onImageError(): void {
   }
   // 连兜底图都上不了屏也得把这一格亮起来，否则它永远停在透明状态。
   phase.value = 'shown'
+  settling.value = false
 }
 
 /**
@@ -103,7 +122,10 @@ function onImageError(): void {
  * （complete + 有实际宽度）就直接当它亮着，否则它会永远停在透明状态等一次不会来的事件。
  */
 function onImgEl(el: Element | ComponentPublicInstance | null): void {
-  if (el instanceof HTMLImageElement && el.complete && el.naturalWidth > 0) phase.value = 'shown'
+  if (el instanceof HTMLImageElement && el.complete && el.naturalWidth > 0) {
+    phase.value = 'shown'
+    settling.value = false
+  }
 }
 
 watch(() => props.src, (value) => {

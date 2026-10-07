@@ -16,6 +16,8 @@ import { useThemeStore } from './stores/theme'
 import { useDownloadStore } from './stores/download'
 import { GetSetting } from './api/app'
 import UpdateModal from './components/UpdateModal.vue'
+import LegacyDataPrompt from './components/LegacyDataPrompt.vue'
+import SchemaNewerPrompt from './components/SchemaNewerPrompt.vue'
 import LicenseGate from './components/LicenseGate.vue'
 
 
@@ -173,6 +175,12 @@ onUnmounted(() => {
 
     <!-- 全局更新弹窗 -->
     <UpdateModal />
+
+    <!-- 首启的旧数据找回提示：等条款闸门和更新弹窗都走完才开口（见组件里的 clear 闸门） -->
+    <LegacyDataPrompt />
+
+    <!-- 「这份数据比当前版本新」：降级或旧 exe 开新库时解释为什么列表缺一截，排在旧数据提示之后 -->
+    <SchemaNewerPrompt />
 
     <!-- 首启许可条款闸门：没同意当前版本时盖在所有弹窗之上（挂在后面，同 z-index 下后画的赢） -->
     <LicenseGate />

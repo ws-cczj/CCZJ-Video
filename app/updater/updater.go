@@ -204,7 +204,8 @@ func buildUpdateInfoFromVersionInfo(verInfo *VersionInfo) *UpdateInfo {
 	if latestVer == "" {
 		latestVer = strings.TrimPrefix(verInfo.Version, "v")
 	}
-	hasUpdate := compareVersions(latestVer, EffectiveVersion()) > 0
+	current := EffectiveVersion()
+	hasUpdate := compareVersions(latestVer, current) > 0
 
 	// 筛选历史版本（仅保留大于当前版本的）
 	var history []VersionItem
@@ -213,14 +214,14 @@ func buildUpdateInfoFromVersionInfo(verInfo *VersionInfo) *UpdateInfo {
 		if ver == "" {
 			ver = strings.TrimPrefix(item.Version, "v")
 		}
-		if compareVersions(ver, EffectiveVersion()) > 0 {
+		if compareVersions(ver, current) > 0 {
 			history = append(history, item)
 		}
 	}
 
 	info := &UpdateInfo{
 		HasUpdate:    hasUpdate,
-		CurrentVer:   EffectiveVersion(),
+		CurrentVer:   current,
 		LatestVer:    latestVer,
 		ReleaseName:  "v" + latestVer,
 		ReleaseNotes: verInfo.Desc,
@@ -228,9 +229,9 @@ func buildUpdateInfoFromVersionInfo(verInfo *VersionInfo) *UpdateInfo {
 	}
 
 	if hasUpdate {
-		applog.Info("[Updater] 发现新版本: %s -> %s (通过 version.json)", Version, latestVer)
+		applog.Info("[Updater] 发现新版本: %s -> %s (通过 version.json)", current, latestVer)
 	} else {
-		applog.Info("[Updater] 当前已是最新版本: %s (通过 version.json)", Version)
+		applog.Info("[Updater] 当前已是最新版本: %s (通过 version.json)", current)
 	}
 
 	return info
@@ -325,13 +326,14 @@ func buildUpdateInfoFromRelease(release *GitHubRelease) *UpdateInfo {
 		applog.Warn("[Updater] 无法从 tag 提取版本号: %s", release.TagName)
 		latestVer = strings.TrimPrefix(release.TagName, "v")
 	}
-	hasUpdate := compareVersions(latestVer, EffectiveVersion()) > 0
+	current := EffectiveVersion()
+	hasUpdate := compareVersions(latestVer, current) > 0
 
 	assetName, downloadURL, assetSize := findBestAsset(release.Assets)
 
 	info := &UpdateInfo{
 		HasUpdate:    hasUpdate,
-		CurrentVer:   EffectiveVersion(),
+		CurrentVer:   current,
 		LatestVer:    latestVer,
 		ReleaseName:  release.Name,
 		ReleaseNotes: release.Body,
@@ -342,9 +344,9 @@ func buildUpdateInfoFromRelease(release *GitHubRelease) *UpdateInfo {
 	}
 
 	if hasUpdate {
-		applog.Info("[Updater] 发现新版本: %s -> %s", Version, latestVer)
+		applog.Info("[Updater] 发现新版本: %s -> %s", current, latestVer)
 	} else {
-		applog.Info("[Updater] 当前已是最新版本: %s", Version)
+		applog.Info("[Updater] 当前已是最新版本: %s", current)
 	}
 
 	return info

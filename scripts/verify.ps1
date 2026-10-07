@@ -65,6 +65,17 @@ if ($errorTextMatching) {
     Write-Error "Classify errors with apperror.CodeOf / errors.Is / errors.As, never by message text.`n$($errorTextMatching -join "`n")"
 }
 
+# The single-instance handoff wait must read a process snapshot, never spawn a console child.
+# This app is built -H windowsgui, so Windows allocates a console window for every console
+# subsystem program it starts: the old tasklist poll painted roughly 150 flashing black
+# windows during one 30s wait (reported on the desktop 2026-10-06). Comment lines are
+# excluded because procs_windows.go names the forbidden call while explaining why.
+$handoffSubprocess = @(rg -n 'exec\.|\btasklist\b|os/exec' app/handoff -g '*.go' -g '!*_test.go' |
+    Where-Object { $_ -notmatch ':\s*//' })
+if ($handoffSubprocess) {
+    Write-Error "app/handoff must not spawn subprocesses while waiting for the old instance; read the snapshot in procs_windows.go.`n$($handoffSubprocess -join "`n")"
+}
+
 # The Windows version resource has three silent failure modes that all still produce a
 # buildable exe, so the template is checked here instead of only at release time:
 #  - the "info" key is parsed by winres as a hex language ID; "0000" makes Win32 skip the

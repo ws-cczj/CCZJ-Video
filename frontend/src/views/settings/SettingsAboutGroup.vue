@@ -1,24 +1,27 @@
 <script setup lang="ts">
 /**
- * 「关于」分组：版本卡片 + 检查更新 / 重启 + 免责声明。
+ * 「关于」分组：版本卡片 + 检查更新 / 重启 / 退回上一版 + 免责声明。
  *
  * 版本号仍然由 Settings.vue 在页面挂载时读一次再传进来（和拆分前一样：
- * 不管当前停在哪一组，进页面就把它取好了），这里只负责展示与两个动作。
+ * 不管当前停在哪一组，进页面就把它取好了），这里只负责展示与这几个动作。
  */
 defineOptions({ name: 'SettingsAboutGroup' })
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '../../components/Icon.vue'
 import { Button } from '../../components/ui'
-import { updateController } from '../../stores/updateState'
+import { updateController, fmtSize } from '../../stores/updateState'
 import { licenseModalOpen } from '../../stores/licenseState'
 import { useThemeStore } from '../../stores/theme'
 import { useErrorStore } from '../../stores/error'
 import { useConfirmStore } from '../../stores/confirm'
 import { useDownloadStore } from '../../stores/download'
-import { GetSetting, RestartApp } from '../../api/app'
+import { formatTime } from '../../utils'
+import {
+  GetSetting, RestartApp, GetSwapBackupInfo, RollbackUpdate,
+} from '../../api/app'
 
-defineProps<{ appVersion: string }>()
+const props = defineProps<{ appVersion: string }>()
 
 const { t } = useI18n()
 const themeStore = useThemeStore()
@@ -30,10 +33,19 @@ const downloadStore = useDownloadStore()
 // 拿常量冒充会掩盖未同意或写入失败的情况。
 const acceptedTerms = ref('')
 
+// 「退回上一版」的原料是 exe 旁边那份 .old 副本，它可能根本不存在（没装过更新、
+// 或 copy 那一步失败）。没有副本就不出现这个按钮：给一个按不动的入口，
+// 用户读到的是"功能坏了"，而不是"这次没有可退的东西"。
+const swapBackup = ref<{ size_bytes?: number; modified_at?: number } | null>(null)
+
 onMounted(async () => {
   try {
     acceptedTerms.value = await GetSetting('license_terms_version')
   } catch { /* 读不到就显示未同意 */ }
+  try {
+    const info = await GetSwapBackupInfo()
+    if (info?.available) swapBackup.value = info
+  } catch { /* 读不到就当没有 */ }
 })
 
 // 重启
@@ -58,6 +70,32 @@ async function restartApp(): Promise<void> {
     errorStore.fromError(t('settings.restartFailed'), e, 'Settings.restartApp')
   } finally {
     restarting.value = false
+  }
+}
+
+// 退回上一版：把 exe 换回上一次更新前的副本，然后让位给脚本。
+// 副本一旦被 move 消费掉就没了，所以这一步必须让用户先看清楚退的是哪一份。
+const rollingBack = ref(false)
+
+async function rollbackUpdate(): Promise<void> {
+  const backup = swapBackup.value
+  if (!backup) return
+  const size = fmtSize(Number(backup.size_bytes ?? 0))
+  const modifiedAt = Number(backup.modified_at ?? 0)
+  const when = modifiedAt > 0 ? formatTime(new Date(modifiedAt * 1000).toISOString()) : t('common.unknown')
+  const yes = await confirmStore.confirm({
+    title: t('settings.rollbackTitle'),
+    message: t('settings.rollbackMsg', { version: props.appVersion, size, when }),
+    okText: t('settings.rollbackBtn'),
+    level: 'warn',
+  })
+  if (!yes) return
+  rollingBack.value = true
+  try {
+    await RollbackUpdate()
+  } catch (e: any) {
+    errorStore.fromError(t('settings.rollbackFailed'), e, 'SettingsAboutGroup.rollbackUpdate')
+    rollingBack.value = false
   }
 }
 </script>
@@ -90,6 +128,17 @@ async function restartApp(): Promise<void> {
           @click="restartApp"
         >
           <Icon name="refresh" :size="14" /> {{ t('settings.restart') }}
+        </Button>
+        <Button
+          v-if="swapBackup"
+          variant="secondary"
+          size="md"
+          :disabled="rollingBack"
+          :loading="rollingBack"
+          :title="t('settings.rollbackHint', { size: fmtSize(Number(swapBackup.size_bytes ?? 0)) })"
+          @click="rollbackUpdate"
+        >
+          <Icon name="back" :size="14" /> {{ t('settings.rollbackBtn') }}
         </Button>
       </div>
     </section>

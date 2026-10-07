@@ -5,12 +5,16 @@ import (
 	"testing"
 
 	"cczjVideo/app/applog"
+	"cczjVideo/app/db"
 	"cczjVideo/app/updater"
 )
 
 // TestMain 抢在任何 applog 调用之前把单例绑到临时目录。
 // applog.Default() 会在单例为空时用 %APPDATA% 的生产目录把它建出来，而这里的
 // 校正分支正是要写警告日志的，不绑就会灌进用户真实的日志文件。
+//
+// 同一个临时目录也拿来开库：这个包的安装安排存在 settings 里，而 settings 就是
+// 那张表——按项目里既有的做法，测这类读写要打真库，不打桩。
 func TestMain(m *testing.M) {
 	dir, err := os.MkdirTemp("", "cczj-update-test-")
 	if err != nil {
@@ -19,7 +23,11 @@ func TestMain(m *testing.M) {
 	if err := applog.Init(dir); err != nil {
 		panic(err)
 	}
+	if err := db.InitDB(dir); err != nil {
+		panic(err)
+	}
 	code := m.Run()
+	db.Close()
 	applog.Default().Close()
 	_ = os.RemoveAll(dir)
 	os.Exit(code)

@@ -120,6 +120,14 @@ func runMigrations() error {
 	if err != nil {
 		return err
 	}
+	if lenient, ahead := applySchemaAhead(instance, current); ahead {
+		// 库比这个程序新：不动它，也不拦着用它，但要说清楚（界面上那条提示读的就是
+		// 这一步记下的版本号，见 app/service/schemanotice.go）。
+		instance = lenient
+		logWarn(fmt.Sprintf("库结构 v%d 比本构建最高 v%d 更新：这份数据是更新的版本写的，本程序只认自己那几列",
+			current, LatestSchemaVersion()))
+		return nil
+	}
 	pending := 0
 	for _, m := range migrations {
 		if m.version > current {

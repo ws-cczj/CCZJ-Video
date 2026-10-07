@@ -231,6 +231,11 @@ func (a *App) GetDiagnostics() (*Diagnostics, error) {
 	if marker := updater.InstalledMarkerSeenThisRun(); marker != "" {
 		d.Env.InstalledMarker = marker
 	}
+	// 回执只活在这次会话里（结论文件启动时就被消费掉了），所以这是失败之后唯一的现场。
+	// 结论词表里 install 与 rollback 两类失败共用 _failed 后缀，现场话要说清是哪一边。
+	if report := a.update.LastInstallReport(); report.Failed {
+		note("上次替换没有生效：脚本回执 %s，当前运行 %s", report.Result, report.Running)
+	}
 	// schema 版本落后说明迁移没跑完，这比任何单项统计都优先，因为后面的读写
 	// 可能已经踩在不存在的列上。
 	if version, err := db.SchemaVersion(); err == nil {

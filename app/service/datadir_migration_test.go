@@ -44,8 +44,18 @@ func readDB(t *testing.T, dir, name string) string {
 	return string(data)
 }
 
-// 2.1.0 的库在 exe 旁边，2.2.0 起在用户配置目录。原地热替换之后新目录是空的，
-// 用户看到的就是「更新完数据没了」——这一条把旧库搬过来。
+// 结论决定界面接下来做什么：migrated 会把「旧数据找回」记账成已处理，blocked 才留下
+// 提示。所以这些用例既查文件也查返回值——只看文件会把「什么都没做」和「做了但失败」
+// 当成同一件事。
+func checkMigration(t *testing.T, name string, got, want legacyMigration) {
+	t.Helper()
+	if got != want {
+		t.Fatalf("%s 的结论 = %d, 期望 %d", name, got, want)
+	}
+}
+
+// 2.0.x 及更早的库在 exe 旁边，2.1.0 起改读用户配置目录。原地热替换 exe 之后新目录是空的，
+// 用户看到的就是「更新完数据没了」——这一条把旧库搬过来，并给出可复制成功的结论。
 func TestMigrateLegacyDatabaseCopiesIntoEmptyNewDir(t *testing.T) {
 	root := t.TempDir()
 	oldDir := filepath.Join(root, "legacy")
@@ -57,7 +67,7 @@ func TestMigrateLegacyDatabaseCopiesIntoEmptyNewDir(t *testing.T) {
 	writeDB(t, oldDir, "cczj_video.db", "old-database")
 	writeDB(t, oldDir, "cczj_video.db-wal", "old-wal")
 
-	migrateLegacyDatabase(oldDir, newDir)
+	checkMigration(t, "新目录为空时复制旧库", migrateLegacyDatabase(oldDir, newDir), legacyMigrated)
 
 	if got := readDB(t, newDir, "cczj_video.db"); got != "old-database" {
 		t.Fatalf("新目录的库 = %q, 期望 %q", got, "old-database")
@@ -72,7 +82,8 @@ func TestMigrateLegacyDatabaseCopiesIntoEmptyNewDir(t *testing.T) {
 	}
 }
 
-// 两处都有库时猜哪边是"真的"都会覆盖掉用户的一半数据，所以什么都不做。
+// 两处都有库时猜哪边是"真的"都会覆盖掉用户的一半数据，所以这里必须停在 blocked，
+// 那份旧库改由「旧数据找回」提示交给用户自己点。
 func TestMigrateLegacyDatabaseNeverOverwritesExistingDatabase(t *testing.T) {
 	root := t.TempDir()
 	oldDir := filepath.Join(root, "legacy")
@@ -80,7 +91,7 @@ func TestMigrateLegacyDatabaseNeverOverwritesExistingDatabase(t *testing.T) {
 	writeDB(t, oldDir, "cczj_video.db", "old-database")
 	writeDB(t, newDir, "cczj_video.db", "live-database")
 
-	migrateLegacyDatabase(oldDir, newDir)
+	checkMigration(t, "新旧两处都有库", migrateLegacyDatabase(oldDir, newDir), legacyBlocked)
 
 	if got := readDB(t, newDir, "cczj_video.db"); got != "live-database" {
 		t.Fatalf("新目录被覆盖了: %q", got)
@@ -96,7 +107,8 @@ func TestMigrateLegacyDatabaseSkipsSameDirectory(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "data")
 	writeDB(t, dir, "cczj_video.db", "database")
 
-	migrateLegacyDatabase(dir, filepath.Join(dir, "..", "data"))
+	checkMigration(t, "旧新其实是同一个目录",
+		migrateLegacyDatabase(dir, filepath.Join(dir, "..", "data")), legacyNone)
 
 	if got := readDB(t, dir, "cczj_video.db"); got != "database" {
 		t.Fatalf("同一个目录被改动了: %q", got)
@@ -112,9 +124,29 @@ func TestMigrateLegacyDatabaseSkipsWhenNoLegacyDatabase(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	migrateLegacyDatabase(oldDir, newDir)
+	checkMigration(t, "旧落点没有库", migrateLegacyDatabase(oldDir, newDir), legacyNone)
 
 	if got := readDB(t, newDir, "cczj_video.db"); got != "" {
 		t.Fatalf("没有旧库却写出了文件: %q", got)
+	}
+}
+
+// 复制失败同样是 blocked。这条结论让界面继续提示用户去找回旧数据，
+// 而不是记成「已经搬好了」——记错等于把那份旧库永久藏起来。
+func TestMigrateLegacyDatabaseReportsBlockedWhenCopyFails(t *testing.T) {
+	root := t.TempDir()
+	oldDir := filepath.Join(root, "legacy")
+	writeDB(t, oldDir, "cczj_video.db", "old-database")
+	// 新落点是个普通文件：复制必定失败，而它下面的 .db 也 Stat 不到，
+	// 于是走到复制分支而不是「两处都有库」分支。
+	notADir := filepath.Join(root, "config")
+	if err := os.WriteFile(notADir, []byte("not a directory"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	checkMigration(t, "复制失败", migrateLegacyDatabase(oldDir, notADir), legacyBlocked)
+
+	if got := readDB(t, oldDir, "cczj_video.db"); got != "old-database" {
+		t.Fatalf("旧目录被改动了: %q", got)
 	}
 }

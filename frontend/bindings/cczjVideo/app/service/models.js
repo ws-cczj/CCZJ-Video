@@ -1478,6 +1478,100 @@ export class HistoryReq {
 }
 
 /**
+ * LegacyNotice 是旧数据现场的完整描述，界面照它说话，不自己拼路径也不猜内容。
+ */
+export class LegacyNotice {
+    /**
+     * Creates a new LegacyNotice instance.
+     * @param {Partial<LegacyNotice>} [$$source = {}] - The source object to create the LegacyNotice.
+     */
+    constructor($$source = {}) {
+        if (!("available" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["available"] = false;
+        }
+        if (!("legacy_dir" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["legacy_dir"] = "";
+        }
+        if (!("size_bytes" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["size_bytes"] = 0;
+        }
+        if (!("modified_at" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["modified_at"] = "";
+        }
+        if (!("status" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["status"] = "";
+        }
+        if (!("status_at" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["status_at"] = "";
+        }
+        if (!("favorites" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["favorites"] = 0;
+        }
+        if (!("history" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["history"] = 0;
+        }
+        if (!("sources" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["sources"] = 0;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["reason"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new LegacyNotice instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {LegacyNotice}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new LegacyNotice(/** @type {Partial<LegacyNotice>} */($$parsedSource));
+    }
+}
+
+/**
  * LogEntry 前端写入的日志条目
  */
 export class LogEntry {
@@ -1956,6 +2050,62 @@ export class RuntimeMetrics {
             $$parsedSource["cache"] = $$createField3_0($$parsedSource["cache"]);
         }
         return new RuntimeMetrics(/** @type {Partial<RuntimeMetrics>} */($$parsedSource));
+    }
+}
+
+/**
+ * SchemaCompat 是「这份库比当前程序新」的现场描述。界面照它说话，不自己比版本号。
+ * 
+ * 走到这一步只有两条路：拿旧 exe 开了新库，或者「退回上一版」把老程序换回原位。
+ * 两种都不是数据坏了，而是程序太旧，所以这里只说明情况并给出出口，不拦读写——
+ * 拦下来的代价是用户连查看自己数据的入口都没了（取舍见 docs/adr/0011-read-newer-library.md）。
+ */
+export class SchemaCompat {
+    /**
+     * Creates a new SchemaCompat instance.
+     * @param {Partial<SchemaCompat>} [$$source = {}] - The source object to create the SchemaCompat.
+     */
+    constructor($$source = {}) {
+        if (!("newer" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["newer"] = false;
+        }
+        if (!("db_version" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["db_version"] = 0;
+        }
+        if (!("build_version" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["build_version"] = 0;
+        }
+        if (!("data_dir" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["data_dir"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SchemaCompat instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {SchemaCompat}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new SchemaCompat(/** @type {Partial<SchemaCompat>} */($$parsedSource));
     }
 }
 

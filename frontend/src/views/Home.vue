@@ -497,10 +497,11 @@ watch(
 
 <template>
   <div class="home cczj-max-w-full cczj-text-primary">
-    <BookCarousel v-if="carouselSlides.length > 0" :slides="carouselSlides"
-      :source-key="sourceStore.currentSourceKey" :on-slide-click="onChartSlideClick" />
+    <BookCarousel v-if="layoutStore.showCarousel && carouselSlides.length > 0" :slides="carouselSlides"
+      :source-key="sourceStore.currentSourceKey" :on-slide-click="onChartSlideClick"
+      :auto-play="layoutStore.carouselAutoPlay" :interval-ms="layoutStore.carouselIntervalMs" />
     <!-- ============ 推荐区域（仅在无内容筛选时展示，排序不影响） ============ -->
-    <section v-if="!hasContentFilter && (carouselSlides.length > 0 || recommendGroups.length > 0 || recommendLoading)"
+    <section v-if="layoutStore.showRecommend && !hasContentFilter && (carouselSlides.length > 0 || recommendGroups.length > 0 || recommendLoading)"
       class="recommend-section cczj-mb-10 cczj-rounded-md">
       <!-- 有内容可看时不再叠一层转圈：转圈一消失整块内容就要跳一次位。 -->
       <div v-if="recommendLoading && recommendGroups.length === 0" class="recommend-loading cczj-text-center">

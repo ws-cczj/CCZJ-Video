@@ -8,6 +8,7 @@ import (
 	"cczjVideo/app/douban"
 	downloadservice "cczjVideo/app/download"
 	"cczjVideo/app/handler"
+	"cczjVideo/app/handoff"
 	"cczjVideo/app/lifecycle"
 	mediaservice "cczjVideo/app/media"
 	pluginservice "cczjVideo/app/plugin"
@@ -28,6 +29,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -62,10 +64,14 @@ type App struct {
 	// 是否真的走完，只有没走完才允许自己 os.Exit。
 	shutdownDone chan struct{}
 	shutdownOnce sync.Once
-	downloads    *downloadservice.Registry[downloadTask]
-	downloadDir  *downloadservice.Directory
-	proxy        *proxyservice.Service
-	hlsProxy     *proxyservice.HLSService
+	// relaunching 标记"这次退出其实是一次重启"。RestartApp 在请求退出之前已经把
+	// 同一个 exe 又拉起一份，新进程立刻重新锁住文件——这时候兑现「退出时安装」
+	// 换不动，还会留下一条用户没取消过的 swap_failed。关停流程读它。
+	relaunching atomic.Bool
+	downloads   *downloadservice.Registry[downloadTask]
+	downloadDir *downloadservice.Directory
+	proxy       *proxyservice.Service
+	hlsProxy    *proxyservice.HLSService
 }
 
 // ======================== 关闭行为 ========================
@@ -104,13 +110,17 @@ func (a *App) RestartApp() {
 	}
 
 	// 带上自己的 PID：新进程会等这个 PID 消失再抢单实例锁，否则它一启动就被
-	// 判成第二实例并静默退出。
-	newArgs := []string{exe, relaunchArg(os.Getpid())}
+	// 判成第二实例并静默退出。换 exe 的批处理脚本带的是同一个参数（见 app/handoff）。
+	newArgs := []string{exe, handoff.Arg(os.Getpid())}
 	_, err = os.StartProcess(exe, newArgs, attr)
 	if err != nil {
-		cmd := exec.Command(exe, relaunchArg(os.Getpid()))
+		cmd := exec.Command(exe, handoff.Arg(os.Getpid()))
 		_ = cmd.Start()
 	}
+
+	// 重启把同一个 exe 又拉起一份，新进程立刻重新锁住那个文件。这次退出不是
+	// 「用户关掉应用」，所以「退出时安装」的安排留给下一次真正的退出兑现。
+	a.relaunching.Store(true)
 
 	a.quitGracefully()
 }
@@ -240,10 +250,15 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 	})
 
 	// 必须排在 InitDB 之前：库一打开就定了归属，晚一步就已经对着空库建表了。
-	migrateLegacyDatabase(legacyDataDir(), dataDir)
+	legacyStep := migrateLegacyDatabase(legacyDataDir(), dataDir)
 
 	if err := db.InitDB(dataDir); err != nil {
 		panic(fmt.Sprintf("Failed to init database: %v", err))
+	}
+
+	// 迁移结论记在当前库里：份旧数据被搬走过一次，就不该再提示用户去合并它。
+	if legacyStep == legacyMigrated {
+		recordLegacyDataStatus(legacyStatusMigrated)
 	}
 
 	// 应用日志级别：log_level 为权威来源，旧的 debug_mode 作为兼容回退。
@@ -358,7 +373,7 @@ func (a *App) getDataDir() string {
 	return filepath.Join(".", "data")
 }
 
-// legacyDataDir 返回 2.1.0 及更早版本的数据落点：<exe 所在目录>\data。
+// legacyDataDir 返回 2.0.x 及更早版本的数据落点：<exe 所在目录>\data。2.1.0 起改读用户配置目录。
 func legacyDataDir() string {
 	exe, err := os.Executable()
 	if err != nil {
@@ -375,25 +390,29 @@ func legacyDataDir() string {
 // 为什么需要它：数据目录从 exe 旁边改到了用户配置目录，而更新是原地热替换 exe。
 // 替换成功后，同一个图标启动起来读的是另一个空目录，用户看到的就是「更新完数据没了」。
 // 只复制不删除：旧目录留着当免费备份，也方便用户自己回去核对。
-func migrateLegacyDatabase(oldDir, newDir string) {
+//
+// 返回的结论决定界面接下来做什么：新落点已经有库时这里什么都不能动（猜错方向就会
+// 覆盖掉用户这一侧的数据），那份旧库改由「旧数据找回」提示交给用户自己点。
+func migrateLegacyDatabase(oldDir, newDir string) legacyMigration {
 	if oldDir == "" || filepath.Clean(oldDir) == filepath.Clean(newDir) {
-		return
+		return legacyNone
 	}
 	oldDB := filepath.Join(oldDir, "cczj_video.db")
 	if _, err := os.Stat(oldDB); err != nil {
-		return // 没有旧库，正常的首次安装
+		return legacyNone // 没有旧库，正常的首次安装
 	}
 	newDB := filepath.Join(newDir, "cczj_video.db")
 	if _, err := os.Stat(newDB); err == nil {
 		// 两处都有库。这里必须什么都不做——猜错方向就会覆盖掉用户这一侧的数据。
 		applog.Warn("[DataDir] 新旧两处都有数据库，保留新目录 %s，未改动 %s", newDir, oldDir)
-		return
+		return legacyBlocked
 	}
 	if err := copyDatabaseFiles(oldDir, newDir); err != nil {
 		applog.Error("[DataDir] 迁移旧数据库失败: %v（旧目录: %s）", err, oldDir)
-		return
+		return legacyBlocked
 	}
 	applog.Info("[DataDir] 已迁移旧数据库: %s -> %s", oldDir, newDir)
+	return legacyMigrated
 }
 
 // copyDatabaseFiles 连同 WAL/SHM 一起复制：只搬 .db 会把尚未 checkpoint 的已提交
@@ -629,6 +648,41 @@ func (a *App) ClearPendingUpdateInfo() {
 	a.update.ClearPending()
 }
 
+// GetLastInstallReport 返回上一次热替换脚本的回执（连同此刻在跑的版本）。
+// 换没换成这件事只有脚本自己知道，本进程拿不到它的退出码，所以界面只能从这里问。
+func (a *App) GetLastInstallReport() updateservice.InstallReport {
+	return a.update.LastInstallReport()
+}
+
+// GetSwapBackupInfo 报告此刻有没有一份能退回的上一版程序副本（exe 旁边的 .old）。
+// 界面用它决定「退回上一版」这个按钮出不出现——没有副本时给一个按不动的按钮，
+// 用户只会以为功能是坏的。
+func (a *App) GetSwapBackupInfo() updateservice.RollbackInfo {
+	return a.update.SwapBackupInfo()
+}
+
+// RollbackUpdate 用那份副本换回上一个程序，然后退出让脚本接管。
+// 路径不接受前端传参：副本位置由当前 exe 推出来，这个入口不该能被指到别的文件上。
+func (a *App) RollbackUpdate() error {
+	return a.update.Rollback()
+}
+
+// ScheduleInstallOnExit 是这个包的第二档安装：只登记「下次退出时装它」，此刻不换 exe、
+// 不关窗口。为什么分两档见 docs/adr/0010-install-timing-tiers.md。
+func (a *App) ScheduleInstallOnExit(filePath string, version string) error {
+	return a.update.ScheduleInstallOnExit(filePath, version)
+}
+
+// CancelInstallOnExit 撤掉那份安排。
+func (a *App) CancelInstallOnExit() error {
+	return a.update.CancelInstallOnExit()
+}
+
+// GetPendingInstall 报告当前有没有一份「退出时安装」的安排，界面据此决定按钮写什么。
+func (a *App) GetPendingInstall() updateservice.PendingInstall {
+	return a.update.PendingInstallInfo()
+}
+
 // FileExists 检查文件是否存在（用于前端检查已下载的更新包）
 func (a *App) FileExists(path string) bool {
 	if path == "" {
@@ -660,6 +714,10 @@ func (a *App) ServiceShutdown() error {
 	// 库先关、日志最后关：关库时 WAL 归并可能失败并要报出来，日志要是先关了，
 	// 丢掉的恰好是唯一那条「这次退出没收干净」的记录。
 	db.Close()
+	// 「退出时安装」在这里兑现，排在关库之后：脚本接下来要 move 的正是这个进程占着的
+	// exe，越靠近退出起脚本，它越少烧那 30 次重试。返回值不往上抛——原因已经记进日志，
+	// 而这里唯一要紧的是别拦住用户本来就想要的关闭。
+	_ = a.update.InstallOnShutdown(a.relaunching.Load())
 	applog.Default().Close()
 	a.shutdownOnce.Do(func() { close(a.shutdownDone) })
 

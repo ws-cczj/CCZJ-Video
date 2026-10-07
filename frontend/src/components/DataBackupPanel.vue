@@ -10,6 +10,8 @@ import {
   BackupImportFile,
   BackupImportFromBase64,
   BackupRestoreArchive,
+  LegacyDataMerge,
+  LegacyDataNotice,
   OpenFolder,
   RestartApp,
 } from '../api/app'
@@ -30,6 +32,9 @@ const archivesLoading = ref(false)
 const files = ref<any[]>([])
 const filesLoading = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
+const legacy = ref<any | null>(null)
+const legacyLoading = ref(false)
+const legacyResult = ref<any | null>(null)
 
 function fmtBytes(value: number): string {
   const bytes = Number(value || 0)
@@ -140,6 +145,38 @@ async function restartApp(): Promise<void> {
   }
 }
 
+// 旧数据找回：路径由后端算（exe 旁边的 data），前端递不进任意目录；
+// 状态非空说明这台机器已经处理过一次，后端也就不再重读那份旧库。
+async function loadLegacy(): Promise<void> {
+  legacyLoading.value = true
+  try {
+    legacy.value = await LegacyDataNotice()
+  } catch (e: any) {
+    legacy.value = null
+    errorStore.fromError(t('legacy.readFailed'), e, 'DataBackupPanel.loadLegacy')
+  } finally {
+    legacyLoading.value = false
+  }
+}
+
+async function mergeLegacy(): Promise<void> {
+  if (!legacy.value?.available) return
+  const ok = await confirmStore.confirm({
+    title: t('legacy.title'),
+    message: t('legacy.mergeConfirm', { dir: legacy.value.legacy_dir }),
+  })
+  if (!ok) return
+  busy.value = 'legacy'
+  try {
+    legacyResult.value = await LegacyDataMerge()
+    await loadLegacy()
+  } catch (e: any) {
+    errorStore.fromError(t('legacy.mergeFailed'), e, 'DataBackupPanel.mergeLegacy')
+  } finally {
+    busy.value = ''
+  }
+}
+
 async function loadFiles(): Promise<void> {
   filesLoading.value = true
   try {
@@ -173,6 +210,7 @@ async function importFile(item: any): Promise<void> {
 onMounted(() => {
   void loadArchives()
   void loadFiles()
+  void loadLegacy()
 })
 </script>
 
@@ -211,6 +249,33 @@ onMounted(() => {
       <div class="cczj-flex cczj-items-center cczj-gap-4">
         <Button variant="secondary" size="sm" @click="restartApp">{{ t('backup.restart') }}</Button>
       </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="block-hd cczj-flex cczj-items-center cczj-justify-between">
+      <h3>{{ t('legacy.title') }}</h3>
+      <Button variant="secondary" size="sm" :loading="legacyLoading" @click="loadLegacy">
+        <Icon name="refresh" :size="12" /> {{ t('common.refresh') }}
+      </Button>
+    </div>
+    <p class="desc">{{ t('legacy.intro') }}</p>
+    <div v-if="legacyLoading" class="desc">{{ t('backup.archivesLoading') }}</div>
+    <div v-else-if="!legacy || !legacy.legacy_dir" class="desc">{{ t('legacy.none') }}</div>
+    <div v-else class="legacy-detail cczj-flex cczj-flex-col cczj-gap-2">
+      <p class="legacy-path">{{ t('legacy.found', { dir: legacy.legacy_dir }) }}</p>
+      <p class="desc">{{ t('legacy.foundMeta', { size: fmtBytes(legacy.size_bytes), modified: legacy.modified_at }) }}</p>
+      <p v-if="legacy.status === 'migrated'" class="desc">{{ t('legacy.statusMigrated', { time: legacy.status_at }) }}</p>
+      <p v-else-if="legacy.status === 'merged'" class="desc">{{ t('legacy.statusMerged', { time: legacy.status_at }) }}</p>
+      <p v-else-if="legacy.available" class="desc">{{ t('legacy.counts', { favorites: legacy.favorites, history: legacy.history, sources: legacy.sources }) }}</p>
+      <p v-else-if="legacy.reason" class="desc">{{ t('legacy.unreadable', { reason: legacy.reason }) }}</p>
+      <p v-else class="desc">{{ t('legacy.empty') }}</p>
+      <div v-if="legacy.available" class="cczj-flex cczj-items-center cczj-gap-4">
+        <Button variant="secondary" size="sm" :loading="busy === 'legacy'" @click="mergeLegacy">
+          {{ t('legacy.merge') }}
+        </Button>
+      </div>
+      <p v-if="legacyResult" class="desc">{{ t('legacy.done', { sources: legacyResult.sources_added, favorites: legacyResult.favorites_added, history: legacyResult.history_applied }) }}</p>
     </div>
   </section>
 
@@ -289,6 +354,13 @@ onMounted(() => {
   font-size: 12px;
   line-height: 1.6;
   color: var(--text-muted);
+}
+.legacy-path {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  word-break: break-all;
 }
 .result {
   margin-top: 10px;

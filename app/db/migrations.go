@@ -98,6 +98,38 @@ func LatestSchemaVersion() int {
 	return latest
 }
 
+// schemaAheadOfBuild 记下「库结构比这个构建能认的最高版本还新」这件事。走到这一步只有
+// 两条路：拿旧 exe 开新库，或者「退回上一版」把老程序换回原位——两条落下的是同一个状态。
+var schemaAheadOfBuild struct {
+	dbVersion    int
+	buildVersion int
+}
+
+// applySchemaAhead 在库比构建新时换成忽略未知列的那份连接，并记下两个版本号。
+//
+// 为什么非得换：库里多出来的那一列会让旧结构体的 SELECT * 当场报错（sqlx 默认严格映射），
+// 界面看到的就是「加载源站列表失败」加一整页空数据——库好好的，看着却像数据没了。
+// 2026-10-06 用官方 v2.1.0 开 v10 库实测过，见 docs/pending-decisions.md 第 10 条。
+//
+// 只认这一种情形，平时仍由严格映射兜住写错的 db tag。
+func applySchemaAhead(database *sqlx.DB, current int) (*sqlx.DB, bool) {
+	latest := LatestSchemaVersion()
+	if current <= latest {
+		return database, false
+	}
+	schemaAheadOfBuild.dbVersion = current
+	schemaAheadOfBuild.buildVersion = latest
+	return database.Unsafe(), true
+}
+
+// DataNewerThanBuild 报告这份库是不是被更新的版本写过的，以及两边的版本号。
+func DataNewerThanBuild() (dbVersion int, buildVersion int, newer bool) {
+	if schemaAheadOfBuild.dbVersion == 0 {
+		return 0, LatestSchemaVersion(), false
+	}
+	return schemaAheadOfBuild.dbVersion, schemaAheadOfBuild.buildVersion, true
+}
+
 // migrateToLatest 补齐落后的版本，返回实际执行的迁移。
 func migrateToLatest(database *sqlx.DB) ([]migration, error) {
 	current, err := schemaVersion(database)

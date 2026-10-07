@@ -3,6 +3,7 @@ package updater
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -112,6 +113,115 @@ func TestRequireArtifactRejectsNonReleaseURL(t *testing.T) {
 		if _, err := requireArtifact(u); err == nil {
 			t.Fatalf("expected %q to be rejected", u)
 		}
+	}
+}
+
+func hexDigest(c byte) string { return strings.Repeat(string(c), sha256.Size*2) }
+
+func voteSums(t *testing.T, body string) map[string]string {
+	t.Helper()
+	sums := parseChecksums([]byte(body))
+	if len(sums) == 0 {
+		t.Fatal("fixture checksums did not parse")
+	}
+	return sums
+}
+
+// 清单是整条更新链上唯一不可信的取回动作：它只能走 github.com 直连的话，
+// 大陆网络上的用户会在下载第一步就被挡住，而产物本身明明能从加速站顺利下完。
+func TestDecideChecksumsPrefersDirect(t *testing.T) {
+	direct := voteSums(t, hexDigest('a')+"  app.exe")
+	proxy := voteSums(t, hexDigest('b')+"  app.exe")
+	votes := []checksumVote{{party: "gh-proxy.com", sums: proxy}}
+
+	got, party, err := decideChecksums(direct, nil, votes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if party != "github.com" {
+		t.Fatalf("party = %q, want the direct channel to win outright", party)
+	}
+	if got["app.exe"] != hexDigest('a') {
+		t.Fatalf("direct manifest was not used: %v", got)
+	}
+}
+
+func TestDecideChecksumsNeedsTwoIndependentOperators(t *testing.T) {
+	good := voteSums(t, hexDigest('a')+"  app.exe")
+	failing := errors.New("dial tcp: lookup github.com: no such host")
+
+	// v4/v6 与主站是同一家：三条回答完全一致，也凑不出第二票。
+	sameFamily := []checksumVote{
+		{party: "gh-proxy.org", sums: good},
+		{party: "gh-proxy.org", sums: good},
+		{party: "gh-proxy.org", sums: good},
+	}
+	if _, _, err := decideChecksums(nil, failing, sameFamily); err == nil {
+		t.Fatal("一家运营商自问自答不该被当成两处一致")
+	}
+
+	twoParties := []checksumVote{
+		{party: "gh-proxy.org", sums: good},
+		{party: "gh-proxy.com", sums: good},
+	}
+	got, party, err := decideChecksums(nil, failing, twoParties)
+	if err != nil {
+		t.Fatalf("two agreeing operators should be accepted: %v", err)
+	}
+	if got["app.exe"] != hexDigest('a') {
+		t.Fatalf("wrong manifest adopted: %v", got)
+	}
+	if !strings.Contains(party, "gh-proxy.org") || !strings.Contains(party, "gh-proxy.com") {
+		t.Fatalf("party = %q, want both operators named for the log", party)
+	}
+}
+
+func TestDecideChecksumsRejectsDisagreementAndSelfContradiction(t *testing.T) {
+	failing := errors.New("直连超时")
+	left := voteSums(t, hexDigest('a')+"  app.exe")
+	right := voteSums(t, hexDigest('b')+"  app.exe")
+
+	// 两家一致才有票：各说各话时谁都不能单独决定给用户装什么字节。
+	if _, _, err := decideChecksums(nil, failing, []checksumVote{
+		{party: "gh-proxy.org", sums: left},
+		{party: "gh-proxy.com", sums: right},
+	}); err == nil {
+		t.Fatal("两份不一致的清单不该被采信")
+	}
+
+	// 同一家先后给出不一致的清单，这家整体作废：少了它，剩下只有一家的票，
+	// 凑不出第二处一致。它不作废的话，这组票本来能靠它和 gh-proxy.com 的一致通过。
+	if _, _, err := decideChecksums(nil, failing, []checksumVote{
+		{party: "gh-proxy.org", sums: left},
+		{party: "gh-proxy.org", sums: right},
+		{party: "gh-proxy.com", sums: left},
+	}); err == nil {
+		t.Fatal("内部自相矛盾的运营商不该有票")
+	}
+
+	// 一家都没回答时，错误里要留得下直连的原因，否则排查只能猜。
+	_, _, err := decideChecksums(nil, failing, []checksumVote{
+		{party: "gh-proxy.org", err: errors.New("HTTP 502")},
+	})
+	if err == nil || !strings.Contains(err.Error(), "直连超时") {
+		t.Fatalf("error should carry the direct failure, got %v", err)
+	}
+}
+
+func TestChecksumChannelsGroupProxiesByOperator(t *testing.T) {
+	channels := checksumChannels()
+	if channels[0].prefix != "" {
+		t.Fatal("第一个通道必须是直连：它优先，也是唯一由我们自己发布内容的通道")
+	}
+	parties := map[string]int{}
+	for _, ch := range channels {
+		if ch.party == "" {
+			t.Fatalf("channel %q has no operator", ch.prefix)
+		}
+		parties[ch.party]++
+	}
+	if len(parties) < requiredParties {
+		t.Fatalf("only %d distinct operators: quorum of %d is unreachable", len(parties), requiredParties)
 	}
 }
 

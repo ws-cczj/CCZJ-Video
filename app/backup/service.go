@@ -76,6 +76,10 @@ var machineLocalSettings = map[string]bool{
 	"database_reset_version":              true,
 	"database_reset_generation":           true,
 	"collect.schedule.last_exit_unix_sec": true,
+	// 旧数据目录的记账（已迁移/已合并、发生在哪天）说的是这台机器上的库搬到哪儿了。
+	// 跟着备份走到另一台机器，就会把那边还没找回来的旧库判成「已经处理过」。
+	"legacy_data_status": true,
+	"legacy_data_at":     true,
 	// 同意条款是对「这台机器上的这份安装」作出的意思表示。跟着备份导入走，
 	// 一份已同意的备份就能替别人跳过首启确认，闸门形同虚设。
 	"license_terms_version": true,
