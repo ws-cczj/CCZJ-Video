@@ -17,7 +17,8 @@ async function fixture(work, configuration = {}) {
     writeFileSync(join(root, 'CHANGELOG.md'), '## [2.4.1] - 2026-10-23\n\n### Fixed\n\n- Discover receivers.\n\n## [2.4.0] - 2026-10-22\n\nOriginal release.\n')
     const stage = join(root, 'dist/releases/v2.4.1'), commands = []
     let head = oldHead, localTag, remoteTag, release, clean = false
-    const state = { commands, root, stage, configuration }
+    const commandOptions = []
+    const state = { commands, commandOptions, root, stage, configuration }
     const success = stdout => ({ code: 0, stdout: stdout ?? '', stderr: '' })
     const fail = message => ({ code: 1, stdout: '', stderr: message })
     function build() {
@@ -33,8 +34,9 @@ async function fixture(work, configuration = {}) {
       const files = [...names, 'version.json', 'artifact-manifest.json', 'android-metadata.json', 'release-notes.md']
       writeFileSync(join(stage, 'checksums.txt'), files.map(name => sha(readFileSync(join(stage, name))) + '  ' + name).join('\n') + '\n')
     }
-    function run(program, args) {
+    function run(program, args, options) {
       commands.push([program, ...args])
+      commandOptions.push(options)
       if (program === 'git') {
         if (args[0] === 'remote') return success('https://github.com/owner/project.git\n')
         if (args[0] === 'symbolic-ref') return success('main\n')
@@ -61,6 +63,16 @@ async function fixture(work, configuration = {}) {
       if (args[0] === 'auth') return configuration.authFailure ? fail('not authenticated') : success()
       if (args[0] === 'api') {
         if (configuration.apiFailure) return { code: 1, stdout: 'HTTP/2.0 502 Bad Gateway\nContent-Type: text/plain\n\nunavailable', stderr: '' }
+        const apiPath = args[2]
+        if (apiPath.includes('?per_page=')) {
+          if (configuration.listFailure) return { code: 1, stdout: 'HTTP/2.0 403 Forbidden\nContent-Type: application/json\n\n{}', stderr: 'forbidden' }
+          const page = Number(new URL('https://api.github.com/' + apiPath).searchParams.get('page'))
+          const entries = configuration.draftOnSecondPage && page === 1
+            ? Array.from({ length: 100 }, (_, index) => ({ id: index + 100, tag_name: `v0.0.${index}`, draft: false }))
+            : release ? configuration.duplicateDraft ? [release, { ...release, id: 8 }] : [release] : []
+          return success('HTTP/2.0 200 OK\nContent-Type: application/json\n\n' + JSON.stringify(entries))
+        }
+        if (apiPath.includes('/tags/') && release?.draft && configuration.draftTag404) return { code: 1, stdout: 'HTTP/2.0 404 Not Found\nContent-Type: application/json\n\n{}', stderr: '404' }
         return release ? success('HTTP/2.0 200 OK\nContent-Type: application/json\n\n' + JSON.stringify(release)) : { code: 1, stdout: 'HTTP/2.0 404 Not Found\nContent-Type: application/json\n\n{"message":"Not Found"}', stderr: '404' }
       }
       if (args[1] === 'create') release = { id: 7, tag_name: 'v2.4.1', draft: true, prerelease: false, assets: [], html_url: 'https://github.com/owner/project/releases/tag/v2.4.1' }
@@ -146,4 +158,37 @@ test('version notes reject duplicate, missing and empty sections and versions th
   assert.throws(() => releaseNotes('## [2.4.1]\nA\n', '02.4.1'), /stable/)
   writeFileSync(join(state.root, 'CHANGELOG.md'), '## [2.4.100]\nA\n')
   assert.throws(() => prepareReleaseVersion(state.root, '2.4.100', 'owner/project'), /versionCode limits/)
+}))
+
+test('drafts missing from the tag endpoint are found in the authenticated paginated listing', () => fixture(async state => {
+  await state.publish()
+  assert.equal(state.release().draft, false)
+  assert.equal(state.commands.filter(c => c[1] === 'release' && c[2] === 'create').length, 1)
+  assert.ok(state.commands.some(c => c[0] === 'gh' && c[1] === 'api' && c[3]?.includes('page=2')))
+}, { draftTag404: true, draftOnSecondPage: true }))
+
+test('a failed upload resumes a draft even when the tag endpoint returns 404', () => fixture(async state => {
+  await assert.rejects(state.publish(), /connection lost/)
+  state.configuration.uploadFailure = false
+  await state.publish()
+  assert.equal(state.release().draft, false)
+  assert.equal(state.commands.filter(c => c[1] === 'release' && c[2] === 'create').length, 1)
+}, { draftTag404: true, uploadFailure: true }))
+
+test('a failed authenticated release listing never creates a new draft', () => fixture(async state => {
+  await assert.rejects(state.publish(), /GitHub API failed/)
+  assert.equal(state.commands.some(c => c[1] === 'release' && c[2] === 'create'), false)
+}, { listFailure: true }))
+
+test('duplicate matching drafts stop publication', () => fixture(async state => {
+  await assert.rejects(state.publish(), /Multiple releases/)
+  assert.equal(published(state.commands), false)
+}, { draftTag404: true, duplicateDraft: true }))
+
+test('source pushes allow enough time for the initial source-library upload', () => fixture(async state => {
+  await state.publish()
+  const pushes = state.commands.map((command, index) => ({ command, options: state.commandOptions[index] }))
+    .filter(entry => entry.command[0] === 'git' && entry.command[1] === 'push')
+  assert.equal(pushes.length, 2)
+  assert.ok(pushes.every(entry => entry.options.timeout === 1800000))
 }))

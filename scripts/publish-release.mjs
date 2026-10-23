@@ -55,7 +55,22 @@ export async function publishRelease(options, { run = execute, log = console.log
     if (response.code !== 0 || !match || !/^2\d\d$/.test(match[1])) throw new Error(`GitHub API failed: ${path}. ${response.stderr || response.stdout}`)
     return JSON.parse(match[2])
   }
-  let release = api(`repos/${repository}/releases/tags/${tag}`, [], true)
+  const base = `repos/${repository}/releases`
+  const findRelease = () => {
+    const published = api(`${base}/tags/${tag}`, [], true)
+    if (published) return published
+    // A draft can return 404 from the tag endpoint while remaining visible in
+    // the authenticated release list. Include every page when resuming it.
+    for (let page = 1; ; page++) {
+      const releases = api(`${base}?per_page=100&page=${page}`)
+      if (!Array.isArray(releases)) throw new Error('Unexpected GitHub release listing.')
+      const matches = releases.filter(entry => entry.tag_name === tag)
+      if (matches.length > 1) throw new Error(`Multiple releases identify ${tag}; resolve the duplicate drafts before publishing.`)
+      if (matches.length) return matches[0]
+      if (releases.length < 100) return undefined
+    }
+  }
+  let release = findRelease()
   if ((remoteCommit || localTag || release) && git('status', '--porcelain').length) throw new Error(`${tag} already exists. Commit changes under a new version instead of changing this release.`)
   prepareReleaseVersion(root, version, repository)
   const dirty = () => git('status', '--porcelain').length > 0
@@ -84,12 +99,12 @@ export async function publishRelease(options, { run = execute, log = console.log
   // Tags make the source available first. main/version.json is pushed only
   // after publishing, so update fallbacks cannot advertise unavailable assets.
   if (!localTag) command('git', ['tag', '-a', tag, '-m', `Release ${tag}`, head])
-  if (!remoteCommit) command('git', ['push', 'origin', `refs/tags/${tag}`], { stream: true })
-  const base = `repos/${repository}/releases`
+  if (!remoteCommit) command('git', ['push', 'origin', `refs/tags/${tag}`], { stream: true, timeout: 1800000 })
   const notes = join(stage, 'release-notes.md')
   if (!release) {
     command('gh', ['release', 'create', tag, '--repo', repository, '--verify-tag', '--draft', '--title', tag, '--notes-file', notes], { stream: true })
-    release = api(`${base}/tags/${tag}`)
+    release = findRelease()
+    if (!release) throw new Error('GitHub created no discoverable release draft.')
   }
   if (release.tag_name !== tag || release.prerelease) throw new Error('Unexpected remote release identity.')
   if (release.draft) {
@@ -124,7 +139,7 @@ export async function publishRelease(options, { run = execute, log = console.log
     release = api(`${base}/${release.id}`)
     if (release.draft || release.prerelease) throw new Error('GitHub did not publish the stable release.')
   }
-  command('git', ['push', 'origin', `${head}:refs/heads/${branch}`], { stream: true })
+  command('git', ['push', 'origin', `${head}:refs/heads/${branch}`], { stream: true, timeout: 1800000 })
   log(`Published ${release.html_url}`)
   return { version, url: release.html_url }
 }
