@@ -13,8 +13,10 @@ import { Button, Modal } from '../../components/ui'
 import { useThemeStore, readSurfaceAlpha, isPackAssetRef, type CustomTheme, type ColorPalette } from '../../stores/theme'
 import { useErrorStore } from '../../stores/error'
 import { pickColorFromImage } from '../../utils/imagePalette'
+import { isMobileRuntime } from '../../api/runtime'
 
 const { t } = useI18n()
+const mobile = isMobileRuntime()
 const themeStore = useThemeStore()
 const errorStore = useErrorStore()
 
@@ -234,8 +236,7 @@ async function saveEditing(): Promise<void> {
     sidebarAlpha: editing.sidebarAlpha ?? 0.65,
     contentAlpha: editing.contentAlpha ?? 0.88,
   }
-  await themeStore.saveCustom(themeToSave)
-  editorOpen.value = false
+  if(await themeStore.saveCustom(themeToSave))editorOpen.value = false
 }
 
 async function deleteEditing(): Promise<void> {
@@ -340,11 +341,11 @@ defineExpose({ openCreate, openEdit, openEditPreset, applyPreview })
     :show-footer="true"
     @update:model-value="(v: boolean) => !v && closeEditor()"
   >
-    <div class="modal-body">
+    <div class="modal-body cczj-mobile-theme-editor">
       <div class="edit-row cczj-flex cczj-flex-wrap">
         <div class="field cczj-flex cczj-flex-col cczj-gap-2">
           <label>{{ t('settings.themeName') }}</label>
-          <input type="text" v-model="editing.name" :placeholder="t('settings.myThemePlaceholder')" @input="applyPreview" />
+          <input type="text" :aria-label="t('settings.themeName')" v-model="editing.name" :placeholder="t('settings.myThemePlaceholder')" @input="applyPreview" />
         </div>
         <div class="flags cczj-flex cczj-items-center cczj-flex-wrap">
           <label class="toggle cczj-inline-flex cczj-items-center cczj-gap-4 cczj-cursor-pointer">
@@ -361,39 +362,39 @@ defineExpose({ openCreate, openEdit, openEditPreset, applyPreview })
       <div class="picker-grid">
         <div class="picker-item">
           <label>{{ t('settings.accentColor') }}</label>
-          <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.primary" @input="applyPreview" /><span>{{ editing.primary }}</span></div>
+          <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.accentColor')" v-model="editing.primary" @input="applyPreview" /><span>{{ editing.primary }}</span></div>
         </div>
         <div class="picker-item">
           <label>{{ t('settings.textColor') }}</label>
-          <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.text" @input="applyPreview" /><span>{{ editing.text }}</span></div>
+          <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.textColor')" v-model="editing.text" @input="applyPreview" /><span>{{ editing.text }}</span></div>
         </div>
         <div class="picker-item">
           <label>{{ t('settings.bgApp') }}</label>
-          <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.background" @input="applyPreview" /><span>{{ editing.background }}</span></div>
+          <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.bgApp')" v-model="editing.background" @input="applyPreview" /><span>{{ editing.background }}</span></div>
         </div>
         <div class="picker-item">
-          <label>{{ t('settings.bgSidebar') }}</label>
-          <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.sidebar" @input="applyPreview" /><span>{{ editing.sidebar }}</span></div>
+          <label>{{ t(mobile ? 'mobile.secondaryBackground' : 'settings.bgSidebar') }}</label>
+          <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t(mobile ? 'mobile.secondaryBackground' : 'settings.bgSidebar')" v-model="editing.sidebar" @input="applyPreview" /><span>{{ editing.sidebar }}</span></div>
         </div>
         <div class="picker-item">
           <label>{{ t('settings.bgContent') }}</label>
-          <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.content" @input="applyPreview" /><span>{{ editing.content }}</span></div>
+          <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.bgContent')" v-model="editing.content" @input="applyPreview" /><span>{{ editing.content }}</span></div>
         </div>
       </div>
 
       <h4 class="group-title">{{ t('settings.bgAlpha') }}</h4>
       <div class="picker-grid">
         <div class="picker-item">
-          <label>{{ t('settings.sidebarAlpha') }}</label>
+          <label>{{ t(mobile ? 'mobile.secondaryAlpha' : 'settings.sidebarAlpha') }}</label>
           <div class="picker-cell range-cell cczj-flex cczj-items-center cczj-gap-4">
-            <input type="range" v-model.number="editing.sidebarAlpha" min="0" max="1" step="0.05" @input="applyPreview" />
+            <input type="range" :aria-label="t(mobile ? 'mobile.secondaryAlpha' : 'settings.sidebarAlpha')" v-model.number="editing.sidebarAlpha" min="0" max="1" step="0.05" @input="applyPreview" />
             <span>{{ Math.round((editing.sidebarAlpha ?? 0.65) * 100) }}%</span>
           </div>
         </div>
         <div class="picker-item">
           <label>{{ t('settings.cardAlpha') }}</label>
           <div class="picker-cell range-cell cczj-flex cczj-items-center cczj-gap-4">
-            <input type="range" v-model.number="editing.contentAlpha" min="0" max="1" step="0.05" @input="applyPreview" />
+            <input type="range" :aria-label="t('settings.cardAlpha')" v-model.number="editing.contentAlpha" min="0" max="1" step="0.05" @input="applyPreview" />
             <span>{{ Math.round((editing.contentAlpha ?? 0.88) * 100) }}%</span>
           </div>
         </div>
@@ -401,17 +402,17 @@ defineExpose({ openCreate, openEdit, openEditPreset, applyPreview })
 
       <h4 class="group-title">{{ t('settings.globalColors') }}</h4>
       <div class="picker-grid small">
-        <div class="picker-item"><label>{{ t('settings.btnAction') }}</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.primaryAction" @input="applyPreview" /><span>{{ editing.primaryAction }}</span></div></div>
-        <div class="picker-item"><label>{{ t('settings.tagColor') }}</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.tagColor" @input="applyPreview" /><span>{{ editing.tagColor }}</span></div></div>
-        <div class="picker-item"><label>{{ t('settings.carouselColor') }}</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.carouselColor" @input="applyPreview" /><span>{{ editing.carouselColor }}</span></div></div>
+        <div class="picker-item"><label>{{ t('settings.btnAction') }}</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.btnAction')" v-model="editing.primaryAction" @input="applyPreview" /><span>{{ editing.primaryAction }}</span></div></div>
+        <div class="picker-item"><label>{{ t('settings.tagColor') }}</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.tagColor')" v-model="editing.tagColor" @input="applyPreview" /><span>{{ editing.tagColor }}</span></div></div>
+        <div class="picker-item"><label>{{ t('settings.carouselColor') }}</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.carouselColor')" v-model="editing.carouselColor" @input="applyPreview" /><span>{{ editing.carouselColor }}</span></div></div>
       </div>
 
       <h4 class="group-title">{{ t('settings.semanticColors') }}</h4>
       <div class="picker-grid small">
-        <div class="picker-item"><label>{{ t('settings.paletteRoleSuccess') }}</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.successColor" @input="applyPreview" /><span>{{ editing.successColor }}</span></div></div>
-        <div class="picker-item"><label>{{ t('settings.paletteRoleWarning') }}</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.warningColor" @input="applyPreview" /><span>{{ editing.warningColor }}</span></div></div>
-        <div class="picker-item"><label>{{ t('settings.paletteRoleDanger') }}</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.dangerColor" @input="applyPreview" /><span>{{ editing.dangerColor }}</span></div></div>
-        <div class="picker-item"><label>{{ t('settings.paletteRoleInfo') }}</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" v-model="editing.infoColor" @input="applyPreview" /><span>{{ editing.infoColor }}</span></div></div>
+        <div class="picker-item"><label>{{ t('settings.paletteRoleSuccess') }}</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.paletteRoleSuccess')" v-model="editing.successColor" @input="applyPreview" /><span>{{ editing.successColor }}</span></div></div>
+        <div class="picker-item"><label>{{ t('settings.paletteRoleWarning') }}</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.paletteRoleWarning')" v-model="editing.warningColor" @input="applyPreview" /><span>{{ editing.warningColor }}</span></div></div>
+        <div class="picker-item"><label>{{ t('settings.paletteRoleDanger') }}</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.paletteRoleDanger')" v-model="editing.dangerColor" @input="applyPreview" /><span>{{ editing.dangerColor }}</span></div></div>
+        <div class="picker-item"><label>{{ t('settings.paletteRoleInfo') }}</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.paletteRoleInfo')" v-model="editing.infoColor" @input="applyPreview" /><span>{{ editing.infoColor }}</span></div></div>
       </div>
 
       <div
@@ -433,7 +434,7 @@ defineExpose({ openCreate, openEdit, openEditPreset, applyPreview })
         <img v-if="backgroundImageUrl" :src="backgroundImageUrl" :alt="t('settings.backgroundPreview')" />
         <div v-else class="bg-drop-hint cczj-flex cczj-flex-col cczj-items-center cczj-gap-5">
           <Icon name="plus" :size="42" />
-          <span>{{ t('settings.dropImage') }}</span>
+          <span>{{ t(mobile ? 'mobile.chooseBackground' : 'settings.dropImage') }}</span>
         </div>
         <input ref="fileInputRef" type="file" accept="image/*" @change="onImageSelected" hidden />
       </div>
@@ -461,92 +462,80 @@ defineExpose({ openCreate, openEdit, openEditPreset, applyPreview })
 <style scoped>
 .modal-body {
   padding: 18px 20px;
-  overflow-y: auto;
+  @apply cczj-overflow-y-auto;
 }
 .edit-row {
-  align-items: flex-end;
-  gap: 20px;
+  @apply cczj-items-end cczj-gap-10;
   padding-bottom: 14px;
-  margin-bottom: 10px;
+  @apply cczj-mb-5;
   border-bottom: 1px dashed var(--border);
 }
-.field { gap: 4px; flex: 1; min-width: 180px; }
-.field label { font-size: 0.79rem; color: var(--text-muted); font-weight: 600; }
+.field { @apply cczj-gap-2 cczj-flex-1; min-width: 180px; }
+.field label { font-size: 0.79rem; @apply cczj-text-muted cczj-font-semibold; }
 .field input[type='text'] {
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  @apply cczj-px-6-py-4 cczj-border cczj-rounded-md;
   background: var(--bg-secondary);
-  color: var(--text-primary);
+  @apply cczj-text-primary;
   font-size: 0.93rem;
-  outline: none;
+  @apply cczj-outline-none;
 }
-.field input[type='text']:focus { border-color: var(--accent); }
+.field input[type='text']:focus { @apply cczj-border-primary; }
 .flags { gap: 18px; }
 
 .group-title {
   font-size: 0.79rem;
-  color: var(--text-muted);
-  font-weight: 600;
+  @apply cczj-text-muted cczj-font-semibold;
   text-transform: uppercase;
   letter-spacing: 1px;
   margin: 12px 0 8px;
 }
 .picker-grid {
-  display: grid;
+  @apply cczj-grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 10px;
-  margin-bottom: 6px;
+  @apply cczj-gap-5 cczj-mb-3;
 }
 .picker-grid.small {
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
 }
 .picker-item label {
-  display: block;
+  @apply cczj-block;
   font-size: 0.79rem;
-  color: var(--text-muted);
-  margin-bottom: 4px;
-  font-weight: 600;
+  @apply cczj-text-muted cczj-mb-2 cczj-font-semibold;
 }
 .picker-cell {
-  gap: 8px;
+  @apply cczj-gap-4;
   padding: 8px 10px;
   background: var(--bg-secondary);
-  border: 1px solid var(--border);
+  @apply cczj-border;
   border-radius: 10px;
 }
 .picker-cell input[type='color'] {
-  width: 32px; height: 28px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  @apply cczj-w-32; height: 28px;
+  @apply cczj-border cczj-rounded;
   padding: 0;
   background: transparent;
-  cursor: pointer;
+  @apply cczj-cursor-pointer;
 }
 .picker-cell span {
   font-size: 0.79rem;
-  color: var(--text-secondary);
+  @apply cczj-text-secondary;
   font-family: ui-monospace, Menlo, Monaco, Consolas, monospace;
 }
 .picker-cell.range-cell {
-  gap: 10px;
+  @apply cczj-gap-5;
 }
 .picker-cell.range-cell input[type='range'] {
-  flex: 1;
+  @apply cczj-flex-1;
   height: 4px;
   -webkit-appearance: none;
   appearance: none;
-  background: var(--border);
-  border-radius: 2px;
-  outline: none;
+  @apply cczj-bg-border cczj-rounded-xs cczj-outline-none;
 }
 .picker-cell.range-cell input[type='range']::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
+  @apply cczj-w-16 cczj-h-16 cczj-rounded-50;
   background: var(--accent);
-  cursor: pointer;
+  @apply cczj-cursor-pointer;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 .bg-drop-zone {
@@ -555,42 +544,39 @@ defineExpose({ openCreate, openEdit, openEditPreset, applyPreview })
   border-radius: 10px;
   min-height: 180px;
   background: var(--bg-card);
-  transition: all 0.15s ease;
+  @apply cczj-transition-fast;
 }
-.bg-drop-zone:hover { border-color: var(--accent); background: var(--bg-hover); }
-.bg-drop-zone.has-image { border-style: solid; cursor: default; padding: 0; }
+.bg-drop-zone:hover { @apply cczj-border-primary; background: var(--bg-hover); }
+.bg-drop-zone.has-image { border-style: solid; @apply cczj-cursor-default; padding: 0; }
 .bg-drop-zone.has-image:hover { background: var(--bg-card); }
 .bg-drop-zone img {
-  display: block;
-  width: 100%;
+  @apply cczj-block cczj-w-full;
   height: auto;
   max-height: 240px;
-  object-fit: cover;
+  @apply cczj-object-cover;
 }
 .bg-drop-hint {
-  gap: 10px;
-  color: var(--text-secondary);
+  @apply cczj-gap-5 cczj-text-secondary;
 }
 .bg-drop-hint span { font-size: 0.93rem; }
 .bg-remove {
-  top: 8px;
-  right: 8px;
+  @apply cczj-top-2 cczj-right-2;
   width: 28px;
   height: 28px;
-  border-radius: 50%;
+  @apply cczj-rounded-50;
   background: rgba(0,0,0,0.55);
-  color: #fff;
+  @apply cczj-text-white;
   border: none;
-  cursor: pointer;
+  @apply cczj-cursor-pointer;
   z-index: 2;
   transition: background 0.15s ease;
 }
 .bg-remove:hover { background: var(--danger); }
 
 .toggle {
-  gap: 8px;
+  @apply cczj-gap-4;
   font-size: 0.93rem;
-  color: var(--text-primary);
+  @apply cczj-text-primary;
 }
 .toggle input[type='checkbox'] {
   -webkit-appearance: none;
@@ -600,25 +586,22 @@ defineExpose({ openCreate, openEdit, openEditPreset, applyPreview })
   border: 1.5px solid var(--border-strong);
   border-radius: 5px;
   background: var(--bg-card);
-  cursor: pointer;
-  position: relative;
-  transition: all 0.15s ease;
-  flex-shrink: 0;
+  @apply cczj-cursor-pointer cczj-relative cczj-transition-fast cczj-flex-shrink-0;
 }
 .toggle input[type='checkbox']:hover {
-  border-color: var(--accent);
+  @apply cczj-border-primary;
 }
 .toggle input[type='checkbox']:checked {
   background: var(--accent);
-  border-color: var(--accent);
+  @apply cczj-border-primary;
 }
 .toggle input[type='checkbox']:checked::after {
   content: '';
-  position: absolute;
+  @apply cczj-absolute;
   top: 3px;
   left: 5px;
   width: 4px;
-  height: 8px;
+  @apply cczj-h-2;
   border: 2px solid var(--accent-contrast);
   border-top: 0;
   border-left: 0;

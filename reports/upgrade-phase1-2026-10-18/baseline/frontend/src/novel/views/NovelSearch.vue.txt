@@ -1,0 +1,63 @@
+<script setup lang="ts">
+import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { useAsyncResource } from '../../reading/asyncResource'
+import { searchNovels, type NovelSearchPage } from '../data/novelLibrary'
+import NovelBookCard from '../components/NovelBookCard.vue'
+import Icon from '../../components/Icon.vue'
+import { Spinner } from '../../components/ui'
+const { t } = useI18n()
+const keyword = ref('')
+const page = ref(1)
+// 新一轮搜索的代号：迟到的旧响应不能把结果追加进新一轮的累计列表。
+let searchId = 0
+let accumulated: NovelSearchPage['items'] = []
+const search = useAsyncResource<NovelSearchPage>({
+  load: async () => {
+    const id = searchId, current = page.value
+    const result = await searchNovels(keyword.value.trim(), current)
+    if (id !== searchId) return result
+    accumulated = current <= 1 ? result.items : [...accumulated, ...result.items]
+    return { ...result, items: accumulated }
+  },
+  isEmpty: data => data.items.length === 0 && data.failures.length === 0,
+})
+function submit(): void {
+  const value = keyword.value.trim()
+  if (!value || search.status.value === 'loading') return
+  searchId += 1
+  page.value = 1
+  accumulated = []
+  void search.run()
+}
+function more(): void {
+  if (search.status.value === 'loading') return
+  page.value += 1
+  void search.run()
+}
+function clear(): void {
+  searchId += 1
+  page.value = 1
+  accumulated = []
+  keyword.value = ''
+  search.cancel()
+}
+</script>
+<template>
+  <div class="novel-page"><form class="novel-search" role="search" @submit.prevent="submit"><Icon name="search" :size="20" /><input v-model="keyword" type="search" :placeholder="t('novel.searchHint')" :aria-label="t('novel.search')" autofocus /><button v-if="keyword" :aria-label="t('common.clearAll')" @click="clear" type="button"><Icon name="close" :size="18" /></button></form>
+    <Spinner v-if="search.status.value === 'loading' && !search.data.value" :label="t('common.loading')" />
+    <div v-else-if="search.status.value === 'error'" class="novel-empty"><Icon name="warning" :size="36" /><h2>{{ search.error.value?.message || t('common.unknownError') }}</h2><button class="novel-button" @click="search.retry()">{{ t('common.retry') }}</button></div>
+    <div v-else-if="search.status.value === 'idle'" class="novel-empty"><Icon name="search" :size="36" /><h2>{{ t('novel.discoverMore') }}</h2><p>{{ t('novel.searchPrompt') }}</p></div>
+    <template v-else>
+      <div class="novel-section-heading"><h2>{{ t('novel.searchResults') }}</h2><span>{{ t('novel.bookCount',{n:search.data.value?.items.length ?? 0}) }}</span></div>
+      <div v-if="search.data.value && search.data.value.failures.length" class="novel-search-failures" role="status">
+        <strong>{{ t('novel.failedSources',{n:search.data.value.failures.length}) }}</strong>
+        <ul><li v-for="failure in search.data.value.failures" :key="failure.sourceKey"><span>{{ failure.sourceName }}</span><small>{{ failure.errorMessage || failure.errorCode }}</small></li></ul>
+      </div>
+      <div v-if="search.data.value && search.data.value.items.length" class="novel-row-grid"><NovelBookCard v-for="book in search.data.value.items" :key="book.id" :book="book" compact /></div>
+      <div v-else-if="search.status.value === 'empty' || (search.data.value && !search.data.value.failures.length)" class="novel-empty"><Icon name="search" :size="36" /><h2>{{ t('novel.noBooks') }}</h2><p>{{ t('novel.tryKeyword') }}</p></div>
+      <div v-if="search.status.value === 'loading'" class="novel-load-more"><Spinner size="sm" /></div>
+      <div v-else-if="search.data.value && search.data.value.hasNext && search.data.value.items.length" class="novel-load-more"><button class="novel-button" @click="more">{{ t('novel.loadMore') }}</button></div>
+    </template>
+  </div>
+</template>

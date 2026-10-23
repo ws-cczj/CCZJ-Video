@@ -1,0 +1,115 @@
+{
+  "head": "c900bb131d8d82d680d96816fb549dcfce4193a1",
+  "files": [
+    {
+      "path": "docs/implementation-notes.md",
+      "sha256": "f387564f0fe13cf7e4fe021c123d71d320f5ed0329adacba839fd9a5d8b193b4",
+      "bytes": 46043
+    },
+    {
+      "path": "docs/pending-decisions.md",
+      "sha256": "1ca340dc8bc03dcc3b4bede823814afacb85bb5074882867ea092b61f884e73d",
+      "bytes": 84318
+    },
+    {
+      "path": "docs/adr/0007-declarative-extension-packs.md",
+      "sha256": "0698b8ff6b5aa319854b5b8bcf23708dfcb9d67cb7cac4d6d2ff887ec28ac958",
+      "bytes": 3355
+    },
+    {
+      "path": "docs/adr/0015-player-presentation-boundaries.md",
+      "sha256": "6e23303acf38f68785766b90dcae7ce68a22bfedf222855d314e7e2f7eb38b2c",
+      "bytes": 5745
+    },
+    {
+      "path": "docs/adr/0016-novel-comic-content-domain.md",
+      "sha256": "4378c81404bca2edfe58bb619c366ce27f6d908c7e49f20e20b3dbeafb46dd86",
+      "bytes": 14537
+    },
+    {
+      "path": "app/model/source.go",
+      "sha256": "392abc13da7ff946059c489bfc8cd5610615c7cfeb0b11ddcf503ef01faf4bbf",
+      "bytes": 8167
+    },
+    {
+      "path": "app/handler/source.go",
+      "sha256": "e3115498732c58dde15805ab81263c690201d6a3a4cf52ac75b3e626aa472bcb",
+      "bytes": 7996
+    },
+    {
+      "path": "app/handler/source_test.go",
+      "sha256": "838fc4b21c4b723e6afa772cf4b666364c9b1f6d24352e38aecde051b796eb88",
+      "bytes": 7160
+    },
+    {
+      "path": "app/library/sources.go",
+      "sha256": "1660343cf768953646bf1083b8419a727e98c55913e75c1117a566b4556774d3",
+      "bytes": 13801
+    },
+    {
+      "path": "app/library/service.go",
+      "sha256": "04a9abf84df77b7ba94b246516e858a2d567b047a4fdde31ac56d5f2ff06136d",
+      "bytes": 18435
+    },
+    {
+      "path": "app/library/content.go",
+      "sha256": "05239b7f1a12cf6f660079f36b55ce117d80f7d8ca50a7329fe280f940eb2a7c",
+      "bytes": 18528
+    },
+    {
+      "path": "app/library/library_test.go",
+      "sha256": "cd8906aaffc27305176c215a1ae2cf135228564fb2b57dde897904744e12485c",
+      "bytes": 21947
+    },
+    {
+      "path": "app/proxy/imgproxy.go",
+      "sha256": "43cb55d54ce7e66bcfd8337200826e6c2c66877019ef7d9477711e3d2056aca6",
+      "bytes": 14202
+    },
+    {
+      "path": "app/proxy/imgproxy_test.go",
+      "sha256": "836839e7fe37bf91acc52083afd5016a945b00f1ad1984bad01f00ebef944ffe",
+      "bytes": 11653
+    },
+    {
+      "path": "app/service/facade_library.go",
+      "sha256": "dffb4316c575756070f2d2b98cc503f39bc3ab0f90fdcfa5a388ce2f48463d85",
+      "bytes": 6081
+    },
+    {
+      "path": "frontend/src/api/library.ts",
+      "sha256": "18f4dca36eb02e5185cb76e7b6e08794fb90d9a63e1acc3214cb08fc086ffbad",
+      "bytes": 8559
+    },
+    {
+      "path": "frontend/src/api/app.ts",
+      "sha256": "84ca7d167e6dc14a780986e733fd95bda44bfc3156311f8fbe99a07402f931be",
+      "bytes": 2527
+    },
+    {
+      "path": "frontend/src/novel/data/novelLibrary.ts",
+      "sha256": "709e6e0102bf84242f2578ef097c52e5b99782132d3e3aa6be76df8760634737",
+      "bytes": 5522
+    },
+    {
+      "path": "frontend/src/comic/data/repository.ts",
+      "sha256": "7dbeff80799afb5e47a3536bb1eb6ab42a25dc12b3adb07d3e104b7a9bd849ad",
+      "bytes": 7436
+    },
+    {
+      "path": "frontend/src/novel/views/NovelSearch.vue",
+      "sha256": "3553db7ae9fec2ab5606514b59e39775481f61c3309e4bdd465c795ce55fe4c0",
+      "bytes": 3832
+    },
+    {
+      "path": "frontend/src/comic/views/ComicCatalog.vue",
+      "sha256": "dd33db8ea99998ce837dae9ae46a426bb47a0b6af9e193b27e1832b6ccae99a0",
+      "bytes": 7467
+    },
+    {
+      "path": "frontend/tests/comic-reading.test.ts",
+      "sha256": "29dacd9f8fda4912a41090b468931e5c6a923719e1603a900eed4bfd011ced36",
+      "bytes": 7299
+    }
+  ]
+}

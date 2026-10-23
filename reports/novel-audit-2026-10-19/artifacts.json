@@ -1,0 +1,17 @@
+[
+  {
+    "path": "C:\\Users\\18446\\Desktop\\CCZJ Video\\bin\\cczjVideo-novel-fix.exe",
+    "bytes": 35360256,
+    "sha256": "A0B5B4F56A004F925080790366F8AEF45B61F04AF646C323069056F4C3FB0155"
+  },
+  {
+    "path": "C:\\Users\\18446\\Desktop\\CCZJ Video\\bin\\CCZJ-Video-android-amd64-preview.apk",
+    "bytes": 42866056,
+    "sha256": "67E0170364F44D70DD05417F79117E087A206C33D28D0EEFCA01A712AB095ED5"
+  },
+  {
+    "path": "C:\\Users\\18446\\Desktop\\CCZJ Video\\bin\\CCZJ-Video-android-amd64-acceptance.apk",
+    "bytes": 42866056,
+    "sha256": "C69C9A13163BFA4B8E7D87F6EDDE930045C667FA698CD934CBB20471CEBC7CC1"
+  }
+]

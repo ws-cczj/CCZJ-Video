@@ -1,0 +1,1684 @@
+{
+  "version": "reading-quality.v1",
+  "updatedAt": "2026-10-21",
+  "works": [
+    {
+      "id": "novel-tribal-glory",
+      "kind": "novel",
+      "title": "部族荣光",
+      "aliases": [],
+      "authors": [
+        "丧狐"
+      ],
+      "tags": [
+        "传统玄幻",
+        "男频",
+        "完结"
+      ],
+      "language": "zh",
+      "layout": "text",
+      "edition": "中文原著网络版",
+      "selection": "本次官方首页精选；题材覆盖样本，非全网热度名次",
+      "references": [
+        {
+          "url": "https://fanqienovel.com/page/7069948840148732967",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        },
+        {
+          "url": "https://fanqienovel.com/",
+          "checkedAt": "2026-10-21",
+          "role": "ranking"
+        }
+      ],
+      "catalog": {
+        "unit": "chapter",
+        "scope": "complete",
+        "status": "completed",
+        "verifiedAt": "2026-10-21",
+        "url": "https://fanqienovel.com/page/7069948840148732967",
+        "anchors": [
+          {
+            "number": 1,
+            "title": "第1章 部族生死战"
+          },
+          {
+            "number": 176,
+            "title": "第176章 神庭？不可能！绝对不可能"
+          },
+          {
+            "number": 351,
+            "title": "第351章 不可思议的神罗大帝！姜玄的计划！"
+          }
+        ],
+        "count": 351
+      }
+    },
+    {
+      "id": "novel-moruo-lingxiao",
+      "kind": "novel",
+      "title": "莫若凌霄",
+      "aliases": [],
+      "authors": [
+        "月关"
+      ],
+      "tags": [
+        "历史",
+        "男频",
+        "架空"
+      ],
+      "language": "zh",
+      "layout": "text",
+      "edition": "中文原著网络版",
+      "selection": "本次官方首页精选；题材覆盖样本，非全网热度名次",
+      "references": [
+        {
+          "url": "https://fanqienovel.com/page/7091150316644600867",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        },
+        {
+          "url": "https://fanqienovel.com/",
+          "checkedAt": "2026-10-21",
+          "role": "ranking"
+        }
+      ],
+      "catalog": {
+        "unit": "chapter",
+        "scope": "complete",
+        "status": "completed",
+        "verifiedAt": "2026-10-21",
+        "url": "https://fanqienovel.com/page/7091150316644600867",
+        "anchors": [
+          {
+            "number": 1,
+            "title": "第001章 蛰伏，五载蝉鸣"
+          },
+          {
+            "number": 368,
+            "title": "第368章 引弓，林暗草惊"
+          },
+          {
+            "number": 734,
+            "title": "第734章 流年，时光未央（完结）"
+          }
+        ],
+        "count": 734
+      }
+    },
+    {
+      "id": "novel-jinghong",
+      "kind": "novel",
+      "title": "惊鸿",
+      "aliases": [],
+      "authors": [
+        "一夕烟雨"
+      ],
+      "tags": [
+        "东方玄幻",
+        "男频",
+        "长篇"
+      ],
+      "language": "zh",
+      "layout": "text",
+      "edition": "中文原著网络版",
+      "selection": "本次官方首页精选；题材覆盖样本，非全网热度名次",
+      "references": [
+        {
+          "url": "https://fanqienovel.com/page/6883748331202284558",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        },
+        {
+          "url": "https://fanqienovel.com/",
+          "checkedAt": "2026-10-21",
+          "role": "ranking"
+        }
+      ],
+      "catalog": {
+        "unit": "chapter",
+        "scope": "snapshot",
+        "status": "ongoing",
+        "verifiedAt": "2026-10-21",
+        "url": "https://fanqienovel.com/page/6883748331202284558",
+        "anchors": [
+          {
+            "number": 1,
+            "title": "第1章 天资妖孽李子夜"
+          },
+          {
+            "number": 2186,
+            "title": "第2186章 演化仙道经"
+          },
+          {
+            "number": 4370,
+            "title": "第4370章 路过"
+          }
+        ],
+        "count": 4370
+      }
+    },
+    {
+      "id": "novel-firefly-city",
+      "kind": "novel",
+      "title": "萤火之城",
+      "aliases": [],
+      "authors": [
+        "童童"
+      ],
+      "tags": [
+        "科幻",
+        "女频",
+        "现实"
+      ],
+      "language": "zh",
+      "layout": "text",
+      "edition": "中文原著网络版",
+      "selection": "本次官方首页精选；题材覆盖样本，非全网热度名次",
+      "references": [
+        {
+          "url": "https://fanqienovel.com/page/7218822722090961958",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        },
+        {
+          "url": "https://fanqienovel.com/",
+          "checkedAt": "2026-10-21",
+          "role": "ranking"
+        }
+      ],
+      "catalog": {
+        "unit": "chapter",
+        "scope": "complete",
+        "status": "completed",
+        "verifiedAt": "2026-10-21",
+        "url": "https://fanqienovel.com/page/7218822722090961958",
+        "anchors": [
+          {
+            "number": 1,
+            "title": "第1章 种子"
+          },
+          {
+            "number": 113,
+            "title": "第113章 越权"
+          },
+          {
+            "number": 225,
+            "title": "第225章 无名之人"
+          }
+        ],
+        "count": 225
+      }
+    },
+    {
+      "id": "novel-jiaoyang-meigui",
+      "kind": "novel",
+      "title": "娇养玫瑰",
+      "aliases": [],
+      "authors": [
+        "美绿哔哔"
+      ],
+      "tags": [
+        "现代言情",
+        "女频"
+      ],
+      "language": "zh",
+      "layout": "text",
+      "edition": "中文原著网络版",
+      "selection": "本次官方首页精选；题材覆盖样本，非全网热度名次",
+      "references": [
+        {
+          "url": "https://fanqienovel.com/page/7137359676424850443",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        },
+        {
+          "url": "https://fanqienovel.com/",
+          "checkedAt": "2026-10-21",
+          "role": "ranking"
+        }
+      ],
+      "catalog": {
+        "unit": "chapter",
+        "scope": "complete",
+        "status": "completed",
+        "verifiedAt": "2026-10-21",
+        "url": "https://fanqienovel.com/page/7137359676424850443",
+        "anchors": [
+          {
+            "number": 1,
+            "title": "第1章“把旗袍脱掉。”"
+          },
+          {
+            "number": 85,
+            "title": "第85章 皈依你"
+          },
+          {
+            "number": 168,
+            "title": "第168章 棠梨最爱傅则谌「全文完」"
+          }
+        ],
+        "count": 168
+      }
+    },
+    {
+      "id": "novel-disaster-stockpile",
+      "kind": "novel",
+      "title": "天灾，我囤几十亿物资在末世求生",
+      "aliases": [],
+      "authors": [
+        "袅袅鱼音"
+      ],
+      "tags": [
+        "末世",
+        "女频",
+        "生存"
+      ],
+      "language": "zh",
+      "layout": "text",
+      "edition": "中文原著网络版",
+      "selection": "本次官方首页精选；题材覆盖样本，非全网热度名次",
+      "references": [
+        {
+          "url": "https://fanqienovel.com/page/7111200276232539166",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        },
+        {
+          "url": "https://fanqienovel.com/",
+          "checkedAt": "2026-10-21",
+          "role": "ranking"
+        }
+      ],
+      "catalog": {
+        "unit": "chapter",
+        "scope": "snapshot",
+        "status": "completed",
+        "verifiedAt": "2026-10-21",
+        "url": "https://fanqienovel.com/page/7111200276232539166",
+        "anchors": [
+          {
+            "number": 1,
+            "title": "第1章 重生末世前"
+          },
+          {
+            "number": 254,
+            "title": "第254章 让你领略一下星际的风光"
+          },
+          {
+            "number": 508,
+            "title": "第508章 番外：朋友总会相见"
+          }
+        ]
+      }
+    },
+    {
+      "id": "novel-xingan-chong",
+      "kind": "novel",
+      "title": "心肝宠",
+      "aliases": [],
+      "authors": [
+        "九棂"
+      ],
+      "tags": [
+        "都市",
+        "女频",
+        "言情"
+      ],
+      "language": "zh",
+      "layout": "text",
+      "edition": "中文原著网络版",
+      "selection": "本次官方首页精选；题材覆盖样本，非全网热度名次",
+      "references": [
+        {
+          "url": "https://fanqienovel.com/page/7096667097870109733",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        },
+        {
+          "url": "https://fanqienovel.com/",
+          "checkedAt": "2026-10-21",
+          "role": "ranking"
+        }
+      ],
+      "catalog": {
+        "unit": "chapter",
+        "scope": "snapshot",
+        "status": "completed",
+        "verifiedAt": "2026-10-21",
+        "url": "https://fanqienovel.com/page/7096667097870109733",
+        "anchors": [
+          {
+            "number": 1,
+            "title": "第1章 你怀的是谁的种？"
+          },
+          {
+            "number": 493,
+            "title": "第493章 他真的是个实足的变态了"
+          },
+          {
+            "number": 985,
+            "title": "第985章 大结局终章"
+          }
+        ]
+      }
+    },
+    {
+      "id": "novel-gouye",
+      "kind": "novel",
+      "title": "够野",
+      "aliases": [],
+      "authors": [
+        "纠纠猫"
+      ],
+      "tags": [
+        "都市",
+        "女频",
+        "言情"
+      ],
+      "language": "zh",
+      "layout": "text",
+      "edition": "中文原著网络版",
+      "selection": "本次官方首页精选；题材覆盖样本，非全网热度名次",
+      "references": [
+        {
+          "url": "https://fanqienovel.com/page/7101803652683140111",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        },
+        {
+          "url": "https://fanqienovel.com/",
+          "checkedAt": "2026-10-21",
+          "role": "ranking"
+        }
+      ],
+      "catalog": {
+        "unit": "chapter",
+        "scope": "snapshot",
+        "status": "completed",
+        "verifiedAt": "2026-10-21",
+        "url": "https://fanqienovel.com/page/7101803652683140111",
+        "anchors": [
+          {
+            "number": 1,
+            "title": "第1章 借火"
+          },
+          {
+            "number": 82,
+            "title": "第82章 唯独不能把心给你"
+          },
+          {
+            "number": 162,
+            "title": "第162章 一眼万年"
+          }
+        ]
+      }
+    },
+    {
+      "id": "novel-lord-of-mysteries",
+      "kind": "novel",
+      "title": "诡秘之主",
+      "aliases": [],
+      "authors": [
+        "爱潜水的乌贼"
+      ],
+      "tags": [
+        "奇幻",
+        "男频",
+        "悬疑"
+      ],
+      "language": "zh",
+      "layout": "text",
+      "edition": "中文原著网络版",
+      "selection": "经典网文／类型代表；本次未获取可靠实时榜单名次",
+      "references": [
+        {
+          "url": "https://www.qidian.com/chapter/1010868264/435145342/",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "novel-joy-of-life",
+      "kind": "novel",
+      "title": "庆余年",
+      "aliases": [],
+      "authors": [
+        "猫腻"
+      ],
+      "tags": [
+        "架空历史",
+        "男频",
+        "完结"
+      ],
+      "language": "zh",
+      "layout": "text",
+      "edition": "中文原著网络版",
+      "selection": "经典网文／类型代表；本次未获取可靠实时榜单名次",
+      "references": [
+        {
+          "url": "https://book.qidian.com/info/114559b",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "novel-kings-avatar",
+      "kind": "novel",
+      "title": "全职高手",
+      "aliases": [],
+      "authors": [
+        "蝴蝶蓝"
+      ],
+      "tags": [
+        "游戏",
+        "男频",
+        "电竞",
+        "完结"
+      ],
+      "language": "zh",
+      "layout": "text",
+      "edition": "中文原著网络版",
+      "selection": "经典网文／类型代表；本次未获取可靠实时榜单名次",
+      "references": [
+        {
+          "url": "https://book.qidian.com/fansrank/1887208",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "novel-dafeng",
+      "kind": "novel",
+      "title": "大奉打更人",
+      "aliases": [],
+      "authors": [
+        "卖报小郎君"
+      ],
+      "tags": [
+        "仙侠",
+        "男频",
+        "探案",
+        "完结"
+      ],
+      "language": "zh",
+      "layout": "text",
+      "edition": "中文原著网络版",
+      "selection": "经典网文／类型代表；本次未获取可靠实时榜单名次",
+      "references": [
+        {
+          "url": "https://www.qidian.com/book/1019664125/",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        },
+        {
+          "url": "https://book.qidian.com/honor/1019664125",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        },
+        {
+          "url": "https://t.shuqi.com/book/8964838.html",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "novel-nanhong",
+      "kind": "novel",
+      "title": "难哄",
+      "aliases": [],
+      "authors": [
+        "竹已"
+      ],
+      "tags": [
+        "现代言情",
+        "女频",
+        "完结"
+      ],
+      "language": "zh",
+      "layout": "text",
+      "edition": "晋江网络版；修订/锁章与实体版不能混算",
+      "selection": "分类代表；核实作者和版本，非本次实时热榜",
+      "references": [
+        {
+          "url": "https://wap.jjwxc.net/book2/4001734?whole=1",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "novel-bairimengwo",
+      "kind": "novel",
+      "title": "白日梦我",
+      "aliases": [],
+      "authors": [
+        "栖见"
+      ],
+      "tags": [
+        "校园",
+        "女频",
+        "言情",
+        "完结"
+      ],
+      "language": "zh",
+      "layout": "text",
+      "edition": "晋江网络版；修订/锁章与实体版不能混算",
+      "selection": "分类代表；核实作者和版本，非本次实时热榜",
+      "references": [
+        {
+          "url": "https://wap.jjwxc.net/book2/3525826?whole=1",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "novel-heaven-official",
+      "kind": "novel",
+      "title": "天官赐福",
+      "aliases": [],
+      "authors": [
+        "墨香铜臭"
+      ],
+      "tags": [
+        "仙侠",
+        "纯爱",
+        "修订版",
+        "完结"
+      ],
+      "language": "zh",
+      "layout": "text",
+      "edition": "晋江网络版；修订/锁章与实体版不能混算",
+      "selection": "分类代表；核实作者和版本，非本次实时热榜",
+      "references": [
+        {
+          "url": "https://wap.jjwxc.net/book2/3200611?whole=1",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "novel-blood-princess",
+      "kind": "novel",
+      "title": "血姬小姐才不会被骗",
+      "aliases": [],
+      "authors": [
+        "LAKAL"
+      ],
+      "tags": [
+        "原创轻小说",
+        "二次元",
+        "奇幻"
+      ],
+      "language": "zh",
+      "layout": "text",
+      "edition": "中文原著网络版",
+      "selection": "分类代表；公众/VIP混合目录",
+      "references": [
+        {
+          "url": "https://book.sfacg.com/Novel/689943/",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        },
+        {
+          "url": "https://p.sfacg.com/p/14645580",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "novel-cute-three-kingdoms",
+      "kind": "novel",
+      "title": "我的三国不可能这么可爱",
+      "aliases": [],
+      "authors": [
+        "平凡的宅男"
+      ],
+      "tags": [
+        "轻小说",
+        "二次元",
+        "历史",
+        "重生"
+      ],
+      "language": "zh",
+      "layout": "text",
+      "edition": "中文原著网络版",
+      "selection": "分类代表兼前轮规则故障校准",
+      "references": [
+        {
+          "url": "https://book.sfacg.com/Novel/291080/",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "novel-savior-leader",
+      "kind": "novel",
+      "title": "我，救世组织神秘领袖",
+      "aliases": [],
+      "authors": [
+        "不是浪迹"
+      ],
+      "tags": [
+        "游戏",
+        "二次元",
+        "都市奇幻",
+        "完结"
+      ],
+      "language": "zh",
+      "layout": "text",
+      "edition": "中文原著网络版",
+      "selection": "分类代表；作品页标2021征文获奖，非当前排行",
+      "references": [
+        {
+          "url": "https://mip.ciweimao.com/book/100255662",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "novel-three-body",
+      "kind": "novel",
+      "title": "三体",
+      "aliases": [],
+      "authors": [
+        "刘慈欣",
+        "Cixin Liu"
+      ],
+      "tags": [
+        "科幻",
+        "出版",
+        "经典"
+      ],
+      "language": "zh",
+      "layout": "text",
+      "edition": "中文第一部；不把三部曲/英文译本目录混为一本",
+      "selection": "经典科幻代表；出版社确认第一部身份，未用英文版目录推中文完整度",
+      "references": [
+        {
+          "url": "https://us.macmillan.com/books/9780765377067/thethreebodyproblem/",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        },
+        {
+          "url": "https://finance.people.com.cn/n1/2026/1010/c1004-40811627.html",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "novel-red-chamber",
+      "kind": "novel",
+      "title": "红楼梦",
+      "aliases": [
+        "紅樓夢"
+      ],
+      "authors": [
+        "曹雪芹",
+        "Cao Xueqin"
+      ],
+      "tags": [
+        "古典文学",
+        "出版",
+        "经典"
+      ],
+      "language": "zh",
+      "layout": "text",
+      "edition": "Project Gutenberg中文电子版；非现代删节/青少改写本",
+      "selection": "经典对照；保留繁简体与版本差异",
+      "references": [
+        {
+          "url": "https://www.gutenberg.org/ebooks/24264",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "novel-journey-west",
+      "kind": "novel",
+      "title": "西游记",
+      "aliases": [
+        "西遊記"
+      ],
+      "authors": [
+        "吴承恩",
+        "Wu Chengen"
+      ],
+      "tags": [
+        "古典文学",
+        "出版",
+        "经典"
+      ],
+      "language": "zh",
+      "layout": "text",
+      "edition": "Project Gutenberg中文电子版；非现代删节/青少改写本",
+      "selection": "经典对照；保留繁简体与版本差异",
+      "references": [
+        {
+          "url": "https://www.gutenberg.org/ebooks/23962",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "novel-three-kingdoms",
+      "kind": "novel",
+      "title": "三国演义",
+      "aliases": [
+        "三國志演義",
+        "三國演義"
+      ],
+      "authors": [
+        "罗贯中",
+        "Luo Guanzhong"
+      ],
+      "tags": [
+        "古典文学",
+        "出版",
+        "经典"
+      ],
+      "language": "zh",
+      "layout": "text",
+      "edition": "Project Gutenberg中文电子版；非现代删节/青少改写本",
+      "selection": "经典对照；保留繁简体与版本差异",
+      "references": [
+        {
+          "url": "https://www.gutenberg.org/ebooks/23950",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "novel-pride-prejudice",
+      "kind": "novel",
+      "title": "Pride and Prejudice",
+      "aliases": [
+        "傲慢与偏见"
+      ],
+      "authors": [
+        "Jane Austen"
+      ],
+      "tags": [
+        "英文原著",
+        "外国文学",
+        "经典"
+      ],
+      "language": "en",
+      "layout": "text",
+      "edition": "Project Gutenberg英文版",
+      "selection": "英文原著对照；不按中文译名合并不同译本",
+      "references": [
+        {
+          "url": "https://www.gutenberg.org/ebooks/1342",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "novel-sherlock-adventures",
+      "kind": "novel",
+      "title": "The Adventures of Sherlock Holmes",
+      "aliases": [
+        "福尔摩斯冒险史",
+        "福爾摩斯冒險史"
+      ],
+      "authors": [
+        "Arthur Conan Doyle",
+        "Conan Doyle"
+      ],
+      "tags": [
+        "悬疑",
+        "外国文学",
+        "短篇集",
+        "经典"
+      ],
+      "language": "en",
+      "layout": "text",
+      "edition": "Project Gutenberg英文短篇集",
+      "selection": "短篇集结构对照；不等同福尔摩斯全集",
+      "references": [
+        {
+          "url": "https://www.gutenberg.org/ebooks/1661",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "comic-feirenzai",
+      "kind": "comic",
+      "title": "非人哉",
+      "aliases": [],
+      "authors": [
+        "一汪空气"
+      ],
+      "tags": [
+        "国漫",
+        "日常",
+        "搞笑"
+      ],
+      "language": "zh",
+      "layout": "strip",
+      "edition": "漫画作者：一汪空气",
+      "selection": "本次官方经典必看/飙升榜可见；动态名次仅作选样",
+      "references": [
+        {
+          "url": "https://www.kuaikanmanhua.com/web/topic/531/",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        },
+        {
+          "url": "https://www.kuaikanmanhua.com/",
+          "checkedAt": "2026-10-21",
+          "role": "ranking"
+        }
+      ]
+    },
+    {
+      "id": "comic-cuoliao",
+      "kind": "comic",
+      "title": "错撩",
+      "aliases": [],
+      "authors": [
+        "翘摇",
+        "绿绿绿酱"
+      ],
+      "tags": [
+        "国漫",
+        "都市",
+        "恋爱"
+      ],
+      "language": "zh",
+      "layout": "strip",
+      "edition": "原著：翘摇；漫画署名：绿绿绿酱",
+      "selection": "本次官方经典必看/飙升榜可见；动态名次仅作选样",
+      "references": [
+        {
+          "url": "https://www.kuaikanmanhua.com/web/topic/21881/",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        },
+        {
+          "url": "https://www.kuaikanmanhua.com/",
+          "checkedAt": "2026-10-21",
+          "role": "ranking"
+        }
+      ]
+    },
+    {
+      "id": "comic-bairimengwo",
+      "kind": "comic",
+      "title": "白日梦我",
+      "aliases": [],
+      "authors": [
+        "栖见",
+        "好夹心儿",
+        "江骨"
+      ],
+      "tags": [
+        "国漫",
+        "校园",
+        "恋爱"
+      ],
+      "language": "zh",
+      "layout": "strip",
+      "edition": "原著：栖见；主笔：好夹心儿；编剧：江骨",
+      "selection": "本次官方经典必看/飙升榜可见；动态名次仅作选样",
+      "references": [
+        {
+          "url": "https://www.kuaikanmanhua.com/web/topic/13620/",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        },
+        {
+          "url": "https://www.kuaikanmanhua.com/",
+          "checkedAt": "2026-10-21",
+          "role": "ranking"
+        }
+      ]
+    },
+    {
+      "id": "comic-solo-leveling",
+      "kind": "comic",
+      "title": "我独自升级",
+      "aliases": [],
+      "authors": [
+        "DUBU",
+        "REDICE STUDIO",
+        "Chugong",
+        "h-goon"
+      ],
+      "tags": [
+        "韩漫",
+        "系统",
+        "奇幻"
+      ],
+      "language": "zh",
+      "layout": "strip",
+      "edition": "主笔：DUBU(REDICE STUDIO)；原著：Chugong；编剧：h-goon",
+      "selection": "本次官方经典必看/飙升榜可见；动态名次仅作选样",
+      "references": [
+        {
+          "url": "https://www.kuaikanmanhua.com/web/topic/4319/",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        },
+        {
+          "url": "https://www.kuaikanmanhua.com/",
+          "checkedAt": "2026-10-21",
+          "role": "ranking"
+        }
+      ]
+    },
+    {
+      "id": "comic-princess",
+      "kind": "comic",
+      "title": "某天成为公主",
+      "aliases": [],
+      "authors": [
+        "Spoon",
+        "Plutus",
+        "CARROTOON"
+      ],
+      "tags": [
+        "韩漫",
+        "恋爱",
+        "西幻"
+      ],
+      "language": "zh",
+      "layout": "strip",
+      "edition": "平台联合署名：Spoon、Plutus、CARROTOON；角色不从姓名顺序臆断",
+      "selection": "本次官方经典必看/飙升榜可见；动态名次仅作选样",
+      "references": [
+        {
+          "url": "https://www.kuaikanmanhua.com/web/topic/2991/",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        },
+        {
+          "url": "https://www.kuaikanmanhua.com/",
+          "checkedAt": "2026-10-21",
+          "role": "ranking"
+        }
+      ]
+    },
+    {
+      "id": "comic-global-horror",
+      "kind": "comic",
+      "title": "全球诡异时代",
+      "aliases": [],
+      "authors": [
+        "黑白茶",
+        "奇小怪"
+      ],
+      "tags": [
+        "国漫",
+        "悬疑",
+        "恐怖"
+      ],
+      "language": "zh",
+      "layout": "strip",
+      "edition": "原著：黑白茶；漫画署名：奇小怪",
+      "selection": "本次官方经典必看/飙升榜可见；动态名次仅作选样",
+      "references": [
+        {
+          "url": "https://www.kuaikanmanhua.com/web/topic/12432/",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        },
+        {
+          "url": "https://www.kuaikanmanhua.com/",
+          "checkedAt": "2026-10-21",
+          "role": "ranking"
+        }
+      ]
+    },
+    {
+      "id": "comic-one-piece",
+      "kind": "comic",
+      "title": "航海王",
+      "aliases": [
+        "海贼王",
+        "ONE PIECE"
+      ],
+      "authors": [
+        "尾田荣一郎"
+      ],
+      "tags": [
+        "日漫",
+        "热血",
+        "冒险"
+      ],
+      "language": "zh",
+      "layout": "page",
+      "edition": "哔哩哔哩中文漫画版；版权方不当作者",
+      "selection": "本次B漫官方日漫榜/首页可见；兼顾完结经典与连载",
+      "references": [
+        {
+          "url": "https://manga.bilibili.com/m/detail/mc24742",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        },
+        {
+          "url": "https://manga.bilibili.com/",
+          "checkedAt": "2026-10-21",
+          "role": "ranking"
+        }
+      ]
+    },
+    {
+      "id": "comic-conan",
+      "kind": "comic",
+      "title": "名侦探柯南",
+      "aliases": [],
+      "authors": [
+        "青山刚昌"
+      ],
+      "tags": [
+        "日漫",
+        "悬疑",
+        "探案"
+      ],
+      "language": "zh",
+      "layout": "page",
+      "edition": "哔哩哔哩中文漫画版；版权方不当作者",
+      "selection": "本次B漫官方日漫榜/首页可见；兼顾完结经典与连载",
+      "references": [
+        {
+          "url": "https://manga.bilibili.com/m/detail/mc26444",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        },
+        {
+          "url": "https://manga.bilibili.com/",
+          "checkedAt": "2026-10-21",
+          "role": "ranking"
+        }
+      ]
+    },
+    {
+      "id": "comic-spy-family",
+      "kind": "comic",
+      "title": "间谍过家家",
+      "aliases": [
+        "SPY×FAMILY"
+      ],
+      "authors": [
+        "远藤达哉"
+      ],
+      "tags": [
+        "日漫",
+        "家庭",
+        "喜剧"
+      ],
+      "language": "zh",
+      "layout": "page",
+      "edition": "哔哩哔哩中文漫画版；版权方不当作者",
+      "selection": "本次B漫官方日漫榜/首页可见；兼顾完结经典与连载",
+      "references": [
+        {
+          "url": "https://manga.bilibili.com/m/detail/mc28201",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        },
+        {
+          "url": "https://manga.bilibili.com/",
+          "checkedAt": "2026-10-21",
+          "role": "ranking"
+        }
+      ]
+    },
+    {
+      "id": "comic-dungeon-meshi",
+      "kind": "comic",
+      "title": "迷宫饭",
+      "aliases": [],
+      "authors": [
+        "九井谅子"
+      ],
+      "tags": [
+        "日漫",
+        "美食",
+        "奇幻",
+        "完结"
+      ],
+      "language": "zh",
+      "layout": "page",
+      "edition": "哔哩哔哩中文漫画版；版权方不当作者",
+      "selection": "本次B漫官方日漫榜/首页可见；兼顾完结经典与连载",
+      "references": [
+        {
+          "url": "https://manga.bilibili.com/m/detail/mc28284",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        },
+        {
+          "url": "https://manga.bilibili.com/",
+          "checkedAt": "2026-10-21",
+          "role": "ranking"
+        },
+        {
+          "url": "https://manga.bilibili.com/detail/mc28284",
+          "checkedAt": "2026-10-21",
+          "role": "catalog"
+        }
+      ],
+      "catalog": {
+        "unit": "episode",
+        "count": 97,
+        "scope": "complete",
+        "status": "completed",
+        "verifiedAt": "2026-10-21",
+        "url": "https://manga.bilibili.com/detail/mc28284",
+        "anchors": [
+          {
+            "number": 1,
+            "title": "汤锅"
+          },
+          {
+            "number": 49,
+            "title": "狮鹫汤"
+          },
+          {
+            "number": 97,
+            "title": "迷宫饭"
+          }
+        ]
+      }
+    },
+    {
+      "id": "comic-blue-lock",
+      "kind": "comic",
+      "title": "蓝色监狱",
+      "aliases": [
+        "BLUE LOCK"
+      ],
+      "authors": [
+        "金城宗幸",
+        "之村优介"
+      ],
+      "tags": [
+        "日漫",
+        "运动",
+        "足球"
+      ],
+      "language": "zh",
+      "layout": "page",
+      "edition": "哔哩哔哩中文漫画版；版权方不当作者",
+      "selection": "本次B漫官方日漫榜/首页可见；兼顾完结经典与连载",
+      "references": [
+        {
+          "url": "https://manga.bilibili.com/m/detail/mc31443",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        },
+        {
+          "url": "https://manga.bilibili.com/",
+          "checkedAt": "2026-10-21",
+          "role": "ranking"
+        }
+      ]
+    },
+    {
+      "id": "comic-demon-slayer",
+      "kind": "comic",
+      "title": "鬼灭之刃",
+      "aliases": [],
+      "authors": [
+        "吾峠呼世晴"
+      ],
+      "tags": [
+        "日漫",
+        "热血",
+        "完结"
+      ],
+      "language": "zh",
+      "layout": "page",
+      "edition": "哔哩哔哩中文漫画版；版权方不当作者",
+      "selection": "本次B漫官方日漫榜/首页可见；兼顾完结经典与连载",
+      "references": [
+        {
+          "url": "https://manga.bilibili.com/m/detail/mc25717",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        },
+        {
+          "url": "https://manga.bilibili.com/",
+          "checkedAt": "2026-10-21",
+          "role": "ranking"
+        }
+      ]
+    },
+    {
+      "id": "comic-dragon-ball",
+      "kind": "comic",
+      "title": "龙珠",
+      "aliases": [],
+      "authors": [
+        "鸟山明"
+      ],
+      "tags": [
+        "日漫",
+        "热血",
+        "经典"
+      ],
+      "language": "zh",
+      "layout": "page",
+      "edition": "哔哩哔哩中文漫画版；版权方不当作者",
+      "selection": "本次B漫官方日漫榜/首页可见；兼顾完结经典与连载",
+      "references": [
+        {
+          "url": "https://manga.bilibili.com/m/detail/mc24743",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        },
+        {
+          "url": "https://manga.bilibili.com/",
+          "checkedAt": "2026-10-21",
+          "role": "ranking"
+        }
+      ]
+    },
+    {
+      "id": "comic-naruto",
+      "kind": "comic",
+      "title": "火影忍者",
+      "aliases": [],
+      "authors": [
+        "岸本齐史"
+      ],
+      "tags": [
+        "日漫",
+        "热血",
+        "完结"
+      ],
+      "language": "zh",
+      "layout": "page",
+      "edition": "哔哩哔哩中文漫画版；版权方不当作者",
+      "selection": "本次B漫官方日漫榜/首页可见；兼顾完结经典与连载",
+      "references": [
+        {
+          "url": "https://manga.bilibili.com/m/detail/mc24733",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        },
+        {
+          "url": "https://manga.bilibili.com/",
+          "checkedAt": "2026-10-21",
+          "role": "ranking"
+        }
+      ]
+    },
+    {
+      "id": "comic-tower-of-god",
+      "kind": "comic",
+      "title": "神之塔",
+      "aliases": [],
+      "authors": [
+        "SIU"
+      ],
+      "tags": [
+        "韩漫",
+        "奇幻",
+        "条漫",
+        "公开目录校准"
+      ],
+      "language": "zh",
+      "layout": "strip",
+      "edition": "咚漫中文公开网站版",
+      "selection": "前轮实测校准；公开网站范围，不代表整部全集",
+      "references": [
+        {
+          "url": "https://www.dongmanmanhua.cn/BOY/tower-of-god/list?title_no=241",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "comic-tower-of-god-urek",
+      "kind": "comic",
+      "title": "神之塔外传：乌雷克·马奇努",
+      "aliases": [
+        "神之塔外传:乌雷克·马奇努"
+      ],
+      "authors": [
+        "SIU"
+      ],
+      "tags": [
+        "韩漫",
+        "奇幻",
+        "条漫",
+        "公开目录校准"
+      ],
+      "language": "zh",
+      "layout": "strip",
+      "edition": "咚漫中文公开网站版",
+      "selection": "前轮实测校准；本次官方公开目录复核，非整部全集",
+      "references": [
+        {
+          "url": "https://www.dongmanmanhua.cn/BOY/shenzhitawaizhuanwuleikemaqinu/list?title_no=2791",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        }
+      ],
+      "catalog": {
+        "unit": "episode",
+        "count": 10,
+        "scope": "public",
+        "status": "unknown",
+        "verifiedAt": "2026-10-21",
+        "url": "https://www.dongmanmanhua.cn/BOY/shenzhitawaizhuanwuleikemaqinu/list?title_no=2791",
+        "anchors": [
+          {
+            "number": 1,
+            "title": "[第1话] 试炼之层"
+          },
+          {
+            "number": 6,
+            "title": "[第6话] 摔跤"
+          },
+          {
+            "number": 10,
+            "title": "[第10话] 灰海豚女王"
+          }
+        ]
+      }
+    },
+    {
+      "id": "novel-ten-days",
+      "kind": "novel",
+      "title": "十日终焉",
+      "aliases": [],
+      "authors": [
+        "杀虫队队员"
+      ],
+      "tags": [
+        "悬疑",
+        "男频",
+        "推理",
+        "无限流",
+        "完结"
+      ],
+      "language": "zh",
+      "layout": "text",
+      "edition": "中文原著网络版",
+      "selection": "官方作品页标2024年度巅峰榜TOP1；历史热度样本，不称当前第一",
+      "references": [
+        {
+          "url": "https://fanqienovel.com/page/7143038691944959011",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "novel-nine-masters",
+      "kind": "novel",
+      "title": "高手下山，我有九个无敌师父！",
+      "aliases": [],
+      "authors": [
+        "小殇殇"
+      ],
+      "tags": [
+        "都市",
+        "男频",
+        "神医",
+        "爽文"
+      ],
+      "language": "zh",
+      "layout": "text",
+      "edition": "中文原著网络版",
+      "selection": "本次官方首页男频精选；补都市类型",
+      "references": [
+        {
+          "url": "https://fanqienovel.com/page/7075952796322761739",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "novel-dao-mystery",
+      "kind": "novel",
+      "title": "道诡异仙",
+      "aliases": [],
+      "authors": [
+        "狐尾的笔"
+      ],
+      "tags": [
+        "中式恐怖",
+        "男频",
+        "玄幻",
+        "悬疑"
+      ],
+      "language": "zh",
+      "layout": "text",
+      "edition": "中文原著网络版",
+      "selection": "类型代表；官方作品页核实作者，未填实时热度名次",
+      "references": [
+        {
+          "url": "https://www.qidian.com/book/1031794030/?source=m_jump",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "novel-cal-kuwo-zhongmou",
+      "kind": "novel",
+      "title": "三国之仲谋天下",
+      "aliases": [],
+      "authors": [
+        "拾一"
+      ],
+      "tags": [
+        "历史",
+        "三国",
+        "校准样本"
+      ],
+      "language": "zh",
+      "layout": "text",
+      "edition": "酷我当前分发版；书名作者另有阅文平台元信息相互印证",
+      "selection": "已知可读校准样本，非热门；该源自己的目录不作为独立完整性基准",
+      "references": [
+        {
+          "url": "http://appi.kuwo.cn/novels/api/book/22543868000604102",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        },
+        {
+          "url": "https://www.hongxiu.com/bqx/skiqvxgtos",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "novel-cal-kuwo-liuqi",
+      "kind": "novel",
+      "title": "三国之霸主刘琦",
+      "aliases": [],
+      "authors": [
+        "帝夜之殇"
+      ],
+      "tags": [
+        "历史",
+        "三国",
+        "校准样本"
+      ],
+      "language": "zh",
+      "layout": "text",
+      "edition": "酷我当前分发版；红袖同书页确认作者，不推断同版全目录",
+      "selection": "已知可读校准样本，非热门；该源自己的目录不作为独立完整性基准",
+      "references": [
+        {
+          "url": "http://appi.kuwo.cn/novels/api/book/9046067203383803",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        },
+        {
+          "url": "https://www.hongxiu.com/book/9046067203383803",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "novel-cal-yueyou-zhengfeng",
+      "kind": "novel",
+      "title": "三国争锋",
+      "aliases": [],
+      "authors": [
+        "逆天吼"
+      ],
+      "tags": [
+        "历史",
+        "三国",
+        "校准样本"
+      ],
+      "language": "zh",
+      "layout": "text",
+      "edition": "阅友/随心看当前作品页署名；未确认原著首发平台或独立完整目录",
+      "selection": "已知可读校准样本，非热门；该源自己的目录不作为独立完整性基准",
+      "references": [
+        {
+          "url": "http://m.suixkan.com/b/235207.html",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "novel-cal-yueyou-nizi",
+      "kind": "novel",
+      "title": "三国第一逆子",
+      "aliases": [],
+      "authors": [
+        "沧凌九界"
+      ],
+      "tags": [
+        "历史",
+        "三国",
+        "校准样本"
+      ],
+      "language": "zh",
+      "layout": "text",
+      "edition": "阅友/随心看当前作品页署名；未确认原著首发平台或独立完整目录",
+      "selection": "已知可读校准样本，非热门；该源自己的目录不作为独立完整性基准",
+      "references": [
+        {
+          "url": "http://m.suixkan.com/b/235861.html",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "comic-cal-bh3-escape",
+      "kind": "comic",
+      "title": "逃离长空篇",
+      "aliases": [],
+      "authors": [],
+      "tags": [
+        "游戏衍生",
+        "国漫",
+        "校准样本"
+      ],
+      "language": "zh",
+      "layout": "page",
+      "edition": "崩坏3官方漫画；作品页未确认个人原作/作画，不把运营方当作者",
+      "selection": "已知可读校准样本，非热门；该源自己的目录不作为独立完整性基准",
+      "references": [
+        {
+          "url": "https://comic.bh3.com/book/1001",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "comic-cal-bh3-sakura",
+      "kind": "comic",
+      "title": "樱花追忆篇",
+      "aliases": [],
+      "authors": [],
+      "tags": [
+        "游戏衍生",
+        "国漫",
+        "校准样本"
+      ],
+      "language": "zh",
+      "layout": "page",
+      "edition": "崩坏3官方漫画；作品页未确认个人原作/作画，不把运营方当作者",
+      "selection": "已知可读校准样本，非热门；该源自己的目录不作为独立完整性基准",
+      "references": [
+        {
+          "url": "https://comic.bh3.com/book/1002",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "comic-cal-terra-general",
+      "kind": "comic",
+      "title": "循途漫录：大将军，出击！",
+      "aliases": [],
+      "authors": [],
+      "tags": [
+        "游戏衍生",
+        "国漫",
+        "校准样本"
+      ],
+      "language": "zh",
+      "layout": "page",
+      "edition": "泰拉记事社官方版；接口authors为鹰角网络，视为官方制作归属，不推断个人原作/作画",
+      "selection": "已知可读校准样本，非热门；该源自己的目录不作为独立完整性基准",
+      "references": [
+        {
+          "url": "https://comic.hypergryph.com/api/comic/7746",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "comic-cal-terra-solitary",
+      "kind": "comic",
+      "title": "序言组曲：孤行之人",
+      "aliases": [],
+      "authors": [],
+      "tags": [
+        "游戏衍生",
+        "国漫",
+        "校准样本"
+      ],
+      "language": "zh",
+      "layout": "page",
+      "edition": "泰拉记事社官方版；接口authors为鹰角网络，视为官方制作归属，不推断个人原作/作画",
+      "selection": "已知可读校准样本，非热门；该源自己的目录不作为独立完整性基准",
+      "references": [
+        {
+          "url": "https://comic.hypergryph.com/api/comic/0694",
+          "checkedAt": "2026-10-21",
+          "role": "metadata"
+        }
+      ]
+    }
+  ]
+}

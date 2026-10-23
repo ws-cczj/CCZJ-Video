@@ -1,0 +1,25 @@
+.cczj-mobile-plugin-logs { @apply cczj-min-w-0; padding:0 0 20px; }
+.cczj-mobile-plugin-logs .block { @apply cczj-p-7 cczj-mb-5; }
+.cczj-mobile-plugin-logs .log-grid { grid-template-columns:repeat(2,minmax(0,1fr)); @apply cczj-gap-4; }
+.cczj-mobile-plugin-logs .log-card { @apply cczj-p-5 cczj-gap-4; }
+.cczj-mobile-plugin-logs .log-card-body { @apply cczj-min-w-0; }
+.cczj-mobile-plugin-logs .log-card-icon { width:26px; height:26px; }
+.cczj-mobile-plugin-logs .log-card-value { @apply cczj-text-base; overflow-wrap:anywhere; }
+.cczj-mobile-plugin-logs :is(button,.log-select) { min-height:44px; }
+.cczj-mobile-plugin-logs :is(.log-chip,.log-seg) { @apply cczj-px-6-py-4 cczj-text-sm; }
+.cczj-mobile-plugin-logs .log-search { flex:1 1 100%; height:44px; }
+.cczj-mobile-plugin-logs .log-search input { @apply cczj-w-full cczj-min-w-0 cczj-text-lg; }
+.cczj-mobile-plugin-logs .log-levels-hint { flex-basis:100%; @apply cczj-ml-0; }
+.cczj-mobile-plugin-logs .log-list { height:48vh; min-height:260px; @apply cczj-overflow-x-hidden; overscroll-behavior:contain; }
+.cczj-mobile-plugin-logs .log-row { display:grid !important; grid-template-columns:78px 46px minmax(0,1fr); grid-template-rows:18px 34px; gap:4px 6px; height:76px; box-sizing:border-box; padding:8px 10px; white-space:normal; align-items:start; }
+.cczj-mobile-plugin-logs .log-ts { @apply cczj-text-xs; line-height:18px; }
+.cczj-mobile-plugin-logs .log-lvl { line-height:18px; }
+.cczj-mobile-plugin-logs .log-origin { justify-self:end; @apply cczj-max-w-full cczj-text-xs; line-height:16px; @apply cczj-whitespace-nowrap cczj-overflow-hidden; text-overflow:ellipsis; }
+.cczj-mobile-plugin-logs .log-msg { grid-column:1/-1; grid-row:2; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; line-height:17px; @apply cczj-text-sm cczj-overflow-hidden; overflow-wrap:anywhere; }
+.cczj-mobile-plugin-logs .log-caller { @apply cczj-hidden; }
+.cczj-mobile-plugin-logs .log-file-picker { @apply cczj-ml-0 cczj-w-full; }
+.cczj-mobile-plugin-logs .log-file-picker select { @apply cczj-max-w-full cczj-flex-1 cczj-min-w-0; }
+.cczj-mobile-plugin-logs .log-detail { @apply cczj-fixed; z-index:10030; inset:auto 8px calc(env(safe-area-inset-bottom,0px) + 8px); max-height:55vh; @apply cczj-overflow-auto cczj-p-8; box-shadow:0 -8px 30px rgb(0 0 0 / .16); border-radius:18px; }
+.cczj-mobile-plugin-logs .log-detail button { min-width:44px; @apply cczj-flex-shrink-0; }
+.cczj-mobile-plugin-logs .log-raw { @apply cczj-text-sm; }
+.cczj-mobile-plugin-logs .log-export-actions { @apply cczj-flex-wrap cczj-min-w-0; }

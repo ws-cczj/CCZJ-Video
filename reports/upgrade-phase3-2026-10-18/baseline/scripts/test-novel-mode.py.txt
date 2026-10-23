@@ -1,0 +1,114 @@
+"""Native reading flows, document-level mode switches, persistence and layouts.
+Requires the native Vite HMR host. Restores only this test's reading preferences.
+"""
+import argparse
+import json
+import time
+from pathlib import Path
+from android_webview import AndroidWebView
+
+parser=argparse.ArgumentParser();parser.add_argument('--leave-novel',action='store_true');args=parser.parse_args()
+OUT=Path(__file__).resolve().parent.parent/'dist/audit/novel-mode'
+OUT.mkdir(parents=True,exist_ok=True)
+PINIA="document.querySelector('#app').__vue_app__.config.globalProperties.$pinia"
+SNAPSHOT="Object.fromEntries(Object.keys(localStorage).filter(k=>k.startsWith('cczj.')).map(k=>[k,localStorage.getItem(k)]))"
+RESTORE="d=>{for(const[k,v]of Object.entries(d))v===null?localStorage.removeItem(k):localStorage.setItem(k,v);for(const k of Object.keys(localStorage))if(k.startsWith('cczj.')&&!(k in d))localStorage.removeItem(k)}"
+
+with AndroidWebView() as p:
+ original_mode=p.evaluate(PINIA+"._s.get('applicationMode').mode")
+ original_route=p.evaluate('location.hash')
+ original_storage=p.evaluate(SNAPSHOT)
+ results={}
+ def wait(expr,timeout=25):
+  end=time.monotonic()+timeout
+  while time.monotonic()<end:
+   try:
+    if p.evaluate(expr):return
+   except RuntimeError:pass # Execution contexts are replaced by a real reload.
+   time.sleep(.1)
+  raise AssertionError(expr)
+ def visit(path,selector):
+  p.evaluate('location.hash='+json.dumps(path));wait('!!document.querySelector('+json.dumps(selector)+')')
+  time.sleep(.4)
+ def click(selector):p.evaluate('document.querySelector('+json.dumps(selector)+').click()')
+ def switch(mode):
+  current=p.evaluate(PINIA+"._s.get('applicationMode').mode")
+  if current==mode:return
+  visit('/'+current+'/settings' if current!='video' else '/settings?group=basic&section=appearance','.mode-switch-options')
+  before=p.evaluate('performance.timeOrigin');click('.mode-switch-options button:nth-child('+('2' if mode=='novel' else '1')+')')
+  seen=False;end=time.monotonic()+30
+  while time.monotonic()<end:
+   try:
+    boot=p.evaluate("!!document.querySelector('.splash-wrap,.initial-boot')")
+    if boot and not seen:
+     seen=True;p.screenshot(OUT/f'startup-{mode}.png')
+    if p.evaluate('!!document.querySelector('+json.dumps('.cczj-novel-shell .novel-featured' if mode=='novel' else '.cczj-mobile-shell .home')+')'):break
+   except RuntimeError:pass
+   time.sleep(.07)
+  else:raise AssertionError('Mode did not switch to '+mode)
+  assert p.evaluate('performance.timeOrigin')>before,'Only changed a hash; application was not reloaded'
+  wait("!document.querySelector('.splash-wrap,.initial-boot')")
+  results.setdefault('switches',[]).append({'mode':mode,'documentReload':True,'startupVisible':seen})
+ try:
+  switch('video')
+  visit('/','.home')
+  video_theme=p.evaluate(PINIA+"._s.get('theme').currentId")
+  switch('novel')
+  assert p.evaluate("!document.querySelector('.cczj-mobile-shell,.sidebar,.download-fab,.collect-overlay')"),'Video chrome leaked into reading mode'
+  assert p.evaluate(PINIA+"._s.has('collect')===false && "+PINIA+"._s.has('download')===false"),'Video stores initialized in novel mode'
+  visit('/novel/search','.novel-search input')
+  p.evaluate("(()=>{const e=document.querySelector('.novel-search input');e.value='霜序';e.dispatchEvent(new Event('input',{bubbles:true}))})()")
+  wait("document.querySelectorAll('.novel-book-card').length===1")
+  assert p.evaluate("document.querySelector('.novel-book-copy h3').textContent==='星海来信'")
+  visit('/novel/categories?genre=romance&status=complete','.novel-catalog-results')
+  assert p.evaluate("document.querySelectorAll('.novel-book-card').length===2")
+  visit('/novel/book/paper-moon','.novel-book-detail')
+  if not p.evaluate("document.querySelector('.novel-detail-actions button').getAttribute('aria-pressed')==='true'"):click('.novel-detail-actions button')
+  visit('/novel/shelf','.novel-shelf-grid')
+  assert p.evaluate("!!document.querySelector('.novel-shelf-item a[href*=paper-moon]')")
+  visit('/novel/settings','.novel-reader-preferences')
+  p.evaluate("[...document.querySelectorAll('.novel-font-options button')].find(e=>e.textContent==='上下滚动').click()")
+  visit('/novel/read/paper-moon/0','.novel-reading-paragraph')
+  p.evaluate("(()=>{const e=document.querySelector('.novel-reader-scroll');e.scrollTop=(e.scrollHeight-e.clientHeight)*.55;e.dispatchEvent(new Event('scroll'))})()")
+  time.sleep(.8)
+  ratio=p.evaluate(PINIA+"._s.get('novelReading').progress['paper-moon'].ratio")
+  assert .5<ratio<.6,ratio
+  p.evaluate("document.querySelector('.novel-page-viewport').click()")
+  click('.novel-reader-top > button:last-child');wait("!!document.querySelector('.novel-reader-preferences')")
+  click('.novel-font-stepper button:last-child');click('.novel-reader-colors .novel-paper-night')
+  p.screenshot(OUT/'reader-night-settings.png')
+  click('.reader-sheet header button');wait("!document.querySelector('.reader-sheet-mask')")
+  assert p.evaluate("document.querySelector('.novel-reader').dataset.readingTheme==='night'")
+  p.call('Page.reload');wait("!!document.querySelector('.novel-reading-paragraph')")
+  wait("document.querySelector('.novel-reader-scroll').scrollTop>10")
+  restored=p.evaluate("(()=>{const e=document.querySelector('.novel-reader-scroll');return e.scrollTop/(e.scrollHeight-e.clientHeight)})()")
+  assert abs(restored-ratio)<.03,(restored,ratio)
+  click('.novel-reader-seek button:last-child');wait("location.hash.endsWith('/paper-moon/1')")
+  wait("document.querySelector('.novel-reading-paper h1')?.textContent==='月光借阅处'")
+  switch('video');assert p.evaluate(PINIA+"._s.get('theme').currentId")==video_theme,'Video theme changed'
+  switch('novel')
+  assert p.evaluate(PINIA+"._s.get('novelReading').shelf.includes('paper-moon')")
+  assert p.evaluate(PINIA+"._s.get('novelReading').progress['paper-moon'].chapter===1")
+  results['search']=results['filter']=results['shelf']=results['progressReload']=results['videoThemePreserved']=True
+  for width in [320,360,412,768]:
+   p.call('Emulation.setDeviceMetricsOverride',{'width':width,'height':760,'deviceScaleFactor':1,'mobile':True})
+   for name,path,selector in [('home','/novel','.novel-featured'),('categories','/novel/categories','.novel-genres'),('search','/novel/search','.novel-search'),('shelf','/novel/shelf','.novel-shelf-grid'),('book','/novel/book/long-wind','.novel-detail-actions'),('reader','/novel/read/long-wind/0','.novel-reader'),('settings','/novel/settings','.novel-settings'),('me','/novel/me','.novel-me')]:
+    visit(path,selector)
+    wait("!document.querySelector('.splash-wrap')")
+    bounds=p.evaluate('''(()=>{const root=document.querySelector('.cczj-novel-shell'),main=document.querySelector('.novel-main');const clipped=[...root.querySelectorAll('button,input,select,.novel-header a,.novel-bottom-nav a,.novel-detail-actions a')].filter(e=>{const r=e.getBoundingClientRect();return r.width&&r.height&&(r.left<-.5||r.right>innerWidth+.5)}).map(e=>e.className);return {overflow:main.scrollWidth>main.clientWidth+1,clipped,scrollbar:main.getBoundingClientRect().width-main.clientWidth,footer:document.querySelector('.novel-detail-actions')?.getBoundingClientRect().toJSON()};})()''')
+    assert not bounds['overflow'] and not bounds['clipped'] and bounds['scrollbar']<1,(width,name,bounds)
+    if name=='book':assert bounds['footer']['bottom']<=760+1,(width,bounds)
+    p.screenshot(OUT/f'{width}-{name}.png')
+  results['responsiveViews']=32
+  (OUT/'results.json').write_text(json.dumps(results,ensure_ascii=False,indent=2),encoding='utf-8')
+  print('PASS: real mode reloads/startup, isolated stores, search/filter, bookshelf, reader preferences/progress and 32 responsive views')
+ finally:
+  p.call('Emulation.clearDeviceMetricsOverride')
+  # Leave the reader first so its final progress write precedes restoration.
+  current=p.evaluate(PINIA+"._s.get('applicationMode').mode")
+  if current=='novel':visit('/novel/settings','.novel-settings')
+  p.evaluate('('+RESTORE+')('+json.dumps(original_storage)+')')
+  final='novel' if args.leave_novel else original_mode
+  switch(final)
+  p.evaluate('location.hash='+json.dumps('/novel' if args.leave_novel else original_route))
+  p.call('Page.reload')

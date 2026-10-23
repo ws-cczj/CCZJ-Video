@@ -3,6 +3,9 @@ import { segmentCacheKey } from './segment-key'
 import { cache, episodeIndex, session } from './store'
 import type { CacheEntry } from './store'
 
+let byteLimit = MAX_CACHED_BYTES
+let entryLimit = MAX_CACHED_SEGMENTS
+
 // ====== LRU 内存缓存 ======
 //
 // 状态本体在 store.cache 里（内存层、失效层、统计都要读同一份 lruCache /
@@ -49,6 +52,9 @@ export function cacheSet(
 ): void {
   const key = segmentCacheKey(url, range)
   const size = buf.byteLength
+  // An oversized fragment must not flush useful entries and then exceed the
+  // entire budget anyway. It can still play without being retained in the LRU.
+  if (size <= 0 || size > byteLimit) return
   const epKey = episodeKey || session.currentEpKey || ''
 
   // 同一份内容重写（时效签名换了、缓存键没换）：先把旧条目摘掉，否则同一份字节
@@ -67,7 +73,7 @@ export function cacheSet(
   }
 
   // ---- 2) 全局条数 / 字节上限 ----
-  while (cache.lruCache.size >= MAX_CACHED_SEGMENTS || cache.totalCacheBytes + size > MAX_CACHED_BYTES) {
+  while (cache.lruCache.size >= entryLimit || cache.totalCacheBytes + size > byteLimit) {
     const oldest = findLeastUsedEntry()
     if (!oldest) break
     evict(oldest)
@@ -118,3 +124,19 @@ export function findLeastUsedEntry(onlyEpisodeKey?: string): CacheEntry | null {
 
 export function cacheHas(url: string, range?: string | null): boolean { return cache.lruCache.has(segmentCacheKey(url, range)) }
 export function cacheClear(): void { cache.lruCache.clear(); cache.totalCacheBytes = 0; cache.epCacheKeys.clear() }
+
+/** Shrink only the memory copy, keeping the newest LRU entries and disk data. */
+export function trimMemoryCache(maxBytes: number, maxEntries: number): void {
+  while (cache.totalCacheBytes > maxBytes || cache.lruCache.size > maxEntries) {
+    const oldest = findLeastUsedEntry()
+    if (!oldest) break
+    evict(oldest)
+  }
+}
+
+/** Apply the idle/playing budget to both retained and newly arriving entries. */
+export function setMemoryCacheBudget(maxBytes: number, maxEntries: number): void {
+  byteLimit = maxBytes
+  entryLimit = maxEntries
+  trimMemoryCache(maxBytes, maxEntries)
+}

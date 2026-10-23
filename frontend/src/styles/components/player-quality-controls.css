@@ -1,0 +1,49 @@
+.quality-group {
+  @apply cczj-flex-shrink-0;
+  margin: 0 2px;
+}
+
+.quality-group :deep(.select-dropdown) {
+  min-width: 84px;
+}
+
+.quality-group :deep(.select-trigger) {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.75);
+  @apply cczj-text-11;
+  padding: 3px 8px;
+  min-height: 26px;
+  @apply cczj-rounded-sm;
+}
+
+.quality-group :deep(.select-trigger:hover) {
+  border-color: rgba(24, 144, 255, 0.5);
+  @apply cczj-text-white;
+  background: rgba(24, 144, 255, 0.15);
+}
+
+.quality-group :deep(.select-panel) {
+  background: rgba(20, 20, 20, 0.96);
+  border-color: rgba(255, 255, 255, 0.1);
+  @apply cczj-text-sm cczj-rounded;
+  min-width: 120px;
+}
+
+.quality-group :deep(.option) {
+  color: rgba(255, 255, 255, 0.75);
+  padding: 6px 10px;
+  @apply cczj-text-sm;
+}
+
+.quality-group :deep(.option:hover) {
+  background: rgba(24, 144, 255, 0.15);
+  @apply cczj-text-white;
+}
+
+.quality-group :deep(.option.is-selected) {
+  background: rgba(24, 144, 255, 0.25);
+  color: #40a9ff;
+}
+
+/* ========= 画质增强提示弹窗 ========= */

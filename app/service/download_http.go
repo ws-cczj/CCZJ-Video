@@ -185,8 +185,7 @@ func (a *App) downloadDirectSingle(ctx context.Context, task *downloadTask, urlS
 	}
 
 	task.mu.Lock()
-	task.status.Status = "done"
-	task.status.EndTime = time.Now().Unix()
+	task.transferComplete = true
 	task.status.SpeedBps = 0
 	task.status.EtaSec = 0
 	if task.status.Total <= 0 {
@@ -435,8 +434,7 @@ func (a *App) downloadDirectParallel(ctx context.Context, task *downloadTask, ur
 	}
 	updateProgress(true)
 	task.mu.Lock()
-	task.status.Status = "done"
-	task.status.EndTime = time.Now().Unix()
+	task.transferComplete = true
 	task.status.SpeedBps = 0
 	task.status.EtaSec = 0
 	task.status.Total = total

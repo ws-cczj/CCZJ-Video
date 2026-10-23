@@ -3,8 +3,8 @@ defineProps<{ icon?: string; title: string; description?: string }>()
 </script>
 
 <template>
-  <div class="empty-state">
-    <div class="empty-icon">{{ icon || '📭' }}</div>
+  <div class="empty-state cczj-flex cczj-flex-col cczj-items-center cczj-justify-center cczj-gap-6">
+    <div class="empty-icon"><slot name="icon">{{ icon || '📭' }}</slot></div>
     <h3 class="empty-title">{{ title }}</h3>
     <p v-if="description" class="empty-desc">{{ description }}</p>
     <slot></slot>
@@ -13,33 +13,24 @@ defineProps<{ icon?: string; title: string; description?: string }>()
 
 <style scoped>
 .empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
   padding: 80px 20px;
-  text-align: center;
+  @apply cczj-text-center;
   animation: cczj-fade-in-up var(--cczj-motion-slow) var(--cczj-motion-ease-enter) backwards;
 }
 
 .empty-icon {
   font-size: 56px;
-  line-height: 1;
-  opacity: 0.7;
+  @apply cczj-leading-none cczj-opacity-70;
   animation: cczj-float 2s ease-in-out infinite;
 }
 
 .empty-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
+  @apply cczj-text-lg cczj-font-semibold cczj-text-primary;
   margin: 0;
 }
 
 .empty-desc {
-  font-size: 13px;
-  color: var(--text-secondary);
+  @apply cczj-text-13 cczj-text-secondary;
   margin: 0;
   max-width: 320px;
   line-height: 1.6;

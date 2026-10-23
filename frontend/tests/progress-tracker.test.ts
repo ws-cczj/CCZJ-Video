@@ -1,0 +1,65 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createMediaProgressTracker } from '../src/player/mediaProgressTracker'
+
+afterEach(() => vi.useRealTimers())
+function setup() {
+  vi.useFakeTimers()
+  let video: EventTarget | null = null
+  const progress = vi.fn()
+  const metadata = vi.fn()
+  const missing = vi.fn()
+  const getVideo = vi.fn(() => video as HTMLVideoElement | null)
+  const tracker = createMediaProgressTracker({ getVideo, progress, metadata, missing })
+  return { tracker, getVideo, progress, metadata, missing, setVideo: (value: EventTarget | null) => { video = value } }
+}
+describe('page progress listener lifetime', () => {
+  it('stops polling after 20 attempts when no player mounts', () => {
+    const { tracker, getVideo, missing } = setup()
+    tracker.bind()
+    vi.advanceTimersByTime(60000)
+    expect(getVideo).toHaveBeenCalledTimes(20)
+    expect(missing).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(0)
+    tracker.stop()
+  })
+  it('cancels delayed and late requests to bind after disposal', () => {
+    const { tracker, getVideo } = setup()
+    tracker.schedule()
+    tracker.stop()
+    tracker.bind()
+    tracker.schedule()
+    vi.advanceTimersByTime(60000)
+    expect(getVideo).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+  it('removes the old listeners when the video changes and on stop', () => {
+    const { tracker, setVideo, progress, metadata } = setup()
+    const old = new EventTarget()
+    const next = new EventTarget()
+    setVideo(old)
+    tracker.bind()
+    old.dispatchEvent(new Event('timeupdate'))
+    expect(progress).toHaveBeenCalledOnce()
+    setVideo(next)
+    tracker.schedule(0)
+    old.dispatchEvent(new Event('timeupdate'))
+    vi.advanceTimersByTime(0)
+    next.dispatchEvent(new Event('loadedmetadata'))
+    expect(progress).toHaveBeenCalledOnce()
+    expect(metadata).toHaveBeenCalledWith(next)
+    tracker.stop()
+    next.dispatchEvent(new Event('timeupdate'))
+    expect(progress).toHaveBeenCalledOnce()
+  })
+  it('restarts the retry budget on a new media load', () => {
+    const { tracker, setVideo, progress } = setup()
+    tracker.bind()
+    vi.advanceTimersByTime(6000)
+    const video = new EventTarget()
+    setVideo(video)
+    tracker.bind()
+    video.dispatchEvent(new Event('timeupdate'))
+    expect(progress).toHaveBeenCalledWith(video)
+    tracker.stop()
+  })
+})

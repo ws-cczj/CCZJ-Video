@@ -1,0 +1,39 @@
+<script setup lang="ts">
+import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+import { isMobileRuntime } from '../api/runtime'
+import Icon from '../components/Icon.vue'
+import MobileRouteStage from '../mobile/MobileRouteStage.vue'
+import { useNovelReading } from './readingState'
+const router = useRouter()
+const { t } = useI18n()
+const reading = useNovelReading()
+const primary = ['/novel','/novel/categories','/novel/shelf','/novel/me']
+const navigation = [{path:'/novel',label:'novel.store',icon:'book-open'},{path:'/novel/categories',label:'novel.categories',icon:'grid'},{path:'/novel/shelf',label:'novel.shelf',icon:'bookmark'},{path:'/novel/me',label:'novel.me',icon:'user'}]
+function back(): void {
+  if (typeof router.options.history.state.back === 'string' && String(router.options.history.state.back).startsWith('/novel')) router.back()
+  else void router.replace('/novel')
+}
+</script>
+<template>
+  <div class="cczj-novel-shell" :class="{ 'novel-native': isMobileRuntime() }">
+   <MobileRouteStage :mobile="isMobileRuntime()">
+    <template #default="{Component,route:shownRoute}">
+    <header v-if="!shownRoute.path.startsWith('/novel/read/')" class="novel-header">
+      <button v-if="!primary.includes(shownRoute.path)" class="novel-icon-button" :aria-label="t('common.back')" @click="back"><Icon name="chevron-left" :size="22" /></button>
+      <router-link v-if="primary.includes(shownRoute.path)" class="novel-brand" to="/novel"><Icon name="book-open" :size="23" /><strong>CCZJ <span>{{ t('modes.novel') }}</span></strong></router-link>
+      <h1 v-else class="novel-page-heading">{{ t(String(shownRoute.meta.title || 'novel.details')) }}</h1>
+      <nav class="novel-desktop-nav" :aria-label="t('novel.navigation')"><router-link v-for="item in navigation" :key="item.path" :to="item.path" :class="{selected:shownRoute.path===item.path}">{{ t(item.label) }}</router-link></nav>
+      <router-link v-if="shownRoute.path !== '/novel/search'" to="/novel/search" class="novel-icon-button" :aria-label="t('novel.search')"><Icon name="search" :size="21" /></router-link>
+      <router-link v-if="shownRoute.path !== '/novel/settings'" to="/novel/settings" class="novel-icon-button" :aria-label="t('sidebar.settings')"><Icon name="settings" :size="20" /></router-link>
+    </header>
+    <p v-if="reading.storageError" class="novel-storage-error" role="alert">{{ t('novel.storageError') }}</p>
+    <main class="novel-main main-content" :class="{'novel-reader-content-host':shownRoute.path.startsWith('/novel/read/')}">
+      <component :is="Component" />
+    </main>
+    </template>
+    <template #navigation="{route:shownRoute}"><nav v-if="primary.includes(shownRoute.path)" class="novel-bottom-nav" :aria-label="t('novel.navigation')"><router-link v-for="item in navigation" :key="item.path" :to="item.path" :aria-current="shownRoute.path===item.path ? 'page' : undefined"><Icon :name="item.icon" :size="22" /><span>{{ t(item.label) }}</span></router-link></nav></template>
+   </MobileRouteStage>
+  </div>
+</template>
+<style src="./styles/novel.css"></style>

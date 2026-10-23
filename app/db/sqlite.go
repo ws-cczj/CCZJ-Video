@@ -1,6 +1,8 @@
 package db
 
 import (
+	"cczjVideo/app/danmaku"
+	"cczjVideo/app/netpolicy"
 	"errors"
 	"fmt"
 	"os"
@@ -22,9 +24,9 @@ const (
 )
 
 var (
-	instance *sqlx.DB
-	once     sync.Once
-	dataDir  string
+	instance    *sqlx.DB
+	lifecycleMu sync.Mutex
+	dataDir     string
 
 	logMu sync.Mutex
 	logFn func(level, msg string)
@@ -74,59 +76,69 @@ func sqliteDSN(dbPath string) string {
 }
 
 func InitDB(dir string) error {
-	var initErr error
-	once.Do(func() {
-		dataDir = dir
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			initErr = fmt.Errorf("create data directory: %w", err)
-			return
+	lifecycleMu.Lock()
+	defer lifecycleMu.Unlock()
+	if instance != nil {
+		if filepath.Clean(dir) != filepath.Clean(dataDir) {
+			return fmt.Errorf("database already open in %q", dataDir)
 		}
-		// 三条 pragma 都写在 DSN 里，而不是连上之后再 PRAGMA：连接池有 8 条连接，
-		// 事后设置只对「当时借到的那一条」生效，其余连接仍按默认值跑，表现就是
-		// WAL 有时收得住、有时收不住。写进 DSN 则每条新连接都一样。
-		//   journal_size_limit：WAL 超过这个上限才会在归并时截回去。没有它，-wal
-		//     只增不减，采集一轮攒下的几十 MB 就一直躺在数据目录里。
-		//   wal_autocheckpoint：显式钉住默认值（约 4MB 触发一次被动归并），免得
-		//     某条连接被人单独调大后写放大悄悄回来了。
-		//   busy_timeout：抢不到写锁时排队，而不是立刻把 SQLITE_BUSY 冒到界面上。
-		instance, initErr = sqlx.Connect("sqlite", sqliteDSN(filepath.Join(dir, "cczj_video.db")))
-		if initErr != nil {
-			initErr = fmt.Errorf("connect sqlite: %w", initErr)
-			return
-		}
-		// 连接池策略：8 条连接由读和写共用，并没有一套单独的「写连接上限 1」。
-		// SQLite 的写锁本来就是库级的，WAL 下同一时刻仍只有一个写事务能推进，
-		// 抢不到锁的连接靠 busy_timeout(5000) 排队而不是立刻返回 SQLITE_BUSY。
-		// 早先的 SetMaxOpenConns(1) 会把读也一起串行化，采集写入时前端列表就卡住，
-		// 所以才放开到 8；代价是写方必须自己把批量改动包进一个事务
-		// （见 upsertCatalogItems / InheritDoubanFieldsFromSiblings），
-		// 用「少而长的写事务」代替「几十次抢锁 + fsync 的短写」。
-		instance.SetMaxOpenConns(8)
-		instance.SetMaxIdleConns(4)
-		instance.SetConnMaxLifetime(0) // 长连接，避免频繁重建
-		if err := createTables(); err != nil {
-			initErr = err
-			return
-		}
-		initErr = runMigrations()
-	})
-	return initErr
-}
-
-// runMigrations 先备份再改 schema：拿不到备份就宁可启动失败，也不在无兜底的情况下
-// 动用户的库。没有待执行迁移时直接返回，避免每次启动都复制一遍数据库。
-func runMigrations() error {
-	current, err := schemaVersion(instance)
+		return instance.Ping()
+	}
+	database, err := Open(dir)
 	if err != nil {
 		return err
 	}
-	if lenient, ahead := applySchemaAhead(instance, current); ahead {
+	instance, dataDir = database, dir
+	return nil
+}
+
+// Open returns an independently owned database. Failed startup closes partial
+// resources; callers may retry without changing the package's default connection.
+func Open(dir string) (database *sqlx.DB, err error) {
+	if err = os.MkdirAll(dir, 0755); err != nil {
+		return nil, fmt.Errorf("create data directory: %w", err)
+	}
+	database, err = sqlx.Connect("sqlite", sqliteDSN(filepath.Join(dir, "cczj_video.db")))
+	if err != nil {
+		return nil, fmt.Errorf("connect sqlite: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			_ = database.Close()
+			database = nil
+		}
+	}()
+	database.SetMaxOpenConns(8)
+	database.SetMaxIdleConns(4)
+	database.SetConnMaxLifetime(0)
+	if err = createSchema(database); err != nil {
+		return database, err
+	}
+	database, err = migrateDatabase(database, dir)
+	return database, err
+}
+
+// runMigrations is the compatibility entry point for default-connection callers.
+func runMigrations() error {
+	database, err := migrateDatabase(instance, dataDir)
+	if err == nil {
+		instance = database
+	}
+	return err
+}
+
+// migrateDatabase backs up pending migrations before changing user data.
+func migrateDatabase(database *sqlx.DB, dir string) (*sqlx.DB, error) {
+	current, err := schemaVersion(database)
+	if err != nil {
+		return database, err
+	}
+	if lenient, ahead := applySchemaAhead(database, current); ahead {
 		// 库比这个程序新：不动它，也不拦着用它，但要说清楚（界面上那条提示读的就是
 		// 这一步记下的版本号，见 app/service/schemanotice.go）。
-		instance = lenient
 		logWarn(fmt.Sprintf("库结构 v%d 比本构建最高 v%d 更新：这份数据是更新的版本写的，本程序只认自己那几列",
 			current, LatestSchemaVersion()))
-		return nil
+		return lenient, nil
 	}
 	pending := 0
 	for _, m := range migrations {
@@ -135,18 +147,18 @@ func runMigrations() error {
 		}
 	}
 	if pending == 0 {
-		return nil
+		return database, nil
 	}
-	backup, err := backupBeforeMigrations(instance, dataDir, pending)
+	backup, err := backupBeforeMigrations(database, dir, pending)
 	if err != nil {
-		return err
+		return database, err
 	}
 	logInfo(fmt.Sprintf("迁移前已备份数据库: %s", backup))
-	if _, err := migrateToLatest(instance); err != nil {
-		return err
+	if _, err := migrateToLatest(database); err != nil {
+		return database, err
 	}
 	// 建表时写下的索引可能引用了迁移新增的列，迁移后重建一次才不会出现半套索引。
-	return createIndexes()
+	return database, createDatabaseIndexes(database)
 }
 
 func vacuumInto(database *sqlx.DB, destination string) error {
@@ -164,6 +176,8 @@ func DataDir() string {
 
 // Close 退出前先把 WAL 排空再断开。
 func Close() {
+	lifecycleMu.Lock()
+	defer lifecycleMu.Unlock()
 	if instance == nil {
 		return
 	}
@@ -179,19 +193,22 @@ func Close() {
 	if err := instance.Close(); err != nil {
 		logWarn(fmt.Sprintf("关闭数据库连接时报错: %v", err))
 	}
+	instance, dataDir = nil, ""
 }
 
 // walCheckpoint 做一次 TRUNCATE 归并：把 -wal 里的页写回主库，再把 -wal 截到 0 字节。
 //
-// 不这么做的话，写入会一直留在 -wal 里 —— SQLite 只在攒够 wal_autocheckpoint 页时
-// 才被动归并，进程直接退出就没人补这一刀，下次启动得先重放一遍才能读到最新数据，
-// 中间崩一次还可能整段回滚。抢不到独占锁时它不返回错误，而是在结果行第一列给 1，
-// 所以三个数都得读出来才知道到底收干净了没有。
+// A checkpoint reduces retained WAL space. Committed WAL transactions remain
+// durable without it. A busy checkpoint is reported in the first result column.
 func walCheckpoint(busy, logPages, moved *int) error {
 	return instance.QueryRow("PRAGMA wal_checkpoint(TRUNCATE)").Scan(busy, logPages, moved)
 }
 
 func createTables() error {
+	return createSchema(instance)
+}
+
+func createSchema(database *sqlx.DB) error {
 	tables := []string{
 		// 核心配置表
 		`CREATE TABLE IF NOT EXISTS sources (
@@ -206,6 +223,7 @@ func createTables() error {
 			schedule_config TEXT DEFAULT '',
 			strategy_config TEXT DEFAULT '',
 			auto_disabled_at INTEGER NOT NULL DEFAULT 0,
+			kind TEXT NOT NULL DEFAULT 'video',
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE TABLE IF NOT EXISTS settings (
@@ -283,25 +301,41 @@ func createTables() error {
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE(source_key, source_vod_id)
 		)`,
+		// 小说与漫画的领域表。DDL 与迁移 v11 共用 library.go 里那两份常量，
+		// 分开写会各自漂移成"新库有的列老库没有"。
+		libraryItemsDDL,
+		libraryChaptersDDL,
+		readingStateDDL,
+		readingImportsDDL,
+		downloadTasksDDL,
+		downloadImportsDDL,
 	}
 
+	tables = append(tables, danmaku.Schema...)
+	tables = append(tables, danmaku.MatchSchema...)
+	tables = append(tables, netpolicy.Schema...)
+	tables = append(tables, readingRoutingSchema...)
 	for _, t := range tables {
-		if _, err := instance.Exec(t); err != nil {
+		if _, err := database.Exec(t); err != nil {
 			return fmt.Errorf("create table: %w\nsql: %s", err, t)
 		}
 	}
 
 	// 旧版已合并到 global_video 的表，删除干净
-	_, _ = instance.Exec(`DROP TABLE IF EXISTS douban_info`)
-	_, _ = instance.Exec(`DROP TABLE IF EXISTS id_mappings`)
+	_, _ = database.Exec(`DROP TABLE IF EXISTS douban_info`)
+	_, _ = database.Exec(`DROP TABLE IF EXISTS id_mappings`)
 
 	// 旧版归一化索引由迁移 v3 负责删除并重建，这里不再每次启动都 drop 重建。
 
-	return createIndexes()
+	return createDatabaseIndexes(database)
 }
 
 // createIndexes 建出当前 schema 需要的全部索引，可重复执行。
 func createIndexes() error {
+	return createDatabaseIndexes(instance)
+}
+
+func createDatabaseIndexes(database *sqlx.DB) error {
 	// 创建索引（IF NOT EXISTS 确保幂等）
 	// global_video: 名称归一化唯一索引。name_norm 由 Go 侧那一份归一化实现写入，
 	// 不再用 SQL 表达式建函数索引——那份表达式和 Go 的实现各自漂移过，
@@ -366,8 +400,10 @@ func createIndexes() error {
 		// favorites 按 global_id 查走 UNIQUE(global_id, source_key, vod_id)
 		// 自动索引的左前缀，不需要再建一条。
 	}
+	// library_* 的索引与 DDL 一起放在 library.go，迁移 v11 建老库那一遍用的是同一份。
+	indexes = append(indexes, libraryIndexes...)
 	for _, idx := range indexes {
-		if _, err := instance.Exec(idx); err != nil {
+		if _, err := database.Exec(idx); err != nil {
 			// 索引建不起来不会让功能坏掉，但会让本该走 B 树的查询退化成全表扫，
 			// 库越大越明显。以前这行只写进 INFO 且标成「已忽略」，等于某天开始变慢
 			// 却查不出为什么。报出来，并带上是哪条索引。

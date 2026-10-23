@@ -1,0 +1,65 @@
+[
+  {
+    "video": false,
+    "loading": false
+  },
+  {
+    "video": true,
+    "ready": 0,
+    "loading": true,
+    "gif": "https://wails.localhost/assets/loading-Bro188wv.gif"
+  },
+  {
+    "video": true,
+    "ready": 0,
+    "loading": true,
+    "gif": "https://wails.localhost/assets/loading-Bro188wv.gif"
+  },
+  {
+    "video": true,
+    "ready": 0,
+    "loading": true,
+    "gif": "https://wails.localhost/assets/loading-Bro188wv.gif"
+  },
+  {
+    "video": true,
+    "ready": 0,
+    "loading": true,
+    "gif": "https://wails.localhost/assets/loading-Bro188wv.gif"
+  },
+  {
+    "video": true,
+    "ready": 0,
+    "loading": true,
+    "gif": "https://wails.localhost/assets/loading-Bro188wv.gif"
+  },
+  {
+    "video": true,
+    "ready": 0,
+    "loading": true,
+    "gif": "https://wails.localhost/assets/loading-Bro188wv.gif"
+  },
+  {
+    "video": true,
+    "ready": 0,
+    "loading": true,
+    "gif": "https://wails.localhost/assets/loading-Bro188wv.gif"
+  },
+  {
+    "video": true,
+    "ready": 0,
+    "loading": true,
+    "gif": "https://wails.localhost/assets/loading-Bro188wv.gif"
+  },
+  {
+    "video": true,
+    "ready": 1,
+    "loading": true,
+    "gif": "https://wails.localhost/assets/loading-Bro188wv.gif"
+  },
+  {
+    "video": true,
+    "ready": 4,
+    "loading": false
+  }
+]

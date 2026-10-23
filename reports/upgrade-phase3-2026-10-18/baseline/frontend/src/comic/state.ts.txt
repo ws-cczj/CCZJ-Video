@@ -1,0 +1,137 @@
+import { computed, ref } from 'vue'
+import { defineStore } from 'pinia'
+import { parseRefKey, refKey, refOf } from '../api/library'
+import { readStorage, writeStorage } from '../platform/storage'
+import { normalizeComicPreferences, type ComicPreferences, type ComicProgress, type ComicRecentEntry, type ComicSeries, type ComicShelfEntry } from './domain'
+
+// v2：键从作品 id 换成 {kind, sourceKey, remoteId} 复合键（ADR 0016）。
+// 旧的 v1 键不再读——里面只有已下线的演示作品。
+const FOLLOW_KEY = 'cczj.comic.follow.v2'
+const PROGRESS_KEY = 'cczj.comic.progress.v2'
+const PREFERENCES_KEY = 'cczj.comic.preferences.v2'
+
+function readFollowed(): ComicShelfEntry[] {
+  const raw = readStorage<unknown>(FOLLOW_KEY, [])
+  if (!Array.isArray(raw)) return []
+  const seen = new Set<string>()
+  const entries: ComicShelfEntry[] = []
+  for (const value of raw) {
+    if (!value || typeof value !== 'object') continue
+    const candidate = value as Partial<ComicShelfEntry>
+    const kind = candidate.kind === 'comic' ? 'comic' : candidate.kind === 'novel' ? 'novel' : null
+    const itemId = Number(candidate.itemId)
+    if (!kind || !candidate.sourceKey || !candidate.remoteId || !Number.isInteger(itemId) || itemId <= 0) continue
+    const entry: ComicShelfEntry = {
+      kind,
+      sourceKey: String(candidate.sourceKey),
+      remoteId: String(candidate.remoteId),
+      itemId,
+      title: String(candidate.title ?? ''),
+      cover: String(candidate.cover ?? ''),
+      addedAt: Number.isFinite(Number(candidate.addedAt)) ? Number(candidate.addedAt) : 0,
+    }
+    const key = refKey(entry)
+    if (seen.has(key)) continue
+    seen.add(key)
+    entries.push(entry)
+  }
+  return entries
+}
+
+function readProgress(): Record<string, ComicProgress> {
+  const raw = readStorage<unknown>(PROGRESS_KEY, {})
+  const table: Record<string, ComicProgress> = {}
+  if (!raw || typeof raw !== 'object') return table
+  for (const [key, value] of Object.entries(raw)) {
+    // 只丢弃形状坏掉的记录。源没了、作品下架了都留着，界面标"来源已下架"，
+    // 由用户自己决定要不要移走——凭空消失会让人以为数据丢了。
+    if (!value || typeof value !== 'object' || !parseRefKey(key)) continue
+    const entry = value as Partial<ComicProgress>
+    const itemId = Number(entry.itemId), ord = Number(entry.episodeOrd), page = Number(entry.page), updatedAt = Number(entry.updatedAt)
+    if (!Number.isInteger(itemId) || itemId <= 0 || !Number.isInteger(ord) || ord < 0 || !Number.isInteger(page) || page < 0 || !Number.isFinite(updatedAt)) continue
+    const offset = Number(entry.offset)
+    table[key] = {
+      itemId,
+      title: String(entry.title ?? ''),
+      cover: String(entry.cover ?? ''),
+      episodeOrd: ord,
+      episodeId: Number(entry.episodeId) || 0,
+      episodeRemoteId: String(entry.episodeRemoteId ?? ''),
+      page,
+      offset: Number.isFinite(offset) ? Math.max(0, Math.min(1, offset)) : 0,
+      updatedAt,
+    }
+  }
+  return table
+}
+
+export const useComicState = defineStore('comicReading', () => {
+  const followed = ref<ComicShelfEntry[]>(readFollowed())
+  const progress = ref<Record<string, ComicProgress>>(readProgress())
+  const preferences = ref(normalizeComicPreferences(readStorage(PREFERENCES_KEY, {})))
+  const error = ref(false)
+
+  const followIndex = computed(() => new Map(followed.value.map(entry => [refKey(entry), entry])))
+  const recent = computed<ComicRecentEntry[]>(() => Object.entries(progress.value)
+    .sort((a, b) => b[1].updatedAt - a[1].updatedAt)
+    .map(([key, value]) => ({ key, ...value })))
+
+  function persist(key: string, value: unknown): void { error.value = !writeStorage(key, value) }
+  function keyOf(item: ComicSeries): string { return refKey(refOf(item)) }
+  function isFollowed(key: string): boolean { return followIndex.value.has(key) }
+
+  function follow(item: ComicSeries): void {
+    const key = keyOf(item)
+    if (!item.id || !item.sourceKey || !item.remoteId || isFollowed(key)) return
+    followed.value = [...followed.value, { ...refOf(item), itemId: item.id, title: item.title, cover: item.cover, addedAt: Date.now() }]
+    persist(FOLLOW_KEY, followed.value)
+  }
+
+  function unfollow(key: string): void {
+    if (!isFollowed(key)) return
+    followed.value = followed.value.filter(entry => refKey(entry) !== key)
+    persist(FOLLOW_KEY, followed.value)
+  }
+
+  function toggle(item: ComicSeries): void {
+    const key = keyOf(item)
+    if (isFollowed(key)) unfollow(key)
+    else follow(item)
+  }
+
+  function remember(item: ComicSeries, episode: { ord: number; id: number; remoteId: string }, page: number, offset: number): void {
+    if (!item.id || !item.sourceKey || !item.remoteId) return
+    if (!Number.isInteger(episode.ord) || episode.ord < 0 || !Number.isInteger(page) || page < 0 || !Number.isFinite(offset)) return
+    const key = keyOf(item)
+    progress.value = {
+      ...progress.value,
+      [key]: {
+        itemId: item.id,
+        title: item.title,
+        cover: item.cover,
+        episodeOrd: episode.ord,
+        episodeId: episode.id,
+        episodeRemoteId: episode.remoteId,
+        page,
+        offset: Math.max(0, Math.min(1, offset)),
+        updatedAt: Date.now(),
+      },
+    }
+    persist(PROGRESS_KEY, progress.value)
+  }
+
+  function setPreferences(value: Partial<ComicPreferences>): void {
+    preferences.value = normalizeComicPreferences({ ...preferences.value, ...value })
+    persist(PREFERENCES_KEY, preferences.value)
+  }
+
+  function seriesPath(itemId: number): string { return `/comic/series/${itemId}` }
+  function readPath(itemId: number, ord: number): string { return `/comic/read/${itemId}/${ord}` }
+  /** 没有进度的条目先进详情页：第一话的 ord 只有目录加载完才知道。 */
+  function resumePath(entry: { itemId: number; key?: string }): string {
+    const saved = entry.key ? progress.value[entry.key] : undefined
+    return saved ? readPath(entry.itemId, saved.episodeOrd) : seriesPath(entry.itemId)
+  }
+
+  return { followed, followIndex, progress, recent, preferences, error, keyOf, isFollowed, follow, unfollow, toggle, remember, setPreferences, seriesPath, readPath, resumePath }
+})

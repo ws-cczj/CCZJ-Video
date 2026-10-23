@@ -1,6 +1,8 @@
 package douban
 
 import (
+	"cczjVideo/app/netpolicy"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -73,11 +75,11 @@ var (
 		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
-		Transport: netstats.WrapTransport(netstats.CategoryDouban, &http.Transport{
+		Transport: netpolicy.WrapTransport(string(netstats.CategoryDouban), netstats.WrapTransport(netstats.CategoryDouban, &http.Transport{
 			MaxIdleConns:        10,
 			MaxIdleConnsPerHost: 2,
 			IdleConnTimeout:     30 * time.Second,
-		}),
+		})),
 	}
 
 	lastRequestTime time.Time
@@ -332,17 +334,27 @@ func reserveDoubanSlot() time.Time {
 // ok 为 false 表示等不起：直接放弃这次请求，而不是绕过闸门硬打——退让本身就是让限速生效。
 // 注意放弃时槽位已经占掉了，下一次请求会因此等得更久，这个方向是安全的。
 func awaitDoubanSlot(caller string, budget time.Duration) (wait time.Duration, ok bool) {
+	wait, ok, _ = awaitDoubanSlotContext(context.Background(), caller, budget)
+	return
+}
+func awaitDoubanSlotContext(ctx context.Context, caller string, budget time.Duration) (wait time.Duration, ok bool, err error) {
+	if err = ctx.Err(); err != nil {
+		return 0, false, err
+	}
 	wait = time.Until(reserveDoubanSlot())
 	if wait > budget {
-		applog.Warn("[Douban] %s 需要等 %s，超出可等待的 %s，本次放弃",
-			caller, wait.Round(time.Second), budget)
-		return wait, false
+		return wait, false, nil
 	}
 	if wait > 0 {
-		applog.Debug("[Douban] %s 限速等待 %.1fs", caller, wait.Seconds())
-		time.Sleep(wait)
+		timer := time.NewTimer(wait)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			return wait, false, ctx.Err()
+		}
 	}
-	return wait, true
+	return wait, true, ctx.Err()
 }
 
 func fetchHTML(urlStr string) (string, error) {
@@ -355,31 +367,45 @@ func fetchHTML(urlStr string) (string, error) {
 //
 // 命中 sec.douban.com 验证跳转时先自解 proof-of-work 再重试，解成了就不算被封。
 func fetchDouban(urlStr string, ignoreBlock bool) (string, error) {
+	return fetchDoubanContext(context.Background(), urlStr, ignoreBlock)
+}
+
+func fetchDoubanContext(ctx context.Context, urlStr string, ignoreBlock bool) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	if !ignoreBlock {
 		if left := remainingBlock(); left > 0 {
 			applog.Warn("[Douban] 反爬静默中（剩余 %s），跳过请求: %s", left.Round(time.Second), urlStr)
 			return "", blockedError(urlStr, fmt.Sprintf("本地反爬熔断静默中，剩余 %s", left.Round(time.Second)))
 		}
 	}
-	if wait, ok := awaitDoubanSlot("搜索/详情", crawlerWaitBudget); !ok {
+	wait, ok, slotErr := awaitDoubanSlotContext(ctx, "搜索/详情", crawlerWaitBudget)
+	if slotErr != nil {
+		return "", slotErr
+	}
+	if !ok {
 		return "", blockedError(urlStr, fmt.Sprintf(
 			"本地限速需等待 %s，超过本次可等待的 %s", wait.Round(time.Second), crawlerWaitBudget))
 	}
 
 	applog.Info("[Douban] Fetching URL: %s", urlStr)
 
-	html, challenge, err := fetchDoubanOnce(urlStr, referer)
+	html, challenge, err := fetchDoubanOnceContext(ctx, urlStr, referer)
 	if challenge != "" {
 		// 这是一道算力题而不是登录墙，所以先解题重试，只有解不出来才计入熔断。
 		// 把"能过的题"也当成封禁，会白白静默 5~60 分钟，字段也就永远补不全。
-		if solveErr := solveDoubanChallenge(challenge, urlStr); solveErr != nil {
+		if solveErr := solveDoubanChallengeContext(ctx, challenge, urlStr); solveErr != nil {
+			if ctx.Err() != nil {
+				return "", ctx.Err()
+			}
 			applog.Warn("[Douban] 自动通过验证失败：%v", solveErr)
 			noteAntiCrawl()
 			return "", err
 		}
 		// 放行 Cookie 已在 jar 里；浏览器解题后也是带着它重新导航一次。
 		var again string
-		html, again, err = fetchDoubanOnce(urlStr, challenge)
+		html, again, err = fetchDoubanOnceContext(ctx, urlStr, challenge)
 		if again != "" {
 			// 解完题仍被踢回验证页，说明放行没被接受（IP 被更硬地标记了）。
 			// 继续逐条解题只会把配额烧光，这里必须收手。
@@ -387,6 +413,9 @@ func fetchDouban(urlStr string, ignoreBlock bool) (string, error) {
 			noteAntiCrawl()
 			return "", err
 		}
+	}
+	if ctx.Err() != nil {
+		return "", ctx.Err()
 	}
 	if err != nil {
 		var httpErr *doubanFetchError
@@ -411,9 +440,12 @@ func fetchDouban(urlStr string, ignoreBlock bool) (string, error) {
 // sec.douban.com 验证页挡住，调用方可解题后重试；此时 err 是解题失败时要
 // 原样上报的错误。
 func fetchDoubanOnce(urlStr, requestReferer string) (doc string, challenge string, err error) {
+	return fetchDoubanOnceContext(context.Background(), urlStr, requestReferer)
+}
+func fetchDoubanOnceContext(ctx context.Context, urlStr, requestReferer string) (doc string, challenge string, err error) {
 	startTime := time.Now()
 
-	req, err := http.NewRequest("GET", urlStr, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", urlStr, nil)
 	if err != nil {
 		applog.Error("[Douban] Failed to create request: %v", err)
 		return "", "", apperror.Wrap(apperror.Unavailable, err, "failed to create request")
@@ -423,6 +455,9 @@ func fetchDoubanOnce(urlStr, requestReferer string) (doc string, challenge strin
 
 	resp, err := client.Do(req)
 	if err != nil {
+		if ctx.Err() != nil {
+			return "", "", ctx.Err()
+		}
 		applog.Error("[Douban] HTTP request failed: %v", err)
 		return "", "", apperror.Wrap(apperror.Unavailable, err, "failed to fetch")
 	}
@@ -528,6 +563,13 @@ func uniqueFallbackSubjectID(html string) (string, bool) {
 }
 
 func SearchSubjectID(keyword string, meta SearchMeta) (string, error) {
+	return SearchSubjectIDContext(context.Background(), keyword, meta)
+}
+
+func SearchSubjectIDContext(ctx context.Context, keyword string, meta SearchMeta) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	// 冷却是按行记的：写和读都只认 global_id，不再靠 vod_name 猜行。
 	if db.IsDoubanSearchOnCooldown(meta.GlobalID) {
 		applog.Debug("[Douban] Skipping search for '%s' (id=%d in cooldown period)", keyword, meta.GlobalID)
@@ -544,6 +586,9 @@ func SearchSubjectID(keyword string, meta SearchMeta) (string, error) {
 	var lastErr error
 	hadUsableSearchResponse := false
 	for _, kw := range keywords {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
 		applog.Info("[Douban] Searching for keyword: %s (meta: year=%s type=%s director=%s)",
 			kw, meta.Year, meta.VodType, meta.Director)
 
@@ -553,8 +598,11 @@ func SearchSubjectID(keyword string, meta SearchMeta) (string, error) {
 
 		fullURL := searchURL + "?" + params.Encode()
 
-		html, err := fetchHTML(fullURL)
+		html, err := fetchDoubanContext(ctx, fullURL, false)
 		if err != nil {
+			if ctx.Err() != nil {
+				return "", ctx.Err()
+			}
 			applog.Error("[Douban] Search fetch failed for '%s': %v", kw, err)
 			if isRemoteAntiCrawl(err) {
 				applog.Warn("[Douban] '%s' returned an anti-crawl page; keeping the record retryable", kw)

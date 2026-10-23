@@ -60,7 +60,7 @@ func seedCatalog(t *testing.T, name string) (sourceKey, vodID string, globalID i
 // 没有播放记录是正常状态，不是错误。把它当错误抛给界面，用户看到的就是
 // 「打开一个没看过的视频先报一次错」。
 func TestHistoryPositionWithoutRecordIsZeroNotError(t *testing.T) {
-	svc := NewService()
+	svc := NewService(db.GetVideoById)
 	sourceKey, vodID, _ := seedCatalog(t, "history_empty")
 
 	position, err := svc.HistoryPosition(sourceKey, vodID, 7)
@@ -73,7 +73,7 @@ func TestHistoryPositionWithoutRecordIsZeroNotError(t *testing.T) {
 }
 
 func TestSaveAndReadHistoryPosition(t *testing.T) {
-	svc := NewService()
+	svc := NewService(db.GetVideoById)
 	sourceKey, vodID, _ := seedCatalog(t, "history_roundtrip")
 
 	if err := svc.SaveHistory(sourceKey, vodID, 3, 1234.5); err != nil {
@@ -100,7 +100,7 @@ func TestSaveAndReadHistoryPosition(t *testing.T) {
 
 // 收藏是按全局身份共享的：加一次收藏，同身份的另一条目录记录也应当认得出已收藏。
 func TestFavoriteRoundTripIsSharedByGlobalIdentity(t *testing.T) {
-	svc := NewService()
+	svc := NewService(db.GetVideoById)
 	sourceKey, vodID, globalID := seedCatalog(t, "favorite")
 
 	if ok, err := svc.IsFavorite(sourceKey, vodID); err != nil || ok {
@@ -139,7 +139,7 @@ func TestFavoriteRoundTripIsSharedByGlobalIdentity(t *testing.T) {
 // 目录里查不到条目时必须是错误，不能静默当成 global_id=0 去写收藏——
 // 那正是「界面说收藏成功了，重启后哪一档里都没有」的形状。
 func TestFavoriteOnUnknownVideoIsAnError(t *testing.T) {
-	svc := NewService()
+	svc := NewService(db.GetVideoById)
 	sourceKey, _, _ := seedCatalog(t, "favorite_missing")
 
 	err := svc.AddFavorite(sourceKey, "vod-does-not-exist")
@@ -153,7 +153,7 @@ func TestFavoriteOnUnknownVideoIsAnError(t *testing.T) {
 
 // WatchedEpisodes 走同一道身份闸门：查不到身份就报错，不返回空列表装作「还没看」。
 func TestWatchedEpisodesOnUnknownVideoIsAnError(t *testing.T) {
-	svc := NewService()
+	svc := NewService(db.GetVideoById)
 	sourceKey, _, _ := seedCatalog(t, "watched_missing")
 
 	if _, err := svc.WatchedEpisodes(sourceKey, "vod-does-not-exist"); err == nil {
@@ -163,7 +163,7 @@ func TestWatchedEpisodesOnUnknownVideoIsAnError(t *testing.T) {
 
 // IsFavorite 面对查不到的视频要答「没收藏」而不是报错：这是每次渲染卡片都会走的路径。
 func TestIsFavoriteOnUnknownVideoIsFalseNotError(t *testing.T) {
-	svc := NewService()
+	svc := NewService(db.GetVideoById)
 	sourceKey, _, _ := seedCatalog(t, "isfav_missing")
 
 	ok, err := svc.IsFavorite(sourceKey, "vod-does-not-exist")

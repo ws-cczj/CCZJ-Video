@@ -1,0 +1,143 @@
+goroutine 299 [running, locked to thread]:
+runtime/pprof.writeGoroutineStacks({0x75c8fbf942a8, 0x21763cb82020})
+	C:/Environment/Go/src/runtime/pprof/pprof.go:819 +0x6b
+runtime/pprof.writeGoroutine({0x75c8fbf942a8?, 0x21763cb82020?}, 0x21763cb0fc70?)
+	C:/Environment/Go/src/runtime/pprof/pprof.go:782 +0x25
+runtime/pprof.(*Profile).WriteTo(0x75c8fa1be973?, {0x75c8fbf942a8?, 0x21763cb82020?}, 0x75c8000001b6?)
+	C:/Environment/Go/src/runtime/pprof/pprof.go:408 +0x149
+cczjVideo/app/service.writeDiagnosticsReport({0x21763ce94000, 0x48}, {0x75c8fbeca5e0, 0x21763cdad7a0})
+	C:/Users/18446/Desktop/CCZJ Video/app/service/diagnostics_export.go:131 +0x466
+cczjVideo/app/service.(*App).ExportDiagnosticsReport(0x21763c9fc100, {0x21763ce16800, 0x1579})
+	C:/Users/18446/Desktop/CCZJ Video/app/service/diagnostics_export.go:40 +0x3e5
+reflect.Value.call({0x75c8fbf8a7a0?, 0x21763c9fc100?, 0x75c8fbe5af00?}, {0x75c8fa1b9c11, 0x4}, {0x21763cdc9708, 0x1, 0x75c8fb6ed4b9?})
+	C:/Environment/Go/src/reflect/value.go:586 +0xf06
+reflect.Value.Call({0x75c8fbf8a7a0?, 0x21763c9fc100?, 0x1800?}, {0x21763cdc9708?, 0x21763cba0120?, 0x21763ca101b0?})
+	C:/Environment/Go/src/reflect/value.go:369 +0xb9
+github.com/wailsapp/wails/v3/pkg/application.(*BoundMethod).Call(0x21763cc17560, {0x75c8fbf9a280?, 0x21763cb0b410?}, {0x21763ca10198?, 0x1, 0x21763cc38008?})
+	C:/Environment/Go/go_work/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-beta.30/pkg/application/bindings.go:388 +0x716
+github.com/wailsapp/wails/v3/pkg/application.(*MessageProcessor).processCallMethod(0x21763ca2e020, {0x75c8fbf9a0c0, 0x75c8fc1cb7c0}, 0x21763cdc9d48, {0x75c8fbfa6e38, 0x21763cc38008})
+	C:/Environment/Go/go_work/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-beta.30/pkg/application/messageprocessor_call.go:139 +0x79e
+github.com/wailsapp/wails/v3/pkg/application.(*MessageProcessor).HandleRuntimeCallWithIDs(0x21763ca2e020, {0x75c8fbf9a0c0, 0x75c8fc1cb7c0}, 0x21763cdc9d48)
+	C:/Environment/Go/go_work/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-beta.30/pkg/application/messageprocessor.go:121 +0x165
+github.com/wailsapp/wails/v3/pkg/application.handleRuntimeCallForAndroid(0x21763cc32008, {0x21763cc92000, 0x1850})
+	C:/Environment/Go/go_work/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-beta.30/pkg/application/application_android.go:1064 +0x17b
+github.com/wailsapp/wails/v3/pkg/application.Java_com_wails_app_WailsBridge_nativeHandleRuntimeCall(0x75cb8703d370, 0x21763ca7c000?, 0x75c8b4438668)
+	C:/Environment/Go/go_work/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-beta.30/pkg/application/application_android.go:888 +0x165
+
+goroutine 20 [select (no cases), 1 minutes]:
+github.com/wailsapp/wails/v3/pkg/application.(*App).platformRun(0x21763cc32008)
+	C:/Environment/Go/go_work/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-beta.30/pkg/application/application_android.go:491 +0x11a
+github.com/wailsapp/wails/v3/pkg/application.(*androidApp).run(0x21763ca02178)
+	C:/Environment/Go/go_work/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-beta.30/pkg/application/application_android.go:520 +0x25
+github.com/wailsapp/wails/v3/pkg/application.(*App).Run(0x21763cc32008)
+	C:/Environment/Go/go_work/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-beta.30/pkg/application/application.go:774 +0x21a
+main.main()
+	C:/Users/18446/Desktop/CCZJ Video/main.go:13 +0x25
+created by github.com/wailsapp/wails/v3/pkg/application.Java_com_wails_app_WailsBridge_nativeInit in goroutine 17
+	C:/Environment/Go/go_work/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-beta.30/pkg/application/application_android.go:691 +0xc5
+
+goroutine 17 [syscall, locked to thread]:
+runtime.goexit({})
+	C:/Environment/Go/src/runtime/asm_amd64.s:1771 +0x1
+
+goroutine 18 [syscall, 1 minutes, locked to thread]:
+runtime.goexit({})
+	C:/Environment/Go/src/runtime/asm_amd64.s:1771 +0x1
+
+goroutine 8 [select]:
+github.com/wailsapp/wails/v3/pkg/application.(*HTTPTransport).cleanupChunks(0x21763ca7a420, 0x21763ca7c460, 0x0?)
+	C:/Environment/Go/go_work/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-beta.30/pkg/application/transport_http.go:110 +0x133
+created by github.com/wailsapp/wails/v3/pkg/application.(*HTTPTransport).Start in goroutine 20
+	C:/Environment/Go/go_work/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-beta.30/pkg/application/transport_http.go:101 +0x179
+
+goroutine 227 [chan receive, 1 minutes]:
+cczjVideo/app/collection.(*SchedulerService).Start(0x21763ca10108, {0x75c8fbf9a2b8, 0x21763cc1e0a0})
+	C:/Users/18446/Desktop/CCZJ Video/app/collection/scheduler_service.go:43 +0xdc
+cczjVideo/app/service.(*App).ServiceStartup.func2({0x75c8fbf9a2b8?, 0x21763cc1e0a0?})
+	C:/Users/18446/Desktop/CCZJ Video/app/service/app.go:332 +0x2e
+cczjVideo/app/lifecycle.(*Group).Go.func1()
+	C:/Users/18446/Desktop/CCZJ Video/app/lifecycle/group.go:74 +0x88
+created by cczjVideo/app/lifecycle.(*Group).Go in goroutine 20
+	C:/Users/18446/Desktop/CCZJ Video/app/lifecycle/group.go:59 +0x19b
+
+goroutine 238 [chan receive, 1 minutes]:
+github.com/wailsapp/wails/v3/pkg/application.(*App).Run.func1.7()
+	C:/Environment/Go/go_work/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-beta.30/pkg/application/application.go:735 +0x49
+created by github.com/wailsapp/wails/v3/pkg/application.(*App).Run.func1 in goroutine 20
+	C:/Environment/Go/go_work/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-beta.30/pkg/application/application.go:733 +0x44b
+
+goroutine 263 [select, 1 minutes]:
+cczjVideo/app/douban.(*Scheduler).Start.func1()
+	C:/Users/18446/Desktop/CCZJ Video/app/douban/scheduler.go:61 +0xea
+created by cczjVideo/app/douban.(*Scheduler).Start in goroutine 227
+	C:/Users/18446/Desktop/CCZJ Video/app/douban/scheduler.go:58 +0x2d1
+
+goroutine 212 [select, 1 minutes]:
+database/sql.(*DB).connectionOpener(0x21763cb0edd0, {0x75c8fbf9a2b8, 0x21763cc521e0})
+	C:/Environment/Go/src/database/sql/sql.go:1261 +0x89
+created by database/sql.OpenDB in goroutine 20
+	C:/Environment/Go/src/database/sql/sql.go:841 +0x130
+
+goroutine 236 [chan receive, 1 minutes]:
+github.com/wailsapp/wails/v3/pkg/application.(*App).Run.func1.5()
+	C:/Environment/Go/go_work/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-beta.30/pkg/application/application.go:722 +0x45
+created by github.com/wailsapp/wails/v3/pkg/application.(*App).Run.func1 in goroutine 20
+	C:/Environment/Go/go_work/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-beta.30/pkg/application/application.go:720 +0x3c7
+
+goroutine 235 [chan receive, 1 minutes]:
+github.com/wailsapp/wails/v3/pkg/application.(*App).Run.func1.4()
+	C:/Environment/Go/go_work/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-beta.30/pkg/application/application.go:716 +0x45
+created by github.com/wailsapp/wails/v3/pkg/application.(*App).Run.func1 in goroutine 20
+	C:/Environment/Go/go_work/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-beta.30/pkg/application/application.go:714 +0x385
+
+goroutine 234 [chan receive, 1 minutes]:
+github.com/wailsapp/wails/v3/pkg/application.(*App).Run.func1.3()
+	C:/Environment/Go/go_work/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-beta.30/pkg/application/application.go:710 +0x45
+created by github.com/wailsapp/wails/v3/pkg/application.(*App).Run.func1 in goroutine 20
+	C:/Environment/Go/go_work/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-beta.30/pkg/application/application.go:708 +0x33f
+
+goroutine 233 [chan receive, 1 minutes]:
+github.com/wailsapp/wails/v3/pkg/application.(*App).Run.func1.2()
+	C:/Environment/Go/go_work/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-beta.30/pkg/application/application.go:704 +0x45
+created by github.com/wailsapp/wails/v3/pkg/application.(*App).Run.func1 in goroutine 20
+	C:/Environment/Go/go_work/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-beta.30/pkg/application/application.go:702 +0x2fd
+
+goroutine 232 [chan receive]:
+github.com/wailsapp/wails/v3/pkg/application.(*App).Run.func1.1()
+	C:/Environment/Go/go_work/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-beta.30/pkg/application/application.go:698 +0x45
+created by github.com/wailsapp/wails/v3/pkg/application.(*App).Run.func1 in goroutine 20
+	C:/Environment/Go/go_work/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-beta.30/pkg/application/application.go:696 +0x2bb
+
+goroutine 237 [chan receive, 1 minutes]:
+github.com/wailsapp/wails/v3/pkg/application.(*App).Run.func1.6()
+	C:/Environment/Go/go_work/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-beta.30/pkg/application/application.go:728 +0x45
+created by github.com/wailsapp/wails/v3/pkg/application.(*App).Run.func1 in goroutine 20
+	C:/Environment/Go/go_work/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-beta.30/pkg/application/application.go:726 +0x409
+
+goroutine 275 [syscall, 1 minutes, locked to thread]:
+runtime.goexit({})
+	C:/Environment/Go/src/runtime/asm_amd64.s:1771 +0x1
+
+goroutine 276 [syscall, 1 minutes, locked to thread]:
+runtime.goexit({})
+	C:/Environment/Go/src/runtime/asm_amd64.s:1771 +0x1
+
+goroutine 293 [syscall, 1 minutes, locked to thread]:
+runtime.goexit({})
+	C:/Environment/Go/src/runtime/asm_amd64.s:1771 +0x1
+
+goroutine 294 [syscall, 1 minutes, locked to thread]:
+runtime.goexit({})
+	C:/Environment/Go/src/runtime/asm_amd64.s:1771 +0x1
+
+goroutine 295 [syscall, 1 minutes, locked to thread]:
+runtime.goexit({})
+	C:/Environment/Go/src/runtime/asm_amd64.s:1771 +0x1
+
+goroutine 296 [syscall, 1 minutes, locked to thread]:
+runtime.goexit({})
+	C:/Environment/Go/src/runtime/asm_amd64.s:1771 +0x1
+
+goroutine 297 [syscall, 1 minutes, locked to thread]:
+runtime.goexit({})
+	C:/Environment/Go/src/runtime/asm_amd64.s:1771 +0x1

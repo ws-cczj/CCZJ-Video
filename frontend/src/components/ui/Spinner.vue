@@ -3,7 +3,7 @@ defineProps<{ size?: 'sm' | 'md' | 'lg'; label?: string }>()
 </script>
 
 <template>
-  <div class="spinner-wrap" :class="size || 'md'">
+  <div class="spinner-wrap cczj-flex cczj-flex-col cczj-items-center cczj-justify-center cczj-gap-6" :class="size || 'md'">
     <div class="spinner-ring"></div>
     <span v-if="label" class="label">{{ label }}</span>
   </div>
@@ -11,20 +11,14 @@ defineProps<{ size?: 'sm' | 'md' | 'lg'; label?: string }>()
 
 <style scoped>
 .spinner-wrap {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
   padding: 60px 20px;
-  color: var(--text-muted);
-  text-align: center;
+  @apply cczj-text-muted cczj-text-center;
 }
 
 .spinner-ring {
   border: 3px solid var(--border);
   border-top-color: var(--accent);
-  border-radius: 50%;
+  @apply cczj-rounded-50;
   animation: cczj-spin 800ms linear infinite;
 }
 
@@ -35,8 +29,7 @@ defineProps<{ size?: 'sm' | 'md' | 'lg'; label?: string }>()
 }
 
 .spinner-wrap.md .spinner-ring {
-  width: 32px;
-  height: 32px;
+  @apply cczj-w-32 cczj-h-32;
 }
 
 .spinner-wrap.lg .spinner-ring {
@@ -46,8 +39,7 @@ defineProps<{ size?: 'sm' | 'md' | 'lg'; label?: string }>()
 }
 
 .spinner-wrap .label {
-  font-size: 13px;
-  color: var(--text-muted);
+  @apply cczj-text-13 cczj-text-muted;
 }
 
 </style>

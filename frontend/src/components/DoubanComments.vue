@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
-import { GetDoubanComments, normalizeApiError } from '../api/app'
+import { ref, watch, computed, onBeforeUnmount } from 'vue'
+import { normalizeApiError } from '../api/app'
+import { GetDoubanComments } from '../api/comments'
 import { tr } from '../locales'
 import RemoteImage from './RemoteImage.vue'
 
@@ -43,25 +44,50 @@ const sortOptions = computed(() => [
   { value: 'time' as const, label: tr('detail.sortLatest') },
 ])
 
+let requestRevision = 0
+let loadingTimer: ReturnType<typeof setTimeout> | undefined
+let pending: ReturnType<typeof GetDoubanComments> | undefined
+function cancelPending(): void {
+  const request = pending
+  pending = undefined
+  try { void Promise.resolve(request?.cancel?.()).catch(() => {}) } catch { /* Already settled. */ }
+}
+onBeforeUnmount(() => { requestRevision++; clearTimeout(loadingTimer); cancelPending() })
 async function fetchComments() {
+  const revision = ++requestRevision
+  cancelPending()
+  clearTimeout(loadingTimer)
   if (!props.doubanId) return
   loading.value = true
   error.value = null
+  // The IP gate and challenge may outlast one network timeout. Stop the
+  // blocking spinner while the same request continues warming the cache.
+  loadingTimer = setTimeout(() => {
+    if (revision !== requestRevision) return
+    loading.value = false
+    error.value = tr('detail.commentsSlow')
+  }, 12000)
   try {
-    const resp = await GetDoubanComments({
+    pending = GetDoubanComments({
       douban_id: props.doubanId,
       page: page.value,
       sort: sort.value,
-    }) as DoubanCommentsResp
-    comments.value = resp?.comments || []
+    })
+    const resp = await pending as DoubanCommentsResp
+    if (revision !== requestRevision) return
+    comments.value = Array.isArray(resp?.comments) ? resp.comments : []
+    error.value = null
     totalPages.value = resp?.total_pages || 1
     total.value = resp?.total || 0
   } catch (e: any) {
+    if (revision !== requestRevision) return
     // 走 normalizeApiError：Go 侧的错误带 CODE: 前缀，直接展示会把内部编码甩到脸上。
-    error.value = normalizeApiError(e).message
+    const failure = normalizeApiError(e)
+    if(failure.code==='CANCELLED')return
+    error.value = failure.code === 'UNAVAILABLE' ? tr('detail.commentsUnavailable') : failure.message
     comments.value = []
   } finally {
-    loading.value = false
+    if (revision === requestRevision) { clearTimeout(loadingTimer); pending = undefined; loading.value = false }
   }
 }
 
@@ -94,7 +120,8 @@ const visiblePages = computed(() => {
 
 // 评分星标
 function renderStars(rating: number): string {
-  return '★'.repeat(rating) + '☆'.repeat(5 - rating)
+  const stars = Number.isFinite(rating) ? Math.max(0, Math.min(5, Math.floor(rating))) : 0
+  return '★'.repeat(stars) + '☆'.repeat(5 - stars)
 }
 
 // 评分颜色
@@ -106,6 +133,14 @@ function ratingColor(rating: number): string {
 }
 
 watch(() => props.doubanId, (newId) => {
+  requestRevision++
+  cancelPending()
+  clearTimeout(loadingTimer)
+  comments.value = []
+  total.value = 0
+  totalPages.value = 1
+  error.value = null
+  loading.value = false
   if (newId) {
     page.value = 1
     fetchComments()
@@ -135,13 +170,13 @@ watch(() => props.doubanId, (newId) => {
     </div>
 
     <!-- 加载中 -->
-    <div v-if="loading" class="comments-loading">
+    <div v-if="loading" class="comments-loading" role="status">
       <div class="loading-spinner"></div>
       <span>{{ tr('detail.loadingComments') }}</span>
     </div>
 
     <!-- 错误 -->
-    <div v-else-if="error" class="comments-error">
+    <div v-else-if="error" class="comments-error" role="alert">
       <span class="error-icon">⚠️</span>
       <span>{{ error }}</span>
       <button class="retry-btn" @click="fetchComments">{{ tr('detail.retry') }}</button>

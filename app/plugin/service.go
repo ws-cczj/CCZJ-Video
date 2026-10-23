@@ -22,8 +22,9 @@ type Service struct {
 	mu      sync.Mutex
 	infos   []Info
 	scanned bool
-	// scanMu 让并发的手动重扫排队进行，而不是各扫各的、日志交错。
-	scanMu sync.Mutex
+	// scanMu serializes registry scans, state read-modify-write and filesystem publication.
+	scanMu        sync.Mutex
+	renameInstall func(string, string) error
 
 	// 状态读写在构造时指向 settings KV（SQLite）。app/db 要库打开后才可用，
 	// 因此只有 Scan / SetEnabled 会碰它，NewService 不碰。测试注入自己的实现。
@@ -35,9 +36,10 @@ type Service struct {
 // （传方法值，不要传调用结果），扩展包根目录是它的 plugins 子目录。
 func NewService(dataDir func() string) *Service {
 	return &Service{
-		dataDir:    dataDir,
-		loadStates: loadStatesFromDB,
-		saveStates: saveStatesToDB,
+		dataDir:       dataDir,
+		loadStates:    loadStatesFromDB,
+		saveStates:    saveStatesToDB,
+		renameInstall: os.Rename,
 	}
 }
 
@@ -61,7 +63,10 @@ func (s *Service) Directory() string {
 func (s *Service) Scan() ([]Info, error) {
 	s.scanMu.Lock()
 	defer s.scanMu.Unlock()
+	return s.scanLocked()
+}
 
+func (s *Service) scanLocked() ([]Info, error) {
 	root := s.Directory()
 	entries, err := os.ReadDir(root)
 	if err != nil {
@@ -97,12 +102,16 @@ func (s *Service) Scan() ([]Info, error) {
 		info.Files, info.Bytes, info.Updated = packStats(packDir)
 		// 按目录名判定内置包：注册表里这一行是不是应用自己种下去的那个。
 		info.Builtin = isBuiltinPackID(name)
+		info.BuiltinDigest = verifiedBuiltinDigest(name, packDir)
 		infos = append(infos, info)
 	}
 
 	markDuplicateIDs(infos)
 
-	states := s.states()
+	states, err := s.loadStates()
+	if err != nil {
+		return nil, apperror.Wrap(apperror.Storage, err, "读取扩展包启用状态失败")
+	}
 	applyStates(infos, states)
 	s.replace(infos)
 	s.logScan(root, infos)
@@ -117,10 +126,12 @@ func (s *Service) List() ([]Info, error) {
 // SetEnabled 持久化某个包的启用状态。只有注册表里真实存在的包才接受，
 // 免得界面拿着一个已经删掉的包 id 写进设置表。
 func (s *Service) SetEnabled(id string, enabled bool) error {
+	s.scanMu.Lock()
+	defer s.scanMu.Unlock()
 	if strings.TrimSpace(id) == "" {
 		return apperror.New(apperror.Validation, "扩展包 id 为空")
 	}
-	infos, err := s.snapshot()
+	infos, err := s.snapshotLocked()
 	if err != nil {
 		return err
 	}
@@ -135,7 +146,13 @@ func (s *Service) SetEnabled(id string, enabled bool) error {
 		return apperror.Newf(apperror.NotFound, "未找到扩展包 %q", id)
 	}
 
-	states := s.states()
+	states, err := s.loadStates()
+	if err != nil {
+		return apperror.Wrap(apperror.Storage, err, "读取扩展包启用状态失败，没有修改启停状态")
+	}
+	if states == nil {
+		states = make(map[string]bool)
+	}
 	if enabled {
 		delete(states, id)
 	} else {
@@ -170,6 +187,8 @@ func (s *Service) SetEnabled(id string, enabled bool) error {
 // ReadFile 返回包内某个文本文件的内容（UTF-8）。只认 §6 的体积上限，
 // 路径一律走 resolveInside，越出包目录的直接拒绝。
 func (s *Service) ReadFile(id, relPath string) (string, error) {
+	s.scanMu.Lock()
+	defer s.scanMu.Unlock()
 	packDir, err := s.packDir(id)
 	if err != nil {
 		return "", err
@@ -194,6 +213,8 @@ func (s *Service) ReadFile(id, relPath string) (string, error) {
 // ReadAsset 把包内图片读成 data:<mime>;base64,...，给界面当 <img src> 用。
 // 图片只按 §6 的 8 MiB 上限走，扩展名不在白名单里的一律拒绝。
 func (s *Service) ReadAsset(id, relPath string) (string, error) {
+	s.scanMu.Lock()
+	defer s.scanMu.Unlock()
 	packDir, err := s.packDir(id)
 	if err != nil {
 		return "", err
@@ -233,8 +254,20 @@ func (s *Service) replace(infos []Info) {
 	s.mu.Unlock()
 }
 
+// Caller holds scanMu, so an initial scan must not acquire it a second time.
+func (s *Service) snapshotLocked() ([]Info, error) {
+	s.mu.Lock()
+	if s.scanned {
+		out := append([]Info(nil), s.infos...)
+		s.mu.Unlock()
+		return out, nil
+	}
+	s.mu.Unlock()
+	return s.scanLocked()
+}
+
 func (s *Service) packDir(id string) (string, error) {
-	infos, err := s.snapshot()
+	infos, err := s.snapshotLocked()
 	if err != nil {
 		return "", err
 	}
@@ -249,7 +282,8 @@ func (s *Service) packDir(id string) (string, error) {
 	return "", apperror.Newf(apperror.NotFound, "未找到扩展包 %q", id)
 }
 
-// states 读启用状态。设置值坏了不该让整个注册表消失：报一条警告，按全启用继续。
+// states is best-effort cleanup after disk uninstall. Scan and SetEnabled use
+// strict reads so a storage failure never turns a disabled registry into ready.
 func (s *Service) states() map[string]bool {
 	states, err := s.loadStates()
 	if err != nil {

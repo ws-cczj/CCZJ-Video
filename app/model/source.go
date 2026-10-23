@@ -3,6 +3,7 @@ package model
 import (
 	"cczjVideo/app/apperror"
 	"encoding/json"
+	"net/url"
 	"regexp"
 	"strings"
 )
@@ -24,6 +25,28 @@ func ValidateSourceKey(key string) error {
 	return nil
 }
 
+// sourceKeyHostPattern 去掉域名里除小写字母与数字之外的所有字符。
+var sourceKeyHostPattern = regexp.MustCompile(`[^a-z0-9]`)
+
+// DeriveSourceKey preserves the legacy address-derived alias for compatibility.
+// New sources use NewSourceKey: a hostname cannot identify interfaces or accounts.
+func DeriveSourceKey(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+	host := u.Hostname()
+	host = strings.TrimPrefix(host, "api.")
+	parts := strings.Split(host, ".")
+	if len(parts) >= 2 {
+		switch parts[len(parts)-1] {
+		case "com", "cn", "me", "cc":
+			return sourceKeyHostPattern.ReplaceAllString(parts[len(parts)-2], "_")
+		}
+	}
+	return sourceKeyHostPattern.ReplaceAllString(parts[0], "_")
+}
+
 // CollectMode 采集模式
 type CollectMode string
 
@@ -32,6 +55,44 @@ const (
 	CollectModeIncremental CollectMode = "incremental" // 增量/补采：按时间窗采集（h参数）
 	CollectModeOnce        CollectMode = "once"        // 单次采集：采集一次后停止
 )
+
+// SourceKind 区分一行 sources 属于哪个应用模式（ADR 0016）。三种模式共用同一张表、
+// 同一份健康度采样与同一套连败自动停用闸门，差别只在 kind 与各自声明的操作集合。
+type SourceKind string
+
+const (
+	SourceKindVideo SourceKind = "video"
+	SourceKindNovel SourceKind = "novel"
+	SourceKindComic SourceKind = "comic"
+)
+
+// Valid 报告这个 kind 是不是三种之一。空值按 video 处理：迁移 v11 之前的行没有这一列，
+// 补列时给的默认值也是 video，所以"没写"和"视频"是同一个意思。
+func (k SourceKind) Valid() bool {
+	switch k.Normalize() {
+	case SourceKindVideo, SourceKindNovel, SourceKindComic:
+		return true
+	}
+	return false
+}
+
+// Normalize 把空值收敛成 video，其余原样返回。它不做大小写归一：kind 由界面写入，
+// 写错就该在 ValidateSourceKind 那一层被拒，而不是被这里悄悄改对。
+func (k SourceKind) Normalize() SourceKind {
+	if strings.TrimSpace(string(k)) == "" {
+		return SourceKindVideo
+	}
+	return k
+}
+
+// ValidateSourceKind 拒绝未知 kind。加源与改源都要过这一道：一个拼错的 kind 会让这行
+// 既进不了视频采集池、也进不了阅读模式的源列表，界面上就是一个谁也解释不了的幽灵源。
+func ValidateSourceKind(kind SourceKind) error {
+	if !kind.Valid() {
+		return apperror.Newf(apperror.Validation, "invalid source kind %q: expected video, novel or comic", kind)
+	}
+	return nil
+}
 
 // AdvConfig 源的高级配置（JSON 存储在 sources.adv_config 列）
 type AdvConfig struct {
@@ -56,6 +117,11 @@ type Source struct {
 	Enabled   int    `json:"enabled" db:"enabled"`
 	CreatedAt string `json:"created_at" db:"created_at"`
 
+	// Kind 是这一行属于哪个应用模式。迁移 v11 补列，默认 'video'，所以旧行读出来
+	// 就是视频源。读取请一律走 GetKind()，它把空值收敛成 video，不要求调用方
+	// 自己记得"没写等于视频"这条历史。
+	Kind string `json:"kind" db:"kind"`
+
 	// AutoDisabledAt 是这个源被自动停用（连续失败到阈值）时的 Unix 秒，0 表示不是。
 	// 用户手动关掉的源留 0，所以冷却到期时只会自动恢复机器做掉的停用，不会擅自
 	// 打开用户明确关掉的东西。
@@ -66,11 +132,27 @@ type Source struct {
 	// 调度配置（JSON 字符串，DB 列，null 表示使用全局默认）
 	ScheduleCfgRaw string `json:"-" db:"schedule_config"`
 	// 策略配置（JSON 字符串，DB 列，用于自定义数据源参数组合）
+	//
+	// 视频源里装的是 collect.StrategyConfig（v2）；小说与漫画源里装的是
+	// provider.Document（v3）。两种文档共用这一列，靠 version 与 sources.kind
+	// 一起区分，谁也不会去解析另一种。
 	StrategyConfig string `json:"strategy_config,omitempty" db:"strategy_config"`
 
 	CollectLimit int `json:"collect_limit,omitempty" db:"collect_limit"`
 	CollectHours int `json:"collect_hours,omitempty" db:"collect_hours"`
 }
+
+// GetKind 返回这个源的模式，空值按 video 处理。
+func (s *Source) GetKind() SourceKind {
+	if s == nil {
+		return SourceKindVideo
+	}
+	return SourceKind(s.Kind).Normalize()
+}
+
+// IsVideo 报告这是不是一个视频采集源。视频侧的调度、采集、豆瓣匹配都要先过这一道：
+// 小说与漫画源现在和视频源同表，不加判定的话一个启用的书源会被当成 CMS 接口去拉分页。
+func (s *Source) IsVideo() bool { return s.GetKind() == SourceKindVideo }
 
 // GetAdvConfig 解析高级配置
 func (s *Source) GetAdvConfig() AdvConfig {

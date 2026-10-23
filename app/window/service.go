@@ -10,9 +10,10 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
+// Minimum client area shared by native creation and persisted size restoration.
 const (
-	minimumWidth  = 800
-	minimumHeight = 500
+	MinimumWidth  = 960
+	MinimumHeight = 600
 )
 
 // CurrentWindow returns the active Wails window, or nil before startup.
@@ -134,11 +135,11 @@ func (s *Service) Resizable() bool {
 
 // SetSize clamps, applies, and persists the active window size.
 func (s *Service) SetSize(width, height int) {
-	if width < minimumWidth {
-		width = minimumWidth
+	if width < MinimumWidth {
+		width = MinimumWidth
 	}
-	if height < minimumHeight {
-		height = minimumHeight
+	if height < MinimumHeight {
+		height = MinimumHeight
 	}
 	if w := s.currentWindow(); w != nil {
 		w.SetSize(width, height)
@@ -169,8 +170,12 @@ func (s *Service) ApplySettings() {
 	if widthErr == nil && heightErr == nil {
 		parsedWidth, widthParseErr := strconv.Atoi(width)
 		parsedHeight, heightParseErr := strconv.Atoi(height)
-		if widthParseErr == nil && heightParseErr == nil && parsedWidth >= minimumWidth && parsedHeight >= minimumHeight {
-			w.SetSize(parsedWidth, parsedHeight)
+		if widthParseErr == nil && heightParseErr == nil && parsedWidth > 0 && parsedHeight > 0 {
+			if parsedWidth < MinimumWidth || parsedHeight < MinimumHeight {
+				s.SetSize(parsedWidth, parsedHeight)
+			} else {
+				w.SetSize(parsedWidth, parsedHeight)
+			}
 		}
 	}
 

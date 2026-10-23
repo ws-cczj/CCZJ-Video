@@ -1,4 +1,4 @@
-// Package media owns video browsing, favorites, and watch-history operations.
+// Package media owns video identity, favorites, and watch-history behavior.
 package media
 
 import (
@@ -6,92 +6,18 @@ import (
 	"cczjVideo/app/db"
 	"cczjVideo/app/handler"
 	"cczjVideo/app/model"
-	"context"
 	"database/sql"
 	"errors"
 )
 
 // Service provides media-facing application operations.
-type Service struct{}
+type Service struct {
+	lookup func(sourceKey, vodID string) (*model.Video, error)
+}
 
 // NewService constructs a media service.
-func NewService() *Service {
-	return &Service{}
-}
-
-// List returns a filtered page of videos.
-func (s *Service) List(req handler.VideoListReq) (*handler.VideoListResp, error) {
-	return handler.GetVideoList(req)
-}
-
-// Detail returns one video and its episodes.
-func (s *Service) Detail(ctx context.Context, req handler.VideoDetailReq) (*handler.VideoDetailResp, error) {
-	return handler.GetVideoDetail(ctx, req)
-}
-
-// SpeedTestPlayLines probes every play line of one video and ranks them.
-func (s *Service) SpeedTestPlayLines(ctx context.Context, req handler.PlayLineSpeedReq) (*handler.PlayLineSpeedResp, error) {
-	return handler.SpeedTestPlayLines(ctx, req)
-}
-
-// Search returns videos matching a keyword within a source.
-func (s *Service) Search(req handler.VideoSearchReq) (*handler.VideoListResp, error) {
-	return handler.SearchVideos(req)
-}
-
-// GlobalID returns the global identity for a source video.
-func (s *Service) GlobalID(sourceKey, vodID string) (int64, error) {
-	return db.GetGlobalIdForVideo(sourceKey, vodID)
-}
-
-// SourcesByGlobalID returns every source which has the global video.
-func (s *Service) SourcesByGlobalID(globalID int64) ([]db.SourceVideoRef, error) {
-	return db.FindSourcesByGlobalId(globalID)
-}
-
-// Types returns the video types available from a source.
-func (s *Service) Types(req handler.GetTypesReq) ([]*model.VType, error) {
-	return handler.GetTypes(req)
-}
-
-// Delete soft-deletes a source video, moving it to the recycle bin.
-func (s *Service) Delete(req handler.DeleteVideoReq) error {
-	return handler.DeleteVideo(req)
-}
-
-// RecycleBin lists soft-deleted catalog entries across sources.
-func (s *Service) RecycleBin(req handler.RecycleListReq) (*handler.RecycleListResp, error) {
-	return handler.ListRecycleBin(req)
-}
-
-// Restore puts one recycle-bin entry back into the library.
-func (s *Service) Restore(req handler.RecycleReq) error {
-	return handler.RestoreVideo(req)
-}
-
-// Purge permanently deletes one recycle-bin entry.
-func (s *Service) Purge(req handler.RecycleReq) (*handler.RecycleResult, error) {
-	return handler.PurgeVideo(req)
-}
-
-// ClearRecycleBin purges every entry in the recycle bin.
-func (s *Service) ClearRecycleBin(req handler.RecycleListReq) (*handler.RecycleResult, error) {
-	return handler.ClearRecycleBin(req)
-}
-
-// YearsAndAreas returns filter values available for a source.
-func (s *Service) YearsAndAreas(sourceKey string) (*handler.YearsResp, error) {
-	return handler.GetYearsAndAreas(sourceKey)
-}
-
-// MergeCandidates returns identities that look like duplicates of each other.
-func (s *Service) MergeCandidates(limit int) (*handler.MergeCandidatesResp, error) {
-	return handler.ListMergeCandidates(limit)
-}
-
-// MergeIdentities merges user-confirmed duplicate identities.
-func (s *Service) MergeIdentities(req handler.MergeIdentitiesReq) (*handler.MergeIdentitiesResp, error) {
-	return handler.MergeIdentities(req)
+func NewService(lookup func(sourceKey, vodID string) (*model.Video, error)) *Service {
+	return &Service{lookup: lookup}
 }
 
 // Recommend returns recommended videos after normalizing optional arguments.
@@ -137,9 +63,15 @@ func (s *Service) RemoveFavorite(sourceKey, vodID string) error {
 
 // IsFavorite reports whether the global video is favorited.
 func (s *Service) IsFavorite(sourceKey, vodID string) (bool, error) {
-	v, err := db.GetVideoById(sourceKey, vodID)
-	if err != nil || v.GlobalId <= 0 {
+	v, err := s.lookup(sourceKey, vodID)
+	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
+	}
+	if err != nil {
+		return false, apperror.Wrap(apperror.Storage, err, "read favorite identity")
+	}
+	if v == nil || v.GlobalId <= 0 {
+		return false, apperror.New(apperror.Internal, "video has no catalog global identity")
 	}
 	return db.IsFavoriteByGlobalID(int(v.GlobalId)), nil
 }
@@ -217,11 +149,11 @@ func (s *Service) WatchedEpisodes(sourceKey, vodID string) ([]int, error) {
 }
 
 func (s *Service) catalogGlobalID(sourceKey, vodID string) (int64, error) {
-	v, err := db.GetVideoById(sourceKey, vodID)
+	v, err := s.lookup(sourceKey, vodID)
 	if err != nil {
-		return 0, apperror.Wrap(apperror.NotFound, err, "video not found")
+		return 0, apperror.Wrap(apperror.Storage, err, "read video identity")
 	}
-	if v.GlobalId <= 0 {
+	if v == nil || v.GlobalId <= 0 {
 		return 0, apperror.New(apperror.Internal, "video has no catalog global identity")
 	}
 	return v.GlobalId, nil

@@ -3,18 +3,39 @@ import { createPinia } from 'pinia'
 import './styles/cczj-utilities.css'
 import './styles/animations.css'
 import './style.css'
-import i18n, { loadLocale } from './locales'
+import i18n, { loadLocale, tr } from './locales'
 import App from './App.vue'
+import { useApplicationMode } from './modes/applicationMode'
 import router from './router'
 import { startCacheInvalidation } from './stores/cacheInvalidate'
 import { useMotionStore } from './stores/motion'
 import { syncPluginScripts } from './plugins/runtime'
 import { startDropWatch } from './plugins/dropInstall'
+import { initializeRuntimeEnvironment } from './api/runtime'
+import { loadPlatformPresentation } from './platform/presentation'
+import { useThemeStore } from './stores/theme'
+import { markStartup, startupTask } from './diagnostics/startup'
+import { APPLICATION_MODES } from './modes/definitions'
+import { useErrorStore } from './stores/error'
 
+markStartup('modules_ready')
+const runtimeReady = startupTask('runtime', () => initializeRuntimeEnvironment().then(loadPlatformPresentation))
 const app = createApp(App)
-app.use(createPinia())
+const pinia = createPinia()
+app.use(pinia)
+// Vue catches render/lifecycle failures before they reach window.error. Install
+// reporting before the first navigation, including lazy route import failures.
+app.config.errorHandler = (error, _instance, info) => {
+  useErrorStore(pinia).fromError(tr('errors.runtimeError'), error, `Vue:${info}`)
+}
+router.onError(error => {
+  useErrorStore(pinia).fromError(tr('errors.runtimeError'), error, 'Router')
+})
 app.use(router)
 app.use(i18n)
+// Warm only the selected shell while settings are loading. The async view still
+// owns errors and mounting, and the splash never waits on this preload.
+void useApplicationMode().load().then(()=>startupTask('mode_shell',()=>APPLICATION_MODES[useApplicationMode().mode].loadShell())).catch(()=>{})
 
 // 缓存失效订阅要在 pinia 装好之后、挂载之前起：Go 侧一删片/一采完集就会发事件，
 // 晚起一步等于让那一次失效永久漏掉。
@@ -25,8 +46,10 @@ startCacheInvalidation()
 // 动画开关和语言一起等：先挂载再把 data-cczj-motion 补上，启动那几段动效照样会跑一遍，
 // 那正是把动画关掉的人最不想看见的一下。
 const motion = useMotionStore()
-Promise.all([loadLocale(), motion.load()]).finally(() => {
+Promise.all([runtimeReady, startupTask('locale',loadLocale), startupTask('motion',()=>motion.load()), startupTask('mode',()=>useApplicationMode().load()), startupTask('theme',()=>useThemeStore().load())]).finally(() => {
   app.mount('#app')
+  markStartup('vue_mount')
+  requestAnimationFrame(()=>requestAnimationFrame(()=>markStartup('first_render_opportunity')))
   // 注入型扩展包只能挂在「已挂载」之后跑：它们要往 router 上加页面、往 head 里塞样式，
   // 有的还会立刻 push 路由——太早跑的话 <router-view> 还没就位，导航会被静默吞掉。
   // 不 await：坏包不该挡住应用启动，注入结果由日志面板和扩展面板各自汇报。

@@ -1,0 +1,78 @@
+@import './player-option-button.css';
+.speed-group {
+  @apply cczj-relative cczj-inline-flex cczj-items-center;
+}
+
+/* 桥接区：仅覆盖按钮与 popup 之间的缝隙，不延伸到进度条区域 */
+.speed-group::before {
+  content: '';
+  @apply cczj-absolute;
+  left: -4px;
+  right: -4px;
+  top: -8px;
+  height: 10px;
+  @apply cczj-pointer-events-auto;
+  z-index: 1;
+}
+
+.speed-group:hover .speed-popup,
+.speed-popup.show {
+  @apply cczj-opacity-100 cczj-pointer-events-auto;
+  transform: translateY(0);
+}
+
+.speed-btn {
+  min-width: 52px;
+  padding: 0 8px;
+}
+
+.speed-text {
+  @apply cczj-font-semibold cczj-text-sm;
+  font-variant-numeric: tabular-nums;
+}
+
+.speed-popup {
+  @apply cczj-absolute;
+  bottom: calc(100% + 10px);
+  @apply cczj-right-0;
+  background: rgba(20, 20, 20, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  @apply cczj-rounded-md cczj-p-3 cczj-flex cczj-flex-col cczj-gap-1;
+  min-width: 92px;
+  @apply cczj-opacity-0 cczj-pointer-events-none;
+  transform: translateY(6px);
+  transition: all 0.18s ease;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  @apply cczj-z-10;
+}
+
+.speed-popup.show {
+  @apply cczj-opacity-100 cczj-pointer-events-auto;
+  transform: translateY(0);
+}
+
+.speed-item {
+  @apply cczj-flex cczj-items-center cczj-justify-between cczj-gap-3 cczj-px-6-py-4;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.75);
+  @apply cczj-text-sm;
+  font-family: inherit;
+  @apply cczj-rounded cczj-cursor-pointer cczj-whitespace-nowrap;
+  transition: all 0.1s ease;
+  font-variant-numeric: tabular-nums;
+}
+
+.speed-item:hover {
+  background: rgba(24, 144, 255, 0.18);
+  @apply cczj-text-white;
+}
+
+.speed-item.active {
+  background: rgba(24, 144, 255, 0.3);
+  color: #40a9ff;
+  @apply cczj-font-semibold;
+}
+
+/* ========= 播放设置弹出面板 ========= */
+/* ========= 报告广告 ========= */

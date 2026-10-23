@@ -4,6 +4,7 @@ import (
 	"cczjVideo/app/apperror"
 	"cczjVideo/app/db"
 	"cczjVideo/app/douban"
+	"context"
 )
 
 // ======================== Douban ========================
@@ -20,20 +21,22 @@ type DoubanSearchResp struct {
 }
 
 // DoubanSearch 搜索豆瓣获取 subject_id
-func (a *App) DoubanSearch(req DoubanSearchReq) (*DoubanSearchResp, error) {
-	if req.Keyword == "" {
-		return nil, apperror.New(apperror.Validation, "关键词不能为空")
-	}
-	// GlobalID 留空：这是用户在界面上主动发起的搜索，不该被某条记录的 24 小时
-	// 「查无此片」冷却挡住；反过来说它的失败结果也不该写进任何一行的冷却。
-	id, err := douban.SearchSubjectID(req.Keyword, douban.SearchMeta{VodName: req.Keyword})
-	if err != nil {
-		return nil, err
-	}
-	return &DoubanSearchResp{
-		SubjectID: id,
-		URL:       "https://movie.douban.com/subject/" + id + "/",
-	}, nil
+func (a *App) DoubanSearch(ctx context.Context, req DoubanSearchReq) (*DoubanSearchResp, error) {
+	return runRequest(a, ctx, "douban.DoubanSearch", func(ctx context.Context) (*DoubanSearchResp, error) {
+		if req.Keyword == "" {
+			return nil, apperror.New(apperror.Validation, "关键词不能为空")
+		}
+		// GlobalID 留空：这是用户在界面上主动发起的搜索，不该被某条记录的 24 小时
+		// 「查无此片」冷却挡住；反过来说它的失败结果也不该写进任何一行的冷却。
+		id, err := douban.SearchSubjectIDContext(ctx, req.Keyword, douban.SearchMeta{VodName: req.Keyword})
+		if err != nil {
+			return nil, err
+		}
+		return &DoubanSearchResp{
+			SubjectID: id,
+			URL:       "https://movie.douban.com/subject/" + id + "/",
+		}, nil
+	})
 }
 
 // DoubanDetailReq 豆瓣详情请求
@@ -47,15 +50,17 @@ type DoubanDetailResp struct {
 }
 
 // DoubanDetail 获取豆瓣详情信息
-func (a *App) DoubanDetail(req DoubanDetailReq) (*DoubanDetailResp, error) {
-	if req.SubjectID == "" {
-		return nil, apperror.New(apperror.Validation, "subject_id 不能为空")
-	}
-	info, err := douban.ParseDetail(req.SubjectID)
-	if err != nil {
-		return nil, err
-	}
-	return &DoubanDetailResp{DoubanInfo: info}, nil
+func (a *App) DoubanDetail(ctx context.Context, req DoubanDetailReq) (*DoubanDetailResp, error) {
+	return runRequest(a, ctx, "douban.DoubanDetail", func(ctx context.Context) (*DoubanDetailResp, error) {
+		if req.SubjectID == "" {
+			return nil, apperror.New(apperror.Validation, "subject_id 不能为空")
+		}
+		info, err := douban.ParseDetailContext(ctx, req.SubjectID)
+		if err != nil {
+			return nil, err
+		}
+		return &DoubanDetailResp{DoubanInfo: info}, nil
+	})
 }
 
 // DoubanUpdateVideoReq 更新单个视频的豆瓣信息请求
@@ -153,15 +158,17 @@ type DoubanCommentsReq struct {
 }
 
 // GetDoubanComments 获取豆瓣评论（带 24h 缓存）
-func (a *App) GetDoubanComments(req DoubanCommentsReq) (*douban.DoubanCommentsResp, error) {
-	if req.DoubanId == "" {
-		return nil, apperror.New(apperror.Validation, "douban_id 不能为空")
-	}
-	if req.Page <= 0 {
-		req.Page = 1
-	}
-	if req.Sort == "" {
-		req.Sort = "new_score"
-	}
-	return douban.FetchComments(req.DoubanId, req.Page, req.Sort)
+func (a *App) GetDoubanComments(ctx context.Context, req DoubanCommentsReq) (*douban.DoubanCommentsResp, error) {
+	return runRequest(a, ctx, "douban.comments", func(ctx context.Context) (*douban.DoubanCommentsResp, error) {
+		if req.DoubanId == "" {
+			return nil, apperror.New(apperror.Validation, "douban_id 不能为空")
+		}
+		if req.Page <= 0 {
+			req.Page = 1
+		}
+		if req.Sort == "" {
+			req.Sort = "new_score"
+		}
+		return douban.FetchCommentsContext(ctx, req.DoubanId, req.Page, req.Sort)
+	})
 }

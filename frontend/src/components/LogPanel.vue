@@ -3,7 +3,9 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from './Icon.vue'
 import { Button } from './ui'
-import { GetLogContent, OpenFileInExplorer, OpenFolder } from '../api/app'
+import { GetLogContent, OpenFileInExplorer } from '../api/app'
+import { revealDiagnosticExport, revealLogDirectory } from '../platform/diagnosticFiles'
+import { useViewActivity } from '../composables/useViewActivity'
 import { useConfirmStore } from '../stores/confirm'
 import { useErrorStore } from '../stores/error'
 import {
@@ -17,6 +19,13 @@ import {
 } from '../stores/logs'
 
 const { t } = useI18n()
+const props=withDefaults(defineProps<{active?:boolean;rowHeight?:number;localFileActions?:boolean;exportActionLabel?:string;detailMode?:'inline'|'sheet'}>(),{
+  active:true,rowHeight:26,localFileActions:true,exportActionLabel:'logs.revealExport',detailMode:'inline',
+})
+const viewActive=useViewActivity(()=>props.active)
+let disposed=false
+let activation=0
+let initialized=false
 const logs = useLogsStore()
 const errorStore = useErrorStore()
 const confirmStore = useConfirmStore()
@@ -29,24 +38,24 @@ const lastExportPath = ref('')
 const selected = ref<LogRecord | null>(null)
 
 // ---------- 实时时间线：定高窗口化渲染 ----------
-const ROW_H = 26
+const ROW_H = computed(()=>props.rowHeight)
 const OVERSCAN = 8
 const scroller = ref<HTMLElement | null>(null)
 const scrollTop = ref(0)
 const viewportH = ref(420)
 
 const liveRows = computed(() => logs.visible)
-const first = computed(() => Math.max(0, Math.floor(scrollTop.value / ROW_H) - OVERSCAN))
-const rowCapacity = computed(() => Math.ceil(viewportH.value / ROW_H) + OVERSCAN * 2)
+const first = computed(() => Math.max(0, Math.floor(scrollTop.value / ROW_H.value) - OVERSCAN))
+const rowCapacity = computed(() => Math.ceil(viewportH.value / ROW_H.value) + OVERSCAN * 2)
 const last = computed(() => Math.min(liveRows.value.length, first.value + rowCapacity.value))
 const rendered = computed(() => liveRows.value.slice(first.value, last.value))
-const padTop = computed(() => first.value * ROW_H)
-const padBottom = computed(() => Math.max(0, (liveRows.value.length - last.value) * ROW_H))
+const padTop = computed(() => first.value * ROW_H.value)
+const padBottom = computed(() => Math.max(0, (liveRows.value.length - last.value) * ROW_H.value))
 
 function onScroll(evt: Event): void {
   const el = evt.target as HTMLElement
   scrollTop.value = el.scrollTop
-  autoScroll.value = el.scrollHeight - el.scrollTop - el.clientHeight < ROW_H * 2
+  autoScroll.value = el.scrollHeight - el.scrollTop - el.clientHeight < ROW_H.value * 2
 }
 
 let resizeObserver: ResizeObserver | undefined
@@ -58,7 +67,8 @@ async function scrollToBottom(force = false): Promise<void> {
   if (el) el.scrollTop = el.scrollHeight
 }
 
-watch(() => liveRows.value.length, () => { void scrollToBottom() })
+watch(() => liveRows.value[liveRows.value.length-1]?.key, () => { void scrollToBottom() })
+watch([() => logs.query, () => logs.levelFilter.slice(), () => logs.originFilter.slice()],()=>{scrollTop.value=0;if(scroller.value)scroller.value.scrollTop=0})
 
 // ---------- 关键词高亮（纯文本分段，不用 v-html） ----------
 interface Segment { text: string; hit: boolean }
@@ -96,10 +106,11 @@ const fileOptions = computed(() => logs.files.map(f => ({
 const currentFile = ref('')
 
 async function openFile(name: string): Promise<void> {
-  if (!name) return
+  if (!name || disposed || !viewActive.value || tab.value !== 'file') return
   currentFile.value = name
   selected.value = null
-  await logs.loadFileLatest(name)
+  try {await logs.loadFileLatest(name)}
+  catch(error){if(!disposed&&viewActive.value)errorStore.fromError(t('logs.loadFailed'),error,'LogPanel.file')}
 }
 
 function pickFile(evt: Event): void {
@@ -107,10 +118,14 @@ function pickFile(evt: Event): void {
 }
 
 let fileFilterTimer: number | undefined
-watch([() => logs.query, () => logs.levelFilter, () => logs.originFilter], () => {
-  if (tab.value !== 'file' || !currentFile.value) return
+function cancelFileFilter(): void {
   window.clearTimeout(fileFilterTimer)
-  fileFilterTimer = window.setTimeout(() => { void openFile(currentFile.value) }, 300)
+  fileFilterTimer = undefined
+}
+watch([() => logs.query, () => logs.levelFilter.slice(), () => logs.originFilter.slice()], () => {
+  cancelFileFilter()
+  if (!viewActive.value || tab.value !== 'file' || !currentFile.value) return
+  fileFilterTimer = window.setTimeout(() => { fileFilterTimer = undefined; void openFile(currentFile.value) }, 300)
 })
 
 // ---------- 原始文本 ----------
@@ -118,8 +133,19 @@ const rawText = ref('')
 const rawFile = ref('')
 const rawLoading = ref(false)
 const RAW_LIMIT_BYTES = 2 * 1024 * 1024
+let rawGeneration=0
+let rawRequest:ReturnType<typeof GetLogContent>|undefined
+function cancelRaw():void {
+  rawGeneration++
+  try{void Promise.resolve(rawRequest?.cancel?.()).catch(()=>{})}catch{/* Already completed. */}
+  rawRequest=undefined
+  rawLoading.value=false
+}
 
 async function loadRaw(): Promise<void> {
+  if(disposed||!viewActive.value)return
+  cancelRaw()
+  const generation=rawGeneration
   const name = currentFile.value || logs.currentFileLabel
   const size = logs.files.find(f => f.name === name)?.size_bytes ?? 0
   if (size > RAW_LIMIT_BYTES) {
@@ -129,32 +155,42 @@ async function loadRaw(): Promise<void> {
   rawLoading.value = true
   rawFile.value = name
   try {
-    rawText.value = (await GetLogContent(name)) || ''
+    rawRequest=GetLogContent(name)
+    const text=await rawRequest
+    if(generation!==rawGeneration||disposed)return
+    rawText.value = text || ''
   } catch (e: any) {
+    if(generation!==rawGeneration||disposed)return
     errorStore.fromError(t('logs.loadFailed'), e, 'LogPanel')
     rawText.value = ''
   } finally {
-    rawLoading.value = false
+    if(generation===rawGeneration){rawRequest=undefined;rawLoading.value = false}
   }
 }
 
 watch(tab, (next) => {
+  cancelFileFilter()
+  if (next !== 'raw') cancelRaw()
+  if (next !== 'file') logs.cancelFileLoad()
+  if (!viewActive.value) return
   if (next === 'file' && !logs.fileRecords.length && currentFile.value) void openFile(currentFile.value)
   if (next === 'raw' && !rawText.value) void loadRaw()
 })
 
 // ---------- 操作 ----------
 async function refresh(): Promise<void> {
+  const token = activation
   await logs.bootstrap()
-  await logs.refreshStats()
-  if (currentFile.value) await openFile(currentFile.value)
-  await scrollToBottom(true)
+  if (disposed || !viewActive.value || token !== activation) return
+  if (tab.value === 'file' && currentFile.value) await openFile(currentFile.value)
+  else if (tab.value === 'raw') await loadRaw()
+  else await scrollToBottom(true)
 }
 
 async function openLogDir(): Promise<void> {
   const dir = String(logs.stats?.dir || '')
   if (!dir) return
-  try { await OpenFolder(dir) } catch (e: any) { errorStore.fromError(t('logs.openDirFailed'), e, 'LogPanel') }
+  try { await revealLogDirectory(dir) } catch (e: any) { errorStore.fromError(t('logs.openDirFailed'), e, 'LogPanel') }
 }
 
 async function revealLogFile(): Promise<void> {
@@ -179,7 +215,7 @@ async function doExport(): Promise<void> {
 
 async function revealExport(): Promise<void> {
   if (!lastExportPath.value) return
-  try { await OpenFolder(lastExportPath.value) } catch (e: any) { errorStore.fromError(t('logs.openDirFailed'), e, 'LogPanel') }
+  try { await revealDiagnosticExport(lastExportPath.value) } catch (e: any) { errorStore.fromError(t('logs.openDirFailed'), e, 'LogPanel') }
 }
 
 async function doClear(): Promise<void> {
@@ -199,6 +235,7 @@ async function doClear(): Promise<void> {
 }
 
 function clearFileView(): void {
+  cancelRaw()
   logs.clearFileView()
   rawText.value = ''
   rawFile.value = ''
@@ -250,29 +287,45 @@ const originChips = computed(() => ALL_ORIGINS.map(origin => ({
 const stats = computed<Record<string, any>>(() => logs.stats || {})
 const bufferedLabel = computed(() => `${stats.value.buffered ?? 0} / ${stats.value.capacity ?? 0}`)
 
-onMounted(async () => {
-  await logs.bootstrap()
-  await logs.attach()
-  currentFile.value = logs.files[0]?.name || logs.currentFileLabel
-  if (scroller.value) {
-    viewportH.value = scroller.value.clientHeight
-    resizeObserver = new ResizeObserver(() => {
-      if (scroller.value) viewportH.value = scroller.value.clientHeight
-    })
-    resizeObserver.observe(scroller.value)
-  }
-  await scrollToBottom(true)
-})
+watch(viewActive,async active=>{
+  const token=++activation
+  if(!active){cancelFileFilter();cancelRaw();logs.cancelBootstrap();logs.cancelFileLoad();void logs.detach();return}
+  if(!initialized){const loaded=await logs.bootstrap();if(disposed||token!==activation)return;initialized=loaded;currentFile.value=logs.files[0]?.name||logs.currentFileLabel}
+  if(tab.value==='live')await logs.attach()
+  else if(tab.value==='file'&&currentFile.value)await openFile(currentFile.value)
+  else if(tab.value==='raw')await loadRaw()
+  if(!disposed&&token===activation)await scrollToBottom(true)
+},{immediate:true})
+watch(tab,next=>{if(!viewActive.value)return;if(next==='live')void logs.attach();else void logs.detach()})
+watch(scroller,el=>{
+  resizeObserver?.disconnect()
+  if(!el)return
+  viewportH.value=el.clientHeight
+  resizeObserver=new ResizeObserver(()=>{viewportH.value=el.clientHeight})
+  resizeObserver.observe(el)
+},{flush:'post'})
 
 onBeforeUnmount(() => {
+  disposed=true
+  activation++
+  cancelRaw()
+  logs.cancelBootstrap()
+  logs.cancelFileLoad()
   resizeObserver?.disconnect()
-  window.clearTimeout(fileFilterTimer)
+  cancelFileFilter()
   void logs.detach()
 })
+function onOverlayBack(event:Event):void {
+  if(props.detailMode!=='sheet'||!selected.value||!viewActive.value)return
+  event.preventDefault();event.stopImmediatePropagation();selected.value=null
+}
+onMounted(()=>{if(props.detailMode==='sheet')window.addEventListener('cczj:android-overlay-back',onOverlayBack)})
+onBeforeUnmount(()=>window.removeEventListener('cczj:android-overlay-back',onOverlayBack))
 </script>
 
 <template>
   <div class="log-panel cczj-flex cczj-flex-col cczj-gap-2">
+    <p v-if="logs.connectionError" class="log-hint" role="status">{{t('logs.connectionRetry')}}</p>
     <!-- 概览卡 -->
     <section class="block">
       <div class="block-hd cczj-flex cczj-items-center cczj-justify-between">
@@ -377,13 +430,13 @@ onBeforeUnmount(() => {
         <Button variant="secondary" size="sm" @click="copyVisible">
           <Icon name="copy" :size="12" /> {{ t('logs.copyAll') }}
         </Button>
-        <Button variant="secondary" size="sm" @click="openLogDir">
+        <Button v-if="localFileActions" variant="secondary" size="sm" @click="openLogDir">
           <Icon name="folder" :size="12" /> {{ t('logs.openDir') }}
         </Button>
-        <Button variant="secondary" size="sm" @click="revealLogFile">
+        <Button v-if="localFileActions" variant="secondary" size="sm" @click="revealLogFile">
           <Icon name="file-text" :size="12" /> {{ t('logs.reveal') }}
         </Button>
-        <div class="cczj-flex cczj-items-center cczj-gap-3">
+        <div class="log-export-actions cczj-flex cczj-items-center cczj-gap-3">
           <button
             v-for="fmt in (['log', 'csv', 'json'] as const)"
             :key="fmt"
@@ -395,7 +448,7 @@ onBeforeUnmount(() => {
             <Icon name="download" :size="12" /> {{ t('logs.export') }}
           </Button>
           <Button v-if="lastExportPath" variant="secondary" size="sm" @click="revealExport">
-            <Icon name="folder" :size="12" /> {{ t('logs.revealExport') }}
+            <Icon name="folder" :size="12" /> {{ t(exportActionLabel) }}
           </Button>
         </div>
         <Button variant="danger" size="sm" @click="doClear">

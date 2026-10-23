@@ -1,0 +1,1222 @@
+--- before/app/handler/source.go
++++ after/app/handler/source.go
+@@ -7,7 +7,6 @@
+ 	"cczjVideo/app/db"
+ 	"cczjVideo/app/model"
+ 	"fmt"
+-	"net/url"
+ )
+ 
+ // GetAllSources 返回**视频**源列表。
+@@ -32,8 +31,7 @@
+ 	return db.GetEnabledSources()
+ }
+ 
+-// deriveKey 委托给 model.DeriveSourceKey：小说/漫画源要走同一条推导，
+-// 而 source_key 在 sources 表上是 UNIQUE 的，两处各写一套迟早会产出不一致的 key。
++// deriveKey is the legacy alias derivation, retained for existing callers.
+ func deriveKey(rawURL string) string {
+ 	return model.DeriveSourceKey(rawURL)
+ }
+@@ -45,17 +43,24 @@
+ 	if s.ApiUrl == "" {
+ 		return apperror.New(apperror.Validation, "api_url is required")
+ 	}
+-	if _, err := url.Parse(s.ApiUrl); err != nil {
++	if err := model.ValidateSourceURL(s.ApiUrl); err != nil {
+ 		return apperror.Wrap(apperror.Validation, err, "invalid api_url")
+ 	}
+ 	if s.SourceKey == "" {
+-		s.SourceKey = deriveKey(s.ApiUrl)
++		key, err := model.NewSourceKey()
++		if err != nil {
++			return apperror.Wrap(apperror.Internal, err, "分配来源标识失败")
++		}
++		s.SourceKey = key
+ 	}
+ 	if err := model.ValidateSourceKey(s.SourceKey); err != nil {
+ 		return apperror.Wrap(apperror.Validation, err, "invalid source_key")
+ 	}
+ 	if s.Name == "" {
+-		s.Name = s.SourceKey
++		s.Name = deriveKey(s.ApiUrl)
++		if s.Name == "" {
++			s.Name = s.SourceKey
++		}
+ 	}
+ 
+ 	existing, _ := db.GetSourceByKey(s.SourceKey)
+--- before/app/library/content.go
++++ after/app/library/content.go
+@@ -205,7 +205,7 @@
+ 	}
+ 	key := s.textCacheKey(resolved, row)
+ 	if cached, ok := s.readTextCache(key); ok {
+-		return &ChapterText{ChapterID: chapterID, Paragraphs: cached, FromCache: true}, nil
++		return &ChapterText{ChapterID: chapterID, Paragraphs: cached.Paragraphs, FromCache: true, Warnings: contentWarnings(cached)}, nil
+ 	}
+ 
+ 	chapter := &provider.Chapter{
+@@ -217,7 +217,7 @@
+ 		return nil, err
+ 	}
+ 	warnings := contentWarnings(content)
+-	s.writeTextCache(key, content.Paragraphs)
++	s.writeTextCache(key, content)
+ 	return &ChapterText{ChapterID: chapterID, Paragraphs: content.Paragraphs, Warnings: warnings}, nil
+ }
+ 
+@@ -244,15 +244,21 @@
+ 
+ // textCacheEntry 是正文缓存的落盘形状。
+ type textCacheEntry struct {
+-	Paragraphs []string `json:"paragraphs"`
++	Version        int      `json:"version"`
++	Paragraphs     []string `json:"paragraphs"`
++	Truncated      bool     `json:"truncated,omitempty"`
++	Garbled        bool     `json:"garbled,omitempty"`
++	FontObfuscated bool     `json:"fontObfuscated,omitempty"`
+ }
+ 
+ func (s *Service) textCacheKey(resolved *resolvedSource, row *chapterRow) string {
+-	// 键的四段与 reports/00:104 的建议一致：provider + provider 版本 + 作品 + 章节。
+-	return strings.Join([]string{resolved.source.SourceKey, resolved.version, row.itemRemoteID, row.remoteID}, "|")
+-}
+-
+-func (s *Service) readTextCache(key string) ([]string, bool) {
++	// JSON encodes component boundaries, including identities containing delimiters.
++	// A policy change must also invalidate previously truncated content.
++	key, _ := json.Marshal([]any{"content-v2", resolved.source.SourceKey, resolved.version, row.itemRemoteID, row.remoteID, s.limits.MaxContentPages, s.limits.MaxContentBytes})
++	return string(key)
++}
++
++func (s *Service) readTextCache(key string) (*provider.TextContent, bool) {
+ 	if s.textCache == nil {
+ 		return nil, false
+ 	}
+@@ -266,17 +272,17 @@
+ 	}
+ 	// 空正文不进缓存也不该从缓存里被端出来：那意味着上次写入时判错了，
+ 	// 而现在这一次本可以重新抓。
+-	if len(entry.Paragraphs) == 0 {
+-		return nil, false
+-	}
+-	return entry.Paragraphs, true
+-}
+-
+-func (s *Service) writeTextCache(key string, paragraphs []string) {
+-	if s.textCache == nil || len(paragraphs) == 0 {
++	if entry.Version != 2 || len(entry.Paragraphs) == 0 {
++		return nil, false
++	}
++	return &provider.TextContent{Paragraphs: entry.Paragraphs, Truncated: entry.Truncated, Garbled: entry.Garbled, FontObfuscated: entry.FontObfuscated}, true
++}
++
++func (s *Service) writeTextCache(key string, content *provider.TextContent) {
++	if s.textCache == nil || content == nil || len(content.Paragraphs) == 0 {
+ 		return
+ 	}
+-	raw, err := json.Marshal(textCacheEntry{Paragraphs: paragraphs})
++	raw, err := json.Marshal(textCacheEntry{Version: 2, Paragraphs: content.Paragraphs, Truncated: content.Truncated, Garbled: content.Garbled, FontObfuscated: content.FontObfuscated})
+ 	if err != nil {
+ 		return
+ 	}
+--- before/app/library/library_test.go
++++ after/app/library/library_test.go
+@@ -93,11 +93,8 @@
+ 	}))
+ }
+ 
+-// testDataDir 与 testCacheDir 在整个测试进程里是固定的：db.InitDB 受 sync.Once
+-// 保护，一个进程只能初始化一次，所以各测试共享一个库、各自用不同的 source_key
+-// 并在开始前清掉自己那一份。缓存目录同样必须稳定——正文缓存命中与否是靠磁盘上
+-// 那一份文件判定的，每个测试换一个目录会让"第二次取正文应当命中缓存"永远失败，
+-// 而且失败原因看不出来。
++// This suite owns one process-local database and cache directory. Tests clear
++// their source records before searching the shared database.
+ var (
+ 	testDataDir  string
+ 	testCacheDir string
+@@ -159,8 +156,7 @@
+ 
+ // cleanupTestSource 清掉一个 source_key 的全部痕迹。
+ //
+-// 库是整个测试进程共享的（db.InitDB 受 sync.Once 保护，没法每个测试重开），
+-// 所以每个测试开头都要先清一遍自己那份，否则会读到上一个测试留下的行。
++// The suite shares one database; clear references before deleting a source.
+ func cleanupTestSource(t *testing.T, key string) {
+ 	t.Helper()
+ 	_, _ = db.DB().Exec(`DELETE FROM library_chapters WHERE item_id IN (SELECT id FROM library_items WHERE source_key=?)`, key)
+@@ -344,11 +340,6 @@
+ 	service := setupLibraryTest(t)
+ 	server := fakeSource()
+ 	defer server.Close()
+-	// httptest 的地址是 127.0.0.1:随机端口，DeriveSourceKey 会从主机名推出
+-	// 一个固定的 key（"127"），所以每个用 AddSource 的测试都得先清掉它，
+-	// 否则上一个测试留下的行会让这一个报"来源已存在"。
+-	derived := model.DeriveSourceKey(server.URL)
+-	cleanupTestSource(t, derived)
+ 
+ 	// 一份为别的引擎写的文档，带着 js 字段。必须在**写入之前**报出具名错误：
+ 	// 静默忽略的话用户看到的就是"源加上了但搜不出东西"，
+@@ -360,7 +351,7 @@
+ 		t.Fatalf("报错没有指名是哪个字段：%v", err)
+ 	}
+ 	// 被拒的源不该落库：否则源列表里会多一个永远不能用的幽灵源。
+-	if existing, _ := db.GetSourceByKey(derived); existing != nil {
++	if sources, err := db.GetSourcesByKind(model.SourceKindNovel); err != nil || len(sources) != 0 {
+ 		t.Fatal("被拒的源落库了")
+ 	}
+ 
+@@ -477,12 +468,12 @@
+ 	brokenToc := strings.Replace(novelDocument(), `"query": "ul.chapters > li"`, `"query": "ul.nonexistent > li"`, 1)
+ 	server := fakeSource()
+ 	defer server.Close()
+-	cleanupTestSource(t, model.DeriveSourceKey(server.URL))
+-	if _, err := service.AddSource(model.SourceKindNovel, "分级测试", server.URL, brokenToc); err != nil {
+-		t.Fatal(err)
+-	}
+-
+-	outcome, err := service.TestSource(context.Background(), model.DeriveSourceKey(server.URL))
++	source, err := service.AddSource(model.SourceKindNovel, "分级测试", server.URL, brokenToc)
++	if err != nil {
++		t.Fatal(err)
++	}
++
++	outcome, err := service.TestSource(context.Background(), source.SourceKey)
+ 	if err != nil {
+ 		t.Fatal(err)
+ 	}
+@@ -571,7 +562,6 @@
+ 	defer server.Close()
+ 	// 漫画源必须能取出图片列表；缺了 pages 不是"这个源不支持漫画"，
+ 	// 而是文档写漏了，导入时就该拦住。
+-	cleanupTestSource(t, model.DeriveSourceKey(server.URL))
+ 	if _, err := service.AddSource(model.SourceKindComic, "漫画", server.URL, novelDocument()); err == nil {
+ 		t.Fatal("一份小说文档被当成漫画源接受了")
+ 	} else if !strings.Contains(err.Error(), "kind") && !strings.Contains(err.Error(), "pages") {
+--- before/app/library/service.go
++++ after/app/library/service.go
+@@ -14,9 +14,9 @@
+ 	"context"
+ 	"crypto/sha256"
+ 	"encoding/hex"
++	"encoding/json"
+ 	"fmt"
+ 	"strings"
+-	"sync"
+ 	"time"
+ 
+ 	"cczjVideo/app/apperror"
+@@ -34,20 +34,18 @@
+ 	// textCacheMaxBytes 是正文缓存目录的上限。一章几 KB 到几十 KB，
+ 	// 256MB 装得下上万章，而数据目录在系统盘上。
+ 	textCacheMaxBytes = 256 << 20
+-	// searchConcurrency 是聚合搜索同时在飞的源数。
+-	//
+-	// 全局并发、每源并发与每主机速率是三个不同的限制（reports/00:131）；
+-	// 这一条只管第一个。每源并发由 provider 的分页循环自己管，
+-	// 每主机速率这一轮不做——用户自己加的源通常只有一两个同域，
+-	// 为它引入一个令牌桶在没有实测限流证据前是投机。
++	// searchConcurrency bounds active source searches across this Service.
++	// This is not a budget for playback, image requests or other host traffic.
+ 	searchConcurrency = 6
+ )
+ 
+ // Service 是阅读模式的资源载入服务。
+ type Service struct {
+-	fetcher   *provider.Fetcher
+-	textCache *proxy.BlobStore
+-	limits    provider.Limits
++	fetcher       *provider.Fetcher
++	textCache     *proxy.BlobStore
++	limits        provider.Limits
++	searchSlots   chan struct{}
++	continuations searchContinuations
+ 
+ 	// imageURL 把上游图片地址换成同源代理地址。由服务层注入，
+ 	// 因为代理实例挂在 App 上，而这个包不该知道 App 的存在。
+@@ -57,9 +55,10 @@
+ // NewService 建一个阅读资源服务。dataDir 延迟求值：启动早期数据目录可能还没迁移到位。
+ func NewService(dataDir func() string) *Service {
+ 	return &Service{
+-		fetcher:   provider.NewFetcher(),
+-		textCache: proxy.NewBlobStore(dataDir, "textcache", textCacheTTL, textCacheMaxBytes),
+-		limits:    provider.DefaultLimits(),
++		fetcher:     provider.NewFetcher(),
++		textCache:   proxy.NewBlobStore(dataDir, "textcache", textCacheTTL, textCacheMaxBytes),
++		limits:      provider.DefaultLimits(),
++		searchSlots: make(chan struct{}, searchConcurrency),
+ 	}
+ }
+ 
+@@ -178,6 +177,9 @@
+ 	// 所以界面上要同时显示"有 N 个源没搜成"。
+ 	Total       int `json:"total"`
+ 	FailedCount int `json:"failedCount"`
++	// NextCursor is an opaque, short-lived continuation owned by this Service.
++	// It retains each source's independent cursor and configuration revision.
++	NextCursor string `json:"nextCursor"`
+ }
+ 
+ // ---------------------------------------------------------------------------
+@@ -224,13 +226,18 @@
+ 	if err != nil {
+ 		return nil, apperror.Wrap(apperror.Validation, err, "这个源的配置不合法")
+ 	}
+-	sum := sha256.Sum256([]byte(source.StrategyConfig))
+ 	return &resolvedSource{
+ 		source:   source,
+ 		document: document,
+ 		pipeline: provider.NewPipeline(document, s.fetcher, s.limits),
+-		version:  hex.EncodeToString(sum[:])[:16],
++		version:  sourceRevision(source),
+ 	}, nil
++}
++
++func sourceRevision(source *model.Source) string {
++	encoded, _ := json.Marshal([]string{source.ApiUrl, source.StrategyConfig, string(source.GetKind())})
++	sum := sha256.Sum256(encoded)
++	return hex.EncodeToString(sum[:])
+ }
+ 
+ // ---------------------------------------------------------------------------
+@@ -312,10 +319,10 @@
+ // 事件），返回值是最终汇总。reports/00:131 要求"按 provider 逐个发回成功结果，
+ // 不等待最慢源完成再全屏刷新"。
+ func (s *Service) Search(ctx context.Context, kind model.SourceKind, keyword string, page int, onResult func(*SourceResult)) (*SearchOutcome, error) {
++	if err := validateSearch(kind, keyword); err != nil {
++		return nil, err
++	}
+ 	keyword = strings.TrimSpace(keyword)
+-	if keyword == "" {
+-		return nil, apperror.New(apperror.Validation, "搜索词不能为空")
+-	}
+ 	if page < 1 {
+ 		page = 1
+ 	}
+@@ -323,61 +330,32 @@
+ 	if err != nil {
+ 		return nil, apperror.Wrap(apperror.Storage, err, "读取源列表失败")
+ 	}
+-	if len(sources) == 0 {
+-		// 没有源不是错误，是"还没加源"。前端据此显示引导而不是报错。
+-		return &SearchOutcome{Keyword: keyword, Page: page, Results: []*SourceResult{}}, nil
+-	}
+-
+-	outcome := &SearchOutcome{
+-		Keyword: keyword, Page: page, Results: make([]*SourceResult, 0, len(sources)),
+-	}
+-	var (
+-		mu        sync.Mutex
+-		semaphore = make(chan struct{}, searchConcurrency)
+-		group     sync.WaitGroup
+-	)
++	plans := make([]sourceSearchState, 0, len(sources))
++	byKey := make(map[string]*model.Source, len(sources))
+ 	for _, source := range sources {
+-		group.Add(1)
+-		go func(row *model.Source) {
+-			defer group.Done()
+-			select {
+-			case semaphore <- struct{}{}:
+-				defer func() { <-semaphore }()
+-			case <-ctx.Done():
+-				return
+-			}
+-			result := s.searchOne(ctx, kind, row, keyword, page)
+-			mu.Lock()
+-			outcome.Results = append(outcome.Results, result)
+-			outcome.Total += len(result.Items)
+-			if result.ErrorCode != "" {
+-				outcome.FailedCount++
+-			}
+-			mu.Unlock()
+-			if onResult != nil {
+-				onResult(result)
+-			}
+-		}(source)
+-	}
+-	group.Wait()
+-	if err := ctx.Err(); err != nil {
+-		return nil, err
+-	}
+-	return outcome, nil
+-}
+-
+-func (s *Service) searchOne(ctx context.Context, kind model.SourceKind, source *model.Source, keyword string, page int) *SourceResult {
++		plans = append(plans, sourceSearchState{Key: source.SourceKey, Page: page})
++		byKey[source.SourceKey] = source
++	}
++	return s.searchPlans(ctx, kind, keyword, page, plans, byKey, onResult)
++}
++
++func (s *Service) searchSourcePage(ctx context.Context, kind model.SourceKind, source *model.Source, keyword string, state sourceSearchState) *SourceResult {
+ 	result := &SourceResult{SourceKey: source.SourceKey, SourceName: source.Name, Items: []*Item{}}
+ 	resolved, err := s.resolve(source.SourceKey, kind)
+ 	if err != nil {
+ 		result.ErrorCode, result.ErrorMessage = splitError(err)
+ 		return result
+ 	}
+-	found, err := resolved.pipeline.Search(ctx, source.ApiUrl, keyword, page, "")
++	if state.Version != "" && state.Version != resolved.version {
++		result.ErrorCode, result.ErrorMessage = splitError(apperror.New(apperror.Conflict, "来源配置已变化，请重新搜索"))
++		return result
++	}
++	found, err := resolved.pipeline.Search(ctx, resolved.source.ApiUrl, keyword, state.Page, state.URL)
+ 	if err != nil {
+ 		result.ErrorCode, result.ErrorMessage = splitError(err)
+ 		return result
+ 	}
++	result.NextURL, result.HasNext = found.NextURL, found.HasNext
+ 	if len(found.Items) == 0 {
+ 		// 一次成功的"没有结果"。刻意不写成错误：空列表只能是这个意思
+ 		// （reports/00:135），否则"源挂了"与"这本书真没有"在界面上分不开。
+--- before/app/library/sources.go
++++ after/app/library/sources.go
+@@ -2,8 +2,6 @@
+ 
+ import (
+ 	"context"
+-	"database/sql"
+-	"errors"
+ 	"strings"
+ 	"time"
+ 
+@@ -81,24 +79,23 @@
+ 	if apiURL == "" {
+ 		return nil, apperror.New(apperror.Validation, "接口地址不能为空")
+ 	}
++	if err := model.ValidateSourceURL(apiURL); err != nil {
++		return nil, apperror.Wrap(apperror.Validation, err, "来源地址必须是完整的 HTTP(S) 地址")
++	}
+ 	parsed, err := provider.ParseDocument(document, string(kind))
+ 	if err != nil {
+ 		return nil, apperror.Wrap(apperror.Validation, err, "源配置不合法")
+ 	}
+-	sourceKey := model.DeriveSourceKey(apiURL)
+-	if err := model.ValidateSourceKey(sourceKey); err != nil {
+-		return nil, apperror.Wrap(apperror.Validation, err, "从接口地址推不出合法的源标识")
+-	}
+-	existing, lookupErr := db.GetSourceByKey(sourceKey)
+-	if lookupErr != nil && !errors.Is(lookupErr, sql.ErrNoRows) {
+-		return nil, apperror.Wrap(apperror.Storage, lookupErr, "读取来源失败")
+-	}
+-	if existing != nil {
+-		return nil, apperror.Newf(apperror.Conflict, "来源 %s 已存在", sourceKey)
++	sourceKey, err := model.NewSourceKey()
++	if err != nil {
++		return nil, apperror.Wrap(apperror.Internal, err, "分配来源标识失败")
+ 	}
+ 	name = strings.TrimSpace(name)
+ 	if name == "" {
+-		name = sourceKey
++		name = model.DeriveSourceKey(apiURL)
++		if name == "" {
++			name = sourceKey
++		}
+ 	}
+ 	row := &model.Source{
+ 		SourceKey: sourceKey, Name: name, ApiUrl: apiURL, Enabled: 1,
+@@ -136,6 +133,9 @@
+ 	}
+ 	if strings.TrimSpace(apiURL) == "" {
+ 		apiURL = existing.ApiUrl
++	}
++	if err := model.ValidateSourceURL(apiURL); err != nil {
++		return apperror.Wrap(apperror.Validation, err, "来源地址必须是完整的 HTTP(S) 地址")
+ 	}
+ 	if strings.TrimSpace(name) == "" {
+ 		name = existing.Name
+--- before/app/model/source.go
++++ after/app/model/source.go
+@@ -28,11 +28,8 @@
+ // sourceKeyHostPattern 去掉域名里除小写字母与数字之外的所有字符。
+ var sourceKeyHostPattern = regexp.MustCompile(`[^a-z0-9]`)
+ 
+-// DeriveSourceKey 从一个接口地址推出一个 source_key。
+-//
+-// 它是 model 层的函数而不是 handler 的私有函数，因为小说/漫画源也要走同一条推导：
+-// 三种模式共用一张 sources 表，而 source_key 在这张表上是 UNIQUE 的，
+-// 两处各自实现一套推导规则迟早会撞车或产出不一致的 key。
++// DeriveSourceKey preserves the legacy address-derived alias for compatibility.
++// New sources use NewSourceKey: a hostname cannot identify interfaces or accounts.
+ func DeriveSourceKey(rawURL string) string {
+ 	u, err := url.Parse(rawURL)
+ 	if err != nil {
+--- before/app/proxy/imgproxy.go
++++ after/app/proxy/imgproxy.go
+@@ -8,7 +8,6 @@
+ 	"fmt"
+ 	"io"
+ 	"net/http"
+-	"net/http/cookiejar"
+ 	"net/url"
+ 	"strings"
+ 	"time"
+@@ -18,15 +17,12 @@
+ )
+ 
+ const (
+-	// readingCacheTTL 比海报那份（7 天）短：漫画一页几百 KB 到 1MB，
+-	// 一话几十页，同样的容量装不下同样多"次"的阅读。重读一章是常见操作，
+-	// 所以 3 天足够覆盖"昨天看到一半今天接着看"，再长就是拿磁盘换很少的命中。
++	// Defaults for reading images; age is measured since last access.
+ 	readingCacheTTL = 3 * 24 * time.Hour
+ 	// readingCacheMaxBytes 比海报那份（80MB）大：单页体积差一到两个数量级，
+ 	// 80MB 只装得下几十话，翻两下就全被挤出去了。
+ 	readingCacheMaxBytes = 256 << 20
+-	// maxReadingImageBytes 是单张图的上限。漫画原图能到几 MB，
+-	// 但一个"图片"响应超过 16MB 基本可以断定拿到的不是图片。
++	// maxReadingImageBytes bounds transfer memory, independent of image validity.
+ 	maxReadingImageBytes = 16 << 20
+ 	// maxReadingRefBytes 限制引用页地址的长度。HLS 那边是 1024，
+ 	// 对完整页面地址（含 query）偏紧，这里放宽到 4096。
+@@ -46,8 +42,9 @@
+ //
+ // 两条路由共用的部分仍然是共用的：SafeDialContext、ValidateTarget、netstats。
+ type ImageProxy struct {
+-	client *http.Client
+-	store  *imageStore
++	client   *http.Client
++	store    *imageStore
++	sessions imageSessions
+ 
+ 	// headersFor 由服务层注入，按 source_key 取出这个源声明的请求头。
+ 	//
+@@ -59,12 +56,10 @@
+ 
+ // NewImageProxy 建一个阅读图片代理。cacheDir 传 nil 表示不落盘（单测用这条）。
+ func NewImageProxy(cacheDir func() string) *ImageProxy {
+-	jar, _ := cookiejar.New(nil)
+ 	return &ImageProxy{
+ 		store: newBlobStore(cacheDir, "readingcache", readingCacheTTL, readingCacheMaxBytes),
+ 		client: &http.Client{
+ 			Timeout: 60 * time.Second,
+-			Jar:     jar,
+ 			// 归到 reading 而不是 image：诊断页上"阅读模式用了多少流量"应当是一个桶，
+ 			// 而 image 那一类记的是海报代理的 miss 次数，两者的量级与含义都不同。
+ 			Transport: netstats.WrapTransport(netstats.CategoryReading, &http.Transport{
+@@ -126,20 +121,31 @@
+ 	}
+ 	referer := decodeReferer(r.URL.Query().Get("ref"))
+ 	sourceKey := r.URL.Query().Get("k")
++	// Resolve headers once: the cache key and every redirect use this snapshot.
++	request, err := http.NewRequestWithContext(r.Context(), http.MethodGet, upstream.String(), nil)
++	if err != nil {
++		http.Error(w, "invalid upstream URL", http.StatusBadRequest)
++		return
++	}
++	p.applyHeaders(request, referer, sourceKey)
++	profile := request.Header.Clone()
++	profile.Del("Referer")
++	session := p.sessions.get(imageContextKey(sourceKey, profile), p.client)
++	cacheKey := imageContextKey(sourceKey, request.Header) + ":" + upstream.String()
+ 
+ 	// 命中磁盘副本时不出网。ServeContent 会正确处理 Range 与 HEAD。
+-	if data, contentType, ok := p.store.read(upstream.String()); ok {
++	if data, contentType, ok := p.store.read(cacheKey); ok && !session.stateful.Load() {
+ 		serveCachedImage(w, r, data, contentType)
+ 		return
+ 	}
+-	if !p.store.allow(upstream.String()) {
++	if !session.stateful.Load() && !p.store.allow(cacheKey) {
+ 		// 冷却期内直接报 503，让前端显示"这一页取不到"而不是转圈：
+ 		// 一张取不到的图会被每个渲染它的 <img> 反复要一遍。
+ 		http.Error(w, "cooling down", http.StatusServiceUnavailable)
+ 		return
+ 	}
+ 
+-	data, contentType, err := p.fetch(r.Context(), upstream, referer, sourceKey)
++	data, contentType, err := p.fetch(r.Context(), upstream, request.Header, session.client)
+ 	if err != nil {
+ 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+ 			// 用户翻页/切章会取消上一批请求，这是正常路径：**不记失败冷却**
+@@ -148,13 +154,19 @@
+ 			// 响应写状态码。
+ 			return
+ 		}
+-		p.store.noteFailure(upstream.String())
++		if !session.stateful.Load() {
++			p.store.noteFailure(cacheKey)
++		}
+ 		applog.Warn("[ReadingImage] 取图失败 %s: %v", upstream.Host, err)
+ 		http.Error(w, "upstream request failed", http.StatusBadGateway)
+ 		return
+ 	}
+ 
+-	p.store.write(upstream.String(), data, contentType)
++	// Cookie sessions may change representation without changing configuration.
++	// Conservatively bypass disk caching once the session receives any cookies.
++	if !session.stateful.Load() {
++		p.store.write(cacheKey, data, contentType)
++	}
+ 	serveCachedImage(w, r, data, contentType)
+ }
+ 
+@@ -165,10 +177,9 @@
+ // 而一份自相矛盾的响应会让 WebView 的图片解码器直接放弃。
+ func serveCachedImage(w http.ResponseWriter, r *http.Request, data []byte, contentType string) {
+ 	w.Header().Set("Content-Type", contentType)
+-	// 缓存副本是按 URL 记账的，同一个 URL 拿到的字节不会自己变；
+-	// 换图是换 URL。所以这里可以放一个较长的浏览器侧缓存，
+-	// 免得同一话来回滚动时反复走一遍 IPC。
+-	w.Header().Set("Cache-Control", "private, max-age=86400")
++	// Browser URLs do not encode configuration/session revisions. Always enter
++	// this handler so the server can resolve the current context and disk cache.
++	w.Header().Set("Cache-Control", "private, no-store")
+ 	http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(data))
+ }
+ 
+@@ -193,15 +204,15 @@
+ }
+ 
+ // fetch 取一张图，逐跳校验重定向，并在**写缓存之前**确认它真的是图片。
+-func (p *ImageProxy) fetch(ctx context.Context, initial *url.URL, referer, sourceKey string) ([]byte, string, error) {
++func (p *ImageProxy) fetch(ctx context.Context, initial *url.URL, headers http.Header, client *http.Client) ([]byte, string, error) {
+ 	current := initial
+ 	for hop := 0; hop <= maxReadingRedirect; hop++ {
+ 		request, err := http.NewRequestWithContext(ctx, http.MethodGet, current.String(), nil)
+ 		if err != nil {
+ 			return nil, "", err
+ 		}
+-		p.applyHeaders(request, referer, sourceKey)
+-		response, err := p.client.Do(request)
++		request.Header = headers.Clone()
++		response, err := client.Do(request)
+ 		if err != nil {
+ 			return nil, "", err
+ 		}
+@@ -228,7 +239,7 @@
+ 			return nil, "", err
+ 		}
+ 		if len(data) > maxReadingImageBytes {
+-			return nil, "", fmt.Errorf("响应超过 %d 字节，不像一张图片", maxReadingImageBytes)
++			return nil, "", fmt.Errorf("响应超过图片传输上限 %d 字节", maxReadingImageBytes)
+ 		}
+ 		contentType, err := verifyImageBytes(data, response.Header.Get("Content-Type"))
+ 		if err != nil {
+@@ -247,7 +258,7 @@
+ // 解码期才在阅读器里暴露，而那份坏字节已经进了缓存、下次还是它。
+ // reports/00:146 明确要求"检查响应类型/解码，不缓存错误页为图片"。
+ //
+-// 判据用"声明的类型"与"字节实际是什么"两者取交集，任一方认定是图片就通过：
++// 声明的类型与字节识别结果任一方认定是图片就通过：
+ // 只信声明会被 Content-Type: application/octet-stream 的 CDN 卡住，
+ // 只信魔数会漏掉 DetectContentType 认不出的格式。但 text/html 一票否决——
+ // 那就是错误页/登录页，没有例外。
+--- before/app/proxy/imgproxy_test.go
++++ after/app/proxy/imgproxy_test.go
+@@ -6,6 +6,7 @@
+ 	"io"
+ 	"net/http"
+ 	"net/http/httptest"
++	"os"
+ 	"strings"
+ 	"testing"
+ )
+@@ -190,9 +191,12 @@
+ 	// 关键断言：那份 HTML **没有进磁盘缓存**。
+ 	// 进了的话，之后即使上游修好了，用户也还是会拿到那份坏字节，
+ 	// 而界面上看不出任何区别——这正是 Mihon 那条路径的问题。
+-	store := newBlobStore(func() string { return dir }, "readingcache", readingCacheTTL, readingCacheMaxBytes)
+-	if data, contentType, ok := store.read("http://127.0.0.1:9/bad.png"); ok {
+-		t.Fatalf("错误页被缓存了：contentType=%q bytes=%d", contentType, len(data))
++	entries, err := os.ReadDir(service.store.root())
++	if err != nil && !os.IsNotExist(err) {
++		t.Fatal(err)
++	}
++	if len(entries) != 0 {
++		t.Fatal("HTML error response was written to the image cache")
+ 	}
+ 
+ 	// 失败之后进入冷却：一张取不到的图会被每个渲染它的 <img> 反复要一遍，
+--- before/app/service/facade_library.go
++++ after/app/service/facade_library.go
+@@ -87,6 +87,14 @@
+ 		})
+ }
+ 
++// LibrarySearchPage preserves each source's continuation. An empty cursor starts
++// a new query; subsequent calls use only the opaque cursor returned by this app.
++func (a *App) LibrarySearchPage(ctx context.Context, kind, keyword, cursor string) (*library.SearchOutcome, error) {
++	ctx, release := a.requestContext(ctx)
++	defer release()
++	return a.library.SearchPage(ctx, model.SourceKind(kind), keyword, cursor)
++}
++
+ // LibraryItems 列出一个模式下所有已入库的作品（跨源）。书城与分类页用它。
+ // includeRetired 为真时连来源已下架的一起返回：书架指着它们，
+ // 界面上要能显示成"来源已下架"，而不是让用户的书架凭空少一行。
+--- before/docs/adr/0007-declarative-extension-packs.md
++++ after/docs/adr/0007-declarative-extension-packs.md
+@@ -57,4 +57,4 @@
+   keys: ADR 0001 keeps ownership of `source_key` and `source_videos`, so a pack
+   only fills the existing `sources.strategy_config` column.
+ - Generated bindings stay the only Go↔UI channel and stay behind
+-  `frontend/src/api/` per ADR 0005.
++  `frontend/src/api/` (current development guidance: root AGENTS.md).
+--- before/docs/adr/0015-player-presentation-boundaries.md
++++ after/docs/adr/0015-player-presentation-boundaries.md
+@@ -4,7 +4,8 @@
+ 
+ ## Status
+ 
+-Accepted, 2026-10-18. Incremental migration; builds on ADR 0005 and ADR 0014.
++Accepted, 2026-10-18. Incremental migration; related mode design is in ADR 0014.
++Current architecture guidance is consolidated in root AGENTS.md.
+ 
+ ## Decision
+ 
+--- before/docs/adr/0016-novel-comic-content-domain.md
++++ after/docs/adr/0016-novel-comic-content-domain.md
+@@ -193,7 +193,7 @@
+ ### Progress and shelf stay in browser storage this round
+ 
+ ADR 0014 put novel and comic shelf, progress and preferences in versioned
+-`platform/storage.ts` keys, and ADR 0005 assigns browser persistence to that module. The
++`platform/storage.ts` keys. Current persistence guidance is in root AGENTS.md. The
+ keys move to `v2` with `{providerId, remoteId}` composite keys, and the current behaviour
+ of silently dropping an id the repository cannot resolve becomes "keep the entry, mark the
+ source unavailable". Whether reading progress should instead live in SQLite next to
+--- before/docs/implementation-notes.md
++++ after/docs/implementation-notes.md
+@@ -522,16 +522,13 @@
+ 
+ ## 📄 开发规范
+ 
+-架构边界与开发决策都在 [`adr/`](adr)：0001~0006 是数据与服务层的既有决定（0001 / 0002 / 0005 / 0006
+-在 2026-10-01 按当前实现修订过），0007 / 0008 解释扩展包为什么分成「声明式」与「注入 JS」两层，
+-0009 是错误码的唯一口径——界面上要分支的错误一律走 `app/apperror` 的码，不许按 `err.Error()` 的文本猜，
+-0010 定下安装时机只分「立即」与「退出时」两档、两档都要人点一次，
+-0011 定下库的结构比当前程序新时**读而不拦**：只在这一种情形换成忽略未知列的连接、把话说清楚，不拒绝启动。
++当前开发规范统一在 [AGENTS.md](../AGENTS.md)。[`adr/`](adr) 保留历史设计与兼容背景，
++不是禁止重构的约束。旧 ADR 0005、0009 已在规范合并时删除，其架构与错误处理要求以
++AGENTS.md 和当前实现为准；本文件也不另立一套开发规则。
+ 
+ - [统一开发规范](../AGENTS.md) — 模块职责、错误传输、数据与生命周期；历史实现允许按证据重构
+ - [`plugins.md`](plugins.md) — 扩展包规范与原因码表
+-- [`pending-decisions.md`](pending-decisions.md) — 待拍板事项：已经查清、但方向要人定的记录。
+-  与 ADR 相反，这里只放没决定的；拍板之后挪进 `adr/` 或直接改代码，再从这里删掉。
++- [`pending-decisions.md`](pending-decisions.md) — 尚未处理的问题与历史取舍记录；按当前用户指令和证据推进。
+ 
+ ---
+ 
+--- before/docs/pending-decisions.md
++++ after/docs/pending-decisions.md
+@@ -768,9 +768,9 @@
+   （`app/db/sqlite.go:253-260`，`UNIQUE(global_id, source_key, vod_id)`）与 `watch_history`
+   （`:262-271`，带 `position REAL`）。所以「清一次 WebView 数据，书架和阅读进度全没，
+   但收藏和观看历史还在」是当前会真实发生的事。
+-- 证据（为什么现在没搬）：ADR 0005 把浏览器持久化明确划给 `platform/storage.ts`，
+-  ADR 0014 也是按这个边界写的小说/漫画存储；搬进 SQLite 要同时动两个 ADR 的归属划分、
+-  加两张表、加 facade 方法，并把两个 store 从同步读改成异步——与第 15 条的异步化重叠但不等价。
++- 当前未迁移：小说/漫画仍经 `platform/storage.ts` 使用浏览器持久化。旧 ADR 0005 已删除，
++  不能作为禁止迁移的依据；SQLite 迁移需落实表结构、绑定、异步 store 与旧值导入验证，
++  与第 15 条的异步化重叠但不等价。当前规范见根目录 AGENTS.md。
+ - 证据（报告的态度）：`reports/00:97-105` 建议的表里包含 `progress`
+   （`UNIQUE(profile_id, item_id, media_kind)`），`reports/03:119-121` 另提醒
+   「不要在每次图片状态变化时都写一次全量书架」，要 debounce 合并、并在退出/切章/进后台时落盘。
+--- before/frontend/bindings/cczjVideo/app/library/models.js
++++ after/frontend/bindings/cczjVideo/app/library/models.js
+@@ -25,7 +25,7 @@
+         if (!("remoteId" in $$source)) {
+             /**
+              * RemoteID 是这一章的稳定身份（规范化后的去域名路径，或源声明的显式 id）。
+-             *
++             * 
+              * 前端记阅读进度要用它而不是 ID：ID 是本地自增主键，换库或重装就变，
+              * 而进度是按 {kind, sourceKey, itemRemoteId} 存的，章也得有一个同样稳定的键，
+              * 否则"这本书读到第几章"在源改版之后就对不上了。
+@@ -377,8 +377,8 @@
+         }
+         if (!("chapterCount" in $$source)) {
+             /**
+-             * ChapterCount 含已下架的章，Chapters 只含可用的：
+-             * 界面上"共 N 章"与列表长度不一致时，用户需要能看出差在哪。
++             * ChapterCount 与 Chapters 是同一批行，包含已下架的（每行用 Available 标注）。
++             * 界面上"共 N 章"直接数列表即可，这个字段是给调用方省一次遍历的。
+              * @member
+              * @type {number}
+              */
+@@ -490,6 +490,15 @@
+              * @type {number}
+              */
+             this["failedCount"] = 0;
++        }
++        if (!("nextCursor" in $$source)) {
++            /**
++             * NextCursor is an opaque, short-lived continuation owned by this Service.
++             * It retains each source's independent cursor and configuration revision.
++             * @member
++             * @type {string}
++             */
++            this["nextCursor"] = "";
+         }
+ 
+         Object.assign(this, $$source);
+@@ -614,7 +623,7 @@
+ 
+ /**
+  * SourceResult 是一个源在一次聚合搜索里的结果。
+- *
++ * 
+  * 每个源各自成功或失败（reports/00:131）：一个源挂了不该让整屏搜索变空，
+  * 而"空列表"必须只代表一次成功的"没有结果"，不能承担所有错误。
+  */
+--- before/frontend/bindings/cczjVideo/app/service/app.js
++++ after/frontend/bindings/cczjVideo/app/service/app.js
+@@ -3,7 +3,7 @@
+ // This file is automatically generated. DO NOT EDIT
+ 
+ /**
+- * 图片代理限速：避免对同一CDN连续快速请求导致被限流
++ * App owns application dependencies, lifecycle, and the Wails-facing adapters.
+  * @module
+  */
+ 
+@@ -934,7 +934,7 @@
+  * InstallPlugin 安装一次原生拖放：WebView2 交给应用的只有被拖文件夹的绝对路径，
+  * 所以这里只把路径递下去——读目录、落盘、改名、校验、放进 plugins 都在 app/plugin
+  * 里做（那里的目录边界比这里能做的多）。
+- *
++ * 
+  * 校验没过就什么都不会装，错误消息带原因码；成功时返回注册表里那条权威 Info，
+  * 界面据此刷新列表并重新注入脚本包。
+  * @param {string} path
+@@ -1080,7 +1080,7 @@
+ 
+ /**
+  * LibraryResolveRef 按自然键 {kind, sourceKey, remoteId} 把一个条目取回来。
+- *
++ * 
+  * 书架存的是自然键而不是本地 id：id 是自增主键，换库或重装就变了，
+  * 而书架要跨这些活下来。解析不到时返回 NOT_FOUND，前端据此把这一条
+  * 标成"来源不可用"，而不是把它从书架上悄悄删掉。
+@@ -1110,6 +1110,20 @@
+ }
+ 
+ /**
++ * LibrarySearchPage preserves each source's continuation. An empty cursor starts
++ * a new query; subsequent calls use only the opaque cursor returned by this app.
++ * @param {string} kind
++ * @param {string} keyword
++ * @param {string} cursor
++ * @returns {$CancellablePromise<library$0.SearchOutcome | null>}
++ */
++export function LibrarySearchPage(kind, keyword, cursor) {
++    return $Call.ByID(2882346785, kind, keyword, cursor).then(/** @type {($result: any) => any} */(($result) => {
++        return $$createType96($result);
++    }));
++}
++
++/**
+  * @param {string} sourceKey
+  * @param {boolean} enabled
+  * @returns {$CancellablePromise<void>}
+@@ -1131,7 +1145,7 @@
+ 
+ /**
+  * LibraryTestSource 逐级试一个源：配置 → 搜索 → 详情 → 目录 → 正文/图片。
+- *
++ * 
+  * 逐级是因为"能搜到"与"能读"是两件事：目录规则写错时搜索是正常的。
+  * 每一步失败都继续下一步，一次测试把所有坏掉的步骤都报出来。
+  * @param {string} sourceKey
+@@ -1270,7 +1284,7 @@
+  * 记录状态码与首包耗时。只读前 4KB 用于判断返回的是不是列表结构，
+  * 不把整个响应灌进内存。结果会落一条巡检样本进 source_health，
+  * 所以手动点一次「探测」和页面自动探到的那一次是同一份历史。
+- *
++ * 
+  * 每个源最多 sourceProbeMinInterval 探一次：还在冷却里的源直接不发请求，
+  * 把上一条巡检样本和还需等待的秒数回给界面。
+  * @returns {$CancellablePromise<$models.SourceProbe[]>}
+@@ -1344,7 +1358,7 @@
+ 
+ /**
+  * ReadingImageURL 把一个上游图片地址换成同源代理地址。
+- *
++ * 
+  * referer 必须是**完整的页面地址**，不要截成 origin：真实漫画 CDN 校验的
+  * 往往就是那个含路径的地址，而截断正是 /__cczj/img 这条路由存在的原因
+  * （ADR 0016、pending-decisions 第 16 条）。sourceKey 用来让代理反查这个源
+@@ -1387,7 +1401,7 @@
+ 
+ /**
+  * RestartApp 重启应用：先把新进程拉起来，再请求退出。
+- *
++ * 
+  * 这里以前是 sleep(200ms) + os.Exit(0)：整个关停流程被跳过 —— 记录退出时刻
+  * （下次启动的补采窗口按它算）、取消并等待采集与下载收尾、关日志、关库一个都没执行。
+  * 留下的结果就是"重启一次，库就脏一点"。现在只请求退出，进程由 app.Run() 正常返回
+@@ -1802,10 +1816,10 @@
+ 
+ /**
+  * WindowSetFullscreen 切换"系统级全屏"（覆盖任务栏，移除窗口边框）
+- *
++ * 
+  * 	enter=true  → 进入全屏
+  * 	enter=false → 退出全屏
+- *
++ * 
+  * Wails 的 WindowFullscreen 在 Windows 上会自动移除标题栏并覆盖任务栏。
+  * @param {boolean} enter
+  * @returns {$CancellablePromise<void>}
+--- before/frontend/bindings/cczjVideo/app/service/models.js
++++ after/frontend/bindings/cczjVideo/app/service/models.js
+@@ -426,10 +426,10 @@
+ 
+ /**
+  * DiagNetwork 是这一趟进程的出网账本，来自 netstats 的计数 RoundTripper。
+- *
++ * 
+  * 速率不是测速软件的读数，而是真实请求算出来的：播放中继、测速取样、更新包的 Range
+  * 探测各自贡献自己的字节与耗时。没跑过的类别是 0，界面对应行直接不画。
+- *
++ * 
+  * AllowPrivateTargets 放在这里是因为它会改变上面所有数字的可比性：放行私网后，
+  * 同一类流量可能来自局域网 NAS，速度和公网源站完全不是一个量级。
+  */
+@@ -2145,7 +2145,7 @@
+ 
+ /**
+  * SchemaCompat 是「这份库比当前程序新」的现场描述。界面照它说话，不自己比版本号。
+- *
++ * 
+  * 走到这一步只有两条路：拿旧 exe 开了新库，或者「退回上一版」把老程序换回原位。
+  * 两种都不是数据坏了，而是程序太旧，所以这里只说明情况并给出出口，不拦读写——
+  * 拦下来的代价是用户连查看自己数据的入口都没了（取舍见 docs/adr/0011-read-newer-library.md）。
+@@ -2342,7 +2342,7 @@
+ 
+ /**
+  * SourceProbe 是单个采集源的一次连通性探测结果。
+- *
++ * 
+  * Skipped 为真表示这次没发请求（该源还在冷却里），此时 OK/Error/ProbeTimeUnix
+  * 沿用上一条巡检样本，RetryAfterSec 告诉界面还要等多久。
+  */
+--- before/frontend/src/api/library.ts
++++ after/frontend/src/api/library.ts
+@@ -10,6 +10,7 @@
+   LibraryResolveRef,
+   LibraryRefreshToc,
+   LibrarySearch,
++  LibrarySearchPage,
+   LibrarySetSourceEnabled,
+   LibrarySources,
+   LibraryTestSource,
+@@ -105,8 +106,12 @@
+  * 非空表示那一个源失败了，而 `items` 为空且没有 errorCode 才代表
+  * "这个源确实没有这本书"（reports/00:135）。
+  */
+-export function searchLibrary(kind: LibraryKind, keyword: string, page = 1): CancellablePromise<SearchOutcomeDTO> {
+-  return unwrap(LibrarySearch(kind, keyword, page), 'LibrarySearch')
++export function searchLibrary(kind: LibraryKind, keyword: string, page = 1, cursor = ''): CancellablePromise<SearchOutcomeDTO> {
++  // Preserve the numbered-page entry for older callers. Current search views
++  // follow the opaque continuation and never reconstruct upstream page URLs.
++  return page > 1 && !cursor
++    ? unwrap(LibrarySearch(kind, keyword, page), 'LibrarySearch')
++    : unwrap(LibrarySearchPage(kind, keyword, cursor), 'LibrarySearchPage')
+ }
+ 
+ /**
+--- before/frontend/src/comic/data/repository.ts
++++ after/frontend/src/comic/data/repository.ts
+@@ -46,38 +46,41 @@
+   total: number
+   failedCount: number
+   hasNext: boolean
++  nextCursor: string
+   /** 一个源都没有：这不是失败，是"还没加源"，界面要显示引导而不是错误。 */
+   noSources: boolean
+ }
+ 
+-export async function searchComics(keyword: string, page: number): Promise<ComicSearchResult> {
+-  const outcome = await searchLibrary('comic', keyword, page)
+-  const results = (outcome.results ?? []).filter((result): result is NonNullable<typeof result> => !!result)
+-  const sources: ComicSourceOutcome[] = []
+-  const items: ComicSeries[] = []
+-  for (const result of results) {
+-    const found = (result.items ?? []).filter((item): item is ItemDTO => !!item)
+-    items.push(...found)
+-    sources.push({
+-      sourceKey: result.sourceKey,
+-      sourceName: result.sourceName || result.sourceKey,
+-      items: found,
+-      failed: !!result.errorCode,
+-      errorCode: result.errorCode ?? '',
+-      errorMessage: result.errorMessage ?? '',
+-      hasNext: !!result.hasNext,
+-    })
+-  }
+-  return {
+-    keyword: outcome.keyword ?? keyword,
+-    page: outcome.page ?? page,
+-    items,
+-    sources,
+-    total: outcome.total ?? items.length,
+-    failedCount: outcome.failedCount ?? sources.filter(source => source.failed).length,
+-    hasNext: sources.some(source => source.hasNext),
+-    noSources: results.length === 0,
+-  }
++export function searchComics(keyword: string, page: number, cursor = '') {
++  return searchLibrary('comic', keyword, page, cursor).then(outcome => {
++    const results = (outcome.results ?? []).filter((result): result is NonNullable<typeof result> => !!result)
++    const sources: ComicSourceOutcome[] = []
++    const items: ComicSeries[] = []
++    for (const result of results) {
++      const found = (result.items ?? []).filter((item): item is ItemDTO => !!item)
++      items.push(...found)
++      sources.push({
++        sourceKey: result.sourceKey,
++        sourceName: result.sourceName || result.sourceKey,
++        items: found,
++        failed: !!result.errorCode,
++        errorCode: result.errorCode ?? '',
++        errorMessage: result.errorMessage ?? '',
++        hasNext: !!result.hasNext,
++      })
++    }
++    return {
++      keyword: outcome.keyword ?? keyword,
++      page: outcome.page ?? page,
++      items,
++      sources,
++      total: outcome.total ?? items.length,
++      failedCount: outcome.failedCount ?? sources.filter(source => source.failed).length,
++      hasNext: !!outcome.nextCursor,
++      nextCursor: outcome.nextCursor || '',
++      noSources: results.length === 0,
++    }
++  })
+ }
+ 
+ /** 发现页与分类页展示的是"已经入库的全部作品"，不隶属任何单个源。 */
+--- before/frontend/src/comic/views/ComicCatalog.vue
++++ after/frontend/src/comic/views/ComicCatalog.vue
+@@ -21,13 +21,14 @@
+ })
+ 
+ const { status: searchStatus, data: searchData, error: searchError, retry: retrySearch, run: runSearch } = useAsyncResource<ComicSearchResult, [string, number]>({
+-  load: async (word, page): Promise<ComicSearchResult> => {
+-    const result = await searchComics(word, page)
+-    const previous = searchData.value
++  load: (word, page): ReturnType<typeof searchComics> => {
++    const previous: ComicSearchResult | null = searchData.value
++    return searchComics(word, page, page > 1 && previous?.keyword === word ? previous.nextCursor : '').then(result => {
+     // 分页是"再取一页"：第 2 页往后要接在已有结果后面，而不是换掉它。
+     return page > 1 && previous && previous.keyword === word && previous.page === page - 1
+       ? { ...result, items: [...previous.items, ...result.items] }
+       : result
++    })
+   },
+   // 有源失败时不算 empty：那不是一个成功的"没有结果"，界面要指出哪一个源失败了。
+   isEmpty: result => result.items.length === 0 && result.failedCount === 0,
+@@ -55,7 +56,8 @@
+ })
+ 
+ function retryCurrent(): void {
+-  if (searching.value) void retrySearch()
++  if (searching.value && searchError.value?.code === 'CONFLICT') void runSearch(keyword.value.trim(), 1)
++  else if (searching.value) void retrySearch()
+   else void retryBrowse()
+ }
+ 
+@@ -73,7 +75,7 @@
+ 
+ function more(): void {
+   const result = searchData.value
+-  if (result) void runSearch(result.keyword, result.page + 1)
++  if (result?.nextCursor && searchStatus.value !== 'loading') void runSearch(result.keyword, result.page + 1)
+ }
+ 
+ function reload(): void {
+--- before/frontend/src/locales/en.ts
++++ after/frontend/src/locales/en.ts
+@@ -1028,8 +1028,8 @@
+     advancedOptions: 'Advanced options',
+     advancedParams: 'Advanced parameters',
+     apiUrlPlaceholder: 'https://api.yyzy-tv.vip/inc/apijson.php or https://api.example.com/api.php/provide/vod/?ac=detail',
+-    autoDetect: 'Auto-detected',
+-    autoUseSourceKey: 'Source key is used automatically',
++    autoDetect: 'Suggested name',
++    autoUseSourceKey: 'Use the suggested name automatically',
+     backendScheduleLabel: 'Background schedule',
+     backendScheduler: 'Background scheduler',
+     backendStatus: 'Backend status',
+@@ -1060,7 +1060,7 @@
+     everyNMinutes: 'Scheduled every {n} minutes',
+     exportTo: 'to',
+     exported: 'Exported',
+-    formDesc: 'Just provide the API URL; the source key and name are detected automatically.',
++    formDesc: 'Enter the API URL to add a source. You can also choose a name.',
+     fullCollect: 'Full collection',
+     hourUnit: 'h',
+     importDesc: 'Drop a .json / .json.br / .json.gz file, or click the area below to choose one. The backend parses the file and adds it to the source list.',
+--- before/frontend/src/locales/zh-CN.ts
++++ after/frontend/src/locales/zh-CN.ts
+@@ -1040,8 +1040,8 @@
+     advancedOptions: '高级选项',
+     advancedParams: '高级参数',
+     apiUrlPlaceholder: 'https://api.yyzy-tv.vip/inc/apijson.php 或 https://api.example.com/api.php/provide/vod/?ac=detail',
+-    autoDetect: '自动识别',
+-    autoUseSourceKey: '自动使用来源标识',
++    autoDetect: '建议名称',
++    autoUseSourceKey: '自动使用建议名称',
+     backendScheduleLabel: '后台定时',
+     backendScheduler: '后台调度',
+     backendStatus: '后端状态',
+@@ -1072,7 +1072,7 @@
+     everyNMinutes: '每 {n} 分钟定时',
+     exportTo: '到',
+     exported: '已导出',
+-    formDesc: '只需提供 API 地址，系统会自动识别来源标识和名称。',
++    formDesc: '填写 API 地址即可添加来源，也可以自行设置名称。',
+     fullCollect: '全量采集',
+     hourUnit: '时',
+     importDesc: '支持拖入 .json / .json.br / .json.gz 文件，或点击下方区域选择文件。文件将由后端解析并添加到采集源列表。',
+--- before/frontend/src/novel/data/novelLibrary.ts
++++ after/frontend/src/novel/data/novelLibrary.ts
+@@ -30,28 +30,30 @@
+   failedCount: number
+   page: number
+   hasNext: boolean
++  nextCursor: string
+ }
+ 
+-export async function searchNovels(keyword: string, page = 1): Promise<NovelSearchPage> {
+-  const outcome = await searchLibrary('novel', keyword, page)
+-  const results = (outcome.results ?? []).filter((result): result is NonNullable<typeof result> => !!result)
+-  const items: ItemDTO[] = []
+-  const failures: NovelSearchFailure[] = []
+-  for (const result of results) {
+-    if (result.errorCode) {
+-      failures.push({
+-        sourceKey: result.sourceKey,
+-        sourceName: result.sourceName || result.sourceKey,
+-        errorCode: result.errorCode,
+-        errorMessage: result.errorMessage ?? '',
+-      })
+-      continue
++export function searchNovels(keyword: string, page = 1, cursor = '') {
++  return searchLibrary('novel', keyword, page, cursor).then(outcome => {
++    const results = (outcome.results ?? []).filter((result): result is NonNullable<typeof result> => !!result)
++    const items: ItemDTO[] = []
++    const failures: NovelSearchFailure[] = []
++    for (const result of results) {
++      if (result.errorCode) {
++        failures.push({
++          sourceKey: result.sourceKey,
++          sourceName: result.sourceName || result.sourceKey,
++          errorCode: result.errorCode,
++          errorMessage: result.errorMessage ?? '',
++        })
++        continue
++      }
++      for (const item of result.items ?? []) {
++        if (item) items.push(item)
++      }
+     }
+-    for (const item of result.items ?? []) {
+-      if (item) items.push(item)
+-    }
+-  }
+-  return { items, failures, total: outcome.total, failedCount: outcome.failedCount, page: outcome.page || page, hasNext: results.some(result => result.hasNext) }
++    return { items, failures, total: outcome.total, failedCount: outcome.failedCount, page: outcome.page || page, hasNext: !!outcome.nextCursor, nextCursor: outcome.nextCursor || '' }
++  })
+ }
+ 
+ /**
+--- before/frontend/src/novel/views/NovelSearch.vue
++++ after/frontend/src/novel/views/NovelSearch.vue
+@@ -12,14 +12,17 @@
+ // 新一轮搜索的代号：迟到的旧响应不能把结果追加进新一轮的累计列表。
+ let searchId = 0
+ let accumulated: NovelSearchPage['items'] = []
++let cursor = ''
+ const search = useAsyncResource<NovelSearchPage>({
+-  load: async () => {
++  load: () => {
+     const id = searchId, current = page.value
+-    const result = await searchNovels(keyword.value.trim(), current)
++    return searchNovels(keyword.value.trim(), current, current > 1 ? cursor : '').then(result => {
+     if (id !== searchId) return result
+     accumulated = current <= 1 ? result.items : [...accumulated, ...result.items]
+     return { ...result, items: accumulated }
++    })
+   },
++  onData: result => { cursor = result.nextCursor },
+   isEmpty: data => data.items.length === 0 && data.failures.length === 0,
+ })
+ function submit(): void {
+@@ -28,10 +31,11 @@
+   searchId += 1
+   page.value = 1
+   accumulated = []
++  cursor = ''
+   void search.run()
+ }
+ function more(): void {
+-  if (search.status.value === 'loading') return
++  if (search.status.value === 'loading' || !cursor) return
+   page.value += 1
+   void search.run()
+ }
+@@ -39,14 +43,24 @@
+   searchId += 1
+   page.value = 1
+   accumulated = []
++  cursor = ''
+   keyword.value = ''
+   search.cancel()
++}
++function retrySearch(): void {
++  if (search.error.value?.code === 'CONFLICT') {
++    searchId += 1
++    page.value = 1
++    accumulated = []
++    cursor = ''
++  }
++  void search.run()
+ }
+ </script>
+ <template>
+   <div class="novel-page"><form class="novel-search" role="search" @submit.prevent="submit"><Icon name="search" :size="20" /><input v-model="keyword" type="search" :placeholder="t('novel.searchHint')" :aria-label="t('novel.search')" autofocus /><button v-if="keyword" :aria-label="t('common.clearAll')" @click="clear" type="button"><Icon name="close" :size="18" /></button></form>
+     <Spinner v-if="search.status.value === 'loading' && !search.data.value" :label="t('common.loading')" />
+-    <div v-else-if="search.status.value === 'error'" class="novel-empty"><Icon name="warning" :size="36" /><h2>{{ search.error.value?.message || t('common.unknownError') }}</h2><button class="novel-button" @click="search.retry()">{{ t('common.retry') }}</button></div>
++    <div v-else-if="search.status.value === 'error'" class="novel-empty"><Icon name="warning" :size="36" /><h2>{{ search.error.value?.message || t('common.unknownError') }}</h2><button class="novel-button" @click="retrySearch">{{ t('common.retry') }}</button></div>
+     <div v-else-if="search.status.value === 'idle'" class="novel-empty"><Icon name="search" :size="36" /><h2>{{ t('novel.discoverMore') }}</h2><p>{{ t('novel.searchPrompt') }}</p></div>
+     <template v-else>
+       <div class="novel-section-heading"><h2>{{ t('novel.searchResults') }}</h2><span>{{ t('novel.bookCount',{n:search.data.value?.items.length ?? 0}) }}</span></div>
+@@ -57,7 +71,7 @@
+       <div v-if="search.data.value && search.data.value.items.length" class="novel-row-grid"><NovelBookCard v-for="book in search.data.value.items" :key="book.id" :book="book" compact /></div>
+       <div v-else-if="search.status.value === 'empty' || (search.data.value && !search.data.value.failures.length)" class="novel-empty"><Icon name="search" :size="36" /><h2>{{ t('novel.noBooks') }}</h2><p>{{ t('novel.tryKeyword') }}</p></div>
+       <div v-if="search.status.value === 'loading'" class="novel-load-more"><Spinner size="sm" /></div>
+-      <div v-else-if="search.data.value && search.data.value.hasNext && search.data.value.items.length" class="novel-load-more"><button class="novel-button" @click="more">{{ t('novel.loadMore') }}</button></div>
++      <div v-else-if="search.data.value && search.data.value.hasNext" class="novel-load-more"><button class="novel-button" @click="more">{{ t('novel.loadMore') }}</button></div>
+     </template>
+   </div>
+ </template>
+--- before/frontend/src/views/sources/SourceFormModal.vue
++++ after/frontend/src/views/sources/SourceFormModal.vue
+@@ -110,7 +110,7 @@
+       const before = new Set(sourceStore.sources.map(sk))
+       await AddSource(payload as any)
+       await sourceStore.loadSources(true)
+-      // 新源的 source_key 由后端从 api_url 推导，前端只认这次新增出来的那一行。
++      // 后端分配独立身份；地址和建议名称都不是持久标识。
+       const created = sourceStore.sources.find(s => !before.has(sk(s)))
+       key = created ? sk(created) : ''
+     }
+--- before/frontend/tests/comic-reading.test.ts
++++ after/frontend/tests/comic-reading.test.ts
+@@ -66,7 +66,7 @@
+ 
+ it('keeps a failed source visible in search results instead of collapsing it into "no matches"', async () => {
+   vi.mocked(searchLibrary).mockResolvedValue({
+-    keyword: 'x', page: 1, total: 1, failedCount: 1,
++    keyword: 'x', page: 1, total: 1, failedCount: 1, nextCursor: 'opaque-next-page',
+     results: [
+       { sourceKey: 'src-a', sourceName: 'A源', items: [item], nextUrl: '', hasNext: true },
+       { sourceKey: 'src-b', sourceName: 'B源', items: [], nextUrl: '', hasNext: false, errorCode: 'TIMEOUT', errorMessage: '超时' },

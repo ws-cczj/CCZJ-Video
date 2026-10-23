@@ -8,6 +8,31 @@ import (
 	"cczjVideo/app/applog"
 )
 
+func TestMigrateLegacyDatabaseFailureDoesNotPublishPartialDatabase(t *testing.T) {
+	root := t.TempDir()
+	oldDir, newDir := filepath.Join(root, "旧目录"), filepath.Join(root, "新目录")
+	writeDB(t, oldDir, "cczj_video.db", "old-database")
+	if err := os.MkdirAll(newDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	// The primary DB can be copied, but the WAL cannot be read as a file.
+	badWAL := filepath.Join(oldDir, "cczj_video.db-wal")
+	if err := os.Mkdir(badWAL, 0755); err != nil {
+		t.Fatal(err)
+	}
+	checkMigration(t, "WAL 复制失败", migrateLegacyDatabase(oldDir, newDir), legacyBlocked)
+	if _, err := os.Stat(filepath.Join(newDir, "cczj_video.db")); !os.IsNotExist(err) {
+		t.Fatalf("failed migration published a partial database; next startup will skip recovery: %v", err)
+	}
+	if err := os.Remove(badWAL); err != nil {
+		t.Fatal(err)
+	}
+	checkMigration(t, "下次启动可重试", migrateLegacyDatabase(oldDir, newDir), legacyMigrated)
+	if got := readDB(t, newDir, "cczj_video.db"); got != "old-database" {
+		t.Fatalf("retry lost the legacy data: %q", got)
+	}
+}
+
 // TestMain 抢在任何 applog 调用之前把单例绑到临时目录。
 // applog.Default() 会在单例为空时用 %APPDATA% 的生产目录把它建出来，而这里的
 // 「新旧两处都有库」分支就是要写日志的，不绑就会灌进用户真实的日志文件。

@@ -1,0 +1,53 @@
+{
+  "head": "c900bb131d8d82d680d96816fb549dcfce4193a1",
+  "files": [
+    {
+      "path": "app/service/app.go",
+      "sha256": "d8aa12c21203e70c9d80ee25b22b2b8ed738f78ea594f36e61db1d2047599756"
+    },
+    {
+      "path": "app/service/download.go",
+      "sha256": "6ecda50074411eb32d2641c5c426037e22d1bacf881c37bead58de93774f9deb"
+    },
+    {
+      "path": "app/service/download_http.go",
+      "sha256": "b0adc73a8f0511d4cf30daa6857fd3399d971db06d09c8c72ce7374b467d25da"
+    },
+    {
+      "path": "app/service/download_hls.go",
+      "sha256": "b3603a3ee96e5b2419ba6c936be0b63d85cd432e5c118919203b1b53bc54566c"
+    },
+    {
+      "path": "app/service/download_persist_test.go",
+      "sha256": "48cc59eab5e5775bf9f4ea1049c81051fd5d016dd2d29fd9b3061ca95652eaa2"
+    },
+    {
+      "path": "app/service/download_cleanup_test.go",
+      "sha256": "4e0f5be5eac3cfde71bd13619253723dbeb16917ae4431c4eca2da4bf1de6af7"
+    },
+    {
+      "path": "app/service/hls_download_test.go",
+      "sha256": "7739b9796cc2def0cfe84a9113354ffc85a5cb2e36613a8cdbfea647f2882c1f"
+    },
+    {
+      "path": "app/db/migrations.go",
+      "sha256": "9934678be42ec1d4a0570b13081b9c692c62a1d2a148603785a2e29d6e78649a"
+    },
+    {
+      "path": "app/db/sqlite.go",
+      "sha256": "acf57726b0e294107d30662aa4711af437538c1bcd4dcb0c75116ce94b7c3d83"
+    },
+    {
+      "path": "app/download/registry.go",
+      "sha256": "563bd730082dc70b405909c87adf9a6b8096ec538625973ce1e7b9be9308096a"
+    },
+    {
+      "path": "frontend/bindings/cczjVideo/app/service/app.js",
+      "sha256": "009d03d6736b35e155c9399bd177449e42efea0e52b0148cd771fb48f5e83898"
+    },
+    {
+      "path": "frontend/bindings/cczjVideo/app/service/models.js",
+      "sha256": "73f23bc0c8da37af678193de3511ff51c6ea83610c3eecdef2f8d9d4c90871b4"
+    }
+  ]
+}

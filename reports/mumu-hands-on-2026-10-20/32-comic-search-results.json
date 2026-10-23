@@ -1,0 +1,26 @@
+{
+  "url": "https://wails.localhost/?application-mode=comic&mode-resume=mvgn7svg-1-12mmjpa321#/comic/search?q=%E7%A5%9E",
+  "text": "搜索漫画\n搜索\n全部\n全部状态\n已完结\n已加载 0 部\n加载中...",
+  "links": [
+    {
+      "text": "发现",
+      "href": "#/comic"
+    },
+    {
+      "text": "分类",
+      "href": "#/comic/categories"
+    },
+    {
+      "text": "追漫",
+      "href": "#/comic/library"
+    },
+    {
+      "text": "我的",
+      "href": "#/comic/me"
+    },
+    {
+      "text": "",
+      "href": "#/comic/settings"
+    }
+  ]
+}

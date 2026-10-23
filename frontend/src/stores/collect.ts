@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { tr } from '../locales'
 import { ref, computed } from 'vue'
-import { StartCollect, PauseCollect, ResumeCollect, StopCollect, GetCollectSchedule, SetCollectSchedule, TriggerCollectNow, StopBackgroundCollect, SetSourceSchedule, GetCollectStatus, normalizeApiError } from '../api/app'
+import { StartCollect, PauseCollect, ResumeCollect, StopCollect, GetCollectSchedule, SetCollectSchedule, TriggerCollectNow, StopBackgroundCollect, SetSourceSchedule, GetCollectStatus, GetCollectStatuses, normalizeApiError } from '../api/app'
 import { useErrorStore } from './error'
 import { onBackendEvent } from '../api/events'
 
@@ -303,6 +303,10 @@ export const useCollectStore = defineStore('collect', () => {
     } catch {
       return null
     }
+    return applyBackendStatus(key, raw)
+  }
+
+  function applyBackendStatus(key: string, raw: any): BackendCollectStatus | null {
     if (!raw) return null
     const snapshot: BackendCollectStatus = {
       source_key: raw.source_key || key,
@@ -317,7 +321,7 @@ export const useCollectStore = defineStore('collect', () => {
       lastRun: toLastRun(raw),
       syncedAt: Date.now(),
     }
-    backendStatus.value = { ...backendStatus.value, [key]: snapshot }
+    backendStatus.value[key] = snapshot
 
     const st = getState(key)
     st.running = snapshot.running
@@ -336,7 +340,17 @@ export const useCollectStore = defineStore('collect', () => {
 
   // 批量校正：事件流只覆盖"页面在线时"的推送，重进页面需拉一次权威快照
   async function syncAllFromBackend(keys: string[]): Promise<void> {
-    await Promise.all(keys.map(k => syncFromBackend(k)))
+    const unique = [...new Set(keys.filter(Boolean))]
+    for (let start = 0; start < unique.length; start += 256) {
+      const batch = unique.slice(start, start + 256)
+      try {
+        const rows = await GetCollectStatuses(batch)
+        const requested = new Set(batch)
+        for (const row of rows ?? []) {
+          if (row && requested.has(row.source_key)) applyBackendStatus(row.source_key, row)
+        }
+      } catch { /* Keep the last known state, as with a failed individual read. */ }
+    }
   }
 
   // 记录上一次 progress 事件的时间和页码，用于计算速度

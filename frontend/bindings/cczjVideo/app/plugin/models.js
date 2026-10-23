@@ -222,6 +222,16 @@ export class Info {
              */
             this["builtin"] = false;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * BuiltinDigest describes verified shipped bytes (including known legacy
+             * releases). A modified pack receives only the current embedded baseline,
+             * so the frontend's exact comparison never trusts a familiar ID alone.
+             * @member
+             * @type {string | undefined}
+             */
+            this["builtin_digest"] = undefined;
+        }
 
         Object.assign(this, $$source);
     }

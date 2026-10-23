@@ -1,0 +1,30 @@
+{
+  "revision": "player-seams-20261019-4",
+  "presentation": {
+    "ui": "mobile",
+    "host": "native-mobile"
+  },
+  "observed_active_players": 0,
+  "scope": "app_process",
+  "pss_mib": [
+    134.84,
+    134.87
+  ],
+  "go_heap_mib": [
+    2.38,
+    2.46
+  ],
+  "goroutines": [
+    18,
+    18
+  ],
+  "file_descriptors": [
+    220,
+    220
+  ],
+  "recording_active": [
+    false,
+    false
+  ],
+  "conclusion": "Updated frontend revision and Android diagnostic transport observed; no playback scenario or before/after performance comparison performed."
+}

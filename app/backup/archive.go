@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -147,6 +148,17 @@ func readArchive(path string) (Payload, error) {
 	payload.History = history
 	payload.Videos = videos
 	payload.Sources = sources
+	var readingTables int
+	if err := database.Get(&readingTables, `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='reading_state'`); err != nil {
+		return Payload{}, err
+	}
+	if readingTables != 0 {
+		reading, err := db.NewReadingStateStore(database).ReadBackup(context.Background())
+		if err != nil {
+			return Payload{}, apperror.Wrap(apperror.Corrupt, err, "归档中的阅读记录无法读取")
+		}
+		payload.Reading = reading
+	}
 	return payload, nil
 }
 

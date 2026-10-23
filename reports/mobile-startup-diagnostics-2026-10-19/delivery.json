@@ -1,0 +1,100 @@
+{
+  "recorded_at": "2026-10-19T04:21:24.508556+00:00",
+  "head": "c900bb131d8d82d680d96816fb549dcfce4193a1",
+  "dirty_worktree_preserved": true,
+  "device": "emulator-5554",
+  "package": "com.cczj.video.preview",
+  "apk": {
+    "path": "C:\\Users\\18446\\Desktop\\CCZJ Video\\bin\\CCZJ-Video-android-amd64-preview.apk",
+    "bytes": 41898952,
+    "sha256": "c9e6322c1c84bd770b2775b6003811fd500f164759c1cc04b4b4fe721e66dab0"
+  },
+  "local_verification": {
+    "exit_code": 0,
+    "finished_at": "2026-10-19T04:10:53.5098122Z"
+  },
+  "frontend_tests": 174,
+  "go_packages_passed": 32,
+  "build": {
+    "finished_at": "2026-10-19T04:12:03.6744985Z",
+    "exit_code": 0
+  },
+  "source_manifest": {
+    "path": "source-files.json",
+    "sha256": "49d5781f3a7cb3c194bf74b37ac48d8b9c3b9ddbd7c19559b0c609bcd118bac2",
+    "files": 908
+  },
+  "startup": {
+    "before_first_image": {
+      "ms": 330.69999998807907,
+      "initial": false,
+      "splash": true,
+      "wrapperOpacity": "1.79801e-19",
+      "image": true,
+      "ready": false,
+      "imageOpacity": "0",
+      "imageTransition": "0.36s, 0.48s"
+    },
+    "after_first_image": {
+      "ms": 155.30000001192093,
+      "initial": false,
+      "splash": true,
+      "wrapperOpacity": "1",
+      "image": true,
+      "ready": false,
+      "imageOpacity": "0",
+      "imageTransition": "0.36s, 0.48s"
+    },
+    "scope": "Actual Android document reload, not a cold-start performance benchmark"
+  },
+  "native_observation": {
+    "events": [
+      "recording_start",
+      "startup_snapshot",
+      "activity_snapshot",
+      "window_state",
+      "playback_snapshot",
+      "startup_snapshot",
+      "activity_snapshot",
+      "recording_stop"
+    ],
+    "max_payload_bytes": 1354,
+    "recording_error": "",
+    "mode_restored": "video"
+  },
+  "logs": {
+    "verify-delivery.log": {
+      "path": "verify-delivery.log",
+      "sha256": "04a01deab33282c339a7057514bc298ae258add6d52d98345a908fcf2ad6b6b1"
+    },
+    "build-delivery.log": {
+      "path": "build-delivery.log",
+      "sha256": "cd9f7e41a9c2675119b205d863e663be0b0cda54a648ed6bc93be35e42ea1a32"
+    },
+    "bindings.log": {
+      "path": "bindings.log",
+      "sha256": "cf26389ec9bbc65701497756265018724d3a2d4f643d436b5276802c8a13317a"
+    },
+    "final-diagnostic-recording.jsonl": {
+      "path": "final-diagnostic-recording.jsonl",
+      "sha256": "f990b1d22331ec9322134386407f4dc5b4a339c08e84425ed87201218239737d"
+    },
+    "final-native-checks.json": {
+      "path": "final-native-checks.json",
+      "sha256": "975f05733b6dda6c5b6d44cee9e67e67d9386415cc03b0f8f06b46f07fa89c3c"
+    },
+    "actual-player-observation.json": {
+      "path": "actual-player-observation.json",
+      "sha256": "123a0f7d1dc556217563d50e9b9c204ea524a197d7aea7bed9a30dc81fde9ba9"
+    },
+    "actual-player-pause.json": {
+      "path": "actual-player-pause.json",
+      "sha256": "819d2f927c67fac457c3e03f816d431f0cdf5173db00ffb4bfd48d757eaa6358"
+    }
+  },
+  "limits": [
+    "Android memory excludes isolated WebView/GPU; JS heap and DOM counts are approximate and not additive.",
+    "No repeated full acceptance, long-run memory or Windows/race performance run.",
+    "Inherited Wails late-cancellation rejection transport remains separate; no global unhandledrejection suppression."
+  ]
+}

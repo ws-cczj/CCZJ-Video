@@ -4,7 +4,7 @@
  * 这里只有「展示用的登记簿」，没有加载逻辑——加载在 runtime.ts，撤销动作由每个包自己的
  * dispose 闭包负责（api.ts 里登记），登记簿只保证界面上看到的东西和实际生效的东西一致。
  */
-import { ref, type Component } from 'vue'
+import { ref, shallowRef, type Component } from 'vue'
 
 export interface PluginNavItem {
   /** 归属包 id：重扫或禁用时要能只收回这一个包加的那一项。 */
@@ -77,7 +77,7 @@ export function dropPackNav(packId: string): void {
 }
 
 /** 设置页读取的扩展包分组，排在内置分组后面。 */
-export const pluginSettingsTabs = ref<PluginSettingsTab[]>([])
+export const pluginSettingsTabs = shallowRef<PluginSettingsTab[]>([])
 
 /**
  * 内置分组占用的 id，扩展包不能拿（和 assertNewPath 不许覆盖内置页面同一个道理：

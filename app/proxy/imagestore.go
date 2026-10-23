@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"os"
@@ -29,7 +30,7 @@ const (
 	imageFailureTTL = 5 * time.Minute
 )
 
-// imageStore 是海报的磁盘副本，键是前端给的那个 URL 的 sha256。
+// imageStore stores disposable content by the hash of its full representation key.
 //
 // 为什么这一层要在 Go 而不是前端：前端那层缓存装在 localStorage 里，塞的是 data URL，
 // 20KB 的图编码成 base64 就是 25K 个字符，80 条已经吃掉浏览器配额的两成，所以容量
@@ -37,10 +38,22 @@ const (
 // 相关推荐一屏就超过 80 张，结果是最先缓存的那批被 LRU 挤掉，下次进同一页重新出网——
 // 30 天的 TTL 根本轮不到生效。磁盘没有这个天花板，也就不用再拿容量换寿命。
 //
-// ttl 与 maxBytes 是字段而不是常量，为的是让淘汰分支能在单测里跑到：把这两个值调小，
-// 才能在不写 80MB、不等 7 天的前提下证明「该删的删了、不该删的还在」。
+// 它同时服务两条互不干扰的路径，各自一个子目录、各自一份 TTL 与容量上限：
+//
+//   - **海报**（subdir "imagecache"）：图小（约 20KB）、被反复展示、7 天 / 80MB。
+//   - **阅读图片**（subdir "readingcache"，见 imgproxy.go）：漫画一页几百 KB 到 1MB，
+//     一话几十页，但重读一章是常见操作，所以给更大的容量。
+//
+// 分成两个目录而不是共用一个，是因为淘汰是按 mtime 全局排序的：一话漫画几十张大图
+// 会把首页那批小海报全挤出去，而海报是每次开屏都要用的。
+//
+// ttl、maxBytes 与 subdir 是字段而不是常量，为的是让淘汰分支能在单测里跑到：
+// 把这几个值调小，才能在不写 80MB、不等 7 天的前提下证明「该删的删了、不该删的还在」。
 type imageStore struct {
-	dirFn func() string
+	maintenance  func(string, func(context.Context)) bool // configured before use
+	pruneRunning bool
+	dirFn        func() string
+	subdir       string
 
 	ttl      time.Duration
 	maxBytes int64
@@ -51,15 +64,25 @@ type imageStore struct {
 }
 
 func newImageStore(dirFn func() string) *imageStore {
-	return &imageStore{dirFn: dirFn, ttl: imageCacheTTL, maxBytes: imageCacheMaxBytes, failures: map[string]time.Time{}}
+	return newBlobStore(dirFn, "imagecache", imageCacheTTL, imageCacheMaxBytes)
+}
+
+// newBlobStore 建一份磁盘缓存。subdir 决定它在数据目录下的位置，
+// 两份 store 指到同一个 subdir 会各自跑一遍淘汰、互相删对方的文件，所以必须分开。
+func newBlobStore(dirFn func() string, subdir string, ttl time.Duration, maxBytes int64) *imageStore {
+	return &imageStore{dirFn: dirFn, subdir: subdir, ttl: ttl, maxBytes: maxBytes,
+		failures: map[string]time.Time{}}
 }
 
 func (s *imageStore) enabled() bool { return s != nil && s.dirFn != nil }
 
+// root 是这个 store 的目录。subdir 是代码里写死的字面量，不接受外部输入。
+func (s *imageStore) root() string { return filepath.Join(s.dirFn(), s.subdir) }
+
 func (s *imageStore) pathFor(rawURL string) string {
 	sum := sha256.Sum256([]byte(rawURL))
 	hexKey := hex.EncodeToString(sum[:])
-	return filepath.Join(s.dirFn(), "imagecache", hexKey[:2], hexKey)
+	return filepath.Join(s.root(), hexKey[:2], hexKey)
 }
 
 // read 取回一份还能用的海报。命中会把 mtime 推到当下：淘汰判定读的就是这个时间，
@@ -77,7 +100,7 @@ func (s *imageStore) read(rawURL string) ([]byte, string, bool) {
 	if err != nil {
 		return nil, "", false
 	}
-	contentType, data, ok := splitImageBlob(raw)
+	contentType, data, ok := splitBlob(raw)
 	if !ok {
 		// 写坏或被截断的一份：丢掉它，让调用方去抓一次，而不是把坏图一直端下去。
 		_ = os.Remove(path)
@@ -117,7 +140,32 @@ func (s *imageStore) write(rawURL string, data []byte, contentType string) {
 		applog.Warn("[ImageCache] 落盘失败: %v", err)
 		return
 	}
-	s.pruneIfNeeded()
+	s.schedulePrune()
+}
+
+func (s *imageStore) schedulePrune() {
+	if s.maintenance == nil {
+		s.pruneIfNeeded()
+		return
+	}
+	s.mu.Lock()
+	if s.pruneRunning || (!s.lastPrune.IsZero() && time.Since(s.lastPrune) < imageCachePruneGap) {
+		s.mu.Unlock()
+		return
+	}
+	s.pruneRunning = true
+	s.mu.Unlock()
+	accepted := s.maintenance("cache-prune:"+s.subdir, func(ctx context.Context) {
+		defer func() { s.mu.Lock(); s.pruneRunning = false; s.mu.Unlock() }()
+		if ctx.Err() == nil {
+			s.pruneIfNeededContext(ctx)
+		}
+	})
+	if !accepted {
+		s.mu.Lock()
+		s.pruneRunning = false
+		s.mu.Unlock()
+	}
 }
 
 // noteFailure / allow 实现抓失败的冷却，与前端 imageProxyFallbackCache 同一套判定，
@@ -154,6 +202,10 @@ func (s *imageStore) noteFailure(rawURL string) {
 // pruneIfNeeded 删掉「超过 7 天没被看到」和超出容量上限的部分。
 // 上限按最久未看先删：这条序和 read 推 mtime 的语义是同一套，所以留下的一定还是会被看的。
 func (s *imageStore) pruneIfNeeded() {
+	s.pruneIfNeededContext(context.Background())
+}
+
+func (s *imageStore) pruneIfNeededContext(ctx context.Context) {
 	if !s.enabled() {
 		return
 	}
@@ -165,7 +217,7 @@ func (s *imageStore) pruneIfNeeded() {
 	s.lastPrune = time.Now()
 	s.mu.Unlock()
 
-	root := filepath.Join(s.dirFn(), "imagecache")
+	root := s.root()
 	type entry struct {
 		path string
 		size int64
@@ -175,6 +227,9 @@ func (s *imageStore) pruneIfNeeded() {
 	var total int64
 	cutoff := time.Now().Add(-s.ttl)
 	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		if err != nil || info == nil || info.IsDir() {
 			return nil
 		}
@@ -191,6 +246,9 @@ func (s *imageStore) pruneIfNeeded() {
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].mod.Before(entries[j].mod) })
 	for _, e := range entries {
+		if ctx.Err() != nil {
+			return
+		}
 		if total <= s.maxBytes {
 			break
 		}
@@ -201,17 +259,22 @@ func (s *imageStore) pruneIfNeeded() {
 	applog.Debug("[ImageCache] 淘汰后占用 %d 张 / %.1f MB", len(entries), float64(total)/(1<<20))
 }
 
-// splitImageBlob 拆出首行的 Content-Type 和其余的图片字节。
+// splitBlob 拆出首行的内容类型和其余的字节。
 //
 // 类型单独存一行，是为了不必从字节猜（http.DetectContentType 认不出 SVG，
-// 猜错就是一份永远显示不出来的图），也不必给每张图多配一个 meta 文件。
-func splitImageBlob(raw []byte) (string, []byte, bool) {
+// 猜错就是一份永远显示不出来的图），也不必给每条缓存多配一个 meta 文件。
+//
+// 这里**不要求类型是 image/**：这个存储层现在同时服务图片代理与正文缓存
+// （见 blobstore.go），"什么算合法内容"是调用方的判定——图片代理要拒绝 HTML
+// 错误页（verifyImageBytes），正文缓存要拒绝空正文。首行只要长得像一个媒体类型
+// （含 "/"）就算格式正确，剩下的只用来识别"这份文件被截断或写坏了"。
+func splitBlob(raw []byte) (string, []byte, bool) {
 	i := bytes.IndexByte(raw, '\n')
 	if i <= 0 || i == len(raw)-1 {
 		return "", nil, false
 	}
 	contentType := strings.TrimSpace(string(raw[:i]))
-	if !strings.HasPrefix(contentType, "image/") {
+	if len(contentType) > 256 || !strings.Contains(contentType, "/") {
 		return "", nil, false
 	}
 	return contentType, raw[i+1:], true

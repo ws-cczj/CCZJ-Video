@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"fmt"
 	"time"
 	"unicode/utf8"
@@ -121,6 +122,10 @@ func ResetSourceHealth(exec sqlx.Ext, sourceKey string) error {
 // ListSourceHealth 返回某源最近的样本，新→旧。kind 为空表示不限来源，
 // 诊断页的"健康度历史"就靠这个把采集与巡检掺在一起按时间铺开。
 func ListSourceHealth(sourceKey, kind string, limit int) ([]SourceHealthSample, error) {
+	return ListSourceHealthContext(context.Background(), sourceKey, kind, limit)
+}
+
+func ListSourceHealthContext(ctx context.Context, sourceKey, kind string, limit int) ([]SourceHealthSample, error) {
 	if limit <= 0 || limit > sourceHealthKeep {
 		limit = sourceHealthKeep
 	}
@@ -132,7 +137,7 @@ func ListSourceHealth(sourceKey, kind string, limit int) ([]SourceHealthSample, 
 		args = append(args, kind)
 	}
 	var rows []SourceHealthSample
-	err := instance.Select(&rows, query+` ORDER BY ts_unix DESC, id DESC LIMIT ?`, append(args, limit)...)
+	err := instance.SelectContext(ctx, &rows, query+` ORDER BY ts_unix DESC, id DESC LIMIT ?`, append(args, limit)...)
 	return rows, err
 }
 

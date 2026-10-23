@@ -56,9 +56,10 @@ export const useDownloadStore = defineStore('download', () => {
   const dir = ref<string>('')
   let _off: (() => void) | null = null
   let _inited = false
+  const removedTasks = new Set<string>()
 
   function upsert(raw: DownloadStatusWire | null | undefined): void {
-    if (!raw) return
+    if (!raw || removedTasks.has(raw.task_id ?? '')) return
     const t: DownloadTask = {
       task_id: raw.task_id ?? '',
       url: raw.url ?? '',
@@ -120,8 +121,8 @@ export const useDownloadStore = defineStore('download', () => {
       if (Array.isArray(all)) {
         for (const item of all) upsert(item)
       }
-    } catch {
-      // 忽略
+    } catch (e: unknown) {
+      useErrorStore().fromError(tr('errors.loadDownloadsFailed'), e)
     }
 
     try {
@@ -211,7 +212,7 @@ export const useDownloadStore = defineStore('download', () => {
       // 重复下载：移除临时任务并抛出错误让调用方决定
       tasks.value = tasks.value.filter((x) => x.task_id !== id)
       if (isDuplicate) {
-        throw new Error(msg)
+        throw e
       }
       // 其他错误：保留任务记录错误
       tasks.value = [
@@ -236,11 +237,11 @@ export const useDownloadStore = defineStore('download', () => {
     try {
       const ok = await CancelDownload(taskId)
       if (ok) {
-        const t = tasks.value.find((x) => x.task_id === taskId)
-        if (t) t.status = 'cancelled'
+        await refresh(taskId)
       }
       return !!ok
-    } catch {
+    } catch (e: unknown) {
+      useErrorStore().fromError(tr('errors.cancelTaskFailed'), e)
       return false
     }
   }
@@ -249,12 +250,7 @@ export const useDownloadStore = defineStore('download', () => {
     try {
       const ok = await PauseDownload(taskId)
       if (ok) {
-        const t = tasks.value.find((x) => x.task_id === taskId)
-        if (t) {
-          t.status = 'paused'
-          t.speed_bps = 0
-          t.eta_sec = 0
-        }
+        await refresh(taskId)
       }
       return !!ok
     } catch (e: any) {
@@ -267,8 +263,7 @@ export const useDownloadStore = defineStore('download', () => {
     try {
       const ok = await ResumeDownload(taskId)
       if (ok) {
-        const t = tasks.value.find((x) => x.task_id === taskId)
-        if (t) t.status = 'downloading'
+        await refresh(taskId)
       }
       return !!ok
     } catch (e: any) {
@@ -279,12 +274,17 @@ export const useDownloadStore = defineStore('download', () => {
 
   async function remove(taskId: string): Promise<boolean> {
     try {
-      await RemoveDownload(taskId)
-    } catch {
-      // 忽略
+      const removed = await RemoveDownload(taskId)
+      if (!removed) return false
+      removedTasks.add(taskId)
+      // Suppress late IPC events while keeping session bookkeeping bounded.
+      if (removedTasks.size > 256) removedTasks.delete(removedTasks.values().next().value!)
+      tasks.value = tasks.value.filter((x) => x.task_id !== taskId)
+      return true
+    } catch (e: unknown) {
+      useErrorStore().fromError(tr('errors.removeTaskFailed'), e)
+      return false
     }
-    tasks.value = tasks.value.filter((x) => x.task_id !== taskId)
-    return true
   }
 
   async function openFile(path: string): Promise<boolean> {

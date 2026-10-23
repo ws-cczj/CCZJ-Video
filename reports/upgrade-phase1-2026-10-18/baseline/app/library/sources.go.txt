@@ -1,0 +1,364 @@
+package library
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"strings"
+	"time"
+
+	"cczjVideo/app/apperror"
+	"cczjVideo/app/applog"
+	"cczjVideo/app/db"
+	"cczjVideo/app/model"
+	"cczjVideo/app/provider"
+)
+
+// SourceInfo 是源管理界面的一行。
+type SourceInfo struct {
+	SourceKey string `json:"sourceKey"`
+	Name      string `json:"name"`
+	ApiUrl    string `json:"apiUrl"`
+	Kind      string `json:"kind"`
+	Enabled   bool   `json:"enabled"`
+	// AutoDisabled 区分"机器停用的"与"用户关掉的"。前者会在冷却到期后自动恢复，
+	// 后者不会（app/db/source.go 的 AutoDisableSource 注释里有这条约定）。
+	AutoDisabled bool `json:"autoDisabled"`
+	// ItemCount 是这个源下已入库的作品数。
+	ItemCount int `json:"itemCount"`
+	// Document 是源文档原文，编辑界面回填用。
+	Document string `json:"document"`
+	// DocumentError 在文档解析不了时说明为什么。它不阻止这一行出现在列表里：
+	// 一份写坏的配置应该显示成"这个源的配置有问题"，而不是让源凭空消失，
+	// 那样用户连去修它的入口都没有。
+	DocumentError string `json:"documentError,omitempty"`
+	// CheckKeyword 是"测试源"用的关键词，界面上显示出来让用户知道会搜什么。
+	CheckKeyword string `json:"checkKeyword,omitempty"`
+}
+
+// ListSources 列出某个模式下的源，含停用的。
+func (s *Service) ListSources(kind model.SourceKind) ([]*SourceInfo, error) {
+	if err := model.ValidateSourceKind(kind); err != nil {
+		return nil, apperror.Wrap(apperror.Validation, err, "invalid source kind")
+	}
+	sources, err := db.GetSourcesByKind(kind)
+	if err != nil {
+		return nil, apperror.Wrap(apperror.Storage, err, "读取源列表失败")
+	}
+	out := make([]*SourceInfo, 0, len(sources))
+	for _, source := range sources {
+		info := &SourceInfo{
+			SourceKey: source.SourceKey, Name: source.Name, ApiUrl: source.ApiUrl,
+			Kind: string(source.GetKind()), Enabled: source.Enabled == 1,
+			AutoDisabled: source.AutoDisabledAt != 0, Document: source.StrategyConfig,
+		}
+		if count, err := db.CountLibraryItems(kind, source.SourceKey); err == nil {
+			info.ItemCount = count
+		}
+		if document, err := provider.ParseDocument(source.StrategyConfig, string(kind)); err != nil {
+			info.DocumentError = err.Error()
+		} else {
+			info.CheckKeyword = document.CheckKeyword
+		}
+		out = append(out, info)
+	}
+	return out, nil
+}
+
+// AddSource 加一个源。document 会先过一遍校验再落库。
+//
+// 校验放在写入之前是必要的：一份带 js / webView 字段的文档如果先落库再报错，
+// 用户看到的就是"源加上了但搜不出东西"——静默忽略不支持的字段在界面上与
+// "源真的没有这本书"无法区分（reports/02:135、ADR 0016）。
+func (s *Service) AddSource(kind model.SourceKind, name, apiURL, document string) (*SourceInfo, error) {
+	if err := model.ValidateSourceKind(kind); err != nil {
+		return nil, apperror.Wrap(apperror.Validation, err, "invalid source kind")
+	}
+	if kind == model.SourceKindVideo {
+		return nil, apperror.New(apperror.Validation, "视频源要在采集源管理里加，不走这个入口")
+	}
+	apiURL = strings.TrimSpace(apiURL)
+	if apiURL == "" {
+		return nil, apperror.New(apperror.Validation, "接口地址不能为空")
+	}
+	parsed, err := provider.ParseDocument(document, string(kind))
+	if err != nil {
+		return nil, apperror.Wrap(apperror.Validation, err, "源配置不合法")
+	}
+	sourceKey := model.DeriveSourceKey(apiURL)
+	if err := model.ValidateSourceKey(sourceKey); err != nil {
+		return nil, apperror.Wrap(apperror.Validation, err, "从接口地址推不出合法的源标识")
+	}
+	existing, lookupErr := db.GetSourceByKey(sourceKey)
+	if lookupErr != nil && !errors.Is(lookupErr, sql.ErrNoRows) {
+		return nil, apperror.Wrap(apperror.Storage, lookupErr, "读取来源失败")
+	}
+	if existing != nil {
+		return nil, apperror.Newf(apperror.Conflict, "来源 %s 已存在", sourceKey)
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = sourceKey
+	}
+	row := &model.Source{
+		SourceKey: sourceKey, Name: name, ApiUrl: apiURL, Enabled: 1,
+		Kind: string(kind), StrategyConfig: document,
+	}
+	if err := db.AddSource(row); err != nil {
+		return nil, apperror.Wrap(apperror.Storage, err, "写入源失败")
+	}
+	applog.Info("[Library] 已添加%s源 %s（%s）", kind, name, sourceKey)
+	return &SourceInfo{
+		SourceKey: sourceKey, Name: name, ApiUrl: apiURL, Kind: string(kind),
+		Enabled: true, Document: document, CheckKeyword: parsed.CheckKeyword,
+	}, nil
+}
+
+// UpdateSource 改一个源。kind 不可改：一个源属于哪个模式是它的身份，
+// 改 kind 会让已入库的作品与已加入书架的条目全部失去归属。要换模式就删掉重建。
+func (s *Service) UpdateSource(sourceKey, name, apiURL, document string) error {
+	existing, err := db.GetSourceByKey(sourceKey)
+	if err != nil {
+		return apperror.Wrap(apperror.Storage, err, "读取来源失败")
+	}
+	if existing.GetKind() == model.SourceKindVideo {
+		return apperror.New(apperror.Validation, "视频源要在采集源管理里改，不走这个入口")
+	}
+	if strings.TrimSpace(document) != "" {
+		if _, err := provider.ParseDocument(document, string(existing.GetKind())); err != nil {
+			return apperror.Wrap(apperror.Validation, err, "源配置不合法")
+		}
+	} else {
+		// 传空表示"不改配置"，与 handler.UpdateSource 对三个 JSON 列的处理一致：
+		// db.UpdateSource 是无条件整列覆盖，所以空值必须沿用库里的原值，
+		// 否则用户改一次源名就把配置抹掉了。
+		document = existing.StrategyConfig
+	}
+	if strings.TrimSpace(apiURL) == "" {
+		apiURL = existing.ApiUrl
+	}
+	if strings.TrimSpace(name) == "" {
+		name = existing.Name
+	}
+	existing.Name = name
+	existing.ApiUrl = apiURL
+	existing.StrategyConfig = document
+	if err := db.UpdateSource(existing); err != nil {
+		return apperror.Wrap(apperror.Storage, err, "更新源失败")
+	}
+	return nil
+}
+
+// SetSourceEnabled 打开或关掉一个源。
+func (s *Service) SetSourceEnabled(sourceKey string, enabled bool) error {
+	existing, err := db.GetSourceByKey(sourceKey)
+	if err != nil {
+		return apperror.Wrap(apperror.Storage, err, "读取来源失败")
+	}
+	if existing.GetKind() == model.SourceKindVideo {
+		return apperror.New(apperror.Validation, "视频源的开关在采集源管理里，不走这个入口")
+	}
+	value := 0
+	if enabled {
+		value = 1
+	}
+	existing.Enabled = value
+	if err := db.UpdateSource(existing); err != nil {
+		return apperror.Wrap(apperror.Storage, err, "更新源失败")
+	}
+	// 从关到开等于用户重新宣告"这个源可用"：旧的失败样本必须作废，
+	// 否则连败计数还停在阈值上，下一次探测刚回来就把它再次停用。
+	// db.UpdateSource 已经清了 auto_disabled_at，健康度历史在这里清。
+	if enabled {
+		if err := db.ResetSourceHealth(db.DB(), sourceKey); err != nil {
+			applog.Warn("[Library] 重置 %s 的健康度历史失败: %v", sourceKey, err)
+		}
+	}
+	return nil
+}
+
+// DeleteSource 删一个源。作品与章节转 deleted 而不是删行（见 db.DeleteSource）。
+func (s *Service) DeleteSource(sourceKey string) error {
+	existing, err := db.GetSourceByKey(sourceKey)
+	if err != nil {
+		return apperror.Wrap(apperror.Storage, err, "读取来源失败")
+	}
+	if existing.GetKind() == model.SourceKindVideo {
+		return apperror.New(apperror.Validation, "视频源的删除在采集源管理里，不走这个入口")
+	}
+	if err := db.DeleteSource(sourceKey); err != nil {
+		return apperror.Wrap(apperror.Storage, err, "删除源失败")
+	}
+	return nil
+}
+
+// 测试阶段名。它们是**稳定标识符**而不是显示文案：这一串要跨到前端做 i18n，
+// 中文写死在 Go 里就没法翻译，而英文写死在 Go 里则会与项目其余部分的中文
+// 错误消息不一致。前端按这些常量查 locale。
+const (
+	StageConfig  = "config"
+	StageSearch  = "search"
+	StageDetail  = "detail"
+	StageToc     = "toc"
+	StageContent = "content"
+	StagePages   = "pages"
+)
+
+// TestStage 是"测试源"的一步。
+type TestStage struct {
+	Name    string `json:"name"`
+	Status  string `json:"status"` // ok | skipped | failed
+	Message string `json:"message,omitempty"`
+	// Count 是这一步取到的条目数（搜索条数、章节数、段落数、页数）。
+	Count int `json:"count,omitempty"`
+	// Millis 是这一步的耗时。慢在哪一步是排查源问题时最常问的事。
+	Millis int64 `json:"millis"`
+}
+
+// TestOutcome 是一次源测试的全部结果。
+type TestOutcome struct {
+	SourceKey string       `json:"sourceKey"`
+	Stages    []*TestStage `json:"stages"`
+	// OK 为真表示搜索这一步至少取到了一条结果。后续步骤失败时 OK 仍然为假，
+	// 但界面要能显示"搜索通了、目录没通"——那比一个总的失败有用得多。
+	OK bool `json:"ok"`
+}
+
+// TestSource 逐级试一个源：搜索 → 详情 → 目录 → 正文/图片。
+//
+// 逐级而不是只试一次搜索，是因为"能搜到"与"能读"是两件事：
+// 目录规则写错时搜索是正常的，正文规则写错时目录也是正常的。
+// 只报一个总的成功/失败，用户就得自己猜是哪一步坏了。
+//
+// 每一步失败都**继续**下一步（只要还有可用的输入），这样一次测试能把
+// 所有坏掉的步骤一次性报出来，而不是修一步再测一次。
+func (s *Service) TestSource(ctx context.Context, sourceKey string) (*TestOutcome, error) {
+	existing, err := db.GetSourceByKey(sourceKey)
+	if err != nil {
+		return nil, apperror.Wrap(apperror.Storage, err, "读取来源失败")
+	}
+	kind := existing.GetKind()
+	if kind == model.SourceKindVideo {
+		return nil, apperror.New(apperror.Validation, "视频源的连通性在诊断页测，不走这个入口")
+	}
+	outcome := &TestOutcome{SourceKey: sourceKey}
+	// first 是搜索阶段记住的第一条结果，后续每一步都拿它当输入。
+	// 它是这个函数的局部变量、由闭包捕获：测试是用户点一次跑一次的串行操作，
+	// 没有并发写它的场景。
+	var first *provider.Item
+	resolved, err := s.resolve(sourceKey, kind)
+	if err != nil {
+		outcome.Stages = append(outcome.Stages, &TestStage{Name: StageConfig, Status: "failed", Message: err.Error()})
+		return outcome, nil
+	}
+	outcome.Stages = append(outcome.Stages, &TestStage{Name: StageConfig, Status: "ok"})
+
+	keyword := strings.TrimSpace(resolved.document.CheckKeyword)
+	if keyword == "" {
+		keyword = "的"
+	}
+	found, err := timedStage(ctx, outcome, StageSearch, func(ctx context.Context) (int, error) {
+		page, err := resolved.pipeline.Search(ctx, existing.ApiUrl, keyword, 1, "")
+		if err != nil {
+			return 0, err
+		}
+		if len(page.Items) == 0 {
+			// 空结果不是错误，但对"测试源"来说它意味着这个关键词在这个源上搜不到东西，
+			// 所以报成 failed 并说清是"搜到了但一条都没有"，与"请求失败"区分开。
+			return 0, apperror.New(apperror.NotFound,
+				"请求成功但没有结果；换一个 check_keyword 试试")
+		}
+		first = page.Items[0]
+		return len(page.Items), nil
+	})
+	if err != nil || found == 0 {
+		outcome.OK = false
+		return outcome, nil
+	}
+	outcome.OK = true
+
+	if first == nil {
+		return outcome, nil
+	}
+	detailURL := first.URL
+	var tocTarget *provider.Item
+	_, err = timedStage(ctx, outcome, StageDetail, func(ctx context.Context) (int, error) {
+		item, err := resolved.pipeline.Detail(ctx, existing.ApiUrl, detailURL)
+		if err != nil {
+			return 0, err
+		}
+		tocTarget = item
+		return 1, nil
+	})
+	if tocTarget == nil {
+		tocTarget = &provider.Item{RemoteID: first.RemoteID, Title: first.Title, URL: first.URL, TocURL: first.TocURL}
+	}
+
+	var chapters []*provider.Chapter
+	count, err := timedStage(ctx, outcome, StageToc, func(ctx context.Context) (int, error) {
+		found, err := resolved.pipeline.Toc(ctx, existing.ApiUrl, tocTarget)
+		if err != nil {
+			return 0, err
+		}
+		chapters = found
+		return len(found), nil
+	})
+	if err != nil || count == 0 || len(chapters) == 0 {
+		return outcome, nil
+	}
+
+	// 最后一步按模式分叉：小说试正文，漫画试图片列表。
+	// 挑**第一个非卷标题**的章：卷标题行没有正文，拿它试会误报失败。
+	target := chapters[0]
+	for _, chapter := range chapters {
+		if !chapter.IsVolume {
+			target = chapter
+			break
+		}
+	}
+	nextURL := ""
+	for i, chapter := range chapters {
+		if chapter == target && i+1 < len(chapters) {
+			nextURL = chapters[i+1].URL
+			break
+		}
+	}
+	if kind == model.SourceKindNovel {
+		_, _ = timedStage(ctx, outcome, StageContent, func(ctx context.Context) (int, error) {
+			content, err := resolved.pipeline.Content(ctx, existing.ApiUrl, target, nextURL)
+			if err != nil {
+				return 0, err
+			}
+			return len(content.Paragraphs), nil
+		})
+		return outcome, nil
+	}
+	_, _ = timedStage(ctx, outcome, StagePages, func(ctx context.Context) (int, error) {
+		pages, err := resolved.pipeline.Pages(ctx, existing.ApiUrl, target)
+		if err != nil {
+			return 0, err
+		}
+		return len(pages), nil
+	})
+	return outcome, nil
+}
+
+// timedStage 跑一步测试，把耗时与结果记进 outcome。
+//
+// 失败**不中断**后续步骤：一次测试把所有坏掉的步骤一次性报出来，
+// 比"修一步、再测一次"省好几轮。
+func timedStage(ctx context.Context, outcome *TestOutcome, name string, run func(context.Context) (int, error)) (int, error) {
+	stage := &TestStage{Name: name, Status: "skipped"}
+	outcome.Stages = append(outcome.Stages, stage)
+	started := time.Now()
+	count, err := run(ctx)
+	stage.Millis = time.Since(started).Milliseconds()
+	if err != nil {
+		stage.Status = "failed"
+		stage.Message = err.Error()
+		return 0, err
+	}
+	stage.Status = "ok"
+	stage.Count = count
+	return count, nil
+}

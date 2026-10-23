@@ -1,0 +1,39 @@
+{
+  "observation_seconds": 5.015,
+  "native_scope": "app_process",
+  "pss_mib": [
+    123.294921875,
+    123.341796875
+  ],
+  "rss_mib": [
+    245.4375,
+    245.48046875
+  ],
+  "go_heap_mib": [
+    2.2084503173828125,
+    2.3327865600585938
+  ],
+  "cpu_percent": 0.6295101112825373,
+  "file_descriptors": [
+    216,
+    216
+  ],
+  "goroutines": [
+    22,
+    22
+  ],
+  "native_available": true,
+  "share_bridge_available": true,
+  "diagnostic_recording_active": false,
+  "log_stream_stack_present": false,
+  "recorder_stack_present": false,
+  "new_errors": 0,
+  "new_warnings": 0,
+  "performance_comparison_available": false,
+  "limitations": [
+    "Two idle snapshots only",
+    "No same-environment pre-refactor baseline",
+    "WebView renderer/GPU excluded",
+    "Share chooser and player interactions not exercised"
+  ]
+}

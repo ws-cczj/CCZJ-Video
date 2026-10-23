@@ -1,0 +1,990 @@
+{
+  "version": "reading-quality.v1",
+  "updatedAt": "2026-10-22",
+  "works": [
+    {
+      "id": "classic-novel-red-chamber",
+      "kind": "novel",
+      "title": "红楼梦",
+      "authors": [
+        "曹雪芹",
+        "高鹗"
+      ],
+      "tags": [
+        "古典·世情"
+      ],
+      "aliases": [],
+      "language": "zh",
+      "layout": "text",
+      "edition": "作品身份核对；版本、译本和完整度另核",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://lib.nju.edu.cn/info/1204/1873.htm",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-novel-west",
+      "kind": "novel",
+      "title": "西游记",
+      "authors": [
+        "吴承恩"
+      ],
+      "tags": [
+        "古典·神魔"
+      ],
+      "aliases": [],
+      "language": "zh",
+      "layout": "text",
+      "edition": "作品身份核对；版本、译本和完整度另核",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://book.douban.com/subject/1089886/",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-novel-three-kingdoms",
+      "kind": "novel",
+      "title": "三国演义",
+      "authors": [
+        "罗贯中"
+      ],
+      "tags": [
+        "古典·历史"
+      ],
+      "aliases": [],
+      "language": "zh",
+      "layout": "text",
+      "edition": "作品身份核对；版本、译本和完整度另核",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://hotbook.nbt.edu.cn/nbt/?id=730&what=detail",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-novel-water-margin",
+      "kind": "novel",
+      "title": "水浒传",
+      "authors": [
+        "施耐庵",
+        "罗贯中"
+      ],
+      "tags": [
+        "古典·英雄"
+      ],
+      "aliases": [],
+      "language": "zh",
+      "layout": "text",
+      "edition": "作品身份核对；版本、译本和完整度另核",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://book.douban.com/subject/1114653/",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-novel-condor",
+      "kind": "novel",
+      "title": "射雕英雄传",
+      "authors": [
+        "金庸"
+      ],
+      "tags": [
+        "武侠·修订版辨别"
+      ],
+      "aliases": [],
+      "language": "zh",
+      "layout": "text",
+      "edition": "作品身份核对；版本、译本和完整度另核",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://www.ylib.com/hotsale/new_jin/allbook.htm",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-novel-demigods",
+      "kind": "novel",
+      "title": "天龙八部",
+      "authors": [
+        "金庸"
+      ],
+      "tags": [
+        "武侠·多主角"
+      ],
+      "aliases": [],
+      "language": "zh",
+      "layout": "text",
+      "edition": "作品身份核对；版本、译本和完整度另核",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://www.ylib.com/hotsale/new_jin/allbook.htm",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-novel-swordsman",
+      "kind": "novel",
+      "title": "笑傲江湖",
+      "authors": [
+        "金庸"
+      ],
+      "tags": [
+        "武侠·江湖"
+      ],
+      "aliases": [],
+      "language": "zh",
+      "layout": "text",
+      "edition": "作品身份核对；版本、译本和完整度另核",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://www.ylib.com/hotsale/new_jin/allbook.htm",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-novel-to-live",
+      "kind": "novel",
+      "title": "活着",
+      "authors": [
+        "余华"
+      ],
+      "tags": [
+        "现实·乡土"
+      ],
+      "aliases": [],
+      "language": "zh",
+      "layout": "text",
+      "edition": "作品身份核对；版本、译本和完整度另核",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://opac.gxu.edu.cn/bookInfo_01h0890879.html",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-novel-blood-merchant",
+      "kind": "novel",
+      "title": "许三观卖血记",
+      "authors": [
+        "余华"
+      ],
+      "tags": [
+        "现实·家庭"
+      ],
+      "aliases": [],
+      "language": "zh",
+      "layout": "text",
+      "edition": "作品身份核对；版本、译本和完整度另核",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://book.douban.com/subject/1029791/",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-novel-fortress",
+      "kind": "novel",
+      "title": "围城",
+      "authors": [
+        "钱锺书",
+        "钱钟书"
+      ],
+      "tags": [
+        "现代·讽刺"
+      ],
+      "aliases": [],
+      "language": "zh",
+      "layout": "text",
+      "edition": "作品身份核对；版本、译本和完整度另核",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://read.douban.com/ebook/472348339/",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-novel-ordinary-world",
+      "kind": "novel",
+      "title": "平凡的世界",
+      "authors": [
+        "路遥"
+      ],
+      "tags": [
+        "现实·成长"
+      ],
+      "aliases": [],
+      "language": "zh",
+      "layout": "text",
+      "edition": "作品身份核对；版本、译本和完整度另核",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://book.douban.com/subject/1200840/",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-novel-three-body",
+      "kind": "novel",
+      "title": "三体",
+      "authors": [
+        "刘慈欣"
+      ],
+      "tags": [
+        "科幻·硬科幻"
+      ],
+      "aliases": [],
+      "language": "zh",
+      "layout": "text",
+      "edition": "作品身份核对；版本、译本和完整度另核",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://book.douban.com/subject/2567698/",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-novel-ball-lightning",
+      "kind": "novel",
+      "title": "球状闪电",
+      "authors": [
+        "刘慈欣"
+      ],
+      "tags": [
+        "科幻·科学探索"
+      ],
+      "aliases": [],
+      "language": "zh",
+      "layout": "text",
+      "edition": "作品身份核对；版本、译本和完整度另核",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://book.douban.com/subject/1192090/",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-novel-white-night",
+      "kind": "novel",
+      "title": "白夜行",
+      "authors": [
+        "东野圭吾"
+      ],
+      "tags": [
+        "推理·社会派"
+      ],
+      "aliases": [],
+      "language": "zh",
+      "layout": "text",
+      "edition": "作品身份核对；版本、译本和完整度另核",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://book.douban.com/subject/3259440/",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-novel-and-then-none",
+      "kind": "novel",
+      "title": "无人生还",
+      "authors": [
+        "阿加莎·克里斯蒂",
+        "Agatha Christie"
+      ],
+      "tags": [
+        "推理·孤岛"
+      ],
+      "aliases": [],
+      "language": "zh",
+      "layout": "text",
+      "edition": "作品身份核对；版本、译本和完整度另核",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://www.agathachristie.com/stories/and-then-there-were-none",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-novel-pride",
+      "kind": "novel",
+      "title": "傲慢与偏见",
+      "authors": [
+        "简·奥斯汀",
+        "简·奥斯丁",
+        "Jane Austen"
+      ],
+      "tags": [
+        "外国·爱情"
+      ],
+      "aliases": [],
+      "language": "zh",
+      "layout": "text",
+      "edition": "作品身份核对；版本、译本和完整度另核",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://www.cp.com.cn/book/c6efef51-a.html",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-novel-jane-eyre",
+      "kind": "novel",
+      "title": "简爱",
+      "authors": [
+        "夏洛蒂·勃朗特",
+        "Charlotte Brontë"
+      ],
+      "tags": [
+        "外国·女性成长"
+      ],
+      "aliases": [],
+      "language": "zh",
+      "layout": "text",
+      "edition": "作品身份核对；版本、译本和完整度另核",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://www.gutenberg.org/ebooks/1260",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-novel-1984",
+      "kind": "novel",
+      "title": "1984",
+      "authors": [
+        "乔治·奥威尔",
+        "George Orwell"
+      ],
+      "tags": [
+        "外国·反乌托邦"
+      ],
+      "aliases": [],
+      "language": "zh",
+      "layout": "text",
+      "edition": "作品身份核对；版本、译本和完整度另核",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://www.penguinrandomhouse.com/books/326569/1984-by-george-orwell/",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-novel-battle-heavens",
+      "kind": "novel",
+      "title": "斗破苍穹",
+      "authors": [
+        "天蚕土豆"
+      ],
+      "tags": [
+        "网文·玄幻"
+      ],
+      "aliases": [],
+      "language": "zh",
+      "layout": "text",
+      "edition": "作品身份核对；版本、译本和完整度另核",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://book.douban.com/subject/22933018/",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-novel-douluo",
+      "kind": "novel",
+      "title": "斗罗大陆",
+      "authors": [
+        "唐家三少"
+      ],
+      "tags": [
+        "网文·系列首部"
+      ],
+      "aliases": [],
+      "language": "zh",
+      "layout": "text",
+      "edition": "作品身份核对；版本、译本和完整度另核",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://book.douban.com/subject/3705820/",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-novel-jade-dynasty",
+      "kind": "novel",
+      "title": "诛仙",
+      "authors": [
+        "萧鼎"
+      ],
+      "tags": [
+        "网文·仙侠"
+      ],
+      "aliases": [],
+      "language": "zh",
+      "layout": "text",
+      "edition": "作品身份核对；版本、译本和完整度另核",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://book.douban.com/subject/1921362/",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-novel-kings-avatar",
+      "kind": "novel",
+      "title": "全职高手",
+      "authors": [
+        "蝴蝶蓝"
+      ],
+      "tags": [
+        "网文·电竞"
+      ],
+      "aliases": [],
+      "language": "zh",
+      "layout": "text",
+      "edition": "作品身份核对；版本、译本和完整度另核",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://book.douban.com/subject/27077107/",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-novel-ghost",
+      "kind": "novel",
+      "title": "鬼吹灯",
+      "authors": [
+        "天下霸唱"
+      ],
+      "tags": [
+        "网文·探险"
+      ],
+      "aliases": [],
+      "language": "zh",
+      "layout": "text",
+      "edition": "作品身份核对；版本、译本和完整度另核",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://zh.wikipedia.org/wiki/鬼吹灯",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-novel-tomb",
+      "kind": "novel",
+      "title": "盗墓笔记",
+      "authors": [
+        "南派三叔"
+      ],
+      "tags": [
+        "网文·悬疑"
+      ],
+      "aliases": [],
+      "language": "zh",
+      "layout": "text",
+      "edition": "作品身份核对；版本、译本和完整度另核",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://book.douban.com/subject/1948901/",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-comic-one-piece",
+      "kind": "comic",
+      "title": "海贼王",
+      "authors": [
+        "尾田荣一郎",
+        "尾田栄一郎",
+        "Eiichiro Oda"
+      ],
+      "tags": [
+        "冒险·热血"
+      ],
+      "aliases": [
+        "航海王",
+        "ONE PIECE"
+      ],
+      "language": "zh",
+      "layout": "page",
+      "edition": "原作漫画；不包含动画、外传、续作",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://www.viz.com/one-piece",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-comic-naruto",
+      "kind": "comic",
+      "title": "火影忍者",
+      "authors": [
+        "岸本齐史",
+        "岸本斉史",
+        "Masashi Kishimoto"
+      ],
+      "tags": [
+        "忍者·战斗"
+      ],
+      "aliases": [
+        "NARUTO"
+      ],
+      "language": "zh",
+      "layout": "page",
+      "edition": "原作漫画；不包含动画、外传、续作",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://www.viz.com/naruto",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-comic-dragon-ball",
+      "kind": "comic",
+      "title": "龙珠",
+      "authors": [
+        "鸟山明",
+        "鳥山明",
+        "Akira Toriyama"
+      ],
+      "tags": [
+        "经典·战斗"
+      ],
+      "aliases": [
+        "七龙珠",
+        "DRAGON BALL"
+      ],
+      "language": "zh",
+      "layout": "page",
+      "edition": "原作漫画；不包含动画、外传、续作",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://www.viz.com/dragon-ball",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-comic-slam-dunk",
+      "kind": "comic",
+      "title": "灌篮高手",
+      "authors": [
+        "井上雄彦",
+        "Takehiko Inoue"
+      ],
+      "tags": [
+        "运动·篮球"
+      ],
+      "aliases": [
+        "SLAM DUNK"
+      ],
+      "language": "zh",
+      "layout": "page",
+      "edition": "原作漫画；不包含动画、外传、续作",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://www.viz.com/slam-dunk",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-comic-conan",
+      "kind": "comic",
+      "title": "名侦探柯南",
+      "authors": [
+        "青山刚昌",
+        "青山剛昌",
+        "Gosho Aoyama"
+      ],
+      "tags": [
+        "推理·侦探"
+      ],
+      "aliases": [
+        "名偵探柯南",
+        "Case Closed"
+      ],
+      "language": "zh",
+      "layout": "page",
+      "edition": "原作漫画；不包含动画、外传、续作",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://www.viz.com/case-closed",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-comic-death-note",
+      "kind": "comic",
+      "title": "死亡笔记",
+      "authors": [
+        "大场鸫",
+        "大場つぐみ",
+        "小畑健",
+        "Tsugumi Ohba",
+        "Takeshi Obata"
+      ],
+      "tags": [
+        "悬疑·智斗"
+      ],
+      "aliases": [
+        "死亡筆記",
+        "DEATH NOTE"
+      ],
+      "language": "zh",
+      "layout": "page",
+      "edition": "原作漫画；不包含动画、外传、续作",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://www.viz.com/death-note",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-comic-natsume",
+      "kind": "comic",
+      "title": "夏目友人帐",
+      "authors": [
+        "绿川幸",
+        "緑川ゆき",
+        "Yuki Midorikawa"
+      ],
+      "tags": [
+        "治愈·妖怪"
+      ],
+      "aliases": [
+        "夏目友人帳"
+      ],
+      "language": "zh",
+      "layout": "page",
+      "edition": "原作漫画；不包含动画、外传、续作",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://www.viz.com/natsume-s-book-of-friends",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-comic-fullmetal",
+      "kind": "comic",
+      "title": "钢之炼金术师",
+      "authors": [
+        "荒川弘",
+        "Hiromu Arakawa"
+      ],
+      "tags": [
+        "奇幻·成长"
+      ],
+      "aliases": [
+        "鋼之鍊金術師"
+      ],
+      "language": "zh",
+      "layout": "page",
+      "edition": "原作漫画；不包含动画、外传、续作",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://www.viz.com/fullmetal-alchemist",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-comic-haikyu",
+      "kind": "comic",
+      "title": "排球少年",
+      "authors": [
+        "古馆春一",
+        "古舘春一",
+        "Haruichi Furudate"
+      ],
+      "tags": [
+        "运动·排球"
+      ],
+      "aliases": [
+        "排球少年！！",
+        "Haikyu!!"
+      ],
+      "language": "zh",
+      "layout": "page",
+      "edition": "原作漫画；不包含动画、外传、续作",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://www.viz.com/haikyu",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-comic-spy-family",
+      "kind": "comic",
+      "title": "间谍过家家",
+      "authors": [
+        "远藤达哉",
+        "遠藤達哉",
+        "Tatsuya Endo"
+      ],
+      "tags": [
+        "家庭·喜剧"
+      ],
+      "aliases": [
+        "間諜家家酒",
+        "SPY×FAMILY"
+      ],
+      "language": "zh",
+      "layout": "page",
+      "edition": "原作漫画；不包含动画、外传、续作",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://www.viz.com/spy-x-family",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-comic-sailor",
+      "kind": "comic",
+      "title": "美少女战士",
+      "authors": [
+        "武内直子",
+        "Naoko Takeuchi"
+      ],
+      "tags": [
+        "少女·魔法"
+      ],
+      "aliases": [
+        "美少女戰士"
+      ],
+      "language": "zh",
+      "layout": "page",
+      "edition": "原作漫画；不包含动画、外传、续作",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://kodansha.us/series/pretty-guardian-sailor-moon/",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-comic-titan",
+      "kind": "comic",
+      "title": "进击的巨人",
+      "authors": [
+        "谏山创",
+        "諫山創",
+        "Hajime Isayama"
+      ],
+      "tags": [
+        "黑暗·末世"
+      ],
+      "aliases": [
+        "進擊的巨人"
+      ],
+      "language": "zh",
+      "layout": "page",
+      "edition": "原作漫画；不包含动画、外传、续作",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://kodansha.us/series/attack-on-titan/",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-comic-outcast",
+      "kind": "comic",
+      "title": "一人之下",
+      "authors": [
+        "米二"
+      ],
+      "tags": [
+        "国漫·异人"
+      ],
+      "aliases": [],
+      "language": "zh",
+      "layout": "strip",
+      "edition": "原作漫画；不包含动画、外传、续作",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://zh.wikipedia.org/wiki/一人之下",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-comic-fox",
+      "kind": "comic",
+      "title": "狐妖小红娘",
+      "authors": [
+        "小新"
+      ],
+      "tags": [
+        "国漫·爱情"
+      ],
+      "aliases": [],
+      "language": "zh",
+      "layout": "strip",
+      "edition": "原作漫画；不包含动画、外传、续作",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://ac.qq.com/Comic/ComicInfo/id/518333",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-comic-tower",
+      "kind": "comic",
+      "title": "神之塔",
+      "authors": [
+        "SIU"
+      ],
+      "tags": [
+        "韩漫·奇幻"
+      ],
+      "aliases": [],
+      "language": "zh",
+      "layout": "strip",
+      "edition": "原作漫画；不包含动画、外传、续作",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://www.webtoons.com/zh-hant/fantasy/tower-of-god/list?title_no=160",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "classic-comic-lookism",
+      "kind": "comic",
+      "title": "看脸时代",
+      "authors": [
+        "泰俊",
+        "朴泰俊"
+      ],
+      "tags": [
+        "韩漫·校园"
+      ],
+      "aliases": [
+        "看臉時代"
+      ],
+      "language": "zh",
+      "layout": "strip",
+      "edition": "原作漫画；不包含动画、外传、续作",
+      "selection": "经典与类型代表分层抽样；包含较新代表作，不作为热度或统计随机样本",
+      "references": [
+        {
+          "url": "https://m.webtoons.com/zh-hant/school/kanlianshidai/list?title_no=546",
+          "checkedAt": "2026-10-22",
+          "role": "metadata"
+        }
+      ]
+    }
+  ]
+}

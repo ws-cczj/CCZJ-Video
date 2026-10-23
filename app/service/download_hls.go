@@ -57,7 +57,9 @@ func (a *App) resolvePlaylist(ctx context.Context, task *downloadTask, m3u8URL, 
 	task.playlist = append([]downloadservice.Segment(nil), sequence...)
 	task.segments = segmentURLs(parsed.Segments)
 	task.mu.Unlock()
-	a.savePersistedTasks()
+	if !a.checkpoint(task) {
+		return nil, fmt.Errorf("保存播放列表失败")
+	}
 	return sequence, nil
 }
 
@@ -165,7 +167,7 @@ func (a *App) failSegmentTask(task *downloadTask, err error) {
 	task.setError(err.Error())
 	// 进度落盘：失败位置之后的片段还没写，segIndex 停在断点上是用户点「继续」
 	// 能接着下的唯一依据。
-	a.savePersistedTasks()
+	a.checkpoint(task)
 	a.emitProgress(task)
 }
 
@@ -195,8 +197,32 @@ func (a *App) downloadM3u8(ctx context.Context, task *downloadTask, m3u8URL, sav
 		existingBytes = info.Size()
 	}
 	startIdx := task.nextSegIdx()
-	if startIdx < 0 || startIdx >= len(segments) {
+	task.mu.Lock()
+	synced, checkpointBytes := task.boundarySynced, task.checkpointBytes
+	task.mu.Unlock()
+	if startIdx < 0 || startIdx > len(segments) {
 		startIdx = 0
+	}
+	if startIdx > 0 && !synced && existingBytes > 0 {
+		// Legacy checkpoints did not pair a flushed byte count with the segment
+		// index. Preserve the old partial before restarting an unverifiable prefix.
+		backup := fmt.Sprintf("%s.legacy-%d", tmpPath, time.Now().UnixNano())
+		if err := os.Rename(tmpPath, backup); err != nil {
+			a.failSegmentTask(task, fmt.Errorf("保留旧分片文件失败: %w", err))
+			return
+		}
+		existingBytes, startIdx = 0, 0
+	}
+	if synced && startIdx > 0 {
+		if existingBytes < checkpointBytes {
+			startIdx = 0
+		} else if existingBytes > checkpointBytes {
+			if err := os.Truncate(tmpPath, checkpointBytes); err != nil {
+				a.failSegmentTask(task, err)
+				return
+			}
+			existingBytes = checkpointBytes
+		}
 	}
 	flags := os.O_CREATE | os.O_WRONLY
 	if existingBytes > 0 && startIdx > 0 {
@@ -281,6 +307,20 @@ func (a *App) downloadM3u8(ctx context.Context, task *downloadTask, m3u8URL, sav
 	}
 
 	downloaded := existingBytes
+	syncBoundary := func() bool {
+		if err := out.Sync(); err != nil {
+			a.failSegmentTask(task, fmt.Errorf("同步分片文件失败: %w", err))
+			return false
+		}
+		task.mu.Lock()
+		task.segIndex, task.status.Downloaded = nextExpected, downloaded
+		task.checkpointIndex, task.checkpointBytes, task.boundarySynced = nextExpected, downloaded, true
+		task.mu.Unlock()
+		return a.checkpoint(task)
+	}
+	if !syncBoundary() {
+		return
+	}
 	lastEmit := time.Now()
 	lastBytes := downloaded
 	segmentBytes := float64(0)
@@ -291,19 +331,16 @@ func (a *App) downloadM3u8(ctx context.Context, task *downloadTask, m3u8URL, sav
 		select {
 		case <-ctx.Done():
 			shutdown()
-			if task.isPaused() {
-				task.setSegIdx(nextExpected)
-				a.savePersistedTasks()
-				a.emitProgress(task)
-				return
-			}
 			task.setCancel()
+			syncBoundary()
 			a.emitProgress(task)
 			return
 		case result := <-results:
 			if result.err != nil {
 				shutdown()
-				task.setSegIdx(nextExpected)
+				if !syncBoundary() {
+					return
+				}
 				a.failSegmentTask(task, result.err)
 				return
 			}
@@ -354,8 +391,11 @@ func (a *App) downloadM3u8(ctx context.Context, task *downloadTask, m3u8URL, sav
 				lastBytes = downloaded
 				a.emitProgress(task)
 			}
-			if nextExpected%20 == 0 {
-				a.savePersistedTasks()
+			task.mu.Lock()
+			needsCheckpoint := nextExpected-task.checkpointIndex >= 20
+			task.mu.Unlock()
+			if needsCheckpoint && !syncBoundary() {
+				return
 			}
 			if !schedule() {
 				return
@@ -363,23 +403,12 @@ func (a *App) downloadM3u8(ctx context.Context, task *downloadTask, m3u8URL, sav
 		}
 	}
 	shutdown()
+	if !syncBoundary() {
+		return
+	}
 	if err := out.Close(); err != nil {
 		a.failSegmentTask(task, fmt.Errorf("close file failed: %w", err))
 		return
 	}
-	if err := os.Rename(tmpPath, savePath); err != nil {
-		a.failSegmentTask(task, fmt.Errorf("rename failed: %w", err))
-		return
-	}
-	task.mu.Lock()
-	task.status.Status = "done"
-	task.status.EndTime = time.Now().Unix()
-	task.status.Total = downloaded
-	task.status.Downloaded = downloaded
-	task.status.SpeedBps = 0
-	task.status.EtaSec = 0
-	task.playlist = nil
-	task.mu.Unlock()
-	a.emitProgress(task)
-	a.savePersistedTasks()
+	a.finalizeDownload(task, tmpPath, savePath)
 }

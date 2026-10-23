@@ -74,7 +74,7 @@ export class ConnectionState {
         if (!("NegotiatedProtocolIsMutual" in $$source)) {
             /**
              * NegotiatedProtocolIsMutual used to indicate a mutual NPN negotiation.
-             * 
+             *
              * Deprecated: this value is always true.
              * @member
              * @type {boolean}
@@ -95,11 +95,11 @@ export class ConnectionState {
              * PeerCertificates are the parsed certificates sent by the peer, in the
              * order in which they were sent. The first element is the leaf certificate
              * that the connection is verified against.
-             * 
+             *
              * On the client side, it can't be empty. On the server side, it can be
              * empty if Config.ClientAuth is not RequireAnyClientCert or
              * RequireAndVerifyClientCert.
-             * 
+             *
              * PeerCertificates and its contents should not be modified.
              * @member
              * @type {(x509$0.Certificate | null)[]}
@@ -111,11 +111,11 @@ export class ConnectionState {
              * VerifiedChains is a list of one or more chains where the first element is
              * PeerCertificates[0] and the last element is from Config.RootCAs (on the
              * client side) or Config.ClientCAs (on the server side).
-             * 
+             *
              * On the client side, it's set if Config.InsecureSkipVerify is false. On
              * the server side, it's set if Config.ClientAuth is VerifyClientCertIfGiven
              * (and the peer provided a certificate) or RequireAndVerifyClientCert.
-             * 
+             *
              * VerifiedChains and its contents should not be modified.
              * @member
              * @type {(x509$0.Certificate | null)[][]}
@@ -207,7 +207,7 @@ export class ConnectionState {
 /**
  * CurveID is the type of a TLS identifier for a key exchange mechanism. See
  * https://www.iana.org/assignments/tls-parameters/tls-parameters.xml#tls-parameters-8.
- * 
+ *
  * In TLS 1.2, this registry used to support only elliptic curves. In TLS 1.3,
  * it was extended to other groups and renamed NamedGroup. See RFC 8446, Section
  * 4.2.7. It was then also extended to other mechanisms, such as hybrid

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CczjMobileEditActions from '../mobile/CczjMobileEditActions.vue'
 defineOptions({ name: 'History' })
 import { ref, onMounted, onActivated, onDeactivated, computed } from 'vue'
 import { tr } from '../locales'
@@ -12,10 +13,14 @@ import { Button, Badge, Spinner as LoadingSpinner, Empty as EmptyState } from '.
 import { formatTime, getDetailPath } from '../utils'
 import { epProgressKey, getEpProgress, getEpProgressPct } from '../utils/episodeProgress'
 import type { HistoryItem } from '../types'
+import { isMobileRuntime } from '../api/runtime'
+import { useHoldToEdit } from '../mobile/useHoldToEdit'
+import { useConfirmStore } from '../stores/confirm'
 
 const router = useRouter()
 const posterCache = usePosterCacheStore()
 const errorStore = useErrorStore()
+const mobile = isMobileRuntime()
 
 const history = ref<HistoryItem[]>([])
 const loading = ref(false)
@@ -47,7 +52,6 @@ async function reloadHistory(): Promise<void> {
     const err = normalizeApiError(e)
     console.error('加载历史失败:', e)
     errorStore.error(tr('history.loadFailed'), err.message, '', 'History')
-    history.value = []
   } finally {
     loading.value = false
   }
@@ -85,6 +89,14 @@ onActivated(() => {
 })
 
 onDeactivated(() => { wasDeactivated = true })
+
+const confirmStore = useConfirmStore()
+const { vHoldToEdit } = useHoldToEdit(mobile, manageMode, () => { selectedKeys.value = new Set() })
+async function removeMobileHistory(item: HistoryItem): Promise<void> {
+  if (batchRemoving.value || !await confirmStore.confirm({ message: tr('mobile.confirmItemRemoval', { name: resolveName(item) }), level: 'danger' })) return
+  selectedKeys.value = new Set([keyOf(item)])
+  await deleteSelected(true)
+}
 
 /**
  * 对没有名称或封面的历史项，异步从详情接口补齐信息。
@@ -202,8 +214,9 @@ function toggleSelectAll(): void {
   }
 }
 
-async function deleteSelected(): Promise<void> {
+async function deleteSelected(confirmed = false): Promise<void> {
   if (selectedKeys.value.size === 0 || batchRemoving.value) return
+  if (mobile && !confirmed && !await confirmStore.confirm({ message: tr('mobile.confirmSelectedRemoval', { count: selectedKeys.value.size }), level: 'danger' })) return
   batchRemoving.value = true
   const failed: string[] = []
   try {
@@ -233,7 +246,7 @@ async function deleteSelected(): Promise<void> {
 }
 
 async function clearAll(): Promise<void> {
-  if (!window.confirm(tr('history.confirmClear'))) return
+  if (!await confirmStore.confirm({ message: tr('history.confirmClear'), level: 'danger' })) return
   batchRemoving.value = true
   try {
     await ClearAllHistory()
@@ -322,33 +335,34 @@ function goDetail(h: HistoryItem): void {
 </script>
 
 <template>
-  <div class="history-page cczj-max-w-full cczj-text-primary">
+  <div class="history-page cczj-max-w-full cczj-text-primary" :class="{ 'cczj-mobile-history-managing': mobile && manageMode }">
     <div class="page-header cczj-flex cczj-items-start cczj-justify-between cczj-gap-8 cczj-mb-12 cczj-pb-8 cczj-border-bottom">
       <div class="page-header-left cczj-min-w-0 cczj-flex-1">
         <h2 class="cczj-inline-flex cczj-items-center cczj-gap-5 cczj-text-primary cczj-font-bold cczj-mb-2"><Icon name="clock" :size="20" /> {{ tr('history.title') }}</h2>
-        <p class="desc cczj-text-muted cczj-mt-1" v-if="dedupedHistory.length > 0 && !manageMode">
+        <p class="desc cczj-text-muted cczj-mt-1" v-if="dedupedHistory.length > 0 && (mobile || !manageMode)">
           {{ tr('history.viewedCount', { count: dedupedHistory.length }) }}{{ searchKeyword ? tr('history.searchResultCount', { count: filteredHistory.length }) : '' }}
         </p>
-        <p class="desc cczj-text-muted cczj-mt-1" v-else-if="manageMode">{{ tr('history.selectedCount', { count: selectedKeys.size }) }}</p>
+        <p class="desc cczj-text-muted cczj-mt-1" v-else-if="!mobile && manageMode">{{ tr('history.selectedCount', { count: selectedKeys.size }) }}</p>
         <p class="desc cczj-text-muted cczj-mt-1" v-else>{{ tr('history.emptyHint') }}</p>
+        <p v-if="mobile && dedupedHistory.length > 0 && !manageMode" class="cczj-mobile-history-hint">{{ tr('history.longPressManage') }}</p>
       </div>
-      <div class="page-header-actions cczj-flex cczj-items-center cczj-gap-2 cczj-flex-shrink-0">
-        <template v-if="!manageMode">
+      <div class="page-header-actions cczj-flex cczj-items-center cczj-gap-2 cczj-flex-shrink-0" :class="{ 'cczj-mobile-history-actions': mobile && manageMode }">
+        <template v-if="mobile || !manageMode">
           <div class="search-box cczj-inline-flex cczj-items-center cczj-gap-4 cczj-px-3 cczj-py-2 cczj-rounded cczj-border cczj-bg-card">
             <Icon name="search" :size="14" class="cczj-text-muted" />
             <input v-model="searchKeyword" type="text" :placeholder="tr('history.searchPlaceholder')" class="cczj-bg-transparent cczj-outline-none cczj-flex-1 cczj-text-primary" />
           </div>
-          <Button v-if="dedupedHistory.length > 0" variant="ghost" size="sm" @click="enterManageMode">
+          <Button v-if="!mobile && dedupedHistory.length > 0" variant="ghost" size="sm" @click="enterManageMode">
             <Icon name="settings" :size="14" />
             <span>{{ tr('common.manage') }}</span>
           </Button>
         </template>
-        <template v-else>
+        <template v-else-if="!mobile">
           <Button variant="secondary" size="sm" @click="toggleSelectAll">
             <Icon name="check" :size="14" />
             <span>{{ allSelected ? tr('common.cancelSelectAll') : tr('common.selectAll') }}</span>
           </Button>
-          <Button variant="danger" size="sm" @click="deleteSelected" :disabled="selectedKeys.size === 0 || batchRemoving">
+          <Button variant="danger" size="sm" @click="deleteSelected()" :disabled="selectedKeys.size === 0 || batchRemoving">
             <Icon name="trash" :size="14" />
             <span>{{ tr('common.deleteSelected') }}</span>
           </Button>
@@ -365,7 +379,7 @@ function goDetail(h: HistoryItem): void {
     </div>
 
     <!-- 加载状态 -->
-    <div v-if="loading" class="loading-wrap cczj-flex cczj-justify-center cczj-items-center cczj-py-12">
+    <div v-if="loading && history.length === 0" class="loading-wrap cczj-flex cczj-justify-center cczj-items-center cczj-py-12">
       <LoadingSpinner :label="tr('history.loading')" />
     </div>
 
@@ -381,7 +395,7 @@ function goDetail(h: HistoryItem): void {
     </div>
 
     <!-- 历史列表（按日期分组） -->
-    <div v-else class="history-list cczj-flex cczj-flex-col cczj-gap-12">
+    <div v-else  :data-cczj-editing="mobile && manageMode || undefined" class="history-list cczj-flex cczj-flex-col cczj-gap-12">
       <div v-for="group in groupedByDate" :key="group.label" class="history-group cczj-flex cczj-flex-col cczj-gap-5">
         <div class="group-header cczj-flex cczj-items-center cczj-justify-between cczj-gap-6 cczj-mb-3 cczj-px-2">
           <span class="group-label cczj-text-lg cczj-font-semibold cczj-text-primary">{{ group.label }}</span>
@@ -393,10 +407,13 @@ function goDetail(h: HistoryItem): void {
             v-for="h in group.items"
             :key="keyOf(h)"
             class="history-card cczj-relative cczj-flex cczj-gap-7 cczj-p-6 cczj-rounded cczj-border cczj-bg-card cczj-transition cczj-cursor-pointer"
-            :class="{ 'is-selected': manageMode && isSelected(h) }"
-            @click="goDetail(h)"
+            :class="{ 'is-selected': manageMode && isSelected(h), 'cczj-mobile-history-card': mobile }"
+            :role="mobile ? 'button' : undefined" :tabindex="mobile ? 0 : undefined"
+            :aria-pressed="mobile && manageMode ? isSelected(h) : undefined"
+            v-hold-to-edit @click="(!mobile || !manageMode) && goDetail(h)" @keydown.enter.self.prevent="goDetail(h)" @keydown.space.self.prevent="goDetail(h)"
           >
-            <label v-if="manageMode" class="card-checkbox cczj-absolute cczj-top-2 cczj-left-2 cczj-z-10" @click.stop>
+            <button v-if="mobile && manageMode" type="button" class="cczj-mobile-item-remove" data-cczj-remove :disabled="batchRemoving" :aria-label="`${tr('common.delete')}: ${resolveName(h)}`" @click.stop="removeMobileHistory(h)"><Icon name="close" :size="16" /></button>
+            <label v-if="!mobile && manageMode" class="card-checkbox cczj-absolute cczj-top-2 cczj-left-2 cczj-z-10" @click.stop>
               <input
                 type="checkbox"
                 :checked="isSelected(h)"
@@ -449,6 +466,7 @@ function goDetail(h: HistoryItem): void {
       </div>
     </div>
   </div>
+<CczjMobileEditActions v-if="mobile" :open="manageMode" @done="exitManage" @cancel="exitManage" />
 </template>
 
 <style scoped>
@@ -463,80 +481,73 @@ function goDetail(h: HistoryItem): void {
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 .search-box:focus-within {
-  border-color: var(--accent);
+  @apply cczj-border-primary;
   background: var(--bg-hover);
 }
 .search-box input {
   border: none;
-  font-size: 13px;
+  @apply cczj-text-13;
   font-family: inherit;
   width: 180px;
 }
 .search-box input::placeholder {
-  color: var(--text-muted);
-  opacity: 0.8;
+  @apply cczj-text-muted cczj-opacity-80;
 }
 
 /* 历史分组 */
 .group-header .group-label {
-  font-size: 14px;
+  @apply cczj-text-base;
 }
 .group-header .group-count {
-  font-size: 12px;
+  @apply cczj-text-sm;
 }
 
 /* 卡片网格 */
 .history-cards {
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  min-width: 0;
+  @apply cczj-min-w-0;
 }
 
 .history-card {
-  min-width: 0;
+  @apply cczj-min-w-0;
 }
 
 /* 单张卡片 */
 .history-card:hover {
-  border-color: var(--accent);
+  @apply cczj-border-primary;
   transform: translateY(-2px);
   box-shadow: 0 4px 16px var(--accent-alpha-10);
 }
 .history-card.is-selected {
-  border-color: var(--accent);
+  @apply cczj-border-primary;
   background: var(--accent-alpha-5);
   box-shadow: 0 2px 12px var(--accent-alpha-10);
 }
-.history-card:hover .play-overlay { opacity: 1; }
+.history-card:hover .play-overlay { @apply cczj-opacity-100; }
 
 .card-checkbox {
   top: 10px;
   right: 10px;
   z-index: 2;
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
+  @apply cczj-w-24 cczj-h-24 cczj-flex cczj-items-center cczj-justify-center cczj-cursor-pointer;
 }
 .card-checkbox input {
-  position: absolute;
-  opacity: 0;
+  @apply cczj-absolute cczj-opacity-0;
   width: 0;
   height: 0;
-  pointer-events: none;
+  @apply cczj-pointer-events-none;
 }
 .check-mark {
   width: 22px;
   height: 22px;
-  border-radius: 6px;
+  @apply cczj-rounded;
   background: rgba(255, 255, 255, 0.9);
   border: 2px solid var(--accent);
-  transition: all 0.15s ease;
+  @apply cczj-transition-fast;
 }
 .check-mark::after {
   content: '';
-  display: none;
+  @apply cczj-hidden;
   width: 6px;
   height: 11px;
   border: solid var(--accent);
@@ -547,22 +558,21 @@ function goDetail(h: HistoryItem): void {
   background: var(--accent);
 }
 .card-checkbox input:checked + .check-mark::after {
-  display: block;
+  @apply cczj-block;
   border-color: #ffffff;
 }
 .card-checkbox input:disabled + .check-mark {
-  opacity: 0.5;
-  cursor: not-allowed;
+  @apply cczj-opacity-50 cczj-cursor-not-allowed;
 }
 
 /* 封面 */
 .poster {
   width: 90px;
   height: 130px;
-  border-radius: 8px;
+  @apply cczj-rounded-md;
   transition: border-color 0.2s ease;
 }
-.history-card:hover .poster { border-color: var(--accent); }
+.history-card:hover .poster { @apply cczj-border-primary; }
 
 .play-overlay {
   background: linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 55%);
@@ -574,5 +584,5 @@ function goDetail(h: HistoryItem): void {
   line-height: 1.4;
   transition: color 0.15s ease;
 }
-.history-card:hover .info .title { color: var(--accent); }
+.history-card:hover .info .title { @apply cczj-text-accent; }
 </style>

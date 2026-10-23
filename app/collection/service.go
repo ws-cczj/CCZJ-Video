@@ -25,13 +25,17 @@ type Service struct {
 	background BackgroundFunc
 	// appCtx 是应用生命周期上下文（lifecycle.Group 的那一个，创建后不再更换）。
 	// 采集引擎要在登记给界面之前挂上它，理由见 Start。
-	appCtx context.Context
+	appCtx          context.Context
+	contextProvider func() context.Context
 }
 
 // NewService constructs a collection service.
 func NewService(emit EmitFunc, background BackgroundFunc, appCtx context.Context) *Service {
 	return &Service{emit: emit, background: background, appCtx: appCtx}
 }
+
+// SetContextProvider is wired before startup; each run captures its mode owner.
+func (s *Service) SetContextProvider(provider func() context.Context) { s.contextProvider = provider }
 
 // Start begins a manual collection run for a source.
 func (s *Service) Start(req handler.CollectReq) (*handler.CollectStatus, error) {
@@ -80,7 +84,14 @@ func (s *Service) Start(req handler.CollectReq) (*handler.CollectStatus, error) 
 	// 上下文先挂再登记：TryBindEngine 一发布，"停止采集"和退出清理就都能立刻拿到
 	// 这个引擎。等后台任务真正开跑才 SetContext 的话，中间那段窗口里取消信号
 	// 无处可去，退出时这一趟采集会继续往已经关掉的库里写。
-	engine.SetContext(s.appCtx)
+	owner := s.appCtx
+	if s.contextProvider != nil {
+		owner = s.contextProvider()
+	}
+	if err := owner.Err(); err != nil {
+		return nil, err
+	}
+	engine.SetContext(owner)
 	if !entry.TryBindEngine(engine, string(mode)) {
 		return nil, apperror.Newf(apperror.Conflict, "采集源 %s 正在采集中", req.SourceKey)
 	}

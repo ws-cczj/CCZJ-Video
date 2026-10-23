@@ -113,8 +113,10 @@ onBeforeUnmount(() => {
     </div>
     <div class="info cczj-flex-1 cczj-flex cczj-flex-col cczj-gap-2">
       <h4 class="title cczj-truncate cczj-font-semibold cczj-text-primary" :title="video.vod_name">{{ video.vod_name }}</h4>
-      <div v-if="video.type_name" class="sub cczj-truncate cczj-text-13 cczj-text-muted">{{ video.type_name }}</div>
-      <div v-if="sourceLabel" class="sub cczj-truncate cczj-text-13 cczj-text-accent">{{ sourceLabel }}</div>
+      <slot name="meta">
+        <div v-if="video.type_name" class="sub cczj-truncate cczj-text-13 cczj-text-muted">{{ video.type_name }}</div>
+        <div v-if="sourceLabel" class="sub cczj-truncate cczj-text-13 cczj-text-accent">{{ sourceLabel }}</div>
+      </slot>
     </div>
   </div>
 </template>
@@ -130,14 +132,13 @@ onBeforeUnmount(() => {
 }
 
 .video-card.visible {
-  opacity: 1;
+  @apply cczj-opacity-100;
   transform: translateY(0);
 }
 
 .video-card:hover {
   transform: translateY(-6px) scale(1.02);
-  box-shadow: var(--shadow);
-  border-color: var(--accent);
+  @apply cczj-shadow cczj-border-primary;
 }
 
 /* 键盘可达：卡片是点进去详情页的入口，聚焦必须看得见。
@@ -152,7 +153,7 @@ onBeforeUnmount(() => {
 }
 
 .poster-wrap > img {
-  object-fit: cover;
+  @apply cczj-object-cover;
   transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -178,23 +179,20 @@ onBeforeUnmount(() => {
 
 /* 目录命中态：放在海报左下角，避开右上角的更新状态角标 */
 .catalog-badge {
-  left: 8px;
+  @apply cczj-left-2;
   bottom: 8px;
   z-index: 3;
   padding: 2px 7px;
   border-radius: var(--radius-sm);
   background: var(--success);
   color: var(--success-contrast);
-  font-size: 11px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
+  @apply cczj-text-11 cczj-font-semibold cczj-flex cczj-items-center;
   gap: 3px;
   box-shadow: 0 2px 8px var(--success-alpha-10);
 }
 
 .video-card:hover .overlay {
-  opacity: 1;
+  @apply cczj-opacity-100;
 }
 
 .play-btn {
@@ -222,7 +220,7 @@ onBeforeUnmount(() => {
 }
 
 .video-card:hover .title {
-  color: var(--accent);
+  @apply cczj-text-accent;
 }
 
 .sub {

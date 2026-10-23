@@ -178,48 +178,35 @@ const {
 /* === 卡片 === */
 .source-card {
   background: rgba(255,255,255,0.05);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  @apply cczj-border cczj-rounded-lg;
   transition: all 0.25s ease;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+  @apply cczj-overflow-hidden cczj-flex cczj-flex-col;
 }
 .source-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 24px rgba(0,0,0,0.2);
   border-color: rgba(255,255,255,0.12);
 }
-.source-card.expanded { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-alpha-20), 0 8px 24px rgba(0,0,0,0.25); }
+.source-card.expanded { @apply cczj-border-primary; box-shadow: 0 0 0 1px var(--accent-alpha-20), 0 8px 24px rgba(0,0,0,0.25); }
 .source-card.running { border-color: var(--accent-alpha-30); }
 
 /* === 卡片头部 === */
 .card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  @apply cczj-flex cczj-items-center cczj-justify-between;
   padding: 16px 18px;
-  cursor: pointer;
+  @apply cczj-cursor-pointer;
   user-select: none;
   transition: background 0.15s ease;
 }
 .card-header:hover { background: rgba(255,255,255,0.03); }
 .card-header-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-  min-width: 0;
+  @apply cczj-flex cczj-items-center cczj-gap-5 cczj-flex-1 cczj-min-w-0;
 }
 .card-header-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
+  @apply cczj-flex cczj-items-center cczj-gap-4 cczj-flex-shrink-0;
 }
 .status-dot {
-  width: 10px; height: 10px; border-radius: 50%;
-  flex-shrink: 0;
+  width: 10px; height: 10px; @apply cczj-rounded-50 cczj-flex-shrink-0;
   background: #757575;
 }
 .status-dot.running {
@@ -236,41 +223,40 @@ const {
 .status-dot.error { background: var(--danger); box-shadow: 0 0 6px var(--danger-alpha-10); }
 .status-dot.idle { background: var(--text-muted); }
 .card-name {
-  font-size: 15px; font-weight: 600; margin: 0;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: 15px; @apply cczj-font-semibold; margin: 0;
+  @apply cczj-whitespace-nowrap cczj-overflow-hidden; text-overflow: ellipsis;
 }
 .mode-badge {
-  padding: 3px 10px; border-radius: 12px;
-  font-size: 11px; font-weight: 600; flex-shrink: 0;
+  @apply cczj-px-5-py-2 cczj-rounded-lg cczj-text-11 cczj-font-semibold cczj-flex-shrink-0;
 }
-.mode-badge.full { background: var(--accent-alpha-15); color: var(--accent); }
-.mode-badge.incremental { background: var(--success-alpha-10); color: var(--success); }
+.mode-badge.full { background: var(--accent-alpha-15); @apply cczj-text-accent; }
+.mode-badge.incremental { background: var(--success-alpha-10); @apply cczj-text-success; }
 .mode-badge.once { background: var(--warning-alpha-10); color: var(--warning-text); }
 .schedule-mini {
-  display: inline-flex; align-items: center; gap: 3px;
-  font-size: 10px; color: var(--success);
+  @apply cczj-inline-flex cczj-items-center; gap: 3px;
+  @apply cczj-text-xs cczj-text-success;
   background: var(--success-alpha-10);
   padding: 2px 8px; border-radius: 10px;
-  flex-shrink: 0;
+  @apply cczj-flex-shrink-0;
 }
 .probe-mini {
-  display: inline-flex; align-items: center; gap: 3px;
-  font-size: 10px;
+  @apply cczj-inline-flex cczj-items-center; gap: 3px;
+  @apply cczj-text-xs;
   padding: 2px 8px; border-radius: 10px;
-  flex-shrink: 0;
+  @apply cczj-flex-shrink-0;
   font-family: 'SF Mono', Consolas, monospace;
 }
-.probe-mini.cooling { color: var(--text-muted); background: var(--bg-hover); }
+.probe-mini.cooling { @apply cczj-text-muted; background: var(--bg-hover); }
 /* 探测点阵：一个点 = 5 分钟时间窗。灰点刻意用文字灰而不是边框色——
    深色主题下边框类 token 太暗，"没探过"会糊成看不见。 */
 .probe-dots {
-  display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;
+  @apply cczj-inline-flex cczj-items-center; gap: 3px; @apply cczj-flex-shrink-0;
   padding: 4px 6px; margin: -4px -6px; border-radius: 10px;
   transition: background 0.15s ease;
 }
 .probe-dot {
-  position: relative;
-  width: 6px; height: 6px; border-radius: 50%;
+  @apply cczj-relative;
+  width: 6px; @apply cczj-h-1.5 cczj-rounded-50;
   transition: transform 0.12s ease;
 }
 .probe-dot.none { background: var(--text-muted); opacity: 0.35; }
@@ -284,33 +270,31 @@ const {
    （9px 宽 = 6px 点 + 3px 缝，18px 高），圆点的视觉大小和排布都不变。 */
 .probe-dot::after {
   content: '';
-  position: absolute;
+  @apply cczj-absolute;
   inset: -6px -1.5px;
 }
 .mini-progress-text {
-  font-size: 12px; color: var(--accent); font-weight: 600;
+  @apply cczj-text-sm cczj-text-accent cczj-font-semibold;
   font-family: 'SF Mono', Consolas, monospace;
 }
 .expand-arrow {
-  font-size: 13px; color: var(--text-muted);
+  @apply cczj-text-13 cczj-text-muted;
   transition: transform 0.2s ease;
-  width: 20px; text-align: center;
+  width: 20px; @apply cczj-text-center;
 }
 
 /* === 迷你进度条 === */
 .mini-progress {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  @apply cczj-flex cczj-items-center cczj-gap-4;
   padding: 0 18px 8px;
 }
 .mini-progress-track {
-  flex: 1; height: 6px;
+  @apply cczj-flex-1 cczj-h-1.5;
   background: rgba(255,255,255,0.08);
-  border-radius: 3px; overflow: hidden;
+  border-radius: 3px; @apply cczj-overflow-hidden;
 }
 .mini-progress-fill {
-  height: 100%;
+  @apply cczj-h-full;
   background: linear-gradient(90deg, var(--accent), #818cf8);
   border-radius: 3px;
   transition: width 0.4s ease;
@@ -321,39 +305,30 @@ const {
   50% { opacity: 0.7; }
 }
 .mini-progress-pct {
-  font-size: 12px; color: var(--accent); font-weight: 600;
+  @apply cczj-text-sm cczj-text-accent cczj-font-semibold;
   font-family: 'SF Mono', Consolas, monospace;
-  min-width: 36px; text-align: right;
+  min-width: 36px; @apply cczj-text-right;
 }
 
 /* === 操作按钮行 === */
 .card-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  @apply cczj-flex cczj-items-center cczj-gap-3;
   padding: 10px 18px 14px;
   border-top: 1px solid rgba(255,255,255,0.06);
 }
 .mode-select {
   padding: 5px 10px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
+  @apply cczj-rounded cczj-border;
   background: rgba(255,255,255,0.05);
-  color: var(--text-primary);
-  font-size: 12px;
-  cursor: pointer;
-  outline: none;
-  font-weight: 500;
+  @apply cczj-text-primary cczj-text-sm cczj-cursor-pointer cczj-outline-none cczj-font-medium;
 }
-.mode-select:focus { border-color: var(--accent); }
-.mode-select:disabled { opacity: 0.4; cursor: not-allowed; }
+.mode-select:focus { @apply cczj-border-primary; }
+.mode-select:disabled { @apply cczj-opacity-40 cczj-cursor-not-allowed; }
 .hours-input-small {
   width: 48px; padding: 5px 8px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
+  @apply cczj-rounded cczj-border;
   background: rgba(255,255,255,0.05);
-  color: var(--text-primary);
-  font-size: 12px; text-align: center;
+  @apply cczj-text-primary cczj-text-sm cczj-text-center;
   font-family: 'SF Mono', Consolas, monospace;
   -moz-appearance: textfield;
 }
@@ -362,41 +337,35 @@ const {
   -webkit-appearance: none;
   margin: 0;
 }
-.hours-input-small:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 2px var(--accent-alpha-10); }
-.hours-input-small:disabled { opacity: 0.4; cursor: not-allowed; }
-.hours-suffix { font-size: 11px; color: var(--text-muted); }
-.action-spacer { flex: 1; }
+.hours-input-small:focus { @apply cczj-border-primary cczj-outline-none; box-shadow: 0 0 0 2px var(--accent-alpha-10); }
+.hours-input-small:disabled { @apply cczj-opacity-40 cczj-cursor-not-allowed; }
+.hours-suffix { @apply cczj-text-11 cczj-text-muted; }
+.action-spacer { @apply cczj-flex-1; }
 .icon-btn {
   width: 34px; height: 34px;
-  border-radius: 8px;
+  @apply cczj-rounded-md;
   border: 1px solid rgba(255,255,255,0.08);
   background: rgba(255,255,255,0.04);
-  color: var(--text-secondary);
-  cursor: pointer;
-  display: inline-flex; align-items: center; justify-content: center;
-  transition: all 0.15s ease;
-  flex-shrink: 0;
+  @apply cczj-text-secondary cczj-cursor-pointer cczj-inline-flex cczj-items-center cczj-justify-center cczj-transition-fast cczj-flex-shrink-0;
 }
-.icon-btn:hover { background: rgba(255,255,255,0.1); color: var(--text-primary); }
-.icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.probe-btn:hover:not(:disabled) { border-color: var(--accent); }
-.play-btn, .incr-btn, .sched-btn { color: var(--success); border-color: var(--success-alpha-10); }
+.icon-btn:hover { background: rgba(255,255,255,0.1); @apply cczj-text-primary; }
+.icon-btn:disabled { @apply cczj-opacity-40 cczj-cursor-not-allowed; }
+.probe-btn:hover:not(:disabled) { @apply cczj-border-primary; }
+.play-btn, .incr-btn, .sched-btn { @apply cczj-text-success; border-color: var(--success-alpha-10); }
 .play-btn:hover, .incr-btn:hover, .sched-btn:hover { background: var(--success-alpha-10); border-color: var(--success); }
 .pause-btn { color: var(--warning-text); border-color: var(--warning-alpha-10); }
 .pause-btn:hover { background: var(--warning-alpha-10); border-color: var(--warning); }
-.stop-btn, .del-btn { color: var(--danger); border-color: var(--danger-alpha-10); }
-.stop-btn:hover, .del-btn:hover { background: var(--danger-alpha-10); border-color: var(--danger); }
-.export-btn { color: var(--accent); border-color: var(--accent-alpha-25); }
-.export-btn:hover { background: var(--accent-alpha-10); border-color: var(--accent); }
-.edit-btn { color: var(--accent); border-color: var(--accent-alpha-25); }
-.edit-btn:hover { background: var(--accent-alpha-10); border-color: var(--accent); }
+.stop-btn, .del-btn { @apply cczj-text-danger; border-color: var(--danger-alpha-10); }
+.stop-btn:hover, .del-btn:hover { @apply cczj-bg-danger-alpha; border-color: var(--danger); }
+.export-btn { @apply cczj-text-accent; border-color: var(--accent-alpha-25); }
+.export-btn:hover { background: var(--accent-alpha-10); @apply cczj-border-primary; }
+.edit-btn { @apply cczj-text-accent; border-color: var(--accent-alpha-25); }
+.edit-btn:hover { background: var(--accent-alpha-10); @apply cczj-border-primary; }
 
 /* === 展开内容 === */
 .card-expanded {
   padding: 0 18px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+  @apply cczj-flex cczj-flex-col cczj-gap-7;
   animation: expandIn 0.25s ease;
 }
 @keyframes expandIn {

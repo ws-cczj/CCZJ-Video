@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang='zh'>
+<head>
+<meta charset="GBK">
+<meta http-equiv="Cache-Control" content="no-siteapp"/>
+<meta http-equiv="Cache-Control" content="no-transform"/>
+<meta http-equiv="mobile-agent" content="format=html5; url=https://m.shoujix.com"/>
+<meta http-equiv="mobile-agent" content="format=xhtml; url=https://m.shoujix.com"/>
+<title>手机小说_一个免费阅读手机小说的网站</title>
+<meta name="keywords" content="手机小说,一个免费阅读手机小说的网站" />
+<meta name="description" content="手机小说,一个免费阅读手机小说的网站" />
+<link rel="stylesheet" href="/static/bqg/biquge.css?v=202307091">
+<script src="/static/bqg/jquery.min.js"></script>
+<script src="/static/bqg/jquery.cookie.min.js"></script>
+<script type="text/javascript" src="/static/bqg/toplink.js?v=202306271"></script>
+</head>
+<body>
+	<div class="ywtop"><div class="ywtop_con"><div class="ywtop_sethome">Ctrl+D收藏手机小说</div><div class="ywtop_addfavorite">手机小说www.shoujix.com</div><div class="nri"><script>login();</script></div></div></div>
+	<div class="header"><div class="header_logo"><a href="/">手机小说</a></div><script>bqg_panel();</script><div class="clear"></div></div>
+		<div class="nav"><ul><li><a href="/">首页</a></li><li><a href="/xhqh/">玄幻奇幻</a></li><li><a href="/wx/">武侠小说</a></li><li><a href="/xx/">仙侠小说</a></li><li><a href="/ds/">都市现实</a></li><li><a href="/js/">军事小说</a></li><li><a href="/ls/">历史小说</a></li><li><a href="/yxty/">游戏体育</a></li><li><a href="/kh/">科幻小说</a></li><li><a href="/ly/">灵异小说</a></li><li><a href="/ecy/">二次元类</a></li><li><a href="/yq/">言情小说</a></li></ul></div><div id="main">
+	<div id="hotcontent" class="mt10">
+		<div class="l">
+					<div class="item">
+				<div class="image">
+					<a href="/shoujixs_91382/" title="王者峡谷黑科技教父"><img src="https://images.shoujix.com/91/91382/91382s.jpg" alt="王者峡谷黑科技教父" width="120" height="150"></a>
+				</div>
+				<dl>
+					<dt><span>小黑小黑小黑</span><a href="/shoujixs_91382/" title="王者峡谷黑科技教父">王者峡谷黑科技教父</a></dt>
+					<dd> 林溪穿越到平行世界的另一个自己身上，那里王者荣耀这款手游火爆全球，但是玩家的游戏水平和理解程度还很落后。作为KPL三赛季FMVP，王者荣耀教科书的林溪，自然要在这里大展身手！ 先来挽救一下这个时空的自己吧，作为一个主播要颜没颜，要技术没技术，也不搞笑，怎么火得起来？正好，现在的我都有！ 朋友们，你们可见过四无尽守约，献祭流雅典娜，攻速暴击流嬴政，宗师李白，飞雷神······ </dd>
+				</dl>
+				<div class="clear">
+				</div>
+			</div>
+						<div class="item">
+				<div class="image">
+					<a href="/shoujixs_45563/" title="开局继承废品站"><img src="https://www.shoujix.com/static/bqg/nocover.jpg" alt="开局继承废品站" width="120" height="150"></a>
+				</div>
+				<dl>
+					<dt><span>捡漏王</span><a href="/shoujixs_45563/" title="开局继承废品站">开局继承废品站</a></dt>
+					<dd> [[【A级签约作品：开局继承废品站】认真的么。。开局继承废品收购站？真秀。。“叮~~~万物回收系统已启动”易拉罐100000只回收成功价值10000元。塑料瓶5000只回收成功，价值5000元。废铁10吨回收成功，价值30000元。废弃家电回收成功，价值80000元。“发现明代香炉两个，回收价格60W，古玩市场出售价值150W”“发现元代青花瓷一只，系统回收价值200W，古玩市场出售价值500W</dd>
+				</dl>
+				<div class="clear">
+				</div>
+			</div>
+						<div class="item">
+				<div class="image">
+					<a href="/shoujixs_101591/" title="穿书顶流大佬他又苏又撩"><img src="https://images.shoujix.com/101/101591/101591s.jpg" alt="穿书顶流大佬他又苏又撩" width="120" height="150"></a>
+				</div>
+				<dl>
+					<dt><span>绿竹暖月</span><a href="/shoujixs_101591/" title="穿书顶流大佬他又苏又撩">穿书顶流大佬他又苏又撩</a></dt>
+					<dd> 第一财阀BOSS林嘉远权势滔天，长相英挺俊美，却手段狠辣，惹到他的下场不是死就是生不如死，尽管他不近女色，连母蚊子都不多看一眼，可爱慕他的女人依然多如过江之鲫。 传说，某知名女模特不过就捱了下他的车，他就连人带车扔到河里。 传说，某女演员不过就对他抛了个媚眼，却被逼写下万字血书。 而十八线小练习生白恩熙每天不是在蹭他的热度，就是在蹭他热度的路上，不但掌掴被他宠在手心里的绯闻女友，还踹飞他的商业合</dd>
+				</dl>
+				<div class="clear">
+				</div>
+			</div>
+						<div class="item">
+				<div class="image">
+					<a href="/shoujixs_90684/" title="恐怖轮回：百倍奖励"><img src="https://www.shoujix.com/static/bqg/nocover.jpg" alt="恐怖轮回：百倍奖励" width="120" height="150"></a>
+				</div>
+				<dl>
+					<dt><span>神豪机甲</span><a href="/shoujixs_90684/" title="恐怖轮回：百倍奖励">恐怖轮回：百倍奖励</a></dt>
+					<dd> [[【飞卢小说网独家签约小说：恐怖轮回：百倍奖励】“有只鬼在敲门，快要闯进来了，该怎么办？在线等，急！”林川被鬼缠上了，正走投无路之际，激活鬼神副本系统，抽中唯一SSSSS级天赋-百倍奖励！获得一切，将百倍加持！第一个世界，就是九叔世界！于是乎……“获得一年修为，叮！加持百倍，获得百年修为！”“获得十年桃木剑，叮！加持百倍，获得千年桃木剑！”“获得镇尸符，叮！加持百倍，获得无上镇阴符！”“获得雷</dd>
+				</dl>
+				<div class="clear">
+				</div>
+			</div>
+					</div>
+		<div class="r">
+			<h2>热门小说榜</h2>
+			<ul>
+								<li><span class="s1">[仙侠]</span><span class="s2"><a href="/shoujixs_27779/" title="我师兄实在太稳健了">我师兄实在太稳健了</a></span><span class="s5">言归正传</span></li>
+								<li><span class="s1">[玄幻]</span><span class="s2"><a href="/shoujixs_180488/" title="从低魔世界归来，先做人工智能">从低魔世界归来，先做人工智能</a></span><span class="s5">吴杰超</span></li>
+								<li><span class="s1">[都市]</span><span class="s2"><a href="/shoujixs_121928/" title="深空彼岸">深空彼岸</a></span><span class="s5">辰东</span></li>
+								<li><span class="s1">[玄幻]</span><span class="s2"><a href="/shoujixs_182428/" title="巫师：从骑士呼吸法开始肝经验">巫师：从骑士呼吸法开始肝经验</a></span><span class="s5">田隶</span></li>
+								<li><span class="s1">[玄幻]</span><span class="s2"><a href="/shoujixs_110914/" title="我的治愈系游戏">我的治愈系游戏</a></span><span class="s5">我会修空调</span></li>
+								<li><span class="s1">[玄幻]</span><span class="s2"><a href="/shoujixs_181085/" title="人在港综，你管这叫卧底？">人在港综，你管这叫卧底？</a></span><span class="s5">不吃葱花</span></li>
+								<li><span class="s1">[玄幻]</span><span class="s2"><a href="/shoujixs_156998/" title="我家娘子，不对劲">我家娘子，不对劲</a></span><span class="s5">一蝉知夏</span></li>
+								<li><span class="s1">[玄幻]</span><span class="s2"><a href="/shoujixs_151784/" title="红楼之挽天倾">红楼之挽天倾</a></span><span class="s5">林悦南兮</span></li>
+								<li><span class="s1">[玄幻]</span><span class="s2"><a href="/shoujixs_176593/" title="从野怪开始进化升级">从野怪开始进化升级</a></span><span class="s5">命给你行不行</span></li>
+							</ul>
+		</div>
+		<div class="clear">
+		</div>
+	</div>
+<div class="novelslist">
+		<div class="content">
+		  <h2><a href="/xhqh_1.html">玄幻奇幻</a></h2>
+			  <div class="top">
+								<div class="image"><a href="/shoujixs_9017/"><img src="https://images.shoujix.com/9/9017/9017s.jpg" alt="火影之幕后大BOSS系统"  width="67" height="82" /></div>
+				<dl><dt><a href="/shoujixs_9017/">火影之幕后大BOSS系统</a></dt><dd> 我叫陆玄，我万万没想到我竟然穿越了，而且是这么一个坑爹的世界。我现在叫宇智波玄，被大伯收养，有一个堂哥，每天一脸龙傲天的表情，叫宇智波斑。还有一个每天都看我不爽的堂弟，不过他不敢说出来，因为他打不过..
+...</dd></dl>
+				<div class="clear"></div>
+			  </div>
+						<ul>
+			 			<li><a href="/shoujixs_110914/">我的治愈系游戏</a>/我会修空调</li>
+			 			<li><a href="/shoujixs_146258/">宇宙职业选手</a>/我吃西红柿</li>
+			 			<li><a href="/shoujixs_11323/">夫人们的香裙</a>/六如和尚</li>
+			 			<li><a href="/shoujixs_168560/">我的诡异人生</a>/白刃斩春风</li>
+			 			<li><a href="/shoujixs_179875/">从解析太阳开始</a>/竹围月色</li>
+			 			<li><a href="/shoujixs_166863/">重生飞扬年代</a>/金蟾老祖</li>
+			 			<li><a href="/shoujixs_129071/">不科学御兽</a>/轻泉流响</li>
+			 			<li><a href="/shoujixs_176593/">从野怪开始进化升级</a>/命给你行不行</li>
+			 			<li><a href="/shoujixs_13990/">天启预报</a>/风月</li>
+			 			<li><a href="/shoujixs_182428/">巫师：从骑士呼吸法开始肝经验</a>/田隶</li>
+			 			<li><a href="/shoujixs_7796/">修真聊天群</a>/圣骑士的传说</li>
+			 			<li><a href="/shoujixs_156998/">我家娘子，不对劲</a>/一蝉知夏</li>
+			 			</ul>
+		</div>
+		<div class="content">
+		  <h2><a href="/wx_1.html">武侠小说</a></h2>
+			  <div class="top">
+								<div class="image"><a href="/shoujixs_27952/"><img src="https://images.shoujix.com/27/27952/27952s.jpg" alt="大隋国师"  width="67" height="82" /></div>
+				<dl><dt><a href="/shoujixs_27952/">大隋国师</a></dt><dd> 手中握笔，可书文章千篇锦绣，可画山川大河繁荣，绘那人间盛事。 也可上伐昏君乱臣，落笔九泉，腰悬一剑，斩妖魔魍魉，荡尽这人间不平事。 我叫陆良生，乃大隋国师 —————————————— 群：174411676
+...</dd></dl>
+				<div class="clear"></div>
+			  </div>
+						<ul>
+			 			<li><a href="/shoujixs_128770/">横推诸天从风云开始</a>/天帝大人</li>
+			 			<li><a href="/shoujixs_60652/">磨了10年剑的我终于可以浪了</a>/西风啸月</li>
+			 			<li><a href="/shoujixs_90194/">金刚不坏大寨主</a>/请叫我小佳佳</li>
+			 			<li><a href="/shoujixs_43681/">洪荒:偷盗就能变强</a>/偷腥的猫</li>
+			 			<li><a href="/shoujixs_51469/">剑侠风云志</a>/按时发疯</li>
+			 			<li><a href="/shoujixs_1110/">凌天剑神</a>/竹林之大贤</li>
+			 			<li><a href="/shoujixs_88908/">从风云开始拯救世界</a>/秦皇之剑</li>
+			 			<li><a href="/shoujixs_25021/">贼人休走</a>/非玩家角色</li>
+			 			<li><a href="/shoujixs_28895/">我有一块属性板</a>/易子七</li>
+			 			<li><a href="/shoujixs_29319/">超脑太监</a>/萧舒</li>
+			 			<li><a href="/shoujixs_6569/">魔邪之主</a>/永不落伍</li>
+			 			<li><a href="/shoujixs_94536/">万界武侠扮演者</a>/温茶米酒</li>
+			 			</ul>
+		</div>
+		<div class="content border">
+		  <h2><a href="/xx_1.html">仙侠小说</a></h2>
+			  <div class="top">
+								<div class="image"><a href="/shoujixs_113783/"><img src="https://images.shoujix.com/113/113783/113783s.jpg" alt="弃宇宙"  width="67" height="82" /></div>
+				<dl><dt><a href="/shoujixs_113783/">弃宇宙</a></dt><dd> 地球元气复苏了，但这真不是地球灵气复苏的故事， 而是一个流浪宇宙的故事。 ...</dd></dl>
+				<div class="clear"></div>
+			  </div>
+						<ul>
+			 			<li><a href="/shoujixs_74034/">大周仙吏</a>/荣小荣</li>
+			 			<li><a href="/shoujixs_25880/">烂柯棋缘</a>/真费事</li>
+			 			<li><a href="/shoujixs_125641/">我用闲书成圣人</a>/出走八万里</li>
+			 			<li><a href="/shoujixs_115748/">镇妖博物馆</a>/阎ZK</li>
+			 			<li><a href="/shoujixs_69609/">大梦主</a>/忘语</li>
+			 			<li><a href="/shoujixs_131103/">大乾长生</a>/萧舒</li>
+			 			<li><a href="/shoujixs_116978/">我只想安静的做个苟道中人</a>/爆炸小拿铁</li>
+			 			<li><a href="/shoujixs_26970/">青莲之巅</a>/Ф???</li>
+			 			<li><a href="/shoujixs_81783/">原来我是修仙大佬</a>/木下雉水</li>
+			 			<li><a href="/shoujixs_6453/">神话烘炉</a>/雪满林中</li>
+			 			<li><a href="/shoujixs_27685/">赤心巡天</a>/情何以甚</li>
+			 			<li><a href="/shoujixs_105081/">皓玉真仙</a>/小道不讲武德</li>
+			 			</ul>
+		</div>
+		<div class="clear"></div>
+	</div>
+	<div class="novelslist">
+		<div class="content">
+		  <h2><a href="/ds_1.html">都市现实</a></h2>
+			  <div class="top">
+								<div class="image"><a href="/shoujixs_24302/"><img src="https://images.shoujix.com/24/24302/24302s.jpg" alt="当医生开了外挂"  width="67" height="82" /></div>
+				<dl><dt><a href="/shoujixs_24302/">当医生开了外挂</a></dt><dd> 你是一名月入2000的小（穷）医生，饱受生活的压力和摧残！ 可是，某天一觉醒来，发现自己开了外挂…… 你要做一台阑尾手术，于是开腹探查： 你触摸盲肠：【盲肠：健康！】 你触摸结肠：【结肠：健康！】 你触摸阑尾：【阑尾：这是一个炎性化脓的阑尾怪，lv15，稀有怪，建议：行阑尾切除术！】 你手起刀落，圆满切下阑尾。 【叮！击杀稀有阑尾怪，获得：阑尾切除术经验+100，人民币+100，白色缝合针一个！...</dd></dl>
+				<div class="clear"></div>
+			  </div>
+						<ul>
+			 			<li><a href="/shoujixs_21949/">第一序列</a>/会说话的肘子</li>
+			 			<li><a href="/shoujixs_60665/">我的功法全靠捡</a>/百万单机王</li>
+			 			<li><a href="/shoujixs_138399/">这个穿越有点早</a>/青铜老五</li>
+			 			<li><a href="/shoujixs_95334/">我的投资时代</a>/桥上风景独好</li>
+			 			<li><a href="/shoujixs_137733/">成为圣人是一种什么体验？</a>/要离刺荆轲</li>
+			 			<li><a href="/shoujixs_110784/">起航1992</a>/千年静守</li>
+			 			<li><a href="/shoujixs_37179/">万族之劫</a>/老鹰吃小鸡</li>
+			 			<li><a href="/shoujixs_27295/">影帝的黑锅</a>/君王带笑</li>
+			 			<li><a href="/shoujixs_131735/">这个明星很想退休</a>/幼儿园一把手</li>
+			 			<li><a href="/shoujixs_61961/">史上最强炼气期</a>/李道然</li>
+			 			<li><a href="/shoujixs_68298/">我的白富美老婆</a>/城南一梦</li>
+			 			<li><a href="/shoujixs_23873/">我真没想重生啊</a>/柳岸花又明</li>
+			 			</ul>
+		</div>
+		<div class="content">
+		  <h2><a href="/js_1.html">军事小说</a></h2>
+			  <div class="top">
+								<div class="image"><a href="/shoujixs_43596/"><img src="https://www.shoujix.com/static/bqg/nocover.jpg" alt="三国之无上至尊"  width="67" height="82" /></div>
+				<dl><dt><a href="/shoujixs_43596/">三国之无上至尊</a></dt><dd> [[【A级签约作品：三国之无上至尊】刘昊意外穿越到狼烟并起的三国，变成了大汉皇叔！有无上霸主系统加身，刘昊可以抽取史上猛将、绝世神功、万界美女...还能吞食天地气运，万界荒古独尊！只有想不到，没有做不到！李元霸双锤霸世，怒锤人神吕布？！秦琼秘传杀手锏，可斗关公青龙偃月刀？！“吾乃常山赵子龍也，凡铁骑踏及之处，尽皆主公之土！”“天王冉闵在此，犯我主华夏领土！虽，远，必，诛！”......(本故事及...</dd></dl>
+				<div class="clear"></div>
+			  </div>
+						<ul>
+			 			<li><a href="/shoujixs_103129/">从亮剑开始崛起</a>/我的头像是猫</li>
+			 			<li><a href="/shoujixs_6368/">佣兵的战争</a>/如水意</li>
+			 			<li><a href="/shoujixs_103220/">大魏春</a>/眀志</li>
+			 			<li><a href="/shoujixs_139104/">我的亮剑生涯</a>/千斤顶</li>
+			 			<li><a href="/shoujixs_127984/">蝉动</a>/江苏棹子</li>
+			 			<li><a href="/shoujixs_1524/">间谍的战争</a>/如水意</li>
+			 			<li><a href="/shoujixs_6836/">钢铁苏联</a>/柯基丶</li>
+			 			<li><a href="/shoujixs_35211/">抗战之捍卫者</a>/歪打不留一</li>
+			 			<li><a href="/shoujixs_23649/">军工科技</a>/止天戈</li>
+			 			<li><a href="/shoujixs_23793/">密战无痕</a>/长风</li>
+			 			<li><a href="/shoujixs_117184/">我的谍战岁月</a>/猪头七</li>
+			 			<li><a href="/shoujixs_84551/">抗战最牛山寨</a>/肥皂快乐水</li>
+			 			</ul>
+		</div>
+		<div class="content border">
+		  <h2><a href="/ls_1.html">历史小说</a></h2>
+			  <div class="top">
+								<div class="image"><a href="/shoujixs_96271/"><img src="https://images.shoujix.com/96/96271/96271s.jpg" alt="大英公务员"  width="67" height="82" /></div>
+				<dl><dt><a href="/shoujixs_96271/">大英公务员</a></dt><dd> 遍及整个世界的二战已经进入尾声，大英帝国的衰落却才刚刚开始，美苏憧憬着未来的光辉岁月，知道破落贵族已经不是自己的阻碍。 “我并不同意他们的想法，可先拆了英属印度也并不全是坏事。” ...</dd></dl>
+				<div class="clear"></div>
+			  </div>
+						<ul>
+			 			<li><a href="/shoujixs_86451/">大唐第一世家</a>/晴了</li>
+			 			<li><a href="/shoujixs_38581/">我非痴愚实乃纯良</a>/怪诞的表哥</li>
+			 			<li><a href="/shoujixs_21632/">赘婿</a>/愤怒的香蕉</li>
+			 			<li><a href="/shoujixs_6742/">抢救大明朝</a>/大罗罗</li>
+			 			<li><a href="/shoujixs_83288/">我姐姐实在太宠我了</a>/重楼不要粉</li>
+			 			<li><a href="/shoujixs_5969/">穿越1630之崛起南美</a>/孤独麦客</li>
+			 			<li><a href="/shoujixs_25994/">大明最后一个狠人</a>/大明第一帅</li>
+			 			<li><a href="/shoujixs_73143/">世子很凶</a>/关关公子</li>
+			 			<li><a href="/shoujixs_47060/">梦回大明春</a>/王梓钧</li>
+			 			<li><a href="/shoujixs_59992/">日月风华</a>/??</li>
+			 			<li><a href="/shoujixs_120044/">红楼如此多骄</a>/嗷世巅锋</li>
+			 			<li><a href="/shoujixs_121073/">大明小学生</a>/随轻风去</li>
+			 			</ul>
+		</div>
+		<div class="clear"></div>
+	</div>
+	<div id="newscontent">
+		<div class="l">
+			<h2>热门小说更新列表</h2>
+			<ul>
+								<li><span class="s1">[都市现实]</span><span class="s2"><a href="/shoujixs_223655/" title="谍战：红色特工之代号不死鸟">谍战：红色特工之代号不死鸟</a></span><span class="s3"><a href="/shoujixs_223655_63109944.html" title="第1960章 我军不能孤军深入" target="_blank">第1960章 我军不能孤军深入</a></span><span class="s4">凤飞凰随</span><span class="s5">10-19</span></li>
+								<li><span class="s1">[仙侠小说]</span><span class="s2"><a href="/shoujixs_221188/" title="我在天牢，长生不死">我在天牢，长生不死</a></span><span class="s3"><a href="/shoujixs_221188_63110172.html" title="第2094章 他要娶寡妇" target="_blank">第2094章 他要娶寡妇</a></span><span class="s4">戒界</span><span class="s5">10-19</span></li>
+								<li><span class="s1">[玄幻奇幻]</span><span class="s2"><a href="/shoujixs_222657/" title="九死逆仙叶尘回归">九死逆仙叶尘回归</a></span><span class="s3"><a href="/shoujixs_222657_63109949.html" title="第1047章 归墟之眼" target="_blank">第1047章 归墟之眼</a></span><span class="s4">安心宝贝</span><span class="s5">10-19</span></li>
+								<li><span class="s1">[游戏体育]</span><span class="s2"><a href="/shoujixs_226340/" title="联盟：从G2青训开始">联盟：从G2青训开始</a></span><span class="s3"><a href="/shoujixs_226340_63110149.html" title="第882章 这对吗兄弟" target="_blank">第882章 这对吗兄弟</a></span><span class="s4">叽帕斯</span><span class="s5">10-19</span></li>
+								<li><span class="s1">[二次元类]</span><span class="s2"><a href="/shoujixs_230629/" title="怎么你也是我前女友啊">怎么你也是我前女友啊</a></span><span class="s3"><a href="/shoujixs_230629_63109940.html" title="第247章 什么意思捏？" target="_blank">第247章 什么意思捏？</a></span><span class="s4">十万可燃冰</span><span class="s5">10-19</span></li>
+								<li><span class="s1">[科幻小说]</span><span class="s2"><a href="/shoujixs_226925/" title="末世：开局我夺取了SSS级异能">末世：开局我夺取了SSS级异能</a></span><span class="s3"><a href="/shoujixs_226925_63109947.html" title="第2484章 至尊意志" target="_blank">第2484章 至尊意志</a></span><span class="s4">天降123</span><span class="s5">10-19</span></li>
+								<li><span class="s1">[都市现实]</span><span class="s2"><a href="/shoujixs_216432/" title="民国，卦了！">民国，卦了！</a></span><span class="s3"><a href="/shoujixs_216432_63110146.html" title="第847章 螃蟹爬月" target="_blank">第847章 螃蟹爬月</a></span><span class="s4">集虚斋小学士</span><span class="s5">10-19</span></li>
+								<li><span class="s1">[言情小说]</span><span class="s2"><a href="/shoujixs_222370/" title="四合院之重生成为何雨柱">四合院之重生成为何雨柱</a></span><span class="s3"><a href="/shoujixs_222370_63110154.html" title="第814章 ?窝??囊??的???何?雨??柱???" target="_blank">第814章 ?窝??囊??的???何?雨??柱???</a></span><span class="s4">毛利夏小正</span><span class="s5">10-19</span></li>
+								<li><span class="s1">[科幻小说]</span><span class="s2"><a href="/shoujixs_216047/" title="九宫引魂案">九宫引魂案</a></span><span class="s3"><a href="/shoujixs_216047_63109943.html" title="第304章 散布" target="_blank">第304章 散布</a></span><span class="s4">彧无为</span><span class="s5">10-19</span></li>
+								<li><span class="s1">[历史小说]</span><span class="s2"><a href="/shoujixs_226429/" title="我也是皇叔">我也是皇叔</a></span><span class="s3"><a href="/shoujixs_226429_63109935.html" title="第2074章 杀使表忠 柳生拼命" target="_blank">第2074章 杀使表忠 柳生拼命</a></span><span class="s4">双木道人</span><span class="s5">10-19</span></li>
+								<li><span class="s1">[科幻小说]</span><span class="s2"><a href="/shoujixs_226484/" title="全民迷雾求生，我用邪神血肉建家">全民迷雾求生，我用邪神血肉建家</a></span><span class="s3"><a href="/shoujixs_226484_63109957.html" title="第1394章 秘密潜入" target="_blank">第1394章 秘密潜入</a></span><span class="s4">半顷阳光</span><span class="s5">10-19</span></li>
+								<li><span class="s1">[言情小说]</span><span class="s2"><a href="/shoujixs_218034/" title="重生六零，千金囤货随军兵王">重生六零，千金囤货随军兵王</a></span><span class="s3"><a href="/shoujixs_218034_63110150.html" title="第1585章 小萌新被群嘲" target="_blank">第1585章 小萌新被群嘲</a></span><span class="s4">功夫马铃薯</span><span class="s5">10-19</span></li>
+								<li><span class="s1">[都市现实]</span><span class="s2"><a href="/shoujixs_228345/" title="一年一二三等功，牌匾送家倍长脸">一年一二三等功，牌匾送家倍长脸</a></span><span class="s3"><a href="/shoujixs_228345_63110152.html" title="第1092章 向前训话" target="_blank">第1092章 向前训话</a></span><span class="s4">爱上辣椒酱</span><span class="s5">10-19</span></li>
+								<li><span class="s1">[历史小说]</span><span class="s2"><a href="/shoujixs_220415/" title="剑出淮南：我在三国开军校">剑出淮南：我在三国开军校</a></span><span class="s3"><a href="/shoujixs_220415_63110170.html" title="第955章 麦城之下（十一）" target="_blank">第955章 麦城之下（十一）</a></span><span class="s4">壶中海怪</span><span class="s5">10-19</span></li>
+								<li><span class="s1">[都市现实]</span><span class="s2"><a href="/shoujixs_216820/" title="舔狗反派只想苟，女主不按套路走！">舔狗反派只想苟，女主不按套路走！</a></span><span class="s3"><a href="/shoujixs_216820_63109951.html" title="第2723章 三个非人类" target="_blank">第2723章 三个非人类</a></span><span class="s4">我是愤怒</span><span class="s5">10-19</span></li>
+								<li><span class="s1">[都市现实]</span><span class="s2"><a href="/shoujixs_227604/" title="官场：从家族弃子到权利巅峰">官场：从家族弃子到权利巅峰</a></span><span class="s3"><a href="/shoujixs_227604_63110153.html" title="第1653章 找到" target="_blank">第1653章 找到</a></span><span class="s4">铁大任</span><span class="s5">10-19</span></li>
+								<li><span class="s1">[言情小说]</span><span class="s2"><a href="/shoujixs_220904/" title="四合院之我的无赖人生">四合院之我的无赖人生</a></span><span class="s3"><a href="/shoujixs_220904_63109938.html" title="第1465章 你监视我？" target="_blank">第1465章 你监视我？</a></span><span class="s4">锦鲤跃起看向往</span><span class="s5">10-19</span></li>
+								<li><span class="s1">[言情小说]</span><span class="s2"><a href="/shoujixs_226630/" title="通天代野王不能是万人迷吗？">通天代野王不能是万人迷吗？</a></span><span class="s3"><a href="/shoujixs_226630_63109991.html" title="第382章 琴房" target="_blank">第382章 琴房</a></span><span class="s4">一只布咕鸟</span><span class="s5">10-19</span></li>
+								<li><span class="s1">[玄幻奇幻]</span><span class="s2"><a href="/shoujixs_211012/" title="大荒经">大荒经</a></span><span class="s3"><a href="/shoujixs_211012_63110144.html" title="第2777章 两仪烬灭指" target="_blank">第2777章 两仪烬灭指</a></span><span class="s4">金牛断章</span><span class="s5">10-19</span></li>
+								<li><span class="s1">[科幻小说]</span><span class="s2"><a href="/shoujixs_229442/" title="末世：穿成炮灰，靠刷短视频翻盘">末世：穿成炮灰，靠刷短视频翻盘</a></span><span class="s3"><a href="/shoujixs_229442_63109952.html" title="第273章 不帮为夫介绍一下吗" target="_blank">第273章 不帮为夫介绍一下吗</a></span><span class="s4">红茶黑森林</span><span class="s5">10-19</span></li>
+								<li><span class="s1">[都市现实]</span><span class="s2"><a href="/shoujixs_217036/" title="下山退婚：逍遥神医">下山退婚：逍遥神医</a></span><span class="s3"><a href="/shoujixs_217036_63110005.html" title="第3978章 东方众" target="_blank">第3978章 东方众</a></span><span class="s4">天师本师</span><span class="s5">10-19</span></li>
+								<li><span class="s1">[玄幻奇幻]</span><span class="s2"><a href="/shoujixs_225343/" title="九幽轮回塔">九幽轮回塔</a></span><span class="s3"><a href="/shoujixs_225343_63109953.html" title="第2196章 混元九重巅峰" target="_blank">第2196章 混元九重巅峰</a></span><span class="s4">白青玄</span><span class="s5">10-19</span></li>
+								<li><span class="s1">[仙侠小说]</span><span class="s2"><a href="/shoujixs_227112/" title="天局非异人任">天局非异人任</a></span><span class="s3"><a href="/shoujixs_227112_63110143.html" title="第1331章 过桥抽板有风险" target="_blank">第1331章 过桥抽板有风险</a></span><span class="s4">鼓聋</span><span class="s5">10-19</span></li>
+								<li><span class="s1">[都市现实]</span><span class="s2"><a href="/shoujixs_229060/" title="火红年代：开发北大荒，种田赶山养全家">火红年代：开发北大荒，种田赶山养全家</a></span><span class="s3"><a href="/shoujixs_229060_63109945.html" title="第八百二十三章 辞行" target="_blank">第八百二十三章 辞行</a></span><span class="s4">慎思量</span><span class="s5">10-19</span></li>
+								<li><span class="s1">[仙侠小说]</span><span class="s2"><a href="/shoujixs_227827/" title="魔在镖局打工的日子">魔在镖局打工的日子</a></span><span class="s3"><a href="/shoujixs_227827_63109954.html" title="第782章 珍贵记忆" target="_blank">第782章 珍贵记忆</a></span><span class="s4">林小翰</span><span class="s5">10-19</span></li>
+								<li><span class="s1">[都市现实]</span><span class="s2"><a href="/shoujixs_224187/" title="激情岁月：在北大荒渔猎的日子">激情岁月：在北大荒渔猎的日子</a></span><span class="s3"><a href="/shoujixs_224187_63110141.html" title="第496章 摧枯拉朽拔暗哨，军号一响裂长空" target="_blank">第496章 摧枯拉朽拔暗哨，军号一响裂长空</a></span><span class="s4">一个幸运的小号</span><span class="s5">10-19</span></li>
+								<li><span class="s1">[都市现实]</span><span class="s2"><a href="/shoujixs_220028/" title="打赏返现，美女主播被我套路坏了">打赏返现，美女主播被我套路坏了</a></span><span class="s3"><a href="/shoujixs_220028_63110089.html" title="第863章 两场聚会" target="_blank">第863章 两场聚会</a></span><span class="s4">一颗大蟠桃</span><span class="s5">10-19</span></li>
+								<li><span class="s1">[玄幻奇幻]</span><span class="s2"><a href="/shoujixs_222683/" title="吞天葫">吞天葫</a></span><span class="s3"><a href="/shoujixs_222683_63110041.html" title="第1178章 炼丹大赛结束，突如其来的挑战" target="_blank">第1178章 炼丹大赛结束，突如其来的挑战</a></span><span class="s4">夜伴钟声</span><span class="s5">10-19</span></li>
+								<li><span class="s1">[游戏体育]</span><span class="s2"><a href="/shoujixs_221284/" title="嘿嘿！我的冰山">嘿嘿！我的冰山</a></span><span class="s3"><a href="/shoujixs_221284_63110128.html" title="第735章 压毒" target="_blank">第735章 压毒</a></span><span class="s4">洛丶暮白</span><span class="s5">10-19</span></li>
+								<li><span class="s1">[玄幻奇幻]</span><span class="s2"><a href="/shoujixs_220954/" title="沉寂十八年，我一剑斩落皇朝老祖">沉寂十八年，我一剑斩落皇朝老祖</a></span><span class="s3"><a href="/shoujixs_220954_63110046.html" title="第1549章 上百名神帝惊现" target="_blank">第1549章 上百名神帝惊现</a></span><span class="s4">芝麻眼儿</span><span class="s5">10-19</span></li>
+							</ul>
+		</div>
+		<div class="r">
+			<h2>最新入库小说</h2>
+			<ul>
+								<li><span class="s1">[科幻]</span><span class="s2"><a href="/shoujixs_230625/" title="高达SEED从东亚开始崛起">高达SEED从东亚开始崛起</a></span><span class="s5">星河的开拓者</span></li>
+								<li><span class="s1">[二次]</span><span class="s2"><a href="/shoujixs_230620/" title="什么叫你的御兽都开了？">什么叫你的御兽都开了？</a></span><span class="s5">纯洁的乌鱼子酱</span></li>
+								<li><span class="s1">[科幻]</span><span class="s2"><a href="/shoujixs_230611/" title="重生末日前：我的后盾是国家">重生末日前：我的后盾是国家</a></span><span class="s5">零点有雨</span></li>
+								<li><span class="s1">[玄幻]</span><span class="s2"><a href="/shoujixs_230617/" title="遮天：开局仙金圣灵证道">遮天：开局仙金圣灵证道</a></span><span class="s5">愉悦的小猫</span></li>
+								<li><span class="s1">[军事]</span><span class="s2"><a href="/shoujixs_230628/" title="我在俄乌战场捡属性">我在俄乌战场捡属性</a></span><span class="s5">小生逍棠</span></li>
+								<li><span class="s1">[二次]</span><span class="s2"><a href="/shoujixs_230630/" title="继承神社后，九尾成了我妹妹">继承神社后，九尾成了我妹妹</a></span><span class="s5">短毛火斑猫</span></li>
+								<li><span class="s1">[历史]</span><span class="s2"><a href="/shoujixs_230632/" title="红楼：从打造神童人设开始">红楼：从打造神童人设开始</a></span><span class="s5">蜜制红烧肉</span></li>
+								<li><span class="s1">[言情]</span><span class="s2"><a href="/shoujixs_230627/" title="入职地府当法官，死了都还要上班">入职地府当法官，死了都还要上班</a></span><span class="s5">苏之灵</span></li>
+								<li><span class="s1">[都市]</span><span class="s2"><a href="/shoujixs_230612/" title="我在内娱挥金如土">我在内娱挥金如土</a></span><span class="s5">野山椒鱼仔</span></li>
+								<li><span class="s1">[都市]</span><span class="s2"><a href="/shoujixs_230615/" title="没钱当什么导演啊">没钱当什么导演啊</a></span><span class="s5">别再上火</span></li>
+								<li><span class="s1">[都市]</span><span class="s2"><a href="/shoujixs_230631/" title="华娱：开局赴约刘阿姨后被堵门了">华娱：开局赴约刘阿姨后被堵门了</a></span><span class="s5">梦不好换枕头</span></li>
+								<li><span class="s1">[游戏]</span><span class="s2"><a href="/shoujixs_230610/" title="综网：从召唤师开始毁灭世界">综网：从召唤师开始毁灭世界</a></span><span class="s5">月之侵蚀</span></li>
+								<li><span class="s1">[二次]</span><span class="s2"><a href="/shoujixs_230623/" title="从斗罗开始的诸天神墓">从斗罗开始的诸天神墓</a></span><span class="s5">蒹葭渡江</span></li>
+								<li><span class="s1">[都市]</span><span class="s2"><a href="/shoujixs_230609/" title="华娱：都重生了，谁还当演员啊">华娱：都重生了，谁还当演员啊</a></span><span class="s5">缘乐</span></li>
+								<li><span class="s1">[军事]</span><span class="s2"><a href="/shoujixs_230622/" title="新一团不可能这么富">新一团不可能这么富</a></span><span class="s5">歪打不留一</span></li>
+								<li><span class="s1">[二次]</span><span class="s2"><a href="/shoujixs_230633/" title="可恶的妖女竟然伪装成我的夫人！">可恶的妖女竟然伪装成我的夫人！</a></span><span class="s5">怀玉枕风</span></li>
+								<li><span class="s1">[二次]</span><span class="s2"><a href="/shoujixs_230629/" title="怎么你也是我前女友啊">怎么你也是我前女友啊</a></span><span class="s5">十万可燃冰</span></li>
+								<li><span class="s1">[游戏]</span><span class="s2"><a href="/shoujixs_230613/" title="足球：什么叫全能型中场啊">足球：什么叫全能型中场啊</a></span><span class="s5">努力的Chris</span></li>
+								<li><span class="s1">[都市]</span><span class="s2"><a href="/shoujixs_230607/" title="华娱：装备系经纪人">华娱：装备系经纪人</a></span><span class="s5">A股夜归人</span></li>
+								<li><span class="s1">[二次]</span><span class="s2"><a href="/shoujixs_230618/" title="美漫世界的假面骑士ZZZ">美漫世界的假面骑士ZZZ</a></span><span class="s5">暗码编号零</span></li>
+								<li><span class="s1">[二次]</span><span class="s2"><a href="/shoujixs_230626/" title="犬夜叉：我的职业面板没有下限">犬夜叉：我的职业面板没有下限</a></span><span class="s5">莫骂了</span></li>
+								<li><span class="s1">[历史]</span><span class="s2"><a href="/shoujixs_230608/" title="我在汉末当反贼！">我在汉末当反贼！</a></span><span class="s5">牛角的二师兄</span></li>
+								<li><span class="s1">[玄幻]</span><span class="s2"><a href="/shoujixs_230614/" title="神秘复苏：从驾驭躲人鬼开始">神秘复苏：从驾驭躲人鬼开始</a></span><span class="s5">无e小包</span></li>
+								<li><span class="s1">[都市]</span><span class="s2"><a href="/shoujixs_230634/" title="重生08：我网恋老婆是高冷校花">重生08：我网恋老婆是高冷校花</a></span><span class="s5">一一更兽</span></li>
+								<li><span class="s1">[都市]</span><span class="s2"><a href="/shoujixs_230624/" title="重生在四合院的悠然人生">重生在四合院的悠然人生</a></span><span class="s5">欲望如雨</span></li>
+								<li><span class="s1">[玄幻]</span><span class="s2"><a href="/shoujixs_230621/" title="屠魔快刀">屠魔快刀</a></span><span class="s5">狐夫</span></li>
+								<li><span class="s1">[言情]</span><span class="s2"><a href="/shoujixs_230606/" title="网恋三个道侣后，我死遁跑路了">网恋三个道侣后，我死遁跑路了</a></span><span class="s5">青铄</span></li>
+								<li><span class="s1">[言情]</span><span class="s2"><a href="/shoujixs_230605/" title="六零香江摆地摊，全港喊我大佬">六零香江摆地摊，全港喊我大佬</a></span><span class="s5">六月浩雪</span></li>
+								<li><span class="s1">[科幻]</span><span class="s2"><a href="/shoujixs_230616/" title="诡秘：旧世界的审判者">诡秘：旧世界的审判者</a></span><span class="s5">火炀</span></li>
+								<li><span class="s1">[都市]</span><span class="s2"><a href="/shoujixs_230619/" title="人在华娱，系统说是诸天">人在华娱，系统说是诸天</a></span><span class="s5">刘吃瓜</span></li>
+							</ul>
+		</div>
+		<div class="clear"></div>
+	</div>
+</div>
+<div class="container flex">
+    <div class="link">友情链接: 
+
+</div>
+</div>
+
+<!-- footer -->
+<div id="footer">
+    <footer class="container">
+			<p><a href="/api/sitemap.xml">网站地图</a> 本站所有小说均为网络搜索而来。如果侵犯了您的权益，请发送邮件到shoujixs#gmail.com</p>
+			<p>Copyright 2018 手机小说 All Rights Reserved.</p><script>tj();</script>
+    </footer>
+</div>
+</body></html>

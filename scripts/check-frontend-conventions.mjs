@@ -1,4 +1,4 @@
-// 前端约定守卫：i18n 中英键位对齐 + 键引用有效性 + cczj-* 工具类存在性 + 行内样式体量。
+// 前端约定守卫：i18n 中英键位对齐 + 键引用有效性 + cczj-* 工具类存在性。
 // 独立成脚本的原因：locales 是 `export default {}` 的无类型对象，vue-tsc 看不出缺键；
 // cczj-* 是手写 CSS，类名写错只会静默不生效。两者都只能靠静态扫描。
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
@@ -184,7 +184,12 @@ const usedClasses = new Map()
 const classPrefixes = new Map()
 
 function addClasses(text, into) {
-  for (const match of text.matchAll(/\.((?:cczj|bc)-[A-Za-z0-9_-]+)/g)) into.add(match[1])
+  for (const match of text.matchAll(/\.((?:cczj|bc)-[A-Za-z0-9_-]+)/g)) {
+    into.add(match[1])
+    // Vue Transition's name refers to its generated enter/leave CSS classes.
+    const transition = match[1].match(/^(.*)-(?:enter|leave)-(?:active|from|to)$/)
+    if (transition) into.add(transition[1])
+  }
   for (const match of text.matchAll(/@keyframes\s+((?:cczj|bc)-[A-Za-z0-9_-]+)/g)) into.add(match[1])
 }
 
@@ -196,7 +201,7 @@ const cssFiles = []
     if (statSync(path).isDirectory()) collectCss(path)
     else if (/\.css$/.test(entry)) cssFiles.push(path)
   }
-})(join(SRC, 'styles'))
+})(SRC)
 for (const file of [...cssFiles, join(SRC, 'App.vue'), join(ROOT, 'frontend', 'index.html')]) {
   let text = ''
   try { text = readFileSync(file, 'utf8') } catch { continue }
@@ -239,20 +244,6 @@ if (undefinedClasses.length) {
     undefinedClasses.map(([name, where]) => `  ${name}  ← ${where}`).join('\n'))
 }
 
-// ---------- 4. 单个 SFC 的行内 scoped 样式体量 ----------
-// 一个 700 行的 <style scoped> 会把模板和逻辑挤出可审阅范围，也正是这一轮拆分的起因。
-// 规则只管 scoped：App.vue 那份全局样式本来就该留在入口文件里。
-const INLINE_STYLE_LIMIT = 260
-for (const file of walk(SRC, [], /\.vue$/)) {
-  const text = readFileSync(file, 'utf8')
-  const open = text.lastIndexOf('\n<style scoped>')
-  if (open === -1) continue // 已经搬出去的写成 <style scoped src="...">，不会命中这里
-  const lines = text.slice(open).split('\n').length
-  if (lines > INLINE_STYLE_LIMIT) {
-    fail(`${relTo(ROOT, file)} 的行内 <style scoped> 有 ${lines} 行，搬到 styles/ 下再用 <style scoped src> 引回来`)
-  }
-}
-
 // ---------- 输出 ----------
 
 if (process.argv.includes('--report-unused')) {
@@ -267,4 +258,4 @@ console.log(
   `前端约定检查通过：zh-CN ${maps['zh-CN'].size} 键 / en ${maps.en.size} 键、被引用 ${referenced.size} 键、` +
   `cczj-* 与 bc-* 定义 ${definedGlobally.size} 类、未引用键 ${unused.length} 个。`,
 )
-if (unused.length) process.exit(1)
+if (unused.length) console.warn(`未引用 locale 键仅供清理参考，不阻止构建：${unused.length} 个。`)

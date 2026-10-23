@@ -1,0 +1,62 @@
+@import './player-option-button.css';
+.report-ad-group {
+  @apply cczj-relative;
+}
+
+.report-ad-popup {
+  @apply cczj-absolute;
+  bottom: calc(100% + 10px);
+  @apply cczj-right-0;
+  background: rgba(20, 20, 20, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  @apply cczj-rounded-md cczj-p-3 cczj-flex cczj-flex-col cczj-gap-1;
+  min-width: 220px;
+  max-width: 340px;
+  @apply cczj-opacity-0 cczj-pointer-events-none;
+  transform: translateY(6px);
+  transition: all 0.18s ease;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  @apply cczj-z-10;
+}
+
+.report-ad-popup.show {
+  @apply cczj-opacity-100 cczj-pointer-events-auto;
+  transform: translateY(0);
+}
+
+.report-ad-title {
+  padding: 6px 12px 4px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.75rem;
+  user-select: none;
+}
+
+.report-ad-empty {
+  @apply cczj-px-6-py-4;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.82rem;
+}
+
+.report-ad-item {
+  @apply cczj-flex cczj-items-center cczj-gap-4;
+  padding: 7px 12px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.82rem;
+  @apply cczj-rounded cczj-cursor-pointer;
+  background: none;
+  border: none;
+  @apply cczj-w-full cczj-text-left;
+  font-family: inherit;
+}
+
+.report-ad-item:hover {
+  background: rgba(255, 77, 77, 0.15);
+  color: #ff6b6b;
+}
+
+.report-ad-domain {
+  @apply cczj-overflow-hidden;
+  text-overflow: ellipsis;
+  @apply cczj-whitespace-nowrap;
+}
+

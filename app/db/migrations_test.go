@@ -37,6 +37,50 @@ func TestMigrationsAreOrdered(t *testing.T) {
 	}
 }
 
+func TestNetworkRequestLimitMigrationPreservesV15Bindings(t *testing.T) {
+	database := openFreshSQLite(t, t.TempDir())
+	tx, err := database.Beginx()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = migrateLibraryDomain(tx); err != nil {
+		_ = tx.Rollback()
+		t.Fatal(err)
+	}
+	if err = migrateDanmaku(tx); err != nil {
+		_ = tx.Rollback()
+		t.Fatal(err)
+	}
+	if err = tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = database.Exec(`INSERT INTO danmaku_bindings(local_key,payload,updated_at) VALUES('keep',?,1)`, []byte(`{"confirmed":true}`)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = database.Exec(`PRAGMA user_version=15`); err != nil {
+		t.Fatal(err)
+	}
+	applied, err := migrateToLatest(database)
+	if err != nil || len(applied) != LatestSchemaVersion()-15 || applied[0].version != 16 || applied[1].version != 17 {
+		t.Fatal(applied, err)
+	}
+	var payload []byte
+	if err = database.Get(&payload, `SELECT payload FROM danmaku_bindings WHERE local_key='keep'`); err != nil || string(payload) != `{"confirmed":true}` {
+		t.Fatal(string(payload), err)
+	}
+	if exists, err := tableExistsIn(database, "network_request_limits"); err != nil || !exists {
+		t.Fatal(exists, err)
+	}
+	if exists, err := tableExistsIn(database, "danmaku_match_failures"); err != nil || !exists {
+		t.Fatal(exists, err)
+	}
+	for _, table := range []string{"reading_source_checks", "reading_work_sources", "reading_chapter_evidence", "reading_chapter_alignments"} {
+		if exists, err := tableExistsIn(database, table); err != nil || !exists {
+			t.Fatal(table, exists, err)
+		}
+	}
+}
+
 func TestMigrateToLatestAppliesOnceAndStaysIdempotent(t *testing.T) {
 	database := openFreshSQLite(t, t.TempDir())
 

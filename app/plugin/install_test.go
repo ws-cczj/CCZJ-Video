@@ -94,6 +94,32 @@ func TestInstallScriptPack(t *testing.T) {
 	assertStagingClean(t, service)
 }
 
+func TestInstallPreservesPreviousPackWhenPublicationAndRollbackFail(t *testing.T) {
+	service, root, _ := testService(t)
+	previous := writePack(t, root, "restore-test", scriptManifest("restore-test", `{"entry":"main.js"}`))
+	writeFile(t, filepath.Join(previous, "main.js"), validScriptSource)
+	service.renameInstall = func(from, to string) error {
+		if to == previous {
+			return errors.New("simulated destination lock")
+		}
+		return os.Rename(from, to)
+	}
+	_, err := service.InstallFromPath(dropTree(t, "replacement", map[string]string{
+		"plugin.json": scriptManifest("restore-test", `{"entry":"main.js"}`), "main.js": validScriptSource + "\n// replacement",
+	}))
+	if err == nil {
+		t.Fatal("expected publication and rollback failures")
+	}
+	backups, err := filepath.Glob(filepath.Join(service.stagingRoot(), "install-*", "previous", "main.js"))
+	if err != nil || len(backups) != 1 {
+		t.Fatalf("old pack was deleted despite failed rollback: backups=%v, err=%v", backups, err)
+	}
+	saved, err := os.ReadFile(backups[0])
+	if err != nil || string(saved) != validScriptSource {
+		t.Fatalf("old code was not preserved: %q, %v", saved, err)
+	}
+}
+
 func TestInstallUnwrapsSingleWrapperDirectory(t *testing.T) {
 	service, pluginsDir, _ := testService(t)
 

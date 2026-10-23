@@ -1,0 +1,188 @@
+{
+  "device": "emulator-5554",
+  "environment": "emulator",
+  "identity": {
+    "ro.product.model": "SDY-AN00",
+    "ro.product.cpu.abi": "x86_64",
+    "ro.build.version.release": "15",
+    "ro.build.fingerprint": "HONOR/Sandy/Sandy:15/V417IR/1100:user/release-keys",
+    "ro.kernel.qemu": "",
+    "ro.hardware": "HONOR",
+    "ro.product.manufacturer": "HONOR"
+  },
+  "package": "com.cczj.video.acceptance",
+  "startedDeviceTime": "10-22 09:58:21.000",
+  "passed": false,
+  "scenarios": [
+    {
+      "kind": "novel",
+      "keyword": "部族荣光",
+      "passed": false,
+      "error": "{'wait': '!!document.querySelector(\".novel-search input\")', 'text': 'CCZJ漫画\\n漫游\\n✦\\n全部作品\\n人气国漫\\n36\\n咚漫精选\\n68\\n崩坏3\\n23\\n泰拉记事社\\n27\\n封面放映室\\n/ 01\\n瓜子漫画\\n从姑获鸟开始\\n翻开漫画\\nCOMIC!\\n✦\\nCCZJ\\n从姑获鸟开始\\nCCZJ\\n从姑获鸟开始\\nCCZJ\\n如出一辙的女儿\\nCCZJ\\n逃离长空篇\\nCCZJ\\n循途漫录：大将军，出击！\\n继续阅读\\n逃离长空篇\\n第 1 话 · 第 1 页\\n01\\n人气国漫\\n展开全部\\nCCZJ\\n从姑获鸟开始\\n从姑获鸟开始\\n\\n之画文化\\n\\nCCZJ\\n不当舔狗后，我成了亿万神豪\\n不当舔狗后，我成了亿万神豪\\n\\n米分文化\\n\\nCCZJ\\n原来，她们才是主角\\n原来，她们才是主角\\n\\n刺猬猫阅读\\n\\nCCZJ\\n高武进化：从觉醒怪兽之王开始\\n高武进化：从觉醒怪兽之王开始\\n\\n两套金漫画\\n\\nCCZJ\\n恰似寒光遇骄阳\\n恰似寒光遇骄阳\\n\\n火力熊猫工作室\\n\\nCCZJ\\n开局绝色俏师父：系统十斤反骨\\n开局绝色俏师父：系统十斤反骨\\n\\n人加可以\\n\\n瓜子漫画 · 书目保存于 09:52\\n02\\n咚漫精选\\n展开全部\\nCCZJ\\n如出一辙的女儿\\n如出一辙的女儿\\n\\nYIDAHM\\n\\nCCZJ\\n我们公会的爱豆\\n我们公会的爱豆\\n\\nKKOBO\\n\\nCCZJ\\n觉醒吧，铲屎官！\\n觉醒吧，铲屎官！\\n\\n孙齐皓 / ZHENA\\n\\nCCZJ\\n痞子学霸\\n痞子学霸\\n\\nShin Hyungwuk / Ryu Seung Yeon\\n\\nCCZJ\\n我家妹妹是狗狗\\n我家妹妹是狗狗\\n\\nMojo\\n\\nCCZJ\\n成为塔防游戏里的暴君\\n成为塔防游戏里的暴君\\n\\nRyuMo/Ha Jung / Gyong\\n\\n咚漫漫画 · 书目保存于 09:52\\n03\\n崩坏3\\n展开全部\\nCCZJ\\n逃离长空篇\\n逃离长空篇\\n\\n崩坏3官方漫画\\n\\nCCZJ\\n樱花追忆篇\\n樱花追忆篇\\n\\n崩坏3官方漫画\\n\\nCCZJ\\n逆熵入侵篇\\n逆熵入侵篇\\n\\n崩坏3官方漫画\\n\\nCCZJ\\n恩返篇\\n恩返篇\\n\\n崩坏3官方漫画\\n\\nCCZJ\\n月影篇\\n月影篇\\n\\n崩坏3官方漫画\\n\\nCCZJ\\n紫鸢篇\\n紫鸢篇\\n\\n崩坏3官方漫画\\n\\n崩坏3官方漫画 · 书目保存于 09:52\\n04\\n泰拉记事社\\n展开全部\\nCCZJ\\n循途漫录：大将军，出击！\\n循途漫录：大将军，出击！\\n\\n鹰角网络\\n\\nCCZJ\\n序言组曲：孤行之人\\n序言组曲：孤行之人\\n\\n鹰角网络\\n\\nCCZJ\\n循途漫录：王权金币\\n循途漫录：王权金币\\n\\n鹰角网络\\n\\nCCZJ\\n暮岁闲谈：正是团圆时分\\n暮岁闲谈：正是团圆时分\\n\\n鹰角网络\\n\\nCCZJ\\n精英干员：启程\\n精英干员：启程\\n\\n鹰角网络\\n\\nCCZJ\\n暮岁闲谈：这是平凡人生\\n暮岁闲谈：这是平凡人生\\n\\n鹰角网络\\n\\n泰拉记事社 · 书目保存于 09:52\\n漫游\\n追漫\\n设置'}"
+    },
+    {
+      "kind": "comic",
+      "keyword": "崩坏",
+      "passed": true,
+      "searchFirstTargetMs": 281,
+      "readerRoute": "#/comic/read/3170/0?episodeRemoteId=%2Fbook%2F1001%2F1",
+      "pageTurnObservedMs": [
+        31.0,
+        47.0,
+        32.0,
+        46.0,
+        63.0,
+        31.0,
+        47.0,
+        47.0,
+        47.0,
+        47.0,
+        47.0,
+        31.0,
+        31.0,
+        47.0,
+        32.0,
+        46.0,
+        32.0,
+        47.0
+      ]
+    }
+  ],
+  "phaseMetrics": [
+    {
+      "name": "comic.real-search",
+      "elapsedMs": 1429,
+      "frames": 84,
+      "rafGapP50Ms": 16.666999999999973,
+      "rafGapP95Ms": 16.667000000000144,
+      "rafGapMaxMs": 16.667000000000144,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 370,
+      "images": 23,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "comic.open-detail-and-read-network",
+      "elapsedMs": 694.7000000029802,
+      "frames": 40,
+      "rafGapP50Ms": 16.666999999999916,
+      "rafGapP95Ms": 16.667000000000144,
+      "rafGapMaxMs": 33.333000000000084,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [
+        {
+          "at": 615.6000000014901,
+          "ms": 52
+        }
+      ],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 913,
+      "images": 4,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "comic.consecutive-page-turns",
+      "elapsedMs": 2978.7999999970198,
+      "frames": 178,
+      "rafGapP50Ms": 16.66699999999946,
+      "rafGapP95Ms": 16.66700000000037,
+      "rafGapMaxMs": 16.66700000000037,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 208,
+      "images": 3,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "comic.reader-sheet-open-close",
+      "elapsedMs": 632,
+      "frames": 37,
+      "rafGapP50Ms": 16.66699999999946,
+      "rafGapP95Ms": 16.66700000000037,
+      "rafGapMaxMs": 16.66700000000037,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 204,
+      "images": 3,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "comic.continuous-scroll",
+      "elapsedMs": 8332.90000000596,
+      "frames": 499,
+      "rafGapP50Ms": 16.66699999999946,
+      "rafGapP95Ms": 16.66700000000128,
+      "rafGapMaxMs": 16.66700000000128,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 779,
+      "images": 3,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "comic.return-to-detail",
+      "elapsedMs": 507,
+      "frames": 29,
+      "rafGapP50Ms": 16.66700000000128,
+      "rafGapP95Ms": 16.66700000000128,
+      "rafGapMaxMs": 16.66700000000128,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 913,
+      "images": 4,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    }
+  ],
+  "javascriptErrors": [],
+  "limitations": [
+    "WebView rAF callback gaps are not hardware presentation FPS.",
+    "Network wait is reported separately from cached page-turn interaction.",
+    "Success on these sampled works does not establish all-source quality."
+  ],
+  "initialPid": "27787",
+  "finalPid": "27787",
+  "sameProcess": true,
+  "javascriptErrorsLastDocument": []
+}

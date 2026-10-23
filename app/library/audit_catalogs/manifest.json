@@ -1,0 +1,26 @@
+{
+  "catalogs": [
+    {
+      "file": "aoaostar-all.json.gz",
+      "kinds": [
+        "novel",
+        "comic"
+      ],
+      "sha256": "a50c80e81e45a6ad77f6cdb94ab420e74de29691f8924692415a3e9f0e022747"
+    },
+    {
+      "file": "xiu2.json.gz",
+      "kinds": [
+        "novel"
+      ],
+      "sha256": "00644eda44f0fcabcfc015a024480376638d5e7a381a2010aeedfca5aa797845"
+    },
+    {
+      "file": "keiyoushi.json.gz",
+      "kinds": [
+        "comic"
+      ],
+      "sha256": "dd561ad8bec64007c3a1dc385ecde8635a0797283cbd3d67ec0d46f20856a9ca"
+    }
+  ]
+}

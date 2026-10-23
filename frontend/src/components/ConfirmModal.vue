@@ -75,15 +75,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
 <style scoped>
 .confirm-body {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  @apply cczj-flex cczj-flex-col cczj-items-start;
   gap: var(--spacing-sm);
 }
 .confirm-message {
   margin: 0;
   font-size: var(--font);
-  color: var(--text-secondary);
+  @apply cczj-text-secondary;
   line-height: 1.6;
 }
 </style>

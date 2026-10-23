@@ -1,0 +1,5159 @@
+
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8"/>
+    <title>书籍目录</title>
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no">
+    
+    <script type="text/javascript" src="https://s5.cnzz.com/z_stat.php?id=1276678693&amp;web_id=1276678693"></script>
+    <link rel="stylesheet" href='https://cdn.p.yueyouxs.com/static/prod/yygowap/common/css/global.css?timestamp=20191014'>
+    <link rel="stylesheet" href='https://cdn.p.yueyouxs.com/static/prod/yygowap/common/css/detail.css?timestamp=20191014'>
+    <script type="text/javascript" src='https://cdn.p.yueyouxs.com/static/prod/yygowap/common/js/yueYou.js?ts=20260123'></script>
+    <script type="text/javascript"  src='https://cdn.p.yueyouxs.com/static/prod/yygowap/common/js/clipboard.min.js'></script>
+    <script type="text/javascript" src='https://cdn.p.yueyouxs.com/static/prod/yygowap/common/js/base64.js'></script>
+    <script type="text/javascript" src='https://cdn.p.yueyouxs.com/static/prod/yygowap/common/js/jquery-2.1.4.js'></script>
+
+    <script>
+        
+        var _czc = _czc || [];
+        _czc.push(["_setAccount", ""]) ;
+    </script>
+
+    <style>
+        .btn-group .flex-item span {
+            background: url(https://cdn.p.yueyouxs.com/static/prod/yygowap/common/image/tit2.png) no-repeat left center;
+            -webkit-background-size: 17px 17px;
+            padding-left: 20px;
+        }
+
+        .kRybVuWaNZ2s {
+            position: fixed !important;
+            width: 100%;
+            bottom: 0;
+            left: 0;
+            padding-bottom: 20px;
+        }
+
+        .kRybVuWaNZ2sa {
+            color: #fff;
+            background-color: #f50202;
+            text-align: center;
+            line-height: 44px;
+            -webkit-border-radius: 22px;
+            font-size: 18px;
+            width: 280px;
+            margin: 0 auto;
+        }
+        .fixnewUser {
+            position: fixed;
+            cursor: pointer;
+            width: 121px;
+            font-size: smaller;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 10000;
+            top: 190px;
+            left: 260px;
+        }
+
+        .fixnewUser>img {
+            width: 70px;
+            height: 70px;
+        }
+    </style>
+</head>
+<body>
+
+
+<div class="bookName" style="display: none;">三国争锋</div>
+<div class="authorName" style="display: none;">逆天吼</div>
+
+<div class="header_wrap">
+    <div class="header flex show">
+        <div class="icon_back" style="opacity: 0.7" onclick="gotoPage('/b/235207.html')"></div>
+        <h1 class="flex_item">书籍目录</h1>
+        <div class="icon_home" onclick="gotoPage('/')"></div>
+    </div>
+</div>
+
+<div class="catalog_sum">
+    
+        <div class="select">
+            <select id="chapterFilter" onchange="selectChange()">
+                
+                    <option value=1>1 - 50 章</option>
+                
+                    <option value=2>51 - 100 章</option>
+                
+                    <option value=3>101 - 150 章</option>
+                
+                    <option value=4>151 - 200 章</option>
+                
+                    <option value=5>201 - 250 章</option>
+                
+                    <option value=6>251 - 300 章</option>
+                
+                    <option value=7>301 - 350 章</option>
+                
+                    <option value=8>351 - 400 章</option>
+                
+                    <option value=9>401 - 450 章</option>
+                
+                    <option value=10>451 - 500 章</option>
+                
+                    <option value=11>501 - 550 章</option>
+                
+                    <option value=12>551 - 600 章</option>
+                
+                    <option value=13>601 - 650 章</option>
+                
+                    <option value=14>651 - 700 章</option>
+                
+                    <option value=15>701 - 750 章</option>
+                
+                    <option value=16>751 - 779 章</option>
+                
+            </select>
+        </div>
+    
+    <h3>共 779章</h3>
+</div>
+<ul class="catalog_ls">
+
+    
+        
+            <div id="1" >
+        
+        
+            <li>
+                <a href="/r/235207/235208.html">
+                    第1章 越后之龙
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235209.html">
+                    第2章 相见：九原虓虎
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235210.html">
+                    第3章 龙虎斗
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235211.html">
+                    第4章 救命苻牌
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235212.html">
+                    第5章 女闯王
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235213.html">
+                    第6章 董超、薛霸来追杀
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235214.html">
+                    第7章 文优未现计先行
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235215.html">
+                    第8章 命名卡
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235216.html">
+                    第9章 血战孟津渡：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235217.html">
+                    第10章 血战孟津渡：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235218.html">
+                    第11章‘恶妇’八重
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235219.html">
+                    第12章 高家兄弟登场
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235220.html">
+                    第13章 系统作弊
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235221.html">
+                    第14章 慧梅中箭
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235222.html">
+                    第15章 两个任务一张卡
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235223.html">
+                    第16章 小司马仲达
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235224.html">
+                    第17章 你滚吧
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235225.html">
+                    第18章 高衙内抢亲
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235226.html">
+                    第19章 有福利啊
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235227.html">
+                    第20章 高俅上门
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235228.html">
+                    第21章 袁公本初
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235229.html">
+                    第22章 满分召唤
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235230.html">
+                    第23章 咸鱼翻身陆虞侯
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235231.html">
+                    第24章 陈王刘宠
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235232.html">
+                    第25章 私印好说
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235233.html">
+                    第26章 袁仕凯出世
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235234.html">
+                    第27章 划地为誓
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235235.html">
+                    第28章 出师表姐妹
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235236.html">
+                    第29章 封官
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235237.html">
+                    第30章 阎家芝兰、马家玉树
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235238.html">
+                    第31章 北上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235239.html">
+                    第32章 蔡大家：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235240.html">
+                    第33章 蔡大家夫妻：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235241.html">
+                    第34章 四十积分
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235242.html">
+                    第35章 八重的消息和要求
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235243.html">
+                    第36章 蔡文姬的请求
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235244.html">
+                    第37章 吃豆腐
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235245.html">
+                    第38章 大闹土门关：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235246.html">
+                    第39章 大闹土门关：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235247.html">
+                    第40章 二十五股黑山军：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235248.html">
+                    第41章 二十五股黑山军：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235249.html">
+                    第42章 刺客
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235250.html">
+                    第43章 收伏八重
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235251.html">
+                    第44章 大植入
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235252.html">
+                    第45章 到达安邑
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235253.html">
+                    第46章 消息
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235254.html">
+                    第47章 对策
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235255.html">
+                    第48章 又是男装女荆钗
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235256.html">
+                    第49章 忘了单洪是叛徒
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235257.html">
+                    第50章 来得走不得
+                </a>
+            </li>
+        
+        </div>
+    
+        
+            <div id="2" style='display:none;'>
+        
+        
+            <li>
+                <a href="/r/235207/235258.html">
+                    第51章 大战卫家宅
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235259.html">
+                    第52章 杀出安邑：一
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235260.html">
+                    第53章 杀出安邑：二
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235261.html">
+                    第54章 杀出安邑：三
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235262.html">
+                    第55章 杀出安邑：四
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235263.html">
+                    第56章 宝马神剑
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235264.html">
+                    第57章 小聪明的代价
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235265.html">
+                    第58章 单骑说将：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235266.html">
+                    第59章 单骑说将：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235267.html">
+                    第60章 结怨曹孟德：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235268.html">
+                    第61章 结怨曹孟德：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235269.html">
+                    第62章 倡意矫诏
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235270.html">
+                    第63章 胡仙真抢亲
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235271.html">
+                    第64章 让人为难的胡充华
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235272.html">
+                    第65章 卖身契
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235273.html">
+                    第66章 归来
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235274.html">
+                    第67章  开衙建府
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235275.html">
+                    第68章 传檄天下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235276.html">
+                    第69章 英雄纷纷起风云
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235277.html">
+                    第70章 阳夏会盟
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235278.html">
+                    第71章 议立盟主
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235279.html">
+                    第72章 兵发睢阳
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235280.html">
+                    第73章 应对召唤
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235281.html">
+                    第74章 樊梨花的三个条件
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235282.html">
+                    第75章 得锏
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235283.html">
+                    第76章 李家秘事
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235284.html">
+                    第77章 樊梨花晋级
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235285.html">
+                    第78章 自领梁国
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235286.html">
+                    第79章 整顿梁国
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235287.html">
+                    第80章 梁东之战
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235288.html">
+                    第81章 险胜
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235289.html">
+                    第82章 谯郡文稷
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235290.html">
+                    第83章 拿下梁县
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235291.html">
+                    第84章 召唤来的援兵
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235292.html">
+                    第85章 赶往中牟
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235293.html">
+                    第86章 温酒斩华雄
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235294.html">
+                    第87章 商议北上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235295.html">
+                    第88章 虎牢关下群美图
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235296.html">
+                    第89章 两个姐姐变别扭
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235297.html">
+                    第90章 剑指慧梅
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235298.html">
+                    第91章 哥儿哥儿走北口
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235299.html">
+                    第92章 孙坚被害
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235300.html">
+                    第93章  杨排风出世
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235301.html">
+                    第94章 三英战曹纯
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235302.html">
+                    第95章 任务启动
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235303.html">
+                    第96章 生死之险
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235304.html">
+                    第97章 一片浮云
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235305.html">
+                    第98章 偷袭
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235306.html">
+                    第99章 兵进太原
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235307.html">
+                    第100章 血浴京陵
+                </a>
+            </li>
+        
+        </div>
+    
+        
+            <div id="3" style='display:none;'>
+        
+        
+            <li>
+                <a href="/r/235207/235308.html">
+                    第101章 守城战
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235309.html">
+                    第102章 火烧京陵
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235310.html">
+                    第103章 斩杀耿祉
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235311.html">
+                    第104章 血战太原
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235312.html">
+                    第105章 进入太原
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235313.html">
+                    第106章 直江献计
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235314.html">
+                    第107章 王柔用计
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235315.html">
+                    第108章 赌战徐晃
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235316.html">
+                    第109章 处置
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235317.html">
+                    第110章 瓦解白波军
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235318.html">
+                    第111章 卫觊败走
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235319.html">
+                    第112章 又一次大植入
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235320.html">
+                    第113章 暗手
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235321.html">
+                    第114章 初战
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235322.html">
+                    第115章 传话
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235323.html">
+                    第116章 最毒妇人心
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235324.html">
+                    第117章 赛猿精
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235325.html">
+                    第118章 王家的机会
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235326.html">
+                    第119章 破城：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235327.html">
+                    第120章 破城：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235328.html">
+                    第121章 来信
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235329.html">
+                    第122章 睡了
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235330.html">
+                    第123章 安顿
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235331.html">
+                    第124章 姑嫂对阵
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235332.html">
+                    第125章 连战连胜
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235333.html">
+                    第126章 明末三大总兵
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235334.html">
+                    第127章 注定娘化的日本名将
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235335.html">
+                    第128章 招安
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235336.html">
+                    第129章 是马上风马上风还是马上风
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235337.html">
+                    第130章 叛逃
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235338.html">
+                    第131章 劫走王泽
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235339.html">
+                    第132章 用计
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235340.html">
+                    第133章 破袭：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235341.html">
+                    第134章 破袭：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235342.html">
+                    第135章 埋伏
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235343.html">
+                    第136章 一堆堆都是事
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235344.html">
+                    第137章 三眼神镜铳
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235345.html">
+                    第138章 系统晋级去了
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235346.html">
+                    第139章 义送
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235347.html">
+                    第140章 离开
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235348.html">
+                    第141章 胡车儿
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235349.html">
+                    第142章 暗子
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235350.html">
+                    第143章 巧遇鲍丹娘
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235351.html">
+                    第144章 连环套
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235352.html">
+                    第145章 再见刘宠
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235353.html">
+                    第146章 金芝公主
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235354.html">
+                    第147章 同名事件
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235355.html">
+                    第148章 进入洛阳
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235356.html">
+                    第149章 董槐的算计
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235357.html">
+                    第150章 择婿
+                </a>
+            </li>
+        
+        </div>
+    
+        
+            <div id="4" style='display:none;'>
+        
+        
+            <li>
+                <a href="/r/235207/235358.html">
+                    第151章 孤苦唐姬
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235359.html">
+                    第152章 谈判
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235360.html">
+                    第153章 野心
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235361.html">
+                    第154章 夺玺开始
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235362.html">
+                    第155章 夺玺
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235363.html">
+                    第156章 出洛阳：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235364.html">
+                    第157章 出洛阳：中
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235365.html">
+                    第158章 出洛阳：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235366.html">
+                    第159章 诏书
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235367.html">
+                    第160章 玉玺
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235368.html">
+                    第161章 玉玺的争执
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235369.html">
+                    第162章 白玉美人
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235370.html">
+                    第163章 挖墙角
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235371.html">
+                    第164章 水浒十二女将卡
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235372.html">
+                    第165章 扈三娘
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235373.html">
+                    第166章 血战向城
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235374.html">
+                    第167章 第一次使‘铳’
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235375.html">
+                    第168章 江匪
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235376.html">
+                    第169章 中毒
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235377.html">
+                    第170章 天下第一渣男的身份
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235378.html">
+                    第171章 三姐妹
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235379.html">
+                    第172章 保安二人组
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235380.html">
+                    第173章 孙策的安排
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235381.html">
+                    第174章 祝寿前夕：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235382.html">
+                    第175章 祝寿前夕：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235383.html">
+                    第176章 匪人来袭
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235384.html">
+                    第177章 母大虫噬人
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235385.html">
+                    第178章 救兵来援
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235386.html">
+                    第179章 祝寿：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235387.html">
+                    第180章 祝寿：中
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235388.html">
+                    第181章 祝寿：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235389.html">
+                    第182章 大乱
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235390.html">
+                    第183章 突围
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235391.html">
+                    第184章 救命
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235392.html">
+                    第185章 负义杀弟
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235393.html">
+                    第186章 援助
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235394.html">
+                    第187章 动了杀意
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235395.html">
+                    第188章 坏人名节
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235396.html">
+                    第189章 收复刘慧娘
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235397.html">
+                    第190章 演戏骗父
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235398.html">
+                    第191章 恶斗匡九天
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235399.html">
+                    第192章 匡长宁
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235400.html">
+                    第193章 一语惊醒梦中人
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235401.html">
+                    第194章 秦明升级
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235402.html">
+                    第195章 天下第一渣男
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235403.html">
+                    第196章 大奖
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235404.html">
+                    第197章 高梦鸾出世
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235405.html">
+                    第198章 交手
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235406.html">
+                    第199章 孙儿丁立
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235407.html">
+                    第200章 哄骗两个大傻瓜
+                </a>
+            </li>
+        
+        </div>
+    
+        
+            <div id="5" style='display:none;'>
+        
+        
+            <li>
+                <a href="/r/235207/235408.html">
+                    第201章 高焉归心
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235409.html">
+                    第202章 方百花领兵
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235410.html">
+                    第203章 群牛破广戚
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235411.html">
+                    第204章 第二形态第一次召唤
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235412.html">
+                    第205章 高梦鸾用兵：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235413.html">
+                    第206章 高梦鸾用兵：中
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235414.html">
+                    第207章 高梦鸾用兵：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235415.html">
+                    第208章 一战而名：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235416.html">
+                    第209章 一战而名：中
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235417.html">
+                    第210章 一战而名：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235418.html">
+                    第211章 兵到卧牛山
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235419.html">
+                    第212章 收伏
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235420.html">
+                    第213章 商议赴会
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235421.html">
+                    第214章 杼秋会：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235422.html">
+                    第215章 杼秋会：中
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235423.html">
+                    第216章 杼秋会：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235424.html">
+                    第217章 整军
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235425.html">
+                    第218章 变故
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235426.html">
+                    第219章 妇产科医生
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235427.html">
+                    第220章 谋杀刘家父子
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235428.html">
+                    第221章 神品被植入
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235429.html">
+                    第222章 关羽有妈了
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235430.html">
+                    第223章我只能帮你到这里
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235431.html">
+                    第224章 羞辱戏志才
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235432.html">
+                    第225章 动了杀意
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235433.html">
+                    第226章 二女将相逢
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235434.html">
+                    第227章 出事了
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235435.html">
+                    第228章 火烧鲍府：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235436.html">
+                    第229章 火烧鲍府：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235437.html">
+                    第230章 书院救人：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235438.html">
+                    第231章 书院救人：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235439.html">
+                    第232章 李傕来袭
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235440.html">
+                    第233章 临战
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235441.html">
+                    第234章 玉人到手
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235442.html">
+                    第235章 又一个未婚妻来了
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235443.html">
+                    第236章 破李傕：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235444.html">
+                    第237章 破李傕：中
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235445.html">
+                    第238章 破李傕：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235446.html">
+                    第239章 丰厚奖励
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235447.html">
+                    第240章 定颖川
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235448.html">
+                    第241章 申屠蟠救缑玉
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235449.html">
+                    第242章 佛母唐赛儿
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235450.html">
+                    第243章 招兵聚将
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235451.html">
+                    第244章 找了个假公主
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235452.html">
+                    第245章 杨丑叛
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235453.html">
+                    第246章 寨主母女
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235454.html">
+                    第247章 古之恶来：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235455.html">
+                    第248章 古之恶来：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235456.html">
+                    第249章 姑父老爷候选人
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235457.html">
+                    第250章 刘宠升级
+                </a>
+            </li>
+        
+        </div>
+    
+        
+            <div id="6" style='display:none;'>
+        
+        
+            <li>
+                <a href="/r/235207/235458.html">
+                    第251章 前世兄弟今生情
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235459.html">
+                    第252章 纵马突围
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235460.html">
+                    第253章 乱战
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235461.html">
+                    第254章友 情转基情
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235462.html">
+                    第255章 寻到李鑫
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235463.html">
+                    第256章 招揽
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235464.html">
+                    第257章 大战前
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235465.html">
+                    第258章 南匈奴覆灭之战：序幕
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235466.html">
+                    第259章 南匈奴覆灭之战：开始
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235467.html">
+                    第260章 南匈奴覆灭之战：鏖战
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235468.html">
+                    第261章 南匈奴覆灭之战：结束
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235469.html">
+                    第262章 大战之后
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235470.html">
+                    第263章 一封书信
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235471.html">
+                    第264章 定下亲事
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235472.html">
+                    第265章 设计
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235473.html">
+                    第266章 缚虎
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235474.html">
+                    第267章 信奈的野望
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235475.html">
+                    第268章 系统保卫任务
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235476.html">
+                    第269章 狠手
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235477.html">
+                    第270章 胁迫
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235478.html">
+                    第271章 收拢铁弗
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235479.html">
+                    第272章 天寿公主来了
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235480.html">
+                    第273章 匈奴大会：一
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235481.html">
+                    第274章 匈奴大会：二
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235482.html">
+                    第275章 匈奴大会：三
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235483.html">
+                    第276章 匈奴大会：四
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235484.html">
+                    第277章 匈奴大会：五
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235485.html">
+                    第278章 匈奴大会：六
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235486.html">
+                    第279章 匈奴大会：七
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235487.html">
+                    第280章 救兵
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235488.html">
+                    第281章 找点事出来
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235489.html">
+                    第282章 我替小弟求个亲
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235490.html">
+                    第283章 收拢兵将
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235491.html">
+                    第284章 比武夺单于：一
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235492.html">
+                    第285章 比武夺单于：二
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235493.html">
+                    第286章 比武夺单于：三
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235494.html">
+                    第287章 比武夺单于：四
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235495.html">
+                    第288章 比武夺单于：五
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235496.html">
+                    第289章 比武夺单于：六
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235497.html">
+                    第290章 比武夺单于：七
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235498.html">
+                    第291章 全歼远江部
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235499.html">
+                    第292章 完成任务
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235500.html">
+                    第293章 平定
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235501.html">
+                    第294章 结怨黑山军
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235502.html">
+                    第295章 杂事
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235503.html">
+                    第296章 刺客
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235504.html">
+                    第297章 刺客的身份
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235505.html">
+                    第298章交易
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235506.html">
+                    第299章 二十五股黑山军任务失败
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235507.html">
+                    第300章 老太太看中儿媳妇
+                </a>
+            </li>
+        
+        </div>
+    
+        
+            <div id="7" style='display:none;'>
+        
+        
+            <li>
+                <a href="/r/235207/235508.html">
+                    第301章 平淡洞房
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235509.html">
+                    第302章 潜入西河
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235510.html">
+                    第303章 解救杨凤
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235511.html">
+                    第304章 杨凤的决断
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235512.html">
+                    第305章 解救蔡中郎任务
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235513.html">
+                    第306章 突袭北屈
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235514.html">
+                    第307章 河东易主
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235515.html">
+                    第308章 大获全胜
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235516.html">
+                    第309章 错过毒士
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235517.html">
+                    第310章 我要去长安
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235518.html">
+                    第311章 我就是丁立
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235519.html">
+                    第312章 三国四大美人拯救任务
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235520.html">
+                    第313章 夜探李宅
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235521.html">
+                    第314章 琵琶记上演了
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235522.html">
+                    第315章 长安城内
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235523.html">
+                    第316章 神秘‘女鬼’
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235524.html">
+                    第317章 刺杀
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235525.html">
+                    第318章 三剑齐出对降龙
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235526.html">
+                    第319章 益州刘焉
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235527.html">
+                    第320章 五侯会
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235528.html">
+                    第321章 再见张飞
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235529.html">
+                    第322章 消息到手
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235530.html">
+                    第323章 行刺
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235531.html">
+                    第324章 吕布的属性
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235532.html">
+                    第325章 见貂婵
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235533.html">
+                    第326章 准备
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235534.html">
+                    第327章 乱长安：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235535.html">
+                    第328章 乱长安：中
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235536.html">
+                    第329章 灞陵破：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235537.html">
+                    第330章 乱长安：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235538.html">
+                    第331章 灞陵破：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235539.html">
+                    第332章 闯王李自成：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235540.html">
+                    第333章闯王李自成：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235541.html">
+                    第334章 上、中、下三计
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235542.html">
+                    第335章 威胁颖川
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235543.html">
+                    第336章 轘辕关之战
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235544.html">
+                    第337章 条件
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235545.html">
+                    第338章 女反贼的能力
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235546.html">
+                    第339章 突围开始
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235547.html">
+                    第340章 温侯易主
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235548.html">
+                    第341章 善后
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235549.html">
+                    第342章 泪点礼包
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235550.html">
+                    第343章 反应
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235551.html">
+                    第344章 安排
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235552.html">
+                    第345章 封赏
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235553.html">
+                    第346章 出征
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235554.html">
+                    第347章 郭太求战
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235555.html">
+                    第348章 少女神将
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235556.html">
+                    第349章 弹汗山下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235557.html">
+                    第350章 大炮出来了
+                </a>
+            </li>
+        
+        </div>
+    
+        
+            <div id="8" style='display:none;'>
+        
+        
+            <li>
+                <a href="/r/235207/235558.html">
+                    第351章 收伏阎柔
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235559.html">
+                    第352章 抢婚
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235560.html">
+                    第353章 战败公孙范
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235561.html">
+                    第354章 荀攸设计
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235562.html">
+                    第355章 赵云来了
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235563.html">
+                    第356章 银枪无敌
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235564.html">
+                    第357章 大事提前
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235565.html">
+                    第358章 刺客
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235566.html">
+                    第359章 两个定点召唤者的表现
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235567.html">
+                    第360章 征袁术
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235568.html">
+                    第361章 大败袁术
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235569.html">
+                    第362章 心黑手狠
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235570.html">
+                    第363章 毒士毒局
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235571.html">
+                    第364章 自行用玺
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235572.html">
+                    第365章 荀彧式的忠诚
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235573.html">
+                    第366章 豪气的曹操虚伪的刘备
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235574.html">
+                    第367章 明知是坑也要跳
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235575.html">
+                    第368章 穆柯寨请穆桂英
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235576.html">
+                    第369章 六连抽
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235577.html">
+                    第370章 大败王允
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235578.html">
+                    第371章 两个晓将的对决
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235579.html">
+                    第372章 诈取安定
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235580.html">
+                    第373章 武威城下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235581.html">
+                    第374章 进入武威
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235582.html">
+                    第375章 黑山军的命运：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235583.html">
+                    第376章 黑山军的命运：中
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235584.html">
+                    第377章 黑山军的命运：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235585.html">
+                    第378章 偷营
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235586.html">
+                    第379章 撤军
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235587.html">
+                    第380章 五虎擒羊阵
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235588.html">
+                    第381章 终退闯军
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235589.html">
+                    第382章 破汉阳
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235590.html">
+                    第383章 战败阎行
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235591.html">
+                    第384章 议兵向北
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235592.html">
+                    第385章 心有不甘的高梦鸾：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235593.html">
+                    第386章 心有不甘的高梦鸾：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235594.html">
+                    第387章 六枪平西：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235595.html">
+                    第388章 六枪平西：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235596.html">
+                    第389章 少女将军杜凤扬：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235597.html">
+                    第390章 少女将军杜凤扬：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235598.html">
+                    第391章 徐州
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235599.html">
+                    第392章 各施妙计
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235600.html">
+                    第393章 走出沙漠
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235601.html">
+                    第394章 南国女将
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235602.html">
+                    第395章 七杀星下世
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235603.html">
+                    第396章 刘备兵破葭萌关
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235604.html">
+                    第397章 十三太保
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235605.html">
+                    第398章 两个小人
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235606.html">
+                    第399章 尚师徒下毒手
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235607.html">
+                    第400章 秦蕊珠献五阮关
+                </a>
+            </li>
+        
+        </div>
+    
+        
+            <div id="9" style='display:none;'>
+        
+        
+            <li>
+                <a href="/r/235207/235608.html">
+                    第401章 飞狐岭上：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235609.html">
+                    第402章 飞狐岭上：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235610.html">
+                    第403章 先进武器
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235611.html">
+                    第404章 大破麴义
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235612.html">
+                    第405章 高柔的安排
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235613.html">
+                    第406章 对阵五姓：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235614.html">
+                    第407章 对阵五姓：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235615.html">
+                    第408章 磨刀霍霍
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235616.html">
+                    第409章 大战将至
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235617.html">
+                    第410章 街亭之战
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235618.html">
+                    第411章 斩杀韩遂
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235619.html">
+                    第412章 平定西凉：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235620.html">
+                    第413章 平定西凉：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235621.html">
+                    第414章 慑服袁绍：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235622.html">
+                    第415章 慑服袁绍：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235623.html">
+                    第416章 徐王
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235624.html">
+                    第417章 徐州平定
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235625.html">
+                    第418章 玉带
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235626.html">
+                    第419章 辛宪英的见识
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235627.html">
+                    第420章 穆桂英挂帅
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235628.html">
+                    第421章 玉带诏
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235629.html">
+                    第422章 公主之死
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235630.html">
+                    第423章 能找到鲜卑大军的人
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235631.html">
+                    第424章 准备击胡
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235632.html">
+                    第425章 伏后
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235633.html">
+                    第426章 左贤王庭
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235634.html">
+                    第427章 破胡
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235635.html">
+                    第428章 胡骑袭代郡
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235636.html">
+                    第429章 代郡之战：一
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235637.html">
+                    第430章 代郡之战：二
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235638.html">
+                    第431章 代郡之战：三
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235639.html">
+                    第432章 代郡之战：四
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235640.html">
+                    第433章 代郡之战：五
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235641.html">
+                    第434章 代郡之战：六
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235642.html">
+                    第435章 代郡之战：七
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235643.html">
+                    第436章 代郡之战：八
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235644.html">
+                    第437章 代郡之战：九
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235645.html">
+                    第438章 代郡之战：十
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235646.html">
+                    第439章 代郡之战：十一
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235647.html">
+                    第440章 代郡之战：十二
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235648.html">
+                    第441章 代郡之战：十三
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235649.html">
+                    第442章 代郡之战：十四
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235650.html">
+                    第443章 代郡之战：十五
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235651.html">
+                    第444章 代郡之战：十六
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235652.html">
+                    第445章 代郡之战：十七
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235653.html">
+                    第446章 代郡之战：十八
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235654.html">
+                    第447章 代郡之战：十九
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235655.html">
+                    第448章 代郡之战：二十
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235656.html">
+                    第449章 平定代郡：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235657.html">
+                    第450章 平定代郡：中
+                </a>
+            </li>
+        
+        </div>
+    
+        
+            <div id="10" style='display:none;'>
+        
+        
+            <li>
+                <a href="/r/235207/235658.html">
+                    第451章 平定代郡：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235659.html">
+                    第452章 南下豫章
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235660.html">
+                    第453章 面具人的消息
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235661.html">
+                    第454章 三眼神镜铳的威力
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235662.html">
+                    第455章  于吉上门
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235663.html">
+                    第456章 江上遇险：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235664.html">
+                    第457章 江上遇险：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235665.html">
+                    第458章 柴桑
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235666.html">
+                    第459章 诸葛姐妹
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235667.html">
+                    第460章 其实我是二位姑娘的未婚夫
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235668.html">
+                    第461章 去见你家男子
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235669.html">
+                    第462章 他真的是丁立
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235670.html">
+                    第463章 逃命
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235671.html">
+                    第464章 张宁失踪
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235672.html">
+                    第465章  出师表姐妹的问题
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235673.html">
+                    第466章 进入豫章
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235674.html">
+                    第467章 生死卡任务起动
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235675.html">
+                    第468章 小张姑娘
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235676.html">
+                    第469章 生死卡任务的完结
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235677.html">
+                    第470章 白衣侠女
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235678.html">
+                    第471章 轰火神杖的下落
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235679.html">
+                    第472章 战左慈：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235680.html">
+                    第473章 战左慈：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235681.html">
+                    第474章 斗于吉
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235682.html">
+                    第475章 孙策遇刺
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235683.html">
+                    第476章 江东风起：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235684.html">
+                    第477章 江东风起：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235685.html">
+                    第478章  战豫章：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235686.html">
+                    第479章 战豫章：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235687.html">
+                    第480章 轰火神杖激发
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235688.html">
+                    第481章 火焚群匪
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235689.html">
+                    第482章 送信
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235690.html">
+                    第483章 夜晚
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235691.html">
+                    第484章 过江
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235692.html">
+                    第485章 分头进兵
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235693.html">
+                    第486章 孙尚香大战六安
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235694.html">
+                    第487章 直到浔阳
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235695.html">
+                    第488章 孙权的反击
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235696.html">
+                    第489章 雷山突围：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235697.html">
+                    第490章 雷山突围：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235698.html">
+                    第491章 御花坡
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235699.html">
+                    第492章 过江北归
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235700.html">
+                    第493章 薛家在行动
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235701.html">
+                    第494章 周瑜的决择
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235702.html">
+                    第495章 皖县谈判
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235703.html">
+                    第496章 吕毋的困境
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235704.html">
+                    第497章 两只西凉残部的会合
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235705.html">
+                    第498章 疯兵取上庸
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235706.html">
+                    第499章 大破黄忠
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235707.html">
+                    第500章 魏延叛逃
+                </a>
+            </li>
+        
+        </div>
+    
+        
+            <div id="11" style='display:none;'>
+        
+        
+            <li>
+                <a href="/r/235207/235708.html">
+                    第501章 荆南叛乱
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235709.html">
+                    第502章 刘表之死
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235710.html">
+                    第503章 会战荆州：一
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235711.html">
+                    第504章 会战荆州：二
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235712.html">
+                    第505章 会战荆州：三
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235713.html">
+                    第506章 会战荆州：四
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235714.html">
+                    第507章 会战荆州：五
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235715.html">
+                    第508章 会战荆州：六
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235716.html">
+                    第509章 会战荆州：七
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235717.html">
+                    第510章 会战荆州：八
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235718.html">
+                    第511章 会战荆州：九
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235719.html">
+                    第512章 会战荆州：十
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235720.html">
+                    第513章 会战荆州：十一
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235721.html">
+                    第514章 会战荆州：十二
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235722.html">
+                    第515章 浴血江陵：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235723.html">
+                    第516章 浴血江陵：中
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235724.html">
+                    第517章 浴血江陵：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235725.html">
+                    第518章 大胜?败敌军
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235726.html">
+                    第519章 大胜?破江陵
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235727.html">
+                    第520章 大胜?定襄阳
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235728.html">
+                    第521章 为诸葛亮求亲
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235729.html">
+                    第522章 议军
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235730.html">
+                    第523章 调防
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235731.html">
+                    第524章 万骑莫当
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235732.html">
+                    第525章 洛神甄宓：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235733.html">
+                    第526章 洛神甄宓：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235734.html">
+                    第527章 曹家子弟
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235735.html">
+                    第528章 布署完必
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235736.html">
+                    第529章 曹婴参军
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235737.html">
+                    第530章 三国大发明家
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235738.html">
+                    第531章 长子
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235739.html">
+                    第532章 算计玉美人的后果
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235740.html">
+                    第533章 挑动袁曹大战
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235741.html">
+                    第534章 美男计
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235742.html">
+                    第535章 请赐娇娘为我妾
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235743.html">
+                    第536章 嫁作李门丁家妇
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235744.html">
+                    第537章 行刺
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235745.html">
+                    第538章 袁曹各起马步三军
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235746.html">
+                    第539章 曹操的反击：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235747.html">
+                    第540章 曹操的反击：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235748.html">
+                    第541章  进袭邺城
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235749.html">
+                    第542章 大破邺城
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235750.html">
+                    第543章 袁曹之战：一
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235751.html">
+                    第544章 袁曹之战：二
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235752.html">
+                    第545章 袁曹之战：三
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235753.html">
+                    第546章 袁曹之战：四
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235754.html">
+                    第547章 袁曹之战：五
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235755.html">
+                    第548章 袁曹之战：六
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235756.html">
+                    第549章 袁曹之战：七
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235757.html">
+                    第550章 袁曹之战：八
+                </a>
+            </li>
+        
+        </div>
+    
+        
+            <div id="12" style='display:none;'>
+        
+        
+            <li>
+                <a href="/r/235207/235758.html">
+                    第551章 袁曹之战：九
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235759.html">
+                    第552章 袁曹之战：十
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235760.html">
+                    第553章 袁曹之战：十一
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235761.html">
+                    第554章 袁曹之战：十二
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235762.html">
+                    第555章 十面埋伏
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235763.html">
+                    第556章 袁绍之死
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235764.html">
+                    第557章 河北局势
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235765.html">
+                    第558章 减了分的冉闵对加了分的许褚
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235766.html">
+                    第559章 停战
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235767.html">
+                    第560章 叛逃
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235768.html">
+                    第561章 夺关
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235769.html">
+                    第562章 天良丧尽
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235770.html">
+                    第563章 秦良玉出川：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235771.html">
+                    第564章 秦良玉出川：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235772.html">
+                    第565章 说张任
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235773.html">
+                    第566章 留任西军
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235774.html">
+                    第567章 二袁之乱
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235775.html">
+                    第568章 兄弟反目
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235776.html">
+                    第569章 拢霞山：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235777.html">
+                    第570章 拢霞山：中
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235778.html">
+                    第571章 拢霞山：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235779.html">
+                    第572章 分割冀州
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235780.html">
+                    第573章 重建洛阳
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235781.html">
+                    第574章 洛阳
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235782.html">
+                    第575章 女官
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235783.html">
+                    第576章 开天僻地我来行
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235784.html">
+                    第577章 女状元
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235785.html">
+                    第578章 震动
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235786.html">
+                    第579章 胡仙真的手段：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235787.html">
+                    第580章 胡仙真的手段：中
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235788.html">
+                    第581章 胡仙真的手段：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235789.html">
+                    第582章 暗箭袭来
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235790.html">
+                    第583章 皇的女人
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235791.html">
+                    第584章 谁的女人
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235792.html">
+                    第585章 我的女人
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235793.html">
+                    第586章 前世恩仇今世完
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235794.html">
+                    第587章 山陵崩
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235795.html">
+                    第588章 苦劝刘宠
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235796.html">
+                    第589章 公布消息
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235797.html">
+                    第590章 曹昂之死
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235798.html">
+                    第591章 曹婴之变
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235799.html">
+                    第592章 天下女帝：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235800.html">
+                    第593章 天下女帝：中
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235801.html">
+                    第594章 天下女帝：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235802.html">
+                    第595章 动荡
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235803.html">
+                    第596章 叛乱
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235804.html">
+                    第597章 平叛：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235805.html">
+                    第598章 平叛：中
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235806.html">
+                    第599章 平叛：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235807.html">
+                    第600章 逃命的马超
+                </a>
+            </li>
+        
+        </div>
+    
+        
+            <div id="13" style='display:none;'>
+        
+        
+            <li>
+                <a href="/r/235207/235808.html">
+                    第601章 平定幽冀：一
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235809.html">
+                    第602章 平定幽冀：二
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235810.html">
+                    第603章 平定幽冀：三
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235811.html">
+                    第604章 平定幽冀：四
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235812.html">
+                    第605章 平定幽冀：五
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235813.html">
+                    第606章 平定幽冀：六
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235814.html">
+                    第607章 平定幽冀：七
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235815.html">
+                    第608章 平定幽冀：八
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235816.html">
+                    第609章 平定幽冀：九
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235817.html">
+                    第610章 平定幽冀：十
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235818.html">
+                    第611章 平定幽冀：十一
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235819.html">
+                    第612章 洛阳天子：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235820.html">
+                    第613章 洛阳天子：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235821.html">
+                    第614章 梳理朝政：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235822.html">
+                    第615章 梳理朝政：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235823.html">
+                    第616章 来投
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235824.html">
+                    第617章 平定荆南：一
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235825.html">
+                    第618章 平定荆南：二
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235826.html">
+                    第619章 平定荆南：三
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235827.html">
+                    第620章 平定荆南：四
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235828.html">
+                    第621章 平定荆南：五
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235829.html">
+                    第622章 平定荆南：六
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235830.html">
+                    第623章 吕董火并
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235831.html">
+                    第624章 擒魔：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235832.html">
+                    第625章 擒魔：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235833.html">
+                    第626章 余波：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235834.html">
+                    第627章 余波：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235835.html">
+                    第628章 吕雉的野望
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235836.html">
+                    第629章 亚玛逊女王
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235837.html">
+                    第630章 赫拉克勒斯的琴加忒修斯的脸
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235838.html">
+                    第631章 报复
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235839.html">
+                    第632章 伍月所VS李和尚
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235840.html">
+                    第633章 破闯：一
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235841.html">
+                    第634章 破闯：二
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235842.html">
+                    第635章 破闯：三
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235843.html">
+                    第636章 破闯：四
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235844.html">
+                    第637章 破闯：五
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235845.html">
+                    第638章 破闯：六
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235846.html">
+                    第639章 破闯：七
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235847.html">
+                    第640章 破闯：八
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235848.html">
+                    第641章 破闯：九
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235849.html">
+                    第642章 破闯：十
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235850.html">
+                    第643章 破闯：十一
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235851.html">
+                    第644章 破闯：十二
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235852.html">
+                    第645章 大战余波：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235853.html">
+                    第646章 大战余波：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235854.html">
+                    第647章 擒住李自成
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235855.html">
+                    第648章 红娘子独斗杨家姐妹
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235856.html">
+                    第649章 王兰英的大刀
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235857.html">
+                    第650章 关中大迁移
+                </a>
+            </li>
+        
+        </div>
+    
+        
+            <div id="14" style='display:none;'>
+        
+        
+            <li>
+                <a href="/r/235207/235858.html">
+                    第651章 三挡关羽
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235859.html">
+                    第652章 算计关羽
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235860.html">
+                    第653章 平西羌：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235861.html">
+                    第654章 平西羌：中
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235862.html">
+                    第655章 羌人内乱
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235863.html">
+                    第656章 平西羌：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235864.html">
+                    第657章 三大集团军的构想
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235865.html">
+                    第658章 挑唆
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235866.html">
+                    第659章 遥尊刘备：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235867.html">
+                    第660章 遥尊刘备：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235868.html">
+                    第661章 行刺：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235869.html">
+                    第662章 行刺：中
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235870.html">
+                    第663章 行刺：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235871.html">
+                    第664章 刘裕的能力：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235872.html">
+                    第665章 刘裕的能力：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235873.html">
+                    第666章 钓鱼
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235874.html">
+                    第667章 收网
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235875.html">
+                    第668章 洛阳琐事：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235876.html">
+                    第669章 洛阳琐事：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235877.html">
+                    第670章 劝降樊家寨：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235878.html">
+                    第671章 劝降樊家寨：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235879.html">
+                    第672章 丁立的耳目
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235880.html">
+                    第673章 拦路劫杀：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235881.html">
+                    第674章 拦路劫杀：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235882.html">
+                    第675章 曲江关
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235883.html">
+                    第676章 失忆的李定国
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235884.html">
+                    第677章 呼延令的提议
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235885.html">
+                    第678章 杜金娥出战
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235886.html">
+                    第679章 赌约
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235887.html">
+                    第680章 叛乱
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235888.html">
+                    第681章 拿下曲江关：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235889.html">
+                    第682章 拿下曲江关：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235890.html">
+                    第683章 偷袭阳朔
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235891.html">
+                    第684章 激战长江
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235892.html">
+                    第685章 阻击
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235893.html">
+                    第686章 土族的兵马
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235894.html">
+                    第687章 南方战场：一
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235895.html">
+                    第688章 南方战场：二
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235896.html">
+                    第689章 南方战场：三
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235897.html">
+                    第690章 南方战场：四
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235898.html">
+                    第691章 南方战场：五
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235899.html">
+                    第692章 南方战场：六
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235900.html">
+                    第693章 南方战场：七
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235901.html">
+                    第694章 南方战场：八
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235902.html">
+                    第695章 南方战场：九
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235903.html">
+                    第696章 南方战场：十
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235904.html">
+                    第697章 南方战场：十一
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235905.html">
+                    第698章 南方战场：十二
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235906.html">
+                    第699章 南方战场：十三
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235907.html">
+                    第700章 定交州：一
+                </a>
+            </li>
+        
+        </div>
+    
+        
+            <div id="15" style='display:none;'>
+        
+        
+            <li>
+                <a href="/r/235207/235908.html">
+                    第701章 定交州：二
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235909.html">
+                    第702章 定交州：三
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235910.html">
+                    第703章 定交州：四
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235911.html">
+                    第704章 定交州：五
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235912.html">
+                    第705章 定交州：六
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235913.html">
+                    第706章 定交州：七
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235914.html">
+                    第707章 诱杀李弘：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235915.html">
+                    第708章 诱杀李弘：中
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235916.html">
+                    第709章 诱杀李弘：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235917.html">
+                    第710章 诱杀李弘：续
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235918.html">
+                    第711章 流产
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235919.html">
+                    第712章 早产
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235920.html">
+                    第713章 局势
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235921.html">
+                    第714章 刘备称帝
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235922.html">
+                    第715章 有孕回京
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235923.html">
+                    第716章 有女刘娥
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235924.html">
+                    第717章 遇刺
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235925.html">
+                    第718章 怨念成恨
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235926.html">
+                    第719章 相会徐、杨
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235927.html">
+                    第720章 渔阳之变：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235928.html">
+                    第721章 渔阳之变：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235929.html">
+                    第722章 智取襄平：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235930.html">
+                    第723章 智取襄平：中
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235931.html">
+                    第724章 智取襄平：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235932.html">
+                    第725章 终定襄平
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235933.html">
+                    第726章 拦路劫战：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235934.html">
+                    第727章 拦路劫战：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235935.html">
+                    第728章 天家无亲
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235936.html">
+                    第729章 陈王世子
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235937.html">
+                    第730章 领兵
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235938.html">
+                    第731章 虎儿刘裕：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235939.html">
+                    第732章 虎儿刘裕：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235940.html">
+                    第733章 射杀郭淮
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235941.html">
+                    第734章 母子离心
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235942.html">
+                    第735章 父子相争
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235943.html">
+                    第736章 洛阳之变：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235944.html">
+                    第737章 洛阳之变：中
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235945.html">
+                    第738章 洛阳之变：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235946.html">
+                    第739章 洛阳之变：结
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235947.html">
+                    第740章 大礼
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235948.html">
+                    第741章 冢虎出招
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235949.html">
+                    第742章 曹操与卑弥呼
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235950.html">
+                    第743章 女儿曹婴
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235951.html">
+                    第744章 曹婴离去
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235952.html">
+                    第745章 先向西进
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235953.html">
+                    第746章 火烧藤甲兵
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235954.html">
+                    第747章 劝降
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235955.html">
+                    第748章 平定乌戈国
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235956.html">
+                    第749章 大胜敌军
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235957.html">
+                    第750章 杨金花出世
+                </a>
+            </li>
+        
+        </div>
+    
+        
+            <div id="16" style='display:none;'>
+        
+        
+            <li>
+                <a href="/r/235207/235958.html">
+                    第751章 祝融夫人VS陈丽卿
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235959.html">
+                    第752章 伏象破三江
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235960.html">
+                    第753章 荀攸画谋
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235961.html">
+                    第754章 破袭白水关
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235962.html">
+                    第755章 樊梨花让贤
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235963.html">
+                    第756章 诈取洪泽湖：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235964.html">
+                    第757章 诈取洪泽湖：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235965.html">
+                    第758章 救走徐晃
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235966.html">
+                    第759章 平定北漠：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235967.html">
+                    第760章 平定北漠：中
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235968.html">
+                    第761章 平定北漠：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235969.html">
+                    第762章 两个神品上位
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235970.html">
+                    第763章 整军政，备大战
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235971.html">
+                    第764章 曹操的应对
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235972.html">
+                    第765章 周处兵败醴陵城
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235973.html">
+                    第766章 陈登作说
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235974.html">
+                    第767章 招唤水军女将
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235975.html">
+                    第768章 火轰寿春城
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235976.html">
+                    第769章 威赫江北：上
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235977.html">
+                    第770章 威赫江北：中
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235978.html">
+                    第771章 威赫江北：下
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235979.html">
+                    第772章 为儿而忧
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235980.html">
+                    第773章 父母给的机会
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235981.html">
+                    第774章 进兵淮阴
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235982.html">
+                    第775章 刘裕用心擒夏侯
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235983.html">
+                    第776章 活字印刷
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235984.html">
+                    第777章 凤压龙
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235985.html">
+                    第778章 水路破严颜
+                </a>
+            </li>
+        
+            <li>
+                <a href="/r/235207/235986.html">
+                    第779章 八番反南中
+                </a>
+            </li>
+        
+        </div>
+    
+</ul>
+
+
+    <div class="v-logbtn">
+        <em onclick="pre_page()">上一页</em>
+        <em onclick="loadDownloadAPP('235207','三国争锋', 'mlxz620', this, 'span')">全本下载</em>
+        <em onclick="next_page()">下一页</em>
+    </div>
+    <footer class="kRybVuWaNZ2s kRybVuWaNZ"
+            onclick="loadDownloadAPP('235207','三国争锋', 'mlydb620', this, 'span')">
+        <aside class="kRybVuWaNZ2sa">
+            <em style="color:#fff;">下载APP 免费看全本</em>
+        </aside>
+    </footer>
+
+
+
+
+
+<div style="margin-bottom: 18vw;">
+
+<style>
+    .footer {
+        display: flex;
+        justify-content: center;
+        padding-top: 10px;
+        min-height: 90px;
+        line-height: 30px;
+        text-align: center;
+        color: rgba(0, 0, 0, 0.45);
+        background: #f5f7f9;
+    }
+
+    .footer .f2 {
+        width: 70%;
+        text-align: center;
+        font-size: 12px;
+        box-sizing: border-box;
+    }
+
+    .footer .f2 a {
+        display: flex;
+        text-decoration: underline;
+        justify-content: center;
+        align-items: center;
+    }
+</style>
+<div class="footer">
+    <div class="f2">
+        <a href="http://www.beian.gov.cn/portal/registerSystemInfo?recordcode=11010502038773"
+                style="color:#999999;"
+        ><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAACXBIWXMAAAsTAAALEwEAmpwYAAAKTWlDQ1BQaG90b3Nob3AgSUNDIHByb2ZpbGUAAHjanVN3WJP3Fj7f92UPVkLY8LGXbIEAIiOsCMgQWaIQkgBhhBASQMWFiApWFBURnEhVxILVCkidiOKgKLhnQYqIWotVXDjuH9yntX167+3t+9f7vOec5/zOec8PgBESJpHmomoAOVKFPDrYH49PSMTJvYACFUjgBCAQ5svCZwXFAADwA3l4fnSwP/wBr28AAgBw1S4kEsfh/4O6UCZXACCRAOAiEucLAZBSAMguVMgUAMgYALBTs2QKAJQAAGx5fEIiAKoNAOz0ST4FANipk9wXANiiHKkIAI0BAJkoRyQCQLsAYFWBUiwCwMIAoKxAIi4EwK4BgFm2MkcCgL0FAHaOWJAPQGAAgJlCLMwAIDgCAEMeE80DIEwDoDDSv+CpX3CFuEgBAMDLlc2XS9IzFLiV0Bp38vDg4iHiwmyxQmEXKRBmCeQinJebIxNI5wNMzgwAABr50cH+OD+Q5+bk4eZm52zv9MWi/mvwbyI+IfHf/ryMAgQAEE7P79pf5eXWA3DHAbB1v2upWwDaVgBo3/ldM9sJoFoK0Hr5i3k4/EAenqFQyDwdHAoLC+0lYqG9MOOLPv8z4W/gi372/EAe/tt68ABxmkCZrcCjg/1xYW52rlKO58sEQjFu9+cj/seFf/2OKdHiNLFcLBWK8ViJuFAiTcd5uVKRRCHJleIS6X8y8R+W/QmTdw0ArIZPwE62B7XLbMB+7gECiw5Y0nYAQH7zLYwaC5EAEGc0Mnn3AACTv/mPQCsBAM2XpOMAALzoGFyolBdMxggAAESggSqwQQcMwRSswA6cwR28wBcCYQZEQAwkwDwQQgbkgBwKoRiWQRlUwDrYBLWwAxqgEZrhELTBMTgN5+ASXIHrcBcGYBiewhi8hgkEQcgIE2EhOogRYo7YIs4IF5mOBCJhSDSSgKQg6YgUUSLFyHKkAqlCapFdSCPyLXIUOY1cQPqQ28ggMor8irxHMZSBslED1AJ1QLmoHxqKxqBz0XQ0D12AlqJr0Rq0Hj2AtqKn0UvodXQAfYqOY4DRMQ5mjNlhXIyHRWCJWBomxxZj5Vg1Vo81Yx1YN3YVG8CeYe8IJAKLgBPsCF6EEMJsgpCQR1hMWEOoJewjtBK6CFcJg4Qxwicik6hPtCV6EvnEeGI6sZBYRqwm7iEeIZ4lXicOE1+TSCQOyZLkTgohJZAySQtJa0jbSC2kU6Q+0hBpnEwm65Btyd7kCLKArCCXkbeQD5BPkvvJw+S3FDrFiOJMCaIkUqSUEko1ZT/lBKWfMkKZoKpRzame1AiqiDqfWkltoHZQL1OHqRM0dZolzZsWQ8ukLaPV0JppZ2n3aC/pdLoJ3YMeRZfQl9Jr6Afp5+mD9HcMDYYNg8dIYigZaxl7GacYtxkvmUymBdOXmchUMNcyG5lnmA+Yb1VYKvYqfBWRyhKVOpVWlX6V56pUVXNVP9V5qgtUq1UPq15WfaZGVbNQ46kJ1Bar1akdVbupNq7OUndSj1DPUV+jvl/9gvpjDbKGhUaghkijVGO3xhmNIRbGMmXxWELWclYD6yxrmE1iW7L57Ex2Bfsbdi97TFNDc6pmrGaRZp3mcc0BDsax4PA52ZxKziHODc57LQMtPy2x1mqtZq1+rTfaetq+2mLtcu0W7eva73VwnUCdLJ31Om0693UJuja6UbqFutt1z+o+02PreekJ9cr1Dund0Uf1bfSj9Rfq79bv0R83MDQINpAZbDE4Y/DMkGPoa5hpuNHwhOGoEctoupHEaKPRSaMnuCbuh2fjNXgXPmasbxxirDTeZdxrPGFiaTLbpMSkxeS+Kc2Ua5pmutG003TMzMgs3KzYrMnsjjnVnGueYb7ZvNv8jYWlRZzFSos2i8eW2pZ8ywWWTZb3rJhWPlZ5VvVW16xJ1lzrLOtt1ldsUBtXmwybOpvLtqitm63Edptt3xTiFI8p0in1U27aMez87ArsmuwG7Tn2YfYl9m32zx3MHBId1jt0O3xydHXMdmxwvOuk4TTDqcSpw+lXZxtnoXOd8zUXpkuQyxKXdpcXU22niqdun3rLleUa7rrStdP1o5u7m9yt2W3U3cw9xX2r+00umxvJXcM970H08PdY4nHM452nm6fC85DnL152Xlle+70eT7OcJp7WMG3I28Rb4L3Le2A6Pj1l+s7pAz7GPgKfep+Hvqa+It89viN+1n6Zfgf8nvs7+sv9j/i/4XnyFvFOBWABwQHlAb2BGoGzA2sDHwSZBKUHNQWNBbsGLww+FUIMCQ1ZH3KTb8AX8hv5YzPcZyya0RXKCJ0VWhv6MMwmTB7WEY6GzwjfEH5vpvlM6cy2CIjgR2yIuB9pGZkX+X0UKSoyqi7qUbRTdHF09yzWrORZ+2e9jvGPqYy5O9tqtnJ2Z6xqbFJsY+ybuIC4qriBeIf4RfGXEnQTJAntieTE2MQ9ieNzAudsmjOc5JpUlnRjruXcorkX5unOy553PFk1WZB8OIWYEpeyP+WDIEJQLxhP5aduTR0T8oSbhU9FvqKNolGxt7hKPJLmnVaV9jjdO31D+miGT0Z1xjMJT1IreZEZkrkj801WRNberM/ZcdktOZSclJyjUg1plrQr1zC3KLdPZisrkw3keeZtyhuTh8r35CP5c/PbFWyFTNGjtFKuUA4WTC+oK3hbGFt4uEi9SFrUM99m/ur5IwuCFny9kLBQuLCz2Lh4WfHgIr9FuxYji1MXdy4xXVK6ZHhp8NJ9y2jLspb9UOJYUlXyannc8o5Sg9KlpUMrglc0lamUycturvRauWMVYZVkVe9ql9VbVn8qF5VfrHCsqK74sEa45uJXTl/VfPV5bdra3kq3yu3rSOuk626s91m/r0q9akHV0IbwDa0b8Y3lG19tSt50oXpq9Y7NtM3KzQM1YTXtW8y2rNvyoTaj9nqdf13LVv2tq7e+2Sba1r/dd3vzDoMdFTve75TsvLUreFdrvUV99W7S7oLdjxpiG7q/5n7duEd3T8Wej3ulewf2Re/ranRvbNyvv7+yCW1SNo0eSDpw5ZuAb9qb7Zp3tXBaKg7CQeXBJ9+mfHvjUOihzsPcw83fmX+39QjrSHkr0jq/dawto22gPaG97+iMo50dXh1Hvrf/fu8x42N1xzWPV56gnSg98fnkgpPjp2Snnp1OPz3Umdx590z8mWtdUV29Z0PPnj8XdO5Mt1/3yfPe549d8Lxw9CL3Ytslt0utPa49R35w/eFIr1tv62X3y+1XPK509E3rO9Hv03/6asDVc9f41y5dn3m978bsG7duJt0cuCW69fh29u0XdwruTNxdeo94r/y+2v3qB/oP6n+0/rFlwG3g+GDAYM/DWQ/vDgmHnv6U/9OH4dJHzEfVI0YjjY+dHx8bDRq98mTOk+GnsqcTz8p+Vv9563Or59/94vtLz1j82PAL+YvPv655qfNy76uprzrHI8cfvM55PfGm/K3O233vuO+638e9H5ko/ED+UPPR+mPHp9BP9z7nfP78L/eE8/sl0p8zAAA7SGlUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPD94cGFja2V0IGJlZ2luPSLvu78iIGlkPSJXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQiPz4KPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iQWRvYmUgWE1QIENvcmUgNS41LWMwMjEgNzkuMTU1NzcyLCAyMDE0LzAxLzEzLTE5OjQ0OjAwICAgICAgICAiPgogICA8cmRmOlJERiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiPgogICAgICA8cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0iIgogICAgICAgICAgICB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iCiAgICAgICAgICAgIHhtbG5zOnhtcE1NPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvbW0vIgogICAgICAgICAgICB4bWxuczpzdEV2dD0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL3NUeXBlL1Jlc291cmNlRXZlbnQjIgogICAgICAgICAgICB4bWxuczpwaG90b3Nob3A9Imh0dHA6Ly9ucy5hZG9iZS5jb20vcGhvdG9zaG9wLzEuMC8iCiAgICAgICAgICAgIHhtbG5zOmRjPSJodHRwOi8vcHVybC5vcmcvZGMvZWxlbWVudHMvMS4xLyIKICAgICAgICAgICAgeG1sbnM6dGlmZj0iaHR0cDovL25zLmFkb2JlLmNvbS90aWZmLzEuMC8iCiAgICAgICAgICAgIHhtbG5zOmV4aWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20vZXhpZi8xLjAvIj4KICAgICAgICAgPHhtcDpDcmVhdG9yVG9vbD5BZG9iZSBQaG90b3Nob3AgQ0MgMjAxNCAoV2luZG93cyk8L3htcDpDcmVhdG9yVG9vbD4KICAgICAgICAgPHhtcDpDcmVhdGVEYXRlPjIwMTUtMTEtMTBUMTQ6MDQ6NTArMDg6MDA8L3htcDpDcmVhdGVEYXRlPgogICAgICAgICA8eG1wOk1ldGFkYXRhRGF0ZT4yMDE1LTExLTEwVDE0OjA0OjUwKzA4OjAwPC94bXA6TWV0YWRhdGFEYXRlPgogICAgICAgICA8eG1wOk1vZGlmeURhdGU+MjAxNS0xMS0xMFQxNDowNDo1MCswODowMDwveG1wOk1vZGlmeURhdGU+CiAgICAgICAgIDx4bXBNTTpJbnN0YW5jZUlEPnhtcC5paWQ6ODBiY2E5ODUtNGY5Yi02ZTRkLTlmYzktZThmNDkyNjdkZjRlPC94bXBNTTpJbnN0YW5jZUlEPgogICAgICAgICA8eG1wTU06RG9jdW1lbnRJRD5hZG9iZTpkb2NpZDpwaG90b3Nob3A6ZWRkYWU4MGMtODc3MC0xMWU1LTg0OWEtYmNmZGE2MDI4ZjJlPC94bXBNTTpEb2N1bWVudElEPgogICAgICAgICA8eG1wTU06T3JpZ2luYWxEb2N1bWVudElEPnhtcC5kaWQ6ZDAxN2I5NGUtOTRiZC0yNjQxLThmZjktYmY3YTBhMzY3N2IxPC94bXBNTTpPcmlnaW5hbERvY3VtZW50SUQ+CiAgICAgICAgIDx4bXBNTTpIaXN0b3J5PgogICAgICAgICAgICA8cmRmOlNlcT4KICAgICAgICAgICAgICAgPHJkZjpsaSByZGY6cGFyc2VUeXBlPSJSZXNvdXJjZSI+CiAgICAgICAgICAgICAgICAgIDxzdEV2dDphY3Rpb24+Y3JlYXRlZDwvc3RFdnQ6YWN0aW9uPgogICAgICAgICAgICAgICAgICA8c3RFdnQ6aW5zdGFuY2VJRD54bXAuaWlkOmQwMTdiOTRlLTk0YmQtMjY0MS04ZmY5LWJmN2EwYTM2NzdiMTwvc3RFdnQ6aW5zdGFuY2VJRD4KICAgICAgICAgICAgICAgICAgPHN0RXZ0OndoZW4+MjAxNS0xMS0xMFQxNDowNDo1MCswODowMDwvc3RFdnQ6d2hlbj4KICAgICAgICAgICAgICAgICAgPHN0RXZ0OnNvZnR3YXJlQWdlbnQ+QWRvYmUgUGhvdG9zaG9wIENDIDIwMTQgKFdpbmRvd3MpPC9zdEV2dDpzb2Z0d2FyZUFnZW50PgogICAgICAgICAgICAgICA8L3JkZjpsaT4KICAgICAgICAgICAgICAgPHJkZjpsaSByZGY6cGFyc2VUeXBlPSJSZXNvdXJjZSI+CiAgICAgICAgICAgICAgICAgIDxzdEV2dDphY3Rpb24+c2F2ZWQ8L3N0RXZ0OmFjdGlvbj4KICAgICAgICAgICAgICAgICAgPHN0RXZ0Omluc3RhbmNlSUQ+eG1wLmlpZDo4MGJjYTk4NS00ZjliLTZlNGQtOWZjOS1lOGY0OTI2N2RmNGU8L3N0RXZ0Omluc3RhbmNlSUQ+CiAgICAgICAgICAgICAgICAgIDxzdEV2dDp3aGVuPjIwMTUtMTEtMTBUMTQ6MDQ6NTArMDg6MDA8L3N0RXZ0OndoZW4+CiAgICAgICAgICAgICAgICAgIDxzdEV2dDpzb2Z0d2FyZUFnZW50PkFkb2JlIFBob3Rvc2hvcCBDQyAyMDE0IChXaW5kb3dzKTwvc3RFdnQ6c29mdHdhcmVBZ2VudD4KICAgICAgICAgICAgICAgICAgPHN0RXZ0OmNoYW5nZWQ+Lzwvc3RFdnQ6Y2hhbmdlZD4KICAgICAgICAgICAgICAgPC9yZGY6bGk+CiAgICAgICAgICAgIDwvcmRmOlNlcT4KICAgICAgICAgPC94bXBNTTpIaXN0b3J5PgogICAgICAgICA8cGhvdG9zaG9wOkRvY3VtZW50QW5jZXN0b3JzPgogICAgICAgICAgICA8cmRmOkJhZz4KICAgICAgICAgICAgICAgPHJkZjpsaT4zQ0I4RkVFOEMyRUJFNkU1QTREQTk3MzI4MzU0MTI0RTwvcmRmOmxpPgogICAgICAgICAgICAgICA8cmRmOmxpPmFkb2JlOmRvY2lkOnBob3Rvc2hvcDpiZGRmY2Y2Zi04NzcwLTExZTUtODQ5YS1iY2ZkYTYwMjhmMmU8L3JkZjpsaT4KICAgICAgICAgICAgPC9yZGY6QmFnPgogICAgICAgICA8L3Bob3Rvc2hvcDpEb2N1bWVudEFuY2VzdG9ycz4KICAgICAgICAgPHBob3Rvc2hvcDpDb2xvck1vZGU+MzwvcGhvdG9zaG9wOkNvbG9yTW9kZT4KICAgICAgICAgPHBob3Rvc2hvcDpJQ0NQcm9maWxlPnNSR0IgSUVDNjE5NjYtMi4xPC9waG90b3Nob3A6SUNDUHJvZmlsZT4KICAgICAgICAgPGRjOmZvcm1hdD5pbWFnZS9wbmc8L2RjOmZvcm1hdD4KICAgICAgICAgPHRpZmY6T3JpZW50YXRpb24+MTwvdGlmZjpPcmllbnRhdGlvbj4KICAgICAgICAgPHRpZmY6WFJlc29sdXRpb24+NzIwMDAwLzEwMDAwPC90aWZmOlhSZXNvbHV0aW9uPgogICAgICAgICA8dGlmZjpZUmVzb2x1dGlvbj43MjAwMDAvMTAwMDA8L3RpZmY6WVJlc29sdXRpb24+CiAgICAgICAgIDx0aWZmOlJlc29sdXRpb25Vbml0PjI8L3RpZmY6UmVzb2x1dGlvblVuaXQ+CiAgICAgICAgIDxleGlmOkNvbG9yU3BhY2U+MTwvZXhpZjpDb2xvclNwYWNlPgogICAgICAgICA8ZXhpZjpQaXhlbFhEaW1lbnNpb24+MjA8L2V4aWY6UGl4ZWxYRGltZW5zaW9uPgogICAgICAgICA8ZXhpZjpQaXhlbFlEaW1lbnNpb24+MjA8L2V4aWY6UGl4ZWxZRGltZW5zaW9uPgogICAgICA8L3JkZjpEZXNjcmlwdGlvbj4KICAgPC9yZGY6UkRGPgo8L3g6eG1wbWV0YT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAKPD94cGFja2V0IGVuZD0idyI/Pu6JurQAAAAgY0hSTQAAeiUAAICDAAD5/wAAgOkAAHUwAADqYAAAOpgAABdvkl/FRgAABRFJREFUeNpE1OtvW/Udx/H3ufj4+Ph2nDh2vLgrTSPaFNqGtd0Gy9LRTVymNoNM6ihCaEwdQ5sYAo0HTOwBYg/Yk0pDiG3qmLSiPtjGJERbdZSQaUArykXt1la9hDRNY6dpYsexj30uPj7ntwcVyT/w0ucrfT5fSQgBdguAEBlZhDhaiVikF2j22lfPjP77+Kc/9ZyO9p37th7s2rLlbegveZ4g6jggS4AMAKkkkhAC366DJJADgaJlgA/unTx+4qmT/7oyKpxJfdYzUDIma7M6TsXoDH+3/8jgnrG/iOC2o8JrIiQJECjpvlt0Q7JoimWEkQHN1Sf+8MbE40+O7226M/rtCYX9+k2e0me55+48XXfn1f1PvvfwiVdfOSLFlKitSbh8hq9+DitZFRlZSaHK1aJ35uV3f3+4zr79/fy42CD9pwtULwdUpwLqu//ID4JzPHPoEQ7+00dc/vM/Eoary3oCPR5dBROeRTxaH7x+9MWpkd3nRsyBPL/InmP6cAN5jUlgtcELkXpMTj19kr3GGfLfuovv7T62Z/GjN67aM2c3XHz/nVUw6jmo7ruJI5eT2idz23lwu0XzbAP5eh3JjBJdCnBP3iSyrhu96VD562nG7m8z8cUm3vwwKCSkVgx5aBWsL1aK4cfvHwilGKg2KWuOxjxEAh+WXKT1Bto2E/lGC42QyrRDX5cHkkStKRPtUQ9sHB5btwLOXHrvh+1yeTiT0KATRRQKZId7aSKw7ukm2Fck8dIQxjNbkHsMctuytOw2CEEhZ0Dp7L1Ls6d+sgIaicxgw/Lp73FB7+bEaQN1V4rqnrUEZQvpfy3sYzfxp5fRnh+m69mtvHWoBsQZ2qzSmlrALU0VV8BwaW5Po6ZyZ9Gi+HWN19+M859XSgztKJA2ktgXaoQLHu65GsnyMudfvsKrh6Lkh0w299WplD38pUvDK6CstkyrIZNavMLe+wM6fgL/6Dzdf/scuS9Cu0chzKlkdxUoTFylcvA8rbbC2GiEZHUSq6GiJuUIgAoQM746Lm+4Nhrk+3jiGxYH+np4vTyIP3uB7uokcjqGc6GGNZCjnCnwdzkGKZMnvrlAJ1nEvEPCyKw5tgKCnBMNwdyUxZ2D0/z2V9t48fkRjlqboeEzalfpMmXeOpakiQFkeO7nOjsGJpmbBFybsGNtXQFVs729k8zjz/uUFi7yy+EoY+NxJo7bXJK38MCmLyjEKnSO9NGuOazZaPDrB65x89Q1bF9Hz2qoprYRuPUcvOYnj1ZP/+6wM9/Gq/hQmmH9Q0NE8zoEVYKqSnPBIb2uC9Z2Q6nC9NuXcZJZEv0JYr0G6YF9O7XM9z+QhBAAdFr/fWzp/IHXAtdJVz6cR40LencOEiw5+HYL2dDRu+JIWoTqqSk6gUp6+3p8l2p6w8gjcTM1Lmn33TrZd2ZwFp2yOx9z9HyYzu8aIKi3CKwGGBqKZqLFoL3cpFWqoa/tRi/m8ZZt3LIlYmuaKKkUsS9rI9pXUfjohdzXkr2RTAGvHhIGKmGg4C5aIELa1TrNyUUkJQKShHujQiQmk/92IasZ1s9Ch9Uta0qKaPeOhyw7/ZpdKrU0ZZlUrkNEstEkH8VbRjgOyY1ZUgMpZK2JmtaQMr3XO+pdv1GN23+kaIus1kb4SBHVblTjTzsX8y859cUHPX9251c29WwKLSmhm3KXGkti3eB6rMe01dzI2aWphXFnpnaib2culBQFEbgA/H8ALiI3EysggNoAAAAASUVORK5CYII="
+                style="width:20px;height:20px;"
+        />&nbsp;京公网安备 11010502038773号</a
+        >
+        <a href="https://beian.miit.gov.cn/"
+                style="color:#999999;"
+                target="_blank"
+        >
+            京ICP备18033312号</a
+        >
+        <a href="https://cdn.p.yueyouxs.com/static/yueyou/wangluowenhua3.jpeg"
+                style="color:#999999;"
+                target="_blank"
+        >《网络文化经营许可证》京网文（2021）4272-1054号</a
+        >
+        <a href="https://cdn.p.yueyouxs.com/static/yueyou/icp2.jpeg"
+                style="color:#999999;"
+                target="_blank">京ICP证京B2-20191694</a
+        >
+    </div>
+</div>
+
+</div>
+
+<script type="text/javascript">
+
+    var maxPage = "16";
+    var value = '1';
+
+    function selectChange() {
+        var objS = document.getElementById("chapterFilter");
+        var value1 = objS.options[objS.selectedIndex].value;
+        
+        document.getElementById(value).style.display = "none";
+        document.getElementById(value1).style.display = "";
+        value = value1;
+        ctrl_button(value);
+    }
+
+    
+    if (value == '1' && maxPage != value) {
+        $("#prev_button_id_box").hide();
+    }
+
+    function pre_page() {
+        var cur = parseInt(value);
+        var pre_cur = cur - 1;
+        if (pre_cur >= 1) {
+            $("#next_button_id_box").show();
+            $("#chapterFilter").val(pre_cur);
+            ctr_page(pre_cur, cur);
+            value = pre_cur;
+            if (pre_cur == 1) {
+                $("#prev_button_id_box").hide();
+                $("#next_button_id_box").show();
+            }
+        }
+    }
+
+    function next_page() {
+        var cur = parseInt(value);
+        var next_cur = cur + 1;
+        if (next_cur <= parseInt(maxPage)) {
+            $("#prev_button_id_box").show();
+            $("#chapterFilter").val(cur);
+            ctr_page(next_cur, cur);
+            value = next_cur;
+            if (cur == parseInt(maxPage)) {
+                $("#next_button_id_box").hide();
+            }
+        }
+    }
+
+    function ctrl_button(curr_page) {
+        if (curr_page == 1) {
+            $("#prev_button_id_box").hide();
+            $("#next_button_id_box").show();
+        } else if (curr_page == parseInt(maxPage)) {
+            $("#prev_button_id_box").show();
+            $("#next_button_id_box").hide();
+        } else {
+            $("#prev_button_id_box").show();
+            $("#next_button_id_box").show();
+        }
+    }
+
+    function ctr_page(show_id, hide_id) {
+        $("#" + show_id).show();
+        $("#" + hide_id).hide();
+    }
+
+    
+    var msg = '<p style="font-size: 18px; line-height: 35px; text-align: center;">下载APP开启免费畅读体验</br> 正版小说承诺终身免费 </br> 光速追更紧跟作者脚步</p>';
+
+    
+    function gotoContent(chapter_id) {
+        layer.open({
+            content: msg
+            , btn: ['立即下载', '取消']
+            , shadeClose: false
+            , yes: function (index) {
+                loadDownloadAPP('235207', '三国争锋', 'c3222', "", '');
+                setTimeout(function () {
+                    layer.close(index);
+                }, 500);
+            }
+            , no: function () {
+                gotoPage('/r/235207/' + chapter_id + '.html')
+            }
+        })
+
+    }
+
+    
+    var group_start =  0 ;
+    var read_book_id =  235207 ;
+    var plat_type = "ios";
+    var time_out = 2000;
+    var is_zy =  null ;
+    var remote_ip =  null ;
+    var template_id =  null ;
+    var current_chapter = 235207  +1;
+    var cps_name = "六月小说";
+
+    function loadDownloadAPP(book_id, book_name, download_source, elem, text_elem) {
+        
+        _czc.push(["_trackEvent", "app", "阅读下载", book_name, 1, download_source]);
+
+        var group_book_id = group_start + "" + book_id;
+        var bookinfo = new Base64().encode("yueyou:" + book_name + "<;>" + group_book_id + "<;>" + current_chapter + "<;>" + download_source);
+        var clipboard = new ClipboardJS("body", {
+            text: function () {
+                return bookinfo;
+            }
+        });
+        
+        clipboard.on('success', function (e) {
+            console.log("复制成功");
+        });
+        clipboard.on('error', function (e) {
+            console.log('复制失败');
+        });
+
+        if (elem) {
+            var srcText1 = "";
+            $(elem).removeAttr("onclick"); 
+            $(elem).off("click");          
+            if (elem.tagName.toLowerCase() == text_elem) {
+                srcText1 = $(elem).text();
+                $(elem).text("加载中...");
+            } else {
+                srcText1 = $(elem).find(text_elem).text();
+                $(elem).find(text_elem).text("加载中...");
+            }
+        }
+        if (plat_type == "ios") {
+            if (is_zy) {
+                dowloadZYIOS();
+            } else {
+                dowLoadYYIOS(book_name, group_book_id, download_source, current_chapter, remote_ip, read_book_id, cps_name);
+            }
+        } else {
+            if (is_zy) {
+                dowLoadAndroid();
+            } else {
+                
+                window.location.href = "yueyoureader://host:8081/read?bookInfo=" + encodeURIComponent(bookinfo);
+                setTimeout(function () {
+                    dowLoadYYAndroid(book_name, group_book_id, download_source,
+                        current_chapter, remote_ip, read_book_id, cps_name);
+                }, 3000)
+            }
+        }
+
+        
+
+        function backBind(book_id, book_name, download_source, elem, text_elem, srcText) {
+            
+            if (elem) {
+                if (elem.tagName.toLowerCase() == text_elem) {
+                    $(elem).text(srcText);
+                } else {
+                    $(elem).find(text_elem).text(srcText);
+                }
+                $(elem).on("click", function () {
+                    console.log('repeat click');
+                    clipboard.destroy();
+                    loadDownloadAPP(book_id, book_name, download_source, elem, text_elem, template_id);
+                })
+            }
+        }
+
+        
+        setTimeout(function () {
+            backBind(book_id, book_name, download_source, elem, text_elem, srcText1)
+        }, time_out);
+
+        return false;
+    }
+
+    function hide_statics() {
+        var sa = $("a[title='站长统计']");
+        if (sa.length !== 0) {
+            var web_id = sa.attr("href").split("web_id=")[1];
+            $("#cnzz_stat_icon_" + web_id).hide();
+            sa.hide();
+        }
+    }
+
+    setTimeout(hide_statics, 300);
+</script>

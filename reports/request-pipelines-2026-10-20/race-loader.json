@@ -1,0 +1,17 @@
+[
+  {
+    "dll": "kernel32.dll",
+    "function": "WakeByAddressSingle",
+    "error": "function 'WakeByAddressSingle' not found"
+  },
+  {
+    "dll": "kernel32.dll",
+    "function": "WakeByAddressAll",
+    "error": "function 'WakeByAddressAll' not found"
+  },
+  {
+    "dll": "kernel32.dll",
+    "function": "WaitOnAddress",
+    "error": "function 'WaitOnAddress' not found"
+  }
+]

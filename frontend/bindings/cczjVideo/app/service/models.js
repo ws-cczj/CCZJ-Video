@@ -14,10 +14,31 @@ import * as applog$0 from "../applog/models.js";
 import * as cache$0 from "../cache/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as danmaku$0 from "../danmaku/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as db$0 from "../db/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as diagnosticrecording$0 from "../diagnosticrecording/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as download$0 from "../download/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as netbudget$0 from "../netbudget/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as netpolicy$0 from "../netpolicy/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as netstats$0 from "../netstats/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as operation$0 from "../operation/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as resource$0 from "../resource/models.js";
 
 /**
  * ChunkProgress 单个并发连接的分块进度
@@ -719,12 +740,75 @@ export class DiagStorage {
  * Diagnostics 是诊断页一次拉全的载荷。Notes 收集分项失败原因，
  * 单项取不到时整页仍然可用，界面对应区块标灰，而不是报「诊断失败」。
  */
+export class DiagnosticScope {
+    /**
+     * Creates a new DiagnosticScope instance.
+     * @param {Partial<DiagnosticScope>} [$$source = {}] - The source object to create the DiagnosticScope.
+     */
+    constructor($$source = {}) {
+        if (!("mode" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["mode"] = "";
+        }
+        if (!("business" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["business"] = "";
+        }
+        if (!("resources" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["resources"] = "";
+        }
+        if (!("storage" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["storage"] = "";
+        }
+        if (!("network_budget" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["network_budget"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DiagnosticScope instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {DiagnosticScope}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new DiagnosticScope(/** @type {Partial<DiagnosticScope>} */($$parsedSource));
+    }
+}
+
 export class Diagnostics {
     /**
      * Creates a new Diagnostics instance.
      * @param {Partial<Diagnostics>} [$$source = {}] - The source object to create the Diagnostics.
      */
     constructor($$source = {}) {
+        if (!("scope" in $$source)) {
+            /**
+             * @member
+             * @type {DiagnosticScope}
+             */
+            this["scope"] = (new DiagnosticScope());
+        }
         if (!("env" in $$source)) {
             /**
              * @member
@@ -753,19 +837,19 @@ export class Diagnostics {
              */
             this["cache"] = [];
         }
-        if (!("douban" in $$source)) {
+        if (/** @type {any} */(false)) {
             /**
              * @member
-             * @type {DiagDouban}
+             * @type {DiagDouban | null | undefined}
              */
-            this["douban"] = (new DiagDouban());
+            this["douban"] = undefined;
         }
-        if (!("collect" in $$source)) {
+        if (/** @type {any} */(false)) {
             /**
              * @member
-             * @type {DiagCollect}
+             * @type {DiagCollect | null | undefined}
              */
-            this["collect"] = (new DiagCollect());
+            this["collect"] = undefined;
         }
         if (!("sources" in $$source)) {
             /**
@@ -801,41 +885,97 @@ export class Diagnostics {
         const $$createField0_0 = $$createType7;
         const $$createField1_0 = $$createType8;
         const $$createField2_0 = $$createType9;
-        const $$createField3_0 = $$createType11;
+        const $$createField3_0 = $$createType10;
         const $$createField4_0 = $$createType12;
-        const $$createField5_0 = $$createType13;
-        const $$createField6_0 = $$createType15;
-        const $$createField7_0 = $$createType17;
-        const $$createField8_0 = $$createType18;
+        const $$createField5_0 = $$createType14;
+        const $$createField6_0 = $$createType16;
+        const $$createField7_0 = $$createType18;
+        const $$createField8_0 = $$createType20;
+        const $$createField9_0 = $$createType21;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("scope" in $$parsedSource) {
+            $$parsedSource["scope"] = $$createField0_0($$parsedSource["scope"]);
+        }
         if ("env" in $$parsedSource) {
-            $$parsedSource["env"] = $$createField0_0($$parsedSource["env"]);
+            $$parsedSource["env"] = $$createField1_0($$parsedSource["env"]);
         }
         if ("storage" in $$parsedSource) {
-            $$parsedSource["storage"] = $$createField1_0($$parsedSource["storage"]);
+            $$parsedSource["storage"] = $$createField2_0($$parsedSource["storage"]);
         }
         if ("network" in $$parsedSource) {
-            $$parsedSource["network"] = $$createField2_0($$parsedSource["network"]);
+            $$parsedSource["network"] = $$createField3_0($$parsedSource["network"]);
         }
         if ("cache" in $$parsedSource) {
-            $$parsedSource["cache"] = $$createField3_0($$parsedSource["cache"]);
+            $$parsedSource["cache"] = $$createField4_0($$parsedSource["cache"]);
         }
         if ("douban" in $$parsedSource) {
-            $$parsedSource["douban"] = $$createField4_0($$parsedSource["douban"]);
+            $$parsedSource["douban"] = $$createField5_0($$parsedSource["douban"]);
         }
         if ("collect" in $$parsedSource) {
-            $$parsedSource["collect"] = $$createField5_0($$parsedSource["collect"]);
+            $$parsedSource["collect"] = $$createField6_0($$parsedSource["collect"]);
         }
         if ("sources" in $$parsedSource) {
-            $$parsedSource["sources"] = $$createField6_0($$parsedSource["sources"]);
+            $$parsedSource["sources"] = $$createField7_0($$parsedSource["sources"]);
         }
         if ("tables" in $$parsedSource) {
-            $$parsedSource["tables"] = $$createField7_0($$parsedSource["tables"]);
+            $$parsedSource["tables"] = $$createField8_0($$parsedSource["tables"]);
         }
         if ("notes" in $$parsedSource) {
-            $$parsedSource["notes"] = $$createField8_0($$parsedSource["notes"]);
+            $$parsedSource["notes"] = $$createField9_0($$parsedSource["notes"]);
         }
         return new Diagnostics(/** @type {Partial<Diagnostics>} */($$parsedSource));
+    }
+}
+
+/**
+ * DiagnosticsExport names the report and profiles written by an explicit export.
+ */
+export class DiagnosticsExport {
+    /**
+     * Creates a new DiagnosticsExport instance.
+     * @param {Partial<DiagnosticsExport>} [$$source = {}] - The source object to create the DiagnosticsExport.
+     */
+    constructor($$source = {}) {
+        if (!("bundle_path" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["bundle_path"] = "";
+        }
+        if (!("path" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["path"] = "";
+        }
+        if (!("heap_profile_path" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["heap_profile_path"] = "";
+        }
+        if (!("goroutine_profile_path" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["goroutine_profile_path"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DiagnosticsExport instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {DiagnosticsExport}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new DiagnosticsExport(/** @type {Partial<DiagnosticsExport>} */($$parsedSource));
     }
 }
 
@@ -1160,7 +1300,7 @@ export class DoubanGetAllResp {
      * @returns {DoubanGetAllResp}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType21;
+        const $$createField0_0 = $$createType24;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("rows" in $$parsedSource) {
             $$parsedSource["rows"] = $$createField0_0($$parsedSource["rows"]);
@@ -1332,7 +1472,7 @@ export class ExportLogsReq {
      * @returns {ExportLogsReq}
      */
     static createFrom($$source = {}) {
-        const $$createField2_0 = $$createType18;
+        const $$createField2_0 = $$createType21;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("levels" in $$parsedSource) {
             $$parsedSource["levels"] = $$createField2_0($$parsedSource["levels"]);
@@ -1734,7 +1874,7 @@ export class LogPageReq {
      * @returns {LogPageReq}
      */
     static createFrom($$source = {}) {
-        const $$createField3_0 = $$createType18;
+        const $$createField3_0 = $$createType21;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("levels" in $$parsedSource) {
             $$parsedSource["levels"] = $$createField3_0($$parsedSource["levels"]);
@@ -1825,7 +1965,7 @@ export class LogPageResp {
      * @returns {LogPageResp}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType23;
+        const $$createField0_0 = $$createType26;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("records" in $$parsedSource) {
             $$parsedSource["records"] = $$createField0_0($$parsedSource["records"]);
@@ -1982,7 +2122,7 @@ export class RecommendReq {
      * @returns {RecommendReq}
      */
     static createFrom($$source = {}) {
-        const $$createField2_0 = $$createType18;
+        const $$createField2_0 = $$createType21;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("exclude_ids" in $$parsedSource) {
             $$parsedSource["exclude_ids"] = $$createField2_0($$parsedSource["exclude_ids"]);
@@ -1992,9 +2132,8 @@ export class RecommendReq {
 }
 
 /**
- * RuntimeMetrics 是界面每隔两三秒轮一次的轻量快照：只有内存里的计数器读数，
- * 不查库、不遍历目录、不做全表 COUNT。真实使用中的网络与缓存数字一直在涨，
- * 手动刷新一次的快照看不到趋势，所以把这两块单独开一个便宜口。
+ * RuntimeMetrics combines in-memory counters and a native process snapshot.
+ * It does not query the database, walk directories, spawn tools or force GC.
  */
 export class RuntimeMetrics {
     /**
@@ -2002,6 +2141,55 @@ export class RuntimeMetrics {
      * @param {Partial<RuntimeMetrics>} [$$source = {}] - The source object to create the RuntimeMetrics.
      */
     constructor($$source = {}) {
+        if (!("operations" in $$source)) {
+            /**
+             * @member
+             * @type {operation$0.Stat[]}
+             */
+            this["operations"] = [];
+        }
+        if (!("network_policy" in $$source)) {
+            /**
+             * @member
+             * @type {netpolicy$0.Stat[]}
+             */
+            this["network_policy"] = [];
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {danmaku$0.Stats | null | undefined}
+             */
+            this["danmaku"] = undefined;
+        }
+        if (!("scope" in $$source)) {
+            /**
+             * @member
+             * @type {DiagnosticScope}
+             */
+            this["scope"] = (new DiagnosticScope());
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {download$0.ExecutorStats | null | undefined}
+             */
+            this["download_executor"] = undefined;
+        }
+        if (!("network_budget" in $$source)) {
+            /**
+             * @member
+             * @type {netbudget$0.Snapshot}
+             */
+            this["network_budget"] = (new netbudget$0.Snapshot());
+        }
+        if (!("recording" in $$source)) {
+            /**
+             * @member
+             * @type {diagnosticrecording$0.Status}
+             */
+            this["recording"] = (new diagnosticrecording$0.Status());
+        }
         if (!("uptime_seconds" in $$source)) {
             /**
              * @member
@@ -2030,6 +2218,20 @@ export class RuntimeMetrics {
              */
             this["cache"] = [];
         }
+        if (!("resources" in $$source)) {
+            /**
+             * @member
+             * @type {resource$0.Snapshot}
+             */
+            this["resources"] = (new resource$0.Snapshot());
+        }
+        if (!("background_tasks" in $$source)) {
+            /**
+             * @member
+             * @type {{ [_ in string]?: number }}
+             */
+            this["background_tasks"] = {};
+        }
 
         Object.assign(this, $$source);
     }
@@ -2040,14 +2242,50 @@ export class RuntimeMetrics {
      * @returns {RuntimeMetrics}
      */
     static createFrom($$source = {}) {
-        const $$createField2_0 = $$createType9;
-        const $$createField3_0 = $$createType11;
+        const $$createField0_0 = $$createType28;
+        const $$createField1_0 = $$createType30;
+        const $$createField2_0 = $$createType32;
+        const $$createField3_0 = $$createType7;
+        const $$createField4_0 = $$createType34;
+        const $$createField5_0 = $$createType35;
+        const $$createField6_0 = $$createType36;
+        const $$createField9_0 = $$createType10;
+        const $$createField10_0 = $$createType12;
+        const $$createField11_0 = $$createType37;
+        const $$createField12_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("operations" in $$parsedSource) {
+            $$parsedSource["operations"] = $$createField0_0($$parsedSource["operations"]);
+        }
+        if ("network_policy" in $$parsedSource) {
+            $$parsedSource["network_policy"] = $$createField1_0($$parsedSource["network_policy"]);
+        }
+        if ("danmaku" in $$parsedSource) {
+            $$parsedSource["danmaku"] = $$createField2_0($$parsedSource["danmaku"]);
+        }
+        if ("scope" in $$parsedSource) {
+            $$parsedSource["scope"] = $$createField3_0($$parsedSource["scope"]);
+        }
+        if ("download_executor" in $$parsedSource) {
+            $$parsedSource["download_executor"] = $$createField4_0($$parsedSource["download_executor"]);
+        }
+        if ("network_budget" in $$parsedSource) {
+            $$parsedSource["network_budget"] = $$createField5_0($$parsedSource["network_budget"]);
+        }
+        if ("recording" in $$parsedSource) {
+            $$parsedSource["recording"] = $$createField6_0($$parsedSource["recording"]);
+        }
         if ("network" in $$parsedSource) {
-            $$parsedSource["network"] = $$createField2_0($$parsedSource["network"]);
+            $$parsedSource["network"] = $$createField9_0($$parsedSource["network"]);
         }
         if ("cache" in $$parsedSource) {
-            $$parsedSource["cache"] = $$createField3_0($$parsedSource["cache"]);
+            $$parsedSource["cache"] = $$createField10_0($$parsedSource["cache"]);
+        }
+        if ("resources" in $$parsedSource) {
+            $$parsedSource["resources"] = $$createField11_0($$parsedSource["resources"]);
+        }
+        if ("background_tasks" in $$parsedSource) {
+            $$parsedSource["background_tasks"] = $$createField12_0($$parsedSource["background_tasks"]);
         }
         return new RuntimeMetrics(/** @type {Partial<RuntimeMetrics>} */($$parsedSource));
     }
@@ -2194,7 +2432,7 @@ export class SimilarReq {
      * @returns {SimilarReq}
      */
     static createFrom($$source = {}) {
-        const $$createField3_0 = $$createType18;
+        const $$createField3_0 = $$createType21;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("exclude_ids" in $$parsedSource) {
             $$parsedSource["exclude_ids"] = $$createField3_0($$parsedSource["exclude_ids"]);
@@ -2469,7 +2707,7 @@ export class SourceProbeTimeline {
      * @returns {SourceProbeTimeline}
      */
     static createFrom($$source = {}) {
-        const $$createField2_0 = $$createType25;
+        const $$createField2_0 = $$createType39;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("slots" in $$parsedSource) {
             $$parsedSource["slots"] = $$createField2_0($$parsedSource["slots"]);
@@ -2700,7 +2938,7 @@ export class VideoDownloadStatus {
      * @returns {VideoDownloadStatus}
      */
     static createFrom($$source = {}) {
-        const $$createField12_0 = $$createType27;
+        const $$createField12_0 = $$createType41;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("chunks" in $$parsedSource) {
             $$parsedSource["chunks"] = $$createField12_0($$parsedSource["chunks"]);
@@ -2755,24 +2993,38 @@ const $$createType3 = $Create.Array($$createType2);
 const $$createType4 = db$0.SourceHealth.createFrom;
 const $$createType5 = db$0.SourceHealthSample.createFrom;
 const $$createType6 = $Create.Array($$createType5);
-const $$createType7 = DiagEnv.createFrom;
-const $$createType8 = DiagStorage.createFrom;
-const $$createType9 = DiagNetwork.createFrom;
-const $$createType10 = cache$0.Row.createFrom;
-const $$createType11 = $Create.Array($$createType10);
-const $$createType12 = DiagDouban.createFrom;
-const $$createType13 = DiagCollect.createFrom;
-const $$createType14 = DiagSourceRow.createFrom;
-const $$createType15 = $Create.Array($$createType14);
-const $$createType16 = db$0.TableStat.createFrom;
-const $$createType17 = $Create.Array($$createType16);
-const $$createType18 = $Create.Array($Create.Any);
-const $$createType19 = db$0.DoubanInfoRow.createFrom;
-const $$createType20 = $Create.Nullable($$createType19);
-const $$createType21 = $Create.Array($$createType20);
-const $$createType22 = applog$0.Record.createFrom;
-const $$createType23 = $Create.Array($$createType22);
-const $$createType24 = SourceProbeSlot.createFrom;
-const $$createType25 = $Create.Array($$createType24);
-const $$createType26 = ChunkProgress.createFrom;
-const $$createType27 = $Create.Array($$createType26);
+const $$createType7 = DiagnosticScope.createFrom;
+const $$createType8 = DiagEnv.createFrom;
+const $$createType9 = DiagStorage.createFrom;
+const $$createType10 = DiagNetwork.createFrom;
+const $$createType11 = cache$0.Row.createFrom;
+const $$createType12 = $Create.Array($$createType11);
+const $$createType13 = DiagDouban.createFrom;
+const $$createType14 = $Create.Nullable($$createType13);
+const $$createType15 = DiagCollect.createFrom;
+const $$createType16 = $Create.Nullable($$createType15);
+const $$createType17 = DiagSourceRow.createFrom;
+const $$createType18 = $Create.Array($$createType17);
+const $$createType19 = db$0.TableStat.createFrom;
+const $$createType20 = $Create.Array($$createType19);
+const $$createType21 = $Create.Array($Create.Any);
+const $$createType22 = db$0.DoubanInfoRow.createFrom;
+const $$createType23 = $Create.Nullable($$createType22);
+const $$createType24 = $Create.Array($$createType23);
+const $$createType25 = applog$0.Record.createFrom;
+const $$createType26 = $Create.Array($$createType25);
+const $$createType27 = operation$0.Stat.createFrom;
+const $$createType28 = $Create.Array($$createType27);
+const $$createType29 = netpolicy$0.Stat.createFrom;
+const $$createType30 = $Create.Array($$createType29);
+const $$createType31 = danmaku$0.Stats.createFrom;
+const $$createType32 = $Create.Nullable($$createType31);
+const $$createType33 = download$0.ExecutorStats.createFrom;
+const $$createType34 = $Create.Nullable($$createType33);
+const $$createType35 = netbudget$0.Snapshot.createFrom;
+const $$createType36 = diagnosticrecording$0.Status.createFrom;
+const $$createType37 = resource$0.Snapshot.createFrom;
+const $$createType38 = SourceProbeSlot.createFrom;
+const $$createType39 = $Create.Array($$createType38);
+const $$createType40 = ChunkProgress.createFrom;
+const $$createType41 = $Create.Array($$createType40);

@@ -3,12 +3,16 @@
 // 只有一个机制：给各处已有的 http.Transport 套一层计数 RoundTripper，在响应体 Close 时
 // 结账。它不查库、不发请求，读侧只是拿锁遍历七个计数器。
 //
-// 刻意不做统一的出网中间层：项目里 8 个 http.Client 各有各的超时、cookie jar 和地址校验
-// 策略，为了计数把它们并成一个会改掉真实的网络行为。
+// 保留每个 http.Client 的超时、Cookie 和地址校验；共享请求策略只包装 Transport，
+// 在计数器外层复用响应或拦截冷却请求，避免将缓存命中计为源站读取。
 package netstats
 
 import (
+	"cczjVideo/app/netpolicy"
+	"context"
+	"errors"
 	"io"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -18,18 +22,23 @@ import (
 type Category string
 
 const (
-	CategoryPlayback  Category = "playback"  // 播放中继：m3u8 与 TS 分片
-	CategoryLineProbe Category = "lineprobe" // 多线路测速取样
-	CategoryCollect   Category = "collect"   // 采集源列表与详情分页
-	CategoryDouban    Category = "douban"    // 豆瓣搜索/热榜/评论/验证
-	CategoryImage     Category = "image"     // 海报代理
-	CategoryUpdate    Category = "update"    // 更新检查与安装包下载
-	CategoryDownload  Category = "download"  // 用户发起的离线下载
+	CategoryDanmaku      Category = "danmaku"
+	CategoryPlayback     Category = "playback"  // 播放中继：m3u8 与 TS 分片
+	CategoryLineProbe    Category = "lineprobe" // 多线路测速取样
+	CategoryCollect      Category = "collect"   // 采集源列表与详情分页
+	CategoryDouban       Category = "douban"    // 豆瓣搜索/热榜/评论/验证
+	CategoryImage        Category = "image"     // 海报代理
+	CategoryUpdate       Category = "update"    // 更新检查与安装包下载
+	CategoryDownload     Category = "download"  // 用户发起的离线下载
+	CategoryNovel        Category = "novel"
+	CategoryComic        Category = "comic"
+	CategoryReading      Category = "reading" // 小说正文与漫画页表/图片的资源载入
+	CategoryReadingImage Category = "reading-image"
 )
 
 var categories = []Category{
-	CategoryPlayback, CategoryLineProbe, CategoryCollect,
-	CategoryDouban, CategoryImage, CategoryUpdate, CategoryDownload,
+	CategoryPlayback, CategoryDanmaku, CategoryLineProbe, CategoryCollect,
+	CategoryDouban, CategoryImage, CategoryUpdate, CategoryDownload, CategoryReading, CategoryReadingImage, CategoryNovel, CategoryComic,
 }
 
 // Stat 是一类出网的累计结果。速率都由「字节/耗时」直接派生，没跑过的类别是 0 而不是猜测值。
@@ -37,6 +46,8 @@ type Stat struct {
 	Category      string `json:"category"`
 	Requests      int64  `json:"requests"`
 	Fails         int64  `json:"fails"`
+	Cancelled     int64  `json:"cancelled"`
+	Timeouts      int64  `json:"timeouts"`
 	Bytes         int64  `json:"bytes"`
 	AvgMS         int64  `json:"avg_ms"`
 	MaxMS         int64  `json:"max_ms"`
@@ -47,14 +58,16 @@ type Stat struct {
 }
 
 type counters struct {
-	requests int64
-	fails    int64
-	bytes    int64
-	ms       int64
-	maxMS    int64
-	peakBps  int64
-	lastErr  string
-	lastAt   time.Time
+	requests  int64
+	fails     int64
+	cancelled int64
+	timeouts  int64
+	bytes     int64
+	ms        int64
+	maxMS     int64
+	peakBps   int64
+	lastErr   string
+	lastAt    time.Time
 }
 
 var (
@@ -81,9 +94,15 @@ func Record(cat Category, bytes, ms int64, err error) {
 		c.maxMS = ms
 	}
 	c.ms += ms
-	if err != nil {
+	if errors.Is(err, context.Canceled) {
+		c.cancelled++
+	} else if err != nil {
 		c.fails++
 		c.lastErr = err.Error()
+		var timeout net.Error
+		if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &timeout) && timeout.Timeout()) {
+			c.timeouts++
+		}
 	}
 	// 失败的请求常常一个字节都没读到，字节数仍然要记下来：半截断流也是真实流量。
 	c.bytes += bytes
@@ -109,6 +128,8 @@ func Snapshot() []Stat {
 			Category:      string(cat),
 			Requests:      c.requests,
 			Fails:         c.fails,
+			Cancelled:     c.cancelled,
+			Timeouts:      c.timeouts,
 			Bytes:         c.bytes,
 			MaxMS:         c.maxMS,
 			PeakBytesPerS: c.peakBps,
@@ -150,8 +171,8 @@ func SinceUnix() int64 {
 }
 
 // WrapTransport 给一类出网请求贴上类别标签：返回的 RoundTripper 把每次真实发生的
-// 请求次数、读到的字节数与耗时记进本包的账本。它不改任何网络策略——拨号、超时、
-// 重定向与地址校验仍然是原来那一份，所以加计数不会让任何一条请求变快或变慢。
+// 请求次数、读到的字节数与耗时记进本包的账本。共享策略位于计数器外层，
+// 拦截和响应复用不算源站流量；拨号、超时、重定向与地址校验仍由原客户端拥有。
 func WrapTransport(cat Category, base http.RoundTripper) http.RoundTripper {
 	if base == nil {
 		base = http.DefaultTransport
@@ -164,17 +185,30 @@ type counterTransport struct {
 	base http.RoundTripper
 }
 
+// CloseIdleConnections preserves the underlying transport's cleanup contract.
+func (t *counterTransport) CloseIdleConnections() {
+	if closer, ok := t.base.(interface{ CloseIdleConnections() }); ok {
+		closer.CloseIdleConnections()
+	}
+}
+
 func (t *counterTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	started := time.Now()
+	cat := t.cat
+	if cat == CategoryReading || cat == CategoryReadingImage {
+		if mode, ok := req.Context().Value(readingModeKey{}).(Category); ok {
+			cat = mode
+		}
+	}
 	resp, err := t.base.RoundTrip(req)
 	if err != nil {
 		// 连不上也是真实出网尝试：次数和失败数少了，面板就会把「全挂在拨号上」
 		// 显示成一片空白，而那恰恰是最该看见的故障。
-		Record(t.cat, 0, time.Since(started).Milliseconds(), err)
+		Record(cat, 0, time.Since(started).Milliseconds(), err)
 		return resp, err
 	}
 	if resp.Body != nil {
-		resp.Body = &countedBody{ReadCloser: resp.Body, cat: t.cat, started: started}
+		resp.Body = &countedBody{ReadCloser: resp.Body, cat: cat, started: started}
 	}
 	return resp, nil
 }
@@ -214,4 +248,32 @@ func reset() {
 	defer mu.Unlock()
 	book = map[Category]*counters{}
 	since = time.Time{}
+}
+
+// Reading identity is attached before I/O and retained through body Close, so a
+// late completion is never charged to whichever mode happens to be visible.
+type readingModeKey struct{}
+
+func WithReadingMode(ctx context.Context, mode string) context.Context {
+	if mode != "novel" && mode != "comic" {
+		return ctx
+	}
+	return netpolicy.WithCategory(context.WithValue(ctx, readingModeKey{}, Category(mode)), mode)
+}
+
+type readingModeTransport struct {
+	mode string
+	base http.RoundTripper
+}
+
+func ForReadingMode(mode string, base http.RoundTripper) http.RoundTripper {
+	return &readingModeTransport{mode, base}
+}
+func (t *readingModeTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	return t.base.RoundTrip(r.WithContext(WithReadingMode(r.Context(), t.mode)))
+}
+func (t *readingModeTransport) CloseIdleConnections() {
+	if c, ok := t.base.(interface{ CloseIdleConnections() }); ok {
+		c.CloseIdleConnections()
+	}
 }

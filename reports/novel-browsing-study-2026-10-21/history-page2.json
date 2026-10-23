@@ -1,0 +1,54 @@
+{
+  "name": "history-page2",
+  "url": "https://api.fanqiesdk.com/api/novel/channel/homepage/new_category/book_list/v1/?aid=1967&offset=5&limit=5&category_id=273&gender=1",
+  "http": 200,
+  "count": 5,
+  "samples": [
+    {
+      "author": "画凌烟",
+      "book_id": "7005106440989838336",
+      "book_name": "回到宋朝当暴君",
+      "book_type": "0",
+      "category": "历史古代",
+      "genre": "0",
+      "type": "0"
+    },
+    {
+      "author": "悟途",
+      "book_id": "7241012597783268363",
+      "book_name": "贞观小闲王",
+      "book_type": "0",
+      "category": "历史古代",
+      "genre": "0",
+      "type": "0"
+    },
+    {
+      "author": "瑜兰瑾",
+      "book_id": "7433332360923319321",
+      "book_name": "大秦：开局扶苏被贬，忽悠他造反",
+      "book_type": "0",
+      "category": "历史古代",
+      "genre": "0",
+      "type": "0"
+    },
+    {
+      "author": "天香瞳",
+      "book_id": "6765985292156406792",
+      "book_name": "帝国败家子",
+      "book_type": "0",
+      "category": "历史古代",
+      "genre": "0",
+      "type": "0"
+    },
+    {
+      "author": "文盲写小说",
+      "book_id": "7226178857223588916",
+      "book_name": "大明：穿越崇祯帝，开局一根绳",
+      "book_type": "0",
+      "category": "历史古代",
+      "genre": "0",
+      "type": "0"
+    }
+  ],
+  "checkedAt": "2026-10-21T18:00:59.919193+08:00"
+}

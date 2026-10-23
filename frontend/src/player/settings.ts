@@ -22,40 +22,42 @@ export function createPlayerSettings() {
 
   function load(): Record<string, string> {
     if (cache) return cache
-    const parsed = readStorage<Record<string, string> | null>(STORAGE_KEY, null)
-    if (parsed && typeof parsed === 'object') {
-      cache = parsed
+    const parsed = readStorage<unknown>(STORAGE_KEY, null)
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      cache = Object.fromEntries(Object.entries(parsed).filter((entry):entry is [string,string]=>typeof entry[1]==='string'))
       return cache
     }
 
     const migrated: Record<string, string> = { _version: STORAGE_VERSION }
     for (const legacyKey of LEGACY_KEYS) {
       const value = readStorageString(legacyKey)
-      if (value !== null) {
+      if (value !== '') {
         migrated[legacyKey.replace(/^vp_/, '')] = value
-        removeStorage(legacyKey)
       }
     }
     cache = migrated
-    if (Object.keys(migrated).length > 1) save()
+    if (Object.keys(migrated).length > 1 && save())for(const key of LEGACY_KEYS)removeStorage(key)
     return cache
   }
 
-  function save(): void {
-    if (!cache) return
+  function save(): boolean {
+    if (!cache) return false
     cache._version = STORAGE_VERSION
-    writeStorage(STORAGE_KEY, cache)
+    return writeStorage(STORAGE_KEY, cache)
   }
 
   function read(key: string, fallback: string): string {
     return load()[key] ?? fallback
   }
 
-  function write(key: string, value: string): void {
+  function write(key: string, value: string): boolean {
     const settings = load()
-    if (settings[key] === value) return
+    if (settings[key] === value) return true
+    const previous=settings[key]
     settings[key] = value
-    save()
+    if(save())return true
+    if(previous===undefined)delete settings[key];else settings[key]=previous
+    return false
   }
 
   return { read, write }

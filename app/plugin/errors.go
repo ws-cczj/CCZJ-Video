@@ -38,12 +38,8 @@ const (
 	reasonScriptInvalid      = "script_invalid"
 )
 
-// packError 承载「整包判 invalid」的原因，类型就是全应用共用的 apperror.Error：
-// 校验失败的包只会走到这里一次，成功路径上不分配错误值。
-//
-// 码保持小写 snake_case —— docs/plugins.md §2 那张表就是码表本身，界面按 reason_code
-// 分组、拖拽安装把码原样显示，改大小写会同时改掉文档和界面。变的只有类型：全应用
-// 一套带码错误，不再各写一套。
+// packError keeps existing extension reason codes compatible with the public
+// error adapter. It does not constrain the error types used by other domains.
 type packError = apperror.Error
 
 // 码在本包里保持普通 string：Info.ReasonCode 下发的就是字符串，散落的判定代码也按

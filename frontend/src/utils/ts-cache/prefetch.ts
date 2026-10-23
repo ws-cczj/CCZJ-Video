@@ -14,7 +14,7 @@ import {
   PREFETCH_DEBOUNCE_MS,
   PREFETCH_TRIGGER_WHEN_LESS_THAN,
 } from './constants'
-import { diskSave } from './disk-cache'
+import { diskLoad, diskSave } from './disk-cache'
 import { cacheHas, cacheSet } from './memory-cache'
 import {
   adaptiveConcurrency,
@@ -59,6 +59,10 @@ function finishInflight(generation: number): void {
 
 export function beginCacheSession(): void {
   prefetchState.cacheSession++
+  if (prefetchState.debounceTimer != null) {
+    window.clearTimeout(prefetchState.debounceTimer)
+    prefetchState.debounceTimer = null
+  }
   for (const controller of prefetchState.prefetchControllers) controller.abort()
   prefetchState.prefetchControllers.clear()
   for (const job of prefetchState.queue) prefetchState.pendingUrls.delete(pendingKey(job.url, job.generation))
@@ -129,20 +133,29 @@ export function setPlaybackBufferAhead(seconds: number): void {
 async function runOne(job: FetchJob): Promise<void> {
   const generation = job.generation ?? prefetchState.cacheSession
   if (generation !== prefetchState.cacheSession) return
-  const t0 = performance.now()
   const timeout = adaptiveFragmentTimeout()
   let ctrl: AbortController | null = null
   let timeoutID: number | null = null
   try {
+    // Read only this scheduled segment. Without this check, removing eager
+    // episode restoration would cause prefetch to download disk hits again.
+    const stored = await diskLoad(job.url)
+    if (generation !== prefetchState.cacheSession) return
+    if (stored) {
+      cacheSet(job.url, stored, job.episodeKey)
+      fireListeners()
+      return
+    }
+    const t0 = performance.now()
     ctrl = new AbortController()
     prefetchState.prefetchControllers.add(ctrl)
     timeoutID = window.setTimeout(() => ctrl?.abort(), timeout)
     const init: RequestInit = { signal: ctrl.signal }
     try { (init as any).priority = 'low' } catch { /* ignore */ }
     const resp = await fetch(job.url, init)
-    if (timeoutID != null) window.clearTimeout(timeoutID)
     if (resp.ok && generation === prefetchState.cacheSession) {
       const buf = await resp.arrayBuffer()
+      if (generation !== prefetchState.cacheSession || ctrl.signal.aborted) return
       const elapsed = performance.now() - t0
       cacheSet(job.url, buf, job.episodeKey, null, elapsed)
       diskSave(job.url, buf, job.episodeKey).catch(() => { })
@@ -268,12 +281,14 @@ export async function prefetchNextEpisode(count: number): Promise<number> {
 /** 详情页自行 fetch m3u8 并解析 TS URL，不等播放器；使用 episodes[epIdx] 的 vod_id+ep_num 做稳定 key */
 export async function prefetchFromM3u8(m3u8Url: string, epIdx: number): Promise<number> {
   if (!session.enabled) return 0
+  const generation = prefetchState.cacheSession
   try {
     const ep = session.episodes[epIdx]
     if (!ep) return 0
     const epKey = epKeyFrom(ep, epIdx)
 
     const parsed = await fetchAndParseM3u8(m3u8Url)
+    if (generation !== prefetchState.cacheSession || !session.enabled) return 0
     if (parsed.isMaster || parsed.urls.length === 0) return 0
 
     const segs = parsed.urls

@@ -123,20 +123,18 @@ async function saveGlobalSchedule(): Promise<void> {
 
 /* === 全局调度器条 === */
 .scheduler-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  @apply cczj-flex cczj-items-center cczj-gap-5;
   padding: 10px 16px;
-  margin-bottom: 16px;
+  @apply cczj-mb-8;
   background: var(--bg-card);
-  border: 1px solid var(--border);
+  @apply cczj-border;
   border-radius: 10px;
-  font-size: 13px;
+  @apply cczj-text-13;
 }
 .scheduler-bar.active { border-color: var(--accent-alpha-30); }
 .scheduler-indicator {
-  width: 8px; height: 8px; border-radius: 50%;
-  background: var(--text-muted); flex-shrink: 0;
+  @apply cczj-w-2 cczj-h-2 cczj-rounded-50;
+  background: var(--text-muted); @apply cczj-flex-shrink-0;
 }
 .scheduler-indicator.on {
   background: #4caf50;
@@ -147,36 +145,34 @@ async function saveGlobalSchedule(): Promise<void> {
   0%, 100% { box-shadow: 0 0 4px #4caf50; }
   50% { box-shadow: 0 0 12px #4caf50; }
 }
-.scheduler-label { font-weight: 600; color: var(--text-secondary); }
-.scheduler-state { font-weight: 600; color: var(--accent); }
-.scheduler-note { flex: 1; color: var(--text-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.scheduler-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.scheduler-label { @apply cczj-font-semibold cczj-text-secondary; }
+.scheduler-state { @apply cczj-font-semibold cczj-text-accent; }
+.scheduler-note { @apply cczj-flex-1 cczj-text-muted cczj-text-sm cczj-overflow-hidden; text-overflow: ellipsis; @apply cczj-whitespace-nowrap; }
+.scheduler-actions { @apply cczj-flex cczj-gap-3 cczj-flex-shrink-0; }
 .scheduler-config {
-  display: flex; flex-direction: column; gap: 10px;
-  margin: -8px 0 16px; padding: 12px 16px;
+  @apply cczj-flex cczj-flex-col cczj-gap-5;
+  margin: -8px 0 16px; @apply cczj-px-8-py-6;
   background: var(--bg-card); border: 1px solid var(--accent-alpha-30);
   border-radius: 10px;
 }
-.sc-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-.sc-field { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); }
-.sc-label { color: var(--text-muted); white-space: nowrap; }
-.sc-value { min-width: 52px; color: var(--text-primary); font-weight: 600; }
+.sc-row { @apply cczj-flex cczj-items-center cczj-gap-8 cczj-flex-wrap; }
+.sc-field { @apply cczj-flex cczj-items-center cczj-gap-4 cczj-text-sm cczj-text-secondary; }
+.sc-label { @apply cczj-text-muted cczj-whitespace-nowrap; }
+.sc-value { min-width: 52px; @apply cczj-text-primary cczj-font-semibold; }
 .sc-input {
-  width: 68px; padding: 5px 8px; border-radius: 6px;
-  border: 1px solid var(--border); background: var(--bg-secondary);
-  color: var(--text-primary); font-size: 12px; outline: none;
+  width: 68px; padding: 5px 8px; @apply cczj-rounded cczj-border; background: var(--bg-secondary);
+  @apply cczj-text-primary cczj-text-sm cczj-outline-none;
 }
-.sc-input:hover, .sc-input:focus { border-color: var(--accent); }
+.sc-input:hover, .sc-input:focus { @apply cczj-border-primary; }
 .sc-input:focus { box-shadow: 0 0 0 3px var(--accent-alpha-10); }
 .sc-input::-webkit-inner-spin-button,
 .sc-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .sc-input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
-.sc-field input[type='range'] { accent-color: var(--accent); cursor: pointer; }
+.sc-field input[type='range'] { accent-color: var(--accent); @apply cczj-cursor-pointer; }
 .sc-check {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-size: 12px; color: var(--text-secondary); cursor: pointer;
+  @apply cczj-inline-flex cczj-items-center cczj-gap-3 cczj-text-sm cczj-text-secondary cczj-cursor-pointer;
 }
-.sc-check input { accent-color: var(--accent); cursor: pointer; }
-.sc-hint { color: var(--text-muted); }
+.sc-check input { accent-color: var(--accent); @apply cczj-cursor-pointer; }
+.sc-hint { @apply cczj-text-muted; }
 
 </style>

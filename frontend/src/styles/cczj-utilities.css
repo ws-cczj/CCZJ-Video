@@ -638,6 +638,9 @@
 .cczj-break-all {
   word-break: break-all;
 }
+.cczj-wrap-anywhere {
+  overflow-wrap: anywhere;
+}
 
 /* ============================================================
    9. 光标 (Cursor)
@@ -1014,4 +1017,9 @@
 }
 .cczj-hover-bg-accent-alpha:hover {
   background: var(--accent-alpha-10);
+}
+
+/* 裁剪装饰层与路由场景，不创建可被 scrollIntoView 移动的滚动容器。 */
+.cczj-overflow-clip {
+  overflow: clip;
 }

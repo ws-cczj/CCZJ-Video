@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, onScopeDispose } from 'vue'
 import { WriteLog, normalizeApiError } from '../api/app'
 import { tr } from '../locales'
 
@@ -12,6 +12,9 @@ export interface ErrorItem {
   message: string
   detail?: string
   source?: string
+  code?: string
+  requestId?: string
+  count?: number
   time: number // ms timestamp
   // 在 toast 状态里，用户可关闭
   closed?: boolean
@@ -32,12 +35,16 @@ function nextId(): string {
 export const useErrorStore = defineStore('error', () => {
   const toasts = ref<ErrorItem[]>([])
   const history = ref<ErrorItem[]>([])
+  const timers = new Map<string, ReturnType<typeof setTimeout>>()
+  onScopeDispose(clearToasts)
 
   // 直接用 toasts 数组的存在/不存在来驱动 transition-group
   const visibleToasts = computed(() => toasts.value)
 
   // 暴露给前端的主要方法
-  function push(item: Omit<ErrorItem, 'id' | 'time'> & { autoDismiss?: boolean | number }): ErrorItem {
+  function push(item: Omit<ErrorItem, 'id' | 'time'> & { autoDismiss?: boolean | number; logged?: boolean }): ErrorItem {
+    const duplicate = toasts.value.find(e => e.level === item.level && e.source === item.source && e.code === item.code && e.title === item.title && e.message === item.message && Date.now() - e.time < 10000)
+    if (duplicate) { duplicate.count = (duplicate.count || 1) + 1; return duplicate }
     const e: ErrorItem = {
       id: nextId(),
       level: item.level || 'error',
@@ -45,6 +52,9 @@ export const useErrorStore = defineStore('error', () => {
       message: item.message || '',
       detail: item.detail,
       source: item.source,
+      code: item.code,
+      requestId: item.requestId,
+      count: 1,
       time: Date.now(),
     }
     toasts.value.unshift(e)
@@ -52,13 +62,13 @@ export const useErrorStore = defineStore('error', () => {
     // 限制列表长度
     if (toasts.value.length > MAX_TOAST) {
       // 移除最旧的（数组末尾），保证新的在前
-      toasts.value.splice(MAX_TOAST, toasts.value.length - MAX_TOAST)
+      for (const old of toasts.value.splice(MAX_TOAST)) { clearTimeout(timers.get(old.id)); timers.delete(old.id) }
     }
     if (history.value.length > 500) history.value.length = 500
 
     // 写入后端日志文件（异步）
     try {
-      WriteLog({
+      if (!item.logged) WriteLog({
         level: e.level.toUpperCase(),
         message: `${e.title} — ${e.message}`,
         source: e.source || '',
@@ -80,7 +90,7 @@ export const useErrorStore = defineStore('error', () => {
       ms = AUTO_DISMISS_MS_ERROR
     }
     if (ms > 0) {
-      setTimeout(() => dismiss(e.id), ms)
+      timers.set(e.id, setTimeout(() => dismiss(e.id), ms))
     }
     return e
   }
@@ -95,20 +105,23 @@ export const useErrorStore = defineStore('error', () => {
     return push({ level: 'error', title, message, detail, source })
   }
   function fromError(title: string, err: unknown, source = ''): ErrorItem {
-    // 后端带码错误一律渲染成「CODE: 消息: 原因」（见 app/apperror），而这条是几乎所有
-    // 界面提示的唯一出口：码在这里剥掉，界面就只显示人话那半句，不至于每加一个错误码
-    // 就多一类把 STORAGE / UNAVAILABLE 甩给用户看的噪声。认不出码的整句照原样显示。
-    const { message } = normalizeApiError(err)
+    // Prefer the public structured message; the adapter also supports old hosts.
+    const normalized = normalizeApiError(err)
+    if (normalized.code === 'CANCELLED') return { id: nextId(), level: 'info', title, message: normalized.message, source, code: normalized.code, time: Date.now(), closed: true }
     const detail = err instanceof Error && err.stack ? err.stack : ''
-    return error(title, message, detail, source)
+    const level: ErrorLevel = ['INTERNAL', 'STORAGE', 'CORRUPT'].includes(normalized.code) ? 'error' : 'warn'
+    return push({ level, title, message: normalized.message, detail, source, code: normalized.code, requestId: normalized.requestId, logged: normalized.logged })
   }
 
   // 从数组中移除 —— 让 transition-group 正确触发 leave 动画
   function dismiss(id: string): void {
+    clearTimeout(timers.get(id)); timers.delete(id)
     const idx = toasts.value.findIndex(x => x.id === id)
     if (idx >= 0) toasts.value.splice(idx, 1)
   }
   function clearToasts(): void {
+    for (const timer of timers.values()) clearTimeout(timer)
+    timers.clear()
     toasts.value = []
   }
 

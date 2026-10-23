@@ -173,9 +173,9 @@ onBeforeUnmount(() => {
         <tbody>
           <tr v-for="(row, idx) in visibleRows" :key="row.GlobalID || row.VodName || idx">
             <td class="adv-td-name" :title="row.VodName">{{ row.VodName || '--' }}</td>
-            <td class="adv-td-mono" :title="row.SubjectID">{{ row.SubjectID || '--' }}</td>
-            <td class="adv-td-num">{{ row.Rating || '--' }}</td>
-            <td class="adv-td-num">{{ row.ReleaseDate ? String(row.ReleaseDate).slice(0, 4) : '--' }}</td>
+            <td class="adv-td-mono" data-label="ID" :title="row.SubjectID">{{ row.SubjectID || '--' }}</td>
+            <td class="adv-td-num" :data-label="t('advanced.colRating')">{{ row.Rating || '--' }}</td>
+            <td class="adv-td-num" :data-label="t('advanced.colYear')">{{ row.ReleaseDate ? String(row.ReleaseDate).slice(0, 4) : '--' }}</td>
             <td class="adv-td-act">
               <Button variant="secondary" size="sm"
                 :disabled="busy === String(row.VodName || '')"
@@ -202,127 +202,91 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .adv-douban {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  @apply cczj-flex cczj-flex-col cczj-gap-5;
 }
 .adv-card {
   background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  @apply cczj-border cczj-rounded-lg;
   padding: 12px 14px;
 }
 .adv-card-hd {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 10px;
+  @apply cczj-flex cczj-items-center cczj-gap-5 cczj-flex-wrap cczj-mb-5;
 }
 .adv-card-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
+  @apply cczj-inline-flex cczj-items-center cczj-gap-3 cczj-text-13 cczj-font-semibold cczj-text-primary;
 }
 .adv-card-acts {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: auto;
+  @apply cczj-inline-flex cczj-items-center cczj-gap-3 cczj-ml-auto;
 }
 .adv-count {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-muted);
+  @apply cczj-text-11 cczj-font-medium cczj-text-muted;
   background: var(--bg-hover);
   border-radius: 980px;
   padding: 1px 7px;
 }
 .adv-stats {
-  display: flex;
-  flex-wrap: wrap;
+  @apply cczj-flex cczj-flex-wrap;
   gap: 8px 22px;
 }
-.adv-stat { display: flex; flex-direction: column; gap: 2px; }
-.adv-stat-label { font-size: 11px; color: var(--text-muted); }
-.adv-stat-value { font-size: 14px; font-weight: 600; color: var(--text-primary); }
-.adv-stat-value.on { color: var(--accent); }
+.adv-stat { @apply cczj-flex cczj-flex-col cczj-gap-1; }
+.adv-stat-label { @apply cczj-text-11 cczj-text-muted; }
+.adv-stat-value { @apply cczj-text-base cczj-font-semibold cczj-text-primary; }
+.adv-stat-value.on { @apply cczj-text-accent; }
 .adv-stat-value.ok { color: var(--success, #4caf50); }
 .adv-stat-value.warn { color: var(--warning, #ff9800); }
-.adv-note { font-size: 12px; color: var(--text-muted); padding: 6px 0; }
+.adv-note { @apply cczj-text-sm cczj-text-muted; padding: 6px 0; }
 .adv-search {
   height: 26px;
   width: 150px;
   padding: 0 9px;
-  font-size: 12px;
-  color: var(--text-primary);
+  @apply cczj-text-sm cczj-text-primary;
   background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  outline: none;
+  @apply cczj-border cczj-rounded-md cczj-outline-none;
 }
-.adv-search:focus { border-color: var(--accent); }
+.adv-search:focus { @apply cczj-border-primary; }
 .adv-tb {
-  width: 100%;
+  @apply cczj-w-full;
   border-collapse: collapse;
-  font-size: 12px;
+  @apply cczj-text-sm;
 }
 .adv-tb th {
-  text-align: left;
-  font-weight: 600;
-  color: var(--text-muted);
+  @apply cczj-text-left cczj-font-semibold cczj-text-muted;
   padding: 6px 8px;
-  border-bottom: 1px solid var(--border);
-  white-space: nowrap;
+  @apply cczj-border-bottom cczj-whitespace-nowrap;
 }
 .adv-tb td {
   padding: 6px 8px;
-  border-bottom: 1px solid var(--border);
-  color: var(--text-secondary);
+  @apply cczj-border-bottom cczj-text-secondary;
   vertical-align: middle;
 }
 .adv-tb tbody tr:hover td { background: var(--bg-hover); }
-.adv-th-num, .adv-td-num { text-align: right; width: 70px; }
-.adv-th-act { text-align: right; width: 96px; }
-.adv-td-act { text-align: right; }
+.adv-th-num, .adv-td-num { @apply cczj-text-right; width: 70px; }
+.adv-th-act { @apply cczj-text-right; width: 96px; }
+.adv-td-act { @apply cczj-text-right; }
 .adv-td-name {
   max-width: 260px;
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
+  @apply cczj-text-primary cczj-whitespace-nowrap cczj-overflow-hidden;
   text-overflow: ellipsis;
 }
 .adv-td-mono {
   max-width: 140px;
   font-family: 'SF Mono', Consolas, monospace;
-  white-space: nowrap;
-  overflow: hidden;
+  @apply cczj-whitespace-nowrap cczj-overflow-hidden;
   text-overflow: ellipsis;
 }
 .adv-pager {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  margin-top: 10px;
+  @apply cczj-flex cczj-items-center cczj-justify-center cczj-gap-5 cczj-mt-5;
 }
 .adv-page-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  @apply cczj-inline-flex cczj-items-center cczj-justify-center;
   width: 26px;
   height: 26px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
+  @apply cczj-rounded-md cczj-border;
   background: var(--bg-card);
-  color: var(--text-secondary);
-  cursor: pointer;
+  @apply cczj-text-secondary cczj-cursor-pointer;
   transition: all .15s;
 }
-.adv-page-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
-.adv-page-btn:disabled { opacity: .4; cursor: not-allowed; }
-.adv-page-info { font-size: 12px; color: var(--text-muted); min-width: 54px; text-align: center; }
+.adv-page-btn:hover:not(:disabled) { @apply cczj-border-primary cczj-text-accent; }
+.adv-page-btn:disabled { opacity: .4; @apply cczj-cursor-not-allowed; }
+.adv-page-info { @apply cczj-text-sm cczj-text-muted; min-width: 54px; @apply cczj-text-center; }
 </style>

@@ -94,3 +94,20 @@ func installMarkerPresent() (string, bool) {
 	}
 	return eff, true
 }
+
+func TestRejectedInstallDoesNotClaimTheNewVersion(t *testing.T) {
+	setCompiledVersion(t, "2.3.1")
+	updater.ClearInstalledVersion()
+	t.Cleanup(updater.ClearInstalledVersion)
+	s := newDBBackedService(t)
+	s.pending = &updater.UpdateInfo{HasUpdate: true, LatestVer: "9.1.0"}
+	if err := s.Install("missing-update.exe"); err == nil {
+		t.Fatal("invalid update must be rejected")
+	}
+	if got := s.Version(); got != "2.3.1" {
+		t.Fatalf("failed install claimed version %q and hides the available update", got)
+	}
+	if s.Pending() == nil {
+		t.Fatal("failed install consumed the update offer")
+	}
+}

@@ -6,7 +6,7 @@
  * memory-cache / prefetch / network / telemetry / m3u8 / disk-cache 各自的文件里。
  */
 import { addAdDomain, getAdDomains } from './ad-filter'
-import { diskCache, diskCacheInfo, diskCachePrune, diskClear, diskLoadForEpisode } from './disk-cache'
+import { diskCache, diskCacheInfo, diskCachePrune, diskClear } from './disk-cache'
 import { cacheClear, cacheHas, evict } from './memory-cache'
 import { clearM3u8TextCache, fetchAndParseM3u8, getM3u8FromCache, setM3u8Cache } from './m3u8'
 import {
@@ -43,6 +43,7 @@ import {
   telemetry,
 } from './store'
 import type { EpisodeLite, Listener } from './store'
+import { playbackCacheStatus, retainPlayback } from './playback-lifetime'
 
 // ====== 公共 API ======
 
@@ -98,8 +99,7 @@ export function setCurrentEpisode(idx: number): void {
     if (!cs) { cs = { hits: 0, misses: 0 }; telemetry.epStats.set(session.currentEpKey, cs) }
     telemetry.curEpStats = cs
 
-    // ⭐ 按需从磁盘加载该集的缓存（只有当前集的片段才恢复到内存）
-    diskLoadForEpisode(session.currentEpKey).catch(() => { })
+    // Segment binaries stay on disk until the playback loader requests them.
   } else {
     telemetry.curEpStats = { hits: 0, misses: 0 }
   }
@@ -136,10 +136,7 @@ export function setSegments(segments: string[], epIdx?: number): void {
     telemetry.curEpStats = cs
   }
 
-  // Records in the v2 cache are indexed by episode key. Reload after the playlist is parsed.
-  if (key === session.currentEpKey && list.length > 0) {
-    diskLoadForEpisode(key).catch(() => { })
-  }
+  // Playlist refreshes update the index without re-reading segment binaries.
   fireListeners()
 }
 
@@ -155,6 +152,7 @@ export function stats() {
   const avgMs = telemetry.recentFetchDurations.length > 0
     ? Math.round(telemetry.recentFetchDurations.reduce((a, b) => a + b, 0) / telemetry.recentFetchDurations.length) : 0
   return {
+    ...playbackCacheStatus(),
     hits: h, misses: m, entries: cachedForCurEp, totalEntries: cache.lruCache.size,
     bytes: cache.totalCacheBytes, totalSegments: segs.length,
     playedSegments: played,
@@ -266,6 +264,7 @@ export function dropSourceCache(sourceKey: string): Promise<void> {
 
 /** 用户显式清除：所有片段缓存与 m3u8 文本缓存一起丢掉，当前会话的剧集清单保留。 */
 export async function dropAllSegmentCache(): Promise<void> {
+  beginCacheSession()
   cacheClear()
   episodeIndex.segmentsByEpisode.clear()
   episodeIndex.playedSegmentsByEpisode.clear()
@@ -279,7 +278,7 @@ export async function dropAllSegmentCache(): Promise<void> {
 }
 
 export const TsCache = {
-  enable, clear, stats,
+  enable, clear, stats, retainPlayback,
   setEpisodes, setCurrentEpisode, setSegments, setTargetDuration, setPlaybackBufferAhead,
   prefetchFirst, prefetchNextEpisode, prefetchFromM3u8,
   notifyCurrentTs, notifyFragmentRequested,

@@ -12,6 +12,9 @@ import { usePluginStore, type ScriptPack } from '../stores/plugins'
 import { createPackRuntime, type CczjApi, type PackRuntime } from './api'
 import { claimBlobUrl, releaseBlobUrls } from './attribution'
 import { installNetworkGuards } from './permissions'
+import { scriptDigest } from './scriptTrust'
+import { scriptTrust } from './trust'
+import { PluginWorkCancelled, waitForPluginWork } from './pendingWork'
 
 /** 当前生效的包 -> 它的撤销入口 + 注入时那份内容的指纹 + 它那份代码的 blob URL。 */
 interface Active {
@@ -22,6 +25,8 @@ interface Active {
 }
 
 const active = new Map<string, Active>()
+const pending = new Map<string, { abort: AbortController; runtime: PackRuntime }>()
+const pendingReads = new Map<string, AbortController>()
 
 /** 串成一条链：后一轮一定等在前一轮之后，不会出现两个 pass 交错登记。 */
 let queue: Promise<void> = Promise.resolve()
@@ -33,6 +38,17 @@ type Store = ReturnType<typeof usePluginStore>
  * 一轮下来没变的包一个字节都不会被重跑，所以开关一个包不会闪另外几个包的界面。
  */
 export function syncPluginScripts(): Promise<void> {
+  // Disposal must happen before joining the queue: that queue may currently
+  // be waiting for this very plugin's unfinished async setup.
+  const store = usePluginStore()
+  if (store.loaded) {
+    const wanted = new Set(store.scriptPacks.filter(entry => !store.scriptError(entry.packId)).map(entry => entry.packId))
+    for (const [id, job] of pending) {
+      if (!wanted.has(id)) { job.runtime.dispose(); job.abort.abort() }
+    }
+    for (const [id, abort] of pendingReads) if (!wanted.has(id)) abort.abort()
+    for (const [id, current] of [...active]) if (!wanted.has(id)) disposeOne(id, current)
+  }
   queue = queue.then(runPass).catch((e) => {
     console.error('[plugin] 扩展包注入轮次失败', e)
   })
@@ -62,7 +78,11 @@ async function runPass(): Promise<void> {
   // 包串起来的唯一慢活儿，而「启用」那点延迟正好落在用户看得见的地方。
   const reads = new Map<string, Promise<Loaded>>()
   for (const [packId, entry] of wanted) {
-    const read = readPack(store, entry)
+    const abort = new AbortController()
+    pendingReads.set(packId, abort)
+    const read = waitForPluginWork(readPack(store, entry), abort.signal).finally(() => {
+      if (pendingReads.get(packId) === abort) pendingReads.delete(packId)
+    })
     // 并行预读时某个包可能先失败，但它的处理器要等前面的包逐个落地才挂得上；这段空档会被
     // App.vue 的 unhandledrejection 记成一条红色错误弹窗。先派一个吞掉的分支占位，
     // 真正的失败仍在下面 await 处按原样隔离。
@@ -75,12 +95,26 @@ async function runPass(): Promise<void> {
     try {
       loaded = await reads.get(packId)!
     } catch (e) {
+      if (e instanceof PluginWorkCancelled) continue
       isolate(store, entry, current, e)
       continue
     }
+    if (!store.scriptPacks.some(item => item.packId === packId)) continue
     // 指纹对得上就说明这个包一行都不必重跑：样式、路由、侧边栏条目全留在原处。
     if (current && current.sig === loaded.sig) continue
     disposeOne(packId, current)
+    try {
+      if (!await waitForPluginWork(scriptTrust.requireTrust(packId, store.localized(entry.pack.name), loaded.sig, entry.pack.builtin_digest, false), new AbortController().signal)) {
+        const error = await store.setEnabled(packId, false)
+        if (error) throw new Error(error)
+        continue
+      }
+    } catch (error) {
+      console.error('[plugin] Cannot persist script trust; execution denied:', packId, error)
+      WriteLog({ level: 'ERROR', message: 'Script trust could not be saved; execution denied', source: packId, detail: String(error) }).catch(() => {})
+      continue
+    }
+    if (!store.scriptPacks.some(item => item.packId === packId)) continue
     await inject(store, entry, loaded)
   }
 }
@@ -91,6 +125,8 @@ async function readPack(store: Store, entry: ScriptPack): Promise<Loaded> {
     ...styles.map(style => store.readText(entry.packId, style)),
     store.readText(entry.packId, entry.script.entry),
   ])
+  const manifest = await store.readText(entry.packId, 'plugin.json')
+  if (!manifest) throw new Error('Cannot read plugin.json for script trust')
   const css: string[] = []
   for (let i = 0; i < styles.length; i++) {
     if (!texts[i]) throw new Error(`读取样式文件失败：${styles[i]}`)
@@ -98,35 +134,32 @@ async function readPack(store: Store, entry: ScriptPack): Promise<Loaded> {
   }
   const source = texts[styles.length]
   if (!source) throw new Error(`读取入口脚本失败：${entry.script.entry}`)
-  return { css, source, sig: fingerprint(css.join('\n') + '\n' + source) }
-}
-
-/**
- * FNV-1a。这里只要回答「同一个包这轮读到的和上轮是不是同一份」，不抗碰撞，所以不必上 crypto。
- */
-function fingerprint(text: string): string {
-  let hash = 0x811c9dc5
-  for (let i = 0; i < text.length; i++) {
-    hash ^= text.charCodeAt(i)
-    hash = Math.imul(hash, 0x01000193)
-  }
-  return `${text.length}:${(hash >>> 0).toString(16)}`
+  return { css, source, sig: await scriptDigest([manifest, ...css, source]) }
 }
 
 async function inject(store: Store, entry: ScriptPack, loaded: Loaded): Promise<void> {
   const runtime = createPackRuntime(entry.pack)
+  const abort = new AbortController()
+  const job = { abort, runtime }
+  pending.set(entry.packId, job)
   const urls: string[] = []
   try {
     // 出网闸门要在第一行包代码跑起来之前就在位，否则那几行正好是没人管的那一段。
     installNetworkGuards()
     // 先把模块取进来，再动界面：动态 import 是这一轮里唯一长的异步段。反过来先挂样式，
     // 界面上就会出现几百毫秒「包的外观已经生效、它的页面和入口还没登记上」的中间态。
-    const module = await importSource(loaded.source, entry.packId, urls)
+    const module = await waitForPluginWork(importSource(loaded.source, entry.packId, urls), abort.signal)
     for (const text of loaded.css) runtime.cczj.css(text)
-    await setupOf(module)(runtime.cczj)
+    await waitForPluginWork(Promise.resolve(setupOf(module)(runtime.cczj)), abort.signal)
     active.set(entry.packId, { runtime, sig: loaded.sig, urls })
   } catch (e) {
+    if (e instanceof PluginWorkCancelled) {
+      disposeOne(entry.packId, { runtime, sig: loaded.sig, urls })
+      return
+    }
     isolate(store, entry, { runtime, sig: loaded.sig, urls }, e)
+  } finally {
+    if (pending.get(entry.packId) === job) pending.delete(entry.packId)
   }
 }
 
@@ -183,6 +216,7 @@ function disposeOne(packId: string, current: Active | undefined): void {
   active.delete(packId)
   // 认领先撤，这个包迟到的回调就不会再被算成「它又在出网」。
   releaseBlobUrls(current.urls)
+  current.urls.forEach(url => URL.revokeObjectURL(url))
   try {
     current.runtime.dispose()
   } catch (e) {

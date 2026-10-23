@@ -1,0 +1,122 @@
+@import './player-option-button.css';
+.playback-settings-group {
+  @apply cczj-relative;
+}
+
+.playback-settings-popup {
+  @apply cczj-absolute;
+  bottom: calc(100% + 10px);
+  @apply cczj-right-0;
+  background: rgba(20, 20, 20, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  @apply cczj-rounded-md cczj-p-3 cczj-flex cczj-flex-col cczj-gap-1;
+  min-width: 180px;
+  @apply cczj-opacity-0 cczj-pointer-events-none;
+  transform: translateY(6px);
+  transition: all 0.18s ease;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  @apply cczj-z-10;
+}
+
+.playback-settings-popup.show {
+  @apply cczj-opacity-100 cczj-pointer-events-auto;
+  transform: translateY(0);
+}
+
+.playback-settings-item {
+  @apply cczj-flex cczj-items-center cczj-justify-between cczj-px-6-py-4;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.86rem;
+  @apply cczj-rounded cczj-gap-6;
+}
+
+.playback-settings-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.ps-toggle {
+  @apply cczj-relative cczj-inline-flex cczj-items-center cczj-cursor-pointer;
+}
+
+.ps-toggle input {
+  @apply cczj-hidden;
+}
+
+.ps-switch {
+  @apply cczj-relative cczj-w-32;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  transition: background 0.2s;
+  @apply cczj-flex-shrink-0;
+}
+
+.ps-switch::after {
+  content: '';
+  @apply cczj-absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  background: #fff;
+  @apply cczj-rounded-50;
+  transition: transform 0.2s;
+}
+
+.ps-toggle input:checked~.ps-switch {
+  background: #1890ff;
+}
+
+.ps-toggle input:checked~.ps-switch::after {
+  transform: translateX(14px);
+}
+
+.ps-select {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  @apply cczj-rounded-sm cczj-text-white;
+  padding: 3px 6px;
+  font-size: 0.79rem;
+  font-family: inherit;
+  @apply cczj-cursor-pointer cczj-outline-none;
+}
+
+.ps-select:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.ps-select option {
+  background: #1a1a1a;
+  @apply cczj-text-white;
+}
+
+/* 播放设置弹窗 - 分隔线 + 快捷键入口 */
+.playback-settings-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 4px 0;
+}
+
+.playback-settings-link {
+  @apply cczj-flex cczj-items-center cczj-gap-4;
+  padding: 8px 10px;
+  @apply cczj-rounded;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  @apply cczj-text-13 cczj-cursor-pointer;
+  transition: background 0.12s;
+  font-family: inherit;
+  @apply cczj-w-full cczj-text-left;
+}
+
+.playback-settings-link:hover {
+  background: rgba(255, 255, 255, 0.08);
+  @apply cczj-text-white;
+}
+
+.playback-settings-link span {
+  @apply cczj-flex-1;
+}
+
+

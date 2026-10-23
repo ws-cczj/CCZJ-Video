@@ -26,7 +26,7 @@ const accessibleLabel = computed(() => props.ariaLabel
 
 <template>
   <button
-    class="ui-btn"
+    class="ui-btn cczj-inline-flex cczj-items-center cczj-justify-center cczj-gap-3"
     :class="[
       `ui-btn--${variant || 'secondary'}`,
       `ui-btn--${size || 'md'}`,
@@ -42,7 +42,7 @@ const accessibleLabel = computed(() => props.ariaLabel
     :aria-label="accessibleLabel"
   >
     <!-- 内容始终留在原位，spinner 盖在正中：见下面 .ui-btn--loading 那段。 -->
-    <span class="ui-btn__content"><slot /></span>
+    <span class="ui-btn__content cczj-inline-flex cczj-items-center cczj-gap-3"><slot /></span>
     <span v-if="loading" class="ui-btn__spinner"></span>
   </button>
 </template>
@@ -50,21 +50,13 @@ const accessibleLabel = computed(() => props.ariaLabel
 <style scoped>
 /* ========== Button Base ========== */
 .ui-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
   border: 1px solid transparent;
-  border-radius: 4px;
-  font-weight: 600;
-  line-height: 1;
-  white-space: nowrap;
+  @apply cczj-rounded-sm cczj-font-semibold cczj-leading-none cczj-whitespace-nowrap;
   transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast), opacity var(--transition-fast);
   font-family: inherit;
   user-select: none;
   -webkit-user-select: none;
-  text-decoration: none;
-  cursor: pointer;
+  @apply cczj-no-underline cczj-cursor-pointer;
   touch-action: manipulation;
 }
 .ui-btn:focus-visible {
@@ -73,9 +65,9 @@ const accessibleLabel = computed(() => props.ariaLabel
 }
 
 /* ========== Size ========== */
-.ui-btn--sm  { padding: 5px 12px; font-size: 12px; border-radius: 3px; }
-.ui-btn--md  { padding: 8px 16px; font-size: 13px; }
-.ui-btn--lg  { padding: 10px 22px; font-size: 14px; }
+.ui-btn--sm  { padding: 5px 12px; @apply cczj-text-sm; border-radius: 3px; }
+.ui-btn--md  { @apply cczj-px-8-py-4 cczj-text-13; }
+.ui-btn--lg  { padding: 10px 22px; @apply cczj-text-base; }
 
 .ui-btn--icon.ui-btn--sm  { padding: 5px; width: 28px; height: 28px; }
 .ui-btn--icon.ui-btn--md  { padding: 7px; width: 34px; height: 34px; }
@@ -102,15 +94,13 @@ const accessibleLabel = computed(() => props.ariaLabel
 /* ========== Variant: Secondary ========== */
 .ui-btn--secondary {
   background: var(--bg-secondary);
-  color: var(--text-secondary);
-  border-color: var(--border);
+  @apply cczj-text-secondary cczj-border-gray-300;
 }
 .ui-btn--secondary:hover {
   background: var(--bg-hover);
-  color: var(--text-primary);
-  border-color: var(--accent);
+  @apply cczj-text-primary cczj-border-primary;
 }
-.ui-btn--secondary:active { background: var(--border); }
+.ui-btn--secondary:active { @apply cczj-bg-border; }
 
 /* ========== Semantic variants ========== */
 .ui-btn--success,
@@ -146,7 +136,7 @@ const accessibleLabel = computed(() => props.ariaLabel
 /* ========== Variant: Danger ========== */
 .ui-btn--danger {
   background: transparent;
-  color: var(--danger);
+  @apply cczj-text-danger;
   border-color: var(--danger);
 }
 .ui-btn--danger:hover {
@@ -159,8 +149,7 @@ const accessibleLabel = computed(() => props.ariaLabel
 /* ========== Variant: Ghost ========== */
 .ui-btn--ghost {
   background: transparent;
-  color: var(--accent);
-  border-color: var(--accent);
+  @apply cczj-text-accent cczj-border-primary;
 }
 .ui-btn--ghost:hover { background: var(--accent-alpha-10); }
 .ui-btn--ghost:active { background: var(--accent-alpha-20); }
@@ -168,14 +157,14 @@ const accessibleLabel = computed(() => props.ariaLabel
 /* ========== Variant: Text ========== */
 .ui-btn--text {
   background: transparent;
-  color: var(--text-secondary);
+  @apply cczj-text-secondary;
   border-color: transparent;
 }
 .ui-btn--text:hover {
   background: var(--bg-hover);
-  color: var(--text-primary);
+  @apply cczj-text-primary;
 }
-.ui-btn--text:active { color: var(--accent); }
+.ui-btn--text:active { @apply cczj-text-accent; }
 
 /* ========== Variant: Overlay ========== */
 /* 浮动在卡片/图片上方的按钮（如删除、关闭标记）。
@@ -183,7 +172,7 @@ const accessibleLabel = computed(() => props.ariaLabel
  * 背景半透明，hover 时变色。 */
 .ui-btn--overlay {
   background: rgba(0, 0, 0, 0.6);
-  color: #fff;
+  @apply cczj-text-white;
   border: none;
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
@@ -197,22 +186,21 @@ const accessibleLabel = computed(() => props.ariaLabel
 }
 
 /* ========== Block / Disabled / Loading ========== */
-.ui-btn--block { width: 100%; }
-.ui-btn--disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+.ui-btn--block { @apply cczj-w-full; }
+.ui-btn--disabled { @apply cczj-opacity-50 cczj-cursor-not-allowed cczj-pointer-events-none; }
 
 /* loading 绝不能把内容换成 spinner：按钮会从七八十字宽塌成 14px，同一排的别的按钮和
    标签跟着重排，用户点一下开关就看见整行抖一下。内容留在原位撑住宽度，spinner 盖在正中。 */
 .ui-btn--loading {
   cursor: wait;
-  pointer-events: none;
-  position: relative;
+  @apply cczj-pointer-events-none cczj-relative;
 }
 .ui-btn--loading .ui-btn__content {
   visibility: hidden;
 }
 
 .ui-btn__spinner {
-  position: absolute;
+  @apply cczj-absolute;
   left: 50%;
   top: 50%;
   width: 14px;
@@ -220,14 +208,8 @@ const accessibleLabel = computed(() => props.ariaLabel
   margin: -7px 0 0 -7px;
   border: 2px solid currentColor;
   border-top-color: transparent;
-  border-radius: 50%;
+  @apply cczj-rounded-50;
   animation: cczj-spin 800ms linear infinite;
-}
-
-.ui-btn__content {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
 }
 
 </style>

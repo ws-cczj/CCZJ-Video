@@ -44,6 +44,13 @@ func InstallUpdate(filePath string) error {
 	ext := strings.ToLower(filepath.Ext(filePath))
 
 	switch runtime.GOOS {
+	case "android":
+		if ext != ".apk" {
+			return apperror.New(apperror.Validation, "Android 更新必须使用 APK")
+		}
+		// The frontend hands this validated path to Android's package installer.
+		// Launching that UI does not establish that installation succeeded.
+		return nil
 	case "windows":
 		switch ext {
 		case ".exe":

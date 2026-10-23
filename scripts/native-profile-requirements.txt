@@ -1,0 +1,2 @@
+# Optional native WebView profiling / Android smoke checks; not an application dependency.
+websocket-client==1.8.0

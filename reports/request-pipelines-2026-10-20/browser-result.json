@@ -1,0 +1,136 @@
+{
+  "passed": true,
+  "checks": [
+    "cached view cancellation",
+    "no late timeline read",
+    "reactivation",
+    "64 callers share one IPC",
+    "source search cancels superseded request",
+    "progress filters request identity",
+    "source search resumes after activation",
+    "video search cancellation and resumption"
+  ],
+  "pipelines": [
+    {
+      "pipeline": "rpc.GetAllSources",
+      "requested": 1,
+      "dispatched": 1,
+      "joined": 0,
+      "active": 0,
+      "cancelled": 0,
+      "failed": 0,
+      "rejected": 0
+    },
+    {
+      "pipeline": "rpc.GetSourceStats",
+      "requested": 1,
+      "dispatched": 1,
+      "joined": 0,
+      "active": 0,
+      "cancelled": 0,
+      "failed": 0,
+      "rejected": 0
+    },
+    {
+      "pipeline": "rpc.GetCollectSchedule",
+      "requested": 1,
+      "dispatched": 1,
+      "joined": 0,
+      "active": 0,
+      "cancelled": 0,
+      "failed": 0,
+      "rejected": 0
+    },
+    {
+      "pipeline": "rpc.GetPluginDirectory",
+      "requested": 1,
+      "dispatched": 1,
+      "joined": 0,
+      "active": 0,
+      "cancelled": 0,
+      "failed": 0,
+      "rejected": 0
+    },
+    {
+      "pipeline": "rpc.ProbeSources",
+      "requested": 2,
+      "dispatched": 2,
+      "joined": 0,
+      "active": 0,
+      "cancelled": 1,
+      "failed": 0,
+      "rejected": 0
+    },
+    {
+      "pipeline": "rpc.ListPlugins",
+      "requested": 1,
+      "dispatched": 1,
+      "joined": 0,
+      "active": 0,
+      "cancelled": 0,
+      "failed": 0,
+      "rejected": 0
+    },
+    {
+      "pipeline": "rpc.SourceProbeTimeline",
+      "requested": 1,
+      "dispatched": 1,
+      "joined": 0,
+      "active": 0,
+      "cancelled": 0,
+      "failed": 0,
+      "rejected": 0
+    },
+    {
+      "pipeline": "rpc.GetSetting",
+      "requested": 70,
+      "dispatched": 7,
+      "joined": 63,
+      "active": 0,
+      "cancelled": 0,
+      "failed": 0,
+      "rejected": 0
+    },
+    {
+      "pipeline": "rpc.GetRecentHistory",
+      "requested": 1,
+      "dispatched": 1,
+      "joined": 0,
+      "active": 0,
+      "cancelled": 0,
+      "failed": 0,
+      "rejected": 0
+    },
+    {
+      "pipeline": "rpc.GetVideoList",
+      "requested": 1,
+      "dispatched": 1,
+      "joined": 0,
+      "active": 0,
+      "cancelled": 0,
+      "failed": 0,
+      "rejected": 0
+    },
+    {
+      "pipeline": "rpc.SearchSourceRequest",
+      "requested": 3,
+      "dispatched": 3,
+      "joined": 0,
+      "active": 0,
+      "cancelled": 2,
+      "failed": 0,
+      "rejected": 0
+    },
+    {
+      "pipeline": "rpc.SearchVideos",
+      "requested": 2,
+      "dispatched": 2,
+      "joined": 0,
+      "active": 0,
+      "cancelled": 1,
+      "failed": 0,
+      "rejected": 0
+    }
+  ],
+  "pageErrors": []
+}

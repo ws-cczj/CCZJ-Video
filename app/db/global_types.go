@@ -2,21 +2,39 @@ package db
 
 import (
 	"cczjVideo/app/applog"
-	"cczjVideo/app/model"
+	"database/sql/driver"
 	"fmt"
 	"strings"
 	"unicode/utf8"
+
+	"modernc.org/sqlite"
 )
 
-// catalogTypeVisibilityClause is shared by every catalog read path. A video
-// may have been written before its global type was disabled, so filtering only
-// at collection time is not sufficient. global_type_id is authoritative when
-// present; the type-name fallback keeps older rows safe as well.
+func init() {
+	// Reads and incoming pages must compare aliases identically, including old
+	// rows with missing/wrong global_type_id. This pure function does no DB I/O.
+	sqlite.MustRegisterDeterministicScalarFunction("cczj_type_key", 1, func(_ *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
+		name, _ := args[0].(string)
+		return normalizeTypeName(name), nil
+	})
+}
+
+// An explicit denial wins over an enabled spelling variant and stale identity
+// mapping. Retained rows remain intact, but cannot leak through another reader.
 func catalogTypeVisibilityClause(alias string) string {
 	if strings.TrimSpace(alias) == "" {
 		alias = "source_videos"
 	}
-	return fmt.Sprintf("COALESCE((SELECT collect_enabled FROM global_types WHERE id = %s.global_type_id), (SELECT collect_enabled FROM global_types WHERE type_name = %s.type_name), 1) = 1", alias, alias)
+	return globalTypeVisibilityClause(alias) + fmt.Sprintf(` AND NOT EXISTS (
+	 SELECT 1 FROM source_types policy_source_type WHERE policy_source_type.source_key=%[1]s.source_key
+	 AND policy_source_type.source_type_id=%[1]s.source_type_id AND NOT (%[2]s))`, alias, globalTypeVisibilityClause("policy_source_type"))
+}
+
+func globalTypeVisibilityClause(alias string) string {
+	return fmt.Sprintf(`NOT EXISTS (SELECT 1 FROM global_types denied_type WHERE denied_type.collect_enabled=0 AND (
+		denied_type.id=%[1]s.global_type_id
+		OR cczj_type_key(denied_type.type_name)=cczj_type_key(%[1]s.type_name)
+		OR cczj_type_key(denied_type.type_name)=(SELECT cczj_type_key(mapped_type.type_name) FROM global_types mapped_type WHERE mapped_type.id=%[1]s.global_type_id)))`, alias)
 }
 
 // GlobalTypeRow 全局类型行
@@ -31,7 +49,10 @@ type GlobalTypeRow struct {
 // GetAllGlobalTypes 获取所有全局类型
 func GetAllGlobalTypes() ([]*GlobalTypeRow, error) {
 	var rows []*GlobalTypeRow
-	err := instance.Select(&rows, `SELECT * FROM global_types ORDER BY sort ASC, id ASC`)
+	err := instance.Select(&rows, `SELECT id,type_name,sort,created_at,CASE WHEN EXISTS(
+	 SELECT 1 FROM global_types denied WHERE denied.collect_enabled=0
+	 AND cczj_type_key(denied.type_name)=cczj_type_key(global_types.type_name)) THEN 0 ELSE collect_enabled END AS collect_enabled
+	 FROM global_types ORDER BY sort ASC, id ASC`)
 	if err != nil {
 		applog.Error("[GlobalTypes] GetAllGlobalTypes failed: %v", err)
 		return nil, err
@@ -45,7 +66,7 @@ func SetGlobalTypeCollectEnabled(typeName string, enabled bool) error {
 	if enabled {
 		val = 1
 	}
-	_, err := instance.Exec(`UPDATE global_types SET collect_enabled = ? WHERE type_name = ?`, val, typeName)
+	_, err := instance.Exec(`UPDATE global_types SET collect_enabled = ? WHERE cczj_type_key(type_name) = ?`, val, normalizeTypeName(typeName))
 	if err != nil {
 		applog.Error("[GlobalTypes] SetGlobalTypeCollectEnabled failed for '%s': %v", typeName, err)
 	}
@@ -69,12 +90,15 @@ var typeNameSynonyms = map[string]string{
 // 归一化结果只用于「是不是同一个类型」的判定，写库的仍是用户看到的原名。
 func normalizeTypeName(s string) string {
 	s = strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(s)), ""))
+	s = typeNameTraditional.Replace(s)
 	s = stripTypeNameSuffixes(s)
 	if canonical, ok := typeNameSynonyms[s]; ok {
 		return canonical
 	}
 	return s
 }
+
+var typeNameTraditional = strings.NewReplacer("倫", "伦", "類", "类", "劇", "剧", "紀", "纪", "錄", "录", "動", "动", "畫", "画", "電", "电", "視", "视", "綜", "综", "藝", "艺")
 
 // stripTypeNameSuffixes 剥掉「类/片/剧」这一类纯修饰后缀，每个至多剥一次：
 // 「电视剧类」剥成「电视」，「卡通片」剥成「卡通」。再往下就要把词根啃掉了，
@@ -234,54 +258,25 @@ func IsTypeCollectEnabled(typeName string) bool {
 	if typeName == "" {
 		return true
 	}
-	var enabled int
-	if err := instance.Get(&enabled, `SELECT collect_enabled FROM global_types WHERE type_name = ?`, typeName); err == nil {
-		return enabled == 1
+	var enabled bool
+	if err := instance.Get(&enabled, `SELECT NOT EXISTS(SELECT 1 FROM global_types WHERE collect_enabled=0 AND cczj_type_key(type_name)=?)`, normalizeTypeName(typeName)); err != nil {
+		applog.Error("[GlobalTypes] cannot read type policy: %v", err)
+		return false
 	}
-
-	// Source APIs do not always use the exact spelling stored in global_types.
-	// Resolve those names with the same normalization used during catalog
-	// identity mapping, otherwise a disabled alias would be treated as enabled.
-	normalized := normalizeTypeName(typeName)
-	if normalized == "" {
-		return true
-	}
-	var rows []struct {
-		TypeName       string `db:"type_name"`
-		CollectEnabled int    `db:"collect_enabled"`
-	}
-	if err := instance.Select(&rows, `SELECT type_name, collect_enabled FROM global_types`); err != nil {
-		return true
-	}
-	for _, row := range rows {
-		if normalizeTypeName(row.TypeName) == normalized {
-			return row.CollectEnabled == 1
-		}
-	}
-	return true
+	return enabled
 }
 
 func isGlobalTypeCollectEnabled(globalTypeID int64, typeName string) bool {
+	if !IsTypeCollectEnabled(typeName) {
+		return false
+	}
 	if globalTypeID > 0 {
-		var enabled int
-		if err := instance.Get(&enabled, `SELECT collect_enabled FROM global_types WHERE id = ?`, globalTypeID); err == nil {
-			return enabled == 1
+		var mapped string
+		if err := instance.Get(&mapped, `SELECT type_name FROM global_types WHERE id = ?`, globalTypeID); err == nil {
+			return IsTypeCollectEnabled(mapped)
 		}
 	}
-	return IsTypeCollectEnabled(typeName)
-}
-
-// FilterEnabledCollectVideos removes videos whose global type is disabled.
-// It is intentionally reusable by collection, remote search, and import paths
-// so disabled items cannot be reintroduced through a secondary entry point.
-func FilterEnabledCollectVideos(videos []*model.Video) []*model.Video {
-	filtered := make([]*model.Video, 0, len(videos))
-	for _, video := range videos {
-		if video != nil && IsTypeCollectEnabled(video.TypeName) {
-			filtered = append(filtered, video)
-		}
-	}
-	return filtered
+	return true
 }
 
 // getAllSourceKeys 获取所有源的 source_key（内部使用）

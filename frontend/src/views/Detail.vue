@@ -13,6 +13,7 @@ import Icon from '../components/Icon.vue'
 import PlayLinePicker from '../components/PlayLinePicker.vue'
 import RemoteImage from '../components/RemoteImage.vue'
 import { Button, Modal, Tag, Spinner as LoadingSpinner } from '../components/ui'
+import FavFolderModal from '../components/FavFolderModal.vue'
 import { getDetailPath, getSearchPath, getPlayerPath, humanizeBytes, buildEpisodeFilename, buildSingleFilename, sanitizeFilename, resolveEpisodeUrl, stripHtmlTags } from '../utils'
 import { TsCache } from '../utils/tsCache'
 import { proxyHlsURL } from '../player/hls/proxy'
@@ -21,8 +22,11 @@ import { epProgressKey, loadEpProgress, getEpProgressPct, flushEpProgress } from
 import { bumpFavoritesRefresh } from '../stores/favoritesSync'
 import type { Video, HistoryItem, Episode } from '../types'
 import { readStorage, writeStorage } from '../platform/storage'
+import { isMobileRuntime } from '../api/runtime'
 
 const { t } = useI18n()
+const mobile = isMobileRuntime()
+const mobileMetadataExpanded = ref(false)
 
 const route = useRoute()
 const router = useRouter()
@@ -210,26 +214,6 @@ const isFav = ref(false)
 const favBusy = ref(false)
 const showFavFolderModal = ref(false)
 
-interface FavFolder { id: string; name: string; default: boolean }
-const favFolders = ref<FavFolder[]>([
-  { id: 'default', name: t('detail.defaultFolder'), default: true },
-])
-const favTargetFolderId = ref<string>('default')
-
-function loadFavFolders(): void {
-  try {
-    const raw = JSON.stringify(readStorage<unknown>('cczj_fav_folders', null))
-    if (raw) {
-      const parsed = JSON.parse(raw) as FavFolder[]
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        favFolders.value = parsed
-        return
-      }
-    }
-  } catch { /* ignore */ }
-  favFolders.value = [{ id: 'default', name: t('detail.defaultFolder'), default: true }]
-}
-
 async function refreshFav(): Promise<void> {
   if (!vodId.value) return
   try {
@@ -265,12 +249,10 @@ async function toggleFavorite(): Promise<void> {
     return
   }
   // 未收藏 → 先展示选择文件夹弹窗
-  loadFavFolders()
-  favTargetFolderId.value = 'default'
   showFavFolderModal.value = true
 }
 
-async function confirmAddToFolder(): Promise<void> {
+async function confirmAddToFolder(folderId: string): Promise<void> {
   if (!vodId.value) return
   favBusy.value = true
   showFavFolderModal.value = false
@@ -285,7 +267,7 @@ async function confirmAddToFolder(): Promise<void> {
       const key = `${sourceKey.value}-${vodId.value}`
       const raw = JSON.stringify(readStorage<Record<string, string>>('cczj_fav_mapping', {}))
       const obj: Record<string, string> = raw ? JSON.parse(raw) : {}
-      obj[key] = favTargetFolderId.value
+      obj[key] = folderId
       writeStorage('cczj_fav_mapping', obj)
     } catch { /* ignore */ }
     isFav.value = true
@@ -814,9 +796,9 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="detail-page cczj-max-w-full cczj-text-primary">
+  <div class="detail-page cczj-max-w-full cczj-text-primary" :class="{ 'cczj-mobile-detail': mobile }">
     <!-- 顶部面包屑 / 返回 -->
-    <div class="detail-nav cczj-flex cczj-items-center cczj-gap-3 cczj-mb-4">
+    <div v-if="!mobile" class="detail-nav cczj-flex cczj-items-center cczj-gap-3 cczj-mb-4">
       <Button variant="text" size="md" @click="router.back()" class="cczj-flex cczj-items-center cczj-gap-1">
         <Icon name="back" :size="14" />
         <span>{{ t('detail.back') }}</span>
@@ -854,7 +836,10 @@ onBeforeUnmount(() => {
             <span v-if="video.vod_remarks" class="badge-float cczj-absolute cczj-top-2 cczj-right-2 cczj-rounded cczj-px-2 cczj-py-1 cczj-text-xs">{{ video.vod_remarks }}</span>
           </div>
           <div class="poster-actions cczj-flex cczj-flex-col cczj-gap-2">
-            <div v-if="videoStore.episodes.length > 0" class="poster-action-group">
+            <Button v-if="mobile && videoStore.episodes.length" variant="primary" @click="playEpisode(lastWatched?.epIdx ?? 0)">
+              <Icon name="play" :size="16" />{{ lastWatched ? t('detail.continueWatching') : t('player.play') }}
+            </Button>
+            <div v-if="!mobile && videoStore.episodes.length > 0" class="poster-action-group">
               <!-- 继续上次观看 → 有历史时显示 -->
               <button v-if="lastWatched" class="continue-btn cczj-inline-flex cczj-items-center cczj-justify-center cczj-gap-4 cczj-cursor-pointer cczj-rounded cczj-px-3 cczj-py-2 cczj-w-full cczj-text-13 cczj-font-semibold cczj-transition" @click="playEpisode(lastWatched.epIdx)">
                 <Icon name="play" :size="12" />
@@ -863,15 +848,17 @@ onBeforeUnmount(() => {
                   Math.round(lastWatched.position)) }}%</span>
               </button>
             </div>
-            <Button :variant="isFav ? 'primary' : 'secondary'" size="md" :disabled="favBusy" @click="toggleFavorite"
+            <Button :variant="isFav && !mobile ? 'primary' : 'secondary'" size="md" :disabled="favBusy" :aria-pressed="isFav" @click="toggleFavorite"
               :title="isFav ? t('detail.removeFav') : t('detail.addFav')" class="cczj-flex cczj-items-center cczj-gap-2">
-              <span>{{ isFav ? '★' : '☆' }}</span>
+              <Icon v-if="mobile" name="star" :size="18" /><span v-else>{{ isFav ? '★' : '☆' }}</span>
               <span>{{ isFav ? t('detail.removeFav') : t('detail.addFav') }}</span>
             </Button>
+            <button v-if="mobile" class="cczj-mobile-detail-delete" :disabled="deleting" :aria-label="t('detail.deleteVideo')" @click="deleteThisVideo"><Icon name="trash" :size="18" /></button>
           </div>
         </div>
 
         <div class="info-column cczj-flex-1 cczj-flex cczj-flex-col cczj-gap-4">
+          <div class="cczj-mobile-detail-heading" :style="mobile ? undefined : {display:'contents'}">
           <h1 class="title cczj-text-2xl cczj-font-bold cczj-flex cczj-items-center cczj-gap-6">
             {{ video.vod_name }}
             <span v-if="refreshing" class="refreshing-badge cczj-inline-flex cczj-items-center cczj-gap-1 cczj-text-xs cczj-text-accent cczj-rounded cczj-px-2 cczj-py-1" :title="t('detail.updating')">
@@ -895,9 +882,16 @@ onBeforeUnmount(() => {
               <Icon name="map-pin" :size="10" />
               <span>{{ video.vod_area }}</span>
             </button>
+            <template v-if="mobile">
+              <Tag v-if="video.vod_douban_score" variant="success" size="sm"><Icon name="star" :size="10" /> {{ t('detail.doubanScoreValue', { score: video.vod_douban_score }) }}</Tag>
+              <Tag v-if="video.vod_score" variant="primary" size="sm"><Icon name="star" :size="10" /> {{ t('detail.scoreValue', { score: video.vod_score }) }}</Tag>
+              <Tag v-if="video.vod_hits" size="sm"><Icon name="flame" :size="10" /> {{ t('detail.hitsValue', { hits: formatHits(video.vod_hits) }) }}</Tag>
+            </template>
           </div>
 
-          <div v-if="directorList.length > 0" class="meta-row cczj-flex cczj-items-start cczj-gap-2">
+          </div>
+          <button v-if="mobile && (directorList.length || actorList.length)" class="cczj-mobile-detail-metadata" :aria-expanded="mobileMetadataExpanded" @click="mobileMetadataExpanded = !mobileMetadataExpanded">{{ t('common.details') }}<span>{{ mobileMetadataExpanded ? t('common.collapse') : t('common.expand') }}</span></button>
+          <div v-if="directorList.length > 0 && (!mobile || mobileMetadataExpanded)" class="meta-row cczj-flex cczj-items-start cczj-gap-2">
             <span class="meta-label cczj-text-sm cczj-font-semibold cczj-text-muted cczj-w-16 cczj-flex-shrink-0">{{ t('detail.director') }}</span>
             <div class="meta-values cczj-flex cczj-flex-wrap cczj-gap-1 cczj-flex-1">
               <button v-for="(d, i) in directorList" :key="'d-' + i" class="meta-chip clickable cczj-cursor-pointer cczj-rounded cczj-px-2 cczj-py-1 cczj-text-xs cczj-bg-secondary cczj-hover-bg-accent-alpha"
@@ -905,7 +899,7 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <div v-if="actorList.length > 0" class="meta-row cczj-flex cczj-items-start cczj-gap-2">
+          <div v-if="actorList.length > 0 && (!mobile || mobileMetadataExpanded)" class="meta-row cczj-flex cczj-items-start cczj-gap-2">
             <span class="meta-label cczj-text-sm cczj-font-semibold cczj-text-muted cczj-w-16 cczj-flex-shrink-0">{{ t('detail.actors') }}</span>
             <div class="meta-values cczj-flex cczj-flex-wrap cczj-gap-1 cczj-flex-1">
               <button v-for="(a, i) in actorList" :key="'a-' + i" class="meta-chip clickable cczj-cursor-pointer cczj-rounded cczj-px-2 cczj-py-1 cczj-text-xs cczj-bg-secondary cczj-hover-bg-accent-alpha"
@@ -913,7 +907,7 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <div v-if="hasMetaRow" class="meta-row cczj-flex cczj-items-start cczj-gap-2">
+          <div v-if="!mobile && hasMetaRow" class="meta-row cczj-flex cczj-items-start cczj-gap-2">
             <span class="meta-label cczj-text-sm cczj-font-semibold cczj-text-muted cczj-w-16 cczj-flex-shrink-0">{{ t('detail.rating') }}</span>
             <div class="meta-values cczj-flex cczj-flex-wrap cczj-gap-2 cczj-flex-1">
               <Tag v-if="video.vod_douban_score" variant="success" size="sm" class="cczj-flex cczj-items-center cczj-gap-1">
@@ -963,7 +957,7 @@ onBeforeUnmount(() => {
       <section v-if="videoStore.episodes.length > 0" class="episodes-section cczj-mt-6 cczj-bg-card cczj-border">
         <div class="section-head cczj-flex cczj-items-center cczj-justify-between cczj-gap-4 cczj-mb-4">
           <div class="section-head-left cczj-flex cczj-items-center cczj-gap-2">
-            <h3 class="cczj-text-lg cczj-font-semibold">{{ episodeMode === 'download' ? t('detail.episodesDownloadHint') : t('detail.episodesPlayHint') }}</h3>
+            <h3 class="cczj-text-lg cczj-font-semibold">{{ mobile ? t('detail.episodes') : episodeMode === 'download' ? t('detail.episodesDownloadHint') : t('detail.episodesPlayHint') }}</h3>
             <!-- 共 X 集信息（始终显示为次要信息） -->
             <span class="cczj-text-sm cczj-text-muted">{{ t('detail.totalEpisodes', { count: videoStore.episodes.length }) }}</span>
           </div>
@@ -976,9 +970,9 @@ onBeforeUnmount(() => {
             <Button :variant="episodeMode === 'download' ? 'primary' : 'secondary'" size="sm"
               @click="toggleEpisodeMode" class="cczj-flex cczj-items-center cczj-gap-1">
               <Icon name="download" :size="14" />
-              <span>{{ episodeMode === 'download' ? t('detail.backToPlayMode') : t('detail.downloadMode') }}</span>
+              <span>{{ mobile ? (episodeMode === 'download' ? t('player.play') : t('sidebar.downloads')) : episodeMode === 'download' ? t('detail.backToPlayMode') : t('detail.downloadMode') }}</span>
             </Button>
-            <Button v-if="episodeMode === 'download'" variant="primary" size="sm" @click="downloadAllEpisodes" class="cczj-flex cczj-items-center cczj-gap-1">
+            <Button v-if="episodeMode === 'download'" variant="primary" size="sm" @click="downloadAllEpisodes" class="cczj-mobile-batch-download cczj-flex cczj-items-center cczj-gap-1">
               <Icon name="layers" :size="14" />
               <span>{{ t('detail.batchDownload') }}</span>
             </Button>
@@ -1132,22 +1126,10 @@ onBeforeUnmount(() => {
     </Modal>
 
     <!-- ==================== 选择收藏夹弹窗 ==================== -->
-    <Modal :model-value="showFavFolderModal" :title="t('detail.favToFolder')" width="420px" :show-footer="true"
-      @update:model-value="(v: boolean) => !v && (showFavFolderModal = false)">
-      <div class="folder-select-list">
-        <label v-for="folder in favFolders" :key="folder.id" class="folder-select-item"
-          :class="{ active: favTargetFolderId === folder.id }">
-          <input type="radio" v-model="favTargetFolderId" :value="folder.id" />
-          <span class="folder-radio" />
-          <Icon :name="folder.default ? 'star' : 'list'" :size="14" />
-          <span class="folder-name">{{ folder.default ? t('detail.defaultFolder') : folder.name }}</span>
-        </label>
-      </div>
-      <template #footer>
-        <Button variant="secondary" size="md" @click="showFavFolderModal = false">{{ t('common.cancel') }}</Button>
-        <Button variant="primary" size="md" @click="confirmAddToFolder">{{ t('detail.confirmFav') }}</Button>
-      </template>
-    </Modal>
+    <FavFolderModal
+      v-model="showFavFolderModal"
+      @confirm="confirmAddToFolder"
+    />
   </div>
 </template>
 

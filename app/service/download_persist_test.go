@@ -10,12 +10,10 @@ import (
 	downloadservice "cczjVideo/app/download"
 )
 
-// 断点续传的进度写在 %APPDATA%\CCZJ Video\downloads.json。新版多写了 segment_details，
-// 旧版本写的文件必须照样能读出来 —— 读不出来等于用户的下载队列凭空消失。
+// Legacy JSON imports keep both plain URLs and structured HLS segment details.
 func TestLegacyDownloadsFileRestoresAsPlainSegments(t *testing.T) {
-	root := t.TempDir()
-	t.Setenv("APPDATA", root)
-	dir := filepath.Join(root, "CCZJ Video")
+	app := newDownloadTestApp(t)
+	dir := filepath.Dir(app.persistPath())
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -28,8 +26,9 @@ func TestLegacyDownloadsFileRestoresAsPlainSegments(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	app := &App{downloads: downloadservice.NewRegistry[downloadTask]()}
-	app.loadPersistedTasks()
+	if err := app.loadPersistedTasks(); err != nil {
+		t.Fatal(err)
+	}
 	task, ok := app.downloads.Get("old")
 	if !ok {
 		t.Fatal("legacy task was not restored")
@@ -58,14 +57,12 @@ func TestLegacyDownloadsFileRestoresAsPlainSegments(t *testing.T) {
 }
 
 func TestPersistedDownloadsKeepSegmentDetailsAcrossRestart(t *testing.T) {
-	root := t.TempDir()
-	t.Setenv("APPDATA", root)
-	dir := filepath.Join(root, "CCZJ Video")
+	app := newDownloadTestApp(t)
+	dir := filepath.Dir(app.persistPath())
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		t.Fatal(err)
 	}
 
-	app := &App{downloads: downloadservice.NewRegistry[downloadTask]()}
 	key := &downloadservice.Key{Method: "AES-128", URI: "https://cdn.example.test/k"}
 	rng := &downloadservice.ByteRange{Length: 100, Start: 200}
 	task := &downloadTask{
@@ -76,10 +73,14 @@ func TestPersistedDownloadsKeepSegmentDetailsAcrossRestart(t *testing.T) {
 		segments: []string{"https://cdn.example.test/b.m3u8", "https://cdn.example.test/big.mp4"},
 	}
 	app.downloads.Add("new", task)
-	app.savePersistedTasks()
+	if !app.checkpoint(task) {
+		t.Fatal("checkpoint failed")
+	}
 
-	reloaded := &App{downloads: downloadservice.NewRegistry[downloadTask]()}
-	reloaded.loadPersistedTasks()
+	reloaded := &App{downloads: downloadservice.NewRegistry[downloadTask](), downloadStore: app.downloadStore}
+	if err := reloaded.loadPersistedTasks(); err != nil {
+		t.Fatal(err)
+	}
 	restored, ok := reloaded.downloads.Get("new")
 	if !ok {
 		t.Fatal("task was not restored")

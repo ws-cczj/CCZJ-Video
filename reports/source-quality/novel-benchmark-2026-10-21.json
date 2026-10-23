@@ -1,0 +1,1765 @@
+{
+  "version": "reading-quality.v1",
+  "corpusDate": "2026-10-21",
+  "startedAt": "2026-10-21T23:02:09+08:00",
+  "completed": true,
+  "results": [
+    {
+      "version": "reading-quality.v1",
+      "corpusDate": "2026-10-21",
+      "corpusHash": "f5baffd43449a9cb9d626dd9249fbf74120d98bd16a3af40dac1824ec6ba44e1",
+      "checkedAt": 1792594944,
+      "source": {
+        "id": "42b07a562f14c6f067083fbc046a15d0638fc0187b62c1928199e44f38984005",
+        "name": "阅友小说",
+        "kind": "novel",
+        "url": "http://m.suixkan.com"
+      },
+      "millis": 14196,
+      "summary": {
+        "status": "healthy",
+        "score": 84,
+        "confidence": "limited",
+        "queries": 31,
+        "matched": 2,
+        "verified": 2,
+        "readable": 6,
+        "attempts": 6,
+        "restricted": 0,
+        "catalogCompared": 0,
+        "tagCoverage": {
+          "三国": 2,
+          "历史": 2,
+          "校准样本": 2
+        },
+        "metrics": [
+          {
+            "name": "identity",
+            "score": 100,
+            "weight": 15,
+            "observations": 2
+          },
+          {
+            "name": "metadata",
+            "score": 100,
+            "weight": 10,
+            "observations": 2
+          },
+          {
+            "name": "catalog",
+            "score": 100,
+            "weight": 30,
+            "observations": 2
+          },
+          {
+            "name": "reading",
+            "score": 100,
+            "weight": 35,
+            "observations": 6
+          },
+          {
+            "name": "text_cleanliness",
+            "score": 100,
+            "weight": 10,
+            "observations": 6
+          }
+        ],
+        "notes": [
+          "未收录样本仅影响覆盖面，不扣内容质量；分数与置信度必须一起看",
+          "这是一轮抽检，不能表示长期稳定或全站完整",
+          "未满足多锚点同版比较条件，章节完整度尚未证实"
+        ]
+      },
+      "works": [
+        {
+          "id": "novel-tribal-glory",
+          "title": "部族荣光",
+          "tags": [
+            "传统玄幻",
+            "男频",
+            "完结"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-moruo-lingxiao",
+          "title": "莫若凌霄",
+          "tags": [
+            "历史",
+            "男频",
+            "架空"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-jinghong",
+          "title": "惊鸿",
+          "tags": [
+            "东方玄幻",
+            "男频",
+            "长篇"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-firefly-city",
+          "title": "萤火之城",
+          "tags": [
+            "科幻",
+            "女频",
+            "现实"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-jiaoyang-meigui",
+          "title": "娇养玫瑰",
+          "tags": [
+            "现代言情",
+            "女频"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-disaster-stockpile",
+          "title": "天灾，我囤几十亿物资在末世求生",
+          "tags": [
+            "末世",
+            "女频",
+            "生存"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-xingan-chong",
+          "title": "心肝宠",
+          "tags": [
+            "都市",
+            "女频",
+            "言情"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-lord-of-mysteries",
+          "title": "诡秘之主",
+          "tags": [
+            "奇幻",
+            "男频",
+            "悬疑"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-joy-of-life",
+          "title": "庆余年",
+          "tags": [
+            "架空历史",
+            "男频",
+            "完结"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-kings-avatar",
+          "title": "全职高手",
+          "tags": [
+            "游戏",
+            "男频",
+            "电竞",
+            "完结"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-dafeng",
+          "title": "大奉打更人",
+          "tags": [
+            "仙侠",
+            "男频",
+            "探案",
+            "完结"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-bairimengwo",
+          "title": "白日梦我",
+          "tags": [
+            "校园",
+            "女频",
+            "言情",
+            "完结"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-blood-princess",
+          "title": "血姬小姐才不会被骗",
+          "tags": [
+            "原创轻小说",
+            "二次元",
+            "奇幻"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-cute-three-kingdoms",
+          "title": "我的三国不可能这么可爱",
+          "tags": [
+            "轻小说",
+            "二次元",
+            "历史",
+            "重生"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-red-chamber",
+          "title": "红楼梦",
+          "tags": [
+            "古典文学",
+            "出版",
+            "经典"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-pride-prejudice",
+          "title": "Pride and Prejudice",
+          "tags": [
+            "英文原著",
+            "外国文学",
+            "经典"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-sherlock-adventures",
+          "title": "The Adventures of Sherlock Holmes",
+          "tags": [
+            "悬疑",
+            "外国文学",
+            "短篇集",
+            "经典"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-dao-mystery",
+          "title": "道诡异仙",
+          "tags": [
+            "中式恐怖",
+            "男频",
+            "玄幻",
+            "悬疑"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-cal-kuwo-zhongmou",
+          "title": "三国之仲谋天下",
+          "tags": [
+            "历史",
+            "三国",
+            "校准样本"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-three-body",
+          "title": "三体",
+          "tags": [
+            "科幻",
+            "出版",
+            "经典"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-nanhong",
+          "title": "难哄",
+          "tags": [
+            "现代言情",
+            "女频",
+            "完结"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-gouye",
+          "title": "够野",
+          "tags": [
+            "都市",
+            "女频",
+            "言情"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-savior-leader",
+          "title": "我，救世组织神秘领袖",
+          "tags": [
+            "游戏",
+            "二次元",
+            "都市奇幻",
+            "完结"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-heaven-official",
+          "title": "天官赐福",
+          "tags": [
+            "仙侠",
+            "纯爱",
+            "修订版",
+            "完结"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-journey-west",
+          "title": "西游记",
+          "tags": [
+            "古典文学",
+            "出版",
+            "经典"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-ten-days",
+          "title": "十日终焉",
+          "tags": [
+            "悬疑",
+            "男频",
+            "推理",
+            "无限流",
+            "完结"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-cal-kuwo-liuqi",
+          "title": "三国之霸主刘琦",
+          "tags": [
+            "历史",
+            "三国",
+            "校准样本"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-nine-masters",
+          "title": "高手下山，我有九个无敌师父！",
+          "tags": [
+            "都市",
+            "男频",
+            "神医",
+            "爽文"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-three-kingdoms",
+          "title": "三国演义",
+          "tags": [
+            "古典文学",
+            "出版",
+            "经典"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-cal-yueyou-zhengfeng",
+          "title": "三国争锋",
+          "tags": [
+            "历史",
+            "三国",
+            "校准样本"
+          ],
+          "identity": {
+            "status": "verified",
+            "reason": "标题与第一方作品地址吻合"
+          },
+          "matchedUrl": "http://m.suixkan.com/b/235207.html",
+          "author": "逆天吼",
+          "metadataFields": 4,
+          "catalog": {
+            "entries": 779,
+            "numbered": 779,
+            "anchorMatches": 0,
+            "referenceComparable": false,
+            "countRelation": "unknown",
+            "issues": []
+          },
+          "samples": [
+            {
+              "position": 0,
+              "title": "第1章 越后之龙",
+              "access": "unknown",
+              "text": {
+                "runes": 3344,
+                "paragraphs": 46,
+                "fingerprint": "eb6c297dcdded3d626ccff8e07fcfe3b9983165b6ff9734afa2fd9867433e47f",
+                "issues": []
+              }
+            },
+            {
+              "position": 389,
+              "title": "第390章 少女将军杜凤扬：下",
+              "access": "unknown",
+              "text": {
+                "runes": 4232,
+                "paragraphs": 48,
+                "fingerprint": "978574fa7e7f87a708de9940dc846cb00ad40d8348a33e6f00eace7140ec36bf",
+                "issues": []
+              }
+            },
+            {
+              "position": 778,
+              "title": "第779章 八番反南中",
+              "access": "unknown",
+              "text": {
+                "runes": 4451,
+                "paragraphs": 71,
+                "fingerprint": "4770db086e45a9be67b5019f92068a4cf90ebfcdcef9c3d183f4e8fd877c3e9b",
+                "issues": []
+              }
+            }
+          ],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-cal-yueyou-nizi",
+          "title": "三国第一逆子",
+          "tags": [
+            "历史",
+            "三国",
+            "校准样本"
+          ],
+          "identity": {
+            "status": "verified",
+            "reason": "标题与第一方作品地址吻合"
+          },
+          "matchedUrl": "http://m.suixkan.com/b/235861.html",
+          "author": "沧凌九界",
+          "metadataFields": 4,
+          "catalog": {
+            "entries": 65,
+            "numbered": 65,
+            "anchorMatches": 0,
+            "referenceComparable": false,
+            "countRelation": "unknown",
+            "issues": []
+          },
+          "samples": [
+            {
+              "position": 0,
+              "title": "第一章 穿越北地王刘谌",
+              "access": "unknown",
+              "text": {
+                "runes": 2340,
+                "paragraphs": 134,
+                "fingerprint": "35cc9f1fcc338d0a820b63757f8d79cad65907c7142c4717c8d22d2931c0049b",
+                "issues": []
+              }
+            },
+            {
+              "position": 32,
+              "title": "第三十三章 惊惧的司马望",
+              "access": "unknown",
+              "text": {
+                "runes": 2209,
+                "paragraphs": 119,
+                "fingerprint": "9df7f90122841a35533bb188ca01d9e2d49b6845ab4cf06866f4ac6920439899",
+                "issues": []
+              }
+            },
+            {
+              "position": 64,
+              "title": "第六十五章 贾充的算计",
+              "access": "unknown",
+              "text": {
+                "runes": 2230,
+                "paragraphs": 102,
+                "fingerprint": "29d4c83b672133717c2c164dc3411be41400195a9f33ffd83e964ea71e54ad30",
+                "issues": []
+              }
+            }
+          ],
+          "failures": [],
+          "issues": []
+        }
+      ]
+    },
+    {
+      "version": "reading-quality.v1",
+      "corpusDate": "2026-10-21",
+      "corpusHash": "f5baffd43449a9cb9d626dd9249fbf74120d98bd16a3af40dac1824ec6ba44e1",
+      "checkedAt": 1792594929,
+      "source": {
+        "id": "fc251043db615f4bc9718d56005c1721268e48174214219f1f684e71b3e44fb6",
+        "name": "酷我小说",
+        "kind": "novel",
+        "url": "http://appi.kuwo.cn"
+      },
+      "millis": 14397,
+      "summary": {
+        "status": "partial",
+        "score": 74,
+        "confidence": "limited",
+        "queries": 27,
+        "matched": 3,
+        "verified": 3,
+        "readable": 9,
+        "attempts": 9,
+        "restricted": 0,
+        "catalogCompared": 0,
+        "tagCoverage": {
+          "三国": 2,
+          "历史": 2,
+          "完结": 1,
+          "架空历史": 1,
+          "校准样本": 2,
+          "男频": 1
+        },
+        "metrics": [
+          {
+            "name": "identity",
+            "score": 100,
+            "weight": 15,
+            "observations": 3
+          },
+          {
+            "name": "metadata",
+            "score": 100,
+            "weight": 10,
+            "observations": 3
+          },
+          {
+            "name": "catalog",
+            "score": 66,
+            "weight": 30,
+            "observations": 3
+          },
+          {
+            "name": "reading",
+            "score": 100,
+            "weight": 35,
+            "observations": 9
+          },
+          {
+            "name": "text_cleanliness",
+            "score": 100,
+            "weight": 10,
+            "observations": 9
+          }
+        ],
+        "notes": [
+          "未收录样本仅影响覆盖面，不扣内容质量；分数与置信度必须一起看",
+          "这是一轮抽检，不能表示长期稳定或全站完整",
+          "未满足多锚点同版比较条件，章节完整度尚未证实"
+        ]
+      },
+      "works": [
+        {
+          "id": "novel-tribal-glory",
+          "title": "部族荣光",
+          "tags": [
+            "传统玄幻",
+            "男频",
+            "完结"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-moruo-lingxiao",
+          "title": "莫若凌霄",
+          "tags": [
+            "历史",
+            "男频",
+            "架空"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-jinghong",
+          "title": "惊鸿",
+          "tags": [
+            "东方玄幻",
+            "男频",
+            "长篇"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-firefly-city",
+          "title": "萤火之城",
+          "tags": [
+            "科幻",
+            "女频",
+            "现实"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-jiaoyang-meigui",
+          "title": "娇养玫瑰",
+          "tags": [
+            "现代言情",
+            "女频"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-disaster-stockpile",
+          "title": "天灾，我囤几十亿物资在末世求生",
+          "tags": [
+            "末世",
+            "女频",
+            "生存"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-xingan-chong",
+          "title": "心肝宠",
+          "tags": [
+            "都市",
+            "女频",
+            "言情"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-lord-of-mysteries",
+          "title": "诡秘之主",
+          "tags": [
+            "奇幻",
+            "男频",
+            "悬疑"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-joy-of-life",
+          "title": "庆余年",
+          "tags": [
+            "架空历史",
+            "男频",
+            "完结"
+          ],
+          "identity": {
+            "status": "verified",
+            "reason": "标题与作者吻合"
+          },
+          "matchedUrl": "http://appi.kuwo.cn/novels/api/book/22376031000468402",
+          "author": "猫腻",
+          "metadataFields": 4,
+          "catalog": {
+            "entries": 777,
+            "numbered": 80,
+            "anchorMatches": 0,
+            "referenceComparable": false,
+            "countRelation": "unknown",
+            "issues": [
+              {
+                "code": "numbering_decrease_review",
+                "severity": "warning",
+                "evidence": "升序相邻 73，倒序相邻 1；无卷信息时混合下降仅待核查"
+              }
+            ]
+          },
+          "samples": [
+            {
+              "position": 0,
+              "title": "楔子 一块黑布",
+              "access": "unknown",
+              "text": {
+                "runes": 4578,
+                "paragraphs": 66,
+                "fingerprint": "ed007de9eed9f3eac764e08252731c021110057ba0499f0df84bd2a822d24576",
+                "issues": []
+              }
+            },
+            {
+              "position": 388,
+              "title": "第五卷京华江南　第一百三十三章　范建的剑",
+              "access": "unknown",
+              "text": {
+                "runes": 5837,
+                "paragraphs": 102,
+                "fingerprint": "48571ee4c838c777b34b7cc59188daaaab00a3a258d7659fa6ba2ae7e35a1072",
+                "issues": []
+              }
+            },
+            {
+              "position": 776,
+              "title": "庆余年第二季开播，《叶轻眉日记》起点独家发布",
+              "access": "unknown",
+              "text": {
+                "runes": 135,
+                "paragraphs": 5,
+                "fingerprint": "c2f2eeabf9b42e4aac58743be0f2536f9ff00e81e06c4450bad9898983cdfee2",
+                "issues": []
+              }
+            }
+          ],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-kings-avatar",
+          "title": "全职高手",
+          "tags": [
+            "游戏",
+            "男频",
+            "电竞",
+            "完结"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-dafeng",
+          "title": "大奉打更人",
+          "tags": [
+            "仙侠",
+            "男频",
+            "探案",
+            "完结"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-bairimengwo",
+          "title": "白日梦我",
+          "tags": [
+            "校园",
+            "女频",
+            "言情",
+            "完结"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-blood-princess",
+          "title": "血姬小姐才不会被骗",
+          "tags": [
+            "原创轻小说",
+            "二次元",
+            "奇幻"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-cute-three-kingdoms",
+          "title": "我的三国不可能这么可爱",
+          "tags": [
+            "轻小说",
+            "二次元",
+            "历史",
+            "重生"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-red-chamber",
+          "title": "红楼梦",
+          "tags": [
+            "古典文学",
+            "出版",
+            "经典"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-pride-prejudice",
+          "title": "Pride and Prejudice",
+          "tags": [
+            "英文原著",
+            "外国文学",
+            "经典"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-sherlock-adventures",
+          "title": "The Adventures of Sherlock Holmes",
+          "tags": [
+            "悬疑",
+            "外国文学",
+            "短篇集",
+            "经典"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-dao-mystery",
+          "title": "道诡异仙",
+          "tags": [
+            "中式恐怖",
+            "男频",
+            "玄幻",
+            "悬疑"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-cal-kuwo-zhongmou",
+          "title": "三国之仲谋天下",
+          "tags": [
+            "历史",
+            "三国",
+            "校准样本"
+          ],
+          "identity": {
+            "status": "verified",
+            "reason": "标题与第一方作品地址吻合"
+          },
+          "matchedUrl": "http://appi.kuwo.cn/novels/api/book/22543868000604102",
+          "author": "拾一",
+          "metadataFields": 4,
+          "catalog": {
+            "entries": 1651,
+            "numbered": 1631,
+            "anchorMatches": 0,
+            "referenceComparable": false,
+            "countRelation": "unknown",
+            "issues": [
+              {
+                "code": "numbering_gap_review",
+                "severity": "warning",
+                "evidence": "相邻编号 268 → 270；需核对拆章、番外与源站目录"
+              },
+              {
+                "code": "numbering_gap_review",
+                "severity": "warning",
+                "evidence": "相邻编号 488 → 490；需核对拆章、番外与源站目录"
+              },
+              {
+                "code": "numbering_gap_review",
+                "severity": "warning",
+                "evidence": "相邻编号 526 → 627；需核对拆章、番外与源站目录"
+              },
+              {
+                "code": "numbering_gap_review",
+                "severity": "warning",
+                "evidence": "相邻编号 672 → 674；需核对拆章、番外与源站目录"
+              },
+              {
+                "code": "numbering_gap_review",
+                "severity": "warning",
+                "evidence": "相邻编号 768 → 789；需核对拆章、番外与源站目录"
+              },
+              {
+                "code": "numbering_gap_review",
+                "severity": "warning",
+                "evidence": "相邻编号 786 → 789；需核对拆章、番外与源站目录"
+              },
+              {
+                "code": "numbering_gap_review",
+                "severity": "warning",
+                "evidence": "相邻编号 809 → 811；需核对拆章、番外与源站目录"
+              },
+              {
+                "code": "numbering_gap_review",
+                "severity": "warning",
+                "evidence": "相邻编号 910 → 912；需核对拆章、番外与源站目录"
+              },
+              {
+                "code": "numbering_gap_review",
+                "severity": "warning",
+                "evidence": "相邻编号 1340 → 1401；需核对拆章、番外与源站目录"
+              },
+              {
+                "code": "numbering_gap_review",
+                "severity": "warning",
+                "evidence": "相邻编号 1406 → 1408；需核对拆章、番外与源站目录"
+              },
+              {
+                "code": "numbering_gap_review",
+                "severity": "warning",
+                "evidence": "相邻编号 1407 → 1413；需核对拆章、番外与源站目录"
+              },
+              {
+                "code": "numbering_decrease_review",
+                "severity": "warning",
+                "evidence": "升序相邻 1600，倒序相邻 6；无卷信息时混合下降仅待核查"
+              }
+            ]
+          },
+          "samples": [
+            {
+              "position": 0,
+              "title": "第一章 落魄青年",
+              "access": "unknown",
+              "text": {
+                "runes": 3128,
+                "paragraphs": 65,
+                "fingerprint": "5bc855b654a07283bb2a45e4899a7621d0eb6697c30a7837b086a69a7e632c1d",
+                "issues": []
+              }
+            },
+            {
+              "position": 825,
+              "title": "第八百二十七章 庞统的新去向",
+              "access": "unknown",
+              "text": {
+                "runes": 2505,
+                "paragraphs": 76,
+                "fingerprint": "9e42d77d53052df98547410c69e398a1bebd10c9b212ad87625a1020f96c80b0",
+                "issues": []
+              }
+            },
+            {
+              "position": 1650,
+              "title": "完本之感！",
+              "access": "unknown",
+              "text": {
+                "runes": 746,
+                "paragraphs": 20,
+                "fingerprint": "1db591fe7ea6b892c2e632fe24a88324def6659fcdb9197ea3beaa387deffe26",
+                "issues": []
+              }
+            }
+          ],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-three-body",
+          "title": "三体",
+          "tags": [
+            "科幻",
+            "出版",
+            "经典"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-nanhong",
+          "title": "难哄",
+          "tags": [
+            "现代言情",
+            "女频",
+            "完结"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-gouye",
+          "title": "够野",
+          "tags": [
+            "都市",
+            "女频",
+            "言情"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-savior-leader",
+          "title": "我，救世组织神秘领袖",
+          "tags": [
+            "游戏",
+            "二次元",
+            "都市奇幻",
+            "完结"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-heaven-official",
+          "title": "天官赐福",
+          "tags": [
+            "仙侠",
+            "纯爱",
+            "修订版",
+            "完结"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-journey-west",
+          "title": "西游记",
+          "tags": [
+            "古典文学",
+            "出版",
+            "经典"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-ten-days",
+          "title": "十日终焉",
+          "tags": [
+            "悬疑",
+            "男频",
+            "推理",
+            "无限流",
+            "完结"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-cal-kuwo-liuqi",
+          "title": "三国之霸主刘琦",
+          "tags": [
+            "历史",
+            "三国",
+            "校准样本"
+          ],
+          "identity": {
+            "status": "verified",
+            "reason": "标题与第一方作品地址吻合"
+          },
+          "matchedUrl": "http://appi.kuwo.cn/novels/api/book/9046067203383803",
+          "author": "帝夜之殇",
+          "metadataFields": 4,
+          "catalog": {
+            "entries": 771,
+            "numbered": 757,
+            "anchorMatches": 0,
+            "referenceComparable": false,
+            "countRelation": "unknown",
+            "issues": [
+              {
+                "code": "numbering_gap_review",
+                "severity": "warning",
+                "evidence": "相邻编号 5 → 7；需核对拆章、番外与源站目录"
+              },
+              {
+                "code": "numbering_gap_review",
+                "severity": "warning",
+                "evidence": "相邻编号 7 → 9；需核对拆章、番外与源站目录"
+              },
+              {
+                "code": "numbering_gap_review",
+                "severity": "warning",
+                "evidence": "相邻编号 45 → 47；需核对拆章、番外与源站目录"
+              },
+              {
+                "code": "numbering_gap_review",
+                "severity": "warning",
+                "evidence": "相邻编号 57 → 59；需核对拆章、番外与源站目录"
+              },
+              {
+                "code": "numbering_gap_review",
+                "severity": "warning",
+                "evidence": "相邻编号 77 → 80；需核对拆章、番外与源站目录"
+              },
+              {
+                "code": "numbering_gap_review",
+                "severity": "warning",
+                "evidence": "相邻编号 93 → 95；需核对拆章、番外与源站目录"
+              },
+              {
+                "code": "numbering_gap_review",
+                "severity": "warning",
+                "evidence": "相邻编号 676 → 679；需核对拆章、番外与源站目录"
+              },
+              {
+                "code": "numbering_decrease_review",
+                "severity": "warning",
+                "evidence": "升序相邻 744，倒序相邻 1；无卷信息时混合下降仅待核查"
+              }
+            ]
+          },
+          "samples": [
+            {
+              "position": 0,
+              "title": "第一章 前因",
+              "access": "unknown",
+              "text": {
+                "runes": 2150,
+                "paragraphs": 38,
+                "fingerprint": "57d64094468c2e8448726f3405bc5ab4a58c03c2c28adf8b914a52c4d5f80837",
+                "issues": []
+              }
+            },
+            {
+              "position": 385,
+              "title": "第三百八十七章 许褚的处置",
+              "access": "unknown",
+              "text": {
+                "runes": 2256,
+                "paragraphs": 72,
+                "fingerprint": "f105ab75858a9be859517b65461b69f7554a75034f5f41fe3b68858350bdd0fc",
+                "issues": []
+              }
+            },
+            {
+              "position": 770,
+              "title": "完结撒花",
+              "access": "unknown",
+              "text": {
+                "runes": 364,
+                "paragraphs": 9,
+                "fingerprint": "53fa2eff36e0871023f0bcdf11bf4e63953df6f229e275d6890d5a55e5012e29",
+                "issues": []
+              }
+            }
+          ],
+          "failures": [],
+          "issues": []
+        }
+      ]
+    },
+    {
+      "version": "reading-quality.v1",
+      "corpusDate": "2026-10-21",
+      "corpusHash": "f5baffd43449a9cb9d626dd9249fbf74120d98bd16a3af40dac1824ec6ba44e1",
+      "checkedAt": 1792594958,
+      "source": {
+        "id": "260ac95862f67eb7d6a036dbc71d7ba9d95e610d8c6412cf20e6bc4aad5a7af2",
+        "name": "番茄小说",
+        "kind": "novel",
+        "url": "https://fanqienovel.com"
+      },
+      "millis": 6668,
+      "summary": {
+        "status": "partial",
+        "score": 63,
+        "confidence": "limited",
+        "queries": 3,
+        "matched": 3,
+        "verified": 3,
+        "readable": 3,
+        "attempts": 9,
+        "restricted": 6,
+        "catalogCompared": 3,
+        "tagCoverage": {
+          "东方玄幻": 1,
+          "传统玄幻": 1,
+          "历史": 1,
+          "完结": 1,
+          "架空": 1,
+          "男频": 3,
+          "长篇": 1
+        },
+        "metrics": [
+          {
+            "name": "identity",
+            "score": 100,
+            "weight": 15,
+            "observations": 3
+          },
+          {
+            "name": "metadata",
+            "score": 100,
+            "weight": 10,
+            "observations": 3
+          },
+          {
+            "name": "catalog",
+            "score": 100,
+            "weight": 30,
+            "observations": 3
+          },
+          {
+            "name": "reading",
+            "score": 33,
+            "weight": 35,
+            "observations": 9
+          },
+          {
+            "name": "text_cleanliness",
+            "score": 100,
+            "weight": 10,
+            "observations": 3
+          }
+        ],
+        "notes": [
+          "未收录样本仅影响覆盖面，不扣内容质量；分数与置信度必须一起看",
+          "这是一轮抽检，不能表示长期稳定或全站完整",
+          "付费或登录限制单独记录，影响当前可读范围，不判作正文损坏"
+        ]
+      },
+      "works": [
+        {
+          "id": "novel-tribal-glory",
+          "title": "部族荣光",
+          "tags": [
+            "传统玄幻",
+            "男频",
+            "完结"
+          ],
+          "identity": {
+            "status": "verified",
+            "reason": "标题与第一方作品地址吻合"
+          },
+          "matchedUrl": "https://fanqienovel.com/page/7069948840148732967",
+          "author": "丧狐",
+          "metadataFields": 4,
+          "catalog": {
+            "entries": 351,
+            "numbered": 351,
+            "anchorMatches": 3,
+            "referenceComparable": true,
+            "countRelation": "exact",
+            "issues": []
+          },
+          "samples": [
+            {
+              "position": 0,
+              "title": "第1章 部族生死战",
+              "access": "available",
+              "text": {
+                "runes": 4344,
+                "paragraphs": 122,
+                "fingerprint": "e7510c398aa6a9f60067f102a346b0c7bf7c1372a8365d7a19146a2f4bc004ab",
+                "issues": []
+              }
+            },
+            {
+              "position": 175,
+              "title": "第176章 神庭？不可能！绝对不可能",
+              "access": "subscription",
+              "failure": {
+                "stage": "content",
+                "code": "PERMISSION_DENIED",
+                "message": "此章节需要在番茄官方客户端获取访问权限"
+              }
+            },
+            {
+              "position": 350,
+              "title": "第351章 不可思议的神罗大帝！姜玄的计划！",
+              "access": "subscription",
+              "failure": {
+                "stage": "content",
+                "code": "PERMISSION_DENIED",
+                "message": "此章节需要在番茄官方客户端获取访问权限"
+              }
+            }
+          ],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-moruo-lingxiao",
+          "title": "莫若凌霄",
+          "tags": [
+            "历史",
+            "男频",
+            "架空"
+          ],
+          "identity": {
+            "status": "verified",
+            "reason": "标题与第一方作品地址吻合"
+          },
+          "matchedUrl": "https://fanqienovel.com/page/7091150316644600867",
+          "author": "月关",
+          "metadataFields": 4,
+          "catalog": {
+            "entries": 734,
+            "numbered": 734,
+            "anchorMatches": 3,
+            "referenceComparable": true,
+            "countRelation": "exact",
+            "issues": []
+          },
+          "samples": [
+            {
+              "position": 0,
+              "title": "第001章 蛰伏，五载蝉鸣",
+              "access": "available",
+              "text": {
+                "runes": 2130,
+                "paragraphs": 61,
+                "fingerprint": "f5381f42522be9e4b4d6f66c92c994d47214ac6b04b95d444370e4d085f55090",
+                "issues": []
+              }
+            },
+            {
+              "position": 367,
+              "title": "第368章 引弓，林暗草惊",
+              "access": "subscription",
+              "failure": {
+                "stage": "content",
+                "code": "PERMISSION_DENIED",
+                "message": "此章节需要在番茄官方客户端获取访问权限"
+              }
+            },
+            {
+              "position": 733,
+              "title": "第734章 流年，时光未央（完结）",
+              "access": "subscription",
+              "failure": {
+                "stage": "content",
+                "code": "PERMISSION_DENIED",
+                "message": "此章节需要在番茄官方客户端获取访问权限"
+              }
+            }
+          ],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "novel-jinghong",
+          "title": "惊鸿",
+          "tags": [
+            "东方玄幻",
+            "男频",
+            "长篇"
+          ],
+          "identity": {
+            "status": "verified",
+            "reason": "标题与第一方作品地址吻合"
+          },
+          "matchedUrl": "https://fanqienovel.com/page/6883748331202284558",
+          "author": "一夕烟雨",
+          "metadataFields": 4,
+          "catalog": {
+            "entries": 4370,
+            "numbered": 4370,
+            "anchorMatches": 3,
+            "referenceComparable": true,
+            "countRelation": "exact",
+            "issues": []
+          },
+          "samples": [
+            {
+              "position": 0,
+              "title": "第1章 天资妖孽李子夜",
+              "access": "available",
+              "text": {
+                "runes": 3259,
+                "paragraphs": 100,
+                "fingerprint": "58998f3f297e0fcfaba261c4370e3ec8c20af374819a979f4bca4111c864c913",
+                "issues": []
+              }
+            },
+            {
+              "position": 2185,
+              "title": "第2186章 演化仙道经",
+              "access": "subscription",
+              "failure": {
+                "stage": "content",
+                "code": "PERMISSION_DENIED",
+                "message": "此章节需要在番茄官方客户端获取访问权限"
+              }
+            },
+            {
+              "position": 4369,
+              "title": "第4370章 路过",
+              "access": "subscription",
+              "failure": {
+                "stage": "content",
+                "code": "PERMISSION_DENIED",
+                "message": "此章节需要在番茄官方客户端获取访问权限"
+              }
+            }
+          ],
+          "failures": [],
+          "issues": []
+        }
+      ]
+    }
+  ],
+  "skipped": [
+    "♜+阅友小说 #破冰：header 必须是静态 JSON 请求头",
+    "♜+阅友小说 #破冰1101：header 必须是静态 JSON 请求头",
+    "⚡️⚡️阅友小说 #一程：ruleSearch.bookUrl：需要未支持的规则能力 @js:",
+    "✨ 番茄小说：搜索地址含未支持的模板表达式",
+    "⭐番茄小说：缺少 searchUrl",
+    "⭐番茄小说：缺少 searchUrl",
+    "番茄小说：缺少 searchUrl",
+    "番茄小说：ruleSearch.bookUrl：需要未支持的规则能力 $.",
+    "番茄小说123：搜索地址需要脚本或 Legado URL 选项，尚不能自动转换",
+    "番茄小说2：搜索地址含未支持的模板表达式",
+    "番茄小说[api1]：搜索地址需要脚本或 Legado URL 选项，尚不能自动转换",
+    "番茄小说[m]：ruleSearch.name：需要未支持的规则能力 $.",
+    "番茄小说[w]：ruleSearch.kind：需要未支持的规则能力 {{",
+    "番茄小说[zym]：ruleSearch.kind：需要未支持的规则能力 {{",
+    "番茄小说①：ruleSearch.name：需要未支持的规则能力 $.",
+    "番茄小说①：ruleSearch.coverUrl：需要未支持的规则能力 {{",
+    "番茄小说②：ruleSearch.name：需要未支持的规则能力 $.",
+    "番茄小说②：ruleSearch.author：需要未支持的规则能力 $.",
+    "番茄小说②：ruleSearch.kind：需要未支持的规则能力 {{",
+    "酷我小说[api]：ruleSearch.kind：需要未支持的规则能力 \u0026\u0026",
+    "酷我小说[api]：ruleSearch.bookUrl：需要未支持的规则能力 {{",
+    "阅友小说：header 必须是静态 JSON 请求头",
+    "阅友小说：搜索地址不合法",
+    "阅友小说[apigo]：搜索地址需要脚本或 Legado URL 选项，尚不能自动转换",
+    "阅友小说②：header 必须是静态 JSON 请求头",
+    "🌸番茄小说：ruleSearch.lastChapter：需要未支持的规则能力 \u003cjs\u003e",
+    "🎉 番茄小说：ruleSearch.kind：需要未支持的规则能力 \u0026\u0026",
+    "🎉 番茄小说：ruleSearch.bookUrl：需要未支持的规则能力 $.",
+    "🎉 番茄小说：ruleSearch.lastChapter：需要未支持的规则能力 $.",
+    "🎉 阅友小说：ruleSearch.bookUrl：需要未支持的规则能力 @js:"
+  ],
+  "failures": []
+}

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 defineOptions({ name: 'UpdateModal' })
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { tr } from '../locales'
 import {
   CheckUpdate, DownloadUpdate, InstallUpdate, FileExists,
@@ -11,13 +11,17 @@ import { useErrorStore } from '../stores/error'
 import {
   updateModalOpen, updateChecking,
   updateDownloading, updateDownloaded, updateDownloadPath, updateDownloadProgress,
+  updateDownloadError,
   updateController, fmtSize, fmtSpeed,
   saveDownloadState, loadDownloadState, clearDownloadState,
+  applyUpdateDownloadProgress,
 } from '../stores/updateState'
 import { licensePending } from '../stores/licenseState'
 import Icon from './Icon.vue'
 import { Button, Modal, MotionTransition } from './ui'
 import { onBackendEvent } from '../api/events'
+import { isMobileRuntime } from '../api/runtime'
+import { openAndroidUpdateInstaller } from '../platform/updateInstaller'
 
 const errorStore = useErrorStore()
 
@@ -29,6 +33,9 @@ const onExitPlanned = ref(false)
 const scheduling = ref(false)
 let stopDownloadProgress: (() => void) | null = null
 let stopUpdateAvailable: (() => void) | null = null
+let checkRequest: ReturnType<typeof CheckUpdate> | null = null
+let pendingPollTimer: ReturnType<typeof setTimeout> | undefined
+let disposed = false
 
 interface UpdateInfoData {
   has_update: boolean
@@ -46,12 +53,39 @@ interface UpdateInfoData {
 }
 const updateInfo = ref<UpdateInfoData | null>(null)
 
+const backgroundTitle = computed(() => {
+  if (updateDownloadError.value) return tr('update.downloadFailed')
+  if (updateDownloaded.value) return tr(onExitPlanned.value ? 'update.onExitTitle' : 'update.downloadedTitle')
+  if (updateDownloadProgress.downloaded === 0) return tr('update.connecting')
+  if (updateDownloadProgress.total > 0 && updateDownloadProgress.downloaded >= updateDownloadProgress.total) return tr('update.verifying')
+  return tr('update.downloadingShort')
+})
+
+const backgroundDetail = computed(() => {
+  if (updateDownloadError.value) return tr('update.clickToRetry')
+  if (updateDownloaded.value) return onExitPlanned.value
+    ? tr('update.onExitTarget', { version: updateInfo.value?.latest_version || '' })
+    : tr('update.readyToInstall')
+  if (updateDownloadProgress.total > 0 && updateDownloadProgress.downloaded > 0) {
+    return `${updateDownloadProgress.percent}% · ${fmtSpeed(updateDownloadProgress.speed_bps) || fmtSize(updateDownloadProgress.downloaded)}`
+  }
+  return updateDownloadProgress.downloaded > 0 ? fmtSize(updateDownloadProgress.downloaded) : '...'
+})
+
 // ---------- 检查更新 ----------
 async function doCheckUpdate(): Promise<void> {
+  if (updateChecking.value || updateDownloading.value || installing.value) {
+    updateModalOpen.value = true
+    return
+  }
   updateChecking.value = true
   checkFailed.value = false
+  const request = CheckUpdate()
+  checkRequest = request
+  // A manual check must finish even when several upstream mirrors time out.
+  const deadline = setTimeout(() => { void request.cancel() }, 30_000)
   try {
-    const info = await CheckUpdate()
+    const info = await request
     if (!info) return
     updateInfo.value = info
     if (info.has_update) {
@@ -65,6 +99,8 @@ async function doCheckUpdate(): Promise<void> {
     checkFailed.value = true
     updateModalOpen.value = true
   } finally {
+    clearTimeout(deadline)
+    if (checkRequest === request) checkRequest = null
     updateChecking.value = false
   }
 }
@@ -73,21 +109,25 @@ async function doCheckUpdate(): Promise<void> {
 async function doDownload(): Promise<void> {
   if (!updateInfo.value?.download_url || updateDownloading.value) return
   updateDownloading.value = true
+  updateDownloadError.value = false
+  clearDownloadState()
   updateDownloaded.value = false
   updateDownloadPath.value = ''
   updateDownloadProgress.downloaded = 0
   updateDownloadProgress.total = 0
   updateDownloadProgress.percent = 0
   updateDownloadProgress.speed_bps = 0
+  const requestedUpdate = updateInfo.value
   try {
-    const path = await DownloadUpdate(updateInfo.value.download_url)
+    const path = await DownloadUpdate(requestedUpdate.download_url)
     updateDownloadPath.value = path
     updateDownloaded.value = true
     // 持久化下载状态，下次启动时可检查
-    if (updateInfo.value?.latest_version) {
-      saveDownloadState(path, updateInfo.value.latest_version, updateInfo.value.download_url)
+    if (requestedUpdate.latest_version) {
+      saveDownloadState(path, requestedUpdate.latest_version, requestedUpdate.download_url)
     }
   } catch (e: any) {
+    updateDownloadError.value = true
     errorStore.fromError(tr('update.downloadFailed'), e, 'UpdateModal.downloadUpdate')
   } finally {
     updateDownloading.value = false
@@ -99,13 +139,19 @@ async function doInstall(): Promise<void> {
   if (!updateDownloadPath.value) return
   installing.value = true
   try {
-    clearDownloadState()
     // Go 那边一进 Install 就取代退出时安装的安排，所以不论这次成不成，界面都不该再
     // 显示「取消安排」。
     onExitPlanned.value = false
     // 注意：不要在这里调用 ClearPendingUpdateInfo()！
-    // Go 的 InstallUpdate 会先读取 pendingUpdateInfo 记录版本号，再清理
+    // 桌面 InstallUpdate 会先读取 pendingUpdateInfo 记录版本号，再清理
     await InstallUpdate(updateDownloadPath.value)
+    if (isMobileRuntime()) {
+      openAndroidUpdateInstaller(updateDownloadPath.value)
+      installing.value = false
+      errorStore.info(tr('update.androidInstallerOpened'), tr('update.androidInstallerHint'), '', 'UpdateModal')
+      return
+    }
+    clearDownloadState()
   } catch (e: any) {
     errorStore.fromError(tr('update.installFailed'), e, 'UpdateModal.installUpdate')
     installing.value = false
@@ -236,22 +282,8 @@ function onClose(): void {
 }
 
 // ---------- 事件监听 ----------
-function onDownloadProgress(ev: any): void {
-  const data = ev.data
-  if (!data) return
-  const downloaded = Number(data.downloaded ?? 0)
-  const total = Number(data.total ?? 0)
-  const speedBps = Number(data.speed_bps ?? 0)
-  updateDownloadProgress.downloaded = downloaded
-  updateDownloadProgress.total = total
-  updateDownloadProgress.speed_bps = speedBps
-  if (total > 0) {
-    updateDownloadProgress.percent = Math.round((downloaded / total) * 100)
-  }
-}
-
-function onUpdateAvailable(ev: any): void {
-  const data = ev.data
+function onUpdateAvailable(data: UpdateInfoData): void {
+  if (updateDownloading.value || installing.value) return
   if (data && data.has_update) {
     // 条款还没同意时不抢先弹更新窗：一次只问用户一个必须回答的问题。
     if (licensePending.value) return
@@ -264,11 +296,15 @@ function onUpdateAvailable(ev: any): void {
 }
 
 // 检查是否有已下载的安装包
-// 优先使用 Go 后端扫描结果（already_downloaded_path），回退到 localStorage
+// Go 后端扫描结果是包的版本与校验状态的权威来源。
 async function checkAlreadyDownloaded(info: UpdateInfoData): Promise<void> {
-  // 方式1：Go 后端直接扫描应用目录发现的 *_update.exe
+  if (updateDownloading.value) return
+  updateDownloaded.value = false
+  updateDownloadPath.value = ''
+  updateDownloadError.value = false
+  // Go 后端只返回当前 release 的已校验包。
   const backendPath = info.already_downloaded_path
-  if (backendPath) {
+  if (backendPath && info.already_downloaded_version === info.latest_version) {
     try {
       const exists = await FileExists(backendPath)
       if (exists) {
@@ -279,24 +315,8 @@ async function checkAlreadyDownloaded(info: UpdateInfoData): Promise<void> {
     } catch { /* fall through */ }
   }
 
-  // 方式2：localStorage 缓存（兼容旧版下载状态）
-  const state = loadDownloadState()
-  if (!state || !state.path || !state.version) return
-  if (info.latest_version && state.version !== info.latest_version) {
-    clearDownloadState()
-    return
-  }
-  try {
-    const exists = await FileExists(state.path)
-    if (exists) {
-      updateDownloadPath.value = state.path
-      updateDownloaded.value = true
-    } else {
-      clearDownloadState()
-    }
-  } catch {
-    clearDownloadState()
-  }
+  // A legacy cache only proves existence, not release or integrity.
+  clearDownloadState()
 }
 
 // 条款还没签时提示条会被闸门压在下面，所以等它让开再说这一次。
@@ -307,7 +327,7 @@ watch(licensePending, (pending) => { if (!pending) void reportLastInstall() }, {
 watch([updateDownloaded, updateDownloadPath], () => { void refreshOnExitPlan() }, { immediate: true })
 
 onMounted(async () => {
-  stopDownloadProgress = onBackendEvent('update:download:progress', onDownloadProgress)
+  stopDownloadProgress = onBackendEvent('update:download:progress', applyUpdateDownloadProgress)
   stopUpdateAvailable = onBackendEvent('update:available', onUpdateAvailable)
 
   // 注册全局函数
@@ -320,15 +340,17 @@ onMounted(async () => {
   const pollInterval = 5000
 
   const pollPending = async () => {
+    if (disposed) return
     // 条款还没同意时不弹更新窗，也不消耗重试次数：等用户答复完再接着轮。
     if (licensePending.value) {
-      setTimeout(pollPending, pollInterval)
+      pendingPollTimer = setTimeout(pollPending, pollInterval)
       return
     }
     if (updateModalOpen.value || pollRetries >= maxPollRetries) return
     pollRetries++
     try {
       const pending = await GetPendingUpdateInfo()
+      if (disposed) return
       if (pending && pending.has_update) {
         updateInfo.value = pending
         // 检查是否有已下载的安装包
@@ -337,16 +359,19 @@ onMounted(async () => {
         return
       }
     } catch { /* ignore */ }
-    if (pollRetries < maxPollRetries) {
-      setTimeout(pollPending, pollInterval)
+    if (!disposed && pollRetries < maxPollRetries) {
+      pendingPollTimer = setTimeout(pollPending, pollInterval)
     }
   }
 
   // 延迟 5 秒后开始首次轮询
-  setTimeout(pollPending, pollInterval)
+  pendingPollTimer = setTimeout(pollPending, pollInterval)
 })
 
 onUnmounted(() => {
+  disposed = true
+  if (pendingPollTimer !== undefined) clearTimeout(pendingPollTimer)
+  void checkRequest?.cancel()
   stopDownloadProgress?.()
   stopUpdateAvailable?.()
   stopDownloadProgress = null
@@ -486,7 +511,7 @@ onUnmounted(() => {
         <Button variant="secondary" size="md" @click="doIgnore">
           {{ tr('update.ignore') }}
         </Button>
-        <Button variant="secondary" size="md" :loading="scheduling" @click="doScheduleOnExit">
+        <Button v-if="!isMobileRuntime()" variant="secondary" size="md" :loading="scheduling" @click="doScheduleOnExit">
           <Icon name="clock" :size="14" /> {{ onExitPlanned ? tr('update.cancelOnExit') : tr('update.installOnExit') }}
         </Button>
         <span style="flex: 1"></span>
@@ -529,19 +554,22 @@ onUnmounted(() => {
   <Teleport to="body">
     <MotionTransition preset="slide-up">
       <div
-        v-if="updateDownloading && !updateModalOpen"
+        v-if="(updateDownloading || updateDownloaded || updateDownloadError) && !updateModalOpen"
         class="bg-download-indicator"
+        role="button"
+        tabindex="0"
         @click="updateModalOpen = true"
+        @keydown.enter="updateModalOpen = true"
+        @keydown.space.prevent="updateModalOpen = true"
       >
-        <div class="bg-download-icon">
-          <Icon name="download" :size="14" />
+        <div class="bg-download-icon" :class="{ 'is-idle': !updateDownloading }">
+          <Icon :name="updateDownloadError ? 'alert-circle' : (updateDownloaded ? 'check' : 'download')" :size="14" />
         </div>
         <div class="bg-download-info">
-          <span class="bg-download-title">{{ updateDownloadProgress.downloaded === 0 ? tr('update.connecting') : tr('update.downloadingShort') }}</span>
-          <span v-if="updateDownloadProgress.total > 0 && updateDownloadProgress.downloaded > 0" class="bg-download-pct">{{ updateDownloadProgress.percent }}%</span>
-          <span v-else class="bg-download-pct">...</span>
+          <span class="bg-download-title">{{ backgroundTitle }}</span>
+          <span class="bg-download-pct">{{ backgroundDetail }}</span>
         </div>
-        <div class="bg-download-track">
+        <div v-if="updateDownloading" class="bg-download-track">
           <div
             class="bg-download-fill"
             :class="{ 'cczj-motion-progress-indeterminate': updateDownloadProgress.total <= 0 }"
@@ -555,77 +583,74 @@ onUnmounted(() => {
 
 <style scoped>
 /* 版本更新弹窗 */
-.update-header { gap: 16px; padding: 8px 0 16px; border-bottom: 1px dashed var(--border); margin-bottom: 16px; }
-.update-icon { width: 52px; height: 52px; border-radius: 14px; background: var(--accent); color: var(--accent-contrast); box-shadow: 0 6px 18px var(--accent-alpha-35); flex-shrink: 0; }
-.update-title { font-size: 1.14rem; font-weight: 700; margin: 0 0 4px; color: var(--text-primary); }
-.update-versions { margin: 0; font-size: 0.93rem; display: flex; align-items: center; gap: 10px; }
-.update-current { color: var(--text-muted); font-family: ui-monospace, Menlo, Monaco, Consolas, monospace; }
-.update-arrow { color: var(--text-muted); font-size: 1.14rem; }
-.update-latest { color: var(--accent); font-weight: 700; font-family: ui-monospace, Menlo, Monaco, Consolas, monospace; }
-.update-notes { margin-bottom: 16px; }
-.update-notes h4 { font-size: 0.86rem; font-weight: 600; color: var(--text-secondary); margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.5px; }
-.update-notes-body { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; font-size: 0.93rem; line-height: 1.6; color: var(--text-secondary); max-height: 200px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; }
-.update-progress-full { width: 100%; max-width: 400px; }
-.update-progress-full .progress-track { height: 8px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; margin-bottom: 8px; position: relative; }
+.update-header { @apply cczj-gap-8; padding: 8px 0 16px; border-bottom: 1px dashed var(--border); @apply cczj-mb-8; }
+.update-icon { width: 52px; height: 52px; border-radius: 14px; background: var(--accent); color: var(--accent-contrast); box-shadow: 0 6px 18px var(--accent-alpha-35); @apply cczj-flex-shrink-0; }
+.update-title { font-size: 1.14rem; @apply cczj-font-bold; margin: 0 0 4px; @apply cczj-text-primary; }
+.update-versions { margin: 0; font-size: 0.93rem; @apply cczj-flex cczj-items-center cczj-gap-5; }
+.update-current { @apply cczj-text-muted; font-family: ui-monospace, Menlo, Monaco, Consolas, monospace; }
+.update-arrow { @apply cczj-text-muted; font-size: 1.14rem; }
+.update-latest { @apply cczj-text-accent cczj-font-bold; font-family: ui-monospace, Menlo, Monaco, Consolas, monospace; }
+.update-notes { @apply cczj-mb-8; }
+.update-notes h4 { font-size: 0.86rem; @apply cczj-font-semibold cczj-text-secondary; margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+.update-notes-body { background: var(--bg-secondary); @apply cczj-border; border-radius: 10px; padding: 12px 14px; font-size: 0.93rem; line-height: 1.6; @apply cczj-text-secondary; max-height: 200px; @apply cczj-overflow-y-auto cczj-whitespace-pre; word-break: break-word; }
+.update-progress-full { @apply cczj-w-full; max-width: 400px; }
+.update-progress-full .progress-track { @apply cczj-h-2; background: var(--bg-secondary); @apply cczj-border cczj-rounded-sm cczj-overflow-hidden cczj-mb-4 cczj-relative; }
 .update-progress-full .progress-track.indeterminate .progress-fill {
   width: 30%;
 }
-.update-progress-full .progress-fill { height: 100%; background: var(--accent); border-radius: 4px; transition: width var(--cczj-motion-normal) var(--cczj-motion-ease-standard); }
-.update-progress-full .progress-meta { font-size: 0.86rem; color: var(--text-muted); }
-.update-connecting { color: var(--text-muted); }
+.update-progress-full .progress-fill { @apply cczj-h-full; background: var(--accent); @apply cczj-rounded-sm; transition: width var(--cczj-motion-normal) var(--cczj-motion-ease-standard); }
+.update-progress-full .progress-meta { font-size: 0.86rem; @apply cczj-text-muted; }
+.update-connecting { @apply cczj-text-muted; }
 .update-speed-placeholder { visibility: hidden; }
-.update-file-info { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; font-size: 0.86rem; }
-.update-file-name { color: var(--text-primary); font-family: ui-monospace, Menlo, Monaco, Consolas, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; margin-right: 12px; }
-.update-file-size { color: var(--text-muted); flex-shrink: 0; }
-.update-done-card { gap: 16px; padding: 16px 0; text-align: center; }
-.update-done-icon { width: 64px; height: 64px; border-radius: 50%; background: var(--success); color: var(--success-contrast); box-shadow: 0 6px 18px var(--success-alpha-10); }
-.update-done-text p { margin: 0 0 4px; font-size: 1.07rem; color: var(--text-primary); }
-.update-done-path { font-size: 0.79rem !important; color: var(--text-muted) !important; font-family: ui-monospace, Menlo, Monaco, Consolas, monospace; word-break: break-all; margin-top: 6px !important; }
-.update-done-hint { font-size: 0.86rem; color: var(--text-muted); line-height: 1.6; }
+.update-file-info { @apply cczj-flex cczj-justify-between cczj-items-center cczj-px-7-py-5; background: var(--bg-secondary); @apply cczj-border cczj-rounded-md; font-size: 0.86rem; }
+.update-file-name { @apply cczj-text-primary; font-family: ui-monospace, Menlo, Monaco, Consolas, monospace; @apply cczj-overflow-hidden; text-overflow: ellipsis; @apply cczj-whitespace-nowrap cczj-flex-1 cczj-min-w-0 cczj-mr-6; }
+.update-file-size { @apply cczj-text-muted cczj-flex-shrink-0; }
+.update-done-card { @apply cczj-gap-8; padding: 16px 0; @apply cczj-text-center; }
+.update-done-icon { width: 64px; height: 64px; @apply cczj-rounded-50; background: var(--success); color: var(--success-contrast); box-shadow: 0 6px 18px var(--success-alpha-10); }
+.update-done-text p { margin: 0 0 4px; font-size: 1.07rem; @apply cczj-text-primary; }
+.update-done-path { font-size: 0.79rem !important; color: var(--text-muted) !important; font-family: ui-monospace, Menlo, Monaco, Consolas, monospace; @apply cczj-break-all; margin-top: 6px !important; }
+.update-done-hint { font-size: 0.86rem; @apply cczj-text-muted; line-height: 1.6; }
 .update-done-hint p { margin: 0 0 4px; }
-.update-fail-icon { width: 64px; height: 64px; border-radius: 50%; background: var(--warning); color: var(--warning-contrast); box-shadow: 0 6px 18px var(--warning-alpha-10); }
-.update-fail-hint { font-size: 0.86rem; color: var(--text-muted); line-height: 1.6; text-align: left; padding: 0 8px; }
+.update-fail-icon { width: 64px; height: 64px; @apply cczj-rounded-50; background: var(--warning); color: var(--warning-contrast); box-shadow: 0 6px 18px var(--warning-alpha-10); }
+.update-fail-hint { font-size: 0.86rem; @apply cczj-text-muted; line-height: 1.6; @apply cczj-text-left; padding: 0 8px; }
 .update-fail-hint p { margin: 0 0 4px; }
-.update-link { color: var(--accent); text-decoration: underline; cursor: pointer; }
-.update-link:hover { opacity: 0.8; }
-.update-history { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
-.update-history h4 { font-size: 0.91rem; font-weight: 600; color: var(--text-primary); margin: 0 0 10px; }
-.update-history-item { margin-bottom: 12px; padding: 10px 12px; background: var(--bg-secondary); border-radius: 8px; }
-.update-history-item h5 { font-size: 0.89rem; font-weight: 600; color: var(--text-primary); margin: 0 0 6px; }
-.update-history-item pre { font-size: 0.82rem; color: var(--text-secondary); white-space: pre-wrap; margin: 0; line-height: 1.5; font-family: inherit; }
+.update-link { @apply cczj-text-accent cczj-underline cczj-cursor-pointer; }
+.update-link:hover { @apply cczj-opacity-80; }
+.update-history { @apply cczj-mt-8 cczj-pt-6 cczj-border-top; }
+.update-history h4 { font-size: 0.91rem; @apply cczj-font-semibold cczj-text-primary; margin: 0 0 10px; }
+.update-history-item { @apply cczj-mb-6; padding: 10px 12px; background: var(--bg-secondary); @apply cczj-rounded-md; }
+.update-history-item h5 { font-size: 0.89rem; @apply cczj-font-semibold cczj-text-primary; margin: 0 0 6px; }
+.update-history-item pre { font-size: 0.82rem; @apply cczj-text-secondary cczj-whitespace-pre; margin: 0; @apply cczj-leading-normal; font-family: inherit; }
 
 /* 下载中界面 */
-.update-downloading-card { padding: 24px 0; text-align: center; }
+.update-downloading-card { padding: 24px 0; @apply cczj-text-center; }
 .update-loading-icon {
-  width: 56px; height: 56px; border-radius: 50%;
-  background: var(--accent-alpha-15); color: var(--accent);
+  width: 56px; height: 56px; @apply cczj-rounded-50;
+  background: var(--accent-alpha-15); @apply cczj-text-accent;
   animation: pulse-download 2s ease-in-out infinite;
 }
 @keyframes pulse-download {
   0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 var(--accent-alpha-20); }
   50% { transform: scale(1.05); box-shadow: 0 0 0 12px transparent; }
 }
-.update-downloading-title p { margin: 0 0 4px; font-size: 1.07rem; color: var(--text-primary); }
+.update-downloading-title p { margin: 0 0 4px; font-size: 1.07rem; @apply cczj-text-primary; }
 .update-downloading-sub { font-size: 0.86rem !important; color: var(--text-muted) !important; }
 
 /* 后台下载提示文字 */
-.bg-hint { font-size: 0.82rem; color: var(--text-muted); }
+.bg-hint { font-size: 0.82rem; @apply cczj-text-muted; }
 
 /* ====== 后台下载悬浮指示器 ====== */
 .bg-download-indicator {
-  position: fixed;
+  @apply cczj-fixed;
   right: 24px;
   bottom: 88px;
   z-index: var(--z-fab);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
+  @apply cczj-flex cczj-items-center cczj-gap-4 cczj-px-7-py-5;
   background: var(--bg-card);
   border: 1px solid var(--accent);
   border-radius: 24px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15), 0 0 0 3px var(--accent-alpha-10);
-  cursor: pointer;
+  @apply cczj-cursor-pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   min-width: 160px;
 }
@@ -634,24 +659,24 @@ onUnmounted(() => {
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2), 0 0 0 4px var(--accent-alpha-15);
 }
 .bg-download-icon {
-  width: 28px; height: 28px; border-radius: 50%;
+  width: 28px; height: 28px; @apply cczj-rounded-50;
   background: var(--accent); color: var(--accent-contrast);
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
+  @apply cczj-flex cczj-items-center cczj-justify-center cczj-flex-shrink-0;
   /* 反馈型转圈不吃时长令牌：动画关掉时它得继续转，否则看不出还在下载。 */
   animation: cczj-spin 800ms linear infinite;
 }
 .bg-download-info {
-  display: flex; flex-direction: column; flex: 1; min-width: 0;
+  @apply cczj-flex cczj-flex-col cczj-flex-1 cczj-min-w-0;
 }
-.bg-download-title { font-size: 0.79rem; font-weight: 600; color: var(--text-primary); }
-.bg-download-pct { font-size: 0.72rem; color: var(--text-muted); font-family: ui-monospace, monospace; }
+.bg-download-icon.is-idle { animation: none; }
+.bg-download-title { font-size: 0.79rem; @apply cczj-font-semibold cczj-text-primary; }
+.bg-download-pct { font-size: 0.72rem; @apply cczj-text-muted; font-family: ui-monospace, monospace; }
 .bg-download-track {
-  position: absolute; bottom: 0; left: 12px; right: 12px;
-  height: 3px; background: var(--bg-secondary); border-radius: 2px; overflow: hidden;
+  @apply cczj-absolute cczj-bottom-0; left: 12px; right: 12px;
+  height: 3px; background: var(--bg-secondary); @apply cczj-rounded-xs cczj-overflow-hidden;
 }
 .bg-download-fill {
-  height: 100%; background: var(--accent); border-radius: 2px; transition: width var(--cczj-motion-normal) var(--cczj-motion-ease-standard);
+  @apply cczj-h-full; background: var(--accent); @apply cczj-rounded-xs; transition: width var(--cczj-motion-normal) var(--cczj-motion-ease-standard);
 }
 .bg-download-fill.cczj-motion-progress-indeterminate {
   width: 30%;

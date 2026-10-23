@@ -1,0 +1,123 @@
+"""Actual Android reader gestures, typography, persisted progress and mode isolation."""
+import json,time,argparse,subprocess
+from pathlib import Path
+from android_webview import AndroidWebView
+parser=argparse.ArgumentParser();parser.add_argument('--leave-comic',action='store_true');args=parser.parse_args()
+OUT=Path(__file__).resolve().parent.parent/'dist/audit/reader-comic';OUT.mkdir(exist_ok=True)
+PINIA="document.querySelector('#app').__vue_app__.config.globalProperties.$pinia"
+SNAPSHOT="Object.fromEntries(Object.keys(localStorage).filter(k=>k.startsWith('cczj.')).map(k=>[k,localStorage.getItem(k)]))"
+RESTORE="d=>{for(const[k,v]of Object.entries(d))v===null?localStorage.removeItem(k):localStorage.setItem(k,v);for(const k of Object.keys(localStorage))if(k.startsWith('cczj.')&&!(k in d))localStorage.removeItem(k)}"
+with AndroidWebView() as p:
+ original=p.evaluate('location.hash');mode=p.evaluate(PINIA+"._s.get('applicationMode').mode")
+ storage=p.evaluate(SNAPSHOT)
+ native=p.evaluate('JSON.parse(wails.playerState())')
+ def wait(expr,timeout=30):
+  end=time.monotonic()+timeout
+  while time.monotonic()<end:
+   try:
+    if p.evaluate(expr):return
+   except RuntimeError:pass
+   time.sleep(.1)
+  raise AssertionError(expr)
+ def visit(path,selector):
+  p.evaluate('location.hash='+json.dumps(path));wait('!!document.querySelector('+json.dumps(selector)+')');time.sleep(.5)
+ def click(selector):p.evaluate('document.querySelector('+json.dumps(selector)+').click()');time.sleep(.25)
+ def text_click(selector,text):p.evaluate('Array.from(document.querySelectorAll('+json.dumps(selector)+')).find(e=>e.textContent.trim()==='+json.dumps(text)+').click()');time.sleep(.25)
+ def touch(kind,x=0,y=0):p.call('Input.dispatchTouchEvent',{'type':kind,'touchPoints':[] if kind in ('touchEnd','touchCancel') else [{'x':x,'y':y}]})
+ def point(selector,x=.5,y=.5):return p.evaluate('(()=>{const r=document.querySelector('+json.dumps(selector)+').getBoundingClientRect();return{x:r.x+r.width*'+str(x)+',y:r.y+r.height*'+str(y)+'}})()')
+ def tap(selector,x=.5,y=.5):
+  at=point(selector,x,y);touch('touchStart',**at);touch('touchEnd');time.sleep(.3)
+ def swipe(selector,reverse=False,cancel=False):
+  a=point(selector,.25 if reverse else .8,.45);b=point(selector,.8 if reverse else .25,.45)
+  touch('touchStart',**a)
+  for i in range(1,9):touch('touchMove',a['x']+(b['x']-a['x'])*i/8,a['y']);time.sleep(.025)
+  touch('touchCancel' if cancel else 'touchEnd');time.sleep(.4)
+ def back():subprocess.run(p.adb+['shell','input','keyevent','KEYCODE_BACK'],capture_output=True,check=True);time.sleep(.4)
+ def switch(target):
+  current=p.evaluate(PINIA+"._s.get('applicationMode').mode")
+  if current==target:return
+  visit('/settings?group=basic&section=appearance' if current=='video' else '/'+current+'/settings','.mode-switch-options')
+  before=p.evaluate('performance.timeOrigin');click('.mode-switch-options button:nth-child('+str(['video','novel','comic'].index(target)+1)+')')
+  wait("!!document.querySelector('.app-shell[data-application-mode="+target+"]') && !document.querySelector('.splash-wrap')")
+  assert p.evaluate('performance.timeOrigin')>before
+ def page_number():return int(p.evaluate("document.querySelector('.novel-reading-status > span:nth-child(2)').textContent.split('/')[0]"))
+ try:
+  switch('novel')
+  visit('/novel/settings','.novel-settings')
+  p.evaluate(PINIA+"._s.get('novelReading').setPreferences({flow:'paged',size:20,margin:24,leading:1.85,systemBrightness:true})")
+  visit('/novel/read/last-train/0','.novel-pagination-track')
+  # Begin at the first page without changing any other reading history.
+  p.evaluate("document.querySelector('.novel-page-viewport').click()")
+  if p.evaluate("getComputedStyle(document.querySelector('.novel-reader-bottom')).visibility==='hidden'"):tap('.novel-page-viewport')
+  p.evaluate("(()=>{const e=document.querySelector('.novel-reader-seek input');e.value=0;e.dispatchEvent(new Event('input',{bubbles:true}))})()")
+  tap('.novel-page-viewport');wait("getComputedStyle(document.querySelector('.novel-reader-bottom')).visibility==='hidden'")
+  assert page_number()==1
+  total=int(p.evaluate("document.querySelector('.novel-reading-status > span:nth-child(2)').textContent.split('/')[1]"));assert total>=3
+  text=p.evaluate("document.querySelector('.novel-reading-paper').textContent")
+  swipe('.novel-page-viewport');assert page_number()==2
+  swipe('.novel-page-viewport',cancel=True);assert page_number()==2,'Cancelled novel swipe turned a page'
+  p.screenshot(OUT/'novel-page-2.png')
+  tap('.novel-page-viewport');click('.novel-reader-bottom nav button:last-child');wait("!!document.querySelector('.reader-sheet')")
+  before=p.evaluate(PINIA+"._s.get('novelReading').progress['last-train'].ratio")
+  click('.novel-font-stepper button:last-child')
+  assert p.evaluate(PINIA+"._s.get('novelReading').preferences.size")==21
+  assert p.evaluate("document.querySelector('.novel-reading-paper').textContent")==text,'Reflow lost chapter text'
+  click('.novel-paper-night');p.screenshot(OUT/'novel-settings-night.png')
+  click('.novel-brightness-row button')
+  p.evaluate("(()=>{const e=document.querySelector('.novel-brightness-row input');e.value=70;e.dispatchEvent(new Event('input',{bubbles:true}))})()")
+  assert abs(p.evaluate('JSON.parse(wails.playerState()).brightness')-.7)<.04
+  back();wait("!document.querySelector('.reader-sheet')")
+  assert p.evaluate("!!document.querySelector('.novel-reader')")
+  click('.novel-reader-seek button:last-child');wait("location.hash.endsWith('/last-train/1') && document.querySelectorAll('.cczj-mobile-route-scene').length===1")
+  assert abs(p.evaluate('JSON.parse(wails.playerState()).brightness')-.7)<.04,'Outgoing chapter restored brightness after the incoming chapter claimed it'
+  assert p.evaluate(PINIA+"._s.get('novelReading').progress['last-train'].chapter")==1,'Outgoing chapter overwrote the new reading progress during the overlapping transition'
+  tap('.novel-page-viewport')
+  click('.novel-reader-bottom nav button:first-child');wait("!!document.querySelector('.novel-chapter-list')");back()
+  click('.novel-reader-bottom nav button:last-child');text_click('.novel-font-options button','上下滚动');back()
+  p.evaluate("(()=>{const e=document.querySelector('.novel-reader-scroll');e.scrollTop=(e.scrollHeight-e.clientHeight)*.55;e.dispatchEvent(new Event('scroll'))})()")
+  time.sleep(.8);p.call('Page.reload');wait("!!document.querySelector('.novel-reader-scroll') && !document.querySelector('.splash-wrap')")
+  position=p.evaluate("(()=>{const e=document.querySelector('.novel-reader-scroll');return e.scrollTop/(e.scrollHeight-e.clientHeight)})()")
+  assert abs(position-.55)<.04,position
+  visit('/novel/settings','.novel-settings');assert abs(p.evaluate('JSON.parse(wails.playerState()).brightness')-native['brightness'])<.04,'Reading brightness leaked out of the reader'
+  switch('comic')
+  assert p.evaluate(PINIA+"._s.has('novelReading')===false && "+PINIA+"._s.has('collect')===false && "+PINIA+"._s.has('download')===false"),'Other mode stores started in comic mode'
+  visit('/comic/search','.comic-search input');p.evaluate("(()=>{const e=document.querySelector('.comic-search input');e.value='月亮';e.dispatchEvent(new Event('input',{bubbles:true}))})()")
+  wait("document.querySelectorAll('.comic-card').length===1")
+  visit('/comic/categories?complete=1','.comic-grid');assert p.evaluate("document.querySelectorAll('.comic-card').length===2")
+  visit('/comic/series/cloud-island','.comic-detail')
+  if p.evaluate("document.querySelector('.comic-detail-actions button').getAttribute('aria-pressed')!=='true'"):click('.comic-detail-actions button')
+  visit('/comic/library','.comic-library');assert p.evaluate("!!document.querySelector('.comic-library a[href*=cloud-island]')")
+  visit('/comic/read/cloud-island/0','.comic-reader')
+  p.evaluate(PINIA+"._s.get('comicReading').setPreferences({flow:'strip',direction:'ltr',systemBrightness:true})")
+  p.evaluate("(()=>{const e=document.querySelector('.comic-reader-viewport'),c=e.querySelectorAll('.comic-panel')[2];e.scrollTop=c.offsetTop+c.offsetHeight*.2;e.dispatchEvent(new Event('scroll'))})()")
+  time.sleep(.8);assert p.evaluate(PINIA+"._s.get('comicReading').progress['cloud-island'].page")==2
+  p.screenshot(OUT/'comic-strip.png')
+  p.call('Page.reload');wait("!!document.querySelector('.comic-reader') && !document.querySelector('.splash-wrap')")
+  assert p.evaluate(PINIA+"._s.get('comicReading').progress['cloud-island'].page")==2
+  tap('.comic-reader-viewport');click('.comic-reader-bottom nav button:nth-child(2)')
+  assert p.evaluate("document.querySelector('.comic-reader').classList.contains('comic-reader-pages')")
+  swipe('.comic-reader-viewport');assert p.evaluate(PINIA+"._s.get('comicReading').progress['cloud-island']?.page") in [2,3]
+  time.sleep(.6);assert p.evaluate(PINIA+"._s.get('comicReading').progress['cloud-island'].page")==3
+  swipe('.comic-reader-viewport',cancel=True);time.sleep(.6);assert p.evaluate(PINIA+"._s.get('comicReading').progress['cloud-island'].page")==3
+  p.screenshot(OUT/'comic-pages.png')
+  click('.comic-reader-bottom nav button:last-child');text_click('.comic-preference button','从右到左');back()
+  swipe('.comic-reader-viewport');time.sleep(.6);assert p.evaluate(PINIA+"._s.get('comicReading').progress['cloud-island'].page")==2
+  click('.comic-reader-bottom nav button:last-child');text_click('.comic-preference button','从左到右');back()
+  p.evaluate("(()=>{const e=document.querySelector('.comic-reader-seek input');e.value=6;e.dispatchEvent(new Event('input',{bubbles:true}))})()")
+  swipe('.comic-reader-viewport');wait("location.hash.endsWith('/cloud-island/1')")
+  tap('.comic-reader-viewport');click('.comic-reader-bottom nav button:first-child');wait("!!document.querySelector('.comic-reader-episodes')");back();assert p.evaluate("!!document.querySelector('.comic-reader')")
+  for width in [320,360,412,768]:
+   p.call('Emulation.setDeviceMetricsOverride',{'width':width,'height':760,'deviceScaleFactor':1,'mobile':True})
+   for name,path,selector in [('home','/comic','.comic-featured'),('categories','/comic/categories','.comic-grid'),('search','/comic/search','.comic-search'),('library','/comic/library','.comic-library'),('series','/comic/series/moon-mail','.comic-detail'),('reader','/comic/read/moon-mail/0','.comic-reader'),('settings','/comic/settings','.comic-settings'),('me','/comic/me','.comic-me')]:
+    visit(path,selector)
+    bounds=p.evaluate("(()=>{const m=document.querySelector('.comic-main');return{overflow:m.scrollWidth>m.clientWidth+1,clipped:[...document.querySelectorAll('.cczj-comic-shell button,.comic-header a,.comic-bottom-nav a,.comic-detail-actions a')].filter(e=>{const r=e.getBoundingClientRect();return getComputedStyle(e).visibility!=='hidden'&&r.width&&(r.left<-.5||r.right>innerWidth+.5)}).map(e=>e.className)}})()")
+    assert not bounds['overflow'] and not bounds['clipped'],(width,name,bounds)
+    p.screenshot(OUT/f'{width}-comic-{name}.png')
+  print('PASS: native novel page turns/cancel/reflow/settings, brightness restore, scroll progress reload; comic mode reload, isolated stores, filters/follows, strip/page/RTL, chapter transitions and 32 comic layouts')
+ finally:
+  p.call('Emulation.clearDeviceMetricsOverride')
+  current=p.evaluate(PINIA+"._s.get('applicationMode').mode")
+  visit('/'+current+'/settings' if current!='video' else '/settings','.mode-switch-options')
+  p.evaluate('('+RESTORE+')('+json.dumps(storage)+')')
+  switch('comic' if args.leave_comic else mode)
+  p.evaluate('location.hash='+json.dumps('/comic' if args.leave_comic else original));p.call('Page.reload')

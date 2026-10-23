@@ -338,6 +338,13 @@ func (r *VideoSearchReq) UnmarshalJSON(data []byte) error {
 // many sources, so its results only enter the catalog when the user presses
 // 入库, which goes through ImportSourceVideos and always resurrects.
 func SearchVideos(req VideoSearchReq) (*VideoListResp, error) {
+	return SearchVideosContext(context.Background(), req)
+}
+
+func SearchVideosContext(ctx context.Context, req VideoSearchReq) (*VideoListResp, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if req.Page <= 0 {
 		req.Page = 1
 	}
@@ -350,19 +357,28 @@ func SearchVideos(req VideoSearchReq) (*VideoListResp, error) {
 	}
 	// Search is an on-demand remote operation. Project only catalog fields when
 	// caching results locally; never enrich a search hit through detail requests.
-	source, err := db.GetSourceByKey(req.SourceKey)
+	source, err := db.GetSourceByKeyContext(ctx, req.SourceKey)
 	if err != nil {
-		return nil, apperror.Wrap(apperror.NotFound, err, "get source")
+		return nil, apperror.Wrap(apperror.Storage, err, "get source")
+	}
+	if source.GetKind() != model.SourceKindVideo {
+		return nil, apperror.New(apperror.Unsupported, "视频搜索只支持视频采集源")
 	}
 	strategy := collect.CreateStrategyFromSource(source)
 	if strategy == nil {
 		return nil, apperror.New(apperror.Unsupported, "source strategy unavailable")
 	}
-	fetched, err := collect.FetchSearchPage(strategy, keyword, req.Page)
+	fetched, err := collect.FetchSearchPageContext(ctx, strategy, keyword, req.Page)
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		return nil, apperror.Wrap(apperror.Unavailable, err, "remote search")
 	}
-	fetched.List = db.FilterEnabledCollectVideos(fetched.List)
+	fetched.List, err = db.FilterSourceCollectVideos(req.SourceKey, fetched.List)
+	if err != nil {
+		return nil, apperror.Wrap(apperror.Storage, err, "读取禁用类型失败")
+	}
 
 	// Snapshot catalog membership before this search caches its own hits,
 	// otherwise every result would come back flagged as already stored.
@@ -382,6 +398,9 @@ func SearchVideos(req VideoSearchReq) (*VideoListResp, error) {
 		}
 	}
 
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if err := db.UpsertCatalogItems(req.SourceKey, fetched.List); err != nil {
 		return nil, apperror.Wrap(apperror.Storage, err, "cache search catalog")
 	}

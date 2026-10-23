@@ -16,12 +16,20 @@ import (
 	"cczjVideo/app/apperror"
 	"cczjVideo/app/applog"
 	cacheservice "cczjVideo/app/cache"
+	"cczjVideo/app/danmaku"
 	"cczjVideo/app/db"
+	"cczjVideo/app/diagnosticrecording"
 	"cczjVideo/app/douban"
+	downloadservice "cczjVideo/app/download"
 	"cczjVideo/app/handler"
 	"cczjVideo/app/model"
+	"cczjVideo/app/netbudget"
+	"cczjVideo/app/netpolicy"
 	"cczjVideo/app/netstats"
+	"cczjVideo/app/operation"
+	"cczjVideo/app/parallel"
 	"cczjVideo/app/proxy"
+	"cczjVideo/app/resource"
 	"cczjVideo/app/updater"
 )
 
@@ -178,49 +186,131 @@ type DiagSourceRow struct {
 
 // Diagnostics 是诊断页一次拉全的载荷。Notes 收集分项失败原因，
 // 单项取不到时整页仍然可用，界面对应区块标灰，而不是报「诊断失败」。
+type DiagnosticScope struct {
+	Mode          string `json:"mode"`
+	Business      string `json:"business"`
+	Resources     string `json:"resources"`
+	Storage       string `json:"storage"`
+	NetworkBudget string `json:"network_budget"`
+}
+
+func (a *App) diagnosticScope() DiagnosticScope {
+	return DiagnosticScope{a.currentMode(), "current_mode", "shared_host_process", "shared_database_and_logs", "shared_host_budget"}
+}
+
 type Diagnostics struct {
+	Scope   DiagnosticScope    `json:"scope"`
 	Env     DiagEnv            `json:"env"`
 	Storage DiagStorage        `json:"storage"`
 	Network DiagNetwork        `json:"network"`
 	Cache   []cacheservice.Row `json:"cache"`
-	Douban  DiagDouban         `json:"douban"`
-	Collect DiagCollect        `json:"collect"`
+	Douban  *DiagDouban        `json:"douban,omitempty"`
+	Collect *DiagCollect       `json:"collect,omitempty"`
 	Sources []DiagSourceRow    `json:"sources"`
 	Tables  []db.TableStat     `json:"tables"`
 	Notes   []string           `json:"notes"`
 }
 
-// RuntimeMetrics 是界面每隔两三秒轮一次的轻量快照：只有内存里的计数器读数，
-// 不查库、不遍历目录、不做全表 COUNT。真实使用中的网络与缓存数字一直在涨，
-// 手动刷新一次的快照看不到趋势，所以把这两块单独开一个便宜口。
+// RuntimeMetrics combines in-memory counters and a native process snapshot.
+// It does not query the database, walk directories, spawn tools or force GC.
 type RuntimeMetrics struct {
-	UptimeSeconds int64              `json:"uptime_seconds"`
-	Goroutines    int                `json:"goroutines"`
-	Network       DiagNetwork        `json:"network"`
-	Cache         []cacheservice.Row `json:"cache"`
+	Operations       []operation.Stat               `json:"operations"`
+	NetworkPolicy    []netpolicy.Stat               `json:"network_policy"`
+	Danmaku          *danmaku.Stats                 `json:"danmaku,omitempty"`
+	Scope            DiagnosticScope                `json:"scope"`
+	DownloadExecutor *downloadservice.ExecutorStats `json:"download_executor,omitempty"`
+	NetworkBudget    netbudget.Snapshot             `json:"network_budget"`
+	Recording        diagnosticrecording.Status     `json:"recording"`
+	UptimeSeconds    int64                          `json:"uptime_seconds"`
+	Goroutines       int                            `json:"goroutines"`
+	Network          DiagNetwork                    `json:"network"`
+	Cache            []cacheservice.Row             `json:"cache"`
+	Resources        resource.Snapshot              `json:"resources"`
+	BackgroundTasks  map[string]int                 `json:"background_tasks"`
 }
 
+var resourceSampler resource.Sampler
+
 func (a *App) runtimeNetwork() DiagNetwork {
-	return DiagNetwork{
-		SinceUnix:           netstats.SinceUnix(),
-		TotalBytes:          netstats.TotalBytes(),
-		AllowPrivateTargets: proxy.AllowPrivateTargets(),
-		Categories:          netstats.Snapshot(),
+	mode := a.currentMode()
+	network := DiagNetwork{SinceUnix: netstats.SinceUnix(), AllowPrivateTargets: proxy.AllowPrivateTargets(), Categories: []netstats.Stat{}}
+	for _, row := range netstats.Snapshot() {
+		include := row.Category == mode
+		if mode == "video" {
+			switch row.Category {
+			case "playback", "lineprobe", "collect", "douban", "image", "download", "danmaku":
+				include = true
+			}
+		}
+		if include {
+			network.Categories = append(network.Categories, row)
+			network.TotalBytes += row.Bytes
+		}
 	}
+	return network
+}
+
+func (a *App) modeCacheStats() []cacheservice.Row {
+	if a.currentMode() == "video" {
+		return cacheservice.Stats()
+	}
+	return []cacheservice.Row{} // Reading disk caches have no mode-attributed memory counter yet.
 }
 
 func (a *App) GetRuntimeMetrics() *RuntimeMetrics {
-	return &RuntimeMetrics{
+	a.modeSwitchMu.RLock()
+	defer a.modeSwitchMu.RUnlock()
+	return a.runtimeMetrics()
+}
+
+func (a *App) runtimeMetrics() *RuntimeMetrics {
+	snapshot := &RuntimeMetrics{
+		Scope:         a.diagnosticScope(),
 		UptimeSeconds: int64(time.Since(appStartedAt).Seconds()),
 		Goroutines:    runtime.NumGoroutine(),
 		Network:       a.runtimeNetwork(),
-		Cache:         cacheservice.Stats(),
+		Cache:         a.modeCacheStats(),
+		Resources:     resourceSampler.Sample(),
+		Recording:     a.GetDiagnosticsRecordingStatus(),
 	}
+	if a.networkBudget != nil {
+		snapshot.NetworkBudget = a.networkBudget.Snapshot()
+	}
+	if a.requestPolicy != nil {
+		categories := map[string]bool{a.currentMode(): true, "update": true}
+		if a.currentMode() == "video" {
+			for _, category := range []string{"playback", "lineprobe", "collect", "douban", "image", "download", "danmaku", "cast"} {
+				categories[category] = true
+			}
+		}
+		snapshot.NetworkPolicy = a.requestPolicy.Snapshot(categories)
+	}
+	if a.operations != nil {
+		snapshot.Operations = a.operations.Snapshot(a.currentMode())
+	}
+	if a.currentMode() == "video" && a.downloadExecutor != nil {
+		stats := a.downloadExecutor.Stats()
+		snapshot.DownloadExecutor = &stats
+	}
+	if a.currentMode() == "video" && a.danmaku != nil {
+		stats := a.danmaku.Stats()
+		snapshot.Danmaku = &stats
+	}
+	if a.background != nil {
+		snapshot.BackgroundTasks = a.modeWork().ActiveTasks()
+	}
+	return snapshot
 }
 
 // GetDiagnostics 汇总环境、存储、豆瓣、采集调度、源统计与表行数。
 func (a *App) GetDiagnostics() (*Diagnostics, error) {
-	d := &Diagnostics{Notes: []string{}}
+	a.modeSwitchMu.RLock()
+	defer a.modeSwitchMu.RUnlock()
+	return a.diagnostics()
+}
+
+func (a *App) diagnostics() (*Diagnostics, error) {
+	d := &Diagnostics{Scope: a.diagnosticScope(), Notes: []string{}}
 	note := func(format string, args ...any) {
 		d.Notes = append(d.Notes, fmt.Sprintf(format, args...))
 	}
@@ -258,7 +348,7 @@ func (a *App) GetDiagnostics() (*Diagnostics, error) {
 		note("存储占用统计失败: %v", err)
 	}
 	d.Network = a.runtimeNetwork()
-	d.Cache = cacheservice.Stats()
+	d.Cache = a.modeCacheStats()
 	if stats, err := a.GetLogStats(); err == nil {
 		d.Storage.LogFiles = stats.Files
 		d.Storage.LogKeepDays = stats.KeepDays
@@ -269,14 +359,18 @@ func (a *App) GetDiagnostics() (*Diagnostics, error) {
 		note("日志统计失败: %v", err)
 	}
 
-	if tables, err := db.TableStats(); err == nil {
+	if tables, err := db.TableStatsForMode(d.Scope.Mode); err == nil {
 		d.Tables = tables
 	} else {
 		note("表行数统计失败: %v", err)
 	}
-	d.Sources = a.diagnosticsSources(note)
-	d.Douban = a.diagnosticsDouban(note)
-	d.Collect = a.diagnosticsCollect(note)
+	if d.Scope.Mode == "video" {
+		d.Sources = a.diagnosticsSources(note)
+		douban := a.diagnosticsDouban(note)
+		d.Douban = &douban
+		collect := a.diagnosticsCollect(note)
+		d.Collect = &collect
+	}
 
 	return d, nil
 }
@@ -305,7 +399,7 @@ func (a *App) diagnosticsEnv() DiagEnv {
 		NumGC:         mem.NumGC,
 	}
 	if a.background != nil {
-		env.BackgroundTasks = a.background.ActiveTasks()
+		env.BackgroundTasks = a.modeWork().ActiveTasks()
 	}
 	return env
 }
@@ -433,40 +527,54 @@ func (a *App) diagnosticsCollect(note func(string, ...any)) DiagCollect {
 	return snap
 }
 
-// ProbeSources 逐个探测采集源接口能否应答：带 ac=videolist&pg=1 发一次 GET，
+// ProbeSources 有界并发探测视频采集源接口：带 ac=videolist&pg=1 发一次 GET，
 // 记录状态码与首包耗时。只读前 4KB 用于判断返回的是不是列表结构，
 // 不把整个响应灌进内存。结果会落一条巡检样本进 source_health，
 // 所以手动点一次「探测」和页面自动探到的那一次是同一份历史。
 //
 // 每个源最多 sourceProbeMinInterval 探一次：还在冷却里的源直接不发请求，
 // 把上一条巡检样本和还需等待的秒数回给界面。
-func (a *App) ProbeSources() ([]SourceProbe, error) {
-	return a.probeAllSources(a.background.Context())
+func (a *App) ProbeSources(ctx context.Context) ([]SourceProbe, error) {
+	return runRequest(a, ctx, "video.ProbeSources", a.probeAllSources)
 }
 
 // ProbeSource 探测单个采集源。与「探测全部」共用同一道闸门、同一份巡检样本，
 // 所以单独点某一个源不会绕过节流，也不会让健康度历史分成两套口径。
-func (a *App) ProbeSource(sourceKey string) (*SourceProbe, error) {
-	source, err := db.GetSourceByKey(sourceKey)
-	if err != nil {
-		return nil, err
-	}
-	last, retryAfter, allowed := admitSourceProbe(source.SourceKey, time.Now())
-	if !allowed {
-		probe := coolingProbe(source, last, retryAfter)
+func (a *App) ProbeSource(ctx context.Context, sourceKey string) (*SourceProbe, error) {
+	return runRequest(a, ctx, "video.ProbeSource", func(ctx context.Context) (*SourceProbe, error) {
+		source, err := db.GetSourceByKeyContext(ctx, sourceKey)
+		if err != nil {
+			return nil, err
+		}
+		if source.GetKind() != model.SourceKindVideo {
+			return nil, apperror.New(apperror.Validation, "视频探测只支持视频采集源")
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		last, retryAfter, allowed := admitSourceProbe(source.SourceKey, time.Now())
+		if !allowed {
+			probe := coolingProbe(source, last, retryAfter)
+			return &probe, nil
+		}
+		client := &http.Client{Timeout: sourceProbeTimeout, Transport: netpolicy.WrapTransport(string(netstats.CategoryCollect), netstats.WrapTransport(netstats.CategoryCollect, nil))}
+		defer client.CloseIdleConnections()
+		probe := probeSource(ctx, client, source)
+		recordPatrolSample(ctx, probe)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		return &probe, nil
-	}
-	client := &http.Client{Timeout: sourceProbeTimeout, Transport: netstats.WrapTransport(netstats.CategoryCollect, nil)}
-	ctx := a.background.Context()
-	probe := probeSource(ctx, client, source)
-	recordPatrolSample(ctx, probe)
-	return &probe, nil
+	})
 }
 
 // probeAllSources 跑一轮探测并记账。ctx 取消时正在飞的请求立刻断开，
 // 于是退出应用不会被一趟 10 秒超时的巡检拖住。
 func (a *App) probeAllSources(ctx context.Context) ([]SourceProbe, error) {
-	sources, err := db.GetAllSources()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	sources, err := db.GetSourcesByKindContext(ctx, model.SourceKindVideo)
 	if err != nil {
 		return nil, err
 	}
@@ -477,35 +585,23 @@ func (a *App) probeAllSources(ctx context.Context) ([]SourceProbe, error) {
 		}
 	}
 	out := make([]SourceProbe, len(enabled))
-	client := &http.Client{Timeout: sourceProbeTimeout, Transport: netstats.WrapTransport(netstats.CategoryCollect, nil)}
-	sem := make(chan struct{}, sourceProbeConcurrency)
-	var wg sync.WaitGroup
-	for i := range enabled {
-		// 取决策在派发之前：冷却中的源连信号量都不占，一轮"探测全部"点的
-		// 越快越不会给源站叠请求。
+	client := &http.Client{Timeout: sourceProbeTimeout, Transport: netpolicy.WrapTransport(string(netstats.CategoryCollect), netstats.WrapTransport(netstats.CategoryCollect, nil))}
+	defer client.CloseIdleConnections()
+	err = parallel.Each(ctx, len(enabled), sourceProbeConcurrency, func(ctx context.Context, i int) error {
+		// Reserve cooldown only when a worker can actually issue the request.
 		last, retryAfter, allowed := admitSourceProbe(enabled[i].SourceKey, time.Now())
 		if !allowed {
 			out[i] = coolingProbe(enabled[i], last, retryAfter)
-			continue
+			return nil
 		}
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			select {
-			case sem <- struct{}{}:
-			case <-ctx.Done():
-				return
-			}
-			defer func() { <-sem }()
-			out[i] = probeSource(ctx, client, enabled[i])
-			recordPatrolSample(ctx, out[i])
-		}(i)
-	}
-	wg.Wait()
+		out[i] = probeSource(ctx, client, enabled[i])
+		recordPatrolSample(ctx, out[i])
+		return ctx.Err()
+	})
 	// 取消时 out 里会有没跑完的空探测，把它们当成"不应答"报出去只会让退出日志
 	// 里多出一串假故障。
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
+	if err != nil {
+		return nil, err
 	}
 	return out, nil
 }
@@ -546,27 +642,29 @@ type SourceProbeTimeline struct {
 // SourceProbeTimeline 把已落库的巡检样本铺成点阵给界面画。纯读库、不发请求：
 // 真正发请求的是 ProbeSources / ProbeSource，而它们只在采集源页被打开时才调，
 // 所以离开这一页就不会再有任何探测流量。
-func (a *App) SourceProbeTimeline() ([]SourceProbeTimeline, error) {
-	sources, err := db.GetAllSources()
-	if err != nil {
-		return nil, err
-	}
-	slotSecs := int64(sourceProbeMinInterval / time.Second)
-	firstBucket := time.Now().Unix()/slotSecs - int64(sourceProbeSlotCount-1)
-	out := make([]SourceProbeTimeline, 0, len(sources))
-	for _, src := range sources {
-		// 取两倍条数：同一格里挤进多条时，后来的旧样本仍要把格子填上。
-		samples, err := db.ListSourceHealth(src.SourceKey, db.SourceHealthKindPatrol, sourceProbeSlotCount*2)
+func (a *App) SourceProbeTimeline(ctx context.Context) ([]SourceProbeTimeline, error) {
+	return runRequest(a, ctx, "video.SourceProbeTimeline", func(ctx context.Context) ([]SourceProbeTimeline, error) {
+		sources, err := db.GetSourcesByKindContext(ctx, model.SourceKindVideo)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, SourceProbeTimeline{
-			SourceKey: src.SourceKey,
-			SlotSecs:  slotSecs,
-			Slots:     bucketProbeSamples(samples, firstBucket, slotSecs, sourceProbeSlotCount),
-		})
-	}
-	return out, nil
+		slotSecs := int64(sourceProbeMinInterval / time.Second)
+		firstBucket := time.Now().Unix()/slotSecs - int64(sourceProbeSlotCount-1)
+		out := make([]SourceProbeTimeline, 0, len(sources))
+		for _, src := range sources {
+			// 取两倍条数：同一格里挤进多条时，后来的旧样本仍要把格子填上。
+			samples, err := db.ListSourceHealthContext(ctx, src.SourceKey, db.SourceHealthKindPatrol, sourceProbeSlotCount*2)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, SourceProbeTimeline{
+				SourceKey: src.SourceKey,
+				SlotSecs:  slotSecs,
+				Slots:     bucketProbeSamples(samples, firstBucket, slotSecs, sourceProbeSlotCount),
+			})
+		}
+		return out, nil
+	})
 }
 
 // bucketProbeSamples 把「新→旧」的巡检样本铺进 count 个等宽时间窗。

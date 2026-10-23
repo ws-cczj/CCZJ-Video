@@ -1,0 +1,331 @@
+{
+  "device": "emulator-5554",
+  "environment": "emulator",
+  "identity": {
+    "ro.product.model": "SDY-AN00",
+    "ro.product.cpu.abi": "x86_64",
+    "ro.build.version.release": "15",
+    "ro.build.fingerprint": "HONOR/Sandy/Sandy:15/V417IR/1100:user/release-keys",
+    "ro.kernel.qemu": "",
+    "ro.hardware": "HONOR",
+    "ro.product.manufacturer": "HONOR"
+  },
+  "package": "com.cczj.video.acceptance",
+  "startedDeviceTime": "10-22 10:00:24.000",
+  "passed": true,
+  "scenarios": [
+    {
+      "kind": "novel",
+      "keyword": "部族荣光",
+      "passed": true,
+      "searchFirstTargetMs": 765,
+      "readerRoute": "#/novel/read/3145/119",
+      "pageTurnStride": 9,
+      "pageTurnObservedMs": [
+        265.0,
+        282.0,
+        281.0,
+        281.0,
+        282.0,
+        281.0,
+        282.0,
+        265.0,
+        281.0,
+        282.0,
+        281.0,
+        359.0,
+        282.0,
+        265.0,
+        281.0,
+        266.0,
+        281.0,
+        282.0
+      ]
+    },
+    {
+      "kind": "comic",
+      "keyword": "崩坏",
+      "passed": true,
+      "searchFirstTargetMs": 250,
+      "readerRoute": "#/comic/read/3170/0?episodeRemoteId=%2Fbook%2F1001%2F1",
+      "pageTurnStride": 9,
+      "pageTurnObservedMs": [
+        46.0,
+        62.0,
+        47.0,
+        46.0,
+        47.0,
+        282.0,
+        31.0,
+        47.0,
+        31.0,
+        47.0,
+        47.0,
+        47.0,
+        47.0,
+        47.0,
+        47.0,
+        47.0,
+        31.0,
+        31.0
+      ]
+    }
+  ],
+  "phaseMetrics": [
+    {
+      "name": "novel.real-search",
+      "elapsedMs": 1856.6000000014901,
+      "frames": 108,
+      "rafGapP50Ms": 16.666999999999916,
+      "rafGapP95Ms": 16.667000000000144,
+      "rafGapMaxMs": 50,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 3.451841288212816e-05,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 292,
+      "images": 12,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "novel.open-detail-and-read-network",
+      "elapsedMs": 615.5,
+      "frames": 34,
+      "rafGapP50Ms": 16.666999999999916,
+      "rafGapP95Ms": 16.66700000000037,
+      "rafGapMaxMs": 50,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [
+        {
+          "at": 540.8000000044703,
+          "ms": 53
+        }
+      ],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 296,
+      "images": 1,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "novel.consecutive-page-turns",
+      "elapsedMs": 7298.89999999851,
+      "frames": 437,
+      "rafGapP50Ms": 16.66699999999946,
+      "rafGapP95Ms": 16.66700000000037,
+      "rafGapMaxMs": 16.66700000000128,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 240,
+      "images": 0,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "novel.reader-sheet-open-close",
+      "elapsedMs": 559.5,
+      "frames": 32,
+      "rafGapP50Ms": 16.66699999999946,
+      "rafGapP95Ms": 16.66700000000128,
+      "rafGapMaxMs": 16.66700000000128,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 236,
+      "images": 0,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "novel.continuous-scroll",
+      "elapsedMs": 7359.60000000149,
+      "frames": 441,
+      "rafGapP50Ms": 16.66699999999946,
+      "rafGapP95Ms": 16.66700000000128,
+      "rafGapMaxMs": 16.66700000000128,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 236,
+      "images": 0,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "novel.return-to-detail",
+      "elapsedMs": 491.6000000014901,
+      "frames": 29,
+      "rafGapP50Ms": 16.66700000000128,
+      "rafGapP95Ms": 16.66700000000128,
+      "rafGapMaxMs": 16.66700000000128,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 296,
+      "images": 1,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "comic.real-search",
+      "elapsedMs": 1331.2000000029802,
+      "frames": 79,
+      "rafGapP50Ms": 16.666999999999973,
+      "rafGapP95Ms": 16.667000000000144,
+      "rafGapMaxMs": 16.667000000000144,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 370,
+      "images": 23,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "comic.open-detail-and-read-network",
+      "elapsedMs": 689.8999999985099,
+      "frames": 38,
+      "rafGapP50Ms": 16.666999999999916,
+      "rafGapP95Ms": 33.333000000000084,
+      "rafGapMaxMs": 33.33399999999983,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 913,
+      "images": 4,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "comic.consecutive-page-turns",
+      "elapsedMs": 3224,
+      "frames": 192,
+      "rafGapP50Ms": 16.66699999999946,
+      "rafGapP95Ms": 16.66700000000037,
+      "rafGapMaxMs": 16.66700000000037,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 208,
+      "images": 3,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "comic.reader-sheet-open-close",
+      "elapsedMs": 555.5,
+      "frames": 32,
+      "rafGapP50Ms": 16.66700000000037,
+      "rafGapP95Ms": 16.66700000000128,
+      "rafGapMaxMs": 16.66700000000128,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 204,
+      "images": 3,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "comic.continuous-scroll",
+      "elapsedMs": 8297.30000000447,
+      "frames": 497,
+      "rafGapP50Ms": 16.66699999999946,
+      "rafGapP95Ms": 16.66700000000128,
+      "rafGapMaxMs": 16.66700000000128,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 779,
+      "images": 3,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "comic.return-to-detail",
+      "elapsedMs": 504,
+      "frames": 30,
+      "rafGapP50Ms": 16.66700000000128,
+      "rafGapP95Ms": 16.66700000000128,
+      "rafGapMaxMs": 16.66700000000128,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 913,
+      "images": 4,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    }
+  ],
+  "javascriptErrors": [],
+  "limitations": [
+    "WebView rAF callback gaps are not hardware presentation FPS.",
+    "Network wait is reported separately from cached page-turn interaction.",
+    "Success on these sampled works does not establish all-source quality."
+  ],
+  "initialPid": "27787",
+  "finalPid": "27787",
+  "sameProcess": true,
+  "javascriptErrorsLastDocument": []
+}

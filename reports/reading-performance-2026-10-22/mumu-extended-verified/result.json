@@ -1,0 +1,2641 @@
+{
+  "device": "emulator-5554",
+  "environment": "emulator",
+  "identity": {
+    "ro.product.model": "SDY-AN00",
+    "ro.product.cpu.abi": "x86_64",
+    "ro.build.version.release": "15",
+    "ro.build.fingerprint": "HONOR/Sandy/Sandy:15/V417IR/1100:user/release-keys",
+    "ro.kernel.qemu": "",
+    "ro.hardware": "HONOR",
+    "ro.product.manufacturer": "HONOR"
+  },
+  "package": "com.cczj.video.acceptance",
+  "startedDeviceTime": "10-22 10:05:09.000",
+  "passed": false,
+  "scenarios": [
+    {
+      "kind": "novel",
+      "keyword": "部族荣光",
+      "passed": false,
+      "searchFirstTargetMs": 281,
+      "readerRoute": "#/novel/read/3145/120",
+      "pageTurnStride": 15,
+      "pageTurnObservedMs": [
+        281.0,
+        266.0,
+        281.0,
+        281.0,
+        282.0,
+        281.0,
+        266.0,
+        281.0,
+        265.0,
+        282.0,
+        281.0,
+        282.0,
+        281.0,
+        281.0,
+        282.0,
+        281.0,
+        266.0,
+        281.0,
+        297.0,
+        282.0,
+        281.0,
+        282.0,
+        281.0,
+        281.0,
+        282.0,
+        281.0,
+        266.0,
+        281.0,
+        265.0,
+        282.0
+      ],
+      "nextChapterRoute": "#/novel/read/3145/121",
+      "readerCycles": [],
+      "error": "{'wait': '(()=>{const e=document.querySelector(\".novel-detail-actions a\");if(!e||e.disabled)return null;for(let p=e;p;p=p.parentElement){if(p.inert||p.dataset.routeActive===\"false\"||p.getAnimations().some(a=>a.playState===\"running\"&&Number.isFinite(a.effect?.getTiming().iterations)))return null}e.scrollIntoView({block:\"center\",inline:\"center\"});const r=e.getBoundingClientRect(),x=r.left+r.width/2,y=r.top+r.height/2;return r.width&&r.height&&e.contains(document.elementFromPoint(x,y))?{x,y}:null})()', 'text': '搜索书籍\\n找书\\n\\n从你的内容源中寻找下一本书\\n\\n搜索\\n内容源\\n浏览已入库作品\\n搜索结果\\n12 本书\\n有 2 个源搜索失败\\n验收nA\\n请求失败\\n验收nB\\n请求失败\\n部族荣光\\n丧狐\\n部族荣光\\n\\n丧狐\\n\\n盛产美女的“姜氏部族”与“申屠部族”已开战三年，这让姜氏部族的成年男人近乎死绝，而一但输掉“部族生死战”，姜氏部族的所有女人，会被折磨致死，会被凌辱贩卖，绝望的气氛笼罩着整个部族，有人选择了逃亡，有人选择了背叛。 \\u3000\\u3000十五岁的姜玄本还是一个半大孩子，为了母亲妹妹以及族里的女人们，他别无选择！ \\u3000\\u3000我不装了！我摊牌了！ \\u3000\\u3000我一直在隐藏实力！ \\u3000\\u3000我！姜玄！姜氏部族最后一个男人！\\n传统玄幻 · 完结\\n部 落： 荣 耀\\n川昀\\n部 落： 荣 耀\\n\\n川昀\\n\\n在古老而又神秘的魔法大陆上，哥布林，野蛮人、巨人等部落，为了争夺资源和土地，维持部落的长远发展，而不断展开了无数次的战斗的故事，部落首领，从村庄里建造训练营、兵营、城墙等建筑物，扩大自己部落的实力，防止其他部落的入侵。同时，还能入侵其他部落，掠夺更多资源，使得自己的部落变强\\n游戏体育 · 连载\\n蛮荒 部族\\n十年苦逼\\n蛮荒 部族\\n\\n十年苦逼\\n\\n武道➕神通➕血脉➕爽文 蛮荒世界，万族林立 人族如蝼蚁，只为活命人族当自强不息，壮气血，练神通 石蛮子一个石村的少年，我为人族则当世无敌\\n传统玄幻 · 连载\\n平安村传奇\\n湘西部族\\n平安村传奇\\n\\n湘西部族\\n\\n新作品出炉，欢迎大家前往番茄小说阅读我的作品，希望大家能够喜欢，你们的关注是我写作的动力，我会努力讲好每个故事！\\n东方仙侠 · 连载\\n上古 部族 演义\\n有虞沧溟\\n上古 部族 演义\\n\\n有虞沧溟\\n\\n在炎黄之前，还有华胥氏—— 在夏朝兴起之前，还有燧人氏、有巢氏—— 中华文明五千年，不是从黄帝开始的。 上古部族演义，重走中华文明最初的一万年。\\n历史古代 · 连载\\n兽魂图腾 部族 战歌\\n万剑峰\\n兽魂图腾 部族 战歌\\n\\n万剑峰\\n\\n蛮荒大陆 “图腾部族” 以兽魂为尊，少年炎昊是狼族遗孤，兽魂微弱却意外获 “上古图腾印”，能唤醒沉睡兽魂。他为复兴狼族，寻 “图腾圣物”，遇鹿族少女鹿溪（为阻止虎族吞并其他部族），二人联手联合弱势部族，对抗虎族侵略，揭开图腾印与圣物的关联。\\n传统玄幻 · 连载\\n扎格拉玛 部族 最后一位先知\\n不藓的鱼\\n扎格拉玛 部族 最后一位先知\\n\\n不藓的鱼\\n\\n搬山一族，族人出生后会被鬼洞诅咒缠身，命不过半百，追寻雮尘珠千余年，终究不得见。 今有杨小弟，动用秘法 ，吞蛇神，预知，得生机。 反吞蛇神，解开搬山千年诅咒，血脉力压蛇类，擒获各大巨蛇，走上玩蛇的不归路。 于是，杨小弟，我与长生粽子精怪不共戴天，不是你死，就是我吃。\\n悬疑 · 连载\\n都市荣耀战神\\n荣光\\n都市荣耀战神\\n\\n荣光\\n\\n十年前，他是杨家养子，投身军营，化身铁血战士！十年后，他权倾天下，万人之上，带着无上荣耀归来，养父义兄却遭奸人所害！当即，他一腔热血为之愤怒！至尊战神，荣耀归来，无人能敌！\\n阅友小说\\n上门龙婿\\n金兴利\\n上门龙婿\\n\\n金兴利\\n\\n轩辕世家二少爷入赘望京豪门苏家，世人眼中的软饭男不过是龙困浅滩。龙遇风云，注定荣光。只要你执我之手，我必保你万丈荣光！\\n阅友小说\\n九黎至尊\\n零肆叁贰\\n九黎至尊\\n\\n零肆叁贰\\n\\n这里没有斗气魔法，也没有修真修仙。灵魂天眼是秦皇大陆修行者的力量源泉，而天地法相是修行者的唯一武力。你的灵魂天眼能够凝聚轩辕黄帝的法相真身？抱歉，我的天地法相乃是九黎之主，号称战神兵主的蚩尤大帝！八十一部族的兄弟已经列阵以待，随我踏平这秦皇大陆，称帝为尊！\\n阅友小说\\n生而为王：荣耀战神\\n痞子老妖\\n生而为王：荣耀战神\\n\\n痞子老妖\\n\\n十年前家破人亡，他颠沛流离，忍辱负重，终成西北护国将，驱狼吞虎，护万民太平。 十年后朝荣耀归来，视敌人如蝼蚁，将豪门踩于脚下，横刀立马，俾睨天下。 生而为王，注定荣光！\\n阅友小说\\n穿到远古后，我抱上了酋长大腿\\n苏暖白\\n穿到远古后，我抱上了酋长大腿\\n\\n苏暖白\\n\\n索菲活了二十几岁，没感受过家的小爱，没体会过人间大爱，更没谈过恋爱。 老天可怜她，凌空一道雷，把她霹到了兽世。索菲看看这魔兽横行的世界，靠，这也叫可怜她？ 谁知，最后的结局却让索菲大感意外，兽人大妈欢乐多，穿着小草裙天天带她跳广场舞，兽人部族忒团结，狐狸兔子一家亲，老虎老狼不争食，早早实现大同世界！ 最重要的是，是那个有着奇怪名字的男人，他自称首领，叫她夫人，总是对她炫腹肌，弄得人家好羞羞……\\n阅友小说\\n继续扩展来源'}"
+    },
+    {
+      "kind": "comic",
+      "keyword": "崩坏",
+      "passed": false,
+      "searchFirstTargetMs": 281,
+      "readerRoute": "#/comic/read/3170/0?episodeRemoteId=%2Fbook%2F1001%2F1",
+      "pageTurnStride": 15,
+      "pageTurnObservedMs": [
+        63.0,
+        47.0,
+        31.0,
+        31.0,
+        63.0,
+        63.0,
+        46.0,
+        63.0,
+        31.0,
+        63.0,
+        47.0,
+        62.0,
+        31.0,
+        63.0,
+        31.0,
+        47.0,
+        47.0,
+        47.0,
+        63.0,
+        46.0,
+        32.0,
+        47.0,
+        46.0,
+        62.0,
+        32.0,
+        46.0,
+        47.0,
+        47.0,
+        31.0,
+        31.0
+      ],
+      "nextChapterRoute": "#/comic/read/3170/1?episodeRemoteId=/book/1001/2",
+      "readerCycles": [],
+      "error": "{'wait': '(()=>{const e=document.querySelector(\".comic-detail-actions a\");if(!e||e.disabled)return null;for(let p=e;p;p=p.parentElement){if(p.inert||p.dataset.routeActive===\"false\"||p.getAnimations().some(a=>a.playState===\"running\"&&Number.isFinite(a.effect?.getTiming().iterations)))return null}e.scrollIntoView({block:\"center\",inline:\"center\"});const r=e.getBoundingClientRect(),x=r.left+r.width/2,y=r.top+r.height/2;return r.width&&r.height&&e.contains(document.elementFromPoint(x,y))?{x,y}:null})()', 'text': '搜索漫画\\n找漫画\\n\\n从你的内容源中寻找漫画\\n\\n搜索\\n内容源\\n浏览已入库作品\\n全部\\n全部状态\\n已完结\\n已加载 27 部\\n验收cA 搜索失败 · 请求失败\\nCCZJ\\n逃离长空篇\\n逃离长空篇\\n\\n崩坏3官方漫画\\n\\nCCZJ\\n樱花追忆篇\\n樱花追忆篇\\n\\n崩坏3官方漫画\\n\\nCCZJ\\n逆熵入侵篇\\n逆熵入侵篇\\n\\n崩坏3官方漫画\\n\\nCCZJ\\n恩返篇\\n恩返篇\\n\\n崩坏3官方漫画\\n\\nCCZJ\\n月影篇\\n月影篇\\n\\n崩坏3官方漫画\\n\\nCCZJ\\n紫鸢篇\\n紫鸢篇\\n\\n崩坏3官方漫画\\n\\nCCZJ\\n第二次崩坏\\n第二次崩坏\\n\\n崩坏3官方漫画\\n\\nCCZJ\\n雾都假日\\n雾都假日\\n\\n崩坏3官方漫画\\n\\nCCZJ\\n传承\\n传承\\n\\n崩坏3官方漫画\\n\\nCCZJ\\n异乡\\n异乡\\n\\n崩坏3官方漫画\\n\\nCCZJ\\n绀海篇\\n绀海篇\\n\\n崩坏3官方漫画\\n\\nCCZJ\\n绯樱篇\\n绯樱篇\\n\\n崩坏3官方漫画\\n\\nCCZJ\\n神之键秘话\\n神之键秘话\\n\\n崩坏3官方漫画\\n\\nCCZJ\\n玩崩坏3的琪亚娜\\n玩崩坏3的琪亚娜\\n\\n崩坏3官方漫画\\n\\nCCZJ\\n女武神的餐桌\\n女武神的餐桌\\n\\n崩坏3官方漫画\\n\\nCCZJ\\n夏日回忆-预告篇\\n夏日回忆-预告篇\\n\\n崩坏3官方漫画\\n\\nCCZJ\\n双子：起源\\n双子：起源\\n\\n崩坏3官方漫画\\n\\nCCZJ\\n双子：入侵\\n双子：入侵\\n\\n崩坏3官方漫画\\n\\nCCZJ\\n蛇之篇\\n蛇之篇\\n\\n崩坏3官方漫画\\n\\nCCZJ\\n年岁\\n年岁\\n\\n崩坏3官方漫画\\n\\nCCZJ\\n武装人偶\\n武装人偶\\n\\n崩坏3官方漫画\\n\\nCCZJ\\n云墨剑心\\n云墨剑心\\n\\n崩坏3官方漫画\\n\\nCCZJ\\n新春旅行\\n新春旅行\\n\\n崩坏3官方漫画\\n\\nCCZJ\\n全球崩坏\\n全球崩坏\\n\\n夏天岛\\n\\nCCZJ\\n崩坏世界的魔杖匠人\\n崩坏世界的魔杖匠人\\n\\n風都ノリ\\n\\nCCZJ\\n茉莉花酱的好感度正在崩坏\\n茉莉花酱的好感度正在崩坏\\n\\n小麦りん\\n\\nCCZJ\\n崩坏3rd\\n崩坏3rd\\n\\n米哈游'}"
+    }
+  ],
+  "phaseMetrics": [
+    {
+      "name": "novel.real-search",
+      "elapsedMs": 1443.7999999970198,
+      "frames": 86,
+      "rafGapP50Ms": 16.666999999999916,
+      "rafGapP95Ms": 16.667000000000144,
+      "rafGapMaxMs": 16.667000000000144,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 292,
+      "images": 12,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "novel.open-detail-and-read-network",
+      "elapsedMs": 602.8999999985099,
+      "frames": 36,
+      "rafGapP50Ms": 16.666999999999916,
+      "rafGapP95Ms": 16.667000000000144,
+      "rafGapMaxMs": 16.667000000000144,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 333,
+      "images": 1,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "novel.consecutive-page-turns",
+      "elapsedMs": 11998.60000000149,
+      "frames": 719,
+      "rafGapP50Ms": 16.66699999999946,
+      "rafGapP95Ms": 16.66700000000128,
+      "rafGapMaxMs": 16.66700000000128,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 277,
+      "images": 0,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "novel.reader-sheet-open-close",
+      "elapsedMs": 659.7999999970198,
+      "frames": 39,
+      "rafGapP50Ms": 16.666999999997643,
+      "rafGapP95Ms": 16.66700000000128,
+      "rafGapMaxMs": 16.66700000000128,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 273,
+      "images": 0,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "novel.continuous-scroll",
+      "elapsedMs": 7412.30000000447,
+      "frames": 444,
+      "rafGapP50Ms": 16.666999999997643,
+      "rafGapP95Ms": 16.66700000000128,
+      "rafGapMaxMs": 16.66700000000128,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 273,
+      "images": 0,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "novel.next-chapter-network",
+      "elapsedMs": 488.8999999985099,
+      "frames": 25,
+      "rafGapP50Ms": 16.666999999997643,
+      "rafGapP95Ms": 33.33299999999872,
+      "rafGapMaxMs": 50,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 256,
+      "images": 0,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "novel.previous-chapter-cached",
+      "elapsedMs": 830.7000000029802,
+      "frames": 49,
+      "rafGapP50Ms": 16.666999999997643,
+      "rafGapP95Ms": 16.66700000000128,
+      "rafGapMaxMs": 16.66700000000128,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 277,
+      "images": 0,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "novel.return-to-detail",
+      "elapsedMs": 730.2999999970198,
+      "frames": 43,
+      "rafGapP50Ms": 16.66700000000128,
+      "rafGapP95Ms": 16.66700000000128,
+      "rafGapMaxMs": 16.66700000000128,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 0.7131002485169151,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 357,
+      "images": 13,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "novel.reader-cycle-1",
+      "elapsedMs": 45044.89999999851,
+      "frames": 2702,
+      "rafGapP50Ms": 16.66700000000128,
+      "rafGapP95Ms": 16.66700000000128,
+      "rafGapMaxMs": 16.667000000008557,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 301,
+      "images": 12,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "comic.real-search",
+      "elapsedMs": 1446.3000000044703,
+      "frames": 85,
+      "rafGapP50Ms": 16.666999999999973,
+      "rafGapP95Ms": 16.667000000000144,
+      "rafGapMaxMs": 16.667000000000144,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 370,
+      "images": 23,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "comic.open-detail-and-read-network",
+      "elapsedMs": 802.3000000044703,
+      "frames": 43,
+      "rafGapP50Ms": 16.666999999999916,
+      "rafGapP95Ms": 33.333000000000084,
+      "rafGapMaxMs": 50,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [
+        {
+          "at": 644.8000000044703,
+          "ms": 54
+        }
+      ],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 913,
+      "images": 4,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "comic.consecutive-page-turns",
+      "elapsedMs": 5095.19999999553,
+      "frames": 305,
+      "rafGapP50Ms": 16.66699999999946,
+      "rafGapP95Ms": 16.66700000000128,
+      "rafGapMaxMs": 16.66700000000128,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 208,
+      "images": 3,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "comic.reader-sheet-open-close",
+      "elapsedMs": 647.6000000014901,
+      "frames": 38,
+      "rafGapP50Ms": 16.66699999999946,
+      "rafGapP95Ms": 16.66700000000128,
+      "rafGapMaxMs": 16.66700000000128,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 204,
+      "images": 3,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "comic.continuous-scroll",
+      "elapsedMs": 8339.39999999851,
+      "frames": 500,
+      "rafGapP50Ms": 16.66699999999946,
+      "rafGapP95Ms": 16.66700000000128,
+      "rafGapMaxMs": 16.66700000000128,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 779,
+      "images": 3,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "comic.next-chapter-network",
+      "elapsedMs": 485.8999999985099,
+      "frames": 27,
+      "rafGapP50Ms": 16.666999999997643,
+      "rafGapP95Ms": 16.66700000000128,
+      "rafGapMaxMs": 33.33300000000236,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 739,
+      "images": 3,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "comic.previous-chapter-cached",
+      "elapsedMs": 878.7999999970198,
+      "frames": 52,
+      "rafGapP50Ms": 16.666999999997643,
+      "rafGapP95Ms": 16.66700000000128,
+      "rafGapMaxMs": 16.66700000000128,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 783,
+      "images": 3,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "comic.return-to-detail",
+      "elapsedMs": 769.8999999985099,
+      "frames": 45,
+      "rafGapP50Ms": 16.666999999997643,
+      "rafGapP95Ms": 16.66700000000128,
+      "rafGapMaxMs": 16.66700000000128,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 0.06309336000048933,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 548,
+      "images": 28,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    },
+    {
+      "name": "comic.reader-cycle-1",
+      "elapsedMs": 45038,
+      "frames": 2702,
+      "rafGapP50Ms": 16.66700000000128,
+      "rafGapP95Ms": 16.66700000000128,
+      "rafGapMaxMs": 16.667000000008557,
+      "rafGapsOver50": 0,
+      "rafGapsOver100": 0,
+      "longTasks": [],
+      "layoutShift": 0,
+      "heap": {
+        "used": 10000000,
+        "total": 10000000
+      },
+      "domNodes": 418,
+      "images": 27,
+      "observers": 2,
+      "note": "rAF gaps describe WebView callback delivery, not hardware presentation FPS."
+    }
+  ],
+  "motion": [
+    {
+      "name": "novel.return-to-detail",
+      "start": 26800.19999999553,
+      "samples": [
+        {
+          "at": 3.4130000044715416,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/read/3145/120",
+              "x": 0,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 20.07900000446898,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/read/3145/120",
+              "x": 0,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 36.74600000447026,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/read/3145/120",
+              "x": 0,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 53.41300000447154,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/read/3145/120",
+              "x": 0,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/book/3145",
+              "x": -90,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 70.07900000446898,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/read/3145/120",
+              "x": 0,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/book/3145",
+              "x": -90,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 86.74600000447026,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/read/3145/120",
+              "x": 0,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/book/3145",
+              "x": -90,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 103.41300000447154,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/read/3145/120",
+              "x": 0,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/book/3145",
+              "x": -90,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 120.07900000446898,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/read/3145/120",
+              "x": 8.582761764526367,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/book/3145",
+              "x": -87.85430908203125,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 136.74600000447026,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/read/3145/120",
+              "x": 46.61887741088867,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/book/3145",
+              "x": -78.34529113769531,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 153.41300000447154,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/read/3145/120",
+              "x": 111.55105590820312,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/book/3145",
+              "x": -62.11223602294922,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 170.07900000446898,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/read/3145/120",
+              "x": 165.972900390625,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/book/3145",
+              "x": -48.50677490234375,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 186.74600000447026,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/read/3145/120",
+              "x": 205.64781188964844,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/book/3145",
+              "x": -38.58804702758789,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 203.41300000447154,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/read/3145/120",
+              "x": 235.69271850585938,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/book/3145",
+              "x": -31.076820373535156,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 220.07900000446898,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/read/3145/120",
+              "x": 259.33648681640625,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/book/3145",
+              "x": -25.165884017944336,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 236.74600000447026,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/read/3145/120",
+              "x": 278.43798828125,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/book/3145",
+              "x": -20.390499114990234,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 253.41300000447154,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/read/3145/120",
+              "x": 294.1324157714844,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/book/3145",
+              "x": -16.466901779174805,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 270.079000004469,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/read/3145/120",
+              "x": 307.1624755859375,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/book/3145",
+              "x": -13.209381103515625,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 286.74600000447026,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/read/3145/120",
+              "x": 318.0434265136719,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/book/3145",
+              "x": -10.489147186279297,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 303.41300000447154,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/read/3145/120",
+              "x": 327.1449890136719,
+              "width": 360.00006103515625,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/book/3145",
+              "x": -8.213759422302246,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 320.079000004469,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/read/3145/120",
+              "x": 334.7436218261719,
+              "width": 360.00006103515625,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/book/3145",
+              "x": -6.314095973968506,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 336.74600000447026,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/read/3145/120",
+              "x": 341.05322265625,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/book/3145",
+              "x": -4.736700534820557,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 353.41300000447154,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/read/3145/120",
+              "x": 346.2408447265625,
+              "width": 360.00006103515625,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/book/3145",
+              "x": -3.4397847652435303,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 370.079000004469,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/read/3145/120",
+              "x": 350.4410400390625,
+              "width": 360.00006103515625,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/book/3145",
+              "x": -2.3897414207458496,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 386.74600000447026,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/read/3145/120",
+              "x": 353.76422119140625,
+              "width": 359.9999694824219,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/book/3145",
+              "x": -1.5589451789855957,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 403.41300000447154,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/read/3145/120",
+              "x": 356.30133056640625,
+              "width": 359.9999694824219,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/book/3145",
+              "x": -0.92467200756073,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/search",
+              "x": -90,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 420.079000004469,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/read/3145/120",
+              "x": 358.1287841796875,
+              "width": 359.9999694824219,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/book/3145",
+              "x": -0.4678080976009369,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/search",
+              "x": -90,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 436.74600000447026,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/read/3145/120",
+              "x": 359.311767578125,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/book/3145",
+              "x": 8.127302169799805,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/search",
+              "x": -90,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 453.41300000447154,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/book/3145",
+              "x": 46.215110778808594,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/search",
+              "x": -87.85401916503906,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 470.079000004469,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/book/3145",
+              "x": 111.22819519042969,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/search",
+              "x": -78.34529113769531,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 486.74600000447026,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/book/3145",
+              "x": 165.72354125976562,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/search",
+              "x": -62.11223602294922,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 503.41300000447154,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/book/3145",
+              "x": 205.44927978515625,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/search",
+              "x": -48.50608444213867,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 520.079000004469,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/book/3145",
+              "x": 235.53118896484375,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/search",
+              "x": -38.58804702758789,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 536.7460000044703,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/book/3145",
+              "x": 259.2069396972656,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/search",
+              "x": -31.076820373535156,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 553.4130000044715,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/book/3145",
+              "x": 278.33306884765625,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/search",
+              "x": -25.165569305419922,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 570.079000004469,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/book/3145",
+              "x": 294.04681396484375,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/search",
+              "x": -20.390499114990234,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 586.7460000044703,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/book/3145",
+              "x": 307.0945129394531,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/search",
+              "x": -16.466901779174805,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 603.4130000044715,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/book/3145",
+              "x": 317.989501953125,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/search",
+              "x": -13.20920467376709,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 620.079000004469,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/book/3145",
+              "x": 327.102294921875,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/search",
+              "x": -10.489147186279297,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 636.7460000044703,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/book/3145",
+              "x": 334.7112121582031,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/search",
+              "x": -8.213759422302246,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 653.4130000044715,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/book/3145",
+              "x": 341.0289306640625,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/search",
+              "x": -6.313992500305176,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 670.079000004469,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/book/3145",
+              "x": 346.2229919433594,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/search",
+              "x": -4.736700534820557,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 686.7460000044703,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/book/3145",
+              "x": 350.4288330078125,
+              "width": 360.00006103515625,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/search",
+              "x": -3.4397847652435303,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 703.4130000044715,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/book/3145",
+              "x": 353.75628662109375,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/search",
+              "x": -2.3896849155426025,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 720.079000004469,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/novel/book/3145",
+              "x": 356.2965087890625,
+              "width": 360.00006103515625,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/novel/search",
+              "x": -1.5589451789855957,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        }
+      ],
+      "maxNoVisibleSceneMs": 0,
+      "note": "Visible scene geometry only; video/screenshot review is still required for visual animation quality."
+    },
+    {
+      "name": "comic.return-to-detail",
+      "start": 21665.89999999851,
+      "samples": [
+        {
+          "at": 4.89500000148837,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/read/3170/0",
+              "x": 0,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 21.561000001489447,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/read/3170/0",
+              "x": 0,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 38.22800000149073,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/read/3170/0",
+              "x": 0,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 54.89500000148837,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/read/3170/0",
+              "x": 0,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 71.56100000148945,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/read/3170/0",
+              "x": 0,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/series/3170",
+              "x": -90,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 88.22800000149073,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/read/3170/0",
+              "x": 0,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/series/3170",
+              "x": -90,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 104.89500000148837,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/read/3170/0",
+              "x": 0,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/series/3170",
+              "x": -90,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 121.56100000148945,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/read/3170/0",
+              "x": 8.582761764526367,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/series/3170",
+              "x": -87.85430908203125,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 138.22800000149073,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/read/3170/0",
+              "x": 46.61887741088867,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/series/3170",
+              "x": -78.34529113769531,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 154.89500000148837,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/read/3170/0",
+              "x": 111.55105590820312,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/series/3170",
+              "x": -62.11223602294922,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 171.56100000148945,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/read/3170/0",
+              "x": 165.972900390625,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/series/3170",
+              "x": -48.50677490234375,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 188.22800000149073,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/read/3170/0",
+              "x": 205.64781188964844,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/series/3170",
+              "x": -38.58804702758789,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 204.89500000148837,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/read/3170/0",
+              "x": 235.69271850585938,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/series/3170",
+              "x": -31.076820373535156,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 221.56100000148945,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/read/3170/0",
+              "x": 259.33648681640625,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/series/3170",
+              "x": -25.165884017944336,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 238.22800000149073,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/read/3170/0",
+              "x": 278.43798828125,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/series/3170",
+              "x": -20.390499114990234,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 254.89500000148837,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/read/3170/0",
+              "x": 294.1324157714844,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/series/3170",
+              "x": -16.466901779174805,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 271.56100000148945,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/read/3170/0",
+              "x": 307.1624755859375,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/series/3170",
+              "x": -13.209381103515625,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 288.2280000014907,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/read/3170/0",
+              "x": 318.0434265136719,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/series/3170",
+              "x": -10.489147186279297,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 304.89500000148837,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/read/3170/0",
+              "x": 327.1449890136719,
+              "width": 360.00006103515625,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/series/3170",
+              "x": -8.213759422302246,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 321.56100000148945,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/read/3170/0",
+              "x": 334.7436218261719,
+              "width": 360.00006103515625,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/series/3170",
+              "x": -6.314095973968506,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 338.2280000014907,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/read/3170/0",
+              "x": 341.05322265625,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/series/3170",
+              "x": -4.736700534820557,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 354.89500000148837,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/read/3170/0",
+              "x": 346.2408447265625,
+              "width": 360.00006103515625,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/series/3170",
+              "x": -3.4397847652435303,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 371.56100000148945,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/read/3170/0",
+              "x": 350.4410400390625,
+              "width": 360.00006103515625,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/series/3170",
+              "x": -2.3897414207458496,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 388.2280000014907,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/read/3170/0",
+              "x": 353.76422119140625,
+              "width": 359.9999694824219,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/series/3170",
+              "x": -1.5589451789855957,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 404.89500000148837,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/read/3170/0",
+              "x": 356.30133056640625,
+              "width": 359.9999694824219,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/series/3170",
+              "x": -0.92467200756073,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 421.56100000148945,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/read/3170/0",
+              "x": 358.1287841796875,
+              "width": 359.9999694824219,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/series/3170",
+              "x": -0.4678080976009369,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/search",
+              "x": -90,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 438.2280000014907,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/read/3170/0",
+              "x": 359.311767578125,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/series/3170",
+              "x": -0.17205676436424255,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/search",
+              "x": -90,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 454.89500000148837,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/series/3170",
+              "x": 8.416001319885254,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/search",
+              "x": -90,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 471.56100000148945,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/series/3170",
+              "x": 46.46909713745117,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/search",
+              "x": -90,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 488.2280000014907,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/series/3170",
+              "x": 111.43230438232422,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/search",
+              "x": -87.85401916503906,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 504.89500000148837,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/series/3170",
+              "x": 165.88294982910156,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/search",
+              "x": -78.34442138671875,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 521.5610000014894,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/series/3170",
+              "x": 205.5740203857422,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/search",
+              "x": -62.11223602294922,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 538.2280000014907,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/series/3170",
+              "x": 235.63330078125,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/search",
+              "x": -48.50608444213867,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 554.8950000014884,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/series/3170",
+              "x": 259.28961181640625,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/search",
+              "x": -38.5875358581543,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 571.5610000014894,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/series/3170",
+              "x": 278.3990173339844,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/search",
+              "x": -31.076820373535156,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 588.2280000014907,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/series/3170",
+              "x": 294.1009216308594,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/search",
+              "x": -25.165569305419922,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 604.8950000014884,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/series/3170",
+              "x": 307.137939453125,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/search",
+              "x": -20.390241622924805,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 621.5610000014894,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/series/3170",
+              "x": 318.02337646484375,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/search",
+              "x": -16.466901779174805,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 638.2280000014907,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/series/3170",
+              "x": 327.1292724609375,
+              "width": 359.9999694824219,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/search",
+              "x": -13.20920467376709,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 654.8950000014884,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/series/3170",
+              "x": 334.73193359375,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/search",
+              "x": -10.488996505737305,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 671.5610000014894,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/series/3170",
+              "x": 341.0441589355469,
+              "width": 359.9999694824219,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/search",
+              "x": -8.213759422302246,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 688.2280000014907,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/series/3170",
+              "x": 346.2342529296875,
+              "width": 359.9999694824219,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/search",
+              "x": -6.313992500305176,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 704.8950000014884,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/series/3170",
+              "x": 350.43670654296875,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/search",
+              "x": -4.73661470413208,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 721.5610000014894,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/series/3170",
+              "x": 353.76123046875,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/search",
+              "x": -3.4397847652435303,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 738.2280000014907,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/series/3170",
+              "x": 356.2995300292969,
+              "width": 359.9999694824219,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/search",
+              "x": -2.3896849155426025,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        },
+        {
+          "at": 754.8950000014884,
+          "painted": true,
+          "scenes": [
+            {
+              "path": "/comic/series/3170",
+              "x": 358.12799072265625,
+              "width": 359.9999694824219,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            },
+            {
+              "path": "/comic/search",
+              "x": -1.5589015483856201,
+              "width": 360,
+              "height": 616,
+              "opacity": 1,
+              "display": "flex",
+              "visible": "visible"
+            }
+          ]
+        }
+      ],
+      "maxNoVisibleSceneMs": 0,
+      "note": "Visible scene geometry only; video/screenshot review is still required for visual animation quality."
+    }
+  ],
+  "javascriptErrors": [],
+  "limitations": [
+    "WebView rAF callback gaps are not hardware presentation FPS.",
+    "Network wait is reported separately from cached page-turn interaction.",
+    "Success on these sampled works does not establish all-source quality."
+  ],
+  "initialPid": "27787",
+  "finalPid": "27787",
+  "sameProcess": true,
+  "javascriptErrorsLastDocument": []
+}

@@ -10,8 +10,7 @@ import (
 	"cczjVideo/app/model"
 )
 
-// testDirs holds the one data directory this binary shares: db.InitDB is
-// once-guarded, so every test works on the same SQLite file.
+// testDirs owns the shared default database used by this backup test process.
 var testDirs struct {
 	data string
 }

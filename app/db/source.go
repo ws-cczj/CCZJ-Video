@@ -2,6 +2,7 @@ package db
 
 import (
 	"cczjVideo/app/model"
+	"context"
 	"fmt"
 	"time"
 
@@ -12,18 +13,46 @@ func GetAllSources() ([]*model.Source, error) {
 	return ReadSources(instance)
 }
 
+// GetEnabledSources 返回**视频**采集池：启用中的、kind 为 video 的源。
+//
+// kind 过滤不是可选的。小说与漫画源现在和视频源同表（ADR 0016），而这个函数的
+// 两个调用方——定时采集调度器（app/handler/scheduler.go:174）与豆瓣热榜匹配
+// （app/douban/chart.go:455、chart_match.go:15）——都会拿返回的 api_url 当 MAC-CMS
+// 接口去拉分页。一个启用的书源进了这个列表，就会被当成视频源发一轮
+// ?ac=detail&pg=1 的请求，然后连败三次被自动停用。
 func GetEnabledSources() ([]*model.Source, error) {
+	return GetEnabledSourcesByKind(model.SourceKindVideo)
+}
+
+// GetEnabledSourcesByKind 返回某个模式下启用中的源。
+func GetEnabledSourcesByKind(kind model.SourceKind) ([]*model.Source, error) {
 	var sources []*model.Source
-	err := instance.Select(&sources, `SELECT * FROM sources WHERE enabled = 1 ORDER BY id`)
+	err := instance.Select(&sources,
+		`SELECT * FROM sources WHERE enabled = 1 AND kind = ? ORDER BY id`, string(kind.Normalize()))
+	return sources, err
+}
+
+// GetSourcesByKind 返回某个模式下的全部源（含停用的），源管理页要它。
+func GetSourcesByKind(kind model.SourceKind) ([]*model.Source, error) {
+	return GetSourcesByKindContext(context.Background(), kind)
+}
+
+func GetSourcesByKindContext(ctx context.Context, kind model.SourceKind) ([]*model.Source, error) {
+	var sources []*model.Source
+	err := instance.SelectContext(ctx, &sources, `SELECT * FROM sources WHERE kind = ? ORDER BY id`, string(kind.Normalize()))
 	return sources, err
 }
 
 func GetSourceByKey(key string) (*model.Source, error) {
+	return GetSourceByKeyContext(context.Background(), key)
+}
+
+func GetSourceByKeyContext(ctx context.Context, key string) (*model.Source, error) {
 	if err := model.ValidateSourceKey(key); err != nil {
 		return nil, err
 	}
 	var s model.Source
-	err := instance.Get(&s, `SELECT * FROM sources WHERE source_key = ?`, key)
+	err := instance.GetContext(ctx, &s, `SELECT * FROM sources WHERE source_key = ?`, key)
 	if err != nil {
 		return nil, err
 	}
@@ -37,8 +66,14 @@ func AddSource(s *model.Source) error {
 	if err := model.ValidateSourceKey(s.SourceKey); err != nil {
 		return err
 	}
-	_, err := instance.NamedExec(`INSERT INTO sources (source_key, name, api_url, enabled, collect_limit, collect_hours, adv_config, schedule_config, strategy_config)
-		VALUES (:source_key, :name, :api_url, :enabled, :collect_limit, :collect_hours, :adv_config, :schedule_config, :strategy_config)`, s)
+	// kind 在这里归一并校验：一个拼错的 kind 会让这行既进不了视频采集池、
+	// 也进不了阅读模式的源列表，界面上就是一个谁也解释不了的幽灵源。
+	s.Kind = string(s.GetKind())
+	if err := model.ValidateSourceKind(model.SourceKind(s.Kind)); err != nil {
+		return err
+	}
+	_, err := instance.NamedExec(`INSERT INTO sources (source_key, name, api_url, enabled, collect_limit, collect_hours, adv_config, schedule_config, strategy_config, kind)
+		VALUES (:source_key, :name, :api_url, :enabled, :collect_limit, :collect_hours, :adv_config, :schedule_config, :strategy_config, :kind)`, s)
 	return err
 }
 
@@ -49,8 +84,16 @@ func UpdateSource(s *model.Source) error {
 	if err := model.ValidateSourceKey(s.SourceKey); err != nil {
 		return err
 	}
+	s.Kind = string(s.GetKind())
+	if err := model.ValidateSourceKind(model.SourceKind(s.Kind)); err != nil {
+		return err
+	}
 	// auto_disabled_at 一并清零：用户手动存过一次源，就等于重新宣告"这个源可用"，
 	// 自动停用的时间戳留着会让调度器在冷却到期时误把它当自动停用去恢复。
+	//
+	// kind 刻意**不在** SET 里：一个源属于哪个模式是它的身份，改名或改接口地址
+	// 都不该顺带把它从视频源变成书源——那会让已经采集的目录与已经加入书架的
+	// 条目全部失去归属。要换模式就删掉重建。
 	_, err := instance.NamedExec(`UPDATE sources SET name=:name, api_url=:api_url, enabled=:enabled,
 		collect_limit=:collect_limit, collect_hours=:collect_hours,
 		adv_config=:adv_config, schedule_config=:schedule_config, strategy_config=:strategy_config,
@@ -151,6 +194,11 @@ func DeleteSource(key string) error {
 	if _, err := tx.Exec(`UPDATE source_videos SET lifecycle_state='deleted', updated_at=CURRENT_TIMESTAMP WHERE source_key=?`, key); err != nil {
 		return fmt.Errorf("retire source catalog: %w", err)
 	}
+	// 小说/漫画的作品与章节同样只退役不删行：书架与阅读进度还指着它们，
+	// 删了会让"这个源没了"变成"这本书从来没存在过"。
+	if err := RetireLibraryItemsOfSource(tx, key); err != nil {
+		return err
+	}
 	if _, err := tx.Exec(`DELETE FROM sources WHERE source_key = ?`, key); err != nil {
 		return fmt.Errorf("delete source record: %w", err)
 	}
@@ -176,11 +224,25 @@ func GetSourceStats() ([]model.SourceStat, error) {
 		stats = append(stats, model.SourceStat{
 			SourceKey:    s.SourceKey,
 			Name:         s.Name,
-			VideoCount:   catalogCount(s.SourceKey),
+			VideoCount:   itemCount(s),
 			EpisodeCount: 0,
 		})
 	}
 	return stats, nil
+}
+
+// itemCount 按源的模式数它的存量。视频源数目录行，小说/漫画源数作品条——
+// 三种模式共用一张 sources 表之后，一个书源在 source_videos 里永远是 0 条，
+// 源列表上会显示成"这个源什么都没采到"，看着像坏了。
+func itemCount(s *model.Source) int {
+	if s.IsVideo() {
+		return catalogCount(s.SourceKey)
+	}
+	count, err := CountLibraryItems(s.GetKind(), s.SourceKey)
+	if err != nil {
+		return 0
+	}
+	return count
 }
 
 func catalogCount(sourceKey string) int {

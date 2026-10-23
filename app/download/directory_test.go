@@ -28,3 +28,19 @@ func TestDirectorySetAndReset(t *testing.T) {
 		t.Fatalf("reset = %q, %q, %v", got, saved, err)
 	}
 }
+
+func TestDirectoryUsesPlatformStorageAfterReset(t *testing.T) {
+	root := t.TempDir()
+	writable := filepath.Join(root, "app-files", "downloads")
+	directory := NewDirectoryWithDefault(nil, func() string { return writable })
+	directory.homeDir = func() (string, error) { return filepath.Join(root, "unwritable-shared-storage"), nil }
+	if got := directory.Get(); got != writable {
+		t.Fatalf("platform default = %q, want %q", got, writable)
+	}
+	if _, err := directory.Set(filepath.Join(root, "custom")); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := directory.Set(""); err != nil || got != writable {
+		t.Fatalf("reset = %q, %v", got, err)
+	}
+}

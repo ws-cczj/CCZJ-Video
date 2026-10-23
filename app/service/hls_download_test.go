@@ -52,7 +52,7 @@ func TestHLSDownloadWritesOrderedSegmentsWithBoundedWorkers(t *testing.T) {
 	}
 	task := &downloadTask{httpClient: server.Client(), segments: urls}
 	savePath := filepath.Join(t.TempDir(), "ordered.ts")
-	(&App{}).downloadM3u8(context.Background(), task, server.URL+"/playlist.m3u8", savePath)
+	newTransportTestApp().downloadM3u8(context.Background(), task, server.URL+"/playlist.m3u8", savePath)
 
 	data, err := os.ReadFile(savePath)
 	if err != nil {
@@ -87,7 +87,7 @@ func TestHLSDownloadCancelsInFlightRequests(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		(&App{}).downloadM3u8(ctx, task, server.URL+"/playlist.m3u8", filepath.Join(t.TempDir(), "cancelled.ts"))
+		newTransportTestApp().downloadM3u8(ctx, task, server.URL+"/playlist.m3u8", filepath.Join(t.TempDir(), "cancelled.ts"))
 	}()
 	select {
 	case <-started:
@@ -100,8 +100,59 @@ func TestHLSDownloadCancelsInFlightRequests(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("HLS download did not stop after cancellation")
 	}
-	if status := task.snapshot(); status.Status != "cancelled" {
+	// Application cancellation is an interruption; only a user cancel is terminal.
+	if status := task.snapshot(); status.Status != "paused" {
 		t.Fatalf("unexpected status: %+v", status)
+	}
+}
+
+func TestHLSResumeUsesSyncedBoundaryAndPreservesLegacyPartial(t *testing.T) {
+	for _, mode := range []string{"synced-tail", "all-written", "legacy"} {
+		t.Run(mode, func(t *testing.T) {
+			var requests atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				if r.URL.Path == "/a.ts" {
+					io.WriteString(w, "AAA")
+				} else {
+					io.WriteString(w, "BBB")
+				}
+			}))
+			defer server.Close()
+			path := filepath.Join(t.TempDir(), "v.ts")
+			task := &downloadTask{httpClient: server.Client(), segments: []string{server.URL + "/a.ts", server.URL + "/b.ts"}, segIndex: 1, boundarySynced: true, checkpointBytes: 3, checkpointIndex: 1}
+			partial := "AAAstale-tail"
+			wantRequests := int32(1)
+			if mode == "all-written" {
+				task.segIndex, task.checkpointIndex, task.checkpointBytes = 2, 2, 6
+				partial = "AAABBB"
+				wantRequests = 0
+			}
+			if mode == "legacy" {
+				task.boundarySynced = false
+				partial = "unverified-old-bytes"
+				wantRequests = 2
+			}
+			if err := os.WriteFile(path+".part", []byte(partial), 0600); err != nil {
+				t.Fatal(err)
+			}
+			newTransportTestApp().downloadM3u8(context.Background(), task, server.URL+"/v.m3u8", path)
+			if data, err := os.ReadFile(path); err != nil || string(data) != "AAABBB" {
+				t.Fatalf("resumed file = %q %v", data, err)
+			}
+			if requests.Load() != wantRequests {
+				t.Fatalf("requests = %d, want %d", requests.Load(), wantRequests)
+			}
+			if mode == "legacy" {
+				backups, _ := filepath.Glob(path + ".part.legacy-*")
+				if len(backups) != 1 {
+					t.Fatalf("legacy backups = %v", backups)
+				}
+				if data, err := os.ReadFile(backups[0]); err != nil || string(data) != partial {
+					t.Fatalf("legacy bytes lost = %q %v", data, err)
+				}
+			}
+		})
 	}
 }
 
@@ -114,7 +165,7 @@ func TestHLSDownloadRejectsOversizedSegmentBeforeReadingBody(t *testing.T) {
 	defer server.Close()
 
 	task := &downloadTask{httpClient: server.Client(), segments: []string{server.URL + "/oversized.ts"}}
-	(&App{}).downloadM3u8(context.Background(), task, server.URL+"/playlist.m3u8", filepath.Join(t.TempDir(), "oversized.ts"))
+	newTransportTestApp().downloadM3u8(context.Background(), task, server.URL+"/playlist.m3u8", filepath.Join(t.TempDir(), "oversized.ts"))
 	if status := task.snapshot(); status.Status != "error" || !strings.Contains(status.Error, "exceeds size limit") {
 		t.Fatalf("unexpected status: %+v", status)
 	}
@@ -161,7 +212,7 @@ func TestHLSDownloadDecryptsAES128SegmentsWithSequenceIV(t *testing.T) {
 
 	task := &downloadTask{httpClient: server.Client()}
 	savePath := filepath.Join(t.TempDir(), "decrypted.ts")
-	(&App{}).downloadM3u8(context.Background(), task, server.URL+"/playlist.m3u8", savePath)
+	newTransportTestApp().downloadM3u8(context.Background(), task, server.URL+"/playlist.m3u8", savePath)
 
 	data, err := os.ReadFile(savePath)
 	if err != nil {
@@ -231,7 +282,7 @@ func TestHLSDownloadSplicesByteRangeSegments(t *testing.T) {
 
 	task := &downloadTask{httpClient: server.Client()}
 	savePath := filepath.Join(t.TempDir(), "spliced.bin")
-	(&App{}).downloadM3u8(context.Background(), task, server.URL+"/playlist.m3u8", savePath)
+	newTransportTestApp().downloadM3u8(context.Background(), task, server.URL+"/playlist.m3u8", savePath)
 
 	data, err := os.ReadFile(savePath)
 	if err != nil {
@@ -268,7 +319,7 @@ func TestHLSDownloadFailsWhenUpstreamIgnoresByteRange(t *testing.T) {
 	defer server.Close()
 
 	task := &downloadTask{httpClient: server.Client()}
-	(&App{}).downloadM3u8(context.Background(), task, server.URL+"/playlist.m3u8", filepath.Join(t.TempDir(), "wrong.bin"))
+	newTransportTestApp().downloadM3u8(context.Background(), task, server.URL+"/playlist.m3u8", filepath.Join(t.TempDir(), "wrong.bin"))
 	status := task.snapshot()
 	if status.Status != "error" || !strings.Contains(status.Error, "ignores Range") {
 		t.Fatalf("unexpected status: %+v", status)
@@ -293,7 +344,7 @@ func TestHLSDownloadRetriesTransientSegmentFailure(t *testing.T) {
 
 	task := &downloadTask{httpClient: server.Client()}
 	savePath := filepath.Join(t.TempDir(), "retried.ts")
-	(&App{}).downloadM3u8(context.Background(), task, server.URL+"/playlist.m3u8", savePath)
+	newTransportTestApp().downloadM3u8(context.Background(), task, server.URL+"/playlist.m3u8", savePath)
 
 	data, err := os.ReadFile(savePath)
 	if err != nil {
@@ -326,7 +377,7 @@ func TestHLSDownloadWritesInitSegmentOnceAtItsPlace(t *testing.T) {
 
 	task := &downloadTask{httpClient: server.Client()}
 	savePath := filepath.Join(t.TempDir(), "ordered.mp4")
-	(&App{}).downloadM3u8(context.Background(), task, server.URL+"/playlist.m3u8", savePath)
+	newTransportTestApp().downloadM3u8(context.Background(), task, server.URL+"/playlist.m3u8", savePath)
 
 	data, err := os.ReadFile(savePath)
 	if err != nil {
@@ -354,7 +405,7 @@ func TestHLSDownloadRejectsEncryptedMapWithoutExplicitIV(t *testing.T) {
 	defer server.Close()
 
 	task := &downloadTask{httpClient: server.Client()}
-	(&App{}).downloadM3u8(context.Background(), task, server.URL+"/playlist.m3u8", filepath.Join(t.TempDir(), "fmp4.mp4"))
+	newTransportTestApp().downloadM3u8(context.Background(), task, server.URL+"/playlist.m3u8", filepath.Join(t.TempDir(), "fmp4.mp4"))
 	status := task.snapshot()
 	if status.Status != "error" || !strings.Contains(status.Error, "unsupported tags") {
 		t.Fatalf("unexpected status: %+v", status)

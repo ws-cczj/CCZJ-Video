@@ -1,0 +1,551 @@
+[
+  {
+    "id": "legado-kuwo",
+    "name": "酷我小说",
+    "apiUrl": "http://appi.kuwo.cn",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/XIU2/Yuedu/blob/426b24f59aa763ee0f2d9cc094612d2ef42c8293/shuyuan",
+    "document": {
+      "version": 3,
+      "kind": "novel",
+      "encoding": "utf-8",
+      "headers": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        "Referer": "http://appi.kuwo.cn/"
+      },
+      "check_keyword": "三国",
+      "operations": {
+        "search": {
+          "format": "json",
+          "path": "/novels/api/book/search",
+          "params": {
+            "ps": "10"
+          },
+          "param_names": {
+            "keyword": "keyword",
+            "page": "pi"
+          },
+          "list": {
+            "path": "data"
+          },
+          "fields": {
+            "id": {
+              "path": "book_id"
+            },
+            "title": {
+              "path": "title"
+            },
+            "author": {
+              "path": "author_name"
+            },
+            "cover": {
+              "path": "cover_url"
+            },
+            "summary": {
+              "path": "intro"
+            },
+            "url": {
+              "path": "book_id",
+              "regex": {
+                "pattern": "^(.+)$",
+                "replacement": "/novels/api/book/${1}"
+              }
+            },
+            "genres": {
+              "path": "category_name"
+            }
+          }
+        },
+        "detail": {
+          "format": "json",
+          "root": {
+            "path": "data"
+          },
+          "fields": {
+            "id": {
+              "path": "book_id"
+            },
+            "title": {
+              "path": "title"
+            },
+            "author": {
+              "path": "author_name"
+            },
+            "cover": {
+              "path": "cover_url"
+            },
+            "summary": {
+              "path": "intro"
+            },
+            "toc_url": {
+              "path": "book_id",
+              "regex": {
+                "pattern": "^(.+)$",
+                "replacement": "/novels/api/book/${1}/chapters?paging=0"
+              }
+            }
+          }
+        },
+        "toc": {
+          "format": "json",
+          "list": {
+            "path": "data"
+          },
+          "fields": {
+            "id": {
+              "path": "chapter_id"
+            },
+            "title": {
+              "path": "chapter_title"
+            },
+            "chapter_url": {
+              "concat": [
+                {
+                  "path": "book_id",
+                  "regex": {
+                    "pattern": "^(.+)$",
+                    "replacement": "/novels/api/book/${1}/chapters/"
+                  }
+                },
+                {
+                  "path": "chapter_id"
+                }
+              ]
+            }
+          }
+        },
+        "content": {
+          "format": "json",
+          "text": {
+            "path": "data.content"
+          }
+        }
+      }
+    },
+    "checkedAt": "2026-10-19",
+    "status": "verified",
+    "summary": "搜索、详情、目录、首章实测通过；只测免费章节。当前源 HTTP 可用，HTTPS 返回业务错误。",
+    "sample": {
+      "keyword": "三国",
+      "title": "三国之仲谋天下",
+      "detailUrl": "http://appi.kuwo.cn/novels/api/book/22543868000604102",
+      "chapterUrl": "http://appi.kuwo.cn/novels/api/book/22543868000604102/chapters/96825218742211052",
+      "contentCharacters": 3326
+    }
+  },
+  {
+    "id": "legado-yueyou",
+    "name": "阅友小说",
+    "apiUrl": "http://m.suixkan.com",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/XIU2/Yuedu/blob/426b24f59aa763ee0f2d9cc094612d2ef42c8293/shuyuan",
+    "document": {
+      "version": 3,
+      "kind": "novel",
+      "encoding": "utf-8",
+      "headers": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        "Referer": "http://m.suixkan.com/"
+      },
+      "check_keyword": "三国",
+      "operations": {
+        "search": {
+          "format": "html",
+          "path": "/s/1.html",
+          "params": {
+            "page": "{page}"
+          },
+          "param_names": {
+            "keyword": "keyword"
+          },
+          "list": {
+            "query": ".v-list-item",
+            "attr": "text"
+          },
+          "fields": {
+            "title": {
+              "query": ".v-title",
+              "attr": "text"
+            },
+            "author": {
+              "query": ".v-author",
+              "attr": "text"
+            },
+            "cover": {
+              "query": "img",
+              "attr": "src"
+            },
+            "summary": {
+              "query": ".v-intro",
+              "attr": "text"
+            },
+            "url": {
+              "attr": "onclick",
+              "regex": {
+                "pattern": "^.*newWebView\\('([^']+)'.*$",
+                "replacement": "${1}"
+              }
+            }
+          }
+        },
+        "detail": {
+          "format": "html",
+          "fields": {
+            "title": {
+              "query": ".face-info-title",
+              "attr": "text"
+            },
+            "author": {
+              "query": ".face-info .v-words span",
+              "attr": "text",
+              "index": {
+                "indices": [
+                  0
+                ]
+              },
+              "regex": {
+                "pattern": "^作者：",
+                "replacement": ""
+              }
+            },
+            "cover": {
+              "query": ".face-cover img",
+              "attr": "src"
+            },
+            "summary": {
+              "query": "#intro",
+              "attr": "text"
+            },
+            "toc_url": {
+              "query": ".sumchapter a",
+              "attr": "href"
+            }
+          }
+        },
+        "toc": {
+          "format": "html",
+          "list": {
+            "query": ".catalog_ls li a",
+            "attr": "text"
+          },
+          "fields": {
+            "title": {
+              "attr": "text"
+            },
+            "chapter_url": {
+              "attr": "href"
+            }
+          }
+        },
+        "content": {
+          "format": "html",
+          "text": {
+            "concat": [
+              {
+                "query": ".con",
+                "attr": "text",
+                "regex": {
+                  "pattern": "[（(]本章未完[^）)]*[）)]|[（(]本章完[）)]",
+                  "replacement": ""
+                }
+              }
+            ],
+            "separator": "\n\n"
+          }
+        }
+      }
+    },
+    "checkedAt": "2026-10-19",
+    "status": "verified",
+    "summary": "搜索、详情、779 章目录、首章全部 5 段实测通过；站点提示部分阅读需客户端，未测试付费章节。",
+    "sample": {
+      "keyword": "三国",
+      "title": "三国争锋",
+      "detailUrl": "http://m.suixkan.com/b/235207.html",
+      "chapterUrl": "http://m.suixkan.com/r/235207/235208.html",
+      "chapterCount": 779,
+      "contentCharacters": 3399
+    }
+  },
+  {
+    "id": "mihon-guazi",
+    "name": "瓜子漫画",
+    "apiUrl": "https://www.guazimanhua.com",
+    "kind": "comic",
+    "project": "Mihon",
+    "origin": "https://github.com/keiyoushi/extensions-source/blob/314a0d1b2b6b194f6a4f9aee252fec9ce55ae5ca/src/zh/guazimanhua/src/eu/kanade/tachiyomi/extension/zh/guazimanhua/Guazimanhua.kt",
+    "document": {
+      "version": 3,
+      "kind": "comic",
+      "encoding": "utf-8",
+      "headers": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        "Referer": "https://www.guazimanhua.com/"
+      },
+      "reverse": true,
+      "check_keyword": "斗罗",
+      "operations": {
+        "search": {
+          "format": "html",
+          "path": "/category.php",
+          "params": {
+            "sort": "hits"
+          },
+          "param_names": {
+            "keyword": "keyword",
+            "page": "page"
+          },
+          "list": {
+            "query": "article.card",
+            "attr": "text"
+          },
+          "fields": {
+            "title": {
+              "query": "h3 a",
+              "attr": "text"
+            },
+            "url": {
+              "query": "a.cover-wrap",
+              "attr": "href"
+            },
+            "cover": {
+              "query": "img.cover",
+              "attr": "src"
+            },
+            "author": {
+              "query": "div.meta",
+              "attr": "ownText",
+              "regex": {
+                "pattern": " · .*$",
+                "replacement": ""
+              }
+            }
+          }
+        },
+        "detail": {
+          "format": "html",
+          "fields": {
+            "title": {
+              "query": "div.mobile-comic-title",
+              "attr": "text"
+            },
+            "cover": {
+              "query": "img.mobile-comic-cover",
+              "attr": "src"
+            },
+            "summary": {
+              "query": "p.mobile-comic-desc",
+              "attr": "text"
+            },
+            "genres": {
+              "query": "p.mobile-comic-tags",
+              "attr": "text"
+            }
+          }
+        },
+        "toc": {
+          "format": "html",
+          "list": {
+            "query": "section.mobile-comic-all-chapters div.mobile-chapter-grid a",
+            "attr": "text"
+          },
+          "fields": {
+            "title": {
+              "attr": "text"
+            },
+            "chapter_url": {
+              "attr": "href"
+            }
+          }
+        },
+        "pages": {
+          "format": "html",
+          "list": {
+            "query": "section.reader-images img",
+            "attr": "text"
+          },
+          "fields": {
+            "image_url": {
+              "attr": "src"
+            }
+          }
+        }
+      }
+    },
+    "checkedAt": "2026-10-19",
+    "status": "verified",
+    "summary": "搜索、详情、605 话目录、第一话 19 页、首图 JPEG 实测通过；必须桌面 User-Agent。",
+    "sample": {
+      "keyword": "斗罗",
+      "title": "斗罗大陆",
+      "detailUrl": "https://www.guazimanhua.com/comic.php?id=14917",
+      "chapterUrl": "https://www.guazimanhua.com/chapter.php?id=1668692",
+      "chapterCount": 605,
+      "pageCount": 19,
+      "imageBytes": 224815,
+      "imageMime": "image/jpeg"
+    }
+  },
+  {
+    "id": "mihon-dongman",
+    "name": "咚漫漫画",
+    "apiUrl": "https://www.dongmanmanhua.cn",
+    "kind": "comic",
+    "project": "Mihon",
+    "origin": "https://github.com/keiyoushi/extensions-source/blob/314a0d1b2b6b194f6a4f9aee252fec9ce55ae5ca/src/zh/dongmanmanhua/src/eu/kanade/tachiyomi/extension/zh/dongmanmanhua/DongmanManhua.kt",
+    "document": {
+      "version": 3,
+      "kind": "comic",
+      "encoding": "utf-8",
+      "headers": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        "Referer": "https://www.dongmanmanhua.cn/"
+      },
+      "reverse": true,
+      "check_keyword": "神之塔",
+      "operations": {
+        "search": {
+          "format": "html",
+          "path": "/search",
+          "param_names": {
+            "keyword": "keyword",
+            "page": "page"
+          },
+          "list": {
+            "query": "#content > div.card_wrap.search ul:not(#filterLayer) li a",
+            "attr": "text"
+          },
+          "fields": {
+            "title": {
+              "query": "p.subj",
+              "attr": "text"
+            },
+            "url": {
+              "attr": "href"
+            },
+            "cover": {
+              "query": "img",
+              "attr": "src"
+            }
+          }
+        },
+        "detail": {
+          "format": "html",
+          "fields": {
+            "title": {
+              "query": "h1.subj, h3.subj",
+              "attr": "text"
+            },
+            "author": {
+              "fallback": [
+                {
+                  "query": ".detail_header .info .author",
+                  "attr": "ownText"
+                },
+                {
+                  "query": ".detail_header .info .author_area",
+                  "attr": "ownText"
+                }
+              ]
+            },
+            "summary": {
+              "query": "#_asideDetail p.summary",
+              "attr": "text"
+            },
+            "cover": {
+              "query": "meta[property='og:image']",
+              "attr": "content"
+            }
+          }
+        },
+        "toc": {
+          "format": "html",
+          "list": {
+            "query": "ul#_listUl li",
+            "attr": "text"
+          },
+          "fields": {
+            "title": {
+              "query": "span.subj span",
+              "attr": "text"
+            },
+            "chapter_url": {
+              "query": "a",
+              "attr": "href"
+            }
+          },
+          "next": {
+            "query": "div.paginate a[onclick] + a",
+            "attr": "href"
+          }
+        },
+        "pages": {
+          "format": "html",
+          "list": {
+            "query": "div#_imageList > img",
+            "attr": "text"
+          },
+          "fields": {
+            "image_url": {
+              "attr": "data-url"
+            }
+          }
+        }
+      }
+    },
+    "checkedAt": "2026-10-19",
+    "status": "verified",
+    "summary": "搜索、详情、目录首屏、免费第3话 41 页、首图 JPEG 实测通过；完整目录翻页及付费章未实测。",
+    "sample": {
+      "keyword": "神之塔",
+      "title": "神之塔",
+      "detailUrl": "https://www.dongmanmanhua.cn/episodeList?titleNo=241",
+      "chapterUrl": "https://www.dongmanmanhua.cn/BOY/tower-of-god/%E7%AC%AC3%E8%AF%9D-%E6%B5%B7%E9%A1%BF%E7%9A%84%E6%A5%BC%E5%B1%82-/viewer?title_no=241&episode_no=4",
+      "pageCount": 41,
+      "imageBytes": 57931,
+      "imageMime": "image/jpeg"
+    }
+  },
+  {
+    "id": "fqapp-fanqie",
+    "name": "番茄小说 / 漫画",
+    "apiUrl": "https://fanqienovel.com",
+    "kind": "novel",
+    "project": "fqapp",
+    "origin": "https://github.com/ch6vip/fqapp/blob/9ada894abac9cc94fded76958c1c71dbf479a754/rust/src/endpoints/content.rs",
+    "status": "unsupported",
+    "summary": "项目采用设备会话、请求签名和正文协议处理，不能通过静态 JSON/CSS 文档直接导入；未做完整真实链路测试。"
+  },
+  {
+    "id": "legado-69shuba",
+    "name": "69书吧",
+    "apiUrl": "https://www.69shuba.com",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/XIU2/Yuedu/blob/426b24f59aa763ee0f2d9cc094612d2ef42c8293/shuyuan",
+    "status": "blocked",
+    "summary": "本机实测搜索 HTTP 403，返回挑战页；不应标为可用。"
+  },
+  {
+    "id": "mihon-bh3",
+    "name": "崩坏3官方漫画",
+    "apiUrl": "https://comic.bh3.com",
+    "kind": "comic",
+    "project": "Mihon",
+    "origin": "https://github.com/keiyoushi/extensions-source/blob/314a0d1b2b6b194f6a4f9aee252fec9ce55ae5ca/src/zh/bh3/src/eu/kanade/tachiyomi/extension/zh/bh3/BH3.kt",
+    "status": "partial",
+    "summary": "官方列表和目录实测 HTTP 200；扩展明确无搜索，需支持列表浏览后才能导入。"
+  },
+  {
+    "id": "mihon-terra",
+    "name": "泰拉记事社",
+    "apiUrl": "https://comic.hypergryph.com",
+    "kind": "comic",
+    "project": "Mihon",
+    "origin": "https://github.com/keiyoushi/extensions-source/blob/314a0d1b2b6b194f6a4f9aee252fec9ce55ae5ca/src/zh/terrahistoricus/src/eu/kanade/tachiyomi/extension/zh/terrahistoricus/TerraHistoricus.kt",
+    "status": "partial",
+    "summary": "官方漫画列表 JSON 实测 HTTP 200；搜索在客户端过滤，图片页接口需序号构造，待专用适配。"
+  }
+]

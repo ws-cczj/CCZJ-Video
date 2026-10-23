@@ -24,9 +24,9 @@ const levelIcon = (lvl: string) => iconMap[lvl] || 'i'
 </script>
 
 <template>
-  <div class="ui-toast" :class="`ui-toast--${level || 'info'}`" role="alert">
+  <div class="ui-toast cczj-flex cczj-items-start cczj-gap-5" :class="`ui-toast--${level || 'info'}`" role="alert">
     <!-- 左侧图标 -->
-    <div class="ui-toast__icon" :class="`ui-toast__icon--${level || 'info'}`">
+    <div class="ui-toast__icon cczj-flex cczj-items-center cczj-justify-center cczj-flex-shrink-0" :class="`ui-toast__icon--${level || 'info'}`">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <template v-if="level === 'error' || level === 'warn'">
           <line x1="18" y1="6" x2="6" y2="18" />
@@ -41,10 +41,10 @@ const levelIcon = (lvl: string) => iconMap[lvl] || 'i'
     </div>
 
     <!-- 内容区 -->
-    <div class="ui-toast__body">
-      <div class="ui-toast__header">
+    <div class="ui-toast__body cczj-min-w-0">
+      <div class="ui-toast__header cczj-flex cczj-items-center cczj-justify-between cczj-gap-4">
         <span v-if="title" class="ui-toast__title">{{ title }}</span>
-        <span v-if="time" class="ui-toast__time">{{ time }}</span>
+        <span v-if="time" class="ui-toast__time cczj-flex-shrink-0">{{ time }}</span>
       </div>
       <slot>
         <div v-if="detail" class="ui-toast__detail">
@@ -57,7 +57,7 @@ const levelIcon = (lvl: string) => iconMap[lvl] || 'i'
     </div>
 
     <!-- 关闭按钮 -->
-    <button class="ui-toast__close" type="button" @click.stop="emit('close')" :aria-label="tr('common.close')">
+    <button class="ui-toast__close cczj-flex cczj-items-center cczj-justify-center cczj-flex-shrink-0" type="button" @click.stop="emit('close')" :aria-label="tr('common.close')">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
         <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
       </svg>
@@ -67,28 +67,19 @@ const levelIcon = (lvl: string) => iconMap[lvl] || 'i'
 
 <style scoped>
 .ui-toast {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
   min-width: 280px;
   max-width: 420px;
   background: var(--bg-card);
-  border: 1px solid var(--border);
+  @apply cczj-border;
   border-radius: var(--radius-lg);
   padding: 12px 14px;
-  box-shadow: var(--shadow-lg);
-  color: var(--text-primary);
-  overflow: hidden;
-  pointer-events: auto;
+  @apply cczj-shadow-lg cczj-text-primary cczj-overflow-hidden cczj-pointer-events-auto;
 }
 
 /* 等级边框色 —— 用左侧 accent bar */
 .ui-toast::before {
   content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  bottom: 0;
+  @apply cczj-absolute cczj-top-0 cczj-left-0 cczj-bottom-0;
   width: 4px;
   border-top-left-radius: var(--radius-lg);
   border-bottom-left-radius: var(--radius-lg);
@@ -101,11 +92,7 @@ const levelIcon = (lvl: string) => iconMap[lvl] || 'i'
 .ui-toast__icon {
   width: 28px;
   height: 28px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+  @apply cczj-rounded-50;
   color: var(--accent-contrast);
   background: var(--accent);
 }
@@ -115,50 +102,43 @@ const levelIcon = (lvl: string) => iconMap[lvl] || 'i'
 
 /* 正文 */
 .ui-toast__body {
-  flex: 1;
-  min-width: 0;
+  @apply cczj-flex-1;
 }
 .ui-toast__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 4px;
+  @apply cczj-mb-2;
 }
 .ui-toast__title {
   font-size: var(--font);
-  font-weight: 700;
+  @apply cczj-font-bold;
 }
 .ui-toast__time {
   font-size: var(--font-xs);
-  color: var(--text-muted);
-  flex-shrink: 0;
+  @apply cczj-text-muted;
 }
 
 /* Detail 展开 */
 .ui-toast__detail {
-  margin-top: 6px;
+  @apply cczj-mt-3;
   font-size: var(--font-xs);
 }
 .ui-toast__detail summary {
-  cursor: pointer;
-  color: var(--accent);
+  @apply cczj-cursor-pointer cczj-text-accent;
   user-select: none;
   -webkit-user-select: none;
 }
-.ui-toast__detail summary:hover { text-decoration: underline; }
+.ui-toast__detail summary:hover { @apply cczj-underline; }
 .ui-toast__detail pre {
   margin: 6px 0 0 0;
   padding: 8px 10px;
   background: var(--bg-secondary);
   border-radius: var(--radius-sm);
-  color: var(--text-secondary);
+  @apply cczj-text-secondary;
   font-family: 'SF Mono', Consolas, 'Courier New', monospace;
   font-size: var(--font-xs);
-  white-space: pre-wrap;
+  @apply cczj-whitespace-pre;
   word-break: break-word;
   max-height: 160px;
-  overflow-y: auto;
+  @apply cczj-overflow-y-auto;
   user-select: text;
   -webkit-user-select: text;
 }
@@ -167,18 +147,14 @@ const levelIcon = (lvl: string) => iconMap[lvl] || 'i'
 .ui-toast__close {
   background: transparent;
   border: none;
-  cursor: pointer;
+  @apply cczj-cursor-pointer;
   padding: 2px;
   border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  @apply cczj-text-muted;
   transition: background var(--transition-fast), color var(--transition-fast);
-  flex-shrink: 0;
 }
 .ui-toast__close:hover {
   background: var(--bg-hover);
-  color: var(--text-primary);
+  @apply cczj-text-primary;
 }
 </style>

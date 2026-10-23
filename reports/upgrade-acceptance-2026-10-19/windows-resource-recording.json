@@ -1,0 +1,2399 @@
+{
+  "scenario": {
+    "production": true,
+    "cold_baseline": false,
+    "natural_gc": true,
+    "render_offscreen": false,
+    "play_seconds": 2.1,
+    "cycles": 3,
+    "idle_seconds": 15,
+    "extra_browser_args": [],
+    "bare_video": false,
+    "no_preview": false
+  },
+  "gpu_info": {
+    "gpu": {
+      "devices": [
+        {
+          "vendorId": 4318,
+          "deviceId": 9634,
+          "subSysId": 2297761852,
+          "revision": 161,
+          "vendorString": "",
+          "deviceString": "NVIDIA GeForce RTX 3050 Laptop GPU",
+          "driverVendor": "NVIDIA",
+          "driverVersion": "32.0.15.9282"
+        },
+        {
+          "vendorId": 32902,
+          "deviceId": 39528,
+          "subSysId": 2297761852,
+          "revision": 1,
+          "vendorString": "",
+          "deviceString": "Intel(R) UHD Graphics",
+          "driverVendor": "",
+          "driverVersion": "27.20.100.9749"
+        },
+        {
+          "vendorId": 32902,
+          "deviceId": 39528,
+          "subSysId": 2297761852,
+          "revision": 1,
+          "vendorString": "",
+          "deviceString": "Intel(R) UHD Graphics",
+          "driverVendor": "",
+          "driverVersion": "27.20.100.9749"
+        },
+        {
+          "vendorId": 32902,
+          "deviceId": 39528,
+          "subSysId": 2297761852,
+          "revision": 1,
+          "vendorString": "",
+          "deviceString": "Intel(R) UHD Graphics",
+          "driverVendor": "",
+          "driverVersion": "27.20.100.9749"
+        },
+        {
+          "vendorId": 5140,
+          "deviceId": 140,
+          "subSysId": 0,
+          "revision": 0,
+          "vendorString": "",
+          "deviceString": "Microsoft Basic Render Driver",
+          "driverVendor": "",
+          "driverVersion": "10.0.19041.5794"
+        }
+      ],
+      "auxAttributes": {
+        "amdSwitchable": false,
+        "bgra8OverlaySupport": "SCALING",
+        "canSupportThreadedTextureMailbox": false,
+        "directComposition": true,
+        "directMLFeatureLevel": "Not supported",
+        "directRenderingVersion": "",
+        "displayType": "ANGLE_D3D11",
+        "dx12FeatureLevel": "Not supported",
+        "glExtensions": "GL_AMD_performance_monitor GL_ANGLE_base_vertex_base_instance_shader_builtin GL_ANGLE_blob_cache GL_ANGLE_client_arrays GL_ANGLE_clip_cull_distance GL_ANGLE_copy_texture_3d GL_ANGLE_depth_texture GL_ANGLE_framebuffer_blit GL_ANGLE_framebuffer_multisample GL_ANGLE_get_serialized_context_string GL_ANGLE_get_tex_level_parameter GL_ANGLE_instanced_arrays GL_ANGLE_memory_size GL_ANGLE_multiview_multisample GL_ANGLE_pack_reverse_row_order GL_ANGLE_polygon_mode GL_ANGLE_program_binary_readiness_query GL_ANGLE_program_cache_control GL_ANGLE_provoking_vertex GL_ANGLE_renderability_validation GL_ANGLE_request_extension GL_ANGLE_robust_client_memory GL_ANGLE_shader_pixel_local_storage GL_ANGLE_shader_pixel_local_storage_coherent GL_ANGLE_stencil_texturing GL_ANGLE_texture_compression_dxt3 GL_ANGLE_texture_compression_dxt5 GL_ANGLE_texture_multisample GL_ANGLE_texture_usage GL_ANGLE_translated_shader_source GL_APPLE_clip_distance GL_ARM_rgba8 GL_CHROMIUM_bind_generates_resource GL_CHROMIUM_bind_uniform_location GL_CHROMIUM_copy_compressed_texture GL_CHROMIUM_copy_texture GL_CHROMIUM_lose_context GL_EXT_EGL_image_external_wrap_modes GL_EXT_base_instance GL_EXT_blend_func_extended GL_EXT_blend_minmax GL_EXT_clip_control GL_EXT_clip_cull_distance GL_EXT_color_buffer_float GL_EXT_color_buffer_half_float GL_EXT_conservative_depth GL_EXT_debug_label GL_EXT_debug_marker GL_EXT_depth_clamp GL_EXT_discard_framebuffer GL_EXT_disjoint_timer_query GL_EXT_draw_buffers GL_EXT_draw_buffers_indexed GL_EXT_draw_elements_base_vertex GL_EXT_float_blend GL_EXT_frag_depth GL_EXT_instanced_arrays GL_EXT_map_buffer_range GL_EXT_occlusion_query_boolean GL_EXT_polygon_offset_clamp GL_EXT_read_format_bgra GL_EXT_render_snorm GL_EXT_robustness GL_EXT_sRGB GL_EXT_shader_texture_lod GL_EXT_texture_border_clamp GL_EXT_texture_compression_bptc GL_EXT_texture_compression_dxt1 GL_EXT_texture_compression_rgtc GL_EXT_texture_compression_s3tc_srgb GL_EXT_texture_filter_anisotropic GL_EXT_texture_format_BGRA8888 GL_EXT_texture_mirror_clamp_to_edge GL_EXT_texture_norm16 GL_EXT_texture_rg GL_EXT_texture_storage GL_EXT_texture_type_2_10_10_10_REV GL_EXT_unpack_subimage GL_KHR_debug GL_KHR_parallel_shader_compile GL_KHR_robustness GL_NV_EGL_stream_consumer_external GL_NV_fence GL_NV_framebuffer_blit GL_NV_pack_subimage GL_NV_pixel_buffer_object GL_NV_shader_noperspective_interpolation GL_OES_EGL_image GL_OES_EGL_image_external GL_OES_EGL_image_external_essl3 GL_OES_depth24 GL_OES_depth32 GL_OES_draw_buffers_indexed GL_OES_draw_elements_base_vertex GL_OES_element_index_uint GL_OES_fbo_render_mipmap GL_OES_get_program_binary GL_OES_mapbuffer GL_OES_packed_depth_stencil GL_OES_required_internalformat GL_OES_rgb8_rgba8 GL_OES_sample_variables GL_OES_shader_multisample_interpolation GL_OES_standard_derivatives GL_OES_surfaceless_context GL_OES_texture_border_clamp GL_OES_texture_float GL_OES_texture_float_linear GL_OES_texture_half_float GL_OES_texture_half_float_linear GL_OES_texture_npot GL_OES_texture_stencil8 GL_OES_texture_storage_multisample_2d_array GL_OES_vertex_array_object GL_OVR_multiview GL_OVR_multiview2 ",
+        "glImplementationParts": "(gl=egl-angle,angle=d3d11)",
+        "glRenderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3050 Laptop GPU (0x000025A2) Direct3D11 vs_5_0 ps_5_0, D3D11-32.0.15.9282)",
+        "glResetNotificationStrategy": 33362,
+        "glVendor": "Google Inc. (NVIDIA)",
+        "glVersion": "OpenGL ES 3.0 (ANGLE 2.1.48257 git hash: 21c0f7a0f5af)",
+        "glWsExtensions": "EGL_EXT_create_context_robustness EGL_ANGLE_d3d_share_handle_client_buffer EGL_ANGLE_d3d_texture_client_buffer EGL_ANGLE_surface_d3d_texture_2d_share_handle EGL_ANGLE_query_surface_pointer EGL_ANGLE_window_fixed_size EGL_ANGLE_keyed_mutex EGL_ANGLE_surface_orientation EGL_ANGLE_direct_composition EGL_NV_post_sub_buffer EGL_KHR_create_context EGL_KHR_image EGL_KHR_image_base EGL_KHR_gl_texture_2D_image EGL_KHR_gl_texture_cubemap_image EGL_KHR_gl_renderbuffer_image EGL_KHR_get_all_proc_addresses EGL_KHR_stream EGL_KHR_stream_consumer_gltexture EGL_NV_stream_consumer_gltexture_yuv EGL_ANGLE_stream_producer_d3d_texture EGL_ANGLE_create_context_webgl_compatibility EGL_CHROMIUM_create_context_bind_generates_resource EGL_CHROMIUM_sync_control EGL_EXT_pixel_format_float EGL_KHR_surfaceless_context EGL_ANGLE_display_texture_share_group EGL_ANGLE_display_semaphore_share_group EGL_ANGLE_create_context_client_arrays EGL_ANGLE_program_cache_control EGL_ANGLE_robust_resource_initialization EGL_ANGLE_create_context_extensions_enabled EGL_ANDROID_blob_cache EGL_ANDROID_recordable EGL_ANGLE_image_d3d11_texture EGL_ANGLE_create_context_backwards_compatible EGL_KHR_no_config_context EGL_KHR_create_context_no_error EGL_KHR_reusable_sync EGL_ANGLE_memory_usage_report ",
+        "glWsVendor": "Google Inc. (NVIDIA)",
+        "glWsVersion": "1.5 (ANGLE 2.1.48257 git hash: 21c0f7a0f5af)",
+        "inProcessGpu": false,
+        "initializationTime": 0.27135,
+        "isAsan": false,
+        "isClangCoverage": false,
+        "jpegDecodeAcceleratorSupported": false,
+        "maxMsaaSamples": "8",
+        "nv12OverlaySupport": "SCALING",
+        "optimus": false,
+        "p010OverlaySupport": "SOFTWARE",
+        "passthroughCmdDecoder": true,
+        "pixelShaderVersion": "5.0",
+        "playreadyHardwareDrmSupport": false,
+        "processCrashCount": 0,
+        "rgb10a2OverlaySupport": "SCALING",
+        "sandboxed": true,
+        "skiaBackendType": "GaneshGL",
+        "subpixelFontRendering": true,
+        "supportsD3dSharedImages": true,
+        "supportsDirectML": false,
+        "supportsDx12": false,
+        "supportsOverlays": true,
+        "supportsVulkan": false,
+        "targetCpuBits": 64,
+        "vertexShaderVersion": "5.0",
+        "visibilityCallbackCallCount": 0,
+        "vulkanVersion": "Not supported",
+        "yuy2OverlaySupport": "SCALING"
+      },
+      "featureStatus": {
+        "2d_canvas": "enabled",
+        "direct_rendering_display_compositor": "disabled_off_ok",
+        "gpu_compositing": "enabled",
+        "multiple_raster_threads": "enabled_on",
+        "opengl": "enabled_on",
+        "rasterization": "enabled",
+        "raw_draw": "disabled_off_ok",
+        "skia_graphite": "disabled_off",
+        "trees_in_viz": "disabled_off",
+        "video_decode": "enabled",
+        "video_encode": "enabled",
+        "webgl": "enabled",
+        "webgpu": "enabled",
+        "webnn": "disabled_off"
+      },
+      "driverBugWorkarounds": [
+        "disable_accelerated_vp9_encode",
+        "disable_d3d11_vp9_ksvc_decoding",
+        "disable_d3d12_video_encoder",
+        "disable_dcomp_texture",
+        "disable_dynamic_video_encode_framerate_update",
+        "disable_hevc_hmft_cbr_encoding",
+        "disable_vp9_hmft_temporal_encoding",
+        "enable_bgra8_overlays_with_yuv_overlay_support",
+        "enable_webgl_timer_query_extensions",
+        "exit_on_context_lost",
+        "force_rgb10a2_overlay_support",
+        "unpack_overlapping_rows_separately_unpack_buffer",
+        "use_first_valid_ref_for_av1_invalid_ref",
+        "use_g22_topleft_color_space_for_yuv_vp",
+        "disabled_extension_GL_KHR_blend_equation_advanced",
+        "disabled_extension_GL_KHR_blend_equation_advanced_coherent"
+      ],
+      "videoDecoding": [],
+      "videoEncoding": []
+    },
+    "modelName": "",
+    "modelVersion": "",
+    "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\155.0.4283.62\\msedgewebview2.exe\" --embedded-browser-webview=1 --webview-exe-name=probe-9296.exe --user-data-dir=\"C:\\Users\\18446\\AppData\\Local\\Temp\\cczj-native-playback-ur0in0ox\\EBWebView\" --noerrdialogs --embedded-browser-webview-dpi-awareness=2 --autoplay-policy=no-user-gesture-required --disable-background-timer-throttling --disable-features=msSmartScreenProtection --remote-debugging-address=127.0.0.1 --remote-debugging-port=9296 --mojo-named-platform-channel-pipe=55588.47180.18214891228093966249 --flag-switches-begin --flag-switches-end --no-default-browser-check --disable-component-extensions-with-background-pages --no-first-run --disable-default-apps --internet-explorer-integration=none --disable-popup-blocking --disable-sync --sdsm-state=off"
+  },
+  "samples": [
+    {
+      "label": "closed-baseline",
+      "test_gc": false,
+      "native": {
+        "sampled_at_ms": 1792378508042,
+        "heap_alloc_bytes": 941544,
+        "heap_inuse_bytes": 2293760,
+        "heap_retained_bytes": 0,
+        "go_sys_bytes": 11554816,
+        "heap_objects": 7413,
+        "num_gc": 0,
+        "last_gc_pause_ms": 0,
+        "goroutines": 12,
+        "native_available": true,
+        "native_scope": "process_tree",
+        "proportional_bytes": null,
+        "private_resident_bytes": null,
+        "file_descriptors": null,
+        "working_set_bytes": 23179264,
+        "private_bytes": 53526528,
+        "tree_working_set_bytes": 608055296,
+        "tree_private_bytes": 553725952,
+        "system_total_bytes": 16800157696,
+        "system_available_bytes": 1263620096,
+        "system_memory_percent": 92.47852241112678,
+        "working_set_percent": 0.13797051444058064,
+        "cpu_percent": 10.154269917366113,
+        "process_count": 7,
+        "handles": 3290,
+        "processes": [
+          {
+            "pid": 43424,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 262119424,
+            "private_bytes": 354971648,
+            "handles": 864,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 52228,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 131641344,
+            "private_bytes": 82907136,
+            "handles": 296,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 55588,
+            "name": "probe-9296.exe",
+            "working_set_bytes": 23179264,
+            "private_bytes": 53526528,
+            "handles": 313,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 33668,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 111669248,
+            "private_bytes": 38432768,
+            "handles": 1094,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 57356,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 43253760,
+            "private_bytes": 13615104,
+            "handles": 381,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 55992,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 23502848,
+            "private_bytes": 7733248,
+            "handles": 190,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 5188,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 12689408,
+            "private_bytes": 2539520,
+            "handles": 152,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          }
+        ],
+        "notes": []
+      },
+      "process_roles": [
+        {
+          "type": "browser",
+          "id": 33668,
+          "cpuTime": 1.244794
+        },
+        {
+          "type": "renderer",
+          "id": 52228,
+          "cpuTime": 0.703601
+        },
+        {
+          "type": "GPU",
+          "id": 43424,
+          "cpuTime": 1.638804
+        },
+        {
+          "type": "network.mojom.NetworkService",
+          "id": 57356,
+          "cpuTime": 0.31283
+        },
+        {
+          "type": "storage.mojom.StorageService",
+          "id": 55992,
+          "cpuTime": 0.070464
+        }
+      ],
+      "memory_dump": null,
+      "browser": {
+        "JSHeapUsedSize": 14192828,
+        "Nodes": 519,
+        "JSEventListeners": 276
+      },
+      "media_properties": {
+        "F249C1F32D2B3E8C62A59F7323B26E17": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        }
+      },
+      "cache": {
+        "activePlayers": 0,
+        "idleTrimPending": true,
+        "memoryLimitBytes": 134217728,
+        "hits": 0,
+        "misses": 0,
+        "entries": 0,
+        "totalEntries": 2,
+        "bytes": 3513720,
+        "totalSegments": 0,
+        "playedSegments": 0,
+        "hitRate": 0,
+        "avgFetchMs": 284,
+        "prefetchCount": 15,
+        "prefetchTarget": 0,
+        "queued": 0,
+        "inflight": 0,
+        "bufferOffset": 8,
+        "spreadStep": 2,
+        "cacheMB": 3.3509445190429688,
+        "networkMode": "normal",
+        "concurrency": 1,
+        "fragmentTimeout": 8000,
+        "consecutiveSlowSegs": 0
+      },
+      "resources": {
+        "js_heap": {
+          "source": "performance.memory",
+          "used_bytes": 40138133,
+          "total_bytes": 45055665,
+          "limit_bytes": 4395630592
+        },
+        "player": null,
+        "players": [],
+        "registered_player_count": 0,
+        "architecture": {
+          "revision": "player-seams-20261019-4",
+          "presentation": {
+            "ui": "desktop",
+            "host": "browser"
+          },
+          "active_player_count": 0,
+          "active_players": [],
+          "last_closed_player": {
+            "id": "mvenvus8-1",
+            "closed_at_ms": 1792378507377,
+            "lifetime_ms": 985,
+            "media_loads": 1
+          }
+        },
+        "attached_dom": {
+          "video_count": 0,
+          "canvas_count": 0,
+          "image_count": 0,
+          "videos": [],
+          "canvas_rgba_estimate_bytes": 0,
+          "image_rgba_estimate_bytes": 0
+        }
+      }
+    },
+    {
+      "label": "playing-no-preview",
+      "test_gc": false,
+      "native": {
+        "sampled_at_ms": 1792378512042,
+        "heap_alloc_bytes": 1154856,
+        "heap_inuse_bytes": 2449408,
+        "heap_retained_bytes": 0,
+        "go_sys_bytes": 11554816,
+        "heap_objects": 9448,
+        "num_gc": 0,
+        "last_gc_pause_ms": 0,
+        "goroutines": 12,
+        "native_available": true,
+        "native_scope": "process_tree",
+        "proportional_bytes": null,
+        "private_resident_bytes": null,
+        "file_descriptors": null,
+        "working_set_bytes": 23359488,
+        "private_bytes": 53682176,
+        "tree_working_set_bytes": 700203008,
+        "tree_private_bytes": 614109184,
+        "system_total_bytes": 16800157696,
+        "system_available_bytes": 1351823360,
+        "system_memory_percent": 91.95350791069146,
+        "working_set_percent": 0.13904326627577865,
+        "cpu_percent": 1.8226124726449822,
+        "process_count": 7,
+        "handles": 3284,
+        "processes": [
+          {
+            "pid": 43424,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 274563072,
+            "private_bytes": 335675392,
+            "handles": 851,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 52228,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 209977344,
+            "private_bytes": 161312768,
+            "handles": 301,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 55588,
+            "name": "probe-9296.exe",
+            "working_set_bytes": 23359488,
+            "private_bytes": 53682176,
+            "handles": 313,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 33668,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 112730112,
+            "private_bytes": 39464960,
+            "handles": 1118,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 57356,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 43302912,
+            "private_bytes": 13701120,
+            "handles": 359,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 55992,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 23580672,
+            "private_bytes": 7733248,
+            "handles": 190,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 5188,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 12689408,
+            "private_bytes": 2539520,
+            "handles": 152,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          }
+        ],
+        "notes": []
+      },
+      "process_roles": [
+        {
+          "type": "browser",
+          "id": 33668,
+          "cpuTime": 2.094015
+        },
+        {
+          "type": "renderer",
+          "id": 52228,
+          "cpuTime": 1.145386
+        },
+        {
+          "type": "GPU",
+          "id": 43424,
+          "cpuTime": 1.771321
+        },
+        {
+          "type": "network.mojom.NetworkService",
+          "id": 57356,
+          "cpuTime": 0.316331
+        },
+        {
+          "type": "storage.mojom.StorageService",
+          "id": 55992,
+          "cpuTime": 0.0708
+        }
+      ],
+      "memory_dump": null,
+      "browser": {
+        "JSHeapUsedSize": 14597672,
+        "Nodes": 862,
+        "JSEventListeners": 248
+      },
+      "media_properties": {
+        "F249C1F32D2B3E8C62A59F7323B26E17": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        },
+        "33E9A2512F8BDADC930AD041D53C2873": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        }
+      },
+      "cache": {
+        "activePlayers": 1,
+        "idleTrimPending": false,
+        "memoryLimitBytes": 134217728,
+        "hits": 2,
+        "misses": 7,
+        "entries": 0,
+        "totalEntries": 9,
+        "bytes": 15828660,
+        "totalSegments": 0,
+        "playedSegments": 0,
+        "hitRate": 0.2222222222222222,
+        "avgFetchMs": 246,
+        "prefetchCount": 13,
+        "prefetchTarget": 0,
+        "queued": 0,
+        "inflight": 0,
+        "bufferOffset": 8,
+        "spreadStep": 1,
+        "cacheMB": 15.095386505126953,
+        "networkMode": "normal",
+        "concurrency": 1,
+        "fragmentTimeout": 8000,
+        "consecutiveSlowSegs": 0
+      },
+      "resources": {
+        "js_heap": {
+          "source": "performance.memory",
+          "used_bytes": 45713382,
+          "total_bytes": 54175766,
+          "limit_bytes": 4395630592
+        },
+        "player": {
+          "quality_mode": "original",
+          "enhancement_active": false,
+          "presentation": {
+            "profile": {
+              "ui": "desktop",
+              "host": "browser"
+            },
+            "controls": "desktop",
+            "fullscreen_adapter": "element",
+            "pip_adapter": "element",
+            "native_volume": false
+          },
+          "hls": {
+            "active": true,
+            "bandwidth_estimate_bps": 500000,
+            "config": {
+              "forward_seconds": 30,
+              "max_forward_seconds": 60,
+              "back_seconds": 30,
+              "max_bytes": 60000000
+            }
+          },
+          "thumbnail": {
+            "active": false,
+            "hls_active": false,
+            "pending_seek": false,
+            "ready_state": null,
+            "buffered_ranges": []
+          },
+          "issues": [],
+          "segment_cache": {
+            "activePlayers": 1,
+            "idleTrimPending": false,
+            "memoryLimitBytes": 134217728,
+            "hits": 2,
+            "misses": 7,
+            "entries": 0,
+            "totalEntries": 9,
+            "bytes": 15828660,
+            "totalSegments": 0,
+            "playedSegments": 0,
+            "hitRate": 0.2222222222222222,
+            "avgFetchMs": 246,
+            "prefetchCount": 13,
+            "prefetchTarget": 0,
+            "queued": 0,
+            "inflight": 0,
+            "bufferOffset": 8,
+            "spreadStep": 1,
+            "cacheMB": 15.095386505126953,
+            "concurrency": 1,
+            "fragmentTimeout": 8000,
+            "consecutiveSlowSegs": 0
+          }
+        },
+        "players": [
+          {
+            "session_id": "mvenvwkn-2",
+            "snapshot": {
+              "quality_mode": "original",
+              "enhancement_active": false,
+              "presentation": {
+                "profile": {
+                  "ui": "desktop",
+                  "host": "browser"
+                },
+                "controls": "desktop",
+                "fullscreen_adapter": "element",
+                "pip_adapter": "element",
+                "native_volume": false
+              },
+              "hls": {
+                "active": true,
+                "bandwidth_estimate_bps": 500000,
+                "config": {
+                  "forward_seconds": 30,
+                  "max_forward_seconds": 60,
+                  "back_seconds": 30,
+                  "max_bytes": 60000000
+                }
+              },
+              "thumbnail": {
+                "active": false,
+                "hls_active": false,
+                "pending_seek": false,
+                "ready_state": null,
+                "buffered_ranges": []
+              },
+              "issues": [],
+              "segment_cache": {
+                "activePlayers": 1,
+                "idleTrimPending": false,
+                "memoryLimitBytes": 134217728,
+                "hits": 2,
+                "misses": 7,
+                "entries": 0,
+                "totalEntries": 9,
+                "bytes": 15828660,
+                "totalSegments": 0,
+                "playedSegments": 0,
+                "hitRate": 0.2222222222222222,
+                "avgFetchMs": 246,
+                "prefetchCount": 13,
+                "prefetchTarget": 0,
+                "queued": 0,
+                "inflight": 0,
+                "bufferOffset": 8,
+                "spreadStep": 1,
+                "cacheMB": 15.095386505126953,
+                "concurrency": 1,
+                "fragmentTimeout": 8000,
+                "consecutiveSlowSegs": 0
+              }
+            }
+          }
+        ],
+        "registered_player_count": 1,
+        "architecture": {
+          "revision": "player-seams-20261019-4",
+          "presentation": {
+            "ui": "desktop",
+            "host": "browser"
+          },
+          "active_player_count": 1,
+          "active_players": [
+            {
+              "id": "mvenvwkn-2",
+              "started_at_ms": 1792378508711,
+              "media_loads": 1
+            }
+          ],
+          "last_closed_player": {
+            "id": "mvenvus8-1",
+            "closed_at_ms": 1792378507377,
+            "lifetime_ms": 985,
+            "media_loads": 1
+          }
+        },
+        "attached_dom": {
+          "video_count": 1,
+          "canvas_count": 1,
+          "image_count": 1,
+          "videos": [
+            {
+              "current_time": 3.217783,
+              "ready_state": 4,
+              "network_state": 2,
+              "paused": false,
+              "ended": false,
+              "width": 1080,
+              "height": 608,
+              "has_source": true,
+              "buffered_ranges": [
+                [
+                  0,
+                  35.999999
+                ]
+              ],
+              "buffer_ahead_seconds": 32.782216000000005,
+              "buffer_behind_seconds": 3.217783
+            }
+          ],
+          "canvas_rgba_estimate_bytes": 180000,
+          "image_rgba_estimate_bytes": 4194304
+        }
+      }
+    },
+    {
+      "label": "playing-preview",
+      "test_gc": false,
+      "native": {
+        "sampled_at_ms": 1792378515042,
+        "heap_alloc_bytes": 1299680,
+        "heap_inuse_bytes": 2555904,
+        "heap_retained_bytes": 0,
+        "go_sys_bytes": 11554816,
+        "heap_objects": 10765,
+        "num_gc": 0,
+        "last_gc_pause_ms": 0,
+        "goroutines": 12,
+        "native_available": true,
+        "native_scope": "process_tree",
+        "proportional_bytes": null,
+        "private_resident_bytes": null,
+        "file_descriptors": null,
+        "working_set_bytes": 23457792,
+        "private_bytes": 53764096,
+        "tree_working_set_bytes": 749486080,
+        "tree_private_bytes": 658444288,
+        "system_total_bytes": 16800157696,
+        "system_available_bytes": 1294999552,
+        "system_memory_percent": 92.29174168818469,
+        "working_set_percent": 0.1396284036404321,
+        "cpu_percent": 0.6511580937338263,
+        "process_count": 7,
+        "handles": 3302,
+        "processes": [
+          {
+            "pid": 43424,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 303779840,
+            "private_bytes": 362151936,
+            "handles": 871,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 52228,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 231256064,
+            "private_bytes": 180183040,
+            "handles": 303,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 55588,
+            "name": "probe-9296.exe",
+            "working_set_bytes": 23457792,
+            "private_bytes": 53764096,
+            "handles": 313,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 33668,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 111419392,
+            "private_bytes": 38371328,
+            "handles": 1114,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 57356,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 43302912,
+            "private_bytes": 13701120,
+            "handles": 359,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 55992,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 23580672,
+            "private_bytes": 7733248,
+            "handles": 190,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 5188,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 12689408,
+            "private_bytes": 2539520,
+            "handles": 152,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          }
+        ],
+        "notes": []
+      },
+      "process_roles": [
+        {
+          "type": "browser",
+          "id": 33668,
+          "cpuTime": 2.241319
+        },
+        {
+          "type": "renderer",
+          "id": 52228,
+          "cpuTime": 1.289256
+        },
+        {
+          "type": "GPU",
+          "id": 43424,
+          "cpuTime": 1.998849
+        },
+        {
+          "type": "network.mojom.NetworkService",
+          "id": 57356,
+          "cpuTime": 0.31686
+        },
+        {
+          "type": "storage.mojom.StorageService",
+          "id": 55992,
+          "cpuTime": 0.0708
+        }
+      ],
+      "memory_dump": null,
+      "browser": {
+        "JSHeapUsedSize": 17919800,
+        "Nodes": 1031,
+        "JSEventListeners": 324
+      },
+      "media_properties": {
+        "F249C1F32D2B3E8C62A59F7323B26E17": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        },
+        "33E9A2512F8BDADC930AD041D53C2873": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        },
+        "7FE6BFA1C7F98507CF6E2941E1C3CDE7": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        }
+      },
+      "cache": {
+        "activePlayers": 1,
+        "idleTrimPending": false,
+        "memoryLimitBytes": 134217728,
+        "hits": 4,
+        "misses": 8,
+        "entries": 0,
+        "totalEntries": 10,
+        "bytes": 17588152,
+        "totalSegments": 0,
+        "playedSegments": 0,
+        "hitRate": 0.3333333333333333,
+        "avgFetchMs": 244,
+        "prefetchCount": 13,
+        "prefetchTarget": 0,
+        "queued": 0,
+        "inflight": 0,
+        "bufferOffset": 8,
+        "spreadStep": 1,
+        "cacheMB": 16.77336883544922,
+        "networkMode": "normal",
+        "concurrency": 1,
+        "fragmentTimeout": 8000,
+        "consecutiveSlowSegs": 0
+      },
+      "resources": {
+        "js_heap": {
+          "source": "performance.memory",
+          "used_bytes": 72195132,
+          "total_bytes": 78946636,
+          "limit_bytes": 4395630592
+        },
+        "player": {
+          "quality_mode": "original",
+          "enhancement_active": false,
+          "presentation": {
+            "profile": {
+              "ui": "desktop",
+              "host": "browser"
+            },
+            "controls": "desktop",
+            "fullscreen_adapter": "element",
+            "pip_adapter": "element",
+            "native_volume": false
+          },
+          "hls": {
+            "active": true,
+            "bandwidth_estimate_bps": 500000,
+            "config": {
+              "forward_seconds": 30,
+              "max_forward_seconds": 60,
+              "back_seconds": 30,
+              "max_bytes": 60000000
+            }
+          },
+          "thumbnail": {
+            "active": true,
+            "hls_active": true,
+            "pending_seek": false,
+            "ready_state": 4,
+            "buffered_ranges": [
+              [
+                20,
+                23.999999
+              ]
+            ]
+          },
+          "issues": [],
+          "segment_cache": {
+            "activePlayers": 1,
+            "idleTrimPending": false,
+            "memoryLimitBytes": 134217728,
+            "hits": 4,
+            "misses": 8,
+            "entries": 0,
+            "totalEntries": 10,
+            "bytes": 17588152,
+            "totalSegments": 0,
+            "playedSegments": 0,
+            "hitRate": 0.3333333333333333,
+            "avgFetchMs": 244,
+            "prefetchCount": 13,
+            "prefetchTarget": 0,
+            "queued": 0,
+            "inflight": 0,
+            "bufferOffset": 8,
+            "spreadStep": 1,
+            "cacheMB": 16.77336883544922,
+            "concurrency": 1,
+            "fragmentTimeout": 8000,
+            "consecutiveSlowSegs": 0
+          }
+        },
+        "players": [
+          {
+            "session_id": "mvenvwkn-2",
+            "snapshot": {
+              "quality_mode": "original",
+              "enhancement_active": false,
+              "presentation": {
+                "profile": {
+                  "ui": "desktop",
+                  "host": "browser"
+                },
+                "controls": "desktop",
+                "fullscreen_adapter": "element",
+                "pip_adapter": "element",
+                "native_volume": false
+              },
+              "hls": {
+                "active": true,
+                "bandwidth_estimate_bps": 500000,
+                "config": {
+                  "forward_seconds": 30,
+                  "max_forward_seconds": 60,
+                  "back_seconds": 30,
+                  "max_bytes": 60000000
+                }
+              },
+              "thumbnail": {
+                "active": true,
+                "hls_active": true,
+                "pending_seek": false,
+                "ready_state": 4,
+                "buffered_ranges": [
+                  [
+                    20,
+                    23.999999
+                  ]
+                ]
+              },
+              "issues": [],
+              "segment_cache": {
+                "activePlayers": 1,
+                "idleTrimPending": false,
+                "memoryLimitBytes": 134217728,
+                "hits": 4,
+                "misses": 8,
+                "entries": 0,
+                "totalEntries": 10,
+                "bytes": 17588152,
+                "totalSegments": 0,
+                "playedSegments": 0,
+                "hitRate": 0.3333333333333333,
+                "avgFetchMs": 244,
+                "prefetchCount": 13,
+                "prefetchTarget": 0,
+                "queued": 0,
+                "inflight": 0,
+                "bufferOffset": 8,
+                "spreadStep": 1,
+                "cacheMB": 16.77336883544922,
+                "concurrency": 1,
+                "fragmentTimeout": 8000,
+                "consecutiveSlowSegs": 0
+              }
+            }
+          }
+        ],
+        "registered_player_count": 1,
+        "architecture": {
+          "revision": "player-seams-20261019-4",
+          "presentation": {
+            "ui": "desktop",
+            "host": "browser"
+          },
+          "active_player_count": 1,
+          "active_players": [
+            {
+              "id": "mvenvwkn-2",
+              "started_at_ms": 1792378508711,
+              "media_loads": 1
+            }
+          ],
+          "last_closed_player": {
+            "id": "mvenvus8-1",
+            "closed_at_ms": 1792378507377,
+            "lifetime_ms": 985,
+            "media_loads": 1
+          }
+        },
+        "attached_dom": {
+          "video_count": 2,
+          "canvas_count": 2,
+          "image_count": 2,
+          "videos": [
+            {
+              "current_time": 6.28071,
+              "ready_state": 4,
+              "network_state": 2,
+              "paused": false,
+              "ended": false,
+              "width": 1080,
+              "height": 608,
+              "has_source": true,
+              "buffered_ranges": [
+                [
+                  0,
+                  37.208332
+                ]
+              ],
+              "buffer_ahead_seconds": 30.927622,
+              "buffer_behind_seconds": 6.28071
+            },
+            {
+              "current_time": 20.706415,
+              "ready_state": 4,
+              "network_state": 2,
+              "paused": true,
+              "ended": false,
+              "width": 1080,
+              "height": 608,
+              "has_source": true,
+              "buffered_ranges": [
+                [
+                  20,
+                  23.999999
+                ]
+              ],
+              "buffer_ahead_seconds": 3.293583999999999,
+              "buffer_behind_seconds": 0.7064149999999998
+            }
+          ],
+          "canvas_rgba_estimate_bytes": 327456,
+          "image_rgba_estimate_bytes": 4341760
+        }
+      }
+    },
+    {
+      "label": "closed-cycle-1",
+      "test_gc": false,
+      "native": {
+        "sampled_at_ms": 1792378516042,
+        "heap_alloc_bytes": 1348232,
+        "heap_inuse_bytes": 2605056,
+        "heap_retained_bytes": 0,
+        "go_sys_bytes": 11554816,
+        "heap_objects": 11233,
+        "num_gc": 0,
+        "last_gc_pause_ms": 0,
+        "goroutines": 12,
+        "native_available": true,
+        "native_scope": "process_tree",
+        "proportional_bytes": null,
+        "private_resident_bytes": null,
+        "file_descriptors": null,
+        "working_set_bytes": 23511040,
+        "private_bytes": 53821440,
+        "tree_working_set_bytes": 701509632,
+        "tree_private_bytes": 613072896,
+        "system_total_bytes": 16800157696,
+        "system_available_bytes": 1378807808,
+        "system_memory_percent": 91.79288770409408,
+        "working_set_percent": 0.13994535304628608,
+        "cpu_percent": 2.6034697178232054,
+        "process_count": 7,
+        "handles": 3282,
+        "processes": [
+          {
+            "pid": 43424,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 299581440,
+            "private_bytes": 359616512,
+            "handles": 849,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 52228,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 186720256,
+            "private_bytes": 137007104,
+            "handles": 301,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 55588,
+            "name": "probe-9296.exe",
+            "working_set_bytes": 23511040,
+            "private_bytes": 53821440,
+            "handles": 313,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 33668,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 112070656,
+            "private_bytes": 38649856,
+            "handles": 1118,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 57356,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 43347968,
+            "private_bytes": 13701120,
+            "handles": 359,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 55992,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 23588864,
+            "private_bytes": 7737344,
+            "handles": 190,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 5188,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 12689408,
+            "private_bytes": 2539520,
+            "handles": 152,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          }
+        ],
+        "notes": []
+      },
+      "process_roles": [
+        {
+          "type": "browser",
+          "id": 33668,
+          "cpuTime": 2.258475
+        },
+        {
+          "type": "renderer",
+          "id": 52228,
+          "cpuTime": 1.379713
+        },
+        {
+          "type": "GPU",
+          "id": 43424,
+          "cpuTime": 2.031884
+        },
+        {
+          "type": "network.mojom.NetworkService",
+          "id": 57356,
+          "cpuTime": 0.32076
+        },
+        {
+          "type": "storage.mojom.StorageService",
+          "id": 55992,
+          "cpuTime": 0.071041
+        }
+      ],
+      "memory_dump": null,
+      "browser": {
+        "JSHeapUsedSize": 14324352,
+        "Nodes": 1022,
+        "JSEventListeners": 343
+      },
+      "media_properties": {
+        "F249C1F32D2B3E8C62A59F7323B26E17": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        },
+        "33E9A2512F8BDADC930AD041D53C2873": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        },
+        "7FE6BFA1C7F98507CF6E2941E1C3CDE7": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        }
+      },
+      "cache": {
+        "activePlayers": 0,
+        "idleTrimPending": true,
+        "memoryLimitBytes": 134217728,
+        "hits": 0,
+        "misses": 0,
+        "entries": 0,
+        "totalEntries": 10,
+        "bytes": 17588152,
+        "totalSegments": 0,
+        "playedSegments": 0,
+        "hitRate": 0,
+        "avgFetchMs": 244,
+        "prefetchCount": 13,
+        "prefetchTarget": 0,
+        "queued": 0,
+        "inflight": 0,
+        "bufferOffset": 8,
+        "spreadStep": 1,
+        "cacheMB": 16.77336883544922,
+        "networkMode": "normal",
+        "concurrency": 1,
+        "fragmentTimeout": 8000,
+        "consecutiveSlowSegs": 0
+      },
+      "resources": {
+        "js_heap": {
+          "source": "performance.memory",
+          "used_bytes": 48952430,
+          "total_bytes": 58999162,
+          "limit_bytes": 4395630592
+        },
+        "player": null,
+        "players": [],
+        "registered_player_count": 0,
+        "architecture": {
+          "revision": "player-seams-20261019-4",
+          "presentation": {
+            "ui": "desktop",
+            "host": "browser"
+          },
+          "active_player_count": 0,
+          "active_players": [],
+          "last_closed_player": {
+            "id": "mvenvwkn-2",
+            "closed_at_ms": 1792378515399,
+            "lifetime_ms": 6688,
+            "media_loads": 1
+          }
+        },
+        "attached_dom": {
+          "video_count": 0,
+          "canvas_count": 0,
+          "image_count": 0,
+          "videos": [],
+          "canvas_rgba_estimate_bytes": 0,
+          "image_rgba_estimate_bytes": 0
+        }
+      }
+    },
+    {
+      "label": "closed-cycle-2",
+      "test_gc": false,
+      "native": {
+        "sampled_at_ms": 1792378521042,
+        "heap_alloc_bytes": 1576928,
+        "heap_inuse_bytes": 2793472,
+        "heap_retained_bytes": 0,
+        "go_sys_bytes": 11554816,
+        "heap_objects": 13470,
+        "num_gc": 0,
+        "last_gc_pause_ms": 0,
+        "goroutines": 12,
+        "native_available": true,
+        "native_scope": "process_tree",
+        "proportional_bytes": null,
+        "private_resident_bytes": null,
+        "file_descriptors": null,
+        "working_set_bytes": 23728128,
+        "private_bytes": 54054912,
+        "tree_working_set_bytes": 740585472,
+        "tree_private_bytes": 649564160,
+        "system_total_bytes": 16800157696,
+        "system_available_bytes": 1361469440,
+        "system_memory_percent": 91.89609130678484,
+        "working_set_percent": 0.14123753139322914,
+        "cpu_percent": 1.17126875129433,
+        "process_count": 7,
+        "handles": 3285,
+        "processes": [
+          {
+            "pid": 43424,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 321613824,
+            "private_bytes": 381898752,
+            "handles": 849,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 52228,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 203259904,
+            "private_bytes": 150654976,
+            "handles": 301,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 55588,
+            "name": "probe-9296.exe",
+            "working_set_bytes": 23728128,
+            "private_bytes": 54054912,
+            "handles": 313,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 33668,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 112132096,
+            "private_bytes": 38674432,
+            "handles": 1118,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 57356,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 43569152,
+            "private_bytes": 14000128,
+            "handles": 362,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 55992,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 23592960,
+            "private_bytes": 7741440,
+            "handles": 190,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 5188,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 12689408,
+            "private_bytes": 2539520,
+            "handles": 152,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          }
+        ],
+        "notes": []
+      },
+      "process_roles": [
+        {
+          "type": "browser",
+          "id": 33668,
+          "cpuTime": 2.288131
+        },
+        {
+          "type": "renderer",
+          "id": 52228,
+          "cpuTime": 1.745133
+        },
+        {
+          "type": "GPU",
+          "id": 43424,
+          "cpuTime": 2.227791
+        },
+        {
+          "type": "network.mojom.NetworkService",
+          "id": 57356,
+          "cpuTime": 0.32734
+        },
+        {
+          "type": "storage.mojom.StorageService",
+          "id": 55992,
+          "cpuTime": 0.071239
+        }
+      ],
+      "memory_dump": null,
+      "browser": {
+        "JSHeapUsedSize": 16992192,
+        "Nodes": 1449,
+        "JSEventListeners": 452
+      },
+      "media_properties": {
+        "F249C1F32D2B3E8C62A59F7323B26E17": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        },
+        "33E9A2512F8BDADC930AD041D53C2873": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        },
+        "7FE6BFA1C7F98507CF6E2941E1C3CDE7": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        },
+        "4E9C3F8A0C748E8AB45A16E639E9F190": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        },
+        "FF9725ED0EC6701476A07188FC5ABFA0": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        }
+      },
+      "cache": {
+        "activePlayers": 0,
+        "idleTrimPending": true,
+        "memoryLimitBytes": 134217728,
+        "hits": 0,
+        "misses": 0,
+        "entries": 0,
+        "totalEntries": 10,
+        "bytes": 17588152,
+        "totalSegments": 0,
+        "playedSegments": 0,
+        "hitRate": 0,
+        "avgFetchMs": 244,
+        "prefetchCount": 13,
+        "prefetchTarget": 0,
+        "queued": 0,
+        "inflight": 0,
+        "bufferOffset": 8,
+        "spreadStep": 1,
+        "cacheMB": 16.77336883544922,
+        "networkMode": "normal",
+        "concurrency": 1,
+        "fragmentTimeout": 8000,
+        "consecutiveSlowSegs": 0
+      },
+      "resources": {
+        "js_heap": {
+          "source": "performance.memory",
+          "used_bytes": 56758673,
+          "total_bytes": 63613329,
+          "limit_bytes": 4395630592
+        },
+        "player": null,
+        "players": [],
+        "registered_player_count": 0,
+        "architecture": {
+          "revision": "player-seams-20261019-4",
+          "presentation": {
+            "ui": "desktop",
+            "host": "browser"
+          },
+          "active_player_count": 0,
+          "active_players": [],
+          "last_closed_player": {
+            "id": "mvenw2ln-3",
+            "closed_at_ms": 1792378520660,
+            "lifetime_ms": 4137,
+            "media_loads": 1
+          }
+        },
+        "attached_dom": {
+          "video_count": 0,
+          "canvas_count": 0,
+          "image_count": 0,
+          "videos": [],
+          "canvas_rgba_estimate_bytes": 0,
+          "image_rgba_estimate_bytes": 0
+        }
+      }
+    },
+    {
+      "label": "closed-cycle-3",
+      "test_gc": false,
+      "native": {
+        "sampled_at_ms": 1792378526042,
+        "heap_alloc_bytes": 1809360,
+        "heap_inuse_bytes": 3014656,
+        "heap_retained_bytes": 0,
+        "go_sys_bytes": 11554816,
+        "heap_objects": 15686,
+        "num_gc": 0,
+        "last_gc_pause_ms": 0,
+        "goroutines": 12,
+        "native_available": true,
+        "native_scope": "process_tree",
+        "proportional_bytes": null,
+        "private_resident_bytes": null,
+        "file_descriptors": null,
+        "working_set_bytes": 23949312,
+        "private_bytes": 54243328,
+        "tree_working_set_bytes": 760246272,
+        "tree_private_bytes": 668708864,
+        "system_total_bytes": 16800157696,
+        "system_available_bytes": 1424437248,
+        "system_memory_percent": 91.52128644400076,
+        "working_set_percent": 0.1425540904636994,
+        "cpu_percent": 0.2604163281254401,
+        "process_count": 7,
+        "handles": 3292,
+        "processes": [
+          {
+            "pid": 43424,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 321486848,
+            "private_bytes": 381784064,
+            "handles": 849,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 52228,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 223535104,
+            "private_bytes": 170737664,
+            "handles": 301,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 55588,
+            "name": "probe-9296.exe",
+            "working_set_bytes": 23949312,
+            "private_bytes": 54243328,
+            "handles": 313,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 33668,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 111423488,
+            "private_bytes": 37662720,
+            "handles": 1125,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 57356,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 43569152,
+            "private_bytes": 14000128,
+            "handles": 362,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 55992,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 23592960,
+            "private_bytes": 7741440,
+            "handles": 190,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 5188,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 12689408,
+            "private_bytes": 2539520,
+            "handles": 152,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          }
+        ],
+        "notes": []
+      },
+      "process_roles": [
+        {
+          "type": "browser",
+          "id": 33668,
+          "cpuTime": 2.427274
+        },
+        {
+          "type": "renderer",
+          "id": 52228,
+          "cpuTime": 2.095741
+        },
+        {
+          "type": "GPU",
+          "id": 43424,
+          "cpuTime": 2.405693
+        },
+        {
+          "type": "network.mojom.NetworkService",
+          "id": 57356,
+          "cpuTime": 0.32811
+        },
+        {
+          "type": "storage.mojom.StorageService",
+          "id": 55992,
+          "cpuTime": 0.071394
+        }
+      ],
+      "memory_dump": null,
+      "browser": {
+        "JSHeapUsedSize": 18275256,
+        "Nodes": 1847,
+        "JSEventListeners": 523
+      },
+      "media_properties": {
+        "F249C1F32D2B3E8C62A59F7323B26E17": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        },
+        "33E9A2512F8BDADC930AD041D53C2873": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        },
+        "7FE6BFA1C7F98507CF6E2941E1C3CDE7": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        },
+        "4E9C3F8A0C748E8AB45A16E639E9F190": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        },
+        "FF9725ED0EC6701476A07188FC5ABFA0": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        },
+        "824E320B5CF7626E2CC35C7D8F6D6EFD": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        },
+        "2DC31042088E3E3384441A3EC700F613": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        }
+      },
+      "cache": {
+        "activePlayers": 0,
+        "idleTrimPending": true,
+        "memoryLimitBytes": 134217728,
+        "hits": 0,
+        "misses": 0,
+        "entries": 0,
+        "totalEntries": 11,
+        "bytes": 19347832,
+        "totalSegments": 0,
+        "playedSegments": 0,
+        "hitRate": 0,
+        "avgFetchMs": 245,
+        "prefetchCount": 13,
+        "prefetchTarget": 0,
+        "queued": 0,
+        "inflight": 0,
+        "bufferOffset": 8,
+        "spreadStep": 1,
+        "cacheMB": 18.45153045654297,
+        "networkMode": "normal",
+        "concurrency": 1,
+        "fragmentTimeout": 8000,
+        "consecutiveSlowSegs": 0
+      },
+      "resources": {
+        "js_heap": {
+          "source": "performance.memory",
+          "used_bytes": 66706503,
+          "total_bytes": 78569527,
+          "limit_bytes": 4395630592
+        },
+        "player": null,
+        "players": [],
+        "registered_player_count": 0,
+        "architecture": {
+          "revision": "player-seams-20261019-4",
+          "presentation": {
+            "ui": "desktop",
+            "host": "browser"
+          },
+          "active_player_count": 0,
+          "active_players": [],
+          "last_closed_player": {
+            "id": "mvenw6np-4",
+            "closed_at_ms": 1792378525915,
+            "lifetime_ms": 4134,
+            "media_loads": 1
+          }
+        },
+        "attached_dom": {
+          "video_count": 0,
+          "canvas_count": 0,
+          "image_count": 0,
+          "videos": [],
+          "canvas_rgba_estimate_bytes": 0,
+          "image_rgba_estimate_bytes": 0
+        }
+      }
+    },
+    {
+      "label": "closed-idle-15s",
+      "test_gc": false,
+      "native": {
+        "sampled_at_ms": 1792378543042,
+        "heap_alloc_bytes": 2552784,
+        "heap_inuse_bytes": 3727360,
+        "heap_retained_bytes": 0,
+        "go_sys_bytes": 11554816,
+        "heap_objects": 22887,
+        "num_gc": 0,
+        "last_gc_pause_ms": 0,
+        "goroutines": 12,
+        "native_available": true,
+        "native_scope": "process_tree",
+        "proportional_bytes": null,
+        "private_resident_bytes": null,
+        "file_descriptors": null,
+        "working_set_bytes": 24662016,
+        "private_bytes": 55009280,
+        "tree_working_set_bytes": 733294592,
+        "tree_private_bytes": 634626048,
+        "system_total_bytes": 16800157696,
+        "system_available_bytes": 1417359360,
+        "system_memory_percent": 91.56341633425582,
+        "working_set_percent": 0.14679633635743702,
+        "cpu_percent": 0.6507707508031073,
+        "process_count": 7,
+        "handles": 3350,
+        "processes": [
+          {
+            "pid": 43424,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 318959616,
+            "private_bytes": 379224064,
+            "handles": 846,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 52228,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 190087168,
+            "private_bytes": 137519104,
+            "handles": 301,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 55588,
+            "name": "probe-9296.exe",
+            "working_set_bytes": 24662016,
+            "private_bytes": 55009280,
+            "handles": 314,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 33668,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 111464448,
+            "private_bytes": 37662720,
+            "handles": 1127,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 57356,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 43577344,
+            "private_bytes": 14000128,
+            "handles": 362,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 55992,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 23592960,
+            "private_bytes": 7741440,
+            "handles": 190,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 5188,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 20951040,
+            "private_bytes": 3469312,
+            "handles": 210,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          }
+        ],
+        "notes": []
+      },
+      "process_roles": [
+        {
+          "type": "browser",
+          "id": 33668,
+          "cpuTime": 2.43986
+        },
+        {
+          "type": "renderer",
+          "id": 52228,
+          "cpuTime": 2.416585
+        },
+        {
+          "type": "GPU",
+          "id": 43424,
+          "cpuTime": 2.762649
+        },
+        {
+          "type": "network.mojom.NetworkService",
+          "id": 57356,
+          "cpuTime": 0.328487
+        },
+        {
+          "type": "storage.mojom.StorageService",
+          "id": 55992,
+          "cpuTime": 0.071394
+        }
+      ],
+      "memory_dump": null,
+      "browser": {
+        "JSHeapUsedSize": 14918392,
+        "Nodes": 1648,
+        "JSEventListeners": 348
+      },
+      "media_properties": {
+        "F249C1F32D2B3E8C62A59F7323B26E17": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        },
+        "33E9A2512F8BDADC930AD041D53C2873": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        },
+        "7FE6BFA1C7F98507CF6E2941E1C3CDE7": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        },
+        "4E9C3F8A0C748E8AB45A16E639E9F190": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        },
+        "FF9725ED0EC6701476A07188FC5ABFA0": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        },
+        "824E320B5CF7626E2CC35C7D8F6D6EFD": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        },
+        "2DC31042088E3E3384441A3EC700F613": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        }
+      },
+      "cache": {
+        "activePlayers": 0,
+        "idleTrimPending": true,
+        "memoryLimitBytes": 134217728,
+        "hits": 0,
+        "misses": 0,
+        "entries": 0,
+        "totalEntries": 11,
+        "bytes": 19347832,
+        "totalSegments": 0,
+        "playedSegments": 0,
+        "hitRate": 0,
+        "avgFetchMs": 245,
+        "prefetchCount": 13,
+        "prefetchTarget": 0,
+        "queued": 0,
+        "inflight": 0,
+        "bufferOffset": 8,
+        "spreadStep": 1,
+        "cacheMB": 18.45153045654297,
+        "networkMode": "normal",
+        "concurrency": 1,
+        "fragmentTimeout": 8000,
+        "consecutiveSlowSegs": 0
+      },
+      "resources": {
+        "js_heap": {
+          "source": "performance.memory",
+          "used_bytes": 42663364,
+          "total_bytes": 43462072,
+          "limit_bytes": 4395630592
+        },
+        "player": null,
+        "players": [],
+        "registered_player_count": 0,
+        "architecture": {
+          "revision": "player-seams-20261019-4",
+          "presentation": {
+            "ui": "desktop",
+            "host": "browser"
+          },
+          "active_player_count": 0,
+          "active_players": [],
+          "last_closed_player": {
+            "id": "mvenw6np-4",
+            "closed_at_ms": 1792378525915,
+            "lifetime_ms": 4134,
+            "media_loads": 1
+          }
+        },
+        "attached_dom": {
+          "video_count": 0,
+          "canvas_count": 0,
+          "image_count": 0,
+          "videos": [],
+          "canvas_rgba_estimate_bytes": 0,
+          "image_rgba_estimate_bytes": 0
+        }
+      }
+    },
+    {
+      "label": "closed-idle",
+      "test_gc": false,
+      "native": {
+        "sampled_at_ms": 1792378544042,
+        "heap_alloc_bytes": 2596480,
+        "heap_inuse_bytes": 3776512,
+        "heap_retained_bytes": 0,
+        "go_sys_bytes": 11554816,
+        "heap_objects": 23309,
+        "num_gc": 0,
+        "last_gc_pause_ms": 0,
+        "goroutines": 12,
+        "native_available": true,
+        "native_scope": "process_tree",
+        "proportional_bytes": null,
+        "private_resident_bytes": null,
+        "file_descriptors": null,
+        "working_set_bytes": 24702976,
+        "private_bytes": 55042048,
+        "tree_working_set_bytes": 733384704,
+        "tree_private_bytes": 634658816,
+        "system_total_bytes": 16800157696,
+        "system_available_bytes": 1421443072,
+        "system_memory_percent": 91.53910875289917,
+        "working_set_percent": 0.14704014359270928,
+        "cpu_percent": 0.3906933322638129,
+        "process_count": 7,
+        "handles": 3350,
+        "processes": [
+          {
+            "pid": 43424,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 318959616,
+            "private_bytes": 379224064,
+            "handles": 846,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 52228,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 190136320,
+            "private_bytes": 137519104,
+            "handles": 301,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 55588,
+            "name": "probe-9296.exe",
+            "working_set_bytes": 24702976,
+            "private_bytes": 55042048,
+            "handles": 314,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 33668,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 111464448,
+            "private_bytes": 37662720,
+            "handles": 1127,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 57356,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 43577344,
+            "private_bytes": 14000128,
+            "handles": 362,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 55992,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 23592960,
+            "private_bytes": 7741440,
+            "handles": 190,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          },
+          {
+            "pid": 5188,
+            "name": "msedgewebview2.exe",
+            "working_set_bytes": 20951040,
+            "private_bytes": 3469312,
+            "handles": 210,
+            "proportional_bytes": null,
+            "private_resident_bytes": null,
+            "file_descriptors": null
+          }
+        ],
+        "notes": []
+      },
+      "process_roles": [
+        {
+          "type": "browser",
+          "id": 33668,
+          "cpuTime": 2.441406
+        },
+        {
+          "type": "renderer",
+          "id": 52228,
+          "cpuTime": 2.437416
+        },
+        {
+          "type": "GPU",
+          "id": 43424,
+          "cpuTime": 2.788423
+        },
+        {
+          "type": "network.mojom.NetworkService",
+          "id": 57356,
+          "cpuTime": 0.328487
+        },
+        {
+          "type": "storage.mojom.StorageService",
+          "id": 55992,
+          "cpuTime": 0.071394
+        }
+      ],
+      "memory_dump": null,
+      "browser": {
+        "JSHeapUsedSize": 14965436,
+        "Nodes": 1648,
+        "JSEventListeners": 348
+      },
+      "media_properties": {
+        "F249C1F32D2B3E8C62A59F7323B26E17": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        },
+        "33E9A2512F8BDADC930AD041D53C2873": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        },
+        "7FE6BFA1C7F98507CF6E2941E1C3CDE7": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        },
+        "4E9C3F8A0C748E8AB45A16E639E9F190": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        },
+        "FF9725ED0EC6701476A07188FC5ABFA0": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        },
+        "824E320B5CF7626E2CC35C7D8F6D6EFD": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        },
+        "2DC31042088E3E3384441A3EC700F613": {
+          "kVideoDecoderName": "D3D11VideoDecoder",
+          "kVideoTracks": "[{\"alpha mode\":\"is_opaque\",\"codec\":\"h264\",\"coded size\":\"1080x608\",\"color space\":{\"matrix\":\"BT709\",\"primaries\":\"BT709\",\"range\":\"LIMITED\",\"transfer\":\"BT709\"},\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"hdr metadata\":{},\"natural size\":\"1080x608\",\"orientation\":\"0\u00b0\",\"profile\":\"h264 baseline\",\"visible rect\":\"0,0 1080x608\"}]",
+          "kFrameUrl": "http://127.0.0.1:9295/dist/native-probe-site-9296/tests/browser/player.html?media=http%3A%2F%2F127.0.0.1%3A9295%2Fdist%2Fresource-probe-media%2Findex.m3u8#/",
+          "kIsVideoDecryptingDemuxerStream": "false",
+          "kResolution": "1080x608",
+          "kRendererName": "RendererImpl",
+          "kIsPlatformVideoDecoder": "true",
+          "kFrameTitle": "Playback regression harness"
+        }
+      },
+      "cache": {
+        "activePlayers": 0,
+        "idleTrimPending": true,
+        "memoryLimitBytes": 134217728,
+        "hits": 0,
+        "misses": 0,
+        "entries": 0,
+        "totalEntries": 11,
+        "bytes": 19347832,
+        "totalSegments": 0,
+        "playedSegments": 0,
+        "hitRate": 0,
+        "avgFetchMs": 245,
+        "prefetchCount": 13,
+        "prefetchTarget": 0,
+        "queued": 0,
+        "inflight": 0,
+        "bufferOffset": 8,
+        "spreadStep": 1,
+        "cacheMB": 18.45153045654297,
+        "networkMode": "normal",
+        "concurrency": 1,
+        "fragmentTimeout": 8000,
+        "consecutiveSlowSegs": 0
+      },
+      "resources": {
+        "js_heap": {
+          "source": "performance.memory",
+          "used_bytes": 42706764,
+          "total_bytes": 43462072,
+          "limit_bytes": 4395630592
+        },
+        "player": null,
+        "players": [],
+        "registered_player_count": 0,
+        "architecture": {
+          "revision": "player-seams-20261019-4",
+          "presentation": {
+            "ui": "desktop",
+            "host": "browser"
+          },
+          "active_player_count": 0,
+          "active_players": [],
+          "last_closed_player": {
+            "id": "mvenw6np-4",
+            "closed_at_ms": 1792378525915,
+            "lifetime_ms": 4134,
+            "media_loads": 1
+          }
+        },
+        "attached_dom": {
+          "video_count": 0,
+          "canvas_count": 0,
+          "image_count": 0,
+          "videos": [],
+          "canvas_rgba_estimate_bytes": 0,
+          "image_rgba_estimate_bytes": 0
+        }
+      }
+    }
+  ]
+}

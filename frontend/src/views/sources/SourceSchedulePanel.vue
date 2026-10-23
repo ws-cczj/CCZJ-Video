@@ -62,19 +62,16 @@ const { scheduleStateFor, modeLabel } = useSourceDisplay()
   padding: 12px 14px;
 }
 .schedule-summary {
-  display: flex; align-items: center; justify-content: space-between;
+  @apply cczj-flex cczj-items-center cczj-justify-between;
 }
 .schedule-status-label {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-size: 12px; color: var(--text-secondary);
+  @apply cczj-inline-flex cczj-items-center cczj-gap-3 cczj-text-sm cczj-text-secondary;
 }
 .schedule-form-inline {
-  display: flex; flex-direction: column; gap: 10px;
+  @apply cczj-flex cczj-flex-col cczj-gap-5;
 }
 .sched-check {
-  display: inline-flex; align-items: center; gap: 8px;
-  font-size: 13px; color: var(--text-primary); font-weight: 500;
-  cursor: pointer;
+  @apply cczj-inline-flex cczj-items-center cczj-gap-4 cczj-text-13 cczj-text-primary cczj-font-medium cczj-cursor-pointer;
 }
 .sched-check input[type='checkbox'] {
   -webkit-appearance: none; appearance: none;
@@ -82,60 +79,55 @@ const { scheduleStateFor, modeLabel } = useSourceDisplay()
   border: 1.5px solid var(--border-strong);
   border-radius: 5px;
   background: var(--bg-card);
-  cursor: pointer;
-  position: relative;
-  transition: all 0.15s ease;
-  flex-shrink: 0;
+  @apply cczj-cursor-pointer cczj-relative cczj-transition-fast cczj-flex-shrink-0;
 }
-.sched-check input[type='checkbox']:hover { border-color: var(--accent); }
-.sched-check input[type='checkbox']:checked { background: var(--accent); border-color: var(--accent); }
+.sched-check input[type='checkbox']:hover { @apply cczj-border-primary; }
+.sched-check input[type='checkbox']:checked { background: var(--accent); @apply cczj-border-primary; }
 .sched-check input[type='checkbox']:checked::after {
   content: '';
-  position: absolute;
+  @apply cczj-absolute;
   top: 3px; left: 5px;
-  width: 4px; height: 8px;
+  width: 4px; @apply cczj-h-2;
   border: 2px solid var(--accent-contrast);
   border-top: 0; border-left: 0;
   transform: rotate(45deg);
 }
 .sched-options {
-  display: flex; flex-direction: column; gap: 8px;
+  @apply cczj-flex cczj-flex-col cczj-gap-4;
   padding: 10px 12px;
   background: rgba(255,255,255,0.03);
-  border-radius: 8px;
-  border: 1px solid var(--border);
+  @apply cczj-rounded-md cczj-border;
 }
 .sched-row {
-  display: flex; align-items: center; gap: 10px;
+  @apply cczj-flex cczj-items-center cczj-gap-5;
 }
-.sched-row label { font-size: 12px; color: var(--text-secondary); min-width: 70px; font-weight: 500; }
+.sched-row label { @apply cczj-text-sm cczj-text-secondary; min-width: 70px; @apply cczj-font-medium; }
 .sched-select {
-  padding: 5px 32px 5px 12px; border-radius: 6px;
+  padding: 5px 32px 5px 12px; @apply cczj-rounded;
   border: 1.5px solid var(--border-strong); background: var(--bg-card);
-  color: var(--text-primary); font-size: 12px; cursor: pointer; outline: none;
+  @apply cczj-text-primary cczj-text-sm cczj-cursor-pointer cczj-outline-none;
   -webkit-appearance: none; appearance: none;
   background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2'%3e%3cpolyline points='6 9 12 15 18 9'/%3e%3c/svg%3e");
   background-repeat: no-repeat;
   background-position: right 6px center;
   background-size: 14px;
-  transition: all 0.15s ease;
+  @apply cczj-transition-fast;
 }
-.sched-select:hover { border-color: var(--accent); }
-.sched-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-alpha-10); }
+.sched-select:hover { @apply cczj-border-primary; }
+.sched-select:focus { @apply cczj-border-primary; box-shadow: 0 0 0 3px var(--accent-alpha-10); }
 .sched-input {
-  width: 80px; padding: 5px 12px; border-radius: 6px;
+  width: 80px; padding: 5px 12px; @apply cczj-rounded;
   border: 1.5px solid var(--border-strong); background: var(--bg-card);
-  color: var(--text-primary); font-size: 12px; outline: none;
-  text-align: center; font-family: 'SF Mono', Consolas, monospace;
+  @apply cczj-text-primary cczj-text-sm cczj-outline-none cczj-text-center; font-family: 'SF Mono', Consolas, monospace;
   -webkit-appearance: none;
-  transition: all 0.15s ease;
+  @apply cczj-transition-fast;
 }
 .sched-input::-webkit-inner-spin-button,
 .sched-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-.sched-input:hover { border-color: var(--accent); }
-.sched-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-alpha-10); }
+.sched-input:hover { @apply cczj-border-primary; }
+.sched-input:focus { @apply cczj-border-primary; box-shadow: 0 0 0 3px var(--accent-alpha-10); }
 .sched-actions {
-  display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px;
+  @apply cczj-flex cczj-gap-4 cczj-justify-end cczj-mt-2;
 }
 
 </style>

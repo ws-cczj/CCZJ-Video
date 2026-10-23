@@ -1,0 +1,90 @@
+@import './player-option-button.css';
+.subtitle-group {
+  @apply cczj-relative;
+}
+
+
+.subtitle-popup {
+  @apply cczj-absolute;
+  bottom: calc(100% + 10px);
+  @apply cczj-right-0;
+  background: rgba(20, 20, 20, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  @apply cczj-rounded-md cczj-p-3 cczj-flex cczj-flex-col cczj-gap-1;
+  min-width: 230px;
+  max-width: 320px;
+  @apply cczj-opacity-0 cczj-pointer-events-none;
+  transform: translateY(6px);
+  transition: all 0.18s ease;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  @apply cczj-z-10;
+}
+
+.subtitle-popup.show {
+  @apply cczj-opacity-100 cczj-pointer-events-auto;
+  transform: translateY(0);
+}
+
+.subtitle-title {
+  padding: 6px 12px 4px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.75rem;
+  user-select: none;
+}
+
+.subtitle-current {
+  @apply cczj-flex cczj-flex-col cczj-gap-1;
+  padding: 6px 12px 8px;
+  @apply cczj-mb-1;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.subtitle-name {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.8rem;
+  @apply cczj-overflow-hidden;
+  text-overflow: ellipsis;
+  @apply cczj-whitespace-nowrap;
+}
+
+.subtitle-count {
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.72rem;
+}
+
+.subtitle-error {
+  @apply cczj-px-6-py-3;
+  color: #ff6b6b;
+  font-size: 0.75rem;
+}
+
+.subtitle-item {
+  @apply cczj-flex cczj-items-center cczj-gap-4;
+  padding: 7px 12px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.82rem;
+  @apply cczj-rounded cczj-cursor-pointer;
+  background: none;
+  border: none;
+  @apply cczj-w-full cczj-text-left;
+  font-family: inherit;
+}
+
+.subtitle-item:hover {
+  background: rgba(255, 255, 255, 0.12);
+  @apply cczj-text-white;
+}
+
+.subtitle-item--danger:hover {
+  background: rgba(255, 77, 77, 0.15);
+  color: #ff6b6b;
+}
+
+.subtitle-hint {
+  padding: 8px 12px 4px;
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 0.72rem;
+  @apply cczj-leading-normal;
+}
+
+/* ========= B 站风格：底部左侧继续播放小提示 ========= */

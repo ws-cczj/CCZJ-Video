@@ -1,3 +1,5 @@
+> 历史设计记录；当前开发规范统一见 [AGENTS.md](../../AGENTS.md)。本文记录当时的选择与证据，不限制后续重构。
+
 # ADR 0011: Read a newer library, do not refuse it
 
 ## Status
@@ -29,7 +31,7 @@ library is *ahead* of the build it silently does nothing and the app starts anyw
 writing into that library (observed: `[DoubanChart] 入库完成: 新增 0 + 更新 10` from the 2.1.0 run).
 
 One constraint shapes the whole decision: **this cannot be retro-fixed into 2.1.0 or 2.2.0**.
-Whatever ships here only protects builds from this one onward. `docs/pending-decisions.md` §10
+Whatever ships here only protects builds from this one onward. `reports/history/architecture.md` §10
 keeps the matching advice for testers already sitting on a published old build.
 
 ## Decision

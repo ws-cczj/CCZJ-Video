@@ -11,7 +11,7 @@ import * as $models from "./models.js";
 
 /**
  * A Header represents the key-value pairs in an HTTP header.
- * 
+ *
  * The keys should be in canonical form, as returned by
  * [CanonicalHeaderKey].
  * @typedef {$models.Header} Header
@@ -20,7 +20,7 @@ import * as $models from "./models.js";
 /**
  * A ResponseWriter interface is used by an HTTP handler to
  * construct an HTTP response.
- * 
+ *
  * A ResponseWriter may not be used after [Handler.ServeHTTP] has returned.
  * @typedef {$models.ResponseWriter} ResponseWriter
  */

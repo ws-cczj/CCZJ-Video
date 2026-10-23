@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { isMobileRuntime } from '../../api/runtime'
 import MotionTransition from './MotionTransition.vue'
+import Button from './Button.vue'
 import { tr } from '../../locales'
 
 const props = withDefaults(defineProps<{
+  /** Keep overlays inside the active fullscreen player when requested. */
+  teleportTo?: string | HTMLElement
   /** 是否显示 */
   modelValue: boolean
   /** 标题 */
@@ -37,6 +41,15 @@ const emit = defineEmits<{
   (e: 'ok'): void
   (e: 'cancel'): void
 }>()
+const overlay = ref<HTMLElement | null>(null)
+function onAndroidBack(event: Event): void {
+  if (!props.modelValue || !overlay.value) return
+  const stack = document.querySelectorAll('.ui-modal-overlay')
+  if (stack[stack.length - 1] !== overlay.value) return
+  event.preventDefault()
+  event.stopImmediatePropagation()
+  if (props.closable) close()
+}
 
 function close(): void {
   emit('update:modelValue', false)
@@ -56,29 +69,31 @@ function onKeydown(e: KeyboardEvent): void {
 
 onMounted(() => window.addEventListener('keydown', onKeydown))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
+onMounted(() => { if (isMobileRuntime()) window.addEventListener('cczj:android-overlay-back', onAndroidBack) })
+onBeforeUnmount(() => window.removeEventListener('cczj:android-overlay-back', onAndroidBack))
 </script>
 
 <template>
-  <Teleport to="body">
+  <Teleport :to="teleportTo || 'body'">
     <MotionTransition preset="fade">
-      <div v-if="modelValue" class="ui-modal-overlay" @click.self="maskClosable && close()">
+      <div v-if="modelValue" ref="overlay" class="ui-modal-overlay cczj-flex cczj-items-center cczj-justify-center" @click.self="maskClosable && close()">
         <MotionTransition preset="dialog" appear>
           <div
             v-if="modelValue"
-            class="ui-modal"
+            class="ui-modal cczj-min-h-0 cczj-flex cczj-flex-col"
             :style="width ? { width } : undefined"
             role="dialog"
             aria-modal="true"
             :aria-label="title"
           >
             <!-- Header -->
-            <div v-if="title || closable" class="ui-modal__header">
+            <div v-if="title || closable" class="ui-modal__header cczj-flex cczj-items-center cczj-justify-between">
               <slot name="header">
-                <h3 class="ui-modal__title">{{ title }}</h3>
+                <h3 class="ui-modal__title cczj-inline-flex cczj-items-center cczj-gap-4">{{ title }}</h3>
               </slot>
               <button
                 v-if="closable"
-                class="ui-modal__close"
+                class="ui-modal__close cczj-inline-flex cczj-items-center cczj-justify-center cczj-flex-shrink-0"
                 type="button"
                 @click="close"
                 :aria-label="tr('common.close')"
@@ -90,22 +105,17 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
             </div>
 
             <!-- Body -->
-            <div class="ui-modal__body">
+            <div class="ui-modal__body cczj-min-h-0">
               <slot />
             </div>
 
             <!-- Footer -->
-            <div v-if="showFooter" class="ui-modal__footer">
+            <div v-if="showFooter || $slots.footer" class="ui-modal__footer cczj-flex cczj-items-center cczj-justify-end cczj-gap-5">
               <slot name="footer">
-                <button class="ui-btn ui-btn--secondary ui-btn--md" @click="close">{{ cancelText || tr('common.cancel') }}</button>
-                <button
-                  class="ui-btn ui-btn--primary ui-btn--md"
-                  :disabled="okDisabled"
-                  @click="emit('ok')"
-                >
-                  <span v-if="okLoading" class="ui-btn__spinner"></span>
-                  <span v-else>{{ okText || tr('common.ok') }}</span>
-                </button>
+                <Button @click="close">{{ cancelText || tr('common.cancel') }}</Button>
+                <Button variant="primary" :loading="okLoading" :disabled="okDisabled" @click="emit('ok')">
+                  {{ okText || tr('common.ok') }}
+                </Button>
               </slot>
             </div>
           </div>
@@ -118,14 +128,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 <style scoped>
 /* Overlay */
 .ui-modal-overlay {
-  position: fixed;
+  @apply cczj-fixed;
   inset: 0;
   background: rgba(15, 18, 28, 0.55);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   z-index: var(--z-modal-overlay);
   padding: 24px;
 }
@@ -135,119 +142,52 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   width: auto;
   min-width: min(420px, 92vw);
   max-width: 92vw;
-  min-height: 0;
   max-height: 90vh;
-  border-radius: 8px;
+  @apply cczj-rounded-md;
   background: var(--bg-card);
-  border: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  @apply cczj-border cczj-overflow-hidden;
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.35);
-  color: var(--text-primary);
+  @apply cczj-text-primary;
 }
 
 /* Header */
 .ui-modal__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   padding: 16px 20px;
-  border-bottom: 1px solid var(--border);
+  @apply cczj-border-bottom;
 }
 .ui-modal__title {
   margin: 0;
-  font-size: 16px;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+  @apply cczj-text-lg cczj-font-bold;
 }
 .ui-modal__close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   width: 28px;
   height: 28px;
   border: none;
-  border-radius: 4px;
+  @apply cczj-rounded-sm;
   background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
+  @apply cczj-text-muted cczj-cursor-pointer;
   transition: background-color var(--transition-fast), color var(--transition-fast);
-  flex-shrink: 0;
 }
 .ui-modal__close:hover {
   background: var(--bg-hover);
-  color: var(--text-primary);
+  @apply cczj-text-primary;
 }
 
 /* Body */
 .ui-modal__body {
   padding: 20px;
-  overflow-y: auto;
-  flex: 1;
+  @apply cczj-overflow-y-auto cczj-flex-1;
   /* flex 子项默认 min-height:auto，长表单下会顶破 .ui-modal 的 max-height，
      结果是页脚（保存/取消）被裁掉且滚不动。 */
-  min-height: 0;
 }
 
 /* Footer */
 .ui-modal__footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
   padding: 14px 20px;
-  border-top: 1px solid var(--border);
+  @apply cczj-border-top;
   background: var(--bg-secondary);
   border-bottom-left-radius: 8px;
   border-bottom-right-radius: 8px;
 }
 
-/* Reuse button styles (minimal dup to keep modal self-contained) */
-.ui-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  cursor: pointer;
-  font-family: inherit;
-  font-weight: 600;
-  font-size: 13px;
-  line-height: 1;
-  white-space: nowrap;
-  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast), opacity var(--transition-fast);
-}
-.ui-btn--md { padding: 8px 16px; }
-.ui-btn--primary {
-  background: var(--accent);
-  color: var(--accent-contrast);
-  border-color: var(--accent);
-}
-.ui-btn--primary:hover:not(:disabled) {
-  background: var(--accent-dim);
-  transform: translateY(-1px);
-}
-.ui-btn--primary:disabled { opacity: 0.5; cursor: not-allowed; }
-.ui-btn--secondary {
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
-  border-color: var(--border);
-}
-.ui-btn--secondary:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-.ui-btn__spinner {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  border: 2px solid currentColor;
-  border-top-color: transparent;
-  border-radius: 50%;
-  animation: cczj-spin 800ms linear infinite;
-}
 </style>

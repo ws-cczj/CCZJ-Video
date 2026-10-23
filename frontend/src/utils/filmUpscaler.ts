@@ -1,18 +1,8 @@
-/**
- * 影视增强器 — FSRCNNX CNN 超分 + 全链路增强（WebGL2 实时）
- *
- * 管线：Deinterlace → Denoise(H+V) → FSRCNNX 2x → Temporal → Reinhard HDR → CAS
- * 性能自适应：根据 GPU 帧率动态降级
- */
+/** Film enhancement: FSRCNNX 2x super-resolution followed by CAS sharpening. */
 import fsrcnnxSource from './FSRCNNX_x2_8-0-4-1.glsl?raw'
 import { loseGlContext } from './anime4kUpscaler'
 
-export interface FilmUpscalerOptions {
-  sharpness?: number; casStrength?: number
-  deinterlace?: boolean; denoise?: number
-  temporalBlend?: number; hdrToneMap?: number
-  autoQuality?: boolean
-}
+export interface FilmUpscalerOptions { casStrength?: number }
 export interface FilmStats {
   fps: number; gpuEnabled: boolean
   qualityScale: number; enhancements: string[]
@@ -36,74 +26,11 @@ in vec2 a_pos;
 out vec2 v_uv;
 void main() { gl_Position = vec4(a_pos.x, -a_pos.y, 0.0, 1.0); v_uv = a_pos * 0.5 + 0.5; }`
 
-const DEINTERLACE_FRAG = `#version 300 es
-precision highp float; in vec2 v_uv; out vec4 fragColor;
-uniform sampler2D u_input; uniform vec2 u_texelSize; uniform float u_strength;
-void main() {
-  vec3 c = texture(u_input, v_uv).rgb;
-  vec3 p = texture(u_input, v_uv + vec2(0.0, -u_texelSize.y)).rgb;
-  float m = smoothstep(0.01, 0.08, abs(dot(c,vec3(0.333)) - dot(p,vec3(0.333))));
-  fragColor = vec4(mix(mix(c, p, 0.5), c, m * u_strength), 1.0);
-}`
 
-const DENOISE_H_FRAG = `#version 300 es
-precision highp float; in vec2 v_uv; out vec4 fragColor;
-uniform sampler2D u_input; uniform vec2 u_texelSize; uniform float u_strength;
-void main() {
-  vec3 c = texture(u_input, v_uv).rgb; float cl = dot(c, vec3(0.299,0.587,0.114));
-  vec3 s = c; float tw = 1.0; float sigma = 0.1 * (1.0 + u_strength * 5.0);
-  for (int i = 1; i <= 4; i++) {
-    float off = float(i) * u_texelSize.x;
-    vec3 r = texture(u_input, v_uv + vec2(off, 0.0)).rgb;
-    vec3 l = texture(u_input, v_uv - vec2(off, 0.0)).rgb;
-    float wr = exp(-abs(dot(r,vec3(0.299,0.587,0.114)) - cl) / sigma);
-    float wl = exp(-abs(dot(l,vec3(0.299,0.587,0.114)) - cl) / sigma);
-    s += r * wr + l * wl; tw += wr + wl;
-  }
-  fragColor = vec4(s / tw, 1.0);
-}`
 
-const DENOISE_V_FRAG = `#version 300 es
-precision highp float; in vec2 v_uv; out vec4 fragColor;
-uniform sampler2D u_input; uniform vec2 u_texelSize; uniform float u_strength;
-void main() {
-  vec3 c = texture(u_input, v_uv).rgb; float cl = dot(c, vec3(0.299,0.587,0.114));
-  vec3 s = c; float tw = 1.0; float sigma = 0.1 * (1.0 + u_strength * 5.0);
-  for (int i = 1; i <= 4; i++) {
-    float off = float(i) * u_texelSize.y;
-    vec3 u = texture(u_input, v_uv + vec2(0.0, off)).rgb;
-    vec3 d = texture(u_input, v_uv - vec2(0.0, off)).rgb;
-    float wu = exp(-abs(dot(u,vec3(0.299,0.587,0.114)) - cl) / sigma);
-    float wd = exp(-abs(dot(d,vec3(0.299,0.587,0.114)) - cl) / sigma);
-    s += u * wu + d * wd; tw += wu + wd;
-  }
-  fragColor = vec4(s / tw, 1.0);
-}`
 
-const TEMPORAL_FRAG = `#version 300 es
-precision highp float; in vec2 v_uv; out vec4 fragColor;
-uniform sampler2D u_input; uniform sampler2D u_prev; uniform float u_strength;
-void main() {
-  vec3 c = texture(u_input, v_uv).rgb;
-  vec3 p = texture(u_prev, v_uv).rgb;
-  float diff = abs(dot(c,vec3(0.333)) - dot(p,vec3(0.333)));
-  // 静止时(diff小) w接近1.0，多取上一帧；运动时(diff大) w接近0.1
-  float w = mix(0.9, 0.1, smoothstep(0.02, 0.15, diff));
-  float alpha = clamp(u_strength * w, 0.0, 0.9); // 限制最大混合率
-  fragColor = vec4(mix(c, p, alpha), 1.0);
-}`
 
 // Reinhard 色调映射
-const HDR_TONE_FRAG = `#version 300 es
-precision highp float; in vec2 v_uv; out vec4 fragColor;
-uniform sampler2D u_input; uniform float u_strength;
-float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
-void main() {
-  vec3 color = texture(u_input, v_uv).rgb;
-  float L = luma(color);
-  vec3 mapped = color / (1.0 + L);
-  fragColor = vec4(mix(color, mapped, u_strength), 1.0);
-}`
 
 // 标准 AMD CAS 锐化
 const CAS_FRAG = `#version 300 es
@@ -130,7 +57,7 @@ void main() {
   fragColor = vec4((e + w * (a + b + c + d)) / (1.0 + 4.0 * w), 1.0);
 }`
 
-// bilinear upsample（qualityScale < 2 时替代 FSRCNNX）
+// Bilinear color upsampling alongside FSRCNNX detail reconstruction.
 const BILINEAR_UP_FRAG = `#version 300 es
 precision highp float; in vec2 v_uv; out vec4 fragColor;
 uniform sampler2D u_input;
@@ -138,25 +65,6 @@ void main() {
   fragColor = texture(u_input, v_uv);
 }`
 
-// 轻量锐化——Unsharp Mask（qualityScale 降级时补偿 bilinear 模糊）
-const LIGHT_SHARPEN_FRAG = `#version 300 es
-precision highp float; in vec2 v_uv; out vec4 fragColor;
-uniform sampler2D u_input; uniform vec2 u_texelSize; uniform float u_amount;
-void main() {
-  vec2 ts = u_texelSize;
-  vec3 e = texture(u_input, v_uv).rgb;
-  vec3 a = texture(u_input, v_uv + vec2(0,-ts.y)).rgb;
-  vec3 b = texture(u_input, v_uv + vec2(-ts.x,0)).rgb;
-  vec3 c = texture(u_input, v_uv + vec2(ts.x,0)).rgb;
-  vec3 d = texture(u_input, v_uv + vec2(0,ts.y)).rgb;
-  
-  // 计算周边平均
-  vec3 blur = (a + b + c + d) * 0.25;
-  // 提取高频并放大
-  vec3 highFreq = e - blur;
-  
-  fragColor = vec4(e + highFreq * u_amount * 4.0, 1.0);
-}`
 
 // 颜色-细节合成着色器：将 FSRCNNX 提取的高频细节以加法叠加到彩色放大图上
 const DETAIL_COMPOSE_FRAG = `#version 300 es
@@ -334,23 +242,10 @@ export class FilmUpscaler {
   private passProgs: WebGLProgram[] = []
   private aggProg: WebGLProgram | null = null
   private detailComposeProg: WebGLProgram | null = null
-  private casProg: WebGLProgram | null = null
   private casFlipProg: WebGLProgram | null = null  // canvas 输出用（Y 翻转）
-  private deintProg: WebGLProgram | null = null
-  private denHProg: WebGLProgram | null = null
-  private denVProg: WebGLProgram | null = null
-  private tempProg: WebGLProgram | null = null
-  private hdrProg: WebGLProgram | null = null
   private bilinearProg: WebGLProgram | null = null
-  private lightSharpenProg: WebGLProgram | null = null
 
   // 预分配 FBO
-  private preFBO: FBOEntry | null = null
-  private midFBO: FBOEntry | null = null
-  private prevFBO: FBOEntry | null = null
-  private casFBO: FBOEntry | null = null
-  private tempFBO: FBOEntry | null = null
-  private hdrFBO: FBOEntry | null = null
   private lowResFBO: FBOEntry | null = null
   private detailFBO: FBOEntry | null = null
   private composeFBO: FBOEntry | null = null
@@ -360,20 +255,14 @@ export class FilmUpscaler {
 
   private passDefs: PassDef[] = []
   private frames = 0; private lastFpsTime = 0
-  private currentFps = 0; private _qualityScale = 2.0
+  private currentFps = 0
   private inputW = 0; private inputH = 0
   private lastUploadTime = -1
-  private lowFpsCounter = 0; private highFpsCounter = 0
 
   get error(): string | null { return this._error }
 
   constructor(opts: FilmUpscalerOptions = {}) {
-    this.opts = {
-      sharpness: opts.sharpness ?? 0.8, casStrength: opts.casStrength ?? 0.8,
-      deinterlace: opts.deinterlace ?? false, denoise: opts.denoise ?? 0.0,
-      temporalBlend: opts.temporalBlend ?? 0.0, hdrToneMap: opts.hdrToneMap ?? 0.0,
-      autoQuality: opts.autoQuality ?? false,
-    }
+    this.opts = { casStrength: opts.casStrength ?? 0.8 }
   }
 
   async init(video: HTMLVideoElement, wrapper?: HTMLElement): Promise<boolean> {
@@ -418,7 +307,7 @@ export class FilmUpscaler {
       gl.bindTexture(gl.TEXTURE_2D, null)
 
       this.compileAll(gl); this.allocFBOs()
-      console.log(`[FilmUpscaler] init: ${this.inputW}×${this.inputH} [${this.enhancements().join(',')}]`)
+      console.log(`[FilmUpscaler] init: ${this.inputW}×${this.inputH} [${['FSRCNNX', 'CAS'].join(',')}]`)
       return true
     } catch (e: any) {
       this._error = e.message || String(e); console.error('[FilmUpscaler] init:', this._error)
@@ -426,16 +315,6 @@ export class FilmUpscaler {
       this.destroy()
       return false
     }
-  }
-
-  private enhancements(): string[] {
-    const e = ['FSRCNNX', 'CAS']
-    if (this.opts.deinterlace) e.push('Deint')
-    if (this.opts.denoise > 0) e.push('Denoise')
-    if (this.opts.temporalBlend > 0) e.push('Temp')
-    if (this.opts.hdrToneMap > 0) e.push('HDR')
-    if (this.opts.autoQuality) e.push('AutoQ')
-    return e
   }
 
   private compileAll(gl: WebGL2RenderingContext): void {
@@ -459,10 +338,6 @@ export class FilmUpscaler {
     if (!aggFs) throw new Error('Agg'); this.aggProg = linkProgram(gl, vs, aggFs)!; gl.deleteShader(aggFs)
 
     this.detailComposeProg = fsProg(DETAIL_COMPOSE_FRAG)
-    this.deintProg = fsProg(DEINTERLACE_FRAG)
-    this.denHProg = fsProg(DENOISE_H_FRAG); this.denVProg = fsProg(DENOISE_V_FRAG)
-    this.tempProg = fsProg(TEMPORAL_FRAG); this.hdrProg = fsProg(HDR_TONE_FRAG)
-    this.casProg = fsProg(CAS_FRAG)
     // canvas 输出用 flipped VS 重新链接 CAS
     {
       const vsFlip = compileShader(gl, gl.VERTEX_SHADER, VERTEX_FLIP_SRC)
@@ -474,18 +349,12 @@ export class FilmUpscaler {
       gl.deleteShader(vsFlip)
     }
     this.bilinearProg = fsProg(BILINEAR_UP_FRAG)
-    this.lightSharpenProg = fsProg(LIGHT_SHARPEN_FRAG)
     gl.deleteShader(vs)
   }
 
   private allocFBOs(): void {
     const gl = this.gl!, w = this.inputW, h = this.inputH
-    this.preFBO = createFBO(gl, w, h); this.midFBO = createFBO(gl, w, h)
-    this.casFBO = createFBO(gl, w * 2, h * 2)
-    this.tempFBO = createFBO(gl, w * 2, h * 2)
-    this.hdrFBO = createFBO(gl, w * 2, h * 2)
-    this.allocPrevFBO()
-    const outW = Math.round(w * this._qualityScale), outH = Math.round(h * this._qualityScale)
+    const outW = w * 2, outH = h * 2
     this.lowResFBO = createFBO(gl, outW, outH)
     this.detailFBO = createFBO(gl, outW, outH)
     this.composeFBO = createFBO(gl, outW, outH)
@@ -494,26 +363,6 @@ export class FilmUpscaler {
       const p = this.passDefs[i]
       if (!p.isAggregation && p.saveName) this.getFBO(`${p.saveName}_${i}`, w, h)
     }
-  }
-
-  private allocPrevFBO(): void {
-    const gl = this.gl!
-    const outW = Math.round(this.inputW * this._qualityScale)
-    const outH = Math.round(this.inputH * this._qualityScale)
-    if (this.prevFBO) deleteFBO(gl, this.prevFBO)
-    this.prevFBO = createFBO(gl, outW, outH)
-  }
-
-  private allocQualityDependentFBOs(): void {
-    const gl = this.gl!; if (!gl) return
-    const outW = Math.round(this.inputW * this._qualityScale)
-    const outH = Math.round(this.inputH * this._qualityScale)
-    if (this.lowResFBO) deleteFBO(gl, this.lowResFBO)
-    if (this.detailFBO) deleteFBO(gl, this.detailFBO)
-    if (this.composeFBO) deleteFBO(gl, this.composeFBO)
-    this.lowResFBO = createFBO(gl, outW, outH)
-    this.detailFBO = createFBO(gl, outW, outH)
-    this.composeFBO = createFBO(gl, outW, outH)
   }
 
   private getFBO(name: string, w: number, h: number): FBOEntry {
@@ -554,14 +403,7 @@ export class FilmUpscaler {
     this.videoFrameCallbackId = null
   }
 
-  onSeeked(): void {
-    if (this.prevFBO && this.gl) {
-      this.gl.deleteTexture(this.prevFBO.tex)
-      this.gl.deleteFramebuffer(this.prevFBO.fbo)
-    }
-    this.prevFBO = null
-    this.lastUploadTime = -1
-  }
+  onSeeked(): void { this.lastUploadTime = -1 }
 
   destroy(): void {
     this.stop()
@@ -569,13 +411,11 @@ export class FilmUpscaler {
     if (gl) {
       for (const [, a] of this.fboReg) for (const f of a) { gl.deleteTexture(f.tex); gl.deleteFramebuffer(f.fbo) }
       this.fboReg.clear()
-      for (const f of [this.preFBO, this.midFBO, this.casFBO, this.tempFBO, this.hdrFBO,
-                        this.lowResFBO, this.detailFBO, this.composeFBO])
+      for (const f of [this.lowResFBO, this.detailFBO, this.composeFBO])
         deleteFBO(gl, f)
       this.onSeeked()
       for (const p of this.passProgs) if (p) gl.deleteProgram(p)
-      for (const p of [this.aggProg, this.detailComposeProg, this.casProg, this.casFlipProg, this.deintProg, this.denHProg, this.denVProg,
-                       this.tempProg, this.hdrProg, this.bilinearProg, this.lightSharpenProg])
+      for (const p of [this.aggProg, this.detailComposeProg, this.casFlipProg, this.bilinearProg])
         if (p) gl.deleteProgram(p)
       if (this.videoTex) gl.deleteTexture(this.videoTex)
       if (this.quadVBO) gl.deleteBuffer(this.quadVBO)
@@ -584,29 +424,21 @@ export class FilmUpscaler {
       loseGlContext(gl)
     }
     this.passProgs = []; this.passDefs = []; this.fboReg.clear()
-    this.preFBO = null; this.midFBO = null; this.casFBO = null; this.tempFBO = null; this.hdrFBO = null
     this.lowResFBO = null; this.detailFBO = null; this.composeFBO = null
-    this.aggProg = null; this.detailComposeProg = null; this.casProg = null; this.casFlipProg = null; this.deintProg = null
-    this.denHProg = null; this.denVProg = null; this.tempProg = null; this.hdrProg = null
-    this.bilinearProg = null; this.lightSharpenProg = null
+    this.aggProg = null; this.detailComposeProg = null; this.casFlipProg = null
+    this.bilinearProg = null
     this.quadVAO = null; this.quadVBO = null; this.videoTex = null
     if (this.canvas?.parentElement) this.canvas.parentElement.removeChild(this.canvas)
     this.canvas = null; this.gl = null; this.video = null
   }
 
-  updateOptions(opts: Partial<FilmUpscalerOptions>): void {
-    const ks: (keyof FilmUpscalerOptions)[] = ['sharpness','casStrength','deinterlace','denoise','temporalBlend','hdrToneMap','autoQuality']
-    for (const k of ks) if (opts[k] !== undefined) (this.opts as any)[k] = opts[k]
-  }
-
-  /** 仅渲染右侧增强画面，左侧保留原始 video，用于效果对比。 */
   setCompareSplit(percent: number | null): void {
     if (!this.canvas) return
     this.canvas.style.clipPath = percent == null ? '' : `inset(0 0 0 ${Math.max(0, Math.min(100, percent))}%)`
   }
 
   getStats(): FilmStats {
-    return { fps: this.currentFps, gpuEnabled: true, qualityScale: this._qualityScale, enhancements: this.enhancements() }
+    return { fps: this.currentFps, gpuEnabled: true, qualityScale: 2, enhancements: ['FSRCNNX', 'CAS'] }
   }
 
   private renderLoop = (): void => {
@@ -627,27 +459,6 @@ export class FilmUpscaler {
     if (now - this.lastFpsTime >= 2000) {
       this.currentFps = Math.round(this.frames / ((now - this.lastFpsTime) / 1000))
       this.frames = 0; this.lastFpsTime = now
-      if (this.opts.autoQuality) this.adaptQuality()
-    }
-  }
-
-  private adaptQuality(): void {
-    const prevScale = this._qualityScale
-    if (this.currentFps < 24) { this.lowFpsCounter++; this.highFpsCounter = 0 }
-    else if (this.currentFps > 35) { this.highFpsCounter++; this.lowFpsCounter = 0 }
-    else { this.lowFpsCounter = 0; this.highFpsCounter = 0 }
-
-    if (this.lowFpsCounter >= 3 && this._qualityScale > 1.0) {
-      this._qualityScale = Math.max(1.0, this._qualityScale - 0.5)
-      this.lowFpsCounter = 0
-    } else if (this.highFpsCounter >= 3 && this._qualityScale < 2.0) {
-      this._qualityScale = Math.min(2.0, this._qualityScale + 0.5)
-      this.highFpsCounter = 0
-    }
-    if (this._qualityScale !== prevScale) {
-      console.log(`[FilmUpscaler] ⚡ quality: ${prevScale}x → ${this._qualityScale}x`)
-      this.allocPrevFBO()
-      this.allocQualityDependentFBOs()
     }
   }
 
@@ -670,7 +481,7 @@ export class FilmUpscaler {
     if (video.currentTime === this.lastUploadTime) return
 
     const w = this.inputW, h = this.inputH
-    const outW = Math.round(w * this._qualityScale), outH = Math.round(h * this._qualityScale)
+    const outW = w * 2, outH = h * 2
 
     gl.bindVertexArray(this.quadVAO)
 
@@ -694,36 +505,11 @@ export class FilmUpscaler {
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
     }
 
-    let src = this.videoTex!; let srcFBO = false
+    const src = this.videoTex!
 
-    // Step 0: Deinterlace
-    if (this.opts.deinterlace && this.deintProg) {
-      pass(this.preFBO!, this.deintProg, w, h, () => {
-        bind(this.deintProg!, src, 'u_input', 0)
-        set2f(this.deintProg!, 'u_texelSize', 1/w, 1/h)
-        set1f(this.deintProg!, 'u_strength', 1.0)
-      })
-      src = this.preFBO!.tex; srcFBO = true
-    }
-
-    // Step 1: Denoise H+V
-    if (this.opts.denoise > 0 && this.denHProg && this.denVProg) {
-      pass(this.midFBO!, this.denHProg, w, h, () => {
-        bind(this.denHProg!, src, 'u_input', 0)
-        set2f(this.denHProg!, 'u_texelSize', 1/w, 1/h)
-        set1f(this.denHProg!, 'u_strength', this.opts.denoise)
-      })
-      pass(this.preFBO!, this.denVProg, w, h, () => {
-        bind(this.denVProg!, this.midFBO!.tex, 'u_input', 0)
-        set2f(this.denVProg!, 'u_texelSize', 1/w, 1/h)
-        set1f(this.denVProg!, 'u_strength', this.opts.denoise)
-      })
-      src = this.preFBO!.tex; srcFBO = true
-    }
-
-    // Step 2: FSRCNNX (or bilinear upsample when qualityScale < 2)
+    // FSRCNNX detail reconstruction plus bilinear color upsampling
     let aggOut: FBOEntry | null = null
-    if (this._qualityScale >= 2.0) {
+    {
       // 细节+颜色合成管线：bilinear 彩色放大 + FSRCNNX 细节亮度 → 合成
       pass(this.lowResFBO!, this.bilinearProg!, outW, outH, () => {
         bind(this.bilinearProg!, src, 'u_input', 0)
@@ -758,48 +544,12 @@ export class FilmUpscaler {
         bind(this.detailComposeProg!, this.lowResFBO!.tex, 'u_color', 1)
       })
       aggOut = this.composeFBO!
-    } else {
-      pass(this.lowResFBO!, this.bilinearProg!, outW, outH, () => {
-        bind(this.bilinearProg!, src, 'u_input', 0)
-      })
-      pass(this.composeFBO!, this.lightSharpenProg!, outW, outH, () => {
-        bind(this.lightSharpenProg!, this.lowResFBO!.tex, 'u_input', 0)
-        set2f(this.lightSharpenProg!, 'u_texelSize', 1/outW, 1/outH)
-        set1f(this.lightSharpenProg!, 'u_amount', this.opts.sharpness)
-      })
-      aggOut = this.composeFBO!
-    }
-
-    // Step 3: Temporal
-    if (this.opts.temporalBlend > 0 && this.tempProg && aggOut) {
-      const ao = aggOut // TS narrowing
-      pass(this.tempFBO!, this.tempProg, outW, outH, () => {
-        bind(this.tempProg!, ao.tex, 'u_input', 0)
-        bind(this.tempProg!, this.prevFBO?.tex ?? ao.tex, 'u_prev', 1)
-        set1f(this.tempProg!, 'u_strength', this.opts.temporalBlend)
-      })
-      if (!this.prevFBO) this.allocPrevFBO()
-      if (this.prevFBO) {
-        gl.bindFramebuffer(gl.READ_FRAMEBUFFER, aggOut.fbo)
-        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.prevFBO.fbo)
-        gl.blitFramebuffer(0, 0, outW, outH, 0, 0, outW, outH, gl.COLOR_BUFFER_BIT, gl.LINEAR)
-        gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null); gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null)
-      }
-    }
-
-    // Step 4: HDR
-    const afterTemporal = (this.opts.temporalBlend > 0 && this.tempProg) ? this.tempFBO! : aggOut!
-    if (this.opts.hdrToneMap > 0 && this.hdrProg && afterTemporal) {
-      pass(this.hdrFBO!, this.hdrProg, outW, outH, () => {
-        bind(this.hdrProg!, afterTemporal.tex, 'u_input', 0)
-        set1f(this.hdrProg!, 'u_strength', this.opts.hdrToneMap)
-      })
     }
 
     // Step 5: CAS → Canvas（Y 翻转 VS 匹配 DOM 坐标系）
     // 同步 canvas 布局到视频的 letterbox 区域
     this.syncCanvasToVideo()
-    const finalSrc = (this.opts.hdrToneMap > 0 && this.hdrProg) ? this.hdrFBO! : afterTemporal
+    const finalSrc = aggOut
     if (finalSrc && this.casFlipProg) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, null)
       gl.viewport(0, 0, this.canvas!.width, this.canvas!.height)
@@ -820,12 +570,10 @@ export class FilmUpscaler {
     for (const p of this.passProgs) if (p) gl.deleteProgram(p); this.passProgs = []
     for (const [, a] of this.fboReg) for (const f of a) { gl.deleteTexture(f.tex); gl.deleteFramebuffer(f.fbo) }
     this.fboReg.clear()
-    for (const f of [this.preFBO, this.midFBO, this.casFBO, this.tempFBO, this.hdrFBO,
-                      this.lowResFBO, this.detailFBO, this.composeFBO])
+    for (const f of [this.lowResFBO, this.detailFBO, this.composeFBO])
       deleteFBO(gl, f)
     this.onSeeked()
     this.ulocs.clear()
-    this.preFBO = null; this.midFBO = null; this.casFBO = null; this.tempFBO = null; this.hdrFBO = null
     this.lowResFBO = null; this.detailFBO = null; this.composeFBO = null
 
     for (let i = 0; i < this.passDefs.length; i++) {
@@ -852,13 +600,8 @@ export function checkFilmSupport(): { supported: boolean; message: string } {
     const c = document.createElement('canvas'); const gl = c.getContext('webgl2')
     if (!gl) return { supported: false, message: 'WebGL2 不可用' }
     loseGlContext(gl) // 探测 canvas 同样占上下文名额，用完就还
-    return { supported: true, message: 'FSRCNNX + 全链路增强可用' }
+    return { supported: true, message: 'FSRCNNX 2x + CAS available' }
   } catch { return { supported: false, message: 'WebGL2 检测失败' } }
 }
 
-export const FILM_PRESET: Required<FilmUpscalerOptions> = {
-  sharpness: 0.8, casStrength: 0.8,
-  deinterlace: false, denoise: 0.0,
-  temporalBlend: 0.0, hdrToneMap: 0.0,
-  autoQuality: false,
-}
+export const FILM_PRESET: Required<FilmUpscalerOptions> = { casStrength: 0.8 }

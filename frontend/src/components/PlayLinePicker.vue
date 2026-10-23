@@ -116,89 +116,71 @@ async function runSpeedTest(): Promise<void> {
 
 <style scoped>
 .line-picker {
-  gap: 8px;
+  @apply cczj-gap-4;
 }
 
 .line-chips {
-  gap: 8px;
+  @apply cczj-gap-4;
 }
 
 .line-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  @apply cczj-inline-flex cczj-items-center cczj-gap-3;
   max-width: 220px;
   padding: 4px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
+  @apply cczj-rounded-md cczj-border;
   background: var(--bg-secondary);
-  color: var(--text-secondary);
-  font-size: 12px;
+  @apply cczj-text-secondary cczj-text-sm;
   line-height: 1.4;
-  cursor: pointer;
+  @apply cczj-cursor-pointer;
   transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
 }
 
 .line-chip:hover:not(:disabled) {
   border-color: var(--border-strong);
-  color: var(--text-primary);
+  @apply cczj-text-primary;
 }
 
 .line-chip.active {
-  border-color: var(--accent);
+  @apply cczj-border-primary;
   background: var(--bg-hover);
-  color: var(--text-primary);
+  @apply cczj-text-primary;
 }
 
 .line-chip.dead {
-  opacity: 0.6;
+  @apply cczj-opacity-60;
 }
 
 .line-chip.dead .line-chip-speed {
-  color: var(--danger);
+  @apply cczj-text-danger;
 }
 
 .line-chip-name {
-  min-width: 0;
+  @apply cczj-min-w-0;
 }
 
 .line-chip-speed {
-  flex-shrink: 0;
-  color: var(--text-muted);
-  font-size: 11px;
+  @apply cczj-flex-shrink-0 cczj-text-muted cczj-text-11;
 }
 
 .line-chip-best {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  flex-shrink: 0;
-  color: var(--accent);
-  font-size: 11px;
+  @apply cczj-inline-flex cczj-items-center cczj-gap-1 cczj-flex-shrink-0 cczj-text-accent cczj-text-11;
 }
 
 .line-test-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+  @apply cczj-inline-flex cczj-items-center cczj-gap-2;
   padding: 4px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
+  @apply cczj-rounded-md cczj-border;
   background: transparent;
-  color: var(--text-secondary);
-  font-size: 12px;
-  cursor: pointer;
+  @apply cczj-text-secondary cczj-text-sm cczj-cursor-pointer;
   transition: border-color 0.15s ease, color 0.15s ease;
 }
 
 .line-test-btn:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--accent);
+  @apply cczj-border-primary cczj-text-accent;
 }
 
 .line-test-btn:disabled {
-  opacity: 0.6;
-  cursor: default;
+  @apply cczj-opacity-60 cczj-cursor-default;
 }
 
 .line-test-spin {

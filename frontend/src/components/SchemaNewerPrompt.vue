@@ -122,31 +122,27 @@ onMounted(scan)
 
 <style scoped>
 .schema-body {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  @apply cczj-flex cczj-flex-col cczj-gap-5;
   font-size: 0.88rem;
   line-height: 1.65;
-  color: var(--text-secondary);
+  @apply cczj-text-secondary;
 }
 .schema-main {
   margin: 0;
-  color: var(--text-primary);
+  @apply cczj-text-primary;
 }
 .schema-hint {
   margin: 0;
   font-size: 0.8rem;
-  color: var(--text-muted);
-  word-break: break-all;
+  @apply cczj-text-muted cczj-break-all;
 }
 .schema-link {
   padding: 0;
   border: none;
   background: transparent;
-  color: var(--accent);
+  @apply cczj-text-accent;
   font-family: inherit;
   font-size: inherit;
-  cursor: pointer;
-  text-decoration: underline;
+  @apply cczj-cursor-pointer cczj-underline;
 }
 </style>

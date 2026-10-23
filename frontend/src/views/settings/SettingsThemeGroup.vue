@@ -107,6 +107,8 @@ function pickTheme(id: string): void {
 </script>
 
 <template>
+ <div v-if="themeStore.saveError" role="alert" class="cczj-theme-save-error">{{themeStore.saveError}} <button type="button" @click="themeStore.retrySettings()">{{t('common.retry')}}</button></div>
+
   <div class="panel group-card cczj-flex cczj-flex-col cczj-gap-2">
     <section class="block">
       <h3>{{ t('settings.themeColor') }}</h3>
@@ -256,18 +258,19 @@ function pickTheme(id: string): void {
 </template>
 
 <style scoped>
+.cczj-theme-save-error{@apply cczj-p-6;border:1px solid var(--danger);@apply cczj-rounded-md cczj-text-primary cczj-mb-6}.cczj-theme-save-error button{min-height:44px;padding:8px 14px;@apply cczj-ml-5 cczj-border cczj-rounded-md;background:var(--bg-card);@apply cczj-text-primary}
+
 /* 卡片外框与 .block 的压平由 Settings.vue 的 .panel.group-card（:deep）统一画，
    这里只留本组内部的排版——h3 不是根节点，拿不到父级 scope id。 */
 .block h3 {
   font-size: 0.97rem;
-  font-weight: 700;
+  @apply cczj-font-bold;
   margin: 0 0 12px;
   letter-spacing: 0.3px;
 }
 .sub-title {
   font-size: 0.93rem;
-  color: var(--text-secondary);
-  font-weight: 700;
+  @apply cczj-text-secondary cczj-font-bold;
   text-transform: uppercase;
   letter-spacing: 1px;
   margin: 0 0 10px;
@@ -282,56 +285,51 @@ function pickTheme(id: string): void {
 /* ============ 主题网格 ============ */
 .theme-grid {
   grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
-  gap: 14px;
+  @apply cczj-gap-7;
   margin-bottom: 18px;
 }
 .theme-card {
-  position: relative;
-  gap: 10px;
+  @apply cczj-relative cczj-gap-5;
   padding: 14px 10px 14px;
   min-height: 160px;
   background: var(--bg-secondary);
   border: 2px solid transparent;
-  border-radius: 12px;
-  transition: all 0.15s ease;
-  overflow: hidden;
+  @apply cczj-rounded-lg cczj-transition-fast cczj-overflow-hidden;
 }
 .theme-card::before {
   /* 背景层：用 inset 提供一个浅阴影，让卡片更有质感 */
   content: '';
-  position: absolute;
+  @apply cczj-absolute;
   inset: 0;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.04);
   border-radius: 10px;
-  pointer-events: none;
+  @apply cczj-pointer-events-none;
 }
 .theme-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.10);
 }
 .theme-card.active {
-  border-color: var(--accent);
+  @apply cczj-border-primary;
   box-shadow: 0 6px 24px var(--accent-alpha-35);
 }
 .theme-card .card-overlay {
-  position: absolute;
+  @apply cczj-absolute;
   inset: 0;
   border-radius: 10px;
-  z-index: 0;
-  pointer-events: none;
-  opacity: 1;
+  @apply cczj-z-0 cczj-pointer-events-none cczj-opacity-100;
 }
 .theme-card.hasBg .swatch,
 .theme-card.hasBg .label {
-  position: relative;
+  @apply cczj-relative;
   z-index: 1;
 }
 .theme-card .swatch {
   width: 60px;
   height: 60px;
-  border-radius: 50%;
+  @apply cczj-rounded-50;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15), inset 0 -4px 10px rgba(0, 0, 0, 0.10);
-  flex-shrink: 0;
+  @apply cczj-flex-shrink-0;
 }
 /* 「新建主题」这几张占位卡不是预览，它们跟着界面当前主题走。
  * 以前写死 #f5f5f5/#8a8a8a 这套浅灰：浅色主题下正好，切到深色主题就成了一块
@@ -340,45 +338,37 @@ function pickTheme(id: string): void {
 .theme-card.add {
   background: color-mix(in srgb, var(--text-muted) 12%, var(--bg-card));
   border: 2px dashed transparent;
-  color: var(--text-muted);
+  @apply cczj-text-muted;
 }
 .theme-card.add:hover {
   background: color-mix(in srgb, var(--text-muted) 20%, var(--bg-card));
   border-color: color-mix(in srgb, var(--text-muted) 35%, var(--bg-card));
 }
-.theme-card.add .label { color: var(--text-muted); }
+.theme-card.add .label { @apply cczj-text-muted; }
 .theme-card .swatch.plus {
   background: color-mix(in srgb, var(--text-muted) 16%, var(--bg-card));
-  color: var(--text-muted);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  @apply cczj-text-muted cczj-inline-flex cczj-items-center cczj-justify-center;
   border: 2px dashed color-mix(in srgb, var(--text-muted) 35%, var(--bg-card));
-  box-shadow: none;
+  @apply cczj-shadow-none;
 }
-.theme-card .swatch.plus svg { color: var(--text-muted); }
+.theme-card .swatch.plus svg { @apply cczj-text-muted; }
 .theme-card .swatch.small {
   width: 18px;
   height: 18px;
-  margin-top: 4px;
+  @apply cczj-mt-2;
   /* 描边取当前主题的表面色（浅色主题下就是白，跟原来一致），
    * 深色主题的亮主色上才不会被同色吞掉。 */
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2), inset 0 0 0 2px color-mix(in srgb, var(--bg-card) 30%, transparent);
 }
 .theme-card .label {
   font-size: 0.86rem;
-  color: var(--text-secondary);
-  font-weight: 700;
-  max-width: 100%;
-  text-align: center;
+  @apply cczj-text-secondary cczj-font-bold cczj-max-w-full cczj-text-center;
 }
 .check {
-  position: absolute;
-  top: 8px;
-  right: 8px;
+  @apply cczj-absolute cczj-top-2 cczj-right-2;
   width: 22px;
   height: 22px;
-  border-radius: 50%;
+  @apply cczj-rounded-50;
   background: var(--accent);
   color: var(--accent-contrast);
   font-size: 0.86rem;
@@ -390,46 +380,39 @@ function pickTheme(id: string): void {
 .card-actions-top {
   top: 6px;
   right: 6px;
-  gap: 4px;
-  opacity: 0;
+  @apply cczj-gap-2 cczj-opacity-0;
   transition: opacity 0.15s ease;
   z-index: 3;
 }
 .theme-card:hover .card-actions-top {
-  opacity: 1;
+  @apply cczj-opacity-100;
 }
 
 /* 自定义主题卡片上的删除按钮（右下角，hover 显示） */
 .card-actions {
   bottom: 6px;
   right: 6px;
-  gap: 4px;
-  opacity: 0;
+  @apply cczj-gap-2 cczj-opacity-0;
   transition: opacity 0.15s ease;
   z-index: 3;
 }
 .theme-card:hover .card-actions {
-  opacity: 1;
+  @apply cczj-opacity-100;
 }
 .mini-btn {
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
+  @apply cczj-w-24 cczj-h-24 cczj-rounded cczj-border;
   background: var(--bg-card);
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.15s ease;
+  @apply cczj-text-secondary cczj-cursor-pointer cczj-transition-fast;
 }
 .mini-btn:hover {
   background: var(--accent);
   color: var(--accent-contrast);
-  border-color: var(--accent);
+  @apply cczj-border-primary;
 }
 .mini-btn.danger:hover {
   background: var(--danger);
   border-color: var(--danger);
-  color: #fff;
+  @apply cczj-text-white;
 }
 
 .small { font-size: 0.79rem; }

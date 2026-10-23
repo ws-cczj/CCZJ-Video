@@ -1,0 +1,26 @@
+[
+  {
+    "key": "kuwo-detail",
+    "status": 200,
+    "bytes": 10995,
+    "url": "http://appi.kuwo.cn/novels/api/book/22543868000604102"
+  },
+  {
+    "key": "kuwo-toc",
+    "status": 200,
+    "bytes": 534807,
+    "url": "http://appi.kuwo.cn/novels/api/book/22543868000604102/chapters?paging=0"
+  },
+  {
+    "key": "guazi-pages",
+    "status": 200,
+    "bytes": 121698,
+    "url": "https://www.guazimanhua.com/chapter.php?id=1668692"
+  },
+  {
+    "key": "dongman-pages",
+    "status": 200,
+    "bytes": 194005,
+    "url": "https://www.dongmanmanhua.cn/BOY/tower-of-god/%E7%AC%AC3%E8%AF%9D-%E6%B5%B7%E9%A1%BF%E7%9A%84%E6%A5%BC%E5%B1%82-/viewer?title_no=241&episode_no=4"
+  }
+]

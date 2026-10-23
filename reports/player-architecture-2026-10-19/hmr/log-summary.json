@@ -1,0 +1,7 @@
+{
+  "baseline_line_count": 1327,
+  "current_line_count": 1362,
+  "new_line_count": 35,
+  "new_issues": [],
+  "limitation": "Native launch and HMR idle observations; no playback or UI scenarios."
+}

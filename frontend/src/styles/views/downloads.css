@@ -1,147 +1,115 @@
 .downloads-page {
   max-width: 1100px;
   margin: 0 auto;
-  color: var(--text-primary);
+  @apply cczj-text-primary;
 }
 .page-header {
-  margin-bottom: 20px;
+  @apply cczj-mb-10;
 }
 .header-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 12px;
-  flex-wrap: wrap;
+  @apply cczj-flex cczj-justify-between cczj-items-start cczj-gap-8 cczj-mb-6 cczj-flex-wrap;
 }
 .page-header h1 {
   font-size: 22px;
-  font-weight: 600;
+  @apply cczj-font-semibold;
   margin: 0 0 4px 0;
 }
 .subtitle {
-  font-size: 12px;
-  color: var(--text-muted);
+  @apply cczj-text-sm cczj-text-muted;
   margin: 0;
 }
 .filter-row {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+  @apply cczj-flex cczj-gap-4 cczj-flex-wrap;
 }
 
 /* 批量操作按钮区 */
 .bulk-actions {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  align-items: center;
+  @apply cczj-flex cczj-gap-3 cczj-flex-wrap cczj-items-center;
 }
 .b-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+  @apply cczj-inline-flex cczj-items-center cczj-gap-2;
   padding: 4px 10px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
+  @apply cczj-rounded cczj-border;
   background: var(--bg-card);
-  font-size: 11px;
-  cursor: pointer;
+  @apply cczj-text-11 cczj-cursor-pointer;
   transition: all 0.15s;
   font-family: inherit;
 }
 .b-btn-pause { background: var(--warning-alpha-10); border-color: var(--warning); color: var(--warning-text); }
 .b-btn-pause:hover { background: var(--warning-alpha-10); border-color: var(--warning); }
-.b-btn-resume { background: var(--success-alpha-10); border-color: var(--success); color: var(--success); }
+.b-btn-resume { background: var(--success-alpha-10); border-color: var(--success); @apply cczj-text-success; }
 .b-btn-resume:hover { background: var(--success-alpha-10); border-color: var(--success); }
-.b-btn-danger { background: var(--danger-alpha-10); border-color: var(--danger); color: var(--danger); }
-.b-btn-danger:hover { background: var(--danger-alpha-10); border-color: var(--danger); }
+.b-btn-danger { @apply cczj-bg-danger-alpha; border-color: var(--danger); @apply cczj-text-danger; }
+.b-btn-danger:hover { @apply cczj-bg-danger-alpha; border-color: var(--danger); }
 .b-btn-remove { background: rgba(107, 114, 128, 0.1); border-color: rgba(107, 114, 128, 0.4); color: #6b7280; }
 .b-btn-remove:hover { background: rgba(107, 114, 128, 0.2); border-color: #6b7280; color: #6b7280; }
 
 /* ========== 下载设置 ========== */
 .download-settings-block {
   background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  @apply cczj-border cczj-rounded-lg;
   padding: 18px 20px;
-  margin-bottom: 20px;
+  @apply cczj-mb-10;
 }
 .download-settings-block h3 {
-  font-size: 14px;
-  font-weight: 700;
+  @apply cczj-text-base cczj-font-bold;
   margin: 0 0 14px;
 }
 .setting-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  @apply cczj-flex cczj-items-center cczj-gap-5 cczj-flex-wrap;
 }
 .setting-input {
-  flex: 1;
+  @apply cczj-flex-1;
   min-width: 200px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
+  @apply cczj-px-6-py-4 cczj-rounded-md cczj-border;
   background: var(--bg-secondary);
-  color: var(--text-primary);
-  font-size: 13px;
+  @apply cczj-text-primary cczj-text-13;
   font-family: inherit;
-  outline: none;
+  @apply cczj-outline-none;
   transition: border-color 0.15s;
 }
 .setting-input:focus {
-  border-color: var(--accent);
+  @apply cczj-border-primary;
 }
 .hint {
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--text-muted);
-  line-height: 1.5;
+  @apply cczj-mt-4 cczj-text-sm cczj-text-muted cczj-leading-normal;
 }
 
 .f-btn {
   padding: 6px 14px;
   border-radius: 18px;
-  border: 1px solid var(--border);
+  @apply cczj-border;
   background: var(--bg-card);
-  color: var(--text-secondary);
-  font-size: 12px;
-  cursor: pointer;
+  @apply cczj-text-secondary cczj-text-sm cczj-cursor-pointer;
   transition: all 0.15s;
   font-family: inherit;
 }
 .f-btn:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  @apply cczj-border-primary cczj-text-accent;
 }
 .f-btn.active {
   background: var(--accent);
-  border-color: var(--accent);
+  @apply cczj-border-primary;
   color: var(--accent-contrast);
 }
 
 .empty {
-  text-align: center;
+  @apply cczj-text-center;
   padding: 60px 20px;
   background: var(--bg-card);
-  border-radius: 12px;
+  @apply cczj-rounded-lg;
   border: 1px dashed var(--border);
 }
-.empty-icon { font-size: 44px; margin-bottom: 12px; }
-.empty-title { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
-.empty-desc { font-size: 13px; color: var(--text-muted); }
+.empty-icon { font-size: 44px; @apply cczj-mb-6; }
+.empty-title { @apply cczj-text-lg cczj-font-semibold cczj-mb-3; }
+.empty-desc { @apply cczj-text-13 cczj-text-muted; }
 
 .task-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  @apply cczj-flex cczj-flex-col cczj-gap-6;
 }
 .task-card {
   background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  @apply cczj-border cczj-rounded-lg;
   padding: 16px 18px;
   transition: all 0.15s;
 }
@@ -150,71 +118,40 @@
   box-shadow: 0 4px 14px var(--accent-alpha-10);
 }
 .task-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-  gap: 10px;
+  @apply cczj-flex cczj-items-center cczj-justify-between cczj-mb-5 cczj-gap-5;
 }
 .task-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
+  @apply cczj-flex cczj-items-center cczj-gap-4 cczj-text-base cczj-font-semibold cczj-text-primary;
 }
 .task-ep {
-  color: var(--text-secondary);
-  font-weight: 500;
-  margin-left: 4px;
+  @apply cczj-text-secondary cczj-font-medium cczj-ml-2;
 }
 .status-chip {
-  flex-shrink: 0;
-  padding: 3px 10px;
-  font-size: 11px;
-  border-radius: 12px;
-  font-weight: 500;
+  @apply cczj-flex-shrink-0 cczj-px-5-py-2 cczj-text-11 cczj-rounded-lg cczj-font-medium;
 }
 .status-queued { background: rgba(120, 120, 120, 0.15); color: #8a8a8a; }
 .status-downloading { background: var(--info-alpha-10); color: var(--info); }
 .status-paused { background: var(--warning-alpha-10); color: var(--warning-text); }
-.status-done { background: var(--success-alpha-10); color: var(--success); }
-.status-error, .status-cancelled { background: var(--danger-alpha-10); color: var(--danger); }
+.status-done { background: var(--success-alpha-10); @apply cczj-text-success; }
+.status-error, .status-cancelled { @apply cczj-bg-danger-alpha cczj-text-danger; }
 
 .task-meta-row {
-  display: flex;
-  gap: 14px;
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-bottom: 8px;
-  align-items: center;
-  flex-wrap: wrap;
+  @apply cczj-flex cczj-gap-7 cczj-text-sm cczj-text-muted cczj-mb-4 cczj-items-center cczj-flex-wrap;
 }
 .task-meta-row .speed { color: #1890ff; font-variant-numeric: tabular-nums; }
-.task-meta-row .eta { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
-.task-meta-row .err-msg { color: #ef4444; max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.task-meta-row .eta { @apply cczj-text-secondary; font-variant-numeric: tabular-nums; }
+.task-meta-row .err-msg { color: #ef4444; max-width: 300px; @apply cczj-whitespace-nowrap cczj-overflow-hidden; text-overflow: ellipsis; }
 
 /* ========== IDM 风格分块进度条 ========== */
 .chunk-progress-container {
-  position: relative;
-  width: 100%;
-  height: 8px;
+  @apply cczj-relative cczj-w-full cczj-h-2;
   background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  overflow: hidden;
-  margin-bottom: 8px;
+  @apply cczj-border cczj-rounded-sm cczj-overflow-hidden cczj-mb-4;
 }
 .chunk-bar {
-  position: absolute;
-  top: 0;
-  height: 100%;
-  border-radius: 2px;
+  @apply cczj-absolute cczj-top-0 cczj-h-full cczj-rounded-xs;
   transition: width 0.2s ease, background 0.3s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  @apply cczj-flex cczj-items-center cczj-justify-center;
   min-width: 2px;
 }
 .chunk-bar:not(:last-child) {
@@ -222,79 +159,56 @@
 }
 .chunk-label {
   font-size: 7px;
-  font-weight: 700;
+  @apply cczj-font-bold;
   color: rgba(255, 255, 255, 0.85);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-  pointer-events: none;
+  @apply cczj-pointer-events-none;
 }
 
 .progress-track {
-  position: relative;
-  width: 100%;
+  @apply cczj-relative cczj-w-full;
   height: 18px;
   background: var(--bg-secondary);
-  border: 1px solid var(--border);
+  @apply cczj-border;
   border-radius: 9px;
-  overflow: hidden;
-  margin-bottom: 10px;
+  @apply cczj-overflow-hidden cczj-mb-5;
 }
 .progress-fill {
-  position: absolute;
+  @apply cczj-absolute;
   inset: 0 auto 0 0;
-  height: 100%;
+  @apply cczj-h-full;
   background: linear-gradient(90deg, var(--accent) 0%, #36a3ff 100%);
   transition: width 0.3s ease;
 }
 .progress-text {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-primary);
+  @apply cczj-relative cczj-flex cczj-items-center cczj-justify-center cczj-h-full cczj-text-11 cczj-font-semibold cczj-text-primary;
   text-shadow: 0 1px 2px rgba(255, 255, 255, 0.4);
 }
 
 .task-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  @apply cczj-flex cczj-items-center cczj-justify-between cczj-gap-5;
 }
 .file-path {
-  font-size: 11px;
-  color: var(--text-muted);
-  flex: 1;
-  min-width: 0;
+  @apply cczj-text-11 cczj-text-muted cczj-flex-1 cczj-min-w-0;
 }
 .task-actions {
-  display: flex;
-  gap: 6px;
-  flex-shrink: 0;
+  @apply cczj-flex cczj-gap-3 cczj-flex-shrink-0;
 }
 .t-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+  @apply cczj-inline-flex cczj-items-center cczj-gap-2;
   padding: 5px 10px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
+  @apply cczj-rounded cczj-border;
   background: var(--bg-secondary);
-  color: var(--text-secondary);
-  font-size: 11px;
-  cursor: pointer;
+  @apply cczj-text-secondary cczj-text-11 cczj-cursor-pointer;
   transition: all 0.15s;
   font-family: inherit;
 }
 .t-btn:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  @apply cczj-border-primary cczj-text-accent;
 }
 .t-btn.primary {
   background: var(--accent);
-  border-color: var(--accent);
+  @apply cczj-border-primary;
   color: var(--accent-contrast);
 }
 .t-btn.primary:hover {
@@ -318,7 +232,7 @@
 .t-btn-resume {
   background: var(--success-alpha-10);
   border-color: var(--success);
-  color: var(--success);
+  @apply cczj-text-success;
 }
 .t-btn-resume:hover {
   background: var(--success-alpha-10);
@@ -327,12 +241,12 @@
 }
 
 .t-btn-danger {
-  background: var(--danger-alpha-10);
+  @apply cczj-bg-danger-alpha;
   border-color: var(--danger);
-  color: var(--danger);
+  @apply cczj-text-danger;
 }
 .t-btn-danger:hover {
-  background: var(--danger-alpha-10);
+  @apply cczj-bg-danger-alpha;
   border-color: var(--danger-hover);
   color: var(--danger-hover);
 }
@@ -354,12 +268,12 @@
   color: #6b7280;
 }
 .t-btn-remove:hover {
-  background: var(--danger-alpha-10);
+  @apply cczj-bg-danger-alpha;
   border-color: var(--danger);
-  color: var(--danger);
+  @apply cczj-text-danger;
 }
 
 .status-paused-label {
   color: var(--warning-text) !important;
-  font-weight: 500;
+  @apply cczj-font-medium;
 }

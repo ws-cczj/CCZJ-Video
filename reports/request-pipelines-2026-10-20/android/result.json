@@ -1,0 +1,15 @@
+{
+  "passed": true,
+  "native": true,
+  "package": "com.cczj.video.acceptance",
+  "checks": [
+    "four novel sources can be selectively imported; no three-source cap",
+    "shared source-editor modal exposes its caller-provided footer and closes by trusted touch",
+    "cached novel home immediately reflects imported sources",
+    "offline full source library, quality ordering and readable mobile layout",
+    "real novel text, paged reading and trusted touch on persistent exit",
+    "one-tap official comic import, refreshed home, real image decode and reader exit"
+  ],
+  "catalog_count": 2801,
+  "webview": "Mozilla/5.0 (Linux; Android 15; SDY-AN00 Build/V417IR; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/110.0.5481.154 Mobile Safari/537.36"
+}

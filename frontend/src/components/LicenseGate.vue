@@ -15,6 +15,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import licenseText from '../../../LICENSE?raw'
 import { tr } from '../locales'
 import { GetSetting, QuitApp, SetSetting } from '../api/app'
+import { closeMobileApplication } from '../api/runtime'
 import { useErrorStore } from '../stores/error'
 import { updateController } from '../stores/updateState'
 import {
@@ -37,9 +38,6 @@ let ticker: number | undefined
 
 const canDismiss = computed(() => !licensePending.value)
 const canAccept = computed(() => remain.value <= 0)
-
-const agreeLabel = computed(() =>
-  canAccept.value ? tr('license.agree') : tr('license.agreeWaiting', { s: remain.value }))
 
 function startReadTimer(): void {
   stopReadTimer()
@@ -93,11 +91,12 @@ async function accept(): Promise<void> {
   updateController.checkUpdate?.()
 }
 
-function decline(): void {
+async function decline(): Promise<void> {
   // 不写任何记录，直接走优雅退出：库、日志和后台任务都按关停流程收尾。
   // 刻意不"清除本机数据"——那是删用户的东西，条款没要求，代码也不该擅自做。
   stopReadTimer()
-  QuitApp()
+  await QuitApp()
+  closeMobileApplication()
 }
 
 function onClose(): void {
@@ -133,14 +132,15 @@ onUnmounted(stopReadTimer)
     </div>
 
     <template #footer>
-      <template v-if="licensePending">
-        <Button variant="secondary" size="md" :disabled="saving" @click="decline">
+      <div v-if="licensePending" class="license-actions">
+        <span class="license-read-status" role="status">{{ canAccept ? '' : tr('license.readWaiting', { s: remain }) }}</span>
+        <Button class="license-exit" variant="secondary" size="md" :disabled="saving" @click="decline">
           {{ tr('license.decline') }}
         </Button>
-        <Button variant="primary" size="md" :disabled="!canAccept" :loading="saving" @click="accept">
-          {{ agreeLabel }}
+        <Button class="license-accept" variant="primary" size="md" :disabled="!canAccept" :loading="saving" @click="accept">
+          {{ tr('license.agree') }}
         </Button>
-      </template>
+      </div>
       <Button v-else variant="primary" size="md" @click="onClose">
         {{ tr('license.close') }}
       </Button>
@@ -149,63 +149,58 @@ onUnmounted(stopReadTimer)
 </template>
 
 <style scoped>
+.license-actions { @apply cczj-w-full cczj-min-w-0 cczj-grid; grid-template-columns: minmax(72px, 1fr) minmax(0, 2fr); @apply cczj-gap-5; }
+.license-actions > .ui-btn { @apply cczj-min-w-0; min-height: 44px; padding-inline: 12px; }
+.license-read-status { grid-column: 1 / -1; min-height: 1.4em; @apply cczj-text-muted; font-size: .8rem; @apply cczj-text-right; line-height: 1.4; }
 .license-body {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  @apply cczj-flex cczj-flex-col cczj-gap-6;
   font-size: 0.89rem;
   line-height: 1.65;
-  color: var(--text-secondary);
+  @apply cczj-text-secondary;
 }
 .license-intro {
   margin: 0;
-  color: var(--text-primary);
+  @apply cczj-text-primary;
 }
 .license-clauses {
   margin: 0;
   padding-left: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  @apply cczj-flex cczj-flex-col cczj-gap-4;
 }
 .license-clauses li::marker {
-  color: var(--accent);
-  font-weight: 700;
+  @apply cczj-text-accent cczj-font-bold;
 }
 .license-free {
   margin: 0;
   padding: 10px 12px;
-  border: 1px solid var(--border);
+  @apply cczj-border;
   border-left: 3px solid var(--warning);
-  border-radius: 6px;
+  @apply cczj-rounded;
   background: var(--bg-secondary);
-  color: var(--text-primary);
+  @apply cczj-text-primary;
 }
 .license-toggle {
-  align-self: flex-start;
+  @apply cczj-self-start;
   padding: 0;
   border: none;
   background: transparent;
-  color: var(--accent);
+  @apply cczj-text-accent;
   font-family: inherit;
   font-size: 0.84rem;
-  font-weight: 600;
-  cursor: pointer;
-  text-decoration: underline;
+  @apply cczj-font-semibold cczj-cursor-pointer cczj-underline;
 }
 .license-full {
   margin: 0;
   max-height: 40vh;
-  overflow-y: auto;
+  @apply cczj-overflow-y-auto;
   padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  @apply cczj-border cczj-rounded;
   background: var(--bg-secondary);
   font-family: inherit;
   font-size: 0.8rem;
   line-height: 1.6;
-  white-space: pre-wrap;
+  @apply cczj-whitespace-pre;
   word-break: break-word;
-  color: var(--text-secondary);
+  @apply cczj-text-secondary;
 }
 </style>

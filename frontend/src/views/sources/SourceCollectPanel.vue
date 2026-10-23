@@ -64,21 +64,18 @@ const { isRunning, isPaused, progressFor } = useSourceDisplay()
   padding: 14px 16px;
 }
 .cp-progress-wrap {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
+  @apply cczj-flex cczj-items-center cczj-gap-6 cczj-mb-6;
 }
 .cp-progress-track {
-  flex: 1; height: 12px;
+  @apply cczj-flex-1; height: 12px;
   background: rgba(255,255,255,0.08);
-  border-radius: 6px; overflow: hidden;
+  @apply cczj-rounded cczj-overflow-hidden;
 }
 .cp-progress-fill {
-  height: 100%;
+  @apply cczj-h-full;
   background: linear-gradient(90deg, var(--accent), #818cf8, var(--accent));
   background-size: 200% 100%;
-  border-radius: 6px;
+  @apply cczj-rounded;
   transition: width 0.3s ease;
   animation: gradientMove 2s ease-in-out infinite;
 }
@@ -87,55 +84,50 @@ const { isRunning, isPaused, progressFor } = useSourceDisplay()
   50% { background-position: 100% 50%; }
 }
 .cp-progress-pct {
-  font-size: 16px; font-weight: 700; color: var(--accent);
+  @apply cczj-text-lg cczj-font-bold cczj-text-accent;
   font-family: 'SF Mono', Consolas, monospace;
-  min-width: 44px; text-align: right;
+  min-width: 44px; @apply cczj-text-right;
 }
 .cp-stats {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-  margin-bottom: 10px;
+  @apply cczj-flex cczj-gap-8 cczj-flex-wrap cczj-mb-5;
 }
 .cp-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  @apply cczj-flex cczj-flex-col cczj-gap-1;
 }
 .cp-stat-label {
-  font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px;
+  @apply cczj-text-xs cczj-text-muted; text-transform: uppercase; letter-spacing: 0.3px;
 }
 .cp-stat-value {
-  font-size: 13px; color: var(--text-primary); font-weight: 600;
+  @apply cczj-text-13 cczj-text-primary cczj-font-semibold;
   font-family: 'SF Mono', Consolas, monospace;
 }
 .cp-page-names {
-  margin-top: 8px;
+  @apply cczj-mt-4;
 }
 .cp-page-names-label {
-  font-size: 11px; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 6px;
+  @apply cczj-text-11 cczj-text-muted cczj-font-semibold cczj-block cczj-mb-3;
 }
 .cp-name-tags {
-  display: flex; flex-wrap: wrap; gap: 4px;
+  @apply cczj-flex cczj-flex-wrap cczj-gap-2;
 }
 .cp-name-tag {
-  padding: 3px 10px; border-radius: 12px;
+  @apply cczj-px-5-py-2 cczj-rounded-lg;
   background: rgba(255,255,255,0.05);
   border: 1px solid rgba(255,255,255,0.08);
-  font-size: 11px; color: var(--text-secondary);
-  max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  @apply cczj-text-11 cczj-text-secondary;
+  max-width: 200px; @apply cczj-overflow-hidden; text-overflow: ellipsis; @apply cczj-whitespace-nowrap;
 }
 .cp-name-more {
-  padding: 3px 10px; border-radius: 12px;
+  @apply cczj-px-5-py-2 cczj-rounded-lg;
   background: var(--accent-alpha-10);
-  color: var(--accent); font-size: 11px; font-weight: 600;
+  @apply cczj-text-accent cczj-text-11 cczj-font-semibold;
 }
 .cp-error {
-  margin-top: 10px; padding: 8px 12px;
+  @apply cczj-mt-5 cczj-px-6-py-4;
   background: rgba(239,83,80,0.1);
   border: 1px solid rgba(239,83,80,0.3);
-  border-radius: 8px;
-  color: #ef5350; font-size: 12px; font-weight: 500;
+  @apply cczj-rounded-md;
+  color: #ef5350; @apply cczj-text-sm cczj-font-medium;
 }
 
 </style>

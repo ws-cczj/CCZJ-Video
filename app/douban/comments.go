@@ -1,9 +1,8 @@
 package douban
 
 import (
+	"context"
 	"fmt"
-	"io"
-	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
@@ -63,6 +62,8 @@ var (
 	// 每条缓存是一整页评论（含正文），长时间翻页只增不减会一直占着内存。
 	maxCommentCacheEntries = 200
 
+	commentSubjectIDRegex = regexp.MustCompile(`^[0-9]{1,16}$`)
+
 	// 评论页 HTML 解析正则
 	commentItemRegex = regexp.MustCompile(`<div class="comment-item"[^>]*data-cid="(\d+)"[\s\S]*?</div>\s*</div>`)
 	avatarRegex      = regexp.MustCompile(`<div class="avatar">\s*<a[^>]*href="([^"]*)"[^>]*>\s*<img src="([^"]*)"`)
@@ -94,15 +95,23 @@ var commentRefresh = struct {
 }
 
 // FetchComments 获取豆瓣评论：24 小时内的缓存直接用，过期的先返回旧数据再后台刷新，
-// 只有内存里什么都没有时才让调用方等网络。
+// 内存未命中先读持久快照，只有两者都不可用时才等待网络。
 func FetchComments(doubanID string, page int, sort string) (*DoubanCommentsResp, error) {
-	if doubanID == "" {
-		return nil, apperror.New(apperror.Validation, "douban_id 不能为空")
+	return FetchCommentsContext(context.Background(), doubanID, page, sort)
+}
+
+// FetchCommentsContext preserves cache semantics while making cold reads cancellable.
+func FetchCommentsContext(ctx context.Context, doubanID string, page int, sort string) (*DoubanCommentsResp, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
-	if page < 1 {
+	if !commentSubjectIDRegex.MatchString(doubanID) {
+		return nil, apperror.New(apperror.Validation, "douban_id 必须是数字")
+	}
+	if page < 1 || page > 10000 {
 		page = 1
 	}
-	if sort == "" {
+	if sort != "time" && sort != "new_score" {
 		sort = "new_score"
 	}
 
@@ -110,6 +119,13 @@ func FetchComments(doubanID string, page int, sort string) (*DoubanCommentsResp,
 	commentsCache.RLock()
 	entry, has := commentsCache.entries[cacheKey]
 	commentsCache.RUnlock()
+
+	if !has {
+		loadCommentSnapshots()
+		commentsCache.RLock()
+		entry, has = commentsCache.entries[cacheKey]
+		commentsCache.RUnlock()
+	}
 
 	if has && entry.data != nil {
 		switch age := time.Since(entry.fetchedAt); {
@@ -128,14 +144,7 @@ func FetchComments(doubanID string, page int, sort string) (*DoubanCommentsResp,
 	}
 
 	commentsCounters.misses.Add(1)
-	resp, err := fetchCommentsPage(doubanID, page, sort)
-	if err != nil {
-		commentsCounters.fetchFail.Add(1)
-		return nil, err
-	}
-	commentsCounters.fetchOK.Add(1)
-	storeCommentsPage(cacheKey, resp)
-	return resp, nil
+	return requestCommentsPage(ctx, cacheKey, doubanID, page, sort)
 }
 
 // fetchCommentsPage 是「抓一页评论」的替身位，理由同热榜的 fetchChartPage。
@@ -159,12 +168,12 @@ func startCommentRefresh(cacheKey, doubanID string, page int, sort string) {
 	commentRefresh.running[cacheKey] = true
 	commentRefresh.Unlock()
 
-	go func() {
-		resp, err := fetchCommentsPage(doubanID, page, sort)
+	accepted := launchCommentRefresh(func(ctx context.Context) {
+		resp, err := requestCommentsPage(ctx, cacheKey, doubanID, page, sort)
 
 		commentRefresh.Lock()
 		delete(commentRefresh.running, cacheKey)
-		if err != nil {
+		if err != nil && apperror.CodeOf(err) != apperror.Cancelled {
 			commentRefresh.blocked[cacheKey] = time.Now().Add(commentRefreshBackoff)
 		} else {
 			delete(commentRefresh.blocked, cacheKey)
@@ -173,17 +182,22 @@ func startCommentRefresh(cacheKey, doubanID string, page int, sort string) {
 		commentRefresh.Unlock()
 
 		if err != nil {
-			commentsCounters.fetchFail.Add(1)
+			if apperror.CodeOf(err) == apperror.Cancelled {
+				return
+			}
 			// 失败就继续展示旧数据，但不给旧数据续期：fetchedAt 一旦刷新，过期上限
 			// 就被无限推后，一个早已抓不到的页面会永远停留在「静默失败」。退避
 			// 已经由 blocked 管住（30 分钟内不再撞闸门），这里什么都不用做。
 			applog.Warn("[DoubanComments] 后台刷新失败，继续展示旧数据: %v", err)
 			return
 		}
-		commentsCounters.fetchOK.Add(1)
-		storeCommentsPage(cacheKey, resp)
 		applog.Info("[DoubanComments] 后台刷新完成: %s (%d 条)", cacheKey, len(resp.Comments))
-	}()
+	})
+	if !accepted {
+		commentRefresh.Lock()
+		delete(commentRefresh.running, cacheKey)
+		commentRefresh.Unlock()
+	}
 }
 
 // storeCommentsPage 写入一页评论并维持容量上限。
@@ -192,6 +206,7 @@ func storeCommentsPage(cacheKey string, resp *DoubanCommentsResp) {
 	commentsCache.entries[cacheKey] = commentCacheEntry{data: resp, fetchedAt: time.Now()}
 	evictOldestCommentsLocked()
 	commentsCache.Unlock()
+	saveCommentSnapshots()
 }
 
 // pruneCommentRefreshStateLocked 收掉退避到期的键；调用方需持有 commentRefresh 锁。
@@ -205,6 +220,16 @@ func pruneCommentRefreshStateLocked() {
 		if now.After(until) {
 			delete(commentRefresh.blocked, key)
 		}
+	}
+	for len(commentRefresh.blocked) > maxCommentCacheEntries {
+		var oldest string
+		var at time.Time
+		for key, until := range commentRefresh.blocked {
+			if oldest == "" || until.Before(at) {
+				oldest, at = key, until
+			}
+		}
+		delete(commentRefresh.blocked, oldest)
 	}
 }
 
@@ -224,57 +249,21 @@ func evictOldestCommentsLocked() {
 }
 
 // fetchCommentsFromWeb 从豆瓣网页抓取评论
-func fetchCommentsFromWeb(doubanID string, page int, sort string) (*DoubanCommentsResp, error) {
+func fetchCommentsFromWeb(ctx context.Context, doubanID string, page int, sort string) (*DoubanCommentsResp, error) {
 	offset := (page - 1) * 20
 	url := fmt.Sprintf("https://movie.douban.com/subject/%s/comments?start=%d&limit=20&status=P&sort=%s",
 		doubanID, offset, sort)
 
 	applog.Info("[DoubanComments] 抓取评论: doubanID=%s, page=%d, url=%s", doubanID, page, url)
 
-	// 反爬静默期内快速失败，不要让交互操作排在静默期后面。
-	if left := remainingBlock(); left > 0 {
-		applog.Warn("[DoubanComments] 反爬静默中（剩余 %s），跳过评论抓取", left.Round(time.Second))
-		return nil, apperror.Newf(apperror.Unavailable, "douban 反爬静默中，剩余 %s", left.Round(time.Minute))
-	}
-
-	// 和搜索/详情/热榜共用一个间隔闸门：豆瓣按 IP 计数，评论这条独立时钟留 8~20 秒
-	// 等于给整体节奏开了个后门，实测的「搜索访问太频繁」就是这么攒出来的。
-	// 等得起就等，等不起（批量补全在跑）就快速失败，上层有评论缓存兜着。
-	if _, ok := awaitDoubanSlot("评论", uiWaitBudget); !ok {
-		return nil, apperror.New(apperror.Unavailable, "douban 限速中，稍后重试评论")
-	}
-
-	// 构造请求
-	req, err := http.NewRequest("GET", url, nil)
+	html, err := fetchInteractiveDoubanContext(ctx, url, fmt.Sprintf("https://movie.douban.com/subject/%s/", doubanID), "评论")
 	if err != nil {
-		return nil, apperror.Wrap(apperror.Unavailable, err, "创建请求失败")
+		return nil, err
 	}
-
-	// 设置请求头；Cookie 由可选的环境变量提供，不使用仓库内的过期登录凭据。
-	applyDoubanHeaders(req, fmt.Sprintf("https://movie.douban.com/subject/%s/", doubanID))
-
-	// 发送请求
-	httpResp, err := client.Do(req)
-	if err != nil {
-		return nil, apperror.Wrap(apperror.Unavailable, err, "请求失败")
+	// A login/error/redesigned page is not a valid empty comments page.
+	if !strings.Contains(html, `id="comments"`) && !strings.Contains(html, `class="comment-item"`) {
+		return nil, apperror.New(apperror.Unavailable, "豆瓣评论页面暂不可用")
 	}
-	defer httpResp.Body.Close()
-
-	if httpResp.StatusCode != 200 {
-		if loc := httpResp.Header.Get("Location"); isDoubanChallengeURL(loc) {
-			applog.Warn("[DoubanComments] 命中验证跳转 %d -> %s", httpResp.StatusCode, loc)
-			noteAntiCrawl()
-		}
-		return nil, apperror.Newf(apperror.Unavailable, "HTTP 状态码: %d", httpResp.StatusCode)
-	}
-	noteDoubanSuccess()
-
-	body, err := io.ReadAll(io.LimitReader(httpResp.Body, 4*1024*1024))
-	if err != nil {
-		return nil, apperror.Wrap(apperror.Unavailable, err, "读取响应失败")
-	}
-
-	html := string(body)
 
 	// 解析评论
 	comments := parseComments(html)
@@ -407,5 +396,6 @@ func ClearCommentsCache() {
 	commentsCache.Lock()
 	commentsCache.entries = make(map[string]commentCacheEntry)
 	commentsCache.Unlock()
+	clearCommentSnapshots()
 	applog.Info("[DoubanComments] 缓存已清除")
 }

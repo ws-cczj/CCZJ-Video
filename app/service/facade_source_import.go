@@ -3,15 +3,12 @@ package service
 import (
 	"bytes"
 	"cczjVideo/app/apperror"
+	"cczjVideo/app/payload"
 	sourceservice "cczjVideo/app/source"
-	"compress/gzip"
-	"encoding/base64"
-	"encoding/json"
+	"context"
 	"io"
 	"os"
 	"strings"
-
-	"github.com/andybalholm/brotli"
 )
 
 // ======================== 数据源导入 / 导出（含 Brotli 压缩） ========================
@@ -25,115 +22,60 @@ func (a *App) ExportSource(sourceKey string) (string, error) {
 	return sourceservice.NewService().Export(a.getDataDir(), sourceKey)
 }
 
-func (a *App) ImportSource(filePath string) (string, error) {
-	trimmed := strings.TrimSpace(filePath)
-	if trimmed == "" {
-		return "", apperror.New(apperror.Validation, "文件路径为空")
-	}
-	info, err := os.Stat(trimmed)
-	if err != nil {
-		return "", apperror.Wrap(apperror.NotFound, err, "无法访问文件")
-	}
-	if info.IsDir() {
-		return "", apperror.New(apperror.Validation, "路径是目录，不是文件")
-	}
-	if info.Size() > maxSourceImportBytes {
-		return "", apperror.Newf(apperror.Validation, "导入文件过大：最大允许 %d MiB", maxSourceImportBytes>>20)
-	}
-
-	f, err := os.Open(trimmed)
-	if err != nil {
-		return "", apperror.Wrap(apperror.Storage, err, "打开文件失败")
-	}
-	defer f.Close()
-
-	// 根据文件扩展名检测压缩格式
-	lower := strings.ToLower(trimmed)
-	var reader io.Reader = f
-	if strings.HasSuffix(lower, ".br") {
-		reader = brotli.NewReader(f)
-	} else if strings.HasSuffix(lower, ".gz") {
-		gzr, err := gzip.NewReader(f)
+func (a *App) ImportSource(ctx context.Context, filePath string) (string, error) {
+	return runRequest(a, ctx, "source.ImportSource", func(ctx context.Context) (string, error) {
+		trimmed := strings.TrimSpace(filePath)
+		if trimmed == "" {
+			return "", apperror.New(apperror.Validation, "文件路径为空")
+		}
+		info, err := os.Stat(trimmed)
 		if err != nil {
-			return "", apperror.Wrap(apperror.Corrupt, err, "解压 gzip 失败")
+			return "", apperror.Wrap(apperror.NotFound, err, "无法访问文件")
 		}
-		defer gzr.Close()
-		reader = gzr
-	} else {
-		// 无扩展名或 .json：尝试检测 gzip magic bytes
-		magic := make([]byte, 2)
-		_, err = f.Read(magic)
-		if err != nil {
-			return "", apperror.Wrap(apperror.Storage, err, "读取文件失败")
+		if info.IsDir() {
+			return "", apperror.New(apperror.Validation, "路径是目录，不是文件")
 		}
-		_, _ = f.Seek(0, 0)
-		if magic[0] == 0x1f && magic[1] == 0x8b {
-			gzr, err := gzip.NewReader(f)
-			if err != nil {
-				return "", apperror.Wrap(apperror.Corrupt, err, "解压 gzip 失败")
-			}
-			defer gzr.Close()
-			reader = gzr
+		if info.Size() > maxSourceImportBytes {
+			return "", apperror.Newf(apperror.Validation, "导入文件过大：最大允许 %d MiB", maxSourceImportBytes>>20)
 		}
-	}
 
-	var payload sourceExportPayload
-	dec := json.NewDecoder(io.LimitReader(reader, maxSourceImportBytes+1))
-	if err := dec.Decode(&payload); err != nil {
-		return "", apperror.Wrap(apperror.Corrupt, err, "解析 JSON 失败")
-	}
-	if payload.Source == nil {
-		return "", apperror.New(apperror.Corrupt, "文件中缺少 source 信息")
-	}
-	return a.persistImportedSource(payload, "file")
+		f, err := os.Open(trimmed)
+		if err != nil {
+			return "", apperror.Wrap(apperror.Storage, err, "打开文件失败")
+		}
+		defer f.Close()
+
+		return a.decodeSourceImport(ctx, trimmed, f, "file")
+	})
 }
 
-// ImportSourceFromBase64 imports source data provided by the browser.
-func (a *App) ImportSourceFromBase64(filename string, b64Content string) (string, error) {
-	if strings.TrimSpace(b64Content) == "" {
-		return "", apperror.New(apperror.Validation, "文件内容为空")
-	}
-	if len(b64Content) > maxSourceImportBase64Bytes {
-		return "", apperror.Newf(apperror.Validation, "导入内容过大：最大允许 %d MiB", maxSourceImportBytes>>20)
-	}
-	raw, err := base64.StdEncoding.DecodeString(b64Content)
-	if err != nil {
-		return "", apperror.Wrap(apperror.Corrupt, err, "解码 base64 失败")
-	}
-
-	// 根据文件名扩展名检测压缩格式
-	var reader io.Reader = bytes.NewReader(raw)
-	lower := strings.ToLower(filename)
-	if strings.HasSuffix(lower, ".br") {
-		reader = brotli.NewReader(bytes.NewReader(raw))
-	} else if strings.HasSuffix(lower, ".gz") {
-		gzr, err := gzip.NewReader(bytes.NewReader(raw))
+// ImportSourceFromBase64 accepts the same bounded formats as file import.
+func (a *App) ImportSourceFromBase64(ctx context.Context, filename string, b64Content string) (string, error) {
+	return runRequest(a, ctx, "source.ImportSourceFromBase64", func(ctx context.Context) (string, error) {
+		if strings.TrimSpace(b64Content) == "" {
+			return "", apperror.New(apperror.Validation, "文件内容为空")
+		}
+		raw, err := payload.Base64(ctx, b64Content, maxSourceImportBytes)
 		if err != nil {
-			return "", apperror.Wrap(apperror.Corrupt, err, "解压 gzip 失败")
+			return "", err
 		}
-		defer gzr.Close()
-		reader = gzr
-	} else {
-		// 无扩展名或 .json：尝试检测 gzip magic bytes
-		if len(raw) >= 2 && raw[0] == 0x1f && raw[1] == 0x8b {
-			gzr, err := gzip.NewReader(bytes.NewReader(raw))
-			if err != nil {
-				return "", apperror.Wrap(apperror.Corrupt, err, "解压 gzip 失败")
-			}
-			defer gzr.Close()
-			reader = gzr
-		}
-	}
+		return a.decodeSourceImport(ctx, filename, bytes.NewReader(raw), "base64")
+	})
+}
 
-	var payload sourceExportPayload
-	dec := json.NewDecoder(io.LimitReader(reader, maxSourceImportBytes+1))
-	if err := dec.Decode(&payload); err != nil {
-		return "", apperror.Wrap(apperror.Corrupt, err, "解析 JSON 失败")
+func (a *App) decodeSourceImport(ctx context.Context, name string, reader io.Reader, origin string) (string, error) {
+	decoded, err := payload.Unpack(ctx, name, reader, payload.Limits{Input: maxSourceImportBytes, Output: maxSourceImportBytes})
+	if err != nil {
+		return "", err
 	}
-	if payload.Source == nil {
+	var imported sourceExportPayload
+	if err = payload.JSON(ctx, decoded, &imported, false); err != nil {
+		return "", err
+	}
+	if imported.Source == nil {
 		return "", apperror.New(apperror.Corrupt, "文件中缺少 source 信息")
 	}
-	return a.persistImportedSource(payload, "base64")
+	return a.persistImportedSource(imported, origin)
 }
 
 func (a *App) persistImportedSource(payload sourceExportPayload, origin string) (string, error) {

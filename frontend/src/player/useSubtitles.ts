@@ -1,4 +1,4 @@
-import { computed, ref, type Ref } from 'vue'
+import { computed, onScopeDispose, ref, shallowRef, type Ref } from 'vue'
 import { findActiveCue, parseSubtitle, type SubtitleCue } from '../utils/subtitles'
 import { tr } from '../locales'
 
@@ -17,10 +17,13 @@ export interface SubtitlesDeps {
  */
 export function useSubtitles(deps: SubtitlesDeps) {
   const showSubtitlePanel = ref(false)
-  const subtitleCues = ref<SubtitleCue[]>([])
+  const subtitleCues = shallowRef<SubtitleCue[]>([])
   const subtitleName = ref('')
   const subtitleVisible = ref(true)
   const subtitleError = ref('')
+  let generation = 0
+  let disposed = false
+  const maxFileBytes = 8 * 1024 * 1024
 
   const activeSubtitle = computed(() => {
     if (!subtitleVisible.value || subtitleCues.value.length === 0) return ''
@@ -36,10 +39,16 @@ export function useSubtitles(deps: SubtitlesDeps) {
     const input = e.target as HTMLInputElement
     const file = input.files?.[0]
     input.value = ''
-    if (!file) return
+    if (!file || disposed) return
+    const token = ++generation
     subtitleError.value = ''
+    if (file.size > maxFileBytes) {
+      subtitleError.value = tr('player.subtitleTooLarge')
+      return
+    }
     try {
       const text = await file.text()
+      if (disposed || token !== generation) return
       const cues = parseSubtitle(text)
       if (cues.length === 0) {
         subtitleError.value = tr('player.subtitleEmptyFile')
@@ -49,16 +58,20 @@ export function useSubtitles(deps: SubtitlesDeps) {
       subtitleName.value = file.name
       subtitleVisible.value = true
     } catch {
+      if (disposed || token !== generation) return
       subtitleError.value = tr('player.subtitleReadFailed')
     }
   }
 
   function clearSubtitle(): void {
+    generation++
     subtitleCues.value = []
     subtitleName.value = ''
     subtitleError.value = ''
     subtitleVisible.value = true
   }
+
+  onScopeDispose(() => { disposed = true; clearSubtitle() })
 
   return {
     showSubtitlePanel,

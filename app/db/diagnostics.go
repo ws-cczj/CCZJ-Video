@@ -30,6 +30,19 @@ type DoubanHealth struct {
 // TableStats 返回所有用户表的行数。表名来自 sqlite_master 且做了标识符校验，
 // 不能参数绑定的地方只拼这个白名单里的名字。
 func TableStats() ([]TableStat, error) {
+	return tableStatsForMode("")
+}
+
+// TableStatsForMode filters before COUNT, including rows of shared domain
+// tables. Opening reading diagnostics never scans the video catalogue.
+func TableStatsForMode(mode string) ([]TableStat, error) {
+	if mode != "video" && mode != "novel" && mode != "comic" {
+		return nil, errors.New("invalid diagnostic mode")
+	}
+	return tableStatsForMode(mode)
+}
+
+func tableStatsForMode(mode string) ([]TableStat, error) {
 	if instance == nil {
 		return nil, errors.New("database not initialized")
 	}
@@ -42,8 +55,32 @@ func TableStats() ([]TableStat, error) {
 		if !isSQLiteIdentifier(name) {
 			continue
 		}
+		query := fmt.Sprintf(`SELECT COUNT(*) FROM "%s"`, name)
+		var args []any
+		if mode != "" {
+			switch name {
+			case "sources", "library_items", "reading_state", "reading_state_imports":
+				if mode == "video" && name != "sources" {
+					continue
+				}
+				query += " WHERE kind = ?"
+				args = []any{mode}
+			case "library_chapters":
+				if mode == "video" {
+					continue
+				}
+				query += " WHERE item_id IN (SELECT id FROM library_items WHERE kind = ?)"
+				args = []any{mode}
+			case "global_video", "global_types", "favorites", "watch_history", "source_types", "source_videos", "collect_cursor", "source_health", "download_tasks", "download_task_imports", "danmaku_cache", "danmaku_bindings", "danmaku_match_failures", "douban_info", "douban_comments":
+				if mode != "video" {
+					continue
+				}
+			default:
+				continue // Shared settings/migrations are host metadata, not mode data.
+			}
+		}
 		var rows int64
-		if err := instance.QueryRow(fmt.Sprintf(`SELECT COUNT(*) FROM "%s"`, name)).Scan(&rows); err != nil {
+		if err := instance.QueryRow(query, args...).Scan(&rows); err != nil {
 			return nil, fmt.Errorf("统计 %s 失败: %w", name, err)
 		}
 		out = append(out, TableStat{Name: name, Rows: rows})

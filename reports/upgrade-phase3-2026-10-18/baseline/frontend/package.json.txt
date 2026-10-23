@@ -1,0 +1,29 @@
+{
+  "name": "frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "gen:css-data": "node ../scripts/gen-cczj-vscode-data.mjs"
+  },
+  "dependencies": {
+    "@wailsio/runtime": "3.0.0-beta.30",
+    "hls.js": "^1.7.0-beta.1",
+    "pinia": "^3.0.4",
+    "vue": "^3.5.42",
+    "vue-i18n": "^9.14.5",
+    "vue-router": "^4.6.4"
+  },
+  "devDependencies": {
+    "@types/node": "18.19.70",
+    "@vitejs/plugin-vue": "^3.0.3",
+    "typescript": "^4.6.4",
+    "vite": "^3.0.7",
+    "vitest": "0.34.6",
+    "vue-tsc": "^1.8.27"
+  }
+}

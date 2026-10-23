@@ -1,6 +1,7 @@
 package updater
 
 import (
+	"cczjVideo/app/netpolicy"
 	"context"
 	"fmt"
 	"net/http"
@@ -50,11 +51,12 @@ func speedTestSources(originalURL string) []speedTestResult {
 
 			client := &http.Client{
 				Timeout: 12 * time.Second,
-				Transport: netstats.WrapTransport(netstats.CategoryUpdate, &http.Transport{
+				Transport: netpolicy.WrapTransport(string(netstats.CategoryUpdate), netstats.WrapTransport(netstats.CategoryUpdate, &http.Transport{
 					TLSHandshakeTimeout:   8 * time.Second,
 					ResponseHeaderTimeout: 10 * time.Second,
-				}),
+				})),
 			}
+			defer client.CloseIdleConnections()
 
 			start := time.Now()
 			req, err := http.NewRequestWithContext(ctx, "HEAD", url, nil)
@@ -111,11 +113,12 @@ func downloadSpeedTest(url string) float64 {
 		Timeout: 18 * time.Second,
 		// 512KB 的 Range 取样是本项目里最接近「带宽实测」的一次请求，
 		// 它的字节数与耗时进诊断页的吞吐表，比任何估算都有说服力。
-		Transport: netstats.WrapTransport(netstats.CategoryUpdate, &http.Transport{
+		Transport: netpolicy.WrapTransport(string(netstats.CategoryUpdate), netstats.WrapTransport(netstats.CategoryUpdate, &http.Transport{
 			TLSHandshakeTimeout:   8 * time.Second,
 			ResponseHeaderTimeout: 10 * time.Second,
-		}),
+		})),
 	}
+	defer client.CloseIdleConnections()
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {

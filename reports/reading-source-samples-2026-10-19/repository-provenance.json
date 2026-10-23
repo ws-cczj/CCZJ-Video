@@ -1,0 +1,10 @@
+{
+  "observed_at_utc": "2026-10-18T04:30:45.071702+00:00",
+  "official_repository": "gedoor/legado",
+  "observed_main_commit": "9bb0569269ed557753fc3866250970de6d454fcf",
+  "readme_url": "https://raw.githubusercontent.com/gedoor/legado/9bb0569269ed557753fc3866250970de6d454fcf/README.md",
+  "readme_sha256": "74b621c3f3724f7d679e704188111891635f0821a4e1e34f0bacc7fbfcc04fe7",
+  "analysis_repository": "CCSSNE/legado",
+  "analysis_commit": "da17bb2bed44f30b12a524c2457e32a20b16fa41",
+  "note": "Official current tree is announcement-only; analysis uses a public historical source snapshot."
+}

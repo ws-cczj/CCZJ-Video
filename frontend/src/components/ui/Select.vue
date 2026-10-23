@@ -1,6 +1,6 @@
 <script setup lang="ts">
 defineOptions({ name: 'SelectDropdown' })
-import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick, useId } from 'vue'
+import { ref, computed, onDeactivated, onBeforeUnmount, watch, nextTick, useId } from 'vue'
 import MotionTransition from './MotionTransition.vue'
 import { tr } from '../../locales'
 
@@ -13,6 +13,7 @@ interface Option {
 const props = withDefaults(defineProps<{
   modelValue?: string | number
   options: Option[]
+  ariaLabel?: string
   placeholder?: string
   disabled?: boolean
   size?: 'sm' | 'md'
@@ -36,6 +37,10 @@ const emit = defineEmits(['update:modelValue', 'change', 'open-change'])
 const open = ref(false)
 const rootRef = ref<HTMLElement | null>(null)
 const panelStyle = ref<Record<string, string>>({})
+const panelRef = ref<HTMLElement | null>(null)
+let observer: ResizeObserver | undefined
+let followFrame = 0
+let generation = 0
 
 // 同页可能有多个 Select，id 必须实例唯一，aria-controls / aria-activedescendant 才有有效指向
 const uid = useId()
@@ -53,8 +58,14 @@ const selected = computed(() => {
 })
 
 function scrollHighlightIntoView(): void {
-  const el = activeIndex.value >= 0 ? document.getElementById(optionId(activeIndex.value)) : null
-  el?.scrollIntoView({ block: 'nearest' })
+  const option = activeIndex.value >= 0 ? document.getElementById(optionId(activeIndex.value)) : null
+  const panel = panelRef.value
+  if (!option || !panel) return
+  // Scroll only this menu: scrollIntoView can move the page before the first positioning pass.
+  const top = option.offsetTop
+  if (top < panel.scrollTop) panel.scrollTop = top
+  else if (top + option.offsetHeight > panel.scrollTop + panel.clientHeight)
+    panel.scrollTop = top + option.offsetHeight - panel.clientHeight
 }
 
 function setHighlight(idx: number): void {
@@ -89,10 +100,49 @@ function chooseHighlighted(): void {
 
 function openPanel(): void {
   if (props.disabled || open.value) return
+  updatePanelPosition()
   open.value = true
+  activeIndex.value = props.options.findIndex(o => o.value === props.modelValue && !o.disabled)
+  const current = ++generation
   emit('open-change', true)
-  // 打开即把高亮对齐到当前选中项，方向键才有一段合理的起点
-  syncHighlightToSelection()
+  nextTick(() => {
+    if (!open.value || current !== generation) return
+    updatePanelPosition()
+    scrollHighlightIntoView()
+    document.addEventListener('click', onDocClick, true)
+    document.addEventListener('scroll', onHostScroll, true)
+    window.addEventListener('resize', updatePanelPosition)
+    observer = new ResizeObserver(updatePanelPosition)
+    if (rootRef.value) observer.observe(rootRef.value)
+    followEntrance()
+  })
+}
+function followEntrance(): void {
+  // Follow a moving anchor only during finite ancestor entrance animations.
+  const root = rootRef.value
+  if (!root || !open.value) return
+  const moving = document.getAnimations().some(animation => {
+    const effect = animation.effect as KeyframeEffect | null
+    return animation.playState === 'running' && effect?.target instanceof Element
+      && effect.target.contains(root) && effect.getTiming().iterations !== Infinity
+  })
+  updatePanelPosition()
+  if (moving) followFrame = requestAnimationFrame(followEntrance)
+  else followFrame = 0
+}
+function onHostScroll(event: Event): void {
+  if (event.target instanceof Node && panelRef.value?.contains(event.target)) return
+  updatePanelPosition()
+}
+function detachPanel(): void {
+  ++generation
+  document.removeEventListener('click', onDocClick, true)
+  document.removeEventListener('scroll', onHostScroll, true)
+  window.removeEventListener('resize', updatePanelPosition)
+  observer?.disconnect()
+  observer = undefined
+  cancelAnimationFrame(followFrame)
+  followFrame = 0
 }
 
 function toggle(): void {
@@ -116,6 +166,8 @@ function choose(value: string | number): void {
 function closePanel(): void {
   if (!open.value) return
   open.value = false
+  activeIndex.value = -1
+  detachPanel()
   emit('open-change', false)
 }
 
@@ -152,7 +204,7 @@ function onTriggerKeydown(e: KeyboardEvent): void {
 function onDocClick(e: MouseEvent): void {
   if (!rootRef.value) return
   if (!open.value) return
-  if (!rootRef.value.contains(e.target as Node)) {
+  if (!rootRef.value.contains(e.target as Node) && !panelRef.value?.contains(e.target as Node)) {
     closePanel()
   }
 }
@@ -166,60 +218,38 @@ function updatePanelPosition(): void {
     return
   }
   const rect = rootRef.value.getBoundingClientRect()
-  const panelHeight = 260 // max-height
-  const spaceBelow = window.innerHeight - rect.bottom
-  const spaceAbove = rect.top
-  const showBelow = spaceBelow >= panelHeight || spaceBelow >= spaceAbove
-
-  if (showBelow) {
-    panelStyle.value = {
-      position: 'fixed',
-      left: rect.left + 'px',
-      top: (rect.bottom + 4) + 'px',
-      minWidth: rect.width + 'px',
-      zIndex: '10000',
-      maxHeight: Math.min(panelHeight, spaceBelow - 8) + 'px',
-    }
-  } else {
-    panelStyle.value = {
-      position: 'fixed',
-      left: rect.left + 'px',
-      bottom: (window.innerHeight - rect.top + 4) + 'px',
-      minWidth: rect.width + 'px',
-      zIndex: '10000',
-      maxHeight: Math.min(panelHeight, spaceAbove - 8) + 'px',
-    }
+  if (!rect.width || !rect.height) { closePanel(); return }
+  const height = Math.min(260, panelRef.value?.querySelector('ul')?.scrollHeight
+    ? panelRef.value.querySelector('ul')!.scrollHeight + 14 : Math.max(40, props.options.length * 36 + 14))
+  const spaceBelow = Math.max(0, window.innerHeight - rect.bottom - 8)
+  const spaceAbove = Math.max(0, rect.top - 8)
+  const showBelow = spaceBelow >= height || (spaceAbove < height && spaceBelow >= spaceAbove)
+  const width = Math.min(rect.width, window.innerWidth - 16)
+  panelStyle.value = {
+    position: 'fixed', left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)) + 'px',
+    width: width + 'px', zIndex: '10000',
+    maxHeight: Math.max(32, Math.min(height, showBelow ? spaceBelow : spaceAbove)) + 'px',
+    ...(showBelow ? { top: (rect.bottom + 4) + 'px' } : { bottom: (window.innerHeight - rect.top + 4) + 'px' }),
   }
 }
+onBeforeUnmount(detachPanel)
+onDeactivated(closePanel)
+watch(() => props.disabled, disabled => { if (disabled) closePanel() })
 
-onMounted(() => {
-  document.addEventListener('click', onDocClick, true)
-})
-onBeforeUnmount(() => {
-  document.removeEventListener('click', onDocClick, true)
-})
-
-watch(open, async (v) => {
-  if (v) {
-    await nextTick()
-    updatePanelPosition()
-    return
-  }
-  activeIndex.value = -1
-})
 </script>
 
 <template>
   <div
-    class="select-dropdown"
+    class="select-dropdown cczj-inline-block"
     :class="{ 'is-disabled': disabled, 'is-open': open, [`size-${size}`]: true }"
     ref="rootRef"
   >
     <button
-      class="select-trigger"
+      class="select-trigger cczj-inline-flex cczj-items-center cczj-justify-between"
       type="button"
       :disabled="disabled"
       role="combobox"
+      :aria-label="ariaLabel"
       aria-haspopup="listbox"
       :aria-expanded="open ? 'true' : 'false'"
       :aria-controls="open ? listId : undefined"
@@ -242,6 +272,7 @@ watch(open, async (v) => {
       <MotionTransition preset="dropdown">
         <div
           v-if="open"
+          ref="panelRef"
           class="select-panel"
           :class="{ 'is-inline': inline, 'drop-up': inline && inlineDrop === 'up' }"
           :style="panelStyle"
@@ -252,7 +283,7 @@ watch(open, async (v) => {
               v-for="(opt, i) in options"
               :key="String(opt.value)"
               :id="optionId(i)"
-              class="option"
+              class="option cczj-flex cczj-items-center cczj-justify-between"
               role="option"
               :aria-selected="selected && selected.value === opt.value ? 'true' : 'false'"
               :aria-disabled="opt.disabled ? 'true' : undefined"
@@ -272,77 +303,65 @@ watch(open, async (v) => {
 
 <style scoped>
 .select-dropdown {
-  position: relative;
-  display: inline-block;
+  @apply cczj-relative;
   min-width: 140px;
-  color: var(--text-primary);
-  font-size: 14px;
+  @apply cczj-text-primary cczj-text-base;
   user-select: none;
 }
 
 .select-dropdown.size-sm {
-  font-size: 12px;
+  @apply cczj-text-sm;
 }
 
 .select-trigger {
-  display: inline-flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 8px 12px;
+  transition: background-color var(--cczj-motion-fast), border-color var(--cczj-motion-fast), box-shadow var(--cczj-motion-fast);
+  @apply cczj-w-full cczj-px-6-py-4;
   background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  @apply cczj-border cczj-rounded-md;
   color: inherit;
   font-family: inherit;
-  cursor: pointer;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  @apply cczj-cursor-pointer;
   min-height: 34px;
 }
 
 .size-sm .select-trigger {
   padding: 4px 10px;
   min-height: 28px;
-  border-radius: 6px;
+  @apply cczj-rounded;
 }
 
 .select-trigger:hover:not(:disabled) {
-  border-color: var(--accent);
+  @apply cczj-border-primary;
 }
 
 .select-trigger:focus,
 .select-trigger:focus-visible {
-  outline: none;
+  @apply cczj-outline-none;
 }
 
 .is-open .select-trigger,
 .select-trigger:focus-visible {
-  border-color: var(--accent);
+  @apply cczj-border-primary;
   box-shadow: 0 0 0 3px var(--accent-alpha-20);
 }
 
 .select-trigger:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+  @apply cczj-opacity-60 cczj-cursor-not-allowed;
 }
 
 .label {
-  flex: 1;
-  text-align: left;
-  overflow: hidden;
-  white-space: nowrap;
+  @apply cczj-flex-1 cczj-text-left cczj-overflow-hidden cczj-whitespace-nowrap;
   text-overflow: ellipsis;
 }
 
 .label.placeholder {
-  color: var(--text-muted);
+  @apply cczj-text-muted;
 }
 
 .caret {
   width: 14px;
   height: 14px;
-  margin-left: 6px;
-  color: var(--text-muted);
+  @apply cczj-ml-3 cczj-text-muted;
   transition: transform var(--transition-fast);
 }
 
@@ -353,22 +372,20 @@ watch(open, async (v) => {
 .select-panel {
   /* position/left/top 由 JS panelStyle 动态设置（fixed 定位，通过 Teleport 到 body） */
   background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  @apply cczj-border cczj-rounded-md;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
-  padding: 4px;
+  @apply cczj-p-2;
   max-height: 260px;
-  overflow: auto;
+  @apply cczj-overflow-auto;
   box-sizing: border-box;
 }
 
 /* inline 模式：绝对定位相对 .select-dropdown（本身 position:relative），
    留在父级 DOM 树内，跟随父级显隐，且父级的 scoped 样式（含 :deep）能命中。 */
 .select-panel.is-inline {
-  position: absolute;
-  left: 0;
+  @apply cczj-absolute cczj-left-0;
   min-width: 100%;
-  z-index: 100;
+  @apply cczj-z-100;
 }
 /* 向下展开：面板顶部贴在 trigger 下方 */
 .select-panel.is-inline:not(.drop-up) {
@@ -388,53 +405,40 @@ watch(open, async (v) => {
 }
 
 .option {
-  padding: 8px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  color: var(--text-secondary);
+  @apply cczj-px-6-py-4 cczj-rounded cczj-cursor-pointer cczj-text-secondary;
   transition: background-color var(--transition-fast), color var(--transition-fast);
   margin: 1px 0;
 }
 
 .option:hover {
   background: var(--bg-hover);
-  color: var(--text-primary);
+  @apply cczj-text-primary;
 }
 
 /* 键盘高亮用和 hover 同一层底色：方向键选中的那行要看得见，
    但不引入第三种颜色——焦点在触发按钮上，选项本身拿不到 :focus。 */
 .option.is-active {
   background: var(--bg-hover);
-  color: var(--text-primary);
+  @apply cczj-text-primary;
 }
 
 .option.is-selected {
   background: var(--accent-alpha-15);
-  color: var(--accent);
-  font-weight: 500;
+  @apply cczj-text-accent cczj-font-medium;
 }
 
 .option.is-disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  color: var(--text-muted);
+  @apply cczj-opacity-40 cczj-cursor-not-allowed cczj-text-muted;
   background: transparent;
 }
 
 .check-icon {
-  font-size: 12px;
-  color: var(--accent);
-  margin-left: 8px;
+  @apply cczj-text-sm cczj-text-accent cczj-ml-4;
 }
 
 .empty {
   padding: 10px 12px;
-  color: var(--text-muted);
-  font-size: 12px;
-  text-align: center;
+  @apply cczj-text-muted cczj-text-sm cczj-text-center;
 }
 
 </style>

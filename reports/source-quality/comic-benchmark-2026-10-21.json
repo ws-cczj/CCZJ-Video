@@ -1,0 +1,2357 @@
+{
+  "version": "reading-quality.v1",
+  "corpusDate": "2026-10-21",
+  "startedAt": "2026-10-21T23:02:09+08:00",
+  "completed": true,
+  "results": [
+    {
+      "version": "reading-quality.v1",
+      "corpusDate": "2026-10-21",
+      "corpusHash": "f5baffd43449a9cb9d626dd9249fbf74120d98bd16a3af40dac1824ec6ba44e1",
+      "checkedAt": 1792594961,
+      "source": {
+        "id": "e6c3adbb5055902f8168f13ceab542bba07dde2dbd3059b18e30736a2b8ec114",
+        "name": "咚漫漫画",
+        "kind": "comic",
+        "url": "https://www.dongmanmanhua.cn"
+      },
+      "millis": 37597,
+      "summary": {
+        "status": "healthy",
+        "score": 84,
+        "confidence": "limited",
+        "queries": 20,
+        "matched": 2,
+        "verified": 2,
+        "readable": 6,
+        "attempts": 6,
+        "restricted": 0,
+        "catalogCompared": 0,
+        "tagCoverage": {
+          "公开目录校准": 1,
+          "国漫": 1,
+          "奇幻": 1,
+          "搞笑": 1,
+          "日常": 1,
+          "条漫": 1,
+          "韩漫": 1
+        },
+        "metrics": [
+          {
+            "name": "identity",
+            "score": 100,
+            "weight": 15,
+            "observations": 2
+          },
+          {
+            "name": "metadata",
+            "score": 100,
+            "weight": 10,
+            "observations": 2
+          },
+          {
+            "name": "catalog",
+            "score": 100,
+            "weight": 30,
+            "observations": 2
+          },
+          {
+            "name": "reading",
+            "score": 100,
+            "weight": 35,
+            "observations": 6
+          }
+        ],
+        "notes": [
+          "未收录样本仅影响覆盖面，不扣内容质量；分数与置信度必须一起看",
+          "这是一轮抽检，不能表示长期稳定或全站完整",
+          "已检验图片响应、格式、尺寸和重复指纹；未做 OCR/人工逐页审核，不能宣称图片无广告或图序全部正确",
+          "未满足多锚点同版比较条件，章节完整度尚未证实"
+        ]
+      },
+      "works": [
+        {
+          "id": "comic-feirenzai",
+          "title": "非人哉",
+          "tags": [
+            "国漫",
+            "日常",
+            "搞笑"
+          ],
+          "identity": {
+            "status": "verified",
+            "reason": "标题与作者吻合"
+          },
+          "matchedUrl": "https://www.dongmanmanhua.cn/episodeList?titleNo=1804",
+          "author": "一汪空气",
+          "metadataFields": 4,
+          "catalog": {
+            "entries": 500,
+            "numbered": 480,
+            "anchorMatches": 0,
+            "referenceComparable": false,
+            "countRelation": "unknown",
+            "issues": []
+          },
+          "samples": [
+            {
+              "position": 0,
+              "title": "第776话 花式泡澡，快乐加倍",
+              "access": "unknown",
+              "pages": 5,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 800,
+                  "height": 453,
+                  "format": "jpeg",
+                  "bytes": 21565,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "fee092ed0e5b5d208a1ead93785ffab205afbe98d1f5c06f6b5188b4a4ca8c9e"
+                },
+                {
+                  "index": 2,
+                  "width": 800,
+                  "height": 1238,
+                  "format": "jpeg",
+                  "bytes": 131848,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "7af538b421529571ab67a2b4a027b6632ac1477fb18460e5d8418d28629ca657"
+                },
+                {
+                  "index": 4,
+                  "width": 800,
+                  "height": 1412,
+                  "format": "jpeg",
+                  "bytes": 177634,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "b06ae5f18dc818f1ac82a121f0d5286b02f8470b3c21638efbf52f40ca6d8eb4"
+                }
+              ]
+            },
+            {
+              "position": 250,
+              "title": "第1017话 不是冤家不聚头。",
+              "access": "unknown",
+              "pages": 5,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 800,
+                  "height": 433,
+                  "format": "jpeg",
+                  "bytes": 25267,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "e77a67c5f37418f514caf16125424a008e8433f14a5639f68208a0ee10151539"
+                },
+                {
+                  "index": 2,
+                  "width": 800,
+                  "height": 1245,
+                  "format": "jpeg",
+                  "bytes": 102691,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "0e53e5037fb88deb67d22c0b9e888c1f056f6fa1c07d7557d92ba687e10800e5"
+                },
+                {
+                  "index": 4,
+                  "width": 800,
+                  "height": 1405,
+                  "format": "jpeg",
+                  "bytes": 161268,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "9eacf34ce5711fa0876ab318c13c2491ddb3340b7073e2c8bf8cd3b61aa0bdc7"
+                }
+              ]
+            },
+            {
+              "position": 499,
+              "title": "第1257话 穿梭时间的画面的钟，从反方向开始移动",
+              "access": "unknown",
+              "pages": 5,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 800,
+                  "height": 426,
+                  "format": "jpeg",
+                  "bytes": 21177,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "6a87328de1bfb32e1c0d46632ab2c5278afbdb8c90fa715767d94f9dacd64195"
+                },
+                {
+                  "index": 2,
+                  "width": 800,
+                  "height": 1268,
+                  "format": "jpeg",
+                  "bytes": 269953,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "f79685e41f09d81a1d046cf3e08c8be19ca738dd431a584bae5c3642bd03249a"
+                },
+                {
+                  "index": 4,
+                  "width": 800,
+                  "height": 1425,
+                  "format": "jpeg",
+                  "bytes": 262081,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "d65c34d3924b7a978b7e89c76087a2da8a63c6eb8689cfcf4ed9c7ae115c9840"
+                }
+              ]
+            }
+          ],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-solo-leveling",
+          "title": "我独自升级",
+          "tags": [
+            "韩漫",
+            "系统",
+            "奇幻"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-one-piece",
+          "title": "航海王",
+          "tags": [
+            "日漫",
+            "热血",
+            "冒险"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-cal-bh3-escape",
+          "title": "逃离长空篇",
+          "tags": [
+            "游戏衍生",
+            "国漫",
+            "校准样本"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-cuoliao",
+          "title": "错撩",
+          "tags": [
+            "国漫",
+            "都市",
+            "恋爱"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-princess",
+          "title": "某天成为公主",
+          "tags": [
+            "韩漫",
+            "恋爱",
+            "西幻"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-conan",
+          "title": "名侦探柯南",
+          "tags": [
+            "日漫",
+            "悬疑",
+            "探案"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-cal-bh3-sakura",
+          "title": "樱花追忆篇",
+          "tags": [
+            "游戏衍生",
+            "国漫",
+            "校准样本"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-bairimengwo",
+          "title": "白日梦我",
+          "tags": [
+            "国漫",
+            "校园",
+            "恋爱"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-tower-of-god",
+          "title": "神之塔",
+          "tags": [
+            "韩漫",
+            "奇幻",
+            "条漫",
+            "公开目录校准"
+          ],
+          "identity": {
+            "status": "verified",
+            "reason": "标题与第一方作品地址吻合"
+          },
+          "matchedUrl": "https://www.dongmanmanhua.cn/episodeList?titleNo=241",
+          "author": "SIU",
+          "metadataFields": 4,
+          "catalog": {
+            "entries": 12,
+            "numbered": 10,
+            "anchorMatches": 0,
+            "referenceComparable": false,
+            "countRelation": "unknown",
+            "issues": []
+          },
+          "samples": [
+            {
+              "position": 0,
+              "title": "预告",
+              "access": "unknown",
+              "pages": 7,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 690,
+                  "height": 1230,
+                  "format": "jpeg",
+                  "bytes": 46511,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "fb89755702e3a4d72695f1ce9e414303251083591ef090820f0e0f2b30bacb3a"
+                },
+                {
+                  "index": 3,
+                  "width": 690,
+                  "height": 1230,
+                  "format": "jpeg",
+                  "bytes": 31845,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "b9c979b710ec96d058527bf098ccce2d9d60688a9ad6dddcba094440856c06a0"
+                },
+                {
+                  "index": 6,
+                  "width": 690,
+                  "height": 434,
+                  "format": "jpeg",
+                  "bytes": 2131,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "30d3e33e2adf054c7e59ce0334c0027d57ad51914aa62b1e13fa2ad44281f311"
+                }
+              ]
+            },
+            {
+              "position": 6,
+              "title": "[第6话] 伊凡科尔的地狱",
+              "access": "unknown",
+              "pages": 37,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 690,
+                  "height": 1230,
+                  "format": "jpeg",
+                  "bytes": 131655,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "ca3ac9a7cf78ddc1c4cfad9a96460eb2a0a6c501498fad47c1181140e86b90a8"
+                },
+                {
+                  "index": 18,
+                  "width": 690,
+                  "height": 1230,
+                  "format": "jpeg",
+                  "bytes": 138507,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "eb04f87d0bb13fd5e1fafd93ce646215701c39cbc72f092317cadb7e5f1c7c83"
+                },
+                {
+                  "index": 36,
+                  "width": 690,
+                  "height": 765,
+                  "format": "jpeg",
+                  "bytes": 21138,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "6db4a9994aeca22c0784838d6b58c5fd12f8b0043a19974dc55327e27ed1772d"
+                }
+              ]
+            },
+            {
+              "position": 11,
+              "title": "[第2季] 预告",
+              "access": "unknown",
+              "pages": 25,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 690,
+                  "height": 1230,
+                  "format": "jpeg",
+                  "bytes": 80476,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "4542db3a5d518489e866fa1a958cc850484e8b1d5e7ae7eaa90d00c3a28aaab5"
+                },
+                {
+                  "index": 12,
+                  "width": 690,
+                  "height": 1230,
+                  "format": "jpeg",
+                  "bytes": 69837,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "b7de21f9d583a58cfbf4b5f027393da3373a7e1002166c3296dad77c17f8989b"
+                },
+                {
+                  "index": 24,
+                  "width": 690,
+                  "height": 674,
+                  "format": "jpeg",
+                  "bytes": 4004,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "1b5572bd0062ab3f1efcf151601d3b749079fc0ef2c5f08427409c95d2f3449c"
+                }
+              ]
+            }
+          ],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-spy-family",
+          "title": "间谍过家家",
+          "tags": [
+            "日漫",
+            "家庭",
+            "喜剧"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-cal-terra-general",
+          "title": "循途漫录：大将军，出击！",
+          "tags": [
+            "游戏衍生",
+            "国漫",
+            "校准样本"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-global-horror",
+          "title": "全球诡异时代",
+          "tags": [
+            "国漫",
+            "悬疑",
+            "恐怖"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-tower-of-god-urek",
+          "title": "神之塔外传：乌雷克·马奇努",
+          "tags": [
+            "韩漫",
+            "奇幻",
+            "条漫",
+            "公开目录校准"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-dungeon-meshi",
+          "title": "迷宫饭",
+          "tags": [
+            "日漫",
+            "美食",
+            "奇幻",
+            "完结"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-cal-terra-solitary",
+          "title": "序言组曲：孤行之人",
+          "tags": [
+            "游戏衍生",
+            "国漫",
+            "校准样本"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-blue-lock",
+          "title": "蓝色监狱",
+          "tags": [
+            "日漫",
+            "运动",
+            "足球"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-demon-slayer",
+          "title": "鬼灭之刃",
+          "tags": [
+            "日漫",
+            "热血",
+            "完结"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-dragon-ball",
+          "title": "龙珠",
+          "tags": [
+            "日漫",
+            "热血",
+            "经典"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-naruto",
+          "title": "火影忍者",
+          "tags": [
+            "日漫",
+            "热血",
+            "完结"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        }
+      ]
+    },
+    {
+      "version": "reading-quality.v1",
+      "corpusDate": "2026-10-21",
+      "corpusHash": "f5baffd43449a9cb9d626dd9249fbf74120d98bd16a3af40dac1824ec6ba44e1",
+      "checkedAt": 1792594929,
+      "source": {
+        "id": "ba7175c654b19094fdba523002fb5c9aa802e1b695cf7ba49013bcc0cd36712c",
+        "name": "崩坏3官方漫画",
+        "kind": "comic",
+        "url": "https://comic.bh3.com"
+      },
+      "millis": 16477,
+      "summary": {
+        "status": "healthy",
+        "score": 81,
+        "confidence": "limited",
+        "queries": 20,
+        "matched": 2,
+        "verified": 2,
+        "readable": 6,
+        "attempts": 6,
+        "restricted": 0,
+        "catalogCompared": 0,
+        "tagCoverage": {
+          "国漫": 2,
+          "校准样本": 2,
+          "游戏衍生": 2
+        },
+        "metrics": [
+          {
+            "name": "identity",
+            "score": 100,
+            "weight": 15,
+            "observations": 2
+          },
+          {
+            "name": "metadata",
+            "score": 75,
+            "weight": 10,
+            "observations": 2
+          },
+          {
+            "name": "catalog",
+            "score": 100,
+            "weight": 30,
+            "observations": 2
+          },
+          {
+            "name": "reading",
+            "score": 100,
+            "weight": 35,
+            "observations": 6
+          }
+        ],
+        "notes": [
+          "未收录样本仅影响覆盖面，不扣内容质量；分数与置信度必须一起看",
+          "这是一轮抽检，不能表示长期稳定或全站完整",
+          "已检验图片响应、格式、尺寸和重复指纹；未做 OCR/人工逐页审核，不能宣称图片无广告或图序全部正确",
+          "未满足多锚点同版比较条件，章节完整度尚未证实"
+        ]
+      },
+      "works": [
+        {
+          "id": "comic-feirenzai",
+          "title": "非人哉",
+          "tags": [
+            "国漫",
+            "日常",
+            "搞笑"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-solo-leveling",
+          "title": "我独自升级",
+          "tags": [
+            "韩漫",
+            "系统",
+            "奇幻"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-one-piece",
+          "title": "航海王",
+          "tags": [
+            "日漫",
+            "热血",
+            "冒险"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-cal-bh3-escape",
+          "title": "逃离长空篇",
+          "tags": [
+            "游戏衍生",
+            "国漫",
+            "校准样本"
+          ],
+          "identity": {
+            "status": "verified",
+            "reason": "标题与第一方作品地址吻合"
+          },
+          "matchedUrl": "https://comic.bh3.com/book/1001",
+          "metadataFields": 3,
+          "catalog": {
+            "entries": 7,
+            "numbered": 6,
+            "anchorMatches": 0,
+            "referenceComparable": false,
+            "countRelation": "unknown",
+            "issues": []
+          },
+          "samples": [
+            {
+              "position": 0,
+              "title": "序章 琪亚娜·出击",
+              "access": "available",
+              "pages": 29,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 800,
+                  "height": 1131,
+                  "format": "jpeg",
+                  "bytes": 148724,
+                  "host": "act-webstatic.mihoyo.com",
+                  "fingerprint": "a1282395a8bbe48d3de4293c3ad1a04fbcac9cbdf99f211a07f9f2ab103a86b9"
+                },
+                {
+                  "index": 14,
+                  "width": 800,
+                  "height": 1131,
+                  "format": "jpeg",
+                  "bytes": 688453,
+                  "host": "act-webstatic.mihoyo.com",
+                  "fingerprint": "44c1c9394c43a841b540ebc130cb1b9b4d8b6b859f8c9124424c1a79451c67c9"
+                },
+                {
+                  "index": 28,
+                  "width": 1600,
+                  "height": 1131,
+                  "format": "jpeg",
+                  "bytes": 338527,
+                  "host": "act-webstatic.mihoyo.com",
+                  "fingerprint": "c6f7e4a6a44fb14481629e84d38ccef7258d5a95337a87c2322742280bff2c73"
+                }
+              ]
+            },
+            {
+              "position": 3,
+              "title": "第三话 女武神出阵",
+              "access": "available",
+              "pages": 19,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 800,
+                  "height": 1131,
+                  "format": "jpeg",
+                  "bytes": 144714,
+                  "host": "act-webstatic.mihoyo.com",
+                  "fingerprint": "aa5833d864870d2133c573c8e5f814c8f36f3a7f16c2fda1636167178f503da8"
+                },
+                {
+                  "index": 9,
+                  "width": 729,
+                  "height": 1131,
+                  "format": "jpeg",
+                  "bytes": 157034,
+                  "host": "act-webstatic.mihoyo.com",
+                  "fingerprint": "272d7c458de514a971caf858bf1a7d9074632f9eb8432f05aa404239406069d8"
+                },
+                {
+                  "index": 18,
+                  "width": 800,
+                  "height": 1131,
+                  "format": "jpeg",
+                  "bytes": 108972,
+                  "host": "act-webstatic.mihoyo.com",
+                  "fingerprint": "5cce727f1648ddbe87a5cd57f08c8666bdd251921bc8f00d9096bfe96d0acba9"
+                }
+              ]
+            },
+            {
+              "position": 6,
+              "title": "第六话 新的旅程",
+              "access": "available",
+              "pages": 21,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 823,
+                  "height": 1131,
+                  "format": "jpeg",
+                  "bytes": 189809,
+                  "host": "act-webstatic.mihoyo.com",
+                  "fingerprint": "1ee51bab355e45b34784ed90ab331bdea569d54658d627e1c6ebe0dbb793c5f2"
+                },
+                {
+                  "index": 10,
+                  "width": 723,
+                  "height": 1131,
+                  "format": "jpeg",
+                  "bytes": 235853,
+                  "host": "act-webstatic.mihoyo.com",
+                  "fingerprint": "eb5d4d1fce2ad1fb4064588853aedbd38b781c66a0ea74005f20b6c62db4f90e"
+                },
+                {
+                  "index": 20,
+                  "width": 1566,
+                  "height": 1131,
+                  "format": "jpeg",
+                  "bytes": 410140,
+                  "host": "act-webstatic.mihoyo.com",
+                  "fingerprint": "e979df8643ac9a02acfacc50ecb5ab1f9812bb6f79af35f107c5717f40ed2642"
+                }
+              ]
+            }
+          ],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-cuoliao",
+          "title": "错撩",
+          "tags": [
+            "国漫",
+            "都市",
+            "恋爱"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-princess",
+          "title": "某天成为公主",
+          "tags": [
+            "韩漫",
+            "恋爱",
+            "西幻"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-conan",
+          "title": "名侦探柯南",
+          "tags": [
+            "日漫",
+            "悬疑",
+            "探案"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-cal-bh3-sakura",
+          "title": "樱花追忆篇",
+          "tags": [
+            "游戏衍生",
+            "国漫",
+            "校准样本"
+          ],
+          "identity": {
+            "status": "verified",
+            "reason": "标题与第一方作品地址吻合"
+          },
+          "matchedUrl": "https://comic.bh3.com/book/1002",
+          "metadataFields": 3,
+          "catalog": {
+            "entries": 8,
+            "numbered": 8,
+            "anchorMatches": 0,
+            "referenceComparable": false,
+            "countRelation": "unknown",
+            "issues": []
+          },
+          "samples": [
+            {
+              "position": 0,
+              "title": "第七话 琪亚娜最大的危机",
+              "access": "available",
+              "pages": 15,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 1457,
+                  "height": 2060,
+                  "format": "jpeg",
+                  "bytes": 475721,
+                  "host": "act-webstatic.mihoyo.com",
+                  "fingerprint": "24732264b22a16b35b0af4dbb7cfd9225534d3a21f89b0eaf82a09ee49b1f2ea"
+                },
+                {
+                  "index": 7,
+                  "width": 1457,
+                  "height": 2262,
+                  "format": "jpeg",
+                  "bytes": 689193,
+                  "host": "act-webstatic.mihoyo.com",
+                  "fingerprint": "3ca79b4ab5b7f4ce6cffea73646576615c91eccffec7a4b93da7d335f628dab7"
+                },
+                {
+                  "index": 14,
+                  "width": 1457,
+                  "height": 2262,
+                  "format": "jpeg",
+                  "bytes": 606632,
+                  "host": "act-webstatic.mihoyo.com",
+                  "fingerprint": "d302b7388c944f281930ff51d1f28ae991dd764d84ddbc4bd52deabb8bd51f98"
+                }
+              ]
+            },
+            {
+              "position": 4,
+              "title": "第十一话 白骑士·月光",
+              "access": "available",
+              "pages": 23,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 1457,
+                  "height": 2060,
+                  "format": "jpeg",
+                  "bytes": 468375,
+                  "host": "act-webstatic.mihoyo.com",
+                  "fingerprint": "933f0c0d971acfce5121f859ca3f806dc9f3ba56a7fe0448adf0c31846faaeea"
+                },
+                {
+                  "index": 11,
+                  "width": 800,
+                  "height": 1131,
+                  "format": "jpeg",
+                  "bytes": 225603,
+                  "host": "act-webstatic.mihoyo.com",
+                  "fingerprint": "11b06520042cb916d5e8b84db836485450b58a4bc6900cc4d3efc0a47079a9bd"
+                },
+                {
+                  "index": 22,
+                  "width": 729,
+                  "height": 1131,
+                  "format": "jpeg",
+                  "bytes": 132106,
+                  "host": "act-webstatic.mihoyo.com",
+                  "fingerprint": "630ba0654ff210b9d3e5cc00679ba8219cb3256f003eeece0d6b303417be43cb"
+                }
+              ]
+            },
+            {
+              "position": 7,
+              "title": "第十四话 愿樱花与你同在",
+              "access": "available",
+              "pages": 20,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 1457,
+                  "height": 2060,
+                  "format": "jpeg",
+                  "bytes": 480098,
+                  "host": "act-webstatic.mihoyo.com",
+                  "fingerprint": "18f996f2563391d7004cea30a57884f746afa5f5465ab025ce3ba2987d7927c2"
+                },
+                {
+                  "index": 10,
+                  "width": 724,
+                  "height": 1131,
+                  "format": "jpeg",
+                  "bytes": 65313,
+                  "host": "act-webstatic.mihoyo.com",
+                  "fingerprint": "556eba555d78f60a0b73a7a8495cc27adc1a32760f15677832bf7c792f089e8c"
+                },
+                {
+                  "index": 19,
+                  "width": 728,
+                  "height": 1131,
+                  "format": "jpeg",
+                  "bytes": 202493,
+                  "host": "act-webstatic.mihoyo.com",
+                  "fingerprint": "da2d20c1d4c72cc87f9e64de71a3673327511b7149c7e59eaed5173fb38e4dd2"
+                }
+              ]
+            }
+          ],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-bairimengwo",
+          "title": "白日梦我",
+          "tags": [
+            "国漫",
+            "校园",
+            "恋爱"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-tower-of-god",
+          "title": "神之塔",
+          "tags": [
+            "韩漫",
+            "奇幻",
+            "条漫",
+            "公开目录校准"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-spy-family",
+          "title": "间谍过家家",
+          "tags": [
+            "日漫",
+            "家庭",
+            "喜剧"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-cal-terra-general",
+          "title": "循途漫录：大将军，出击！",
+          "tags": [
+            "游戏衍生",
+            "国漫",
+            "校准样本"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-global-horror",
+          "title": "全球诡异时代",
+          "tags": [
+            "国漫",
+            "悬疑",
+            "恐怖"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-tower-of-god-urek",
+          "title": "神之塔外传：乌雷克·马奇努",
+          "tags": [
+            "韩漫",
+            "奇幻",
+            "条漫",
+            "公开目录校准"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-dungeon-meshi",
+          "title": "迷宫饭",
+          "tags": [
+            "日漫",
+            "美食",
+            "奇幻",
+            "完结"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-cal-terra-solitary",
+          "title": "序言组曲：孤行之人",
+          "tags": [
+            "游戏衍生",
+            "国漫",
+            "校准样本"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-blue-lock",
+          "title": "蓝色监狱",
+          "tags": [
+            "日漫",
+            "运动",
+            "足球"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-demon-slayer",
+          "title": "鬼灭之刃",
+          "tags": [
+            "日漫",
+            "热血",
+            "完结"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-dragon-ball",
+          "title": "龙珠",
+          "tags": [
+            "日漫",
+            "热血",
+            "经典"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-naruto",
+          "title": "火影忍者",
+          "tags": [
+            "日漫",
+            "热血",
+            "完结"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        }
+      ]
+    },
+    {
+      "version": "reading-quality.v1",
+      "corpusDate": "2026-10-21",
+      "corpusHash": "f5baffd43449a9cb9d626dd9249fbf74120d98bd16a3af40dac1824ec6ba44e1",
+      "checkedAt": 1792594946,
+      "source": {
+        "id": "a62c9e523ca3c0d43ca4290f88e450977f4d465dcfe470f9943f43fea4174337",
+        "name": "泰拉记事社",
+        "kind": "comic",
+        "url": "https://comic.hypergryph.com"
+      },
+      "millis": 14967,
+      "summary": {
+        "status": "partial",
+        "score": 54,
+        "confidence": "insufficient",
+        "queries": 20,
+        "matched": 2,
+        "verified": 2,
+        "readable": 4,
+        "attempts": 4,
+        "restricted": 0,
+        "catalogCompared": 0,
+        "tagCoverage": {
+          "国漫": 2,
+          "校准样本": 2,
+          "游戏衍生": 2
+        },
+        "metrics": [
+          {
+            "name": "identity",
+            "score": 100,
+            "weight": 15,
+            "observations": 2
+          },
+          {
+            "name": "metadata",
+            "score": 100,
+            "weight": 10,
+            "observations": 2
+          },
+          {
+            "name": "catalog",
+            "score": 77,
+            "weight": 30,
+            "observations": 2
+          },
+          {
+            "name": "reading",
+            "score": 100,
+            "weight": 35,
+            "observations": 4
+          }
+        ],
+        "notes": [
+          "未收录样本仅影响覆盖面，不扣内容质量；分数与置信度必须一起看",
+          "这是一轮抽检，不能表示长期稳定或全站完整",
+          "已检验图片响应、格式、尺寸和重复指纹；未做 OCR/人工逐页审核，不能宣称图片无广告或图序全部正确",
+          "未满足多锚点同版比较条件，章节完整度尚未证实"
+        ]
+      },
+      "works": [
+        {
+          "id": "comic-feirenzai",
+          "title": "非人哉",
+          "tags": [
+            "国漫",
+            "日常",
+            "搞笑"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-solo-leveling",
+          "title": "我独自升级",
+          "tags": [
+            "韩漫",
+            "系统",
+            "奇幻"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-one-piece",
+          "title": "航海王",
+          "tags": [
+            "日漫",
+            "热血",
+            "冒险"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-cal-bh3-escape",
+          "title": "逃离长空篇",
+          "tags": [
+            "游戏衍生",
+            "国漫",
+            "校准样本"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-cuoliao",
+          "title": "错撩",
+          "tags": [
+            "国漫",
+            "都市",
+            "恋爱"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-princess",
+          "title": "某天成为公主",
+          "tags": [
+            "韩漫",
+            "恋爱",
+            "西幻"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-conan",
+          "title": "名侦探柯南",
+          "tags": [
+            "日漫",
+            "悬疑",
+            "探案"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-cal-bh3-sakura",
+          "title": "樱花追忆篇",
+          "tags": [
+            "游戏衍生",
+            "国漫",
+            "校准样本"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-bairimengwo",
+          "title": "白日梦我",
+          "tags": [
+            "国漫",
+            "校园",
+            "恋爱"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-tower-of-god",
+          "title": "神之塔",
+          "tags": [
+            "韩漫",
+            "奇幻",
+            "条漫",
+            "公开目录校准"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-spy-family",
+          "title": "间谍过家家",
+          "tags": [
+            "日漫",
+            "家庭",
+            "喜剧"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-cal-terra-general",
+          "title": "循途漫录：大将军，出击！",
+          "tags": [
+            "游戏衍生",
+            "国漫",
+            "校准样本"
+          ],
+          "identity": {
+            "status": "verified",
+            "reason": "标题与第一方作品地址吻合"
+          },
+          "matchedUrl": "https://comic.hypergryph.com/api/comic/7746",
+          "author": "鹰角网络",
+          "metadataFields": 4,
+          "catalog": {
+            "entries": 1,
+            "numbered": 1,
+            "anchorMatches": 0,
+            "referenceComparable": false,
+            "countRelation": "unknown",
+            "issues": []
+          },
+          "samples": [
+            {
+              "position": 0,
+              "title": "01 大将军，出击！",
+              "access": "available",
+              "pages": 58,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 1200,
+                  "height": 1670,
+                  "format": "jpeg",
+                  "bytes": 1534154,
+                  "host": "res01.hycdn.cn",
+                  "fingerprint": "a10fcf3fbd48820340c9d81dc54d0fdbdda9d80546684e52348ccbe69e9e290f"
+                },
+                {
+                  "index": 29,
+                  "width": 1200,
+                  "height": 1691,
+                  "format": "jpeg",
+                  "bytes": 1059884,
+                  "host": "res01.hycdn.cn",
+                  "fingerprint": "25ca8654112ad0304634352a47180e9428c8d3ae74f4e072e12d8756a475a292"
+                },
+                {
+                  "index": 57,
+                  "width": 1200,
+                  "height": 1691,
+                  "format": "jpeg",
+                  "bytes": 1226857,
+                  "host": "res01.hycdn.cn",
+                  "fingerprint": "69fbbb1aa25174af8be52341579bb401529dde71e249ef5e329456985ca2c02f"
+                }
+              ]
+            }
+          ],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-global-horror",
+          "title": "全球诡异时代",
+          "tags": [
+            "国漫",
+            "悬疑",
+            "恐怖"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-tower-of-god-urek",
+          "title": "神之塔外传：乌雷克·马奇努",
+          "tags": [
+            "韩漫",
+            "奇幻",
+            "条漫",
+            "公开目录校准"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-dungeon-meshi",
+          "title": "迷宫饭",
+          "tags": [
+            "日漫",
+            "美食",
+            "奇幻",
+            "完结"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-cal-terra-solitary",
+          "title": "序言组曲：孤行之人",
+          "tags": [
+            "游戏衍生",
+            "国漫",
+            "校准样本"
+          ],
+          "identity": {
+            "status": "verified",
+            "reason": "标题与第一方作品地址吻合"
+          },
+          "matchedUrl": "https://comic.hypergryph.com/api/comic/0694",
+          "author": "鹰角网络",
+          "metadataFields": 4,
+          "catalog": {
+            "entries": 3,
+            "numbered": 3,
+            "anchorMatches": 0,
+            "referenceComparable": false,
+            "countRelation": "unknown",
+            "issues": [
+              {
+                "code": "reversed_chapter_order",
+                "severity": "error",
+                "evidence": "升序相邻 0，倒序相邻 2；无卷信息时混合下降仅待核查"
+              }
+            ]
+          },
+          "samples": [
+            {
+              "position": 0,
+              "title": "03 梦",
+              "access": "available",
+              "pages": 50,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 1200,
+                  "height": 1691,
+                  "format": "jpeg",
+                  "bytes": 1315402,
+                  "host": "res01.hycdn.cn",
+                  "fingerprint": "a0c151689efc420f6003f38c79fc97a6c940e228e8ca962083e70ef8d5c79b7f"
+                },
+                {
+                  "index": 25,
+                  "width": 1200,
+                  "height": 1691,
+                  "format": "jpeg",
+                  "bytes": 1184750,
+                  "host": "res01.hycdn.cn",
+                  "fingerprint": "7032b92838c78cdf366d790f38ead2dce523eaeb5e3e876fd2f8e03601635c7a"
+                },
+                {
+                  "index": 49,
+                  "width": 1200,
+                  "height": 1691,
+                  "format": "jpeg",
+                  "bytes": 991063,
+                  "host": "res01.hycdn.cn",
+                  "fingerprint": "e2b6c9fdb07bf6bed65c86676bb28a95ebaeb7a129fa00c736a49762adbf9145"
+                }
+              ]
+            },
+            {
+              "position": 1,
+              "title": "02 心跳",
+              "access": "available",
+              "pages": 50,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 1200,
+                  "height": 1691,
+                  "format": "jpeg",
+                  "bytes": 1082146,
+                  "host": "res01.hycdn.cn",
+                  "fingerprint": "ccbaef2f67973c9910b3be90bc76f116c861a191275596144b7a4f8b78b958be"
+                },
+                {
+                  "index": 25,
+                  "width": 1200,
+                  "height": 1691,
+                  "format": "jpeg",
+                  "bytes": 634049,
+                  "host": "res01.hycdn.cn",
+                  "fingerprint": "67ca86c3fa27125ce64a4f094e2e03f6b1d5799528d1b44c6b290ea1773d5911"
+                },
+                {
+                  "index": 49,
+                  "width": 1200,
+                  "height": 1691,
+                  "format": "jpeg",
+                  "bytes": 1001606,
+                  "host": "res01.hycdn.cn",
+                  "fingerprint": "6b1e134cecf7edcc6a5c4251447a660d586d9923ca8ca1401b30fdd442a4502e"
+                }
+              ]
+            },
+            {
+              "position": 2,
+              "title": "01 呼吸",
+              "access": "available",
+              "pages": 43,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 1200,
+                  "height": 1691,
+                  "format": "jpeg",
+                  "bytes": 925386,
+                  "host": "res01.hycdn.cn",
+                  "fingerprint": "6f4da148efdecbb1699b2c8e9abf584de3b3859cdad523331d1dbca977e53082"
+                },
+                {
+                  "index": 21,
+                  "width": 1200,
+                  "height": 1691,
+                  "format": "jpeg",
+                  "bytes": 664410,
+                  "host": "res01.hycdn.cn",
+                  "fingerprint": "d5e2000d0c178f44a1ca25955ac9c48b7cc508037fdfbb82f00df955211da16b"
+                },
+                {
+                  "index": 42,
+                  "width": 1200,
+                  "height": 1691,
+                  "format": "jpeg",
+                  "bytes": 876937,
+                  "host": "res01.hycdn.cn",
+                  "fingerprint": "42df8868333552f5e55a4a6c81122bad37c811670ddd24e201c22b0d608b9d56"
+                }
+              ]
+            }
+          ],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-blue-lock",
+          "title": "蓝色监狱",
+          "tags": [
+            "日漫",
+            "运动",
+            "足球"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-demon-slayer",
+          "title": "鬼灭之刃",
+          "tags": [
+            "日漫",
+            "热血",
+            "完结"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-dragon-ball",
+          "title": "龙珠",
+          "tags": [
+            "日漫",
+            "热血",
+            "经典"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-naruto",
+          "title": "火影忍者",
+          "tags": [
+            "日漫",
+            "热血",
+            "完结"
+          ],
+          "identity": {
+            "status": "absent",
+            "reason": "未检索到同版作品"
+          },
+          "metadataFields": 0,
+          "samples": [],
+          "failures": [],
+          "issues": []
+        }
+      ]
+    },
+    {
+      "version": "reading-quality.v1",
+      "corpusDate": "2026-10-21",
+      "corpusHash": "f5baffd43449a9cb9d626dd9249fbf74120d98bd16a3af40dac1824ec6ba44e1",
+      "checkedAt": 1792594998,
+      "source": {
+        "id": "3b8118b51a39e510eed317610ff159063cffcdd4e239876c19d3bc265aab810a",
+        "name": "瓜子漫画",
+        "kind": "comic",
+        "url": "https://www.guazimanhua.com"
+      },
+      "millis": 46222,
+      "summary": {
+        "status": "partial",
+        "score": 50,
+        "confidence": "insufficient",
+        "queries": 3,
+        "matched": 3,
+        "verified": 0,
+        "readable": 9,
+        "attempts": 9,
+        "restricted": 0,
+        "catalogCompared": 0,
+        "tagCoverage": {
+          "冒险": 1,
+          "国漫": 1,
+          "奇幻": 1,
+          "搞笑": 1,
+          "日常": 1,
+          "日漫": 1,
+          "热血": 1,
+          "系统": 1,
+          "韩漫": 1
+        },
+        "metrics": [
+          {
+            "name": "identity",
+            "score": 50,
+            "weight": 15,
+            "observations": 3
+          },
+          {
+            "name": "metadata",
+            "score": 75,
+            "weight": 10,
+            "observations": 3
+          },
+          {
+            "name": "catalog",
+            "score": 93,
+            "weight": 30,
+            "observations": 3
+          },
+          {
+            "name": "reading",
+            "score": 100,
+            "weight": 35,
+            "observations": 9
+          }
+        ],
+        "notes": [
+          "未收录样本仅影响覆盖面，不扣内容质量；分数与置信度必须一起看",
+          "这是一轮抽检，不能表示长期稳定或全站完整",
+          "已检验图片响应、格式、尺寸和重复指纹；未做 OCR/人工逐页审核，不能宣称图片无广告或图序全部正确",
+          "未满足多锚点同版比较条件，章节完整度尚未证实"
+        ]
+      },
+      "works": [
+        {
+          "id": "comic-feirenzai",
+          "title": "非人哉",
+          "tags": [
+            "国漫",
+            "日常",
+            "搞笑"
+          ],
+          "identity": {
+            "status": "provisional",
+            "reason": "标题吻合，缺少可核对的作者"
+          },
+          "matchedUrl": "https://www.guazimanhua.com/comic.php?id=28880",
+          "metadataFields": 3,
+          "catalog": {
+            "entries": 1288,
+            "numbered": 1254,
+            "anchorMatches": 0,
+            "referenceComparable": false,
+            "countRelation": "unknown",
+            "issues": []
+          },
+          "samples": [
+            {
+              "position": 0,
+              "title": "第1话 我是九月",
+              "access": "unknown",
+              "pages": 8,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 800,
+                  "height": 1330,
+                  "format": "jpeg",
+                  "bytes": 102887,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "23aec1d0e0fa5f0a80ef68006d08e0592f1d339238fda93de8e8b77629b81159"
+                },
+                {
+                  "index": 4,
+                  "width": 800,
+                  "height": 1330,
+                  "format": "jpeg",
+                  "bytes": 98818,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "7fdb7b52a7c57e8aa3c0b12d5494969773e97c873144a9fe04e63b50c13188ba"
+                },
+                {
+                  "index": 7,
+                  "width": 800,
+                  "height": 720,
+                  "format": "jpeg",
+                  "bytes": 131545,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "a25f5d7bbf9dc40dd95a9bb6c3a5930d2b5652cf7f1c6105698d1ea55a7042ae"
+                }
+              ]
+            },
+            {
+              "position": 644,
+              "title": "第645话 圣诞老人你好！送给我的礼物麻烦放到我家门",
+              "access": "unknown",
+              "pages": 8,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 800,
+                  "height": 1793,
+                  "format": "jpeg",
+                  "bytes": 156030,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "6a5577366e66fa9911967e52534367371272635c3775de1e7744c167df9d44f2"
+                },
+                {
+                  "index": 4,
+                  "width": 800,
+                  "height": 1350,
+                  "format": "jpeg",
+                  "bytes": 137177,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "86cbd05627bc399daa8f51f9b209024ccf1177c550ffd516d693f8f70725c736"
+                },
+                {
+                  "index": 7,
+                  "width": 800,
+                  "height": 1416,
+                  "format": "jpeg",
+                  "bytes": 177281,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "93dbabf00a8364da744610e95c427a4c5b5a896af0b06511589b022065265b55"
+                }
+              ]
+            },
+            {
+              "position": 1287,
+              "title": "第1255话 小兔子乖乖，本性难改。",
+              "access": "unknown",
+              "pages": 4,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 800,
+                  "height": 1803,
+                  "format": "webp",
+                  "bytes": 64564,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "bfdc06e762fcc6b4b13fd1e97b0b1a64125802ac2ea90e9e0999e47164442fca"
+                },
+                {
+                  "index": 2,
+                  "width": 800,
+                  "height": 1364,
+                  "format": "webp",
+                  "bytes": 62928,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "7e9ccbff1ba3c0bbd2116911d9d4b9f4665bc1b4174dbfe2f4f1cd879f659f56"
+                },
+                {
+                  "index": 3,
+                  "width": 800,
+                  "height": 1426,
+                  "format": "webp",
+                  "bytes": 82982,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "f63183e4b45eb7e5ae944d91f4955862b144da5e6bc62ad4d7d8117e67a405dc"
+                }
+              ]
+            }
+          ],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-solo-leveling",
+          "title": "我独自升级",
+          "tags": [
+            "韩漫",
+            "系统",
+            "奇幻"
+          ],
+          "identity": {
+            "status": "provisional",
+            "reason": "标题吻合，缺少可核对的作者"
+          },
+          "matchedUrl": "https://www.guazimanhua.com/comic.php?id=18658",
+          "metadataFields": 3,
+          "catalog": {
+            "entries": 210,
+            "numbered": 179,
+            "anchorMatches": 0,
+            "referenceComparable": false,
+            "countRelation": "unknown",
+            "issues": []
+          },
+          "samples": [
+            {
+              "position": 0,
+              "title": "序章 我独自升级",
+              "access": "unknown",
+              "pages": 120,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 900,
+                  "height": 757,
+                  "format": "jpeg",
+                  "bytes": 39231,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "97a844ca6fb14c14f92e92c09a81d32ae1d87c8e7621377a5ae9a1b706aa1bdc"
+                },
+                {
+                  "index": 60,
+                  "width": 900,
+                  "height": 703,
+                  "format": "jpeg",
+                  "bytes": 77034,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "bf51e29869c52ff059d057bcdc00a7614e58d681a1e79437954e116799d20595"
+                },
+                {
+                  "index": 119,
+                  "width": 900,
+                  "height": 167,
+                  "format": "jpeg",
+                  "bytes": 9252,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "2060ca407d94ce159278b4da71d54d93794f81ab0d9a803d23569c78a83246f6"
+                }
+              ]
+            },
+            {
+              "position": 105,
+              "title": "第105话 提取，解除",
+              "access": "unknown",
+              "pages": 243,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 900,
+                  "height": 802,
+                  "format": "jpeg",
+                  "bytes": 54178,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "506e1b447734a16f4e7edbe79d9db1ec65206fe50b54f2c7fc173a0479e6293d"
+                },
+                {
+                  "index": 121,
+                  "width": 900,
+                  "height": 703,
+                  "format": "jpeg",
+                  "bytes": 60798,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "2713ae0a7576b737c07aef5a5f5080d28b743c8c3c4f71496d5c6e4dbf9c2f3f"
+                },
+                {
+                  "index": 242,
+                  "width": 900,
+                  "height": 468,
+                  "format": "jpeg",
+                  "bytes": 18068,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "e372ae281cc65943322e8567e5e786a0ca532a7b39271df1dbaaf3db6651ab73"
+                }
+              ]
+            },
+            {
+              "position": 209,
+              "title": "《我独自升级 ： 诸神黄昏》再续君王传奇",
+              "access": "unknown",
+              "pages": 7,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 900,
+                  "height": 786,
+                  "format": "jpeg",
+                  "bytes": 111734,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "923b1bc2aa9a28822450d246cb2f335b3e6d622b8a6e99ee202641727c8d9b72"
+                },
+                {
+                  "index": 3,
+                  "width": 900,
+                  "height": 703,
+                  "format": "jpeg",
+                  "bytes": 62656,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "9491c228155166bb9f57266ee98ad5f4502f86d9abe8d072c0325f386bfa83da"
+                },
+                {
+                  "index": 6,
+                  "width": 900,
+                  "height": 419,
+                  "format": "jpeg",
+                  "bytes": 36109,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "941cef3e75c758e8abe4c94840ec4c649f74573888216b101cef14df558d21b4"
+                }
+              ]
+            }
+          ],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "comic-one-piece",
+          "title": "航海王",
+          "tags": [
+            "日漫",
+            "热血",
+            "冒险"
+          ],
+          "identity": {
+            "status": "provisional",
+            "reason": "标题吻合，缺少可核对的作者"
+          },
+          "matchedUrl": "https://www.guazimanhua.com/comic.php?id=18109",
+          "metadataFields": 3,
+          "catalog": {
+            "entries": 1187,
+            "numbered": 1186,
+            "anchorMatches": 0,
+            "referenceComparable": false,
+            "countRelation": "unknown",
+            "issues": [
+              {
+                "code": "numbering_gap_review",
+                "severity": "warning",
+                "evidence": "相邻编号 256 → 258；需核对拆章、番外与源站目录"
+              },
+              {
+                "code": "numbering_gap_review",
+                "severity": "warning",
+                "evidence": "相邻编号 298 → 300；需核对拆章、番外与源站目录"
+              },
+              {
+                "code": "numbering_gap_review",
+                "severity": "warning",
+                "evidence": "相邻编号 339 → 341；需核对拆章、番外与源站目录"
+              },
+              {
+                "code": "numbering_gap_review",
+                "severity": "warning",
+                "evidence": "相邻编号 443 → 445；需核对拆章、番外与源站目录"
+              },
+              {
+                "code": "numbering_gap_review",
+                "severity": "warning",
+                "evidence": "相邻编号 1147 → 1149；需核对拆章、番外与源站目录"
+              }
+            ]
+          },
+          "samples": [
+            {
+              "position": 0,
+              "title": "第1话ROMANCE DAWN",
+              "access": "unknown",
+              "pages": 57,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 617,
+                  "height": 1012,
+                  "format": "jpeg",
+                  "bytes": 134875,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "776e783cb27e83825757be3da896eb6d6b3b08a866f74b6bf77c971d88f816dc"
+                },
+                {
+                  "index": 28,
+                  "width": 617,
+                  "height": 960,
+                  "format": "jpeg",
+                  "bytes": 166639,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "31e978a594ea1a0be19a9dbeebf965d312e6d150752a2d2f6966eef08c718857"
+                },
+                {
+                  "index": 56,
+                  "width": 800,
+                  "height": 1290,
+                  "format": "jpeg",
+                  "bytes": 191461,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "ea18294a5e357f83ddd3a86e633bbdcb42a8ac32c3c38be2960e56de6d9cb2a7"
+                }
+              ]
+            },
+            {
+              "position": 593,
+              "title": "第598话 两年后",
+              "access": "unknown",
+              "pages": 26,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 617,
+                  "height": 960,
+                  "format": "jpeg",
+                  "bytes": 121625,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "a001eee94a05e799805274610cbb74f66ad4a909c789b8c49466cb0ad4bb6dd3"
+                },
+                {
+                  "index": 13,
+                  "width": 617,
+                  "height": 960,
+                  "format": "jpeg",
+                  "bytes": 155908,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "9a4fba6db87ef50cfd04b3c1b8e990816ce440527bcab668f77a641dbf2af600"
+                },
+                {
+                  "index": 25,
+                  "width": 630,
+                  "height": 1018,
+                  "format": "jpeg",
+                  "bytes": 31112,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "8f4b95fe1797f8feb2b00a607ff26d05c9fc075b9f5353e4fd7cc18c24c80e1a"
+                }
+              ]
+            },
+            {
+              "position": 1186,
+              "title": "第1190话 众盼其死之人",
+              "access": "unknown",
+              "pages": 18,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 1200,
+                  "height": 1752,
+                  "format": "webp",
+                  "bytes": 234208,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "d8048f57e5c8796923ce72e4af949e033923bc959fc4ed8494a8ae0f884f4e42"
+                },
+                {
+                  "index": 9,
+                  "width": 1200,
+                  "height": 1752,
+                  "format": "webp",
+                  "bytes": 387814,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "868cc86c2bcec712905e57ddbf97f27719ceb075ededb7d798a9b5eed58163db"
+                },
+                {
+                  "index": 17,
+                  "width": 1200,
+                  "height": 1752,
+                  "format": "webp",
+                  "bytes": 24384,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "040ece2ef2da8787df27fb820d200fd713c834c70326dfc58cd633b30e918fc8"
+                }
+              ]
+            }
+          ],
+          "failures": [],
+          "issues": []
+        }
+      ]
+    }
+  ],
+  "skipped": [],
+  "failures": []
+}

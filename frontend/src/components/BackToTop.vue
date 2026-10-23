@@ -2,6 +2,13 @@
 defineOptions({ name: 'BackToTop' })
 import { ref, onMounted, onBeforeUnmount, onActivated, onDeactivated, computed } from 'vue'
 import { tr } from '../locales'
+import { isMobileRuntime } from '../api/runtime'
+import { useRoute } from 'vue-router'
+const mobile = isMobileRuntime()
+const props=withDefaults(defineProps<{compact?:boolean;targetSelector?:string}>(),{compact:false,targetSelector:'.main-content'})
+const compact=computed(()=>mobile||props.compact)
+const route = useRoute()
+const mobileBottom = computed(() => ['/','/search','/favorites','/history','/settings'].includes(route.path) && !route.query.group ? 'calc(72px + env(safe-area-inset-bottom,0px))' : 'calc(16px + env(safe-area-inset-bottom,0px))')
 
 const THRESHOLD = 400
 const visible = ref(false)
@@ -11,6 +18,16 @@ const growPhase = ref(0)  // 0 未显示，1 生长中，2 静止
 const vineHeight = ref(400) // 藤蔓高度，用 JS 设置为窗口一半
 
 let retractTimer: ReturnType<typeof setTimeout> | null = null
+let growTimer: ReturnType<typeof setTimeout> | null = null
+let scrollFrame: number | null = null
+let finishTimer: ReturnType<typeof setTimeout> | null = null
+function stopScrollAnimation(): void {
+  if (scrollFrame !== null) cancelAnimationFrame(scrollFrame)
+  if (finishTimer !== null) clearTimeout(finishTimer)
+  scrollFrame = null
+  finishTimer = null
+  pulling.value = false
+}
 
 function cancelRetract(): void {
   if (retractTimer) {
@@ -25,7 +42,7 @@ function updateVineHeight() {
 }
 
 function getScrollContainer(): HTMLElement | null {
-  return document.querySelector('.main-content')
+  return document.querySelector(props.targetSelector)
 }
 
 function onScroll(): void {
@@ -37,7 +54,9 @@ function onScroll(): void {
     cancelRetract()
     visible.value = true
     growPhase.value = 1
-    setTimeout(() => {
+    if (growTimer !== null) clearTimeout(growTimer)
+    growTimer = setTimeout(() => {
+      growTimer = null
       if (visible.value) growPhase.value = 2
     }, 1200)
   } else if (!shouldShow && visible.value && !pulling.value && !retracting.value) {
@@ -68,26 +87,29 @@ function scrollToTop(): void {
   const snapDuration = 320
   const startTime = performance.now()
   function tick(now: number) {
+    scrollFrame = null
     const p = Math.min(1, (now - startTime) / snapDuration)
     const eased = 1 - Math.pow(1 - p, 3)
     el!.scrollTop = originalTop * (1 - eased)
     if (p < 1) {
-      requestAnimationFrame(tick)
+      scrollFrame = requestAnimationFrame(tick)
     } else {
       el!.scrollTop = 0
-      setTimeout(() => {
+      finishTimer = setTimeout(() => {
+        finishTimer = null
         pulling.value = false
         visible.value = false
       }, 200)
     }
   }
-  requestAnimationFrame(tick)
+  scrollFrame = requestAnimationFrame(tick)
 }
 
 let scroller: HTMLElement | null = null
 
 function bindScroll(): void {
   unbindScroll()
+  stopScrollAnimation()
   scroller = getScrollContainer()
   if (scroller) {
     scroller.addEventListener('scroll', onScroll, { passive: true })
@@ -105,10 +127,14 @@ function unbindScroll(): void {
   window.removeEventListener('resize', onResize)
 }
 
-onMounted(() => bindScroll())
+onMounted(() => {bindScroll();window.addEventListener('cczj:route-scroll-container',bindScroll)})
 onActivated(() => bindScroll())
-onDeactivated(() => unbindScroll())
-onBeforeUnmount(() => unbindScroll())
+onDeactivated(() => { unbindScroll(); stopScrollAnimation() })
+onBeforeUnmount(() => {
+  unbindScroll();stopScrollAnimation();window.removeEventListener('cczj:route-scroll-container',bindScroll)
+  cancelRetract()
+  if (growTimer !== null) clearTimeout(growTimer)
+})
 
 // 动态生成 SVG 视口
 const vineViewBox = computed(() => `0 0 260 ${vineHeight.value}`)
@@ -127,11 +153,11 @@ const tendril3Y = computed(() => Math.floor(vineHeight.value * 0.75))
   <div
     v-show="visible"
     class="vine-wrap cczj-motion-ornament"
-    :class="{ 'phase-grow': growPhase === 1, pulling: pulling, retracting: retracting }"
-    :style="{ height: svgHeight }"
+    :class="{ 'phase-grow': growPhase === 1, pulling: pulling, retracting: retracting, 'cczj-mobile-back-to-top': compact }"
+    :style="compact ? { bottom: mobileBottom } : { height: svgHeight }"
   >
     <!-- ===== 顶部水平藤蔓 + 下垂曲线（固定在右上角）===== -->
-    <svg
+    <svg v-if="!compact"
       class="vine-svg"
       :width="260"
       :height="vineHeight"
@@ -265,7 +291,9 @@ const tendril3Y = computed(() => Math.floor(vineHeight.value * 0.75))
     <!-- ===== 可点击的花朵（独立层，便于 hover/press 效果）===== -->
     <div
       class="flower-click-target"
+      role="button" tabindex="0" :aria-label="tr('common.backToTopHint')"
       @click="scrollToTop"
+      @keydown.enter.prevent="scrollToTop" @keydown.space.prevent="scrollToTop"
       :title="tr('common.backToTopHint')"
     >
       <svg class="flower-svg" viewBox="0 0 80 80" aria-hidden="true">

@@ -1,16 +1,25 @@
 package service
 
 import (
+	"cczjVideo/app/apperror"
 	"cczjVideo/app/applog"
 	cacheservice "cczjVideo/app/cache"
+	"cczjVideo/app/cast"
 	collectionservice "cczjVideo/app/collection"
+	"cczjVideo/app/danmaku"
 	"cczjVideo/app/db"
+	"cczjVideo/app/diagnosticrecording"
 	"cczjVideo/app/douban"
 	downloadservice "cczjVideo/app/download"
 	"cczjVideo/app/handler"
 	"cczjVideo/app/handoff"
+	"cczjVideo/app/library"
 	"cczjVideo/app/lifecycle"
 	mediaservice "cczjVideo/app/media"
+	"cczjVideo/app/netbudget"
+	"cczjVideo/app/netpolicy"
+	"cczjVideo/app/netstats"
+	"cczjVideo/app/operation"
 	pluginservice "cczjVideo/app/plugin"
 	proxyservice "cczjVideo/app/proxy"
 	"cczjVideo/app/settings"
@@ -18,10 +27,12 @@ import (
 	"cczjVideo/app/updater"
 	windowservice "cczjVideo/app/window"
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -48,18 +59,30 @@ const (
 	shutdownHardStop = 60 * time.Second
 )
 
-// 图片代理限速：避免对同一CDN连续快速请求导致被限流
+// App owns application dependencies, lifecycle, and the Wails-facing adapters.
 type App struct {
-	app        *application.App
-	settings   *settings.Service
-	plugins    *pluginservice.Service
-	window     *windowservice.Service
-	update     *updateservice.Service
-	cache      *cacheservice.Service
-	media      *mediaservice.Service
-	collection *collectionservice.Service
-	schedulers *collectionservice.SchedulerService
-	background *lifecycle.Group
+	danmaku         *danmaku.Service
+	danmakuHTTP     *http.Client
+	modeMu          sync.RWMutex
+	modeSwitchMu    sync.RWMutex
+	mode            string
+	modeTasks       *lifecycle.Group
+	app             *application.App
+	settings        *settings.Service
+	plugins         *pluginservice.Service
+	window          *windowservice.Service
+	update          *updateservice.Service
+	cache           *cacheservice.Service
+	media           *mediaservice.Service
+	collection      *collectionservice.Service
+	schedulers      *collectionservice.SchedulerService
+	background      *lifecycle.Group
+	networkBudget   *netbudget.Budget
+	requestPolicy   *netpolicy.Manager
+	operations      *operation.Metrics
+	settingsWriteMu sync.Mutex
+	stopComments    func(context.Context) error
+	recording       *diagnosticrecording.Recorder
 	// shutdownDone 在 ServiceShutdown 收尾时关闭。RestartApp 用它判断优雅退出
 	// 是否真的走完，只有没走完才允许自己 os.Exit。
 	shutdownDone chan struct{}
@@ -67,11 +90,24 @@ type App struct {
 	// relaunching 标记"这次退出其实是一次重启"。RestartApp 在请求退出之前已经把
 	// 同一个 exe 又拉起一份，新进程立刻重新锁住文件——这时候兑现「退出时安装」
 	// 换不动，还会留下一条用户没取消过的 swap_failed。关停流程读它。
-	relaunching atomic.Bool
-	downloads   *downloadservice.Registry[downloadTask]
-	downloadDir *downloadservice.Directory
-	proxy       *proxyservice.Service
-	hlsProxy    *proxyservice.HLSService
+	relaunching        atomic.Bool
+	downloads          *downloadservice.Registry[downloadTask]
+	downloadMu         sync.Mutex
+	readingState       *db.ReadingStateStore
+	downloadStore      downloadservice.CheckpointStore
+	downloadRestoreErr error
+	downloadExecutor   *downloadservice.Executor
+	downloadPaths      map[string]*downloadservice.Run
+	downloadDir        *downloadservice.Directory
+	proxy              *proxyservice.Service
+	hlsProxy           *proxyservice.HLSService
+	mobileMedia        *proxyservice.MediaBridge
+	// readingImages 服务小说/漫画的图片（漫画页、插图）。与 proxy 那个海报代理
+	// 分开的原因写在 NewApp 里：节流策略、缓存目录与容量上限都不一样。
+	readingImages *proxyservice.ImageProxy
+	// library 是小说/漫画模式的资源载入服务。
+	library *library.Service
+	cast    *cast.Service
 }
 
 // ======================== 关闭行为 ========================
@@ -157,6 +193,7 @@ func (a *App) quitGracefully() {
 
 func NewApp() *App {
 	a := &App{shutdownDone: make(chan struct{})}
+	updater.SetMobileUpdateDirectory(func() string { return filepath.Join(a.getDataDir(), "updates") })
 	a.settings = settings.NewService()
 	// 扩展包注册表只要一个「取数据目录」的函数：它在扫描时才被调用，
 	// 所以构造它可以早于数据库打开（启用状态才需要读库）。
@@ -184,22 +221,80 @@ func NewApp() *App {
 			a.app.Event.Emit(name, data)
 		}
 	})
-	a.media = mediaservice.NewService()
+	a.media = mediaservice.NewService(db.GetVideoById)
 	a.background = lifecycle.NewGroup()
+	a.operations = &operation.Metrics{}
+	a.networkBudget = netbudget.New(a.background.Context(), netbudget.DefaultPolicy())
+	jar, _ := cookiejar.New(nil)
+	a.danmakuHTTP = &http.Client{Jar: jar, Transport: a.networkBudget.Wrap("danmaku", netpolicy.WrapTransport(string(netstats.CategoryDanmaku), netstats.WrapTransport(netstats.CategoryDanmaku, &http.Transport{DialContext: proxyservice.SafeDialContext, MaxIdleConns: 4, MaxIdleConnsPerHost: 2, IdleConnTimeout: 30 * time.Second, TLSHandshakeTimeout: 10 * time.Second}))), CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 3 || !danmaku.AllowedURL(req.URL) {
+			return apperror.New(apperror.PermissionDenied, "弹幕接口重定向不可用")
+		}
+		return nil
+	}}
+	a.danmaku = danmaku.NewService(danmaku.NewStore(func() *sql.DB {
+		if db.DB() == nil {
+			return nil
+		}
+		return db.DB().DB
+	}), danmaku.NewClient(a.danmakuHTTP), a.background.Context())
+
+	a.cast = cast.New(a.background.Context())
+	a.recording = diagnosticrecording.New(func() string { return filepath.Join(a.getDataDir(), "exports", "diagnostics") }, a.background)
 	a.collection = collectionservice.NewService(func(name string, data any) {
 		if a.app != nil {
 			a.app.Event.Emit(name, data)
 		}
-	}, a.background.Go, a.background.Context())
+	}, func(name string, fn func(context.Context)) bool { return a.modeWork().Go(name, fn) }, a.background.Context())
+	a.collection.SetContextProvider(func() context.Context {
+		if a.currentMode() != "video" {
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			return ctx
+		}
+		return a.modeWork().Context()
+	})
 	// 这个间隔只作用于豆瓣补全调度（采集调度器另有生命周期管理）。
 	// 一批 2+2 条在 60~150s 随机间隔下要约 7 分钟跑完：10 分钟一轮等于全天
 	// 七成时间都在抓着豆瓣不放，容易被判定为异常流量；放宽到 30 分钟后
 	// 每轮之间留出 20 分钟空闲，队列靠手动「补全此条」仍可即时推进。
 	a.schedulers = collectionservice.NewSchedulerService(30 * time.Minute)
 	a.downloads = downloadservice.NewRegistry[downloadTask]()
-	a.downloadDir = downloadservice.NewDirectory(func(key, value string) error { return db.SetSetting(key, value) })
+	a.downloadExecutor = downloadservice.NewExecutor(a.background.Context(), a.background.Go, 2, 64)
+	a.downloadPaths = make(map[string]*downloadservice.Run)
+	a.downloadDir = downloadservice.NewDirectoryWithDefault(func(key, value string) error { return db.SetSetting(key, value) }, func() string {
+		if application.System.IsMobile() {
+			return filepath.Join(a.getDataDir(), "downloads")
+		}
+		return ""
+	})
 	a.proxy = proxyservice.NewService(a.getDataDir)
-	a.hlsProxy = proxyservice.NewHLSService()
+	a.hlsProxy = proxyservice.NewHLSServiceWithBudget(a.networkBudget)
+	// 阅读模式的图片代理与海报代理分开：海报那条有 300ms 全局节流（防豆瓣限流），
+	// 一话几十页漫画会被它拖成十几秒。缓存目录、TTL 与容量上限也各自一份，
+	// 因为淘汰是按 mtime 全局排序的，混在一个目录里几十张大图会把开屏要用的
+	// 小海报全挤出去。见 app/proxy/imgproxy.go。
+	a.readingImages = proxyservice.NewImageProxyWithRuntime(a.getDataDir, a.background.Context(), a.networkBudget)
+	a.readingImages.SetHeaderResolver(readingSourceHeaders)
+	a.readingImages.SetModeResolver(func(key string) string {
+		source, err := db.GetSourceByKey(key)
+		if err != nil {
+			return ""
+		}
+		return string(source.GetKind())
+	})
+	a.mobileMedia = proxyservice.NewMediaBridgeWithImages(a.background.Context(), a.hlsProxy, a.readingImages)
+	a.library = library.NewServiceWithRuntime(a.getDataDir, a.background.Context(), a.networkBudget)
+	a.library.EnableBuiltinRouting()
+	a.readingImages.ConfigureReadingRuntime(a.library.WrapReadingTransport, a.library.BeginReadingForeground)
+	a.readingImages.SetEvidenceRecorder(a.library.RecordReadingImage)
+	// 图片地址的换算注入到这里，library 包因此不需要知道 App 与代理实例的存在。
+	a.library.SetImageURLBuilder(a.readingImages.URL)
+	modeLauncher := func(name string, fn func(context.Context)) bool { return a.modeWork().Go(name, fn) }
+	a.stopComments = douban.ConfigureCommentRuntime(a.background.Context(), modeLauncher)
+	a.proxy.SetMaintenanceLauncher(modeLauncher)
+	a.readingImages.SetMaintenanceLauncher(modeLauncher)
+	a.library.SetMaintenanceLauncher(modeLauncher)
 	return a
 }
 
@@ -213,20 +308,16 @@ func SetSystemTray(tray *application.SystemTray) {
 	systemTray = tray
 }
 
-// ServeHLSProxy handles the same-origin HLS endpoint registered in main.go.
-func (a *App) ServeHLSProxy(w http.ResponseWriter, r *http.Request) {
-	if a.hlsProxy == nil {
-		http.Error(w, "HLS proxy unavailable", http.StatusServiceUnavailable)
-		return
-	}
-	a.hlsProxy.ServeHTTP(w, r)
-}
-
 func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
 	a.app = application.Get()
 
 	dataDir := a.getDataDir()
 	os.MkdirAll(dataDir, 0755)
+	if application.System.IsMobile() {
+		if err := configureMobileTemporaryStorage(dataDir); err != nil {
+			return apperror.Wrap(apperror.Storage, err, "应用临时存储不可用")
+		}
+	}
 
 	// 初始化日志（data/applog 目录），按天滚动，超过保留天数自动清理
 	logDir := filepath.Join(dataDir, "applog")
@@ -251,9 +342,41 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 
 	// 必须排在 InitDB 之前：库一打开就定了归属，晚一步就已经对着空库建表了。
 	legacyStep := migrateLegacyDatabase(legacyDataDir(), dataDir)
+	if legacyStep == legacyBlocked {
+		if _, err := os.Stat(filepath.Join(dataDir, "cczj_video.db")); err != nil {
+			return apperror.Wrap(apperror.Storage, err, "旧数据库迁移未完成，已保留旧数据；请检查数据目录权限和磁盘空间后重试")
+		}
+	}
 
 	if err := db.InitDB(dataDir); err != nil {
 		panic(fmt.Sprintf("Failed to init database: %v", err))
+	}
+	rawPolicy, err := a.settings.Get(netpolicy.SettingsKey)
+	if err != nil {
+		return err
+	}
+	policySettings, err := netpolicy.DecodeSettings(rawPolicy)
+	if err != nil {
+		return apperror.Wrap(apperror.Storage, err, "读取网络请求策略失败")
+	}
+	requestPolicy := netpolicy.New(netpolicy.NewStore(func() *sql.DB {
+		if db.DB() == nil {
+			return nil
+		}
+		return db.DB().DB
+	}), a.background.Context(), policySettings)
+	if err = requestPolicy.Initialize(ctx); err != nil {
+		_ = requestPolicy.Close(ctx)
+		return apperror.Wrap(apperror.Storage, err, "恢复网络请求冷却记录失败")
+	}
+	a.requestPolicy = requestPolicy
+	netpolicy.Install(requestPolicy)
+
+	a.readingState = db.NewReadingStateStore(db.DB())
+	a.downloadStore = db.NewDownloadTaskStore(db.DB())
+	if err := a.loadPersistedTasks(); err != nil {
+		a.downloadRestoreErr = err
+		applog.Error("恢复下载任务失败: %v", err)
 	}
 
 	// 迁移结论记在当前库里：份旧数据被搬走过一次，就不该再提示用户去合并它。
@@ -286,45 +409,9 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 	// 恢复诊断页可改的持久化设置（豆瓣轮询间隔、日志保留天数），再启动调度器。
 	a.applyPersistedDiagnosticsSettings()
 
-	// 启动采集和豆瓣调度器。
-	a.background.Go("schedulers", func(taskCtx context.Context) {
-		a.schedulers.Start(taskCtx)
-	})
-
-	// 源探测不再常驻后台：只有停在「采集源」页时界面才会去戳源站，
-	// 每个源最多 5 分钟一次（见 service.sourceProbeMinInterval）。
-	// 代价是没人打开那一页时不会自动发现接口下线，换来的是不挂着后台给源站添流量。
-
-	// 预加载豆瓣热榜缓存（异步，不阻塞启动）
-	// 注意：豆瓣热榜需要通过数据源匹配播放地址，无任何源时跳过，避免无意义请求
-	a.background.Go("preloadDoubanChart", func(taskCtx context.Context) {
-		if taskCtx.Err() != nil {
-			return
-		}
-		if sources, err := db.GetAllSources(); err == nil && len(sources) == 0 {
-			applog.Info("当前无任何数据源，跳过豆瓣热榜预加载")
-			return
-		}
-		_, err := douban.FetchDoubanChart()
-		if err != nil {
-			applog.Debug("预加载豆瓣热榜失败: %v", err)
-		} else {
-			applog.Info("豆瓣热榜预加载完成")
-		}
-	})
-
-	// 同步全局类型表
-	a.background.Go("syncGlobalTypes", func(taskCtx context.Context) {
-		if taskCtx.Err() != nil {
-			return
-		}
-		count, err := db.SyncGlobalTypesFromSources()
-		if err != nil {
-			applog.Warn("同步全局类型失败: %v", err)
-		} else {
-			applog.Info("同步全局类型完成: %d 条", count)
-		}
-	})
+	// Reading modes do not start video collection, Douban polling or chart fetches.
+	mode, _ := a.settings.Get(applicationModeKey)
+	a.startMode(normalizeMode(mode))
 
 	schemaVersion, schemaErr := db.SchemaVersion()
 	if schemaErr != nil {
@@ -341,9 +428,6 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 		"background_tasks": len(a.background.ActiveTasks()),
 	})
 
-	// 加载上次未完成的下载任务
-	a.loadPersistedTasks()
-
 	// 加载关闭行为设置：只有在数据库中明确存在 "0" 时才禁用；首次运行保持默认开启
 	a.window.LoadCloseBehavior()
 
@@ -351,17 +435,24 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 	a.window.ApplySettings()
 
 	// 启动时自动检查更新（每天一次）
-	a.background.Go("startupCheckUpdate", func(taskCtx context.Context) {
-		if taskCtx.Err() == nil {
-			a.startupCheckUpdate(taskCtx)
-		}
-	})
+	if application.System.IsDesktop() {
+		a.background.Go("startupCheckUpdate", func(taskCtx context.Context) {
+			if taskCtx.Err() == nil {
+				a.startupCheckUpdate(taskCtx)
+			}
+		})
+	}
 
 	return nil
 }
 
 // getDataDir 返回数据目录路径
 func (a *App) getDataDir() string {
+	if application.System.IsMobile() {
+		if dir := application.Mobile.StoragePath(); dir != "" {
+			return filepath.Join(dir, "CCZJ Video")
+		}
+	}
 	if dir, err := os.UserConfigDir(); err == nil && strings.TrimSpace(dir) != "" {
 		return filepath.Join(dir, "CCZJ Video")
 	}
@@ -418,14 +509,36 @@ func migrateLegacyDatabase(oldDir, newDir string) legacyMigration {
 // copyDatabaseFiles 连同 WAL/SHM 一起复制：只搬 .db 会把尚未 checkpoint 的已提交
 // 事务留在旧目录里，用户拿到的就是一个少了最近一段的库。
 func copyDatabaseFiles(fromDir, toDir string) error {
+	// Stage the entire DB/WAL/SHM group before publishing any of it. A failed
+	// WAL copy must not leave a main DB that blocks recovery on the next start.
+	staging, err := os.MkdirTemp(toDir, ".legacy-db-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(staging)
+	var suffixes []string
 	for _, suffix := range []string{".db", ".db-wal", ".db-shm"} {
 		src := filepath.Join(fromDir, "cczj_video"+suffix)
-		if err := copyFile(src, filepath.Join(toDir, "cczj_video"+suffix)); err != nil {
+		if err := copyFile(src, filepath.Join(staging, "cczj_video"+suffix)); err != nil {
 			if suffix != ".db" && errors.Is(err, os.ErrNotExist) {
 				continue // WAL/SHM 本来就可能不存在
 			}
 			return err
 		}
+		suffixes = append(suffixes, suffix)
+	}
+	// Publish the main DB last: its presence is the startup migration gate.
+	var published []string
+	for i := len(suffixes) - 1; i >= 0; i-- {
+		name := "cczj_video" + suffixes[i]
+		destination := filepath.Join(toDir, name)
+		if err := os.Rename(filepath.Join(staging, name), destination); err != nil {
+			for _, path := range published {
+				_ = os.Remove(path)
+			}
+			return err
+		}
+		published = append(published, destination)
 	}
 	return nil
 }
@@ -485,13 +598,21 @@ type ChunkProgress struct {
 
 // downloadTask 内部状态
 type downloadTask struct {
-	mu         sync.Mutex
-	status     VideoDownloadStatus
-	cancel     context.CancelFunc
-	httpClient *http.Client
-	paused     bool     // 是否处于暂停状态
-	segIndex   int      // 下一个要下载的分片索引（m3u8 断点恢复用）
-	segments   []string // m3u8 的分片 URL 列表
+	mu                sync.Mutex
+	status            VideoDownloadStatus
+	run               *downloadservice.Run // protected by App.downloadMu
+	cancelRequested   bool
+	persistenceFailed bool
+	transferComplete  bool
+	finalizing        bool
+	finalSize         int64
+	boundarySynced    bool
+	checkpointBytes   int64
+	checkpointIndex   int
+	httpClient        *http.Client
+	paused            bool     // 是否处于暂停状态
+	segIndex          int      // 下一个要下载的分片索引（m3u8 断点恢复用）
+	segments          []string // m3u8 的分片 URL 列表
 	// playlist 是带密钥/初始化段/字节区间的分片列表，落盘顺序。segments 只剩 URL 的
 	// 老任务读不出这些，所以两者并存：有 playlist 用它，否则退回 segments。
 	playlist []downloadservice.Segment
@@ -499,25 +620,7 @@ type downloadTask struct {
 	hasTotal bool // 是否已估算出 total（续传时不再重算）
 }
 
-// persistedTask 磁盘持久化格式
-type persistedTask struct {
-	TaskId     string   `json:"task_id"`
-	Url        string   `json:"url"`
-	Filename   string   `json:"filename"`
-	SavePath   string   `json:"save_path"`
-	Total      int64    `json:"total"`
-	Downloaded int64    `json:"downloaded"`
-	Status     string   `json:"status"`
-	SegIndex   int      `json:"seg_index"`
-	IsM3u8     bool     `json:"is_m3u8"`
-	Segments   []string `json:"segments,omitempty"`
-	// SegmentDetails 与 Segments 同序，但带 EXT-X-KEY / EXT-X-MAP / BYTERANGE。
-	// 旧版本写不出这个字段，恢复时按纯 URL 处理。
-	SegmentDetails []downloadservice.Segment `json:"segment_details,omitempty"`
-	StartTime      int64                     `json:"start_time"`
-	ErrorMsg       string                    `json:"error_msg,omitempty"`
-	HasTotal       bool                      `json:"has_total"`
-}
+type persistedTask = downloadservice.Checkpoint
 
 func sanitizeFilename(name string) string {
 	if name == "" {
@@ -603,8 +706,8 @@ func (a *App) GetAppVersion() string {
 }
 
 // CheckUpdate 检查是否有新版本（每次调用都获取最新信息，无缓存）
-func (a *App) CheckUpdate() (*updater.UpdateInfo, error) {
-	return a.update.Check()
+func (a *App) CheckUpdate(ctx context.Context) (*updater.UpdateInfo, error) {
+	return runRequest(a, ctx, "app.CheckUpdate", func(ctx context.Context) (*updater.UpdateInfo, error) { return a.update.CheckContext(ctx) })
 }
 
 // DownloadUpdate 下载更新包，通过事件向前端推送进度
@@ -698,6 +801,11 @@ func (a *App) startupCheckUpdate(ctx context.Context) {
 }
 
 func (a *App) ServiceShutdown() error {
+	if a.mobileMedia != nil {
+		if err := a.mobileMedia.Close(); err != nil {
+			applog.Warn("mobile media shutdown: %v", err)
+		}
+	}
 	// 移除系统托盘图标（如果存在）
 	if systemTray != nil {
 		systemTray.Destroy()
@@ -708,7 +816,45 @@ func (a *App) ServiceShutdown() error {
 	// 取消并等待后台任务收尾：采集引擎收到取消后最多还跑完当前页的提交，下载立刻断开。
 	// db.Close 必须排在这个等待之后 —— 否则正在提交的那一批会写到已经关掉的句柄上，
 	// 日志里只是一行 "database is closed"，实际丢掉的是整页采集结果。
-	a.background.Stop(shutdownDrainTimeout)
+	if group := a.modeWork(); group != nil && group != a.background && !group.Stop(shutdownDrainTimeout) {
+		return apperror.New(apperror.Timeout, "当前模式后台任务尚未停止")
+	}
+	if !a.background.Stop(shutdownDrainTimeout) {
+		return apperror.New(apperror.Timeout, "后台任务尚未停止，数据库保持打开以完成收尾")
+	}
+	readCtx, cancelReads := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelReads()
+	if a.readingImages != nil {
+		if err := a.readingImages.Close(readCtx); err != nil {
+			return err
+		}
+	}
+	if a.danmaku != nil {
+		if err := a.danmaku.Close(readCtx); err != nil {
+			return err
+		}
+	}
+	if a.danmakuHTTP != nil {
+		a.danmakuHTTP.CloseIdleConnections()
+	}
+	if a.library != nil {
+		if err := a.library.Close(readCtx); err != nil {
+			return err
+		}
+	}
+	if a.hlsProxy != nil {
+		a.hlsProxy.Close()
+	}
+	if a.requestPolicy != nil {
+		if err := a.requestPolicy.Close(readCtx); err != nil {
+			return err
+		}
+	}
+	if a.stopComments != nil {
+		if err := a.stopComments(readCtx); err != nil {
+			return err
+		}
+	}
 
 	applog.Info("应用正常退出")
 	// 库先关、日志最后关：关库时 WAL 归并可能失败并要报出来，日志要是先关了，

@@ -112,21 +112,18 @@ onMounted(scan)
 
 <style scoped>
 .legacy-body {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  @apply cczj-flex cczj-flex-col cczj-gap-5;
   font-size: 0.88rem;
   line-height: 1.65;
-  color: var(--text-secondary);
+  @apply cczj-text-secondary;
 }
 .legacy-main {
   margin: 0;
-  color: var(--text-primary);
-  word-break: break-all;
+  @apply cczj-text-primary cczj-break-all;
 }
 .legacy-hint {
   margin: 0;
   font-size: 0.8rem;
-  color: var(--text-muted);
+  @apply cczj-text-muted;
 }
 </style>

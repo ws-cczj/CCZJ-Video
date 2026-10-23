@@ -1,0 +1,729 @@
+{
+  "header": {
+    "type": "header",
+    "runHash": "ed9bb8c1680afc2c7b510fda1a6f219f89f0e2dde6bca03a0e9845716c736110",
+    "corpusHash": "9cc48b110675d342ea03ae26107cebec4094f147890a6712f7d57700019bcd70",
+    "startedAt": "2026-10-22T00:07:35+08:00",
+    "sources": 420,
+    "algorithm": "indexed-discovery.v2"
+  },
+  "completed": true,
+  "corpusWorks": 6832,
+  "totalSources": 420,
+  "processed": 420,
+  "resumed": 0,
+  "canRead": 47,
+  "canSearch": 420,
+  "sourcesByKind": {
+    "comic": 26,
+    "novel": 394
+  },
+  "states": {
+    "deep_checked": 3,
+    "network_unknown": 237,
+    "no_identity_match": 158,
+    "search_matched": 22
+  },
+  "endpointStates": {
+    "http_reached": 155,
+    "invalid_address": 3,
+    "network_unknown": 262
+  },
+  "discoveryQueries": 618,
+  "indexLookups": 3884,
+  "matchedWorks": 43,
+  "homepagePairs": 0,
+  "network": {
+    "capacity": 5,
+    "requests": 1098,
+    "peakInFlight": 5
+  },
+  "runNetwork": {
+    "capacity": 5,
+    "requests": 1098,
+    "peakInFlight": 5
+  },
+  "endpoints": {
+    "endpointRequests": 224,
+    "endpointReused": 193,
+    "peakEndpointHTTP": 5,
+    "deepStarted": 3,
+    "homepageLookups": 0
+  },
+  "dispatch": {
+    "workers": 5,
+    "queueCapacity": 5,
+    "submitted": 420,
+    "completed": 420,
+    "peakActive": 5,
+    "millis": 169403
+  },
+  "rankings": [
+    {
+      "version": "reading-quality.v1",
+      "corpusDate": "2026-10-21",
+      "corpusHash": "9cc48b110675d342ea03ae26107cebec4094f147890a6712f7d57700019bcd70",
+      "checkedAt": 1792598859,
+      "source": {
+        "id": "e6c3adbb5055902f8168f13ceab542bba07dde2dbd3059b18e30736a2b8ec114",
+        "name": "咚漫漫画",
+        "kind": "comic",
+        "url": "https://www.dongmanmanhua.cn"
+      },
+      "millis": 5635,
+      "summary": {
+        "status": "partial",
+        "score": 59,
+        "confidence": "insufficient",
+        "queries": 1,
+        "matched": 1,
+        "verified": 1,
+        "readable": 3,
+        "attempts": 3,
+        "restricted": 0,
+        "catalogCompared": 0,
+        "tagCoverage": {
+          "Action": 1,
+          "Adventure": 1,
+          "Award Winning": 1,
+          "Comedy": 1,
+          "Drama": 1,
+          "Fantasy": 1,
+          "Full Color": 1,
+          "Long Strip": 1,
+          "MangaDex safe目录": 1,
+          "Mystery": 1,
+          "Psychological": 1,
+          "Supernatural": 1,
+          "Web Comic": 1
+        },
+        "metrics": [
+          {
+            "name": "identity",
+            "score": 100,
+            "weight": 15,
+            "observations": 1
+          },
+          {
+            "name": "metadata",
+            "score": 100,
+            "weight": 10,
+            "observations": 1
+          },
+          {
+            "name": "catalog",
+            "score": 100,
+            "weight": 30,
+            "observations": 1
+          },
+          {
+            "name": "reading",
+            "score": 100,
+            "weight": 35,
+            "observations": 3
+          }
+        ],
+        "notes": [
+          "未收录样本仅影响覆盖面，不扣内容质量；分数与置信度必须一起看",
+          "这是一轮抽检，不能表示长期稳定或全站完整",
+          "已检验图片响应、格式、尺寸和重复指纹；未做 OCR/人工逐页审核，不能宣称图片无广告或图序全部正确",
+          "未满足多锚点同版比较条件，章节完整度尚未证实"
+        ]
+      },
+      "works": [
+        {
+          "id": "mangadex-c0ee660b-f9f2-45c3-8068-5123ff53f84a",
+          "title": "神之塔",
+          "tags": [
+            "MangaDex safe目录",
+            "Award Winning",
+            "Action",
+            "Psychological",
+            "Long Strip",
+            "Comedy",
+            "Adventure",
+            "Drama",
+            "Fantasy",
+            "Web Comic",
+            "Supernatural",
+            "Mystery",
+            "Full Color"
+          ],
+          "identity": {
+            "status": "verified",
+            "reason": "标题与作者吻合"
+          },
+          "matchedUrl": "https://www.dongmanmanhua.cn/episodeList?titleNo=241",
+          "author": "SIU",
+          "metadataFields": 4,
+          "catalog": {
+            "entries": 12,
+            "numbered": 10,
+            "anchorMatches": 0,
+            "referenceComparable": false,
+            "countRelation": "unknown",
+            "issues": []
+          },
+          "samples": [
+            {
+              "position": 0,
+              "title": "预告",
+              "access": "unknown",
+              "pages": 7,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 690,
+                  "height": 1230,
+                  "format": "jpeg",
+                  "bytes": 46511,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "fb89755702e3a4d72695f1ce9e414303251083591ef090820f0e0f2b30bacb3a"
+                },
+                {
+                  "index": 3,
+                  "width": 690,
+                  "height": 1230,
+                  "format": "jpeg",
+                  "bytes": 31845,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "b9c979b710ec96d058527bf098ccce2d9d60688a9ad6dddcba094440856c06a0"
+                },
+                {
+                  "index": 6,
+                  "width": 690,
+                  "height": 434,
+                  "format": "jpeg",
+                  "bytes": 2131,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "30d3e33e2adf054c7e59ce0334c0027d57ad51914aa62b1e13fa2ad44281f311"
+                }
+              ]
+            },
+            {
+              "position": 6,
+              "title": "[第6话] 伊凡科尔的地狱",
+              "access": "unknown",
+              "pages": 37,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 690,
+                  "height": 1230,
+                  "format": "jpeg",
+                  "bytes": 131655,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "ca3ac9a7cf78ddc1c4cfad9a96460eb2a0a6c501498fad47c1181140e86b90a8"
+                },
+                {
+                  "index": 18,
+                  "width": 690,
+                  "height": 1230,
+                  "format": "jpeg",
+                  "bytes": 138507,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "eb04f87d0bb13fd5e1fafd93ce646215701c39cbc72f092317cadb7e5f1c7c83"
+                },
+                {
+                  "index": 36,
+                  "width": 690,
+                  "height": 765,
+                  "format": "jpeg",
+                  "bytes": 21138,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "6db4a9994aeca22c0784838d6b58c5fd12f8b0043a19974dc55327e27ed1772d"
+                }
+              ]
+            },
+            {
+              "position": 11,
+              "title": "[第2季] 预告",
+              "access": "unknown",
+              "pages": 25,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 690,
+                  "height": 1230,
+                  "format": "jpeg",
+                  "bytes": 80476,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "4542db3a5d518489e866fa1a958cc850484e8b1d5e7ae7eaa90d00c3a28aaab5"
+                },
+                {
+                  "index": 12,
+                  "width": 690,
+                  "height": 1230,
+                  "format": "jpeg",
+                  "bytes": 69837,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "b7de21f9d583a58cfbf4b5f027393da3373a7e1002166c3296dad77c17f8989b"
+                },
+                {
+                  "index": 24,
+                  "width": 690,
+                  "height": 674,
+                  "format": "jpeg",
+                  "bytes": 4004,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "1b5572bd0062ab3f1efcf151601d3b749079fc0ef2c5f08427409c95d2f3449c"
+                }
+              ]
+            }
+          ],
+          "failures": [],
+          "issues": []
+        }
+      ]
+    },
+    {
+      "version": "reading-quality.v1",
+      "corpusDate": "2026-10-21",
+      "corpusHash": "9cc48b110675d342ea03ae26107cebec4094f147890a6712f7d57700019bcd70",
+      "checkedAt": 1792598859,
+      "source": {
+        "id": "3b8118b51a39e510eed317610ff159063cffcdd4e239876c19d3bc265aab810a",
+        "name": "瓜子漫画",
+        "kind": "comic",
+        "url": "https://www.guazimanhua.com"
+      },
+      "millis": 13301,
+      "summary": {
+        "status": "partial",
+        "score": 48,
+        "confidence": "insufficient",
+        "queries": 1,
+        "matched": 1,
+        "verified": 0,
+        "readable": 3,
+        "attempts": 3,
+        "restricted": 0,
+        "catalogCompared": 0,
+        "tagCoverage": {
+          "Adaptation": 1,
+          "Drama": 1,
+          "Fantasy": 1,
+          "Full Color": 1,
+          "Isekai": 1,
+          "Long Strip": 1,
+          "MangaDex safe目录": 1,
+          "Reincarnation": 1,
+          "Reverse Harem": 1,
+          "Romance": 1,
+          "Villainess": 1
+        },
+        "metrics": [
+          {
+            "name": "identity",
+            "score": 50,
+            "weight": 15,
+            "observations": 1
+          },
+          {
+            "name": "metadata",
+            "score": 75,
+            "weight": 10,
+            "observations": 1
+          },
+          {
+            "name": "catalog",
+            "score": 80,
+            "weight": 30,
+            "observations": 1
+          },
+          {
+            "name": "reading",
+            "score": 100,
+            "weight": 35,
+            "observations": 3
+          }
+        ],
+        "notes": [
+          "未收录样本仅影响覆盖面，不扣内容质量；分数与置信度必须一起看",
+          "这是一轮抽检，不能表示长期稳定或全站完整",
+          "已检验图片响应、格式、尺寸和重复指纹；未做 OCR/人工逐页审核，不能宣称图片无广告或图序全部正确",
+          "未满足多锚点同版比较条件，章节完整度尚未证实"
+        ]
+      },
+      "works": [
+        {
+          "id": "mangadex-e2c70e21-5a44-4f6e-96a7-464d296f838d",
+          "title": "毒皇妃也有可爱闺蜜？",
+          "tags": [
+            "MangaDex safe目录",
+            "Reincarnation",
+            "Long Strip",
+            "Romance",
+            "Reverse Harem",
+            "Isekai",
+            "Drama",
+            "Fantasy",
+            "Villainess",
+            "Adaptation",
+            "Full Color"
+          ],
+          "identity": {
+            "status": "provisional",
+            "reason": "标题吻合，缺少可核对的作者"
+          },
+          "matchedUrl": "https://www.guazimanhua.com/comic.php?id=25754",
+          "metadataFields": 3,
+          "catalog": {
+            "entries": 117,
+            "numbered": 113,
+            "anchorMatches": 0,
+            "referenceComparable": false,
+            "countRelation": "unknown",
+            "issues": [
+              {
+                "code": "numbering_gap_review",
+                "severity": "warning",
+                "evidence": "相邻编号 43 → 45；需核对拆章、番外与源站目录"
+              }
+            ]
+          },
+          "samples": [
+            {
+              "position": 0,
+              "title": "序章 和反派做闺蜜？",
+              "access": "unknown",
+              "pages": 45,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 900,
+                  "height": 795,
+                  "format": "jpeg",
+                  "bytes": 62312,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "6abf2578b6a2113807455d936cb2f5697d4ecec51dbc4fb4527a20d03ea2290d"
+                },
+                {
+                  "index": 22,
+                  "width": 900,
+                  "height": 703,
+                  "format": "jpeg",
+                  "bytes": 66924,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "2eacfc3a37d4c46100590b73378d2598bd8cfa7ec76145c19ed22668618816c5"
+                },
+                {
+                  "index": 44,
+                  "width": 900,
+                  "height": 514,
+                  "format": "jpeg",
+                  "bytes": 27100,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "1710d90437794880631e20f8a54983d2b8d719fbedbe2fe13aeb4bc3734f4c20"
+                }
+              ]
+            },
+            {
+              "position": 58,
+              "title": "第59话 情话高手",
+              "access": "unknown",
+              "pages": 121,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 900,
+                  "height": 790,
+                  "format": "jpeg",
+                  "bytes": 115544,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "328f50bc845fbd906eb2b213a279ab46538e29ef7491ff7d8363c1cd29632d92"
+                },
+                {
+                  "index": 60,
+                  "width": 900,
+                  "height": 703,
+                  "format": "jpeg",
+                  "bytes": 61704,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "3f40b387ccc58ae2e2cf863d591156105f0bc10035d7b91d54d6b69bdbfdca5d"
+                },
+                {
+                  "index": 120,
+                  "width": 900,
+                  "height": 510,
+                  "format": "jpeg",
+                  "bytes": 22961,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "d8fe9414c67c3cc3affb169a262fcc588a26bc84394b4083c596d59422aff228"
+                }
+              ]
+            },
+            {
+              "position": 116,
+              "title": "完结篇 被爱的幸福",
+              "access": "unknown",
+              "pages": 164,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 900,
+                  "height": 755,
+                  "format": "jpeg",
+                  "bytes": 119340,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "160bb0401898257ca4328218f76abd385e5ff89f7b442a3b1d41d96371820fcb"
+                },
+                {
+                  "index": 82,
+                  "width": 900,
+                  "height": 703,
+                  "format": "jpeg",
+                  "bytes": 43367,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "5729c1ad3da8dafc5611fa65bdf9ec29c1bedf5564f71835ee350e4b50021269"
+                },
+                {
+                  "index": 163,
+                  "width": 900,
+                  "height": 427,
+                  "format": "jpeg",
+                  "bytes": 26974,
+                  "host": "img.guazicdn.com",
+                  "fingerprint": "99d1e168bab9dc1fe4f3349adcf7f0e00078eb2b3237dade4318d7b318660729"
+                }
+              ]
+            }
+          ],
+          "failures": [],
+          "issues": []
+        }
+      ]
+    },
+    {
+      "version": "reading-quality.v1",
+      "corpusDate": "2026-10-21",
+      "corpusHash": "9cc48b110675d342ea03ae26107cebec4094f147890a6712f7d57700019bcd70",
+      "checkedAt": 1792598857,
+      "source": {
+        "id": "260ac95862f67eb7d6a036dbc71d7ba9d95e610d8c6412cf20e6bc4aad5a7af2",
+        "name": "番茄小说",
+        "kind": "novel",
+        "url": "https://fanqienovel.com"
+      },
+      "millis": 3855,
+      "summary": {
+        "status": "partial",
+        "score": 33,
+        "confidence": "insufficient",
+        "queries": 2,
+        "matched": 2,
+        "verified": 2,
+        "readable": 2,
+        "attempts": 6,
+        "restricted": 4,
+        "catalogCompared": 0,
+        "tagCoverage": {
+          "东方仙侠": 1,
+          "中文网络小说": 2,
+          "仙侠": 1,
+          "剑道": 1,
+          "奇幻": 1,
+          "奇幻仙侠": 2,
+          "异世大陆": 1,
+          "玄幻": 2,
+          "穿越": 1,
+          "西方奇幻": 1,
+          "重生": 1
+        },
+        "metrics": [
+          {
+            "name": "identity",
+            "score": 100,
+            "weight": 15,
+            "observations": 2
+          },
+          {
+            "name": "metadata",
+            "score": 100,
+            "weight": 10,
+            "observations": 2
+          },
+          {
+            "name": "catalog",
+            "score": 35,
+            "weight": 30,
+            "observations": 2
+          },
+          {
+            "name": "reading",
+            "score": 33,
+            "weight": 35,
+            "observations": 6
+          },
+          {
+            "name": "text_cleanliness",
+            "score": 100,
+            "weight": 10,
+            "observations": 2
+          }
+        ],
+        "notes": [
+          "未收录样本仅影响覆盖面，不扣内容质量；分数与置信度必须一起看",
+          "这是一轮抽检，不能表示长期稳定或全站完整",
+          "未满足多锚点同版比较条件，章节完整度尚未证实",
+          "付费或登录限制单独记录，影响当前可读范围，不判作正文损坏"
+        ]
+      },
+      "works": [
+        {
+          "id": "fanqie-6955766911246273549",
+          "title": "仙武剑尊",
+          "tags": [
+            "中文网络小说",
+            "东方仙侠",
+            "玄幻",
+            "仙侠",
+            "重生",
+            "剑道",
+            "奇幻仙侠"
+          ],
+          "identity": {
+            "status": "verified",
+            "reason": "标题与第一方作品地址吻合"
+          },
+          "matchedUrl": "https://fanqienovel.com/page/6955766911246273549",
+          "author": "云雀归巢",
+          "metadataFields": 4,
+          "catalog": {
+            "entries": 1676,
+            "numbered": 1676,
+            "anchorMatches": 0,
+            "referenceComparable": false,
+            "countRelation": "unknown",
+            "issues": [
+              {
+                "code": "numbering_gap_review",
+                "severity": "warning",
+                "evidence": "相邻编号 684 → 689；需核对拆章、番外与源站目录"
+              },
+              {
+                "code": "mixed_chapter_order",
+                "severity": "error",
+                "evidence": "升序相邻 1672，倒序相邻 1；无卷信息时混合下降仅待核查"
+              }
+            ]
+          },
+          "samples": [
+            {
+              "position": 0,
+              "title": "第1章 神帝归来，纨绔世子成绝世高人",
+              "access": "available",
+              "text": {
+                "runes": 3159,
+                "paragraphs": 85,
+                "fingerprint": "ea068eee36e5804c4fae1c1aee2db51ca21a8309b98e2912973be41c5538e7be",
+                "issues": []
+              }
+            },
+            {
+              "position": 838,
+              "title": "第841章 剑意考核",
+              "access": "subscription",
+              "failure": {
+                "stage": "content",
+                "code": "PERMISSION_DENIED",
+                "message": "此章节需要在番茄官方客户端获取访问权限"
+              }
+            },
+            {
+              "position": 1675,
+              "title": "第1676章 天道法则（大结局）",
+              "access": "subscription",
+              "failure": {
+                "stage": "content",
+                "code": "PERMISSION_DENIED",
+                "message": "此章节需要在番茄官方客户端获取访问权限"
+              }
+            }
+          ],
+          "failures": [],
+          "issues": []
+        },
+        {
+          "id": "fanqie-6955828180326288397",
+          "title": "魔法之工业革命",
+          "tags": [
+            "中文网络小说",
+            "西方奇幻",
+            "奇幻",
+            "玄幻",
+            "穿越",
+            "奇幻仙侠",
+            "异世大陆"
+          ],
+          "identity": {
+            "status": "verified",
+            "reason": "标题与第一方作品地址吻合"
+          },
+          "matchedUrl": "https://fanqienovel.com/page/6955828180326288397",
+          "author": "大周一号",
+          "metadataFields": 4,
+          "catalog": {
+            "entries": 819,
+            "numbered": 819,
+            "anchorMatches": 0,
+            "referenceComparable": false,
+            "countRelation": "unknown",
+            "issues": [
+              {
+                "code": "numbering_gap_review",
+                "severity": "warning",
+                "evidence": "相邻编号 152 → 154；需核对拆章、番外与源站目录"
+              },
+              {
+                "code": "numbering_gap_review",
+                "severity": "warning",
+                "evidence": "相邻编号 234 → 325；需核对拆章、番外与源站目录"
+              },
+              {
+                "code": "mixed_chapter_order",
+                "severity": "error",
+                "evidence": "升序相邻 816，倒序相邻 1；无卷信息时混合下降仅待核查"
+              }
+            ]
+          },
+          "samples": [
+            {
+              "position": 0,
+              "title": "第1章 这个混蛋珠子听力肯定有问题",
+              "access": "available",
+              "text": {
+                "runes": 3531,
+                "paragraphs": 128,
+                "fingerprint": "20ca3b076f5808f4704be960f7d15d66ee232edd3dfc55edb6ef46fa9b06e14f",
+                "issues": []
+              }
+            },
+            {
+              "position": 409,
+              "title": "第410章 海妖尼普顿",
+              "access": "subscription",
+              "failure": {
+                "stage": "content",
+                "code": "PERMISSION_DENIED",
+                "message": "此章节需要在番茄官方客户端获取访问权限"
+              }
+            },
+            {
+              "position": 818,
+              "title": "第819章 自主决策",
+              "access": "subscription",
+              "failure": {
+                "stage": "content",
+                "code": "PERMISSION_DENIED",
+                "message": "此章节需要在番茄官方客户端获取访问权限"
+              }
+            }
+          ],
+          "failures": [],
+          "issues": []
+        }
+      ]
+    }
+  ]
+}

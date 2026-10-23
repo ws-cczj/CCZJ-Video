@@ -64,6 +64,10 @@ func (s *Service) Check() (*updater.UpdateInfo, error) {
 	return updater.CheckUpdate()
 }
 
+func (s *Service) CheckContext(ctx context.Context) (*updater.UpdateInfo, error) {
+	return updater.CheckUpdateContext(ctx)
+}
+
 // Download downloads an update package and emits progress updates.
 func (s *Service) Download(downloadURL string) (string, error) {
 	return updater.DownloadUpdate(downloadURL, func(downloaded, total int64, speedBps float64) {
@@ -75,15 +79,12 @@ func (s *Service) Download(downloadURL string) (string, error) {
 	})
 }
 
-// Install 立刻装：先记下方才答应的版本号（EffectiveVersion 在换上前要说得出口），
-// 再把「退出时安装」那份安排撤掉——现在装就是取代它，留着只会在下次退出时把同一个包再换一遍。
+// Install hands the package to the installer, then records the target version.
+// A rejected package must not claim to be installed or consume the update offer.
 func (s *Service) Install(filePath string) error {
-	s.mu.Lock()
-	if s.pending != nil {
-		updater.RecordInstalledVersion(s.pending.LatestVer)
-		s.pending = nil
+	if runtime.GOOS == "android" {
+		return updater.InstallUpdate(filePath)
 	}
-	s.mu.Unlock()
 	if s.PendingInstallInfo().Available {
 		if err := s.clearPendingInstall(); err != nil {
 			applog.Warn("[Updater] 立即安装没能取消退出时安装记录: %v", err)
@@ -91,7 +92,16 @@ func (s *Service) Install(filePath string) error {
 			applog.Info("[Updater] 立即安装取代了退出时安装的安排")
 		}
 	}
-	return updater.InstallUpdate(filePath)
+	if err := updater.InstallUpdate(filePath); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	if s.pending != nil {
+		updater.RecordInstalledVersion(s.pending.LatestVer)
+		s.pending = nil
+	}
+	s.mu.Unlock()
+	return nil
 }
 
 // IgnoreVersion persists a version that should not be presented again.
@@ -387,7 +397,7 @@ func (s *Service) StartupCheck(ctx context.Context) {
 	if ctx.Err() != nil {
 		return
 	}
-	info, err := updater.CheckUpdate()
+	info, err := updater.CheckUpdateContext(ctx)
 	if err != nil {
 		applog.Debug("[Updater] 启动时检查更新失败: %v", err)
 		return

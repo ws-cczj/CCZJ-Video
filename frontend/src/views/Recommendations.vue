@@ -121,67 +121,51 @@ onMounted(async () => {
 
 <style scoped>
 .recommendations-page {
-  max-width: 100%;
-  color: var(--text-primary);
+  @apply cczj-max-w-full cczj-text-primary;
   padding: 0;
   animation: cczj-fade-in-up 0.3s ease;
 }
 
 .rec-nav {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 20px;
+  @apply cczj-flex cczj-items-center cczj-gap-8 cczj-mb-10;
 }
 
 .rec-title {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
+  @apply cczj-flex cczj-items-baseline cczj-gap-6;
 }
 
 .rec-title h2 {
   margin: 0;
-  font-size: 20px;
-  font-weight: 700;
+  @apply cczj-text-2xl cczj-font-bold;
 }
 
 .rec-count {
-  font-size: 13px;
-  color: var(--text-muted);
+  @apply cczj-text-13 cczj-text-muted;
 }
 
 .rec-loading {
   padding: 60px 20px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  @apply cczj-flex cczj-flex-col cczj-items-center cczj-justify-center;
 }
 
 .rec-empty {
   padding: 80px 20px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  color: var(--text-muted);
+  @apply cczj-flex cczj-flex-col cczj-items-center cczj-justify-center cczj-gap-8 cczj-text-muted;
 }
 
 .rec-empty p {
   margin: 0;
-  font-size: 14px;
+  @apply cczj-text-base;
 }
 
 .rec-grid {
-  display: grid;
+  @apply cczj-grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 16px;
+  @apply cczj-gap-8;
 }
 
 .rec-card {
-  cursor: pointer;
+  @apply cczj-cursor-pointer;
   transition: transform 0.2s ease;
 }
 
@@ -190,101 +174,82 @@ onMounted(async () => {
 }
 
 .rec-card:hover .rec-cover {
-  border-color: var(--accent);
+  @apply cczj-border-primary;
 }
 
 .rec-card:hover .rec-overlay {
-  opacity: 1;
+  @apply cczj-opacity-100;
 }
 
 .rec-card:hover .rec-name {
-  color: var(--accent);
+  @apply cczj-text-accent;
 }
 
 .rec-cover {
-  position: relative;
+  @apply cczj-relative;
   aspect-ratio: 2/3;
-  border-radius: 12px;
-  overflow: hidden;
+  @apply cczj-rounded-lg cczj-overflow-hidden;
   background: var(--bg-secondary);
-  border: 1px solid var(--border);
+  @apply cczj-border;
   transition: border-color 0.15s ease;
 }
 
 .rec-cover img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
+  @apply cczj-w-full cczj-h-full cczj-object-cover cczj-block;
 }
 
 .rec-cover-empty {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted);
+  @apply cczj-w-full cczj-h-full cczj-flex cczj-items-center cczj-justify-center cczj-text-muted;
   opacity: 0.45;
 }
 
 .rec-remarks {
-  position: absolute;
+  @apply cczj-absolute;
   top: 6px;
   right: 6px;
   padding: 3px 8px;
   border-radius: 10px;
   background: var(--accent);
   color: var(--accent-contrast);
-  font-size: 10px;
-  font-weight: 600;
+  @apply cczj-text-xs cczj-font-semibold;
 }
 
 .rec-score-badge {
-  position: absolute;
+  @apply cczj-absolute;
   top: 6px;
   left: 6px;
   padding: 2px 8px;
-  border-radius: 8px;
+  @apply cczj-rounded-md;
   background: rgba(0, 0, 0, 0.6);
   color: #ffc107;
-  font-size: 11px;
-  font-weight: 700;
+  @apply cczj-text-11 cczj-font-bold;
   backdrop-filter: blur(4px);
 }
 
 .rec-overlay {
-  position: absolute;
+  @apply cczj-absolute;
   inset: 0;
   background: linear-gradient(to top, rgba(0, 0, 0, 0.55), transparent 60%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  opacity: 0;
+  @apply cczj-flex cczj-items-center cczj-justify-center cczj-text-white cczj-opacity-0;
   transition: opacity 0.15s ease;
 }
 
 .rec-info {
-  margin-top: 10px;
-  text-align: center;
+  @apply cczj-mt-5 cczj-text-center;
 }
 
 .rec-name {
-  font-size: 13px;
-  color: var(--text-primary);
+  @apply cczj-text-13 cczj-text-primary;
   line-height: 1.35;
-  overflow: hidden;
+  @apply cczj-overflow-hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   transition: color 0.15s ease;
-  font-weight: 500;
+  @apply cczj-font-medium;
 }
 
 .rec-match {
-  margin-top: 4px;
-  font-size: 11px;
-  color: var(--text-muted);
+  @apply cczj-mt-2 cczj-text-11 cczj-text-muted;
 }
 </style>

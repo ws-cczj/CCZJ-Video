@@ -132,55 +132,43 @@ async function doImportSource(): Promise<void> {
 <style scoped>
 
 /* 同 SourceFormModal：Modal.vue 会 Teleport 到 body，父作用域选不到，样式自带一份。 */
-.modal-desc { font-size: 13px; color: var(--text-muted); margin: 0 0 18px; }
+.modal-desc { @apply cczj-text-13 cczj-text-muted; margin: 0 0 18px; }
 
 /* === 导入弹窗 === */
 .import-drop-zone {
   border: 2px dashed var(--border);
   border-radius: 14px;
   padding: 40px 20px;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  color: var(--text-muted);
+  @apply cczj-text-center cczj-cursor-pointer cczj-transition cczj-text-muted;
   background: rgba(255,255,255,0.02);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
+  @apply cczj-flex cczj-flex-col cczj-items-center cczj-justify-center cczj-gap-4;
 }
 .import-drop-zone:hover {
-  border-color: var(--accent);
+  @apply cczj-border-primary;
   background: var(--accent-alpha-10);
-  color: var(--text-primary);
+  @apply cczj-text-primary;
 }
 .import-drop-zone.dragging {
-  border-color: var(--accent);
+  @apply cczj-border-primary;
   background: var(--accent-alpha-15);
   transform: scale(1.02);
 }
 .import-drop-zone.filled {
   border-style: solid;
-  border-color: var(--accent);
-  color: var(--text-primary);
+  @apply cczj-border-primary cczj-text-primary;
 }
 .import-hint-main {
   margin: 0;
   font-size: 15px;
-  font-weight: 500;
-  color: var(--text-primary);
+  @apply cczj-font-medium cczj-text-primary;
 }
 .import-hint-sub {
   margin: 0;
-  font-size: 12px;
-  color: var(--text-muted);
+  @apply cczj-text-sm cczj-text-muted;
 }
 .import-file-name {
   margin: 4px 0 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--accent);
+  @apply cczj-text-base cczj-font-semibold cczj-text-accent;
 }
 
 </style>

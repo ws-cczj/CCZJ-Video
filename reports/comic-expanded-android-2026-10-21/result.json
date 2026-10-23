@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "native": true,
+  "package": "com.cczj.video.acceptance",
+  "userAgent": "Mozilla/5.0 (Linux; Android 15; SDY-AN00 Build/V417IR; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/110.0.5481.154 Mobile Safari/537.36",
+  "checks": [
+    "Native comic exploration opens four real bundled catalogs, with decoded covers and no search term",
+    "Actual touch changes the featured cover and matching detail destination",
+    "Actual bundled-source chapter images load through native Go bindings and the image proxy: 从姑获鸟开始",
+    "Native Back and Following tab retain the expanded collection and saved comic"
+  ]
+}

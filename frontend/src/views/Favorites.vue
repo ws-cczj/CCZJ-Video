@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CczjMobileEditActions from '../mobile/CczjMobileEditActions.vue'
 defineOptions({ name: 'Favorites' })
 import { ref, onMounted, computed, watch, onActivated, onDeactivated } from 'vue'
 import { storeToRefs } from 'pinia'
@@ -15,8 +16,11 @@ import { useConfirmStore } from '../stores/confirm'
 import { useErrorStore } from '../stores/error'
 import type { Video, Favorite } from '../types'
 import { readStorage, writeStorage } from '../platform/storage'
+import { isMobileRuntime } from '../api/runtime'
+import { useHoldToEdit } from '../mobile/useHoldToEdit'
 
 const router = useRouter()
+const mobile = isMobileRuntime()
 
 const confirmStore = useConfirmStore()
 const errorStore = useErrorStore()
@@ -201,6 +205,7 @@ async function loadMoreFavorites(): Promise<void> {
 
 function goDetail(fav: FavItem): void {
   if (manageMode.value) {
+    if (mobile) return
     toggleSelect(fav)
     return
   }
@@ -229,6 +234,12 @@ function toggleSelectAll(): void {
     for (const f of displayedFavorites.value) merged.add(favKey(f))
     selectedKeys.value = merged
   }
+}
+
+const { vHoldToEdit } = useHoldToEdit(mobile, manageMode, () => { selectedKeys.value = new Set() })
+async function removeMobileFavorite(fav: FavItem, event: Event): Promise<void> {
+  if (removingKey.value || !await confirmStore.confirm({ message: tr('mobile.confirmItemRemoval', { name: fav.video?.vod_name || fav.vod_name || fav.vod_id }), level: 'danger' })) return
+  await onRemove(fav, event)
 }
 
 function enterManageMode(): void {
@@ -446,31 +457,31 @@ watch([mapping, folders], () => {
 
 <template>
   <div class="favorites-page">
-    <div class="page-header cczj-flex cczj-items-center cczj-justify-between cczj-gap-4 cczj-mb-6">
+    <div v-if="!mobile || manageMode || favorites.length" class="page-header cczj-flex cczj-items-center cczj-justify-between cczj-gap-4 cczj-mb-6">
       <div>
         <h2 class="cczj-flex cczj-items-center cczj-gap-2 cczj-text-accent">
           <Icon name="star" :size="20" /> {{ tr('favorites.title') }}
         </h2>
-        <p class="desc cczj-text-muted cczj-mt-1" v-if="manageMode && hasSelection">
+        <p class="desc cczj-text-muted cczj-mt-1" v-if="!mobile && manageMode && hasSelection">
           {{ tr('favorites.selected', { count: selectedKeys.size }) }}
         </p>
-        <p class="desc cczj-text-muted cczj-mt-1" v-else-if="manageMode">
+        <p class="desc cczj-text-muted cczj-mt-1" v-else-if="!mobile && manageMode">
           {{ tr('favorites.manageHint') }}
         </p>
         <p class="desc cczj-text-muted cczj-mt-1" v-else-if="favorites.length > 0">{{ tr('favorites.folderSummary', { total: favorites.length, name: getFolderName(activeFolderId), count: displayedFavorites.length }) }}<template v-if="hasMoreFavorites"> · {{ tr('favorites.moreAvailable') }}</template>
           </p>
-        <p class="desc cczj-text-muted cczj-mt-1" v-else>{{ tr('favorites.emptyHint') }}</p>
+        <p class="desc cczj-text-muted cczj-mt-1" v-else-if="!mobile">{{ tr('favorites.emptyHint') }}</p>
       </div>
       <div class="manage-actions cczj-flex cczj-items-center cczj-gap-2 cczj-flex-shrink-0">
         <template v-if="!manageMode">
-          <Button variant="ghost" size="sm" @click="openCreateFolder">
+          <Button v-if="!mobile" variant="ghost" size="sm" @click="openCreateFolder">
             <Icon name="plus" :size="14" /> {{ tr('favorites.newFolder') }}
           </Button>
-          <Button v-if="favorites.length > 0" variant="ghost" size="sm" @click="enterManageMode">
+          <Button v-if="!mobile && favorites.length > 0" variant="ghost" size="sm" @click="enterManageMode">
             <Icon name="check" :size="14" /> {{ tr('common.manage') }}
           </Button>
         </template>
-        <template v-else>
+        <template v-else-if="!mobile">
           <Button variant="secondary" size="sm" @click="toggleSelectAll">
             {{ isAllSelected ? tr('common.cancelSelectAll') : tr('common.selectAll') }}
           </Button>
@@ -511,25 +522,27 @@ watch([mapping, folders], () => {
             </Button>
           </div>
         </div>
+        <Button v-if="mobile" variant="text" size="sm" class="cczj-mobile-folder-create" :title="tr('favorites.newFolder')" @click="openCreateFolder"><Icon name="plus" :size="18" /><span>{{ tr('mobile.newFolder') }}</span></Button>
       </aside>
 
       <main class="fav-main cczj-flex-1">
         <!-- 加载状态 -->
-        <div v-if="loading">
+        <div v-if="loading && favorites.length === 0">
           <LoadingSpinner :label="tr('favorites.loading')" />
         </div>
 
         <!-- 空状态 -->
         <div v-else-if="displayedFavorites.length === 0">
-          <EmptyState icon="⭐" :title="tr('favorites.folderEmpty', { name: getFolderName(activeFolderId) })" :description="tr('favorites.folderEmptyDesc')">
-            <Button variant="primary" @click="router.push('/')">{{ tr('favorites.discover') }}</Button>
+          <EmptyState icon="⭐" :title="mobile ? tr('mobile.folderEmpty') : tr('favorites.folderEmpty', { name: getFolderName(activeFolderId) })" :description="mobile ? tr('mobile.folderEmptyHint') : tr('favorites.folderEmptyDesc')">
+            <template v-if="mobile" #icon><Icon name="star" :size="32" /></template>
+            <Button :variant="mobile ? 'secondary' : 'primary'" @click="router.push('/')">{{ tr('favorites.discover') }}</Button>
           </EmptyState>
         </div>
 
         <!-- 视频网格 -->
-        <div v-else class="fav-grid cczj-grid" :style="gridStyle">
+        <div v-else class="fav-grid cczj-grid" :style="gridStyle" :data-cczj-editing="mobile && manageMode || undefined">
           <div v-for="fav in displayedFavorites" :key="favKey(fav)" class="fav-card cczj-relative cczj-transition cczj-rounded"
-            draggable="true"
+            v-hold-to-edit :draggable="!mobile"
             :class="{ 'is-selected': selectedKeys.has(favKey(fav)), 'is-manage': manageMode, 'is-removing': removingKey === favKey(fav), 'is-dragging': draggingKeys.includes(favKey(fav)) }"
             @dragstart="onCardDragStart(fav, $event)" @dragend="onCardDragEnd">
             <!-- 卡片字段现在由 GetFavorites 一次给齐，占位卡留给"全局库里连名字和封面都没有"的残缺条目。 -->
@@ -542,7 +555,8 @@ watch([mapping, folders], () => {
               </div>
             </div>
 
-            <label v-if="manageMode" class="fav-checkbox cczj-absolute cczj-top-2 cczj-right-2 cczj-z-10" @click.stop>
+            <button v-if="mobile && manageMode" type="button" class="cczj-mobile-item-remove" data-cczj-remove :disabled="!!removingKey" :aria-label="`${tr('common.delete')}: ${fav.video?.vod_name || fav.vod_id}`" @click.stop="removeMobileFavorite(fav,$event)"><Icon name="close" :size="16" /></button>
+            <label v-if="!mobile && manageMode" class="fav-checkbox cczj-absolute cczj-top-2 cczj-right-2 cczj-z-10" @click.stop>
               <input type="checkbox" :checked="selectedKeys.has(favKey(fav))" :disabled="batchRemoving"
                 @change="toggleSelect(fav)" />
               <span class="check-mark" />
@@ -585,6 +599,7 @@ watch([mapping, folders], () => {
       </div>
     </Modal>
   </div>
+<CczjMobileEditActions v-if="mobile" :open="manageMode" @done="exitManageMode" @cancel="exitManageMode" />
 </template>
 
 <style scoped src="../styles/views/favorites.css"></style>

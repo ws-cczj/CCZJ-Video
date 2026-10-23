@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "native": false,
+  "checks": [
+    "Empty database opens real browse shelves without a search or collection; novel source only",
+    "Actual remote category pagination adds 20 distinct novels without keyword",
+    "Open a real novel, save it, read decoded chapter, Back retains all loaded pages",
+    "Bookcity / shelf navigation preserves the selected category and loaded pages",
+    "Reload restores SQLite book listings and saved personal shelf",
+    "390px phone layout and distinct real category data without horizontal page overflow",
+    "All seven exposed remote channels return real novel metadata"
+  ],
+  "title": "废物皇子：为何要逼我做皇帝？",
+  "rpcCalls": 33,
+  "errors": []
+}

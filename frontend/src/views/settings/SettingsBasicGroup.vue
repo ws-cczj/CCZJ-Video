@@ -1,42 +1,33 @@
 <script setup lang="ts">
-/**
- * 「基本」分组：外观、窗口、首页、播放、数据与网络、维护六节，一行一项。
- *
- * 控件类型按桌面软件的惯例给：布尔用开关、两到六个枚举用下拉、数值用带单位的数字框，
- * 不再用一排单选格子铺满一行。每一项都要求后端真有对应行为——写的都是既有设置键或既有
- * 绑定方法，没有接线的选项一律不出现在这一页；能力不存在的（硬件解码、采集并发之类）
- * 干脆不渲染，而不是摆一个点了没反应的开关。
- *
- * 生效时机逐项写清：列数与首页显隐走 layout store（首页挂在 KeepAlive 下，只有跟着同一
- * 份状态才改完就看得见），播放器偏好写 vp_settings / cczj_auto_next（下次打开播放器时读），
- * 其余走各自的即时接口。
- */
+/** Application preferences live here; playback controls remain in the player. */
 defineOptions({ name: 'SettingsBasicGroup' })
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, onBeforeUnmount } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
   GetSetting, SetSetting, GetCloseBehavior, SetCloseBehavior,
   WindowSetResizable, WindowGetResizable, WindowSetSize, WindowGetSize,
-  GetDoubanIntervalMinutes, SetDoubanIntervalMinutes,
   GetLogKeepDays, SetLogKeepDays,
   GetIgnoredVersion, IgnoreVersion,
 } from '../../api/app'
 import { useErrorStore } from '../../stores/error'
 import { useLayoutStore, type LayoutDensity } from '../../stores/layout'
 import { useMotionStore } from '../../stores/motion'
-import { createPlayerSettings } from '../../player/settings'
-import { readStorageBoolean, writeStorage } from '../../platform/storage'
+import NumberField from '../../components/ui/NumberField.vue'
+import SettingsDataPreferences from './SettingsDataPreferences.vue'
 import { Segment, Select as SelectDropdown } from '../../components/ui'
+import Icon from '../../components/Icon.vue'
+import ApplicationModeSwitch from '../../modes/ApplicationModeSwitch.vue'
 import { setLocale as saveLocalePreference } from '../../locales'
+import { isMobileRuntime } from '../../api/runtime'
 
 const { t } = useI18n()
+const mobile = isMobileRuntime()
+const route = useRoute()
+const router = useRouter()
 const errorStore = useErrorStore()
 const layoutStore = useLayoutStore()
 const motion = useMotionStore()
-// 播放器偏好存在 localStorage 的 vp_settings 容器里：与播放器共用同一份读写口径，
-// 这里改的值就是下次打开播放器时读到的值。
-const playerSettings = createPlayerSettings()
-
 // ---------- 外观 ----------
 const language = ref('zh-CN')
 const languageOptions = computed(() => [
@@ -65,20 +56,20 @@ const fontSizePresets = computed(() => [
 const fontSizeOptions = computed(() => fontSizePresets.value.map(p => ({ value: p.key, label: p.label })))
 const fontSizeKey = ref('md')
 
-function applyFontSize(key: string): void {
+function applyFontSize(key: string, persist = true): void {
   const preset = fontSizePresets.value.find(p => p.key === key)
   if (!preset) return
   fontSizeKey.value = key
   document.documentElement.style.fontSize = preset.px + 'px'
   document.documentElement.style.setProperty('--font-size-base', preset.px + 'px')
-  save('font_size_key', key)
+  if (persist) void save('font_size_key', key)
 }
 
-function applyFontFamily(value: string): void {
+function applyFontFamily(value: string, persist = true): void {
   fontFamily.value = value
   if (value) document.documentElement.style.fontFamily = value
   else document.documentElement.style.removeProperty('font-family')
-  save('font_family', value)
+  if (persist) void save('font_family', value)
 }
 
 async function applyLanguage(value: string): Promise<void> {
@@ -88,11 +79,13 @@ async function applyLanguage(value: string): Promise<void> {
 }
 
 // ---------- 窗口 ----------
-const MIN_WINDOW_WIDTH = 800
-const MIN_WINDOW_HEIGHT = 500
+const MIN_WINDOW_WIDTH = 960
+const MIN_WINDOW_HEIGHT = 600
 const windowResizable = ref(true)
 const windowWidth = ref(1280)
 const windowHeight = ref(800)
+let resizeRevision = 0
+let resizeWrites = Promise.resolve()
 
 const windowSizePresets = computed(() => [
   { key: 'xs', label: `${t('settings.windowSizePresets.xs')} · 1024×640`, width: 1024, height: 640 },
@@ -118,34 +111,51 @@ async function applyWindowPreset(key: string): Promise<void> {
   windowWidth.value = preset.width
   windowHeight.value = preset.height
   // 不再另存一把 window_size_key：Go 侧 SetSize 会把夹过的宽高直接落库，下次启动照原样开窗。
-  try { await WindowSetSize(preset.width, preset.height) } catch { /* 忽略 */ }
+  await applyWindowSize()
 }
 
 /** 宽高任一改动都成对下发：Go 侧按最小值夹住并落库，这里回读一次好让界面不说谎。 */
-async function applyWindowSize(): Promise<void> {
+function applyWindowSize(): Promise<void> {
   const width = Math.max(MIN_WINDOW_WIDTH, Math.round(windowWidth.value) || MIN_WINDOW_WIDTH)
   const height = Math.max(MIN_WINDOW_HEIGHT, Math.round(windowHeight.value) || MIN_WINDOW_HEIGHT)
   windowWidth.value = width
   windowHeight.value = height
-  try {
-    await WindowSetSize(width, height)
-    const size = await WindowGetSize()
-    if (size) {
-      windowWidth.value = size.width
-      windowHeight.value = size.height
+  const revision = ++resizeRevision
+  const write = resizeWrites.then(async () => {
+    if (disposed || revision !== resizeRevision) return
+    try {
+      await WindowSetSize(width, height)
+      if (disposed || revision !== resizeRevision) return
+      const size = await WindowGetSize()
+      if (size && !disposed && revision === resizeRevision) {
+        windowWidth.value = size.width
+        windowHeight.value = size.height
+      }
+    } catch (error) {
+      if (disposed || revision !== resizeRevision) return
+      errorStore.fromError(t('settings.saveFailed'), error, 'Settings.windowSize')
+      await loadWindowSize()
     }
-  } catch { /* 忽略 */ }
+  })
+  resizeWrites = write.catch(() => {})
+  return write
 }
 
 async function saveWindowResizable(): Promise<void> {
-  try { await WindowSetResizable(windowResizable.value) } catch { /* 忽略 */ }
+  try { await WindowSetResizable(windowResizable.value) } catch (error) {
+    errorStore.fromError(t('settings.saveFailed'), error, 'Settings.windowResizable')
+    await loadWindowResizable()
+  }
 }
 
 // ---------- 首页 ----------
 const closeToTray = ref(false)
 
 async function saveCloseBehavior(): Promise<void> {
-  try { await SetCloseBehavior(closeToTray.value) } catch { /* 忽略 */ }
+  try { await SetCloseBehavior(closeToTray.value) } catch (error) {
+    errorStore.fromError(t('settings.saveFailed'), error, 'Settings.closeBehavior')
+    closeToTray.value = await safeGetCloseBehavior()
+  }
 }
 
 const carouselAutoPlay = computed({
@@ -156,84 +166,6 @@ const carouselSeconds = computed({
   get: () => layoutStore.carouselSeconds,
   set: (v: number) => void layoutStore.setCarouselSeconds(v),
 })
-
-// ---------- 播放 ----------
-const autoNext = ref(true)
-const resumeJump = ref(false)
-const playbackSpeed = ref('1')
-const qualityMode = ref('original')
-const anime4kTier = ref('M')
-
-const speedValues = ['0.5', '0.75', '1', '1.25', '1.5', '2']
-const speedOptions = computed(() => {
-  const values = [...speedValues]
-  // 播放中用倍速菜单存过非标准值（1.35× 之类）时把它保留成一项，别让下拉显示成没选。
-  if (!values.includes(playbackSpeed.value)) values.unshift(playbackSpeed.value)
-  return values.map(v => ({ value: v, label: `${v}×` }))
-})
-
-const qualityOptions = computed(() => {
-  const base = [
-    { value: 'original', label: t('player.originalQuality') },
-    { value: 'ai_anime', label: t('player.animeEnhance') },
-    { value: 'ai_film', label: t('player.filmEnhance') },
-  ]
-  // 扩展包着色器有几十种具体档位，这一页只负责在用户没换回内置档时保住现状。
-  if (qualityMode.value === 'ai_custom') base.push({ value: 'ai_custom', label: t('settings.qualityPackShader') })
-  return base
-})
-
-const anime4kTierOptions = [
-  { value: 'S', label: 'S' },
-  { value: 'M', label: 'M' },
-  { value: 'L', label: 'L' },
-]
-
-function savePlayerPref(key: string, value: string): void {
-  playerSettings.write(key, value)
-}
-
-function setAutoNext(next: boolean): void {
-  autoNext.value = next
-  writeStorage('cczj_auto_next', next)
-}
-
-// ---------- 数据与网络 ----------
-const doubanIntervalMinutes = ref(30)
-// 豆瓣补全的随机抖动在 Go 侧闸门里，这里只排每轮的起点，所以最小只给到 10 分钟：
-// 比这更短就是把「调快一点」变成「更容易被封」，不提供那种档位。
-const doubanIntervalOptions = computed(() =>
-  [10, 15, 20, 30, 45, 60, 90, 120].map(m => ({ value: String(m), label: t('settings.doubanEvery', { n: m }) }))
-)
-
-async function saveDoubanInterval(value: string | number): Promise<void> {
-  try {
-    doubanIntervalMinutes.value = await SetDoubanIntervalMinutes(Number(value) || 30)
-    errorStore.info(t('common.saved'), t('settings.doubanIntervalSaved', { n: doubanIntervalMinutes.value }), '', 'Settings.saveDoubanInterval')
-  } catch (e: any) {
-    errorStore.fromError(t('settings.doubanIntervalSaveFailed'), e, 'Settings.saveDoubanInterval')
-  }
-}
-
-const freshness = ref<'fast' | 'standard' | 'saver'>('standard')
-// 用 computed 而不是模块级常量：后者会把 t() 在初始化时求值一次，切语言后标签不再变。
-const freshnessOptions = computed(() => [
-  { value: 'fast', label: t('settings.freshnessFast') },
-  { value: 'standard', label: t('settings.freshnessStandard') },
-  { value: 'saver', label: t('settings.freshnessSaver') },
-])
-
-// 写失败必须报出来：静默吞掉的话，界面上的档位会停在一个没生效的选择上。
-async function saveFreshness(value: string): Promise<void> {
-  const next: 'fast' | 'standard' | 'saver' = value === 'fast' || value === 'saver' ? value : 'standard'
-  freshness.value = next
-  try {
-    await SetSetting('detail_cache_freshness', next)
-    errorStore.info(t('common.saved'), t('settings.freshnessSaved'), '', 'Settings.saveFreshness')
-  } catch (e: any) {
-    errorStore.fromError(t('settings.freshnessSaveFailed'), e, 'Settings.saveFreshness')
-  }
-}
 
 // ---------- 维护 ----------
 const logKeepDays = ref(30)
@@ -267,82 +199,97 @@ async function safeGet(key: string, fallback: string): Promise<string> {
   try { const v = await GetSetting(key); return v || fallback } catch { return fallback }
 }
 async function save(key: string, val: string | number | boolean): Promise<void> {
-  try { await SetSetting(key, String(val)) } catch { /* 忽略 */ }
+  try { await SetSetting(key, String(val)) } catch (error) { errorStore.fromError(t('settings.saveFailed'), error, 'Settings.save') }
 }
 
 // ---------- 启动：与拆分前设置页 onMounted 里这几行的顺序、次数一致 ----------
+let disposed = false
+onBeforeUnmount(() => { disposed = true })
 onMounted(async () => {
-  // 子组件先于父级 onMounted 挂载，而首页那几项的真值只在 layout store 里；
-  // 不先 load 就会把「缺省值」显示成「当前设置」，且滑块一碰就把缺省写回库。
-  await layoutStore.load()
-  await loadWindowResizable()
-  await loadWindowSize()
-
-  const fsk = await safeGet('font_size_key', 'md')
+  const [fsk, family, lang, close, retention, ignored] = await Promise.all([
+    safeGet('font_size_key', 'md'), safeGet('font_family', ''), safeGet('language', 'zh-CN'),
+    mobile ? Promise.resolve(false) : safeGetCloseBehavior(),
+    GetLogKeepDays().catch(() => 30), GetIgnoredVersion().catch(() => ''),
+    layoutStore.load(), ...(mobile ? [] : [loadWindowResizable(), loadWindowSize()]),
+  ])
+  if (disposed) return
+  initializing.value = false
   if (fontSizePresets.value.find(p => p.key === fsk)) fontSizeKey.value = fsk
-  applyFontSize(fontSizeKey.value)
-  fontFamily.value = await safeGet('font_family', '')
-  applyFontFamily(fontFamily.value)
-  const lang = await safeGet('language', 'zh-CN')
-  language.value = lang || 'zh-CN'
+  applyFontSize(fontSizeKey.value, false)
+  applyFontFamily(family, false)
+  language.value = lang
+  closeToTray.value = close
+  logKeepDays.value = retention
+  ignoredVersion.value = ignored
 
-  closeToTray.value = await safeGetCloseBehavior()
-
-  autoNext.value = readStorageBoolean('cczj_auto_next', true)
-  resumeJump.value = playerSettings.read('auto_resume_jump', '0') === '1'
-  playbackSpeed.value = playerSettings.read('speed', '1') || '1'
-  qualityMode.value = normalizeQuality(playerSettings.read('quality_mode', 'original'))
-  anime4kTier.value = playerSettings.read('anime4k_tier', 'M') || 'M'
-
-  try { doubanIntervalMinutes.value = await GetDoubanIntervalMinutes() } catch { /* 忽略 */ }
-  try { logKeepDays.value = await GetLogKeepDays() } catch { /* 忽略 */ }
-  try { ignoredVersion.value = await GetIgnoredVersion() } catch { /* 忽略 */ }
-  freshness.value = await loadFreshness()
 })
+
+const sections = computed(() => [
+  { id: 'appearance', label: t('settings.secAppearance'), icon: 'palette' },
+  { id: 'window', label: t('settings.secWindow'), icon: 'monitor' },
+  { id: 'home', label: t('settings.secHome'), icon: 'home' },
+  { id: 'data', label: t('settings.secData'), icon: 'database' },
+  { id: 'maintenance', label: t('settings.secMaintenance'), icon: 'settings' },
+].filter(section => !mobile || section.id !== 'window'))
+const initializing = ref(true)
+const basicRoot = ref<HTMLElement | null>(null)
+const mobileSection = computed(() => sections.value.some(s => s.id === route.query.section) ? String(route.query.section) : 'appearance')
+function jumpTo(id: string): void {
+  if (mobile) {
+    void router.replace({ path: '/settings', query: { group: 'basic', section: id } })
+    basicRoot.value?.closest('.main-content')?.scrollTo({ top: 0, behavior: 'auto' })
+    return
+  }
+  const section = basicRoot.value?.querySelector<HTMLElement>(`#basic-${id}`)
+  section?.scrollIntoView({ behavior: motion.enabled && !matchMedia('(prefers-reduced-motion: reduce)').matches ? 'smooth' : 'auto', block: 'start' })
+  section?.focus({ preventScroll: true })
+}
 
 async function loadWindowResizable(): Promise<void> {
   try { windowResizable.value = await WindowGetResizable() } catch { /* 忽略 */ }
 }
 
-async function loadWindowSize(): Promise<void> {
+async function loadWindowSize(expectedRevision = resizeRevision): Promise<void> {
   try {
     const size = await WindowGetSize()
-    if (!size) return
+    if (!size || disposed || expectedRevision !== resizeRevision) return
     windowWidth.value = size.width
     windowHeight.value = size.height
   } catch { /* 忽略 */ }
-}
-
-async function loadFreshness(): Promise<'fast' | 'standard' | 'saver'> {
-  const raw = await safeGet('detail_cache_freshness', 'standard')
-  return raw === 'fast' || raw === 'saver' ? raw : 'standard'
 }
 
 async function safeGetCloseBehavior(): Promise<boolean> {
   try { return await GetCloseBehavior() } catch { return false }
 }
 
-/** 与播放器 useVideoQuality 的归一保持一致：旧键值与扩展包档位在进下拉之前先认出来。 */
-function normalizeQuality(value: string): string {
-  if (value === 'ai_frame_interp' || value === 'ai_enhance') return 'ai_anime'
-  if (value === 'ai_anime' || value === 'ai_film' || value === 'ai_custom') return value
-  return 'original'
-}
+const emit = defineEmits<{ (e: 'open-group', id: string): void }>()
 </script>
 
 <template>
-  <div class="panel group-card cczj-flex cczj-flex-col cczj-gap-2">
+  <div ref="basicRoot" class="basic-settings">
+    <nav class="section-links" :aria-label="t('settings.quickJump')">
+      <button v-for="section in sections" :key="section.id" :aria-current="mobile && mobileSection === section.id ? 'page' : undefined" @click="jumpTo(section.id)">
+        <Icon :name="section.icon" :size="14" />{{ section.label }}
+      </button>
+    </nav>
+    <fieldset class="basic-fields" :disabled="initializing">
+    <div class="basic-grid">
 
     <!-- ==================== 外观 ==================== -->
-    <section class="block">
-      <h3>{{ t('settings.secAppearance') }}</h3>
+    <section v-show="!mobile || mobileSection === 'appearance'" id="basic-appearance" class="block basic-section" tabindex="-1" style="--section-order: 0">
+      <header class="section-heading">
+        <span class="section-icon"><Icon name="palette" :size="18" /></span>
+        <h3>{{ t('settings.secAppearance') }}</h3>
+        <span class="section-number">01</span>
+      </header>
 
+      <ApplicationModeSwitch />
       <div class="item">
         <div class="item-text">
           <span class="item-name">{{ t('settings.language') }}</span>
         </div>
         <div class="item-control">
-          <SelectDropdown :model-value="language" :options="languageOptions"
+          <SelectDropdown :aria-label="t('settings.language')" :model-value="language" :options="languageOptions"
             @update:model-value="(v: any) => applyLanguage(String(v))" />
         </div>
       </div>
@@ -352,17 +299,17 @@ function normalizeQuality(value: string): string {
           <span class="item-name">{{ t('settings.fontSize') }}</span>
         </div>
         <div class="item-control">
-          <SelectDropdown :model-value="fontSizeKey" :options="fontSizeOptions"
+          <SelectDropdown :aria-label="t('settings.fontSize')" :model-value="fontSizeKey" :options="fontSizeOptions"
             @update:model-value="(v: any) => applyFontSize(String(v))" />
         </div>
       </div>
 
-      <div class="item">
+      <div v-if="!mobile" class="item">
         <div class="item-text">
           <span class="item-name">{{ t('settings.fontFamily') }}</span>
         </div>
         <div class="item-control">
-          <SelectDropdown :model-value="fontFamily" :options="fontFamilyOptions"
+          <SelectDropdown :aria-label="t('settings.fontFamily')" :model-value="fontFamily" :options="fontFamilyOptions"
             @update:model-value="(v: any) => applyFontFamily(String(v))" />
         </div>
       </div>
@@ -371,11 +318,11 @@ function normalizeQuality(value: string): string {
       <div v-if="motion.packReady" class="item">
         <div class="item-text">
           <span class="item-name">{{ t('settings.motionSwitch') }}</span>
-          <span class="item-desc">{{ t('settings.motionSwitchDesc') }}</span>
+          <span class="item-desc">{{ t(mobile ? 'mobile.settingsMotionHint' : 'settings.motionSwitchDesc') }}</span>
         </div>
         <div class="item-control">
           <label class="switch cczj-cursor-pointer">
-            <input type="checkbox" :checked="motion.enabled"
+            <input :aria-label="t('settings.motionSwitch')" type="checkbox" :checked="motion.enabled"
               @change="motion.setEnabled(($event.target as HTMLInputElement).checked)" />
             <span class="slider" />
           </label>
@@ -384,8 +331,12 @@ function normalizeQuality(value: string): string {
     </section>
 
     <!-- ==================== 窗口 ==================== -->
-    <section class="block">
-      <h3>{{ t('settings.secWindow') }}</h3>
+    <section v-if="!mobile" id="basic-window" class="block basic-section" tabindex="-1" style="--section-order: 1">
+      <header class="section-heading">
+        <span class="section-icon"><Icon name="monitor" :size="18" /></span>
+        <h3>{{ t('settings.secWindow') }}</h3>
+        <span class="section-number">02</span>
+      </header>
 
       <div class="item">
         <div class="item-text">
@@ -393,7 +344,7 @@ function normalizeQuality(value: string): string {
           <span class="item-desc">{{ t('settings.windowSizeDesc') }}</span>
         </div>
         <div class="item-control">
-          <SelectDropdown :model-value="windowSizeKey" :options="windowSizeOptions"
+          <SelectDropdown :aria-label="t('settings.windowSize')" :model-value="windowSizeKey" :options="windowSizeOptions"
             @update:model-value="(v: any) => v && applyWindowPreset(String(v))" />
         </div>
       </div>
@@ -405,11 +356,9 @@ function normalizeQuality(value: string): string {
         </div>
         <div class="item-control cczj-inline-flex cczj-items-center">
           <span class="field-label">{{ t('settings.windowWidth') }}</span>
-          <input class="num" type="number" step="10" :min="MIN_WINDOW_WIDTH" v-model.number="windowWidth"
-            @change="applyWindowSize" />
+          <NumberField v-model="windowWidth" :ariaLabel="t('settings.windowWidth')" :min="MIN_WINDOW_WIDTH" :step="10" @change="applyWindowSize" />
           <span class="field-label">{{ t('settings.windowHeight') }}</span>
-          <input class="num" type="number" step="10" :min="MIN_WINDOW_HEIGHT" v-model.number="windowHeight"
-            @change="applyWindowSize" />
+          <NumberField v-model="windowHeight" :ariaLabel="t('settings.windowHeight')" :min="MIN_WINDOW_HEIGHT" :step="10" @change="applyWindowSize" />
           <span class="unit">px</span>
         </div>
       </div>
@@ -420,7 +369,7 @@ function normalizeQuality(value: string): string {
         </div>
         <div class="item-control">
           <label class="switch cczj-cursor-pointer">
-            <input type="checkbox" v-model="windowResizable" @change="saveWindowResizable" />
+            <input :aria-label="t('settings.allowResize')" type="checkbox" v-model="windowResizable" @change="saveWindowResizable" />
             <span class="slider" />
           </label>
         </div>
@@ -433,7 +382,7 @@ function normalizeQuality(value: string): string {
         </div>
         <div class="item-control">
           <label class="switch cczj-cursor-pointer">
-            <input type="checkbox" v-model="closeToTray" @change="saveCloseBehavior" />
+            <input :aria-label="t('settings.closeBehavior')" type="checkbox" v-model="closeToTray" @change="saveCloseBehavior" />
             <span class="slider" />
           </label>
         </div>
@@ -441,22 +390,26 @@ function normalizeQuality(value: string): string {
     </section>
 
     <!-- ==================== 首页 ==================== -->
-    <section class="block">
-      <h3>{{ t('settings.secHome') }}</h3>
+    <section v-show="!mobile || mobileSection === 'home'" id="basic-home" class="block basic-section" tabindex="-1" style="--section-order: 2">
+      <header class="section-heading">
+        <span class="section-icon"><Icon name="home" :size="18" /></span>
+        <h3>{{ t('settings.secHome') }}</h3>
+        <span class="section-number">03</span>
+      </header>
 
-      <div class="item">
+      <div v-if="!mobile" class="item">
         <div class="item-text">
           <span class="item-name">{{ t('settings.gridColumns') }}</span>
         </div>
         <div class="item-control cczj-inline-flex cczj-items-center">
-          <input type="range" :value="layoutStore.columns" min="2" max="10"
+          <input :aria-label="t('settings.gridColumns')" type="range" :value="layoutStore.columns" min="2" max="10"
             @input="layoutStore.previewColumns(Number(($event.target as HTMLInputElement).value))"
             @change="layoutStore.setColumns(layoutStore.columns)" />
           <span class="value">{{ t('settings.columnCount', { n: layoutStore.columns }) }}</span>
         </div>
       </div>
 
-      <div class="item">
+      <div v-if="!mobile" class="item">
         <div class="item-text">
           <span class="item-name">{{ t('settings.cardDensity') }}</span>
         </div>
@@ -470,11 +423,11 @@ function normalizeQuality(value: string): string {
       <div class="item">
         <div class="item-text">
           <span class="item-name">{{ t('settings.showCarousel') }}</span>
-          <span class="item-desc">{{ t('settings.showCarouselDesc') }}</span>
+          <span class="item-desc">{{ t(mobile ? 'mobile.homeCarouselHint' : 'settings.showCarouselDesc') }}</span>
         </div>
         <div class="item-control">
           <label class="switch cczj-cursor-pointer">
-            <input type="checkbox" :checked="layoutStore.showCarousel"
+            <input :aria-label="t('settings.showCarousel')" type="checkbox" :checked="layoutStore.showCarousel"
               @change="layoutStore.setShowCarousel(($event.target as HTMLInputElement).checked)" />
             <span class="slider" />
           </label>
@@ -484,11 +437,11 @@ function normalizeQuality(value: string): string {
       <div class="item" v-if="layoutStore.showCarousel">
         <div class="item-text">
           <span class="item-name">{{ t('settings.carouselAutoPlay') }}</span>
-          <span class="item-desc">{{ t('settings.carouselAutoPlayDesc') }}</span>
+          <span class="item-desc">{{ t(mobile ? 'mobile.homeAutoplayHint' : 'settings.carouselAutoPlayDesc') }}</span>
         </div>
         <div class="item-control">
           <label class="switch cczj-cursor-pointer">
-            <input type="checkbox" v-model="carouselAutoPlay" />
+            <input :aria-label="t('settings.carouselAutoPlay')" type="checkbox" v-model="carouselAutoPlay" />
             <span class="slider" />
           </label>
         </div>
@@ -499,7 +452,7 @@ function normalizeQuality(value: string): string {
           <span class="item-name">{{ t('settings.carouselInterval') }}</span>
         </div>
         <div class="item-control cczj-inline-flex cczj-items-center">
-          <input class="num" type="number" min="3" max="60" step="1" v-model.number="carouselSeconds" />
+          <NumberField :ariaLabel="t('settings.carouselInterval')" v-model="carouselSeconds" :min="3" :max="60" />
           <span class="unit">{{ t('common.unitSecond') }}</span>
         </div>
       </div>
@@ -507,11 +460,11 @@ function normalizeQuality(value: string): string {
       <div class="item">
         <div class="item-text">
           <span class="item-name">{{ t('settings.showRecommend') }}</span>
-          <span class="item-desc">{{ t('settings.showRecommendDesc') }}</span>
+          <span class="item-desc">{{ t(mobile ? 'mobile.homeRecommendHint' : 'settings.showRecommendDesc') }}</span>
         </div>
         <div class="item-control">
           <label class="switch cczj-cursor-pointer">
-            <input type="checkbox" :checked="layoutStore.showRecommend"
+            <input :aria-label="t('settings.showRecommend')" type="checkbox" :checked="layoutStore.showRecommend"
               @change="layoutStore.setShowRecommend(($event.target as HTMLInputElement).checked)" />
             <span class="slider" />
           </label>
@@ -519,101 +472,24 @@ function normalizeQuality(value: string): string {
       </div>
     </section>
 
-    <!-- ==================== 播放 ==================== -->
-    <section class="block">
-      <h3>{{ t('settings.secPlayer') }}</h3>
-      <p class="block-note">{{ t('settings.playerPrefsHint') }}</p>
-
-      <div class="item">
-        <div class="item-text">
-          <span class="item-name">{{ t('player.autoNext') }}</span>
-          <span class="item-desc">{{ t('settings.autoNextDesc') }}</span>
-        </div>
-        <div class="item-control">
-          <label class="switch cczj-cursor-pointer">
-            <input type="checkbox" :checked="autoNext" @change="setAutoNext(($event.target as HTMLInputElement).checked)" />
-            <span class="slider" />
-          </label>
-        </div>
-      </div>
-
-      <div class="item">
-        <div class="item-text">
-          <span class="item-name">{{ t('settings.resumeJump') }}</span>
-          <span class="item-desc">{{ t('settings.resumeJumpDesc') }}</span>
-        </div>
-        <div class="item-control">
-          <label class="switch cczj-cursor-pointer">
-            <input type="checkbox" v-model="resumeJump" @change="savePlayerPref('auto_resume_jump', resumeJump ? '1' : '0')" />
-            <span class="slider" />
-          </label>
-        </div>
-      </div>
-
-      <div class="item">
-        <div class="item-text">
-          <span class="item-name">{{ t('player.playbackSpeed') }}</span>
-          <span class="item-desc">{{ t('settings.playbackSpeedDesc') }}</span>
-        </div>
-        <div class="item-control">
-          <SelectDropdown :model-value="playbackSpeed" :options="speedOptions"
-            @update:model-value="(v: any) => { playbackSpeed = String(v); savePlayerPref('speed', String(v)) }" />
-        </div>
-      </div>
-
-      <div class="item">
-        <div class="item-text">
-          <span class="item-name">{{ t('settings.qualityPreset') }}</span>
-          <span class="item-desc">{{ t('settings.qualityPresetDesc') }}</span>
-        </div>
-        <div class="item-control">
-          <SelectDropdown :model-value="qualityMode" :options="qualityOptions"
-            @update:model-value="(v: any) => { qualityMode = String(v); savePlayerPref('quality_mode', String(v)) }" />
-        </div>
-      </div>
-
-      <div class="item" v-if="qualityMode === 'ai_anime'">
-        <div class="item-text">
-          <span class="item-name">{{ t('settings.anime4kTier') }}</span>
-          <span class="item-desc">{{ t('settings.anime4kTierDesc') }}</span>
-        </div>
-        <div class="item-control">
-          <Segment :model-value="anime4kTier" :options="anime4kTierOptions"
-            @update:model-value="(v: any) => { anime4kTier = String(v); savePlayerPref('anime4k_tier', String(v)) }" />
-        </div>
-      </div>
-    </section>
-
     <!-- ==================== 数据与网络 ==================== -->
-    <section class="block">
-      <h3>{{ t('settings.secData') }}</h3>
+    <section v-show="!mobile || mobileSection === 'data'" id="basic-data" class="block basic-section" tabindex="-1" style="--section-order: 3">
+      <header class="section-heading">
+        <span class="section-icon"><Icon name="database" :size="18" /></span>
+        <h3>{{ t('settings.secData') }}</h3>
+        <span class="section-number">04</span>
+      </header>
 
-      <div class="item">
-        <div class="item-text">
-          <span class="item-name">{{ t('settings.freshness') }}</span>
-          <span class="item-desc">{{ t('settings.freshnessDesc') }}</span>
-        </div>
-        <div class="item-control">
-          <Segment :model-value="freshness" :options="freshnessOptions"
-            @update:model-value="(v: any) => saveFreshness(String(v))" />
-        </div>
-      </div>
-
-      <div class="item">
-        <div class="item-text">
-          <span class="item-name">{{ t('settings.doubanPolling') }}</span>
-          <span class="item-desc">{{ t('settings.doubanPollingDesc') }}</span>
-        </div>
-        <div class="item-control">
-          <SelectDropdown :model-value="String(doubanIntervalMinutes)" :options="doubanIntervalOptions"
-            @update:model-value="(v: any) => saveDoubanInterval(v)" />
-        </div>
-      </div>
+      <SettingsDataPreferences @open-group="emit('open-group', $event)" />
     </section>
 
     <!-- ==================== 维护 ==================== -->
-    <section class="block">
-      <h3>{{ t('settings.secMaintenance') }}</h3>
+    <section v-show="!mobile || mobileSection === 'maintenance'" id="basic-maintenance" class="block basic-section" tabindex="-1" style="--section-order: 4">
+      <header class="section-heading">
+        <span class="section-icon"><Icon name="settings" :size="18" /></span>
+        <h3>{{ t('settings.secMaintenance') }}</h3>
+        <span class="section-number">05</span>
+      </header>
 
       <div class="item">
         <div class="item-text">
@@ -621,12 +497,12 @@ function normalizeQuality(value: string): string {
           <span class="item-desc">{{ t('settings.logRetentionDesc') }}</span>
         </div>
         <div class="item-control">
-          <SelectDropdown :model-value="String(logKeepDays)" :options="logKeepOptions"
+          <SelectDropdown :aria-label="t('settings.logRetention')" :model-value="String(logKeepDays)" :options="logKeepOptions"
             @update:model-value="(v: any) => saveLogKeepDays(v)" />
         </div>
       </div>
 
-      <div class="item">
+      <div class="item" data-update-preferences>
         <div class="item-text">
           <span class="item-name">{{ t('settings.ignoredVersion') }}</span>
           <span class="item-desc">{{ ignoredVersion ? ignoredVersion : t('settings.ignoredVersionNone') }}</span>
@@ -639,53 +515,80 @@ function normalizeQuality(value: string): string {
       </div>
     </section>
 
+    </div>
+    </fieldset>
   </div>
 </template>
 
 <style scoped>
-/* h3 这类内部元素拿不到父级（Settings.vue）的 scope id，所以标题排版留在用到它的那一组里
-   （同 DataBackupPanel）；卡片外框与 .block 的压平仍由 settings.css 的 .panel.group-card 负责。 */
-.block h3 {
+.basic-settings { @apply cczj-min-w-0; container-type: inline-size; }
+.section-links { @apply cczj-flex cczj-flex-wrap; gap: 7px; margin-bottom: 18px; }
+.section-links button {
+  @apply cczj-inline-flex cczj-items-center; gap: 7px; padding: 8px 11px;
+  @apply cczj-border; border-radius: 7px; background: var(--bg-card);
+  @apply cczj-text-secondary; font: inherit; font-size: .83rem; @apply cczj-cursor-pointer;
+  transition: color var(--cczj-motion-fast), background-color var(--cczj-motion-fast), transform var(--cczj-motion-fast);
+}
+.section-links button:hover { background: var(--accent-alpha-10); @apply cczj-text-accent; }
+.section-links button:active { transform: translateY(1px); }
+.section-links button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.basic-fields { border: 0; margin: 0; padding: 0; @apply cczj-min-w-0; }
+.basic-grid { @apply cczj-grid; grid-template-columns: minmax(0, 1fr); gap: 18px; align-items: start; }
+.basic-section {
+  @apply cczj-border; background: var(--bg-card); border-radius: 14px;
+  padding: 20px 22px; @apply cczj-min-w-0; container-type: inline-size; scroll-margin-top: 90px;
+  animation: settings-reveal var(--cczj-motion-normal) var(--cczj-motion-ease-standard) backwards;
+  animation-delay: calc(var(--section-order) * var(--cczj-motion-stagger, 35ms));
+}
+.basic-section:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.section-heading { @apply cczj-flex cczj-items-center cczj-gap-5; padding-bottom: 15px; @apply cczj-mb-2 cczj-border-bottom; }
+.section-heading h3 { margin: 0; font-size: 1rem; @apply cczj-font-bold; }
+.section-icon { @apply cczj-grid; place-items: center; @apply cczj-w-32 cczj-h-32; border-radius: 9px; background: var(--accent-alpha-10); @apply cczj-text-accent; }
+.section-number { @apply cczj-ml-auto cczj-text-muted; font-size: .75rem; font-variant-numeric: tabular-nums; letter-spacing: .1em; }
+@media (prefers-reduced-motion: reduce) { .basic-section { animation: none; } }
+:global(html[data-cczj-motion='off']) .basic-section { animation: none; }
+@keyframes settings-reveal { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@container (min-width: 980px) { .basic-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (max-width: 570px) {
+  .basic-section { @apply cczj-p-8; }
+  .item { @apply cczj-flex-wrap; gap: 9px; }
+  .item-text { flex: 1 1 180px; }
+  .item-control { @apply cczj-max-w-full; }
+  .item-control :deep(.select-dropdown) { width: 180px; }
+}
+/* Each section owns its layout; the settings shell no longer flattens these cards. */
+.block > h3 {
   font-size: 0.97rem;
-  font-weight: 700;
+  @apply cczj-font-bold;
   margin: 0 0 6px;
   letter-spacing: 0.3px;
 }
 .block-note {
   margin: 0 0 10px;
   font-size: 0.86rem;
-  color: var(--text-muted);
-  line-height: 1.5;
+  @apply cczj-text-muted cczj-leading-normal;
 }
 
 /* 一行一项：左边名称+说明，右边控件。行内不画分隔线，块与块之间已有发丝线。 */
 .item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
+  @apply cczj-flex cczj-items-center cczj-justify-between cczj-gap-10;
   padding: 10px 0;
 }
 .item-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
+  @apply cczj-flex cczj-flex-col cczj-gap-1 cczj-min-w-0;
 }
 .item-name {
   font-size: 0.95rem;
-  color: var(--text-primary);
+  @apply cczj-text-primary;
 }
 .item-desc {
   font-size: 0.83rem;
-  color: var(--text-muted);
-  line-height: 1.5;
+  @apply cczj-text-muted cczj-leading-normal;
 }
 .item-control {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
+  @apply cczj-flex-wrap cczj-justify-end;
+  max-width: 55%;
+  @apply cczj-flex cczj-items-center cczj-gap-4 cczj-flex-shrink-0;
 }
 .item-control :deep(.select-dropdown) {
   width: 190px;
@@ -693,52 +596,47 @@ function normalizeQuality(value: string): string {
 
 .field-label {
   font-size: 0.86rem;
-  color: var(--text-muted);
+  @apply cczj-text-muted;
 }
 .unit {
-  color: var(--text-muted);
+  @apply cczj-text-muted;
   font-size: 0.86rem;
 }
 .num {
   width: 78px;
   padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  @apply cczj-border cczj-rounded-md;
   background: var(--bg-input);
-  color: var(--text-primary);
+  @apply cczj-text-primary;
   font-family: inherit;
   font-size: 0.9rem;
   font-variant-numeric: tabular-nums;
-  text-align: right;
-  outline: none;
+  @apply cczj-text-right cczj-outline-none;
 }
 .num:focus {
-  border-color: var(--accent);
+  @apply cczj-border-primary;
 }
 .value {
   min-width: 58px;
-  font-weight: 600;
-  color: var(--text-secondary);
+  @apply cczj-font-semibold cczj-text-secondary;
   font-variant-numeric: tabular-nums;
 }
 
 .mini-btn {
   padding: 7px 14px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  @apply cczj-border cczj-rounded-md;
   background: var(--bg-card);
-  color: var(--text-primary);
+  @apply cczj-text-primary;
   font-size: 0.88rem;
-  font-weight: 600;
+  @apply cczj-font-semibold;
   transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 .mini-btn:hover:not(:disabled) {
   background: var(--bg-hover);
-  border-color: var(--accent);
+  @apply cczj-border-primary;
 }
 .mini-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+  @apply cczj-opacity-60 cczj-cursor-not-allowed;
 }
 
 .item input[type='range'] {
@@ -748,43 +646,37 @@ function normalizeQuality(value: string): string {
 
 /* 开关：滑块式，与设置页其余分组一致。 */
 .switch {
-  position: relative;
-  display: inline-block;
+  @apply cczj-relative cczj-inline-block;
   width: 40px;
   height: 22px;
-  flex-shrink: 0;
+  @apply cczj-flex-shrink-0;
 }
 .switch input {
-  position: absolute;
-  opacity: 0;
-  width: 100%;
-  height: 100%;
+  @apply cczj-absolute cczj-opacity-0 cczj-w-full cczj-h-full;
   margin: 0;
-  cursor: pointer;
+  @apply cczj-cursor-pointer;
 }
 .switch .slider {
-  position: absolute;
+  @apply cczj-absolute;
   inset: 0;
   border-radius: 999px;
   background: var(--bg-secondary);
-  border: 1px solid var(--border-strong);
+  @apply cczj-border-strong;
   transition: background-color 0.18s ease, border-color 0.18s ease;
-  pointer-events: none;
+  @apply cczj-pointer-events-none;
 }
 .switch .slider::before {
   content: '';
-  position: absolute;
+  @apply cczj-absolute;
   top: 2px;
   left: 2px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
+  @apply cczj-w-16 cczj-h-16 cczj-rounded-50;
   background: var(--text-secondary);
   transition: transform 0.18s ease, background-color 0.18s ease;
 }
 .switch input:checked + .slider {
   background: var(--accent);
-  border-color: var(--accent);
+  @apply cczj-border-primary;
 }
 .switch input:checked + .slider::before {
   transform: translateX(18px);

@@ -1,0 +1,52 @@
+import { beforeEach, expect, it, vi } from 'vitest'
+import { readingPersistence, readingRecord } from '../src/reading/persistence'
+const api = vi.hoisted(() => ({ ReadingStateLoad: vi.fn(), ReadingStateApply: vi.fn() }))
+vi.mock('../src/api/app', () => api)
+beforeEach(() => { vi.resetAllMocks(); api.ReadingStateLoad.mockResolvedValue([]); api.ReadingStateApply.mockResolvedValue(undefined) })
+function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(yes => { resolve = yes }); return { promise, resolve } }
+
+it('deduplicates hydration and never writes before a failed import has recovered', async () => {
+  const failed = new Error('database unavailable'), apply = vi.fn(), status = vi.fn()
+  api.ReadingStateLoad.mockRejectedValueOnce(failed)
+  const state = readingPersistence({ kind: 'novel', legacy: () => [readingRecord('preferences', 'default', {})], apply, status })
+  expect(await state.init()).toBe(false)
+  expect(api.ReadingStateApply).not.toHaveBeenCalled()
+  expect(apply).not.toHaveBeenCalled()
+  expect(status).toHaveBeenLastCalledWith(false, true)
+  const loading = deferred<[]>()
+  api.ReadingStateLoad.mockReturnValueOnce(loading.promise)
+  const one = state.init(), two = state.init()
+  loading.resolve([])
+  expect(await one).toBe(true); expect(await two).toBe(true)
+  expect(api.ReadingStateLoad).toHaveBeenCalledTimes(2)
+})
+
+it('serializes writes, coalesces newer progress and retains failed edits for retry', async () => {
+  const status = vi.fn()
+  const state = readingPersistence({ kind: 'comic', legacy: () => [], apply: vi.fn(), status })
+  await state.init()
+  const inFlight = deferred<void>()
+  api.ReadingStateApply.mockReturnValueOnce(inFlight.promise)
+  state.enqueue(readingRecord('progress', 'comic\u0000source\u0000one', { page: 1 }))
+  const first = state.flush()
+  await vi.waitFor(() => expect(api.ReadingStateApply).toHaveBeenCalledTimes(1))
+  state.enqueue(readingRecord('progress', 'comic\u0000source\u0000one', { page: 2 }))
+  state.enqueue(readingRecord('progress', 'comic\u0000source\u0000one', { page: 3 }))
+  api.ReadingStateApply.mockRejectedValueOnce(new Error('disk full'))
+  inFlight.resolve()
+  expect(await first).toBe(false)
+  expect(status).toHaveBeenLastCalledWith(true, true)
+  expect(await state.retry()).toBe(true)
+  const last = JSON.parse(api.ReadingStateApply.mock.calls[2][1])
+  expect(last).toHaveLength(1)
+  expect(JSON.parse(last[0].value).page).toBe(3)
+  expect(status).toHaveBeenLastCalledWith(true, false)
+})
+
+it('does not publish a partially decoded snapshot', async () => {
+  const apply = vi.fn()
+  api.ReadingStateLoad.mockResolvedValue([readingRecord('preferences', 'default', {}), { bucket: 'shelf', key: 'x', value: '{' }])
+  const state = readingPersistence({ kind: 'novel', legacy: () => [], apply, status: vi.fn() })
+  expect(await state.init()).toBe(false)
+  expect(apply).not.toHaveBeenCalled()
+})

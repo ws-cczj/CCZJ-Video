@@ -16,12 +16,31 @@ export const updateChecking = ref(false)
 export const updateDownloading = ref(false)
 export const updateDownloaded = ref(false)
 export const updateDownloadPath = ref('')
+export const updateDownloadError = ref(false)
 export const updateDownloadProgress = reactive({
   downloaded: 0,
   total: 0,
   speed_bps: 0,
   percent: 0,
 })
+
+export interface UpdateDownloadProgressPayload {
+  downloaded?: number
+  total?: number
+  speed_bps?: number
+}
+
+export function applyUpdateDownloadProgress(data: UpdateDownloadProgressPayload): void {
+  if (!data) return
+  const nonNegative = (value: unknown) => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0
+  const downloaded = nonNegative(data.downloaded)
+  const total = nonNegative(data.total)
+  const speedBps = nonNegative(data.speed_bps)
+  updateDownloadProgress.downloaded = downloaded
+  updateDownloadProgress.total = total
+  updateDownloadProgress.speed_bps = speedBps
+  updateDownloadProgress.percent = total > 0 ? Math.min(100, Math.round((downloaded / total) * 100)) : 0
+}
 
 /** 是否正在后台下载 */
 export const updateBgDownloading = computed(

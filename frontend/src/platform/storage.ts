@@ -1,5 +1,11 @@
 const STORAGE_VERSION = 1
 
+/** Ephemeral mode checkpoints may disappear with WebView storage. Durable
+ * reading progress, preferences and bindings remain in SQLite. */
+export function readSessionString(key:string):string|null {try{return sessionStorage.getItem(key)}catch{return null}}
+export function writeSessionString(key:string,value:string):boolean {try{sessionStorage.setItem(key,value);return true}catch{return false}}
+export function removeSession(key:string):void {try{sessionStorage.removeItem(key)}catch{}}
+
 interface VersionedValue<T> {
   version: number
   value: T

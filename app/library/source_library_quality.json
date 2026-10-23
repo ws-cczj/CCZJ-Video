@@ -1,0 +1,1351 @@
+{
+  "9308894e54eb4d85bc5ad97e2d2ab36aecc1a4abdc69baa0f42cbca7151bcc86": {
+    "status": "failed",
+    "score": 10,
+    "checkedAt": 1792426329,
+    "millis": 129,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "failed",
+        "message": "源站没有这个地址（HTTP 404）",
+        "millis": 129,
+        "code": "NOT_FOUND"
+      }
+    ],
+    "evidence": "local"
+  },
+  "ddcaa7350956b0ef0c5099bd84088d5e9930985342bbeccfd6a7204b4bb6e359": {
+    "status": "partial",
+    "score": 36,
+    "checkedAt": 1792426330,
+    "millis": 731,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "ok",
+        "count": 29,
+        "millis": 181
+      },
+      {
+        "name": "detail",
+        "status": "failed",
+        "message": "详情页没有解析出书名；规则可能选错了元素",
+        "millis": 378,
+        "code": "CORRUPT"
+      },
+      {
+        "name": "toc",
+        "status": "failed",
+        "message": "目录解析出来是空的；可能是规则选错了元素，也可能这个源需要登录",
+        "millis": 172,
+        "code": "CORRUPT"
+      }
+    ],
+    "evidence": "local"
+  },
+  "23795912fcc83bcd2f14065135a4d1ec5751ebe22ee8ac77fe2117d74f8ce8f2": {
+    "status": "failed",
+    "score": 6,
+    "checkedAt": 1792426330,
+    "millis": 1224,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "failed",
+        "message": "请求成功但没有结果；换一个 check_keyword 试试",
+        "millis": 1224,
+        "code": "NOT_FOUND"
+      }
+    ],
+    "evidence": "local"
+  },
+  "07a5d52d3fd59de74ca467dbb1c2e034fa78e19f27161d55a5cc7bd00f5af63b": {
+    "status": "failed",
+    "score": 6,
+    "checkedAt": 1792426332,
+    "millis": 2883,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "failed",
+        "message": "请求失败",
+        "millis": 2883,
+        "code": "UNAVAILABLE"
+      }
+    ],
+    "evidence": "local"
+  },
+  "faca16d514abc943cf0ee5383b08519df07591f0a759dca46daef16006775d2e": {
+    "status": "failed",
+    "score": 0,
+    "checkedAt": 1792426350,
+    "millis": 20033,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "failed",
+        "message": "操作超时",
+        "millis": 20033,
+        "code": "TIMEOUT"
+      }
+    ],
+    "evidence": "local"
+  },
+  "de119a660e50d04ffa1b697073c625dd837be1a1c970364f29c89f539d3a2e4a": {
+    "status": "failed",
+    "score": 10,
+    "checkedAt": 1792426331,
+    "millis": 575,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "failed",
+        "message": "请求成功但没有结果；换一个 check_keyword 试试",
+        "millis": 575,
+        "code": "NOT_FOUND"
+      }
+    ],
+    "evidence": "local"
+  },
+  "50261defeae6711d0f255411df90e85e5c6093fbbf5d2c7c1b706b3d656a3822": {
+    "status": "healthy",
+    "score": 93,
+    "checkedAt": 1792426340,
+    "millis": 8748,
+    "samples": 1,
+    "successes": 1,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "ok",
+        "count": 1,
+        "millis": 1202
+      },
+      {
+        "name": "detail",
+        "status": "ok",
+        "count": 1,
+        "millis": 3431
+      },
+      {
+        "name": "toc",
+        "status": "ok",
+        "count": 120,
+        "millis": 841
+      },
+      {
+        "name": "content",
+        "status": "ok",
+        "count": 796,
+        "millis": 3274
+      }
+    ],
+    "evidence": "local"
+  },
+  "bf56ba7c8d2b6734af1f6426cf57119d510380e8290e313bfe2e138d82d3cfae": {
+    "status": "failed",
+    "score": 0,
+    "checkedAt": 1792426432,
+    "millis": 20061,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "failed",
+        "message": "操作超时",
+        "millis": 20061,
+        "code": "TIMEOUT"
+      }
+    ],
+    "evidence": "local"
+  },
+  "ba73526bd5df9f708342a925a4a93adde88d6f6bc0cfebeefd88d497aae2ccd0": {
+    "status": "failed",
+    "score": 6,
+    "checkedAt": 1792426416,
+    "millis": 4254,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "failed",
+        "message": "源站没有这个地址（HTTP 404）",
+        "millis": 4254,
+        "code": "NOT_FOUND"
+      }
+    ],
+    "evidence": "local"
+  },
+  "f6099b8b47394960c3e7caf2e5c323bf856bcb9c410d60019f217511922d9cb4": {
+    "status": "failed",
+    "score": 10,
+    "checkedAt": 1792426413,
+    "millis": 412,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "failed",
+        "message": "请求成功但没有结果；换一个 check_keyword 试试",
+        "millis": 412,
+        "code": "NOT_FOUND"
+      }
+    ],
+    "evidence": "local"
+  },
+  "e343cae5c1c327a0f5e5f91249263023558755b1ce605da6cfa0f512fa866815": {
+    "status": "failed",
+    "score": 6,
+    "checkedAt": 1792426414,
+    "millis": 1896,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "failed",
+        "message": "请求成功但没有结果；换一个 check_keyword 试试",
+        "millis": 1896,
+        "code": "NOT_FOUND"
+      }
+    ],
+    "evidence": "local"
+  },
+  "1171854eef747fc34b515d168013ffd8ff805979ede177a535d7951528367155": {
+    "status": "failed",
+    "score": 0,
+    "checkedAt": 1792426434,
+    "millis": 20003,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "failed",
+        "message": "操作超时",
+        "millis": 20003,
+        "code": "TIMEOUT"
+      }
+    ],
+    "evidence": "local"
+  },
+  "33dd46f84377865f8930dd03a257425b8ee7a266085b7747354cefc0cb805a9f": {
+    "status": "failed",
+    "score": 0,
+    "checkedAt": 1792426436,
+    "millis": 20003,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "failed",
+        "message": "操作超时",
+        "millis": 20003,
+        "code": "TIMEOUT"
+      }
+    ],
+    "evidence": "local"
+  },
+  "f135a12af714193fd0f3d51c7cd7ce4bd36982987cab48a5b6a2ecd4ce324cda": {
+    "status": "failed",
+    "score": 10,
+    "checkedAt": 1792426432,
+    "millis": 212,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "failed",
+        "message": "请求成功但没有结果；换一个 check_keyword 试试",
+        "millis": 212,
+        "code": "NOT_FOUND"
+      }
+    ],
+    "evidence": "local"
+  },
+  "13e35ea0edd12e4c013d687840a93ad8d380eff4c2e6d611d7718653df5c975b": {
+    "status": "failed",
+    "score": 0,
+    "checkedAt": 1792426463,
+    "millis": 30383,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "failed",
+        "message": "操作超时",
+        "millis": 30383,
+        "code": "TIMEOUT"
+      }
+    ],
+    "evidence": "local"
+  },
+  "d7481653f857d99ebb1291f67a77d53be9fc43c59a84da7d922bbc059039e6d5": {
+    "status": "failed",
+    "score": 10,
+    "checkedAt": 1792426435,
+    "millis": 624,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "failed",
+        "message": "源站没有这个地址（HTTP 404）",
+        "millis": 624,
+        "code": "NOT_FOUND"
+      }
+    ],
+    "evidence": "local"
+  },
+  "dda09c1fe9d9a1ee2f80244f2017af6b764f9768cf3c32a733beb7236b8c51a9": {
+    "status": "failed",
+    "score": 0,
+    "checkedAt": 1792426455,
+    "millis": 20073,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "failed",
+        "message": "操作超时",
+        "millis": 20073,
+        "code": "TIMEOUT"
+      }
+    ],
+    "evidence": "local"
+  },
+  "7a875d98153b84acdd6ae25180b71900cf37d5eccb1f38c16562ab83d774aa6d": {
+    "status": "healthy",
+    "score": 96,
+    "checkedAt": 1792426896,
+    "millis": 2291,
+    "samples": 1,
+    "successes": 1,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "ok",
+        "count": 100,
+        "millis": 1764
+      },
+      {
+        "name": "detail",
+        "status": "ok",
+        "count": 1,
+        "millis": 174
+      },
+      {
+        "name": "toc",
+        "status": "ok",
+        "count": 208,
+        "millis": 179
+      },
+      {
+        "name": "content",
+        "status": "ok",
+        "count": 57,
+        "millis": 174
+      }
+    ],
+    "evidence": "local"
+  },
+  "cd639ddccd61d6e5debddd7ff0f9a2e46b56cbe0d637ffa6760ba0654df26ff5": {
+    "status": "failed",
+    "score": 10,
+    "checkedAt": 1792426440,
+    "millis": 918,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "failed",
+        "message": "请求成功但没有结果；换一个 check_keyword 试试",
+        "millis": 918,
+        "code": "NOT_FOUND"
+      }
+    ],
+    "evidence": "local"
+  },
+  "0916c3848a7275ba8ac1e24b3843e67d1f24e7f56230302db99e2eccfbe4bbfc": {
+    "status": "failed",
+    "score": 0,
+    "checkedAt": 1792426460,
+    "millis": 20028,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "failed",
+        "message": "操作超时",
+        "millis": 20028,
+        "code": "TIMEOUT"
+      }
+    ],
+    "evidence": "local"
+  },
+  "71716995a3ffbd1c1eeb0929dc4a27e2951160745445d1d46f5e773b5c7285d8": {
+    "status": "failed",
+    "score": 6,
+    "checkedAt": 1792426458,
+    "millis": 3054,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "failed",
+        "message": "请求失败",
+        "millis": 3054,
+        "code": "UNAVAILABLE"
+      }
+    ],
+    "evidence": "local"
+  },
+  "bf97f9bc90c2067af58e22c23a1f236645b993db52ce0044665cba892641f5a5": {
+    "status": "failed",
+    "score": 6,
+    "checkedAt": 1792426459,
+    "millis": 1132,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "failed",
+        "message": "请求成功但没有结果；换一个 check_keyword 试试",
+        "millis": 1132,
+        "code": "NOT_FOUND"
+      }
+    ],
+    "evidence": "local"
+  },
+  "9ecf77074c0a6e169a9ffaec12a346d5fbcf210f6b4c029948806186f777824f": {
+    "status": "failed",
+    "score": 0,
+    "checkedAt": 1792426479,
+    "millis": 20026,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "failed",
+        "message": "操作超时",
+        "millis": 20026,
+        "code": "TIMEOUT"
+      }
+    ],
+    "evidence": "local"
+  },
+  "ad0f3632f5ab84d18fea49bebcb0ef9722824406074e70717254c1c9768a4002": {
+    "status": "failed",
+    "score": 6,
+    "checkedAt": 1792426463,
+    "millis": 3447,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "failed",
+        "message": "源站拒绝访问，请检查来源配置或验证要求",
+        "millis": 3447,
+        "code": "PERMISSION_DENIED"
+      }
+    ],
+    "evidence": "local"
+  },
+  "9c4822024121243fa193952848b9f6137fb4cf2f9656759eeabaf7f89c2ed50a": {
+    "status": "partial",
+    "score": 60,
+    "checkedAt": 1792426486,
+    "millis": 23602,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "ok",
+        "count": 50,
+        "millis": 6850
+      },
+      {
+        "name": "detail",
+        "status": "failed",
+        "message": "详情页没有解析出书名；规则可能选错了元素",
+        "millis": 504,
+        "code": "CORRUPT"
+      },
+      {
+        "name": "toc",
+        "status": "ok",
+        "count": 208,
+        "millis": 792
+      },
+      {
+        "name": "content",
+        "status": "ok",
+        "count": 33,
+        "millis": 15456
+      }
+    ],
+    "evidence": "local"
+  },
+  "b8509543db330da12f2cc1ecb16a927e89af82aa0cd935e8815e4d454b116071": {
+    "status": "failed",
+    "score": 0,
+    "checkedAt": 1792426483,
+    "millis": 20004,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "failed",
+        "message": "操作超时",
+        "millis": 20004,
+        "code": "TIMEOUT"
+      }
+    ],
+    "evidence": "local"
+  },
+  "39edf8d7b6633153652dfcc89b4ea98620ad801f9a9d5de9a6e9b127c30628fc": {
+    "status": "failed",
+    "score": 6,
+    "checkedAt": 1792426484,
+    "millis": 4631,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "failed",
+        "message": "请求成功但没有结果；换一个 check_keyword 试试",
+        "millis": 4631,
+        "code": "NOT_FOUND"
+      }
+    ],
+    "evidence": "local"
+  },
+  "faaddb76619d451ebc56f0789def0087c6a7f6cd3307dc17ea9fde2c65f2b63f": {
+    "status": "failed",
+    "score": 10,
+    "checkedAt": 1792426484,
+    "millis": 793,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "failed",
+        "message": "请求成功但没有结果；换一个 check_keyword 试试",
+        "millis": 793,
+        "code": "NOT_FOUND"
+      }
+    ],
+    "evidence": "local"
+  },
+  "d2f0156a1241b27e57112d5847236e8202a86929118bf2befa96c4647063b60a": {
+    "status": "partial",
+    "score": 36,
+    "checkedAt": 1792426484,
+    "millis": 432,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "ok",
+        "count": 30,
+        "millis": 197
+      },
+      {
+        "name": "detail",
+        "status": "failed",
+        "message": "详情页没有解析出书名；规则可能选错了元素",
+        "millis": 166,
+        "code": "CORRUPT"
+      },
+      {
+        "name": "toc",
+        "status": "failed",
+        "message": "目录解析出来是空的；可能是规则选错了元素，也可能这个源需要登录",
+        "millis": 69,
+        "code": "CORRUPT"
+      }
+    ],
+    "evidence": "local"
+  },
+  "cb88a24f8cb6ee1a6eb4e6dda614e6525806086c9b1efc6f0fb690d197ba974b": {
+    "status": "failed",
+    "score": 6,
+    "checkedAt": 1792426486,
+    "millis": 1793,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "failed",
+        "message": "源站没有这个地址（HTTP 404）",
+        "millis": 1793,
+        "code": "NOT_FOUND"
+      }
+    ],
+    "evidence": "local"
+  },
+  "fed25d13b132f9ec82756ecc7bc2880085015dc613855c38e76c0857f7526414": {
+    "status": "failed",
+    "score": 10,
+    "checkedAt": 1792426485,
+    "millis": 898,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "failed",
+        "message": "请求成功但没有结果；换一个 check_keyword 试试",
+        "millis": 898,
+        "code": "NOT_FOUND"
+      }
+    ],
+    "evidence": "local"
+  },
+  "28cd12d792060a1570aef268ea6310755a23cc118e4076d811945038f1d03f9e": {
+    "status": "failed",
+    "score": 10,
+    "checkedAt": 1792426486,
+    "millis": 513,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "failed",
+        "message": "请求地址被拒绝",
+        "millis": 513,
+        "code": "UNAVAILABLE"
+      }
+    ],
+    "evidence": "local"
+  },
+  "735b99b976244b0f1d847aeb6b385ba4c351d8454644b3e352eaf08fd4860192": {
+    "status": "failed",
+    "score": 0,
+    "checkedAt": 1792426506,
+    "millis": 20056,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "failed",
+        "message": "操作超时",
+        "millis": 20056,
+        "code": "TIMEOUT"
+      }
+    ],
+    "evidence": "local"
+  },
+  "414c60d2fc95cbc0dd32b682cb27ea8a1679f75f41389516cf88498d3f874abd": {
+    "status": "failed",
+    "score": 10,
+    "checkedAt": 1792426486,
+    "millis": 91,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "failed",
+        "message": "源站返回 HTTP 503",
+        "millis": 91,
+        "code": "UNAVAILABLE"
+      }
+    ],
+    "evidence": "local"
+  },
+  "f6af5f24a9e7cf22cb3e95103aa0b2dab4fb6df3de9d16ff4953f52e52ebb7f6": {
+    "status": "failed",
+    "score": 10,
+    "checkedAt": 1792426486,
+    "millis": 4,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "failed",
+        "message": "请求地址被拒绝",
+        "millis": 4,
+        "code": "UNAVAILABLE"
+      }
+    ],
+    "evidence": "local"
+  },
+  "899b99e0d64cd7296d95c769ca3c368ab35810593e324858885d401828ba95e6": {
+    "status": "failed",
+    "score": 6,
+    "checkedAt": 1792426488,
+    "millis": 1680,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "failed",
+        "message": "请求成功但没有结果；换一个 check_keyword 试试",
+        "millis": 1680,
+        "code": "NOT_FOUND"
+      }
+    ],
+    "evidence": "local"
+  },
+  "3ca0b0933b01a36475e0ec44c3ad87ba355f1cc019718c53d64b66c0ee0711b6": {
+    "status": "partial",
+    "score": 36,
+    "checkedAt": 1792426487,
+    "millis": 579,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "ok",
+        "count": 8,
+        "millis": 218
+      },
+      {
+        "name": "detail",
+        "status": "failed",
+        "message": "详情页没有解析出书名；规则可能选错了元素",
+        "millis": 180,
+        "code": "CORRUPT"
+      },
+      {
+        "name": "toc",
+        "status": "failed",
+        "message": "目录解析出来是空的；可能是规则选错了元素，也可能这个源需要登录",
+        "millis": 181,
+        "code": "CORRUPT"
+      }
+    ],
+    "evidence": "local"
+  },
+  "a6df4503487077b365a700eb10d8859742fab91f46b87a03ea390ca808a4a922": {
+    "status": "healthy",
+    "score": 96,
+    "checkedAt": 1792426491,
+    "millis": 3688,
+    "samples": 1,
+    "successes": 1,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "ok",
+        "count": 8,
+        "millis": 655
+      },
+      {
+        "name": "detail",
+        "status": "ok",
+        "count": 1,
+        "millis": 1127
+      },
+      {
+        "name": "toc",
+        "status": "ok",
+        "count": 28,
+        "millis": 1447
+      },
+      {
+        "name": "content",
+        "status": "ok",
+        "count": 8,
+        "millis": 459
+      }
+    ],
+    "evidence": "local"
+  },
+  "af777cd23f7ae4e8e220778f2188253468f2d3cea22587f0100c45875b73cfd1": {
+    "status": "healthy",
+    "score": 90,
+    "checkedAt": 1792426954,
+    "millis": 53944,
+    "samples": 2,
+    "successes": 2,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "ok",
+        "count": 1,
+        "millis": 29869
+      },
+      {
+        "name": "detail",
+        "status": "ok",
+        "count": 1,
+        "millis": 2049
+      },
+      {
+        "name": "toc",
+        "status": "ok",
+        "count": 120,
+        "millis": 14020
+      },
+      {
+        "name": "content",
+        "status": "ok",
+        "count": 799,
+        "millis": 8006
+      }
+    ],
+    "evidence": "local"
+  },
+  "0de073057ab692e0b3dbd2a790450cb8a97de3ddfc9e2ca4b889a5392aacc7b9": {
+    "status": "failed",
+    "score": 10,
+    "checkedAt": 1792426491,
+    "millis": 335,
+    "samples": 1,
+    "successes": 0,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "failed",
+        "message": "源站返回 HTTP 500",
+        "millis": 335,
+        "code": "UNAVAILABLE"
+      }
+    ],
+    "evidence": "local"
+  },
+  "ba7175c654b19094fdba523002fb5c9aa802e1b695cf7ba49013bcc0cd36712c": {
+    "status": "healthy",
+    "score": 100,
+    "checkedAt": 1792426898,
+    "millis": 228,
+    "samples": 1,
+    "successes": 1,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "ok",
+        "count": 23,
+        "millis": 36
+      },
+      {
+        "name": "detail",
+        "status": "ok",
+        "count": 1,
+        "millis": 10
+      },
+      {
+        "name": "toc",
+        "status": "ok",
+        "count": 7,
+        "millis": 4
+      },
+      {
+        "name": "pages",
+        "status": "ok",
+        "count": 29,
+        "millis": 4
+      },
+      {
+        "name": "image",
+        "status": "ok",
+        "count": 1,
+        "millis": 174
+      }
+    ],
+    "evidence": "local"
+  },
+  "a62c9e523ca3c0d43ca4290f88e450977f4d465dcfe470f9943f43fea4174337": {
+    "status": "healthy",
+    "score": 96,
+    "checkedAt": 1792426900,
+    "millis": 1300,
+    "samples": 1,
+    "successes": 1,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "ok",
+        "count": 27,
+        "millis": 257
+      },
+      {
+        "name": "detail",
+        "status": "ok",
+        "count": 1,
+        "millis": 43
+      },
+      {
+        "name": "toc",
+        "status": "ok",
+        "count": 1,
+        "millis": 42
+      },
+      {
+        "name": "pages",
+        "status": "ok",
+        "count": 58,
+        "millis": 777
+      },
+      {
+        "name": "image",
+        "status": "ok",
+        "count": 1,
+        "millis": 181
+      }
+    ],
+    "evidence": "local"
+  },
+  "fc251043db615f4bc9718d56005c1721268e48174214219f1f684e71b3e44fb6": {
+    "status": "healthy",
+    "score": 100,
+    "checkedAt": 1792426891,
+    "millis": 420,
+    "samples": 1,
+    "successes": 1,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "ok",
+        "count": 10,
+        "millis": 104
+      },
+      {
+        "name": "detail",
+        "status": "ok",
+        "count": 1,
+        "millis": 79
+      },
+      {
+        "name": "toc",
+        "status": "ok",
+        "count": 1651,
+        "millis": 208
+      },
+      {
+        "name": "content",
+        "status": "ok",
+        "count": 65,
+        "millis": 29
+      }
+    ],
+    "evidence": "local"
+  },
+  "42b07a562f14c6f067083fbc046a15d0638fc0187b62c1928199e44f38984005": {
+    "status": "healthy",
+    "score": 100,
+    "checkedAt": 1792426892,
+    "millis": 438,
+    "samples": 1,
+    "successes": 1,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "ok",
+        "count": 5,
+        "millis": 107
+      },
+      {
+        "name": "detail",
+        "status": "ok",
+        "count": 1,
+        "millis": 100
+      },
+      {
+        "name": "toc",
+        "status": "ok",
+        "count": 779,
+        "millis": 150
+      },
+      {
+        "name": "content",
+        "status": "ok",
+        "count": 46,
+        "millis": 81
+      }
+    ],
+    "evidence": "local"
+  },
+  "260ac95862f67eb7d6a036dbc71d7ba9d95e610d8c6412cf20e6bc4aad5a7af2": {
+    "status": "healthy",
+    "score": 100,
+    "checkedAt": 1792426893,
+    "millis": 994,
+    "samples": 1,
+    "successes": 1,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "ok",
+        "count": 7,
+        "millis": 207
+      },
+      {
+        "name": "detail",
+        "status": "ok",
+        "count": 1,
+        "millis": 292
+      },
+      {
+        "name": "toc",
+        "status": "ok",
+        "count": 351,
+        "millis": 225
+      },
+      {
+        "name": "content",
+        "status": "ok",
+        "count": 122,
+        "millis": 270
+      }
+    ],
+    "evidence": "local"
+  },
+  "e6c3adbb5055902f8168f13ceab542bba07dde2dbd3059b18e30736a2b8ec114": {
+    "status": "healthy",
+    "score": 96,
+    "checkedAt": 1792426903,
+    "millis": 2457,
+    "samples": 1,
+    "successes": 1,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "ok",
+        "count": 2,
+        "millis": 485
+      },
+      {
+        "name": "detail",
+        "status": "ok",
+        "count": 1,
+        "millis": 743
+      },
+      {
+        "name": "toc",
+        "status": "ok",
+        "count": 10,
+        "millis": 720
+      },
+      {
+        "name": "pages",
+        "status": "ok",
+        "count": 159,
+        "millis": 482
+      },
+      {
+        "name": "image",
+        "status": "ok",
+        "count": 1,
+        "millis": 27
+      }
+    ],
+    "evidence": "local"
+  },
+  "3b8118b51a39e510eed317610ff159063cffcdd4e239876c19d3bc265aab810a": {
+    "status": "healthy",
+    "score": 96,
+    "checkedAt": 1792426908,
+    "millis": 2779,
+    "samples": 1,
+    "successes": 1,
+    "stages": [
+      {
+        "name": "config",
+        "status": "ok",
+        "millis": 0
+      },
+      {
+        "name": "search",
+        "status": "ok",
+        "count": 7,
+        "millis": 324
+      },
+      {
+        "name": "detail",
+        "status": "ok",
+        "count": 1,
+        "millis": 278
+      },
+      {
+        "name": "toc",
+        "status": "ok",
+        "count": 447,
+        "millis": 204
+      },
+      {
+        "name": "pages",
+        "status": "ok",
+        "count": 16,
+        "millis": 186
+      },
+      {
+        "name": "image",
+        "status": "ok",
+        "count": 1,
+        "millis": 1787
+      }
+    ],
+    "evidence": "local"
+  }
+}

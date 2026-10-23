@@ -7,14 +7,14 @@
  */
 import { SegmentDiskCache } from '../tsCacheDisk'
 import { LOG_PREFIX } from './constants'
-import { cacheSet } from './memory-cache'
 import { segmentCacheKey } from './segment-key'
-import { cache, session } from './store'
+import { prefetchState, session } from './store'
 import type { DiskCacheInfo } from '../tsCacheDisk'
 
 const MAX_DISK_BYTES = 160 * 1024 * 1024
 const DISK_TTL_MS = 2 * 24 * 60 * 60 * 1000
 const DISK_PRUNE_DEBOUNCE_MS = 5_000
+const DISK_READ_TIMEOUT_MS = 250
 export const diskCache = new SegmentDiskCache(MAX_DISK_BYTES, DISK_TTL_MS, DISK_PRUNE_DEBOUNCE_MS)
 let diskQuotaWarned = false
 
@@ -33,19 +33,22 @@ export async function diskSave(url: string, buf: ArrayBuffer, epKey?: string, ra
   }
 }
 
-export async function diskLoadForEpisode(epKey: string): Promise<number> {
-  if (!epKey) return 0
+/** A miss reads only the requested binary; late session results are discarded. */
+export async function diskLoad(url: string, range?: string | null): Promise<ArrayBuffer | null> {
+  const generation = prefetchState.cacheSession
+  let timer: ReturnType<typeof setTimeout> | undefined
   try {
-    const entries = await diskCache.loadEpisode(epKey)
-    if (session.currentEpKey !== epKey) return 0
-    for (const entry of entries) cacheSet(entry.url, entry.data, epKey)
-    if (entries.length > 0) {
-      const mb = (cache.totalCacheBytes / 1024 / 1024).toFixed(1)
-      console.log(`${LOG_PREFIX} restored ${entries.length} segments (${mb} MB) for ${epKey}`)
-    }
-    return entries.length
+    // Disk caching is optional. A blocked database must not stall playback;
+    // late reads own no cache writes and their result can safely be discarded.
+    const data = await Promise.race([
+      diskCache.loadSegment(segmentCacheKey(url, range)),
+      new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), DISK_READ_TIMEOUT_MS) }),
+    ])
+    return generation === prefetchState.cacheSession ? data : null
   } catch {
-    return 0
+    return null
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
   }
 }
 

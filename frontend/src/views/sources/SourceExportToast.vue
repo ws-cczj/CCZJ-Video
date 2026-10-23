@@ -39,32 +39,28 @@ async function openExportFolder(): Promise<void> {
 
 /* === 导出成功提示条 === */
 .export-toast {
-  position: fixed;
+  @apply cczj-fixed;
   bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  @apply cczj-flex cczj-items-center cczj-gap-5;
   padding: 12px 18px;
   background: var(--bg-card);
   border: 1px solid var(--accent-alpha-30);
-  border-radius: 12px;
+  @apply cczj-rounded-lg;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25);
   z-index: 2000;
-  color: var(--text-primary);
-  font-size: 13px;
+  @apply cczj-text-primary cczj-text-13;
   max-width: 640px;
 }
 .export-toast-text {
-  white-space: nowrap;
+  @apply cczj-whitespace-nowrap;
 }
 .export-toast-path {
-  font-size: 11px;
-  color: var(--accent);
+  @apply cczj-text-11 cczj-text-accent;
   background: var(--accent-alpha-10);
   padding: 2px 8px;
-  border-radius: 4px;
+  @apply cczj-rounded-sm;
   max-width: 240px;
   font-family: 'SF Mono', Consolas, monospace;
 }

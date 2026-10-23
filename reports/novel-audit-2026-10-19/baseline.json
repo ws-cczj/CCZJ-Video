@@ -1,0 +1,55 @@
+{
+  "passed": false,
+  "results": [
+    {
+      "name": "resize-repaginates",
+      "passed": false,
+      "error": "{'before': {'actual': 364, 'column': 364, 'height': 768, 'count': 31}, 'after': {'actual': 720, 'column': 364, 'height': 320, 'count': 36}}"
+    },
+    {
+      "name": "scroll-flow-clears-columns",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "scroll-progress-restores",
+      "passed": true,
+      "detail": 0.6500070658062085
+    },
+    {
+      "name": "scroll-next-chapter",
+      "passed": false,
+      "error": "Page URL expected to be 're.compile('/novel/read/1/102$')'\nActual value: http://127.0.0.1:9299/tests/browser/reading.html#/novel/read/1/101 \nCall log:\n  - Expect \"to_have_url\" with timeout 2500ms\n    6 × unexpected value \"http://127.0.0.1:9299/tests/browser/reading.html#/novel/read/1/101\"\n"
+    },
+    {
+      "name": "scroll-resize-keeps-place",
+      "passed": true,
+      "detail": 0.5878709059173826
+    },
+    {
+      "name": "book-continues-chapter-and-position",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "previous-chapter-end-is-one-shot",
+      "passed": false,
+      "error": "1"
+    },
+    {
+      "name": "portable-progress-resolves-chapter",
+      "passed": false,
+      "error": "Locator expected to have attribute '#/novel/read/1/102'\nActual value: #/novel/read/1/101 \nCall log:\n  - Expect \"to_have_attribute\" with timeout 5000ms\n  - waiting for locator(\".novel-detail-actions a\")\n    9 × locator resolved to <a href=\"#/novel/read/1/101\" class=\"novel-button novel-button-primary\">继续阅读</a>\n      - unexpected value \"#/novel/read/1/101\"\n"
+    },
+    {
+      "name": "search-continuation-uses-submitted-query",
+      "passed": false,
+      "error": "Locator expected to have count '2'\nActual value: 0 \nCall log:\n  - Expect \"to_have_count\" with timeout 5000ms\n  - waiting for locator(\".novel-book-card\")\n    9 × locator resolved to 0 elements\n      - unexpected value \"0\"\n"
+    }
+  ],
+  "errors": [
+    "Unhandled rejection in cancelled promise. Reason: AbortError: signal is aborted without reason",
+    "Unhandled rejection in cancelled promise. Reason: ApiFailure: 操作已取消"
+  ],
+  "native": false
+}

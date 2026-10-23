@@ -6,6 +6,19 @@ import (
 	"time"
 )
 
+func TestGroupStopReportsIncompleteDrain(t *testing.T) {
+	group := NewGroup()
+	release := make(chan struct{})
+	group.Go("uncooperative", func(context.Context) { <-release })
+	if group.Stop(time.Millisecond) {
+		t.Fatal("incomplete drain reported success")
+	}
+	close(release)
+	if !group.Stop(time.Second) {
+		t.Fatal("completed drain reported failure")
+	}
+}
+
 func TestGroupRejectsTasksAfterStop(t *testing.T) {
 	group := NewGroup()
 	started := make(chan struct{})
@@ -26,4 +39,23 @@ func TestGroupStopIsIdempotent(t *testing.T) {
 	group := NewGroup()
 	group.Stop(time.Second)
 	group.Stop(time.Second)
+}
+
+func TestTrackedRequestsDrainAndCannotReenterStoppedOwner(t *testing.T) {
+	group := NewGroup()
+	release, ok := group.Track("request")
+	if !ok || group.ActiveTasks()["request"] != 1 {
+		t.Fatal("request was not tracked")
+	}
+	if group.Stop(time.Millisecond) {
+		t.Fatal("reported drained while request still owns resources")
+	}
+	if _, ok := group.Track("late"); ok {
+		t.Fatal("stopped owner accepted request")
+	}
+	release()
+	release()
+	if !group.Stop(time.Second) || len(group.ActiveTasks()) != 0 {
+		t.Fatal("request release did not drain")
+	}
 }

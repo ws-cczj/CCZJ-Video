@@ -1,0 +1,117 @@
+[
+  {
+    "repository": "navidrome/navidrome",
+    "ref": "v0.61.2",
+    "files": [
+      {
+        "path": "scheduler/scheduler.go",
+        "url": "https://github.com/navidrome/navidrome/blob/v0.61.2/scheduler/scheduler.go",
+        "sha256": "8d312d89aa8bd5af29cdd23f1fb10ea743889901b0eb1d541c94a2d1c11eb03f",
+        "bytes": 831
+      },
+      {
+        "path": "plugins/README.md",
+        "url": "https://github.com/navidrome/navidrome/blob/v0.61.2/plugins/README.md",
+        "sha256": "0ba59e3037434a61bed44b473f251441d4f7abd56ed82f508904bfdf6e904622",
+        "bytes": 34106
+      },
+      {
+        "path": "scanner/scanner.go",
+        "url": "https://github.com/navidrome/navidrome/blob/v0.61.2/scanner/scanner.go",
+        "sha256": "5927410c57f61f882ef4fe8e1fd6e291a7cf4e25db9f475b21298de45819aea6",
+        "bytes": 12078
+      }
+    ],
+    "errors": []
+  },
+  {
+    "repository": "syncthing/syncthing",
+    "ref": "v1.30.0",
+    "files": [
+      {
+        "path": "lib/svcutil/svcutil.go",
+        "url": "https://github.com/syncthing/syncthing/blob/v1.30.0/lib/svcutil/svcutil.go",
+        "sha256": "b9fa1cb836fea81292204343812c13b25450f01f2a4a1988ac963f2fc8574d95",
+        "bytes": 5905
+      },
+      {
+        "path": "lib/events/events.go",
+        "url": "https://github.com/syncthing/syncthing/blob/v1.30.0/lib/events/events.go",
+        "sha256": "d70a3bfd967121f183dc9d26f2a4a88d27ba44791f378038ff5baf924a83c045",
+        "bytes": 13497
+      },
+      {
+        "path": "lib/connections/service.go",
+        "url": "https://github.com/syncthing/syncthing/blob/v1.30.0/lib/connections/service.go",
+        "sha256": "f1af98c6e01812e6336f9d58ae6eef8d1f9a8d5b719ba1db6d9be5d9fad0e0de",
+        "bytes": 46878
+      }
+    ],
+    "errors": []
+  },
+  {
+    "repository": "go-gitea/gitea",
+    "ref": "v1.24.6",
+    "files": [
+      {
+        "path": "modules/queue/queue.go",
+        "url": "https://github.com/go-gitea/gitea/blob/v1.24.6/modules/queue/queue.go",
+        "sha256": "04c1b1bd08313b6d135bc98f739353a6c19d915b7fcb21fc3e793e84a973de6e",
+        "bytes": 4082
+      },
+      {
+        "path": "modules/queue/base.go",
+        "url": "https://github.com/go-gitea/gitea/blob/v1.24.6/modules/queue/base.go",
+        "sha256": "2c390896afbebe64b7d69fc13b36e2e28026594729bc10d503cb10cbbef1ff82",
+        "bytes": 897
+      },
+      {
+        "path": "modules/setting/queue.go",
+        "url": "https://github.com/go-gitea/gitea/blob/v1.24.6/modules/setting/queue.go",
+        "sha256": "f115cde40960f0246eeb73c16f17995fbb547af167f6b8970e8f96a5f505b044",
+        "bytes": 3790
+      }
+    ],
+    "errors": [
+      {
+        "path": "modules/queue/queue_workerpool.go",
+        "error": "HTTP Error 404: Not Found"
+      },
+      {
+        "path": "modules/queue/queue_workerpool_test.go",
+        "error": "HTTP Error 404: Not Found"
+      }
+    ]
+  },
+  {
+    "repository": "pocketbase/pocketbase",
+    "ref": "v0.28.4",
+    "files": [
+      {
+        "path": "core/db_connect.go",
+        "url": "https://github.com/pocketbase/pocketbase/blob/v0.28.4/core/db_connect.go",
+        "sha256": "a2d64def26905ca2cbcad4d9c87fa2fa370b6ab463d027c4843a42cdc0c3bc70",
+        "bytes": 678
+      },
+      {
+        "path": "core/db.go",
+        "url": "https://github.com/pocketbase/pocketbase/blob/v0.28.4/core/db.go",
+        "sha256": "e291432e00d08e956ef80cf2beeaa7f30064f725324be90d8891bcb753feb355",
+        "bytes": 15232
+      },
+      {
+        "path": "tools/hook/hook.go",
+        "url": "https://github.com/pocketbase/pocketbase/blob/v0.28.4/tools/hook/hook.go",
+        "sha256": "d41e571e5980889f0ad1a779a664a2a39c188c9f6d0abdd56e34edda83c6925a",
+        "bytes": 4589
+      },
+      {
+        "path": "core/base.go",
+        "url": "https://github.com/pocketbase/pocketbase/blob/v0.28.4/core/base.go",
+        "sha256": "972358386c0ebeb156e38fcc73d36b46a5f52f7678383476c1e1e5a5fe0b2b78",
+        "bytes": 54380
+      }
+    ],
+    "errors": []
+  }
+]

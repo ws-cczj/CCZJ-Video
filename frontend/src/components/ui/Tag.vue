@@ -20,7 +20,7 @@ const emit = defineEmits<{
 
 <template>
   <span
-    class="ui-tag"
+    class="ui-tag cczj-inline-flex cczj-items-center cczj-gap-2"
     :class="[
       `ui-tag--${variant || 'default'}`,
       `ui-tag--${size || 'md'}`,
@@ -34,7 +34,7 @@ const emit = defineEmits<{
     <span class="ui-tag__label"><slot /></span>
     <button
       v-if="closable"
-      class="ui-tag__close"
+      class="ui-tag__close cczj-inline-flex cczj-items-center cczj-justify-center"
       type="button"
       @click.stop="emit('close')"
       :aria-label="tr('common.remove')"
@@ -48,61 +48,56 @@ const emit = defineEmits<{
 
 <style scoped>
 .ui-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border: 1px solid var(--border);
+  @apply cczj-border;
   border-radius: 5px;
   background: var(--bg-secondary);
-  color: var(--text-secondary);
+  @apply cczj-text-secondary;
   font-family: inherit;
-  font-weight: 500;
-  white-space: nowrap;
+  @apply cczj-font-medium cczj-whitespace-nowrap;
   transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
   user-select: none;
   -webkit-user-select: none;
 }
 
 /* Size */
-.ui-tag--sm  { padding: 3px 10px; font-size: 11px; }
-.ui-tag--md  { padding: 6px 14px; font-size: 13px; }
+.ui-tag--sm  { @apply cczj-px-5-py-2 cczj-text-11; }
+.ui-tag--md  { padding: 6px 14px; @apply cczj-text-13; }
 
 /* Pill (rounded) — default */
 .ui-tag--pill {
-  border-radius: 6px;
+  @apply cczj-rounded;
 }
 
 /* Clickable / Interactive */
 .ui-tag--clickable {
-  cursor: pointer;
+  @apply cczj-cursor-pointer;
 }
 .ui-tag--clickable:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  @apply cczj-border-primary cczj-text-accent;
 }
 
 /* Active / Selected */
 .ui-tag--active {
   background: var(--accent);
-  border-color: var(--accent);
+  @apply cczj-border-primary;
   color: var(--accent-contrast);
   box-shadow: 0 2px 8px var(--accent-alpha-35);
 }
 .ui-tag--active:hover {
   color: var(--accent-contrast);
-  border-color: var(--accent);
+  @apply cczj-border-primary;
 }
 
 /* Variants */
 .ui-tag--primary {
   background: var(--accent-alpha-10);
   border-color: var(--accent-alpha-20);
-  color: var(--accent);
+  @apply cczj-text-accent;
 }
 .ui-tag--success {
   background: var(--success-alpha-10);
   border-color: var(--success-alpha-10);
-  color: var(--success);
+  @apply cczj-text-success;
 }
 .ui-tag--warning {
   background: var(--warning-alpha-10);
@@ -110,30 +105,25 @@ const emit = defineEmits<{
   color: var(--warning-text);
 }
 .ui-tag--danger {
-  background: var(--danger-alpha-10);
+  @apply cczj-bg-danger-alpha;
   border-color: var(--danger-alpha-10);
-  color: var(--danger);
+  @apply cczj-text-danger;
 }
 
 /* Close button */
 .ui-tag__close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
+  @apply cczj-w-16 cczj-h-16;
   margin: -2px -4px -2px 2px;
   padding: 0;
   border: none;
   background: transparent;
   color: inherit;
-  opacity: 0.6;
-  cursor: pointer;
+  @apply cczj-opacity-60 cczj-cursor-pointer;
   border-radius: 3px;
   transition: opacity var(--transition-fast), background-color var(--transition-fast);
 }
 .ui-tag__close:hover {
-  opacity: 1;
+  @apply cczj-opacity-100;
   background: rgba(0, 0, 0, 0.1);
 }
 </style>

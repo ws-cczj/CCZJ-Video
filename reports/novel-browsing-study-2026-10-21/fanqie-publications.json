@@ -1,0 +1,39 @@
+{
+  "name": "fanqie-publications",
+  "url": "https://fanqienovel.com/api/node/publication/list?page_index=0&page_count=5",
+  "http": 200,
+  "code": 0,
+  "dataKeys": [
+    "total_count",
+    "publication_list"
+  ],
+  "books": [
+    {
+      "id": "6982529841564224526",
+      "title": "我在精神病院学斩神",
+      "author": "三九音域"
+    },
+    {
+      "id": "7237477741191236660",
+      "title": "以夏天的名义",
+      "author": "折枝桂w"
+    },
+    {
+      "id": "7221830803263589376",
+      "title": "直球不打暗恋",
+      "author": "韭菜鱼丸包"
+    },
+    {
+      "id": "7204798721333136396",
+      "title": "软诱",
+      "author": "久久萋"
+    },
+    {
+      "id": "7186323174714248248",
+      "title": "就算是假千金也要勇敢摆烂",
+      "author": "纪扶染"
+    }
+  ],
+  "bookCount": 5,
+  "checkedAt": "2026-10-21T18:00:59.918224+08:00"
+}

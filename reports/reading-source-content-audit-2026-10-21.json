@@ -1,0 +1,3083 @@
+[
+  {
+    "alternateSearch": {
+      "count": 10,
+      "keyword": "斗罗",
+      "sameLeadingIDs": false
+    },
+    "apiUrl": "http://appi.kuwo.cn",
+    "baseline": {
+      "sourceKey": "fc251043db615f4bc9718d56005c1721268e48174214219f1f684e71b3e44fb6",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "ok",
+          "count": 10,
+          "millis": 122
+        },
+        {
+          "name": "detail",
+          "status": "ok",
+          "count": 1,
+          "millis": 70
+        },
+        {
+          "name": "toc",
+          "status": "ok",
+          "count": 1651,
+          "millis": 266
+        },
+        {
+          "name": "content",
+          "status": "ok",
+          "count": 65,
+          "millis": 37
+        }
+      ],
+      "ok": true
+    },
+    "checkedAt": 1792590595,
+    "id": "fc251043db615f4bc9718d56005c1721268e48174214219f1f684e71b3e44fb6",
+    "keyword": "三国",
+    "kind": "novel",
+    "millis": 1315,
+    "name": "酷我小说",
+    "searchSample": [
+      {
+        "author": "拾一",
+        "coverPresent": true,
+        "summaryRunes": 113,
+        "title": "三国之仲谋天下",
+        "url": "http://appi.kuwo.cn/novels/api/book/22543868000604102"
+      },
+      {
+        "author": "帝夜之殇",
+        "coverPresent": true,
+        "summaryRunes": 91,
+        "title": "三国之霸主刘琦",
+        "url": "http://appi.kuwo.cn/novels/api/book/9046067203383803"
+      },
+      {
+        "author": "叶脈",
+        "coverPresent": true,
+        "summaryRunes": 98,
+        "title": "三国降临现世",
+        "url": "http://appi.kuwo.cn/novels/api/book/14112718603574804"
+      },
+      {
+        "author": "天涯唯我明月",
+        "coverPresent": true,
+        "summaryRunes": 77,
+        "title": "三国之战神召唤",
+        "url": "http://appi.kuwo.cn/novels/api/book/10865085603792303"
+      },
+      {
+        "author": "游侠范儿",
+        "coverPresent": true,
+        "summaryRunes": 143,
+        "title": "三国之我是无名氏",
+        "url": "http://appi.kuwo.cn/novels/api/book/4766088803790703"
+      },
+      {
+        "author": "雪豹导弹",
+        "coverPresent": true,
+        "summaryRunes": 90,
+        "title": "三国之重振北疆",
+        "url": "http://appi.kuwo.cn/novels/api/book/17407797005770804"
+      }
+    ],
+    "status": "sample_chain_passed",
+    "works": [
+      {
+        "author": "拾一",
+        "chapterSamples": [
+          {
+            "access": "unknown",
+            "excerpt": "东方明珠，上海。\n在这个纷纷扰扰的大城市，灯红酒绿之中，每一天都有人面临工作失败和感情失恋。\n孙重茂就是其中一个，而且还是两方面兼",
+            "garbled": false,
+            "navigationOrAdMarkers": [],
+            "obfuscated": false,
+            "paragraphs": 65,
+            "position": 0,
+            "runes": 3128,
+            "title": "第一章 落魄青年",
+            "truncated": false
+          },
+          {
+            "access": "unknown",
+            "excerpt": "战国六年的十一月，这一个月在吴国和魏朝之间拉拉扯扯的谈判之中的悄然的过去了。\n进入了寒冬时节的十二月，这一方天下忽然之间变得一场的",
+            "garbled": false,
+            "navigationOrAdMarkers": [],
+            "obfuscated": false,
+            "paragraphs": 76,
+            "position": 825,
+            "runes": 2505,
+            "title": "第八百二十七章 庞统的新去向",
+            "truncated": false
+          },
+          {
+            "access": "unknown",
+            "excerpt": "本来是准备晚上完本的，但是昨天拾一从都到尾把仲谋看了一遍，看了很仔细，也有不少感想，所以耽搁了很多时间，今天早上才码出完本的最后一",
+            "garbled": false,
+            "navigationOrAdMarkers": [],
+            "obfuscated": false,
+            "paragraphs": 20,
+            "position": 1650,
+            "runes": 746,
+            "title": "完本之感！",
+            "truncated": false
+          }
+        ],
+        "chapters": 1651,
+        "coverPresent": true,
+        "firstChapter": "第一章 落魄青年",
+        "lastChapter": "完本之感！",
+        "searchTitle": "三国之仲谋天下",
+        "summaryRunes": 113,
+        "title": "三国之仲谋天下",
+        "url": "http://appi.kuwo.cn/novels/api/book/22543868000604102"
+      },
+      {
+        "author": "帝夜之殇",
+        "chapterSamples": [
+          {
+            "access": "unknown",
+            "excerpt": "中平五年夏五月，黄昏时刻...\n荆州城中，黄昏的光辉洒落在一个府邸的院子之中，为院子铺上了一层金黄色，让院子之中的景色，显得更加的",
+            "garbled": false,
+            "navigationOrAdMarkers": [],
+            "obfuscated": false,
+            "paragraphs": 38,
+            "position": 0,
+            "runes": 2150,
+            "title": "第一章 前因",
+            "truncated": false
+          },
+          {
+            "access": "unknown",
+            "excerpt": "等许褚处理完街道上的事情，回到丞相府的时候。\n曹操、戏志才、荀彧、夏侯渊等人一大群人，也都聚在了丞相府之中。\n在许褚回来的这段时间",
+            "garbled": false,
+            "navigationOrAdMarkers": [],
+            "obfuscated": false,
+            "paragraphs": 72,
+            "position": 385,
+            "runes": 2256,
+            "title": "第三百八十七章 许褚的处置",
+            "truncated": false
+          },
+          {
+            "access": "unknown",
+            "excerpt": "写了这么久，终于写完了。\n其实还是比较坑的，主要是写不下去了，应该说很久之前就已经写崩了，这样写着也没有意思了，本来打算写个好点的",
+            "garbled": false,
+            "navigationOrAdMarkers": [],
+            "obfuscated": false,
+            "paragraphs": 9,
+            "position": 770,
+            "runes": 364,
+            "title": "完结撒花",
+            "truncated": false
+          }
+        ],
+        "chapters": 771,
+        "coverPresent": true,
+        "firstChapter": "第一章 前因",
+        "lastChapter": "完结撒花",
+        "searchTitle": "三国之霸主刘琦",
+        "summaryRunes": 91,
+        "title": "三国之霸主刘琦",
+        "url": "http://appi.kuwo.cn/novels/api/book/9046067203383803"
+      }
+    ],
+    "worksSampled": 2
+  },
+  {
+    "alternateSearch": {
+      "count": 5,
+      "keyword": "斗罗",
+      "sameLeadingIDs": false
+    },
+    "apiUrl": "http://m.suixkan.com",
+    "baseline": {
+      "sourceKey": "42b07a562f14c6f067083fbc046a15d0638fc0187b62c1928199e44f38984005",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "ok",
+          "count": 5,
+          "millis": 124
+        },
+        {
+          "name": "detail",
+          "status": "ok",
+          "count": 1,
+          "millis": 102
+        },
+        {
+          "name": "toc",
+          "status": "ok",
+          "count": 779,
+          "millis": 158
+        },
+        {
+          "name": "content",
+          "status": "ok",
+          "count": 46,
+          "millis": 82
+        }
+      ],
+      "ok": true
+    },
+    "checkedAt": 1792590595,
+    "id": "42b07a562f14c6f067083fbc046a15d0638fc0187b62c1928199e44f38984005",
+    "keyword": "三国",
+    "kind": "novel",
+    "millis": 1669,
+    "name": "阅友小说",
+    "searchSample": [
+      {
+        "author": "逆天吼",
+        "coverPresent": true,
+        "summaryRunes": 132,
+        "title": "三国争锋",
+        "url": "http://m.suixkan.com/b/235207.html"
+      },
+      {
+        "author": "沧凌九界",
+        "coverPresent": true,
+        "summaryRunes": 149,
+        "title": "三国第一逆子",
+        "url": "http://m.suixkan.com/b/235861.html"
+      },
+      {
+        "author": "大篷车",
+        "coverPresent": true,
+        "summaryRunes": 65,
+        "title": "衙内闯三国",
+        "url": "http://m.suixkan.com/b/233630.html"
+      },
+      {
+        "author": "小小马甲1号",
+        "coverPresent": true,
+        "summaryRunes": 31,
+        "title": "三国之超级霸主",
+        "url": "http://m.suixkan.com/b/234549.html"
+      },
+      {
+        "author": "铁骑绕龙城",
+        "coverPresent": true,
+        "summaryRunes": 107,
+        "title": "三国之大汉皇权",
+        "url": "http://m.suixkan.com/b/235808.html"
+      }
+    ],
+    "status": "sample_chain_passed",
+    "works": [
+      {
+        "author": "逆天吼",
+        "chapterSamples": [
+          {
+            "access": "unknown",
+            "excerpt": "洛阳城上西门打开，一匹黑色健马奔雷走电一般的冲了出来，向着西门外并州军大营赶去。\n此时已是申时四刻，天色将晚，耳听得身后洛阳城报时",
+            "garbled": false,
+            "navigationOrAdMarkers": [],
+            "obfuscated": false,
+            "paragraphs": 46,
+            "position": 0,
+            "runes": 3344,
+            "title": "第1章 越后之龙",
+            "truncated": false
+          },
+          {
+            "access": "unknown",
+            "excerpt": "兵马一进入白陉谷，张郃先放下了一半的心，这里宽阔广大，完全适合骑兵冲击，而且杜凤扬也是用得骑兵。\n张郃催马向前，仔细看看看那鲲化为",
+            "garbled": false,
+            "navigationOrAdMarkers": [],
+            "obfuscated": false,
+            "paragraphs": 48,
+            "position": 389,
+            "runes": 4232,
+            "title": "第390章 少女将军杜凤扬：下",
+            "truncated": false
+          },
+          {
+            "access": "unknown",
+            "excerpt": "八番位于南中险地，但却是个富饶平静的小村子，这里的人都信奉火神，家家供奉祝融老祖，以祝融的传人自居，每年雨水到来的时候，正是寨子播",
+            "garbled": false,
+            "navigationOrAdMarkers": [],
+            "obfuscated": false,
+            "paragraphs": 71,
+            "position": 778,
+            "runes": 4451,
+            "title": "第779章 八番反南中",
+            "truncated": false
+          }
+        ],
+        "chapters": 779,
+        "coverPresent": true,
+        "firstChapter": "第1章 越后之龙",
+        "lastChapter": "第779章 八番反南中",
+        "searchTitle": "三国争锋",
+        "summaryRunes": 132,
+        "title": "三国争锋",
+        "url": "http://m.suixkan.com/b/235207.html"
+      },
+      {
+        "author": "沧凌九界",
+        "chapterSamples": [
+          {
+            "access": "unknown",
+            "excerpt": "“夫君、夫君！”\n“王死父，妾死夫，妾身愿随夫君同死！”\n身旁的声音传来，刘谌茫然的睁开双眼。\n目光四顾，神色茫然，这是一处样式古",
+            "garbled": false,
+            "navigationOrAdMarkers": [],
+            "obfuscated": false,
+            "paragraphs": 134,
+            "position": 0,
+            "runes": 2340,
+            "title": "第一章 穿越北地王刘谌",
+            "truncated": false
+          },
+          {
+            "access": "unknown",
+            "excerpt": "郿县城外。\n姜维领军杀到此地。\n但他没有直接攻城，毕竟如今陇西之地兵力空虚，已经是显而易见的了。\n这种时候，劝降才是最好的办法。\n",
+            "garbled": false,
+            "navigationOrAdMarkers": [],
+            "obfuscated": false,
+            "paragraphs": 119,
+            "position": 32,
+            "runes": 2209,
+            "title": "第三十三章 惊惧的司马望",
+            "truncated": false
+          },
+          {
+            "access": "unknown",
+            "excerpt": "听得孙休之言，二人也是陷入思索中。\n濮阳兴拱手说道：\n“启禀陛下，这贾充答应的如此痛快，这其中恐怕暗藏阴谋啊！”\n这是濮阳兴考虑到",
+            "garbled": false,
+            "navigationOrAdMarkers": [],
+            "obfuscated": false,
+            "paragraphs": 102,
+            "position": 64,
+            "runes": 2230,
+            "title": "第六十五章 贾充的算计",
+            "truncated": false
+          }
+        ],
+        "chapters": 65,
+        "coverPresent": true,
+        "firstChapter": "第一章 穿越北地王刘谌",
+        "lastChapter": "第六十五章 贾充的算计",
+        "searchTitle": "三国第一逆子",
+        "summaryRunes": 149,
+        "title": "三国第一逆子",
+        "url": "http://m.suixkan.com/b/235861.html"
+      }
+    ],
+    "worksSampled": 2
+  },
+  {
+    "alternateSearch": {
+      "count": 3,
+      "keyword": "斗罗",
+      "sameLeadingIDs": false
+    },
+    "apiUrl": "https://fanqienovel.com",
+    "baseline": {
+      "sourceKey": "260ac95862f67eb7d6a036dbc71d7ba9d95e610d8c6412cf20e6bc4aad5a7af2",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "ok",
+          "count": 7,
+          "millis": 228
+        },
+        {
+          "name": "detail",
+          "status": "ok",
+          "count": 1,
+          "millis": 458
+        },
+        {
+          "name": "toc",
+          "status": "ok",
+          "count": 351,
+          "millis": 226
+        },
+        {
+          "name": "content",
+          "status": "ok",
+          "count": 122,
+          "millis": 213
+        }
+      ],
+      "ok": true
+    },
+    "checkedAt": 1792590595,
+    "id": "260ac95862f67eb7d6a036dbc71d7ba9d95e610d8c6412cf20e6bc4aad5a7af2",
+    "keyword": "部族荣光",
+    "kind": "novel",
+    "millis": 3872,
+    "name": "番茄小说",
+    "searchSample": [
+      {
+        "author": "丧狐",
+        "coverPresent": true,
+        "summaryRunes": 190,
+        "title": "部族荣光",
+        "url": "https://fanqienovel.com/page/7069948840148732967"
+      },
+      {
+        "author": "川昀",
+        "coverPresent": true,
+        "summaryRunes": 137,
+        "title": "部 落： 荣 耀",
+        "url": "https://fanqienovel.com/page/7489787092017351705"
+      },
+      {
+        "author": "十年苦逼",
+        "coverPresent": true,
+        "summaryRunes": 68,
+        "title": "蛮荒 部族",
+        "url": "https://fanqienovel.com/page/7320464935811566654"
+      },
+      {
+        "author": "有虞沧溟",
+        "coverPresent": true,
+        "summaryRunes": 72,
+        "title": "上古 部族 演义",
+        "url": "https://fanqienovel.com/page/7638236346607209534"
+      },
+      {
+        "author": "湘西部族",
+        "coverPresent": true,
+        "summaryRunes": 56,
+        "title": "平安村传奇",
+        "url": "https://fanqienovel.com/page/7529849061952719896"
+      },
+      {
+        "author": "聪明的一宝",
+        "coverPresent": true,
+        "summaryRunes": 143,
+        "title": "部族 纷争兽魂合",
+        "url": "https://fanqienovel.com/page/7550687796063636504"
+      }
+    ],
+    "status": "sample_chain_passed",
+    "works": [
+      {
+        "author": "丧狐",
+        "chapterSamples": [
+          {
+            "access": "available",
+            "excerpt": "大乾皇朝，疆域亿万里。\n北地，黑潭山，七月初九。\n统治周遭百岭之地已有千年之久的黑潭山十大部族之一‘姜氏部族’，如今已经到了生死存",
+            "garbled": false,
+            "navigationOrAdMarkers": [],
+            "obfuscated": false,
+            "paragraphs": 122,
+            "position": 0,
+            "runes": 4344,
+            "title": "第1章 部族生死战",
+            "truncated": false
+          },
+          {
+            "access": "subscription",
+            "error": "PERMISSION_DENIED: 此章节需要在番茄官方客户端获取访问权限",
+            "position": 175,
+            "title": "第176章 神庭？不可能！绝对不可能"
+          },
+          {
+            "access": "subscription",
+            "error": "PERMISSION_DENIED: 此章节需要在番茄官方客户端获取访问权限",
+            "position": 350,
+            "title": "第351章 不可思议的神罗大帝！姜玄的计划！"
+          }
+        ],
+        "chapters": 351,
+        "coverPresent": true,
+        "firstChapter": "第1章 部族生死战",
+        "lastChapter": "第351章 不可思议的神罗大帝！姜玄的计划！",
+        "searchTitle": "部族荣光",
+        "summaryRunes": 190,
+        "title": "部族荣光",
+        "url": "https://fanqienovel.com/page/7069948840148732967"
+      },
+      {
+        "author": "川昀",
+        "chapterSamples": [
+          {
+            "access": "available",
+            "excerpt": "林北从没想过，自己会以这种方式结束自己二十一岁的生命。\n他就读于一所连名字都羞于提起的野鸡大学，专业是“工商管理”，说白了就是混个",
+            "garbled": false,
+            "navigationOrAdMarkers": [],
+            "obfuscated": false,
+            "paragraphs": 89,
+            "position": 0,
+            "runes": 5113,
+            "title": "第1章 部落囚徒（一）",
+            "truncated": false
+          },
+          {
+            "access": "available",
+            "excerpt": "林北说出“往北”的时候，纯粹是脑子一热。当时所有人都盯着他——老铁在等答案，阿娅在等答案，连那只独眼巨人都歪着脑袋等。他总不能说“",
+            "garbled": false,
+            "navigationOrAdMarkers": [],
+            "obfuscated": false,
+            "paragraphs": 19,
+            "position": 2,
+            "runes": 6092,
+            "title": "第3章 部落囚徒（三）",
+            "truncated": false
+          },
+          {
+            "access": "available",
+            "excerpt": "山谷的入口藏在两座断崖之间，像被谁用巨斧在山的肚子上劈开了一道缝。晨雾还没散透，白茫茫地积在谷口，看不清里面有多深，只能隐约看到两",
+            "garbled": false,
+            "navigationOrAdMarkers": [],
+            "obfuscated": false,
+            "paragraphs": 32,
+            "position": 4,
+            "runes": 5708,
+            "title": "第5章 部落囚徒（五）",
+            "truncated": false
+          }
+        ],
+        "chapters": 5,
+        "coverPresent": true,
+        "firstChapter": "第1章 部落囚徒（一）",
+        "lastChapter": "第5章 部落囚徒（五）",
+        "searchTitle": "部 落： 荣 耀",
+        "summaryRunes": 137,
+        "title": "部落：荣耀",
+        "url": "https://fanqienovel.com/page/7489787092017351705"
+      }
+    ],
+    "worksSampled": 2
+  },
+  {
+    "apiUrl": "http://www.pfwx.com",
+    "baseline": {
+      "sourceKey": "7a875d98153b84acdd6ae25180b71900cf37d5eccb1f38c16562ab83d774aa6d",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "操作超时",
+          "millis": 30000,
+          "code": "TIMEOUT"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590596,
+    "id": "7a875d98153b84acdd6ae25180b71900cf37d5eccb1f38c16562ab83d774aa6d",
+    "kind": "novel",
+    "millis": 30000,
+    "name": "平凡文学",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "apiUrl": "http://tiantangxiangzuoshenzhenwangyou.qwyd.net",
+    "baseline": {
+      "sourceKey": "a6df4503487077b365a700eb10d8859742fab91f46b87a03ea390ca808a4a922",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "操作超时",
+          "millis": 30000,
+          "code": "TIMEOUT"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590597,
+    "id": "a6df4503487077b365a700eb10d8859742fab91f46b87a03ea390ca808a4a922",
+    "kind": "novel",
+    "millis": 30000,
+    "name": "🔖天堂向左 深圳往右",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "apiUrl": "http://novel.tingroom.com/wap/index.php",
+    "baseline": {
+      "sourceKey": "50261defeae6711d0f255411df90e85e5c6093fbbf5d2c7c1b706b3d656a3822",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "ok",
+          "count": 1,
+          "millis": 4005
+        },
+        {
+          "name": "detail",
+          "status": "failed",
+          "message": "操作超时",
+          "millis": 30000,
+          "code": "TIMEOUT"
+        },
+        {
+          "name": "toc",
+          "status": "ok",
+          "count": 120,
+          "millis": 3331
+        },
+        {
+          "name": "content",
+          "status": "ok",
+          "count": 796,
+          "millis": 10181
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590599,
+    "error": "TIMEOUT: 读取响应失败: net/http: request canceled (Client.Timeout or context cancellation while reading body)",
+    "id": "50261defeae6711d0f255411df90e85e5c6093fbbf5d2c7c1b706b3d656a3822",
+    "keyword": "三国",
+    "kind": "novel",
+    "name": "🌐 英文小说",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "alternateSearch": {
+      "count": 0,
+      "keyword": "斗罗",
+      "sameLeadingIDs": false
+    },
+    "apiUrl": "https://so.ihuaben.com/search?keyword=我是",
+    "baseline": {
+      "sourceKey": "d2f0156a1241b27e57112d5847236e8202a86929118bf2befa96c4647063b60a",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "ok",
+          "count": 30,
+          "millis": 201
+        },
+        {
+          "name": "detail",
+          "status": "failed",
+          "message": "详情页没有解析出书名；规则可能选错了元素",
+          "millis": 152,
+          "code": "CORRUPT"
+        },
+        {
+          "name": "toc",
+          "status": "failed",
+          "message": "目录解析出来是空的；可能是规则选错了元素，也可能这个源需要登录",
+          "millis": 64,
+          "code": "CORRUPT"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590676,
+    "id": "d2f0156a1241b27e57112d5847236e8202a86929118bf2befa96c4647063b60a",
+    "keyword": "三国",
+    "kind": "novel",
+    "millis": 892,
+    "name": "话本小说",
+    "searchSample": [
+      {
+        "author": "后院种瓜",
+        "coverPresent": false,
+        "summaryRunes": 0,
+        "title": "终极 三国 ：我只是单纯吃瓜",
+        "url": "https://www.ihuaben.com/book/12929894.html"
+      },
+      {
+        "author": "不忍负余殇",
+        "coverPresent": false,
+        "summaryRunes": 0,
+        "title": "终极 三国 之真实的他",
+        "url": "https://www.ihuaben.com/book/4569272.html"
+      },
+      {
+        "author": "化蛟为龙",
+        "coverPresent": false,
+        "summaryRunes": 0,
+        "title": "综影视：她是个普女",
+        "url": "https://www.ihuaben.com/book/12426783.html"
+      },
+      {
+        "author": "甜歆儿",
+        "coverPresent": false,
+        "summaryRunes": 0,
+        "title": "终极 三国 之只喜欢你",
+        "url": "https://www.ihuaben.com/book/8583013.html"
+      },
+      {
+        "author": "魏彧不吃鱼",
+        "coverPresent": false,
+        "summaryRunes": 0,
+        "title": "终极 三国 ：够爱",
+        "url": "https://www.ihuaben.com/book/11008427.html"
+      },
+      {
+        "author": "洛阳尘歆",
+        "coverPresent": false,
+        "summaryRunes": 0,
+        "title": "终极 三国 之无涯",
+        "url": "https://www.ihuaben.com/book/5860823.html"
+      }
+    ],
+    "status": "failed",
+    "works": [
+      {
+        "author": "后院种瓜",
+        "coverPresent": false,
+        "detailError": "CORRUPT: 详情页没有解析出书名；规则可能选错了元素",
+        "searchTitle": "终极 三国 ：我只是单纯吃瓜",
+        "summaryRunes": 0,
+        "title": "终极 三国 ：我只是单纯吃瓜",
+        "tocError": "CORRUPT: 目录解析出来是空的；可能是规则选错了元素，也可能这个源需要登录",
+        "url": "https://www.ihuaben.com/book/12929894.html"
+      },
+      {
+        "author": "不忍负余殇",
+        "coverPresent": false,
+        "detailError": "CORRUPT: 详情页没有解析出书名；规则可能选错了元素",
+        "searchTitle": "终极 三国 之真实的他",
+        "summaryRunes": 0,
+        "title": "终极 三国 之真实的他",
+        "tocError": "CORRUPT: 目录解析出来是空的；可能是规则选错了元素，也可能这个源需要登录",
+        "url": "https://www.ihuaben.com/book/4569272.html"
+      }
+    ],
+    "worksSampled": 2
+  },
+  {
+    "alternateSearchError": "RATE_LIMITED: 源站请求过于频繁，请稍后重试",
+    "apiUrl": "http://www.tiandizw.com",
+    "baseline": {
+      "sourceKey": "3ca0b0933b01a36475e0ec44c3ad87ba355f1cc019718c53d64b66c0ee0711b6",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "ok",
+          "count": 8,
+          "millis": 219
+        },
+        {
+          "name": "detail",
+          "status": "failed",
+          "message": "详情页没有解析出书名；规则可能选错了元素",
+          "millis": 180,
+          "code": "CORRUPT"
+        },
+        {
+          "name": "toc",
+          "status": "failed",
+          "message": "目录解析出来是空的；可能是规则选错了元素，也可能这个源需要登录",
+          "millis": 180,
+          "code": "CORRUPT"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590677,
+    "id": "3ca0b0933b01a36475e0ec44c3ad87ba355f1cc019718c53d64b66c0ee0711b6",
+    "keyword": "三国",
+    "kind": "novel",
+    "millis": 1001,
+    "name": "🔖天地中文网",
+    "searchSample": [
+      {
+        "author": "作者：空心泪",
+        "coverPresent": true,
+        "summaryRunes": 81,
+        "title": "三国 ：截胡变强从桃源三结义开始",
+        "url": "http://www.tiandizw.com/newbookinfo/919247.html"
+      },
+      {
+        "author": "作者：空心泪",
+        "coverPresent": true,
+        "summaryRunes": 81,
+        "title": "穿越 三国 ：截胡就能变强！",
+        "url": "http://www.tiandizw.com/newbookinfo/1020922.html"
+      },
+      {
+        "author": "作者：空心泪",
+        "coverPresent": true,
+        "summaryRunes": 83,
+        "title": "三国 ：从罗马帝国称帝开始",
+        "url": "http://www.tiandizw.com/newbookinfo/918799.html"
+      },
+      {
+        "author": "作者：空心泪",
+        "coverPresent": true,
+        "summaryRunes": 81,
+        "title": "三国 ：只要截胡就能变强",
+        "url": "http://www.tiandizw.com/newbookinfo/1019179.html"
+      },
+      {
+        "author": "作者：赵家公子",
+        "coverPresent": true,
+        "summaryRunes": 81,
+        "title": "三国 ：开局被后妈灌毒药【原书】",
+        "url": "http://www.tiandizw.com/newbookinfo/1019087.html"
+      },
+      {
+        "author": "作者：赵家公子",
+        "coverPresent": true,
+        "summaryRunes": 81,
+        "title": "三国 ：开局被后妈灌毒药",
+        "url": "http://www.tiandizw.com/newbookinfo/919126.html"
+      }
+    ],
+    "status": "failed",
+    "works": [
+      {
+        "author": "作者：空心泪",
+        "coverPresent": true,
+        "detailError": "RATE_LIMITED: 源站请求过于频繁，请稍后重试",
+        "searchTitle": "三国 ：截胡变强从桃源三结义开始",
+        "summaryRunes": 81,
+        "title": "三国 ：截胡变强从桃源三结义开始",
+        "tocError": "RATE_LIMITED: 源站请求过于频繁，请稍后重试",
+        "url": "http://www.tiandizw.com/newbookinfo/919247.html"
+      },
+      {
+        "author": "作者：空心泪",
+        "coverPresent": true,
+        "detailError": "RATE_LIMITED: 源站请求过于频繁，请稍后重试",
+        "searchTitle": "穿越 三国 ：截胡就能变强！",
+        "summaryRunes": 81,
+        "title": "穿越 三国 ：截胡就能变强！",
+        "tocError": "RATE_LIMITED: 源站请求过于频繁，请稍后重试",
+        "url": "http://www.tiandizw.com/newbookinfo/1020922.html"
+      }
+    ],
+    "worksSampled": 2
+  },
+  {
+    "alternateSearch": {
+      "count": 24,
+      "keyword": "斗罗",
+      "sameLeadingIDs": false
+    },
+    "apiUrl": "http://book.sfacg.com",
+    "baseline": {
+      "sourceKey": "ddcaa7350956b0ef0c5099bd84088d5e9930985342bbeccfd6a7204b4bb6e359",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "ok",
+          "count": 30,
+          "millis": 164
+        },
+        {
+          "name": "detail",
+          "status": "failed",
+          "message": "详情页没有解析出书名；规则可能选错了元素",
+          "millis": 316,
+          "code": "CORRUPT"
+        },
+        {
+          "name": "toc",
+          "status": "failed",
+          "message": "目录解析出来是空的；可能是规则选错了元素，也可能这个源需要登录",
+          "millis": 220,
+          "code": "CORRUPT"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590678,
+    "id": "ddcaa7350956b0ef0c5099bd84088d5e9930985342bbeccfd6a7204b4bb6e359",
+    "keyword": "三国",
+    "kind": "novel",
+    "millis": 1260,
+    "name": "📖 SF轻小说",
+    "searchSample": [
+      {
+        "author": "我的三国不可能这么可爱\n\n： 平凡的宅男\n新书求收藏。\n慢热作，慢热作，慢热作。\n建议各位至少看完第二卷，三卷开始发力高甜，构思很久，相信各位看下去一定会喜欢。\n求收藏，求评论，请诸位一定要看完第二卷呀。\n—\n萧清很郁闷，因为他稀里糊涂的穿越到了三国。\n啥？这里曹操是美少女？是那个宁我负人毋人负我的曹操吗？\n啥？这赵云也是美少女？是那个一身是胆常胜将军的赵云吗？\n啥？一个是中二妹子，一个是银发娘？\n我的三国不可能这么可爱！",
+        "coverPresent": true,
+        "summaryRunes": 0,
+        "title": "我的三国不可能这么可爱",
+        "url": "https://book.sfacg.com/Novel/291080"
+      },
+      {
+        "author": "请别告诉我这是三国正史！\n\n： 黑礁商会房东\n我莫名其妙手握了一把羽扇，来到了一个与我所知全然不同的三国时代。什么？男女早就平等了？女性也可以参军？你和你和你和你，怎么都是女孩子啊！！在这个时代里，有着与正史截然不同的有趣故事！但或许这才是三国，这才是三国正史！",
+        "coverPresent": true,
+        "summaryRunes": 0,
+        "title": "请别告诉我这是三国正史！",
+        "url": "https://book.sfacg.com/Novel/24719"
+      },
+      {
+        "author": "我的女友不可能是三国无双吕奉先\n\n： 扫荡小白狼\n长相极为像是一名帅气女孩的我，在某一天接到了来自【三国大学】的入学通知书，同时也被告知自己是三国貂蝉的转世，到了学校后还发现吕奉先的转世居然是一名十分可爱的女孩子！就此，已经踏入了这个魔幻世界的我永远失去了所谓的日常！ （新群旧群已炸）",
+        "coverPresent": true,
+        "summaryRunes": 0,
+        "title": "我的女友不可能是三国无双吕奉先",
+        "url": "https://book.sfacg.com/Novel/42702"
+      },
+      {
+        "author": "三国英灵与异界乱世\n\n： 秋霜燓雪\n身逢乱世，狼烟四起，诸侯纷争，占地称王。\n代表曹魏势力天生枭雄之姿的大姐。\n代表蜀汉势力以仁爱得民心的二姐。\n代表东吴势力潜力无限的三姐。\n身无一兵一卒的你是辅佐其中一位姐姐成就霸业，还是在这乱世中白手起家打出一个属于自己的王朝。\n你的选择是什么？\n\n欢迎加入 এ伴ꦿএ᭄雪ꦿ，群聊号码：210984029\n本群为交流交友群，大家可以畅所欲言！",
+        "coverPresent": true,
+        "summaryRunes": 0,
+        "title": "三国英灵与异界乱世",
+        "url": "https://book.sfacg.com/Novel/172648"
+      },
+      {
+        "author": "战姬三国\n\n： 葛理康迪\n公孙瓒变成了我的美少女幼驯染，卢植变成是一位美女教师，曹老板居然会向我表白？卧龙和凤雏？三年血赚，死刑不亏，司马仲达？我去，向女装大佬低头\n慈慈“你不是熟读三国嘛，怎么一直一副大愚弱（若）智的样子？”\n刘备“你才是弱智！我只是希望用萌新的方式来了解三国而已。”\n慈慈“说人话！”\n刘备“我要扮猪吃老虎！”\n“……”",
+        "coverPresent": true,
+        "summaryRunes": 0,
+        "title": "战姬三国",
+        "url": "https://book.sfacg.com/Novel/82815"
+      },
+      {
+        "author": "魂穿孙尚香，这个三国不对劲\n\n： 时空月狐\n坏消息，穿越三国了。好消息，是蜀汉阵营。坏消息，穿越成孙尚香了。\n自现代而来的男大学生孙南魂穿成孙尚香，看着眼前俊美的男子。\n不可思议的问道：“你是刘备？”\n“是的，夫人，有什么问题吗？”\n那名俊美男子回道，只见其双股剑劈下，燃起阵阵雷火。\n除此之外，还背山走石的蜀汉力士，龙枪破东南的龙胆魂枪。\n孙尚香傻眼了，这三国好像跟自己想象的不一样？\n【变嫁】【战争】【架空历史】【玄幻三国】",
+        "coverPresent": true,
+        "summaryRunes": 0,
+        "title": "魂穿孙尚香，这个三国不对劲",
+        "url": "https://book.sfacg.com/Novel/710991"
+      }
+    ],
+    "status": "failed",
+    "works": [
+      {
+        "author": "我的三国不可能这么可爱\n\n： 平凡的宅男\n新书求收藏。\n慢热作，慢热作，慢热作。\n建议各位至少看完第二卷，三卷开始发力高甜，构思很久，相信各位看下去一定会喜欢。\n求收藏，求评论，请诸位一定要看完第二卷呀。\n—\n萧清很郁闷，因为他稀里糊涂的穿越到了三国。\n啥？这里曹操是美少女？是那个宁我负人毋人负我的曹操吗？\n啥？这赵云也是美少女？是那个一身是胆常胜将军的赵云吗？\n啥？一个是中二妹子，一个是银发娘？\n我的三国不可能这么可爱！",
+        "coverPresent": true,
+        "detailError": "CORRUPT: 详情页没有解析出书名；规则可能选错了元素",
+        "searchTitle": "我的三国不可能这么可爱",
+        "summaryRunes": 0,
+        "title": "我的三国不可能这么可爱",
+        "tocError": "CORRUPT: 目录解析出来是空的；可能是规则选错了元素，也可能这个源需要登录",
+        "url": "https://book.sfacg.com/Novel/291080"
+      },
+      {
+        "author": "请别告诉我这是三国正史！\n\n： 黑礁商会房东\n我莫名其妙手握了一把羽扇，来到了一个与我所知全然不同的三国时代。什么？男女早就平等了？女性也可以参军？你和你和你和你，怎么都是女孩子啊！！在这个时代里，有着与正史截然不同的有趣故事！但或许这才是三国，这才是三国正史！",
+        "coverPresent": true,
+        "detailError": "CORRUPT: 详情页没有解析出书名；规则可能选错了元素",
+        "searchTitle": "请别告诉我这是三国正史！",
+        "summaryRunes": 0,
+        "title": "请别告诉我这是三国正史！",
+        "tocError": "CORRUPT: 目录解析出来是空的；可能是规则选错了元素，也可能这个源需要登录",
+        "url": "https://book.sfacg.com/Novel/24719"
+      }
+    ],
+    "worksSampled": 2
+  },
+  {
+    "apiUrl": "https://www.biquge7.xyz",
+    "baseline": {
+      "sourceKey": "f6af5f24a9e7cf22cb3e95103aa0b2dab4fb6df3de9d16ff4953f52e52ebb7f6",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "域名解析失败",
+          "millis": 4,
+          "code": "UNAVAILABLE"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590680,
+    "id": "f6af5f24a9e7cf22cb3e95103aa0b2dab4fb6df3de9d16ff4953f52e52ebb7f6",
+    "kind": "novel",
+    "millis": 4,
+    "name": "📖 笔趣阁⑦",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "apiUrl": "http://www.acgzc.com#一程",
+    "baseline": {
+      "sourceKey": "414c60d2fc95cbc0dd32b682cb27ea8a1679f75f41389516cf88498d3f874abd",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "源站返回 HTTP 503",
+          "millis": 45,
+          "code": "UNAVAILABLE"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590680,
+    "id": "414c60d2fc95cbc0dd32b682cb27ea8a1679f75f41389516cf88498d3f874abd",
+    "kind": "novel",
+    "millis": 45,
+    "name": "📖 ACGZC",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "apiUrl": "https://wenxue.bkneng.com",
+    "baseline": {
+      "sourceKey": "9308894e54eb4d85bc5ad97e2d2ab36aecc1a4abdc69baa0f42cbca7151bcc86",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "源站没有这个地址（HTTP 404）",
+          "millis": 72,
+          "code": "NOT_FOUND"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590680,
+    "id": "9308894e54eb4d85bc5ad97e2d2ab36aecc1a4abdc69baa0f42cbca7151bcc86",
+    "kind": "novel",
+    "millis": 72,
+    "name": "不可能世界",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "alternateSearch": {
+      "count": 50,
+      "keyword": "斗罗",
+      "sameLeadingIDs": false
+    },
+    "apiUrl": "http://www.paoshu8.com",
+    "baseline": {
+      "sourceKey": "9c4822024121243fa193952848b9f6137fb4cf2f9656759eeabaf7f89c2ed50a",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "ok",
+          "count": 50,
+          "millis": 1828
+        },
+        {
+          "name": "detail",
+          "status": "failed",
+          "message": "详情页没有解析出书名；规则可能选错了元素",
+          "millis": 20129,
+          "code": "CORRUPT"
+        },
+        {
+          "name": "toc",
+          "status": "ok",
+          "count": 208,
+          "millis": 6424
+        },
+        {
+          "name": "content",
+          "status": "ok",
+          "count": 33,
+          "millis": 1775
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590627,
+    "id": "9c4822024121243fa193952848b9f6137fb4cf2f9656759eeabaf7f89c2ed50a",
+    "keyword": "三国",
+    "kind": "novel",
+    "millis": 73166,
+    "name": "泡书吧⓪",
+    "searchSample": [
+      {
+        "author": "很方第",
+        "coverPresent": false,
+        "summaryRunes": 0,
+        "title": "三国醉三国",
+        "url": "http://www.paoshu9.net/145_145715/"
+      },
+      {
+        "author": "轩辕帝喾氏",
+        "coverPresent": false,
+        "summaryRunes": 0,
+        "title": "三国乱之龙返三国",
+        "url": "http://www.paoshu9.net/30_30496/"
+      },
+      {
+        "author": "西柳",
+        "coverPresent": false,
+        "summaryRunes": 0,
+        "title": "迷乱三国",
+        "url": "http://www.paoshu9.net/6_6479/"
+      },
+      {
+        "author": "天上白雪",
+        "coverPresent": false,
+        "summaryRunes": 0,
+        "title": "鹰扬三国",
+        "url": "http://www.paoshu9.net/8_8151/"
+      },
+      {
+        "author": "飞砂风中转",
+        "coverPresent": false,
+        "summaryRunes": 0,
+        "title": "锦绣三国",
+        "url": "http://www.paoshu9.net/11_11020/"
+      },
+      {
+        "author": "湘南笑笑生",
+        "coverPresent": false,
+        "summaryRunes": 0,
+        "title": "兵甲三国",
+        "url": "http://www.paoshu9.net/13_13516/"
+      }
+    ],
+    "status": "failed",
+    "works": [
+      {
+        "author": "很方第",
+        "chapterSamples": [
+          {
+            "access": "unknown",
+            "excerpt": "最新网址：www.paoshu9.net\n“少卿，不知可有御敌之策？”陈到话锋一转问道。\n“哎，不瞒兄长，周瑜智谋过人，某不知他计",
+            "garbled": false,
+            "navigationOrAdMarkers": [
+              "最新网址"
+            ],
+            "obfuscated": false,
+            "paragraphs": 33,
+            "position": 0,
+            "runes": 3253,
+            "title": "第221章 长沙之战（一）",
+            "truncated": false
+          },
+          {
+            "access": "unknown",
+            "excerpt": "最新网址：www.paoshu9.net\n曹操笑笑回首道：“文若，这次反击某要亲自上阵，以带动我军士气，发起绝地反击。你就不要参加",
+            "garbled": false,
+            "navigationOrAdMarkers": [
+              "最新网址"
+            ],
+            "obfuscated": false,
+            "paragraphs": 46,
+            "position": 104,
+            "runes": 3160,
+            "title": "第109章 毒士贾诩的惊天之谋（2）",
+            "truncated": false
+          },
+          {
+            "access": "unknown",
+            "excerpt": "最新网址：www.paoshu9.net\n“援叔…马均，你好狠心！”钱青莲一声悲鸣，伸手扶住了马援将将倒下的身躯：“他可是你的族叔",
+            "garbled": false,
+            "navigationOrAdMarkers": [
+              "最新网址"
+            ],
+            "obfuscated": false,
+            "paragraphs": 36,
+            "position": 207,
+            "runes": 3235,
+            "title": "第212章 夫妻反目",
+            "truncated": false
+          }
+        ],
+        "chapters": 208,
+        "coverPresent": false,
+        "detailError": "CORRUPT: 详情页没有解析出书名；规则可能选错了元素",
+        "firstChapter": "第221章 长沙之战（一）",
+        "lastChapter": "第212章 夫妻反目",
+        "searchTitle": "三国醉三国",
+        "summaryRunes": 0,
+        "title": "三国醉三国",
+        "url": "http://www.paoshu9.net/145_145715/"
+      },
+      {
+        "author": "轩辕帝喾氏",
+        "chapterSamples": [
+          {
+            "access": "unknown",
+            "excerpt": "最新网址：www.paoshu9.net\n年少时，不懂父母在不远游的道理。整天没头没脑的瞎玩。\n也曾自诩为闲云野鹤一只，恣意漂游，",
+            "garbled": false,
+            "navigationOrAdMarkers": [
+              "最新网址"
+            ],
+            "obfuscated": false,
+            "paragraphs": 26,
+            "position": 0,
+            "runes": 1494,
+            "title": "都云五柳陶公痴，世人谁知桃源妙。",
+            "truncated": false
+          },
+          {
+            "access": "unknown",
+            "excerpt": "最新网址：www.paoshu9.net\n传国玺或传国玉玺，为中国古代皇帝的信物，史书记载传国玉玺乃和氏璧雕成。\n传国玉玺”就材于",
+            "garbled": false,
+            "navigationOrAdMarkers": [
+              "最新网址"
+            ],
+            "obfuscated": false,
+            "paragraphs": 10,
+            "position": 29,
+            "runes": 1419,
+            "title": "第十九章 传国玉玺：九州诸侯问鼎重",
+            "truncated": false
+          },
+          {
+            "access": "unknown",
+            "excerpt": "最新网址：www.paoshu9.net\n公元190年，农历庚午年，中国东汉献帝初平元年。董卓，韩遂，马腾百万联军已经包围潼关三月",
+            "garbled": false,
+            "navigationOrAdMarkers": [
+              "最新网址"
+            ],
+            "obfuscated": false,
+            "paragraphs": 7,
+            "position": 58,
+            "runes": 915,
+            "title": "第四十八章：董卓逼宫：汉室君臣非完卵",
+            "truncated": false
+          }
+        ],
+        "chapters": 59,
+        "coverPresent": false,
+        "detailError": "CORRUPT: 详情页没有解析出书名；规则可能选错了元素",
+        "firstChapter": "都云五柳陶公痴，世人谁知桃源妙。",
+        "lastChapter": "第四十八章：董卓逼宫：汉室君臣非完卵",
+        "searchTitle": "三国乱之龙返三国",
+        "summaryRunes": 0,
+        "title": "三国乱之龙返三国",
+        "url": "http://www.paoshu9.net/30_30496/"
+      }
+    ],
+    "worksSampled": 2
+  },
+  {
+    "apiUrl": "https://www.doufu.me/",
+    "baseline": {
+      "sourceKey": "0de073057ab692e0b3dbd2a790450cb8a97de3ddfc9e2ca4b889a5392aacc7b9",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "源站返回 HTTP 500",
+          "millis": 751,
+          "code": "UNAVAILABLE"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590700,
+    "id": "0de073057ab692e0b3dbd2a790450cb8a97de3ddfc9e2ca4b889a5392aacc7b9",
+    "kind": "novel",
+    "millis": 751,
+    "name": "🔰 豆腐文学",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "apiUrl": "http://m.uuxsw8.cc",
+    "baseline": {
+      "sourceKey": "f6099b8b47394960c3e7caf2e5c323bf856bcb9c410d60019f217511922d9cb4",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "请求成功但没有结果；换一个 check_keyword 试试",
+          "millis": 557,
+          "code": "NOT_FOUND"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590701,
+    "id": "f6099b8b47394960c3e7caf2e5c323bf856bcb9c410d60019f217511922d9cb4",
+    "kind": "novel",
+    "millis": 557,
+    "name": "UU小说2",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "apiUrl": "http://m.uuxsw8.cc#响海",
+    "baseline": {
+      "sourceKey": "f135a12af714193fd0f3d51c7cd7ce4bd36982987cab48a5b6a2ecd4ce324cda",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "请求成功但没有结果；换一个 check_keyword 试试",
+          "millis": 21670,
+          "code": "NOT_FOUND"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590680,
+    "id": "f135a12af714193fd0f3d51c7cd7ce4bd36982987cab48a5b6a2ecd4ce324cda",
+    "kind": "novel",
+    "millis": 21671,
+    "name": "☘️UU小说☘️",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "apiUrl": "http://www.uuxsw8.net",
+    "baseline": {
+      "sourceKey": "28cd12d792060a1570aef268ea6310755a23cc118e4076d811945038f1d03f9e",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "域名 www.uuxsw8.net 解析不到",
+          "millis": 541,
+          "code": "NOT_FOUND"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590701,
+    "id": "28cd12d792060a1570aef268ea6310755a23cc118e4076d811945038f1d03f9e",
+    "kind": "novel",
+    "millis": 541,
+    "name": "🎉 UU小说吧",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "apiUrl": "https://www.alphapolis.co.jp",
+    "baseline": {
+      "sourceKey": "de119a660e50d04ffa1b697073c625dd837be1a1c970364f29c89f539d3a2e4a",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "请求成功但没有结果；换一个 check_keyword 试试",
+          "millis": 576,
+          "code": "NOT_FOUND"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590701,
+    "id": "de119a660e50d04ffa1b697073c625dd837be1a1c970364f29c89f539d3a2e4a",
+    "kind": "novel",
+    "millis": 576,
+    "name": "alpha",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "apiUrl": "https://www.shumilou.co/",
+    "baseline": {
+      "sourceKey": "d7481653f857d99ebb1291f67a77d53be9fc43c59a84da7d922bbc059039e6d5",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "源站没有这个地址（HTTP 404）",
+          "millis": 571,
+          "code": "NOT_FOUND"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590702,
+    "id": "d7481653f857d99ebb1291f67a77d53be9fc43c59a84da7d922bbc059039e6d5",
+    "kind": "novel",
+    "millis": 572,
+    "name": "书迷楼",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "apiUrl": "https://i7txt.net",
+    "baseline": {
+      "sourceKey": "faaddb76619d451ebc56f0789def0087c6a7f6cd3307dc17ea9fde2c65f2b63f",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "请求成功但没有结果；换一个 check_keyword 试试",
+          "millis": 932,
+          "code": "NOT_FOUND"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590702,
+    "id": "faaddb76619d451ebc56f0789def0087c6a7f6cd3307dc17ea9fde2c65f2b63f",
+    "kind": "novel",
+    "millis": 932,
+    "name": "艾墨中文网",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "apiUrl": "https://www.biqusa.com",
+    "baseline": {
+      "sourceKey": "fed25d13b132f9ec82756ecc7bc2880085015dc613855c38e76c0857f7526414",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "请求成功但没有结果；换一个 check_keyword 试试",
+          "millis": 989,
+          "code": "NOT_FOUND"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590702,
+    "id": "fed25d13b132f9ec82756ecc7bc2880085015dc613855c38e76c0857f7526414",
+    "kind": "novel",
+    "millis": 990,
+    "name": "🍺 笔趣阁⑨③",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "apiUrl": "https://www.huanyuan.app",
+    "baseline": {
+      "sourceKey": "cd639ddccd61d6e5debddd7ff0f9a2e46b56cbe0d637ffa6760ba0654df26ff5",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "请求成功但没有结果；换一个 check_keyword 试试",
+          "millis": 1092,
+          "code": "NOT_FOUND"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590703,
+    "id": "cd639ddccd61d6e5debddd7ff0f9a2e46b56cbe0d637ffa6760ba0654df26ff5",
+    "kind": "novel",
+    "millis": 1092,
+    "name": "换源小说网",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "apiUrl": "https://www.wcxs5.com",
+    "baseline": {
+      "sourceKey": "bf97f9bc90c2067af58e22c23a1f236645b993db52ce0044665cba892641f5a5",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "请求成功但没有结果；换一个 check_keyword 试试",
+          "millis": 1154,
+          "code": "NOT_FOUND"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590703,
+    "id": "bf97f9bc90c2067af58e22c23a1f236645b993db52ce0044665cba892641f5a5",
+    "kind": "novel",
+    "millis": 1154,
+    "name": "无错小说④",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "apiUrl": "http://www.31xs.com",
+    "baseline": {
+      "sourceKey": "899b99e0d64cd7296d95c769ca3c368ab35810593e324858885d401828ba95e6",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "请求成功但没有结果；换一个 check_keyword 试试",
+          "millis": 4133,
+          "code": "NOT_FOUND"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590705,
+    "id": "899b99e0d64cd7296d95c769ca3c368ab35810593e324858885d401828ba95e6",
+    "kind": "novel",
+    "millis": 4133,
+    "name": "🔖三一小说",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "apiUrl": "https://www.52dzxy.com",
+    "baseline": {
+      "sourceKey": "23795912fcc83bcd2f14065135a4d1ec5751ebe22ee8ac77fe2117d74f8ce8f2",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "请求成功但没有结果；换一个 check_keyword 试试",
+          "millis": 5590,
+          "code": "NOT_FOUND"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590704,
+    "id": "23795912fcc83bcd2f14065135a4d1ec5751ebe22ee8ac77fe2117d74f8ce8f2",
+    "kind": "novel",
+    "millis": 5590,
+    "name": "🔖读者",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "apiUrl": "http://m.uuxsw8.com",
+    "baseline": {
+      "sourceKey": "e343cae5c1c327a0f5e5f91249263023558755b1ce605da6cfa0f512fa866815",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "域名 m.uuxsw8.com 解析不到",
+          "millis": 279,
+          "code": "NOT_FOUND"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590710,
+    "id": "e343cae5c1c327a0f5e5f91249263023558755b1ce605da6cfa0f512fa866815",
+    "kind": "novel",
+    "millis": 279,
+    "name": "UU小说3",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "apiUrl": "https://m.zhuishu.com/",
+    "baseline": {
+      "sourceKey": "cb88a24f8cb6ee1a6eb4e6dda614e6525806086c9b1efc6f0fb690d197ba974b",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "源站没有这个地址（HTTP 404）",
+          "millis": 19899,
+          "code": "NOT_FOUND"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590709,
+    "id": "cb88a24f8cb6ee1a6eb4e6dda614e6525806086c9b1efc6f0fb690d197ba974b",
+    "kind": "novel",
+    "millis": 19899,
+    "name": "追书网站",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "apiUrl": "https://wap.maxreader.net#响海",
+    "baseline": {
+      "sourceKey": "07a5d52d3fd59de74ca467dbb1c2e034fa78e19f27161d55a5cc7bd00f5af63b",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "操作超时",
+          "millis": 20029,
+          "code": "TIMEOUT"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590710,
+    "id": "07a5d52d3fd59de74ca467dbb1c2e034fa78e19f27161d55a5cc7bd00f5af63b",
+    "kind": "novel",
+    "millis": 20029,
+    "name": "☘️乐文小说☘️",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "apiUrl": "https://www.8xs.org",
+    "baseline": {
+      "sourceKey": "71716995a3ffbd1c1eeb0929dc4a27e2951160745445d1d46f5e773b5c7285d8",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "请求失败",
+          "millis": 3226,
+          "code": "UNAVAILABLE"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590729,
+    "id": "71716995a3ffbd1c1eeb0929dc4a27e2951160745445d1d46f5e773b5c7285d8",
+    "kind": "novel",
+    "millis": 3226,
+    "name": "无敌小说",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "apiUrl": "http://m.81ht.com/",
+    "baseline": {
+      "sourceKey": "ad0f3632f5ab84d18fea49bebcb0ef9722824406074e70717254c1c9768a4002",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "源站拒绝访问，请检查来源配置或验证要求",
+          "millis": 2426,
+          "code": "PERMISSION_DENIED"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590730,
+    "id": "ad0f3632f5ab84d18fea49bebcb0ef9722824406074e70717254c1c9768a4002",
+    "kind": "novel",
+    "millis": 2426,
+    "name": "求小说网",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "apiUrl": "http://www.xstxt.com",
+    "baseline": {
+      "sourceKey": "ba73526bd5df9f708342a925a4a93adde88d6f6bc0cfebeefd88d497aae2ccd0",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "源站没有这个地址（HTTP 404）",
+          "millis": 3555,
+          "code": "NOT_FOUND"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590732,
+    "id": "ba73526bd5df9f708342a925a4a93adde88d6f6bc0cfebeefd88d497aae2ccd0",
+    "kind": "novel",
+    "millis": 3555,
+    "name": "E小说",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "alternateSearch": {
+      "count": 0,
+      "keyword": "斗罗",
+      "sameLeadingIDs": false
+    },
+    "apiUrl": "http://novel.tingroom.com",
+    "baseline": {
+      "sourceKey": "af777cd23f7ae4e8e220778f2188253468f2d3cea22587f0100c45875b73cfd1",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "ok",
+          "count": 1,
+          "millis": 8683
+        },
+        {
+          "name": "detail",
+          "status": "ok",
+          "count": 1,
+          "millis": 4074
+        },
+        {
+          "name": "toc",
+          "status": "failed",
+          "message": "操作超时",
+          "millis": 30000,
+          "code": "TIMEOUT"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590626,
+    "id": "af777cd23f7ae4e8e220778f2188253468f2d3cea22587f0100c45875b73cfd1",
+    "keyword": "三国",
+    "kind": "novel",
+    "millis": 110000,
+    "name": "🔖英文小说",
+    "searchSample": [
+      {
+        "author": "",
+        "coverPresent": true,
+        "summaryRunes": 0,
+        "title": "三国演义 Romance of Three Kingdoms",
+        "url": "http://novel.tingroom.com/wap/index.php?moduleid=1025\u0026itemid=179\u0026type=3"
+      }
+    ],
+    "status": "failed",
+    "works": [
+      {
+        "author": "",
+        "coverPresent": true,
+        "detailError": "TIMEOUT: 读取响应失败: net/http: request canceled (Client.Timeout or context cancellation while reading body)",
+        "searchTitle": "三国演义 Romance of Three Kingdoms",
+        "summaryRunes": 0,
+        "title": "三国演义 Romance of Three Kingdoms",
+        "tocError": "TIMEOUT: 读取响应失败: context deadline exceeded",
+        "url": "http://novel.tingroom.com/wap/index.php?moduleid=1025\u0026itemid=179\u0026type=3"
+      }
+    ],
+    "worksSampled": 1
+  },
+  {
+    "apiUrl": "http://www.yunxs.com/",
+    "baseline": {
+      "sourceKey": "1171854eef747fc34b515d168013ffd8ff805979ede177a535d7951528367155",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "操作超时",
+          "millis": 20012,
+          "code": "TIMEOUT"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590735,
+    "id": "1171854eef747fc34b515d168013ffd8ff805979ede177a535d7951528367155",
+    "kind": "novel",
+    "millis": 20012,
+    "name": "[阿玖·AJiu]云中书库.PC",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "apiUrl": "http://m.s4yd.com",
+    "baseline": {
+      "sourceKey": "b8509543db330da12f2cc1ecb16a927e89af82aa0cd935e8815e4d454b116071",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "源站拒绝访问，请检查来源配置或验证要求",
+          "millis": 151,
+          "code": "PERMISSION_DENIED"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590755,
+    "id": "b8509543db330da12f2cc1ecb16a927e89af82aa0cd935e8815e4d454b116071",
+    "kind": "novel",
+    "millis": 151,
+    "name": "盛世阅读网",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "apiUrl": "https://m.xiaxs.la##响海",
+    "baseline": {
+      "sourceKey": "33dd46f84377865f8930dd03a257425b8ee7a266085b7747354cefc0cb805a9f",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "操作超时",
+          "millis": 20010,
+          "code": "TIMEOUT"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590736,
+    "id": "33dd46f84377865f8930dd03a257425b8ee7a266085b7747354cefc0cb805a9f",
+    "kind": "novel",
+    "millis": 20010,
+    "name": "☘️TXT小说☘️",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "apiUrl": "https://maxreader.net",
+    "baseline": {
+      "sourceKey": "0916c3848a7275ba8ac1e24b3843e67d1f24e7f56230302db99e2eccfbe4bbfc",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "请求失败",
+          "millis": 3063,
+          "code": "UNAVAILABLE"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590756,
+    "id": "0916c3848a7275ba8ac1e24b3843e67d1f24e7f56230302db99e2eccfbe4bbfc",
+    "kind": "novel",
+    "millis": 3063,
+    "name": "文墨中文网",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "apiUrl": "https://m.aixdzs.com#未月十八edit",
+    "baseline": {
+      "sourceKey": "faca16d514abc943cf0ee5383b08519df07591f0a759dca46daef16006775d2e",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "请求失败",
+          "millis": 832,
+          "code": "UNAVAILABLE"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590759,
+    "id": "faca16d514abc943cf0ee5383b08519df07591f0a759dca46daef16006775d2e",
+    "kind": "novel",
+    "millis": 832,
+    "name": "Ⓐ 爱下电子书",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "apiUrl": "https://lwkk.xyz/",
+    "baseline": {
+      "sourceKey": "39edf8d7b6633153652dfcc89b4ea98620ad801f9a9d5de9a6e9b127c30628fc",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "操作超时",
+          "millis": 31093,
+          "code": "TIMEOUT"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590732,
+    "id": "39edf8d7b6633153652dfcc89b4ea98620ad801f9a9d5de9a6e9b127c30628fc",
+    "kind": "novel",
+    "millis": 31093,
+    "name": "老王小说",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "apiUrl": "https://m.wangshuge.com/",
+    "baseline": {
+      "sourceKey": "9ecf77074c0a6e169a9ffaec12a346d5fbcf210f6b4c029948806186f777824f",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "操作超时",
+          "millis": 20004,
+          "code": "TIMEOUT"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590756,
+    "id": "9ecf77074c0a6e169a9ffaec12a346d5fbcf210f6b4c029948806186f777824f",
+    "kind": "novel",
+    "millis": 20004,
+    "name": "望书阁ge",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "apiUrl": "http://www.xpsge.com/",
+    "baseline": {
+      "sourceKey": "735b99b976244b0f1d847aeb6b385ba4c351d8454644b3e352eaf08fd4860192",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "操作超时",
+          "millis": 20059,
+          "code": "TIMEOUT"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590760,
+    "id": "735b99b976244b0f1d847aeb6b385ba4c351d8454644b3e352eaf08fd4860192",
+    "kind": "novel",
+    "millis": 20059,
+    "name": "🎉笔趣阁⑧③",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "apiUrl": "https://wwww.2kxs.org",
+    "baseline": {
+      "sourceKey": "bf56ba7c8d2b6734af1f6426cf57119d510380e8290e313bfe2e138d82d3cfae",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "操作超时",
+          "millis": 20038,
+          "code": "TIMEOUT"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590763,
+    "id": "bf56ba7c8d2b6734af1f6426cf57119d510380e8290e313bfe2e138d82d3cfae",
+    "kind": "novel",
+    "millis": 20038,
+    "name": "2k2k小说",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "alternateSearch": {
+      "count": 0,
+      "keyword": "神之塔",
+      "sameLeadingIDs": false
+    },
+    "apiUrl": "https://comic.bh3.com",
+    "baseline": {
+      "sourceKey": "ba7175c654b19094fdba523002fb5c9aa802e1b695cf7ba49013bcc0cd36712c",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "ok",
+          "count": 23,
+          "millis": 78
+        },
+        {
+          "name": "detail",
+          "status": "ok",
+          "count": 1,
+          "millis": 5
+        },
+        {
+          "name": "toc",
+          "status": "ok",
+          "count": 7,
+          "millis": 6
+        },
+        {
+          "name": "pages",
+          "status": "ok",
+          "count": 29,
+          "millis": 6
+        },
+        {
+          "name": "image",
+          "status": "ok",
+          "count": 1,
+          "millis": 39
+        }
+      ],
+      "ok": true
+    },
+    "checkedAt": 1792590784,
+    "id": "ba7175c654b19094fdba523002fb5c9aa802e1b695cf7ba49013bcc0cd36712c",
+    "keyword": "崩坏",
+    "kind": "comic",
+    "millis": 4182,
+    "name": "崩坏3官方漫画",
+    "searchSample": [
+      {
+        "author": "",
+        "coverPresent": true,
+        "summaryRunes": 85,
+        "title": "逃离长空篇",
+        "url": "https://comic.bh3.com/book/1001"
+      },
+      {
+        "author": "",
+        "coverPresent": true,
+        "summaryRunes": 99,
+        "title": "樱花追忆篇",
+        "url": "https://comic.bh3.com/book/1002"
+      },
+      {
+        "author": "",
+        "coverPresent": true,
+        "summaryRunes": 83,
+        "title": "逆熵入侵篇",
+        "url": "https://comic.bh3.com/book/1006"
+      },
+      {
+        "author": "",
+        "coverPresent": true,
+        "summaryRunes": 88,
+        "title": "恩返篇",
+        "url": "https://comic.bh3.com/book/1007"
+      },
+      {
+        "author": "",
+        "coverPresent": true,
+        "summaryRunes": 89,
+        "title": "月影篇",
+        "url": "https://comic.bh3.com/book/1008"
+      },
+      {
+        "author": "",
+        "coverPresent": true,
+        "summaryRunes": 88,
+        "title": "紫鸢篇",
+        "url": "https://comic.bh3.com/book/1009"
+      }
+    ],
+    "status": "sample_chain_passed",
+    "works": [
+      {
+        "author": "",
+        "chapterSamples": [
+          {
+            "access": "available",
+            "images": [
+              {
+                "format": "jpeg",
+                "height": 1131,
+                "httpStatus": 200,
+                "index": 0,
+                "mime": "image/jpeg",
+                "width": 800
+              },
+              {
+                "format": "jpeg",
+                "height": 1131,
+                "httpStatus": 200,
+                "index": 14,
+                "mime": "image/jpeg",
+                "width": 800
+              },
+              {
+                "format": "jpeg",
+                "height": 1131,
+                "httpStatus": 200,
+                "index": 28,
+                "mime": "image/jpeg",
+                "width": 1600
+              }
+            ],
+            "pages": 29,
+            "position": 0,
+            "title": "序章 琪亚娜·出击"
+          },
+          {
+            "access": "available",
+            "images": [
+              {
+                "format": "jpeg",
+                "height": 1131,
+                "httpStatus": 200,
+                "index": 0,
+                "mime": "image/jpeg",
+                "width": 800
+              }
+            ],
+            "pages": 19,
+            "position": 3,
+            "title": "第三话 女武神出阵"
+          },
+          {
+            "access": "available",
+            "images": [
+              {
+                "format": "jpeg",
+                "height": 1131,
+                "httpStatus": 200,
+                "index": 0,
+                "mime": "image/jpeg",
+                "width": 823
+              }
+            ],
+            "pages": 21,
+            "position": 6,
+            "title": "第六话 新的旅程"
+          }
+        ],
+        "chapters": 7,
+        "coverPresent": true,
+        "firstChapter": "序章 琪亚娜·出击",
+        "lastChapter": "第六话 新的旅程",
+        "searchTitle": "逃离长空篇",
+        "summaryRunes": 85,
+        "title": "逃离长空篇",
+        "url": "https://comic.bh3.com/book/1001"
+      },
+      {
+        "author": "",
+        "chapterSamples": [
+          {
+            "access": "available",
+            "images": [
+              {
+                "format": "jpeg",
+                "height": 2060,
+                "httpStatus": 200,
+                "index": 0,
+                "mime": "image/jpeg",
+                "width": 1457
+              }
+            ],
+            "pages": 15,
+            "position": 0,
+            "title": "第七话 琪亚娜最大的危机"
+          },
+          {
+            "access": "available",
+            "images": [
+              {
+                "format": "jpeg",
+                "height": 2060,
+                "httpStatus": 200,
+                "index": 0,
+                "mime": "image/jpeg",
+                "width": 1457
+              }
+            ],
+            "pages": 23,
+            "position": 4,
+            "title": "第十一话 白骑士·月光"
+          },
+          {
+            "access": "available",
+            "images": [
+              {
+                "format": "jpeg",
+                "height": 2060,
+                "httpStatus": 200,
+                "index": 0,
+                "mime": "image/jpeg",
+                "width": 1457
+              }
+            ],
+            "pages": 20,
+            "position": 7,
+            "title": "第十四话 愿樱花与你同在"
+          }
+        ],
+        "chapters": 8,
+        "coverPresent": true,
+        "firstChapter": "第七话 琪亚娜最大的危机",
+        "lastChapter": "第十四话 愿樱花与你同在",
+        "searchTitle": "樱花追忆篇",
+        "summaryRunes": 99,
+        "title": "樱花追忆篇",
+        "url": "https://comic.bh3.com/book/1002"
+      }
+    ],
+    "worksSampled": 2
+  },
+  {
+    "alternateSearch": {
+      "count": 0,
+      "keyword": "神之塔",
+      "sameLeadingIDs": false
+    },
+    "apiUrl": "https://comic.hypergryph.com",
+    "baseline": {
+      "sourceKey": "a62c9e523ca3c0d43ca4290f88e450977f4d465dcfe470f9943f43fea4174337",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "ok",
+          "count": 27,
+          "millis": 237
+        },
+        {
+          "name": "detail",
+          "status": "ok",
+          "count": 1,
+          "millis": 37
+        },
+        {
+          "name": "toc",
+          "status": "ok",
+          "count": 1,
+          "millis": 37
+        },
+        {
+          "name": "pages",
+          "status": "ok",
+          "count": 58,
+          "millis": 690
+        },
+        {
+          "name": "image",
+          "status": "ok",
+          "count": 1,
+          "millis": 761
+        }
+      ],
+      "ok": true
+    },
+    "checkedAt": 1792590788,
+    "id": "a62c9e523ca3c0d43ca4290f88e450977f4d465dcfe470f9943f43fea4174337",
+    "keyword": "明日方舟",
+    "kind": "comic",
+    "millis": 5859,
+    "name": "泰拉记事社",
+    "searchSample": [
+      {
+        "author": "鹰角网络",
+        "coverPresent": true,
+        "summaryRunes": 0,
+        "title": "循途漫录：大将军，出击！",
+        "url": "https://comic.hypergryph.com/api/comic/7746"
+      },
+      {
+        "author": "鹰角网络",
+        "coverPresent": true,
+        "summaryRunes": 0,
+        "title": "序言组曲：孤行之人",
+        "url": "https://comic.hypergryph.com/api/comic/0694"
+      },
+      {
+        "author": "鹰角网络",
+        "coverPresent": true,
+        "summaryRunes": 0,
+        "title": "循途漫录：王权金币",
+        "url": "https://comic.hypergryph.com/api/comic/4578"
+      },
+      {
+        "author": "鹰角网络",
+        "coverPresent": true,
+        "summaryRunes": 0,
+        "title": "暮岁闲谈：正是团圆时分",
+        "url": "https://comic.hypergryph.com/api/comic/8907"
+      },
+      {
+        "author": "鹰角网络",
+        "coverPresent": true,
+        "summaryRunes": 0,
+        "title": "精英干员：启程",
+        "url": "https://comic.hypergryph.com/api/comic/9381"
+      },
+      {
+        "author": "鹰角网络",
+        "coverPresent": true,
+        "summaryRunes": 0,
+        "title": "暮岁闲谈：这是平凡人生",
+        "url": "https://comic.hypergryph.com/api/comic/4579"
+      }
+    ],
+    "status": "sample_chain_passed",
+    "works": [
+      {
+        "author": "鹰角网络",
+        "chapterSamples": [
+          {
+            "access": "available",
+            "images": [
+              {
+                "format": "jpeg",
+                "height": 1670,
+                "httpStatus": 200,
+                "index": 0,
+                "mime": "image/jpeg",
+                "width": 1200
+              },
+              {
+                "format": "jpeg",
+                "height": 1691,
+                "httpStatus": 200,
+                "index": 29,
+                "mime": "image/jpeg",
+                "width": 1200
+              },
+              {
+                "format": "jpeg",
+                "height": 1691,
+                "httpStatus": 200,
+                "index": 57,
+                "mime": "image/jpeg",
+                "width": 1200
+              }
+            ],
+            "pages": 58,
+            "position": 0,
+            "title": "01 大将军，出击！"
+          }
+        ],
+        "chapters": 1,
+        "coverPresent": true,
+        "firstChapter": "01 大将军，出击！",
+        "lastChapter": "01 大将军，出击！",
+        "searchTitle": "循途漫录：大将军，出击！",
+        "summaryRunes": 7,
+        "title": "循途漫录：大将军，出击！",
+        "url": "https://comic.hypergryph.com/api/comic/7746"
+      },
+      {
+        "author": "鹰角网络",
+        "chapterSamples": [
+          {
+            "access": "available",
+            "images": [
+              {
+                "format": "jpeg",
+                "height": 1691,
+                "httpStatus": 200,
+                "index": 0,
+                "mime": "image/jpeg",
+                "width": 1200
+              }
+            ],
+            "pages": 50,
+            "position": 0,
+            "title": "03 梦"
+          },
+          {
+            "access": "available",
+            "images": [
+              {
+                "format": "jpeg",
+                "height": 1691,
+                "httpStatus": 200,
+                "index": 0,
+                "mime": "image/jpeg",
+                "width": 1200
+              }
+            ],
+            "pages": 50,
+            "position": 1,
+            "title": "02 心跳"
+          },
+          {
+            "access": "available",
+            "images": [
+              {
+                "format": "jpeg",
+                "height": 1691,
+                "httpStatus": 200,
+                "index": 0,
+                "mime": "image/jpeg",
+                "width": 1200
+              }
+            ],
+            "pages": 43,
+            "position": 2,
+            "title": "01 呼吸"
+          }
+        ],
+        "chapters": 3,
+        "coverPresent": true,
+        "firstChapter": "03 梦",
+        "lastChapter": "01 呼吸",
+        "searchTitle": "序言组曲：孤行之人",
+        "summaryRunes": 10,
+        "title": "序言组曲：孤行之人",
+        "url": "https://comic.hypergryph.com/api/comic/0694"
+      }
+    ],
+    "worksSampled": 2
+  },
+  {
+    "apiUrl": "http://www.xiaoshuowu.com/",
+    "baseline": {
+      "sourceKey": "dda09c1fe9d9a1ee2f80244f2017af6b764f9768cf3c32a733beb7236b8c51a9",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "操作超时",
+          "millis": 20952,
+          "code": "TIMEOUT"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590776,
+    "id": "dda09c1fe9d9a1ee2f80244f2017af6b764f9768cf3c32a733beb7236b8c51a9",
+    "kind": "novel",
+    "millis": 20953,
+    "name": "小说屋",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "apiUrl": "http://www.lwxstxt.com",
+    "baseline": {
+      "sourceKey": "13e35ea0edd12e4c013d687840a93ad8d380eff4c2e6d611d7718653df5c975b",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "操作超时",
+          "millis": 20098,
+          "code": "TIMEOUT"
+        }
+      ],
+      "ok": false
+    },
+    "checkedAt": 1792590780,
+    "id": "13e35ea0edd12e4c013d687840a93ad8d380eff4c2e6d611d7718653df5c975b",
+    "kind": "novel",
+    "millis": 20098,
+    "name": "乐文小说②",
+    "status": "failed",
+    "worksSampled": 0
+  },
+  {
+    "alternateSearch": {
+      "count": 3,
+      "keyword": "三国",
+      "sameLeadingIDs": false
+    },
+    "apiUrl": "https://www.dongmanmanhua.cn",
+    "baseline": {
+      "sourceKey": "e6c3adbb5055902f8168f13ceab542bba07dde2dbd3059b18e30736a2b8ec114",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "ok",
+          "count": 2,
+          "millis": 435
+        },
+        {
+          "name": "detail",
+          "status": "ok",
+          "count": 1,
+          "millis": 616
+        },
+        {
+          "name": "toc",
+          "status": "ok",
+          "count": 10,
+          "millis": 877
+        },
+        {
+          "name": "pages",
+          "status": "ok",
+          "count": 159,
+          "millis": 470
+        },
+        {
+          "name": "image",
+          "status": "ok",
+          "count": 1,
+          "millis": 56
+        }
+      ],
+      "ok": true
+    },
+    "checkedAt": 1792590794,
+    "id": "e6c3adbb5055902f8168f13ceab542bba07dde2dbd3059b18e30736a2b8ec114",
+    "keyword": "神之塔",
+    "kind": "comic",
+    "millis": 8218,
+    "name": "咚漫漫画",
+    "searchSample": [
+      {
+        "author": "",
+        "coverPresent": true,
+        "summaryRunes": 0,
+        "title": "神之塔外传:乌雷克·马奇努",
+        "url": "https://www.dongmanmanhua.cn/episodeList?titleNo=2791"
+      },
+      {
+        "author": "",
+        "coverPresent": true,
+        "summaryRunes": 0,
+        "title": "神之塔",
+        "url": "https://www.dongmanmanhua.cn/episodeList?titleNo=241"
+      }
+    ],
+    "status": "sample_chain_passed",
+    "works": [
+      {
+        "author": "SIU",
+        "chapterSamples": [
+          {
+            "access": "unknown",
+            "images": [
+              {
+                "format": "jpeg",
+                "height": 690,
+                "httpStatus": 200,
+                "index": 0,
+                "mime": "image/jpeg",
+                "width": 690
+              },
+              {
+                "format": "jpeg",
+                "height": 1342,
+                "httpStatus": 200,
+                "index": 79,
+                "mime": "image/jpeg",
+                "width": 690
+              },
+              {
+                "format": "jpeg",
+                "height": 453,
+                "httpStatus": 200,
+                "index": 158,
+                "mime": "image/jpeg",
+                "width": 690
+              }
+            ],
+            "pages": 159,
+            "position": 0,
+            "title": "[第1话] 试炼之层"
+          },
+          {
+            "access": "unknown",
+            "images": [
+              {
+                "format": "jpeg",
+                "height": 690,
+                "httpStatus": 200,
+                "index": 0,
+                "mime": "image/jpeg",
+                "width": 690
+              }
+            ],
+            "pages": 105,
+            "position": 5,
+            "title": "[第6话] 摔跤"
+          },
+          {
+            "access": "unknown",
+            "images": [
+              {
+                "format": "jpeg",
+                "height": 690,
+                "httpStatus": 200,
+                "index": 0,
+                "mime": "image/jpeg",
+                "width": 690
+              }
+            ],
+            "pages": 107,
+            "position": 9,
+            "title": "[第10话] 灰海豚女王"
+          }
+        ],
+        "chapters": 10,
+        "coverPresent": true,
+        "firstChapter": "[第1话] 试炼之层",
+        "lastChapter": "[第10话] 灰海豚女王",
+        "searchTitle": "神之塔外传:乌雷克·马奇努",
+        "summaryRunes": 98,
+        "title": "神之塔外传:乌雷克·马奇努",
+        "url": "https://www.dongmanmanhua.cn/episodeList?titleNo=2791"
+      },
+      {
+        "author": "SIU",
+        "chapterSamples": [
+          {
+            "access": "unknown",
+            "images": [
+              {
+                "format": "jpeg",
+                "height": 1230,
+                "httpStatus": 200,
+                "index": 0,
+                "mime": "image/jpeg",
+                "width": 690
+              }
+            ],
+            "pages": 7,
+            "position": 0,
+            "title": "预告"
+          },
+          {
+            "access": "unknown",
+            "images": [
+              {
+                "format": "jpeg",
+                "height": 1230,
+                "httpStatus": 200,
+                "index": 0,
+                "mime": "image/jpeg",
+                "width": 690
+              }
+            ],
+            "pages": 37,
+            "position": 6,
+            "title": "[第6话] 伊凡科尔的地狱"
+          },
+          {
+            "access": "unknown",
+            "images": [
+              {
+                "format": "jpeg",
+                "height": 1230,
+                "httpStatus": 200,
+                "index": 0,
+                "mime": "image/jpeg",
+                "width": 690
+              }
+            ],
+            "pages": 25,
+            "position": 11,
+            "title": "[第2季] 预告"
+          }
+        ],
+        "chapters": 12,
+        "coverPresent": true,
+        "firstChapter": "预告",
+        "lastChapter": "[第2季] 预告",
+        "searchTitle": "神之塔",
+        "summaryRunes": 85,
+        "title": "神之塔",
+        "url": "https://www.dongmanmanhua.cn/episodeList?titleNo=241"
+      }
+    ],
+    "worksSampled": 2
+  },
+  {
+    "alternateSearch": {
+      "count": 3,
+      "keyword": "神之塔",
+      "sameLeadingIDs": false
+    },
+    "apiUrl": "https://www.guazimanhua.com",
+    "baseline": {
+      "sourceKey": "3b8118b51a39e510eed317610ff159063cffcdd4e239876c19d3bc265aab810a",
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "ok",
+          "count": 7,
+          "millis": 777
+        },
+        {
+          "name": "detail",
+          "status": "ok",
+          "count": 1,
+          "millis": 393
+        },
+        {
+          "name": "toc",
+          "status": "ok",
+          "count": 447,
+          "millis": 266
+        },
+        {
+          "name": "pages",
+          "status": "ok",
+          "count": 16,
+          "millis": 227
+        },
+        {
+          "name": "image",
+          "status": "ok",
+          "count": 1,
+          "millis": 3954
+        }
+      ],
+      "ok": true
+    },
+    "checkedAt": 1792590796,
+    "id": "3b8118b51a39e510eed317610ff159063cffcdd4e239876c19d3bc265aab810a",
+    "keyword": "斗罗",
+    "kind": "comic",
+    "millis": 18312,
+    "name": "瓜子漫画",
+    "searchSample": [
+      {
+        "author": "神漫君",
+        "coverPresent": true,
+        "summaryRunes": 0,
+        "title": "斗罗大陆 第三部 龙王传说",
+        "url": "https://www.guazimanhua.com/comic.php?id=12378"
+      },
+      {
+        "author": "风炫文化",
+        "coverPresent": true,
+        "summaryRunes": 0,
+        "title": "斗罗大陆",
+        "url": "https://www.guazimanhua.com/comic.php?id=14917"
+      },
+      {
+        "author": "神漫君",
+        "coverPresent": true,
+        "summaryRunes": 0,
+        "title": "斗罗大陆 5 重生唐三",
+        "url": "https://www.guazimanhua.com/comic.php?id=23116"
+      },
+      {
+        "author": "神漫君",
+        "coverPresent": true,
+        "summaryRunes": 0,
+        "title": "斗罗大陆 II 绝世唐门",
+        "url": "https://www.guazimanhua.com/comic.php?id=11826"
+      },
+      {
+        "author": "唐家三少",
+        "coverPresent": true,
+        "summaryRunes": 0,
+        "title": "斗罗大陆外传神界传说",
+        "url": "https://www.guazimanhua.com/comic.php?id=19058"
+      },
+      {
+        "author": "神漫君",
+        "coverPresent": true,
+        "summaryRunes": 0,
+        "title": "斗罗大陆外传 唐门英雄传",
+        "url": "https://www.guazimanhua.com/comic.php?id=13249"
+      }
+    ],
+    "status": "sample_chain_passed",
+    "works": [
+      {
+        "author": "",
+        "chapterSamples": [
+          {
+            "access": "unknown",
+            "images": [
+              {
+                "format": "jpeg",
+                "height": 1292,
+                "httpStatus": 200,
+                "index": 0,
+                "mime": "image/jpeg",
+                "width": 900
+              },
+              {
+                "format": "jpeg",
+                "height": 1283,
+                "httpStatus": 200,
+                "index": 8,
+                "mime": "image/jpeg",
+                "width": 900
+              },
+              {
+                "format": "jpeg",
+                "height": 1279,
+                "httpStatus": 200,
+                "index": 15,
+                "mime": "image/jpeg",
+                "width": 900
+              }
+            ],
+            "pages": 16,
+            "position": 0,
+            "title": "序章 楔子"
+          },
+          {
+            "access": "unknown",
+            "images": [
+              {
+                "format": "jpeg",
+                "height": 1272,
+                "httpStatus": 200,
+                "index": 0,
+                "mime": "image/jpeg",
+                "width": 900
+              }
+            ],
+            "pages": 17,
+            "position": 223,
+            "title": "219 金语"
+          },
+          {
+            "access": "unknown",
+            "images": [
+              {
+                "format": "webp",
+                "height": 1697,
+                "httpStatus": 200,
+                "index": 0,
+                "mime": "image/webp",
+                "width": 1200
+              }
+            ],
+            "pages": 10,
+            "position": 446,
+            "title": "番外"
+          }
+        ],
+        "chapters": 447,
+        "coverPresent": true,
+        "firstChapter": "序章 楔子",
+        "lastChapter": "番外",
+        "searchTitle": "斗罗大陆 第三部 龙王传说",
+        "summaryRunes": 107,
+        "title": "斗罗大陆 第三部 龙王传说",
+        "url": "https://www.guazimanhua.com/comic.php?id=12378"
+      },
+      {
+        "author": "",
+        "chapterSamples": [
+          {
+            "access": "unknown",
+            "images": [
+              {
+                "format": "jpeg",
+                "height": 1667,
+                "httpStatus": 200,
+                "index": 0,
+                "mime": "image/jpeg",
+                "width": 900
+              }
+            ],
+            "pages": 19,
+            "position": 0,
+            "title": "第1话 唐三穿越"
+          },
+          {
+            "access": "unknown",
+            "images": [
+              {
+                "format": "jpeg",
+                "height": 1486,
+                "httpStatus": 200,
+                "index": 0,
+                "mime": "image/jpeg",
+                "width": 800
+              }
+            ],
+            "pages": 36,
+            "position": 302,
+            "title": "第235话 十万年圣柱石（2）"
+          },
+          {
+            "access": "unknown",
+            "images": [
+              {
+                "format": "jpeg",
+                "height": 1657,
+                "httpStatus": 200,
+                "index": 0,
+                "mime": "image/jpeg",
+                "width": 900
+              }
+            ],
+            "pages": 39,
+            "position": 604,
+            "title": "第369话 最后一个条件（上）"
+          }
+        ],
+        "chapters": 605,
+        "coverPresent": true,
+        "firstChapter": "第1话 唐三穿越",
+        "lastChapter": "第369话 最后一个条件（上）",
+        "searchTitle": "斗罗大陆",
+        "summaryRunes": 116,
+        "title": "斗罗大陆",
+        "url": "https://www.guazimanhua.com/comic.php?id=14917"
+      }
+    ],
+    "worksSampled": 2
+  }
+]

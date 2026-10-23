@@ -1,11 +1,14 @@
 package updater
 
 import (
+	"cczjVideo/app/netpolicy"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"cczjVideo/app/apperror"
@@ -13,17 +16,28 @@ import (
 	"cczjVideo/app/netstats"
 )
 
-// getAppDir 返回当前应用可执行文件所在目录（解析符号链接）
+var mobileUpdateDirectory atomic.Value
+
+// SetMobileUpdateDirectory is supplied by application assembly before requests.
+func SetMobileUpdateDirectory(directory func() string) { mobileUpdateDirectory.Store(directory) }
+
+// getAppDir uses Android's private update directory or the desktop executable directory.
 func getAppDir() string {
+	if runtime.GOOS == "android" {
+		if directory, ok := mobileUpdateDirectory.Load().(func() string); ok {
+			return directory()
+		}
+		return filepath.Join(os.TempDir(), "cczj-updates")
+	}
 	exe, err := os.Executable()
 	if err != nil {
 		return "."
 	}
-	exe, err = filepath.EvalSymlinks(exe)
+	resolved, err := filepath.EvalSymlinks(exe)
 	if err != nil {
 		return filepath.Dir(exe)
 	}
-	return filepath.Dir(exe)
+	return filepath.Dir(resolved)
 }
 
 // getAppExeName 返回当前应用可执行文件名（不含路径）
@@ -35,22 +49,14 @@ func getAppExeName() string {
 	return filepath.Base(exe)
 }
 
-// uniqueSavePath 已随暂存命名一起移除：产物名现在由 updateStagingName 决定。
-
 // scanAlreadyDownloaded 扫描应用目录，查找已下载的更新包
-// 返回 (文件路径, 版本号估计) 或 ("", "") 如果不存在
-func scanAlreadyDownloaded() (string, string) {
-	appDir := getAppDir()
-	exeName := getAppExeName()
-	ext := filepath.Ext(exeName)
-	baseName := strings.TrimSuffix(exeName, ext)
+// 只恢复指定版本的已校验产物，不把旧包或当前程序本身当成新版。
+func scanAlreadyDownloaded(version string) (string, string) {
+	return scanDownloadedArtifacts(getAppDir(), getAppExeName(), version)
+}
 
-	// 新命名 CCZJ-Video-Update* 在前，历史命名 {exeBase}_update* 兜底；
-	// 两组都限定在应用目录内，与 isUpdateArtifact 的判定保持一致。
-	patterns := []string{
-		filepath.Join(appDir, stagingPrefix+".*"),
-		filepath.Join(appDir, baseName+"_update*"+ext),
-	}
+func scanDownloadedArtifacts(appDir, exeName, version string) (string, string) {
+	patterns := []string{filepath.Join(appDir, stagingPrefix+".*")}
 	for _, pattern := range patterns {
 		matches, err := filepath.Glob(pattern)
 		if err != nil {
@@ -58,7 +64,16 @@ func scanAlreadyDownloaded() (string, string) {
 		}
 		for _, m := range matches {
 			// 摘要凭据不是产物：名字同样以前缀开头，别把它当更新包递出去。
-			if strings.HasSuffix(strings.ToLower(m), digestSuffix) {
+			if strings.HasSuffix(strings.ToLower(m), digestSuffix) || strings.HasSuffix(strings.ToLower(m), ".part") {
+				continue
+			}
+			// A downloaded exe may itself be the running app after a manual upgrade.
+			if normalizeCase(filepath.Clean(m)) == normalizeCase(filepath.Join(appDir, exeName)) {
+				continue
+			}
+			// Unknown legacy packages must be downloaded again; they cannot be labelled
+			// as the latest release merely because their filename looks like an update.
+			if version == "" || !strings.HasPrefix(filepath.Base(m), stagingPrefix+"."+version+".") {
 				continue
 			}
 			info, err := os.Stat(m)
@@ -69,20 +84,18 @@ func scanAlreadyDownloaded() (string, string) {
 			// 老版本下载的包）。InstallUpdate 装之前会拒绝它，这里就别把它当"已下载"
 			// 递给前端——按钮点了必然失败，比没有按钮更糟。
 			if !hasDigestRecord(m) {
-				// 顺手清掉：装不上的包留在应用目录里只是占着 C 盘的 31MB。
-				applog.Info("[Updater] 清理没有摘要记录的产物: %s", m)
-				_ = os.Remove(m)
-				clearDigestRecord(m)
+				// The downloader may be between rename and receipt creation.
+				// Scanning must not delete a file that another operation is publishing.
 				continue
 			}
 			applog.Info("[Updater] 发现已下载的更新包: %s (%d bytes)", m, info.Size())
-			return m, "" // 版本号未知，由前端根据 pendingInfo 判断
+			return m, version
 		}
 	}
 	return "", ""
 }
 
-// DownloadUpdate 下载更新包到应用同目录，通过回调函数报告进度
+// DownloadUpdate 下载到平台的更新目录，通过回调函数报告进度
 // 先并发测速所有下载源（直连+代理），选最快的下载；失败自动回退下一个源
 // 返回下载文件的本地路径
 func DownloadUpdate(downloadURL string, progress DownloadProgress) (string, error) {
@@ -90,28 +103,15 @@ func DownloadUpdate(downloadURL string, progress DownloadProgress) (string, erro
 
 	// 确定保存路径：应用同目录
 	appDir := getAppDir()
+	if err := os.MkdirAll(appDir, 0700); err != nil {
+		return "", apperror.Wrap(apperror.Storage, err, "无法创建更新下载目录")
+	}
 	applog.Info("[Updater] 应用目录: %s", appDir)
 
 	// 下载前先要到可信摘要：拿不到就不下载，而不是下完再警告一句。
 	expectedSHA, err := requireArtifact(downloadURL)
 	if err != nil {
 		return "", err
-	}
-
-	// 暂存名固定但保留资源的真实扩展名（见 updateStagingName）。
-	savePath := filepath.Join(appDir, updateStagingName(downloadURL))
-	applog.Info("[Updater] 保存路径: %s", savePath)
-
-	// 如果文件已存在，删除后重新下载。凭据一起删：这一次还没校验过任何东西，
-	// 留着上一次的摘要等于给新落盘的字节预先盖章。
-	_ = os.Remove(savePath)
-	clearDigestRecord(savePath)
-
-	// 每一条失败分支都要产物和凭据一起消失：留着半截文件，下一次的"已下载"入口就会
-	// 把一个永远装不上的东西递到用户面前（写盘失败那一条以前就是直接 return 的）。
-	discardArtifact := func() {
-		_ = os.Remove(savePath)
-		clearDigestRecord(savePath)
 	}
 
 	// ====== 并发测速所有下载源 ======
@@ -134,13 +134,19 @@ func DownloadUpdate(downloadURL string, progress DownloadProgress) (string, erro
 	// ====== 按速度顺序尝试下载 ======
 	client := &http.Client{
 		Timeout: DownloadTimeout,
-		Transport: netstats.WrapTransport(netstats.CategoryUpdate, &http.Transport{
+		Transport: netpolicy.WrapTransport("update-download", netstats.WrapTransport(netstats.CategoryUpdate, &http.Transport{
 			MaxIdleConns:        10,
 			IdleConnTimeout:     60 * time.Second,
 			TLSHandshakeTimeout: 15 * time.Second,
-		}),
+		})),
 	}
+	defer client.CloseIdleConnections()
+	return downloadFromSources(appDir, downloadURL, expectedSHA, sources, client, progress)
+}
 
+// downloadFromSources writes and verifies a package after checksum and source selection.
+func downloadFromSources(appDir, downloadURL, expectedSHA string, sources []speedTestResult, client *http.Client, progress DownloadProgress) (string, error) {
+	var lastErr error
 	for i, src := range sources {
 		applog.Info("[Updater] 使用下载源 [%d/%d] %s", i+1, len(sources), src.source)
 
@@ -153,6 +159,7 @@ func DownloadUpdate(downloadURL string, progress DownloadProgress) (string, erro
 		resp, err := client.Do(req)
 		if err != nil {
 			applog.Warn("[Updater] 源 %s 下载失败: %v", src.source, err)
+			lastErr = apperror.Wrap(apperror.Unavailable, err, "下载源连接失败")
 			continue
 		}
 		if resp.StatusCode != http.StatusOK {
@@ -167,86 +174,64 @@ func DownloadUpdate(downloadURL string, progress DownloadProgress) (string, erro
 		}
 
 		// 成功连接，开始下载
-		defer resp.Body.Close()
 		total := resp.ContentLength
 		if total > 0 {
 			applog.Info("[Updater] 文件大小: %d 字节", total)
 		}
 
-		out, err := os.Create(savePath)
+		// Never truncate a previous package: it may be running, scheduled for
+		// installation, or held by OneDrive. Partial bytes are not discoverable.
+		_, _, tag, _, _ := parseReleaseAsset(downloadURL)
+		version := extractSemver(tag)
+		out, err := os.CreateTemp(appDir, stagingPrefix+"."+version+".*.part")
 		if err != nil {
+			resp.Body.Close()
 			return "", apperror.Wrap(apperror.Storage, err, "创建文件失败")
 		}
-		defer out.Close()
-
-		buf := make([]byte, 128*1024)
-		var downloaded int64
-		lastBytes := int64(0)
-		lastTime := time.Now()
-		startTime := lastTime
-
-		for {
-			if time.Since(startTime) > DownloadTimeout {
-				discardArtifact()
-				return "", apperror.Newf(apperror.Timeout, "下载超时（超过 %v）", DownloadTimeout)
+		partialPath := out.Name()
+		downloaded, copyErr := copyUpdateResponse(out, resp, progress)
+		closeErr := out.Close()
+		resp.Body.Close()
+		if copyErr != nil {
+			_ = os.Remove(partialPath)
+			applog.Warn("[Updater] 源 %s 下载失败: %v", src.source, copyErr)
+			if apperror.CodeOf(copyErr) == apperror.Storage {
+				return "", copyErr
 			}
-
-			n, readErr := resp.Body.Read(buf)
-			if n > 0 {
-				if _, werr := out.Write(buf[:n]); werr != nil {
-					discardArtifact()
-					return "", apperror.Wrap(apperror.Storage, werr, "写入文件失败")
-				}
-				downloaded += int64(n)
-
-				if time.Since(lastTime) >= time.Second {
-					elapsed := time.Since(lastTime).Seconds()
-					speed := float64(downloaded-lastBytes) / elapsed
-					lastBytes = downloaded
-					lastTime = time.Now()
-					if progress != nil {
-						progress(downloaded, total, speed)
-					}
-				}
-			}
-			if readErr != nil {
-				if readErr == io.EOF {
-					break
-				}
-				discardArtifact()
-				return "", apperror.Wrap(apperror.Corrupt, readErr, "读取失败")
-			}
+			lastErr = copyErr
+			continue
 		}
-
-		// 先落盘再校验：out 上挂着 defer Close，显式 Close 保证数据已刷出去。
-		if cerr := out.Close(); cerr != nil {
-			discardArtifact()
-			return "", apperror.Wrap(apperror.Storage, cerr, "关闭文件失败")
-		}
-
-		// 最终进度回调
-		if progress != nil {
-			progress(downloaded, total, 0)
+		if closeErr != nil {
+			_ = os.Remove(partialPath)
+			return "", apperror.Wrap(apperror.Storage, closeErr, "关闭文件失败")
 		}
 
 		// Content-Length 对不上说明是被截断的响应；原先 EOF 就算成功，
 		// 于是半截 exe 会一路走到 InstallUpdate 覆盖掉应用本体。
 		if total > 0 && downloaded != total {
 			applog.Warn("[Updater] 源 %s 下载不完整: %d/%d", src.source, downloaded, total)
-			discardArtifact()
+			_ = os.Remove(partialPath)
+			lastErr = apperror.New(apperror.Corrupt, "更新包下载不完整")
 			continue
 		}
 
-		if err := verifyArtifact(savePath, expectedSHA); err != nil {
+		if err := verifyArtifact(partialPath, expectedSHA); err != nil {
 			applog.Error("[Updater] 校验失败，删除产物: %v", err)
-			discardArtifact()
-			return "", apperror.Wrap(apperror.Corrupt, err, "更新包校验失败")
+			_ = os.Remove(partialPath)
+			lastErr = apperror.Wrap(apperror.Corrupt, err, "更新包校验失败")
+			continue
+		}
+		savePath := strings.TrimSuffix(partialPath, ".part") + filepath.Ext(updateStagingName(downloadURL))
+		if err := os.Rename(partialPath, savePath); err != nil {
+			_ = os.Remove(partialPath)
+			return "", apperror.Wrap(apperror.Storage, err, "保存已校验更新包失败")
 		}
 
 		// 校验通过的这一刻才记下凭据：InstallUpdate 装之前会拿它再哈希一次，
 		// "已下载"入口也只认带凭据的产物。
 		if err := recordDigest(savePath, expectedSHA); err != nil {
-			discardArtifact()
+			_ = os.Remove(savePath)
+			clearDigestRecord(savePath)
 			return "", apperror.Wrap(apperror.Storage, err, "记录更新包摘要失败")
 		}
 
@@ -254,5 +239,51 @@ func DownloadUpdate(downloadURL string, progress DownloadProgress) (string, erro
 		return savePath, nil
 	}
 
+	if lastErr != nil {
+		return "", lastErr
+	}
 	return "", apperror.New(apperror.Unavailable, "所有下载源均失败")
+}
+
+func copyUpdateResponse(out io.Writer, resp *http.Response, progress DownloadProgress) (int64, error) {
+	total := resp.ContentLength
+	if progress != nil {
+		progress(0, total, 0)
+	}
+	buf := make([]byte, 128*1024)
+	var downloaded, lastBytes int64
+	lastTime := time.Now()
+	startTime := lastTime
+	for {
+		if time.Since(startTime) > DownloadTimeout {
+			return downloaded, apperror.Newf(apperror.Timeout, "下载超时（超过 %v）", DownloadTimeout)
+		}
+		n, readErr := resp.Body.Read(buf)
+		if n > 0 {
+			written, err := out.Write(buf[:n])
+			if err != nil {
+				return downloaded, apperror.Wrap(apperror.Storage, err, "写入文件失败")
+			}
+			if written != n {
+				return downloaded, apperror.Wrap(apperror.Storage, io.ErrShortWrite, "写入文件失败")
+			}
+			downloaded += int64(n)
+			if time.Since(lastTime) >= 250*time.Millisecond {
+				speed := float64(downloaded-lastBytes) / time.Since(lastTime).Seconds()
+				lastBytes, lastTime = downloaded, time.Now()
+				if progress != nil {
+					progress(downloaded, total, speed)
+				}
+			}
+		}
+		if readErr != nil {
+			if readErr != io.EOF {
+				return downloaded, apperror.Wrap(apperror.Corrupt, readErr, "读取失败")
+			}
+			if progress != nil {
+				progress(downloaded, total, 0)
+			}
+			return downloaded, nil
+		}
+	}
 }

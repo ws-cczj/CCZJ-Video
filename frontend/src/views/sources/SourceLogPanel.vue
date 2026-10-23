@@ -29,26 +29,22 @@ const collectStore = useCollectStore()
   padding: 12px 14px;
 }
 .clog-title {
-  font-size: 12px; font-weight: 600; color: var(--text-secondary);
-  margin-bottom: 8px;
+  @apply cczj-text-sm cczj-font-semibold cczj-text-secondary cczj-mb-4;
 }
 .clog-list {
   max-height: 180px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  @apply cczj-overflow-y-auto cczj-flex cczj-flex-col cczj-gap-1;
 }
 .clog-list::-webkit-scrollbar { width: 4px; }
-.clog-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+.clog-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); @apply cczj-rounded-xs; }
 .clog-line {
-  font-size: 11px; color: var(--text-muted);
+  @apply cczj-text-11 cczj-text-muted;
   font-family: 'SF Mono', Consolas, monospace;
   padding: 2px 0;
-  line-height: 1.5;
+  @apply cczj-leading-normal;
 }
 .clog-empty {
-  font-size: 12px; color: var(--text-muted); text-align: center;
+  @apply cczj-text-sm cczj-text-muted cczj-text-center;
   padding: 16px 0;
 }
 

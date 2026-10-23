@@ -1,0 +1,17 @@
+{
+  "requests": [
+    {
+      "path": "/nB?pg=1&wd=%E5%90%8C%E5%90%8D",
+      "referer": null,
+      "audit": "native-acceptance",
+      "range": null
+    },
+    {
+      "path": "/nA?pg=1&wd=%E5%90%8C%E5%90%8D",
+      "referer": null,
+      "audit": "native-acceptance",
+      "range": null
+    }
+  ],
+  "max_active": 1
+}

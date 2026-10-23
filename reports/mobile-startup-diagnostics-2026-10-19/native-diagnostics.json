@@ -1,0 +1,153 @@
+{
+  "host": {
+    "activity_started_ms": 267773488,
+    "go_ready_ms": 339,
+    "page_started_ms": 279679,
+    "page_committed_ms": 279886,
+    "page_finished_ms": 336908
+  },
+  "runtime": {
+    "download_executor": {
+      "active": 0,
+      "accepted": 0,
+      "concurrency_limit": 2,
+      "admission_limit": 66
+    },
+    "network_budget": {
+      "active": 0,
+      "waiting": 0,
+      "rejected": 0,
+      "waitMilliseconds": 0,
+      "lanes": {}
+    },
+    "recording": {
+      "active": false,
+      "path": "",
+      "started_at_ms": 0,
+      "ended_at_ms": 0,
+      "interval_seconds": 0,
+      "max_duration_seconds": 0,
+      "samples": 0,
+      "markers": 0,
+      "reason": "",
+      "error": "",
+      "start_heap_path": "",
+      "end_heap_path": "",
+      "start_goroutines_path": "",
+      "end_goroutines_path": ""
+    },
+    "uptime_seconds": 421,
+    "goroutines": 22,
+    "network": {
+      "since_unix": 0,
+      "total_bytes": 0,
+      "allow_private_targets": false,
+      "categories": []
+    },
+    "cache": [
+      {
+        "key": "detail",
+        "entries": 0,
+        "bytes": 0,
+        "hits": 0,
+        "stale_hits": 0,
+        "misses": 0,
+        "fetch_ok": 0,
+        "fetch_fail": 0,
+        "skipped": 0
+      },
+      {
+        "key": "chart",
+        "entries": 10,
+        "bytes": 0,
+        "hits": 1,
+        "stale_hits": 0,
+        "misses": 0,
+        "fetch_ok": 0,
+        "fetch_fail": 0,
+        "skipped": 0
+      },
+      {
+        "key": "comments",
+        "entries": 0,
+        "bytes": 0,
+        "hits": 0,
+        "stale_hits": 0,
+        "misses": 0,
+        "fetch_ok": 0,
+        "fetch_fail": 0,
+        "skipped": 0
+      },
+      {
+        "key": "match",
+        "entries": 0,
+        "bytes": 0,
+        "hits": 0,
+        "stale_hits": 0,
+        "misses": 0,
+        "fetch_ok": 0,
+        "fetch_fail": 0,
+        "skipped": 0
+      }
+    ],
+    "resources": {
+      "sampled_at_ms": 1792382468321,
+      "heap_alloc_bytes": 4220848,
+      "heap_inuse_bytes": 6193152,
+      "heap_retained_bytes": 999424,
+      "go_sys_bytes": 26597640,
+      "heap_objects": 8267,
+      "num_gc": 38,
+      "last_gc_pause_ms": 0.089128,
+      "goroutines": 22,
+      "native_available": true,
+      "native_scope": "app_process",
+      "proportional_bytes": 132868096,
+      "private_resident_bytes": 101224448,
+      "file_descriptors": 213,
+      "working_set_bytes": 276209664,
+      "private_bytes": 0,
+      "tree_working_set_bytes": 276209664,
+      "tree_private_bytes": 0,
+      "system_total_bytes": 4123561984,
+      "system_available_bytes": 2524303360,
+      "system_memory_percent": 38.78342632426403,
+      "working_set_percent": 6.698326957900289,
+      "cpu_percent": null,
+      "process_count": 1,
+      "handles": 0,
+      "processes": [
+        {
+          "pid": 64663,
+          "name": "Android app",
+          "working_set_bytes": 276209664,
+          "private_bytes": 0,
+          "handles": 0,
+          "proportional_bytes": 132868096,
+          "private_resident_bytes": 101224448,
+          "file_descriptors": 213
+        }
+      ],
+      "notes": [
+        "Android app process only; isolated WebView renderer/GPU processes are excluded. PSS and private resident memory are not Windows private commit."
+      ]
+    },
+    "background_tasks": {
+      "schedulers": 1
+    }
+  },
+  "history_fields": [
+    "global_id",
+    "source_key",
+    "vod_id",
+    "ep_num",
+    "position",
+    "updated_at",
+    "vod_name",
+    "vod_pic",
+    "vod_remarks"
+  ],
+  "startup_text": "启动与过渡\n\n查看这次启动经过哪些阶段，以及原生页面何时提交。\n\n前端时间从当前文档导航开始计算，页面重载后重新记录；不需要先开启资源录制。\n\n启动阶段\t导航后\t阶段耗时\t观测状态\n前端模块就绪\t79 ms\t—\t已观测\n语言恢复\t107 ms\t26 ms\t已观测\n动画偏好恢复\t108 ms\t26 ms\t已观测\n内容模式恢复\t108 ms\t25 ms\t已观测\n主题恢复\t124 ms\t40 ms\t已观测\n运行环境与端样式\t143 ms\t64 ms\t已观测\n界面挂载\t170 ms\t—\t已观测\n首轮渲染观察\t193 ms\t—\t已观测\n开屏图片解码\t268 ms\t60 ms\t已观测\n开屏内容淡入\t285 ms\t—\t已观测\n开始淡出开屏\t1136 ms\t—\t已观测\n\n首轮渲染标记是双帧回调观察，不代表已完成物理屏幕显示；原生内容提交与图片解码分别记录。\n\nAndroid 宿主启动\n\n以下为当前 Activity 创建后的时间，与前端文档时钟分别计算；页面重载会更新页面阶段。\n\nGo 初始化返回\n339 ms\nWebView 开始导航\n279679 ms\nWebView 内容提交\n279886 ms\nWebView 加载完成\n422214 ms",
+  "activity_text": "阅读与下载\n\n区分加载、取消与失败，观察未保存的阅读修改和下载执行名额。\n\n阅读数据加载与保存仅统计当前文档中已发生的操作；平均/最长包含数据组装，不等于网络时延或页面绘制耗时。取消单列，未发生的操作不冒充零耗时成功。\n\n当前文档尚未发生受观察的阅读操作；可以在当前模式使用后再查看。\n\n下载执行器\n\n宿主内存中的下载执行名额，暂停/完成的历史任务不占执行名额；这不是下载历史条数。\n\n执行中\n0 / 2\n已接纳（含排队）\n0 / 66",
+  "history_present": true
+}

@@ -1,0 +1,16 @@
+version: '3'
+
+tasks:
+  dev:
+    summary: Run Vite HMR in the native Android app (INSTALL_HOST=1 on first use)
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -File build/android/dev.ps1 -Arch {{.ARCH | default "amd64"}} {{if .DEVICE}}-Device {{.DEVICE}}{{end}} {{if .PORT}}-Port {{.PORT}}{{end}} {{if .INSTALL_HOST}}-InstallHost{{end}}
+  build:
+    summary: Build an ARM64 phone preview APK on Windows (ANDROID_ARCH=amd64 for MuMu)
+    cmds:
+      # ARCH is supplied by Task as the computer's architecture, so use a separate Android target.
+      - powershell -NoProfile -ExecutionPolicy Bypass -File build/android/build.ps1 -Arch {{.ANDROID_ARCH | default "arm64"}}
+  run:
+    summary: Build and install the preview on the selected connected device
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -File build/android/build.ps1 -Arch {{.ANDROID_ARCH | default "arm64"}} -Install {{if .DEVICE}}-Device {{.DEVICE}}{{end}}

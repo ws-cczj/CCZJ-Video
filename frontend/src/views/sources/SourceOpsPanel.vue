@@ -122,64 +122,48 @@ async function truncateSource(key: string): Promise<void> {
 /* === 3. 后端状态与数据维护 === */
 .source-ops-panel {
   background: rgba(255,255,255,0.02);
-  border: 1px solid var(--border);
+  @apply cczj-border;
   border-radius: 10px;
   padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  @apply cczj-flex cczj-flex-col cczj-gap-4;
 }
 .sop-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  @apply cczj-flex cczj-items-center cczj-gap-4;
 }
 .sop-title {
-  display: inline-flex;
-  align-items: center;
+  @apply cczj-inline-flex cczj-items-center;
   gap: 5px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
+  @apply cczj-text-sm cczj-font-semibold cczj-text-secondary;
 }
 .sop-synced {
-  font-size: 11px;
-  color: var(--text-muted);
-  margin-left: auto;
+  @apply cczj-text-11 cczj-text-muted cczj-ml-auto;
 }
 .sop-grid {
-  display: grid;
+  @apply cczj-grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 6px 12px;
 }
-.sop-cell { display: flex; flex-direction: column; gap: 2px; }
+.sop-cell { @apply cczj-flex cczj-flex-col cczj-gap-1; }
 .sop-cell-wide { grid-column: 1 / -1; }
-.sop-label { font-size: 11px; color: var(--text-muted); }
-.sop-value { font-size: 12px; color: var(--text-primary); }
-.sop-value.on { color: var(--accent); }
-.sop-value.warn { color: var(--warning); }
-.sop-value.bad { color: var(--danger); }
+.sop-label { @apply cczj-text-11 cczj-text-muted; }
+.sop-value { @apply cczj-text-sm cczj-text-primary; }
+.sop-value.on { @apply cczj-text-accent; }
+.sop-value.warn { @apply cczj-text-warning; }
+.sop-value.bad { @apply cczj-text-danger; }
 .sop-mono {
   font-family: 'SF Mono', Consolas, monospace;
-  white-space: nowrap;
-  overflow: hidden;
+  @apply cczj-whitespace-nowrap cczj-overflow-hidden;
   text-overflow: ellipsis;
 }
-.sop-empty { font-size: 12px; color: var(--text-muted); }
+.sop-empty { @apply cczj-text-sm cczj-text-muted; }
 .sop-danger {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding-top: 8px;
+  @apply cczj-flex cczj-items-center cczj-justify-between cczj-gap-4 cczj-pt-4;
   border-top: 1px dashed var(--border);
 }
 .sop-danger-label {
-  display: inline-flex;
-  align-items: center;
+  @apply cczj-inline-flex cczj-items-center;
   gap: 5px;
-  font-size: 11px;
-  color: var(--danger);
+  @apply cczj-text-11 cczj-text-danger;
 }
 
 </style>

@@ -19,6 +19,9 @@ import {
 } from '../api/app'
 import i18n, { tr, type Locale } from '../locales'
 import { readStorage, writeStorage } from '../platform/storage'
+import { scriptDigest } from '../plugins/scriptTrust'
+import { scriptTrust } from '../plugins/trust'
+import { createPluginFileCache } from '../plugins/fileCache'
 
 export type PluginKind = 'source' | 'shader' | 'theme' | 'script'
 export type PluginStatus = 'ready' | 'disabled' | 'invalid'
@@ -86,6 +89,7 @@ export interface PluginInfo {
   updated?: string
   /** 应用自带的扩展包（logs-panel / diagnostics-panel 那批）：界面不给卸载按钮。 */
   builtin?: boolean
+  builtin_digest?: string
 }
 
 /** 一个可运行的着色器档位，带所属包的信息。 */
@@ -124,8 +128,11 @@ export const usePluginStore = defineStore('plugins', () => {
   /** 本机跑挂过的脚本包：packId -> 错误摘要。注入失败只隔离那一个包，不牵连别人。 */
   const brokenScripts = ref<Record<string, string>>(brokenMap(BROKEN_SCRIPT_KEY))
 
-  const textCache = new Map<string, string>()
-  const assetCache = new Map<string, string>()
+  const textCache = createPluginFileCache(8 * 1024 * 1024)
+  const assetCache = createPluginFileCache(16 * 1024 * 1024)
+  let refreshGeneration = 0
+  let textGeneration = 0
+  let assetGeneration = 0
 
   function localized(map?: LocalizedText): string {
     if (!map) return ''
@@ -197,6 +204,10 @@ export const usePluginStore = defineStore('plugins', () => {
   }
 
   async function refresh(rescan = false): Promise<void> {
+    const token = ++refreshGeneration
+    textGeneration++
+    textCache.clear()
+    if (rescan) { assetGeneration++; assetCache.clear() }
     refreshing.value = true
     if (!directory.value) {
       // 只是给界面多一行指路文字，读不到不算注册表失败。
@@ -204,18 +215,14 @@ export const usePluginStore = defineStore('plugins', () => {
     }
     try {
       const list = rescan ? await RescanPlugins() : await ListPlugins()
+      if (token !== refreshGeneration) return
       packs.value = (list ?? []) as PluginInfo[]
       registryError.value = ''
     } catch (e) {
+      if (token !== refreshGeneration) return
       registryError.value = normalizeApiError(e).message
     } finally {
-      loaded.value = true
-      refreshing.value = false
-      // 包目录随时可能被人改，重扫之后所有已读过的文件都作废。
-      textCache.clear()
-      // 图标只在重扫时作废：开关一个包走的是 Go 缓存里的注册表，目录一个字节都没动，
-      // 每次都重读一遍全部图片会白添几十个来回，正好落在用户能看见的那几百毫秒里。
-      if (rescan) assetCache.clear()
+      if (token === refreshGeneration) { loaded.value = true; refreshing.value = false }
     }
   }
 
@@ -237,6 +244,18 @@ export const usePluginStore = defineStore('plugins', () => {
 
   async function setEnabled(packId: string, enabled: boolean): Promise<string> {
     try {
+      const pack = packs.value.find(pack => pack.id === packId)
+      if (enabled && pack?.script?.entry) {
+        // Read the files again at the explicit enable action, before changing
+        // persisted state. No external code executes while confirmation is open.
+        const files = await Promise.all(['plugin.json', ...(pack.script.styles || []), pack.script.entry]
+          .map(path => ReadPluginFile(packId, path)))
+        if (files.some(text => !text)) throw new Error(tr('permissions.scriptTrustReadFailed'))
+        const digest = await scriptDigest(files)
+        if (!await scriptTrust.requireTrust(packId, localized(pack.name), digest, pack.builtin_digest)) {
+          return tr('permissions.scriptTrustRequired')
+        }
+      }
       await SetPluginEnabled(packId, enabled)
       await refresh(false)
       return ''
@@ -253,20 +272,32 @@ export const usePluginStore = defineStore('plugins', () => {
   async function uninstall(packId: string): Promise<string> {
     try {
       await UninstallPlugin(packId)
-      await refresh(false)
-      return ''
     } catch (e) {
       return normalizeApiError(e).message
     }
+    packs.value = packs.value.filter(pack => pack.id !== packId)
+    textGeneration++
+    assetGeneration++
+    textCache.clear()
+    assetCache.clear()
+    retryScript(packId)
+    for (const key of Object.keys(brokenShaders.value)) if (key.startsWith(`${packId}/`)) clearShaderBroken(key)
+    let warning = ''
+    try { await scriptTrust.revoke(packId) }
+    catch (error) { warning = tr('settings.extensionsUninstallTrustFailed', { detail: normalizeApiError(error).message }) }
+    await refresh(false)
+    return warning
   }
 
   /** 读包内文本文件（着色器源码）。失败返回空串，错误进 console 与调用方。 */
   async function readText(packId: string, path: string): Promise<string> {
+    const generation = textGeneration
     const ck = `${packId}::${path}`
     const hit = textCache.get(ck)
     if (hit !== undefined) return hit
     try {
       const text = await ReadPluginFile(packId, path)
+      if (generation !== textGeneration) return ''
       textCache.set(ck, text ?? '')
       return text ?? ''
     } catch (e) {
@@ -277,11 +308,13 @@ export const usePluginStore = defineStore('plugins', () => {
 
   /** 读包内二进制资源（主题背景图），返回 data URL。 */
   async function readAsset(packId: string, path: string): Promise<string> {
+    const generation = assetGeneration
     const ck = `${packId}::${path}`
     const hit = assetCache.get(ck)
     if (hit !== undefined) return hit
     try {
       const url = await ReadPluginAsset(packId, path)
+      if (generation !== assetGeneration) return ''
       assetCache.set(ck, url ?? '')
       return url ?? ''
     } catch (e) {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import type { ComponentPublicInstance } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -7,6 +7,8 @@ import { getDetailPath } from '../utils'
 import type { Video } from '../types'
 import { useMotionStore } from '../stores/motion'
 import RemoteImage from './RemoteImage.vue'
+import { useViewActivity } from '../composables/useViewActivity'
+import { isMobileRuntime } from '../api/runtime'
 
 const PAGE_HEIGHT = 360
 const PAGE_PADDING = 20
@@ -29,6 +31,66 @@ const props = withDefaults(defineProps<Props>(), {
 const router = useRouter()
 const { t } = useI18n()
 const motion = useMotionStore()
+const mobile = isMobileRuntime()
+const active = useViewActivity()
+const dragX = ref(0)
+let drag: { id: number; x: number; y: number; width: number; horizontal: boolean } | null = null
+let suppressTouchClick = false
+function onPointerDown(event: PointerEvent): void {
+  if (!mobile || !event.isPrimary || event.button !== 0 || animating.value || total.value < 2) return
+  suppressTouchClick = false
+  drag = { id: event.pointerId, x: event.clientX, y: event.clientY,
+    width: (event.currentTarget as HTMLElement).clientWidth, horizontal: false }
+  stopAutoPlay()
+}
+function onPointerMove(event: PointerEvent): void {
+  const start = drag
+  if (!start || event.pointerId !== start.id) return
+  const dx = event.clientX - start.x, dy = event.clientY - start.y
+  if (!start.horizontal) {
+    if (Math.hypot(dx, dy) < 8) return
+    suppressTouchClick = true
+    if (Math.abs(dy) >= Math.abs(dx)) { drag = null; startAutoPlay(); return }
+    start.horizontal = true
+    ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
+  }
+  event.preventDefault()
+  const spare = layers[1 - front.value]
+  spare.animate = false
+  spare.slide = wrap(layers[front.value].slide + (dx < 0 ? 1 : -1))
+  spare.offset = dx < 0 ? 100 : -100
+  dragX.value = Math.max(-start.width, Math.min(start.width, dx))
+}
+function onPointerEnd(event: PointerEvent): void {
+  const start = drag
+  if (!start || event.pointerId !== start.id) return
+  drag = null
+  if (!start.horizontal) { startAutoPlay(); return }
+  suppressTouchClick = true
+  const committed = event.type !== 'pointercancel' && Math.abs(dragX.value) >= Math.max(35, start.width * .16)
+  const sign = dragX.value < 0 ? -1 : 1
+  const leaving = layers[front.value], spare = layers[1 - front.value]
+  layerEls[front.value]?.getBoundingClientRect()
+  animating.value = true
+  leaving.animate = spare.animate = true
+  if (committed) { leaving.offset = sign * 100; spare.offset = 0 }
+  dragX.value = 0
+  transitionTimer = setTimeout(() => {
+    if (committed) settle()
+    else {
+      transitionTimer = null
+      leaving.animate = spare.animate = false
+      spare.offset = 100
+      spare.slide = wrap(leaving.slide + 1)
+      animating.value = false
+    }
+    startAutoPlay()
+  }, slideMs())
+}
+function openMobileSlide(video: Video, event: MouseEvent): void {
+  if ((suppressTouchClick && event.detail !== 0) || animating.value || clickingLoading.value) return
+  void goDetail(video)
+}
 
 /**
  * 两张常驻图层轮流上台：一张在台前，另一张在侧幕里把下一张先画好。
@@ -212,6 +274,7 @@ function slideMs(): number {
 }
 
 function goNext(): void {
+  if (!active.value) return
   moveTo(wrap(layers[front.value].slide + 1))
 }
 
@@ -225,7 +288,7 @@ function goTo(idx: number): void {
 
 function startAutoPlay(): void {
   stopAutoPlay()
-  if (!props.autoPlay || total.value <= 1) return
+  if (drag || !active.value || !props.autoPlay || total.value <= 1) return
   timer = setInterval(goNext, props.intervalMs)
 }
 
@@ -234,8 +297,8 @@ watch(() => [props.autoPlay, props.intervalMs] as const, () => startAutoPlay())
 
 // Home is kept alive while the player is open. Pause the carousel while it is
 // hidden so a failed Douban poster is not mounted again every six seconds.
-onActivated(() => startAutoPlay())
-onDeactivated(() => {
+watch(active, visible => {
+  if (visible) { startAutoPlay(); return }
   stopAutoPlay()
   // 中途切走只把闸门松开，不替这一页收场。原先在这儿调 settle()：闸门在等图时 animating
   // 已经落下，settle 会把还没画完的来片直接钉到台前——等于把「图片瞬间替换」搬到从播放页
@@ -279,6 +342,8 @@ watch(
       transitionTimer = null
     }
     animating.value = false
+    drag = null
+    dragX.value = 0
     front.value = 0
     layers[0].slide = 0
     layers[0].offset = 0
@@ -322,14 +387,14 @@ function onMouseLeave(): void {
 <template>
   <div v-if="total > 0" class="carousel"
     :style="{ height: PAGE_HEIGHT + PAGE_PADDING * 2 + 'px', padding: PAGE_PADDING + 'px' }"
-    @mouseenter="onMouseEnter" @mouseleave="onMouseLeave">
+    @mouseenter="onMouseEnter" @mouseleave="onMouseLeave" @pointerdown="onPointerDown" @pointermove="onPointerMove" @pointerup="onPointerEnd" @pointercancel="onPointerEnd" @dragstart.prevent>
     <div class="carousel-viewport" :style="{ height: PAGE_HEIGHT + 'px' }">
       <!-- 两张图层常驻：谁在台前只由 offset 决定，内容切换一律发生在台后 -->
       <div v-for="view in views" :key="view.slot"
         :ref="(el) => setLayerEl(view.slot, el)"
         class="carousel-slide"
         :class="{ 'is-transitioning': view.layer.animate }"
-        :style="{ transform: `translateX(${view.layer.offset}%)` }">
+        :style="{ transform: `translateX(calc(${view.layer.offset}% + ${dragX}px))` }">
         <div class="slide-inner" v-if="view.slide">
           <div class="slide-image-wrap">
             <RemoteImage :ref="(el) => setLayerImg(view.slot, el)"
@@ -364,10 +429,13 @@ function onMouseLeave(): void {
                 <span v-if="view.slide?.vod_remarks" class="slide-tag slide-tag-votes">{{ view.slide.vod_remarks }}</span>
               </div>
             </div>
-            <div class="slide-actions">
+            <div v-if="!mobile" class="slide-actions">
               <button class="slide-btn slide-btn-primary" @click.stop="goDetail(view.slide!)">{{ t('home.viewDetail') }}</button>
             </div>
           </div>
+          <button v-if="mobile" class="cczj-mobile-carousel-open" :aria-label="`${t('home.viewDetail')}：${view.slide.vod_name || ''}`"
+            :disabled="view.slot !== front || animating || clickingLoading" :tabindex="view.slot === front ? 0 : -1"
+            @click.stop="openMobileSlide(view.slide, $event)" />
         </div>
       </div>
     </div>
@@ -383,7 +451,7 @@ function onMouseLeave(): void {
     <button v-if="total > 1" class="carousel-arrow carousel-arrow-right" @click.stop="goNext">›</button>
 
     <!-- Indicators -->
-    <div class="carousel-indicators">
+    <div v-if="!mobile" class="carousel-indicators">
       <button v-for="(_, idx) in slides.slice(0, Math.min(total, 10))" :key="'ind-' + idx" class="carousel-indicator"
         :class="{ active: idx === currentSlideIndex }" :disabled="animating" @click.stop="goTo(idx)" />
     </div>

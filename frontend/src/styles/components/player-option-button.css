@@ -1,0 +1,27 @@
+.ctrl-btn {
+  background: transparent;
+  border: none;
+  @apply cczj-text-white cczj-h-32;
+  padding: 0 6px;
+  min-width: 32px;
+  @apply cczj-rounded cczj-cursor-pointer cczj-inline-flex cczj-items-center cczj-justify-center cczj-gap-2;
+  transition: all 0.15s;
+  @apply cczj-flex-shrink-0 cczj-text-11;
+  font-family: inherit;
+}
+
+.ctrl-btn:hover:not(:disabled) {
+  background: rgba(24, 144, 255, 0.25);
+  color: #40a9ff;
+}
+
+.ctrl-btn:disabled {
+  opacity: 0.35;
+  @apply cczj-cursor-not-allowed;
+}
+
+.ctrl-btn.active {
+  color: #40a9ff;
+  background: rgba(24, 144, 255, 0.3);
+}
+

@@ -1,72 +1,68 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, KeepAlive } from 'vue'
+import { onMounted, onUnmounted, computed, defineAsyncComponent, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { tr } from './locales'
 import TitleBar from './components/TitleBar.vue'
-import Sidebar from './components/Sidebar.vue'
+import { useApplicationMode } from './modes/applicationMode'
+import { APPLICATION_MODES, APPLICATION_MODE_KEYS, modeHome, routeMode } from './modes/definitions'
+
 import SplashScreen from './components/SplashScreen.vue'
 import ErrorToastStack from './components/ErrorToastStack.vue'
 import ConfirmModal from './components/ConfirmModal.vue'
-import Icon from './components/Icon.vue'
-import BackToTop from './components/BackToTop.vue'
 import { MotionTransition } from './components/ui'
-import { useCollectStore } from './stores/collect'
 import { useErrorStore } from './stores/error'
 import { useThemeStore } from './stores/theme'
-import { useDownloadStore } from './stores/download'
 import { GetSetting } from './api/app'
 import UpdateModal from './components/UpdateModal.vue'
 import LegacyDataPrompt from './components/LegacyDataPrompt.vue'
 import SchemaNewerPrompt from './components/SchemaNewerPrompt.vue'
 import LicenseGate from './components/LicenseGate.vue'
+import { useViewActivity } from './composables/useViewActivity'
+import { isMobileRuntime } from './api/runtime'
+import { cacheLaunchBackground } from './platform/bootAppearance'
+import { disposeRecordingObserver, recordDiagnosticEvent, refreshRecordingStatus } from './diagnostics/recording'
+
+// Keep native window visibility current even when the current page has no
+// images or diagnostic panels mounted (for example during video playback).
+const foreground = useViewActivity()
+watch(foreground, visible => { void recordDiagnosticEvent('window_state', { visible }) })
+onMounted(() => { void refreshRecordingStatus() })
+onUnmounted(disposeRecordingObserver)
 
 
-// 仅缓存"列表型"页面（Home/Search/Sources/...这些展示视频/源/下载/历史/收藏/设置的页面）。
-// Player/Detail 每次进入都是不同的视频，不适合缓存，放在 exclude 里或不在 include 里。
-// 所有被 include 的组件都必须显式 defineOptions({ name: 'Xxx' })，否则名字不可靠。
-const KEEP_ALIVE_INCLUDE = [
-  'Home',
-  'Search',
-  'Sources',
-  'Favorites',
-  'History',
-  'Recent',
-  'Downloads',
-  'Settings',
-]
+const appMode = useApplicationMode()
+const modeShells = Object.fromEntries(APPLICATION_MODE_KEYS.map(mode => [mode, defineAsyncComponent(APPLICATION_MODES[mode].loadShell)]))
+
+const activeShell = computed(() => modeShells[appMode.mode])
 
 const router = useRouter()
-const collect = useCollectStore()
+function onAndroidBack(event: Event): void {
+  if (event.defaultPrevented) return
+  // Dispatch overlay handling in a separate phase. Window listeners installed
+  // by lazy route components must run before the already-mounted router owner.
+  if (!window.dispatchEvent(new Event('cczj:android-overlay-back', { cancelable: true }))) {
+    event.preventDefault()
+    return
+  }
+  if (router.currentRoute.value.path === modeHome(appMode.mode)) return
+  event.preventDefault()
+  if(appMode.mode==='video' && router.currentRoute.value.path==='/settings' && router.currentRoute.value.query.group && router.options.history.state.back!=='/settings') { void router.replace('/settings');return }
+  // Android WebView.canGoBack() can miss the first Vue hash-history entry.
+  // Keep SPA navigation in the router; the native host owns root/backgrounding.
+  const back=router.options.history.state.back
+  if (typeof back === 'string'&&routeMode(back.split('?')[0]!)===appMode.mode) router.back()
+  else void router.replace(modeHome(appMode.mode))
+}
+onMounted(() => {
+  if (isMobileRuntime()) window.addEventListener('cczj:android-back', onAndroidBack)
+})
+onUnmounted(() => window.removeEventListener('cczj:android-back', onAndroidBack))
 const theme = useThemeStore()
+watch(()=>appMode.mode==='novel'?'#faf9f6':appMode.mode==='comic'?'#fffaf5':theme.current.palette.bgApp,color=>cacheLaunchBackground(color,appMode.mode),{immediate:true})
 const errorStore = useErrorStore()
-const dl = useDownloadStore()
 
 // 立即应用一次默认主题，防止页面初始闪烁
 theme.apply()
-
-// 下载悬浮球显示逻辑：任务<1 时不显示；任务>=1 且鼠标靠近右下角时显示
-const fabVisible = ref(false)
-function handleFabMouseMove(e: MouseEvent): void {
-  if (dl.activeCount < 1) {
-    fabVisible.value = false
-    return
-  }
-  const proximity = 140 // 鼠标靠近的判定半径（像素）
-  const w = window.innerWidth
-  const h = window.innerHeight
-  const dx = w - e.clientX
-  const dy = h - e.clientY
-  const dist = Math.sqrt(dx * dx + dy * dy)
-  fabVisible.value = dist <= proximity
-}
-let hoverFab = false
-function onFabEnter(): void {
-  hoverFab = true
-  fabVisible.value = true
-}
-function onFabLeave(): void {
-  hoverFab = false
-}
 
 let winErrorHandler: ((e: ErrorEvent) => void) | null = null
 let rejectHandler: ((e: PromiseRejectionEvent) => void) | null = null
@@ -76,8 +72,7 @@ async function safeGetSetting(key: string, fallback: string): Promise<string> {
 }
 
 onMounted(async () => {
-  await theme.load()
-  await dl.init()
+  if (!theme.loaded) await theme.load()
 
   // 加载字体大小设置
   try {
@@ -99,7 +94,6 @@ onMounted(async () => {
     }
   } catch { /* ignore */ }
 
-  window.addEventListener('mousemove', handleFabMouseMove)
 
   // 把未捕获的 JS 错误 / Promise 拒绝都记录到日志与弹窗
   winErrorHandler = (event: ErrorEvent) => {
@@ -120,7 +114,6 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  window.removeEventListener('mousemove', handleFabMouseMove)
   if (winErrorHandler) window.removeEventListener('error', winErrorHandler)
   if (rejectHandler) window.removeEventListener('unhandledrejection', rejectHandler)
 })
@@ -132,46 +125,11 @@ onUnmounted(() => {
 
   <!-- 投放标记刻意不在这一层：带着它整窗都是投放区，拖到播放器上也会静默装一个扩展包。
        现在只有「设置 → 扩展包」那张卡片带 data-file-drop-target。 -->
-  <div class="app-shell">
+  <div class="app-shell" :data-application-mode="appMode.mode">
     <!-- 自定义标题栏：最顶部一条，背景色与页面主背景一致 -->
-    <TitleBar />
+    <TitleBar v-if="!isMobileRuntime()" />
 
-    <!-- 主体：侧边栏 + 内容 -->
-    <div class="app-body">
-      <Sidebar />
-      <main class="main-content">
-        <router-view v-slot="{ Component }">
-          <MotionTransition preset="page" mode="out-in">
-            <KeepAlive :include="KEEP_ALIVE_INCLUDE">
-              <component :is="Component" :key="$route.name === 'player'
-                ? `player:${String($route.params.sourceKey || '')}:${String($route.params.vodId || '')}`
-                : $route.path" />
-            </KeepAlive>
-          </MotionTransition>
-        </router-view>
-      </main>
-    </div>
-
-    <!-- 全局采集进度条 -->
-    <MotionTransition preset="slide-up">
-      <div v-if="collect.running || collect.done" class="collect-overlay" :class="{ done: collect.done }">
-        <div class="collect-bar-inner">
-          <div class="collect-header">
-            <span class="collect-source">{{ collect.sourceKey }}</span>
-            <span v-if="collect.running" class="collect-status running">{{ tr('common.collecting') }}</span>
-            <span v-else-if="collect.error" class="collect-status error">{{ tr('common.failed') }}</span>
-            <span v-else class="collect-status success">{{ tr('common.done') }}</span>
-          </div>
-          <div class="progress-track">
-            <div class="progress-fill" :style="{ width: collect.progress + '%' }"></div>
-          </div>
-          <div class="collect-meta">
-            <span v-if="collect.total > 0">{{ tr('common.pageOf', { current: collect.current, total: collect.total }) }}</span>
-            <span class="collect-last-log">{{ collect.log[collect.log.length - 1] }}</span>
-          </div>
-        </div>
-      </div>
-    </MotionTransition>
+    <component :is="activeShell" />
 
     <!-- 全局更新弹窗 -->
     <UpdateModal />
@@ -191,21 +149,6 @@ onUnmounted(() => {
     <!-- 全局自定义确认弹窗：通过 useConfirmStore().confirm(...) 调用 -->
     <ConfirmModal />
 
-    <!-- 右下角下载悬浮球 -->
-    <button
-      class="download-fab"
-      :class="{ 'fab-visible': fabVisible || hoverFab }"
-      @click="router.push('/downloads')"
-      @mouseenter="onFabEnter"
-      @mouseleave="onFabLeave"
-      :title="tr('downloads.title')"
-    >
-      <Icon name="download" :size="18" />
-      <span v-if="dl.activeCount > 0" class="fab-badge">{{ dl.activeCount }}</span>
-    </button>
-
-    <!-- 左下角：回到顶部（滚动超过一定距离后出现，与下载悬浮球左右错开，不重叠） -->
-    <BackToTop />
   </div>
 </template>
 
@@ -340,16 +283,15 @@ onUnmounted(() => {
 
 /* 渲染背景图：把 --bg-image 作为顶层背景图叠加在背景色上 */
 html, body {
-  height: 100%;
+  @apply cczj-h-full;
   margin: 0;
-  background-color: var(--bg-primary);
+  @apply cczj-bg-primary;
   background-image: var(--bg-image);
   background-position: center;
   background-size: cover;
   background-repeat: no-repeat;
   background-attachment: fixed;
-  color: var(--text-primary);
-  overflow: hidden;
+  @apply cczj-text-primary cczj-overflow-hidden;
   -webkit-font-smoothing: antialiased;
   user-select: none;
   -webkit-user-select: none;
@@ -362,50 +304,46 @@ input, textarea, [contenteditable="true"], .allow-select, .video-description, .d
 }
 
 #app {
-  height: 100%;
-  background-color: transparent;
-  color: var(--text-primary);
+  @apply cczj-h-full cczj-bg-transparent cczj-text-primary;
   transition: background 0.3s, color 0.3s;
 }
 
 /* ====== 主体布局 ====== */
 .app-shell {
-  height: 100vh;
-  background-color: var(--bg-primary);
+  /* Keep native resize hit areas outside scrollbars and interactive content. */
+  padding: 0 6px 6px 0;
+  box-sizing: border-box;
+  @apply cczj-h-screen cczj-bg-primary;
   background-image: var(--bg-image, none);
   background-position: center;
   background-size: cover;
   background-repeat: no-repeat;
   background-attachment: fixed;
-  display: flex;
-  flex-direction: column;
+  @apply cczj-flex cczj-flex-col;
   transition: background 0.3s;
 }
 /* 拖放态的描边不再由这里画：投放区收到只有扩展包那张卡片那么大，
    高亮跟着卡片走（styles/components/extensions-panel.css）。 */
 .app-body {
-  display: flex;
-  flex: 1;
-  min-height: 0;
+  @apply cczj-min-w-0 cczj-flex cczj-flex-1 cczj-min-h-0;
   background: transparent;
 }
 .main-content {
-  flex: 1;
-  overflow-y: auto;
+  @apply cczj-min-w-0 cczj-flex-1 cczj-overflow-y-auto cczj-overflow-x-hidden;
   /* 滚动条占 8px 且是经典式（挤版心）。启用一个扩展包常把内容顶过一屏，滚动条就在这时出现，
      整页版心窄 8px、每一行重排——用户看到的正是那一下「抖」。留出常驻槽位，出现与否不再改宽度。 */
   scrollbar-gutter: stable;
   padding: 20px 24px 24px;
-  color: var(--text-primary);
+  @apply cczj-text-primary;
   transition: background 0.3s;
 }
 
 /* 滚动条：跟随主题 */
-::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar { @apply cczj-w-2 cczj-h-2; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
   background: var(--border-strong);
-  border-radius: 4px;
+  @apply cczj-rounded-sm;
   transition: background 0.2s;
 }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
@@ -415,11 +353,11 @@ input, textarea, [contenteditable="true"], .allow-select, .video-description, .d
 /* Shared fallback for legacy controls that have not yet migrated to a UI
  * component.  It gives focus, links, and native form fields the active theme
  * without changing their individual layouts. */
-a { color: var(--accent); }
+a { @apply cczj-text-accent; }
 input, textarea, select {
-  color: var(--text-primary);
+  @apply cczj-text-primary;
   background-color: var(--bg-input);
-  border-color: var(--border);
+  @apply cczj-border-gray-300;
 }
 input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible {
   outline: 2px solid var(--accent);
@@ -428,7 +366,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-
 
 /* ====== 采集进度条 ====== */
 .collect-overlay {
-  position: fixed; bottom: 0; left: 0; right: 0; z-index: 999;
+  @apply cczj-fixed cczj-bottom-0 cczj-left-0 cczj-right-0 cczj-z-999;
   background: var(--bg-card);
   border-top: 1px solid var(--accent);
   padding: 10px 24px;
@@ -436,53 +374,50 @@ input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-
 }
 .collect-overlay.done { border-top-color: var(--success); }
 .collect-bar-inner { max-width: 1200px; margin: 0 auto; }
-.collect-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-.collect-source { font-size: 13px; font-weight: 600; color: var(--text-primary); }
-.collect-status { font-size: 11px; padding: 3px 10px; border-radius: 10px; font-weight: 500; }
-.collect-status.running { background: var(--accent-alpha-20); color: var(--accent); }
-.collect-status.success { background: var(--success-alpha-10); color: var(--success); }
-.collect-status.error { background: var(--danger-alpha-10); color: var(--danger); }
-.progress-track { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; margin-bottom: 6px; }
-.progress-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.3s; }
+.collect-header { @apply cczj-flex cczj-justify-between cczj-items-center cczj-mb-3; }
+.collect-source { @apply cczj-text-13 cczj-font-semibold cczj-text-primary; }
+.collect-status { @apply cczj-text-11 cczj-px-5-py-2; border-radius: 10px; @apply cczj-font-medium; }
+.collect-status.running { background: var(--accent-alpha-20); @apply cczj-text-accent; }
+.collect-status.success { background: var(--success-alpha-10); @apply cczj-text-success; }
+.collect-status.error { @apply cczj-bg-danger-alpha cczj-text-danger; }
+.progress-track { height: 4px; @apply cczj-bg-border cczj-rounded-xs cczj-overflow-hidden cczj-mb-3; }
+.progress-fill { @apply cczj-h-full; background: var(--accent); @apply cczj-rounded-xs; transition: width 0.3s; }
 .collect-overlay.done .progress-fill { background: var(--success); }
-.collect-meta { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted); }
-.collect-last-log { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60%; }
+.collect-meta { @apply cczj-flex cczj-justify-between cczj-text-sm cczj-text-muted; }
+.collect-last-log { @apply cczj-overflow-hidden; text-overflow: ellipsis; @apply cczj-whitespace-nowrap; max-width: 60%; }
 
 /* ====== 右下角下载悬浮球 ====== */
 .download-fab {
-  position: fixed;
+  @apply cczj-fixed;
   right: 24px;
   bottom: 24px;
   width: 52px;
   height: 52px;
-  border-radius: 50%;
+  @apply cczj-rounded-50;
   border: none;
   background: var(--accent);
   color: var(--accent-contrast);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
+  @apply cczj-flex cczj-items-center cczj-justify-center cczj-cursor-pointer;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25), 0 0 0 4px var(--accent-alpha-10);
   z-index: 998;
   transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
   font-family: inherit;
   /* 默认隐藏：任务<1 或鼠标未靠近时都不显示 */
-  opacity: 0;
+  @apply cczj-opacity-0;
   transform: scale(0.6);
-  pointer-events: none;
+  @apply cczj-pointer-events-none;
 }
 .download-fab.fab-visible {
-  opacity: 1;
+  @apply cczj-opacity-100;
   transform: scale(1);
-  pointer-events: auto;
+  @apply cczj-pointer-events-auto;
 }
 .download-fab.fab-visible:hover {
   transform: scale(1.08);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.3), 0 0 0 6px var(--accent-alpha-20);
 }
 .download-fab .fab-badge {
-  position: absolute;
+  @apply cczj-absolute;
   top: -4px;
   right: -4px;
   min-width: 20px;
@@ -490,13 +425,8 @@ input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-
   padding: 0 6px;
   border-radius: 10px;
   background: #ef4444;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
+  @apply cczj-text-white cczj-text-11 cczj-font-semibold cczj-flex cczj-items-center cczj-justify-center cczj-leading-none;
   border: 2px solid var(--bg-primary, #fff);
 }
+body[data-player-fullscreen='1'] .app-shell { padding: 0; }
 </style>

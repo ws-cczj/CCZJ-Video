@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue'
+import { computed, ref, shallowRef } from 'vue'
 import { defineStore } from 'pinia'
 import {
   ClearLogs,
@@ -122,7 +122,7 @@ export function logRecordToLine(rec: LogRecord): string {
 }
 
 export const useLogsStore = defineStore('logs', () => {
-  const records = ref<LogRecord[]>([])
+  const records = shallowRef<LogRecord[]>([])
   const lastSeq = ref(0)
   const level = ref<LogLevel>('INFO')
   const stats = ref<Record<string, any> | null>(null)
@@ -130,6 +130,7 @@ export const useLogsStore = defineStore('logs', () => {
   const attached = ref(false)
   const paused = ref(false)
   const loading = ref(false)
+  const connectionError = ref(false)
 
   const query = ref('')
   const levelFilter = ref<LogLevel[]>([])
@@ -161,27 +162,43 @@ export const useLogsStore = defineStore('logs', () => {
 
   let detachEvents: Array<() => void> = []
   let pollTimer: number | undefined
+  let streamGeneration=0
+  let pulling=false
+  let pullRequest:ReturnType<typeof GetLogRecords>|undefined
+  let nativeQueue=Promise.resolve()
+  function nativeStream(start:boolean):Promise<void> {
+    nativeQueue=nativeQueue.then(async()=>{try{if(start)await StartLogStream();else await StopLogStream()}catch{connectionError.value=true}})
+    return nativeQueue
+  }
 
   function append(rec: LogRecord) {
-    if (rec.seq && rec.seq <= lastSeq.value) return
-    if (rec.seq) lastSeq.value = rec.seq
-    records.value.push(rec)
-    if (records.value.length > MAX_RECORDS) {
-      records.value.splice(0, records.value.length - MAX_RECORDS)
-    }
+    appendMany([rec])
+  }
+  function appendMany(items:LogRecord[]):void {
+    let seq=lastSeq.value
+    const accepted:LogRecord[]=[]
+    for(const rec of items){if(rec.seq&&rec.seq<=seq)continue;if(rec.seq)seq=rec.seq;accepted.push(rec)}
+    if(!accepted.length)return
+    records.value=[...records.value,...accepted].slice(-MAX_RECORDS)
+    lastSeq.value=seq
   }
 
   /** 从内存环形缓冲补齐增量；暂停时不消费，恢复后一次拉回全部内容 */
   async function pull(limit = 1000): Promise<void> {
-    if (paused.value) return
+    if (paused.value || !attached.value || pulling) return
+    pulling=true
+    const generation=streamGeneration
     try {
-      const rows = (await GetLogRecords(lastSeq.value, limit)) as Array<{
+      pullRequest=GetLogRecords(lastSeq.value, limit)
+      const rows = (await pullRequest) as Array<{
         seq: number; ts: number; level: string; caller: string; message: string
       }>
-      for (const row of rows || []) append(classify(row))
+      if(generation!==streamGeneration||!attached.value||paused.value)return
+      if(Array.isArray(rows))appendMany(rows.map(classify))
+      connectionError.value=false
     } catch {
-      /* 绑定未就绪时静默，下一次轮询会重试 */
-    }
+      if(generation===streamGeneration)connectionError.value=true
+    } finally {pulling=false;pullRequest=undefined}
   }
 
   async function refreshStats(): Promise<void> {
@@ -190,31 +207,65 @@ export const useLogsStore = defineStore('logs', () => {
       level.value = normalizeLevel((stats.value?.level as string) || '')
     } catch { /* 忽略 */ }
     try {
-      files.value = ((await GetLogFiles()) as typeof files.value) || []
+      const result=await GetLogFiles()
+      files.value=Array.isArray(result)?result as typeof files.value:[]
     } catch { /* 忽略 */ }
   }
 
-  async function bootstrap(): Promise<void> {
-    loading.value = true
-    try {
-      await refreshStats()
-      records.value = []
-      lastSeq.value = 0
-      try {
-        const rows = (await GetLogRecords(0, MAX_RECORDS)) as Array<{
-          seq: number; ts: number; level: string; caller: string; message: string
-        }>
-        for (const row of rows || []) append(classify(row))
-      } catch { /* 忽略 */ }
-    } finally {
-      loading.value = false
+  let bootstrapGeneration = 0
+  let bootstrapFlight: Promise<boolean> | undefined
+  const bootstrapReads = new Set<{ cancel?: () => void | Promise<void> }>()
+  function cancelBootstrap(): void {
+    bootstrapGeneration++
+    bootstrapFlight = undefined
+    loading.value = false
+    for (const request of bootstrapReads) {
+      try { void Promise.resolve(request.cancel?.()).catch(() => {}) } catch { /* Already settled. */ }
     }
+  }
+  async function bootstrapRead<T>(request: Promise<T> & { cancel?: () => void | Promise<void> }): Promise<T> {
+    bootstrapReads.add(request)
+    try { return await request } finally { bootstrapReads.delete(request) }
+  }
+  function bootstrap(): Promise<boolean> {
+    if (bootstrapFlight) return bootstrapFlight
+    const token = bootstrapGeneration
+    loading.value = true
+    bootstrapFlight = (async () => {
+      try {
+        const [snapshot, filenames, rows] = await Promise.all([
+          bootstrapRead(GetLogStats()), bootstrapRead(GetLogFiles()),
+          bootstrapRead(GetLogRecords(0, MAX_RECORDS)),
+        ])
+        if (token !== bootstrapGeneration) return false
+        stats.value = snapshot as Record<string, any>
+        level.value = normalizeLevel(String(stats.value?.level || ''))
+        files.value = Array.isArray(filenames) ? filenames as typeof files.value : []
+        // Events can arrive while a manual refresh reads the ring. Merge by
+        // sequence without clearing the screen or dropping the newer tail.
+        const merged = new Map(records.value.map(row => [row.seq, row]))
+        if (Array.isArray(rows)) for (const row of rows) {
+          const record = classify(row)
+          merged.set(record.seq, record)
+        }
+        records.value = Array.from(merged.values()).sort((a, b) => a.seq - b.seq).slice(-MAX_RECORDS)
+        lastSeq.value = records.value[records.value.length - 1]?.seq || 0
+        connectionError.value = false
+        return true
+      } catch {
+        if (token === bootstrapGeneration) connectionError.value = true
+        return false
+      } finally {
+        if (token === bootstrapGeneration) { loading.value = false; bootstrapFlight = undefined }
+      }
+    })()
+    return bootstrapFlight
   }
 
   async function attach(): Promise<void> {
     if (attached.value) return
     attached.value = true
-    try { await StartLogStream() } catch { /* 忽略 */ }
+    const generation=++streamGeneration
     detachEvents.push(onBackendEvent<{ seq?: number; ts?: number; level?: string; caller?: string; message?: string }>(
       'app:log',
       (payload) => {
@@ -223,19 +274,22 @@ export const useLogsStore = defineStore('logs', () => {
       },
     ))
     pollTimer = window.setInterval(() => { void pull() }, POLL_MS)
-    await pull()
+    await nativeStream(true)
+    if(generation===streamGeneration&&attached.value)await pull()
   }
 
   async function detach(): Promise<void> {
     if (!attached.value) return
     attached.value = false
+    streamGeneration++
+    try{void Promise.resolve(pullRequest?.cancel?.()).catch(()=>{})}catch{/* Completed request. */}
     for (const off of detachEvents) off()
     detachEvents = []
     if (pollTimer !== undefined) {
       window.clearInterval(pollTimer)
       pollTimer = undefined
     }
-    try { await StopLogStream() } catch { /* 忽略 */ }
+    await nativeStream(false)
   }
 
   function setPaused(value: boolean) {
@@ -250,6 +304,7 @@ export const useLogsStore = defineStore('logs', () => {
   }
 
   async function clearAll(): Promise<number> {
+    cancelBootstrap()
     const removed = await ClearLogs()
     records.value = []
     lastSeq.value = 0
@@ -262,18 +317,28 @@ export const useLogsStore = defineStore('logs', () => {
   const fileInfo = ref<{ filename: string; total_rows: number; match_rows: number; first_row: number; has_earlier: boolean; truncated: boolean } | null>(null)
   const fileLoading = ref(false)
   let fileRequest = 0
+  let pendingFileRequest:ReturnType<typeof ReadLogPage>|undefined
+  function cancelFileLoad():void {
+    fileRequest++
+    try{void Promise.resolve(pendingFileRequest?.cancel?.()).catch(()=>{})}catch{/* Completed request. */}
+    pendingFileRequest=undefined
+    fileLoading.value=false
+  }
 
   async function loadFile(filename: string, startRow: number, replace: boolean): Promise<void> {
+    cancelFileLoad()
+    if(replace){fileRecords.value=[];fileInfo.value=null}
     const token = ++fileRequest
     fileLoading.value = true
     try {
-      const resp = (await ReadLogPage({
+      pendingFileRequest=ReadLogPage({
         filename,
         start_row: startRow,
         limit: PAGE_SIZE,
         levels: levelFilter.value.slice(),
         query: query.value.trim(),
-      })) as {
+      })
+      const resp = (await pendingFileRequest) as {
         records: Array<{ seq: number; ts: number; level: string; caller: string; message: string }>
         total_rows: number
         match_rows: number
@@ -283,7 +348,7 @@ export const useLogsStore = defineStore('logs', () => {
         filename: string
       }
       if (token !== fileRequest) return
-      const mapped = (resp.records || []).map((row, index) => {
+      const mapped = (Array.isArray(resp?.records)?resp.records:[]).map((row, index) => {
         // 保留归类结果：整列都写「文件」只是重复标签页已经说明的事，来源列要能看到豆瓣/采集
         const rec = classify({ ...row, seq: 0 })
         return { ...rec, key: `${resp.first_row + index}`, seq: 0 }
@@ -297,8 +362,11 @@ export const useLogsStore = defineStore('logs', () => {
         has_earlier: resp.has_earlier,
         truncated: resp.truncated,
       }
+      connectionError.value=false
+    } catch {
+      if(token===fileRequest)connectionError.value=true
     } finally {
-      if (token === fileRequest) fileLoading.value = false
+      if (token === fileRequest) {fileLoading.value = false;pendingFileRequest=undefined}
     }
   }
 
@@ -312,6 +380,7 @@ export const useLogsStore = defineStore('logs', () => {
   }
 
   function clearFileView(): void {
+    cancelFileLoad()
     fileRecords.value = []
     fileInfo.value = null
   }
@@ -367,6 +436,7 @@ export const useLogsStore = defineStore('logs', () => {
     attached,
     paused,
     loading,
+    connectionError,
     query,
     levelFilter,
     originFilter,
@@ -376,6 +446,7 @@ export const useLogsStore = defineStore('logs', () => {
     bytesLabel,
     currentFileLabel,
     bootstrap,
+    cancelBootstrap,
     attach,
     detach,
     pull,
@@ -386,6 +457,7 @@ export const useLogsStore = defineStore('logs', () => {
     loadFile,
     loadFileLatest,
     loadFileEarlier,
+    cancelFileLoad,
     clearFileView,
     exportToFile,
     describeOrigin,

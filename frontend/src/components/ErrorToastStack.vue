@@ -26,8 +26,8 @@ function dismiss(id: string): void {
         :key="t.id"
         :level="t.level as any"
         :title="t.title"
-        :time="formatTime(t.time)"
-        :detail="t.detail"
+        :time="`${formatTime(t.time)}${(t.count || 1)>1?` ×${t.count}`:''}`"
+        :detail="[t.requestId && `ID: ${t.requestId}`, t.detail].filter(Boolean).join('\n')"
         @close="dismiss(t.id)"
       >
         <div v-if="t.message" class="toast-message">{{ t.message }}</div>
@@ -38,24 +38,20 @@ function dismiss(id: string): void {
 
 <style scoped>
 .toast-stack {
-  position: fixed;
+  @apply cczj-fixed;
   top: 48px;
   right: 24px;
   z-index: var(--z-toast);
-  pointer-events: none;
+  @apply cczj-pointer-events-none;
 }
 
 .toast-stack__list {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 12px;
+  @apply cczj-flex cczj-flex-col cczj-items-end cczj-gap-6;
 }
 
 .toast-message {
   font-size: var(--font-sm);
-  color: var(--text-secondary);
-  line-height: 1.5;
+  @apply cczj-text-secondary cczj-leading-normal;
   word-break: break-word;
 }
 

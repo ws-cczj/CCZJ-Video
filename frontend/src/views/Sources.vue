@@ -6,7 +6,8 @@ import { useCollectStore } from '../stores/collect'
 import { useErrorStore } from '../stores/error'
 import { usePluginStore } from '../stores/plugins'
 import type { SourceScheduleItem } from '../stores/collect'
-import { DeleteSource, ExportSource, GetSourceParamsDoc, ProbeSource, ProbeSources, SourceProbeTimeline } from '../api/app'
+import { DeleteSource, ExportSource, GetSourceParamsDoc, ProbeSource, ProbeSources, SourceProbeTimeline, normalizeApiError } from '../api/app'
+import { createRequestScope } from '../api/requestScope'
 import Icon from '../components/Icon.vue'
 import { Button, MotionTransition, Spinner as LoadingSpinner, Empty as EmptyState, Select as SelectDropdown } from '../components/ui'
 import { useConfirmStore } from '../stores/confirm'
@@ -255,6 +256,8 @@ const autoProbing = ref(false)
 const probes = ref<Record<string, Record<string, any>>>({})
 const timelines = ref<Record<string, Record<string, any>[]>>({})
 let probeTimer: ReturnType<typeof setInterval> | null = null
+const probeRequests = createRequestScope()
+let probeGeneration = 0, probeActive = false
 
 // 60 秒一跳：点阵要按分钟走格，而真正发不发请求由 Go 侧的 5 分钟闸门决定。
 const PROBE_TICK_MS = 60 * 1000
@@ -283,40 +286,46 @@ function coolingText(key: string): string {
   return tr('sources.probeSkipped', { sec: Number(probe.retry_after_sec) || 0 })
 }
 
-async function loadTimeline(): Promise<void> {
+async function loadTimeline(generation = probeGeneration): Promise<void> {
+  if (!probeActive || generation !== probeGeneration) return
   try {
-    const list = ((await SourceProbeTimeline()) as unknown as Record<string, any>[]) || []
+    const list = ((await probeRequests.run(SourceProbeTimeline)) as unknown as Record<string, any>[]) || []
+    if (!probeActive || generation !== probeGeneration) return
     const next: Record<string, Record<string, any>[]> = {}
     for (const timeline of list) {
       if (timeline && timeline.source_key) next[timeline.source_key] = timeline.slots || []
     }
     timelines.value = next
   } catch (e: any) {
-    console.error('[Sources] 探测历史读取失败', e)
+    if (generation === probeGeneration && normalizeApiError(e).code !== 'CANCELLED') console.error('[Sources] 探测历史读取失败', e)
   }
 }
 
 async function autoProbe(): Promise<void> {
-  if (autoProbing.value || probingAll.value) return
+  if (!probeActive || autoProbing.value || probingAll.value) return
+  const generation = probeGeneration
   autoProbing.value = true
   try {
-    const list = ((await ProbeSources()) as unknown as Record<string, any>[]) || []
+    const list = ((await probeRequests.run(ProbeSources)) as unknown as Record<string, any>[]) || []
+    if (!probeActive || generation !== probeGeneration) return
     rememberProbes(list)
   } catch (e: any) {
-    console.error('[Sources] 自动探测失败', e)
+    if (generation === probeGeneration && normalizeApiError(e).code !== 'CANCELLED') console.error('[Sources] 自动探测失败', e)
   } finally {
-    autoProbing.value = false
-    await loadTimeline()
+    if (generation === probeGeneration) { autoProbing.value = false; await loadTimeline(generation) }
   }
 }
 
 function startProbeLoop(): void {
   stopProbeLoop()
+  probeActive = true
+  autoProbing.value = false; probingAll.value = false; probingKey.value = ''
   void autoProbe()
   probeTimer = setInterval(() => void autoProbe(), PROBE_TICK_MS)
 }
 
 function stopProbeLoop(): void {
+  probeActive = false; probeGeneration++; probeRequests.cancel()
   if (probeTimer) {
     clearInterval(probeTimer)
     probeTimer = null
@@ -324,10 +333,12 @@ function stopProbeLoop(): void {
 }
 
 async function probeOne(key: string): Promise<void> {
-  if (probingKey.value || probingAll.value) return
+  if (!probeActive || probingKey.value || probingAll.value) return
+  const generation = probeGeneration
   probingKey.value = key
   try {
-    const probe = (await ProbeSource(key)) as unknown as Record<string, any>
+    const probe = (await probeRequests.run(() => ProbeSource(key))) as unknown as Record<string, any>
+    if (!probeActive || generation !== probeGeneration) return
     if (probe) rememberProbes([probe])
     if (probe?.skipped) {
       errorStore.info(
@@ -337,25 +348,26 @@ async function probeOne(key: string): Promise<void> {
         'Sources.probeOne',
       )
     }
-    await loadTimeline()
+    await loadTimeline(generation)
   } catch (e: any) {
-    errorStore.fromError(tr('sources.probeFailed'), e, 'Sources.probeOne')
+    if (generation === probeGeneration && normalizeApiError(e).code !== 'CANCELLED') errorStore.fromError(tr('sources.probeFailed'), e, 'Sources.probeOne')
   } finally {
-    probingKey.value = ''
+    if (generation === probeGeneration) probingKey.value = ''
   }
 }
 
 async function probeAll(): Promise<void> {
-  if (probingAll.value || autoProbing.value) return
+  if (!probeActive || probingAll.value || autoProbing.value) return
+  const generation = probeGeneration
   probingAll.value = true
   try {
-    const list = ((await ProbeSources()) as unknown as Record<string, any>[]) || []
+    const list = ((await probeRequests.run(ProbeSources)) as unknown as Record<string, any>[]) || []
+    if (!probeActive || generation !== probeGeneration) return
     rememberProbes(list)
   } catch (e: any) {
-    errorStore.fromError(tr('sources.probeFailed'), e, 'Sources.probeAll')
+    if (generation === probeGeneration && normalizeApiError(e).code !== 'CANCELLED') errorStore.fromError(tr('sources.probeFailed'), e, 'Sources.probeAll')
   } finally {
-    probingAll.value = false
-    await loadTimeline()
+    if (generation === probeGeneration) { probingAll.value = false; await loadTimeline(generation) }
   }
 }
 
@@ -476,43 +488,32 @@ onBeforeUnmount(stopProbeLoop)
 .sources-page {
   max-width: 1280px;
   margin: 0 auto;
-  color: var(--text-primary);
+  @apply cczj-text-primary;
   animation: cczj-fade-in-up 0.4s ease;
   padding-bottom: 40px;
 }
 
 /* === 页头 === */
 .page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  margin-bottom: 20px;
-  gap: 20px;
+  @apply cczj-flex cczj-justify-between cczj-items-end cczj-mb-10 cczj-gap-10;
 }
 .page-title h1 {
   font-size: 28px;
-  font-weight: 700;
+  @apply cczj-font-bold;
   margin: 0 0 6px;
 }
 .page-desc {
-  font-size: 13px;
-  color: var(--text-muted);
+  @apply cczj-text-13 cczj-text-muted;
   margin: 0;
 }
 .add-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  @apply cczj-inline-flex cczj-items-center cczj-gap-3;
   padding: 10px 20px;
   border-radius: 10px;
   border: none;
   background: var(--accent);
   color: var(--accent-contrast);
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
-  transition: all 0.15s ease;
-  white-space: nowrap;
+  @apply cczj-cursor-pointer cczj-text-base cczj-font-semibold cczj-transition-fast cczj-whitespace-nowrap;
 }
 .add-btn:hover {
   background: var(--accent-dim);
@@ -522,106 +523,72 @@ onBeforeUnmount(stopProbeLoop)
 
 /* === 顶部操作栏 === */
 .toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
-  padding: 12px 16px;
+  @apply cczj-flex cczj-items-center cczj-justify-between cczj-gap-6 cczj-mb-8 cczj-px-8-py-6;
   background: rgba(255,255,255,0.03);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  flex-wrap: wrap;
+  @apply cczj-border cczj-rounded-lg cczj-flex-wrap;
 }
 .toolbar-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-  min-width: 0;
+  @apply cczj-flex cczj-items-center cczj-gap-5 cczj-flex-1 cczj-min-w-0;
 }
 .toolbar-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
+  @apply cczj-flex cczj-items-center cczj-gap-4 cczj-flex-shrink-0;
 }
 .search-box {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  @apply cczj-flex cczj-items-center cczj-gap-4;
   padding: 8px 14px;
   background: rgba(255,255,255,0.05);
-  border: 1px solid var(--border);
+  @apply cczj-border;
   border-radius: 10px;
-  flex: 1;
+  @apply cczj-flex-1;
   max-width: 360px;
-  min-width: 0;
-  color: var(--text-muted);
+  @apply cczj-min-w-0 cczj-text-muted;
 }
 .search-box input {
   border: none;
   background: transparent;
-  color: var(--text-primary);
-  font-size: 13px;
-  outline: none;
-  flex: 1;
-  min-width: 0;
+  @apply cczj-text-primary cczj-text-13 cczj-outline-none cczj-flex-1 cczj-min-w-0;
 }
-.search-box input::placeholder { color: var(--text-muted); }
+.search-box input::placeholder { @apply cczj-text-muted; }
 .search-clear {
   border: none;
   background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
+  @apply cczj-text-muted cczj-cursor-pointer;
   padding: 2px;
-  display: flex;
+  @apply cczj-flex;
 }
-.search-clear:hover { color: var(--text-primary); }
+.search-clear:hover { @apply cczj-text-primary; }
 .filter-select {
   padding: 8px 14px;
   border-radius: 10px;
-  border: 1px solid var(--border);
+  @apply cczj-border;
   background: rgba(255,255,255,0.05);
-  color: var(--text-primary);
-  font-size: 13px;
-  cursor: pointer;
-  outline: none;
+  @apply cczj-text-primary cczj-text-13 cczj-cursor-pointer cczj-outline-none;
 }
-.filter-select:focus { border-color: var(--accent); }
+.filter-select:focus { @apply cczj-border-primary; }
 .tool-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  @apply cczj-inline-flex cczj-items-center cczj-gap-3;
   padding: 9px 16px;
   border-radius: 10px;
-  border: 1px solid var(--border);
+  @apply cczj-border;
   background: rgba(255,255,255,0.05);
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
-  transition: all 0.15s ease;
-  white-space: nowrap;
+  @apply cczj-text-secondary cczj-cursor-pointer cczj-text-13 cczj-font-medium cczj-transition-fast cczj-whitespace-nowrap;
 }
-.tool-btn:hover { background: rgba(255,255,255,0.08); color: var(--text-primary); }
-.tool-btn.accent { border-color: var(--accent-alpha-35); color: var(--accent); }
+.tool-btn:hover { background: rgba(255,255,255,0.08); @apply cczj-text-primary; }
+.tool-btn.accent { border-color: var(--accent-alpha-35); @apply cczj-text-accent; }
 .tool-btn.accent:hover { background: var(--accent-alpha-10); }
 
 /* === 小按钮 === */
 /* 卡片里的两块面板、全局调度条和导出提示条共用这一套小按钮：规则只留在页面这一份，
    用 :deep 下发给子组件（子组件根节点带着页面的 scope id，选得到），免得各抄一份。 */
 :deep(.mini-btn) {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 4px 10px; border-radius: 6px;
-  border: 1px solid var(--border); background: var(--bg-secondary);
-  color: var(--text-secondary); cursor: pointer; font-size: 11px; font-weight: 500;
-  transition: all 0.15s ease;
+  @apply cczj-inline-flex cczj-items-center cczj-gap-2;
+  padding: 4px 10px; @apply cczj-rounded cczj-border; background: var(--bg-secondary);
+  @apply cczj-text-secondary cczj-cursor-pointer cczj-text-11 cczj-font-medium cczj-transition-fast;
 }
-:deep(.mini-btn:hover) { background: var(--bg-hover); color: var(--text-primary); }
-:deep(.mini-btn.accent) { border-color: var(--accent-alpha-35); color: var(--accent); }
+:deep(.mini-btn:hover) { background: var(--bg-hover); @apply cczj-text-primary; }
+:deep(.mini-btn.accent) { border-color: var(--accent-alpha-35); @apply cczj-text-accent; }
 :deep(.mini-btn.accent:hover) { background: var(--accent-alpha-10); }
-:deep(.mini-btn.danger) { border-color: var(--danger); color: var(--danger); }
+:deep(.mini-btn.danger) { border-color: var(--danger); @apply cczj-text-danger; }
 :deep(.mini-btn.danger:hover) { background: rgba(239, 83, 80, 0.1); }
 
 /* === 加载/空 === */
@@ -629,31 +596,30 @@ onBeforeUnmount(stopProbeLoop)
 
 /* === 卡片网格 === */
 .card-grid {
-  display: grid;
+  @apply cczj-grid;
   grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-  gap: 16px;
+  @apply cczj-gap-8;
   align-items: start;
 }
 
 @media (max-width: 480px) {
   .card-grid { grid-template-columns: 1fr; }
-  .toolbar { flex-direction: column; align-items: stretch; }
-  .toolbar-left { flex-direction: column; }
+  .toolbar { @apply cczj-flex-col cczj-items-stretch; }
+  .toolbar-left { @apply cczj-flex-col; }
   .search-box { max-width: none; }
 }
 
 /* === 弹窗外壳（拆分前就已经是没人用的历史规则） === */
 .modal-overlay {
-  position: fixed; inset: 0;
+  @apply cczj-fixed; inset: 0;
   background: var(--overlay); backdrop-filter: blur(8px);
-  display: flex; align-items: center; justify-content: center;
-  z-index: 200; padding: 20px;
+  @apply cczj-flex cczj-items-center cczj-justify-center cczj-z-200; padding: 20px;
   animation: cczj-fade-in 0.2s ease;
 }
 .modal-content {
   background: var(--bg-card); padding: 24px;
-  border-radius: 16px; width: 520px; max-width: 90vw;
-  border: 1px solid var(--border);
+  @apply cczj-rounded-xl; width: 520px; max-width: 90vw;
+  @apply cczj-border;
   box-shadow: 0 20px 60px rgba(0,0,0,0.3);
   animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -661,31 +627,25 @@ onBeforeUnmount(stopProbeLoop)
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
 }
-.modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
-.modal-header h3 { font-size: 18px; font-weight: 600; margin: 0; }
+.modal-header { @apply cczj-flex cczj-items-center cczj-justify-between cczj-mb-3; }
+.modal-header h3 { @apply cczj-text-xl cczj-font-semibold; margin: 0; }
 .close-btn {
-  width: 32px; height: 32px; border-radius: 8px;
-  border: 1px solid var(--border); background: transparent;
-  color: var(--text-secondary); cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  transition: all 0.15s ease;
+  @apply cczj-w-32 cczj-h-32 cczj-rounded-md cczj-border; background: transparent;
+  @apply cczj-text-secondary cczj-cursor-pointer cczj-flex cczj-items-center cczj-justify-center cczj-transition-fast;
 }
-.close-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
-.form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+.close-btn:hover { background: var(--bg-hover); @apply cczj-text-primary; }
+.form-actions { @apply cczj-flex cczj-gap-5 cczj-justify-end; margin-top: 18px; }
 .cancel-btn {
-  padding: 10px 20px; border-radius: 8px;
-  border: 1px solid var(--border); background: var(--bg-secondary);
-  color: var(--text-secondary); cursor: pointer;
-  font-size: 13px; transition: all 0.15s ease;
+  padding: 10px 20px; @apply cczj-rounded-md cczj-border; background: var(--bg-secondary);
+  @apply cczj-text-secondary cczj-cursor-pointer cczj-text-13 cczj-transition-fast;
 }
-.cancel-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.cancel-btn:hover { background: var(--bg-hover); @apply cczj-text-primary; }
 .save-btn {
-  padding: 10px 22px; border-radius: 8px; border: none;
+  padding: 10px 22px; @apply cczj-rounded-md; border: none;
   background: var(--accent); color: var(--accent-contrast);
-  cursor: pointer; font-size: 13px; font-weight: 600;
-  transition: all 0.15s ease;
+  @apply cczj-cursor-pointer cczj-text-13 cczj-font-semibold cczj-transition-fast;
 }
 .save-btn:hover:not(:disabled) { background: var(--accent-dim); }
-.save-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.save-btn:disabled { @apply cczj-opacity-40 cczj-cursor-not-allowed; }
 
 </style>

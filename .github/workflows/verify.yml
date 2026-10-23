@@ -1,0 +1,72 @@
+name: Verify
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Verify boundaries, frontend and Go
+        shell: pwsh
+        run: ./scripts/verify.ps1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install browser test dependencies
+        run: |
+          python -m pip install -r scripts/browser-test-requirements.txt
+          python -m playwright install chromium
+      - name: Check settings, frame resize and splash lifecycle
+        run: python scripts/test-settings-browser.py
+      - name: Check reading migration, paging and failed-save recovery in browser
+        run: python scripts/test-reading-browser.py
+      - name: Check real browser playback
+        run: |
+          python scripts/test-player-browser.py
+          python scripts/test-player-idle-cache.py
+      - name: Check on-demand IndexedDB segment reads
+        run: python scripts/test-segment-disk-browser.py
+      - name: Check plugin lifecycle and cooperative permissions
+        run: python scripts/test-plugin-browser.py
+      - name: Check diagnostics lifecycle and retained browser memory
+        run: python scripts/test-resource-browser.py
+      - name: Check image memory bounds and background resource release
+        run: python scripts/test-optimization-browser.py
+
+  race:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Check concurrent backend work
+        env:
+          CGO_ENABLED: '1'
+        run: >-
+          go test -race -count=1
+          ./app/apperror ./app/media ./app/provider ./app/library
+          ./app/lifecycle ./app/collect ./app/collection ./app/cache
+          ./app/detail ./app/download ./app/db ./app/plugin ./app/proxy ./app/netstats ./app/resource ./app/diagnosticrecording
+          ./app/netbudget ./app/workflight ./app/readingstate

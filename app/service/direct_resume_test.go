@@ -12,8 +12,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-
-	downloadservice "cczjVideo/app/download"
 )
 
 // 走哪个分支只看一件事：带 manifest 的 .part 是稀疏文件，剩余量再小也不能交给单连接。
@@ -63,11 +61,11 @@ func TestRemoveDownloadKeepsSparsePartWithItsManifest(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	app := &App{downloads: downloadservice.NewRegistry[downloadTask]()}
+	app := newDownloadTestApp(t)
 	app.downloads.Add("t1", &downloadTask{
 		status: VideoDownloadStatus{TaskId: "t1", Url: url, SavePath: savePath, Status: "paused"},
 	})
-	if !app.RemoveDownload("t1") {
+	if ok, err := app.RemoveDownload(context.Background(), "t1"); !ok || err != nil {
 		t.Fatal("RemoveDownload reported failure")
 	}
 	for _, p := range []string{tmpPath, directManifestPath(tmpPath)} {
@@ -121,7 +119,7 @@ func TestDirectSingleRestartsWhenRangeIsIgnored(t *testing.T) {
 		t.Fatal(err)
 	}
 	task := &downloadTask{httpClient: server.Client(), status: VideoDownloadStatus{Total: int64(len(payload))}}
-	app := &App{}
+	app := newTransportTestApp()
 	app.downloadDirectSingle(context.Background(), task, server.URL, tmpPath, int64(len(payload)), int64(len("stale")), "")
 
 	data, err := os.ReadFile(tmpPath)
@@ -131,7 +129,7 @@ func TestDirectSingleRestartsWhenRangeIsIgnored(t *testing.T) {
 	if got := string(data); got != payload {
 		t.Fatalf("file = %q, want %q", got, payload)
 	}
-	if status := task.snapshot(); status.Status != "done" || status.Downloaded != int64(len(payload)) {
+	if status := task.snapshot(); !task.transferComplete || status.Status == "done" || status.Downloaded != int64(len(payload)) {
 		t.Fatalf("unexpected status: %+v", status)
 	}
 }
@@ -159,7 +157,7 @@ func TestDirectParallelWritesOnlyVerifiedRanges(t *testing.T) {
 
 	tmpPath := t.TempDir() + "/video.part"
 	task := &downloadTask{httpClient: server.Client()}
-	app := &App{}
+	app := newTransportTestApp()
 	app.downloadDirectParallel(context.Background(), task, server.URL, tmpPath, int64(len(payload)), 4, "")
 
 	data, err := os.ReadFile(tmpPath)
@@ -169,7 +167,7 @@ func TestDirectParallelWritesOnlyVerifiedRanges(t *testing.T) {
 	if string(data) != string(payload) {
 		t.Fatalf("parallel file = %q, want %q", data, payload)
 	}
-	if status := task.snapshot(); status.Status != "done" || status.Downloaded != int64(len(payload)) {
+	if status := task.snapshot(); !task.transferComplete || status.Status == "done" || status.Downloaded != int64(len(payload)) {
 		t.Fatalf("unexpected status: %+v", status)
 	}
 }
@@ -181,7 +179,7 @@ func TestDirectParallelRejectsIgnoredRange(t *testing.T) {
 	defer server.Close()
 
 	task := &downloadTask{httpClient: server.Client()}
-	app := &App{}
+	app := newTransportTestApp()
 	app.downloadDirectParallel(context.Background(), task, server.URL, t.TempDir()+"/video.part", 13, 2, "")
 	if status := task.snapshot(); status.Status != "error" || !strings.Contains(status.Error, "range request returned HTTP 200") {
 		t.Fatalf("unexpected status: %+v", status)
@@ -232,7 +230,7 @@ func TestDirectDownloadResumesAfterTruncatedResponse(t *testing.T) {
 	dir := t.TempDir()
 	savePath := dir + "/movie.bin"
 	task := &downloadTask{httpClient: server.Client(), status: VideoDownloadStatus{Url: server.URL}}
-	(&App{}).downloadDirect(context.Background(), task, server.URL+"/movie.bin", savePath)
+	newTransportTestApp().downloadDirect(context.Background(), task, server.URL+"/movie.bin", savePath)
 
 	data, err := os.ReadFile(savePath)
 	if err != nil {
@@ -296,7 +294,7 @@ func TestDirectDownloadRestartsWhenRangeSupportDisappears(t *testing.T) {
 		// 上一轮并行下报过 6 段进度，这一轮换成单连接：这些条必须跟着作废。
 		Chunks: []ChunkProgress{{ID: 0, Start: 0, End: 199, Done: 100}},
 	}}
-	(&App{}).downloadDirect(context.Background(), task, urlStr, savePath)
+	newTransportTestApp().downloadDirect(context.Background(), task, urlStr, savePath)
 
 	if got := task.snapshot(); len(got.Chunks) != 0 {
 		t.Fatalf("单连接下载还带着作废的分片进度: %+v", got.Chunks)
@@ -332,7 +330,7 @@ func TestDirectDownloadDoesNotRetryPermanentFailure(t *testing.T) {
 
 	dir := t.TempDir()
 	task := &downloadTask{httpClient: server.Client(), status: VideoDownloadStatus{Url: server.URL}}
-	(&App{}).downloadDirect(context.Background(), task, server.URL+"/movie.bin", dir+"/movie.bin")
+	newTransportTestApp().downloadDirect(context.Background(), task, server.URL+"/movie.bin", dir+"/movie.bin")
 
 	status := task.snapshot()
 	if status.Status != "error" || !strings.Contains(status.Error, "HTTP 404") {

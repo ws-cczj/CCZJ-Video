@@ -126,17 +126,14 @@ function onQuit(): void {
 <style scoped>
 .titlebar {
   height: 36px;
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  @apply cczj-w-full cczj-flex cczj-items-center cczj-justify-between;
   background: transparent;
-  color: var(--text-primary);
+  @apply cczj-text-primary;
   border-bottom: 1px solid rgba(127, 127, 127, 0.18);
   -webkit-user-select: none;
   user-select: none;
   transition: background 0.3s ease, border-color 0.3s ease, color 0.3s ease;
-  position: relative;
+  @apply cczj-relative;
   z-index: 1000;
   box-sizing: border-box;
   backdrop-filter: saturate(1.1) blur(4px);
@@ -144,37 +141,30 @@ function onQuit(): void {
 }
 
 .titlebar-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  @apply cczj-flex cczj-items-center cczj-gap-5;
   padding-left: 14px;
 }
 
 .app-badge {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  @apply cczj-flex cczj-items-center cczj-justify-center;
   width: 22px;
   height: 22px;
   background: var(--accent);
   color: var(--accent-contrast);
-  border-radius: 6px;
+  @apply cczj-rounded;
   box-shadow: 0 2px 8px var(--accent-alpha-35);
-  flex-shrink: 0;
+  @apply cczj-flex-shrink-0;
 }
 
 .app-title {
-  font-size: 12px;
-  font-weight: 600;
+  @apply cczj-text-sm cczj-font-semibold;
   letter-spacing: 0.3px;
-  color: var(--text-primary);
+  @apply cczj-text-primary;
   opacity: 0.9;
 }
 
 .titlebar-controls {
-  display: flex;
-  align-items: stretch;
-  height: 100%;
+  @apply cczj-flex cczj-items-stretch cczj-h-full;
 }
 
 .tb-btn {
@@ -182,18 +172,14 @@ function onQuit(): void {
   height: 36px;
   border: none;
   background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  @apply cczj-text-secondary cczj-cursor-pointer cczj-inline-flex cczj-items-center cczj-justify-center;
   transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
-  position: relative;
+  @apply cczj-relative;
 }
 
 .tb-btn:hover {
   background: var(--bg-hover);
-  color: var(--text-primary);
+  @apply cczj-text-primary;
 }
 
 .tb-btn:active {
@@ -225,12 +211,12 @@ function onQuit(): void {
 }
 
 .restore-icon {
-  display: block;
+  @apply cczj-block;
   color: currentColor;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .titlebar,
-  .tb-btn { transition: none; }
+  .tb-btn { @apply cczj-transition-none; }
 }
 </style>

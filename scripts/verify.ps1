@@ -1,60 +1,32 @@
 $ErrorActionPreference = 'Stop'
 
+node scripts/check-document-links.mjs
+if ($LASTEXITCODE -ne 0) { Write-Error 'Maintained documentation contains missing local links.' }
+
+node scripts/check-release-metadata.mjs (Get-Location).Path
+if ($LASTEXITCODE -ne 0) {
+    Write-Error 'Release documentation does not match version.json.'
+}
+
 # This file must stay ASCII-only: Windows PowerShell 5.1 reads BOM-less files with the
 # ANSI (GBK on this machine) codepage, and UTF-8 Chinese comments then decode into
 # sequences that eat the following newline, silently mangling the next command line.
 
-# Generated Wails bindings and runtime events must stay behind the frontend
-# adapter seam. This makes accidental contract drift fail in CI immediately.
-# rg spells the first path segment with the separator we passed and later segments with
-# the native one, so normalize the whole line to '/' before testing; the whitelist check
-# must not depend on how the search path happened to be written.
-$directBindingImports = rg -n 'bindings/cczjVideo/app|@wailsio/runtime' frontend/src -g '*.ts' -g '*.vue' |
-    Where-Object { $_.Replace('\', '/') -notmatch '^frontend/src/api/' }
-if ($directBindingImports) {
-    Write-Error "Frontend boundary violation: use frontend/src/api adapters.`n$($directBindingImports -join "`n")"
-}
-
-$directStorageAccess = rg -n 'localStorage\.' frontend/src -g '*.ts' -g '*.vue' |
-    Where-Object { $_.Replace('\', '/') -notmatch '^frontend/src/platform/' }
-if ($directStorageAccess) {
-    Write-Error "Frontend storage violation: use frontend/src/platform/storage.ts.`n$($directStorageAccess -join "`n")"
-}
-
-$appLineCount = (Get-Content 'app.go').Count
-if ($appLineCount -gt 600) {
-    Write-Error "app.go must remain a composition root under 600 lines (actual: $appLineCount)."
-}
-
-# Same reasoning for the rest of the Go tree: a 1400-line file mixing fetch, anti-bot
-# backoff, HTML parsing and scoring is the thing that made the douban rate limit hard to
-# audit. 900 is the ceiling the tree currently sits under, so the guard only bites when a
-# file grows past what can be reviewed in one sitting.
-$oversizedGo = @(Get-ChildItem -Recurse -File -Filter '*.go' -Path app |
-    Where-Object { $_.Name -notlike '*_test.go' } |
-    ForEach-Object { [PSCustomObject]@{ Name = $_.FullName.Replace((Get-Location).Path + '\', ''); Lines = @(Get-Content $_.FullName).Count } } |
-    Where-Object { $_.Lines -gt 900 })
-if ($oversizedGo) {
-    Write-Error "Split these Go files by responsibility (tests excluded):`n$(($oversizedGo | ForEach-Object { "  $($_.Name): $($_.Lines) lines" }) -join "`n")"
-}
-
-$downloadInApp = rg -n '^func \(a \*App\) (runDownload|downloadDirect|downloadDirectSingle|downloadDirectParallel|downloadM3u8)' app/service/app.go
-if ($downloadInApp) {
-    Write-Error "Download transport implementation must stay in app/service/download*.go.`n$($downloadInApp -join "`n")"
-}
-
-# Only main.go (entry) and app.go (composition root) may sit in the repo root, otherwise
-# loose app_xxx.go files start growing back.
-$looseRootGo = Get-ChildItem -File -Filter '*.go' | Where-Object { $_.Name -notin @('main.go', 'app.go') }
-if ($looseRootGo) {
-    Write-Error "Root must only contain main.go and app.go; move these into app/...`n$(($looseRootGo | ForEach-Object { $_.Name }) -join "`n")"
-}
+# Check executable imports and browser storage access, not comment text.
+node --test scripts/check-architecture.test.mjs
+if ($LASTEXITCODE -ne 0) { Write-Error 'Architecture checker regression tests failed.' }
+node --test scripts/check-release-artifacts.test.mjs
+if ($LASTEXITCODE -ne 0) { Write-Error 'Release artifact checker regression tests failed.' }
+node scripts/check-architecture.mjs (Get-Location).Path
+if ($LASTEXITCODE -ne 0) { Write-Error 'Frontend dependency or storage check failed.' }
 
 if (Test-Path 'frontend/vite.config.ts.timestamp-*.mjs') {
     Write-Error 'Generated Vite timestamp artifacts must not be present in the source tree.'
 }
+node scripts/gen-request-adapter.mjs --check
+if ($LASTEXITCODE -ne 0) { Write-Error 'Request policies or generated request adapter are stale.' }
 
-# Error classification goes through app/apperror codes (docs/adr/0009-coded-errors.md).
+# Error classification uses types or codes (see AGENTS.md).
 # Matching on err.Error() text is the silent kind of breakage: reword one message and a
 # retry policy or a UI grouping stops firing with no compile error and no failing test.
 # Comment lines are excluded: apperror's own doc comment spells out the forbidden call as
@@ -110,25 +82,23 @@ if ($staleSyso) {
     Write-Error "Generated resource files must not be committed or left in the root: $(($staleSyso | ForEach-Object { $_.Name }) -join ', ')"
 }
 
-# Locales are untyped `export default {}` objects and cczj-* utilities are hand-written CSS:
+# Locale parity and literal references supplement type checking:
 # a wrong key or class name passes vue-tsc and vite silently, so only this static check catches it.
 node scripts/check-frontend-conventions.mjs (Get-Location).Path
 if ($LASTEXITCODE -ne 0) {
-    Write-Error 'Frontend convention check failed (i18n parity / locale keys / cczj-* classes / inline style size).'
+    Write-Error 'Frontend convention check failed (i18n parity / locale keys / cczj-* classes).'
 }
-
-go vet ./...
-if ($LASTEXITCODE -ne 0) {
-    Write-Error 'go vet failed.'
-}
-
-go test -count=1 ./...
-if ($LASTEXITCODE -ne 0) {
-    Write-Error 'go test failed.'
-}
+node scripts/gen-cczj-vscode-data.mjs --check
+if ($LASTEXITCODE -ne 0) { Write-Error 'CCZJ CSS documentation or editor data is stale.' }
+node scripts/audit-cczj-styles.mjs --check-reuse
+if ($LASTEXITCODE -ne 0) { Write-Error 'Reuse CCZJ shared layout utilities instead of duplicating their declarations.' }
 
 Push-Location frontend
 try {
+    npm run test
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error 'Frontend regression tests failed.'
+    }
     # Native commands do not fail a PowerShell script by themselves, and vue-tsc errors only
     # show up in the exit code. Without this the whole script used to exit 0 on a broken build.
     npm run build
@@ -138,4 +108,17 @@ try {
 }
 finally {
     Pop-Location
+}
+
+node scripts/audit-cczj-styles.mjs --check-build
+if ($LASTEXITCODE -ne 0) { Write-Error 'Production CSS contains unexpanded CCZJ composition.' }
+
+go vet ./...
+if ($LASTEXITCODE -ne 0) {
+    Write-Error 'go vet failed.'
+}
+
+go test -count=1 ./...
+if ($LASTEXITCODE -ne 0) {
+    Write-Error 'go test failed.'
 }

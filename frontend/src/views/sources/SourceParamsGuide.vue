@@ -89,66 +89,59 @@ function fallbackCopy(text: string): void {
   padding-top: 10px;
 }
 .params-toggle {
-  display: inline-flex; align-items: center; gap: 6px;
+  @apply cczj-inline-flex cczj-items-center cczj-gap-3;
   background: transparent; border: none;
-  color: var(--text-muted); cursor: pointer; font-size: 12px;
+  @apply cczj-text-muted cczj-cursor-pointer cczj-text-sm;
   padding: 4px 0;
   transition: color 0.15s ease;
 }
-.params-toggle:hover { color: var(--accent); }
+.params-toggle:hover { @apply cczj-text-accent; }
 .params-content {
-  margin-top: 10px;
-  display: flex; flex-direction: column; gap: 10px;
+  @apply cczj-mt-5 cczj-flex cczj-flex-col cczj-gap-5;
 }
-.params-loading { padding: 16px; text-align: center; }
+.params-loading { @apply cczj-p-8 cczj-text-center; }
 .param-block {
   background: rgba(255,255,255,0.03);
   border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 8px; padding: 10px 12px;
+  @apply cczj-rounded-md; padding: 10px 12px;
 }
 .param-block-header {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 6px;
+  @apply cczj-flex cczj-items-center cczj-justify-between cczj-mb-3;
 }
 .param-block-title {
-  font-size: 11px; font-weight: 600; color: var(--accent);
+  @apply cczj-text-11 cczj-font-semibold cczj-text-accent;
   text-transform: uppercase; letter-spacing: 0.3px;
 }
 .params-code {
-  display: block; padding: 6px 10px;
-  background: rgba(255,255,255,0.05); border-radius: 6px;
-  font-family: 'SF Mono', Consolas, monospace; font-size: 11px;
-  color: var(--text-primary); word-break: break-all; line-height: 1.6;
-  border: 1px solid var(--border);
+  @apply cczj-block; padding: 6px 10px;
+  background: rgba(255,255,255,0.05); @apply cczj-rounded;
+  font-family: 'SF Mono', Consolas, monospace; @apply cczj-text-11 cczj-text-primary cczj-break-all; line-height: 1.6;
+  @apply cczj-border;
 }
 .param-row {
-  display: flex; align-items: center; gap: 8px;
+  @apply cczj-flex cczj-items-center cczj-gap-4;
   padding: 5px 0;
   border-bottom: 1px dashed rgba(255,255,255,0.06);
 }
 .param-row:last-child { border-bottom: none; }
 .param-name {
-  flex-shrink: 0; padding: 2px 8px;
-  background: var(--accent-alpha-10); color: var(--accent);
-  border-radius: 6px; font-size: 11px; font-weight: 600;
+  @apply cczj-flex-shrink-0; padding: 2px 8px;
+  background: var(--accent-alpha-10); @apply cczj-text-accent cczj-rounded cczj-text-11 cczj-font-semibold;
   font-family: 'SF Mono', Consolas, monospace;
-  min-width: 70px; text-align: center;
+  min-width: 70px; @apply cczj-text-center;
 }
-.param-desc { flex: 1; font-size: 11px; color: var(--text-secondary); }
+.param-desc { @apply cczj-flex-1 cczj-text-11 cczj-text-secondary; }
 .copy-btn {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 4px 10px; border-radius: 6px;
+  @apply cczj-inline-flex cczj-items-center cczj-gap-2;
+  padding: 4px 10px; @apply cczj-rounded;
   border: 1px solid var(--accent-alpha-35);
-  background: var(--accent-alpha-10); color: var(--accent);
-  font-size: 11px; font-weight: 500; cursor: pointer;
-  transition: all 0.15s ease; flex-shrink: 0;
+  background: var(--accent-alpha-10); @apply cczj-text-accent cczj-text-11 cczj-font-medium cczj-cursor-pointer cczj-transition-fast cczj-flex-shrink-0;
 }
 .copy-btn:hover { background: var(--accent); color: var(--accent-contrast); }
 .copy-btn-sm {
-  padding: 3px 10px; border-radius: 6px; border: 1px solid var(--border);
-  background: transparent; color: var(--text-muted); font-size: 11px;
-  cursor: pointer; transition: all 0.15s ease; flex-shrink: 0;
+  @apply cczj-px-5-py-2 cczj-rounded cczj-border;
+  background: transparent; @apply cczj-text-muted cczj-text-11 cczj-cursor-pointer cczj-transition-fast cczj-flex-shrink-0;
 }
-.copy-btn-sm:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-alpha-10); }
+.copy-btn-sm:hover { @apply cczj-border-primary cczj-text-accent; background: var(--accent-alpha-10); }
 
 </style>

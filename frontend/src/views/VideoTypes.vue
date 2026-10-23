@@ -41,7 +41,7 @@ async function toggleCollect(typeRow: any) {
   const newEnabled = typeRow.CollectEnabled === 1 ? false : true
   try {
     await SetGlobalTypeCollectEnabled({ type_name: typeRow.TypeName, enabled: newEnabled })
-    typeRow.CollectEnabled = newEnabled ? 1 : 0
+    await loadTypes()
     videoStore.notifyRefresh()
   } catch (e: any) {
     errorStore.fromError(tr('videoTypes.setTypeStatusFailed', { name: typeRow.TypeName }), e, 'VideoTypes')
@@ -166,129 +166,94 @@ onMounted(async () => {
 
 <style scoped>
 .video-types-page {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  @apply cczj-flex cczj-flex-col cczj-gap-8;
 }
 
 .status-card {
   background: var(--bg-card);
-  border-radius: 12px;
-  border: 1px solid var(--border);
+  @apply cczj-rounded-lg cczj-border;
   padding: 20px;
 }
 
 .status-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
+  @apply cczj-flex cczj-justify-between cczj-items-center cczj-mb-8;
 }
 
 .status-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
+  @apply cczj-text-lg cczj-font-semibold cczj-text-primary;
   margin: 0;
 }
 
 .status-actions {
-  display: flex;
-  gap: 8px;
+  @apply cczj-flex cczj-gap-4;
 }
 
 .status-grid {
-  display: flex;
+  @apply cczj-flex;
   gap: 32px;
-  flex-wrap: wrap;
+  @apply cczj-flex-wrap;
 }
 
 .status-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  @apply cczj-flex cczj-items-center cczj-gap-4;
 }
 
 .status-label {
-  font-size: 13px;
-  color: var(--text-muted);
+  @apply cczj-text-13 cczj-text-muted;
 }
 
 .status-value {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-muted);
+  @apply cczj-text-base cczj-font-semibold cczj-text-muted;
 }
 
 .status-value.active {
-  color: var(--success);
+  @apply cczj-text-success;
 }
 
 .types-card {
   background: var(--bg-card);
-  border-radius: 12px;
-  border: 1px solid var(--border);
+  @apply cczj-rounded-lg cczj-border;
   padding: 20px;
 }
 
 .types-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-  gap: 12px;
+  @apply cczj-flex cczj-justify-between cczj-items-center cczj-mb-10 cczj-flex-wrap cczj-gap-6;
 }
 
 .types-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
+  @apply cczj-text-lg cczj-font-semibold cczj-text-primary;
   margin: 0;
 }
 
 .types-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
+  @apply cczj-flex cczj-items-center cczj-gap-6 cczj-flex-wrap;
 }
 
 .search-box {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  @apply cczj-flex cczj-items-center cczj-gap-4 cczj-px-6-py-3 cczj-border cczj-rounded-md;
   background: var(--bg-secondary);
   min-width: 200px;
 }
 
 .search-box svg {
-  color: var(--text-muted);
+  @apply cczj-text-muted;
 }
 
 .search-input {
   border: none;
-  outline: none;
+  @apply cczj-outline-none;
   background: transparent;
-  font-size: 13px;
-  color: var(--text-primary);
-  flex: 1;
+  @apply cczj-text-13 cczj-text-primary cczj-flex-1;
 }
 
 .search-input::placeholder {
-  color: var(--text-muted);
+  @apply cczj-text-muted;
 }
 
 .batch-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px;
+  @apply cczj-flex cczj-items-center cczj-gap-3 cczj-p-2;
   background: var(--bg-secondary);
-  border-radius: 8px;
+  @apply cczj-rounded-md;
 }
 
 .batch-btn {
@@ -296,20 +261,17 @@ onMounted(async () => {
 }
 
 .types-grid {
-  display: grid;
+  @apply cczj-grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 10px;
+  @apply cczj-gap-5;
 }
 
 .type-card {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
+  @apply cczj-flex cczj-justify-between cczj-items-center cczj-px-8-py-6;
   background: var(--bg-secondary);
   border-radius: 10px;
   border: 1px solid transparent;
-  transition: all 0.2s ease;
+  @apply cczj-transition;
   user-select: none;
 }
 
@@ -319,17 +281,13 @@ onMounted(async () => {
 }
 
 .type-card-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  @apply cczj-flex cczj-items-center cczj-gap-5;
 }
 
 .type-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+  @apply cczj-w-2 cczj-h-2 cczj-rounded-50;
   background: var(--text-muted);
-  transition: all 0.2s ease;
+  @apply cczj-transition;
 }
 
 .type-dot.collect {
@@ -338,27 +296,20 @@ onMounted(async () => {
 }
 
 .type-name {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-primary);
+  @apply cczj-text-base cczj-font-medium cczj-text-primary;
 }
 
 .type-card-right {
-  display: flex;
-  gap: 6px;
+  @apply cczj-flex cczj-gap-3;
 }
 
 .type-switch {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+  @apply cczj-flex cczj-items-center cczj-gap-2;
   padding: 5px 10px;
-  border-radius: 6px;
+  @apply cczj-rounded;
   border: 1.5px solid var(--border);
   background: transparent;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
+  @apply cczj-text-sm cczj-cursor-pointer cczj-transition;
 }
 
 .type-switch:hover {
@@ -366,35 +317,32 @@ onMounted(async () => {
 }
 
 .switch-icon {
-  font-size: 11px;
+  @apply cczj-text-11;
   font-weight: bold;
 }
 
 .switch-label {
-  font-weight: 500;
+  @apply cczj-font-medium;
 }
 
 .collect-switch {
-  color: var(--text-muted);
+  @apply cczj-text-muted;
 }
 
 .collect-switch.active {
   border-color: var(--success);
   background: rgba(34, 197, 94, 0.12);
-  color: var(--success);
+  @apply cczj-text-success;
 }
 
 .types-empty {
   grid-column: 1 / -1;
-  text-align: center;
+  @apply cczj-text-center;
   padding: 32px;
-  color: var(--text-muted);
-  font-size: 14px;
+  @apply cczj-text-muted cczj-text-base;
 }
 
 .empty-hint {
-  font-size: 13px;
-  color: var(--text-muted);
-  margin-top: 12px;
+  @apply cczj-text-13 cczj-text-muted cczj-mt-6;
 }
 </style>

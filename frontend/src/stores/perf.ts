@@ -1,5 +1,7 @@
 import { computed, reactive, ref } from 'vue'
 import { defineStore } from 'pinia'
+import { recordDiagnosticEvent, registerPlaybackSnapshot } from '../diagnostics/recording'
+import { captureBrowserResources } from '../diagnostics/browserResources'
 
 // 播放质量读数。全部来自真实媒体事件与解码器帧计数，本次会话累计、重启归零：
 // 诊断页要回答的是「我刚播的这片子卡不卡」，历史平均值反而会把最近的问题盖掉。
@@ -19,10 +21,16 @@ export const usePerfStore = defineStore('perf', () => {
   // 都上报会把均值拉低。0 表示当前没有在计时。
   let _loadStart = 0
 
+  function snapshot() {
+    return { loads: loads.value, first_frame: { ...firstFrame }, stalls: { ...stalls }, frames: { ...frames }, errors: { ...errors }, watched_seconds: Math.round(watchedSec.value), current: { ...current }, browser_resources: captureBrowserResources() }
+  }
+  registerPlaybackSnapshot(snapshot)
+
   function beginLoad(host: string): void {
     loads.value++
     _loadStart = performance.now()
     if (host) current.host = host
+    void recordDiagnosticEvent('playback_load', snapshot())
   }
 
   function markFirstFrame(): void {
@@ -34,6 +42,7 @@ export const usePerfStore = defineStore('perf', () => {
     firstFrame.count++
     firstFrame.totalMs += ms
     if (ms > firstFrame.maxMs) firstFrame.maxMs = ms
+    void recordDiagnosticEvent('first_frame', { ms, host: current.host })
   }
 
   // 卡顿时长由播放器实测（waiting 到恢复播放之间），这里只结算，不猜。
@@ -41,6 +50,7 @@ export const usePerfStore = defineStore('perf', () => {
     if (ms <= 0) return
     stalls.count++
     stalls.totalMs += Math.round(ms)
+    void recordDiagnosticEvent('stall', { ms: Math.round(ms), host: current.host })
   }
 
   function addFrames(totalDelta: number, droppedDelta: number): void {
@@ -49,18 +59,21 @@ export const usePerfStore = defineStore('perf', () => {
   }
 
   function addWatched(sec: number): void {
-    if (sec > 0) watchedSec.value += Math.round(sec)
+    if (Number.isFinite(sec) && sec > 0) watchedSec.value += sec
   }
 
   function noteError(kind: string, host: string): void {
     errors.count++
     if (kind) errors.lastKind = kind
     if (host) errors.lastHost = host
+    void recordDiagnosticEvent('error', { kind, host })
   }
 
   function setMedia(resolution: string, bitrateBps: number): void {
+    const changed = (resolution && resolution !== current.resolution) || (bitrateBps > 0 && bitrateBps !== current.bitrateBps)
     if (resolution) current.resolution = resolution
     if (bitrateBps > 0) current.bitrateBps = bitrateBps
+    if (changed) void recordDiagnosticEvent('media', { ...current })
   }
 
   const avgFirstFrameMs = computed(() =>
@@ -69,11 +82,12 @@ export const usePerfStore = defineStore('perf', () => {
   // 丢帧率按本会话累计解码帧算，样本不足 200 帧时不报：刚开播的几十帧里丢两帧是常态，
   // 报成一个刺眼的百分比毫无意义。
   const dropRate = computed(() =>
-    frames.total >= 200 ? (frames.dropped / frames.total) * 100 : 0)
+    frames.total >= 200 ? (frames.dropped / frames.total) * 100 : null)
 
   return {
     loads, firstFrame, stalls, frames, errors, watchedSec, current,
     avgFirstFrameMs, dropRate,
     beginLoad, markFirstFrame, addStall, addFrames, addWatched, noteError, setMedia,
+    snapshot,
   }
 })

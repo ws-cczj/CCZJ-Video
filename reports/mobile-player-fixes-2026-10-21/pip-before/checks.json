@@ -1,0 +1,36 @@
+[
+  {
+    "name": "fullscreen-has-no-white-left-strip",
+    "passed": true,
+    "detail": {
+      "viewport": [
+        640,
+        360
+      ],
+      "rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "native": {
+        "brightness": 0.08235294371843338,
+        "volume": 0.16,
+        "pip": true
+      }
+    }
+  },
+  {
+    "name": "fullscreen-speed-is-right-sidebar",
+    "passed": false,
+    "error": "{'left': 40, 'top': 270, 'right': 600, 'bottom': 348, 'width': 640, 'height': 360, 'inFullscreen': True}"
+  },
+  {
+    "name": "pip-enters-android-pinned-task",
+    "passed": true,
+    "detail": {
+      "nativePinned": true,
+      "videoRetained": true
+    }
+  }
+]

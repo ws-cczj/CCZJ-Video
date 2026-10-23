@@ -1,0 +1,1567 @@
+[
+  {
+    "id": "9308894e54eb4d85bc5ad97e2d2ab36aecc1a4abdc69baa0f42cbca7151bcc86",
+    "name": "不可能世界",
+    "apiUrl": "https://wenxue.bkneng.com",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "failed",
+      "score": 10,
+      "checkedAt": 1792426329,
+      "millis": 129,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "源站没有这个地址（HTTP 404）",
+          "millis": 129,
+          "code": "NOT_FOUND"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "ddcaa7350956b0ef0c5099bd84088d5e9930985342bbeccfd6a7204b4bb6e359",
+    "name": "📖 SF轻小说",
+    "apiUrl": "http://book.sfacg.com",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "partial",
+      "score": 36,
+      "checkedAt": 1792426330,
+      "millis": 731,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "ok",
+          "count": 29,
+          "millis": 181
+        },
+        {
+          "name": "detail",
+          "status": "failed",
+          "message": "详情页没有解析出书名；规则可能选错了元素",
+          "millis": 378,
+          "code": "CORRUPT"
+        },
+        {
+          "name": "toc",
+          "status": "failed",
+          "message": "目录解析出来是空的；可能是规则选错了元素，也可能这个源需要登录",
+          "millis": 172,
+          "code": "CORRUPT"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "23795912fcc83bcd2f14065135a4d1ec5751ebe22ee8ac77fe2117d74f8ce8f2",
+    "name": "🔖读者",
+    "apiUrl": "https://www.52dzxy.com",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "failed",
+      "score": 6,
+      "checkedAt": 1792426330,
+      "millis": 1224,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "请求成功但没有结果；换一个 check_keyword 试试",
+          "millis": 1224,
+          "code": "NOT_FOUND"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "07a5d52d3fd59de74ca467dbb1c2e034fa78e19f27161d55a5cc7bd00f5af63b",
+    "name": "☘️乐文小说☘️",
+    "apiUrl": "https://wap.maxreader.net#响海",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "failed",
+      "score": 6,
+      "checkedAt": 1792426332,
+      "millis": 2883,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "请求失败",
+          "millis": 2883,
+          "code": "UNAVAILABLE"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "faca16d514abc943cf0ee5383b08519df07591f0a759dca46daef16006775d2e",
+    "name": "Ⓐ 爱下电子书",
+    "apiUrl": "https://m.aixdzs.com#未月十八edit",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "failed",
+      "score": 0,
+      "checkedAt": 1792426350,
+      "millis": 20033,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "操作超时",
+          "millis": 20033,
+          "code": "TIMEOUT"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "de119a660e50d04ffa1b697073c625dd837be1a1c970364f29c89f539d3a2e4a",
+    "name": "alpha",
+    "apiUrl": "https://www.alphapolis.co.jp",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "failed",
+      "score": 10,
+      "checkedAt": 1792426331,
+      "millis": 575,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "请求成功但没有结果；换一个 check_keyword 试试",
+          "millis": 575,
+          "code": "NOT_FOUND"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "50261defeae6711d0f255411df90e85e5c6093fbbf5d2c7c1b706b3d656a3822",
+    "name": "🌐 英文小说",
+    "apiUrl": "http://novel.tingroom.com/wap/index.php",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "healthy",
+      "score": 93,
+      "checkedAt": 1792426340,
+      "millis": 8748,
+      "samples": 1,
+      "successes": 1,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "ok",
+          "count": 1,
+          "millis": 1202
+        },
+        {
+          "name": "detail",
+          "status": "ok",
+          "count": 1,
+          "millis": 3431
+        },
+        {
+          "name": "toc",
+          "status": "ok",
+          "count": 120,
+          "millis": 841
+        },
+        {
+          "name": "content",
+          "status": "ok",
+          "count": 796,
+          "millis": 3274
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "bf56ba7c8d2b6734af1f6426cf57119d510380e8290e313bfe2e138d82d3cfae",
+    "name": "2k2k小说",
+    "apiUrl": "https://wwww.2kxs.org",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "failed",
+      "score": 0,
+      "checkedAt": 1792426432,
+      "millis": 20061,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "操作超时",
+          "millis": 20061,
+          "code": "TIMEOUT"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "ba73526bd5df9f708342a925a4a93adde88d6f6bc0cfebeefd88d497aae2ccd0",
+    "name": "E小说",
+    "apiUrl": "http://www.xstxt.com",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "failed",
+      "score": 6,
+      "checkedAt": 1792426416,
+      "millis": 4254,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "源站没有这个地址（HTTP 404）",
+          "millis": 4254,
+          "code": "NOT_FOUND"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "f6099b8b47394960c3e7caf2e5c323bf856bcb9c410d60019f217511922d9cb4",
+    "name": "UU小说2",
+    "apiUrl": "http://m.uuxsw8.cc",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "failed",
+      "score": 10,
+      "checkedAt": 1792426413,
+      "millis": 412,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "请求成功但没有结果；换一个 check_keyword 试试",
+          "millis": 412,
+          "code": "NOT_FOUND"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "e343cae5c1c327a0f5e5f91249263023558755b1ce605da6cfa0f512fa866815",
+    "name": "UU小说3",
+    "apiUrl": "http://m.uuxsw8.com",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "failed",
+      "score": 6,
+      "checkedAt": 1792426414,
+      "millis": 1896,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "请求成功但没有结果；换一个 check_keyword 试试",
+          "millis": 1896,
+          "code": "NOT_FOUND"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "1171854eef747fc34b515d168013ffd8ff805979ede177a535d7951528367155",
+    "name": "[阿玖·AJiu]云中书库.PC",
+    "apiUrl": "http://www.yunxs.com/",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "failed",
+      "score": 0,
+      "checkedAt": 1792426434,
+      "millis": 20003,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "操作超时",
+          "millis": 20003,
+          "code": "TIMEOUT"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "33dd46f84377865f8930dd03a257425b8ee7a266085b7747354cefc0cb805a9f",
+    "name": "☘️TXT小说☘️",
+    "apiUrl": "https://m.xiaxs.la##响海",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "failed",
+      "score": 0,
+      "checkedAt": 1792426436,
+      "millis": 20003,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "操作超时",
+          "millis": 20003,
+          "code": "TIMEOUT"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "f135a12af714193fd0f3d51c7cd7ce4bd36982987cab48a5b6a2ecd4ce324cda",
+    "name": "☘️UU小说☘️",
+    "apiUrl": "http://m.uuxsw8.cc#响海",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "failed",
+      "score": 10,
+      "checkedAt": 1792426432,
+      "millis": 212,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "请求成功但没有结果；换一个 check_keyword 试试",
+          "millis": 212,
+          "code": "NOT_FOUND"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "13e35ea0edd12e4c013d687840a93ad8d380eff4c2e6d611d7718653df5c975b",
+    "name": "乐文小说②",
+    "apiUrl": "http://www.lwxstxt.com",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "failed",
+      "score": 0,
+      "checkedAt": 1792426463,
+      "millis": 30383,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "操作超时",
+          "millis": 30383,
+          "code": "TIMEOUT"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "d7481653f857d99ebb1291f67a77d53be9fc43c59a84da7d922bbc059039e6d5",
+    "name": "书迷楼",
+    "apiUrl": "https://www.shumilou.co/",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "failed",
+      "score": 10,
+      "checkedAt": 1792426435,
+      "millis": 624,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "源站没有这个地址（HTTP 404）",
+          "millis": 624,
+          "code": "NOT_FOUND"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "dda09c1fe9d9a1ee2f80244f2017af6b764f9768cf3c32a733beb7236b8c51a9",
+    "name": "小说屋",
+    "apiUrl": "http://www.xiaoshuowu.com/",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "failed",
+      "score": 0,
+      "checkedAt": 1792426455,
+      "millis": 20073,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "操作超时",
+          "millis": 20073,
+          "code": "TIMEOUT"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "7a875d98153b84acdd6ae25180b71900cf37d5eccb1f38c16562ab83d774aa6d",
+    "name": "平凡文学",
+    "apiUrl": "http://www.pfwx.com",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "healthy",
+      "score": 96,
+      "checkedAt": 1792426439,
+      "millis": 2333,
+      "samples": 1,
+      "successes": 1,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "ok",
+          "count": 100,
+          "millis": 1815
+        },
+        {
+          "name": "detail",
+          "status": "ok",
+          "count": 1,
+          "millis": 172
+        },
+        {
+          "name": "toc",
+          "status": "ok",
+          "count": 208,
+          "millis": 174
+        },
+        {
+          "name": "content",
+          "status": "ok",
+          "count": 57,
+          "millis": 172
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "cd639ddccd61d6e5debddd7ff0f9a2e46b56cbe0d637ffa6760ba0654df26ff5",
+    "name": "换源小说网",
+    "apiUrl": "https://www.huanyuan.app",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "failed",
+      "score": 10,
+      "checkedAt": 1792426440,
+      "millis": 918,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "请求成功但没有结果；换一个 check_keyword 试试",
+          "millis": 918,
+          "code": "NOT_FOUND"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "0916c3848a7275ba8ac1e24b3843e67d1f24e7f56230302db99e2eccfbe4bbfc",
+    "name": "文墨中文网",
+    "apiUrl": "https://maxreader.net",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "failed",
+      "score": 0,
+      "checkedAt": 1792426460,
+      "millis": 20028,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "操作超时",
+          "millis": 20028,
+          "code": "TIMEOUT"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "71716995a3ffbd1c1eeb0929dc4a27e2951160745445d1d46f5e773b5c7285d8",
+    "name": "无敌小说",
+    "apiUrl": "https://www.8xs.org",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "failed",
+      "score": 6,
+      "checkedAt": 1792426458,
+      "millis": 3054,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "请求失败",
+          "millis": 3054,
+          "code": "UNAVAILABLE"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "bf97f9bc90c2067af58e22c23a1f236645b993db52ce0044665cba892641f5a5",
+    "name": "无错小说④",
+    "apiUrl": "https://www.wcxs5.com",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "failed",
+      "score": 6,
+      "checkedAt": 1792426459,
+      "millis": 1132,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "请求成功但没有结果；换一个 check_keyword 试试",
+          "millis": 1132,
+          "code": "NOT_FOUND"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "9ecf77074c0a6e169a9ffaec12a346d5fbcf210f6b4c029948806186f777824f",
+    "name": "望书阁ge",
+    "apiUrl": "https://m.wangshuge.com/",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "failed",
+      "score": 0,
+      "checkedAt": 1792426479,
+      "millis": 20026,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "操作超时",
+          "millis": 20026,
+          "code": "TIMEOUT"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "ad0f3632f5ab84d18fea49bebcb0ef9722824406074e70717254c1c9768a4002",
+    "name": "求小说网",
+    "apiUrl": "http://m.81ht.com/",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "failed",
+      "score": 6,
+      "checkedAt": 1792426463,
+      "millis": 3447,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "源站拒绝访问，请检查来源配置或验证要求",
+          "millis": 3447,
+          "code": "PERMISSION_DENIED"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "9c4822024121243fa193952848b9f6137fb4cf2f9656759eeabaf7f89c2ed50a",
+    "name": "泡书吧⓪",
+    "apiUrl": "http://www.paoshu8.com",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "partial",
+      "score": 60,
+      "checkedAt": 1792426486,
+      "millis": 23602,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "ok",
+          "count": 50,
+          "millis": 6850
+        },
+        {
+          "name": "detail",
+          "status": "failed",
+          "message": "详情页没有解析出书名；规则可能选错了元素",
+          "millis": 504,
+          "code": "CORRUPT"
+        },
+        {
+          "name": "toc",
+          "status": "ok",
+          "count": 208,
+          "millis": 792
+        },
+        {
+          "name": "content",
+          "status": "ok",
+          "count": 33,
+          "millis": 15456
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "b8509543db330da12f2cc1ecb16a927e89af82aa0cd935e8815e4d454b116071",
+    "name": "盛世阅读网",
+    "apiUrl": "http://m.s4yd.com",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "failed",
+      "score": 0,
+      "checkedAt": 1792426483,
+      "millis": 20004,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "操作超时",
+          "millis": 20004,
+          "code": "TIMEOUT"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "39edf8d7b6633153652dfcc89b4ea98620ad801f9a9d5de9a6e9b127c30628fc",
+    "name": "老王小说",
+    "apiUrl": "https://lwkk.xyz/",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "failed",
+      "score": 6,
+      "checkedAt": 1792426484,
+      "millis": 4631,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "请求成功但没有结果；换一个 check_keyword 试试",
+          "millis": 4631,
+          "code": "NOT_FOUND"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "faaddb76619d451ebc56f0789def0087c6a7f6cd3307dc17ea9fde2c65f2b63f",
+    "name": "艾墨中文网",
+    "apiUrl": "https://i7txt.net",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "failed",
+      "score": 10,
+      "checkedAt": 1792426484,
+      "millis": 793,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "请求成功但没有结果；换一个 check_keyword 试试",
+          "millis": 793,
+          "code": "NOT_FOUND"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "d2f0156a1241b27e57112d5847236e8202a86929118bf2befa96c4647063b60a",
+    "name": "话本小说",
+    "apiUrl": "https://so.ihuaben.com/search?keyword=我是",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "partial",
+      "score": 36,
+      "checkedAt": 1792426484,
+      "millis": 432,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "ok",
+          "count": 30,
+          "millis": 197
+        },
+        {
+          "name": "detail",
+          "status": "failed",
+          "message": "详情页没有解析出书名；规则可能选错了元素",
+          "millis": 166,
+          "code": "CORRUPT"
+        },
+        {
+          "name": "toc",
+          "status": "failed",
+          "message": "目录解析出来是空的；可能是规则选错了元素，也可能这个源需要登录",
+          "millis": 69,
+          "code": "CORRUPT"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "cb88a24f8cb6ee1a6eb4e6dda614e6525806086c9b1efc6f0fb690d197ba974b",
+    "name": "追书网站",
+    "apiUrl": "https://m.zhuishu.com/",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "failed",
+      "score": 6,
+      "checkedAt": 1792426486,
+      "millis": 1793,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "源站没有这个地址（HTTP 404）",
+          "millis": 1793,
+          "code": "NOT_FOUND"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "fed25d13b132f9ec82756ecc7bc2880085015dc613855c38e76c0857f7526414",
+    "name": "🍺 笔趣阁⑨③",
+    "apiUrl": "https://www.biqusa.com",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "failed",
+      "score": 10,
+      "checkedAt": 1792426485,
+      "millis": 898,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "请求成功但没有结果；换一个 check_keyword 试试",
+          "millis": 898,
+          "code": "NOT_FOUND"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "28cd12d792060a1570aef268ea6310755a23cc118e4076d811945038f1d03f9e",
+    "name": "🎉 UU小说吧",
+    "apiUrl": "http://www.uuxsw8.net",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "failed",
+      "score": 10,
+      "checkedAt": 1792426486,
+      "millis": 513,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "请求地址被拒绝",
+          "millis": 513,
+          "code": "UNAVAILABLE"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "735b99b976244b0f1d847aeb6b385ba4c351d8454644b3e352eaf08fd4860192",
+    "name": "🎉笔趣阁⑧③",
+    "apiUrl": "http://www.xpsge.com/",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "failed",
+      "score": 0,
+      "checkedAt": 1792426506,
+      "millis": 20056,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "操作超时",
+          "millis": 20056,
+          "code": "TIMEOUT"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "414c60d2fc95cbc0dd32b682cb27ea8a1679f75f41389516cf88498d3f874abd",
+    "name": "📖 ACGZC",
+    "apiUrl": "http://www.acgzc.com#一程",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "failed",
+      "score": 10,
+      "checkedAt": 1792426486,
+      "millis": 91,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "源站返回 HTTP 503",
+          "millis": 91,
+          "code": "UNAVAILABLE"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "f6af5f24a9e7cf22cb3e95103aa0b2dab4fb6df3de9d16ff4953f52e52ebb7f6",
+    "name": "📖 笔趣阁⑦",
+    "apiUrl": "https://www.biquge7.xyz",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "failed",
+      "score": 10,
+      "checkedAt": 1792426486,
+      "millis": 4,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "请求地址被拒绝",
+          "millis": 4,
+          "code": "UNAVAILABLE"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "899b99e0d64cd7296d95c769ca3c368ab35810593e324858885d401828ba95e6",
+    "name": "🔖三一小说",
+    "apiUrl": "http://www.31xs.com",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "failed",
+      "score": 6,
+      "checkedAt": 1792426488,
+      "millis": 1680,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "请求成功但没有结果；换一个 check_keyword 试试",
+          "millis": 1680,
+          "code": "NOT_FOUND"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "3ca0b0933b01a36475e0ec44c3ad87ba355f1cc019718c53d64b66c0ee0711b6",
+    "name": "🔖天地中文网",
+    "apiUrl": "http://www.tiandizw.com",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "partial",
+      "score": 36,
+      "checkedAt": 1792426487,
+      "millis": 579,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "ok",
+          "count": 8,
+          "millis": 218
+        },
+        {
+          "name": "detail",
+          "status": "failed",
+          "message": "详情页没有解析出书名；规则可能选错了元素",
+          "millis": 180,
+          "code": "CORRUPT"
+        },
+        {
+          "name": "toc",
+          "status": "failed",
+          "message": "目录解析出来是空的；可能是规则选错了元素，也可能这个源需要登录",
+          "millis": 181,
+          "code": "CORRUPT"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "a6df4503487077b365a700eb10d8859742fab91f46b87a03ea390ca808a4a922",
+    "name": "🔖天堂向左 深圳往右",
+    "apiUrl": "http://tiantangxiangzuoshenzhenwangyou.qwyd.net",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "healthy",
+      "score": 96,
+      "checkedAt": 1792426491,
+      "millis": 3688,
+      "samples": 1,
+      "successes": 1,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "ok",
+          "count": 8,
+          "millis": 655
+        },
+        {
+          "name": "detail",
+          "status": "ok",
+          "count": 1,
+          "millis": 1127
+        },
+        {
+          "name": "toc",
+          "status": "ok",
+          "count": 28,
+          "millis": 1447
+        },
+        {
+          "name": "content",
+          "status": "ok",
+          "count": 8,
+          "millis": 459
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "af777cd23f7ae4e8e220778f2188253468f2d3cea22587f0100c45875b73cfd1",
+    "name": "🔖英文小说",
+    "apiUrl": "http://novel.tingroom.com",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "healthy",
+      "score": 93,
+      "checkedAt": 1792426498,
+      "millis": 10586,
+      "samples": 1,
+      "successes": 1,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "ok",
+          "count": 1,
+          "millis": 851
+        },
+        {
+          "name": "detail",
+          "status": "ok",
+          "count": 1,
+          "millis": 4611
+        },
+        {
+          "name": "toc",
+          "status": "ok",
+          "count": 120,
+          "millis": 908
+        },
+        {
+          "name": "content",
+          "status": "ok",
+          "count": 799,
+          "millis": 4216
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "id": "0de073057ab692e0b3dbd2a790450cb8a97de3ddfc9e2ca4b889a5392aacc7b9",
+    "name": "🔰 豆腐文学",
+    "apiUrl": "https://www.doufu.me/",
+    "kind": "novel",
+    "project": "Legado",
+    "origin": "https://github.com/aoaostar/legado",
+    "format": "legado",
+    "compatible": true,
+    "reason": "",
+    "summary": "",
+    "imported": false,
+    "quality": {
+      "status": "failed",
+      "score": 10,
+      "checkedAt": 1792426491,
+      "millis": 335,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "源站返回 HTTP 500",
+          "millis": 335,
+          "code": "UNAVAILABLE"
+        }
+      ],
+      "evidence": "local"
+    }
+  }
+]

@@ -36,6 +36,20 @@ export class Stat {
              */
             this["fails"] = 0;
         }
+        if (!("cancelled" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["cancelled"] = 0;
+        }
+        if (!("timeouts" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["timeouts"] = 0;
+        }
         if (!("bytes" in $$source)) {
             /**
              * @member

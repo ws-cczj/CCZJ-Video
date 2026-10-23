@@ -1,60 +1,49 @@
 .douban-comments {
   background: var(--bg-card, #1a1a2e);
-  border-radius: 12px;
+  @apply cczj-rounded-lg;
   padding: 20px;
   color: var(--text-primary, #e0e0e0);
 }
 
 .comments-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
+  @apply cczj-flex cczj-items-center cczj-justify-between cczj-mb-8 cczj-pb-6;
   border-bottom: 1px solid var(--border, #333);
 }
 
 .comments-title {
-  font-size: 16px;
-  font-weight: 600;
+  @apply cczj-text-lg cczj-font-semibold;
   margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  @apply cczj-flex cczj-items-center cczj-gap-3;
 }
 
 .title-icon {
-  font-size: 18px;
+  @apply cczj-text-xl;
 }
 
 .comments-count {
-  font-size: 12px;
-  font-weight: 400;
+  @apply cczj-text-sm cczj-font-normal;
   color: var(--text-muted, #888);
 }
 
 .sort-switcher {
-  display: flex;
-  gap: 4px;
+  @apply cczj-flex cczj-gap-2;
   background: var(--bg-secondary, #16213e);
-  border-radius: 8px;
+  @apply cczj-rounded-md;
   padding: 2px;
 }
 
 .sort-btn {
   padding: 4px 14px;
   border: none;
-  border-radius: 6px;
-  font-size: 12px;
-  cursor: pointer;
+  @apply cczj-rounded cczj-text-sm cczj-cursor-pointer;
   background: transparent;
   color: var(--text-secondary, #aaa);
-  transition: all 0.2s ease;
+  @apply cczj-transition;
 }
 
 .sort-btn.active {
   background: var(--accent, #4f46e5);
-  color: #fff;
+  @apply cczj-text-white;
 }
 
 .sort-btn:hover:not(.active) {
@@ -63,13 +52,10 @@
 
 /* 加载中 */
 .comments-loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
+  @apply cczj-flex cczj-items-center cczj-justify-center cczj-gap-5;
   padding: 40px 0;
   color: var(--text-muted, #888);
-  font-size: 14px;
+  @apply cczj-text-base;
 }
 
 .loading-spinner {
@@ -77,36 +63,31 @@
   height: 20px;
   border: 2px solid var(--border, #333);
   border-top-color: var(--accent, #4f46e5);
-  border-radius: 50%;
+  @apply cczj-rounded-50;
   animation: cczj-spin 0.8s linear infinite;
 }
 
 
 /* 错误 */
 .comments-error {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  @apply cczj-flex cczj-items-center cczj-gap-4;
   padding: 20px;
   background: rgba(239, 68, 68, 0.1);
-  border-radius: 8px;
-  font-size: 13px;
+  @apply cczj-rounded-md cczj-text-13;
   color: var(--text-secondary, #aaa);
 }
 
 .error-icon {
-  font-size: 16px;
+  @apply cczj-text-lg;
 }
 
 .retry-btn {
   padding: 4px 12px;
   border: 1px solid var(--border, #333);
-  border-radius: 6px;
+  @apply cczj-rounded;
   background: transparent;
   color: var(--accent, #4f46e5);
-  font-size: 12px;
-  cursor: pointer;
-  margin-left: auto;
+  @apply cczj-text-sm cczj-cursor-pointer cczj-ml-auto;
 }
 
 .retry-btn:hover {
@@ -115,24 +96,19 @@
 
 /* 空状态 */
 .comments-empty {
-  text-align: center;
+  @apply cczj-text-center;
   padding: 40px 0;
   color: var(--text-muted, #888);
-  font-size: 14px;
+  @apply cczj-text-base;
 }
 
 /* 评论列表 */
 .comments-list {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  @apply cczj-flex cczj-flex-col cczj-gap-8;
 }
 
 .comment-item {
-  display: flex;
-  gap: 12px;
-  padding: 12px;
-  border-radius: 8px;
+  @apply cczj-flex cczj-gap-6 cczj-p-6 cczj-rounded-md;
   transition: background 0.2s ease;
 }
 
@@ -141,87 +117,71 @@
 }
 
 .comment-avatar {
-  flex-shrink: 0;
+  @apply cczj-flex-shrink-0;
 }
 
 .comment-avatar img {
   width: 40px;
   height: 40px;
-  border-radius: 50%;
-  object-fit: cover;
+  @apply cczj-rounded-50 cczj-object-cover;
   border: 1px solid var(--border, #333);
 }
 
 .comment-body {
-  flex: 1;
-  min-width: 0;
+  @apply cczj-flex-1 cczj-min-w-0;
 }
 
 .comment-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
-  flex-wrap: wrap;
+  @apply cczj-flex cczj-items-center cczj-gap-4 cczj-mb-3 cczj-flex-wrap;
 }
 
 .comment-username {
-  font-size: 13px;
-  font-weight: 600;
+  @apply cczj-text-13 cczj-font-semibold;
   color: var(--text-primary, #e0e0e0);
 }
 
 .comment-rating {
-  display: flex;
-  align-items: center;
+  @apply cczj-flex cczj-items-center;
   gap: 3px;
-  font-size: 11px;
+  @apply cczj-text-11;
 }
 
 .stars {
   letter-spacing: -1px;
-  font-size: 12px;
+  @apply cczj-text-sm;
 }
 
 .rating-title {
-  font-size: 11px;
-  opacity: 0.8;
+  @apply cczj-text-11 cczj-opacity-80;
 }
 
 .comment-status {
-  font-size: 11px;
+  @apply cczj-text-11;
   color: var(--text-muted, #888);
   background: var(--bg-secondary, #16213e);
   padding: 1px 6px;
-  border-radius: 4px;
+  @apply cczj-rounded-sm;
 }
 
 .comment-content {
-  font-size: 13px;
+  @apply cczj-text-13;
   line-height: 1.6;
   color: var(--text-secondary, #ccc);
-  margin-bottom: 8px;
+  @apply cczj-mb-4;
   word-break: break-word;
 }
 
 .comment-footer {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 11px;
+  @apply cczj-flex cczj-items-center cczj-gap-6 cczj-text-11;
   color: var(--text-muted, #888);
 }
 
 .comment-location {
-  display: flex;
-  align-items: center;
-  gap: 2px;
+  @apply cczj-flex cczj-items-center cczj-gap-1;
 }
 
 .comment-votes {
-  display: flex;
-  align-items: center;
-  gap: 2px;
+  @apply cczj-flex cczj-items-center cczj-gap-1;
 }
 
 .comment-votes.has-votes {
@@ -230,24 +190,17 @@
 
 /* 分页 */
 .comments-pagination {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  margin-top: 20px;
-  padding-top: 16px;
+  @apply cczj-flex cczj-items-center cczj-justify-center cczj-gap-2 cczj-mt-10 cczj-pt-8;
   border-top: 1px solid var(--border, #333);
 }
 
 .page-btn {
-  padding: 6px 12px;
+  @apply cczj-px-6-py-3;
   border: 1px solid var(--border, #333);
-  border-radius: 6px;
+  @apply cczj-rounded;
   background: transparent;
   color: var(--text-secondary, #aaa);
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
+  @apply cczj-text-sm cczj-cursor-pointer cczj-transition;
 }
 
 .page-btn:hover:not(:disabled):not(.active) {
@@ -257,17 +210,17 @@
 
 .page-btn.active {
   background: var(--accent, #4f46e5);
-  color: #fff;
+  @apply cczj-text-white;
   border-color: var(--accent, #4f46e5);
 }
 
 .page-btn:disabled {
   opacity: 0.3;
-  cursor: not-allowed;
+  @apply cczj-cursor-not-allowed;
 }
 
 .page-ellipsis {
   padding: 6px 8px;
   color: var(--text-muted, #888);
-  font-size: 12px;
+  @apply cczj-text-sm;
 }

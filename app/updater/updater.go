@@ -1,6 +1,8 @@
 package updater
 
 import (
+	"cczjVideo/app/netpolicy"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -123,6 +125,7 @@ type VersionInfo struct {
 	Version string        `json:"version"`
 	Desc    string        `json:"desc"`
 	History []VersionItem `json:"history,omitempty"`
+	Assets  []GitHubAsset `json:"assets,omitempty"`
 }
 
 // VersionItem 历史版本项
@@ -167,6 +170,13 @@ type UpdateInfo struct {
 // CheckUpdate 检查 GitHub 是否有新版本
 // 多渠道回退策略：GitHub API → 代理 → 多源 version.json（无缓存）
 func CheckUpdate() (*UpdateInfo, error) {
+	return CheckUpdateContext(context.Background())
+}
+
+func CheckUpdateContext(ctx context.Context) (*UpdateInfo, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	// Windows ARM 架构：如果没有提供 ARM 包，跳过更新检查
 	if runtime.GOOS == "windows" && strings.Contains(runtime.GOARCH, "arm") {
 		applog.Info("[Updater] Windows ARM 架构，跳过更新检查（暂无 ARM 安装包）")
@@ -178,23 +188,27 @@ func CheckUpdate() (*UpdateInfo, error) {
 	}
 
 	// 策略一：优先使用 GitHub Release API
-	release, err := fetchReleaseFromSources()
+	release, err := fetchReleaseFromSourcesContext(ctx)
 	if err == nil && release != nil {
 		info := buildUpdateInfoFromRelease(release)
-		info.AlreadyDownloadedPath, info.AlreadyDownloadedVer = scanAlreadyDownloaded()
+		info.AlreadyDownloadedPath, info.AlreadyDownloadedVer = scanAlreadyDownloaded(info.LatestVer)
 		return info, nil
+	}
+
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
 	// 策略二：通过多渠道 version.json 获取版本信息
 	applog.Info("[Updater] GitHub API 获取失败，尝试多渠道 version.json")
 
-	verInfo, verErr := fetchVersionInfoFromSources()
+	verInfo, verErr := fetchVersionInfoFromSourcesContext(ctx)
 	if verErr != nil {
 		return nil, apperror.Wrap(apperror.Unavailable, verErr, "所有更新源均失败")
 	}
 
 	info := buildUpdateInfoFromVersionInfo(verInfo)
-	info.AlreadyDownloadedPath, info.AlreadyDownloadedVer = scanAlreadyDownloaded()
+	info.AlreadyDownloadedPath, info.AlreadyDownloadedVer = scanAlreadyDownloaded(info.LatestVer)
 	return info, nil
 }
 
@@ -227,6 +241,11 @@ func buildUpdateInfoFromVersionInfo(verInfo *VersionInfo) *UpdateInfo {
 		ReleaseNotes: verInfo.Desc,
 		History:      history,
 	}
+	name, assetURL, assetSize := findBestAsset(verInfo.Assets)
+	owner, repo, tag, file, valid := parseReleaseAsset(assetURL)
+	if valid && owner == repoOwner && repo == repoName && extractSemver(tag) == latestVer && file == name {
+		info.AssetName, info.DownloadURL, info.AssetSize = name, assetURL, assetSize
+	}
 
 	if hasUpdate {
 		applog.Info("[Updater] 发现新版本: %s -> %s (通过 version.json)", current, latestVer)
@@ -240,11 +259,21 @@ func buildUpdateInfoFromVersionInfo(verInfo *VersionInfo) *UpdateInfo {
 // fetchReleaseFromSources 尝试从多个源获取 GitHub Release（含代理）
 // 每个源最多重试 maxRetryPerSource 次
 func fetchReleaseFromSources() (*GitHubRelease, error) {
+	return fetchReleaseFromSourcesContext(context.Background())
+}
+
+func fetchReleaseFromSourcesContext(ctx context.Context) (*GitHubRelease, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", repoOwner, repoName)
 
 	// 先尝试直连
 	for retry := 0; retry < maxRetryPerSource; retry++ {
-		release, err := fetchRelease(apiURL)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		release, err := fetchReleaseContext(ctx, apiURL)
 		if err == nil {
 			return release, nil
 		}
@@ -255,8 +284,11 @@ func fetchReleaseFromSources() (*GitHubRelease, error) {
 	for _, proxy := range githubProxies {
 		proxyURL := proxy + apiURL
 		for retry := 0; retry < maxRetryPerSource; retry++ {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			applog.Info("[Updater] 尝试代理: %s [第%d次]", proxy, retry+1)
-			release, err := fetchRelease(proxyURL)
+			release, err := fetchReleaseContext(ctx, proxyURL)
 			if err == nil {
 				applog.Info("[Updater] 代理 %s 成功", proxy)
 				return release, nil
@@ -272,12 +304,22 @@ func fetchReleaseFromSources() (*GitHubRelease, error) {
 // fetchVersionInfoFromSources 多渠道获取 version.json（参考 lx-music-desktop）
 // 每个源最多重试 maxRetryPerSource 次，失败后自动切换到下一个源
 func fetchVersionInfoFromSources() (*VersionInfo, error) {
+	return fetchVersionInfoFromSourcesContext(context.Background())
+}
+
+func fetchVersionInfoFromSourcesContext(ctx context.Context) (*VersionInfo, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	var lastErr error
 	for _, source := range versionInfoSources {
 		for retry := 0; retry < maxRetryPerSource; retry++ {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			applog.Info("[Updater] 尝试获取版本信息: %s (%s) [第%d次]",
 				source.url, source.source, retry+1)
-			info, err := fetchVersionInfo(source.url)
+			info, err := fetchVersionInfoContext(ctx, source.url)
 			if err == nil {
 				applog.Info("[Updater] 版本信息获取成功: %s", source.source)
 				return info, nil
@@ -292,8 +334,15 @@ func fetchVersionInfoFromSources() (*VersionInfo, error) {
 
 // fetchVersionInfo 从指定 URL 获取 version.json
 func fetchVersionInfo(url string) (*VersionInfo, error) {
-	client := &http.Client{Timeout: 15 * time.Second, Transport: netstats.WrapTransport(netstats.CategoryUpdate, nil)}
-	req, err := http.NewRequest("GET", url, nil)
+	return fetchVersionInfoContext(context.Background(), url)
+}
+
+func fetchVersionInfoContext(ctx context.Context, url string) (*VersionInfo, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	client := &http.Client{Timeout: 15 * time.Second, Transport: netpolicy.WrapTransport(string(netstats.CategoryUpdate), netstats.WrapTransport(netstats.CategoryUpdate, nil))}
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -354,8 +403,15 @@ func buildUpdateInfoFromRelease(release *GitHubRelease) *UpdateInfo {
 
 // fetchRelease 从 URL 获取 Release 信息
 func fetchRelease(url string) (*GitHubRelease, error) {
-	client := &http.Client{Timeout: 15 * time.Second, Transport: netstats.WrapTransport(netstats.CategoryUpdate, nil)}
-	req, err := http.NewRequest("GET", url, nil)
+	return fetchReleaseContext(context.Background(), url)
+}
+
+func fetchReleaseContext(ctx context.Context, url string) (*GitHubRelease, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	client := &http.Client{Timeout: 15 * time.Second, Transport: netpolicy.WrapTransport(string(netstats.CategoryUpdate), netstats.WrapTransport(netstats.CategoryUpdate, nil))}
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -382,56 +438,68 @@ func fetchRelease(url string) (*GitHubRelease, error) {
 
 // findBestAsset 在 Release 资源中找到最适合当前平台的安装包
 func findBestAsset(assets []GitHubAsset) (name, url string, size int64) {
-	// 根据当前平台确定优先匹配的后缀
-	var preferredExts []string
-	switch runtime.GOOS {
-	case "windows":
-		preferredExts = []string{".exe", ".msi", ".zip"}
-	case "darwin":
-		preferredExts = []string{".dmg", ".pkg", ".zip"}
-	default:
-		preferredExts = []string{".AppImage", ".deb", ".rpm", ".tar.gz"}
-	}
+	return findBestAssetForPlatform(assets, runtime.GOOS, runtime.GOARCH)
+}
 
-	// 平台关键词
-	platformKeys := []string{runtime.GOOS, runtime.GOARCH}
-
-	// 第一轮：精确匹配平台 + 架构
-	for _, ext := range preferredExts {
-		for _, asset := range assets {
+func findBestAssetForPlatform(assets []GitHubAsset, goos, goarch string) (name, url string, size int64) {
+	extensions := map[string][]string{"windows": {".exe", ".msi", ".zip"}, "android": {".apk"}, "darwin": {".dmg", ".pkg", ".zip"}, "linux": {".appimage", ".deb", ".rpm", ".tar.gz"}}[goos]
+	for _, ext := range extensions {
+		best, rank := -1, 99
+		for i, asset := range assets {
 			lower := strings.ToLower(asset.Name)
 			if !strings.HasSuffix(lower, ext) {
 				continue
 			}
-			// 检查是否包含当前平台关键词
-			matchesPlatform := false
-			for _, key := range platformKeys {
-				if strings.Contains(lower, key) {
-					matchesPlatform = true
-					break
+			tokens := strings.FieldsFunc(strings.ReplaceAll(lower, "x86_64", "amd64"), func(r rune) bool { return (r < 'a' || r > 'z') && (r < '0' || r > '9') })
+			present := map[string]bool{}
+			for _, token := range tokens {
+				present[token] = true
+			}
+			if present["aarch64"] {
+				present["arm64"] = true
+			}
+			if present["x64"] {
+				present["amd64"] = true
+			}
+			if present["win"] || present["win64"] {
+				present["windows"] = true
+			}
+			if present["macos"] || present["osx"] {
+				present["darwin"] = true
+			}
+			wrong := false
+			for _, platform := range []string{"windows", "android", "darwin", "linux"} {
+				if present[platform] && platform != goos {
+					wrong = true
 				}
 			}
-			if matchesPlatform {
-				return asset.Name, asset.BrowserDownloadURL, asset.Size
+			archSeen := false
+			for _, arch := range []string{"amd64", "arm64", "386", "arm"} {
+				if present[arch] {
+					archSeen = true
+					if arch != goarch {
+						wrong = true
+					}
+				}
+			}
+			if wrong {
+				continue
+			}
+			candidate := 2
+			if archSeen {
+				candidate = 0
+			} else if goos == "android" && !present["universal"] {
+				continue
+			}
+			if candidate < rank {
+				best, rank = i, candidate
 			}
 		}
-	}
-
-	// 第二轮：只匹配扩展名
-	for _, ext := range preferredExts {
-		for _, asset := range assets {
-			lower := strings.ToLower(asset.Name)
-			if strings.HasSuffix(lower, ext) {
-				return asset.Name, asset.BrowserDownloadURL, asset.Size
-			}
+		if best >= 0 {
+			asset := assets[best]
+			return asset.Name, asset.BrowserDownloadURL, asset.Size
 		}
 	}
-
-	// 第三轮：返回第一个资源
-	if len(assets) > 0 {
-		return assets[0].Name, assets[0].BrowserDownloadURL, assets[0].Size
-	}
-
 	return "", "", 0
 }
 

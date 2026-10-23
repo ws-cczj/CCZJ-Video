@@ -14,7 +14,18 @@ defineProps<{ name: string; size?: number }>()
     stroke-linecap="round"
     stroke-linejoin="round"
   >
-    <g v-if="name === 'home'">
+    <g v-if="name === 'danmaku'"><path d="M4 4h16a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H9l-5 3v-3a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/><path d="M6 8h6m3 0h3M6 12h3m3 0h6M6 16h8"/></g>
+    <g v-else-if="name === 'danmaku-settings'"><path d="M12 19H9l-5 3v-3a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4M6 8h6m3 0h3M6 12h3M6 16h4"/><path d="M14 13v9m6-9v9"/><path d="M12 16h4m2 3h4"/></g>
+    <g v-else-if="name === 'book-open'"><path d="M12 5c-3-2-7-2-10-1v16c3-1 7-1 10 1 3-2 7-2 10-1V4c-3-1-7-1-10 1Zm0 0v16"/></g>
+    <g v-else-if="name === 'panels'"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 10h18M10 10v11M15 3v7"/></g>
+    <g v-else-if="name === 'bookmark'"><path d="M6 3h12v19l-6-4-6 4V3Z"/></g>
+    <g v-else-if="name === 'more'"><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="20" cy="12" r="1" fill="currentColor"/></g>
+    <g v-else-if="name === 'grid'"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></g>
+    <g v-else-if="name === 'user'"><circle cx="12" cy="7" r="4"/><path d="M4 22v-3a8 8 0 0 1 16 0v3"/></g>
+    <g v-else-if="name === 'trending'"><path d="m3 17 6-6 4 4 8-10m-7 0h7v7"/></g>
+    <g v-else-if="name === 'cast'"><path d="M3 3h18v14h-7M3 13a8 8 0 0 1 8 8M3 17a4 4 0 0 1 4 4"/><circle cx="3" cy="21" r="1"/></g>
+    <g v-else-if="name === 'lock' || name === 'unlock'"><rect x="5" y="10" width="14" height="11" rx="2"/><path :d="name === 'lock' ? 'M8 10V6a4 4 0 0 1 8 0v4' : 'M8 10V6a4 4 0 0 1 8 0'"/><path d="M12 14v3"/></g>
+    <g v-else-if="name === 'home'">
       <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
       <polyline points="9 22 9 12 15 12 15 22" />
     </g>
@@ -428,9 +439,9 @@ defineProps<{ name: string; size?: number }>()
 
 <style scoped>
 .icon-svg {
-  display: inline-block;
+  @apply cczj-inline-block;
   vertical-align: middle;
-  flex-shrink: 0;
+  @apply cczj-flex-shrink-0;
   transition: transform 0.15s ease;
 }
 </style>

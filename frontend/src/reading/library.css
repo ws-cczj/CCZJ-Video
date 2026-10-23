@@ -1,0 +1,227 @@
+/* Shared navigation and controls; novel rows and comic covers own their composition. */
+.reading-search-related { margin-top: 24px; color: var(--reading-muted); font-size: 13px; }
+.reading-search-related summary { padding: 12px 0; }
+.reading-search-related > div { margin-top: 12px; }
+/* The shell qualifier keeps lazy-loaded mode styles from changing shared controls. */
+.cczj-novel-shell.reading-shell {
+  --novel-canvas: #f8f7f3; --novel-surface: #fffefa; --novel-ink: #292e29;
+  --novel-muted: #71766e; --novel-line: #e4e5dc; --novel-red: #42634f;
+  --reading-bg: var(--novel-canvas); --reading-surface: var(--novel-surface);
+  --reading-ink: var(--novel-ink); --reading-muted: var(--novel-muted);
+  --reading-line: var(--novel-line); --reading-accent: var(--novel-red); --reading-soft: #eaf0e8;
+  --bg-secondary: #efefe8; --bg-input: var(--reading-surface); --accent-alpha-10: var(--reading-soft);
+}
+.cczj-comic-shell.reading-shell {
+  --comic-bg: #f6f7fa; --comic-surface: #fff; --comic-ink: #262d3b;
+  --comic-muted: #687283; --comic-line: #e2e6ee; --comic-accent: #415f94; --comic-soft: #eaf0fa;
+  --reading-bg: var(--comic-bg); --reading-surface: var(--comic-surface);
+  --reading-ink: var(--comic-ink); --reading-muted: var(--comic-muted);
+  --reading-line: var(--comic-line); --reading-accent: var(--comic-accent); --reading-soft: var(--comic-soft);
+  --bg-primary: var(--comic-bg); --bg-secondary: #edf0f5; --bg-card: var(--comic-surface);
+  --text-muted: var(--comic-muted); --accent-alpha-10: var(--comic-soft);
+}
+:root[data-theme-mode="dark"] .cczj-novel-shell.reading-shell {
+  --novel-canvas: #20231f; --novel-surface: #282c26; --novel-ink: #e0e5da;
+  --novel-muted: #a6afa0; --novel-line: #3b4237; --novel-red: #a6c4a3; --reading-soft: #323f32;
+  --bg-secondary: #2e342b;
+}
+:root[data-theme-mode="dark"] .cczj-comic-shell.reading-shell {
+  --comic-bg: #1d222c; --comic-surface: #252c38; --comic-ink: #e1e6ef;
+  --comic-muted: #a3aec1; --comic-line: #3a4455; --comic-accent: #a8c2ee; --comic-soft: #303e56;
+  --bg-secondary: #2a3342;
+}
+:root[data-theme-mode="dark"] .reading-shell { color-scheme: dark; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-header {
+  @apply cczj-flex cczj-items-center; gap: 16px; @apply cczj-flex-shrink-0; min-height: 76px;
+  padding: 8px max(32px, calc((100% - 1104px) / 2)); border-bottom: 1px solid var(--reading-line);
+  background: var(--reading-surface);
+}
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-brand { @apply cczj-flex cczj-items-center; gap: 12px; min-width: 176px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-brand-icon { @apply cczj-grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; color: var(--reading-accent); background: var(--reading-soft); }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-brand strong { font-size: 20px; letter-spacing: -.04em; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-brand strong span { margin-left: 10px; font-size: 13px; font-weight: 500; color: var(--reading-muted); letter-spacing: .04em; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-header-title { font-size: 15px; font-weight: 600; @apply cczj-min-w-0; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-desktop-nav { @apply cczj-flex; flex: 1; @apply cczj-justify-center cczj-items-center; gap: 8px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-desktop-nav a { @apply cczj-flex cczj-items-center cczj-justify-center; gap: 9px; min-height: 44px; padding: 0 22px; border-radius: 8px; font-size: 14px; color: var(--reading-muted); }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-desktop-nav a[aria-current="page"] { color: var(--reading-accent); background: var(--reading-soft); font-weight: 600; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-icon-button { @apply cczj-inline-flex cczj-items-center cczj-justify-center; min-width: 44px; min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--reading-muted); border-radius: 9px; @apply cczj-flex-shrink-0; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-bottom-nav { @apply cczj-hidden; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-page, .comic-page) { width: 100%; max-width: 1104px; padding: 40px 32px 56px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-page-heading { @apply cczj-flex cczj-items-center cczj-justify-between; gap: 20px; margin: 0 0 30px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-page-heading h1 { font-size: 30px; line-height: 1.35; font-weight: 650; margin: 4px 0 8px; letter-spacing: -.04em; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-page-heading p { margin: 0; font-size: 13px; line-height: 1.7; color: var(--reading-muted); }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-page-heading .reading-eyebrow { color: var(--reading-accent); font-size: 11px; font-weight: 600; letter-spacing: .08em; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-button, .comic-button) { font-size: 13px; min-height: 44px; border-radius: 8px; gap: 8px; padding: 10px 18px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-button-primary, .comic-primary) { background: var(--reading-accent); border-color: var(--reading-accent); color: var(--reading-surface); }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-library-toolbar { @apply cczj-flex cczj-items-center cczj-justify-between; gap: 12px; border-bottom: 1px solid var(--reading-line); margin: 28px 0 18px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-tabs { @apply cczj-flex; gap: 28px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-tabs button { @apply cczj-flex cczj-items-center; gap: 8px; min-height: 48px; background: transparent; border: 0; padding: 0 2px; font-size: 14px; color: var(--reading-muted); }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-tabs button[aria-pressed="true"] { color: var(--reading-ink); box-shadow: inset 0 -2px var(--reading-accent); font-weight: 600; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-tabs small { @apply cczj-grid; place-items: center; min-width: 22px; height: 20px; padding: 0 5px; border-radius: 5px; background: var(--reading-soft); color: var(--reading-accent); font-size: 11px; font-variant-numeric: tabular-nums; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-library-filters { @apply cczj-flex cczj-items-center cczj-justify-between; gap: 16px; margin-bottom: 20px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-inline-search { @apply cczj-flex cczj-items-center; gap: 8px; width: 240px; max-width: 60%; color: var(--reading-muted); }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-inline-search input { @apply cczj-min-w-0; width: 100%; min-height: 44px; padding: 0; border: 0; color: var(--reading-ink); background: transparent; font: inherit; font-size: 13px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-library-filters select { min-height: 44px; max-width: 44%; padding: 0 24px 0 10px; border: 0; border-radius: 6px; background: var(--reading-surface); color: var(--reading-muted); font: inherit; font-size: 12px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-resume, .comic-resume) { @apply cczj-flex cczj-items-center; gap: 20px; background: var(--reading-soft); padding: 24px 28px; border-radius: 12px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-resume, .comic-resume) > div { @apply cczj-flex; flex: 1; @apply cczj-min-w-0 cczj-flex-col; gap: 6px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-resume, .comic-resume) strong { font-size: 19px; line-height: 1.45; @apply cczj-overflow-hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-resume, .comic-resume) small { font-size: 11px; color: var(--reading-accent); }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-resume, .comic-resume) div > span { font-size: 12px; color: var(--reading-muted); }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-resume-icon { @apply cczj-grid; place-items: center; width: 64px; height: 72px; border: 1px solid color-mix(in srgb, var(--reading-accent) 20%, transparent); border-radius: 4px 9px 9px 4px; color: var(--reading-accent); }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-resume-arrow { color: var(--reading-accent); }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-shelf-list { @apply cczj-grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 36px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-shelf-item { @apply cczj-flex cczj-items-center; position: relative; border-bottom: 1px solid var(--reading-line); padding: 20px 0; font-size: 14px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-shelf-entry { @apply cczj-flex cczj-items-center; gap: 18px; flex: 1; @apply cczj-min-w-0; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-shelf-cover { flex: 0 0 64px; width: 64px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-shelf-copy { flex: 1; @apply cczj-min-w-0; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-shelf-copy h2 { font-size: 16px; font-weight: 600; line-height: 1.5; margin: 0 0 6px; @apply cczj-overflow-hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-shelf-copy p { font-size: 12px; margin: 0 0 12px; @apply cczj-overflow-hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-shelf-status { @apply cczj-block; color: var(--reading-muted); font-size: 11px; line-height: 1.5; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-shelf-chevron { @apply cczj-hidden; color: var(--reading-muted); }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-shelf-remove { @apply cczj-grid; place-items: center; width: 44px; height: 44px; @apply cczj-flex-shrink-0; border: 0; border-radius: 8px; background: var(--reading-soft); color: var(--reading-accent); }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-resume { padding: 16px 22px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-resume > .comic-resume-cover { @apply cczj-block; width: 52px; height: 68px; border-radius: 5px; @apply cczj-overflow-hidden; flex: 0 0 52px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-resume > svg { color: var(--reading-accent); @apply cczj-flex-shrink-0; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 28px 22px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-card .comic-cover { border-radius: 7px; box-shadow: 0 4px 12px #17223710; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-card h3 { font-size: 14px; font-weight: 600; line-height: 1.55; margin: 12px 0 5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; @apply cczj-overflow-hidden; padding-right: 24px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-card p { font-size: 11px; line-height: 1.7; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-card-details { position: absolute; right: -12px; top: calc(100% - 59px); min-width: 36px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-cover > span { background: #1c263dd9; padding: 5px 8px; font-size: 10px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-empty { min-height: 320px; padding: 56px 20px; gap: 16px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-empty-icon { @apply cczj-grid; place-items: center; width: 76px; height: 76px; border-radius: 22px; color: var(--reading-accent); background: var(--reading-soft); margin-bottom: 8px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-empty h2 { font-size: 19px; font-weight: 600; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-empty p { font-size: 13px; max-width: 320px; line-height: 1.85; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-empty :is(a, button) { margin-top: 8px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .empty-icon { animation: none; color: var(--reading-accent); }
+/* Composite fields own the focus ring and clear action; WebView native search
+   decorations would otherwise draw a second X and a second focus rectangle. */
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-search,.comic-search) input:focus-visible { @apply cczj-outline-none; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) input[type=search]::-webkit-search-cancel-button,
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) input[type=search]::-webkit-search-decoration { -webkit-appearance:none; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-search-page { max-width: 960px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-search, .comic-search) { background: var(--reading-surface); border: 1px solid var(--reading-line); border-radius: 10px; padding: 6px 6px 6px 18px; margin-bottom: 16px; gap: 12px; color: var(--reading-muted); }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-search, .comic-search):focus-within { border-color: var(--reading-accent); box-shadow: 0 0 0 3px var(--reading-soft); }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-search, .comic-search) input { color: var(--reading-ink); font-size: 15px; min-height: 44px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-search button[type="submit"] { border-radius: 6px; padding: 0 20px; background: var(--reading-accent); color: var(--reading-surface); font-size: 13px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-search-links { @apply cczj-flex; gap: 24px; @apply cczj-flex-wrap; margin-bottom: 24px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-search-links a { @apply cczj-flex cczj-items-center; gap: 7px; min-height: 44px; font-size: 12px; color: var(--reading-muted); }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-book-detail { max-width: 960px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-book-hero, .comic-detail-hero) { padding: 16px 0 32px; margin: 0 0 24px; gap: 28px; @apply cczj-items-center; border-bottom: 1px solid var(--reading-line); }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-detail-cover, .comic-detail-hero .comic-cover) { width: 128px; flex-basis: 128px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-book-hero, .comic-detail-hero) h1 { font-size: 28px; line-height: 1.4; overflow-wrap: anywhere; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-book-hero, .comic-detail-hero) > div:last-child { @apply cczj-min-w-0; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-book-badges span, .comic-detail-tags span) { background: var(--reading-soft); color: var(--reading-muted); font-size: 11px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-description > p, .comic-intro p) { color: var(--reading-muted); line-height: 1.95; font-size: 14px; white-space: pre-line; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-detail-actions, .comic-detail-actions) { bottom: 0; z-index: 2; gap: 12px; padding: 16px 0 calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--reading-bg); }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-chapter-list, .comic-episode-grid) { padding-bottom: 16px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-episode-grid :is(a, .comic-episode-row) { background: var(--reading-surface); border: 1px solid var(--reading-line); border-radius: 8px; min-height: 76px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-episode-grid .selected { border-color: var(--reading-accent); box-shadow: none; background: var(--reading-soft); }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-episode-search { @apply cczj-flex cczj-items-center; gap: 8px; padding: 0 12px; margin: 0 0 16px; border: 1px solid var(--reading-line); background: var(--reading-surface); border-radius: 8px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-episode-search input { width: 100%; @apply cczj-min-w-0; min-height: 44px; border: 0; background: transparent; color: inherit; font: inherit; font-size: 13px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-settings, .comic-settings) { max-width: 860px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-settings-menu { gap: 0; border: 1px solid var(--reading-line); border-radius: 12px; background: var(--reading-surface); @apply cczj-overflow-hidden; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-settings-entry { background: transparent; border: 0; border-radius: 0; min-height: 88px; padding: 18px 22px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-settings-entry + .novel-settings-entry { border-top: 1px solid var(--reading-line); }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-settings-entry-icon { background: var(--reading-soft); color: var(--reading-accent); border-radius: 10px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-settings-entry:hover { background: var(--reading-soft); }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-settings-card { padding: 24px; background: var(--reading-surface); }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-settings-menu { @apply cczj-overflow-hidden; border: 1px solid var(--reading-line); border-radius: 12px; background: var(--reading-surface); }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-settings-entry { @apply cczj-flex cczj-items-center; gap: 16px; padding: 18px 22px; min-height: 88px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-settings-entry + .comic-settings-entry { border-top: 1px solid var(--reading-line); }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-settings-entry > span:nth-child(2) { @apply cczj-min-w-0; flex: 1; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-settings-entry strong { font-size: 15px; font-weight: 600; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-settings-entry small { @apply cczj-block; color: var(--reading-muted); font-size: 12px; line-height: 1.6; margin-top: 5px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-settings-entry-icon { @apply cczj-grid; place-items: center; width: 44px; height: 44px; @apply cczj-flex-shrink-0; background: var(--reading-soft); color: var(--reading-accent); border-radius: 10px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-settings-subhead { @apply cczj-flex cczj-items-center; gap: 12px; margin: 8px 0 24px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-settings-subhead h1 { font-size: 24px; margin: 0; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-settings > .comic-settings-card { margin: 0; padding: 24px; border-radius: 12px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .library-source-advanced { margin-top: 24px; color: var(--reading-muted); font-size: 12px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .library-source-advanced summary { min-height: 44px; cursor: pointer; padding-block: 14px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-reader-preview { margin: 8px 0 20px; padding: 28px; border: 1px solid var(--reading-line); border-radius: 10px; line-height: var(--preview-leading); font-family: var(--preview-font); font-size: var(--preview-size); }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-reader-preview h2 { font-size: 1em; font-weight: 600; margin: 0 0 16px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-reader-preview p { margin: 0; text-indent: 2em; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-reader-preview[data-paper="paper"] { background: #f4eddf; color: #3b362e; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-reader-preview[data-paper="white"] { background: #fff; color: #292825; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-reader-preview[data-paper="night"] { background: #191c1b; color: #c6c9c0; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-preference-row, .comic-preference) { font-size: 13px; gap: 12px; padding: 16px 0; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-preference-row, .comic-preference) button { font-size: 12px; border-radius: 7px; min-height: 44px; padding: 7px 12px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-preference-row, .comic-preference) button[aria-pressed="true"] { outline: 0; border-color: var(--reading-accent); background: var(--reading-soft); color: var(--reading-accent); }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .library-sources-page { max-width: 960px; padding: 40px 32px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .library-sources-tabs { gap: 8px; border-bottom: 1px solid var(--reading-line); padding-bottom: 16px; margin-bottom: 24px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .library-sources-tabs button { min-height: 44px; box-shadow: none; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .library-sources-tabs button[aria-pressed="true"] { background: var(--reading-soft); color: var(--reading-accent); border-color: transparent; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .library-source { background: var(--reading-surface); border-color: var(--reading-line); border-radius: 9px; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .library-source-url { font-size: 11px; overflow-wrap: anywhere; }
+.reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .library-source-form-hint { color: var(--reading-muted); }
+@media (hover: hover) {
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-icon-button:hover { background: var(--reading-soft); color: var(--reading-accent); }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-shelf-entry:hover h2, .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-card > a:hover h3 { color: var(--reading-accent); }
+}
+@media (max-width: 900px) {
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-header { padding-inline: 24px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-desktop-nav a { padding-inline: 14px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px 18px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-shelf-list { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 720px) {
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-header { min-height: 62px; padding: 7px 16px; gap: 8px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-brand { @apply cczj-min-w-0; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-brand-icon { width: 34px; height: 34px; border-radius: 10px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-brand strong { font-size: 18px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-header-title { font-size: 14px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-source-link { margin-left: auto; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-desktop-nav { @apply cczj-hidden; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-bottom-nav { @apply cczj-grid; grid-template-columns: repeat(3, minmax(0, 1fr)); @apply cczj-flex-shrink-0; background: var(--reading-surface); border-top: 1px solid var(--reading-line); padding: 5px 12px calc(5px + env(safe-area-inset-bottom, 0px)); }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-bottom-nav a { @apply cczj-flex cczj-items-center cczj-justify-center cczj-flex-col; gap: 4px; min-height: 56px; color: var(--reading-muted); font-size: 10px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-bottom-nav a[aria-current="page"] { color: var(--reading-accent); font-weight: 600; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-bottom-nav a[aria-current="page"] svg { background: var(--reading-soft); box-shadow: 0 0 0 7px var(--reading-soft); border-radius: 6px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-page, .comic-page) { padding: 24px 20px 32px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-page-heading { margin-bottom: 24px; gap: 12px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-page-heading h1 { font-size: 26px; margin: 5px 0 6px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-page-heading p { font-size: 12px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-page-heading .reading-eyebrow { font-size: 10px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-page-heading > a { padding-inline: 12px; gap: 5px; font-size: 12px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-tabs { gap: 22px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-tabs button { font-size: 13px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-library-toolbar { margin-top: 24px; margin-bottom: 10px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-library-filters { margin-bottom: 4px; gap: 12px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-resume, .comic-resume) { padding: 18px; gap: 14px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-resume, .comic-resume) strong { font-size: 17px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-resume-icon { width: 46px; height: 58px; @apply cczj-flex-shrink-0; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-resume-arrow svg { width: 18px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-shelf-item { padding: 18px 0; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-shelf-entry { gap: 16px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-shelf-copy h2 { font-size: 15px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-shelf-details { margin-right: -10px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px 12px; margin-top: 16px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-card h3 { font-size: 13px; padding-right: 22px; margin: 10px 0 4px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-card p { font-size: 11px; padding-right: 20px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-card-details { top: auto; bottom: 8px; right: -10px; min-width: 36px; min-height: 44px; background: transparent; color: var(--reading-muted); }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-empty { padding: 44px 8px; min-height: 320px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-empty h2 { font-size: 18px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-search, .comic-search) { padding-left: 12px; gap: 8px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-search, .comic-search) input { font-size: 14px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-search button[type="submit"] { padding-inline: 14px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-search-links { gap: 18px; margin-bottom: 14px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-book-hero, .comic-detail-hero) { padding: 4px 0 24px; gap: 20px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-detail-cover, .comic-detail-hero .comic-cover) { width: 96px; flex-basis: 96px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-book-hero, .comic-detail-hero) h1 { font-size: 22px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-detail-tags { gap: 6px; margin-top: 12px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-detail-tags span { padding: 4px 6px; font-size: 10px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-section-heading { @apply cczj-flex-wrap; gap: 4px 12px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-section-heading h2 { font-size: 18px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-episode-grid { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-episode-grid :is(a, .comic-episode-row) { min-height: 68px; padding: 12px 14px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-settings-entry { min-height: 84px; padding: 16px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-settings-card { padding: 18px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .novel-reader-preview { padding: 22px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .library-sources-page { padding: 24px 16px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .library-sources-tabs { @apply cczj-flex-wrap; gap: 6px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .library-sources-search-link { margin-left: 0; }
+}
+@media (max-width: 360px) {
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) :is(.novel-page, .comic-page) { padding-inline: 16px; }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .comic-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .reading-shell:is(.cczj-novel-shell, .cczj-comic-shell) .reading-tabs { gap: 16px; }
+}

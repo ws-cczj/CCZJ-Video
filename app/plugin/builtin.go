@@ -24,9 +24,9 @@ import (
 var builtinFS embed.FS
 
 // builtinSeedVersion 是「这一批内置包的形状」的版本号，记在标记文件第一行。
-// 改动内置包（补一张图标之类）时把它 +1：下一轮只往在场的包里补缺失的文件，
-// 既不复活用户删掉的包，也不覆盖用户改过的文件。
-const builtinSeedVersion = "3"
+// 改动内置包时把它 +1：补在场包缺失的文件，并迁移已知未修改的旧诊断清单；
+// 不复活用户删掉的包，也不覆盖用户改过的文件。
+const builtinSeedVersion = "5"
 
 // builtinMarkerName 用点号开头：Scan 那一层跳过点开头的目录，marker 因此不会
 // 被当成一个校验失败的扩展包列进注册表。
@@ -95,7 +95,10 @@ func (s *Service) SeedBuiltin() error {
 	for _, id := range ids {
 		switch {
 		case dirExists(filepath.Join(root, id)):
-			// 目录在：只往里补缺失的文件（新图标走这条），已存在的一个字节都不动。
+			if err := upgradeDiagnosticsManifest(root, id); err != nil {
+				return err
+			}
+			// 目录在：迁移未修改的旧诊断清单后补缺失文件，保留用户修改。
 			n, err := fillBuiltinPack(root, id)
 			if err != nil {
 				return err

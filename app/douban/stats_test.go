@@ -1,6 +1,7 @@
 package douban
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -113,7 +114,7 @@ func TestCommentCountersClassifyReads(t *testing.T) {
 
 	// 未过期 → hits，且不发请求。
 	seedComments("2400010_1_new_score", commentPage("新评论"), time.Hour)
-	fetchCommentsPage = func(string, int, string) (*DoubanCommentsResp, error) {
+	fetchCommentsPage = func(context.Context, string, int, string) (*DoubanCommentsResp, error) {
 		t.Error("未过期不该发请求")
 		return nil, fmt.Errorf("不该被调用")
 	}
@@ -127,7 +128,7 @@ func TestCommentCountersClassifyReads(t *testing.T) {
 	// 过期但仍能看 → stale_hits，后台抓成功后 fetch_ok。
 	seedComments("2400011_1_new_score", commentPage("旧评论"), 25*time.Hour)
 	done := make(chan struct{}, 1)
-	fetchCommentsPage = func(string, int, string) (*DoubanCommentsResp, error) {
+	fetchCommentsPage = func(context.Context, string, int, string) (*DoubanCommentsResp, error) {
 		resp := commentPage("刷新后的评论")
 		done <- struct{}{}
 		return resp, nil
@@ -145,7 +146,7 @@ func TestCommentCountersClassifyReads(t *testing.T) {
 
 	// 超过上限 → misses，实抓失败要把错误交给调用方并记 fetch_fail。
 	seedComments("2400012_1_new_score", commentPage("太旧的评论"), commentStaleCeiling+time.Hour)
-	fetchCommentsPage = func(string, int, string) (*DoubanCommentsResp, error) {
+	fetchCommentsPage = func(context.Context, string, int, string) (*DoubanCommentsResp, error) {
 		return nil, fmt.Errorf("源站不通")
 	}
 	if _, err := FetchComments("2400012", 1, "new_score"); err == nil {
@@ -161,7 +162,7 @@ func TestCommentCountersRecordBackgroundSkip(t *testing.T) {
 	resetCommentCounters(t)
 
 	seedComments("2400013_1_new_score", commentPage("旧评论"), 25*time.Hour)
-	fetchCommentsPage = func(string, int, string) (*DoubanCommentsResp, error) {
+	fetchCommentsPage = func(context.Context, string, int, string) (*DoubanCommentsResp, error) {
 		return nil, fmt.Errorf("源站不通")
 	}
 	// 第一次读安排后台刷新，刷新失败后进入退避；后续读仍算过期命中，但只多算 skipped。

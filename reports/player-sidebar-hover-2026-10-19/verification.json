@@ -1,0 +1,21 @@
+{
+  "initial": 0,
+  "appeared": 1,
+  "expired": 0,
+  "size": {
+    "x": 898,
+    "y": 372,
+    "width": 22,
+    "height": 56
+  },
+  "originalWidth": 360,
+  "intermediateWidth": 56.875,
+  "collapsedWidth": 0,
+  "inert": true,
+  "restoredWidth": 360,
+  "stableVideo": true,
+  "reduced": "0s",
+  "buttonReduced": "0s",
+  "narrowHidden": true,
+  "errors": []
+}

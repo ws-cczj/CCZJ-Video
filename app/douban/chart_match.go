@@ -18,7 +18,7 @@ func asyncMatchChartItems(items []DoubanChartItem) {
 	}
 
 	// 诊断日志：打印所有源状态，便于排查为什么 sources=0
-	allSources, allErr := db.GetAllSources()
+	allSources, allErr := db.GetSourcesByKind(model.SourceKindVideo)
 	if allErr != nil {
 		applog.Warn("[DoubanChart] 查询所有源失败: %v", allErr)
 	} else {

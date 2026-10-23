@@ -6,11 +6,6 @@ export interface DiskCacheInfo {
   ttlDays: number
 }
 
-export interface DiskSegment {
-  url: string
-  data: ArrayBuffer
-}
-
 interface DiskSegmentRecord {
   url: string
   data: ArrayBuffer
@@ -64,8 +59,8 @@ function waitForRequest<T>(request: IDBRequest<T>): Promise<T> {
 
 /**
  * Owns the browser-side binary segment cache and its metadata indexes.
- * The interface deliberately exposes records by episode, never a bulk blob
- * scan, so playback code cannot accidentally restore every cached video.
+ * Playback reads one segment at a time. Episode metadata is used for pruning
+ * and invalidation, never to restore a whole episode into the playback heap.
  */
 export class SegmentDiskCache {
   private pruneTimer: number | null = null
@@ -95,30 +90,23 @@ export class SegmentDiskCache {
     }
   }
 
-  async loadEpisode(episodeKey: string): Promise<DiskSegment[]> {
-    if (!episodeKey) return []
+  async loadSegment(url: string): Promise<ArrayBuffer | null> {
+    if (!url) return null
     const db = await openDatabase()
     try {
       const metadataTransaction = db.transaction(META_STORE_NAME, 'readonly')
-      const metadataRequest = metadataTransaction
-        .objectStore(META_STORE_NAME)
-        .index('episodeKey')
-        .getAll(IDBKeyRange.only(episodeKey))
-      const metadata = await waitForRequest(metadataRequest) as DiskSegmentMeta[]
+      const metadataRequest = metadataTransaction.objectStore(META_STORE_NAME).get(url)
+      const metadata = await waitForRequest(metadataRequest) as DiskSegmentMeta | undefined
       await waitForTransaction(metadataTransaction)
+      // Check expiry before cloning a potentially large binary from IndexedDB.
+      if (!metadata || Date.now() - metadata.ts > this.ttlMs || metadata.size <= 0) return null
 
       const dataTransaction = db.transaction(STORE_NAME, 'readonly')
-      const dataStore = dataTransaction.objectStore(STORE_NAME)
-      const recordRequests = metadata.map((entry) => dataStore.get(entry.url))
-      const records = await Promise.all(recordRequests.map((request) => waitForRequest(request))) as Array<DiskSegmentRecord | undefined>
+      const recordRequest = dataTransaction.objectStore(STORE_NAME).get(url)
+      const record = await waitForRequest(recordRequest) as DiskSegmentRecord | undefined
       await waitForTransaction(dataTransaction)
-
-      const now = Date.now()
-      return metadata.flatMap((entry, index) => {
-        const data = records[index]?.data
-        if (now - entry.ts > this.ttlMs || !data || data.byteLength === 0) return []
-        return [{ url: entry.url, data }]
-      })
+      const data = record?.data
+      return data instanceof ArrayBuffer && data.byteLength === metadata.size ? data : null
     } finally {
       db.close()
     }

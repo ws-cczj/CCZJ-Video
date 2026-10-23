@@ -1,6 +1,7 @@
 package updater
 
 import (
+	"cczjVideo/app/netpolicy"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -109,7 +110,7 @@ const requiredParties = 2
 func fetchChecksums(url string) (map[string]string, error) {
 	client := &http.Client{
 		Timeout:   20 * time.Second,
-		Transport: netstats.WrapTransport(netstats.CategoryUpdate, nil),
+		Transport: netpolicy.WrapTransport(string(netstats.CategoryUpdate), netstats.WrapTransport(netstats.CategoryUpdate, nil)),
 	}
 	resp, err := client.Get(url)
 	if err != nil {
@@ -416,6 +417,12 @@ func isUpdateArtifact(filePath string) bool {
 		return false
 	}
 	base := strings.ToLower(filepath.Base(abs))
+	if normalizeCase(abs) == normalizeCase(filepath.Join(appDir, getAppExeName())) {
+		return false
+	}
+	if strings.HasSuffix(base, digestSuffix) || strings.HasSuffix(base, ".part") {
+		return false
+	}
 	if strings.HasPrefix(base, strings.ToLower(stagingPrefix)) {
 		return true
 	}

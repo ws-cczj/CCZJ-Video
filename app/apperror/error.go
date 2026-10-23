@@ -1,36 +1,30 @@
-// Package apperror 是全应用唯一的错误类型层。
-//
-// 为什么要带码：Wails 把 Go 的 error 直接转成字符串交给前端，界面拿到的就只剩这句话。
-// 之前三套写法并存（fmt.Errorf 的散文、扩展包自己的 reason_code、proxy 里用
-// strings.Contains 猜错误类型），调用方要么去匹配文案、要么什么都判不出来 ——
-// 文案一改，重试逻辑和界面分组就静默失效。
-//
-// 约定（逐包替换时就按这三条，别再引入第四套）：
-//   - 会跨出包边界的错误（绑定方法的返回值、给界面或上层看的错误）用这里的类型，
-//     选一个 Code，Message 写给人看的那句话，底层原文挂 Cause。
-//   - 只在包内流转的错误继续用 fmt.Errorf，但原因必须用 %w 带上，不许丢掉。
-//   - 判断错误类型用 CodeOf / errors.As / errors.Is；禁止 strings.Contains(err.Error(), ...)。
-//     要重试还是放弃，看 Code 或 Cause 的类型，不看文案。
+// Package apperror maps Go errors to the public application protocol.
+// Domain packages may use their own errors and preserve causes with %w.
 package apperror
 
 import (
+	"cczjVideo/app/applog"
+	"context"
+	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 )
 
-// Code 是稳定的错误类别。它的值就是界面和日志里看到的前缀，所以只能增改、不能改文案。
+// Code identifies an outcome independently of its display message.
 type Code string
 
 const (
 	// Validation：入参不合法，调用方改参数就能修，重试无意义。
 	Validation Code = "VALIDATION"
-	// Conflict：状态撞了（重名、已存在、正在跑），需要用户决定而不是重试。
+	// Conflict：重名、已存在或操作中的状态冲突。
 	Conflict Code = "CONFLICT"
 	// NotFound：要的东西不在库里、不在磁盘上或已被删除。
 	NotFound Code = "NOT_FOUND"
 	// Cancelled：调用方或应用主动收手，不是故障。
 	Cancelled Code = "CANCELLED"
-	// Timeout：底层在期限内没回来，同一次操作可以再试。
+	// Timeout：操作期限已过；是否重试由具体操作决定。
 	Timeout Code = "TIMEOUT"
 	// Unavailable：对端或本地服务不可达（网络、被限流、进程没起来）。
 	Unavailable Code = "UNAVAILABLE"
@@ -38,10 +32,13 @@ const (
 	Storage Code = "STORAGE"
 	// Corrupt：数据存在但坏了（校验不过、格式解不开、长度对不上）。
 	Corrupt Code = "CORRUPT"
-	// Unsupported：认不出的格式或能力，重试多少次都一样。
+	// Unsupported：当前实现未支持的格式或能力。
 	Unsupported Code = "UNSUPPORTED"
 	// Internal：走到不该走到的分支，属于代码问题。
-	Internal Code = "INTERNAL"
+	Internal               Code = "INTERNAL"
+	AuthenticationRequired Code = "AUTHENTICATION_REQUIRED"
+	PermissionDenied       Code = "PERMISSION_DENIED"
+	RateLimited            Code = "RATE_LIMITED"
 
 	// DownloadDuplicate 是既有下载流程的界面契约：前端按这个码弹「是否覆盖」。
 	DownloadDuplicate Code = "DOWNLOAD_DUPLICATE"
@@ -49,13 +46,14 @@ const (
 
 // Error 是带码错误。它同时是普通 Go error：Message 给人看，Cause 给日志和 errors.Is 用。
 type Error struct {
-	Code    Code
-	Message string
-	Cause   error
+	Code              Code
+	Message           string
+	Cause             error
+	RetryAfterSeconds int
 }
 
-// Error 的渲染格式是对外契约的一部分：前端 normalizeApiError 按「CODE: 消息」拆码，
-// 扩展包面板按「reason_code: 详情」显示。改这里要同时改前端。
+// Error renders diagnostic text. Older clients can still read its code prefix;
+// current clients use the structured response produced by Marshal.
 func (e *Error) Error() string {
 	if e == nil {
 		return ""
@@ -79,7 +77,20 @@ func (e *Error) Error() string {
 
 // Unwrap 让 Cause 能被 errors.Is / errors.As 看到，标准库的错误（sql.ErrNoRows、
 // context.Canceled、*httperror 之类）不用复制一份到这套类型里。
-func (e *Error) Unwrap() error { return e.Cause }
+func (e *Error) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Cause
+}
+
+// ErrorCode also lets domain error types expose a public code without embedding Error.
+func (e *Error) ErrorCode() Code {
+	if e == nil {
+		return ""
+	}
+	return e.Code
+}
 
 // New 造一个不带底层原因的带码错误。
 func New(code Code, message string) error { return &Error{Code: code, Message: message} }
@@ -91,17 +102,101 @@ func Newf(code Code, format string, args ...any) error {
 
 // Wrap 造一个带码错误并把底层原因挂上：日志里看得到原文，调用方按 Code 判类别。
 func Wrap(code Code, cause error, message string) error {
+	if cause == nil {
+		return nil
+	}
+	if existing := CodeOf(cause); existing != "" {
+		code = existing
+	}
 	return &Error{Code: code, Message: message, Cause: cause}
 }
 
-// CodeOf 取错误的码；不是带码错误就返回空串（调用方据此退回按 Cause 判断）。
+// CodeOf reads a domain code or classifies common standard-library errors.
 func CodeOf(err error) Code {
-	var appError *Error
-	if errors.As(err, &appError) {
-		return appError.Code
+	var coded interface{ ErrorCode() Code }
+	if errors.As(err, &coded) {
+		return coded.ErrorCode()
+	}
+	if errors.Is(err, context.Canceled) {
+		return Cancelled
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return Timeout
+	}
+	var timeout net.Error
+	if errors.As(err, &timeout) && timeout.Timeout() {
+		return Timeout
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return NotFound
 	}
 	return ""
 }
 
 // Is 判断错误的码是否等于给定码，省去调用方自己 errors.As。
 func Is(err error, code Code) bool { return CodeOf(err) == code }
+
+// Response is the public error value carried in Wails RuntimeError.cause.
+// Diagnostic causes stay in Go's error chain and are not serialized to the UI.
+type Response struct {
+	Logged            bool   `json:"logged,omitempty"`
+	Operation         string `json:"operation,omitempty"`
+	RequestID         string `json:"requestId,omitempty"`
+	Code              Code   `json:"code"`
+	Message           string `json:"message"`
+	RetryAfterSeconds int    `json:"retryAfterSeconds,omitempty"`
+}
+
+// Public supports independently defined domain errors through PublicError().
+func Public(err error) Response {
+	var public interface{ PublicError() Response }
+	if errors.As(err, &public) {
+		return public.PublicError()
+	}
+	code := CodeOf(err)
+	if code == "" {
+		code = Internal
+	}
+	result := Response{Code: code, Message: Describe(code).Message}
+	var appError *Error
+	if errors.As(err, &appError) && appError != nil && appError.Message != "" {
+		result.Message = appError.Message
+	}
+	if code == Cancelled {
+		result.Message = "操作已取消"
+	}
+	if code == Timeout {
+		result.Message = "操作超时"
+	}
+	// A contextual wrapper must not discard a lower layer's retry metadata.
+	for current := err; current != nil; current = errors.Unwrap(current) {
+		if e, ok := current.(*Error); ok && e != nil && e.RetryAfterSeconds > 0 {
+			result.RetryAfterSeconds = e.RetryAfterSeconds
+			break
+		}
+	}
+	return result
+}
+
+// Marshal is installed once at the Wails application boundary.
+func Marshal(err error) []byte {
+	envelope := Encode(err)
+	if envelope.Code != Cancelled {
+		// Operations already carry a diagnostic correlation record. Other bindings
+		// still pass this single transport boundary and get a private native log.
+		if !envelope.Logged {
+			if envelope.RequestID == "" {
+				envelope.RequestID = NewRequestID()
+			}
+			fields := applog.Fields{"code": envelope.Code, "request_id": envelope.RequestID, "error": Diagnostic(err)}
+			if Describe(envelope.Code).Level == "error" {
+				applog.ErrorFields("binding failed", fields)
+			} else {
+				applog.WarnFields("binding failed", fields)
+			}
+		}
+		envelope.Logged = true
+	}
+	value, _ := json.Marshal(envelope)
+	return value
+}

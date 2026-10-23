@@ -22,6 +22,8 @@ import (
 // 删完把启用状态里那一行也抹掉、并从注册表缓存里摘掉：重装同一个 id 时应该从「启用」
 // 开始，而不是继承上次卸载前的开关；缓存不清的话界面刷新出来还是一行幽灵。
 func (s *Service) Uninstall(id string) error {
+	s.scanMu.Lock()
+	defer s.scanMu.Unlock()
 	if strings.TrimSpace(id) == "" {
 		return apperror.New(apperror.Validation, "扩展包 id 为空")
 	}

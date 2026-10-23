@@ -1,6 +1,7 @@
 package douban
 
 import (
+	"context"
 	"crypto/sha512"
 	"encoding/hex"
 	"fmt"
@@ -53,8 +54,14 @@ func isSecChallengeURL(rawurl string) bool {
 // solveProofOfWork 复刻挑战页的 JS：找 nonce 使 sha512(cha+nonce) 的十六进制
 // 以 difficulty 个 0 开头。返回 (nonce, 是否解出)。
 func solveProofOfWork(cha string, difficulty int) (int, bool) {
+	return solveProofOfWorkContext(context.Background(), cha, difficulty)
+}
+func solveProofOfWorkContext(ctx context.Context, cha string, difficulty int) (int, bool) {
 	target := strings.Repeat("0", difficulty)
 	for nonce := 1; nonce <= powMaxNonce; nonce++ {
+		if nonce%1024 == 1 && ctx.Err() != nil {
+			return 0, false
+		}
 		sum := sha512.Sum512([]byte(cha + strconv.Itoa(nonce)))
 		if strings.HasPrefix(hex.EncodeToString(sum[:]), target) {
 			return nonce, true
@@ -87,7 +94,10 @@ func challengeFormAction(page string) string {
 // solveDoubanChallenge 解一道验证题并回传。成功时放行 Cookie 已经落进 client
 // 的 cookie jar，调用方重试原地址即可拿到真实页面。
 func solveDoubanChallenge(challengeURL, sourceURL string) error {
-	req, err := http.NewRequest(http.MethodGet, challengeURL, nil)
+	return solveDoubanChallengeContext(context.Background(), challengeURL, sourceURL)
+}
+func solveDoubanChallengeContext(ctx context.Context, challengeURL, sourceURL string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, challengeURL, nil)
 	if err != nil {
 		return err
 	}
@@ -119,8 +129,11 @@ func solveDoubanChallenge(challengeURL, sourceURL string) error {
 	}
 
 	start := time.Now()
-	nonce, ok := solveProofOfWork(cha, difficulty)
+	nonce, ok := solveProofOfWorkContext(ctx, cha, difficulty)
 	if !ok {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		recordChallengeSolve(difficulty, time.Since(start), false)
 		return fmt.Errorf("难度 %d 下 %d 次迭代未解出", difficulty, powMaxNonce)
 	}
@@ -143,7 +156,7 @@ func solveDoubanChallenge(challengeURL, sourceURL string) error {
 		}
 	}
 
-	postReq, err := http.NewRequest(http.MethodPost, postURL, strings.NewReader(form.Encode()))
+	postReq, err := http.NewRequestWithContext(ctx, http.MethodPost, postURL, strings.NewReader(form.Encode()))
 	if err != nil {
 		return err
 	}

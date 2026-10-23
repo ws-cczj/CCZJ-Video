@@ -55,6 +55,10 @@ type Info struct {
 	// Builtin 标记「这个包是应用自带的」（app/plugin/builtin/ 里那批）。界面据此
 	// 决定给不给卸载按钮：删掉别人的包是卸载，删应用自己的东西不是。
 	Builtin bool `json:"builtin"`
+	// BuiltinDigest describes verified shipped bytes (including known legacy
+	// releases). A modified pack receives only the current embedded baseline,
+	// so the frontend's exact comparison never trusts a familiar ID alone.
+	BuiltinDigest string `json:"builtin_digest,omitempty"`
 }
 
 // Adapter 是 kind=source 包里的一个采集适配条目（docs/plugins.md §3）。

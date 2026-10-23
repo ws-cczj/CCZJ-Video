@@ -160,6 +160,9 @@ const IMAGE_PROXY_MAX_BYTES = 1024 * 1024
 // 内存层以前不设上限，整场会话看过的 data URL 全留着（单条几十~几百 KB），是实打实的内存泄漏。
 // 这里同样封顶：被挤掉的条目还能从持久副本读回，最多回 Go 磁盘缓存重取一次。
 const IMAGE_PROXY_MEMORY_MAX = 80
+const IMAGE_PROXY_MEMORY_MAX_BYTES = 8 * 1024 * 1024
+let imageProxyMemoryBytes = 0
+const IMAGE_PROXY_FAILURE_MAX = 256
 const IMAGE_PROXY_FAILURE_TTL = 5 * 60 * 1000
 
 interface StoredImageProxy { value: string; accessed: number }
@@ -218,9 +221,14 @@ const imageProxyCounters = { memoryHits: 0, storedHits: 0, fetches: 0, failures:
 
 export function imageProxyStats(): {
   entries: number; memoryHits: number; storedHits: number; fetches: number; failures: number;
+  bytes: number; limitBytes: number; failureEntries: number;
 } {
   return {
     entries: imageProxyCache.size,
+    // Conservative UTF-16 string/key estimate, excluding decoded pixels/GPU.
+    bytes: imageProxyMemoryBytes,
+    limitBytes: IMAGE_PROXY_MEMORY_MAX_BYTES,
+    failureEntries: imageProxyFallbackCache.size,
     memoryHits: imageProxyCounters.memoryHits,
     storedHits: imageProxyCounters.storedHits,
     fetches: imageProxyCounters.fetches,
@@ -238,7 +246,7 @@ function readStoredImageProxy(url: string): string {
 }
 
 function writeStoredImageProxy(url: string, value: string): void {
-  // 单条就超预算的不进持久层：内存层照旧留着，本次会话仍然命中。
+  // 单条超出持久预算不落盘；内存层也有独立的字节预算。
   if (value.length > IMAGE_PROXY_MAX_BYTES) return
   const all = storedProxies()
   all[url] = { value, accessed: Date.now() }
@@ -247,12 +255,21 @@ function writeStoredImageProxy(url: string, value: string): void {
 }
 
 // Map 插入序即访问序：新写入落尾部，命中时由调用方 delete+set 挪回尾部，队首永远是最久没用的。
-// 超过 IMAGE_PROXY_MEMORY_MAX 就从队首挤掉，把内存层也钉在固定条数上。
+// 条数或字符串字节超预算时从队首挤掉，单张超大图只交给当前消费者。
 function rememberProxiedImage(url: string, value: string): void {
+  const bytes = (url.length + value.length) * 2
+  if (bytes > IMAGE_PROXY_MEMORY_MAX_BYTES) return
+  const previous = imageProxyCache.get(url)
+  if (previous !== undefined) {
+    imageProxyMemoryBytes -= (url.length + previous.length) * 2
+    imageProxyCache.delete(url)
+  }
   imageProxyCache.set(url, value)
-  while (imageProxyCache.size > IMAGE_PROXY_MEMORY_MAX) {
+  imageProxyMemoryBytes += bytes
+  while (imageProxyCache.size > IMAGE_PROXY_MEMORY_MAX || imageProxyMemoryBytes > IMAGE_PROXY_MEMORY_MAX_BYTES) {
     const oldest = imageProxyCache.keys().next().value
     if (oldest === undefined) break
+    imageProxyMemoryBytes -= (oldest.length + imageProxyCache.get(oldest)!.length) * 2
     imageProxyCache.delete(oldest)
   }
 }
@@ -292,6 +309,9 @@ export async function getProxiedImageUrl(originalUrl: string): Promise<string> {
     } catch { }
     imageProxyCounters.failures++
     imageProxyFallbackCache.set(originalUrl, Date.now())
+    while (imageProxyFallbackCache.size > IMAGE_PROXY_FAILURE_MAX) {
+      imageProxyFallbackCache.delete(imageProxyFallbackCache.keys().next().value!)
+    }
     return ''
   })()
   imageProxyPending.set(originalUrl, request)

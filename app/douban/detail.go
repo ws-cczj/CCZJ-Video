@@ -1,6 +1,7 @@
 package douban
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -73,7 +74,14 @@ func parseSubjectAbstract(subjectID, body string) (*DoubanInfo, error) {
 // ignoreBlock 是必须的：详情页那次 302 已经给自己记了一轮静默期，
 // 若连兜底请求都被本地闸门挡住，这条路径永远不会执行。
 func fetchDetailByAbstract(subjectID string) (*DoubanInfo, error) {
-	body, err := fetchDouban(fmt.Sprintf(subjectAbstractURL, subjectID), true)
+	return fetchDetailByAbstractContext(context.Background(), subjectID)
+}
+
+func fetchDetailByAbstractContext(ctx context.Context, subjectID string) (*DoubanInfo, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	body, err := fetchDoubanContext(ctx, fmt.Sprintf(subjectAbstractURL, subjectID), true)
 	if err != nil {
 		return nil, err
 	}
@@ -87,17 +95,27 @@ func fetchDetailByAbstract(subjectID string) (*DoubanInfo, error) {
 }
 
 func ParseDetail(subjectID string) (*DoubanInfo, error) {
+	return ParseDetailContext(context.Background(), subjectID)
+}
+
+func ParseDetailContext(ctx context.Context, subjectID string) (*DoubanInfo, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	applog.Info("[Douban] Parsing detail for subject ID: %s", subjectID)
 
 	if !detailProbeAllowed() {
 		applog.Info("[Douban] 详情页仍在拦截期内（每 %s 才试探一次网页），本次直接用 subject_abstract: %s", detailProbeInterval, subjectID)
-		return fetchDetailByAbstract(subjectID)
+		return fetchDetailByAbstractContext(ctx, subjectID)
 	}
 
 	urlStr := fmt.Sprintf(detailURL, subjectID)
 
-	html, err := fetchHTML(urlStr)
+	html, err := fetchDoubanContext(ctx, urlStr, false)
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		// /subject/<id>/ 网页层面无条件被 302 到 sec.douban.com 的 JS 验证页，
 		// 不带登录 Cookie 就永远拿不到。这里降级到同站 JSON 接口，而不是让整次
 		// 更新失败——评分/导演/演员/类型/集数这些主要字段都还能拿到。
@@ -105,7 +123,7 @@ func ParseDetail(subjectID string) (*DoubanInfo, error) {
 			markDetailChallenged()
 		}
 		applog.Info("[Douban] Detail page unavailable for %s (%v), falling back to subject_abstract", subjectID, err)
-		info, fallbackErr := fetchDetailByAbstract(subjectID)
+		info, fallbackErr := fetchDetailByAbstractContext(ctx, subjectID)
 		if fallbackErr != nil {
 			applog.Warn("[Douban] Detail fetch failed for %s: %v (fallback: %v)", subjectID, err, fallbackErr)
 			return nil, err

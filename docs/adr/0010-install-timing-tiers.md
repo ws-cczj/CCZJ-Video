@@ -1,3 +1,5 @@
+> 历史设计记录；当前开发规范统一见 [AGENTS.md](../../AGENTS.md)。本文记录当时的选择与证据，不限制后续重构。
+
 # ADR 0010: Two install tiers — now, or on exit
 
 ## Status
@@ -109,7 +111,7 @@ Supporting decisions:
 
 - **Install-on-exit as an app-wide default/setting** — a policy switch that would also
   auto-swap after a session where the user never asked for the update. Can still be added later
-  on top of this mechanism (see `docs/pending-decisions.md` §9).
+  on top of this mechanism (see `reports/history/architecture.md` §9).
 - **A third tier ("install at next start")** — requires the script to run before the process
   has the exe locked, i.e. a launcher or scheduled task. Bigger blast radius than the problem.
 - **Front-end-driven shutdown install** (UI calls the swap binding when it sees the window

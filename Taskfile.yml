@@ -3,6 +3,7 @@ version: '3'
 includes:
   common: ./build/Taskfile.yml
   windows: ./build/windows/Taskfile.yml
+  android: ./build/android/Taskfile.yml
 
 vars:
   APP_NAME: "CCZJ Video"
@@ -10,6 +11,10 @@ vars:
   VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
 
 tasks:
+  release:
+    summary: Prepare Windows EXE, portable ZIP, Android ARM64 APK and update checksums
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -File build/release.ps1
   verify:
     summary: Runs backend checks and the frontend production build
     cmds:

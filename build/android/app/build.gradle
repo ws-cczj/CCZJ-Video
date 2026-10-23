@@ -1,0 +1,88 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.wails.app'
+    compileSdk 35
+
+    buildFeatures {
+        buildConfig = true
+    }
+
+    defaultConfig {
+        applicationId providers.gradleProperty('cczjApplicationId').getOrElse('com.cczj.video.preview')
+        minSdk 24
+        targetSdk 35
+        def releaseVersion = new groovy.json.JsonSlurper().parse(rootProject.file('../../version.json')).version
+        def parts = releaseVersion.tokenize('.').collect { it.toInteger() }
+        versionCode providers.gradleProperty('cczjVersionCode').getOrElse("${parts[0] * 10000 + parts[1] * 100 + parts[2]}").toInteger()
+        versionName providers.gradleProperty('cczjVersionName').getOrElse(releaseVersion)
+
+        // Configure supported ABIs
+        ndk {
+            abiFilters providers.gradleProperty('cczjAbi').getOrElse('arm64-v8a')
+        }
+    }
+
+    def keystoreFile = System.getenv("ANDROID_KEYSTORE_FILE")
+    def hasKeystore = keystoreFile != null && !keystoreFile.trim().isEmpty()
+
+    signingConfigs {
+        // Preserve the existing preview certificate only when explicitly
+        // selected; other releases must provide their signing environment.
+        release {
+            if (!hasKeystore && providers.gradleProperty('cczjPreviewSigning').getOrElse('false') != 'true'
+                    && gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') }) {
+                throw new GradleException('Release signing identity must be selected explicitly')
+            }
+            if (hasKeystore) {
+                storeFile file(keystoreFile)
+                storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("ANDROID_KEY_ALIAS")
+                keyPassword System.getenv("ANDROID_KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig hasKeystore ? signingConfigs.release : signingConfigs.debug
+        }
+        debug {
+            debuggable true
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+
+    // Source sets configuration
+    sourceSets {
+        main {
+            // JNI libraries are in jniLibs folder
+            jniLibs.srcDirs = ['src/main/jniLibs']
+            // Assets for the WebView
+            assets.srcDirs = ['src/main/assets']
+        }
+    }
+
+    // Packaging options
+    packagingOptions {
+        // Don't strip Go symbols in debug builds
+        doNotStrip '*/arm64-v8a/libwails.so'
+        doNotStrip '*/x86_64/libwails.so'
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.webkit:webkit:1.9.0'
+    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'androidx.biometric:biometric:1.1.0'
+    implementation 'androidx.security:security-crypto:1.1.0-alpha06'
+}

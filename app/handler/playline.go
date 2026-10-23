@@ -9,12 +9,12 @@ import (
 	"cczjVideo/app/apperror"
 	"cczjVideo/app/detail"
 	"cczjVideo/app/model"
+	"cczjVideo/app/parallel"
 	"cczjVideo/app/proxy"
 	"context"
 	"encoding/json"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	applog "cczjVideo/app/applog"
@@ -91,23 +91,30 @@ func SpeedTestPlayLines(ctx context.Context, req PlayLineSpeedReq) (*PlayLineSpe
 	probeCtx, cancel := context.WithTimeout(ctx, lineSpeedTotalBudget)
 	defer cancel()
 
-	items := make([]*PlayLineSpeedItem, len(lines))
-	var wg sync.WaitGroup
-	for i, line := range lines {
-		episode := pickProbeEpisode(line, req.EpNum)
-		if episode == nil {
-			items[i] = &PlayLineSpeedItem{Index: line.Index, Name: line.Name, EpNum: req.EpNum}
-			continue
-		}
-		wg.Add(1)
-		go func(i int, line *model.PlayLine, episode *model.Episode) {
-			defer wg.Done()
-			items[i] = probeLine(probeCtx, line, episode)
-		}(i, line, episode)
+	items, err := probePlayLines(probeCtx, lines, req.EpNum, probeLine)
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
 	}
-	wg.Wait()
-
+	// The total sampling budget retains completed samples and unavailable rows.
+	// Request cancellation, unlike a sampling timeout, must not publish a result.
+	if err != nil && probeCtx.Err() == nil {
+		return nil, err
+	}
 	return rankLineSpeed(items), nil
+}
+
+func probePlayLines(ctx context.Context, lines []*model.PlayLine, epNum int, probe func(context.Context, *model.PlayLine, *model.Episode) *PlayLineSpeedItem) ([]*PlayLineSpeedItem, error) {
+	items := make([]*PlayLineSpeedItem, len(lines))
+	for i, line := range lines {
+		items[i] = &PlayLineSpeedItem{Index: line.Index, Name: line.Name, EpNum: epNum}
+	}
+	err := parallel.Each(ctx, len(lines), 4, func(ctx context.Context, i int) error {
+		if episode := pickProbeEpisode(lines[i], epNum); episode != nil {
+			items[i] = probe(ctx, lines[i], episode)
+		}
+		return ctx.Err()
+	})
+	return items, err
 }
 
 func resolveDetail(ctx context.Context, req PlayLineSpeedReq) (*detail.Result, error) {

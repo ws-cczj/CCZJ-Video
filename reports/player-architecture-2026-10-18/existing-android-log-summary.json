@@ -1,0 +1,47 @@
+{
+  "source": "Android app log; existing user activity only",
+  "device": "emulator-5554",
+  "package": "com.cczj.video.preview",
+  "line_count": 748,
+  "first_timestamp": "[2026-10-18 00:06:50.440",
+  "last_timestamp": "[2026-10-18 08:40:16.553]",
+  "level_counts": {
+    "INFO": 723,
+    "WARN": 16,
+    "ERROR": 9
+  },
+  "warning_categories": {
+    "crawler.go": 11,
+    "chart.go": 3,
+    "facade_diagnostic.go": 6,
+    "updater.go": 5
+  },
+  "last_warnings": [
+    "[2026-10-18 07:06:01.452] [ERROR] [facade_diagnostic.go:30] UnhandledRejection :: 未处理的 Promise 异常 — followed.value.map is not a function     Detail: TypeError: followed.value.map is not a function     at ComputedRefImpl.fn ([URL omitted]     at refreshComputed ([URL omitted]     at isDirty ([URL omitted]     at refreshComputed ([URL omitted]     at isDirty ([URL omitted]     at ReactiveEffect.runIfDirty ([URL omitted]     at callWithErrorHandling ([URL omitted]     at flushJobs ([URL omitted]",
+    "[2026-10-18 07:06:23.147] [ERROR] [facade_diagnostic.go:30] UnhandledRejection :: 未处理的 Promise 异常 — $setup.favorites.filter is not a function     Detail: TypeError: $setup.favorites.filter is not a function     at [URL omitted]     at renderList ([URL omitted]     at Proxy._sfc_render ([URL omitted]     at renderComponentRoot ([URL omitted]     at ReactiveEffect.componentUpdateFn [as fn] ([URL omitted]     at ReactiveEffect.run ([URL omitted]     at ReactiveEffect.runIfDirty ([URL omitted]     at callWithErrorHandling ([URL omitted]     at flushJobs ([URL omitted]",
+    "[2026-10-18 07:37:51.823] [WARN] [crawler.go:594] [Douban] No candidates parsed for '凡人歌之逆风飞翔' (HTML len=11892)",
+    "[2026-10-18 07:37:51.823] [WARN] [updater.go:111] [Douban] [1/2] FAILED to fill subject_id for '凡人歌之逆风飞翔': NOT_FOUND: no candidates parsed for keyword: 凡人歌之逆风飞翔",
+    "[2026-10-18 08:23:13.662] [WARN] [crawler.go:337] [Douban] 热榜 需要等 1m44s，超出可等待的 45s，本次放弃",
+    "[2026-10-18 08:23:13.662] [ERROR] [chart.go:207] [DoubanChart] 抓取失败: UNAVAILABLE: douban 限速中，请稍后重试",
+    "[2026-10-18 08:23:48.854] [WARN] [crawler.go:626] [Douban] Rejected match for '凡人逆仙传第6季': score=0 < 70 (best title=\"仙逆 年番5\")",
+    "[2026-10-18 08:24:24.449] [WARN] [crawler.go:337] [Douban] 评论 需要等 4m8s，超出可等待的 45s，本次放弃",
+    "[2026-10-18 08:26:46.114] [WARN] [crawler.go:626] [Douban] Rejected match for '凡人逆仙传第6季': score=0 < 70 (best title=\"凡人修仙传\")",
+    "[2026-10-18 08:26:46.118] [WARN] [updater.go:111] [Douban] [1/2] FAILED to fill subject_id for '凡人逆仙传第6季': NOT_FOUND: best match for 凡人逆仙传第6季 scored 0, below threshold 70",
+    "[2026-10-18 08:39:06.519] [WARN] [crawler.go:594] [Douban] No candidates parsed for '凡人修仙，我血魔极阴正的发邪' (HTML len=12054)",
+    "[2026-10-18 08:39:06.522] [WARN] [updater.go:111] [Douban] [2/2] FAILED to fill subject_id for '凡人修仙，我血魔极阴正的发邪': NOT_FOUND: no candidates parsed for keyword: 凡人修仙，我血魔极阴正的发邪"
+  ],
+  "latest_comment_events": [
+    "[2026-10-18 06:51:58.165] [INFO] [detail.go:214] [Douban] Parsed detail for 38563926: Title='凡人修仙：我靠小树苗逆仙途第二季', Rating='', Votes='', ShortComments='1', Hotness='1', Director='', Actor='', Genre=''",
+    "[2026-10-18 07:08:47.786] [INFO] [comments.go:125] [DoubanComments] 缓存命中: 37525017_1_new_score",
+    "[2026-10-18 07:19:16.162] [INFO] [comments.go:240] [DoubanComments] 抓取评论: doubanID=35861087, page=1, url=[URL omitted]",
+    "[2026-10-18 07:19:41.286] [INFO] [crawler.go:449] [Douban] Redirect detected: 302 -> [URL omitted]",
+    "[2026-10-18 07:19:41.956] [INFO] [comments.go:267] [DoubanComments] 抓取完成: doubanID=35861087, page=1, comments=1, totalPages=2",
+    "[2026-10-18 07:41:08.596] [INFO] [detail.go:214] [Douban] Parsed detail for 38535360: Title='凡人修仙之一罐灵草到道祖第二季', Rating='', Votes='', ShortComments='0', Hotness='0', Director='', Actor='', Genre='动画'",
+    "[2026-10-18 08:24:17.815] [INFO] [comments.go:125] [DoubanComments] 缓存命中: 35861087_1_new_score",
+    "[2026-10-18 08:24:24.449] [INFO] [comments.go:240] [DoubanComments] 抓取评论: doubanID=35861087, page=1, url=[URL omitted]",
+    "[2026-10-18 08:24:24.449] [WARN] [crawler.go:337] [Douban] 评论 需要等 4m8s，超出可等待的 45s，本次放弃",
+    "[2026-10-18 08:24:26.739] [INFO] [comments.go:125] [DoubanComments] 缓存命中: 35861087_1_new_score",
+    "[2026-10-18 08:32:52.768] [INFO] [detail.go:214] [Douban] Parsed detail for 38573297: Title='凡人修仙之一罐灵草到道祖第六季', Rating='', Votes='', ShortComments='0', Hotness='0', Director='', Actor='', Genre='动画'",
+    "[2026-10-18 08:40:16.551] [INFO] [detail.go:214] [Douban] Parsed detail for 38544635: Title='凡人修仙之一罐灵草到道祖第五季', Rating='', Votes='', ShortComments='0', Hotness='0', Director='', Actor='', Genre='动画'"
+  ]
+}

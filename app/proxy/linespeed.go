@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bytes"
+	"cczjVideo/app/netpolicy"
 	"cczjVideo/app/netstats"
 	"context"
 	"fmt"
@@ -37,20 +38,20 @@ type PlayURLSample struct {
 	Error       string  `json:"error,omitempty"`
 }
 
-// lineProbeClient 与 HLS 代理共用拨号策略：safeDialContext 在拨号瞬间复核地址，
+// lineProbeClient 与 HLS 代理共用拨号策略：SafeDialContext 在拨号瞬间复核地址，
 // 私网放行开关因此对测速同样生效。不复用 HLSService.client，因为测速要并发打多个域，
 // 共享连接池和 cookie jar 只会让线路之间互相污染。
 var lineProbeClient = &http.Client{
 	Timeout: lineProbeTimeout,
 	// 每次取样最多拉 1MB 真实媒体字节，所以这一类的峰值就是「这条 CDN 实际能跑多快」——
 	// 诊断页的吞吐数字来自它，而不是任何估算。
-	Transport: netstats.WrapTransport(netstats.CategoryLineProbe, &http.Transport{
+	Transport: netpolicy.WrapTransport(string(netstats.CategoryLineProbe), netstats.WrapTransport(netstats.CategoryLineProbe, &http.Transport{
 		MaxIdleConns:        32,
 		MaxIdleConnsPerHost: 4,
 		IdleConnTimeout:     30 * time.Second,
 		TLSHandshakeTimeout: 8 * time.Second,
-		DialContext:         safeDialContext,
-	}),
+		DialContext:         SafeDialContext,
+	})),
 	CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 }
 

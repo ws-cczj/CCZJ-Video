@@ -163,6 +163,16 @@ export class Source {
              */
             this["created_at"] = "";
         }
+        if (!("kind" in $$source)) {
+            /**
+             * Kind 是这一行属于哪个应用模式。迁移 v11 补列，默认 'video'，所以旧行读出来
+             * 就是视频源。读取请一律走 GetKind()，它把空值收敛成 video，不要求调用方
+             * 自己记得"没写等于视频"这条历史。
+             * @member
+             * @type {string}
+             */
+            this["kind"] = "";
+        }
         if (/** @type {any} */(false)) {
             /**
              * AutoDisabledAt 是这个源被自动停用（连续失败到阈值）时的 Unix 秒，0 表示不是。
@@ -176,6 +186,10 @@ export class Source {
         if (/** @type {any} */(false)) {
             /**
              * 策略配置（JSON 字符串，DB 列，用于自定义数据源参数组合）
+             * 
+             * 视频源里装的是 collect.StrategyConfig（v2）；小说与漫画源里装的是
+             * provider.Document（v3）。两种文档共用这一列，靠 version 与 sources.kind
+             * 一起区分，谁也不会去解析另一种。
              * @member
              * @type {string | undefined}
              */

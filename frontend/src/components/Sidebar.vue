@@ -28,6 +28,7 @@ const navItems = computed<NavItem[]>(() => [
 
 const toolItems = computed<NavItem[]>(() => [
   { path: '/sources', label: t('sidebar.sources'), icon: 'source' },
+  { path: '/danmaku-sources', label: t('danmakuSources.title'), icon: 'danmaku' },
   { path: '/video-types', label: t('sidebar.videoTypes'), icon: 'tag' },
   { path: '/downloads', label: t('sidebar.downloads'), icon: 'download' },
   { path: '/recycle', label: t('sidebar.recycle'), icon: 'trash' },
@@ -109,6 +110,9 @@ function isActive(path: string): boolean {
    - hover/active：主题色淡背景 + 左侧竖条指示
    ================================================================= */
 .sidebar {
+  @apply cczj-overflow-y-auto;
+  scrollbar-width: none;
+  @apply cczj-overflow-x-hidden cczj-flex-shrink-0;
   width: 200px;
   min-width: 200px;
   border-right: 1px solid var(--accent-alpha-20);
@@ -117,6 +121,7 @@ function isActive(path: string): boolean {
 }
 
 .nav-section {
+  @apply cczj-flex-shrink-0;
   padding: 14px 10px 8px;
 }
 
@@ -131,13 +136,14 @@ function isActive(path: string): boolean {
 }
 
 .section-label .label-text {
-  color: var(--accent);
+  @apply cczj-text-accent;
   letter-spacing: 3px;
-  white-space: nowrap;
+  @apply cczj-whitespace-nowrap;
 }
 
 /* —— 菜单项：字号放大、颜色用 text-primary 保证对比度 —— */
 .nav-item {
+  transition: background-color var(--cczj-motion-fast), color var(--cczj-motion-fast);
   margin: 3px 0;
   padding: 11px 14px;
   border: none;
@@ -145,19 +151,22 @@ function isActive(path: string): boolean {
   font-family: inherit;
 }
 
+.nav-item .icon-svg { transition: transform var(--cczj-motion-normal) var(--cczj-motion-ease-standard); }
+.nav-item:hover .icon-svg { transform: translateX(2px); }
+.nav-item:active .icon-svg { transform: scale(.9); }
+.nav-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .nav-item:hover {
   background: var(--accent-alpha-15);
-  color: var(--accent);
+  @apply cczj-text-accent;
 }
 
 .nav-item.active {
   background: var(--accent-alpha-20);
-  color: var(--accent);
-  font-weight: 700;
+  @apply cczj-text-accent cczj-font-bold;
 }
 
 .nav-item.active .nav-indicator {
-  opacity: 1;
+  @apply cczj-opacity-100;
   transform: scaleY(1);
 }
 
@@ -172,18 +181,26 @@ function isActive(path: string): boolean {
 
 /* —— 底部 —— */
 .sidebar-footer {
+  @apply cczj-flex-shrink-0;
   padding: 14px 18px;
   border-top: 1px solid var(--accent-alpha-20);
 }
 
 .source-dot {
   width: 6px;
-  height: 6px;
+  @apply cczj-h-1.5;
   background: var(--text-muted);
 }
 
 .source-dot.online {
   background: var(--accent);
   box-shadow: 0 0 8px var(--accent-alpha-35);
+}
+.sidebar::-webkit-scrollbar { @apply cczj-hidden; }
+@media (max-height: 700px) {
+  .nav-section { padding: 6px 10px 3px; }
+  .section-label { padding: 4px 8px 7px; }
+  .nav-item { margin: 1px 0; padding: 7px 12px; line-height: 1.4; }
+  .sidebar-footer { padding: 8px 18px; }
 }
 </style>

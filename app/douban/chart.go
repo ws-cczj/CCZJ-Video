@@ -2,8 +2,6 @@ package douban
 
 import (
 	"encoding/json"
-	"io/ioutil"
-	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
@@ -87,68 +85,7 @@ var fetchChartPage = fetchChartHTML
 // fetchChartHTML 热榜专用 HTTP 请求：静默期和全局限速闸门都必须走，
 // 等不起就直接跳过这次刷新，首页继续用旧热榜。
 func fetchChartHTML(urlStr string) (string, error) {
-	if left := remainingBlock(); left > 0 {
-		applog.Warn("[DoubanChart] 反爬静默中（剩余 %s），跳过热榜请求", left.Round(time.Second))
-		return "", apperror.Newf(apperror.Unavailable, "douban 反爬静默中，剩余 %s", left.Round(time.Minute))
-	}
-	// 热榜以前只尊重静默期、不限速，理由是「一小时缓存 + 失败退避，请求量极低」。
-	// 但缓存一过期撞上批量补全的间隙，就是一次裸请求插在两条搜索之间——豆瓣按 IP
-	// 计数，不认得谁是谁。
-	if _, ok := awaitDoubanSlot("热榜", uiWaitBudget); !ok {
-		return "", apperror.New(apperror.Unavailable, "douban 限速中，跳过热榜刷新")
-	}
-
-	applog.Info("[DoubanChart] Fetching URL: %s", urlStr)
-
-	doc, location, err := chartGet(urlStr)
-	if isSecChallengeURL(location) {
-		// 和详情页是同一道题：解掉再重试，别把能过的请求记成封禁。
-		if serr := solveDoubanChallenge(location, urlStr); serr != nil {
-			applog.Warn("[DoubanChart] 自动通过验证失败：%v", serr)
-			noteAntiCrawl()
-			return "", err
-		}
-		doc, location, err = chartGet(urlStr)
-	}
-	if err != nil {
-		if isDoubanChallengeURL(location) {
-			applog.Warn("[DoubanChart] 命中验证跳转 -> %s", location)
-			noteAntiCrawl()
-		}
-		return "", err
-	}
-	noteDoubanSuccess()
-	return doc, nil
-}
-
-// chartGet 发一次热榜 GET。location 非空表示被重定向，交给调用方判断能否解题。
-func chartGet(urlStr string) (doc string, location string, err error) {
-	req, err := http.NewRequest("GET", urlStr, nil)
-	if err != nil {
-		return "", "", apperror.Wrap(apperror.Unavailable, err, "failed to create request")
-	}
-
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0")
-	req.Header.Set("Referer", "https://movie.douban.com/")
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", "", apperror.Wrap(apperror.Unavailable, err, "failed to fetch")
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", resp.Header.Get("Location"), apperror.Newf(apperror.Unavailable, "HTTP %d", resp.StatusCode)
-	}
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", "", apperror.Wrap(apperror.Unavailable, err, "failed to read body")
-	}
-
-	return string(body), "", nil
+	return fetchInteractiveDouban(urlStr, "https://movie.douban.com/", "热榜")
 }
 
 // chartStaleCeiling 是「一份旧榜单还值得直接摆上首页」的年龄上限。豆瓣限速可能连着几轮都

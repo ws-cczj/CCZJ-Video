@@ -1,0 +1,26 @@
+[
+  {
+    "key": "home",
+    "url": "https://fanqienovel.com/",
+    "status": 200,
+    "bytes": 162903
+  },
+  {
+    "key": "search-web",
+    "url": "https://fanqienovel.com/search/%E4%B8%89%E5%9B%BD",
+    "status": 200,
+    "bytes": 10838
+  },
+  {
+    "key": "search-api",
+    "url": "https://fanqienovel.com/api/author/search/search_book/v0/?query=%E4%B8%89%E5%9B%BD&offset=0&limit=10",
+    "status": 200,
+    "bytes": 0
+  },
+  {
+    "key": "search-sdk",
+    "url": "https://api.fanqiesdk.com/api/novel/channel/homepage/search/search/v1/?q=%E4%B8%89%E5%9B%BD&offset=0&aid=13&app_name=news_article&version_code=708&device_platform=android",
+    "status": 200,
+    "bytes": 19445
+  }
+]

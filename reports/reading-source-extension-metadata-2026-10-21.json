@@ -1,0 +1,69 @@
+{
+  "source": "https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.json",
+  "entries": [
+    {
+      "name": "包子漫画",
+      "lang": "zh",
+      "url": "https://cn.baozimh.com",
+      "pkg": "eu.kanade.tachiyomi.extension.zh.baozimanhua",
+      "nsfw": null,
+      "version": null
+    },
+    {
+      "name": "GoDa漫画",
+      "lang": "zh",
+      "url": "https://baozimh.org",
+      "pkg": "eu.kanade.tachiyomi.extension.zh.baozimhorg",
+      "nsfw": null,
+      "version": null
+    },
+    {
+      "name": "Dongman Manhua",
+      "lang": "zh-Hans",
+      "url": "https://www.dongmanmanhua.cn",
+      "pkg": "eu.kanade.tachiyomi.extension.zh.dongmanmanhua",
+      "nsfw": null,
+      "version": null
+    },
+    {
+      "name": "瓜子漫画",
+      "lang": "zh",
+      "url": "https://www.guazimanhua.com",
+      "pkg": "eu.kanade.tachiyomi.extension.zh.guazimanhua",
+      "nsfw": null,
+      "version": null
+    },
+    {
+      "name": "快看漫画",
+      "lang": "zh-Hans",
+      "url": "https://www.kuaikanmanhua.com",
+      "pkg": "eu.kanade.tachiyomi.extension.zh.kuaikanmanhua",
+      "nsfw": null,
+      "version": null
+    },
+    {
+      "name": "漫画柜",
+      "lang": "zh",
+      "url": "https://www.manhuagui.com",
+      "pkg": "eu.kanade.tachiyomi.extension.zh.manhuagui",
+      "nsfw": null,
+      "version": null
+    },
+    {
+      "name": "漫画人",
+      "lang": "zh",
+      "url": "https://mangaapi.manhuaren.com",
+      "pkg": "eu.kanade.tachiyomi.extension.zh.manhuaren",
+      "nsfw": null,
+      "version": null
+    },
+    {
+      "name": "腾讯动漫",
+      "lang": "zh-Hans",
+      "url": "https://m.ac.qq.com",
+      "pkg": "eu.kanade.tachiyomi.extension.zh.tencentcomics",
+      "nsfw": null,
+      "version": null
+    }
+  ]
+}

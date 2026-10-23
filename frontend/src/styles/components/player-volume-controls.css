@@ -1,0 +1,84 @@
+@import './player-option-button.css';
+.volume-group {
+  @apply cczj-relative cczj-inline-flex cczj-items-center;
+}
+
+/* 桥接区：仅覆盖按钮与 popup 之间的 6px 缝隙，不延伸到进度条区域 */
+.volume-group::before {
+  content: '';
+  @apply cczj-absolute;
+  left: -4px;
+  right: -4px;
+  top: -8px;
+  height: 10px;
+  @apply cczj-pointer-events-auto;
+  z-index: 1;
+}
+
+.volume-group:hover .volume-popup,
+.volume-popup.show {
+  @apply cczj-opacity-100 cczj-pointer-events-auto;
+  transform: translateX(-50%) translateY(0);
+}
+
+.volume-popup {
+  @apply cczj-absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%) translateY(6px);
+  width: 60px;
+  height: 170px;
+  background: rgba(20, 20, 20, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 12px 0 10px 0;
+  @apply cczj-flex cczj-flex-col cczj-items-center cczj-gap-4 cczj-opacity-0 cczj-pointer-events-none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55);
+  z-index: 15;
+}
+
+.volume-slider-wrap {
+  @apply cczj-relative cczj-w-32;
+  height: 120px;
+  /* 垂直滑块轨道高度 */
+  @apply cczj-flex cczj-items-center cczj-justify-center;
+}
+
+.volume-slider-v {
+  width: 120px;
+  @apply cczj-h-1.5;
+  background: rgba(255,255,255,0.2);
+  border-radius: 3px;
+  @apply cczj-outline-none;
+  transform: rotate(-90deg);
+  transform-origin: center center;
+  @apply cczj-cursor-pointer;
+  accent-color:  #1890ff;
+}
+
+.volume-slider-v::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  @apply cczj-w-16 cczj-h-16 cczj-rounded-50;
+  background: #1890ff;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 4px rgba(24, 144, 255, 0.18);
+  @apply cczj-cursor-pointer;
+}
+
+.volume-slider-v::-moz-range-thumb {
+  @apply cczj-w-16 cczj-h-16 cczj-rounded-50;
+  background: #1890ff;
+  border: 2px solid #fff;
+  @apply cczj-cursor-pointer;
+}
+
+.volume-label {
+  @apply cczj-text-11;
+  color: rgba(255, 255, 255, 0.85);
+  font-variant-numeric: tabular-nums;
+  min-width: 28px;
+  @apply cczj-text-center;
+}
+
+/* ========= 倍速组（带垂直弹出列表） ========= */

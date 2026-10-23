@@ -130,6 +130,13 @@ export class Result {
              */
             this["unresolved"] = 0;
         }
+        if (!("reading_applied" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["reading_applied"] = 0;
+        }
 
         Object.assign(this, $$source);
     }

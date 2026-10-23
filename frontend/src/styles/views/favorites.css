@@ -3,20 +3,19 @@
 }
 
 .page-header {
-  margin-bottom: 24px;
-  gap: 16px;
+  @apply cczj-mb-12 cczj-gap-8;
 }
 
 .page-header h2 {
-  gap: 10px;
+  @apply cczj-gap-5;
   font-size: 22px;
-  font-weight: 700;
+  @apply cczj-font-bold;
   margin: 0 0 4px;
-  color: var(--accent);
+  @apply cczj-text-accent;
 }
 
 .page-header .desc {
-  font-size: 13px;
+  @apply cczj-text-13;
   margin: 0;
 }
 
@@ -25,7 +24,7 @@
 }
 
 .fav-card {
-  border-radius: 12px;
+  @apply cczj-rounded-lg;
 }
 
 .fav-card:hover {
@@ -41,7 +40,7 @@
 }
 
 .fav-card.is-manage {
-  cursor: pointer;
+  @apply cczj-cursor-pointer;
 }
 
 .placeholder-card {
@@ -51,61 +50,47 @@
 }
 
 .placeholder-card:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  @apply cczj-border-primary cczj-text-accent;
 }
 
 .placeholder-inner {
-  gap: 8px;
-  font-size: 13px;
-  opacity: 0.7;
+  @apply cczj-gap-4 cczj-text-13 cczj-opacity-70;
 }
 
 .source-tag {
-  font-size: 11px;
+  @apply cczj-text-11;
   padding: 2px 10px;
   border-radius: 10px;
   background: var(--bg-hover);
-  color: var(--text-muted);
+  @apply cczj-text-muted;
 }
 
 .fav-checkbox {
-  top: 8px;
-  left: 8px;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
+  @apply cczj-top-2 cczj-left-2 cczj-w-24 cczj-h-24 cczj-rounded;
   z-index: 4;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  @apply cczj-cursor-pointer cczj-flex cczj-items-center cczj-justify-center;
 }
 
 .fav-checkbox input {
-  position: absolute;
-  opacity: 0;
+  @apply cczj-absolute cczj-opacity-0;
   width: 0;
   height: 0;
-  pointer-events: none;
+  @apply cczj-pointer-events-none;
 }
 
 .check-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  @apply cczj-inline-flex cczj-items-center cczj-justify-center;
   width: 22px;
   height: 22px;
-  border-radius: 6px;
+  @apply cczj-rounded;
   background: rgba(255, 255, 255, 0.9);
   border: 2px solid var(--accent);
-  transition: all 0.15s ease;
-  position: relative;
+  @apply cczj-transition-fast cczj-relative;
 }
 
 .check-mark::after {
   content: '';
-  display: none;
+  @apply cczj-hidden;
   width: 6px;
   height: 11px;
   border: solid var(--accent);
@@ -118,70 +103,58 @@
 }
 
 .fav-checkbox input:checked+.check-mark::after {
-  display: block;
+  @apply cczj-block;
   border-color: #ffffff;
 }
 
 .fav-checkbox input:disabled+.check-mark {
-  opacity: 0.5;
-  cursor: not-allowed;
+  @apply cczj-opacity-50 cczj-cursor-not-allowed;
 }
 
 /* 两栏布局：左侧文件夹列表 + 右侧内容 */
 .fav-layout {
-  gap: 20px;
-  align-items: flex-start;
+  @apply cczj-gap-10 cczj-items-start;
 }
 
 .fav-folders {
-  flex-shrink: 0;
+  @apply cczj-flex-shrink-0;
   width: 220px;
-  gap: 6px;
-  padding: 16px;
+  @apply cczj-gap-3 cczj-p-8;
   background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  position: sticky;
+  @apply cczj-border cczj-rounded-lg cczj-sticky;
   top: 16px;
 }
 
 .folder-row {
-  gap: 8px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  transition: all 0.15s ease;
+  @apply cczj-gap-4 cczj-px-6-py-4 cczj-rounded-md cczj-transition-fast;
   background: var(--accent-alpha-10);
   border: 1px solid var(--accent);
-  color: var(--accent);
-  font-weight: 500;
+  @apply cczj-text-accent cczj-font-medium;
 }
 
 .folder-row:hover {
   background: var(--bg-card);
-  border-color: var(--border);
-  color: var(--text-primary);
-  font-weight: 500;
+  @apply cczj-border-gray-300 cczj-text-primary cczj-font-medium;
 }
 
 .folder-row.active {
   background: var(--accent);
-  border-color: var(--accent);
+  @apply cczj-border-primary;
   color: var(--accent-contrast);
-  font-weight: 600;
+  @apply cczj-font-semibold;
 }
 
 /* 拖拽归类的目标态：虚线填充加一圈光晕，和纯选中态区分开。
    与 .active 同为双类选择器，靠顺序在后赢过它。 */
 .folder-row.drop-target {
-  border-style: dashed;
+  @apply cczj-border-dashed;
   box-shadow: 0 0 0 2px var(--accent-alpha-35);
 }
 
 .folder-name {
-  gap: 8px;
-  font-size: 13px;
+  @apply cczj-gap-4 cczj-text-13;
   color: inherit;
-  min-width: 0;
+  @apply cczj-min-w-0;
 }
 
 /* 拖拽归类的源卡片：拖出去的那张压暗，表示"正在被搬走"。 */
@@ -194,10 +167,7 @@
 }
 
 .folder-name .count {
-  margin-left: auto;
-  font-size: 11px;
-  color: var(--text-muted);
-  font-weight: 500;
+  @apply cczj-ml-auto cczj-text-11 cczj-text-muted cczj-font-medium;
   padding: 2px 8px;
   border-radius: 10px;
   background: var(--bg-card);
@@ -209,8 +179,7 @@
 }
 
 .folder-actions {
-  gap: 4px;
-  flex-shrink: 0;
+  @apply cczj-gap-2 cczj-flex-shrink-0;
 }
 
 .folder-actions :deep(.ui-btn) {
@@ -218,15 +187,13 @@
   height: 24px !important;
   min-width: 24px !important;
   padding: 0 !important;
-  border-radius: 6px;
-  border: 1px solid var(--border);
+  @apply cczj-rounded cczj-border;
   background: var(--bg-card);
-  color: var(--text-secondary);
+  @apply cczj-text-secondary;
 }
 
 .folder-actions :deep(.ui-btn):hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  @apply cczj-border-primary cczj-text-accent;
 }
 
 .mini-btn-danger:hover {
@@ -235,73 +202,58 @@
 }
 
 .fav-main {
-  min-width: 0;
+  @apply cczj-min-w-0;
 }
 
 /* 选择中的卡片 loading */
 .fav-card.is-removing {
-  opacity: 0.5;
-  pointer-events: none;
+  @apply cczj-opacity-50 cczj-pointer-events-none;
 }
 
 .fav-loading {
-  top: 8px;
-  right: 8px;
+  @apply cczj-top-2 cczj-right-2;
   z-index: 3;
 }
 
 .folder-input {
-  width: 100%;
-  padding: 10px 14px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
+  @apply cczj-w-full cczj-px-7-py-5 cczj-rounded-md cczj-border;
   background: var(--bg-secondary);
-  color: var(--text-primary);
-  font-size: 13px;
+  @apply cczj-text-primary cczj-text-13;
   font-family: inherit;
-  outline: none;
+  @apply cczj-outline-none;
   transition: border-color 0.15s ease;
 }
 
 .folder-input:focus {
-  border-color: var(--accent);
+  @apply cczj-border-primary;
 }
 
 /* 文件夹选择列表 */
 .folder-select-list {
-  gap: 8px;
+  @apply cczj-gap-4;
 }
 
 .folder-select-item {
-  gap: 10px;
-  padding: 10px 14px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  font-size: 13px;
-  color: var(--text-primary);
-  transition: all 0.15s ease;
-  position: relative;
+  @apply cczj-gap-5 cczj-px-7-py-5 cczj-rounded-md cczj-border cczj-text-13 cczj-text-primary cczj-transition-fast cczj-relative;
 }
 
 .folder-select-item small {
-  font-size: 11px;
-  color: var(--text-muted);
-  font-weight: 500;
+  @apply cczj-text-11 cczj-text-muted cczj-font-medium;
   padding: 2px 8px;
   border-radius: 10px;
   background: var(--bg-secondary);
 }
 
 .folder-select-item:hover {
-  border-color: var(--accent);
+  @apply cczj-border-primary;
   background: var(--accent-alpha-10);
 }
 
 .folder-select-item.active {
-  border-color: var(--accent);
+  @apply cczj-border-primary;
   background: var(--accent);
   color: var(--accent-contrast);
-  font-weight: 600;
+  @apply cczj-font-semibold;
 }
 
 .folder-select-item.active small {
@@ -310,22 +262,17 @@
 }
 
 .folder-select-item input {
-  position: absolute;
-  opacity: 0;
+  @apply cczj-absolute cczj-opacity-0;
   width: 0;
   height: 0;
-  pointer-events: none;
+  @apply cczj-pointer-events-none;
 }
 
 .folder-radio {
-  flex-shrink: 0;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
+  @apply cczj-flex-shrink-0 cczj-w-16 cczj-h-16 cczj-rounded-50;
   border: 2px solid var(--border-strong);
   background: var(--bg-card);
-  transition: all 0.15s ease;
-  position: relative;
+  @apply cczj-transition-fast cczj-relative;
 }
 
 .folder-select-item.active .folder-radio {
@@ -335,19 +282,19 @@
 
 .folder-select-item.active .folder-radio::after {
   content: '';
-  position: absolute;
+  @apply cczj-absolute;
   inset: 3px;
-  border-radius: 50%;
+  @apply cczj-rounded-50;
   background: var(--accent);
 }
 
 @media (max-width: 720px) {
   .fav-layout {
-    flex-direction: column;
+    @apply cczj-flex-col;
   }
 
   .fav-folders {
-    width: 100%;
+    @apply cczj-w-full;
     position: static;
   }
 }

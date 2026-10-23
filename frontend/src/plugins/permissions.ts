@@ -39,12 +39,14 @@ interface PackIdentity {
 const identities = new Map<string, PackIdentity>()
 
 /** 注入运行时创建时登记一次：闸门拿到 packId 之后还得知道它叫什么、声明了什么。 */
-export function registerPack(packId: string, name: string, declared: string[]): void {
+export function registerPack(packId: string, name: string, declared: string[]): () => void {
   const known: PackPermission[] = []
   for (const item of declared) {
     if ((item === 'write' || item === 'network') && !known.includes(item)) known.push(item)
   }
-  identities.set(packId, { name: name || packId, declared: known })
+  const identity = { name: name || packId, declared: known }
+  identities.set(packId, identity)
+  return () => { if (identities.get(packId) === identity) identities.delete(packId) }
 }
 
 /** 界面用：这个包这项能力此刻的状态。 */
@@ -65,7 +67,18 @@ async function ensureLedger(): Promise<void> {
     ledgerLoad = (async () => {
       try {
         const raw = await GetSetting(LEDGER_KEY)
-        if (raw) ledger.value = JSON.parse(raw) as Ledger
+        const parsed: unknown = raw ? JSON.parse(raw) : {}
+        const valid: Ledger = Object.create(null)
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          for (const [id, entry] of Object.entries(parsed)) {
+            if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue
+            for (const perm of ['write', 'network'] as const) {
+              const value = (entry as Record<string, unknown>)[perm]
+              if (value === 'granted' || value === 'denied') (valid[id] ??= {})[perm] = value
+            }
+          }
+        }
+        ledger.value = valid
       } catch {
         // 读不到账本就当什么都没授权过：闸门照常拦，只是用户会被重新问一次。
       }
@@ -74,15 +87,20 @@ async function ensureLedger(): Promise<void> {
   await ledgerLoad
 }
 
-function record(packId: string, perm: PackPermission, decision: PermissionDecision | null): void {
-  const next: Partial<Record<PackPermission, PermissionDecision>> = { ...ledger.value[packId] }
-  if (decision) next[perm] = decision
-  else delete next[perm]
-  const all = { ...ledger.value }
-  if (Object.keys(next).length) all[packId] = next
-  else delete all[packId]
-  ledger.value = all
-  SetSetting(LEDGER_KEY, JSON.stringify(all)).catch(() => { /* 存不下也别把包卡住 */ })
+let persistChain: Promise<void> = Promise.resolve()
+function record(packId: string, perm: PackPermission, decision: PermissionDecision | null): Promise<void> {
+  const run = persistChain.then(async () => {
+    const next: Partial<Record<PackPermission, PermissionDecision>> = { ...ledger.value[packId] }
+    if (decision) next[perm] = decision
+    else delete next[perm]
+    const all = { ...ledger.value }
+    if (Object.keys(next).length) all[packId] = next
+    else delete all[packId]
+    await SetSetting(LEDGER_KEY, JSON.stringify(all))
+    ledger.value = all
+  })
+  persistChain = run.catch(() => {})
+  return run
 }
 
 function writeLine(level: 'INFO' | 'WARN', message: string, packId: string, detail: string): void {
@@ -95,8 +113,11 @@ function writeLine(level: 'INFO' | 'WARN', message: string, packId: string, deta
  */
 let promptChain: Promise<unknown> = Promise.resolve()
 
-function ask(packId: string, perm: PackPermission, detail: string): Promise<boolean> {
+function ask(packId: string, perm: PackPermission, detail: string, identity: PackIdentity): Promise<boolean> {
   const run = async (): Promise<boolean> => {
+    if (identities.get(packId) !== identity) throw new Error('Plugin is no longer active')
+    const current = ledger.value[packId]?.[perm]
+    if (current) return current === 'granted'
     const name = packLabel(packId)
     const ok = await useConfirmStore().confirm({
       title: tr('permissions.title'),
@@ -105,7 +126,8 @@ function ask(packId: string, perm: PackPermission, detail: string): Promise<bool
       cancelText: tr('permissions.deny'),
       level: 'warn',
     })
-    record(packId, perm, ok ? 'granted' : 'denied')
+    if (identities.get(packId) !== identity) throw new Error('Plugin is no longer active')
+    await record(packId, perm, ok ? 'granted' : 'denied')
     const params = { name, perm: permLabel(perm), detail }
     writeLine(ok ? 'INFO' : 'WARN', tr(ok ? 'permissions.grantedLog' : 'permissions.deniedLog', params), packId, '')
     return ok
@@ -127,10 +149,12 @@ export async function requirePermission(packId: string, perm: PackPermission, de
     throw new Error(message)
   }
   await ensureLedger()
+  if (identities.get(packId) !== identity) throw new Error('Plugin is no longer active')
   const current = ledger.value[packId]?.[perm]
   if (current === 'granted') return
   if (current === 'denied') throw new Error(tr('permissions.denied', { name, perm: permLabel(perm) }))
-  const ok = await ask(packId, perm, detail)
+  const ok = await ask(packId, perm, detail, identity)
+  if (identities.get(packId) !== identity) throw new Error('Plugin is no longer active')
   if (!ok) throw new Error(tr('permissions.denied', { name, perm: permLabel(perm) }))
 }
 
@@ -144,7 +168,7 @@ export { ensureLedger as loadPermissionLedger }
 /** 用户在扩展包面板撤销授权：清掉这一条，下次这个包再用到时会重新问。 */
 export async function resetPermission(packId: string, perm: PackPermission): Promise<void> {
   await ensureLedger()
-  record(packId, perm, null)
+  await record(packId, perm, null)
   writeLine('INFO', tr('permissions.resetLog', { name: packLabel(packId), perm: permLabel(perm) }), packId, '')
 }
 
@@ -189,15 +213,16 @@ type BindingFn = (...args: unknown[]) => unknown
  * 把整个绑定命名空间包一层：只读的直通，其余的每次调用先过闸门。
  * Wails 的绑定本来就返回 Promise，所以套成 async 不改变包的写法。
  */
-export function guardBindings(namespace: typeof bindings, packId: string): typeof bindings {
+export function guardBindings(namespace: typeof bindings, packId: string, assertLive = () => {}): typeof bindings {
   const target = namespace as unknown as Record<string, unknown>
   return new Proxy(target, {
     get(receiverTarget, prop): unknown {
       const value = Reflect.get(receiverTarget, prop)
-      if (typeof prop !== 'string' || typeof value !== 'function' || isReadOnlyBinding(prop)) return value
+      if (typeof prop !== 'string' || typeof value !== 'function') return value
+      if (isReadOnlyBinding(prop)) return (...args: unknown[]) => { assertLive(); return value.apply(namespace, args) }
       const call = value as BindingFn
       return (...args: unknown[]): unknown =>
-        requirePermission(packId, 'write', `${prop}()`).then(() => call.apply(namespace, args))
+        (assertLive(), requirePermission(packId, 'write', `${prop}()`).then(() => { assertLive(); return call.apply(namespace, args) }))
     },
   }) as unknown as typeof bindings
 }

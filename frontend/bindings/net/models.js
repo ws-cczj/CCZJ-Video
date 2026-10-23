@@ -10,7 +10,7 @@ import { Create as $Create } from "@wailsio/runtime";
  * An IP is a single IP address, a slice of bytes.
  * Functions in this package accept either 4-byte (IPv4)
  * or 16-byte (IPv6) slices as input.
- * 
+ *
  * Note that in this documentation, referring to an
  * IP address as an IPv4 address or an IPv6 address
  * is a semantic property of the address, not just the
@@ -22,7 +22,7 @@ import { Create as $Create } from "@wailsio/runtime";
 /**
  * An IPMask is a bitmask that can be used to manipulate
  * IP addresses for IP addressing and routing.
- * 
+ *
  * See type [IPNet] and func [ParseCIDR] for details.
  * @typedef {string} IPMask
  */

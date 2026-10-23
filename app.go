@@ -1,11 +1,11 @@
 package main
 
 import (
+	"cczjVideo/app/apperror"
 	"cczjVideo/app/applog"
 	"cczjVideo/app/service"
+	appwindow "cczjVideo/app/window"
 	"embed"
-	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -27,8 +27,9 @@ func buildApp() *application.App {
 	// 单实例回调要在窗口创建前声明，Options 只能用闭包引用它。
 	var mainWindow *application.WebviewWindow
 
-	app := application.New(application.Options{
-		Name: "CCZJ Video",
+	options := application.Options{
+		MarshalError: apperror.Marshal,
+		Name:         "CCZJ Video",
 		// 强制单实例：桌面上重复图标只会把已在跑的窗口叫到前台。两份进程会同时写
 		// 同一份 SQLite、同一个缓存目录与同一个豆瓣限速闸门，那些状态都是按进程算的。
 		SingleInstance: &application.SingleInstanceOptions{
@@ -44,26 +45,19 @@ func buildApp() *application.App {
 			},
 		},
 		Services: []application.Service{
-			application.NewService(myApp),
+			// beta.30's service registration uses its own marshaler fallback;
+			// configure it explicitly so every binding carries the public envelope.
+			application.NewServiceWithOptions(myApp, application.ServiceOptions{MarshalError: apperror.Marshal}),
 		},
 		Assets: application.AssetOptions{
-			Handler: application.AssetFileServerFS(assets),
-			Middleware: func(next http.Handler) http.Handler {
-				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					if r.URL.Path == "/__cczj/hls" {
-						myApp.ServeHLSProxy(w, r)
-						return
-					}
-					// Keep all application assets and Vite dev-server requests on Wails' default path.
-					if strings.HasPrefix(r.URL.Path, "/__cczj/") {
-						http.NotFound(w, r)
-						return
-					}
-					next.ServeHTTP(w, r)
-				})
-			},
+			Handler:    application.AssetFileServerFS(assets),
+			Middleware: service.AssetMiddleware(myApp, application.System.IsMobile()),
 		},
-	})
+	}
+	if application.System.IsMobile() {
+		options.SingleInstance = nil
+	}
+	app := application.New(options)
 
 	mainWindow = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:   "main",
@@ -73,8 +67,8 @@ func buildApp() *application.App {
 		// Keep WebView content zoom independent from the monitor DPI. Without an
 		// explicit value WebView2 can retain a 50% zoom after DPI transitions.
 		Zoom:      1.0,
-		MinWidth:  900,
-		MinHeight: 600,
+		MinWidth:  appwindow.MinimumWidth,
+		MinHeight: appwindow.MinimumHeight,
 		Frameless: true,
 		// 扩展包靠「从资源管理器拖一个文件夹进来」安装。不开这个开关，Wails 的运行时
 		// 会对所有外部文件拖放强制 dropEffect=none——鼠标变成一个禁止符号，什么都进不来。
@@ -85,6 +79,11 @@ func buildApp() *application.App {
 			DisableFramelessWindowDecorations: false,
 		},
 	})
+	// Android owns its Activity, screen geometry and lifecycle. Desktop-only
+	// tray, DPI and drag/drop handlers must not control that native host.
+	if application.System.IsMobile() {
+		return app
+	}
 
 	// 原生拖放交给应用的只有被拖条目的绝对路径（WebView2 的 File 对象读不出目录内容），
 	// 所以这里只把路径转给界面：装哪个、失败怎么报由扩展包面板决定，落盘闸门在 app/plugin。

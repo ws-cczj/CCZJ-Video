@@ -1,0 +1,163 @@
+{
+  "observation": "Native Android Wails read-only diagnostics and invalid-input envelope; no playback or gestures exercised",
+  "metrics": {
+    "ok": true,
+    "value": {
+      "danmaku": {
+        "cache_hits": 0,
+        "fetches": 0,
+        "stale_fallbacks": 0,
+        "cache_failures": 0
+      },
+      "scope": {
+        "mode": "video",
+        "business": "current_mode",
+        "resources": "shared_host_process",
+        "storage": "shared_database_and_logs",
+        "network_budget": "shared_host_budget"
+      },
+      "download_executor": {
+        "active": 0,
+        "accepted": 0,
+        "concurrency_limit": 2,
+        "admission_limit": 66
+      },
+      "network_budget": {
+        "active": 0,
+        "waiting": 0,
+        "rejected": 0,
+        "waitMilliseconds": 0,
+        "lanes": {}
+      },
+      "recording": {
+        "mode": "",
+        "active": false,
+        "path": "",
+        "started_at_ms": 0,
+        "ended_at_ms": 0,
+        "interval_seconds": 0,
+        "max_duration_seconds": 0,
+        "samples": 0,
+        "markers": 0,
+        "reason": "",
+        "error": "",
+        "start_heap_path": "",
+        "end_heap_path": "",
+        "start_goroutines_path": "",
+        "end_goroutines_path": ""
+      },
+      "uptime_seconds": 19,
+      "goroutines": 26,
+      "network": {
+        "since_unix": 0,
+        "total_bytes": 0,
+        "allow_private_targets": false,
+        "categories": []
+      },
+      "cache": [
+        {
+          "key": "detail",
+          "entries": 0,
+          "bytes": 0,
+          "hits": 0,
+          "stale_hits": 0,
+          "misses": 0,
+          "fetch_ok": 0,
+          "fetch_fail": 0,
+          "skipped": 0
+        },
+        {
+          "key": "chart",
+          "entries": 0,
+          "bytes": 0,
+          "hits": 0,
+          "stale_hits": 0,
+          "misses": 0,
+          "fetch_ok": 0,
+          "fetch_fail": 0,
+          "skipped": 0
+        },
+        {
+          "key": "comments",
+          "entries": 0,
+          "bytes": 0,
+          "hits": 0,
+          "stale_hits": 0,
+          "misses": 0,
+          "fetch_ok": 0,
+          "fetch_fail": 0,
+          "skipped": 0
+        },
+        {
+          "key": "match",
+          "entries": 0,
+          "bytes": 0,
+          "hits": 0,
+          "stale_hits": 0,
+          "misses": 0,
+          "fetch_ok": 0,
+          "fetch_fail": 0,
+          "skipped": 0
+        }
+      ],
+      "resources": {
+        "sampled_at_ms": 1792389125842,
+        "heap_alloc_bytes": 8258504,
+        "heap_inuse_bytes": 10108928,
+        "heap_retained_bytes": 753664,
+        "go_sys_bytes": 22403336,
+        "heap_objects": 9109,
+        "num_gc": 15,
+        "last_gc_pause_ms": 1.945224,
+        "goroutines": 26,
+        "native_available": true,
+        "native_scope": "app_process",
+        "proportional_bytes": 140843008,
+        "private_resident_bytes": 105115648,
+        "file_descriptors": 214,
+        "working_set_bytes": 270200832,
+        "private_bytes": 0,
+        "tree_working_set_bytes": 270200832,
+        "tree_private_bytes": 0,
+        "system_total_bytes": 4123561984,
+        "system_available_bytes": 2628632576,
+        "system_memory_percent": 36.2533511997767,
+        "working_set_percent": 6.552607504104878,
+        "cpu_percent": null,
+        "process_count": 1,
+        "handles": 0,
+        "processes": [
+          {
+            "pid": 5463,
+            "name": "Android app",
+            "working_set_bytes": 270200832,
+            "private_bytes": 0,
+            "handles": 0,
+            "proportional_bytes": 140843008,
+            "private_resident_bytes": 105115648,
+            "file_descriptors": 214
+          }
+        ],
+        "notes": [
+          "Android app process only; isolated WebView renderer/GPU processes are excluded. PSS and private resident memory are not Windows private commit."
+        ]
+      },
+      "background_tasks": {
+        "schedulers": 1
+      }
+    }
+  },
+  "public_error": {
+    "ok": false,
+    "name": "ApiFailure",
+    "message": "不支持的弹幕平台",
+    "code": "UNSUPPORTED",
+    "requestId": "mveu7gti-1",
+    "operation": "danmaku.search",
+    "logged": true
+  },
+  "unbound": {
+    "ok": true,
+    "value": null
+  }
+}

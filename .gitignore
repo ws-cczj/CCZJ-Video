@@ -12,9 +12,18 @@ dist/
 build/windows/info.generated.json
 
 # 依赖与缓存
+/.cache/
 node_modules
 frontend/.vite/
 frontend/.cache/
+build/android/.gradle/
+build/android/.kotlin/
+build/android/build/
+build/android/app/build/
+build/android/app/src/main/jniLibs/
+build/android/local.properties
+build/android/gen/
+build/android/overlay.json
 
 # 本地开发工具（Agent skills、多模块 workspace 指针）
 .agents/
@@ -26,6 +35,7 @@ go.work.sum
 *.log
 *.tmp
 *.bak
+__pycache__/
 .env
 .env.*
 frontend/vite.config.ts.timestamp-*.mjs

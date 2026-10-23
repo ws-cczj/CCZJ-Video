@@ -1,0 +1,41 @@
+Load: 1.0 / 1.11 / 1.18
+CPU usage from 422230ms to 122220ms ago (2026-10-22 10:17:42.875 to 2026-10-22 10:22:42.885):
+  3.1% 35802/com.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0: 2.7% user + 0.4% kernel / faults: 122516 minor 1 major
+  3.1% 35678/com.cczj.video.acceptance: 2.2% user + 0.8% kernel / faults: 27792 minor 2 major
+  0.8% 715/surfaceflinger: 0.6% user + 0.2% kernel / faults: 18 minor
+  0.4% 841/system_server: 0.2% user + 0.1% kernel / faults: 2448 minor 66 major
+  0.1% 728/adbd: 0% user + 0.1% kernel / faults: 10566 minor
+  0% 483/logd: 0% user + 0% kernel / faults: 6680 minor
+  0% 703/android.hardware.sensors@2.1-service.multihal: 0% user + 0% kernel
+  0% 1/init: 0% user + 0% kernel / faults: 2821 minor
+  0% 655/netd: 0% user + 0% kernel / faults: 1825 minor 2 major
+  0% 1091/com.android.systemui: 0% user + 0% kernel / faults: 592 minor 18 major
+  0% 13/rcu_preempt: 0% user + 0% kernel
+  0% 1139/com.android.networkstack.process: 0% user + 0% kernel / faults: 664 minor 3 major
+  0% 1357/com.mumu.store: 0% user + 0% kernel / faults: 211 minor
+  0% 487/psimon: 0% user + 0% kernel
+  0% 1602/nemu_sys_opt: 0% user + 0% kernel
+  0% 79/kpclimitd: 0% user + 0% kernel
+  0% 447/jbd2/sdc3-8: 0% user + 0% kernel
+  0% 458/kworker/0:2-events: 0% user + 0% kernel
+  0% 656/statsd: 0% user + 0% kernel
+  0% 1057/kworker/3:2-mm_percpu_wq: 0% user + 0% kernel
+  0% 1170/com.android.phone: 0% user + 0% kernel / faults: 91 minor 37 major
+  0% 27742/kworker/u8:0-loop23: 0% user + 0% kernel
+  0% 31394/kworker/u8:3-events_unbound: 0% user + 0% kernel
+  0% 12/ksoftirqd/0: 0% user + 0% kernel
+  0% 19/ksoftirqd/1: 0% user + 0% kernel
+  0% 24/ksoftirqd/2: 0% user + 0% kernel
+  0% 25/kworker/2:0-rcu_gp: 0% user + 0% kernel
+  0% 28/migration/3: 0% user + 0% kernel
+  0% 29/ksoftirqd/3: 0% user + 0% kernel
+  0% 38/kcompactd0: 0% user + 0% kernel
+  0% 40/kworker/1:1-events: 0% user + 0% kernel
+  0% 306/kworker/3:1H-kblockd: 0% user + 0% kernel
+  0% 485/servicemanager: 0% user + 0% kernel
+  0% 486/hwservicemanager: 0% user + 0% kernel / faults: 3 minor 3 major
+  0% 506/android.system.suspend-service: 0% user + 0% kernel / faults: 1 minor 1 major
+  0% 684/android.hardware.health@2.1-service: 0% user + 0% kernel / faults: 1 major
+  0% 1072/app.lawnchair: 0% user + 0% kernel / faults: 147 minor 1 major
+  0% 1592/com.sohu.inputmethod.sogou.chuizi: 0% user + 0% kernel / faults: 16 minor 1 major
+2% TOTAL: 1.5% user + 0.4% kernel + 0% iowait + 0% softirq

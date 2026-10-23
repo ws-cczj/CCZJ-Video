@@ -177,7 +177,7 @@ export class Certificate {
              * were not (fully) processed when parsing. Verify will fail if this
              * slice is non-empty, unless verification is delegated to an OS
              * library which understands all the critical extensions.
-             * 
+             *
              * Users can access these extensions using Extensions and can remove
              * elements from this slice if they believe that they have been
              * handled.
@@ -222,13 +222,13 @@ export class Certificate {
             /**
              * MaxPathLen and MaxPathLenZero indicate the presence and
              * value of the BasicConstraints' "pathLenConstraint".
-             * 
+             *
              * When parsing a certificate, a positive non-zero MaxPathLen
              * means that the field was specified, -1 means it was unset,
              * and MaxPathLenZero being true mean that the field was
              * explicitly set to zero. The case of MaxPathLen==0 with MaxPathLenZero==false
              * should be treated equivalent to -1 (unset).
-             * 
+             *
              * When generating a certificate, an unset pathLenConstraint
              * can be requested with either MaxPathLen == -1 or using the
              * zero value for both MaxPathLen and MaxPathLenZero.
@@ -410,11 +410,11 @@ export class Certificate {
             /**
              * InhibitAnyPolicy and InhibitAnyPolicyZero indicate the presence and value
              * of the inhibitAnyPolicy extension.
-             * 
+             *
              * The value of InhibitAnyPolicy indicates the number of additional
              * certificates in the path after this certificate that may use the
              * anyPolicy policy OID to indicate a match with any other policy.
-             * 
+             *
              * When parsing a certificate, a positive non-zero InhibitAnyPolicy means
              * that the field was specified, -1 means it was unset, and
              * InhibitAnyPolicyZero being true mean that the field was explicitly set to
@@ -440,11 +440,11 @@ export class Certificate {
              * InhibitPolicyMapping and InhibitPolicyMappingZero indicate the presence
              * and value of the inhibitPolicyMapping field of the policyConstraints
              * extension.
-             * 
+             *
              * The value of InhibitPolicyMapping indicates the number of additional
              * certificates in the path after this certificate that may use policy
              * mapping.
-             * 
+             *
              * When parsing a certificate, a positive non-zero InhibitPolicyMapping
              * means that the field was specified, -1 means it was unset, and
              * InhibitPolicyMappingZero being true mean that the field was explicitly
@@ -471,14 +471,14 @@ export class Certificate {
              * RequireExplicitPolicy and RequireExplicitPolicyZero indicate the presence
              * and value of the requireExplicitPolicy field of the policyConstraints
              * extension.
-             * 
+             *
              * The value of RequireExplicitPolicy indicates the number of additional
              * certificates in the path after this certificate before an explicit policy
              * is required for the rest of the path. When an explicit policy is required,
              * each subsequent certificate in the path must contain a required policy OID,
              * or a policy OID which has been declared as equivalent through the policy
              * mapping extension.
-             * 
+             *
              * When parsing a certificate, a positive non-zero RequireExplicitPolicy
              * means that the field was specified, -1 means it was unset, and
              * RequireExplicitPolicyZero being true mean that the field was explicitly

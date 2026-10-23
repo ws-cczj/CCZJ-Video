@@ -8,8 +8,10 @@ import Icon from '../components/Icon.vue'
 import { Button, Tag } from '../components/ui'
 import { useErrorStore } from '../stores/error'
 import { useConfirmStore } from '../stores/confirm'
+import { isMobileRuntime } from '../api/runtime'
 
 const dl = useDownloadStore()
+const mobile = isMobileRuntime()
 const errorStore = useErrorStore()
 const confirmStore = useConfirmStore()
 const filter = ref<'all' | 'active' | 'paused' | 'done' | 'error'>('all')
@@ -178,7 +180,8 @@ function isMatchFilter(t: { status: string }): boolean {
       <div class="header-top cczj-flex cczj-justify-between cczj-items-start">
         <div>
           <h1 class="cczj-text-xl cczj-font-semibold">{{ tr('downloads.title') }}</h1>
-          <p class="subtitle cczj-text-sm cczj-text-muted cczj-mt-1" v-if="dl.dir">{{ tr('downloads.defaultDirLabel') }}{{ dl.dir }}</p>
+          <p class="subtitle cczj-text-sm cczj-text-muted cczj-mt-1" v-if="mobile">{{ tr('mobile.downloadStorageHint') }}</p>
+          <p class="subtitle cczj-text-sm cczj-text-muted cczj-mt-1" v-else-if="dl.dir">{{ tr('downloads.defaultDirLabel') }}{{ dl.dir }}</p>
         </div>
         <!-- 批量操作按钮 -->
         <div v-if="dl.tasks.length > 0" class="bulk-actions cczj-flex cczj-gap-2 cczj-items-center cczj-flex-wrap">
@@ -223,7 +226,7 @@ function isMatchFilter(t: { status: string }): boolean {
     </header>
 
     <!-- ========== 下载设置 ========== -->
-    <section class="download-settings-block cczj-rounded cczj-border cczj-p-4 cczj-bg-card">
+    <section v-if="!mobile" class="download-settings-block cczj-rounded cczj-border cczj-p-4 cczj-bg-card">
       <h3 class="cczj-text-lg cczj-font-semibold cczj-mb-3">{{ tr('downloads.directory') }}</h3>
       <div class="setting-row cczj-flex cczj-gap-3 cczj-items-center cczj-flex-wrap">
         <input

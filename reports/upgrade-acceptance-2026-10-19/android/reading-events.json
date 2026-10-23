@@ -1,0 +1,286 @@
+[
+  {
+    "method": "Log.entryAdded",
+    "params": {
+      "entry": {
+        "source": "network",
+        "level": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Error)",
+        "timestamp": 1792376089522.491,
+        "url": "https://wails.localhost/wails/custom.js",
+        "networkRequestId": "49514.46"
+      }
+    }
+  },
+  {
+    "method": "Log.entryAdded",
+    "params": {
+      "entry": {
+        "source": "network",
+        "level": "error",
+        "text": "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "timestamp": 1792376089688.987,
+        "url": "https://wails.localhost/favicon.ico",
+        "networkRequestId": "49514.58"
+      }
+    }
+  },
+  {
+    "method": "Log.entryAdded",
+    "params": {
+      "entry": {
+        "source": "network",
+        "level": "error",
+        "text": "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "timestamp": 1792376089753.704,
+        "url": "https://wails.localhost/favicon.ico",
+        "networkRequestId": "49514.62"
+      }
+    }
+  },
+  {
+    "method": "Log.entryAdded",
+    "params": {
+      "entry": {
+        "source": "network",
+        "level": "error",
+        "text": "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "timestamp": 1792376090383.656,
+        "url": "https://wails.localhost/favicon.ico",
+        "networkRequestId": "49514.69"
+      }
+    }
+  },
+  {
+    "method": "Log.entryAdded",
+    "params": {
+      "entry": {
+        "source": "network",
+        "level": "error",
+        "text": "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "timestamp": 1792376090384.791,
+        "url": "https://wails.localhost/favicon.ico",
+        "networkRequestId": "49514.70"
+      }
+    }
+  },
+  {
+    "method": "Log.entryAdded",
+    "params": {
+      "entry": {
+        "source": "network",
+        "level": "error",
+        "text": "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "timestamp": 1792376090385.9192,
+        "url": "https://wails.localhost/favicon.ico",
+        "networkRequestId": "49514.71"
+      }
+    }
+  },
+  {
+    "method": "Log.entryAdded",
+    "params": {
+      "entry": {
+        "source": "network",
+        "level": "error",
+        "text": "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "timestamp": 1792376090387.793,
+        "url": "https://wails.localhost/favicon.ico",
+        "networkRequestId": "49514.72"
+      }
+    }
+  },
+  {
+    "method": "Log.entryAdded",
+    "params": {
+      "entry": {
+        "source": "network",
+        "level": "error",
+        "text": "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "timestamp": 1792376091887.2239,
+        "url": "https://wails.localhost/favicon.ico",
+        "networkRequestId": "49514.73"
+      }
+    }
+  },
+  {
+    "method": "Log.entryAdded",
+    "params": {
+      "entry": {
+        "source": "network",
+        "level": "error",
+        "text": "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "timestamp": 1792376091890.074,
+        "url": "https://wails.localhost/favicon.ico",
+        "networkRequestId": "49514.76"
+      }
+    }
+  },
+  {
+    "method": "Log.entryAdded",
+    "params": {
+      "entry": {
+        "source": "network",
+        "level": "error",
+        "text": "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "timestamp": 1792376091891.0452,
+        "url": "https://wails.localhost/favicon.ico",
+        "networkRequestId": "49514.74"
+      }
+    }
+  },
+  {
+    "method": "Log.entryAdded",
+    "params": {
+      "entry": {
+        "source": "network",
+        "level": "error",
+        "text": "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "timestamp": 1792376091893.5908,
+        "url": "https://wails.localhost/favicon.ico",
+        "networkRequestId": "49514.75"
+      }
+    }
+  },
+  {
+    "method": "Log.entryAdded",
+    "params": {
+      "entry": {
+        "source": "network",
+        "level": "error",
+        "text": "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "timestamp": 1792376093543.667,
+        "url": "https://wails.localhost/favicon.ico",
+        "networkRequestId": "49514.77"
+      }
+    }
+  },
+  {
+    "method": "Log.entryAdded",
+    "params": {
+      "entry": {
+        "source": "network",
+        "level": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Error)",
+        "timestamp": 1792376193050.18,
+        "url": "https://wails.localhost/wails/custom.js",
+        "networkRequestId": "49805.46"
+      }
+    }
+  },
+  {
+    "method": "Log.entryAdded",
+    "params": {
+      "entry": {
+        "source": "network",
+        "level": "error",
+        "text": "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "timestamp": 1792376193190.443,
+        "url": "https://wails.localhost/favicon.ico",
+        "networkRequestId": "49805.58"
+      }
+    }
+  },
+  {
+    "method": "Log.entryAdded",
+    "params": {
+      "entry": {
+        "source": "network",
+        "level": "error",
+        "text": "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "timestamp": 1792376193232.406,
+        "url": "https://wails.localhost/favicon.ico",
+        "networkRequestId": "49805.66"
+      }
+    }
+  },
+  {
+    "method": "Log.entryAdded",
+    "params": {
+      "entry": {
+        "source": "network",
+        "level": "error",
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Error)",
+        "timestamp": 1792376194004.619,
+        "url": "https://wails.localhost/wails/custom.js",
+        "networkRequestId": "49805.114"
+      }
+    }
+  },
+  {
+    "method": "Log.entryAdded",
+    "params": {
+      "entry": {
+        "source": "network",
+        "level": "error",
+        "text": "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "timestamp": 1792376194016.65,
+        "url": "https://wails.localhost/favicon.ico",
+        "networkRequestId": "49805.119"
+      }
+    }
+  },
+  {
+    "method": "Log.entryAdded",
+    "params": {
+      "entry": {
+        "source": "network",
+        "level": "error",
+        "text": "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "timestamp": 1792376194130.492,
+        "url": "https://wails.localhost/favicon.ico",
+        "networkRequestId": "49805.133"
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "Reading state write failed; edits retained for retry"
+        },
+        {
+          "type": "object",
+          "subtype": "error",
+          "className": "Error",
+          "description": "Error: Binding call failed: Bound method returned an error: STORAGE: 保存阅读数据失败，请重试: constraint failed: acceptance injected storage failure (1811)\n    at window._wailsAndroidCallback (https://wails.localhost/assets/app-Kpe2nHC0.js:1:2486)\n    at <anonymous>:1:40",
+          "objectId": "-720720941867234460.2.1",
+          "preview": {
+            "type": "object",
+            "subtype": "error",
+            "description": "Error: Binding call failed: Bound method returned an error: STORAGE: 保存阅读数据失败，请重试: constraint failed: acceptance injected storage failure (1811)\n    at window._wailsAndroidCallback (https://wails.localhost/assets/app-Kpe2nHC0.js:1:2486)\n    at <anonymous>:1:40",
+            "overflow": false,
+            "properties": [
+              {
+                "name": "stack",
+                "type": "string",
+                "value": "Error: Binding call failed: Bound method returned …s/app-Kpe2nHC0.js:1:2486)\n    at <anonymous>:1:40"
+              },
+              {
+                "name": "message",
+                "type": "string",
+                "value": "Binding call failed: Bound method returned an erro…ailed: acceptance injected storage failure (1811)"
+              }
+            ]
+          }
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1792376199014.251,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "",
+            "scriptId": "170",
+            "url": "https://wails.localhost/assets/persistence-CBY-I22z.js",
+            "lineNumber": 0,
+            "columnNumber": 1022
+          }
+        ]
+      }
+    }
+  }
+]

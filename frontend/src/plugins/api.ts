@@ -11,12 +11,14 @@
  */
 import {
   computed,
+  getCurrentScope,
   defineComponent,
   h,
   markRaw,
   nextTick,
   onBeforeUnmount,
   onMounted,
+  onScopeDispose,
   reactive,
   ref,
   shallowRef,
@@ -30,12 +32,12 @@ import * as bindings from '../api/app'
 import { WriteLog } from '../api/app'
 import { onBackendEvent } from '../api/events'
 import i18n, { type Locale } from '../locales'
-import DiagnosticsPanel from '../components/DiagnosticsPanel.vue'
-import LogPanel from '../components/LogPanel.vue'
+import { builtinDiagnosticsPanel, builtinLogPanel } from './builtinPanels'
 import MotionPanel from '../components/MotionPanel.vue'
 import router from '../router'
 import { readStorage, removeStorage, writeStorage } from '../platform/storage'
 import { guardBindings, registerPack } from './permissions'
+import { interceptMethod } from './interceptors'
 import { useCollectStore } from '../stores/collect'
 import { useConfirmStore } from '../stores/confirm'
 import { useDownloadStore } from '../stores/download'
@@ -203,8 +205,8 @@ const vueRuntime = {
  * that was made a reactive object」。
  */
 const packComponents = {
-  LogPanel: markRaw(LogPanel),
-  DiagnosticsPanel: markRaw(DiagnosticsPanel),
+  LogPanel: builtinLogPanel,
+  DiagnosticsPanel: builtinDiagnosticsPanel,
   MotionPanel: markRaw(MotionPanel),
 }
 
@@ -228,10 +230,43 @@ export function createPackRuntime(pack: PluginInfo): PackRuntime {
   /** 授权弹窗要报名字，而这一刻还没有 store 可用，所以按当前语言从 manifest 里挑一条。 */
   const locale = i18n.global.locale.value as Locale
   const displayName = pack.name?.[locale] || pack.name?.['zh-CN'] || pack.name?.en || packId
-  registerPack(packId, displayName, pack.permissions ?? [])
+  const unregisterPermission = registerPack(packId, displayName, pack.permissions ?? [])
   /** 后登记的先撤销：同一个方法上叠了两层补丁时，这样还原才不会留下半截包装。 */
-  const disposers: Array<() => void> = []
-  const register = (cleanup: () => void) => disposers.push(cleanup)
+  const disposers = new Set<() => void>()
+  let disposed = false
+  const assertLive = () => { if (disposed) throw new Error(`扩展包 ${packId} 已停用，不能继续登记资源`) }
+  const register = (cleanup: () => void): (() => void) => {
+    let done = false
+    const once = () => { if (done) return; done = true; disposers.delete(once); cleanup() }
+    if (disposed) once()
+    else disposers.add(once)
+    return once
+  }
+  const ownWatch = (stop: ReturnType<typeof watchEffect>): ReturnType<typeof watchEffect> => {
+    const undo = register(stop)
+    // Component-owned effects also unregister from the plugin when that
+    // component leaves; an active plugin must not retain all past components.
+    if (getCurrentScope()) onScopeDispose(undo)
+    return Object.assign(undo, {
+      stop: undo,
+      pause: () => { assertLive(); stop.pause() },
+      resume: () => { assertLive(); stop.resume() },
+    })
+  }
+  const ownedVue = {
+    ...vueRuntime,
+    watch: ((...args: unknown[]) => {
+      assertLive()
+      const stop = (watch as Function)(...args)
+      return ownWatch(stop)
+    }) as typeof watch,
+    watchEffect: ((...args: unknown[]) => {
+      assertLive()
+      const stop = (watchEffect as Function)(...args)
+      return ownWatch(stop)
+    }) as typeof watchEffect,
+  }
+  register(unregisterPermission)
 
   function writeLine(level: 'INFO' | 'WARN' | 'ERROR', message: string, detail?: string): void {
     // 生产构建把 console.log 整条 drop 掉了，日志面板是唯一看得见的那扇门。
@@ -258,13 +293,14 @@ export function createPackRuntime(pack: PluginInfo): PackRuntime {
       dir: pack.dir ?? '',
       icon: pack.icon ?? '',
     },
-    bindings: guardBindings(bindings, packId),
+    bindings: guardBindings(bindings, packId, assertLive),
     router,
-    vue: vueRuntime,
+    vue: ownedVue,
     stores: createStores(),
     i18n: {
       t: (key: string, named?: Record<string, unknown>) => i18n.global.t(key, named ?? {}),
       merge(messages) {
+        assertLive()
         for (const [locale, content] of Object.entries(messages)) {
           i18n.global.mergeLocaleMessage(locale as Locale, content)
         }
@@ -273,9 +309,9 @@ export function createPackRuntime(pack: PluginInfo): PackRuntime {
     },
     events: {
       on<T>(name: string, handler: (payload: T) => void) {
+        assertLive()
         const off = onBackendEvent<T>(name, handler)
-        register(off)
-        return off
+        return register(off)
       },
     },
     storage: {
@@ -283,9 +319,11 @@ export function createPackRuntime(pack: PluginInfo): PackRuntime {
         return readStorage<T>(`plugin:${packId}:${key}`, fallback)
       },
       set<T>(key: string, value: T) {
+        assertLive()
         writeStorage(`plugin:${packId}:${key}`, value)
       },
       remove(key: string) {
+        assertLive()
         removeStorage(`plugin:${packId}:${key}`)
       },
     },
@@ -295,13 +333,14 @@ export function createPackRuntime(pack: PluginInfo): PackRuntime {
       error: (message, detail) => writeLine('ERROR', message, detail),
     },
     nav(item) {
+      assertLive()
       addPluginNav({ packId, path: item.path, label: item.label, icon: item.icon || 'code' })
       const undo = () => removePluginNav(packId, item.path)
-      register(undo)
-      return undo
+      return register(undo)
     },
     components: packComponents,
     settingsTab(item) {
+      assertLive()
       if (RESERVED_SETTINGS_IDS.has(item.id)) {
         throw new Error(`分组 id ${item.id} 是应用内置的，扩展包不能占用`)
       }
@@ -316,10 +355,10 @@ export function createPackRuntime(pack: PluginInfo): PackRuntime {
       }
       addPluginSettingsTab(tab)
       const undo = () => removePluginSettingsTab(packId, item.id)
-      register(undo)
-      return undo
+      return register(undo)
     },
     route(path, component) {
+      assertLive()
       assertNewPath(path)
       const name = routeNameFor(packId, path)
       // markRaw 是必需的而不是优化：登记簿是个 ref，深层响应化会把组件定义对象包成 proxy，
@@ -331,33 +370,20 @@ export function createPackRuntime(pack: PluginInfo): PackRuntime {
         if (router.hasRoute(name)) router.removeRoute(name)
         removePluginRoute(name)
       }
-      register(undo)
-      return undo
+      return register(undo)
     },
     css(text) {
+      assertLive()
       const el = document.createElement('style')
       el.dataset.cczjPack = packId
       el.textContent = text
       document.head.appendChild(el)
       const undo = () => el.remove()
-      register(undo)
-      return undo
+      return register(undo)
     },
     intercept(target, method, wrapper) {
-      const holder = target as Record<string, unknown>
-      const original = holder[method]
-      if (typeof original !== 'function') {
-        throw new Error(`${method} 不是一个方法，没法包住它`)
-      }
-      const patched = function (this: unknown, ...args: unknown[]) {
-        return wrapper(original.bind(this) as (...a: unknown[]) => unknown, ...args)
-      }
-      holder[method] = patched
-      const undo = () => {
-        if (holder[method] === patched) holder[method] = original
-      }
-      register(undo)
-      return undo
+      assertLive()
+      return register(interceptMethod(target, method, wrapper))
     },
     onDispose(cleanup) {
       register(cleanup)
@@ -365,14 +391,16 @@ export function createPackRuntime(pack: PluginInfo): PackRuntime {
   }
 
   function dispose(): void {
-    for (let i = disposers.length - 1; i >= 0; i--) {
+    if (disposed) return
+    disposed = true
+    for (const cleanup of [...disposers].reverse()) {
       try {
-        disposers[i]()
+        cleanup()
       } catch (e) {
         console.error('[plugin] 撤销失败', packId, e)
       }
     }
-    disposers.length = 0
+    disposers.clear()
     // 包自己没登记的（比如它只调了 nav 又没保存撤销函数）也要收回，否则重扫之后侧边栏会攒出幽灵条目。
     dropPackNav(packId)
     dropPackRoutes(packId)

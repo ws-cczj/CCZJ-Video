@@ -428,6 +428,118 @@ export class GlobalTypeRow {
     }
 }
 
+export class LibraryPageQuery {
+    /**
+     * Creates a new LibraryPageQuery instance.
+     * @param {Partial<LibraryPageQuery>} [$$source = {}] - The source object to create the LibraryPageQuery.
+     */
+    constructor($$source = {}) {
+        if (!("kind" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["kind"] = "";
+        }
+        if (!("genre" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["genre"] = "";
+        }
+        if (!("complete" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["complete"] = false;
+        }
+        if (!("sort" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["sort"] = "";
+        }
+        if (!("includeRetired" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["includeRetired"] = false;
+        }
+        if (!("cursor" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["cursor"] = "";
+        }
+        if (!("limit" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["limit"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new LibraryPageQuery instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {LibraryPageQuery}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new LibraryPageQuery(/** @type {Partial<LibraryPageQuery>} */($$parsedSource));
+    }
+}
+
+export class LibraryRef {
+    /**
+     * Creates a new LibraryRef instance.
+     * @param {Partial<LibraryRef>} [$$source = {}] - The source object to create the LibraryRef.
+     */
+    constructor($$source = {}) {
+        if (!("kind" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["kind"] = "";
+        }
+        if (!("sourceKey" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["sourceKey"] = "";
+        }
+        if (!("remoteId" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["remoteId"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new LibraryRef instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {LibraryRef}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new LibraryRef(/** @type {Partial<LibraryRef>} */($$parsedSource));
+    }
+}
+
 /**
  * MergeCandidate 一组疑似同一片的身份。
  */

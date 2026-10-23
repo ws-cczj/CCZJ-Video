@@ -3,6 +3,7 @@ package proxy
 
 import (
 	"cczjVideo/app/apperror"
+	"cczjVideo/app/netpolicy"
 	"cczjVideo/app/netstats"
 	"context"
 	"encoding/base64"
@@ -30,6 +31,10 @@ type Service struct {
 	images   *imageStore
 }
 
+func (s *Service) SetMaintenanceLauncher(launch func(string, func(context.Context)) bool) {
+	s.images.maintenance = launch
+}
+
 // NewService creates an image proxy with conservative transport timeouts.
 // imageCacheDir 给出海报磁盘副本的根目录；传 nil 表示不落盘（单测用的就是这条）。
 func NewService(imageCacheDir func() string) *Service {
@@ -37,12 +42,12 @@ func NewService(imageCacheDir func() string) *Service {
 		Timeout: 30 * time.Second,
 		// 只统计真的出了网的图片：命中磁盘缓存和前端 imageProxyCache 时根本不会走到这里，
 		// 所以这一类的次数是「图片 miss」而不是「图片请求总数」。
-		Transport: netstats.WrapTransport(netstats.CategoryImage, &http.Transport{
+		Transport: netpolicy.WrapTransport(string(netstats.CategoryImage), netstats.WrapTransport(netstats.CategoryImage, &http.Transport{
 			MaxIdleConns:        20,
 			IdleConnTimeout:     60 * time.Second,
 			TLSHandshakeTimeout: 15 * time.Second,
-			DialContext:         safeDialContext,
-		}),
+			DialContext:         SafeDialContext,
+		})),
 		// Redirects must be validated one hop at a time. Let fetch do that
 		// explicitly rather than allowing net/http to follow an unchecked URL.
 		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {

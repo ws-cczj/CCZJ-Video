@@ -1,6 +1,8 @@
 package db
 
 import (
+	"cczjVideo/app/danmaku"
+	"cczjVideo/app/netpolicy"
 	"errors"
 	"fmt"
 	"os"
@@ -37,6 +39,15 @@ var migrations = []migration{
 	{version: 8, note: "标题归一化去掉画质尾巴，重算 name_norm 并合并因此撞车的身份", apply: migrateRetitleGlobalVideo},
 	{version: 9, note: "同一个豆瓣条目被拆成两条身份时按 douban_id 合并（跨类型）", apply: migrateMergeSameDoubanIdentity},
 	{version: 10, note: "sources 补 auto_disabled_at：区分自动停用与手动关闭，到期后允许重试", apply: migrateSourceAutoDisable},
+	{version: 11, note: "sources 补 kind，并建 library_items / library_chapters：小说与漫画源同表分模式", apply: migrateLibraryDomain},
+	{version: 12, note: "下载任务 SQLite 检查点与旧 JSON 导入标记", apply: migrateDownloadTasks},
+	{version: 13, note: "阅读书架、进度与偏好的逐身份持久化", apply: migrateReadingState},
+	{version: 14, note: "书库分页的模式/编号与标题索引", apply: migrateLibraryPaging},
+	{version: 15, note: "视频弹幕单集绑定与分段缓存", apply: migrateDanmaku},
+	{version: 16, note: "应用网络请求频率冷却记录，重启后继续生效", apply: migrateNetworkRequestLimits},
+	{version: 17, note: "逐视频逐弹幕源的匹配失败冷却", apply: migrateDanmakuMatchFailures},
+	{version: 18, note: "小说与漫画分别保留源检测、作品覆盖与章节证据", apply: migrateReadingRouting},
+	{version: 19, note: "阅读搜索实测反馈与源质量抽检分开保存", apply: migrateReadingSearchHealth},
 }
 
 // migrateDoubanAttemptClock 给豆瓣补全队列加一个「最近一次尝试」时钟。
@@ -109,7 +120,7 @@ var schemaAheadOfBuild struct {
 //
 // 为什么非得换：库里多出来的那一列会让旧结构体的 SELECT * 当场报错（sqlx 默认严格映射），
 // 界面看到的就是「加载源站列表失败」加一整页空数据——库好好的，看着却像数据没了。
-// 2026-10-06 用官方 v2.1.0 开 v10 库实测过，见 docs/pending-decisions.md 第 10 条。
+// 2026-10-06 用官方 v2.1.0 开 v10 库实测过，见 reports/history/architecture.md 第 10 条。
 //
 // 只认这一种情形，平时仍由严格映射兜住写错的 db tag。
 func applySchemaAhead(database *sqlx.DB, current int) (*sqlx.DB, bool) {
@@ -163,8 +174,8 @@ func migrateToLatest(database *sqlx.DB) ([]migration, error) {
 	return applied, nil
 }
 
-// backupBeforeMigrations 在动 schema 之前复制一份当前库。备份失败不阻断启动
-// 之外的迁移执行：没有备份就不改 schema，这是"不得造成用户数据丢失"的硬约束。
+// backupBeforeMigrations creates a recoverable snapshot before schema migration.
+// A failed backup stops migration; retries must not collide with prior snapshots.
 func backupBeforeMigrations(database *sqlx.DB, dir string, pending int) (string, error) {
 	if pending == 0 {
 		return "", nil
@@ -173,9 +184,18 @@ func backupBeforeMigrations(database *sqlx.DB, dir string, pending int) (string,
 	if err := os.MkdirAll(backupDir, 0755); err != nil {
 		return "", fmt.Errorf("create schema backup dir: %w", err)
 	}
-	name := fmt.Sprintf("cczj_video_pre_migration_%s.db", time.Now().Format("20060102_150405"))
-	destination := filepath.Join(backupDir, name)
+	pattern := fmt.Sprintf("cczj_video_pre_migration_%s-*.db", time.Now().Format("20060102_150405.000000000"))
+	reserved, err := os.CreateTemp(backupDir, pattern)
+	if err != nil {
+		return "", fmt.Errorf("reserve schema backup: %w", err)
+	}
+	destination := reserved.Name()
+	if err := reserved.Close(); err != nil {
+		_ = os.Remove(destination)
+		return "", err
+	}
 	if err := vacuumInto(database, destination); err != nil {
+		_ = os.Remove(destination)
 		return "", fmt.Errorf("backup database before migration: %w", err)
 	}
 	pruneSchemaBackups(backupDir)
@@ -259,4 +279,31 @@ func tableExists(tx *sqlx.Tx, table string) (bool, error) {
 // quoteIdentifier 只用于代码里写死的表名/列名，不接受用户输入。
 func quoteIdentifier(name string) string {
 	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
+}
+
+func migrateDanmaku(tx *sqlx.Tx) error {
+	for _, query := range danmaku.Schema {
+		if _, err := tx.Exec(query); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func migrateNetworkRequestLimits(tx *sqlx.Tx) error {
+	for _, query := range netpolicy.Schema {
+		if _, err := tx.Exec(query); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func migrateDanmakuMatchFailures(tx *sqlx.Tx) error {
+	for _, query := range danmaku.MatchSchema {
+		if _, err := tx.Exec(query); err != nil {
+			return err
+		}
+	}
+	return nil
 }

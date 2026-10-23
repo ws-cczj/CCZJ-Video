@@ -7,33 +7,33 @@ import (
 	"cczjVideo/app/db"
 	"cczjVideo/app/model"
 	"fmt"
-	"net/url"
-	"regexp"
-	"strings"
 )
 
+// GetAllSources 返回**视频**源列表。
+//
+// 刻意不含小说/漫画源：这个函数的两个下游——设置页的采集源管理与后台采集调度
+// （app/collection/scheduler_service.go:123）——都按视频语义处理返回值，
+// 一个书源出现在这里就会被界面上那个"采集"按钮当成 CMS 接口去拉分页。
+// 需要跨模式的全量列表（备份、诊断）请直接走 db.GetAllSources。
 func GetAllSources() ([]*model.Source, error) {
-	return db.GetAllSources()
+	return db.GetSourcesByKind(model.SourceKindVideo)
+}
+
+// GetSourcesByKind 返回某个模式下的全部源，含停用的。阅读模式的源管理走这里。
+func GetSourcesByKind(kind model.SourceKind) ([]*model.Source, error) {
+	if err := model.ValidateSourceKind(kind); err != nil {
+		return nil, apperror.Wrap(apperror.Validation, err, "invalid source kind")
+	}
+	return db.GetSourcesByKind(kind)
 }
 
 func GetEnabledSources() ([]*model.Source, error) {
 	return db.GetEnabledSources()
 }
 
-var nonAlpha = regexp.MustCompile(`[^a-z0-9]`)
-
+// deriveKey is the legacy alias derivation, retained for existing callers.
 func deriveKey(rawURL string) string {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return ""
-	}
-	host := u.Hostname()
-	host = strings.TrimPrefix(host, "api.")
-	parts := strings.Split(host, ".")
-	if len(parts) >= 2 && (parts[len(parts)-1] == "com" || parts[len(parts)-1] == "cn" || parts[len(parts)-1] == "me" || parts[len(parts)-1] == "cc") {
-		return nonAlpha.ReplaceAllString(parts[len(parts)-2], "_")
-	}
-	return nonAlpha.ReplaceAllString(parts[0], "_")
+	return model.DeriveSourceKey(rawURL)
 }
 
 func AddSource(s *model.Source) error {
@@ -43,17 +43,24 @@ func AddSource(s *model.Source) error {
 	if s.ApiUrl == "" {
 		return apperror.New(apperror.Validation, "api_url is required")
 	}
-	if _, err := url.Parse(s.ApiUrl); err != nil {
+	if err := model.ValidateSourceURL(s.ApiUrl); err != nil {
 		return apperror.Wrap(apperror.Validation, err, "invalid api_url")
 	}
 	if s.SourceKey == "" {
-		s.SourceKey = deriveKey(s.ApiUrl)
+		key, err := model.NewSourceKey()
+		if err != nil {
+			return apperror.Wrap(apperror.Internal, err, "分配来源标识失败")
+		}
+		s.SourceKey = key
 	}
 	if err := model.ValidateSourceKey(s.SourceKey); err != nil {
 		return apperror.Wrap(apperror.Validation, err, "invalid source_key")
 	}
 	if s.Name == "" {
-		s.Name = s.SourceKey
+		s.Name = deriveKey(s.ApiUrl)
+		if s.Name == "" {
+			s.Name = s.SourceKey
+		}
 	}
 
 	existing, _ := db.GetSourceByKey(s.SourceKey)
@@ -64,9 +71,14 @@ func AddSource(s *model.Source) error {
 		return err
 	}
 	// 当用户当前没有默认源时，自动把这个新源设为默认源
-	// 这样首次添加源后前端可以立即拿到一个可用的默认源
-	if cur, _ := db.GetSetting("default_source_key"); cur == "" {
-		_ = db.SetSetting("default_source_key", s.SourceKey)
+	// 这样首次添加源后前端可以立即拿到一个可用的默认源。
+	//
+	// 只对视频源做这件事：default_source_key 是首页与搜索的默认采集源，
+	// 把一个书源写进去会让视频模式拿着小说接口去查片。
+	if s.GetKind() == model.SourceKindVideo {
+		if cur, _ := db.GetSetting("default_source_key"); cur == "" {
+			_ = db.SetSetting("default_source_key", s.SourceKey)
+		}
 	}
 	return nil
 }

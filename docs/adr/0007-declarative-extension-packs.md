@@ -1,3 +1,5 @@
+> 历史设计记录；当前开发规范统一见 [AGENTS.md](../../AGENTS.md)。本文记录当时的选择与证据，不限制后续重构。
+
 # ADR 0007: Declarative extension packs
 
 ## Status
@@ -55,4 +57,4 @@ quarantines only that pack's entry, and the built-in paths are untouched.
   keys: ADR 0001 keeps ownership of `source_key` and `source_videos`, so a pack
   only fills the existing `sources.strategy_config` column.
 - Generated bindings stay the only Go↔UI channel and stay behind
-  `frontend/src/api/` per ADR 0005.
+  `frontend/src/api/` (current development guidance: root AGENTS.md).

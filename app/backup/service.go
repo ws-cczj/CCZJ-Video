@@ -3,11 +3,9 @@
 package backup
 
 import (
-	"bytes"
-	"compress/gzip"
-	"encoding/base64"
+	"cczjVideo/app/payload"
+	"context"
 	"encoding/json"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,7 +23,7 @@ const (
 	// payloadKind 让备份文件和采集源导出文件互不冒充：
 	// 两种 JSON 形状不同，喂错入口只会得到「缺少 source 信息」这种看不懂的报错。
 	payloadKind     = "cczj.backup"
-	payloadVersion  = 1
+	payloadVersion  = 2
 	maxBackupBytes  = 64 << 20
 	maxBackupItems  = 200000
 	defaultExportAt = "20060102_150405"
@@ -49,6 +47,7 @@ type Payload struct {
 	Videos    []db.BackupVideoMeta `json:"videos"`
 	Favorites []db.BackupFavorite  `json:"favorites"`
 	History   []db.BackupHistory   `json:"history"`
+	Reading   *db.BackupReading    `json:"reading,omitempty"`
 }
 
 // Result 是一次导入的逐类计数，界面按这些数字讲结果，不翻译后端文案。
@@ -63,6 +62,7 @@ type Result struct {
 	HistoryApplied   int `json:"history_applied"`
 	HistorySkipped   int `json:"history_skipped"`
 	Unresolved       int `json:"unresolved"`
+	ReadingApplied   int `json:"reading_applied"`
 }
 
 // machineLocalSettings 永远不进导入：这些键描述的是这台机器的窗口、上次启动的
@@ -83,6 +83,9 @@ var machineLocalSettings = map[string]bool{
 	// 同意条款是对「这台机器上的这份安装」作出的意思表示。跟着备份导入走，
 	// 一份已同意的备份就能替别人跳过首启确认，闸门形同虚设。
 	"license_terms_version": true,
+	// Trust and permissions are consent on this installation, never transferable.
+	"plugin_script_trust": true,
+	"plugin_permissions":  true,
 }
 
 // exportableSources 决定备份里是否带上源定义。源带着 API 地址，收藏与历史
@@ -92,6 +95,13 @@ func (s *Service) buildPayload(dataDir string) (Payload, error) {
 	if err != nil {
 		return Payload{}, apperror.Wrap(apperror.Storage, err, "read settings")
 	}
+	portableSettings := make([]db.BackupSetting, 0, len(settings))
+	for _, setting := range settings {
+		if !machineLocalSettings[setting.Key] {
+			portableSettings = append(portableSettings, setting)
+		}
+	}
+	settings = portableSettings
 	favorites, err := db.ReadFavorites(db.DB())
 	if err != nil {
 		return Payload{}, apperror.Wrap(apperror.Storage, err, "read favorites")
@@ -108,6 +118,10 @@ func (s *Service) buildPayload(dataDir string) (Payload, error) {
 	if err != nil {
 		return Payload{}, apperror.Wrap(apperror.Storage, err, "read sources")
 	}
+	reading, err := db.NewReadingStateStore(db.DB()).ReadBackup(context.Background())
+	if err != nil {
+		return Payload{}, apperror.Wrap(apperror.Storage, err, "read reading state")
+	}
 	return Payload{
 		Kind:      payloadKind,
 		Version:   payloadVersion,
@@ -118,6 +132,7 @@ func (s *Service) buildPayload(dataDir string) (Payload, error) {
 		Videos:    videos,
 		Favorites: favorites,
 		History:   history,
+		Reading:   reading,
 	}, nil
 }
 
@@ -198,7 +213,7 @@ func (s *Service) ImportBase64(filename, b64Content string) (Result, error) {
 	if strings.TrimSpace(b64Content) == "" {
 		return Result{}, apperror.New(apperror.Validation, "backup content is empty")
 	}
-	raw, err := base64.StdEncoding.DecodeString(b64Content)
+	raw, err := payload.Base64(context.Background(), b64Content, maxBackupBytes)
 	if err != nil {
 		return Result{}, apperror.Wrap(apperror.Validation, err, "decode base64")
 	}
@@ -223,36 +238,7 @@ func (s *Service) ImportBytes(filename string, raw []byte, origin string) (Resul
 }
 
 func decompress(filename string, raw []byte) ([]byte, error) {
-	source := bytes.NewReader(raw)
-	var reader io.Reader = source
-	switch {
-	case strings.HasSuffix(strings.ToLower(filename), ".br"):
-		reader = brotli.NewReader(source)
-	case strings.HasSuffix(strings.ToLower(filename), ".gz"):
-		gzReader, err := gzip.NewReader(source)
-		if err != nil {
-			return nil, apperror.Wrap(apperror.Corrupt, err, "gunzip backup")
-		}
-		defer gzReader.Close()
-		reader = gzReader
-	default:
-		if len(raw) >= 2 && raw[0] == 0x1f && raw[1] == 0x8b {
-			gzReader, err := gzip.NewReader(source)
-			if err != nil {
-				return nil, apperror.Wrap(apperror.Corrupt, err, "gunzip backup")
-			}
-			defer gzReader.Close()
-			reader = gzReader
-		}
-	}
-	decoded, err := io.ReadAll(io.LimitReader(reader, maxBackupBytes+1))
-	if err != nil {
-		return nil, apperror.Wrap(apperror.Corrupt, err, "read backup")
-	}
-	if len(decoded) > maxBackupBytes {
-		return nil, apperror.Newf(apperror.Validation, "backup too large after decompression: limit %d MiB", maxBackupBytes>>20)
-	}
-	return decoded, nil
+	return payload.UnpackBytes(context.Background(), filename, raw, payload.Limits{Input: maxBackupBytes, Output: maxBackupBytes})
 }
 
 // Import merges a payload into the live database. Nothing here deletes local
@@ -261,7 +247,7 @@ func (s *Service) Import(payload Payload, origin string) (Result, error) {
 	if payload.Kind != payloadKind {
 		return Result{}, apperror.Newf(apperror.Corrupt, "not a CCZJ backup file (kind=%q)", payload.Kind)
 	}
-	if payload.Version != payloadVersion {
+	if payload.Version != 1 && payload.Version != payloadVersion {
 		return Result{}, apperror.Newf(apperror.Unsupported, "unsupported backup version %d (this build reads %d)", payload.Version, payloadVersion)
 	}
 	items := len(payload.Favorites) + len(payload.History) + len(payload.Videos)
@@ -269,6 +255,11 @@ func (s *Service) Import(payload Payload, origin string) (Result, error) {
 		return Result{}, apperror.Newf(apperror.Validation, "backup holds %d entries, limit is %d", items, maxBackupItems)
 	}
 	var result Result
+	readingApplied, err := db.NewReadingStateStore(db.DB()).MergeBackup(context.Background(), payload.Reading)
+	if err != nil {
+		return Result{}, apperror.Wrap(apperror.Corrupt, err, "读取或合并阅读备份失败")
+	}
+	result.ReadingApplied = readingApplied
 	s.mergeSources(payload.Sources, &result)
 	s.mergeSettings(payload.Settings, &result)
 	ids := s.resolveIdentities(payload)

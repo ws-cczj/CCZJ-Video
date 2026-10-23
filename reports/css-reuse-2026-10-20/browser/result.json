@@ -1,0 +1,49 @@
+{
+  "passed": true,
+  "native": false,
+  "records": [
+    {
+      "theme": "green",
+      "mode": "video",
+      "passed": true
+    },
+    {
+      "theme": "green",
+      "mode": "novel",
+      "passed": true
+    },
+    {
+      "theme": "green",
+      "mode": "comic",
+      "passed": true
+    },
+    {
+      "theme": "d-blue",
+      "mode": "video",
+      "passed": true
+    },
+    {
+      "theme": "d-blue",
+      "mode": "novel",
+      "passed": true
+    },
+    {
+      "theme": "d-blue",
+      "mode": "comic",
+      "passed": true
+    }
+  ],
+  "checks": [
+    "template/scoped composition equivalence",
+    "primary and block button layout",
+    "375px and landscape layouts",
+    "light/dark palettes",
+    "select interaction",
+    "shared modal buttons and stable loading width",
+    "custom modal footer slot",
+    "24px base font",
+    "Escape dismiss",
+    "reduced motion"
+  ],
+  "errors": []
+}

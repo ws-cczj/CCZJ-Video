@@ -75,7 +75,10 @@ func upsertCatalogItems(batch *CatalogBatch, sourceKey string, videos []*model.V
 	if err := model.ValidateSourceKey(sourceKey); err != nil {
 		return err
 	}
-	videos = FilterEnabledCollectVideos(videos)
+	videos, err = FilterSourceCollectVideos(sourceKey, videos)
+	if err != nil {
+		return fmt.Errorf("read collection type policy: %w", err)
+	}
 	if len(videos) == 0 {
 		return nil
 	}

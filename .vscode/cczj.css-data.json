@@ -1,0 +1,9 @@
+{
+  "version": 1.1,
+  "atDirectives": [
+    {
+      "name": "@apply",
+      "description": "在 Vue / 构建期 CSS 中组合 cczj-utilities.css 的静态工具类，保持当前选择器、作用域与声明顺序。动态注入的扩展样式不经过此构建步骤。"
+    }
+  ]
+}

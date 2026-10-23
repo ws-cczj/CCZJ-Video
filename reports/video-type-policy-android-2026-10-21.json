@@ -1,0 +1,33 @@
+{
+  "passed": true,
+  "native": true,
+  "package": "com.cczj.video.acceptance",
+  "checks": [
+    "SearchSource returns only allowed category",
+    "SearchVideos returns only allowed category",
+    "GetVideoList returns only allowed category",
+    "Import rejects three banned aliases",
+    "Native collection saves/counts one allowed item"
+  ],
+  "status": {
+    "source_key": "acceptance_type_policy_1792588937",
+    "running": false,
+    "paused": false,
+    "current": 1,
+    "total": 1,
+    "page": 1,
+    "names": [
+      "Policy fixture 4"
+    ],
+    "log": "",
+    "mode": "once",
+    "saved": 1,
+    "fetch_failures": [],
+    "save_failures": [],
+    "empty_pages": [],
+    "last_error_kind": "",
+    "elapsed_ms": 27,
+    "finished_at_unix": 1792588938,
+    "stopped": false
+  }
+}

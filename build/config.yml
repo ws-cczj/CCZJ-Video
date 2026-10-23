@@ -1,6 +1,6 @@
 dev_mode:
   root_path: .
-  log_level: debug
+  log_level: info
   debounce: 1000
   ignore:
     dir:

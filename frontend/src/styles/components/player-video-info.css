@@ -1,0 +1,70 @@
+.vp-empty-text {
+  @apply cczj-text-center;
+  color: rgba(255, 255, 255, 0.4);
+  padding: 20px 0;
+  @apply cczj-text-13;
+}
+
+/* 视频信息 - 网格布局 */
+.vp-info-grid {
+  @apply cczj-grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 20px;
+}
+
+.vp-info-item {
+  @apply cczj-flex cczj-flex-col;
+  gap: 3px;
+}
+
+.vp-info-label {
+  @apply cczj-text-11;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.vp-info-val {
+  @apply cczj-text-base cczj-text-white cczj-font-medium;
+  font-variant-numeric: tabular-nums;
+  @apply cczj-break-all;
+}
+
+.vp-info-val.vp-info-warn {
+  color: #ff6b6b;
+}
+
+.vp-info-val.vp-info-highlight {
+  color: #40a9ff;
+  @apply cczj-font-semibold;
+}
+
+.vp-info-val.vp-info-mono {
+  @apply cczj-text-sm;
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.vp-info-val.vp-info-url {
+  @apply cczj-text-11;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.4;
+}
+
+.vp-info-item.vp-info-full {
+  grid-column: 1 / -1;
+}
+
+.vp-info-section-title {
+  @apply cczj-text-sm cczj-font-semibold;
+  color: rgba(255, 255, 255, 0.55);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 16px 0 8px;
+  @apply cczj-pb-2;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.vp-info-section-title:first-child {
+  @apply cczj-mt-0;
+}
+

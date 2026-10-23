@@ -5,21 +5,32 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "build": "vue-tsc --noEmit && tsc --noEmit -p tsconfig.node.json && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "gen:css-data": "node ../scripts/gen-cczj-vscode-data.mjs",
+    "check:css-data": "node ../scripts/gen-cczj-vscode-data.mjs --check",
+    "audit:css": "node ../scripts/audit-cczj-styles.mjs",
+    "check:css-reuse": "node ../scripts/audit-cczj-styles.mjs --check-reuse"
   },
   "dependencies": {
-    "@wailsio/runtime": "^3.0.0-beta.24",
+    "@wailsio/runtime": "3.0.0-beta.30",
     "hls.js": "^1.7.0-beta.1",
     "pinia": "^3.0.4",
-    "vue": "^3.2.37",
-    "vue-i18n": "^9.14.4",
+    "vue": "^3.5.42",
+    "vue-i18n": "^9.14.5",
     "vue-router": "^4.6.4"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^3.0.3",
-    "typescript": "^4.6.4",
-    "vite": "^3.0.7",
-    "vue-tsc": "^1.8.27"
+    "@types/node": "24.19.2",
+    "@vitejs/plugin-vue": "6.0.10",
+    "postcss": "8.5.30",
+    "typescript": "5.9.3",
+    "vite": "8.3.4",
+    "vitest": "5.0.5",
+    "vue-tsc": "3.3.13"
+  },
+  "engines": {
+    "node": "^22.12.0 || ^24.0.0 || >=26.0.0"
   }
 }

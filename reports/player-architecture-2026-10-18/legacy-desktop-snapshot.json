@@ -1,0 +1,1335 @@
+{
+  "captured_at": "2026-10-16T13:08:35+08:00",
+  "native_resources": {
+    "sampled_at_ms": 1792127315643,
+    "heap_alloc_bytes": 3193392,
+    "heap_inuse_bytes": 5513216,
+    "heap_retained_bytes": 2170880,
+    "go_sys_bytes": 29214968,
+    "heap_objects": 20047,
+    "num_gc": 2120,
+    "last_gc_pause_ms": 0,
+    "goroutines": 17,
+    "native_available": true,
+    "working_set_bytes": 56586240,
+    "private_bytes": 75681792,
+    "tree_working_set_bytes": 663359488,
+    "tree_private_bytes": 1018781696,
+    "system_total_bytes": 16800157696,
+    "system_available_bytes": 1662685184,
+    "system_memory_percent": 90.10315727931605,
+    "working_set_percent": 0.33681969552864843,
+    "cpu_percent": 0.48794265265210607,
+    "process_count": 8,
+    "handles": 4307,
+    "processes": [
+      {
+        "pid": 36652,
+        "name": "msedgewebview2.exe",
+        "working_set_bytes": 289746944,
+        "private_bytes": 446865408,
+        "handles": 341
+      },
+      {
+        "pid": 24184,
+        "name": "msedgewebview2.exe",
+        "working_set_bytes": 118947840,
+        "private_bytes": 413159424,
+        "handles": 872
+      },
+      {
+        "pid": 43596,
+        "name": "cczjVideo.exe",
+        "working_set_bytes": 56586240,
+        "private_bytes": 75681792,
+        "handles": 679
+      },
+      {
+        "pid": 35664,
+        "name": "msedgewebview2.exe",
+        "working_set_bytes": 114135040,
+        "private_bytes": 49950720,
+        "handles": 1440
+      },
+      {
+        "pid": 44516,
+        "name": "msedgewebview2.exe",
+        "working_set_bytes": 38490112,
+        "private_bytes": 12251136,
+        "handles": 325
+      },
+      {
+        "pid": 12496,
+        "name": "msedgewebview2.exe",
+        "working_set_bytes": 13795328,
+        "private_bytes": 9367552,
+        "handles": 202
+      },
+      {
+        "pid": 27584,
+        "name": "msedgewebview2.exe",
+        "working_set_bytes": 17956864,
+        "private_bytes": 8605696,
+        "handles": 269
+      },
+      {
+        "pid": 35448,
+        "name": "msedgewebview2.exe",
+        "working_set_bytes": 13701120,
+        "private_bytes": 2899968,
+        "handles": 179
+      }
+    ],
+    "notes": []
+  },
+  "frontend_resources": {
+    "history": [
+      {
+        "at": 1792127013685,
+        "heap": 2936992,
+        "committed": 999055360,
+        "cpu": 0.12917727904517842,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127015705,
+        "heap": 3657560,
+        "committed": 998522880,
+        "cpu": 0.06444947918963646,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127017718,
+        "heap": 4378304,
+        "committed": 999079936,
+        "cpu": 0,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127019731,
+        "heap": 5098872,
+        "committed": 997122048,
+        "cpu": 0.1293594186166326,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127021745,
+        "heap": 2581888,
+        "committed": 996679680,
+        "cpu": 0.2586408386683697,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127023758,
+        "heap": 3310664,
+        "committed": 996134912,
+        "cpu": 0.06467323596081258,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127025772,
+        "heap": 4031232,
+        "committed": 997195776,
+        "cpu": 0.0646622904387246,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127027785,
+        "heap": 4756176,
+        "committed": 999501824,
+        "cpu": 0.0646761849480102,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127029799,
+        "heap": 2940048,
+        "committed": 999407616,
+        "cpu": 0.06466023856578136,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127031812,
+        "heap": 3668776,
+        "committed": 998907904,
+        "cpu": 0,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127033826,
+        "heap": 4389472,
+        "committed": 998121472,
+        "cpu": 0.06465749972705225,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127035839,
+        "heap": 5110040,
+        "committed": 997953536,
+        "cpu": 0.1293809872035124,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127037852,
+        "heap": 2590368,
+        "committed": 997453824,
+        "cpu": 0.06467661543268734,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127039865,
+        "heap": 3319064,
+        "committed": 996941824,
+        "cpu": 0.06467353791446322,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127041877,
+        "heap": 4044296,
+        "committed": 997736448,
+        "cpu": 0.06471898515462042,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127043891,
+        "heap": 4773104,
+        "committed": 997445632,
+        "cpu": 0.06467247787683876,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127045905,
+        "heap": 2947280,
+        "committed": 997740544,
+        "cpu": 0.06465575957727042,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127047918,
+        "heap": 3667848,
+        "committed": 997158912,
+        "cpu": 0.32334067648804504,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127049932,
+        "heap": 4392920,
+        "committed": 997928960,
+        "cpu": 0.12930665218630777,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127051945,
+        "heap": 5113552,
+        "committed": 997961728,
+        "cpu": 0.06468855884820665,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127053960,
+        "heap": 2632240,
+        "committed": 997814272,
+        "cpu": 0.06461852292668502,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127055975,
+        "heap": 3352920,
+        "committed": 997355520,
+        "cpu": 0.06462282035808843,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127057988,
+        "heap": 4077808,
+        "committed": 998125568,
+        "cpu": 0.06466589036144745,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127060001,
+        "heap": 4806584,
+        "committed": 998060032,
+        "cpu": 0.0646882663955299,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127062015,
+        "heap": 2941808,
+        "committed": 998137856,
+        "cpu": 0.19393984228129357,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127064030,
+        "heap": 3662392,
+        "committed": 997621760,
+        "cpu": 0,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127066044,
+        "heap": 4382960,
+        "committed": 997437440,
+        "cpu": 0.1939608450590371,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127068057,
+        "heap": 5103544,
+        "committed": 997244928,
+        "cpu": 0.12933790218541572,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127070071,
+        "heap": 2619040,
+        "committed": 997072896,
+        "cpu": 0.12933267995705014,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127072084,
+        "heap": 3339608,
+        "committed": 996528128,
+        "cpu": 0.06467917918400234,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127074097,
+        "heap": 4062640,
+        "committed": 996728832,
+        "cpu": 0.06468201304035746,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127076111,
+        "heap": 4783208,
+        "committed": 996794368,
+        "cpu": 0.0646640405741051,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127078126,
+        "heap": 2943056,
+        "committed": 997437440,
+        "cpu": 0.06461554071698777,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127080141,
+        "heap": 3679424,
+        "committed": 996892672,
+        "cpu": 0.06462676872608707,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127082156,
+        "heap": 4408120,
+        "committed": 997269504,
+        "cpu": 0,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127084170,
+        "heap": 5128688,
+        "committed": 997511168,
+        "cpu": 0.19396500570884012,
+        "goroutines": 17,
+        "handles": 4300
+      },
+      {
+        "at": 1792127086184,
+        "heap": 2655496,
+        "committed": 997056512,
+        "cpu": 0.12929596925587616,
+        "goroutines": 17,
+        "handles": 4305
+      },
+      {
+        "at": 1792127088198,
+        "heap": 3376576,
+        "committed": 999145472,
+        "cpu": 0.12929401133805457,
+        "goroutines": 17,
+        "handles": 4305
+      },
+      {
+        "at": 1792127090211,
+        "heap": 4098064,
+        "committed": 1000656896,
+        "cpu": 0.06467573519402091,
+        "goroutines": 17,
+        "handles": 4298
+      },
+      {
+        "at": 1792127092225,
+        "heap": 4819208,
+        "committed": 1001172992,
+        "cpu": 0.06465726534717678,
+        "goroutines": 17,
+        "handles": 4298
+      },
+      {
+        "at": 1792127094239,
+        "heap": 2949928,
+        "committed": 1000013824,
+        "cpu": 0.12930172780375096,
+        "goroutines": 17,
+        "handles": 4298
+      },
+      {
+        "at": 1792127096253,
+        "heap": 3671120,
+        "committed": 1000931328,
+        "cpu": 0.06466821237972996,
+        "goroutines": 17,
+        "handles": 4298
+      },
+      {
+        "at": 1792127098268,
+        "heap": 4392216,
+        "committed": 1001070592,
+        "cpu": 0.06461898150592756,
+        "goroutines": 17,
+        "handles": 4298
+      },
+      {
+        "at": 1792127100282,
+        "heap": 5113944,
+        "committed": 1004003328,
+        "cpu": 0.06464317998936749,
+        "goroutines": 17,
+        "handles": 4298
+      },
+      {
+        "at": 1792127102298,
+        "heap": 2627304,
+        "committed": 1003188224,
+        "cpu": 0.06458609575815223,
+        "goroutines": 17,
+        "handles": 4298
+      },
+      {
+        "at": 1792127104313,
+        "heap": 3356976,
+        "committed": 1002807296,
+        "cpu": 0.06462631324390987,
+        "goroutines": 17,
+        "handles": 4298
+      },
+      {
+        "at": 1792127106325,
+        "heap": 4092712,
+        "committed": 1003286528,
+        "cpu": 0,
+        "goroutines": 17,
+        "handles": 4298
+      },
+      {
+        "at": 1792127108340,
+        "heap": 4820000,
+        "committed": 1003569152,
+        "cpu": 0.06461747110517603,
+        "goroutines": 17,
+        "handles": 4298
+      },
+      {
+        "at": 1792127110354,
+        "heap": 2972184,
+        "committed": 1003802624,
+        "cpu": 0.19395185019017583,
+        "goroutines": 17,
+        "handles": 4298
+      },
+      {
+        "at": 1792127112368,
+        "heap": 3693864,
+        "committed": 1003712512,
+        "cpu": 0.12931558380321032,
+        "goroutines": 17,
+        "handles": 4298
+      },
+      {
+        "at": 1792127114383,
+        "heap": 4423072,
+        "committed": 1003814912,
+        "cpu": 0.06464418771675869,
+        "goroutines": 17,
+        "handles": 4298
+      },
+      {
+        "at": 1792127116396,
+        "heap": 5144152,
+        "committed": 1001975808,
+        "cpu": 0.06465573068258493,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127118411,
+        "heap": 2618264,
+        "committed": 1000099840,
+        "cpu": 0.06463712465873253,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127120423,
+        "heap": 3343784,
+        "committed": 999632896,
+        "cpu": 0.06470740673155148,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127122437,
+        "heap": 4069480,
+        "committed": 999804928,
+        "cpu": 0,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127124451,
+        "heap": 2700032,
+        "committed": 999682048,
+        "cpu": 0.1293104404281325,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127126465,
+        "heap": 3298384,
+        "committed": 999432192,
+        "cpu": 0.06463772147717096,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127128479,
+        "heap": 4024080,
+        "committed": 999497728,
+        "cpu": 0.1939845400342873,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127130493,
+        "heap": 2574400,
+        "committed": 1000960000,
+        "cpu": 0.19393397849406846,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127132507,
+        "heap": 3301648,
+        "committed": 1001013248,
+        "cpu": 0.0646491305289819,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127134521,
+        "heap": 4033280,
+        "committed": 1001414656,
+        "cpu": 0.06465694107097285,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127136535,
+        "heap": 2581672,
+        "committed": 1001074688,
+        "cpu": 0.06464930707196971,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127138549,
+        "heap": 3310832,
+        "committed": 1001013248,
+        "cpu": 0.0646588482470198,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127140564,
+        "heap": 4040904,
+        "committed": 1001172992,
+        "cpu": 0.06462421875006462,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127142577,
+        "heap": 2596224,
+        "committed": 1001091072,
+        "cpu": 0,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127144591,
+        "heap": 3330096,
+        "committed": 1000968192,
+        "cpu": 0.06465901842139367,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127146604,
+        "heap": 4059304,
+        "committed": 1001967616,
+        "cpu": 0.32336266241994327,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127148619,
+        "heap": 4790368,
+        "committed": 1002397696,
+        "cpu": 0.1292890494053465,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127150632,
+        "heap": 3289888,
+        "committed": 1002074112,
+        "cpu": 0.06465212868075017,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127152646,
+        "heap": 4023792,
+        "committed": 1001484288,
+        "cpu": 0.06465165037023031,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127154660,
+        "heap": 4753296,
+        "committed": 1002188800,
+        "cpu": 0.06465302753845743,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127156675,
+        "heap": 3108712,
+        "committed": 1000906752,
+        "cpu": 0.1292964507201618,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127158692,
+        "heap": 3829904,
+        "committed": 1000919040,
+        "cpu": 0.06453995195270096,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127160707,
+        "heap": 4555360,
+        "committed": 1000779776,
+        "cpu": 0.06461098135434178,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127162721,
+        "heap": 5282936,
+        "committed": 1001451520,
+        "cpu": 0.1293157957113337,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127164735,
+        "heap": 2627200,
+        "committed": 999739392,
+        "cpu": 0.06464547470092624,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127166749,
+        "heap": 3365384,
+        "committed": 1000026112,
+        "cpu": 0,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127168763,
+        "heap": 4086576,
+        "committed": 1000173568,
+        "cpu": 0.06465644984687946,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127170778,
+        "heap": 4815816,
+        "committed": 1002831872,
+        "cpu": 0.06462324371807891,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127172795,
+        "heap": 3124488,
+        "committed": 1002143744,
+        "cpu": 0,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127174808,
+        "heap": 3849824,
+        "committed": 1003446272,
+        "cpu": 0.2587501475289841,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127176821,
+        "heap": 4570904,
+        "committed": 1003470848,
+        "cpu": 0.06466839866228088,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127178834,
+        "heap": 2605320,
+        "committed": 1002684416,
+        "cpu": 0.06469491633019928,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127180847,
+        "heap": 3343520,
+        "committed": 1002954752,
+        "cpu": 0.12933630913624403,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127182860,
+        "heap": 4077280,
+        "committed": 1003532288,
+        "cpu": 0.06467380453545615,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127184875,
+        "heap": 2563872,
+        "committed": 1003524096,
+        "cpu": 0.06464255418721576,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127186888,
+        "heap": 3286808,
+        "committed": 1002356736,
+        "cpu": 0.06467103885106554,
+        "goroutines": 17,
+        "handles": 4297
+      },
+      {
+        "at": 1792127188902,
+        "heap": 4007952,
+        "committed": 1005113344,
+        "cpu": 0.06466058214106254,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127190916,
+        "heap": 4729160,
+        "committed": 1004232704,
+        "cpu": 0.1939304834989175,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127192930,
+        "heap": 2941560,
+        "committed": 1003307008,
+        "cpu": 0.06465102440406734,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127194943,
+        "heap": 3669512,
+        "committed": 1007054848,
+        "cpu": 0.06468824711302874,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127196957,
+        "heap": 4390592,
+        "committed": 1005789184,
+        "cpu": 0.06466151976695003,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127198970,
+        "heap": 5118608,
+        "committed": 1004744704,
+        "cpu": 0.3233949481325418,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127200984,
+        "heap": 2942872,
+        "committed": 1002979328,
+        "cpu": 0,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127202997,
+        "heap": 3664016,
+        "committed": 1005678592,
+        "cpu": 0.12936855032574876,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127205009,
+        "heap": 4393224,
+        "committed": 1005662208,
+        "cpu": 0.1293959660490823,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127207023,
+        "heap": 5114368,
+        "committed": 1006555136,
+        "cpu": 0.06465264231066532,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127209037,
+        "heap": 2636624,
+        "committed": 1005334528,
+        "cpu": 0.06465814829392037,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127211051,
+        "heap": 3358112,
+        "committed": 1003991040,
+        "cpu": 0.06464797499868967,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127213064,
+        "heap": 4085576,
+        "committed": 1004367872,
+        "cpu": 0.06467241363325109,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127215077,
+        "heap": 4816480,
+        "committed": 1004015616,
+        "cpu": 0.06468049647863233,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127217094,
+        "heap": 3290032,
+        "committed": 1002844160,
+        "cpu": 0.06457452960358455,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127219108,
+        "heap": 4011368,
+        "committed": 1004580864,
+        "cpu": 0,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127221121,
+        "heap": 4740448,
+        "committed": 1004195840,
+        "cpu": 0.06466630143967342,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127223135,
+        "heap": 3277744,
+        "committed": 1004285952,
+        "cpu": 0.2586183638734725,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127225149,
+        "heap": 4003200,
+        "committed": 1004167168,
+        "cpu": 0.8406033469889115,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127227162,
+        "heap": 4728832,
+        "committed": 1005084672,
+        "cpu": 0.06467153350895183,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127229177,
+        "heap": 2957544,
+        "committed": 1001852928,
+        "cpu": 0.06462348747331702,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127231191,
+        "heap": 3678624,
+        "committed": 1001869312,
+        "cpu": 0.06466397955861729,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127233204,
+        "heap": 4403848,
+        "committed": 1002164224,
+        "cpu": 0.06466983757055904,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127235217,
+        "heap": 5127072,
+        "committed": 1001267200,
+        "cpu": 0,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127237232,
+        "heap": 2941528,
+        "committed": 1004691456,
+        "cpu": 0.3231645918196872,
+        "goroutines": 19,
+        "handles": 4293
+      },
+      {
+        "at": 1792127239247,
+        "heap": 3662832,
+        "committed": 1004736512,
+        "cpu": 0.45231722476098835,
+        "goroutines": 19,
+        "handles": 4293
+      },
+      {
+        "at": 1792127241260,
+        "heap": 4383912,
+        "committed": 1004720128,
+        "cpu": 0.12935681621920717,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127243273,
+        "heap": 5104992,
+        "committed": 1004716032,
+        "cpu": 0.0646953117052828,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127245287,
+        "heap": 2619216,
+        "committed": 1003675648,
+        "cpu": 0.0646435522671646,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127247299,
+        "heap": 3344976,
+        "committed": 1003675648,
+        "cpu": 0.06470403690246183,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127249313,
+        "heap": 4074472,
+        "committed": 1003921408,
+        "cpu": 0.06464297459655627,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127251326,
+        "heap": 4795664,
+        "committed": 1004269568,
+        "cpu": 0,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127253340,
+        "heap": 2959248,
+        "committed": 1004314624,
+        "cpu": 0.19395935227680847,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127255354,
+        "heap": 3686832,
+        "committed": 1004097536,
+        "cpu": 0.25860416181732143,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127257368,
+        "heap": 4407912,
+        "committed": 1004650496,
+        "cpu": 0.19400287389959706,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127259381,
+        "heap": 5128992,
+        "committed": 1005232128,
+        "cpu": 0.06467708447475452,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127261395,
+        "heap": 2950576,
+        "committed": 1005559808,
+        "cpu": 0.06467315244221553,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127263408,
+        "heap": 3675976,
+        "committed": 1005568000,
+        "cpu": 0.06466243173054263,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127265421,
+        "heap": 4405184,
+        "committed": 1005522944,
+        "cpu": 0,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127267435,
+        "heap": 5126264,
+        "committed": 1005596672,
+        "cpu": 0.12933623205421496,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127269449,
+        "heap": 2955320,
+        "committed": 1005645824,
+        "cpu": 0.06465004535309293,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127271462,
+        "heap": 3682872,
+        "committed": 1004335104,
+        "cpu": 0.12933045116387806,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127273475,
+        "heap": 4443288,
+        "committed": 1004347392,
+        "cpu": 0.06468101377241546,
+        "goroutines": 18,
+        "handles": 4293
+      },
+      {
+        "at": 1792127275489,
+        "heap": 5173392,
+        "committed": 1005662208,
+        "cpu": 0.12932797838526805,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127277502,
+        "heap": 2953976,
+        "committed": 1004908544,
+        "cpu": 0.06466328912822596,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127279516,
+        "heap": 3677776,
+        "committed": 1003589632,
+        "cpu": 0,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127281530,
+        "heap": 4406952,
+        "committed": 1003589632,
+        "cpu": 0.06464147591039524,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127283543,
+        "heap": 5128096,
+        "committed": 1003012096,
+        "cpu": 0.19408409325277984,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127285556,
+        "heap": 2943824,
+        "committed": 1003032576,
+        "cpu": 0.1293162002651342,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127287569,
+        "heap": 3669520,
+        "committed": 1001484288,
+        "cpu": 0.06468436192356464,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127289585,
+        "heap": 4398728,
+        "committed": 1001455616,
+        "cpu": 0.06460659894489258,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127291599,
+        "heap": 5122136,
+        "committed": 1000706048,
+        "cpu": 0.06464550679594941,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127293615,
+        "heap": 3274368,
+        "committed": 1000321024,
+        "cpu": 0.06459957935234549,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127295629,
+        "heap": 4003872,
+        "committed": 1000804352,
+        "cpu": 0.12930233771344277,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127297643,
+        "heap": 2587680,
+        "committed": 999305216,
+        "cpu": 0.06465137751169464,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127299657,
+        "heap": 3321912,
+        "committed": 999309312,
+        "cpu": 0.06462563324021287,
+        "goroutines": 19,
+        "handles": 4293
+      },
+      {
+        "at": 1792127301673,
+        "heap": 4055560,
+        "committed": 999116800,
+        "cpu": 0.06459877171626728,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127303687,
+        "heap": 2588024,
+        "committed": 998924288,
+        "cpu": 0,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127305707,
+        "heap": 3309392,
+        "committed": 1004138496,
+        "cpu": 0.2578992604059917,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127307729,
+        "heap": 4039880,
+        "committed": 1007116288,
+        "cpu": 0.12879617344878877,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127309744,
+        "heap": 2592864,
+        "committed": 1006170112,
+        "cpu": 0.38773451672472053,
+        "goroutines": 17,
+        "handles": 4293
+      },
+      {
+        "at": 1792127311760,
+        "heap": 3342048,
+        "committed": 1009364992,
+        "cpu": 0.5167439508919621,
+        "goroutines": 17,
+        "handles": 4301
+      },
+      {
+        "at": 1792127313775,
+        "heap": 4073728,
+        "committed": 1016160256,
+        "cpu": 0.5816054698186032,
+        "goroutines": 17,
+        "handles": 4301
+      }
+    ],
+    "segment_cache_bytes": 73546728,
+    "segment_cache_limit_bytes": 134217728
+  },
+  "playback": {
+    "loads": 2,
+    "first_frame": {
+      "count": 2,
+      "totalMs": 7262,
+      "maxMs": 4689
+    },
+    "stalls": {
+      "count": 1,
+      "totalMs": 1515
+    },
+    "frames": {
+      "total": 95968,
+      "dropped": 5
+    },
+    "errors": {
+      "count": 0,
+      "lastKind": "",
+      "lastHost": ""
+    },
+    "watched_seconds": 3990,
+    "current": {
+      "host": "yzzy.play-cdn6.com",
+      "resolution": "1080x606",
+      "bitrateBps": 800000
+    },
+    "browser_resources": {
+      "js_heap": {
+        "source": "performance.memory",
+        "used_bytes": 91281183,
+        "total_bytes": 93188787,
+        "limit_bytes": 4395630592
+      },
+      "player": null,
+      "attached_dom": {
+        "video_count": 0,
+        "canvas_count": 0,
+        "image_count": 0,
+        "videos": [],
+        "canvas_rgba_estimate_bytes": 0,
+        "image_rgba_estimate_bytes": 0
+      }
+    }
+  }
+}

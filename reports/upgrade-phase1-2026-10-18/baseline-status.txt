@@ -1,0 +1,328 @@
+ M .gitignore
+ M README.md
+ M Taskfile.yml
+ M app.go
+ M app/apperror/error.go
+ M app/apperror/error_test.go
+ M app/backup/service.go
+ M app/db/migrations.go
+ M app/db/source.go
+ M app/db/sqlite.go
+ M app/douban/chart.go
+ M app/douban/comments.go
+ M app/handler/source.go
+ M app/handler/video.go
+ M app/media/service.go
+ M app/media/service_favorite_history_test.go
+ M app/model/source.go
+ M app/netstats/netstats.go
+ M app/plugin/builtin.go
+ M app/plugin/builtin/diagnostics-panel/plugin.json
+ M app/plugin/errors.go
+ M app/plugin/install.go
+ M app/plugin/install_test.go
+ M app/plugin/service.go
+ M app/plugin/types.go
+ M app/plugin/uninstall.go
+ M app/proxy/hls.go
+ M app/proxy/imagestore.go
+ M app/proxy/linespeed.go
+ M app/proxy/service.go
+ M app/service/app.go
+ M app/service/datadir_migration_test.go
+ M app/service/diagnostics.go
+ M app/service/download.go
+ M app/service/facade_video.go
+ M app/source/service.go
+ M app/update/service.go
+ M app/update/service_version_test.go
+ M app/updater/integrity.go
+ M app/updater/speedtest.go
+ M app/updater/update_download.go
+ M app/updater/updater.go
+ M app/window/service.go
+ M app/window/service_test.go
+ M docs/adr/0001-source-tables.md
+ M docs/adr/0002-global-id.md
+ M docs/adr/0003-client-storage.md
+ M docs/adr/0004-download-recovery.md
+ D docs/adr/0005-architecture-boundaries.md
+ M docs/adr/0006-on-demand-detail.md
+ M docs/adr/0007-declarative-extension-packs.md
+ M docs/adr/0008-injected-frontend-packs.md
+ D docs/adr/0009-coded-errors.md
+ M docs/adr/0010-install-timing-tiers.md
+ M docs/adr/0011-read-newer-library.md
+ M docs/adr/0012-relaunch-handoff.md
+ M docs/pending-decisions.md
+ M docs/plugins.md
+ M frontend/bindings/cczjVideo/app/cache/models.js
+ M frontend/bindings/cczjVideo/app/db/models.js
+ M frontend/bindings/cczjVideo/app/model/models.js
+ M frontend/bindings/cczjVideo/app/plugin/models.js
+ M frontend/bindings/cczjVideo/app/service/app.js
+ M frontend/bindings/cczjVideo/app/service/index.js
+ M frontend/bindings/cczjVideo/app/service/models.js
+ M frontend/bindings/cczjVideo/app/update/models.js
+ M frontend/bindings/crypto/tls/models.js
+ M frontend/bindings/crypto/x509/models.js
+ M frontend/bindings/math/big/index.js
+ M frontend/bindings/math/big/models.js
+ M frontend/bindings/net/http/index.js
+ M frontend/bindings/net/http/models.js
+ M frontend/bindings/net/index.js
+ M frontend/bindings/net/models.js
+ M frontend/bindings/net/url/models.js
+ M frontend/index.html
+ M frontend/package-lock.json
+ M frontend/package.json
+ M frontend/src/App.vue
+ M frontend/src/api/app.ts
+ M frontend/src/api/events.ts
+ M frontend/src/api/runtime.ts
+ M frontend/src/components/BackToTop.vue
+ M frontend/src/components/BookCarousel.vue
+ M frontend/src/components/DataBackupPanel.vue
+ M frontend/src/components/DiagnosticsPanel.vue
+ M frontend/src/components/DoubanComments.vue
+ M frontend/src/components/DoubanQueuePanel.vue
+ M frontend/src/components/ExtensionsPanel.vue
+ M frontend/src/components/Icon.vue
+ M frontend/src/components/LogPanel.vue
+ M frontend/src/components/MotionPanel.vue
+ M frontend/src/components/RemoteImage.vue
+ M frontend/src/components/Sidebar.vue
+ M frontend/src/components/SplashScreen.vue
+ M frontend/src/components/UpdateModal.vue
+ M frontend/src/components/VideoCard.vue
+ M frontend/src/components/VideoPlayer.vue
+ M frontend/src/components/ui/Empty.vue
+ M frontend/src/components/ui/Modal.vue
+ M frontend/src/components/ui/Segment.vue
+ M frontend/src/components/ui/Select.vue
+ M frontend/src/locales/en.ts
+ M frontend/src/locales/zh-CN.ts
+ M frontend/src/main.ts
+ M frontend/src/player/hls/useHlsEngine.ts
+ M frontend/src/player/useSubtitles.ts
+ M frontend/src/player/useThumbnailScrubber.ts
+ M frontend/src/player/useVideoQuality.ts
+ M frontend/src/plugins/api.ts
+ M frontend/src/plugins/permissions.ts
+ M frontend/src/plugins/runtime.ts
+ M frontend/src/router/index.ts
+ M frontend/src/stores/error.ts
+ M frontend/src/stores/logs.ts
+ M frontend/src/stores/motion.ts
+ M frontend/src/stores/perf.ts
+ M frontend/src/stores/plugins.ts
+ M frontend/src/stores/posterCache.ts
+ M frontend/src/stores/theme.ts
+ M frontend/src/stores/updateState.ts
+ M frontend/src/style.css
+ M frontend/src/styles/animations.css
+ M frontend/src/styles/components/back-to-top.css
+ M frontend/src/styles/components/player.css
+ M frontend/src/styles/views/player.css
+ M frontend/src/styles/views/settings.css
+ M frontend/src/utils/filmUpscaler.ts
+ M frontend/src/utils/index.ts
+ M frontend/src/utils/recommend.ts
+ M frontend/src/utils/subtitles.ts
+ M frontend/src/utils/ts-cache/api.ts
+ M frontend/src/utils/ts-cache/constants.ts
+ M frontend/src/utils/ts-cache/disk-cache.ts
+ M frontend/src/utils/ts-cache/loader.ts
+ M frontend/src/utils/ts-cache/m3u8.ts
+ M frontend/src/utils/ts-cache/memory-cache.ts
+ M frontend/src/utils/ts-cache/prefetch.ts
+ M frontend/src/utils/tsCacheDisk.ts
+ M frontend/src/views/Detail.vue
+ M frontend/src/views/Favorites.vue
+ M frontend/src/views/History.vue
+ M frontend/src/views/Home.vue
+ M frontend/src/views/Player.vue
+ M frontend/src/views/Search.vue
+ M frontend/src/views/Settings.vue
+ M frontend/src/views/settings/SettingsAboutGroup.vue
+ M frontend/src/views/settings/SettingsAdvancedGroup.vue
+ M frontend/src/views/settings/SettingsBasicGroup.vue
+ M frontend/src/views/settings/ThemeEditorModal.vue
+ M frontend/vite.config.ts
+ M go.mod
+ M go.sum
+ M scripts/check-frontend-conventions.mjs
+ M scripts/verify.ps1
+?? .github/
+?? .vscode/
+?? AGENTS.md
+?? CONTEXT.md
+?? app/backup/consent_test.go
+?? app/cast/
+?? app/db/library.go
+?? app/db/library_test.go
+?? app/db/lifecycle_test.go
+?? app/diagnosticrecording/
+?? app/douban/comments_fetch.go
+?? app/douban/comments_persistence_test.go
+?? app/douban/comments_snapshot.go
+?? app/douban/interactive.go
+?? app/douban/interactive_test.go
+?? app/library/
+?? app/lifecycle/request.go
+?? app/lifecycle/request_test.go
+?? app/media/service_test.go
+?? app/model/library.go
+?? app/netstats/transport_cleanup_test.go
+?? app/plugin/builtin_digest.go
+?? app/plugin/builtin_digest_test.go
+?? app/plugin/builtin_upgrade.go
+?? app/plugin/builtin_upgrade_test.go
+?? app/plugin/concurrency_test.go
+?? app/provider/
+?? app/proxy/blobstore.go
+?? app/proxy/imgproxy.go
+?? app/proxy/imgproxy_test.go
+?? app/proxy/media_bridge.go
+?? app/proxy/media_bridge_test.go
+?? app/resource/
+?? app/service/assets.go
+?? app/service/assets_test.go
+?? app/service/cast.go
+?? app/service/diagnostics_export.go
+?? app/service/diagnostics_export_test.go
+?? app/service/diagnostics_recording.go
+?? app/service/download_cleanup_test.go
+?? app/service/facade_library.go
+?? app/service/mobile.go
+?? app/service/requests.go
+?? app/updater/download_lock_windows_test.go
+?? app/updater/download_test.go
+?? build/android/
+?? design-system/
+?? docs/adr/0013-script-content-trust.md
+?? docs/adr/0014-application-mode-strategies.md
+?? docs/adr/0015-player-presentation-boundaries.md
+?? docs/adr/0016-novel-comic-content-domain.md
+?? docs/android-preview-2026-10-17.md
+?? docs/cczj-utilities-cheatsheet.md
+?? docs/diagnostics-page-2026-10-13.md
+?? docs/implementation-notes.md
+?? docs/memory-optimization-2026-10-13.md
+?? docs/mobile-feedback-2026-10-18.md
+?? docs/mobile-layout-2026-10-17.md
+?? docs/mobile-navigation-2026-10-18.md
+?? docs/mobile-player-settings-2026-10-18.md
+?? docs/novel-mode-2026-10-18.md
+?? docs/playback-analysis-2026-10-13.md
+?? docs/playback-memory-fix-2026-10-16.md
+?? docs/playback-on-demand-cache-2026-10-17.md
+?? docs/playback-recording-2026-10-13-evening.md
+?? docs/playback-recording-2026-10-13.md
+?? docs/playback-recording-2026-10-14.md
+?? docs/player-architecture-2026-10-18.md
+?? docs/player-audit-2026-10-13.md
+?? docs/player-resource-cleanup-2026-10-13.md
+?? docs/plugin-audit-2026-10-13.md
+?? docs/readers-comic-2026-10-18.md
+?? docs/resource-audit-2026-10-13.md
+?? docs/settings-feedback-2026-10-14.md
+?? docs/settings-layout-2026-10-14.md
+?? docs/update-reliability.md
+?? docs/webview-native-retention-2026-10-16.md
+?? frontend/bindings/cczjVideo/app/cast/
+?? frontend/bindings/cczjVideo/app/diagnosticrecording/
+?? frontend/bindings/cczjVideo/app/library/
+?? frontend/bindings/cczjVideo/app/resource/
+?? frontend/src/api/library.ts
+?? frontend/src/api/mobilePlayer.ts
+?? frontend/src/comic/
+?? frontend/src/components/FavFolderModal.vue
+?? frontend/src/components/LibrarySourcesPanel.vue
+?? frontend/src/components/RuntimeResourcePanel.vue
+?? frontend/src/components/ui/NumberField.vue
+?? frontend/src/composables/useViewActivity.ts
+?? frontend/src/diagnostics/
+?? frontend/src/mobile/
+?? frontend/src/modes/
+?? frontend/src/motion/
+?? frontend/src/novel/
+?? frontend/src/platform/diagnosticFiles.ts
+?? frontend/src/platform/presentation.ts
+?? frontend/src/player/enhancementPipeline.ts
+?? frontend/src/player/hls/playbackSource.ts
+?? frontend/src/player/hls/resumeStreaming.ts
+?? frontend/src/player/mediaProgressTracker.ts
+?? frontend/src/player/page/
+?? frontend/src/player/playbackControl.ts
+?? frontend/src/player/playbackSession.ts
+?? frontend/src/player/releaseAnimations.ts
+?? frontend/src/player/usePlaybackResume.ts
+?? frontend/src/player/usePlayerPresentationMode.ts
+?? frontend/src/player/useVideoInfo.ts
+?? frontend/src/player/videoInfoFormat.ts
+?? frontend/src/player/views/
+?? frontend/src/plugins/builtinPanels.ts
+?? frontend/src/plugins/fileCache.ts
+?? frontend/src/plugins/interceptors.ts
+?? frontend/src/plugins/pendingWork.ts
+?? frontend/src/plugins/scriptTrust.ts
+?? frontend/src/plugins/trust.ts
+?? frontend/src/reading/
+?? frontend/src/styles/components/diagnostics-panel.css
+?? frontend/src/styles/components/player-information.css
+?? frontend/src/styles/components/player-shortcuts.css
+?? frontend/src/styles/components/player-video-info.css
+?? frontend/src/styles/mobile.css
+?? frontend/src/styles/mobile/
+?? frontend/src/utils/imageRelease.ts
+?? frontend/src/utils/imageVisibility.ts
+?? frontend/src/utils/ts-cache/playback-lifetime.ts
+?? frontend/src/views/LibrarySources.vue
+?? frontend/src/views/settings/SettingsDataPreferences.vue
+?? frontend/tests/
+?? frontend/vitest.config.ts
+?? reports/
+?? scripts/analyze-diagnostics-recording.py
+?? scripts/android_webview.py
+?? scripts/browser-test-requirements.txt
+?? scripts/check-architecture.mjs
+?? scripts/check-architecture.test.mjs
+?? scripts/check-release-metadata.mjs
+?? scripts/fixtures/
+?? scripts/gen-cczj-vscode-data.mjs
+?? scripts/native-profile-requirements.txt
+?? scripts/profile-native-player.py
+?? scripts/test-android-preview.py
+?? scripts/test-comments-loading.py
+?? scripts/test-diagnostics-browser.py
+?? scripts/test-memory-browser.py
+?? scripts/test-mobile-android-layout.py
+?? scripts/test-mobile-comments-restart.py
+?? scripts/test-mobile-feedback-layout.py
+?? scripts/test-mobile-gestures.py
+?? scripts/test-mobile-interactive-tabs.py
+?? scripts/test-mobile-media-layout.py
+?? scripts/test-mobile-player-chrome.py
+?? scripts/test-mobile-player-feedback.py
+?? scripts/test-mobile-player-interactions.py
+?? scripts/test-mobile-player-more.py
+?? scripts/test-mobile-player-polish.py
+?? scripts/test-mobile-presentation.py
+?? scripts/test-mobile-route-motion.py
+?? scripts/test-mobile-search-history.py
+?? scripts/test-mobile-settings-layout.py
+?? scripts/test-mobile-tab-gestures.py
+?? scripts/test-native-playback-resources.py
+?? scripts/test-novel-desktop.py
+?? scripts/test-novel-mode.py
+?? scripts/test-optimization-browser.py
+?? scripts/test-player-browser.py
+?? scripts/test-player-idle-cache.py
+?? scripts/test-plugin-browser.py
+?? scripts/test-reader-layout.py
+?? scripts/test-reading-comic.py
+?? scripts/test-resource-browser.py
+?? scripts/test-segment-disk-browser.py
+?? scripts/test-settings-browser.py
+?? scripts/test-update-browser.py

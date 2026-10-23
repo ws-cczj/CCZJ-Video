@@ -10,13 +10,14 @@ import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '../../components/Icon.vue'
 import { Button } from '../../components/ui'
-import { updateController, fmtSize } from '../../stores/updateState'
+import { updateController, updateChecking, fmtSize } from '../../stores/updateState'
 import { licenseModalOpen } from '../../stores/licenseState'
 import { useThemeStore } from '../../stores/theme'
 import { useErrorStore } from '../../stores/error'
 import { useConfirmStore } from '../../stores/confirm'
 import { useDownloadStore } from '../../stores/download'
 import { formatTime } from '../../utils'
+import { isMobileRuntime } from '../../api/runtime'
 import {
   GetSetting, RestartApp, GetSwapBackupInfo, RollbackUpdate,
 } from '../../api/app'
@@ -42,6 +43,7 @@ onMounted(async () => {
   try {
     acceptedTerms.value = await GetSetting('license_terms_version')
   } catch { /* 读不到就显示未同意 */ }
+  if (isMobileRuntime()) return
   try {
     const info = await GetSwapBackupInfo()
     if (info?.available) swapBackup.value = info
@@ -112,15 +114,18 @@ async function rollbackUpdate(): Promise<void> {
         </div>
       </div>
 
+      <p v-if="isMobileRuntime()" class="desc">{{ t('mobile.previewUpdate') }}</p>
       <div class="about-actions cczj-flex cczj-gap-5">
         <Button
           variant="primary"
           size="md"
+          :loading="updateChecking"
           @click="updateController.checkUpdate?.()"
         >
           <Icon name="refresh" :size="14" /> {{ t('settings.checkUpdate') }}
         </Button>
         <Button
+          v-if="!isMobileRuntime()"
           variant="secondary"
           size="md"
           :disabled="restarting"
@@ -130,7 +135,7 @@ async function rollbackUpdate(): Promise<void> {
           <Icon name="refresh" :size="14" /> {{ t('settings.restart') }}
         </Button>
         <Button
-          v-if="swapBackup"
+          v-if="!isMobileRuntime() && swapBackup"
           variant="secondary"
           size="md"
           :disabled="rollingBack"
@@ -173,18 +178,17 @@ async function rollbackUpdate(): Promise<void> {
    两条同特异度、后写的赢，和拆分前在同一份样式里的顺序一致。 */
 .block h3 {
   font-size: 0.97rem;
-  font-weight: 700;
+  @apply cczj-font-bold;
   margin: 0 0 12px;
   letter-spacing: 0.3px;
 }
 
 /* ============ 关于 ============ */
 .about-card {
-  gap: 16px;
+  @apply cczj-gap-8;
   padding: 16px 18px;
   background: linear-gradient(135deg, var(--accent-alpha-10), transparent 75%);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  @apply cczj-border cczj-rounded-lg;
 }
 .about-icon {
   width: 52px; height: 52px;
@@ -193,62 +197,53 @@ async function rollbackUpdate(): Promise<void> {
   color: var(--accent-contrast);
   box-shadow: 0 6px 18px var(--accent-alpha-35);
 }
-.about-card h3 { margin: 0 0 4px; font-size: 1.14rem; font-weight: 700; }
-.about-card p { margin: 0 0 4px; font-size: 0.93rem; color: var(--text-secondary); }
-.about-card small { color: var(--text-muted); font-size: 0.86rem; }
+.about-card h3 { margin: 0 0 4px; font-size: 1.14rem; @apply cczj-font-bold; }
+.about-card p { margin: 0 0 4px; font-size: 0.93rem; @apply cczj-text-secondary; }
+.about-card small { @apply cczj-text-muted; font-size: 0.86rem; }
 
 .about-actions {
-  margin-top: 16px;
-  gap: 10px;
-  flex-wrap: wrap;
+  @apply cczj-mt-8 cczj-gap-5 cczj-flex-wrap;
 }
 
 /* ============ 声明卡片 ============ */
 .disclaimer-card {
-  gap: 14px;
+  @apply cczj-gap-7;
   padding: 16px 18px;
   background: linear-gradient(135deg, rgba(255, 193, 7, 0.08), transparent 75%);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  @apply cczj-border cczj-rounded-lg;
 }
 .disclaimer-icon {
-  flex-shrink: 0;
+  @apply cczj-flex-shrink-0;
   width: 44px;
   height: 44px;
-  border-radius: 12px;
+  @apply cczj-rounded-lg;
   background: var(--warning);
   color: #1a1a1a;
   box-shadow: 0 4px 12px var(--warning-alpha-10);
 }
 .disclaimer-content {
-  flex: 1;
-  min-width: 0;
+  @apply cczj-flex-1 cczj-min-w-0;
 }
 .disclaimer-content p {
   margin: 0 0 6px;
   font-size: 0.89rem;
   line-height: 1.55;
-  color: var(--text-secondary);
+  @apply cczj-text-secondary;
 }
-.disclaimer-content p:last-child { margin-bottom: 0; }
+.disclaimer-content p:last-child { @apply cczj-mb-0; }
 
 /* ============ 使用许可 ============ */
 .license-row {
-  gap: 14px;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
+  @apply cczj-gap-7 cczj-items-center cczj-justify-between cczj-flex-wrap;
   padding: 14px 18px;
   background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  @apply cczj-border cczj-rounded-lg;
 }
 .license-row-text {
-  flex: 1;
-  min-width: 0;
+  @apply cczj-flex-1 cczj-min-w-0;
   margin: 0;
   font-size: 0.89rem;
   line-height: 1.55;
-  color: var(--text-secondary);
+  @apply cczj-text-secondary;
 }
 </style>

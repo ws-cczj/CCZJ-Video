@@ -46,12 +46,26 @@ export function findActiveCue(cues: SubtitleCue[], time: number): SubtitleCue | 
       hi = mid - 1
     }
   }
-  // 同起点或紧挨着的条目可能有多条，往前多看两条，避免落在长句子里时取空。
-  for (let i = hit; i >= 0 && i > hit - 3; i--) {
+  // A long cue can overlap any number of shorter cues. The prefix index lets
+  // us stop as soon as no earlier cue can still be active, without scanning
+  // the full subtitle file on every timeupdate. Parsed cue arrays are immutable.
+  const ends = prefixEnds(cues)
+  for (let i = hit; i >= 0 && ends[i] >= time; i--) {
     const cue = cues[i]
     if (time <= cue.end) return cue
   }
   return null
+}
+
+const endIndexes = new WeakMap<SubtitleCue[], number[]>()
+function prefixEnds(cues: SubtitleCue[]): number[] {
+  let ends = endIndexes.get(cues)
+  if (ends && ends.length === cues.length) return ends
+  ends = []
+  let end = -Infinity
+  for (const cue of cues) { end = Math.max(end, cue.end); ends.push(end) }
+  endIndexes.set(cues, ends)
+  return ends
 }
 
 function parseTimeRange(line: string): { start: number; end: number } | null {

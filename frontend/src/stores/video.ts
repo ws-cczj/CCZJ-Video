@@ -1,3 +1,4 @@
+import { GetVideoDetail } from '../api/video'
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { GetTypes, GetYearsAndAreas, normalizeApiError } from '../api/app'
@@ -115,7 +116,7 @@ export const useVideoStore = defineStore('video', () => {
           return true
         }
       }
-      const resp = (await (AppMod as any).GetVideoDetail({ source_key: sourceKey, vod_id: vodId, global_id: globalId, refresh })) as VideoDetailResponse
+      const resp = (await GetVideoDetail({ source_key: sourceKey, vod_id: vodId, global_id: globalId, refresh }))
       if (!detailGen.isCurrent(my)) return false
       currentVideo.value = resp?.video ?? null
       applyDetail(resp, key)
@@ -143,7 +144,7 @@ export const useVideoStore = defineStore('video', () => {
   async function refreshDetail(sourceKey: string, vodId: string, globalId = 0): Promise<boolean> {
     const my = detailGen.begin()
     try {
-      const resp = (await (AppMod as any).GetVideoDetail({ source_key: sourceKey, vod_id: vodId, global_id: globalId, refresh: true })) as VideoDetailResponse
+      const resp = (await GetVideoDetail({ source_key: sourceKey, vod_id: vodId, global_id: globalId, refresh: true }))
       if (!detailGen.isCurrent(my)) return false
       if (resp?.video) {
         currentVideo.value = resp.video

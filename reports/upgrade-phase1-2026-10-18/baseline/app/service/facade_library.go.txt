@@ -1,0 +1,134 @@
+package service
+
+import (
+	"cczjVideo/app/library"
+	"cczjVideo/app/model"
+	"context"
+)
+
+// librarySearchResultEvent 是聚合搜索的逐源结果事件。
+//
+// 搜索不等最慢的源：每个源一有结果就发一次，界面可以渐进渲染，
+// 而不是转圈到全部源都回来才一次性刷出来（reports/00:131）。
+// 绑定方法的返回值仍然是完整汇总，所以不订阅事件的调用方也能用。
+const librarySearchResultEvent = "library:search:result"
+
+// readingSourceHeaders 给图片代理反查一个源声明的请求头。
+//
+// 头不走 URL 参数：让 WebView 能在查询串里塞任意请求头，等于把"用本机的网络
+// 身份发任意请求"开放给了页面脚本。按 source_key 反查用户自己配的内容，
+// 与海报代理的信任模型一致。
+func readingSourceHeaders(sourceKey string) map[string]string {
+	return library.SourcesHeaders(sourceKey)
+}
+
+// ReadingImageURL 把一个上游图片地址换成同源代理地址。
+//
+// referer 必须是**完整的页面地址**，不要截成 origin：真实漫画 CDN 校验的
+// 往往就是那个含路径的地址，而截断正是 /__cczj/img 这条路由存在的原因
+// （ADR 0016、pending-decisions 第 16 条）。sourceKey 用来让代理反查这个源
+// 声明的请求头。
+func (a *App) ReadingImageURL(upstream, referer, sourceKey string) string {
+	if a.readingImages == nil {
+		return upstream
+	}
+	return a.readingImages.URL(upstream, referer, sourceKey)
+}
+
+// ======================== 源管理 ========================
+
+// LibrarySources 列出某个模式下的源。kind 取 novel 或 comic。
+func (a *App) LibrarySources(kind string) ([]*library.SourceInfo, error) {
+	return a.library.ListSources(model.SourceKind(kind))
+}
+
+// LibraryAddSource 加一个源。document 是 provider.Document 的 JSON 原文，
+// 会先校验再落库：一份带 js / webView 之类不支持字段的文档必须在这一刻
+// 报出具名错误，而不是存进去之后表现成"搜不出东西"。
+func (a *App) LibraryAddSource(kind, name, apiURL, document string) (*library.SourceInfo, error) {
+	return a.library.AddSource(model.SourceKind(kind), name, apiURL, document)
+}
+
+func (a *App) LibraryUpdateSource(sourceKey, name, apiURL, document string) error {
+	return a.library.UpdateSource(sourceKey, name, apiURL, document)
+}
+
+func (a *App) LibraryDeleteSource(sourceKey string) error {
+	return a.library.DeleteSource(sourceKey)
+}
+
+func (a *App) LibrarySetSourceEnabled(sourceKey string, enabled bool) error {
+	return a.library.SetSourceEnabled(sourceKey, enabled)
+}
+
+// LibraryTestSource 逐级试一个源：配置 → 搜索 → 详情 → 目录 → 正文/图片。
+//
+// 逐级是因为"能搜到"与"能读"是两件事：目录规则写错时搜索是正常的。
+// 每一步失败都继续下一步，一次测试把所有坏掉的步骤都报出来。
+func (a *App) LibraryTestSource(ctx context.Context, sourceKey string) (*library.TestOutcome, error) {
+	ctx, release := a.requestContext(ctx)
+	defer release()
+	return a.library.TestSource(ctx, sourceKey)
+}
+
+// ======================== 内容 ========================
+
+// LibrarySearch 在所有启用的源上搜一遍。每个源各自成功或失败，
+// 单个源挂了不会让整屏搜索变空；空列表只代表一次成功的"没有结果"。
+func (a *App) LibrarySearch(ctx context.Context, kind, keyword string, page int) (*library.SearchOutcome, error) {
+	ctx, release := a.requestContext(ctx)
+	defer release()
+	return a.library.Search(ctx, model.SourceKind(kind), keyword, page,
+		func(result *library.SourceResult) {
+			if a.app == nil || ctx.Err() != nil {
+				return
+			}
+			a.app.Event.Emit(librarySearchResultEvent, result)
+		})
+}
+
+// LibraryItems 列出一个模式下所有已入库的作品（跨源）。书城与分类页用它。
+// includeRetired 为真时连来源已下架的一起返回：书架指着它们，
+// 界面上要能显示成"来源已下架"，而不是让用户的书架凭空少一行。
+func (a *App) LibraryItems(kind string, includeRetired bool) ([]*library.Item, error) {
+	return a.library.Items(model.SourceKind(kind), includeRetired)
+}
+
+// LibraryResolveRef 按自然键 {kind, sourceKey, remoteId} 把一个条目取回来。
+//
+// 书架存的是自然键而不是本地 id：id 是自增主键，换库或重装就变了，
+// 而书架要跨这些活下来。解析不到时返回 NOT_FOUND，前端据此把这一条
+// 标成"来源不可用"，而不是把它从书架上悄悄删掉。
+func (a *App) LibraryResolveRef(kind, sourceKey, remoteID string) (*library.Item, error) {
+	return a.library.ResolveRef(model.SourceKind(kind), sourceKey, remoteID)
+}
+
+// LibraryItem 取一部作品与它的目录。refresh 为真时才去源站刷新目录。
+func (a *App) LibraryItem(ctx context.Context, itemID int, refresh bool) (*library.ItemDetail, error) {
+	ctx, release := a.requestContext(ctx)
+	defer release()
+	return a.library.Detail(ctx, itemID, refresh)
+}
+
+// LibraryRefreshToc 只刷目录。追更用它：元信息很少变，章节列表才是会变的那一半。
+func (a *App) LibraryRefreshToc(ctx context.Context, itemID int) (*library.ItemDetail, error) {
+	ctx, release := a.requestContext(ctx)
+	defer release()
+	return a.library.RefreshToc(ctx, itemID)
+}
+
+// LibraryChapterText 取一章正文。Warnings 里是"内容拿到了但有件事该说"：
+// 可能被截断、编码像是错了、疑似字体加密。三条都不阻断显示。
+func (a *App) LibraryChapterText(ctx context.Context, chapterID int) (*library.ChapterText, error) {
+	ctx, release := a.requestContext(ctx)
+	defer release()
+	return a.library.ChapterText(ctx, chapterID)
+}
+
+// LibraryChapterPages 取一话的图片列表。返回的 URL 已经是同源代理地址，
+// 前端直接当 <img src> 用，不要自己拼。
+func (a *App) LibraryChapterPages(ctx context.Context, chapterID int) (*library.ChapterPages, error) {
+	ctx, release := a.requestContext(ctx)
+	defer release()
+	return a.library.ChapterPages(ctx, chapterID)
+}

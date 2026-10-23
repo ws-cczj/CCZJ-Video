@@ -1,0 +1,73 @@
+ACTIVITY MANAGER PROCESS EXIT INFO (dumpsys activity exit-info)
+Last Timestamp of Persistence Into Persistent Storage: 2026-10-22 11:48:35.790
+  package: com.cczj.video.acceptance
+    Historical Process Exit for uid=10057
+        ApplicationExitInfo #0:
+          timestamp=2026-10-22 12:23:44.635 pid=47721 realUid=99038 packageUid=10057 definingUid=10027 user=0
+          process=com.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0 reason=13 (OTHER KILLS BY SYSTEM) subreason=17 (ISOLATED NOT NEEDED) status=0
+          importance=300 pss=0.00 rss=0.00 description=isolated not needed state=empty trace=null
+        ApplicationExitInfo #1:
+          timestamp=2026-10-22 12:23:44.625 pid=47588 realUid=10057 packageUid=10057 definingUid=10057 user=0
+          process=com.cczj.video.acceptance reason=13 (OTHER KILLS BY SYSTEM) subreason=11 (KILL UID) status=0
+          importance=100 pss=0.00 rss=0.00 description=REQUEST_INSTALL_PACKAGES changed. state=empty trace=null
+        ApplicationExitInfo #2:
+          timestamp=2026-10-22 12:23:30.251 pid=47253 realUid=99037 packageUid=10057 definingUid=10027 user=0
+          process=com.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0 reason=13 (OTHER KILLS BY SYSTEM) subreason=17 (ISOLATED NOT NEEDED) status=0
+          importance=300 pss=0.00 rss=257MB description=isolated not needed state=empty trace=null
+        ApplicationExitInfo #3:
+          timestamp=2026-10-22 12:23:30.235 pid=47123 realUid=10057 packageUid=10057 definingUid=10057 user=0
+          process=com.cczj.video.acceptance reason=10 (USER REQUESTED) subreason=21 (FORCE STOP) status=0
+          importance=100 pss=0.00 rss=259MB description=stop com.cczj.video.acceptance due to from pid 47572 state=empty trace=null
+        ApplicationExitInfo #4:
+          timestamp=2026-10-22 12:20:38.134 pid=46458 realUid=99036 packageUid=10057 definingUid=10027 user=0
+          process=com.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0 reason=1 (EXIT_SELF) subreason=17 (ISOLATED NOT NEEDED) status=0
+          importance=300 pss=0.00 rss=280MB description=isolated not needed state=empty trace=null
+        ApplicationExitInfo #5:
+          timestamp=2026-10-22 12:20:37.954 pid=46324 realUid=10057 packageUid=10057 definingUid=10057 user=0
+          process=com.cczj.video.acceptance reason=16 (PACKAGE UPDATED) subreason=0 (UNKNOWN) status=0
+          importance=100 pss=0.00 rss=283MB description=stop com.cczj.video.acceptance due to installPackageLI state=empty trace=null
+        ApplicationExitInfo #6:
+          timestamp=2026-10-22 12:14:16.771 pid=45972 realUid=99035 packageUid=10057 definingUid=10027 user=0
+          process=com.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0 reason=1 (EXIT_SELF) subreason=17 (ISOLATED NOT NEEDED) status=0
+          importance=300 pss=0.00 rss=254MB description=isolated not needed state=empty trace=null
+        ApplicationExitInfo #7:
+          timestamp=2026-10-22 12:14:16.642 pid=45840 realUid=10057 packageUid=10057 definingUid=10057 user=0
+          process=com.cczj.video.acceptance reason=16 (PACKAGE UPDATED) subreason=0 (UNKNOWN) status=0
+          importance=100 pss=0.00 rss=273MB description=stop com.cczj.video.acceptance due to installPackageLI state=empty trace=null
+        ApplicationExitInfo #8:
+          timestamp=2026-10-22 12:10:32.870 pid=45646 realUid=99034 packageUid=10057 definingUid=10027 user=0
+          process=com.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0 reason=1 (EXIT_SELF) subreason=17 (ISOLATED NOT NEEDED) status=0
+          importance=300 pss=0.00 rss=0.00 description=isolated not needed state=empty trace=null
+        ApplicationExitInfo #9:
+          timestamp=2026-10-22 12:10:32.802 pid=45525 realUid=10057 packageUid=10057 definingUid=10057 user=0
+          process=com.cczj.video.acceptance reason=16 (PACKAGE UPDATED) subreason=0 (UNKNOWN) status=0
+          importance=100 pss=0.00 rss=0.00 description=stop com.cczj.video.acceptance due to installPackageLI state=empty trace=null
+        ApplicationExitInfo #10:
+          timestamp=2026-10-22 12:06:29.794 pid=45249 realUid=99033 packageUid=10057 definingUid=10027 user=0
+          process=com.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0 reason=1 (EXIT_SELF) subreason=17 (ISOLATED NOT NEEDED) status=0
+          importance=300 pss=0.00 rss=0.00 description=isolated not needed state=empty trace=null
+        ApplicationExitInfo #11:
+          timestamp=2026-10-22 12:06:29.692 pid=45136 realUid=10057 packageUid=10057 definingUid=10057 user=0
+          process=com.cczj.video.acceptance reason=16 (PACKAGE UPDATED) subreason=0 (UNKNOWN) status=0
+          importance=100 pss=0.00 rss=0.00 description=stop com.cczj.video.acceptance due to installPackageLI state=empty trace=null
+        ApplicationExitInfo #12:
+          timestamp=2026-10-22 12:05:36.977 pid=44909 realUid=99032 packageUid=10057 definingUid=10027 user=0
+          process=com.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0 reason=13 (OTHER KILLS BY SYSTEM) subreason=17 (ISOLATED NOT NEEDED) status=0
+          importance=300 pss=0.00 rss=0.00 description=isolated not needed state=empty trace=null
+        ApplicationExitInfo #13:
+          timestamp=2026-10-22 12:05:36.962 pid=44775 realUid=10057 packageUid=10057 definingUid=10057 user=0
+          process=com.cczj.video.acceptance reason=10 (USER REQUESTED) subreason=21 (FORCE STOP) status=0
+          importance=100 pss=0.00 rss=0.00 description=stop com.cczj.video.acceptance due to from pid 45102 state=empty trace=null
+        ApplicationExitInfo #14:
+          timestamp=2026-10-22 12:04:44.495 pid=44575 realUid=99031 packageUid=10057 definingUid=10027 user=0
+          process=com.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0 reason=13 (OTHER KILLS BY SYSTEM) subreason=17 (ISOLATED NOT NEEDED) status=0
+          importance=300 pss=0.00 rss=0.00 description=isolated not needed state=empty trace=null
+        ApplicationExitInfo #15:
+          timestamp=2026-10-22 12:04:44.486 pid=44462 realUid=10057 packageUid=10057 definingUid=10057 user=0
+          process=com.cczj.video.acceptance reason=10 (USER REQUESTED) subreason=21 (FORCE STOP) status=0
+          importance=100 pss=0.00 rss=0.00 description=stop com.cczj.video.acceptance due to from pid 44761 state=empty trace=null
+    Historical Process Exit for uid=99020
+        ApplicationExitInfo #0:
+          timestamp=2026-10-21 20:51:23.766 pid=16134 realUid=99020 packageUid=10057 definingUid=10027 user=0
+          process=com.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0 reason=1 (EXIT_SELF) subreason=0 (UNKNOWN) status=0
+          importance=100 pss=0.00 rss=0.00 description=null state=empty trace=null

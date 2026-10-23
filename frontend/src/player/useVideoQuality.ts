@@ -1,4 +1,5 @@
 import { computed, ref, watch, type Ref } from 'vue'
+import { createEnhancementPipeline } from './enhancementPipeline'
 import { FilmUpscaler, FILM_PRESET, checkFilmSupport } from '../utils/filmUpscaler'
 import { Anime4kUpscaler, ANIME4K_PRESET, checkAnime4kSupport } from '../utils/anime4kUpscaler'
 import type { Anime4kTier } from '../utils/anime4kUpscaler'
@@ -109,7 +110,10 @@ export function useVideoQuality(deps: VideoQualityDeps) {
     qualityToastTimer = setTimeout(() => { qualityToastText.value = '' }, 1500)
   }
 
-  let upscaler: Anime4kUpscaler | FilmUpscaler | CustomShaderUpscaler | null = null
+  type Upscaler = Anime4kUpscaler | FilmUpscaler | CustomShaderUpscaler
+  const pipeline = createEnhancementPipeline<Upscaler>()
+  let pipelineGeneration = 0
+  let upscaler: Upscaler | null = null
   let upscalerStatsTimer: ReturnType<typeof setInterval> | null = null
   const upscalerSupported = ref(false)
   const upscalerStats = ref<{ fps: number; gpuEnabled: boolean }>({ fps: 0, gpuEnabled: false })
@@ -219,140 +223,59 @@ export function useVideoQuality(deps: VideoQualityDeps) {
   }
 
   async function startAiPipeline(mode: 'ai_anime' | 'ai_film' | 'ai_custom'): Promise<void> {
-    // 先清除旧的统计定时器（避免切换模式时泄漏）
-    if (upscalerStatsTimer) {
-      clearInterval(upscalerStatsTimer)
-      upscalerStatsTimer = null
-    }
-    // 先销毁旧实例（切换模式时）
-    if (upscaler) {
-      upscaler.stop()
-      upscaler.destroy()
-      upscaler = null
-    }
-    compareEnabled.value = false
-
-    const v = getVideoEl()
-    if (!v) return
-
-    // 动画模式：Anime4K CNN 超分
-    if (mode === 'ai_anime') {
-      const a4kSupport = checkAnime4kSupport()
-      if (!a4kSupport.recommended) {
-        console.warn('[Player] Anime4K 不可用:', a4kSupport.message)
-        fallBackToOriginal(true)
+    stopAiPipeline()
+    const token = pipelineGeneration
+    const video = getVideoEl()
+    if (!video) return
+    const shaderKey = customShaderKey.value
+    const tier = anime4kTier.value
+    const candidate: { value: Upscaler | null } = { value: null }
+    let permanent = false
+    try {
+      const started = await pipeline.start(async () => {
+        if (mode === 'ai_anime') {
+          if (!checkAnime4kSupport().recommended) { permanent = true; return null }
+          candidate.value = new Anime4kUpscaler({ ...ANIME4K_PRESET, tier })
+        } else if (mode === 'ai_film') {
+          upscalerSupported.value = checkFilmSupport().supported
+          if (!upscalerSupported.value) { permanent = true; return null }
+          candidate.value = new FilmUpscaler({ ...FILM_PRESET })
+        } else {
+          const option = pluginStore.shaderOptions.find(o => o.key === shaderKey)
+          if (!option) { permanent = true; return null }
+          const source = await pluginStore.shaderSource(option)
+          if (token !== pipelineGeneration) return null
+          if (!source) {
+            permanent = true
+            pluginStore.markShaderBroken(shaderKey, tr('player.customShaderReadFailed'))
+            return null
+          }
+          candidate.value = new CustomShaderUpscaler({ id: option.shader.id, source, scale: option.shader.scale === 1 ? 1 : 2 })
+        }
+        return candidate.value
+      }, video, wrapperRef.value ?? undefined)
+      if (token !== pipelineGeneration) return
+      if (!started) {
+        if (candidate.value instanceof CustomShaderUpscaler && !candidate.value.capabilityMissing) {
+          permanent = true
+          pluginStore.markShaderBroken(shaderKey, candidate.value.error ?? 'init failed')
+        }
+        fallBackToOriginal(permanent)
         return
       }
-      upscaler = new Anime4kUpscaler({ ...ANIME4K_PRESET, tier: anime4kTier.value })
-      const ok = await upscaler.init(v, wrapperRef.value ?? undefined)
-      if (ok) {
-        // 上次瞬时失败时界面显示的是原高清，这次重建成功要把画质标签恢复成用户实际享有的模式。
-        qualityMode.value = mode
-        upscaler.start()
-        console.log(`[Player] Anime4K CNN 2x 超分管线已启动 (${anime4kTier.value} 档, WebGL2)`)
-        upscalerStatsTimer = setInterval(() => {
-          if (!upscaler) { if (upscalerStatsTimer) { clearInterval(upscalerStatsTimer); upscalerStatsTimer = null }; return }
-          const s = upscaler.getStats()
-          upscalerStats.value = { fps: s.fps, gpuEnabled: s.gpuEnabled }
-        }, 2000)
-        return
-      }
-      // init() 失败时已自行销毁并归还 WebGL 上下文，这里只需丢掉引用。
-      console.warn('[Player] Anime4K 初始化失败:', upscaler.error)
-      upscaler = null
+      upscaler = started
+      qualityMode.value = mode
+      upscalerStatsTimer = setInterval(() => {
+        if (token !== pipelineGeneration || !upscaler) return
+        const stats = upscaler.getStats()
+        upscalerStats.value = { fps: stats.fps, gpuEnabled: stats.gpuEnabled }
+      }, 2000)
+    } catch (error) {
+      if (token !== pipelineGeneration) return
+      console.error('[Player] Enhancement initialization failed:', error)
+      stopAiPipeline()
       fallBackToOriginal(false)
-      return
     }
-
-    // 扩展包模式：用户声明式着色器
-    if (mode === 'ai_custom') {
-      await startCustomPipeline(v)
-      return
-    }
-
-    // 影视模式：FSRCNNX + CAS
-    const filmSupport = checkFilmSupport()
-    upscalerSupported.value = filmSupport.supported
-
-    if (!filmSupport.supported) {
-      console.warn('[Player] 影视增强不可用:', filmSupport.message)
-      fallBackToOriginal(true)
-      return
-    }
-
-    upscaler = new FilmUpscaler({ ...FILM_PRESET })
-
-    const ok = await upscaler.init(v, wrapperRef.value ?? undefined)
-    if (!ok) {
-      // 同上：init() 的 catch 分支已经走完 destroy()，上下文不会泄漏。
-      console.error('[Player] FSRCNNX 影视增强初始化失败:', upscaler.error)
-      upscaler = null
-      fallBackToOriginal(false)
-      return
-    }
-
-    qualityMode.value = mode
-    upscaler.start()
-    console.log('[Player] FSRCNNX + CAS 影视增强管线已启动 (WebGL2 多 Pass GPU 加速)')
-
-    // 定期更新性能统计
-    upscalerStatsTimer = setInterval(() => {
-      if (!upscaler) {
-        if (upscalerStatsTimer) clearInterval(upscalerStatsTimer)
-        upscalerStatsTimer = null
-        return
-      }
-      const s = upscaler.getStats()
-      upscalerStats.value = { fps: s.fps, gpuEnabled: s.gpuEnabled }
-    }, 2000)
-  }
-
-  /**
-   * 扩展包着色器管线。
-   *
-   * 隔离粒度是「这一个档位」：着色器编译不过属于包本身的问题，换一条媒体也不会变好，
-   * 所以记进本机隔离表并从下拉框摘掉，要重试得由用户在扩展面板明确触发。反过来，
-   * WebGL2 名额被临时占满这类本机条件只回退本次画面，留给下一条媒体重试。
-   */
-  async function startCustomPipeline(v: HTMLVideoElement): Promise<void> {
-    const key = customShaderKey.value
-    const opt = pluginStore.shaderOptions.find(o => o.key === key)
-    if (!opt) {
-      // 包被删除、停用或校验失败：偏好已经没有可执行的东西，落回原高清并丢掉重试意图。
-      fallBackToOriginal(true)
-      return
-    }
-    const source = await pluginStore.shaderSource(opt)
-    if (!source) {
-      const message = tr('player.customShaderReadFailed')
-      console.error('[Player] 扩展包着色器读取失败:', opt.key, message)
-      pluginStore.markShaderBroken(key, message)
-      fallBackToOriginal(true)
-      return
-    }
-    upscaler = new CustomShaderUpscaler({ id: opt.shader.id, source, scale: opt.shader.scale === 1 ? 1 : 2 })
-    const ok = await upscaler.init(v, wrapperRef.value ?? undefined)
-    if (!ok) {
-      const message = upscaler.error ?? 'init failed'
-      const missingCapability = upscaler.capabilityMissing
-      console.error('[Player] 扩展包着色器初始化失败:', opt.key, message)
-      if (!missingCapability) pluginStore.markShaderBroken(key, message)
-      upscaler = null
-      fallBackToOriginal(!missingCapability)
-      return
-    }
-    qualityMode.value = 'ai_custom'
-    upscaler.start()
-    console.log(`[Player] 扩展包着色器管线已启动 (${opt.key}, WebGL2 ${opt.shader.scale === 1 ? '1' : '2'}x)`)
-    upscalerStatsTimer = setInterval(() => {
-      if (!upscaler) {
-        if (upscalerStatsTimer) clearInterval(upscalerStatsTimer)
-        upscalerStatsTimer = null
-        return
-      }
-      const s = upscaler.getStats()
-      upscalerStats.value = { fps: s.fps, gpuEnabled: s.gpuEnabled }
-    }, 2000)
   }
 
   // 扩展包被停用、删除或本机隔离后，正在使用的自定义档位不再可执行：落回原高清。
@@ -369,15 +292,13 @@ export function useVideoQuality(deps: VideoQualityDeps) {
   )
 
   function stopAiPipeline(): void {
+    pipelineGeneration++
+    pipeline.reset()
     if (upscalerStatsTimer) {
       clearInterval(upscalerStatsTimer)
       upscalerStatsTimer = null
     }
-    if (upscaler) {
-      upscaler.stop()
-      upscaler.destroy()
-      upscaler = null
-    }
+    upscaler = null
     compareEnabled.value = false
     upscalerStats.value = { fps: 0, gpuEnabled: false }
     console.log('[Player] AI 增强管线已停止')
@@ -402,6 +323,9 @@ export function useVideoQuality(deps: VideoQualityDeps) {
 
   /** 换集/换源：拆掉实例并忘掉「已就绪」，但保留用户想要的档位等下一条媒体重试。 */
   function resetPipeline(): void {
+    if (qualityToastTimer) clearTimeout(qualityToastTimer)
+    qualityToastTimer = null
+    qualityToastText.value = ''
     stopAiPipeline()
     _aiReady = false
   }

@@ -1,11 +1,11 @@
 {
   "manifest_version": 1,
   "id": "diagnostics-panel",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "name": { "zh-CN": "诊断面板", "en": "Diagnostics Panel" },
   "description": {
-    "zh-CN": "设置页顶部的「诊断」分组：采集源健康度、缓存体积、豆瓣队列这些运行数据。删掉这个文件夹，那一项就没了。",
-    "en": "The Diagnostics group on the Settings page: source health, cache size, Douban queue. Delete the folder and the tab goes away."
+    "zh-CN": "诊断中心：资源概览与趋势、播放、网络与缓存、采集源、豆瓣和存储分区；导出报告辅助排障。需要支持诊断页面的应用构建。",
+    "en": "Diagnostic center with resource trends, playback, network and cache, sources, Douban and storage sections, plus report export. Requires an app build with the diagnostics page."
   },
   "author": "CCZJ Video",
   "icon": "icon.png",

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"cczjVideo/app/apperror"
+	"cczjVideo/app/applog"
 )
 
 // installFile 是准备写进暂存区的一个文件：包内相对路径 + 已经读好的字节。
@@ -27,7 +28,9 @@ type installFile struct {
 // 什么都没装，返回的错误带 reason_code，界面能把原因显示出来。换入用两次 rename——
 // 同号旧包先挪开、新的挪进来，挪进来失败就把旧的放回原位，用户不会因为一次失败的
 // 安装同时失去新旧两份。完成后重扫一次，返回注册表里那条权威 Info。
-func (s *Service) InstallFromPath(path string) (*Info, error) {
+func (s *Service) InstallFromPath(path string) (installed *Info, installErr error) {
+	s.scanMu.Lock()
+	defer s.scanMu.Unlock()
 	root := s.Directory()
 	stagingRoot := s.stagingRoot()
 	if strings.TrimSpace(root) == "" || strings.TrimSpace(stagingRoot) == "" {
@@ -48,7 +51,15 @@ func (s *Service) InstallFromPath(path string) (*Info, error) {
 	if err != nil {
 		return nil, apperror.Wrap(apperror.Storage, err, fmt.Sprintf("无法创建临时安装目录（在 %q 下）", stagingRoot))
 	}
-	defer os.RemoveAll(base)
+	defer func() {
+		// A failed rollback leaves the user's previous pack here. Never let
+		// temporary-directory cleanup delete the only recoverable copy.
+		if installErr != nil && dirExists(filepath.Join(base, "previous")) {
+			applog.Warn("扩展包安装失败，旧包已保留在 %q", filepath.Join(base, "previous"))
+			return
+		}
+		_ = os.RemoveAll(base)
+	}()
 
 	staged := filepath.Join(base, "pack")
 	if err := os.MkdirAll(staged, 0o755); err != nil {
@@ -82,7 +93,7 @@ func (s *Service) installStaged(base, label string) (*Info, error) {
 	// 目录名由 manifest 的 id 决定：拖进来的文件夹叫什么都不算数。先把暂存目录
 	// 改名成 id，loadPack 的「id 必须等于目录名」检查才落在最终形状上。
 	named := filepath.Join(base, doc.ID)
-	if err := os.Rename(staged, named); err != nil {
+	if err := s.renameInstall(staged, named); err != nil {
 		return nil, apperror.Wrap(apperror.Storage, err, fmt.Sprintf("无法整理临时目录 %q", staged))
 	}
 	info, found := loadPack(named, false)
@@ -108,14 +119,14 @@ func (s *Service) installStaged(base, label string) (*Info, error) {
 	previous := filepath.Join(base, "previous")
 	hasPrevious := false
 	if replacing {
-		if err := os.Rename(target, previous); err != nil {
+		if err := s.renameInstall(target, previous); err != nil {
 			return nil, apperror.Wrap(apperror.Storage, err, fmt.Sprintf("无法移开同名旧包 %q", doc.ID))
 		}
 		hasPrevious = true
 	}
-	if err := os.Rename(named, target); err != nil {
+	if err := s.renameInstall(named, target); err != nil {
 		if hasPrevious {
-			if restoreErr := os.Rename(previous, target); restoreErr != nil {
+			if restoreErr := s.renameInstall(previous, target); restoreErr != nil {
 				// 装失败 + 回位也失败：两个错误只能带一个 Cause，把回位的原文写进消息，
 				// 否则用户照着「请手工放回」去挪目录时，连为什么没自动放回都不知道。
 				return nil, apperror.Wrap(apperror.Storage, err,
@@ -125,7 +136,7 @@ func (s *Service) installStaged(base, label string) (*Info, error) {
 		return nil, apperror.Wrap(apperror.Storage, err, "无法安装到扩展包目录")
 	}
 
-	infos, err := s.Scan()
+	infos, err := s.scanLocked()
 	if err != nil {
 		return nil, err
 	}

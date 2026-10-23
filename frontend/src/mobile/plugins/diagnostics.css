@@ -1,0 +1,24 @@
+.cczj-mobile-plugin-diagnostics { height:auto; @apply cczj-min-h-0 cczj-overflow-visible; padding:0 0 20px; }
+.cczj-mobile-plugin-diagnostics .diag-page-header { @apply cczj-items-stretch; padding:0 0 14px; }
+.cczj-mobile-plugin-diagnostics .diag-page-title h1 { @apply cczj-text-2xl; }
+.cczj-mobile-plugin-diagnostics .diag-page-actions { @apply cczj-flex cczj-flex-wrap cczj-gap-4; }
+.cczj-mobile-plugin-diagnostics .diag-page-actions button { flex:1 1 auto; min-height:44px; }
+.cczj-mobile-plugin-diagnostics .diag-recording-bar { @apply cczj-items-start cczj-flex-wrap cczj-p-6; }
+.cczj-mobile-plugin-diagnostics .diag-export-bar { @apply cczj-flex-wrap; overflow-wrap:anywhere; }
+.cczj-mobile-plugin-diagnostics .diag-export-bar>span { flex-basis:100%; white-space:normal; }
+.cczj-mobile-plugin-diagnostics .diag-workspace { @apply cczj-flex cczj-flex-col cczj-min-h-0; gap:0; }
+.cczj-mobile-plugin-diagnostics.diag .diag-nav { @apply cczj-flex-row cczj-flex-nowrap; overflow-x:auto; @apply cczj-max-w-full cczj-gap-2; padding:8px 0; @apply cczj-border-bottom cczj-flex-shrink-0; }
+.cczj-mobile-plugin-diagnostics .diag-nav button { min-height:44px; @apply cczj-flex-shrink-0 cczj-whitespace-nowrap cczj-px-6-py-4; }
+.cczj-mobile-plugin-diagnostics :is(.diag-nav-caption,.diag-nav-footnote,.diag-nav button small) { @apply cczj-hidden; }
+.cczj-mobile-plugin-diagnostics .diag-content { @apply cczj-overflow-visible cczj-min-h-0; padding:14px 0 0; }
+.cczj-mobile-plugin-diagnostics :is(.block,.diag-findings,.resource-monitor) { @apply cczj-p-7 cczj-rounded-lg; }
+.cczj-mobile-plugin-diagnostics .diag-summary-links { grid-template-columns:1fr; }
+.cczj-mobile-plugin-diagnostics .resource-cards { grid-template-columns:repeat(2,minmax(0,1fr)); @apply cczj-gap-4; }
+.cczj-mobile-plugin-diagnostics .resource-card { @apply cczj-p-6; }
+.cczj-mobile-plugin-diagnostics .resource-card strong { font-size:21px; }
+.cczj-mobile-plugin-diagnostics .resource-strip { gap:10px 16px; }
+.cczj-mobile-plugin-diagnostics :is(.resource-header,.resource-chart-header) { @apply cczj-flex-wrap cczj-gap-4; }
+.cczj-mobile-plugin-diagnostics :is(.diag-filter,.diag-search,button) { min-height:44px; }
+.cczj-mobile-plugin-diagnostics .diag-search input { @apply cczj-text-lg; }
+.cczj-mobile-plugin-diagnostics :is(.diag-table-wrap,.process-table-scroll) { @apply cczj-max-w-full cczj-overflow-auto; overscroll-behavior:contain; }
+.cczj-mobile-plugin-diagnostics .diag-source-filters { @apply cczj-flex-wrap; }

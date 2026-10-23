@@ -1,0 +1,55 @@
+usage: test-native-playback-resources.py [-h] [--port PORT]
+                                         [--debug-port DEBUG_PORT]
+                                         [--cycles CYCLES]
+                                         [--idle-seconds IDLE_SECONDS]
+                                         [--legacy-thumbnails] [--seed-cache]
+                                         [--output-tag OUTPUT_TAG]
+                                         [--cold-baseline] [--natural-gc]
+                                         [--render-offscreen] [--memory-trace]
+                                         [--play-seconds PLAY_SECONDS]
+                                         [--max-retained-mib MAX_RETAINED_MIB]
+                                         [--reclaim-at-end] [--no-preview]
+                                         [--bare-video]
+                                         [--extra-browser-arg EXTRA_BROWSER_ARG]
+                                         [--pressure-at-end] [--blank-at-end]
+                                         [--production]
+
+Exercise production HLS/player code in an isolated hidden Wails 3 WebView2.
+Only bindings and the local media proxy are simulated. No production app,
+database, user profile, or browser session is opened or closed.
+
+options:
+  -h, --help            show this help message and exit
+  --port PORT
+  --debug-port DEBUG_PORT
+  --cycles CYCLES
+  --idle-seconds IDLE_SECONDS
+  --legacy-thumbnails
+  --seed-cache          Seed the real 70 MiB multi-episode cache before
+                        closing
+  --output-tag OUTPUT_TAG
+                        Keep separate measurement results for comparisons
+  --cold-baseline       Measure before the first video/decoder is ever created
+  --natural-gc          Do not force GC at playback/idle measurement
+                        checkpoints
+  --render-offscreen    Render in an offscreen, taskbar-hidden native window
+                        rather than a hidden WebView
+  --memory-trace        Capture native allocator dumps and browser process
+                        roles through CDP
+  --play-seconds PLAY_SECONDS
+  --max-retained-mib MAX_RETAINED_MIB
+                        Fail if idle private commitment exceeds the cold
+                        baseline by this amount
+  --reclaim-at-end      Record an explicit test-only GC comparison after the
+                        natural idle samples
+  --no-preview          Minimize to the primary video decoder without
+                        requesting thumbnails
+  --bare-video          Use a native MP4 video without the application
+                        player/HLS/cache
+  --extra-browser-arg EXTRA_BROWSER_ARG
+  --pressure-at-end     Measure an explicit test-only memory pressure
+                        notification
+  --blank-at-end        Compare against unloading the whole document after
+                        idle
+  --production          Compile the fixture with production Vue, keeping only
+                        the API/proxy seams simulated

@@ -1,0 +1,245 @@
+{
+  "nA": {
+    "source": {
+      "sourceKey": "src_9d2d747ae8e843e08c4beea37207b654",
+      "name": "验收nA",
+      "apiUrl": "http://127.0.0.1:64723/nA",
+      "kind": "novel",
+      "enabled": true,
+      "autoDisabled": false,
+      "itemCount": 0,
+      "document": "{\"version\": 3, \"kind\": \"novel\", \"headers\": {\"X-Audit\": \"native-acceptance\"}, \"operations\": {\"search\": {\"format\": \"html\", \"list\": {\"query\": \"li\"}, \"fields\": {\"title\": {\"query\": \"a\"}, \"url\": {\"query\": \"a\", \"attr\": \"href\"}, \"genres\": {\"query\": \".genre\"}}}, \"detail\": {\"format\": \"html\", \"root\": {\"query\": \".detail\"}, \"fields\": {\"title\": {\"query\": \"h1\"}, \"summary\": {\"query\": \".intro\"}, \"toc_url\": {\"query\": \".toc\", \"attr\": \"href\"}}}, \"toc\": {\"format\": \"html\", \"list\": {\"query\": \".chapters li\"}, \"fields\": {\"title\": {\"query\": \"a\"}, \"chapter_url\": {\"query\": \"a\", \"attr\": \"href\"}}}, \"content\": {\"format\": \"html\", \"text\": {\"query\": \"#content\"}}}}"
+    },
+    "item": {
+      "id": 2866,
+      "kind": "novel",
+      "sourceKey": "src_9d2d747ae8e843e08c4beea37207b654",
+      "sourceName": "验收nA",
+      "remoteId": "/nA/book/001",
+      "title": "同名作品001",
+      "author": "",
+      "cover": "",
+      "summary": "",
+      "genres": "adventure",
+      "status": "",
+      "latest": "",
+      "words": "",
+      "updatedAt": "",
+      "available": true
+    },
+    "detail": {
+      "item": {
+        "id": 2866,
+        "kind": "novel",
+        "sourceKey": "src_9d2d747ae8e843e08c4beea37207b654",
+        "sourceName": "验收nA",
+        "remoteId": "/nA/book/001",
+        "title": "同名作品001",
+        "author": "",
+        "cover": "",
+        "summary": "原生测试作品",
+        "genres": "",
+        "status": "",
+        "latest": "",
+        "words": "",
+        "updatedAt": "",
+        "available": true
+      },
+      "chapters": [
+        {
+          "id": 91,
+          "remoteId": "/nA/chapter/1",
+          "ord": 0,
+          "title": "第1章",
+          "volume": "",
+          "isVolume": false,
+          "access": "unknown",
+          "available": true
+        },
+        {
+          "id": 92,
+          "remoteId": "/nA/chapter/2",
+          "ord": 1,
+          "title": "第2章",
+          "volume": "",
+          "isVolume": false,
+          "access": "unknown",
+          "available": true
+        },
+        {
+          "id": 93,
+          "remoteId": "/nA/chapter/3",
+          "ord": 2,
+          "title": "第3章",
+          "volume": "",
+          "isVolume": false,
+          "access": "unknown",
+          "available": true
+        }
+      ],
+      "chapterCount": 3
+    }
+  },
+  "nB": {
+    "source": {
+      "sourceKey": "src_2edfbe4341e07fb05fba6a23beeb319d",
+      "name": "验收nB",
+      "apiUrl": "http://127.0.0.1:64723/nB",
+      "kind": "novel",
+      "enabled": true,
+      "autoDisabled": false,
+      "itemCount": 0,
+      "document": "{\"version\": 3, \"kind\": \"novel\", \"headers\": {\"X-Audit\": \"native-acceptance\"}, \"operations\": {\"search\": {\"format\": \"html\", \"list\": {\"query\": \"li\"}, \"fields\": {\"title\": {\"query\": \"a\"}, \"url\": {\"query\": \"a\", \"attr\": \"href\"}, \"genres\": {\"query\": \".genre\"}}}, \"detail\": {\"format\": \"html\", \"root\": {\"query\": \".detail\"}, \"fields\": {\"title\": {\"query\": \"h1\"}, \"summary\": {\"query\": \".intro\"}, \"toc_url\": {\"query\": \".toc\", \"attr\": \"href\"}}}, \"toc\": {\"format\": \"html\", \"list\": {\"query\": \".chapters li\"}, \"fields\": {\"title\": {\"query\": \"a\"}, \"chapter_url\": {\"query\": \"a\", \"attr\": \"href\"}}}, \"content\": {\"format\": \"html\", \"text\": {\"query\": \"#content\"}}}}"
+    },
+    "item": {
+      "id": 2731,
+      "kind": "novel",
+      "sourceKey": "src_2edfbe4341e07fb05fba6a23beeb319d",
+      "sourceName": "验收nB",
+      "remoteId": "/nB/book/001",
+      "title": "同名作品001",
+      "author": "",
+      "cover": "",
+      "summary": "",
+      "genres": "adventure",
+      "status": "",
+      "latest": "",
+      "words": "",
+      "updatedAt": "",
+      "available": true
+    },
+    "detail": {
+      "item": {
+        "id": 2731,
+        "kind": "novel",
+        "sourceKey": "src_2edfbe4341e07fb05fba6a23beeb319d",
+        "sourceName": "验收nB",
+        "remoteId": "/nB/book/001",
+        "title": "同名作品001",
+        "author": "",
+        "cover": "",
+        "summary": "原生测试作品",
+        "genres": "",
+        "status": "",
+        "latest": "",
+        "words": "",
+        "updatedAt": "",
+        "available": true
+      },
+      "chapters": [
+        {
+          "id": 94,
+          "remoteId": "/nB/chapter/1",
+          "ord": 0,
+          "title": "第1章",
+          "volume": "",
+          "isVolume": false,
+          "access": "unknown",
+          "available": true
+        },
+        {
+          "id": 95,
+          "remoteId": "/nB/chapter/2",
+          "ord": 1,
+          "title": "第2章",
+          "volume": "",
+          "isVolume": false,
+          "access": "unknown",
+          "available": true
+        },
+        {
+          "id": 96,
+          "remoteId": "/nB/chapter/3",
+          "ord": 2,
+          "title": "第3章",
+          "volume": "",
+          "isVolume": false,
+          "access": "unknown",
+          "available": true
+        }
+      ],
+      "chapterCount": 3
+    }
+  },
+  "cA": {
+    "source": {
+      "sourceKey": "src_40fae4e7c21b261b74491626f3e4332c",
+      "name": "验收cA",
+      "apiUrl": "http://127.0.0.1:64723/cA",
+      "kind": "comic",
+      "enabled": true,
+      "autoDisabled": false,
+      "itemCount": 0,
+      "document": "{\"version\": 3, \"kind\": \"comic\", \"headers\": {\"X-Audit\": \"native-acceptance\"}, \"operations\": {\"search\": {\"format\": \"html\", \"list\": {\"query\": \"li\"}, \"fields\": {\"title\": {\"query\": \"a\"}, \"url\": {\"query\": \"a\", \"attr\": \"href\"}, \"genres\": {\"query\": \".genre\"}}}, \"detail\": {\"format\": \"html\", \"root\": {\"query\": \".detail\"}, \"fields\": {\"title\": {\"query\": \"h1\"}, \"summary\": {\"query\": \".intro\"}, \"toc_url\": {\"query\": \".toc\", \"attr\": \"href\"}}}, \"toc\": {\"format\": \"html\", \"list\": {\"query\": \".chapters li\"}, \"fields\": {\"title\": {\"query\": \"a\"}, \"chapter_url\": {\"query\": \"a\", \"attr\": \"href\"}}}, \"pages\": {\"format\": \"html\", \"list\": {\"query\": \"img.page\"}, \"fields\": {\"image_url\": {\"attr\": \"src\"}}}}}"
+    },
+    "item": {
+      "id": 3001,
+      "kind": "comic",
+      "sourceKey": "src_40fae4e7c21b261b74491626f3e4332c",
+      "sourceName": "验收cA",
+      "remoteId": "/cA/book/001",
+      "title": "同名作品001",
+      "author": "",
+      "cover": "",
+      "summary": "",
+      "genres": "adventure",
+      "status": "",
+      "latest": "",
+      "words": "",
+      "updatedAt": "",
+      "available": true
+    },
+    "detail": {
+      "item": {
+        "id": 3001,
+        "kind": "comic",
+        "sourceKey": "src_40fae4e7c21b261b74491626f3e4332c",
+        "sourceName": "验收cA",
+        "remoteId": "/cA/book/001",
+        "title": "同名作品001",
+        "author": "",
+        "cover": "",
+        "summary": "原生测试作品",
+        "genres": "",
+        "status": "",
+        "latest": "",
+        "words": "",
+        "updatedAt": "",
+        "available": true
+      },
+      "chapters": [
+        {
+          "id": 97,
+          "remoteId": "/cA/chapter/1",
+          "ord": 0,
+          "title": "第1章",
+          "volume": "",
+          "isVolume": false,
+          "access": "unknown",
+          "available": true
+        },
+        {
+          "id": 98,
+          "remoteId": "/cA/chapter/2",
+          "ord": 1,
+          "title": "第2章",
+          "volume": "",
+          "isVolume": false,
+          "access": "unknown",
+          "available": true
+        },
+        {
+          "id": 99,
+          "remoteId": "/cA/chapter/3",
+          "ord": 2,
+          "title": "第3章",
+          "volume": "",
+          "isVolume": false,
+          "access": "unknown",
+          "available": true
+        }
+      ],
+      "chapterCount": 3
+    }
+  }
+}

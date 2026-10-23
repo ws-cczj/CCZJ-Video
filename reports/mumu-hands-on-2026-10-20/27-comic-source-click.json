@@ -1,0 +1,46 @@
+{
+  "url": "https://wails.localhost/?application-mode=comic&mode-resume=mvgn7svg-1-12mmjpa321#/comic/sources",
+  "text": "漫画源\n选择内容源\n\n先查看来源和检测情况，再选择需要的源导入。\n\n已适配源\n源列表链接\n载入预览\n选择 JSON 文件\n\n支持 CCZJ 源列表、Legado 静态规则子集和 Mihon 扩展索引。已适配站点可转换；脚本、登录或未适配扩展会列出原因。\n\n名称或域名\n来源项目\n全部\nMihon\n检测情况\n全部\n完整链路通过\n部分通过\n尚未检测\n检测已过期\n检测失败\n暂不兼容\n排序\n实测质量优先\n相同状态按耗时\n按名称\n\n排序：24 小时内完整链路通过 → 部分通过 → 未检测/已过期 → 检测失败 → 不兼容。评分依据阅读完整性、历史成功比例和耗时；单次通过不代表长期稳定。\n\n4 个候选 · 已选 0 个\n选择本页可导入源\n咚漫漫画\n完整链路通过\n\nMihon · 已适配 · 96/100 · 2490 ms\n\nhttps://www.dongmanmanhua.cn\n\n通过 1/1 次 · 2026/10/19 21:06:13\n\n随版本提供的公开网络样本，建议在本机复测\n\n检测链路\n检测详情\n查看原始来源\n瓜子漫画\n完整链路通过\n\nMihon · 已适配 · 93/100 · 6776 ms\n\nhttps://www.guazimanhua.com\n\n通过 1/1 次 · 2026/10/19 21:06:22\n\n随版本提供的公开网络样本，建议在本机复测\n\n检测链路\n检测详情\n查看原始来源\n崩坏3官方漫画\n暂不兼容\n\nMihon · 源配置\n\nhttps://comic.bh3.com\n\n官方列表和目录实测 HTTP 200；扩展明确无搜索，需支持列表浏览后才能导入。\n\n检测详情\n查看原始来源\n泰拉记事社\n暂不兼容\n\nMihon · 源配置\n\nhttps://comic.hypergryph.com\n\n官方漫画列表 JSON 实测 HTTP 200；搜索在客户端过滤，图片页接口需序号构造，待专用适配。\n\n检测详情\n查看原始来源\n检测关键词\n检测所选\n导入所选 (0)\n漫画源\n\n这里管理已经导入的源。也可以手工添加声明式配置；应用不内置书籍或漫画。\n\n添加源\n📭\n还没有添加源\n\n添加一个源之后，这里才能搜到内容。",
+  "links": [
+    {
+      "text": "发现",
+      "href": "#/comic"
+    },
+    {
+      "text": "分类",
+      "href": "#/comic/categories"
+    },
+    {
+      "text": "追漫",
+      "href": "#/comic/library"
+    },
+    {
+      "text": "我的",
+      "href": "#/comic/me"
+    },
+    {
+      "text": "",
+      "href": "#/comic/search"
+    },
+    {
+      "text": "",
+      "href": "#/comic/settings"
+    },
+    {
+      "text": "查看原始来源",
+      "href": "https://github.com/keiyoushi/extensions-source/blob/314a0d1b2b6b194f6a4f9aee252fec9ce55ae5ca/src/zh/dongmanmanhua/src/eu/kanade/tachiyomi/extension/zh/dongmanmanhua/DongmanManhua.kt"
+    },
+    {
+      "text": "查看原始来源",
+      "href": "https://github.com/keiyoushi/extensions-source/blob/314a0d1b2b6b194f6a4f9aee252fec9ce55ae5ca/src/zh/guazimanhua/src/eu/kanade/tachiyomi/extension/zh/guazimanhua/Guazimanhua.kt"
+    },
+    {
+      "text": "查看原始来源",
+      "href": "https://github.com/keiyoushi/extensions-source/blob/314a0d1b2b6b194f6a4f9aee252fec9ce55ae5ca/src/zh/bh3/src/eu/kanade/tachiyomi/extension/zh/bh3/BH3.kt"
+    },
+    {
+      "text": "查看原始来源",
+      "href": "https://github.com/keiyoushi/extensions-source/blob/314a0d1b2b6b194f6a4f9aee252fec9ce55ae5ca/src/zh/terrahistoricus/src/eu/kanade/tachiyomi/extension/zh/terrahistoricus/TerraHistoricus.kt"
+    }
+  ]
+}

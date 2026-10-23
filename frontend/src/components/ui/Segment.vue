@@ -22,11 +22,11 @@ const activeIdx = computed(() => props.options.findIndex(o => o.value === props.
 </script>
 
 <template>
-  <div class="ui-seg" :class="`ui-seg--${size}`">
+  <div class="ui-seg cczj-gap-1" :class="`ui-seg--${size}`">
     <div
       v-if="activeIdx >= 0"
       class="ui-seg__indicator"
-      :style="{ transform: `translateX(${activeIdx * 100}%)`, width: `${100 / options.length}%` }"
+      :style="{ transform: `translateX(calc(${activeIdx * 100}% + ${activeIdx * 2}px))`, width: `calc(${100 / options.length}% - ${2 + 4 / options.length}px)` }"
     ></div>
     <button
       v-for="opt in options"
@@ -34,6 +34,7 @@ const activeIdx = computed(() => props.options.findIndex(o => o.value === props.
       class="ui-seg__item"
       :class="{ 'ui-seg__item--active': opt.value === modelValue }"
       type="button"
+      :aria-pressed="opt.value === modelValue"
       @click="emit('update:modelValue', opt.value)"
     >
       {{ opt.label }}
@@ -43,48 +44,48 @@ const activeIdx = computed(() => props.options.findIndex(o => o.value === props.
 
 <style scoped>
 .ui-seg {
-  position: relative;
-  display: inline-flex;
+  @apply cczj-relative;
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   background: var(--bg-secondary);
-  border: 1px solid var(--border);
+  @apply cczj-border;
   border-radius: 10px;
   padding: 3px;
-  gap: 2px;
 }
 
 .ui-seg__indicator {
-  position: absolute;
+  @apply cczj-absolute;
   top: 3px;
   bottom: 3px;
   left: 3px;
   background: var(--accent);
   border-radius: 7px;
-  transition: transform var(--transition);
-  z-index: 0;
+  transition: transform var(--cczj-motion-normal) var(--cczj-motion-ease-emphasis);
+  @apply cczj-z-0;
 }
 
 .ui-seg__item {
-  position: relative;
+  @apply cczj-relative;
   z-index: 1;
   padding: 6px 14px;
   border: none;
   border-radius: 7px;
   background: transparent;
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: color var(--transition-fast);
-  white-space: nowrap;
+  @apply cczj-text-secondary cczj-text-13 cczj-font-semibold cczj-cursor-pointer;
+  transition: color var(--cczj-motion-fast), transform var(--cczj-motion-fast);
+  @apply cczj-whitespace-nowrap;
   font-family: inherit;
 }
-.ui-seg__item:hover { color: var(--text-primary); }
+.ui-seg__item:active { transform: scale(.96); }
+.ui-seg__item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ui-seg__item:not(.ui-seg__item--active):hover { @apply cczj-text-primary; }
 .ui-seg__item--active { color: var(--accent-contrast); }
 
 .ui-seg--sm .ui-seg__item {
   padding: 5px 10px;
-  font-size: 12px;
+  @apply cczj-text-sm;
 }
-.ui-seg--sm { border-radius: 8px; }
-.ui-seg--sm .ui-seg__indicator { border-radius: 6px; }
+.ui-seg--sm { @apply cczj-rounded-md; }
+.ui-seg--sm .ui-seg__indicator { @apply cczj-rounded; }
 </style>

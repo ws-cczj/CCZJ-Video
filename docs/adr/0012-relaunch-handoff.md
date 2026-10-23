@@ -1,3 +1,5 @@
+> 历史设计记录；当前开发规范统一见 [AGENTS.md](../../AGENTS.md)。本文记录当时的选择与证据，不限制后续重构。
+
 # ADR 0012: A script that starts the app must hand off the single-instance lock
 
 ## Status

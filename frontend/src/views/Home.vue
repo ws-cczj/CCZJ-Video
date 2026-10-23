@@ -1,6 +1,9 @@
 <script setup lang="ts">
+import CczjMobileEditActions from '../mobile/CczjMobileEditActions.vue'
 defineOptions({ name: 'Home' })
 import { ref, computed, onMounted, onActivated, onDeactivated, onBeforeUnmount, watch, nextTick } from 'vue'
+import { useModeViewState } from '../modes/useModeViewState'
+import { startupTask } from '../diagnostics/startup'
 import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -11,12 +14,14 @@ import { useLayoutStore } from '../stores/layout'
 import { useVideoList, type VideoFilter } from '../composables/useVideoList'
 import { useErrorStore } from '../stores/error'
 import VideoCard from '../components/VideoCard.vue'
-import { Button, Tag, Spinner as LoadingSpinner, Empty as EmptyState, Select as SelectDropdown } from '../components/ui'
+import { Button, Tag, Modal, Spinner as LoadingSpinner, Empty as EmptyState, Select as SelectDropdown } from '../components/ui'
 import BookCarousel from '../components/BookCarousel.vue'
 import Icon from '../components/Icon.vue'
 import { getDetailPath, getSearchPath } from '../utils'
 import { readStorage, writeStorage } from '../platform/storage'
 import type { Video } from '../types'
+import { useHoldToEdit } from '../mobile/useHoldToEdit'
+import { isMobileRuntime } from '../api/runtime'
 
 const { t } = useI18n()
 
@@ -67,6 +72,14 @@ const activeFilters = ref<ActiveFilters>({
 
 // 单个展开/收起按钮：未展开时只显示类型，展开后同时显示年份与地区
 const expanded = ref(false)
+const checkpointSource=ref('')
+useModeViewState('video','home',{
+  source:checkpointSource,expanded,
+  typeId:computed({get:()=>activeFilters.value.typeId,set:value=>{activeFilters.value.typeId=value}}),
+  year:computed({get:()=>activeFilters.value.year,set:value=>{activeFilters.value.year=value}}),
+  area:computed({get:()=>activeFilters.value.area,set:value=>{activeFilters.value.area=value}}),
+  sort:computed({get:()=>activeFilters.value.sort,set:value=>{activeFilters.value.sort=['default','rating','hot'].includes(value)?value:'default'}}),
+})
 
 // debounce 防止快速连续触发（如点击chip同时watcher触发）
 let applyTimer: ReturnType<typeof setTimeout> | null = null
@@ -413,6 +426,19 @@ function onChartSlideClick(video: Video): void {
 }
 
 const removingContinueId = ref('')
+const showContinueRemoval = ref(false)
+const pendingContinueRemoval = ref<ContinueItem | null>(null)
+function requestContinueRemoval(item: ContinueItem): void {
+  if (!isMobileRuntime()) { void removeContinueItem(item); return }
+  pendingContinueRemoval.value = item
+  showContinueRemoval.value = true
+}
+async function confirmContinueRemoval(): Promise<void> {
+  if (!pendingContinueRemoval.value || removingContinueId.value) return
+  await removeContinueItem(pendingContinueRemoval.value)
+  showContinueRemoval.value = false
+  pendingContinueRemoval.value = null
+}
 
 async function removeContinueItem(item: ContinueItem): Promise<void> {
   const key = item.global_id != null ? `g-${item.global_id}` : `${item.source_key}-${item.vod_id}`
@@ -448,23 +474,28 @@ let suppressSourceWatch = false
 async function refreshHomeFeed(): Promise<void> {
   const key = sourceStore.currentSourceKey
   if (!key) return
+  // Recommendations are independent of the local first page. Start them under
+  // the same fixed splash interval rather than after the list has completed.
+  void loadRecommendations()
   await Promise.all([
     videoStore.loadTypes(key),
     videoStore.loadYearsAndAreas(key),
-    list.load(key, { type_id: '', year: '', area: '', keyword: '' }, 1, 50),
+    list.load(key, { type_id: activeFilters.value.typeId==='all'?'':activeFilters.value.typeId, year: activeFilters.value.year==='all'?'':activeFilters.value.year, area: activeFilters.value.area==='all'?'':activeFilters.value.area, keyword: '',sort:activeFilters.value.sort==='default'?'':activeFilters.value.sort }, 1, 50),
   ])
-  await loadRecommendations()
 }
 
 onMounted(async () => {
+ await startupTask('first_screen',async()=>{
   suppressSourceWatch = true
-  await layoutStore.load()
-  await sourceStore.loadSources()
+  await Promise.all([layoutStore.load(),sourceStore.loadSources()])
+  if(checkpointSource.value&&checkpointSource.value!==sourceStore.currentSourceKey)resetFilters()
+  checkpointSource.value=sourceStore.currentSourceKey
   await refreshHomeFeed()
   // The currentSourceKey watcher below is for user-driven switches; loadSources()
   // above sets that key, so hold the watcher off until those jobs have flushed.
   await nextTick()
   suppressSourceWatch = false
+ })
 })
 
 onBeforeUnmount(() => {
@@ -478,11 +509,16 @@ onActivated(async () => {
   await refreshHomeFeed()
 })
 
-onDeactivated(() => { homePageWasDeactivated = true })
+onDeactivated(() => {
+  homePageWasDeactivated = true
+  showContinueRemoval.value = false
+  pendingContinueRemoval.value = null
+})
 
 watch(() => sourceStore.currentSourceKey, async (key: string) => {
   if (!key || suppressSourceWatch) return
   resetFilters()
+  checkpointSource.value=key
   await videoStore.loadTypes(key)
   await videoStore.loadYearsAndAreas(key)
   await loadRecommendations()
@@ -493,10 +529,12 @@ watch(
   () => [activeFilters.value.typeId, activeFilters.value.year, activeFilters.value.area, activeFilters.value.sort] as const,
   () => { applyFilters() },
 )
+const { editing: editingContinue, finish: finishContinueEditing, vHoldToEdit } = useHoldToEdit(isMobileRuntime())
 </script>
 
 <template>
   <div class="home cczj-max-w-full cczj-text-primary">
+    <router-link v-if="isMobileRuntime()" to="/search" class="cczj-mobile-home-search"><Icon name="search" :size="19" /><span>{{ t('mobile.homeSearch') }}</span><Icon name="chevron-right" :size="16" /></router-link>
     <BookCarousel v-if="layoutStore.showCarousel && carouselSlides.length > 0" :slides="carouselSlides"
       :source-key="sourceStore.currentSourceKey" :on-slide-click="onChartSlideClick"
       :auto-play="layoutStore.carouselAutoPlay" :interval-ms="layoutStore.carouselIntervalMs" />
@@ -510,19 +548,21 @@ watch(
 
       <!-- 推荐分组（紧凑行） -->
       <div v-if="recommendGroups.length > 0" class="recommend-groups cczj-flex cczj-flex-col">
-        <div v-for="(group, groupIdx) in recommendGroups" :key="group.key" class="recommend-group cczj-flex cczj-flex-col cczj-gap-5">
+        <div v-for="(group, groupIdx) in recommendGroups" :key="group.key" class="recommend-group cczj-flex cczj-flex-col cczj-gap-5" :class="{ 'cczj-mobile-continue-group': isMobileRuntime() && group.key === 'continue' }">
           <div class="group-head cczj-flex cczj-items-baseline cczj-gap-5 cczj-flex-wrap">
             <h4 class="group-title cczj-font-bold cczj-text-primary">{{ group.title }}</h4>
             <span class="group-desc cczj-text-base cczj-text-muted">{{ group.description }}</span>
           </div>
-          <div class="recommend-row cczj-grid cczj-gap-6">
+          <div class="recommend-row cczj-grid cczj-gap-6" :data-cczj-editing="group.key === 'continue' && editingContinue || undefined">
             <template v-if="group.key === 'continue' && group.continueItems">
               <div v-for="(item, idx) in group.continueItems" :key="`rec-continue-${item.source_key}-${item.vod_id}`"
-                class="rec-card-wrap cczj-relative">
-                <VideoCard :video="item" @click="goDetailFromRecommend(item)" />
-                <Button variant="overlay" size="sm" icon class="rec-remove-btn cczj-absolute cczj-rounded-50 cczj-opacity-0 cczj-transition-fast" :title="t('home.removeFromContinue')"
-                  :disabled="removingContinueId === `${item.source_key}-${item.vod_id}`"
-                  @click.stop="removeContinueItem(item)">
+                class="rec-card-wrap cczj-relative" v-hold-to-edit>
+                <VideoCard :video="item" @click="!editingContinue && goDetailFromRecommend(item)">
+                  <template v-if="isMobileRuntime()" #meta><span class="cczj-mobile-continue-meta">{{ t('history.epProgress', { num: item.ep_num || 1 }) }}</span></template>
+                </VideoCard>
+                <Button v-if="!isMobileRuntime() || editingContinue" data-cczj-remove variant="overlay" size="sm" icon class="rec-remove-btn cczj-absolute cczj-rounded-50 cczj-opacity-0 cczj-transition-fast" :title="t('home.removeFromContinue')"
+                  :disabled="removingContinueId === (item.global_id != null ? `g-${item.global_id}` : `${item.source_key}-${item.vod_id}`)"
+                  @click.stop="requestContinueRemoval(item)">
                   <Icon name="x" :size="12" />
                 </Button>
               </div>
@@ -537,8 +577,12 @@ watch(
       </div>
     </section>
 
+    <Modal v-model="showContinueRemoval" :title="t('home.removeFromContinue')" :show-footer="true" :ok-text="t('common.confirm')" :ok-disabled="!!removingContinueId" :ok-loading="!!removingContinueId" @ok="confirmContinueRemoval" @cancel="pendingContinueRemoval = null">
+      <p>{{ t('mobile.removeContinueHint', { name: pendingContinueRemoval?.vod_name || '' }) }}</p>
+    </Modal>
+
     <!-- ============ 筛选区域 ============ -->
-    <section class="filter-section cczj-bg-card cczj-border cczj-mb-10">
+    <section v-if="!isMobileRuntime() || sourceStore.currentSourceKey" class="filter-section cczj-bg-card cczj-border cczj-mb-10">
       <div class="filter-head cczj-flex cczj-items-center cczj-justify-between cczj-gap-6 cczj-mb-6">
         <h3 class="cczj-inline-flex cczj-items-center cczj-gap-4 cczj-font-bold cczj-text-primary">
           <Icon name="sliders" :size="14" />
@@ -621,6 +665,7 @@ watch(
         @click="goDetail(v)" />
     </div>
   </div>
+<CczjMobileEditActions v-if="isMobileRuntime()" :open="editingContinue" @done="finishContinueEditing" @cancel="finishContinueEditing" />
 </template>
 
 <style scoped>
@@ -649,12 +694,11 @@ watch(
 }
 
 .rec-card-wrap:hover .rec-remove-btn {
-  opacity: 1;
+  @apply cczj-opacity-100;
 }
 
 .rec-remove-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  @apply cczj-opacity-50 cczj-cursor-not-allowed;
 }
 
 @media (max-width: 1400px) {

@@ -32,7 +32,7 @@ func (s *Service) Export(dataDir, sourceKey string) (string, error) {
 	}
 	sourceModel, err := db.GetSourceByKey(sourceKey)
 	if err != nil {
-		return "", apperror.Wrap(apperror.NotFound, err, "read source")
+		return "", apperror.Wrap(apperror.Storage, err, "read source")
 	}
 	sourceTypes, err := db.ExportSourceTypes(sourceKey)
 	if err != nil {

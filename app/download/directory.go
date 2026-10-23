@@ -13,14 +13,23 @@ type SettingSaver func(key, value string) error
 
 // Directory owns the mutable download-directory preference.
 type Directory struct {
-	mu      sync.RWMutex
-	custom  string
-	save    SettingSaver
-	homeDir func() (string, error)
+	mu         sync.RWMutex
+	custom     string
+	save       SettingSaver
+	homeDir    func() (string, error)
+	defaultDir func() string
 }
 
 func NewDirectory(save SettingSaver) *Directory {
 	return &Directory{save: save, homeDir: os.UserHomeDir}
+}
+
+// NewDirectoryWithDefault lets the composition root supply a platform-owned
+// writable directory. Android's HOME points at shared storage, not app storage.
+func NewDirectoryWithDefault(save SettingSaver, defaultDir func() string) *Directory {
+	d := NewDirectory(save)
+	d.defaultDir = defaultDir
+	return d
 }
 
 // Get returns the configured directory when it exists, otherwise the platform default.
@@ -31,6 +40,11 @@ func (d *Directory) Get() string {
 	if configured != "" {
 		if info, err := os.Stat(configured); err == nil && info.IsDir() {
 			return configured
+		}
+	}
+	if d.defaultDir != nil {
+		if directory := d.defaultDir(); directory != "" {
+			return directory
 		}
 	}
 	home, err := d.homeDir()

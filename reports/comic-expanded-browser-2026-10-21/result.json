@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "native": false,
+  "checks": [
+    "Empty SQLite opens four actual bundled comic catalogs without keyword; novel/video sources stay separate",
+    "Keyboard shuffle and contact-sheet cover selection agree with the detail link and perform no extra requests",
+    "Actual official comic can be followed and read; Back and Following tab retain the selected catalog",
+    "320–1360px responsive layouts, reachable 44px cover controls, night palette, and functional reduced-motion selection"
+  ],
+  "rpcCalls": 28,
+  "errors": []
+}

@@ -1,0 +1,93 @@
+{
+  "video": {
+    "vod_id": "1",
+    "type_id": "1",
+    "type_name": "测试",
+    "vod_name": "Android acceptance movie",
+    "global_id": 11,
+    "vod_class": "",
+    "vod_lang": "",
+    "vod_actor": "",
+    "vod_area": "",
+    "vod_content": "Controlled acceptance fixture",
+    "vod_pic": "",
+    "vod_director": "",
+    "vod_from": "",
+    "vod_remarks": "2集",
+    "vod_time": "",
+    "vod_year": "2026",
+    "vod_play_url": "第一集$http://127.0.0.1:63345/media/movie.mp4#第二集$http://127.0.0.1:63345/media/movie.mp4?episode=2$$$第一集$http://127.0.0.1:63345/media/movie.m3u8#第二集$http://127.0.0.1:63345/media/movie.m3u8?episode=2",
+    "vod_down_url": "",
+    "vod_douban_id": "",
+    "vod_douban_score": "",
+    "vod_hits": "",
+    "vod_hits_day": "",
+    "vod_hits_week": "",
+    "vod_hits_month": "",
+    "vod_pubdate": "",
+    "vod_version": "",
+    "vod_state": "",
+    "vod_score": "",
+    "vod_score_all": "",
+    "vod_score_num": "",
+    "vod_isend": "",
+    "vod_play_from": "MP4$$$HLS",
+    "vod_play_note": "",
+    "vod_letter": "",
+    "vod_tag": "",
+    "vod_sub": "",
+    "vod_en": ""
+  },
+  "episodes": [
+    {
+      "vod_id": "1",
+      "ep_num": 1,
+      "ep_name": "第一集",
+      "ep_url": "http://127.0.0.1:63345/media/movie.mp4"
+    },
+    {
+      "vod_id": "1",
+      "ep_num": 2,
+      "ep_name": "第二集",
+      "ep_url": "http://127.0.0.1:63345/media/movie.mp4?episode=2"
+    }
+  ],
+  "lines": [
+    {
+      "index": 0,
+      "name": "MP4",
+      "episodes": [
+        {
+          "vod_id": "1",
+          "ep_num": 1,
+          "ep_name": "第一集",
+          "ep_url": "http://127.0.0.1:63345/media/movie.mp4"
+        },
+        {
+          "vod_id": "1",
+          "ep_num": 2,
+          "ep_name": "第二集",
+          "ep_url": "http://127.0.0.1:63345/media/movie.mp4?episode=2"
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "name": "HLS",
+      "episodes": [
+        {
+          "vod_id": "1",
+          "ep_num": 1,
+          "ep_name": "第一集",
+          "ep_url": "http://127.0.0.1:63345/media/movie.m3u8"
+        },
+        {
+          "vod_id": "1",
+          "ep_num": 2,
+          "ep_name": "第二集",
+          "ep_url": "http://127.0.0.1:63345/media/movie.m3u8?episode=2"
+        }
+      ]
+    }
+  ]
+}

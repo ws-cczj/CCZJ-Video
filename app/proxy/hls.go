@@ -2,6 +2,8 @@ package proxy
 
 import (
 	"bytes"
+	"cczjVideo/app/netbudget"
+	"cczjVideo/app/netpolicy"
 	"cczjVideo/app/netstats"
 	"context"
 	"encoding/base64"
@@ -30,7 +32,9 @@ type HLSService struct {
 }
 
 // NewHLSService creates a handler mounted by Wails' same-origin asset server.
-func NewHLSService() *HLSService {
+func NewHLSService() *HLSService { return NewHLSServiceWithBudget(nil) }
+
+func NewHLSServiceWithBudget(budget *netbudget.Budget) *HLSService {
 	// jar 让「发片段的第二跳」带上第一跳拿到的 Set-Cookie：不少 CDN 先在同一批
 	// 请求里下个会话 cookie，再在后续片段上校验它。cookiejar 按标准域名作用域
 	// 存取消协，不会把 A 站的 cookie 发给 B 站；而响应侧永远不把上游的 Set-Cookie
@@ -42,24 +46,32 @@ func NewHLSService() *HLSService {
 		Jar:     jar,
 		// 计数层贴在真正干活的 Transport 外面：播放流量（m3u8 + 分片）是诊断页
 		// 「网络吞吐」里最该被看见的一类，而分片是流式转发，只有在读路径上才数得准。
-		Transport: netstats.WrapTransport(netstats.CategoryPlayback, &http.Transport{
+		Transport: netpolicy.WrapTransport(string(netstats.CategoryPlayback), netstats.WrapTransport(netstats.CategoryPlayback, &http.Transport{
 			MaxIdleConns:        64,
 			MaxIdleConnsPerHost: 12,
 			IdleConnTimeout:     90 * time.Second,
 			TLSHandshakeTimeout: 15 * time.Second,
-			DialContext:         safeDialContext,
-		}),
+			DialContext:         SafeDialContext,
+		})),
 		CheckRedirect: func(req *http.Request, _ []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
 	}
+	if budget != nil {
+		s.client.Transport = budget.Wrap("playback", s.client.Transport)
+	}
 	return s
 }
 
-// safeDialContext validates the address at the moment it is dialled. This
+func (s *HLSService) Close() { s.client.CloseIdleConnections() }
+
+// SafeDialContext validates the address at the moment it is dialled. This
 // closes the DNS-rebinding gap between ValidateTarget and Transport's lookup.
-// It is shared by both HLS and image proxy transports.
-func safeDialContext(ctx context.Context, network, address string) (net.Conn, error) {
+//
+// 它是导出的，因为出网的 transport 不止 proxy 一个：HLS 代理、图片代理、线路测速
+// 与 app/provider（小说/漫画的资源载入）都用同一份。SSRF 判据是那种"两份实现
+// 各自漂移、其中一份出现洞"的代码，所以这里只允许有一份。
+func SafeDialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
 		return nil, err

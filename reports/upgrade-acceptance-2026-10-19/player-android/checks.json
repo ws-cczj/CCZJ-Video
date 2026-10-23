@@ -1,0 +1,1033 @@
+[
+  {
+    "name": "actual-mp4-page-playback",
+    "status": "passed",
+    "result": {
+      "elapsedSeconds": 2.577999999979511,
+      "perf": {
+        "loads": 1,
+        "first_frame": {
+          "count": 1,
+          "totalMs": 715,
+          "maxMs": 715
+        },
+        "stalls": {
+          "count": 0,
+          "totalMs": 0
+        },
+        "frames": {
+          "total": 7,
+          "dropped": 0
+        },
+        "errors": {
+          "count": 0,
+          "lastKind": "",
+          "lastHost": ""
+        },
+        "watched_seconds": 0,
+        "current": {
+          "host": "127.0.0.1",
+          "resolution": "320x180",
+          "bitrateBps": 0
+        },
+        "browser_resources": {
+          "js_heap": {
+            "source": "performance.memory",
+            "used_bytes": 20500000,
+            "total_bytes": 21700000,
+            "limit_bytes": 1070000000
+          },
+          "player": {
+            "quality_mode": "original",
+            "enhancement_active": false,
+            "presentation": {
+              "profile": {
+                "ui": "mobile",
+                "host": "native-mobile"
+              },
+              "controls": "mobile",
+              "fullscreen_adapter": "element",
+              "pip_adapter": "device",
+              "native_volume": true
+            },
+            "hls": {
+              "active": false,
+              "bandwidth_estimate_bps": null,
+              "config": null
+            },
+            "thumbnail": {
+              "active": false,
+              "hls_active": false,
+              "pending_seek": false,
+              "ready_state": null,
+              "buffered_ranges": []
+            },
+            "issues": [
+              {
+                "operation": "source",
+                "code": "manifestLoadError",
+                "recoverable": true,
+                "count": 1,
+                "first_at_ms": 1792379744662,
+                "last_at_ms": 1792379744662
+              }
+            ],
+            "segment_cache": {
+              "activePlayers": 1,
+              "idleTrimPending": false,
+              "memoryLimitBytes": 134217728,
+              "hits": 0,
+              "misses": 0,
+              "entries": 0,
+              "totalEntries": 0,
+              "bytes": 0,
+              "totalSegments": 0,
+              "playedSegments": 0,
+              "hitRate": 0,
+              "avgFetchMs": 0,
+              "prefetchCount": 10,
+              "prefetchTarget": 0,
+              "queued": 0,
+              "inflight": 0,
+              "bufferOffset": 8,
+              "spreadStep": 2,
+              "cacheMB": 0,
+              "concurrency": 1,
+              "fragmentTimeout": 8000,
+              "consecutiveSlowSegs": 0
+            }
+          },
+          "players": [
+            {
+              "session_id": "mveomdzg-1",
+              "snapshot": {
+                "quality_mode": "original",
+                "enhancement_active": false,
+                "presentation": {
+                  "profile": {
+                    "ui": "mobile",
+                    "host": "native-mobile"
+                  },
+                  "controls": "mobile",
+                  "fullscreen_adapter": "element",
+                  "pip_adapter": "device",
+                  "native_volume": true
+                },
+                "hls": {
+                  "active": false,
+                  "bandwidth_estimate_bps": null,
+                  "config": null
+                },
+                "thumbnail": {
+                  "active": false,
+                  "hls_active": false,
+                  "pending_seek": false,
+                  "ready_state": null,
+                  "buffered_ranges": []
+                },
+                "issues": [
+                  {
+                    "operation": "source",
+                    "code": "manifestLoadError",
+                    "recoverable": true,
+                    "count": 1,
+                    "first_at_ms": 1792379744662,
+                    "last_at_ms": 1792379744662
+                  }
+                ],
+                "segment_cache": {
+                  "activePlayers": 1,
+                  "idleTrimPending": false,
+                  "memoryLimitBytes": 134217728,
+                  "hits": 0,
+                  "misses": 0,
+                  "entries": 0,
+                  "totalEntries": 0,
+                  "bytes": 0,
+                  "totalSegments": 0,
+                  "playedSegments": 0,
+                  "hitRate": 0,
+                  "avgFetchMs": 0,
+                  "prefetchCount": 10,
+                  "prefetchTarget": 0,
+                  "queued": 0,
+                  "inflight": 0,
+                  "bufferOffset": 8,
+                  "spreadStep": 2,
+                  "cacheMB": 0,
+                  "concurrency": 1,
+                  "fragmentTimeout": 8000,
+                  "consecutiveSlowSegs": 0
+                }
+              }
+            }
+          ],
+          "registered_player_count": 1,
+          "architecture": {
+            "revision": "player-seams-20261019-4",
+            "presentation": {
+              "ui": "mobile",
+              "host": "native-mobile"
+            },
+            "active_player_count": 1,
+            "active_players": [
+              {
+                "id": "mveomdzg-1",
+                "started_at_ms": 1792379744332,
+                "media_loads": 1
+              }
+            ],
+            "last_closed_player": null
+          },
+          "attached_dom": {
+            "video_count": 1,
+            "canvas_count": 1,
+            "image_count": 0,
+            "videos": [
+              {
+                "current_time": 1.119353,
+                "ready_state": 4,
+                "network_state": 1,
+                "paused": false,
+                "ended": false,
+                "width": 320,
+                "height": 180,
+                "has_source": true,
+                "buffered_ranges": [
+                  [
+                    0,
+                    63.826
+                  ]
+                ],
+                "buffer_ahead_seconds": 62.706647000000004,
+                "buffer_behind_seconds": 1.119353
+              }
+            ],
+            "canvas_rgba_estimate_bytes": 180000,
+            "image_rgba_estimate_bytes": 0
+          }
+        }
+      },
+      "video": {
+        "time": 1.544867,
+        "duration": 120,
+        "src": "https://wails.localhost/__cczj/hls?u=aHR0cDovLzEyNy4wLjAuMTo2MzM0NS9tZWRpYS9tb3ZpZS5tcDQ"
+      }
+    }
+  },
+  {
+    "name": "single-tap-controls-double-tap-pause",
+    "status": "passed",
+    "result": {
+      "pausedAfterDoubleTap": true
+    }
+  },
+  {
+    "name": "seek-preview-brightness-volume",
+    "status": "passed",
+    "result": {
+      "seekBefore": 2.355948,
+      "seekAfter": 32.355947,
+      "seekHUD": {
+        "text": "00:32/ 02:00+30s",
+        "preview": true
+      },
+      "brightnessHUD": {
+        "text": "85%",
+        "preview": false,
+        "compact": "cczj-mobile-level-feedback cczj-mobile-level-compact"
+      },
+      "volumeHUD": {
+        "text": "60%",
+        "preview": false,
+        "compact": "cczj-mobile-level-feedback cczj-mobile-level-compact"
+      },
+      "pictureBefore": "brightness(1)",
+      "pictureAfter": "brightness(1.525)",
+      "nativeBefore": {
+        "brightness": 0.08235294371843338,
+        "volume": 0.6,
+        "pip": true
+      },
+      "nativeAfter": {
+        "brightness": 0.08235294371843338,
+        "volume": 0.6,
+        "pip": true
+      }
+    }
+  },
+  {
+    "name": "native-fullscreen-speed-lock-back-stable-media",
+    "status": "passed",
+    "result": {
+      "before": {
+        "revision": "player-seams-20261019-4",
+        "presentation": {
+          "ui": "mobile",
+          "host": "native-mobile"
+        },
+        "active_player_count": 1,
+        "active_players": [
+          {
+            "id": "mveomdzg-1",
+            "started_at_ms": 1792379744332,
+            "media_loads": 1
+          }
+        ],
+        "last_closed_player": null
+      },
+      "after": {
+        "revision": "player-seams-20261019-4",
+        "presentation": {
+          "ui": "mobile",
+          "host": "native-mobile"
+        },
+        "active_player_count": 1,
+        "active_players": [
+          {
+            "id": "mveomdzg-1",
+            "started_at_ms": 1792379744332,
+            "media_loads": 1
+          }
+        ],
+        "last_closed_player": null
+      }
+    }
+  },
+  {
+    "name": "native-background-foreground-resume",
+    "status": "passed",
+    "result": {
+      "before": 33.613686,
+      "after": 35.398839,
+      "mediaRetained": true
+    }
+  },
+  {
+    "name": "native-picture-in-picture",
+    "status": "passed",
+    "result": {
+      "supported": true,
+      "entered": true,
+      "videoRetained": true
+    }
+  },
+  {
+    "name": "actual-subtitle-file-parsing-render-toggle",
+    "status": "passed",
+    "result": {
+      "fileParsed": true,
+      "displayed": true,
+      "hidden": true
+    }
+  },
+  {
+    "name": "actual-hls-line-resume-and-episode-reset",
+    "status": "passed",
+    "result": {
+      "before": 39.969363,
+      "after": 40.023755,
+      "hls": {
+        "loads": 2,
+        "first_frame": {
+          "count": 2,
+          "totalMs": 1557,
+          "maxMs": 842
+        },
+        "stalls": {
+          "count": 0,
+          "totalMs": 0
+        },
+        "frames": {
+          "total": 151,
+          "dropped": 23
+        },
+        "errors": {
+          "count": 0,
+          "lastKind": "",
+          "lastHost": ""
+        },
+        "watched_seconds": 9,
+        "current": {
+          "host": "127.0.0.1",
+          "resolution": "320x180",
+          "bitrateBps": 0
+        },
+        "browser_resources": {
+          "js_heap": {
+            "source": "performance.memory",
+            "used_bytes": 20500000,
+            "total_bytes": 21700000,
+            "limit_bytes": 1070000000
+          },
+          "player": {
+            "quality_mode": "original",
+            "enhancement_active": false,
+            "presentation": {
+              "profile": {
+                "ui": "mobile",
+                "host": "native-mobile"
+              },
+              "controls": "mobile",
+              "fullscreen_adapter": "element",
+              "pip_adapter": "device",
+              "native_volume": true
+            },
+            "hls": {
+              "active": true,
+              "bandwidth_estimate_bps": 500000,
+              "config": {
+                "forward_seconds": 30,
+                "max_forward_seconds": 60,
+                "back_seconds": 30,
+                "max_bytes": 60000000
+              }
+            },
+            "thumbnail": {
+              "active": false,
+              "hls_active": false,
+              "pending_seek": false,
+              "ready_state": null,
+              "buffered_ranges": []
+            },
+            "issues": [
+              {
+                "operation": "source",
+                "code": "manifestLoadError",
+                "recoverable": true,
+                "count": 1,
+                "first_at_ms": 1792379744662,
+                "last_at_ms": 1792379744662
+              }
+            ],
+            "segment_cache": {
+              "activePlayers": 1,
+              "idleTrimPending": false,
+              "memoryLimitBytes": 134217728,
+              "hits": 0,
+              "misses": 3,
+              "entries": 3,
+              "totalEntries": 3,
+              "bytes": 836412,
+              "totalSegments": 30,
+              "playedSegments": 10,
+              "hitRate": 0,
+              "avgFetchMs": 192,
+              "prefetchCount": 13,
+              "prefetchTarget": 13,
+              "queued": 13,
+              "inflight": 0,
+              "bufferOffset": 8,
+              "spreadStep": 1,
+              "cacheMB": 0.7976646423339844,
+              "concurrency": 1,
+              "fragmentTimeout": 8000,
+              "consecutiveSlowSegs": 0
+            }
+          },
+          "players": [
+            {
+              "session_id": "mveomdzg-1",
+              "snapshot": {
+                "quality_mode": "original",
+                "enhancement_active": false,
+                "presentation": {
+                  "profile": {
+                    "ui": "mobile",
+                    "host": "native-mobile"
+                  },
+                  "controls": "mobile",
+                  "fullscreen_adapter": "element",
+                  "pip_adapter": "device",
+                  "native_volume": true
+                },
+                "hls": {
+                  "active": true,
+                  "bandwidth_estimate_bps": 500000,
+                  "config": {
+                    "forward_seconds": 30,
+                    "max_forward_seconds": 60,
+                    "back_seconds": 30,
+                    "max_bytes": 60000000
+                  }
+                },
+                "thumbnail": {
+                  "active": false,
+                  "hls_active": false,
+                  "pending_seek": false,
+                  "ready_state": null,
+                  "buffered_ranges": []
+                },
+                "issues": [
+                  {
+                    "operation": "source",
+                    "code": "manifestLoadError",
+                    "recoverable": true,
+                    "count": 1,
+                    "first_at_ms": 1792379744662,
+                    "last_at_ms": 1792379744662
+                  }
+                ],
+                "segment_cache": {
+                  "activePlayers": 1,
+                  "idleTrimPending": false,
+                  "memoryLimitBytes": 134217728,
+                  "hits": 0,
+                  "misses": 3,
+                  "entries": 3,
+                  "totalEntries": 3,
+                  "bytes": 836412,
+                  "totalSegments": 30,
+                  "playedSegments": 10,
+                  "hitRate": 0,
+                  "avgFetchMs": 192,
+                  "prefetchCount": 13,
+                  "prefetchTarget": 13,
+                  "queued": 13,
+                  "inflight": 0,
+                  "bufferOffset": 8,
+                  "spreadStep": 1,
+                  "cacheMB": 0.7976646423339844,
+                  "concurrency": 1,
+                  "fragmentTimeout": 8000,
+                  "consecutiveSlowSegs": 0
+                }
+              }
+            }
+          ],
+          "registered_player_count": 1,
+          "architecture": {
+            "revision": "player-seams-20261019-4",
+            "presentation": {
+              "ui": "mobile",
+              "host": "native-mobile"
+            },
+            "active_player_count": 1,
+            "active_players": [
+              {
+                "id": "mveomdzg-1",
+                "started_at_ms": 1792379744332,
+                "media_loads": 2
+              }
+            ],
+            "last_closed_player": null
+          },
+          "attached_dom": {
+            "video_count": 1,
+            "canvas_count": 1,
+            "image_count": 0,
+            "videos": [
+              {
+                "current_time": 40.023755,
+                "ready_state": 4,
+                "network_state": 2,
+                "paused": false,
+                "ended": false,
+                "width": 320,
+                "height": 180,
+                "has_source": true,
+                "buffered_ranges": [
+                  [
+                    36.037346,
+                    44.023221
+                  ]
+                ],
+                "buffer_ahead_seconds": 3.999465999999998,
+                "buffer_behind_seconds": 3.986409000000002
+              }
+            ],
+            "canvas_rgba_estimate_bytes": 180000,
+            "image_rgba_estimate_bytes": 0
+          }
+        }
+      },
+      "secondEpisodeTime": 0
+    }
+  },
+  {
+    "name": "native-hls-download-pause-resume-file-order",
+    "status": "passed",
+    "result": {
+      "paused": {
+        "task_id": "acceptance-hls-1792379773",
+        "url": "http://127.0.0.1:63345/media/movie.m3u8",
+        "filename": "acceptance-hls-1792379773.ts",
+        "save_path": "/data/user/0/com.cczj.video.acceptance/files/CCZJ Video/downloads/acceptance-hls-1792379773.ts",
+        "total": 8347200,
+        "downloaded": 2771872,
+        "speed_bps": 0,
+        "eta_sec": 0,
+        "status": "paused",
+        "start_time": 1792379769,
+        "end_time": 1792379769
+      },
+      "final": {
+        "task_id": "acceptance-hls-1792379773",
+        "url": "http://127.0.0.1:63345/media/movie.m3u8",
+        "filename": "acceptance-hls-1792379773.ts",
+        "save_path": "/data/user/0/com.cczj.video.acceptance/files/CCZJ Video/downloads/acceptance-hls-1792379773.ts",
+        "total": 8333664,
+        "downloaded": 8333664,
+        "speed_bps": 0,
+        "eta_sec": 0,
+        "status": "done",
+        "start_time": 1792379769,
+        "end_time": 1792379770
+      },
+      "verifiedBytes": 8333664
+    }
+  },
+  {
+    "name": "actual-route-exit-resource-release",
+    "status": "passed",
+    "result": {
+      "active": {
+        "loads": 3,
+        "first_frame": {
+          "count": 3,
+          "totalMs": 1835,
+          "maxMs": 842
+        },
+        "stalls": {
+          "count": 0,
+          "totalMs": 0
+        },
+        "frames": {
+          "total": 181,
+          "dropped": 23
+        },
+        "errors": {
+          "count": 0,
+          "lastKind": "",
+          "lastHost": ""
+        },
+        "watched_seconds": 10,
+        "current": {
+          "host": "127.0.0.1",
+          "resolution": "320x180",
+          "bitrateBps": 0
+        },
+        "browser_resources": {
+          "js_heap": {
+            "source": "performance.memory",
+            "used_bytes": 20500000,
+            "total_bytes": 21700000,
+            "limit_bytes": 1070000000
+          },
+          "player": {
+            "quality_mode": "original",
+            "enhancement_active": false,
+            "presentation": {
+              "profile": {
+                "ui": "mobile",
+                "host": "native-mobile"
+              },
+              "controls": "mobile",
+              "fullscreen_adapter": "element",
+              "pip_adapter": "device",
+              "native_volume": true
+            },
+            "hls": {
+              "active": true,
+              "bandwidth_estimate_bps": 500000,
+              "config": {
+                "forward_seconds": 30,
+                "max_forward_seconds": 60,
+                "back_seconds": 30,
+                "max_bytes": 60000000
+              }
+            },
+            "thumbnail": {
+              "active": false,
+              "hls_active": false,
+              "pending_seek": false,
+              "ready_state": null,
+              "buffered_ranges": []
+            },
+            "issues": [
+              {
+                "operation": "source",
+                "code": "manifestLoadError",
+                "recoverable": true,
+                "count": 1,
+                "first_at_ms": 1792379744662,
+                "last_at_ms": 1792379744662
+              }
+            ],
+            "segment_cache": {
+              "activePlayers": 1,
+              "idleTrimPending": false,
+              "memoryLimitBytes": 134217728,
+              "hits": 1,
+              "misses": 8,
+              "entries": 16,
+              "totalEntries": 16,
+              "bytes": 4440560,
+              "totalSegments": 30,
+              "playedSegments": 1,
+              "hitRate": 0.1111111111111111,
+              "avgFetchMs": 258,
+              "prefetchCount": 13,
+              "prefetchTarget": 13,
+              "queued": 6,
+              "inflight": 1,
+              "bufferOffset": 8,
+              "spreadStep": 1,
+              "cacheMB": 4.2348480224609375,
+              "concurrency": 1,
+              "fragmentTimeout": 8000,
+              "consecutiveSlowSegs": 0
+            }
+          },
+          "players": [
+            {
+              "session_id": "mveomdzg-1",
+              "snapshot": {
+                "quality_mode": "original",
+                "enhancement_active": false,
+                "presentation": {
+                  "profile": {
+                    "ui": "mobile",
+                    "host": "native-mobile"
+                  },
+                  "controls": "mobile",
+                  "fullscreen_adapter": "element",
+                  "pip_adapter": "device",
+                  "native_volume": true
+                },
+                "hls": {
+                  "active": true,
+                  "bandwidth_estimate_bps": 500000,
+                  "config": {
+                    "forward_seconds": 30,
+                    "max_forward_seconds": 60,
+                    "back_seconds": 30,
+                    "max_bytes": 60000000
+                  }
+                },
+                "thumbnail": {
+                  "active": false,
+                  "hls_active": false,
+                  "pending_seek": false,
+                  "ready_state": null,
+                  "buffered_ranges": []
+                },
+                "issues": [
+                  {
+                    "operation": "source",
+                    "code": "manifestLoadError",
+                    "recoverable": true,
+                    "count": 1,
+                    "first_at_ms": 1792379744662,
+                    "last_at_ms": 1792379744662
+                  }
+                ],
+                "segment_cache": {
+                  "activePlayers": 1,
+                  "idleTrimPending": false,
+                  "memoryLimitBytes": 134217728,
+                  "hits": 1,
+                  "misses": 8,
+                  "entries": 16,
+                  "totalEntries": 16,
+                  "bytes": 4440560,
+                  "totalSegments": 30,
+                  "playedSegments": 1,
+                  "hitRate": 0.1111111111111111,
+                  "avgFetchMs": 258,
+                  "prefetchCount": 13,
+                  "prefetchTarget": 13,
+                  "queued": 6,
+                  "inflight": 1,
+                  "bufferOffset": 8,
+                  "spreadStep": 1,
+                  "cacheMB": 4.2348480224609375,
+                  "concurrency": 1,
+                  "fragmentTimeout": 8000,
+                  "consecutiveSlowSegs": 0
+                }
+              }
+            }
+          ],
+          "registered_player_count": 1,
+          "architecture": {
+            "revision": "player-seams-20261019-4",
+            "presentation": {
+              "ui": "mobile",
+              "host": "native-mobile"
+            },
+            "active_player_count": 1,
+            "active_players": [
+              {
+                "id": "mveomdzg-1",
+                "started_at_ms": 1792379744332,
+                "media_loads": 3
+              }
+            ],
+            "last_closed_player": null
+          },
+          "attached_dom": {
+            "video_count": 1,
+            "canvas_count": 1,
+            "image_count": 0,
+            "videos": [
+              {
+                "current_time": 2.492133,
+                "ready_state": 4,
+                "network_state": 2,
+                "paused": false,
+                "ended": false,
+                "width": 320,
+                "height": 180,
+                "has_source": true,
+                "buffered_ranges": [
+                  [
+                    0.023222,
+                    32.023221
+                  ]
+                ],
+                "buffer_ahead_seconds": 29.531088,
+                "buffer_behind_seconds": 2.468911
+              }
+            ],
+            "canvas_rgba_estimate_bytes": 180000,
+            "image_rgba_estimate_bytes": 0
+          }
+        }
+      },
+      "idle": {
+        "loads": 3,
+        "first_frame": {
+          "count": 3,
+          "totalMs": 1835,
+          "maxMs": 842
+        },
+        "stalls": {
+          "count": 0,
+          "totalMs": 0
+        },
+        "frames": {
+          "total": 181,
+          "dropped": 23
+        },
+        "errors": {
+          "count": 0,
+          "lastKind": "",
+          "lastHost": ""
+        },
+        "watched_seconds": 10,
+        "current": {
+          "host": "127.0.0.1",
+          "resolution": "320x180",
+          "bitrateBps": 0
+        },
+        "browser_resources": {
+          "js_heap": {
+            "source": "performance.memory",
+            "used_bytes": 20500000,
+            "total_bytes": 21700000,
+            "limit_bytes": 1070000000
+          },
+          "player": null,
+          "players": [],
+          "registered_player_count": 0,
+          "architecture": {
+            "revision": "player-seams-20261019-4",
+            "presentation": {
+              "ui": "mobile",
+              "host": "native-mobile"
+            },
+            "active_player_count": 0,
+            "active_players": [],
+            "last_closed_player": {
+              "id": "mveomdzg-1",
+              "closed_at_ms": 1792379771894,
+              "lifetime_ms": 27562,
+              "media_loads": 3
+            }
+          },
+          "attached_dom": {
+            "video_count": 0,
+            "canvas_count": 0,
+            "image_count": 0,
+            "videos": [],
+            "canvas_rgba_estimate_bytes": 0,
+            "image_rgba_estimate_bytes": 0
+          }
+        }
+      },
+      "native": {
+        "network_budget": {
+          "active": 0,
+          "waiting": 0,
+          "rejected": 0,
+          "waitMilliseconds": 29,
+          "lanes": {}
+        },
+        "recording": {
+          "active": true,
+          "path": "/data/user/0/com.cczj.video.acceptance/files/CCZJ Video/exports/diagnostics/recording-20261019-031544-1648672440.jsonl",
+          "started_at_ms": 1792379744147,
+          "ended_at_ms": 0,
+          "interval_seconds": 5,
+          "max_duration_seconds": 21600,
+          "samples": 8,
+          "markers": 26,
+          "reason": "",
+          "error": "",
+          "start_heap_path": "/data/user/0/com.cczj.video.acceptance/files/CCZJ Video/exports/diagnostics/recording-20261019-031544-1648672440-start-heap.pprof",
+          "end_heap_path": "",
+          "start_goroutines_path": "/data/user/0/com.cczj.video.acceptance/files/CCZJ Video/exports/diagnostics/recording-20261019-031544-1648672440-start-goroutines.txt",
+          "end_goroutines_path": ""
+        },
+        "uptime_seconds": 365,
+        "goroutines": 27,
+        "network": {
+          "since_unix": 1792379421,
+          "total_bytes": 33223789,
+          "allow_private_targets": true,
+          "categories": [
+            {
+              "category": "playback",
+              "requests": 23,
+              "fails": 2,
+              "bytes": 22603669,
+              "avg_ms": 176,
+              "max_ms": 416,
+              "avg_bytes_per_sec": 5557823,
+              "peak_bytes_per_sec": 28122099,
+              "last_error": "context canceled",
+              "last_at_unix": 1792379771
+            },
+            {
+              "category": "collect",
+              "requests": 2,
+              "fails": 0,
+              "bytes": 1260,
+              "avg_ms": 12,
+              "max_ms": 22,
+              "avg_bytes_per_sec": 50400,
+              "peak_bytes_per_sec": 210000,
+              "last_at_unix": 1792379742
+            },
+            {
+              "category": "image",
+              "requests": 8,
+              "fails": 0,
+              "bytes": 2284148,
+              "avg_ms": 2698,
+              "max_ms": 19016,
+              "avg_bytes_per_sec": 105801,
+              "peak_bytes_per_sec": 2068070,
+              "last_at_unix": 1792379463
+            },
+            {
+              "category": "download",
+              "requests": 36,
+              "fails": 5,
+              "bytes": 8334712,
+              "avg_ms": 146,
+              "max_ms": 187,
+              "avg_bytes_per_sec": 1576155,
+              "peak_bytes_per_sec": 1767200,
+              "last_error": "context canceled",
+              "last_at_unix": 1792379770
+            }
+          ]
+        },
+        "cache": [
+          {
+            "key": "detail",
+            "entries": 1,
+            "bytes": 700,
+            "hits": 1,
+            "stale_hits": 0,
+            "misses": 1,
+            "fetch_ok": 1,
+            "fetch_fail": 0,
+            "skipped": 0
+          },
+          {
+            "key": "chart",
+            "entries": 10,
+            "bytes": 0,
+            "hits": 1,
+            "stale_hits": 0,
+            "misses": 0,
+            "fetch_ok": 0,
+            "fetch_fail": 0,
+            "skipped": 0
+          },
+          {
+            "key": "comments",
+            "entries": 0,
+            "bytes": 0,
+            "hits": 0,
+            "stale_hits": 0,
+            "misses": 0,
+            "fetch_ok": 0,
+            "fetch_fail": 0,
+            "skipped": 0
+          },
+          {
+            "key": "match",
+            "entries": 0,
+            "bytes": 0,
+            "hits": 0,
+            "stale_hits": 0,
+            "misses": 0,
+            "fetch_ok": 0,
+            "fetch_fail": 0,
+            "skipped": 0
+          }
+        ],
+        "resources": {
+          "sampled_at_ms": 1792379779700,
+          "heap_alloc_bytes": 4274016,
+          "heap_inuse_bytes": 6160384,
+          "heap_retained_bytes": 2514944,
+          "go_sys_bytes": 22927624,
+          "heap_objects": 17679,
+          "num_gc": 37,
+          "last_gc_pause_ms": 0.611083,
+          "goroutines": 27,
+          "native_available": true,
+          "native_scope": "app_process",
+          "proportional_bytes": 148849664,
+          "private_resident_bytes": 104431616,
+          "file_descriptors": 241,
+          "working_set_bytes": 291684352,
+          "private_bytes": 0,
+          "tree_working_set_bytes": 291684352,
+          "tree_private_bytes": 0,
+          "system_total_bytes": 4123561984,
+          "system_available_bytes": 2589859840,
+          "system_memory_percent": 37.19362410340817,
+          "working_set_percent": 7.073601733932369,
+          "cpu_percent": 1.9789322046892925,
+          "process_count": 1,
+          "handles": 0,
+          "processes": [
+            {
+              "pid": 59874,
+              "name": "Android app",
+              "working_set_bytes": 291684352,
+              "private_bytes": 0,
+              "handles": 0,
+              "proportional_bytes": 148849664,
+              "private_resident_bytes": 104431616,
+              "file_descriptors": 241
+            }
+          ],
+          "notes": [
+            "Android app process only; isolated WebView renderer/GPU processes are excluded. PSS and private resident memory are not Windows private commit."
+          ]
+        },
+        "background_tasks": {
+          "diagnostics-recording": 1,
+          "schedulers": 1
+        }
+      }
+    }
+  }
+]

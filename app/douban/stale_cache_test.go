@@ -1,6 +1,7 @@
 package douban
 
 import (
+	"context"
 	"fmt"
 	"sync/atomic"
 	"testing"
@@ -178,7 +179,7 @@ func TestStaleCommentsServeOldThenRevalidate(t *testing.T) {
 
 	var calls atomic.Int32
 	done := make(chan struct{}, 4)
-	fetchCommentsPage = func(string, int, string) (*DoubanCommentsResp, error) {
+	fetchCommentsPage = func(context.Context, string, int, string) (*DoubanCommentsResp, error) {
 		calls.Add(1)
 		time.Sleep(60 * time.Millisecond)
 		done <- struct{}{}
@@ -216,7 +217,7 @@ func TestCommentRefreshFailureBacksOff(t *testing.T) {
 	seedComments("2400002_1_new_score", commentPage("旧评论"), 25*time.Hour)
 
 	var calls atomic.Int32
-	fetchCommentsPage = func(string, int, string) (*DoubanCommentsResp, error) {
+	fetchCommentsPage = func(context.Context, string, int, string) (*DoubanCommentsResp, error) {
 		calls.Add(1)
 		return nil, fmt.Errorf("源站不通")
 	}
@@ -239,7 +240,7 @@ func TestFreshCommentsNeverReachTheNetwork(t *testing.T) {
 	isolateComments(t)
 	seedComments("2400003_1_new_score", commentPage("新一点的旧评论"), time.Hour)
 
-	fetchCommentsPage = func(string, int, string) (*DoubanCommentsResp, error) {
+	fetchCommentsPage = func(context.Context, string, int, string) (*DoubanCommentsResp, error) {
 		t.Error("缓存未过期不该发请求")
 		return nil, fmt.Errorf("不该被调用")
 	}
@@ -255,7 +256,7 @@ func TestCommentsBeyondCeilingWaitForNetwork(t *testing.T) {
 	seedComments("2400004_1_new_score", commentPage("太旧的评论"), commentStaleCeiling+time.Hour)
 
 	called := make(chan struct{}, 2)
-	fetchCommentsPage = func(string, int, string) (*DoubanCommentsResp, error) {
+	fetchCommentsPage = func(context.Context, string, int, string) (*DoubanCommentsResp, error) {
 		called <- struct{}{}
 		return commentPage("刚抓的评论"), nil
 	}

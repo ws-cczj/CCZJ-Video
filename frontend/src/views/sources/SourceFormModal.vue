@@ -110,7 +110,7 @@ async function save(): Promise<void> {
       const before = new Set(sourceStore.sources.map(sk))
       await AddSource(payload as any)
       await sourceStore.loadSources(true)
-      // 新源的 source_key 由后端从 api_url 推导，前端只认这次新增出来的那一行。
+      // 后端分配独立身份；地址和建议名称都不是持久标识。
       const created = sourceStore.sources.find(s => !before.has(sk(s)))
       key = created ? sk(created) : ''
     }
@@ -184,36 +184,33 @@ async function save(): Promise<void> {
 
 /* Modal.vue 把内容 Teleport 到 body 下，页面的 scoped 选择器选不到这里，
    所以弹窗自己的文案/表单样式都留在本组件。 */
-.modal-desc { font-size: 13px; color: var(--text-muted); margin: 0 0 18px; }
-.form-group { margin-bottom: 14px; }
-.form-group label { display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; font-weight: 500; }
+.modal-desc { @apply cczj-text-13 cczj-text-muted; margin: 0 0 18px; }
+.form-group { @apply cczj-mb-7; }
+.form-group label { @apply cczj-block cczj-text-sm cczj-text-secondary cczj-mb-3 cczj-font-medium; }
 .form-group input {
-  width: 100%; padding: 10px 14px; border-radius: 10px;
-  border: 1px solid var(--border); background: var(--bg-input);
-  color: var(--text-primary); font-size: 13px; outline: none;
-  transition: all 0.15s ease; box-sizing: border-box;
+  @apply cczj-w-full cczj-px-7-py-5; border-radius: 10px;
+  @apply cczj-border; background: var(--bg-input);
+  @apply cczj-text-primary cczj-text-13 cczj-outline-none cczj-transition-fast; box-sizing: border-box;
 }
-.form-group input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-alpha-10); }
-.form-group input::placeholder { color: var(--text-muted); }
-.required { color: var(--danger); }
-.optional { color: var(--text-muted); font-weight: normal; }
-.adapter-option { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 13px; color: var(--text-primary); cursor: pointer; }
+.form-group input:focus { @apply cczj-border-primary; box-shadow: 0 0 0 3px var(--accent-alpha-10); }
+.form-group input::placeholder { @apply cczj-text-muted; }
+.required { @apply cczj-text-danger; }
+.optional { @apply cczj-text-muted; font-weight: normal; }
+.adapter-option { @apply cczj-flex cczj-items-center cczj-gap-4 cczj-mb-2 cczj-text-13 cczj-text-primary cczj-cursor-pointer; }
 .adapter-option input { width: auto; padding: 0; }
-.adapter-option span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adapter-option span { @apply cczj-overflow-hidden; text-overflow: ellipsis; @apply cczj-whitespace-nowrap; }
 .auto-info {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 12px; color: var(--accent);
+  @apply cczj-flex cczj-items-center cczj-gap-4 cczj-text-sm cczj-text-accent;
   padding: 10px 12px; background: var(--accent-alpha-10);
-  border-radius: 8px; margin-bottom: 14px;
+  @apply cczj-rounded-md cczj-mb-7;
 }
-.auto-info code { font-weight: 600; font-family: 'SF Mono', Consolas, monospace; }
+.auto-info code { @apply cczj-font-semibold; font-family: 'SF Mono', Consolas, monospace; }
 .toggle-advanced {
-  display: inline-flex; align-items: center; gap: 6px;
+  @apply cczj-inline-flex cczj-items-center cczj-gap-3;
   background: transparent; border: none;
-  color: var(--text-muted); cursor: pointer;
-  font-size: 12px; padding: 6px 0; margin-bottom: 8px;
+  @apply cczj-text-muted cczj-cursor-pointer cczj-text-sm; padding: 6px 0; @apply cczj-mb-4;
   transition: color 0.15s ease;
 }
-.toggle-advanced:hover { color: var(--accent); }
+.toggle-advanced:hover { @apply cczj-text-accent; }
 
 </style>

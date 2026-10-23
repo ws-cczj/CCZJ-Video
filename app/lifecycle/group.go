@@ -44,6 +44,31 @@ func (g *Group) ActiveTasks() map[string]int {
 	return result
 }
 
+// Track registers work already executing on a request goroutine. Stop waits for
+// release as well as Go tasks, without allocating a waiter goroutine per call.
+func (g *Group) Track(name string) (release func(), accepted bool) {
+	g.mu.Lock()
+	if g.stopped {
+		g.mu.Unlock()
+		return func() {}, false
+	}
+	g.wg.Add(1)
+	g.tasks[name]++
+	g.mu.Unlock()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			g.mu.Lock()
+			g.tasks[name]--
+			if g.tasks[name] == 0 {
+				delete(g.tasks, name)
+			}
+			g.mu.Unlock()
+			g.wg.Done()
+		})
+	}, true
+}
+
 // Go starts a panic-protected application background task. It returns false
 // when shutdown has started, ensuring WaitGroup.Add never races with Wait.
 func (g *Group) Go(name string, fn func(context.Context)) bool {
@@ -77,7 +102,7 @@ func (g *Group) Go(name string, fn func(context.Context)) bool {
 }
 
 // Stop cancels all tasks and waits up to timeout for their completion.
-func (g *Group) Stop(timeout time.Duration) {
+func (g *Group) Stop(timeout time.Duration) bool {
 	g.stopOnce.Do(func() {
 		g.mu.Lock()
 		g.stopped = true
@@ -90,6 +115,7 @@ func (g *Group) Stop(timeout time.Duration) {
 	})
 	select {
 	case <-g.done:
+		return true
 	case <-time.After(timeout):
 		g.mu.Lock()
 		pending := make([]string, 0, len(g.tasks))
@@ -98,5 +124,6 @@ func (g *Group) Stop(timeout time.Duration) {
 		}
 		g.mu.Unlock()
 		applog.Warn("background tasks did not stop within %s: %v", timeout, pending)
+		return false
 	}
 }

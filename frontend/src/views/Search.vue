@@ -4,7 +4,7 @@ import { ref, onMounted, onUnmounted, onActivated, onDeactivated, computed, watc
 import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { GetRecentHistory, GetVideoList, SearchSource, ImportSourceVideos, normalizeApiError } from '../api/app'
+import { GetRecentHistory, GetVideoList, SearchSourceRequest, ImportSourceVideos, normalizeApiError } from '../api/app'
 import { onBackendEvent } from '../api/events'
 import { useSourceStore } from '../stores/source'
 import { useVideoStore } from '../stores/video'
@@ -14,12 +14,18 @@ import { usePosterCacheStore } from '../stores/posterCache'
 import VideoCard from '../components/VideoCard.vue'
 import RemoteImage from '../components/RemoteImage.vue'
 import Icon from '../components/Icon.vue'
-import { Button, Tag, Select as SelectDropdown, Spinner as LoadingSpinner, Empty as EmptyState } from '../components/ui'
+import { Button, Tag, Modal, Select as SelectDropdown, Spinner as LoadingSpinner, Empty as EmptyState } from '../components/ui'
 import { getDetailPath } from '../utils'
 import { readStorage, readStorageBoolean, removeStorage, writeStorage } from '../platform/storage'
 import type { Video, HistoryItem } from '../types'
+import { isMobileRuntime } from '../api/runtime'
+import { useHoldToEdit } from '../mobile/useHoldToEdit'
+import CczjMobileEditActions from '../mobile/CczjMobileEditActions.vue'
+import { useModeViewState } from '../modes/useModeViewState'
+import { startupTask } from '../diagnostics/startup'
 
 const { t } = useI18n()
+const mobile = isMobileRuntime()
 const route = useRoute()
 const router = useRouter()
 const sourceStore = useSourceStore()
@@ -37,6 +43,7 @@ const sourceOptions = computed(() =>
 const currentSearchSource = ref('')
 const keyword = ref('')
 const searchHistory = ref<string[]>(readStorage<string[]>('search_history', []))
+const { editing: managingHistory, finish: finishHistoryManagement, vHoldToEdit } = useHoldToEdit(mobile)
 const sourceSearchMode = ref(readStorageBoolean('source_search_mode'))
 const hasKeyword = computed(() => keyword.value.trim().length > 0)
 let searchPageWasDeactivated = false
@@ -53,6 +60,7 @@ function clearSearchResults(): void {
 
 // 是否进行过搜索
 const hasSearched = ref(false)
+useModeViewState('video','search',{keyword,currentSearchSource,hasSearched})
 
 // 推荐相关
 const recommendLoading = ref(false)
@@ -84,11 +92,11 @@ const layoutStore = useLayoutStore()
 const { gridStyle } = storeToRefs(layoutStore)
 
 onMounted(async () => {
+ await startupTask('first_screen',async()=>{
   suppressSourceWatch = true
-  await layoutStore.load()
-  await sourceStore.loadSources()
+  await Promise.all([layoutStore.load(),sourceStore.loadSources()])
 
-  currentSearchSource.value = sourceStore.currentSourceKey
+  if(!sourceStore.sources.some(source=>String(source.source_key)===currentSearchSource.value))currentSearchSource.value = sourceStore.currentSourceKey
 
   // 从 URL 查询参数读取来源与关键词（用于标签跳转搜索）
   const urlSource = route.query.source
@@ -102,20 +110,24 @@ onMounted(async () => {
     keyword.value = urlKw.trim()
     await nextTick()
     if (currentSearchSource.value) {
-      doSearch()
+      await doSearch()
     }
+  } else if (hasSearched.value&&keyword.value.trim()&&currentSearchSource.value) {
+    await doSearch()
   } else if (currentSearchSource.value) {
     await loadRecommendations()
   }
   // Release after the pre-flush watcher jobs from the assignments above have run.
   await nextTick()
   suppressSourceWatch = false
+ })
 })
 
 watch(
   () => currentSearchSource.value,
   async (key) => {
     if (suppressSourceWatch) return
+    cancelSourceSearch()
     clearSearchResults()
     hasSearched.value = false
     if (key) {
@@ -131,9 +143,10 @@ watch(
 onActivated(async () => {
   if (!searchPageWasDeactivated) return
   searchPageWasDeactivated = false
+  if (sourceSearchInterrupted) { sourceSearchInterrupted = false; await doSourceSearch(sourceSearchPage.value); return }
   if (!currentSearchSource.value) return
   if (keyword.value.trim() && hasSearched.value) {
-    if (videoStore.refreshTrigger !== lastSearchRefreshTrigger) doSearch()
+    if (list.interrupted || videoStore.refreshTrigger !== lastSearchRefreshTrigger) doSearch()
   } else {
     await loadRecommendations()
   }
@@ -141,9 +154,13 @@ onActivated(async () => {
 
 onDeactivated(() => {
   searchPageWasDeactivated = true
+  sourceSearchInterrupted = sourceSearching.value
+  cancelSourceSearch()
+  finishHistoryManagement()
 })
 
 watch(keyword, (value) => {
+  cancelSourceSearch()
   if (value.trim()) return
   clearSearchResults()
   hasSearched.value = false
@@ -359,12 +376,13 @@ function toggleSourceSearchMode(): void {
   }
 }
 
-function doSearch(): void {
+async function doSearch(): Promise<void> {
   const kw = keyword.value.trim()
   if (!kw || !currentSearchSource.value) {
     hasSearched.value = false
     return
   }
+  finishHistoryManagement()
   if (!searchHistory.value.includes(kw)) {
     searchHistory.value.unshift(kw)
     if (searchHistory.value.length > 10) searchHistory.value.pop()
@@ -376,10 +394,10 @@ function doSearch(): void {
   clearSourceResults()
   if (sourceSearchMode.value) {
     clearSearchResults()
-    doSourceSearch(1)
+    await doSourceSearch(1)
   } else {
     list.reset()
-    list.search(currentSearchSource.value, kw)
+    await list.search(currentSearchSource.value, kw)
   }
 }
 
@@ -451,9 +469,18 @@ let importMessageTimer: ReturnType<typeof setTimeout> | null = null
 const searchProgress = ref({ stage: '', message: '', current: 0, total: 0 })
 let searchProgressListener: (() => void) | null = null
 let sourceSearchGeneration = 0
+let sourceSearchRequest: ReturnType<typeof SearchSourceRequest> | null = null
+let sourceSearchRequestId = '', sourceSearchInterrupted = false
+
+function cancelSourceSearch(): void {
+  sourceSearchGeneration++; sourceSearchRequestId = ''
+  void sourceSearchRequest?.cancel(); sourceSearchRequest = null
+  sourceSearching.value = false
+}
 
 onMounted(() => {
   searchProgressListener = onBackendEvent<any>('search:progress', (data) => {
+    if (!sourceSearchRequestId || data?.requestId !== sourceSearchRequestId) return
     searchProgress.value = {
       stage: data.stage || '',
       message: data.message || '',
@@ -464,6 +491,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  cancelSourceSearch()
   if (searchProgressListener) {
     searchProgressListener()
     searchProgressListener = null
@@ -490,19 +518,19 @@ const sourceSearchPageRange = computed(() => {
 })
 
 // 当前页是否全选
+const selectableSourceResults = computed(() => sourceSearchResults.value.filter(v => !importedSourceVodIds.value.has(String(v.vod_id ?? ''))))
 const isAllCurrentPageSelected = computed(() => {
-  if (sourceSearchResults.value.length === 0) return false
-  return sourceSearchResults.value.every(v =>
-    selectedSourceVodIds.value.has(String(v.vod_id ?? '')) ||
-    importedSourceVodIds.value.has(String(v.vod_id ?? ''))
-  )
+  return selectableSourceResults.value.length > 0 && selectableSourceResults.value.every(v => selectedSourceVodIds.value.has(String(v.vod_id ?? '')))
 })
 
 async function doSourceSearch(page: number = 1): Promise<void> {
   const kw = keyword.value.trim()
   if (!kw || !currentSearchSource.value) return
   const sourceKey = currentSearchSource.value
+  cancelSourceSearch()
   const generation = ++sourceSearchGeneration
+  const requestId = `${Date.now().toString(36)}-${generation}`
+  sourceSearchRequestId = requestId
   clearSearchResults()
   sourceSearching.value = true
   hasSourceSearched.value = true
@@ -513,7 +541,9 @@ async function doSourceSearch(page: number = 1): Promise<void> {
   importMessage.value = { type: '', text: '' }
   searchProgress.value = { stage: '', message: '', current: 0, total: 0 }
   try {
-    const resp = (await SearchSource(sourceKey, kw, page, sourceSearchPageSize.value)) as any
+    const request = SearchSourceRequest(sourceKey, kw, page, sourceSearchPageSize.value, requestId)
+    sourceSearchRequest = request
+    const resp = (await request) as any
     if (generation !== sourceSearchGeneration || keyword.value.trim() !== kw || currentSearchSource.value !== sourceKey) return
     // 仅更新分页元数据
     sourceSearchTotal.value = resp?.total || sourceSearchResults.value.length
@@ -532,9 +562,10 @@ async function doSourceSearch(page: number = 1): Promise<void> {
       markImported(remoteVideos.filter(v => v.in_catalog).map(v => String(v.vod_id ?? '')).filter(Boolean))
     }
   } catch (e) {
-    if (generation === sourceSearchGeneration) console.warn(t('search.sourceSearchFailed'), e)
+    if (generation === sourceSearchGeneration && normalizeApiError(e).code !== 'CANCELLED') console.warn(t('search.sourceSearchFailed'), e)
   } finally {
     if (generation === sourceSearchGeneration) {
+      sourceSearchRequest = null; sourceSearchRequestId = ''
       sourceSearching.value = false
       searchProgress.value = { stage: '', message: '', current: 0, total: 0 }
     }
@@ -593,7 +624,7 @@ function toggleSelectAllCurrentPage(): void {
 }
 
 function clearSourceResults(): void {
-  sourceSearchGeneration++
+  cancelSourceSearch()
   sourceSearching.value = false
   sourceSearchResults.value = []
   sourceSearchTotal.value = 0
@@ -681,7 +712,19 @@ function onSourceVideoClick(v: Video): void {
 <template>
   <div class="search-page">
     <!-- 搜索栏 -->
-    <div class="search-bar cczj-flex cczj-gap-2 cczj-mb-4 cczj-p-2">
+    <form v-if="mobile" class="cczj-mobile-search-form" @submit.prevent="doSearch">
+      <div class="cczj-mobile-search-field">
+        <Icon name="search" :size="20" />
+        <input v-model="keyword" type="search" enterkeyhint="search" :aria-label="t('search.search')" :placeholder="t('search.inputPlaceholder')" />
+        <button v-if="keyword" type="button" :aria-label="t('search.clear')" @click="keyword = ''"><Icon name="close" :size="18" /></button>
+        <button type="submit" class="cczj-mobile-search-submit">{{ t('search.search') }}</button>
+      </div>
+      <div class="cczj-mobile-search-scope">
+        <SelectDropdown v-model="currentSearchSource" :options="sourceOptions" :disabled="sourceStore.sources.length === 0" :placeholder="t('search.selectSource')" />
+        <button type="button" class="source-search-toggle" :class="{ 'cczj-bg-primary': sourceSearchMode }" :aria-pressed="sourceSearchMode" @click="toggleSourceSearchMode"><span class="checkbox-icon">{{ sourceSearchMode ? '✓' : '○' }}</span><span>{{ t('search.sourceSearch') }}</span></button>
+      </div>
+    </form>
+    <div v-else class="search-bar cczj-flex cczj-gap-2 cczj-mb-4 cczj-p-2">
       <div class="source-picker cczj-relative cczj-flex cczj-items-center">
         <SelectDropdown
           v-model="currentSearchSource"
@@ -696,6 +739,7 @@ function onSourceVideoClick(v: Video): void {
       <button
         class="source-search-toggle cczj-flex cczj-items-center cczj-gap-1 cczj-px-2 cczj-py-1 cczj-border cczj-border-gray-300 cczj-rounded cczj-text-sm cczj-cursor-pointer cczj-transition-colors"
         :class="{ 'cczj-bg-primary cczj-text-white': sourceSearchMode }"
+        :aria-pressed="sourceSearchMode"
         @click="toggleSourceSearchMode"
       >
         <span class="checkbox-icon">{{ sourceSearchMode ? '✓' : '○' }}</span>
@@ -732,7 +776,19 @@ function onSourceVideoClick(v: Video): void {
     </div>
 
     <!-- 历史搜索 -->
-    <div v-if="searchHistory.length > 0 && !hasSearched" class="history-tags cczj-flex cczj-flex-wrap cczj-gap-2 cczj-mb-4">
+    <section v-if="mobile && searchHistory.length > 0 && !hasSearched" class="cczj-mobile-search-history" :data-cczj-editing="managingHistory || undefined">
+      <div class="cczj-mobile-search-history-heading">
+        <h2><Icon name="clock" :size="15" />{{ t('search.historySearch') }}</h2>
+      </div>
+      <div class="cczj-mobile-search-history-terms">
+        <div v-for="h in searchHistory" :key="h" v-hold-to-edit class="cczj-mobile-search-history-chip">
+          <button type="button" class="cczj-mobile-search-history-term" @click="!managingHistory && applyHistoryKeyword(h)">{{ h }}</button>
+          <button v-if="managingHistory" type="button" class="cczj-mobile-item-remove" data-cczj-remove :aria-label="`${t('search.deleteHistory')}: ${h}`" @click.stop="removeHistoryItem(h)"><Icon name="close" :size="14" /></button>
+        </div>
+      </div>
+    </section>
+    <CczjMobileEditActions v-if="mobile" :open="managingHistory" @done="finishHistoryManagement" @cancel="finishHistoryManagement" />
+    <div v-if="!mobile && searchHistory.length > 0 && !hasSearched" class="history-tags cczj-flex cczj-flex-wrap cczj-gap-2 cczj-mb-4">
       <span class="history-label cczj-flex cczj-items-center cczj-gap-1">
         <Icon name="clock" :size="12" />
         {{ t('search.historySearch') }}
@@ -771,7 +827,7 @@ function onSourceVideoClick(v: Video): void {
       </div>
 
       <div v-else class="recommend-groups cczj-flex cczj-flex-col cczj-gap-4">
-        <div v-for="(group, groupIdx) in recommendGroups" :key="group.typeName" class="recommend-group cczj-motion-reveal" :style="{ '--cczj-motion-delay': `${groupIdx * 100}ms` }">
+        <div v-for="(group, groupIdx) in recommendGroups" :key="group.typeName" class="recommend-group cczj-motion-reveal" :class="{ 'cczj-mobile-history-recommend': mobile && group.items.length > 0 && group.items.every(item => item.isHistory) }" :style="{ '--cczj-motion-delay': `${groupIdx * 100}ms` }">
           <div class="group-label-row cczj-flex cczj-items-center cczj-gap-2 cczj-mb-2">
             <span class="dot"></span>
             <span>{{ group.typeName }}</span>
@@ -807,6 +863,7 @@ function onSourceVideoClick(v: Video): void {
                 </div>
               </div>
               <div class="rec-title cczj-truncate cczj-mt-1">{{ resolveName(item) }}</div>
+              <span v-if="mobile && item.isHistory" class="cczj-mobile-continue-meta">{{ t('history.epProgress', { num: item.history?.ep_num || 1 }) }}</span>
             </div>
           </div>
         </div>
@@ -985,18 +1042,18 @@ function onSourceVideoClick(v: Video): void {
       </div>
 
       <!-- 操作工具栏：全选 / 入库按钮 / 已选计数 -->
-      <div class="source-toolbar cczj-flex cczj-items-center cczj-justify-between cczj-gap-2 cczj-mb-3 cczj-flex-wrap">
+      <div class="source-toolbar cczj-flex cczj-items-center cczj-justify-between cczj-gap-2 cczj-mb-3 cczj-flex-wrap" :class="{ 'cczj-mobile-selection-bar': mobile }" :role="mobile ? 'toolbar' : undefined" :aria-label="t('search.sourceSearchResults')">
         <div class="cczj-flex cczj-items-center cczj-gap-2">
           <label class="select-all-check cczj-flex cczj-items-center cczj-gap-1 cczj-cursor-pointer cczj-text-sm">
             <input
               type="checkbox"
               :checked="isAllCurrentPageSelected"
-              :disabled="sourceSearchResults.length === 0 || importing"
+              :disabled="selectableSourceResults.length === 0 || importing"
               @change="toggleSelectAllCurrentPage"
             />
-            <span>{{ t('search.selectAllCurrentPage') }}</span>
+            <span>{{ mobile ? t('mobile.selectPage') : t('search.selectAllCurrentPage') }}</span>
           </label>
-          <span v-if="selectedSourceVodIds.size > 0" class="cczj-text-sm cczj-text-muted">
+          <span v-if="!mobile && selectedSourceVodIds.size > 0" class="cczj-text-sm cczj-text-muted">
             {{ t('search.selectedCount', { count: selectedSourceVodIds.size }) }}
           </span>
         </div>
@@ -1009,7 +1066,7 @@ function onSourceVideoClick(v: Video): void {
             class="cczj-flex cczj-items-center cczj-gap-1"
           >
             <Icon name="download" :size="12" />
-            <span>{{ t('search.importSelected') }}</span>
+            <span>{{ mobile ? t('mobile.saveSelected', { count: selectedSourceVodIds.size }) : t('search.importSelected') }}</span>
           </Button>
           <Button
             variant="primary"
@@ -1019,7 +1076,7 @@ function onSourceVideoClick(v: Video): void {
             class="cczj-flex cczj-items-center cczj-gap-1"
           >
             <Icon name="download" :size="12" />
-            <span>{{ importing ? t('search.importing') : t('search.importCurrentPage') }}</span>
+            <span>{{ importing ? t('search.importing') : mobile ? t('mobile.savePage') : t('search.importCurrentPage') }}</span>
           </Button>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import * as AppMod from '../api/app'
+import { decodeDetail } from '../api/video'
 import { readStorage } from '../platform/storage'
 import { createDebouncedWriter } from '../platform/debouncedWrite'
 import { normalizePlayLines } from '../utils/playLines'
@@ -119,7 +120,7 @@ async function decode(entry: StoredDetailEntry): Promise<VideoDetailResponse | n
   }
 
   try {
-    const parsed = JSON.parse(json) as { video?: Video | null; lines?: PlayLine[]; episodes?: Episode[] }
+    const parsed = decodeDetail(JSON.parse(json))
     const lines = normalizePlayLines(parsed)
     return {
       video: parsed?.video || null,

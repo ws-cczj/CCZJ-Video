@@ -208,34 +208,28 @@ onMounted(() => {
 
 <style scoped>
 .recycle-page {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  @apply cczj-flex cczj-flex-col cczj-gap-8;
 }
 .block {
   background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  @apply cczj-border cczj-rounded-lg;
   padding: 20px;
 }
 .block-hd h3 {
   margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
+  @apply cczj-text-lg cczj-font-semibold cczj-text-primary;
 }
 .desc {
   margin: 6px 0 0;
-  font-size: 12px;
+  @apply cczj-text-sm;
   line-height: 1.6;
-  color: var(--text-muted);
+  @apply cczj-text-muted;
 }
 .toolbar {
   margin-top: 14px;
 }
 .count {
-  font-size: 12px;
-  color: var(--text-muted);
+  @apply cczj-text-sm cczj-text-muted;
 }
 .row-list {
   margin: 14px 0 0;
@@ -244,40 +238,33 @@ onMounted(() => {
 }
 .row {
   padding: 10px 12px;
-  border: 1px solid var(--border);
+  @apply cczj-border;
   border-radius: 10px;
   background: var(--bg-secondary);
 }
 .poster {
   width: 44px;
   height: 62px;
-  border-radius: 6px;
-  object-fit: cover;
-  flex: none;
+  @apply cczj-rounded cczj-object-cover cczj-flex-none;
   background: var(--bg-card);
 }
 .info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  @apply cczj-flex cczj-flex-col cczj-gap-2;
 }
 .name {
-  font-size: 13px;
-  color: var(--text-primary);
-  word-break: break-all;
+  @apply cczj-text-13 cczj-text-primary cczj-break-all;
 }
 .meta {
-  font-size: 11px;
-  color: var(--text-muted);
+  @apply cczj-text-11 cczj-text-muted;
 }
 .vid {
   padding: 1px 6px;
-  border-radius: 6px;
+  @apply cczj-rounded;
   background: var(--bg-card);
-  font-size: 11px;
+  @apply cczj-text-11;
 }
 .pager {
   margin-top: 14px;
-  justify-content: center;
+  @apply cczj-justify-center;
 }
 </style>

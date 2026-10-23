@@ -1,89 +1,92 @@
-/**
- * 界面动画总开关。
- *
- * 状态只有一个落点：settings KV 里的 ui_motion（缺省开）。写进去的是「用户想要什么」，
- * 落到界面上的是 <html data-cczj-motion>，让 styles/animations.css 那条退化合并策略
- * 去停掉所有过渡。中间隔了一层判断：动画库扩展包不在场时这个属性一律不写——
- * 「开启动画/关闭动画」那颗开关是 motion-effects 提供的分组，包被停用或被删掉之后，
- * 界面上就没有任何地方能把它关回来，留着属性等于把用户锁在无动画里。
- *
- * 开关的状态本身照旧留在 KV：把包启用回来，上次的偏好直接认回来。
- */
-import { ref, watch } from 'vue'
+/** User motion preferences share one persisted owner and one CSS application point. */
+import { ref, watch, onScopeDispose } from 'vue'
 import { defineStore } from 'pinia'
 import { GetSetting, SetSetting } from '../api/app'
 import { usePluginStore } from './plugins'
+import { useErrorStore } from './error'
+import { tr } from '../locales'
+import { DEFAULT_MOTION, normalizeMotionOptions, motionVariables, type MotionOptions } from '../motion/preferences'
 
-/** 设置表里的键。'0' 表示关闭动画，其余值（含空）都按开启处理。 */
 export const MOTION_SETTING_KEY = 'ui_motion'
-
-/** 提供这套动效的内置扩展包。开关只在它处于「已启用」时生效。 */
+export const MOTION_OPTIONS_KEY = 'ui_motion_options'
 export const MOTION_PACK_ID = 'motion-effects'
-
-const ATTRIBUTE = 'data-cczj-motion'
-
-/** 读一个 CSS 时长变量。变量没定义或解析不出来就是 0，调用方按「不等」处理。 */
-function cssDurationMs(name: string): number {
-  const raw = window.getComputedStyle(document.documentElement).getPropertyValue(name).trim()
-  const value = Number.parseFloat(raw)
-  if (!Number.isFinite(value) || value <= 0) return 0
-  return raw.endsWith('ms') ? value : value * 1000
-}
-
 export const useMotionStore = defineStore('motion', () => {
   const pluginStore = usePluginStore()
   const enabled = ref(true)
   const loaded = ref(false)
-
-  /** 动画库扩展包在不在场。注册表还没读回来时算不在，等 watch 那一跳补上。 */
   const packReady = ref(false)
-
+  const options = ref<MotionOptions>({ ...DEFAULT_MOTION })
+  const media = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-reduced-motion: reduce)') : undefined
+  const reduced = ref(media?.matches || false)
+  let savedOptions: MotionOptions = { ...DEFAULT_MOTION }
+  let savedEnabled = true
+  let loading: Promise<void> | undefined
+  let writes = Promise.resolve()
+  const revisions = { enabled: 0, options: 0 }
   function apply(): void {
     const root = document.documentElement
-    if (enabled.value || !packReady.value) root.removeAttribute(ATTRIBUTE)
-    else root.setAttribute(ATTRIBUTE, 'off')
-  }
-
-  async function load(): Promise<void> {
-    try {
-      const raw = await GetSetting(MOTION_SETTING_KEY)
-      enabled.value = String(raw ?? '').trim() !== '0'
-    } catch {
-      enabled.value = true
+    const keys = ['pages', 'overlays', 'feedback'] as const
+    if (enabled.value || !packReady.value) root.removeAttribute('data-cczj-motion')
+    else root.setAttribute('data-cczj-motion', 'off')
+    for (const key of keys) {
+      if (packReady.value && !options.value[key]) root.setAttribute(`data-motion-${key}`, 'off')
+      else root.removeAttribute(`data-motion-${key}`)
     }
-    loaded.value = true
-    // 注册表要有人读才有 packs：这里自己催一次，不指望主题页或扩展面板先打开过。
-    void pluginStore.ensureLoaded()
-    // 注册表到货、重扫、启停某个包都会推这一条：属性跟着包的存在性走，
-    // 不需要谁在挂载或卸载包里额外提醒一次。
-    watch(
-      () => pluginStore.readyPacks.some(pack => pack.id === MOTION_PACK_ID),
-      (present) => { packReady.value = present; apply() },
-      { immediate: true },
-    )
+    const variables = motionVariables(options.value)
+    const cut = reduced.value || (!enabled.value && packReady.value)
+    for (const [name, value] of Object.entries(variables)) {
+      if (!packReady.value) { root.style.removeProperty(name); continue }
+      const next = cut && name === '--cczj-motion-distance' ? '0px' : cut && name === '--cczj-motion-enter-scale' ? '1' : cut && ['--cczj-motion-fast', '--cczj-motion-normal', '--cczj-motion-slow', '--cczj-motion-emphasis', '--cczj-motion-carousel'].includes(name) ? '1ms'
+        : cut && name === '--cczj-motion-stagger' ? '0ms' : value
+      root.style.setProperty(name, next)
+    }
   }
-
-  async function setEnabled(next: boolean): Promise<void> {
-    if (enabled.value === next) return
-    enabled.value = next
-    apply()
-    // 与其余设置项一致：写库失败不打断界面，下次启动退回上次落库的值。
-    try { await SetSetting(MOTION_SETTING_KEY, next ? '1' : '0') } catch { /* 忽略 */ }
+  watch(() => pluginStore.readyPacks.some(pack => pack.id === MOTION_PACK_ID), present => { packReady.value = present; apply() }, { immediate: true })
+  const onReduced = () => { reduced.value = media?.matches || false; apply() }
+  media?.addEventListener('change', onReduced)
+  onScopeDispose(() => media?.removeEventListener('change', onReduced))
+  function load(): Promise<void> {
+    if (loaded.value) return Promise.resolve()
+    if (loading) return loading
+    loading = Promise.all([GetSetting(MOTION_SETTING_KEY).catch(() => ''), GetSetting(MOTION_OPTIONS_KEY).catch(() => '')]).then(([raw, config]) => {
+      enabled.value = String(raw ?? '').trim() !== '0'
+      try { options.value = normalizeMotionOptions(JSON.parse(config || '{}')) } catch { options.value = { ...DEFAULT_MOTION } }
+      savedOptions = { ...options.value }; savedEnabled = enabled.value
+      loaded.value = true
+      apply()
+      void pluginStore.ensureLoaded()
+    }).finally(() => { loading = undefined })
+    return loading
   }
-
-  /**
-   * 换图前那一下淡出的时长。关掉动画就是 0，调用方直接换源不做过渡。
-   * 上限是防呆：包里的变量被改成几秒时不该有图片在那儿空等。
-   */
-  function dipMs(): number {
-    if (!enabled.value || !packReady.value) return 0
-    return Math.min(cssDurationMs('--cczj-motion-fast'), 300)
+  function persist(key: string, value: string, success: () => void, rollback: () => void): Promise<void> {
+    const write = writes.then(async () => {
+      try { await SetSetting(key, value); success() } catch (error) {
+        rollback()
+        useErrorStore().fromError(tr('motion.saveFailed'), error, 'Motion.settings')
+      }
+    })
+    writes = write.catch(() => {})
+    return write
   }
-
-  /** 给「动画」分组显示参数用：当前生效的时长令牌（毫秒）。 */
+  function setEnabled(next: boolean): Promise<void> {
+    if (enabled.value === next) return Promise.resolve()
+    const revision = ++revisions.enabled
+    enabled.value = next; apply()
+    return persist(MOTION_SETTING_KEY, next ? '1' : '0', () => { savedEnabled = next }, () => { if (revision === revisions.enabled) { enabled.value = savedEnabled; apply() } })
+  }
+  function setOptions(next: Partial<MotionOptions>): Promise<void> {
+    const revision = ++revisions.options
+    options.value = normalizeMotionOptions({ ...options.value, ...next }); apply()
+    const submitted = { ...options.value }
+    return persist(MOTION_OPTIONS_KEY, JSON.stringify(submitted), () => { savedOptions = submitted }, () => { if (revision === revisions.options) { options.value = { ...savedOptions }; apply() } })
+  }
+  function reset(): Promise<void> { return setOptions({ ...DEFAULT_MOTION }) }
   function tokenMs(name: string): number {
-    return cssDurationMs(name)
+    void options.value; void reduced.value; void enabled.value; void packReady.value
+    const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+    const value = Number.parseFloat(raw)
+    return Number.isFinite(value) && value > 0 ? raw.endsWith('ms') ? value : value * 1000 : 0
   }
-
-  return { enabled, loaded, packReady, load, setEnabled, dipMs, tokenMs }
+  function dipMs(): number { return !enabled.value || !packReady.value || reduced.value ? 0 : Math.min(tokenMs('--cczj-motion-fast'), 300) }
+  return { enabled, loaded, packReady, options, reduced, load, setEnabled, setOptions, reset, dipMs, tokenMs }
 })

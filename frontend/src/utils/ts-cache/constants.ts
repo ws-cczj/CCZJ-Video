@@ -5,7 +5,7 @@ export const LOG_PREFIX = '[TsCache]'
 // ====== 可调参数 ======
 // ⭐ 用户建议：不要粗暴清空，用"单集上限 + 全局上限 + 最近最少使用"的 LRU 调度
 //   - 单集最多 64 片（超出就淘汰该集最久没被读到的片段）
-//   - 全局最多 1024 片 / 512 MB（超出就淘汰全局最久没被读到的片段）
+//   - 全局最多 1024 片 / 128 MB（超出就淘汰全局最久没被读到的片段）
 //   - 这样切换到已看过的集，缓存仍能命中；而长期不用的片段会自然被淘汰
 export const DEFAULT_PREFETCH_SECONDS = 60
 export const MIN_PREFETCH_COUNT = 4
@@ -15,7 +15,7 @@ export const PREFETCH_AHEAD_NEXT_EPISODE = 5
 export const PREFETCH_DEBOUNCE_MS = 300
 export const MAX_QUEUE_PER_EPISODE = 30
 export const MAX_CACHED_SEGMENTS = 1024          // 全局 LRU 上限：1024 片
-export const MAX_CACHED_BYTES = 512 * 1024 * 1024 // 全局上限：512 MB
+export const MAX_CACHED_BYTES = 128 * 1024 * 1024 // Retained segment bytes, excluding decoder/HLS buffers.
 export const MAX_PER_EPISODE = 64                 // ⭐ 单集上限：64 片（硬约束）
 export const SPEED_SAMPLE_COUNT = 8
 

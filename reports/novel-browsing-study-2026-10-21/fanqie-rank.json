@@ -1,0 +1,40 @@
+{
+  "name": "fanqie-rank",
+  "url": "https://api-lf.fanqiesdk.com/api/novel/channel/homepage/rank/rank_list/v2/?aid=13&limit=5&offset=0&side_type=10&type=1",
+  "http": 200,
+  "code": 0,
+  "dataKeys": [
+    "channel_id",
+    "has_more",
+    "result"
+  ],
+  "books": [
+    {
+      "id": "7665193065501445145",
+      "title": "神通者",
+      "author": "天蚕土豆"
+    },
+    {
+      "id": "7690948774083955736",
+      "title": "垫底漫画家：靠考古一战成名",
+      "author": "陈柯文化"
+    },
+    {
+      "id": "7617740782291651646",
+      "title": "骇夜：我在恐怖游戏里暴富",
+      "author": "阿一不是阿二"
+    },
+    {
+      "id": "7590221243043826712",
+      "title": "这个游戏不对劲，我挖矿成神！",
+      "author": "道不易"
+    },
+    {
+      "id": "7692105276295482430",
+      "title": "斗罗之我的武魂是闪电",
+      "author": null
+    }
+  ],
+  "bookCount": 30,
+  "checkedAt": "2026-10-21T18:00:59.918224+08:00"
+}

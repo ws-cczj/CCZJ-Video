@@ -1,10 +1,11 @@
-import { computed, onScopeDispose, reactive, ref, watch } from 'vue'
+import { computed, onActivated, onDeactivated, onScopeDispose, reactive, ref, watch } from 'vue'
 import { GetVideoList, SearchVideos } from '../api/app'
 import type { Video } from '../types'
 import { useErrorStore } from '../stores/error'
 import { useVideoStore } from '../stores/video'
 import { tr } from '../locales'
 import { useGeneration } from './useGeneration'
+import { createRequestScope } from '../api/requestScope'
 
 export interface VideoFilter {
   type_id: string | number
@@ -41,10 +42,17 @@ export function useVideoList(options: VideoListOptions = {}) {
   const page = ref(1)
   const nextCursor = ref('')
   const loading = ref(false)
+  const interrupted = ref(false)
+  let active = true
   const sourceKey = ref('')
 
   let seenDeletionSeq = 0
   const gen = useGeneration()
+  const requests = createRequestScope()
+  function cancelRequests(): void { gen.invalidate(); requests.cancel(); loading.value = false }
+  onActivated(() => { active = true })
+  onDeactivated(() => { active = false; interrupted.value = loading.value; cancelRequests() })
+  onScopeDispose(cancelRequests)
 
   const errorStore = useErrorStore()
   const videoStore = useVideoStore()
@@ -63,9 +71,11 @@ export function useVideoList(options: VideoListOptions = {}) {
   }
 
   async function load(key: string, filter: VideoFilter, p = 1, pageSize = 50): Promise<void> {
-    if (!key) return
+    if (!key || !active) return
     if (p > 1 && (!nextCursor.value || key !== sourceKey.value)) return
     if (p === 1) nextCursor.value = ''
+    requests.cancel()
+    interrupted.value = false
     const my = gen.begin()
     loading.value = true
     sourceKey.value = key
@@ -82,7 +92,7 @@ export function useVideoList(options: VideoListOptions = {}) {
         page: p,
         page_size: pageSize,
       } as any
-      const resp = (await GetVideoList(req)) as any
+      const resp = (await requests.run(() => GetVideoList(req))) as any
       if (settle(my)) return
       const list: Video[] = Array.isArray(resp?.videos) ? resp.videos : []
       nextCursor.value = typeof resp?.next_cursor === 'string' ? resp.next_cursor : ''
@@ -94,17 +104,19 @@ export function useVideoList(options: VideoListOptions = {}) {
   }
 
   async function search(key: string, keyword: string, p = 1, pageSize = 50): Promise<void> {
-    if (!key) return
+    if (!key || !active) return
+    requests.cancel()
+    interrupted.value = false
     const my = gen.begin()
     loading.value = true
     sourceKey.value = key
     try {
-      const resp = (await SearchVideos({
+      const resp = (await requests.run(() => SearchVideos({
         source_key: key,
         keyword,
         page: p,
         page_size: pageSize,
-      })) as any
+      }))) as any
       if (settle(my)) return
       const list: Video[] = Array.isArray(resp?.videos) ? resp.videos : []
       if (p === 1) localVideos.value = Array.isArray(resp?.local_videos) ? resp.local_videos : []
@@ -129,7 +141,8 @@ export function useVideoList(options: VideoListOptions = {}) {
   }
 
   function reset(): void {
-    gen.invalidate()
+    cancelRequests()
+    interrupted.value = false
     videos.value = []
     localVideos.value = []
     total.value = 0
@@ -156,6 +169,7 @@ export function useVideoList(options: VideoListOptions = {}) {
     page,
     nextCursor,
     loading,
+    interrupted,
     sourceKey,
     hasNext: computed(() => videos.value.length < total.value),
     load,

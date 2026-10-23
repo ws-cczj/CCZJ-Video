@@ -1,0 +1,16 @@
+{
+  "active": false,
+  "path": "/data/user/0/com.cczj.video.acceptance/files/CCZJ Video/exports/diagnostics/recording-20261019-031544-1648672440.jsonl",
+  "started_at_ms": 1792379744147,
+  "ended_at_ms": 1792379779735,
+  "interval_seconds": 5,
+  "max_duration_seconds": 21600,
+  "samples": 9,
+  "markers": 26,
+  "reason": "manual",
+  "error": "",
+  "start_heap_path": "/data/user/0/com.cczj.video.acceptance/files/CCZJ Video/exports/diagnostics/recording-20261019-031544-1648672440-start-heap.pprof",
+  "end_heap_path": "/data/user/0/com.cczj.video.acceptance/files/CCZJ Video/exports/diagnostics/recording-20261019-031544-1648672440-end-heap.pprof",
+  "start_goroutines_path": "/data/user/0/com.cczj.video.acceptance/files/CCZJ Video/exports/diagnostics/recording-20261019-031544-1648672440-start-goroutines.txt",
+  "end_goroutines_path": "/data/user/0/com.cczj.video.acceptance/files/CCZJ Video/exports/diagnostics/recording-20261019-031544-1648672440-end-goroutines.txt"
+}

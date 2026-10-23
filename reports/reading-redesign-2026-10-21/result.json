@@ -1,0 +1,29 @@
+{
+  "passed": true,
+  "native": false,
+  "results": [
+    "desktop: novel personal shelf retains filtering and recent history",
+    "desktop: novel resume exits to its entry",
+    "desktop: comic root shows followed covers and page progress",
+    "desktop: comic episode search and current-episode navigation",
+    "desktop: search forms submit with a visible action",
+    "desktop: settings show focused controls and live typography preview",
+    "desktop: source manager opens installed sources without fetching the catalog",
+    "desktop: failed resolution preserves saved snapshots",
+    "desktop: dark and narrow layouts stay inside the viewport",
+    "desktop: resolved source identity repairs a changed local book ID",
+    "desktop: empty personal libraries offer a direct source setup action",
+    "mobile: novel personal shelf retains filtering and recent history",
+    "mobile: novel resume exits to its entry",
+    "mobile: comic root shows followed covers and page progress",
+    "mobile: comic episode search and current-episode navigation",
+    "mobile: search forms submit with a visible action",
+    "mobile: settings show focused controls and live typography preview",
+    "mobile: source manager opens installed sources without fetching the catalog",
+    "mobile: failed resolution preserves saved snapshots",
+    "mobile: dark and narrow layouts stay inside the viewport",
+    "mobile: resolved source identity repairs a changed local book ID",
+    "mobile: empty personal libraries offer a direct source setup action"
+  ],
+  "errors": []
+}

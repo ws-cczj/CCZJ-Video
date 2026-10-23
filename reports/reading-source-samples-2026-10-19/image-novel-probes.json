@@ -1,0 +1,34 @@
+[
+  {
+    "key": "suixkan-detail",
+    "status": 200,
+    "bytes": 40884,
+    "type": "text/html; charset=utf-8",
+    "url": "http://m.suixkan.com/b/235207.html",
+    "signature": "0a3c21444f43545950452068"
+  },
+  {
+    "key": "kuwo-content",
+    "status": 200,
+    "bytes": 10409,
+    "type": "application/json; charset=utf-8",
+    "url": "http://appi.kuwo.cn/novels/api/book/22543868000604102/chapters/96825218742211052",
+    "signature": "7b22636f6465223a3230302c"
+  },
+  {
+    "key": "guazi-image",
+    "status": 200,
+    "bytes": 224815,
+    "type": "image/jpeg",
+    "url": "https://img.guazicdn.com/th/comics/chapters/24/260425/1_1.webp",
+    "signature": "ffd8ffe000104a4649460001"
+  },
+  {
+    "key": "dongman-image",
+    "status": 200,
+    "bytes": 57931,
+    "type": "image/jpeg",
+    "url": "https://cdn.dongmanmanhua.cn/20141007_237/14126689516181WovO_JPEG/141266895157524140.jpg?x-oss-process=image/quality,q_90",
+    "signature": "ffd8ffe000104a4649460001"
+  }
+]

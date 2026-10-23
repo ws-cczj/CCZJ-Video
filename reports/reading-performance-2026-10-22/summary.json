@@ -1,0 +1,58 @@
+{
+  "date": "2026-10-22",
+  "physicalDeviceStatus": "not_connected",
+  "nativeEmulatorStatus": "passed",
+  "source": "after-fix-verified/result.json",
+  "appSameProcess": true,
+  "javascriptErrors": [],
+  "crashBufferBytes": 0,
+  "maxNoVisibleSceneMs": 0,
+  "modes": {
+    "novel": {
+      "passed": true,
+      "pageTurns": 30,
+      "readerCycles": 4,
+      "toolbarRows": 1,
+      "minimumToolbarHitWidthCssPx": 71,
+      "pageTurnObservedP50Ms": 281.0,
+      "pageTurnObservedP95Ms": 282.0,
+      "rafP95Ms": 16.66700000000128,
+      "rafMaxMs": 16.66700000000128,
+      "longTasks": []
+    },
+    "comic": {
+      "passed": true,
+      "pageTurns": 30,
+      "readerCycles": 4,
+      "toolbarRows": 1,
+      "minimumToolbarHitWidthCssPx": 71,
+      "pageTurnObservedP50Ms": 47.0,
+      "pageTurnObservedP95Ms": 62.0,
+      "rafP95Ms": 16.66700000000037,
+      "rafMaxMs": 16.66700000000037,
+      "longTasks": []
+    }
+  },
+  "apk": {
+    "amd64": {
+      "path": "bin/CCZJ-Video-android-amd64-acceptance.apk",
+      "bytes": 55428136,
+      "sha256": "17ca8e312b781493eebd89fa3eec7dcc21c2bccdf4b50a2034a44581dc3d0225",
+      "nativeLibraries": [
+        "lib/x86_64/libwails.so"
+      ],
+      "runtimeTested": true
+    },
+    "arm64": {
+      "path": "bin/CCZJ-Video-android-arm64-acceptance.apk",
+      "bytes": 54196523,
+      "sha256": "12bc80f4bfd30a1f993bfd424c7b10f2851ca41159cb6be29482711f7f6243be",
+      "nativeLibraries": [
+        "lib/arm64-v8a/libwails.so"
+      ],
+      "runtimeTested": false
+    }
+  },
+  "appMainProcessPssBeforeKiB": 241561,
+  "appMainProcessPssAfterKiB": 234281
+}

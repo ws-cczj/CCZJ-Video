@@ -1,21 +1,15 @@
 /* ========== 容器：覆盖窗口上半部分（右侧）========== */
 .vine-wrap {
-  position: fixed;
-  top: 0;
-  right: 0;
+  @apply cczj-fixed cczj-top-0 cczj-right-0;
   width: 280px;      /* 比 SVG 略宽，给漂浮花瓣留出空间 */
-  pointer-events: none;
+  @apply cczj-pointer-events-none;
   z-index: 998;
-  overflow: visible;
+  @apply cczj-overflow-visible;
 }
 
 /* ========== SVG 主藤（固定在容器顶部）========== */
 .vine-svg {
-  position: absolute;
-  top: 0;
-  right: 0;
-  display: block;
-  overflow: visible;
+  @apply cczj-absolute cczj-top-0 cczj-right-0 cczj-block cczj-overflow-visible;
 }
 
 /* 主藤绘制动画 */
@@ -39,7 +33,7 @@
 .mini-flower {
   transform-origin: center;
   transform: scale(0);
-  opacity: 0;
+  @apply cczj-opacity-0;
 }
 .mf-1 { animation: flower-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.55s forwards; }
 .mf-2 { animation: flower-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.8s forwards; }
@@ -49,7 +43,7 @@
 .vine-leaf {
   transform-origin: center;
   transform: scale(0) rotate(-20deg);
-  opacity: 0;
+  @apply cczj-opacity-0;
 }
 .leaf-l-1 { animation: leaf-spring-sway 4.55s cubic-bezier(0.34, 1.56, 0.64, 1) 0.45s infinite; }
 .leaf-l-2 { animation: leaf-spring-sway2 4.7s cubic-bezier(0.34, 1.56, 0.64, 1) 0.7s infinite; }
@@ -58,7 +52,7 @@
 .hanging-leaf {
   transform-origin: center;
   transform: scale(0);
-  opacity: 0;
+  @apply cczj-opacity-0;
 }
 .h-leaf-1 { animation: leaf-spring-sway 4.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.85s infinite; }
 .h-leaf-2 { animation: leaf-spring-sway2 4.5s cubic-bezier(0.34, 1.56, 0.64, 1) 1.0s infinite; }
@@ -67,7 +61,7 @@
 .vine-tendril {
   transform-origin: center;
   transform: scale(0);
-  opacity: 0;
+  @apply cczj-opacity-0;
 }
 .t-1 { animation: leaf-spring 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) 0.7s forwards; }
 .t-2 { animation: leaf-spring 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) 0.9s forwards; }
@@ -75,25 +69,22 @@
 
 /* ========== 可点击的花朵（位于容器右下角附近）========== */
 .flower-click-target {
-  position: absolute;
+  @apply cczj-absolute;
   right: 14px;
   bottom: 18px;
   width: 72px;
   height: 72px;
-  pointer-events: auto;
-  cursor: pointer;
+  @apply cczj-pointer-events-auto cczj-cursor-pointer;
   transform-origin: center;
   transform: scale(0) rotate(-30deg);
-  opacity: 0;
+  @apply cczj-opacity-0;
   animation: flower-bloom 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) 1.0s forwards,
              flower-sway 4s ease-in-out 1.7s infinite alternate;
   filter: drop-shadow(0 4px 10px var(--accent-alpha-35));
 }
 
 .flower-svg {
-  width: 100%;
-  height: 100%;
-  display: block;
+  @apply cczj-w-full cczj-h-full cczj-block;
   transition: transform 0.25s ease;
 }
 
@@ -149,16 +140,13 @@
 
 /* ========== 漂浮花瓣 ========== */
 .petal-float {
-  position: absolute;
-  color: var(--accent);
-  opacity: 0;
-  pointer-events: none;
+  @apply cczj-absolute cczj-text-accent cczj-opacity-0 cczj-pointer-events-none;
   animation: petal-fall 6s linear infinite;
   text-shadow: 0 1px 3px var(--accent-alpha-35);
 }
-.p-float-1 { top: 25%; right: 120px; animation-delay: 2.5s; font-size: 11px; }
-.p-float-2 { top: 45%; right: 80px;  animation-delay: 4.5s; font-size: 9px;  opacity: 0.7; }
-.p-float-3 { top: 15%; right: 50px;  animation-delay: 1.0s; font-size: 10px; opacity: 0.6; }
+.p-float-1 { top: 25%; right: 120px; animation-delay: 2.5s; @apply cczj-text-11; }
+.p-float-2 { top: 45%; right: 80px;  animation-delay: 4.5s; font-size: 9px;  @apply cczj-opacity-70; }
+.p-float-3 { top: 15%; right: 50px;  animation-delay: 1.0s; @apply cczj-text-xs cczj-opacity-60; }
 
 /* ============================================================
    关键帧动画定义
@@ -278,7 +266,19 @@
   .flower-click-target {
     width: 56px;
     height: 56px;
-    right: 8px;
+    @apply cczj-right-2;
     bottom: 10px;
   }
 }
+
+/* Mobile keeps the flower within thumb reach; the desktop vine stays decorative. */
+.vine-wrap.cczj-mobile-back-to-top { top: auto; right: 10px; width: 48px; height: 48px; }
+.cczj-mobile-back-to-top .flower-click-target { inset: 0; width: 48px; height: 48px; @apply cczj-opacity-100; transform: none; animation: none; }
+.vine-wrap.cczj-mobile-back-to-top.phase-grow .flower-click-target { animation:cczj-mobile-flower-arrive var(--cczj-motion-normal,260ms) var(--cczj-motion-ease-enter,ease-out) both; }
+@keyframes cczj-mobile-flower-arrive {
+  from { opacity:0; transform:translateY(12px) scale(.84) rotate(-8deg); }
+  to { opacity:1; transform:translateY(0) scale(1) rotate(0); }
+}
+.cczj-mobile-back-to-top .petal-float { @apply cczj-hidden; }
+.cczj-mobile-back-to-top .flower-click-target:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; @apply cczj-rounded-50; }
+html[data-cczj-platform=mobile]:has(.cczj-mobile-selection-bar) .vine-wrap.cczj-mobile-back-to-top { bottom: calc(144px + env(safe-area-inset-bottom,0px)) !important; }

@@ -3,6 +3,7 @@ defineOptions({ name: 'ExtensionsPanel' })
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { OpenFolder } from '../api/app'
+import { isMobileRuntime } from '../api/runtime'
 import Icon from './Icon.vue'
 import { Button, Empty, Tag } from './ui'
 import { useErrorStore } from '../stores/error'
@@ -10,10 +11,12 @@ import { useConfirmStore } from '../stores/confirm'
 import { usePluginStore, type PluginInfo } from '../stores/plugins'
 import { humanizeBytes } from '../utils'
 import { syncPluginScripts } from '../plugins/runtime'
+import { scriptTrust } from '../plugins/trust'
 import { loadPermissionLedger, permissionDecision, resetPermission, type PackPermission } from '../plugins/permissions'
 import { dropReports, installing, type InstallReport } from '../plugins/dropInstall'
 
 const { t } = useI18n()
+const mobile = isMobileRuntime()
 const errorStore = useErrorStore()
 const confirmStore = useConfirmStore()
 const pluginStore = usePluginStore()
@@ -34,7 +37,27 @@ onMounted(() => {
   // 卡片上那三个状态（已允许 / 已拒绝 / 还没问过）读的是授权账本，而账本原本只在包
   // 真动手那一刻才去取。不在这儿读一次，一个被拒过的包会显示成「还没问过」。
   void loadPermissionLedger()
+  void scriptTrust.load().catch(e => errorStore.fromError(t('permissions.scriptTrustTitle'), e, 'ExtensionsPanel.trust'))
 })
+
+async function revokeScriptTrust(pack: PluginInfo): Promise<void> {
+  if (pending.value) return
+  pending.value = true
+  busyId.value = pack.id
+  busyAction.value = 'permission'
+  try {
+    const message = await pluginStore.setEnabled(pack.id, false)
+    if (message) throw new Error(message)
+    await syncPluginScripts()
+    await scriptTrust.revoke(pack.id)
+  } catch (error) {
+    errorStore.fromError(t('permissions.scriptTrustTitle'), error, 'ExtensionsPanel.revokeTrust')
+  } finally {
+    pending.value = false
+    busyId.value = ''
+    busyAction.value = ''
+  }
+}
 
 const KIND_KEYS: Record<string, string> = {
   source: 'settings.extensionsKindSource',
@@ -48,6 +71,14 @@ function kindLabel(kind: string): string {
 }
 
 function packDesc(pack: PluginInfo): string {
+  if (mobile && pack.builtin) {
+    const descriptions: Record<string, string> = {
+      'logs-panel': 'mobile.logsExtensionHint',
+      'diagnostics-panel': 'mobile.diagnosticsExtensionHint',
+      'motion-effects': 'mobile.motionExtensionHint',
+    }
+    if (descriptions[pack.id]) return t(descriptions[pack.id])
+  }
   return pluginStore.localized(pack.description)
 }
 
@@ -100,10 +131,12 @@ async function uninstall(pack: PluginInfo): Promise<void> {
   let msg = ''
   try {
     msg = await pluginStore.uninstall(pack.id)
+    // Disk removal may succeed while trust persistence fails. Always reconcile
+    // the runtime with the resulting registry, even when a warning is returned.
+    await syncPluginScripts()
     if (!msg) {
       // 顺带清掉这个 id 的本机隔离记录：同一目录名可能重新拖回来，旧记录不该继续拦注入。
       pluginStore.retryScript(pack.id)
-      await syncPluginScripts()
     }
   } finally {
     pending.value = false
@@ -331,7 +364,7 @@ function kindGlyph(pack: PluginInfo): string {
     dropEffect 会被强制成 none（鼠标变成禁止符号），原生拖放根本不会落到这张卡片上。
     高亮也不用自己数 dragenter——运行时进出时会给带这个标记的元素加 file-drop-target-active。
   -->
-  <div class="ext-card" data-file-drop-target>
+  <div class="ext-card" :data-file-drop-target="mobile ? undefined : ''">
     <div class="ext-hd">
       <span class="ext-title">
         <Icon name="layers" :size="13" />
@@ -339,11 +372,11 @@ function kindGlyph(pack: PluginInfo): string {
       </span>
       <span class="ext-count">{{ pluginStore.packs.length }}</span>
       <div class="ext-acts">
-        <Button variant="secondary" size="sm" @click="copyDir">
+        <Button v-if="!mobile" variant="secondary" size="sm" @click="copyDir">
           <Icon name="copy" :size="12" />
           <span>{{ t('common.copy') }}</span>
         </Button>
-        <Button v-if="hasRealDir" variant="secondary" size="sm" @click="openDir">
+        <Button v-if="!mobile && hasRealDir" variant="secondary" size="sm" @click="openDir">
           <Icon name="folder" :size="12" />
           <span>{{ t('settings.extensionsOpenDir') }}</span>
         </Button>
@@ -359,13 +392,13 @@ function kindGlyph(pack: PluginInfo): string {
       </div>
     </div>
 
-    <p class="ext-desc">{{ t('settings.extensionsDesc') }}</p>
-    <div class="ext-dir" :title="dirText" @click="copyDir">{{ dirText }}</div>
+    <p class="ext-desc">{{ t(mobile ? 'mobile.extensionsManageHint' : 'settings.extensionsDesc') }}</p>
+    <div v-if="!mobile" class="ext-dir" :title="dirText" @click="copyDir">{{ dirText }}</div>
     <div v-if="pluginStore.registryError" class="ext-error">{{ pluginStore.registryError }}</div>
 
     <!-- 这一张卡片是全应用唯一的投放区，所以指针掠过它时运行时才会给出可放置的反馈；
          这一条只需要说「能拖」。 -->
-    <div class="ext-drop" :class="{ 'is-busy': installing }">
+    <div v-if="!mobile" class="ext-drop" :class="{ 'is-busy': installing }">
       <Icon :name="installing ? 'refresh' : 'download'" :size="13" />
       <span>{{ installing ? t('settings.extensionsInstalling') : t('settings.extensionsDropHint') }}</span>
     </div>
@@ -395,7 +428,7 @@ function kindGlyph(pack: PluginInfo): string {
       v-else-if="pluginStore.packs.length === 0"
       icon="📦"
       :title="t('settings.extensionsEmpty')"
-      :description="t('settings.extensionsEmptyDesc')"
+      :description="t(mobile ? 'mobile.extensionsEmptyHint' : 'settings.extensionsEmptyDesc')"
     />
 
     <div
@@ -467,8 +500,17 @@ function kindGlyph(pack: PluginInfo): string {
 
       <!-- script 是横切段：主题包也能带一段自己的脚本，所以这块独立于上面那条 kind 分支。 -->
       <div v-if="pack.script" class="ext-extra">
-        {{ t('settings.extensionsScriptItems') }}{{ scriptFilesOf(pack) }}
+        <template v-if="!mobile">{{ t('settings.extensionsScriptItems') }}{{ scriptFilesOf(pack) }}</template>
         <div class="ext-hint">{{ t('settings.extensionsScriptHint') }}</div>
+        <div v-if="scriptTrust.records.value[pack.id]" class="ext-perm">
+          <Tag size="sm" :variant="scriptTrust.records.value[pack.id].allowed ? 'success' : 'danger'">
+            {{ t(scriptTrust.records.value[pack.id].allowed ? 'permissions.scriptTrusted' : 'permissions.scriptDenied') }}
+          </Tag>
+          <Button variant="secondary" size="sm" :disabled="pending"
+            :loading="busyId === pack.id && busyAction === 'permission'" @click="revokeScriptTrust(pack)">
+            {{ t('permissions.scriptTrustRevoke') }}
+          </Button>
+        </div>
       </div>
 
       <!-- 声明了才拦得住：这一行摊开「包要什么」和「你上次给了什么」，撤销了就等于下次重新问。 -->
@@ -520,7 +562,7 @@ function kindGlyph(pack: PluginInfo): string {
     <!-- 卸载是真删目录，这句话得写在面板上；内置包没有那个按钮，也得在这一行说清楚。 -->
     <div class="ext-foot">
       <Icon name="info" :size="12" />
-      <span>{{ t('settings.extensionsUninstallHint') }}</span>
+      <span>{{ t(mobile ? 'mobile.extensionsUninstallHint' : 'settings.extensionsUninstallHint') }}</span>
     </div>
   </div>
 </template>

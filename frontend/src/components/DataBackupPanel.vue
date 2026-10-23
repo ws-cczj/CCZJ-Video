@@ -17,8 +17,11 @@ import {
 } from '../api/app'
 import { useErrorStore } from '../stores/error'
 import { useConfirmStore } from '../stores/confirm'
+import { isMobileRuntime } from '../api/runtime'
+import { revealDiagnosticExport } from '../platform/diagnosticFiles'
 
 const { t } = useI18n()
+const mobile = isMobileRuntime()
 const errorStore = useErrorStore()
 const confirmStore = useConfirmStore()
 
@@ -49,14 +52,12 @@ function fmtBytes(value: number): string {
   return `${size.toFixed(1)} ${units[unit]}`
 }
 
-// 导出不再走原生保存对话框：WebView2 里 Dialogs.SaveFile 点了既不弹窗口也不报错，
-// 静默失败比少一个「另存为」难查得多。文件一律落在数据目录的 exports 下，
-// 界面上给路径和「打开所在文件夹」，要挪去别处由文件管理器负责。
+// Keep a local backup even when the user cancels Android's share chooser.
 async function doExport(): Promise<void> {
   busy.value = 'export'
   try {
     exportPath.value = await BackupExport('') as string
-    errorStore.info(t('backup.exportOkTitle'), t('backup.exportOk', { path: exportPath.value }))
+    errorStore.info(t('backup.exportOkTitle'), mobile ? t('mobile.backupSaved') : t('backup.exportOk', { path: exportPath.value }))
     await loadFiles()
   } catch (e: any) {
     errorStore.fromError(t('backup.exportFailed'), e, 'DataBackupPanel')
@@ -68,9 +69,10 @@ async function doExport(): Promise<void> {
 async function openExportFolder(): Promise<void> {
   if (!exportPath.value) return
   try {
-    await OpenFolder(exportPath.value)
+    if (mobile) await revealDiagnosticExport(exportPath.value)
+    else await OpenFolder(exportPath.value)
   } catch (e: any) {
-    errorStore.fromError(t('backup.openFolderFailed'), e, 'DataBackupPanel')
+    errorStore.fromError(t(mobile ? 'mobile.shareFailed' : 'backup.openFolderFailed'), e, 'DataBackupPanel')
   }
 }
 
@@ -210,7 +212,7 @@ async function importFile(item: any): Promise<void> {
 onMounted(() => {
   void loadArchives()
   void loadFiles()
-  void loadLegacy()
+  if (!isMobileRuntime()) void loadLegacy()
 })
 </script>
 
@@ -228,7 +230,7 @@ onMounted(() => {
         <Icon name="upload" :size="12" /> {{ t('backup.import') }}
       </Button>
       <Button v-if="exportPath" variant="ghost" size="sm" @click="openExportFolder">
-        <Icon name="folder" :size="12" /> {{ t('backup.openFolder') }}
+        <Icon :name="mobile ? 'upload' : 'folder'" :size="12" /> {{ t(mobile ? 'mobile.shareBackup' : 'backup.openFolder') }}
       </Button>
     </div>
     <input ref="fileInput" class="hidden-input" type="file" accept=".json,.json.br,.json.gz,.br,.gz" @change="onFileSelected" />
@@ -238,6 +240,7 @@ onMounted(() => {
       <ul class="result-list cczj-flex cczj-flex-col cczj-gap-2">
         <li>{{ t('backup.resultFavorites', { count: lastResult.favorites_added }) }}</li>
         <li>{{ t('backup.resultHistory', { count: lastResult.history_applied }) }}</li>
+        <li>{{ t('backup.resultReading', { count: lastResult.reading_applied ?? 0 }) }}</li>
         <li>{{ t('backup.resultSettings', { count: lastResult.settings_applied }) }}</li>
         <li>{{ t('backup.resultSources', { count: lastResult.sources_added }) }}</li>
         <li v-if="lastResult.favorites_skipped || lastResult.history_skipped || lastResult.settings_skipped">
@@ -245,14 +248,14 @@ onMounted(() => {
         </li>
         <li v-if="lastResult.unresolved">{{ t('backup.resultUnresolved', { count: lastResult.unresolved }) }}</li>
       </ul>
-      <p class="desc">{{ t('backup.restartHint') }}</p>
-      <div class="cczj-flex cczj-items-center cczj-gap-4">
+      <p class="desc">{{ t(mobile ? 'mobile.backupReopenHint' : 'backup.restartHint') }}</p>
+      <div v-if="!mobile" class="cczj-flex cczj-items-center cczj-gap-4">
         <Button variant="secondary" size="sm" @click="restartApp">{{ t('backup.restart') }}</Button>
       </div>
     </div>
   </section>
 
-  <section class="block">
+  <section v-if="!isMobileRuntime()" class="block">
     <div class="block-hd cczj-flex cczj-items-center cczj-justify-between">
       <h3>{{ t('legacy.title') }}</h3>
       <Button variant="secondary" size="sm" :loading="legacyLoading" @click="loadLegacy">
@@ -286,7 +289,7 @@ onMounted(() => {
         <Icon name="refresh" :size="12" /> {{ t('common.refresh') }}
       </Button>
     </div>
-    <p class="desc">{{ t('backup.filesIntro') }}</p>
+    <p class="desc">{{ t(mobile ? 'mobile.backupFilesHint' : 'backup.filesIntro') }}</p>
     <div v-if="filesLoading" class="desc">{{ t('backup.archivesLoading') }}</div>
     <div v-else-if="!files.length" class="desc">{{ t('backup.filesEmpty') }}</div>
     <ul v-else class="archive-list cczj-flex cczj-flex-col cczj-gap-3">
@@ -342,43 +345,39 @@ onMounted(() => {
    Settings 里的 .block h3 落不到它身上。 */
 .block h3 {
   font-size: 0.97rem;
-  font-weight: 700;
+  @apply cczj-font-bold;
   margin: 0 0 12px;
   letter-spacing: 0.3px;
 }
 .hidden-input {
-  display: none;
+  @apply cczj-hidden;
 }
 .desc {
   margin: 6px 0 0;
-  font-size: 12px;
+  @apply cczj-text-sm;
   line-height: 1.6;
-  color: var(--text-muted);
+  @apply cczj-text-muted;
 }
 .legacy-path {
   margin: 0;
-  font-size: 12px;
+  @apply cczj-text-sm;
   line-height: 1.6;
-  color: var(--text-secondary);
-  word-break: break-all;
+  @apply cczj-text-secondary cczj-break-all;
 }
 .result {
-  margin-top: 10px;
+  @apply cczj-mt-5;
   padding: 10px 12px;
-  border: 1px solid var(--border);
+  @apply cczj-border;
   border-radius: 10px;
   background: var(--bg-card);
 }
 .result-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
+  @apply cczj-text-13 cczj-font-semibold cczj-text-primary;
 }
 .result-list {
   margin: 0;
   padding-left: 18px;
-  font-size: 12px;
-  color: var(--text-secondary);
+  @apply cczj-text-sm cczj-text-secondary;
 }
 .archive-list {
   margin: 10px 0 0;
@@ -387,17 +386,14 @@ onMounted(() => {
 }
 .archive-row {
   padding: 8px 10px;
-  border: 1px solid var(--border);
+  @apply cczj-border;
   border-radius: 10px;
   background: var(--bg-card);
 }
 .archive-name {
-  font-size: 12px;
-  color: var(--text-primary);
-  word-break: break-all;
+  @apply cczj-text-sm cczj-text-primary cczj-break-all;
 }
 .archive-meta {
-  font-size: 11px;
-  color: var(--text-muted);
+  @apply cczj-text-11 cczj-text-muted;
 }
 </style>

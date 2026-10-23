@@ -1,0 +1,398 @@
+[
+  {
+    "chapters": 1651,
+    "id": "fc251043db615f4bc9718d56005c1721268e48174214219f1f684e71b3e44fb6",
+    "name": "酷我小说",
+    "origin": "https://github.com/XIU2/Yuedu/blob/426b24f59aa763ee0f2d9cc094612d2ef42c8293/shuyuan",
+    "paragraphs": 65,
+    "project": "Legado",
+    "quality": {
+      "status": "healthy",
+      "score": 100,
+      "checkedAt": 1792589806,
+      "millis": 409,
+      "samples": 1,
+      "successes": 1,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "ok",
+          "count": 10,
+          "millis": 97
+        },
+        {
+          "name": "detail",
+          "status": "ok",
+          "count": 1,
+          "millis": 73
+        },
+        {
+          "name": "toc",
+          "status": "ok",
+          "count": 1651,
+          "millis": 213
+        },
+        {
+          "name": "content",
+          "status": "ok",
+          "count": 65,
+          "millis": 26
+        }
+      ],
+      "evidence": "local"
+    },
+    "title": "三国之仲谋天下"
+  },
+  {
+    "chapters": 779,
+    "id": "42b07a562f14c6f067083fbc046a15d0638fc0187b62c1928199e44f38984005",
+    "name": "阅友小说",
+    "origin": "https://github.com/XIU2/Yuedu/blob/426b24f59aa763ee0f2d9cc094612d2ef42c8293/shuyuan",
+    "paragraphs": 46,
+    "project": "Legado",
+    "quality": {
+      "status": "healthy",
+      "score": 100,
+      "checkedAt": 1792589807,
+      "millis": 556,
+      "samples": 1,
+      "successes": 1,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "ok",
+          "count": 5,
+          "millis": 112
+        },
+        {
+          "name": "detail",
+          "status": "ok",
+          "count": 1,
+          "millis": 122
+        },
+        {
+          "name": "toc",
+          "status": "ok",
+          "count": 779,
+          "millis": 158
+        },
+        {
+          "name": "content",
+          "status": "ok",
+          "count": 46,
+          "millis": 164
+        }
+      ],
+      "evidence": "local"
+    },
+    "title": "三国争锋"
+  },
+  {
+    "chapters": 122,
+    "id": "260ac95862f67eb7d6a036dbc71d7ba9d95e610d8c6412cf20e6bc4aad5a7af2",
+    "name": "番茄小说",
+    "origin": "https://github.com/ch6vip/fqapp/blob/9ada894abac9cc94fded76958c1c71dbf479a754/rust/src/endpoints/content.rs",
+    "paragraphs": 5,
+    "project": "fqapp",
+    "quality": {
+      "status": "healthy",
+      "score": 96,
+      "checkedAt": 1792589809,
+      "millis": 1643,
+      "samples": 1,
+      "successes": 1,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "ok",
+          "count": 7,
+          "millis": 597
+        },
+        {
+          "name": "detail",
+          "status": "ok",
+          "count": 1,
+          "millis": 278
+        },
+        {
+          "name": "toc",
+          "status": "ok",
+          "count": 351,
+          "millis": 343
+        },
+        {
+          "name": "content",
+          "status": "ok",
+          "count": 122,
+          "millis": 425
+        }
+      ],
+      "evidence": "local"
+    },
+    "title": "三国大全：三国演义"
+  },
+  {
+    "id": "7a875d98153b84acdd6ae25180b71900cf37d5eccb1f38c16562ab83d774aa6d",
+    "name": "平凡文学",
+    "origin": "https://github.com/aoaostar/legado",
+    "project": "Legado",
+    "quality": {
+      "status": "failed",
+      "score": 0,
+      "checkedAt": 1792589840,
+      "millis": 30000,
+      "samples": 1,
+      "successes": 0,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "failed",
+          "message": "操作超时",
+          "millis": 30000,
+          "code": "TIMEOUT"
+        }
+      ],
+      "evidence": "local"
+    }
+  },
+  {
+    "chapters": 7,
+    "id": "ba7175c654b19094fdba523002fb5c9aa802e1b695cf7ba49013bcc0cd36712c",
+    "name": "崩坏3官方漫画",
+    "origin": "https://github.com/keiyoushi/extensions-source/blob/314a0d1b2b6b194f6a4f9aee252fec9ce55ae5ca/src/zh/bh3/src/eu/kanade/tachiyomi/extension/zh/bh3/BH3.kt",
+    "pages": 29,
+    "project": "Mihon",
+    "quality": {
+      "status": "healthy",
+      "score": 100,
+      "checkedAt": 1792589840,
+      "millis": 290,
+      "samples": 1,
+      "successes": 1,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "ok",
+          "count": 23,
+          "millis": 58
+        },
+        {
+          "name": "detail",
+          "status": "ok",
+          "count": 1,
+          "millis": 5
+        },
+        {
+          "name": "toc",
+          "status": "ok",
+          "count": 7,
+          "millis": 5
+        },
+        {
+          "name": "pages",
+          "status": "ok",
+          "count": 29,
+          "millis": 10
+        },
+        {
+          "name": "image",
+          "status": "ok",
+          "count": 1,
+          "millis": 212
+        }
+      ],
+      "evidence": "local"
+    },
+    "title": "逃离长空篇"
+  },
+  {
+    "chapters": 1,
+    "id": "a62c9e523ca3c0d43ca4290f88e450977f4d465dcfe470f9943f43fea4174337",
+    "name": "泰拉记事社",
+    "origin": "https://github.com/keiyoushi/extensions-source/blob/314a0d1b2b6b194f6a4f9aee252fec9ce55ae5ca/src/zh/terrahistoricus/src/eu/kanade/tachiyomi/extension/zh/terrahistoricus/TerraHistoricus.kt",
+    "pages": 58,
+    "project": "Mihon",
+    "quality": {
+      "status": "healthy",
+      "score": 96,
+      "checkedAt": 1792589842,
+      "millis": 1565,
+      "samples": 1,
+      "successes": 1,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "ok",
+          "count": 27,
+          "millis": 223
+        },
+        {
+          "name": "detail",
+          "status": "ok",
+          "count": 1,
+          "millis": 41
+        },
+        {
+          "name": "toc",
+          "status": "ok",
+          "count": 1,
+          "millis": 42
+        },
+        {
+          "name": "pages",
+          "status": "ok",
+          "count": 58,
+          "millis": 803
+        },
+        {
+          "name": "image",
+          "status": "ok",
+          "count": 1,
+          "millis": 456
+        }
+      ],
+      "evidence": "local"
+    },
+    "title": "循途漫录：大将军，出击！"
+  },
+  {
+    "chapters": 10,
+    "id": "e6c3adbb5055902f8168f13ceab542bba07dde2dbd3059b18e30736a2b8ec114",
+    "name": "咚漫漫画",
+    "origin": "https://github.com/keiyoushi/extensions-source/blob/314a0d1b2b6b194f6a4f9aee252fec9ce55ae5ca/src/zh/dongmanmanhua/src/eu/kanade/tachiyomi/extension/zh/dongmanmanhua/DongmanManhua.kt",
+    "pages": 159,
+    "project": "Mihon",
+    "quality": {
+      "status": "healthy",
+      "score": 96,
+      "checkedAt": 1792589845,
+      "millis": 2421,
+      "samples": 1,
+      "successes": 1,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "ok",
+          "count": 2,
+          "millis": 481
+        },
+        {
+          "name": "detail",
+          "status": "ok",
+          "count": 1,
+          "millis": 605
+        },
+        {
+          "name": "toc",
+          "status": "ok",
+          "count": 10,
+          "millis": 767
+        },
+        {
+          "name": "pages",
+          "status": "ok",
+          "count": 159,
+          "millis": 511
+        },
+        {
+          "name": "image",
+          "status": "ok",
+          "count": 1,
+          "millis": 57
+        }
+      ],
+      "evidence": "local"
+    },
+    "title": "神之塔外传:乌雷克·马奇努"
+  },
+  {
+    "chapters": 447,
+    "id": "3b8118b51a39e510eed317610ff159063cffcdd4e239876c19d3bc265aab810a",
+    "name": "瓜子漫画",
+    "origin": "https://github.com/keiyoushi/extensions-source/blob/314a0d1b2b6b194f6a4f9aee252fec9ce55ae5ca/src/zh/guazimanhua/src/eu/kanade/tachiyomi/extension/zh/guazimanhua/Guazimanhua.kt",
+    "pages": 16,
+    "project": "Mihon",
+    "quality": {
+      "status": "healthy",
+      "score": 93,
+      "checkedAt": 1792589853,
+      "millis": 5370,
+      "samples": 1,
+      "successes": 1,
+      "stages": [
+        {
+          "name": "config",
+          "status": "ok",
+          "millis": 0
+        },
+        {
+          "name": "search",
+          "status": "ok",
+          "count": 7,
+          "millis": 741
+        },
+        {
+          "name": "detail",
+          "status": "ok",
+          "count": 1,
+          "millis": 374
+        },
+        {
+          "name": "toc",
+          "status": "ok",
+          "count": 447,
+          "millis": 268
+        },
+        {
+          "name": "pages",
+          "status": "ok",
+          "count": 16,
+          "millis": 252
+        },
+        {
+          "name": "image",
+          "status": "ok",
+          "count": 1,
+          "millis": 3735
+        }
+      ],
+      "evidence": "local"
+    },
+    "title": "斗罗大陆 第三部 龙王传说"
+  }
+]

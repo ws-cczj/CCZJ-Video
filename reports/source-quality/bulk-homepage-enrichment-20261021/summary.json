@@ -1,0 +1,54 @@
+{
+  "header": {
+    "type": "header",
+    "runHash": "d7d80e9cdee468bd12a55c16f1aa29d09a4c075352fee077f664619a8a5dac0f",
+    "corpusHash": "9cc48b110675d342ea03ae26107cebec4094f147890a6712f7d57700019bcd70",
+    "startedAt": "2026-10-21T23:56:32+08:00",
+    "sources": 1704,
+    "parentRunHash": "6fb08aa94a30dffbf657ad9ba8a808114176aa65a483d21232c0811ff8206397"
+  },
+  "completed": true,
+  "corpusWorks": 6832,
+  "totalSources": 1704,
+  "processed": 1704,
+  "resumed": 0,
+  "canRead": 15,
+  "canSearch": 122,
+  "sourcesByKind": {
+    "comic": 405,
+    "novel": 1299
+  },
+  "states": {
+    "homepage_candidate": 406,
+    "homepage_inspected": 1298
+  },
+  "endpointStates": {
+    "http_reached": 1574,
+    "network_unknown": 130
+  },
+  "discoveryQueries": 0,
+  "indexLookups": 0,
+  "matchedWorks": 0,
+  "homepagePairs": 2154,
+  "network": {
+    "capacity": 5,
+    "requests": 895,
+    "peakInFlight": 5
+  },
+  "endpoints": {
+    "endpointRequests": 716,
+    "endpointReused": 988,
+    "peakEndpointHTTP": 5,
+    "deepStarted": 0,
+    "homepageLookups": 176388
+  },
+  "dispatch": {
+    "workers": 5,
+    "queueCapacity": 5,
+    "submitted": 1704,
+    "completed": 1704,
+    "peakActive": 5,
+    "millis": 142881
+  },
+  "rankings": []
+}

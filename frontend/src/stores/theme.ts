@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
-import { GetSetting, SetSetting } from '../api/app'
+import { GetSetting, SetSetting,normalizeApiError } from '../api/app'
+import { createSettingsQueue } from '../api/settingsQueue'
+import { useErrorStore } from './error'
 import { tr } from '../locales'
 import { usePluginStore } from './plugins'
 import landingMoon from '../assets/theme_images/landingMoon.png'
@@ -43,12 +45,37 @@ export function isPackAssetRef(url: string | undefined | null): boolean {
 }
 
 /**
- * 引用串 → 已解析的 data URL。由 warmPackBackgrounds() 填充（读包是异步的），
+ * 引用串 → 已解析的 data URL。实际主题/预览使用时异步填充，
  * 空串表示读过但失败了。包被删掉、被停用或文件读不出来时这里就是空的，
  * 主题按「无背景图」降级。
  * 放在模块层而不是 store 里：resolvePresetAsset 也要读它，两份缓存只会让其中一份变成死代码。
  */
 const packAssets = ref<Record<string, string>>({})
+const attemptedPackAssets = new Set<string>()
+let packAssetGeneration = 0
+let pinnedPackAsset = ''
+const MAX_PACK_BACKGROUND_BYTES = 32 * 1024 * 1024
+
+function readPackBackground(value: string): void {
+  if (attemptedPackAssets.has(value)) return
+  const [packId, ...parts] = value.slice(PACK_REF_PREFIX.length).split('/')
+  const path = parts.join('/')
+  const plugins = usePluginStore()
+  if (!path || !plugins.readyPacks.some(pack => pack.id === packId)) return
+  attemptedPackAssets.add(value)
+  const generation = packAssetGeneration
+  void plugins.readAsset(packId, path).then(url => {
+    if (generation !== packAssetGeneration || !plugins.readyPacks.some(pack => pack.id === packId)) return
+    packAssets.value[value] = url || ''
+    let bytes = Object.values(packAssets.value).reduce((sum, item) => sum + item.length * 2, 0)
+    for (const key of Object.keys(packAssets.value)) {
+      if (bytes <= MAX_PACK_BACKGROUND_BYTES) break
+      if (key === pinnedPackAsset) continue
+      bytes -= packAssets.value[key].length * 2
+      delete packAssets.value[key]
+    }
+  })
+}
 
 /**
  * 检查一个 URL 是否是 Vite 静态资源路径（/assets/<name>.<hash>.<ext> 或 src/assets/...）。
@@ -58,7 +85,7 @@ const packAssets = ref<Record<string, string>>({})
  */
 function resolvePresetAsset(url: string | undefined | null): string | undefined {
   if (!url) return undefined
-  if (isPackAssetRef(url)) return packAssets.value[url] || undefined
+  if (isPackAssetRef(url)) { readPackBackground(url); return packAssets.value[url] || undefined }
   // data URL 或 http(s) URL 不需要处理 —— 它们是用户自己上传/粘贴的
   if (url.startsWith('data:') || /^https?:\/\//i.test(url)) return url
   // 抽取文件名（含扩展名）：最后一个 '/' 之后，取 "<name>.xxx" 部分
@@ -102,28 +129,12 @@ export function resolveThemeBg(value: string | undefined | null): string | undef
   return value ? resolvePresetAsset(value) : undefined
 }
 
-/**
- * 把扩展包声明的背景图预热进 packAssets：读包是异步的，先把键占成空串免得重复戳同一个
- * 坏文件，读回来再填 data URL。由 plugin store 的 themePresets 变化驱动（注册表首次加载、
- * 重扫、包被启停都会变），所以启动时不需要谁手动调；打开扩展面板时也可以催一次。
- * 已经不在册的引用要清掉，否则包改了背景路径或被人删掉后，主题还会画着那张过期的图。
- */
+/** Invalidate background references on registry changes. Images load only when
+ * the current theme or a mounted preview actually resolves its pack:// URL. */
 export async function warmPackBackgrounds(): Promise<void> {
-  const pluginStore = usePluginStore()
-  const live = new Set<string>()
-  for (const { packId, preset } of pluginStore.themePresets) {
-    if (!preset.bg_image) continue
-    const ref = packBgRef(packId, preset.bg_image)
-    live.add(ref)
-    if (ref in packAssets.value) continue
-    packAssets.value[ref] = ''
-    void pluginStore.readAsset(packId, preset.bg_image).then((url) => {
-      packAssets.value[ref] = url || ''
-    })
-  }
-  for (const key of Object.keys(packAssets.value)) {
-    if (!live.has(key)) delete packAssets.value[key]
-  }
+  packAssetGeneration++
+  attemptedPackAssets.clear()
+  packAssets.value = {}
 }
 
 // ============================================================================
@@ -705,6 +716,10 @@ function buildPresetThemes(): PresetTheme[] { return [
 // Store
 // ============================================================================
 export const useThemeStore = defineStore('theme', () => {
+  const saveError=ref(''),pendingSettings=ref(0)
+  const settingWrites=createSettingsQueue((key,value)=>SetSetting(key,value),(pending,error)=>{pendingSettings.value=pending;saveError.value=error?normalizeApiError(error).message:'';if(error)useErrorStore().fromError(tr('errors.fallbackTitle'),error,'Theme')})
+  async function retrySettings(){return settingWrites.retry()}
+
   const currentId = ref<string>('green')
   const customThemes = ref<CustomTheme[]>([])
   const loaded = ref(false)
@@ -874,7 +889,7 @@ export const useThemeStore = defineStore('theme', () => {
             : []
           // Persist the one-time migration so old themes never require users
           // to press the derive button merely to obtain the new UI tokens.
-          if (migrated) await SetSetting('theme_customs', JSON.stringify(customThemes.value))
+          if (migrated) await settingWrites.set('theme_customs', JSON.stringify(customThemes.value))
         } catch { /* ignore */ }
       }
       // Custom themes are loaded above, so their stored id can now be resolved.
@@ -890,12 +905,12 @@ export const useThemeStore = defineStore('theme', () => {
     apply()
   }
 
-  async function setTheme(id: string): Promise<void> {
+  async function setTheme(id: string): Promise<boolean> {
     currentId.value = id
     // 用户手动换过主题后，先前那个还没认出来的 pack id 就作废了。
     deferredThemeId.value = ''
     apply()
-    try { await SetSetting('theme_id', id) } catch { /* ignore */ }
+    return settingWrites.set('theme_id',id)
   }
 
   // ---- 把调色板写入 CSS 变量 ----
@@ -994,19 +1009,19 @@ export const useThemeStore = defineStore('theme', () => {
   }
 
   // ---- 自定义主题 CRUD ----
-  async function saveCustom(theme: CustomTheme): Promise<void> {
+  async function saveCustom(theme: CustomTheme): Promise<boolean> {
     // 保存前把可能是旧构建的预设资源 URL 替换为当前构建的正确 URL
     const fixed = repairCustomThemeAssets(theme)
     const i = customThemes.value.findIndex(c => c.id === fixed.id)
     if (i >= 0) customThemes.value[i] = fixed
     else customThemes.value.push(fixed)
-    persistCustoms()
-    await setTheme(fixed.id)
+    if(!await persistCustoms())return false
+    return setTheme(fixed.id)
   }
 
   async function deleteCustom(id: string): Promise<void> {
     customThemes.value = customThemes.value.filter(c => c.id !== id)
-    persistCustoms()
+    if(!await persistCustoms())return
     if (currentId.value === id) await setTheme('green')
   }
 
@@ -1014,12 +1029,12 @@ export const useThemeStore = defineStore('theme', () => {
     const t = customThemes.value.find(c => c.id === id)
     if (!t) return
     t.name = name
-    persistCustoms()
+    await persistCustoms()
     apply()
   }
 
-  function persistCustoms(): void {
-    try { SetSetting('theme_customs', JSON.stringify(customThemes.value)) } catch { /* ignore */ }
+  function persistCustoms(): Promise<boolean> {
+    return settingWrites.set('theme_customs',JSON.stringify(customThemes.value))
   }
 
   function makeEmptyCustom(): CustomTheme {
@@ -1097,9 +1112,15 @@ export const useThemeStore = defineStore('theme', () => {
   }
 
   // 扩展包背景图按需读成 data URL 存进内存缓存：theme_customs 那一行只留 pack:// 引用。
-  // themePresets 由 readyPacks 派生，注册表加载完/重扫完/启停一个包都会让它变，
-  // 所以预热跟着它走，比单独盯 loaded 更准（也更快一步）。
+  // 注册表变化只作废旧数据；未使用的主题不读取完整背景图。
   watch(() => pluginStore.themePresets, () => { void warmPackBackgrounds() }, { immediate: true })
+  watch(() => current.value.bgImage, value => {
+    pinnedPackAsset = isPackAssetRef(value) ? value! : ''
+    if (pinnedPackAsset) {
+      attemptedPackAssets.delete(pinnedPackAsset)
+      readPackBackground(pinnedPackAsset)
+    }
+  }, { immediate: true })
 
   // 注册表到货后才认得出的 pack 主题，在这里补认一次。
   watch(themes, (list) => {
@@ -1114,6 +1135,7 @@ export const useThemeStore = defineStore('theme', () => {
   watch(() => current.value.id, () => apply())
 
   return {
+    saveError,pendingSettings,retrySettings,
     themes,
     currentId,
     current,

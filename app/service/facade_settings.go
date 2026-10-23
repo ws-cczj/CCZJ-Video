@@ -1,8 +1,12 @@
 package service
 
 import (
+	"cczjVideo/app/apperror"
 	"cczjVideo/app/applog"
+	"cczjVideo/app/danmaku"
+	"cczjVideo/app/netpolicy"
 	"cczjVideo/app/proxy"
+	"encoding/json"
 	"strings"
 )
 
@@ -13,6 +17,39 @@ func (a *App) GetSetting(key string) (string, error) {
 }
 
 func (a *App) SetSetting(key, value string) error {
+	if key == applicationModeKey {
+		return a.switchApplicationMode(value)
+	}
+	a.settingsWriteMu.Lock()
+	defer a.settingsWriteMu.Unlock()
+	if key == netpolicy.SettingsKey {
+		settings, err := netpolicy.DecodeSettings(value)
+		if err != nil {
+			return apperror.Wrap(apperror.Validation, err, "网络请求策略无效")
+		}
+		raw, err := json.Marshal(settings)
+		if err != nil {
+			return err
+		}
+		if err = a.settings.Set(key, string(raw)); err != nil {
+			return err
+		}
+		if a.requestPolicy != nil {
+			a.requestPolicy.SetSettings(settings)
+		}
+		return nil
+	}
+	if key == danmaku.SourceSettingsKey {
+		settings, err := danmaku.DecodeSourceSettings(value)
+		if err != nil {
+			return apperror.Wrap(apperror.Validation, err, "弹幕源设置无效")
+		}
+		raw, err := json.Marshal(settings)
+		if err != nil {
+			return err
+		}
+		value = string(raw)
+	}
 	return a.settings.Set(key, value)
 }
 

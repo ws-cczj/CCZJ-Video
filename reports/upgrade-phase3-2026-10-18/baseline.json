@@ -1,0 +1,81 @@
+{
+  "head": "c900bb131d8d82d680d96816fb549dcfce4193a1",
+  "files": [
+    {
+      "path": "app/db/migrations.go",
+      "sha256": "d371fe1cfbdf737931c2dc1f12b20342fcf15b427d4b04014c2786032ccdcd28"
+    },
+    {
+      "path": "app/db/sqlite.go",
+      "sha256": "c3b19c7d09f7629b72c598249093a17872190724bfd17e35b7363e123d83bf3f"
+    },
+    {
+      "path": "app/service/app.go",
+      "sha256": "da07eff3548394b8c3bdd6d58414378a8fa238286ab9507114c4ff4931538a98"
+    },
+    {
+      "path": "app/library/service.go",
+      "sha256": "f8d93dfe5044e0370a9afbb81c2e7e46c864e68a08958ead78bdabe2990ef0ea"
+    },
+    {
+      "path": "frontend/src/novel/readingState.ts",
+      "sha256": "56c116d605e308b0d6dc04a037e6c4a896aee3fd17162da5701de68fd99f6fad"
+    },
+    {
+      "path": "frontend/src/comic/state.ts",
+      "sha256": "e5e1c291dbe08641e6e70fb7a420c904a044580b9ad848f10e4a385483c53c34"
+    },
+    {
+      "path": "frontend/src/router/index.ts",
+      "sha256": "793857ac4002b4b291cf062d42b3d53962d850dba055de29d306a27ed5a4bbdb"
+    },
+    {
+      "path": "frontend/src/novel/NovelShell.vue",
+      "sha256": "cb98713f64549310aaa8836b59f79ee7f3eb9c985ad46c6b40bdffefa229528b"
+    },
+    {
+      "path": "frontend/src/comic/ComicShell.vue",
+      "sha256": "cf98997741a6516a047df6d1880a1773a57d80120875647cb5808f96073c9690"
+    },
+    {
+      "path": "frontend/package.json",
+      "sha256": "c97d18377e0a0d753e153aeebc75f957d65d01a2245512a03dd0305d05a92362"
+    },
+    {
+      "path": "frontend/package-lock.json",
+      "sha256": "c256ca3e3c4a06d18d2a12004896925b3c9826d7ed7cc580dfcf8ee540cf9985"
+    },
+    {
+      "path": "frontend/vite.config.ts",
+      "sha256": "7d1b6b57949178d21764a22c5b9b0a881904a0d195e222335143fe9daf5e92bb"
+    },
+    {
+      "path": "frontend/vitest.config.ts",
+      "sha256": "8fc91a91b923a89d5461d7d3770fa1d7b6e20401c3506a9ee16eee2cb764740b"
+    },
+    {
+      "path": "frontend/tsconfig.json",
+      "sha256": "bc64cd1d071f9d6c69775996e69bd856c98a8aba8d5c3bb7056b8a228123a524"
+    },
+    {
+      "path": "scripts/test-novel-mode.py",
+      "sha256": "2e899248c4efe30d16d90767ef497828186421e7e5c890e39a7cc2506c6bd7d0",
+      "deleted": true
+    },
+    {
+      "path": "scripts/test-reader-layout.py",
+      "sha256": "d1f092969ff59acf2d1be9312a16aaf8c16a5be2bb1c7783c34c63768126af04",
+      "deleted": true
+    },
+    {
+      "path": "scripts/test-reading-comic.py",
+      "sha256": "14c6b3aa8b9e1ac80822550eb6e371dae49694b70d745e6729a7dc029549951d",
+      "deleted": true
+    },
+    {
+      "path": "scripts/test-novel-desktop.py",
+      "sha256": "7235579d81eb926a852653a7d90fdf09886c8c331b84e5876c93bfc0458dcf44",
+      "deleted": true
+    }
+  ]
+}

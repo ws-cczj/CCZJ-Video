@@ -72,10 +72,10 @@ onDeactivated(() => { wasDeactivated = true })
 </template>
 
 <style scoped>
-.recent-head h2 { display: flex; align-items: center; gap: 8px; }
+.recent-head h2 { @apply cczj-flex cczj-items-center cczj-gap-4; }
 .recent-tabs { border-bottom: 1px solid var(--accent-alpha-20); }
-.period-tab { padding: 8px 16px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-muted); cursor: pointer; font: inherit; }
-.period-tab:hover, .period-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-.recent-grid { display: grid; grid-template-columns: repeat(5, minmax(140px, 1fr)); gap: 16px; }
+.period-tab { @apply cczj-px-8-py-4; border: 0; border-bottom: 2px solid transparent; background: transparent; @apply cczj-text-muted cczj-cursor-pointer; font: inherit; }
+.period-tab:hover, .period-tab.active { @apply cczj-text-accent; border-bottom-color: var(--accent); }
+.recent-grid { @apply cczj-grid; grid-template-columns: repeat(5, minmax(140px, 1fr)); @apply cczj-gap-8; }
 @media (max-width: 900px) { .recent-grid { grid-template-columns: repeat(3, minmax(120px, 1fr)); } }
 </style>

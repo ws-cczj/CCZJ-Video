@@ -207,6 +207,12 @@ func fetchPageWithRetry(ctx context.Context, apiUrl string, page int, opts Fetch
 			return res, nil
 		}
 		lastErr = err
+		// Shared admission owns long cooldowns. Do not sleep through minutes of
+		// backoff in this page worker or repeatedly call a known blocked request.
+		var upstream *HTTPError
+		if apperror.Public(err).RetryAfterSeconds > 0 || apperror.Is(err, apperror.RateLimited) || (errors.As(err, &upstream) && upstream.RetryAfter > 0) {
+			return nil, err
+		}
 		if logFn != nil {
 			logFn(fmt.Sprintf("第 %d 页 第 %d 次请求失败: %v", page, attempt, err))
 		}
@@ -437,9 +443,6 @@ func (e *Engine) Run() (*RunStats, error) {
 		e.onProgress(1, pc)
 	}
 
-	// 推送第 1 页的视频名列表
-	e.emitPageNames(1, firstPage.List)
-
 	e.commitPage(stats, 1, firstPage.List)
 
 	// 单次采集模式：只采集第1页就停止（用于测试或快速预览）
@@ -491,7 +494,6 @@ func (e *Engine) Run() (*RunStats, error) {
 		if e.onProgress != nil {
 			e.onProgress(p, pc)
 		}
-		e.emitPageNames(p, page.List)
 
 		if len(page.List) == 0 {
 			// 源站声称还有这么多页却回空列表：通常是被限流或分页参数失效。
@@ -518,13 +520,20 @@ func (e *Engine) Run() (*RunStats, error) {
 
 // commitPage 处理并写入一页，把结果记进 stats。
 func (e *Engine) commitPage(stats *RunStats, page int, list []*model.Video) {
-	processed := e.processVideos(list)
+	filtered, err := db.FilterSourceCollectVideos(e.sourceKey, list)
+	if err != nil {
+		e.logWarn(fmt.Sprintf("读取第%d页类型规则失败: %v", page, err))
+		stats.SaveFailures = append(stats.SaveFailures, page)
+		return
+	}
+	processed := e.processVideos(filtered)
 	if err := e.saveVideos(processed); err != nil {
 		e.logWarn(fmt.Sprintf("保存第%d页失败: %v", page, err))
 		stats.SaveFailures = append(stats.SaveFailures, page)
 		return
 	}
 	stats.Saved += len(processed)
+	e.emitPageNames(page, processed)
 }
 
 // settleCursor 只有真正覆盖完一次窗口才推进水位线。
@@ -622,24 +631,6 @@ func (e *Engine) processVideos(list []*model.Video) []*model.Video {
 }
 
 func (e *Engine) saveVideos(videos []*model.Video) error {
-	if len(videos) == 0 {
-		return nil
-	}
-
-	// 过滤掉被禁用采集的类型
-	var filtered []*model.Video
-	for _, v := range videos {
-		if v == nil || v.TypeName == "" {
-			continue
-		}
-		if db.IsTypeCollectEnabled(v.TypeName) {
-			filtered = append(filtered, v)
-		} else {
-			e.log(fmt.Sprintf("[类型过滤] 跳过禁用采集类型: %s (%s)", v.VodName, v.TypeName))
-		}
-	}
-	videos = filtered
-
 	if len(videos) == 0 {
 		return nil
 	}

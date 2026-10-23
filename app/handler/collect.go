@@ -6,6 +6,7 @@ import (
 	"cczjVideo/app/collect"
 	"cczjVideo/app/db"
 	"cczjVideo/app/model"
+	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -440,14 +441,24 @@ type SearchSourceResult struct {
 // This is the intentional counterpart to SearchVideos (app/handler/video.go),
 // which caches each hit as it searches.
 func SearchSource(sourceKey string, keyword string, page int, pageSize int) (*SearchSourceResult, error) {
+	return SearchSourceContext(context.Background(), sourceKey, keyword, page, pageSize, "")
+}
+
+func SearchSourceContext(ctx context.Context, sourceKey, keyword string, page, pageSize int, requestID string) (*SearchSourceResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	keyword = strings.TrimSpace(keyword)
 	if keyword == "" {
 		return nil, apperror.New(apperror.Validation, "关键词不能为空")
 	}
 
-	src, err := db.GetSourceByKey(sourceKey)
+	src, err := db.GetSourceByKeyContext(ctx, sourceKey)
 	if err != nil {
 		return nil, apperror.Wrap(apperror.NotFound, err, "获取源失败")
+	}
+	if src.GetKind() != model.SourceKindVideo {
+		return nil, apperror.New(apperror.Unsupported, "视频搜索只支持视频采集源")
 	}
 
 	if page < 1 {
@@ -462,7 +473,16 @@ func SearchSource(sourceKey string, keyword string, page int, pageSize int) (*Se
 	}
 
 	// Emit: 开始搜索
-	application.Get().Event.Emit("search:progress", map[string]interface{}{
+	emit := func(payload map[string]interface{}) {
+		if host := application.Get(); host != nil && ctx.Err() == nil {
+			payload["requestId"] = requestID
+			payload["source_key"] = sourceKey
+			payload["keyword"] = keyword
+			payload["page"] = page
+			host.Event.Emit("search:progress", payload)
+		}
+	}
+	emit(map[string]interface{}{
 		"stage":   "fetching_list",
 		"message": "正在从源站获取搜索结果...",
 		"current": 0,
@@ -473,8 +493,11 @@ func SearchSource(sourceKey string, keyword string, page int, pageSize int) (*Se
 	if strategy == nil {
 		return nil, apperror.New(apperror.Unsupported, "源站策略不可用")
 	}
-	p, err := collect.FetchSearchPage(strategy, keyword, page)
+	p, err := collect.FetchSearchPageContext(ctx, strategy, keyword, page)
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		return nil, apperror.Wrap(apperror.Unavailable, err, "源站搜索失败")
 	}
 	if p == nil || len(p.List) == 0 {
@@ -487,7 +510,10 @@ func SearchSource(sourceKey string, keyword string, page int, pageSize int) (*Se
 	applog.Info("[SearchSource] 源站搜索完成 - sourceKey: %s, keyword: %s, page: %d, total: %d, listSize: %d",
 		sourceKey, keyword, page, p.Total.Int(), len(p.List))
 
-	p.List = db.FilterEnabledCollectVideos(p.List)
+	p.List, err = db.FilterSourceCollectVideos(sourceKey, p.List)
+	if err != nil {
+		return nil, apperror.Wrap(apperror.Storage, err, "读取禁用类型失败")
+	}
 	// Search results are transient. Only ImportSourceVideos may persist the
 	// user-selected items; otherwise every search hit would appear on Home.
 	// Membership is probed against the catalog so the UI can mark hits the user
@@ -510,7 +536,7 @@ func SearchSource(sourceKey string, keyword string, page int, pageSize int) (*Se
 		v.VodContent, v.VodActor, v.VodDirector = "", "", ""
 		v.VodPlayUrl, v.VodDownUrl, v.VodPlayFrom = "", "", ""
 	}
-	application.Get().Event.Emit("search:progress", map[string]interface{}{
+	emit(map[string]interface{}{
 		"stage":   "done",
 		"message": "搜索完成",
 		"current": len(p.List),
@@ -549,7 +575,11 @@ func ImportSourceVideos(sourceKey string, videos []*model.Video) (int, error) {
 	if len(videos) == 0 {
 		return 0, nil
 	}
-	videos = db.FilterEnabledCollectVideos(videos)
+	filtered, err := db.FilterSourceCollectVideos(sourceKey, videos)
+	if err != nil {
+		return 0, apperror.Wrap(apperror.Storage, err, "读取禁用类型失败")
+	}
+	videos = filtered
 	if len(videos) == 0 {
 		return 0, nil
 	}

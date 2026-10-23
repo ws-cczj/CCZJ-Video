@@ -1,0 +1,404 @@
+{
+  "header": {
+    "type": "header",
+    "runHash": "c86eb137cf812af9b587ec61021c11c6019950f70505637d034804bee0bfc58e",
+    "corpusHash": "9cc48b110675d342ea03ae26107cebec4094f147890a6712f7d57700019bcd70",
+    "startedAt": "2026-10-21T23:38:03+08:00",
+    "sources": 5307
+  },
+  "completed": false,
+  "corpusWorks": 6832,
+  "totalSources": 5307,
+  "processed": 170,
+  "resumed": 0,
+  "canRead": 47,
+  "canSearch": 420,
+  "sourcesByKind": {
+    "comic": 1605,
+    "novel": 3702
+  },
+  "states": {
+    "adapter_required": 140,
+    "deep_checked": 2,
+    "invalid_address": 2,
+    "network_unknown": 14,
+    "no_identity_match": 12
+  },
+  "endpointStates": {
+    "http_reached": 57,
+    "invalid_address": 2,
+    "network_unknown": 111
+  },
+  "discoveryQueries": 28,
+  "indexLookups": 118,
+  "matchedWorks": 2,
+  "network": {
+    "capacity": 5,
+    "requests": 247,
+    "peakInFlight": 5
+  },
+  "endpoints": {
+    "endpointRequests": 173,
+    "endpointReused": 0,
+    "peakEndpointHTTP": 5,
+    "deepStarted": 2
+  },
+  "dispatch": {
+    "workers": 0,
+    "queueCapacity": 0,
+    "submitted": 0,
+    "completed": 0,
+    "peakActive": 0,
+    "millis": 0
+  },
+  "rankings": [
+    {
+      "version": "reading-quality.v1",
+      "corpusDate": "2026-10-21",
+      "corpusHash": "9cc48b110675d342ea03ae26107cebec4094f147890a6712f7d57700019bcd70",
+      "checkedAt": 1792597085,
+      "source": {
+        "id": "e6c3adbb5055902f8168f13ceab542bba07dde2dbd3059b18e30736a2b8ec114",
+        "name": "咚漫漫画",
+        "kind": "comic",
+        "url": "https://www.dongmanmanhua.cn"
+      },
+      "millis": 5855,
+      "summary": {
+        "status": "partial",
+        "score": 59,
+        "confidence": "insufficient",
+        "queries": 1,
+        "matched": 1,
+        "verified": 1,
+        "readable": 3,
+        "attempts": 3,
+        "restricted": 0,
+        "catalogCompared": 0,
+        "tagCoverage": {
+          "Action": 1,
+          "Adventure": 1,
+          "Award Winning": 1,
+          "Comedy": 1,
+          "Drama": 1,
+          "Fantasy": 1,
+          "Full Color": 1,
+          "Long Strip": 1,
+          "MangaDex safe目录": 1,
+          "Mystery": 1,
+          "Psychological": 1,
+          "Supernatural": 1,
+          "Web Comic": 1
+        },
+        "metrics": [
+          {
+            "name": "identity",
+            "score": 100,
+            "weight": 15,
+            "observations": 1
+          },
+          {
+            "name": "metadata",
+            "score": 100,
+            "weight": 10,
+            "observations": 1
+          },
+          {
+            "name": "catalog",
+            "score": 100,
+            "weight": 30,
+            "observations": 1
+          },
+          {
+            "name": "reading",
+            "score": 100,
+            "weight": 35,
+            "observations": 3
+          }
+        ],
+        "notes": [
+          "未收录样本仅影响覆盖面，不扣内容质量；分数与置信度必须一起看",
+          "这是一轮抽检，不能表示长期稳定或全站完整",
+          "已检验图片响应、格式、尺寸和重复指纹；未做 OCR/人工逐页审核，不能宣称图片无广告或图序全部正确",
+          "未满足多锚点同版比较条件，章节完整度尚未证实"
+        ]
+      },
+      "works": [
+        {
+          "id": "mangadex-c0ee660b-f9f2-45c3-8068-5123ff53f84a",
+          "title": "神之塔",
+          "tags": [
+            "MangaDex safe目录",
+            "Award Winning",
+            "Action",
+            "Psychological",
+            "Long Strip",
+            "Comedy",
+            "Adventure",
+            "Drama",
+            "Fantasy",
+            "Web Comic",
+            "Supernatural",
+            "Mystery",
+            "Full Color"
+          ],
+          "identity": {
+            "status": "verified",
+            "reason": "标题与作者吻合"
+          },
+          "matchedUrl": "https://www.dongmanmanhua.cn/episodeList?titleNo=241",
+          "author": "SIU",
+          "metadataFields": 4,
+          "catalog": {
+            "entries": 12,
+            "numbered": 10,
+            "anchorMatches": 0,
+            "referenceComparable": false,
+            "countRelation": "unknown",
+            "issues": []
+          },
+          "samples": [
+            {
+              "position": 0,
+              "title": "预告",
+              "access": "unknown",
+              "pages": 7,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 690,
+                  "height": 1230,
+                  "format": "jpeg",
+                  "bytes": 46511,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "fb89755702e3a4d72695f1ce9e414303251083591ef090820f0e0f2b30bacb3a"
+                },
+                {
+                  "index": 3,
+                  "width": 690,
+                  "height": 1230,
+                  "format": "jpeg",
+                  "bytes": 31845,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "b9c979b710ec96d058527bf098ccce2d9d60688a9ad6dddcba094440856c06a0"
+                },
+                {
+                  "index": 6,
+                  "width": 690,
+                  "height": 434,
+                  "format": "jpeg",
+                  "bytes": 2131,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "30d3e33e2adf054c7e59ce0334c0027d57ad51914aa62b1e13fa2ad44281f311"
+                }
+              ]
+            },
+            {
+              "position": 6,
+              "title": "[第6话] 伊凡科尔的地狱",
+              "access": "unknown",
+              "pages": 37,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 690,
+                  "height": 1230,
+                  "format": "jpeg",
+                  "bytes": 131655,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "ca3ac9a7cf78ddc1c4cfad9a96460eb2a0a6c501498fad47c1181140e86b90a8"
+                },
+                {
+                  "index": 18,
+                  "width": 690,
+                  "height": 1230,
+                  "format": "jpeg",
+                  "bytes": 138507,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "eb04f87d0bb13fd5e1fafd93ce646215701c39cbc72f092317cadb7e5f1c7c83"
+                },
+                {
+                  "index": 36,
+                  "width": 690,
+                  "height": 765,
+                  "format": "jpeg",
+                  "bytes": 21138,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "6db4a9994aeca22c0784838d6b58c5fd12f8b0043a19974dc55327e27ed1772d"
+                }
+              ]
+            },
+            {
+              "position": 11,
+              "title": "[第2季] 预告",
+              "access": "unknown",
+              "pages": 25,
+              "images": [
+                {
+                  "index": 0,
+                  "width": 690,
+                  "height": 1230,
+                  "format": "jpeg",
+                  "bytes": 80476,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "4542db3a5d518489e866fa1a958cc850484e8b1d5e7ae7eaa90d00c3a28aaab5"
+                },
+                {
+                  "index": 12,
+                  "width": 690,
+                  "height": 1230,
+                  "format": "jpeg",
+                  "bytes": 69837,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "b7de21f9d583a58cfbf4b5f027393da3373a7e1002166c3296dad77c17f8989b"
+                },
+                {
+                  "index": 24,
+                  "width": 690,
+                  "height": 674,
+                  "format": "jpeg",
+                  "bytes": 4004,
+                  "host": "cdn.dongmanmanhua.cn",
+                  "fingerprint": "1b5572bd0062ab3f1efcf151601d3b749079fc0ef2c5f08427409c95d2f3449c"
+                }
+              ]
+            }
+          ],
+          "failures": [],
+          "issues": []
+        }
+      ]
+    },
+    {
+      "version": "reading-quality.v1",
+      "corpusDate": "2026-10-21",
+      "corpusHash": "9cc48b110675d342ea03ae26107cebec4094f147890a6712f7d57700019bcd70",
+      "checkedAt": 1792597084,
+      "source": {
+        "id": "260ac95862f67eb7d6a036dbc71d7ba9d95e610d8c6412cf20e6bc4aad5a7af2",
+        "name": "番茄小说",
+        "kind": "novel",
+        "url": "https://fanqienovel.com"
+      },
+      "millis": 2129,
+      "summary": {
+        "status": "partial",
+        "score": 44,
+        "confidence": "insufficient",
+        "queries": 1,
+        "matched": 1,
+        "verified": 1,
+        "readable": 1,
+        "attempts": 3,
+        "restricted": 2,
+        "catalogCompared": 0,
+        "tagCoverage": {
+          "中文网络小说": 1,
+          "天才": 1,
+          "推理": 1,
+          "都市日常": 1
+        },
+        "metrics": [
+          {
+            "name": "identity",
+            "score": 100,
+            "weight": 15,
+            "observations": 1
+          },
+          {
+            "name": "metadata",
+            "score": 100,
+            "weight": 10,
+            "observations": 1
+          },
+          {
+            "name": "catalog",
+            "score": 100,
+            "weight": 30,
+            "observations": 1
+          },
+          {
+            "name": "reading",
+            "score": 33,
+            "weight": 35,
+            "observations": 3
+          },
+          {
+            "name": "text_cleanliness",
+            "score": 100,
+            "weight": 10,
+            "observations": 1
+          }
+        ],
+        "notes": [
+          "未收录样本仅影响覆盖面，不扣内容质量；分数与置信度必须一起看",
+          "这是一轮抽检，不能表示长期稳定或全站完整",
+          "未满足多锚点同版比较条件，章节完整度尚未证实",
+          "付费或登录限制单独记录，影响当前可读范围，不判作正文损坏"
+        ]
+      },
+      "works": [
+        {
+          "id": "fanqie-1621553079684110",
+          "title": "走偏门",
+          "tags": [
+            "中文网络小说",
+            "都市日常",
+            "天才",
+            "推理"
+          ],
+          "identity": {
+            "status": "verified",
+            "reason": "标题与第一方作品地址吻合"
+          },
+          "matchedUrl": "https://fanqienovel.com/page/1621553079684110",
+          "author": "李二不哈",
+          "metadataFields": 4,
+          "catalog": {
+            "entries": 1064,
+            "numbered": 76,
+            "anchorMatches": 0,
+            "referenceComparable": false,
+            "countRelation": "unknown",
+            "issues": []
+          },
+          "samples": [
+            {
+              "position": 0,
+              "title": "第1章 来说说以前走偏门的那些事儿",
+              "access": "available",
+              "text": {
+                "runes": 2871,
+                "paragraphs": 37,
+                "fingerprint": "5915dffd194dffddbb34f84238ec839efd3bc609ca4b6217351160afef4974bc",
+                "issues": []
+              }
+            },
+            {
+              "position": 532,
+              "title": "533张跃才的自以为是，让他们错失逃脱的良机，要团灭的节奏？",
+              "access": "subscription",
+              "failure": {
+                "stage": "content",
+                "code": "PERMISSION_DENIED",
+                "message": "此章节需要在番茄官方客户端获取访问权限"
+              }
+            },
+            {
+              "position": 1063,
+              "title": "第1064章 楼先生「完」",
+              "access": "subscription",
+              "failure": {
+                "stage": "content",
+                "code": "PERMISSION_DENIED",
+                "message": "此章节需要在番茄官方客户端获取访问权限"
+              }
+            }
+          ],
+          "failures": [],
+          "issues": []
+        }
+      ]
+    }
+  ]
+}

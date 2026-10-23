@@ -1,0 +1,13 @@
+<script setup lang="ts">
+import {useRouter} from 'vue-router'
+import {useI18n} from 'vue-i18n'
+import Icon from '../components/Icon.vue'
+import MobileRouteStage from '../mobile/MobileRouteStage.vue'
+import {useComicState} from './state'
+import {isMobileRuntime} from '../api/runtime'
+const router=useRouter(),{t}=useI18n(),state=useComicState()
+const nav=[{path:'/comic',label:'comic.discover',icon:'panels'},{path:'/comic/categories',label:'comic.categories',icon:'grid'},{path:'/comic/library',label:'comic.following',icon:'bookmark'},{path:'/comic/me',label:'comic.me',icon:'user'}]
+function back():void {if(String(router.options.history.state.back||'').startsWith('/comic'))router.back();else void router.replace('/comic')}
+</script>
+<template><div class="cczj-comic-shell" :class="{'comic-native':isMobileRuntime()}"><MobileRouteStage :mobile="isMobileRuntime()" ><template #default="{Component,route:shownRoute}"><header v-if="!shownRoute.path.startsWith('/comic/read/')" class="comic-header"><router-link v-if="nav.some(n=>n.path===shownRoute.path)" to="/comic" class="comic-brand"><Icon name="panels" :size="23"/><strong>CCZJ<span>{{ t('comic.brand') }}</span></strong></router-link><template v-else><button class="comic-icon-button" :aria-label="t('common.back')" @click="back"><Icon name="chevron-left" :size="22"/></button><h1>{{ t(String(shownRoute.meta.title||'comic.details')) }}</h1></template><nav class="comic-desktop-nav"><router-link v-for="item in nav" :key="item.path" :to="item.path" :aria-current="shownRoute.path===item.path?'page':undefined">{{ t(item.label) }}</router-link></nav><router-link v-if="shownRoute.path!=='/comic/search'" to="/comic/search" class="comic-icon-button" :aria-label="t('comic.search')"><Icon name="search" :size="21"/></router-link><router-link v-if="shownRoute.path!=='/comic/settings'" to="/comic/settings" class="comic-icon-button" :aria-label="t('sidebar.settings')"><Icon name="settings" :size="21"/></router-link></header><p v-if="state.error" class="comic-error" role="alert">{{ t('comic.storageError') }}</p><main class="comic-main main-content" :class="{'comic-reader-content-host':shownRoute.path.startsWith('/comic/read/')}"><component :is="Component"/></main></template><template #navigation="{route:shownRoute}"><nav v-if="nav.some(n=>n.path===shownRoute.path)" class="comic-bottom-nav" :aria-label="t('comic.navigation')"><router-link v-for="item in nav" :key="item.path" :to="item.path" :aria-current="shownRoute.path===item.path?'page':undefined"><Icon :name="item.icon" :size="22"/><span>{{ t(item.label) }}</span></router-link></nav></template></MobileRouteStage></div></template>
+<style src="./styles/comic.css"></style>

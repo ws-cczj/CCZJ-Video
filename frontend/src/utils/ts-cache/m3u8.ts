@@ -1,10 +1,13 @@
 import { stripAdFromM3u8Text } from './ad-filter'
 
 // ====== m3u8 文本级缓存（避免重复请求同一个 m3u8）
-// 上限：最多保留 16 条（每个 m3u8 文本很小，但 URL 无限多，不加限会长期泄漏）。
+// 最多保留 16 条，字符串占用估算总量不超过 8 MiB。
 // 用 Map 的插入有序特性做简易 LRU：命中时 delete+set 重新插入到末尾，超限时删头部最旧。
 const M3U8_CACHE_MAX = 16
+const M3U8_CACHE_BYTES = 8 * 1024 * 1024
+const MAX_PLAYLIST_BYTES = 8 * 1024 * 1024
 const m3u8TextCache = new Map<string, string>()
+let cacheBytes = 0
 export function getM3u8FromCache(url: string): string | null {
   const v = m3u8TextCache.get(url)
   if (v == null) return null
@@ -14,18 +17,58 @@ export function getM3u8FromCache(url: string): string | null {
   return v
 }
 export function setM3u8Cache(url: string, text: string): void {
-  if (m3u8TextCache.has(url)) m3u8TextCache.delete(url)
+  const previous = m3u8TextCache.get(url)
+  if (previous !== undefined) { cacheBytes -= previous.length * 2; m3u8TextCache.delete(url) }
+  if (!text.replace(/^\uFEFF/, '').trimStart().startsWith('#EXTM3U') || text.length * 2 > M3U8_CACHE_BYTES) return
   m3u8TextCache.set(url, text)
+  cacheBytes += text.length * 2
   // 超限淘汰最旧（Map 迭代顺序 = 插入顺序，第一个即最久未用）
-  while (m3u8TextCache.size > M3U8_CACHE_MAX) {
+  while (m3u8TextCache.size > M3U8_CACHE_MAX || cacheBytes > M3U8_CACHE_BYTES) {
     const oldest = m3u8TextCache.keys().next().value
     if (oldest === undefined) break
+    cacheBytes -= m3u8TextCache.get(oldest)!.length * 2
     m3u8TextCache.delete(oldest)
   }
 }
 
 /** 缓存/失效入口要的是一次清空，而不是让调用方自己去摸这张 Map。 */
-export function clearM3u8TextCache(): void { m3u8TextCache.clear() }
+export function clearM3u8TextCache(): void { m3u8TextCache.clear(); cacheBytes = 0 }
+
+/** Reject direct media at the first chunk; never decode an entire movie as text. */
+export async function readPlaylistResponse(response: Response): Promise<string> {
+  const type = response.headers.get('Content-Type') ?? ''
+  const size = Number(response.headers.get('Content-Length'))
+  if (size > MAX_PLAYLIST_BYTES || (!/mpegurl/i.test(type) && /^(video\/|audio\/|image\/|text\/html)/i.test(type))) {
+    await response.body?.cancel().catch(() => { })
+    throw new Error('not a bounded HLS playlist')
+  }
+  const reader = response.body?.getReader()
+  if (!reader) throw new Error('empty HLS playlist')
+  const decoder = new TextDecoder()
+  let bytes = 0
+  let text = ''
+  let valid = false
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      bytes += value.byteLength
+      if (bytes > MAX_PLAYLIST_BYTES) throw new Error('HLS playlist exceeds 8 MiB')
+      text += decoder.decode(value, { stream: true })
+      if (!valid) {
+        const prefix = text.replace(/^\uFEFF/, '').trimStart()
+        if (prefix.startsWith('#EXTM3U')) valid = true
+        else if ((prefix && !'#EXTM3U'.startsWith(prefix)) || bytes > 4096) throw new Error('not an HLS playlist')
+      }
+    }
+    text += decoder.decode()
+    if (!valid) throw new Error('not an HLS playlist')
+    return text
+  } catch (error) {
+    await reader.cancel().catch(() => { })
+    throw error
+  } finally { reader.releaseLock() }
+}
 
 // ====== 解析 m3u8 -> 片段 URL 列表 + targetduration
 // 关键区分：
@@ -49,7 +92,8 @@ export interface StreamVariantInfo {
 }
 
 function _parseM3u8Text(text: string, url: string): M3u8ParseResult {
-  const base = url.substring(0, url.lastIndexOf('/') + 1)
+  let base = url
+  try { base = new URL(url, typeof location === 'undefined' ? undefined : location.href).href } catch { /* keep the caller's base */ }
   const urls: string[] = []
   const variantUrls: string[] = []
   const streamInfo: StreamVariantInfo[] = []
@@ -77,7 +121,8 @@ function _parseM3u8Text(text: string, url: string): M3u8ParseResult {
     }
     if (trimmed.startsWith('#')) continue
     let absUrl: string
-    try { absUrl = new URL(trimmed, base).href } catch { absUrl = base + trimmed }
+    try { absUrl = new URL(trimmed, base).href }
+    catch { absUrl = trimmed.startsWith('/') ? trimmed : base.substring(0, base.lastIndexOf('/') + 1) + trimmed }
     if (isMaster || nextLineIsVariant) {
       variantUrls.push(absUrl)
       if (currentVariantMeta) {
@@ -94,7 +139,8 @@ function _parseM3u8Text(text: string, url: string): M3u8ParseResult {
   return { urls, variantUrls, targetduration: m ? parseInt(m[1]) : 6, text, isMaster, streamInfo }
 }
 
-export async function fetchAndParseM3u8(url: string): Promise<M3u8ParseResult> {
+export async function fetchAndParseM3u8(url: string, signal?: AbortSignal): Promise<M3u8ParseResult> {
+  if (signal?.aborted) throw new Error('playlist load cancelled')
   // 1) 文本缓存命中
   const cachedText = getM3u8FromCache(url)
   if (cachedText) {
@@ -103,9 +149,10 @@ export async function fetchAndParseM3u8(url: string): Promise<M3u8ParseResult> {
   }
 
   // 2) 真正 fetch
-  const resp = await fetch(url)
+  const resp = await fetch(url, { signal })
   if (!resp.ok) throw new Error('m3u8 fetch failed: ' + resp.status)
-  const rawText = await resp.text()
+  const rawText = await readPlaylistResponse(resp)
+  if (signal?.aborted) throw new Error('playlist load cancelled')
   setM3u8Cache(url, rawText) // 缓存原始文本
   const clean = stripAdFromM3u8Text(rawText, url)
   return _parseM3u8Text(clean, url)

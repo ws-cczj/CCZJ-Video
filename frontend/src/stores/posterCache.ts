@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
-import { GetVideoDetail } from '../api/app'
+import { ref, toRaw } from 'vue'
+import { GetVideoDetail } from '../api/video'
 import { tr } from '../locales'
 import type { Video } from '../types'
 import { readStorage, removeStorage } from '../platform/storage'
@@ -126,15 +126,16 @@ export const usePosterCacheStore = defineStore('posterCache', () => {
     if (!entry) return null
 
     const now = nowMs()
-    // 检查是否已过期
-    if (now - entry.last_accessed > STALE_MS) {
+    const metadata = toRaw(entry)
+    // Retention bookkeeping must not become a dependency of render-time get().
+    if (now - metadata.last_accessed > STALE_MS) {
       delete cache.value[key]
       saveToStorage()
       return null
     }
-    // 兑现「每次访问刷新 last_accessed」：收藏里天天看、却从没点过的条目不该被 TTL/淘汰当成冷数据清掉。
-    // last_accessed 没有任何渲染依赖它（模板只读 vod_name/vod_pic），所以在这里就地续期不会触发重渲染。
-    entry.last_accessed = now
+    // Content remains reactive, while reading/touching access time stays out of
+    // Vue render tracking. Otherwise get() reads then mutates its own dependency.
+    metadata.last_accessed = now
     saveToStorage()
     return entry
   }

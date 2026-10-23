@@ -7,6 +7,7 @@ import (
 
 	"cczjVideo/app/db"
 	"cczjVideo/app/settings"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 func TestMain(m *testing.M) {
@@ -84,11 +85,11 @@ func TestSetSizeClampsBeforePersisting(t *testing.T) {
 	svc := newSvc(t)
 	svc.SetSize(640, 360)
 
-	if got := stored(t, "window_width"); got != strconv.Itoa(minimumWidth) {
-		t.Fatalf("落盘宽度 = %q, 期望下限 %d", got, minimumWidth)
+	if got := stored(t, "window_width"); got != strconv.Itoa(MinimumWidth) {
+		t.Fatalf("落盘宽度 = %q, 期望下限 %d", got, MinimumWidth)
 	}
-	if got := stored(t, "window_height"); got != strconv.Itoa(minimumHeight) {
-		t.Fatalf("落盘高度 = %q, 期望下限 %d", got, minimumHeight)
+	if got := stored(t, "window_height"); got != strconv.Itoa(MinimumHeight) {
+		t.Fatalf("落盘高度 = %q, 期望下限 %d", got, MinimumHeight)
 	}
 
 	svc.SetSize(1920, 1080)
@@ -119,5 +120,35 @@ func TestWindowMethodsAreSafeBeforeAWindowExists(t *testing.T) {
 	svc.ApplySettings()
 	if svc.Resizable() {
 		t.Fatal("没有窗口时不该报告可调整大小")
+	}
+}
+
+// Legacy sizes must be normalized both on startup and when changing settings.
+type restoredWindow struct {
+	application.Window
+	width, height int
+}
+
+func (w *restoredWindow) SetSize(width, height int) application.Window {
+	w.width, w.height = width, height
+	return w
+}
+func (w *restoredWindow) SetResizable(bool) application.Window { return w }
+func TestLegacyWindowSizeUsesTheCurrentMinimum(t *testing.T) {
+	store := settings.NewService()
+	if err := store.Set("window_width", "800"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Set("window_height", "500"); err != nil {
+		t.Fatal(err)
+	}
+	w := &restoredWindow{}
+	svc := NewService(func() application.Window { return w }, store)
+	svc.ApplySettings()
+	if w.width != 960 || w.height != 600 {
+		t.Fatalf("legacy size restored to %dx%d; want 960x600", w.width, w.height)
+	}
+	if stored(t, "window_width") != "960" || stored(t, "window_height") != "600" {
+		t.Fatal("legacy size was not normalized in storage")
 	}
 }

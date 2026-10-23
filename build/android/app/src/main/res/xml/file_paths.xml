@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Camera captures are written here and shared with the camera app via the
+         FileProvider. -->
+    <cache-path name="captures" path="captures/" />
+    <files-path name="diagnostic_exports" path="CCZJ Video/exports/diagnostics/" />
+    <files-path name="log_exports" path="CCZJ Video/exports/logs/" />
+    <files-path name="backup_exports" path="CCZJ Video/exports/" />
+    <files-path name="updates" path="CCZJ Video/updates/" />
+</paths>

@@ -2,6 +2,7 @@ package collect
 
 import (
 	"cczjVideo/app/apperror"
+	"cczjVideo/app/netpolicy"
 	"compress/gzip"
 	"context"
 	"encoding/json"
@@ -31,12 +32,12 @@ const maxFetchResponseBytes = 32 << 20
 
 var client = &http.Client{
 	Timeout: 30 * time.Second,
-	Transport: netstats.WrapTransport(netstats.CategoryCollect, &http.Transport{
+	Transport: netpolicy.WrapTransport(string(netstats.CategoryCollect), netstats.WrapTransport(netstats.CategoryCollect, &http.Transport{
 		MaxIdleConns:        50,
 		MaxIdleConnsPerHost: 5,
 		IdleConnTimeout:     30 * time.Second,
 		DisableCompression:  true,
-	}),
+	})),
 }
 
 type FlexInt int

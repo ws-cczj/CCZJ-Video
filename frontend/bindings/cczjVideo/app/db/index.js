@@ -7,6 +7,8 @@ export {
     DoubanInfoRow,
     FavWithVideo,
     GlobalTypeRow,
+    LibraryPageQuery,
+    LibraryRef,
     MergeCandidate,
     MergeCandidateRow,
     RecycleItem,

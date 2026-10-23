@@ -1,0 +1,309 @@
+{
+  "device": "emulator-5554",
+  "app_pid": 4803,
+  "frontend": {
+    "captured_at": "2026-10-19T05:42:17.719Z",
+    "presentation": "mobile",
+    "observation": "Passive snapshot; no playback or UI scenarios performed",
+    "share_available": true,
+    "browser_resources": {
+      "video_count": 0,
+      "canvas_count": 0
+    },
+    "scripts": [
+      "https://wails.localhost/assets/index-DrEx9yZd.js",
+      "https://wails.localhost/wails/custom.js"
+    ]
+  },
+  "runtime_samples": [
+    {
+      "danmaku": {
+        "cache_hits": 0,
+        "fetches": 0,
+        "stale_fallbacks": 0,
+        "cache_failures": 0
+      },
+      "scope": {
+        "mode": "video",
+        "business": "current_mode",
+        "resources": "shared_host_process",
+        "storage": "shared_database_and_logs",
+        "network_budget": "shared_host_budget"
+      },
+      "download_executor": {
+        "active": 0,
+        "accepted": 0,
+        "concurrency_limit": 2,
+        "admission_limit": 66
+      },
+      "network_budget": {
+        "active": 0,
+        "waiting": 0,
+        "rejected": 0,
+        "waitMilliseconds": 0,
+        "lanes": {}
+      },
+      "recording": {
+        "mode": "",
+        "active": false,
+        "path": "",
+        "started_at_ms": 0,
+        "ended_at_ms": 0,
+        "interval_seconds": 0,
+        "max_duration_seconds": 0,
+        "samples": 0,
+        "markers": 0,
+        "reason": "",
+        "error": "",
+        "start_heap_path": "",
+        "end_heap_path": "",
+        "start_goroutines_path": "",
+        "end_goroutines_path": ""
+      },
+      "uptime_seconds": 37,
+      "goroutines": 26,
+      "network": {
+        "since_unix": 0,
+        "total_bytes": 0,
+        "allow_private_targets": false,
+        "categories": []
+      },
+      "cache": [
+        {
+          "key": "detail",
+          "entries": 0,
+          "bytes": 0,
+          "hits": 0,
+          "stale_hits": 0,
+          "misses": 0,
+          "fetch_ok": 0,
+          "fetch_fail": 0,
+          "skipped": 0
+        },
+        {
+          "key": "chart",
+          "entries": 0,
+          "bytes": 0,
+          "hits": 0,
+          "stale_hits": 0,
+          "misses": 0,
+          "fetch_ok": 0,
+          "fetch_fail": 0,
+          "skipped": 0
+        },
+        {
+          "key": "comments",
+          "entries": 0,
+          "bytes": 0,
+          "hits": 0,
+          "stale_hits": 0,
+          "misses": 0,
+          "fetch_ok": 0,
+          "fetch_fail": 0,
+          "skipped": 0
+        },
+        {
+          "key": "match",
+          "entries": 0,
+          "bytes": 0,
+          "hits": 0,
+          "stale_hits": 0,
+          "misses": 0,
+          "fetch_ok": 0,
+          "fetch_fail": 0,
+          "skipped": 0
+        }
+      ],
+      "resources": {
+        "sampled_at_ms": 1792388537724,
+        "heap_alloc_bytes": 5118376,
+        "heap_inuse_bytes": 6971392,
+        "heap_retained_bytes": 3391488,
+        "go_sys_bytes": 22141192,
+        "heap_objects": 9096,
+        "num_gc": 17,
+        "last_gc_pause_ms": 0.64327,
+        "goroutines": 26,
+        "native_available": true,
+        "native_scope": "app_process",
+        "proportional_bytes": 140802048,
+        "private_resident_bytes": 103755776,
+        "file_descriptors": 218,
+        "working_set_bytes": 267313152,
+        "private_bytes": 0,
+        "tree_working_set_bytes": 267313152,
+        "tree_private_bytes": 0,
+        "system_total_bytes": 4123561984,
+        "system_available_bytes": 2616430592,
+        "system_memory_percent": 36.54926002926309,
+        "working_set_percent": 6.48257872774103,
+        "cpu_percent": null,
+        "process_count": 1,
+        "handles": 0,
+        "processes": [
+          {
+            "pid": 4803,
+            "name": "Android app",
+            "working_set_bytes": 267313152,
+            "private_bytes": 0,
+            "handles": 0,
+            "proportional_bytes": 140802048,
+            "private_resident_bytes": 103755776,
+            "file_descriptors": 218
+          }
+        ],
+        "notes": [
+          "Android app process only; isolated WebView renderer/GPU processes are excluded. PSS and private resident memory are not Windows private commit."
+        ]
+      },
+      "background_tasks": {
+        "schedulers": 1
+      }
+    },
+    {
+      "danmaku": {
+        "cache_hits": 0,
+        "fetches": 0,
+        "stale_fallbacks": 0,
+        "cache_failures": 0
+      },
+      "scope": {
+        "mode": "video",
+        "business": "current_mode",
+        "resources": "shared_host_process",
+        "storage": "shared_database_and_logs",
+        "network_budget": "shared_host_budget"
+      },
+      "download_executor": {
+        "active": 0,
+        "accepted": 0,
+        "concurrency_limit": 2,
+        "admission_limit": 66
+      },
+      "network_budget": {
+        "active": 0,
+        "waiting": 0,
+        "rejected": 0,
+        "waitMilliseconds": 0,
+        "lanes": {}
+      },
+      "recording": {
+        "mode": "",
+        "active": false,
+        "path": "",
+        "started_at_ms": 0,
+        "ended_at_ms": 0,
+        "interval_seconds": 0,
+        "max_duration_seconds": 0,
+        "samples": 0,
+        "markers": 0,
+        "reason": "",
+        "error": "",
+        "start_heap_path": "",
+        "end_heap_path": "",
+        "start_goroutines_path": "",
+        "end_goroutines_path": ""
+      },
+      "uptime_seconds": 42,
+      "goroutines": 26,
+      "network": {
+        "since_unix": 0,
+        "total_bytes": 0,
+        "allow_private_targets": false,
+        "categories": []
+      },
+      "cache": [
+        {
+          "key": "detail",
+          "entries": 0,
+          "bytes": 0,
+          "hits": 0,
+          "stale_hits": 0,
+          "misses": 0,
+          "fetch_ok": 0,
+          "fetch_fail": 0,
+          "skipped": 0
+        },
+        {
+          "key": "chart",
+          "entries": 0,
+          "bytes": 0,
+          "hits": 0,
+          "stale_hits": 0,
+          "misses": 0,
+          "fetch_ok": 0,
+          "fetch_fail": 0,
+          "skipped": 0
+        },
+        {
+          "key": "comments",
+          "entries": 0,
+          "bytes": 0,
+          "hits": 0,
+          "stale_hits": 0,
+          "misses": 0,
+          "fetch_ok": 0,
+          "fetch_fail": 0,
+          "skipped": 0
+        },
+        {
+          "key": "match",
+          "entries": 0,
+          "bytes": 0,
+          "hits": 0,
+          "stale_hits": 0,
+          "misses": 0,
+          "fetch_ok": 0,
+          "fetch_fail": 0,
+          "skipped": 0
+        }
+      ],
+      "resources": {
+        "sampled_at_ms": 1792388542745,
+        "heap_alloc_bytes": 5253816,
+        "heap_inuse_bytes": 7045120,
+        "heap_retained_bytes": 3366912,
+        "go_sys_bytes": 22403336,
+        "heap_objects": 10293,
+        "num_gc": 17,
+        "last_gc_pause_ms": 0.64327,
+        "goroutines": 26,
+        "native_available": true,
+        "native_scope": "app_process",
+        "proportional_bytes": 140269568,
+        "private_resident_bytes": 104542208,
+        "file_descriptors": 215,
+        "working_set_bytes": 268034048,
+        "private_bytes": 0,
+        "tree_working_set_bytes": 268034048,
+        "tree_private_bytes": 0,
+        "system_total_bytes": 4123561984,
+        "system_available_bytes": 2612682752,
+        "system_memory_percent": 36.64014844113957,
+        "working_set_percent": 6.500061088932573,
+        "cpu_percent": 0.12149605286441764,
+        "process_count": 1,
+        "handles": 0,
+        "processes": [
+          {
+            "pid": 4803,
+            "name": "Android app",
+            "working_set_bytes": 268034048,
+            "private_bytes": 0,
+            "handles": 0,
+            "proportional_bytes": 140269568,
+            "private_resident_bytes": 104542208,
+            "file_descriptors": 215
+          }
+        ],
+        "notes": [
+          "Android app process only; isolated WebView renderer/GPU processes are excluded. PSS and private resident memory are not Windows private commit."
+        ]
+      },
+      "background_tasks": {
+        "schedulers": 1
+      }
+    }
+  ],
+  "export": null
+}

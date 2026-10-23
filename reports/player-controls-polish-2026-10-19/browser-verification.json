@@ -1,0 +1,101 @@
+{
+  "before": {
+    "pauseVisible": false,
+    "loadingVisible": true,
+    "plays": 0
+  },
+  "controls": {
+    "hasToggle": true,
+    "centerDistance": 0,
+    "qualityRight": true,
+    "qualityGap": 5,
+    "distinctIcon": true,
+    "statusGone": true,
+    "disabled": true,
+    "settingsHidden": true,
+    "enabled": true,
+    "settingsOpened": true,
+    "reasonVisible": true
+  },
+  "plays": 1,
+  "pauses": 0,
+  "events": [
+    "loadedmetadata",
+    "canplay",
+    "play",
+    "playing"
+  ],
+  "errors": [],
+  "logs": [
+    {
+      "level": "INFO",
+      "source": "player",
+      "message": "[player.startup] player_media_load",
+      "detail": "{\"player_session_id\":\"mvf6rt3u-1\",\"elapsed_ms\":0,\"host\":\"example.invalid\"}"
+    },
+    {
+      "level": "INFO",
+      "source": "player",
+      "message": "[player.startup] player_resume_loaded",
+      "detail": "{\"player_session_id\":\"mvf6rt3u-1\",\"elapsed_ms\":3}"
+    },
+    {
+      "level": "INFO",
+      "source": "player",
+      "message": "[player.startup] player_source_attached",
+      "detail": "{\"player_session_id\":\"mvf6rt3u-1\",\"elapsed_ms\":3}"
+    },
+    {
+      "level": "INFO",
+      "source": "player",
+      "message": "[player.startup] player_metadata_loaded",
+      "detail": "{\"player_session_id\":\"mvf6rt3u-1\",\"elapsed_ms\":35,\"duration_ms\":1200000}"
+    },
+    {
+      "level": "INFO",
+      "source": "player",
+      "message": "[player.startup] player_preparation",
+      "detail": "{\"player_session_id\":\"mvf6rt3u-1\",\"elapsed_ms\":36,\"stage\":\"accessories\"}"
+    },
+    {
+      "level": "INFO",
+      "source": "player",
+      "message": "[player.startup] player_preparation",
+      "detail": "{\"player_session_id\":\"mvf6rt3u-1\",\"elapsed_ms\":37,\"stage\":\"danmaku\"}"
+    },
+    {
+      "level": "INFO",
+      "source": "player",
+      "message": "[player.startup] player_preparation",
+      "detail": "{\"player_session_id\":\"mvf6rt3u-1\",\"elapsed_ms\":567,\"stage\":\"ready\"}"
+    },
+    {
+      "level": "INFO",
+      "source": "player",
+      "message": "[player.startup] player_autoplay_requested",
+      "detail": "{\"player_session_id\":\"mvf6rt3u-1\",\"elapsed_ms\":567}"
+    },
+    {
+      "level": "INFO",
+      "source": "player",
+      "message": "[player.startup] player_media_playing",
+      "detail": "{\"player_session_id\":\"mvf6rt3u-1\",\"elapsed_ms\":571,\"prepared\":true}"
+    }
+  ],
+  "statusLayout": {
+    "gap": 16,
+    "font": "12px",
+    "lines": 1
+  },
+  "widths": [
+    {
+      "width": 800,
+      "qualityGap": 110.375
+    },
+    {
+      "width": 1280,
+      "qualityGap": 217
+    }
+  ],
+  "pageErrors": []
+}

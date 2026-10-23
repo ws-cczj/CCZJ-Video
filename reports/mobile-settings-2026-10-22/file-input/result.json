@@ -1,0 +1,8 @@
+{
+  "passed": true,
+  "fixture": "cczj-settings-audit-1792643010134726900.json",
+  "read": {
+    "name": "cczj-settings-audit-1792643010134726900.json",
+    "text": "{\"cczj_file_input\":\"readable\"}"
+  }
+}
