@@ -1,15 +1,29 @@
-# Prepare local release assets. Public GitHub publication remains explicit.
+# Shared release build; -Publish runs the complete GitHub release workflow.
 param(
     [string]$Version = '',
     [string]$OutDir = 'dist/releases',
     [ValidateSet('ExistingPreview','Environment')][string]$AndroidSigning = 'ExistingPreview',
     [switch]$SkipBuild,
     [switch]$SkipVerify,
-    [switch]$NoOpen
+    [switch]$NoOpen,
+    [switch]$Publish,
+    [switch]$Commit,
+    [switch]$Plan
 )
 $ErrorActionPreference = 'Stop'
 $workspace = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location -LiteralPath $workspace
+if ($Publish) {
+    if ($SkipVerify) { throw 'Publishing always runs repository verification.' }
+    $publishArgs = @('scripts/publish-release.mjs','--out-dir',$OutDir,'--android-signing',$AndroidSigning)
+    if ($Version) { $publishArgs += @('--version',$Version) }
+    if ($Commit) { $publishArgs += '--commit' }
+    if ($Plan) { $publishArgs += '--plan' }
+    if ($SkipBuild) { $publishArgs += '--skip-build' }
+    & node @publishArgs
+    exit $LASTEXITCODE
+}
+if ($Commit -or $Plan) { throw '-Commit and -Plan require -Publish.' }
 $metadata = Get-Content -LiteralPath version.json -Raw -Encoding UTF8 | ConvertFrom-Json
 if (!$Version) { $Version=$metadata.version }
 if ($Version -ne $metadata.version -or $Version -notmatch '^\d+\.\d+\.\d+$') { throw 'Release version must exactly match version.json.' }

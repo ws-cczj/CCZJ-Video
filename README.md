@@ -1,6 +1,6 @@
 # CCZJ Video
 
-Current release: **v2.4.0**
+Current release: **v2.4.1**
 
 视频、小说与漫画多源聚合应用，使用 Wails v3、Vue 3、TypeScript 和 Go。Windows 10/11 版需要 WebView2 运行时，Android 版目前为预览版。
 
@@ -52,7 +52,7 @@ Windows 单独构建使用 `task build`。Android 构建、模拟器与热更新
 powershell -NoProfile -ExecutionPolicy Bypass -File build/release.ps1 -NoOpen
 ```
 
-版本读取 `version.json`，发布文件位于 `dist/releases/v版本号/`；脚本不自动上传或发布。签名兼容与 GitHub 上传步骤见 [2.4.0 发布流程](docs/releases/2.4.0.md)。
+版本读取 `version.json`，发布文件位于 `dist/releases/v版本号/`。一键提交、构建并发布 GitHub Release，双击 `build/publish.cmd` 或运行 `task publish`；更新说明读取 CHANGELOG。首次需要安装 GitHub CLI 并登录，详见[发布与自动更新](docs/releases.md)。
 
 ## 更多资料
 

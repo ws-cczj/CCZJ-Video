@@ -20,7 +20,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File build/android/build.ps1 `
   -Arch amd64 -ApplicationId com.cczj.video.acceptance -Install -Device emulator-5554
 ```
 
-预览包名是 `com.cczj.video.preview`，验收包名是 `com.cczj.video.acceptance`。`-SkipFrontend` 只用于前端已构建且之后没有改动的情况。Release 签名选择、不可调试 APK 检查与 GitHub 文件准备见 [发布流程](releases/2.4.0.md)。
+预览包名是 `com.cczj.video.preview`，验收包名是 `com.cczj.video.acceptance`。`-SkipFrontend` 只用于前端已构建且之后没有改动的情况。Release 签名选择、不可调试 APK 检查与 GitHub 文件准备见 [发布流程](releases.md)。
 
 ## MuMu 原生应用的前端热更新
 
@@ -41,6 +41,25 @@ wails3 task android:dev DEVICE=emulator-5554
 - 视频全屏要恢复方向、系统栏、屏幕边距与亮度；返回键先处理全屏、弹层和管理状态，再处理应用导航。
 - 文件选择取消后可以再次打开，分享取消不应丢失本地导出，权限拒绝后应有可执行的恢复入口。
 - 设备差异需要实测。MuMu 通过不等于鸿蒙 4 真机通过，APK 构建成功不等于安装、播放和升级成功。
+
+## 投屏发现与接收协议
+
+应用内设备列表使用 DLNA／UPnP AVTransport，电视或盒子需要开启相应接收服务。同一 Wi-Fi 不是协议兼容的保证；海康部分交互屏提供 [WonderCast、Miracast 或 Chromecast](https://pro-av.hikvision.com/en/products/interactive-flat-panel-display/interactive-flat-panels/ultra-series/)，不能据此认定未知型号支持 DLNA。Android 投屏面板提供“打开系统无线投屏”入口，通过 `ACTION_CAST_SETTINGS` 进入系统连接；WonderCast 专用接收仍需配套助手。
+
+`app/cast/discovery.go` 在每个有效私网 IPv4 组播接口上发送 MediaRenderer、AVTransport、根设备和全部设备查询，间隔 1.1 秒重发一次，接收窗口 4.5 秒，总任务最多 8 秒。描述获取使用三路有界队列，按地址去重；只接受与回复发送端同 IP 的私网 HTTP 描述和控制地址，不跟随跳转。请求取消或宿主退出会关闭套接字、停止描述请求并等待工作结束。Android Wi-Fi 组播锁仅在搜索期间持有；准备阶段失败和关闭面板也必须释放搜索状态。
+
+回归检查：
+
+```powershell
+$env:CCZJ_TEST_LAN='1'
+go test ./app/cast -run 'TestSSDP|TestDiscoveryLAN' -count=1 -v
+python scripts/test-cast-browser.py --port 19320
+python scripts/test-cast-android.py --device emulator-5554 --host-ip <接收端可访问的电脑局域网IPv4>
+```
+
+浏览器脚本需在 19320 端口启动前端 Vite，验证生产投屏面板的取消、迟到结果、错误重试、系统设置失败恢复及横竖屏。原生脚本使用独立 acceptance Debug 包，并要求另行安装、启用一个真正的 DLNA 接收端；测试会发送合成视频、控制接收端、打开系统投屏设置并按返回键验证再次搜索。Kodi 可从[官方 Android 下载页](https://kodi.tv/download/android/)获取，按[官方 UPnP 设置说明](https://kodi.wiki/view/Settings/Services/UPnP_DLNA)开启接收能力。同模拟器测试先打开 Kodi，等待接收服务启动，再运行脚本，避免接收应用在后台被系统冻结。
+
+本次使用官方稳定版 Kodi 21.3，在 MuMu 中验证真实 SSDP、描述请求、SOAP 播放控制及接收端拉取和播放视频，证据在 `dist/audit/cast-discovery/`。Go 常规测试、局域网回归和 vet 已通过；本机 race 测试二进制启动失败（Windows `0xc0000139`），未获得 race 结论。海康实体电视、鸿蒙 4 手机、Windows 原生投屏及路由器 Wi-Fi 组播尚未连接验收，不把同模拟器接收端测试算作这些环境通过。
 
 ## 可重复验收
 

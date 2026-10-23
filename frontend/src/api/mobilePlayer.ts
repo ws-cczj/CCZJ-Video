@@ -8,18 +8,19 @@ interface PlayerBridge {
   playerRestoreBrightness(): void
   playerEnterPip(width: number, height: number): void
   playerMulticast(enabled: boolean): void
+  playerOpenCastSettings(): string
 }
 function bridge(): PlayerBridge | undefined {
   return (window as unknown as { wails?: PlayerBridge }).wails
 }
-export function readPlayerDevice(): { volume: number; brightness: number; pip: boolean; pipAllowed?: boolean } | undefined {
+export function readPlayerDevice(): { volume: number; brightness: number; pip: boolean; pipAllowed?: boolean; castSettings?:boolean } | undefined {
   try {
     const b = bridge()
     const value: unknown = b?.playerState ? JSON.parse(b.playerState()) : undefined
     if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
     const state = value as Record<string, unknown>
     if (typeof state.volume !== 'number' || !Number.isFinite(state.volume) || typeof state.brightness !== 'number' || !Number.isFinite(state.brightness) || typeof state.pip !== 'boolean') return undefined
-    return {volume:Math.max(0,Math.min(1,state.volume)),brightness:Math.max(0,Math.min(1,state.brightness)),pip:state.pip,...(typeof state.pipAllowed === 'boolean' ? {pipAllowed:state.pipAllowed} : {})}
+    return {volume:Math.max(0,Math.min(1,state.volume)),brightness:Math.max(0,Math.min(1,state.brightness)),pip:state.pip,...(typeof state.pipAllowed === 'boolean' ? {pipAllowed:state.pipAllowed} : {}),...(typeof state.castSettings==='boolean'?{castSettings:state.castSettings}:{})}
   } catch { return undefined }
 }
 export function setDeviceVolume(value: number): void { bridge()?.playerVolume?.(value) }
@@ -33,3 +34,7 @@ export function enterDevicePip(width: number, height: number): boolean {
   return true
 }
 export function setCastMulticast(enabled: boolean): void { bridge()?.playerMulticast?.(enabled) }
+export function openSystemCastSettings(): boolean {
+  const host=bridge()
+  return !!host?.playerOpenCastSettings && host.playerOpenCastSettings()===''
+}

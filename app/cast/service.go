@@ -1,7 +1,6 @@
 package cast
 
 import (
-	"bufio"
 	"cczjVideo/app/netpolicy"
 	"context"
 	"crypto/sha256"
@@ -14,7 +13,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -169,115 +167,6 @@ func (s *Service) DiscoverContext(ctx context.Context) ([]Device, error) {
 	return s.discoverAtContext(ctx, &net.UDPAddr{IP: net.IPv4(239, 255, 255, 250), Port: 1900})
 }
 
-// The destination is a seam for exercising the entire SSDP/HTTP discovery flow
-// with a local renderer; frontend callers always use the standard multicast group.
-func (s *Service) discoverAt(group *net.UDPAddr) ([]Device, error) {
-	return s.discoverAtContext(context.Background(), group)
-}
-
-func (s *Service) discoverAtContext(request context.Context, group *net.UDPAddr) ([]Device, error) {
-	if err := request.Err(); err != nil {
-		return nil, err
-	}
-	if err := s.ctx.Err(); err != nil {
-		return nil, err
-	}
-	if !s.scanMu.TryLock() {
-		return nil, errors.New("正在搜索设备，请稍候")
-	}
-	defer s.scanMu.Unlock()
-	ctx, cancel := context.WithTimeout(request, 6*time.Second)
-	defer cancel()
-	stopOwner := context.AfterFunc(s.ctx, cancel)
-	defer stopOwner()
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	socket, e := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero})
-	if e != nil {
-		return nil, e
-	}
-	defer socket.Close()
-	stop := context.AfterFunc(ctx, func() { _ = socket.Close() })
-	defer stop()
-	for _, st := range []string{"urn:schemas-upnp-org:device:MediaRenderer:1", "urn:schemas-upnp-org:service:AVTransport:1"} {
-		query := "M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nMAN: \"ssdp:discover\"\r\nMX: 2\r\nST: " + st + "\r\n\r\n"
-		if _, e = socket.WriteToUDP([]byte(query), group); e != nil {
-			return nil, e
-		}
-	}
-	_ = socket.SetReadDeadline(time.Now().Add(3500 * time.Millisecond))
-	// Fixed worker count and a bounded queue avoid per-response goroutines.
-	jobs := make(chan struct {
-		location string
-		peer     net.IP
-	}, 24)
-	var workers sync.WaitGroup
-	for i := 0; i < 3; i++ {
-		workers.Add(1)
-		go func() {
-			defer workers.Done()
-			for job := range jobs {
-				d, e := resolve(ctx, job.location, job.peer)
-				if e == nil {
-					s.mu.Lock()
-					s.devices[d.ID] = d
-					s.mu.Unlock()
-				}
-			}
-		}()
-	}
-	seen := map[string]bool{}
-	buf := make([]byte, 8192)
-	for len(seen) < 32 {
-		n, from, err := socket.ReadFromUDP(buf)
-		if err != nil {
-			break
-		}
-		response, err := http.ReadResponse(bufio.NewReader(strings.NewReader(string(buf[:n]))), nil)
-		if err != nil {
-			continue
-		}
-		if response.Body != nil {
-			_ = response.Body.Close()
-		}
-		location := response.Header.Get("Location")
-		if response.StatusCode != 200 || seen[location] {
-			continue
-		}
-		if _, err = endpoint(location, from.IP); err != nil {
-			continue
-		}
-		seen[location] = true
-		select {
-		case jobs <- struct {
-			location string
-			peer     net.IP
-		}{location, append(net.IP(nil), from.IP...)}:
-		default:
-		}
-	}
-	close(jobs)
-	workers.Wait()
-	if s.ctx.Err() != nil {
-		return nil, s.ctx.Err()
-	}
-	if request.Err() != nil {
-		return nil, request.Err()
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	out := make([]Device, 0)
-	for id, d := range s.devices {
-		if time.Since(d.seen) > 2*time.Hour {
-			delete(s.devices, id)
-		} else if time.Since(d.seen) <= 2*time.Minute {
-			out = append(out, d.Device)
-		}
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
-	return out, nil
-}
 func escaped(value string) string {
 	var b strings.Builder
 	_ = xml.EscapeText(&b, []byte(value))

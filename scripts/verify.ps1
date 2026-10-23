@@ -17,6 +17,8 @@ node --test scripts/check-architecture.test.mjs
 if ($LASTEXITCODE -ne 0) { Write-Error 'Architecture checker regression tests failed.' }
 node --test scripts/check-release-artifacts.test.mjs
 if ($LASTEXITCODE -ne 0) { Write-Error 'Release artifact checker regression tests failed.' }
+node --test scripts/publish-release.test.mjs
+if ($LASTEXITCODE -ne 0) { Write-Error 'Release publication workflow regression tests failed.' }
 node scripts/check-architecture.mjs (Get-Location).Path
 if ($LASTEXITCODE -ne 0) { Write-Error 'Frontend dependency or storage check failed.' }
 

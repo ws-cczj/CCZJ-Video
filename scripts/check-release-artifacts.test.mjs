@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, rmSync, readFileSync, renameSync } from 'node:fs'
 import { resolve, join, sep } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createHash } from 'node:crypto'
@@ -30,3 +30,13 @@ const check=dir=>spawnSync(process.execPath,['scripts/check-release-artifacts.mj
 test('complete release metadata and checksums pass',()=>fixture(dir=>assert.equal(check(dir).status,0)))
 test('modified APK bytes fail instead of silently replacing checksum expectations',()=>fixture((dir,names)=>{writeFileSync(join(dir,names[2]),'truncated apk');const result=check(dir);assert.notEqual(result.status,0);assert.match(result.stderr,/Checksum mismatch/)}))
 test('missing phone APK fails',()=>fixture((dir,names)=>{rmSync(join(dir,names[2]));assert.notEqual(check(dir).status,0)}))
+test('filename case must match GitHub URLs even on Windows',()=>fixture((dir,names)=>{
+  renameSync(join(dir,names[2]),join(dir,names[2]+'.tmp'))
+  renameSync(join(dir,names[2]+'.tmp'),join(dir,names[2].replace('.apk','.APK')))
+  assert.match(check(dir).stderr,/filename case mismatch/)
+}))
+test('duplicate checksum entries fail',()=>fixture(dir=>{
+  const file=join(dir,'checksums.txt'),text=readFileSync(file,'utf8')
+  writeFileSync(file,text+text.split('\n')[0]+'\n')
+  assert.match(check(dir).stderr,/Duplicate checksum/)
+}))

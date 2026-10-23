@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.1] - 2026-10-23
+
+### Added
+
+- 一键 GitHub 发布：同步版本与更新说明、验证代码、提交源码、构建 Windows 与 Android 安装包、上传并核对全部附件后正式发布；失败可重试。
+
+### Fixed
+
+- 投屏发现改为逐个局域网接口发送，补充通用 SSDP 查询与重发，避免只响应根设备或首包丢失的接收端被漏掉。
+- Android 增加系统无线投屏设置入口，搜索准备阶段失败后不再一直停留在搜索状态，可恢复重试。
+
+### Validation
+
+- 独立验收 APK 已对接官方 Kodi 21.3，验证真实 SSDP 发现、媒体拉取及播放／暂停／继续／跳转／停止，以及从系统设置返回后再次搜索。同模拟器接收端不代替海康电视、实体手机或路由器的无线组播验证。
+
 ## [2.4.0] - 2026-10-22
 
 ### Added

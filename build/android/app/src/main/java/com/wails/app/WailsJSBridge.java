@@ -87,6 +87,7 @@ public class WailsJSBridge {
     @JavascriptInterface public void playerRestoreBrightness() { player.restoreBrightness(); }
     @JavascriptInterface public void playerEnterPip(int width, int height) { player.pip(width, height); }
     @JavascriptInterface public void playerMulticast(boolean enabled) { player.multicast(enabled); }
+    @JavascriptInterface public String playerOpenCastSettings() { return player.openCastSettings(); }
     @JavascriptInterface public String diagnosticShare(String path) { return diagnosticFiles.share(path); }
     @JavascriptInterface public String installApk(String path) {
         WebView view = webView;

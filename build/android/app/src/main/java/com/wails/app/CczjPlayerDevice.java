@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.AppOpsManager;
 import android.app.PictureInPictureParams;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.media.AudioManager;
 import android.net.wifi.WifiManager;
@@ -13,6 +14,8 @@ import android.util.Rational;
 import android.view.WindowManager;
 import android.webkit.WebView;
 import org.json.JSONObject;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
 
 /** Native, activity-scoped playback capabilities. No persistent brightness changes. */
 final class CczjPlayerDevice {
@@ -30,6 +33,7 @@ final class CczjPlayerDevice {
         JSONObject out = new JSONObject();
         try {
             out.put("pip", Build.VERSION.SDK_INT >= 26 && activity.getPackageManager().hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE));
+            out.put("castSettings", new Intent(Settings.ACTION_CAST_SETTINGS).resolveActivity(activity.getPackageManager()) != null);
             // Audio/brightness services can be temporarily unavailable while
             // an OEM host resumes. They must not erase an independent PiP flag.
             out.put("brightness", .5);
@@ -104,6 +108,15 @@ final class CczjPlayerDevice {
             WifiManager wifi = (WifiManager)activity.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
             if (wifi != null) { multicast = wifi.createMulticastLock("cczj-dlna"); multicast.setReferenceCounted(false); multicast.acquire(); }
         }
+    }
+    String openCastSettings() {
+        FutureTask<String> launch = new FutureTask<>(() -> {
+            try { activity.startActivity(new Intent(Settings.ACTION_CAST_SETTINGS)); return ""; }
+            catch (RuntimeException error) { return "UNSUPPORTED"; }
+        });
+        activity.runOnUiThread(launch);
+        try { return launch.get(5, TimeUnit.SECONDS); }
+        catch (Exception error) { launch.cancel(false); return "UNAVAILABLE"; }
     }
     void close() {
         multicast(false); restoreBrightness();

@@ -11,6 +11,10 @@ vars:
   VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
 
 tasks:
+  publish:
+    summary: Verify, commit, build and publish all release assets to GitHub
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -File build/release.ps1 -Publish -Commit
   release:
     summary: Prepare Windows EXE, portable ZIP, Android ARM64 APK and update checksums
     cmds:

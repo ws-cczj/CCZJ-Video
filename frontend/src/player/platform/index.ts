@@ -1,5 +1,5 @@
 import { createFullscreenPlatform } from '../../platform/fullscreen'
-import { enterDevicePip, readPlayerDevice, restoreDeviceBrightness, setDeviceVolume, setCastMulticast } from '../../api/mobilePlayer'
+import { enterDevicePip, readPlayerDevice, restoreDeviceBrightness, setDeviceVolume, setCastMulticast, openSystemCastSettings } from '../../api/mobilePlayer'
 import { presentationProfile } from '../../platform/presentation'
 
 /** Native calls and capability probes stay here. View size never selects an adapter.
@@ -32,7 +32,10 @@ export function createPlayerPlatform() {
       setVolume: (value: number) => { if (nativeDevice) setDeviceVolume(Math.max(0, Math.min(1, value))) },
       restoreBrightness: () => { if (nativeDevice) restoreDeviceBrightness() },
     },
-    cast: { supported: profile.host !== 'browser', multicast: (enabled: boolean) => { if (nativeDevice) setCastMulticast(enabled) } },
+    cast: { supported: profile.host !== 'browser', multicast: (enabled: boolean) => { if (nativeDevice) setCastMulticast(enabled) },
+      systemSupported:()=>nativeDevice && readPlayerDevice()?.castSettings===true,
+      openSystem:()=>nativeDevice && openSystemCastSettings(),
+    },
   }
 }
 export type PlayerPlatform = ReturnType<typeof createPlayerPlatform>

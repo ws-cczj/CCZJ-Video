@@ -150,6 +150,14 @@ func TestSOAPCancellationAndDeviceExpiry(t *testing.T) {
 	}
 }
 func TestSSDPDiscoveryRoundTripAndConcurrentScan(t *testing.T) {
+	testSSDPDiscovery(t, false)
+}
+
+func TestSSDPBroadDiscoveryAfterPacketLoss(t *testing.T) {
+	testSSDPDiscovery(t, true)
+}
+
+func testSSDPDiscovery(t *testing.T, broadOnly bool) {
 	// Real LAN listeners can trigger Windows Firewall for each temporary test binary.
 	// Keep this integration test opt-in instead of opening sockets in ordinary runs.
 	if os.Getenv("CCZJ_TEST_LAN") != "1" {
@@ -192,13 +200,32 @@ func TestSSDPDiscoveryRoundTripAndConcurrentScan(t *testing.T) {
 	go func() {
 		defer close(done)
 		buf := make([]byte, 2048)
-		n, peer, e := socket.ReadFromUDP(buf)
-		if e != nil {
-			return
-		}
-		close(received)
-		if !strings.Contains(string(buf[:n]), "M-SEARCH * HTTP/1.1") {
-			return
+		var peer *net.UDPAddr
+		searches := map[string]int{}
+		for {
+			n, from, err := socket.ReadFromUDP(buf)
+			if err != nil {
+				return
+			}
+			if peer == nil {
+				close(received)
+			}
+			peer = from
+			query := string(buf[:n])
+			if !strings.HasPrefix(query, "M-SEARCH * HTTP/1.1") {
+				continue
+			}
+			if !broadOnly {
+				break
+			}
+			// This renderer answers only the root-device query, and its first
+			// reply is lost. Both are valid conditions on a real Wi-Fi LAN.
+			if strings.Contains(query, "ST: upnp:rootdevice\r\n") {
+				searches["root"]++
+				if searches["root"] >= 2 {
+					break
+				}
+			}
 		}
 		packet := "HTTP/1.1 200 OK\r\nLOCATION: " + httpServer.URL + "/description.xml\r\nST: urn:schemas-upnp-org:device:MediaRenderer:1\r\n\r\n"
 		socket.WriteToUDP([]byte(packet), peer)

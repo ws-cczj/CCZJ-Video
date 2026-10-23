@@ -3,7 +3,8 @@ import './player/presentation.css'
 import { ref, watch, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '../components/Icon.vue'
-import { DiscoverCastDevices, PlayCastVideo, ControlCastVideo } from '../api/app'
+import { Button } from '../components/ui'
+import { DiscoverCastDevices, PlayCastVideo, ControlCastVideo, normalizeApiError } from '../api/app'
 import { createPlayerPlatform } from '../player/platform'
 const platform=createPlayerPlatform()
 const props = defineProps<{ open: boolean; url: string; title: string; position: number; host?:HTMLElement }>()
@@ -25,12 +26,13 @@ function stopDiscovery():void {
 async function scan(): Promise<void> {
   if (scanning.value || disposed || !props.open) return
   const token=++scanGeneration
-  scanning.value = true; error.value = ''; platform.cast.multicast(true)
+  scanning.value = true; error.value = ''
   try {
+    platform.cast.multicast(true)
     discovery = DiscoverCastDevices()
     const result = await discovery
     if (!disposed&&token===scanGeneration) devices.value = Array.isArray(result)?result:[]
-  } catch (e) { if (!disposed&&token===scanGeneration) error.value = String(e) }
+  } catch (e) { if (!disposed&&token===scanGeneration) error.value = normalizeApiError(e).message }
   finally { if(token===scanGeneration){platform.cast.multicast(false); scanning.value = false; discovery = undefined} }
 }
 async function connect(device: { id: string; name: string }): Promise<void> {
@@ -39,6 +41,12 @@ async function connect(device: { id: string; name: string }): Promise<void> {
   try { await PlayCastVideo(device.id, props.url, props.title); if (!disposed) { selected.value = device; paused.value = false; emit('connected') } }
   catch (e) { if (!disposed) error.value = String(e) }
   finally { busy.value = false }
+}
+function systemCast():void {
+  stopDiscovery()
+  try { if(platform.cast.openSystem()){emit('close');return} }
+  catch { /* Keep the panel usable when an OEM settings activity is unavailable. */ }
+  error.value=t('mobile.castSystemUnavailable')
 }
 async function control(action: string): Promise<void> {
   if (!selected.value || busy.value) return
@@ -68,6 +76,10 @@ onBeforeUnmount(() => { disposed = true; stopDiscovery() })
       <button class="cczj-mobile-cast-refresh" :disabled="scanning || busy" @click="scan"><Icon name="refresh" :size="16" />{{ scanning ? t('mobile.castScanning') : t('common.refresh') }}</button>
       <div class="cczj-mobile-cast-list"><button v-for="device in devices" :key="device.id" :disabled="busy" @click="connect(device)"><Icon name="monitor" :size="22" /><span>{{ device.name }}</span><Icon name="chevron-right" :size="18" /></button></div>
       <p v-if="!scanning && !devices.length">{{ t('mobile.castEmpty') }}</p>
+      <div v-if="platform.cast.systemSupported()" class="cczj-grid cczj-gap-4">
+        <Button variant="secondary" :disabled="busy" @click="systemCast"><Icon name="cast" :size="18"/>{{t('mobile.castSystem')}}</Button>
+        <small>{{t('mobile.castSystemHint')}}</small>
+      </div>
       <p v-if="busy" role="status">{{ t('mobile.castConnecting') }}</p>
     </template>
   </div>

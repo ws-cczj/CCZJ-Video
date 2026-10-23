@@ -13,7 +13,7 @@
 | 扩展包格式、信任与能力 | [扩展包规范](plugins.md) · [采集策略 Schema](source-strategy-v2.schema.json) |
 | 阅读源排名与章节／话次匹配 | [策略设计](reading-source-routing-design.md) · [实现入口](reading-source-routing-implementation.md) |
 | 阅读源质量检查与新源复测 | [质量基准](reading-source-quality-benchmark.md) |
-| 构建与 GitHub 发布 | [2.4.0 发布流程](releases/2.4.0.md) |
+| 构建与 GitHub 发布 | [发布与自动更新](releases.md) |
 | 全项目待核查范围 | [整改任务书](project-remediation.md)，其中待办需对照当前实现确认 |
 | 领域用语与架构选择 | [术语](../CONTEXT.md) · [ADR 目录](adr/) |
 
