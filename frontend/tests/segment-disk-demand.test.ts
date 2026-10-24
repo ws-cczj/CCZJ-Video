@@ -9,6 +9,8 @@ import { session } from '../src/utils/ts-cache/store'
 beforeEach(() => {
   vi.useFakeTimers()
   vi.stubGlobal('window', globalThis)
+  // HLS FetchLoader uses the browser global even when fetch itself is mocked.
+  vi.stubGlobal('self', globalThis)
   beginCacheSession()
   cacheClear()
   setMemoryCacheBudget(MAX_CACHED_BYTES, MAX_CACHED_SEGMENTS)
@@ -29,11 +31,13 @@ afterEach(() => {
 
 function request(context: object = {}) {
   const loader = new TsCacheLoader({})
-  const success = vi.fn(), error = vi.fn(), abort = vi.fn()
+  let finish!: () => void
+  const done = new Promise<void>(resolve => { finish = resolve })
+  const success = vi.fn(finish), error = vi.fn(finish), abort = vi.fn(finish)
   loader.load({ url: 'https://fixture/17.ts', type: 'media-fragment', responseType: 'arraybuffer', ...context }, {}, {
     onSuccess: success, onError: error, onAbort: abort,
   })
-  return { loader, success, error, abort }
+  return { loader, success, error, abort, done }
 }
 
 describe('fragment disk reads through the real playback loader', () => {
@@ -86,7 +90,7 @@ describe('fragment disk reads through the real playback loader', () => {
     const network = vi.fn(async () => new Response(new Uint8Array([3, 4])))
     vi.stubGlobal('fetch', network)
     const result = request()
-    await vi.advanceTimersByTimeAsync(0)
+    await result.done
     expect(network).toHaveBeenCalledOnce()
     expect(new Uint8Array(result.success.mock.calls[0][0].data)).toEqual(new Uint8Array([3, 4]))
     expect(result.error).not.toHaveBeenCalled()
@@ -102,6 +106,7 @@ describe('fragment disk reads through the real playback loader', () => {
     await vi.advanceTimersByTimeAsync(249)
     expect(network).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1)
+    await result.done
     expect(network).toHaveBeenCalledOnce()
     expect(result.success).toHaveBeenCalledOnce()
     finish(new Uint8Array([99]).buffer)

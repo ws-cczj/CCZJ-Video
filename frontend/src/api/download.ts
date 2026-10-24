@@ -8,10 +8,12 @@ import {
   PauseDownload,
   RemoveDownload,
   ResumeDownload,
-  SetDownloadDir,
+  SetDownloadDir as setDownloadDir,
   StartVideoDownload,
   normalizeApiError,
 } from './app'
+import { response } from './response'
+import { text } from './decode'
 
 export {
   CancelDownload,
@@ -23,8 +25,11 @@ export {
   PauseDownload,
   RemoveDownload,
   ResumeDownload,
-  SetDownloadDir,
   StartVideoDownload,
+}
+
+export function SetDownloadDir(directory: string) {
+  return response(() => setDownloadDir(directory), text)
 }
 
 export type DownloadErrorCode = 'DOWNLOAD_DUPLICATE' | 'UNKNOWN'

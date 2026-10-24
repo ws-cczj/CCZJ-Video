@@ -1,9 +1,11 @@
 import { defineStore } from 'pinia'
 import { tr } from '../locales'
 import { ref, computed } from 'vue'
-import { GetAllSources, GetSourceStats, GetSetting, SetSetting } from '../api/app'
+import { GetAllSources, GetSourceStats, GetSetting, SetSetting, WriteLog, normalizeApiError } from '../api/app'
 import { useErrorStore } from './error'
 import type { SourceStat } from '../types'
+import { useGeneration } from '../composables/useGeneration'
+import { list, object, text } from '../api/decode'
 
 const DEFAULT_SOURCE_KEY = 'default_source_key'
 
@@ -32,58 +34,67 @@ export const useSourceStore = defineStore('source', () => {
     sources.value.find((s) => s.source_key === currentSourceKey.value)
   )
 
-  async function fetchSources(): Promise<void> {
-    loading.value = true
-    try {
-      const [s, st] = await Promise.all([GetAllSources(), GetSourceStats()])
-      sources.value = s as SourceRow[]
-      stats.value = st as SourceStat[]
-      loaded.value = true
+  const generation = useGeneration()
 
-      if (!currentSourceKey.value && sources.value.length > 0) {
+  async function fetchSources(force: boolean): Promise<void> {
+    const seq = generation.begin()
+    loading.value = true
+    const pending = GetAllSources()
+    function trace(stage: string, extra: Record<string,string> = {}): void {
+      void WriteLog({ level: 'INFO', source: 'Sources.list', message: stage, detail: '', fields: {
+        ui_request_id: pending.request.requestId, ui_flight_id: pending.request.flightId,
+        pipeline: pending.request.pipeline, generation: String(seq), forced: String(force), ...extra,
+      } }).catch(() => {})
+    }
+    trace('requested')
+    // Statistics are supplementary: their failure must not hide a committed source.
+    void Promise.resolve(GetSourceStats()).then(st => {
+      if (generation.isCurrent(seq)) stats.value = st ?? []
+    }, e => {
+      if (generation.isCurrent(seq)) useErrorStore().fromError(tr('errors.loadSourcesFailed'), e)
+    })
+    try {
+      const rows = list(await pending, value => {
+        const row = object(value)
+        text(row.source_key); text(row.name); text(row.api_url)
+        return row as unknown as SourceRow
+      })
+      if (!generation.isCurrent(seq)) { trace('discarded_stale_response', { count: String(rows.length) }); return }
+      sources.value = rows
+      trace('published', { count: String(rows.length), source_keys: rows.map(row => row.source_key).join(',') })
+      loaded.value = true
+      if (!rows.some(src => src.source_key === currentSourceKey.value)) {
         let savedKey = ''
-        try {
-          savedKey = (await GetSetting(DEFAULT_SOURCE_KEY)) as string
-        } catch { /* ignore */ }
-        if (savedKey && sources.value.some(src => src.source_key === savedKey)) {
-          currentSourceKey.value = savedKey
-        } else {
-          currentSourceKey.value = sources.value[0].source_key || ''
-        }
+        try { savedKey = await GetSetting(DEFAULT_SOURCE_KEY) } catch { /* use first source */ }
+        if (!generation.isCurrent(seq)) return
+        if (rows.some(src => src.source_key === currentSourceKey.value)) return
+        currentSourceKey.value = rows.some(src => src.source_key === savedKey)
+          ? savedKey : rows[0]?.source_key || ''
       }
     } catch (e) {
+      const failure = normalizeApiError(e)
+      trace('failed', { backend_request_id: failure.requestId || '', code: failure.code })
+      if (!generation.isCurrent(seq)) return
+      if (force) throw e
       useErrorStore().fromError(tr('errors.loadSourcesFailed'), e)
     } finally {
-      loading.value = false
+      if (generation.isCurrent(seq)) loading.value = false
     }
   }
 
-  /**
-   * 源列表只有采集源管理页会改，其他页拿它只为填下拉框和 currentSourceKey，
-   * 所以第二次以后直接吃已加载的结果：以前 Home/Detail/Player/Search/Recent/
-   * Recommendations 各自 onMounted 都全量重拉，进一次播放页就是 6 个重复 IPC。
-   *
-   * loaded 只记成功，失败保持 false，下一个挂载点才会重试而不是永久吃空列表。
-   * force 不等现有 inflight：管理页刚写完库就要读回真实状态，共享一个在途请求
-   * 可能拿到写之前的快照。并发两个 force 只会把同一份结果写两遍，无害。
-   */
+  // Forced reads start a new generation after writes. Older reads may finish,
+  // but may never overwrite the committed list, selection, errors or loading state.
   async function loadSources(force = false): Promise<void> {
     if (!force && inflight) return inflight
     if (!force && loaded.value) return
-    const run = fetchSources()
+    const run = fetchSources(force)
     inflight = run
-    try {
-      await run
-    } finally {
-      if (inflight === run) inflight = null
-    }
+    try { await run } finally { if (inflight === run) inflight = null }
   }
 
   async function switchSource(key: string): Promise<void> {
+    await SetSetting(DEFAULT_SOURCE_KEY, key)
     currentSourceKey.value = key
-    try {
-      await SetSetting(DEFAULT_SOURCE_KEY, key)
-    } catch { /* ignore */ }
   }
 
   return {

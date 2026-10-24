@@ -14,6 +14,7 @@ import ComicCatalog from '../../src/comic/views/ComicCatalog.vue'
 import ComicReader from '../../src/comic/views/ComicReader.vue'
 import NovelSources from '../../src/novel/views/NovelSources.vue'
 import ComicSources from '../../src/comic/views/ComicSources.vue'
+import LibrarySources from '../../src/views/LibrarySources.vue'
 import NovelSearch from '../../src/novel/views/NovelSearch.vue'
 import NovelHome from '../../src/novel/views/NovelHome.vue'
 import ComicHome from '../../src/comic/views/ComicHome.vue'
@@ -29,11 +30,14 @@ import '../../src/styles/cczj-utilities.css'
 import '../../src/styles/animations.css'
 
 const pinia = createPinia()
+// Compatibility import APIs still serve LibrarySourcesPanel. Production mode
+// routes use the builtin directories; online import QA mounts this panel explicitly.
+const legacySources = new URLSearchParams(location.search).has('legacy-source-import')
 const router = createRouter({ history: createWebHashHistory(), routes: [
   {path:'/novel',component:NovelHome},{path:'/comic',component:ComicHome},
   {path:'/novel/settings',component:NovelSettings},{path:'/comic/settings',component:ComicSettings},
   {path:'/novel/diagnostics',component:RuntimeDiagnostics,meta:{title:'diagnostics.pageTitle'}},{path:'/comic/diagnostics',component:RuntimeDiagnostics,meta:{title:'diagnostics.pageTitle'}},
-  { path: '/novel/sources', component: NovelSources,meta:{title:'librarySources.novelTitle'} }, { path: '/comic/sources', component: ComicSources,meta:{title:'librarySources.comicTitle'} }, { path:'/novel/search',component:NovelSearch,meta:{title:'novel.search'} }, { path:'/comic/search',component:ComicCatalog,meta:{title:'comic.search'} },
+  { path: '/novel/sources', component: legacySources ? LibrarySources : NovelSources,meta:{title:'librarySources.novelTitle'} }, { path: '/comic/sources', component: legacySources ? LibrarySources : ComicSources,meta:{title:'librarySources.comicTitle'} }, { path:'/novel/search',component:NovelSearch,meta:{title:'novel.search'} }, { path:'/comic/search',component:ComicCatalog,meta:{title:'comic.search'} },
   { path: '/novel/shelf', component: NovelShelf }, { path: '/novel/book/:bookId', component: NovelBook },
   { path: '/novel/read/:bookId/:chapter', component: NovelReader }, { path: '/novel/categories', component: NovelCatalog },
   { path: '/comic/series/:seriesId', component: ComicSeries }, { path: '/comic/library', component: ComicLibrary },

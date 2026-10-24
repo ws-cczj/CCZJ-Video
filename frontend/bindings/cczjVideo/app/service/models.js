@@ -26,6 +26,9 @@ import * as diagnosticrecording$0 from "../diagnosticrecording/models.js";
 import * as download$0 from "../download/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as engine$0 from "../download/engine/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as netbudget$0 from "../netbudget/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -38,60 +41,10 @@ import * as netstats$0 from "../netstats/models.js";
 import * as operation$0 from "../operation/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as outbound$0 from "../outbound/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as resource$0 from "../resource/models.js";
-
-/**
- * ChunkProgress 单个并发连接的分块进度
- */
-export class ChunkProgress {
-    /**
-     * Creates a new ChunkProgress instance.
-     * @param {Partial<ChunkProgress>} [$$source = {}] - The source object to create the ChunkProgress.
-     */
-    constructor($$source = {}) {
-        if (!("id" in $$source)) {
-            /**
-             * @member
-             * @type {number}
-             */
-            this["id"] = 0;
-        }
-        if (!("start" in $$source)) {
-            /**
-             * @member
-             * @type {number}
-             */
-            this["start"] = 0;
-        }
-        if (!("end" in $$source)) {
-            /**
-             * @member
-             * @type {number}
-             */
-            this["end"] = 0;
-        }
-        if (!("done" in $$source)) {
-            /**
-             * 本块已下载字节数
-             * @member
-             * @type {number}
-             */
-            this["done"] = 0;
-        }
-
-        Object.assign(this, $$source);
-    }
-
-    /**
-     * Creates a new ChunkProgress instance from a string or object.
-     * @param {any} [$$source = {}]
-     * @returns {ChunkProgress}
-     */
-    static createFrom($$source = {}) {
-        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        return new ChunkProgress(/** @type {Partial<ChunkProgress>} */($$parsedSource));
-    }
-}
 
 /**
  * DiagCollect 是采集调度器快照。
@@ -1410,7 +1363,7 @@ export class DoubanUpdateVideoReq {
 }
 
 /**
- * ExportLogsReq 描述一次导出。Paths 为空时导出内存缓冲。
+ * ExportLogsReq exports retained history plus memory-only records by default.
  */
 export class ExportLogsReq {
     /**
@@ -1720,6 +1673,13 @@ export class LogEntry {
      * @param {Partial<LogEntry>} [$$source = {}] - The source object to create the LogEntry.
      */
     constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {{ [_ in string]?: string } | undefined}
+             */
+            this["fields"] = undefined;
+        }
         if (!("level" in $$source)) {
             /**
              * INFO / WARN / ERROR
@@ -1762,7 +1722,11 @@ export class LogEntry {
      * @returns {LogEntry}
      */
     static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType25;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("fields" in $$parsedSource) {
+            $$parsedSource["fields"] = $$createField0_0($$parsedSource["fields"]);
+        }
         return new LogEntry(/** @type {Partial<LogEntry>} */($$parsedSource));
     }
 }
@@ -1965,7 +1929,7 @@ export class LogPageResp {
      * @returns {LogPageResp}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType26;
+        const $$createField0_0 = $$createType27;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("records" in $$parsedSource) {
             $$parsedSource["records"] = $$createField0_0($$parsedSource["records"]);
@@ -1983,6 +1947,41 @@ export class LogStats {
      * @param {Partial<LogStats>} [$$source = {}] - The source object to create the LogStats.
      */
     constructor($$source = {}) {
+        if (!("session_id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["session_id"] = "";
+        }
+        if (!("write_failures" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["write_failures"] = 0;
+        }
+        if (!("unpersisted" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["unpersisted"] = 0;
+        }
+        if (!("last_write_error" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["last_write_error"] = "";
+        }
+        if (!("last_write_ts" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["last_write_ts"] = 0;
+        }
         if (!("dir" in $$source)) {
             /**
              * @member
@@ -2158,6 +2157,13 @@ export class RuntimeMetrics {
         if (/** @type {any} */(false)) {
             /**
              * @member
+             * @type {outbound$0.Status | null | undefined}
+             */
+            this["outbound_proxy"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
              * @type {danmaku$0.Stats | null | undefined}
              */
             this["danmaku"] = undefined;
@@ -2242,17 +2248,18 @@ export class RuntimeMetrics {
      * @returns {RuntimeMetrics}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType28;
-        const $$createField1_0 = $$createType30;
-        const $$createField2_0 = $$createType32;
-        const $$createField3_0 = $$createType7;
-        const $$createField4_0 = $$createType34;
-        const $$createField5_0 = $$createType35;
-        const $$createField6_0 = $$createType36;
-        const $$createField9_0 = $$createType10;
-        const $$createField10_0 = $$createType12;
-        const $$createField11_0 = $$createType37;
-        const $$createField12_0 = $$createType1;
+        const $$createField0_0 = $$createType29;
+        const $$createField1_0 = $$createType31;
+        const $$createField2_0 = $$createType33;
+        const $$createField3_0 = $$createType35;
+        const $$createField4_0 = $$createType7;
+        const $$createField5_0 = $$createType37;
+        const $$createField6_0 = $$createType38;
+        const $$createField7_0 = $$createType39;
+        const $$createField10_0 = $$createType10;
+        const $$createField11_0 = $$createType12;
+        const $$createField12_0 = $$createType40;
+        const $$createField13_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("operations" in $$parsedSource) {
             $$parsedSource["operations"] = $$createField0_0($$parsedSource["operations"]);
@@ -2260,32 +2267,35 @@ export class RuntimeMetrics {
         if ("network_policy" in $$parsedSource) {
             $$parsedSource["network_policy"] = $$createField1_0($$parsedSource["network_policy"]);
         }
+        if ("outbound_proxy" in $$parsedSource) {
+            $$parsedSource["outbound_proxy"] = $$createField2_0($$parsedSource["outbound_proxy"]);
+        }
         if ("danmaku" in $$parsedSource) {
-            $$parsedSource["danmaku"] = $$createField2_0($$parsedSource["danmaku"]);
+            $$parsedSource["danmaku"] = $$createField3_0($$parsedSource["danmaku"]);
         }
         if ("scope" in $$parsedSource) {
-            $$parsedSource["scope"] = $$createField3_0($$parsedSource["scope"]);
+            $$parsedSource["scope"] = $$createField4_0($$parsedSource["scope"]);
         }
         if ("download_executor" in $$parsedSource) {
-            $$parsedSource["download_executor"] = $$createField4_0($$parsedSource["download_executor"]);
+            $$parsedSource["download_executor"] = $$createField5_0($$parsedSource["download_executor"]);
         }
         if ("network_budget" in $$parsedSource) {
-            $$parsedSource["network_budget"] = $$createField5_0($$parsedSource["network_budget"]);
+            $$parsedSource["network_budget"] = $$createField6_0($$parsedSource["network_budget"]);
         }
         if ("recording" in $$parsedSource) {
-            $$parsedSource["recording"] = $$createField6_0($$parsedSource["recording"]);
+            $$parsedSource["recording"] = $$createField7_0($$parsedSource["recording"]);
         }
         if ("network" in $$parsedSource) {
-            $$parsedSource["network"] = $$createField9_0($$parsedSource["network"]);
+            $$parsedSource["network"] = $$createField10_0($$parsedSource["network"]);
         }
         if ("cache" in $$parsedSource) {
-            $$parsedSource["cache"] = $$createField10_0($$parsedSource["cache"]);
+            $$parsedSource["cache"] = $$createField11_0($$parsedSource["cache"]);
         }
         if ("resources" in $$parsedSource) {
-            $$parsedSource["resources"] = $$createField11_0($$parsedSource["resources"]);
+            $$parsedSource["resources"] = $$createField12_0($$parsedSource["resources"]);
         }
         if ("background_tasks" in $$parsedSource) {
-            $$parsedSource["background_tasks"] = $$createField12_0($$parsedSource["background_tasks"]);
+            $$parsedSource["background_tasks"] = $$createField13_0($$parsedSource["background_tasks"]);
         }
         return new RuntimeMetrics(/** @type {Partial<RuntimeMetrics>} */($$parsedSource));
     }
@@ -2707,7 +2717,7 @@ export class SourceProbeTimeline {
      * @returns {SourceProbeTimeline}
      */
     static createFrom($$source = {}) {
-        const $$createField2_0 = $$createType39;
+        const $$createField2_0 = $$createType42;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("slots" in $$parsedSource) {
             $$parsedSource["slots"] = $$createField2_0($$parsedSource["slots"]);
@@ -2765,187 +2775,22 @@ export class TriggerCollectReq {
 }
 
 /**
- * VideoDownloadReq 前端发起的下载请求
+ * VideoDownloadReq preserves the public binding shape while the download
+ * engine owns task admission, transfer state and file publication.
  */
-export class VideoDownloadReq {
-    /**
-     * Creates a new VideoDownloadReq instance.
-     * @param {Partial<VideoDownloadReq>} [$$source = {}] - The source object to create the VideoDownloadReq.
-     */
-    constructor($$source = {}) {
-        if (!("task_id" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["task_id"] = "";
-        }
-        if (!("url" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["url"] = "";
-        }
-        if (!("filename" in $$source)) {
-            /**
-             * 不含目录的文件名（含扩展名）
-             * @member
-             * @type {string}
-             */
-            this["filename"] = "";
-        }
-        if (!("save_dir" in $$source)) {
-            /**
-             * 可选：自定义保存目录
-             * @member
-             * @type {string}
-             */
-            this["save_dir"] = "";
-        }
-        if (!("force" in $$source)) {
-            /**
-             * 强制覆盖已有任务（用于重复下载确认后）
-             * @member
-             * @type {boolean}
-             */
-            this["force"] = false;
-        }
-
-        Object.assign(this, $$source);
-    }
-
-    /**
-     * Creates a new VideoDownloadReq instance from a string or object.
-     * @param {any} [$$source = {}]
-     * @returns {VideoDownloadReq}
-     */
-    static createFrom($$source = {}) {
-        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        return new VideoDownloadReq(/** @type {Partial<VideoDownloadReq>} */($$parsedSource));
-    }
-}
+export const VideoDownloadReq = engine$0.Request;
 
 /**
- * VideoDownloadStatus 下载状态（用于 GetDownloadProgress 与事件推送）
+ * VideoDownloadReq preserves the public binding shape while the download
+ * engine owns task admission, transfer state and file publication.
+ * @typedef {engine$0.Request} VideoDownloadReq
  */
-export class VideoDownloadStatus {
-    /**
-     * Creates a new VideoDownloadStatus instance.
-     * @param {Partial<VideoDownloadStatus>} [$$source = {}] - The source object to create the VideoDownloadStatus.
-     */
-    constructor($$source = {}) {
-        if (!("task_id" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["task_id"] = "";
-        }
-        if (!("url" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["url"] = "";
-        }
-        if (!("filename" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["filename"] = "";
-        }
-        if (!("save_path" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["save_path"] = "";
-        }
-        if (!("total" in $$source)) {
-            /**
-             * @member
-             * @type {number}
-             */
-            this["total"] = 0;
-        }
-        if (!("downloaded" in $$source)) {
-            /**
-             * @member
-             * @type {number}
-             */
-            this["downloaded"] = 0;
-        }
-        if (!("speed_bps" in $$source)) {
-            /**
-             * @member
-             * @type {number}
-             */
-            this["speed_bps"] = 0;
-        }
-        if (!("eta_sec" in $$source)) {
-            /**
-             * @member
-             * @type {number}
-             */
-            this["eta_sec"] = 0;
-        }
-        if (!("status" in $$source)) {
-            /**
-             * queued / downloading / done / error / cancelled
-             * @member
-             * @type {string}
-             */
-            this["status"] = "";
-        }
-        if (/** @type {any} */(false)) {
-            /**
-             * @member
-             * @type {string | undefined}
-             */
-            this["error"] = undefined;
-        }
-        if (!("start_time" in $$source)) {
-            /**
-             * @member
-             * @type {number}
-             */
-            this["start_time"] = 0;
-        }
-        if (/** @type {any} */(false)) {
-            /**
-             * @member
-             * @type {number | undefined}
-             */
-            this["end_time"] = undefined;
-        }
-        if (/** @type {any} */(false)) {
-            /**
-             * 多连接并行下载的每个分块进度
-             * @member
-             * @type {ChunkProgress[] | undefined}
-             */
-            this["chunks"] = undefined;
-        }
 
-        Object.assign(this, $$source);
-    }
+export const VideoDownloadStatus = engine$0.Status;
 
-    /**
-     * Creates a new VideoDownloadStatus instance from a string or object.
-     * @param {any} [$$source = {}]
-     * @returns {VideoDownloadStatus}
-     */
-    static createFrom($$source = {}) {
-        const $$createField12_0 = $$createType41;
-        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        if ("chunks" in $$parsedSource) {
-            $$parsedSource["chunks"] = $$createField12_0($$parsedSource["chunks"]);
-        }
-        return new VideoDownloadStatus(/** @type {Partial<VideoDownloadStatus>} */($$parsedSource));
-    }
-}
+/**
+ * @typedef {engine$0.Status} VideoDownloadStatus
+ */
 
 /**
  * WindowSizeResp 窗口尺寸响应
@@ -3011,20 +2856,21 @@ const $$createType21 = $Create.Array($Create.Any);
 const $$createType22 = db$0.DoubanInfoRow.createFrom;
 const $$createType23 = $Create.Nullable($$createType22);
 const $$createType24 = $Create.Array($$createType23);
-const $$createType25 = applog$0.Record.createFrom;
-const $$createType26 = $Create.Array($$createType25);
-const $$createType27 = operation$0.Stat.createFrom;
-const $$createType28 = $Create.Array($$createType27);
-const $$createType29 = netpolicy$0.Stat.createFrom;
-const $$createType30 = $Create.Array($$createType29);
-const $$createType31 = danmaku$0.Stats.createFrom;
-const $$createType32 = $Create.Nullable($$createType31);
-const $$createType33 = download$0.ExecutorStats.createFrom;
-const $$createType34 = $Create.Nullable($$createType33);
-const $$createType35 = netbudget$0.Snapshot.createFrom;
-const $$createType36 = diagnosticrecording$0.Status.createFrom;
-const $$createType37 = resource$0.Snapshot.createFrom;
-const $$createType38 = SourceProbeSlot.createFrom;
-const $$createType39 = $Create.Array($$createType38);
-const $$createType40 = ChunkProgress.createFrom;
-const $$createType41 = $Create.Array($$createType40);
+const $$createType25 = $Create.Map($Create.Any, $Create.Any);
+const $$createType26 = applog$0.Record.createFrom;
+const $$createType27 = $Create.Array($$createType26);
+const $$createType28 = operation$0.Stat.createFrom;
+const $$createType29 = $Create.Array($$createType28);
+const $$createType30 = netpolicy$0.Stat.createFrom;
+const $$createType31 = $Create.Array($$createType30);
+const $$createType32 = outbound$0.Status.createFrom;
+const $$createType33 = $Create.Nullable($$createType32);
+const $$createType34 = danmaku$0.Stats.createFrom;
+const $$createType35 = $Create.Nullable($$createType34);
+const $$createType36 = download$0.ExecutorStats.createFrom;
+const $$createType37 = $Create.Nullable($$createType36);
+const $$createType38 = netbudget$0.Snapshot.createFrom;
+const $$createType39 = diagnosticrecording$0.Status.createFrom;
+const $$createType40 = resource$0.Snapshot.createFrom;
+const $$createType41 = SourceProbeSlot.createFrom;
+const $$createType42 = $Create.Array($$createType41);

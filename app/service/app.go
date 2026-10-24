@@ -8,10 +8,13 @@ import (
 	collectionservice "cczjVideo/app/collection"
 	"cczjVideo/app/danmaku"
 	"cczjVideo/app/db"
+	"cczjVideo/app/detail"
 	"cczjVideo/app/diagnosticrecording"
 	"cczjVideo/app/douban"
 	downloadservice "cczjVideo/app/download"
-	"cczjVideo/app/handler"
+	downloadengine "cczjVideo/app/download/engine"
+	sourceservice "cczjVideo/app/source"
+
 	"cczjVideo/app/handoff"
 	"cczjVideo/app/library"
 	"cczjVideo/app/lifecycle"
@@ -20,9 +23,11 @@ import (
 	"cczjVideo/app/netpolicy"
 	"cczjVideo/app/netstats"
 	"cczjVideo/app/operation"
+	"cczjVideo/app/outbound"
 	pluginservice "cczjVideo/app/plugin"
 	proxyservice "cczjVideo/app/proxy"
 	"cczjVideo/app/settings"
+	"cczjVideo/app/storagepaths"
 	updateservice "cczjVideo/app/update"
 	"cczjVideo/app/updater"
 	windowservice "cczjVideo/app/window"
@@ -42,7 +47,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unicode/utf8"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -74,11 +78,15 @@ type App struct {
 	update          *updateservice.Service
 	cache           *cacheservice.Service
 	media           *mediaservice.Service
+	details         *detail.Service
+	releaseDetails  func()
+	sources         *sourceservice.Service
 	collection      *collectionservice.Service
 	schedulers      *collectionservice.SchedulerService
 	background      *lifecycle.Group
 	networkBudget   *netbudget.Budget
 	requestPolicy   *netpolicy.Manager
+	outboundPool    *outbound.Pool
 	operations      *operation.Metrics
 	settingsWriteMu sync.Mutex
 	stopComments    func(context.Context) error
@@ -87,21 +95,19 @@ type App struct {
 	// 是否真的走完，只有没走完才允许自己 os.Exit。
 	shutdownDone chan struct{}
 	shutdownOnce sync.Once
+	shutdownMu   sync.Mutex
+	databaseOpen bool
+	logOpen      bool
 	// relaunching 标记"这次退出其实是一次重启"。RestartApp 在请求退出之前已经把
 	// 同一个 exe 又拉起一份，新进程立刻重新锁住文件——这时候兑现「退出时安装」
 	// 换不动，还会留下一条用户没取消过的 swap_failed。关停流程读它。
-	relaunching        atomic.Bool
-	downloads          *downloadservice.Registry[downloadTask]
-	downloadMu         sync.Mutex
-	readingState       *db.ReadingStateStore
-	downloadStore      downloadservice.CheckpointStore
-	downloadRestoreErr error
-	downloadExecutor   *downloadservice.Executor
-	downloadPaths      map[string]*downloadservice.Run
-	downloadDir        *downloadservice.Directory
-	proxy              *proxyservice.Service
-	hlsProxy           *proxyservice.HLSService
-	mobileMedia        *proxyservice.MediaBridge
+	relaunching  atomic.Bool
+	downloads    *downloadengine.Engine
+	readingState *db.ReadingStateStore
+	downloadDir  *downloadservice.Directory
+	proxy        *proxyservice.Service
+	hlsProxy     *proxyservice.HLSService
+	mobileMedia  *proxyservice.MediaBridge
 	// readingImages 服务小说/漫画的图片（漫画页、插图）。与 proxy 那个海报代理
 	// 分开的原因写在 NewApp 里：节流策略、缓存目录与容量上限都不一样。
 	readingImages *proxyservice.ImageProxy
@@ -112,18 +118,14 @@ type App struct {
 
 // ======================== 关闭行为 ========================
 
-func (a *App) shouldMinimizeToTray() bool {
-	return a.window.CloseBehavior()
-}
-
 // GetCloseBehavior 返回关闭行为：true=缩小到托盘，false=直接退出
 func (a *App) GetCloseBehavior() bool {
 	return a.window.CloseBehavior()
 }
 
 // SetCloseBehavior 设置关闭行为并持久化
-func (a *App) SetCloseBehavior(minimize bool) {
-	a.window.SetCloseBehavior(minimize)
+func (a *App) SetCloseBehavior(ctx context.Context, minimize bool) error {
+	return a.window.SetCloseBehavior(ctx, minimize)
 }
 
 // RestartApp 重启应用：先把新进程拉起来，再请求退出。
@@ -132,10 +134,16 @@ func (a *App) SetCloseBehavior(minimize bool) {
 // （下次启动的补采窗口按它算）、取消并等待采集与下载收尾、关日志、关库一个都没执行。
 // 留下的结果就是"重启一次，库就脏一点"。现在只请求退出，进程由 app.Run() 正常返回
 // 来结束；硬超时兜底只在优雅退出真的卡死时才对进程动手。
-func (a *App) RestartApp() {
+func (a *App) RestartApp() error {
+	if application.System.IsMobile() {
+		return apperror.New(apperror.Unsupported, "当前平台不支持桌面进程重启")
+	}
+	if a.app == nil {
+		return apperror.New(apperror.Unavailable, "应用尚未启动")
+	}
 	exe, err := os.Executable()
-	if err != nil || a.app == nil {
-		return
+	if err != nil {
+		return apperror.Wrap(apperror.Unavailable, err, "无法启动新的应用进程")
 	}
 
 	attr := &os.ProcAttr{
@@ -148,10 +156,8 @@ func (a *App) RestartApp() {
 	// 带上自己的 PID：新进程会等这个 PID 消失再抢单实例锁，否则它一启动就被
 	// 判成第二实例并静默退出。换 exe 的批处理脚本带的是同一个参数（见 app/handoff）。
 	newArgs := []string{exe, handoff.Arg(os.Getpid())}
-	_, err = os.StartProcess(exe, newArgs, attr)
-	if err != nil {
-		cmd := exec.Command(exe, handoff.Arg(os.Getpid()))
-		_ = cmd.Start()
+	if err := launchReplacement(exe, newArgs, attr); err != nil {
+		return apperror.Wrap(apperror.Unavailable, err, "无法启动新的应用进程")
 	}
 
 	// 重启把同一个 exe 又拉起一份，新进程立刻重新锁住那个文件。这次退出不是
@@ -159,6 +165,27 @@ func (a *App) RestartApp() {
 	a.relaunching.Store(true)
 
 	a.quitGracefully()
+	return nil
+}
+
+// launchReplacement returns only after a replacement has actually started.
+// The handoff PID lets the child wait for this process to finish shutting down.
+func launchReplacement(exe string, args []string, attr *os.ProcAttr) error {
+	process, firstErr := os.StartProcess(exe, args, attr)
+	if firstErr == nil {
+		if err := process.Release(); err != nil {
+			applog.Warn("release replacement process handle: %v", err)
+		}
+		return nil
+	}
+	cmd := exec.Command(exe, args[1:]...)
+	if err := cmd.Start(); err != nil {
+		return errors.Join(firstErr, err)
+	}
+	if err := cmd.Process.Release(); err != nil {
+		applog.Warn("release replacement process handle: %v", err)
+	}
+	return nil
 }
 
 // QuitApp 退出应用：与 RestartApp 的差别只在于不拉起新进程。
@@ -204,11 +231,6 @@ func NewApp() *App {
 		}
 		return a.app.Window.Current()
 	}, a.settings)
-	a.update = updateservice.NewService(a.settings, func(name string, data any) {
-		if a.app != nil {
-			a.app.Event.Emit(name, data)
-		}
-	})
 	// 装更新时 updater 要让当前进程退场，替换脚本才好覆盖 exe。退出通道在这里递进去：
 	// 走应用的关停流程（取消并等待采集与下载、关日志、关库），而不是 updater 自己
 	// os.Exit —— 那样整个收尾会被跳过，丢的是正在提交的那一批数据。
@@ -221,10 +243,16 @@ func NewApp() *App {
 			a.app.Event.Emit(name, data)
 		}
 	})
-	a.media = mediaservice.NewService(db.GetVideoById)
 	a.background = lifecycle.NewGroup()
+	a.details = detail.NewWithContext(a.background.Context(), 90*time.Second)
+	a.media = mediaservice.NewService(db.GetVideoByIdContext, db.NewMediaStore(db.DB), a.details)
 	a.operations = &operation.Metrics{}
 	a.networkBudget = netbudget.New(a.background.Context(), netbudget.DefaultPolicy())
+	a.update = updateservice.NewService(a.settings, func(name string, data any) {
+		if a.app != nil {
+			a.app.Event.Emit(name, data)
+		}
+	}, updater.NewDownloader(a.networkBudget))
 	jar, _ := cookiejar.New(nil)
 	a.danmakuHTTP = &http.Client{Jar: jar, Transport: a.networkBudget.Wrap("danmaku", netpolicy.WrapTransport(string(netstats.CategoryDanmaku), netstats.WrapTransport(netstats.CategoryDanmaku, &http.Transport{DialContext: proxyservice.SafeDialContext, MaxIdleConns: 4, MaxIdleConnsPerHost: 2, IdleConnTimeout: 30 * time.Second, TLSHandshakeTimeout: 10 * time.Second}))), CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		if len(via) >= 3 || !danmaku.AllowedURL(req.URL) {
@@ -254,14 +282,18 @@ func NewApp() *App {
 		}
 		return a.modeWork().Context()
 	})
+	a.sources = sourceservice.NewServiceWithRuntime(a.collection, func(name string, data any) {
+		if a.app != nil {
+			a.app.Event.Emit(name, data)
+		}
+	})
+
 	// 这个间隔只作用于豆瓣补全调度（采集调度器另有生命周期管理）。
 	// 一批 2+2 条在 60~150s 随机间隔下要约 7 分钟跑完：10 分钟一轮等于全天
 	// 七成时间都在抓着豆瓣不放，容易被判定为异常流量；放宽到 30 分钟后
 	// 每轮之间留出 20 分钟空闲，队列靠手动「补全此条」仍可即时推进。
-	a.schedulers = collectionservice.NewSchedulerService(30 * time.Minute)
-	a.downloads = downloadservice.NewRegistry[downloadTask]()
-	a.downloadExecutor = downloadservice.NewExecutor(a.background.Context(), a.background.Go, 2, 64)
-	a.downloadPaths = make(map[string]*downloadservice.Run)
+	a.schedulers = collectionservice.NewSchedulerService(30*time.Minute, a.collection)
+	a.sources.SetChangeObserver(a.schedulers.SourceChanged)
 	a.downloadDir = downloadservice.NewDirectoryWithDefault(func(key, value string) error { return db.SetSetting(key, value) }, func() string {
 		if application.System.IsMobile() {
 			return filepath.Join(a.getDataDir(), "downloads")
@@ -308,11 +340,19 @@ func SetSystemTray(tray *application.SystemTray) {
 	systemTray = tray
 }
 
-func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
+func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOptions) (startupErr error) {
+	committed := false
+	defer func() {
+		if !committed {
+			startupErr = errors.Join(startupErr, a.rollbackStartup())
+		}
+	}()
 	a.app = application.Get()
 
 	dataDir := a.getDataDir()
-	os.MkdirAll(dataDir, 0755)
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		return apperror.Wrap(apperror.Storage, err, "应用数据目录不可用")
+	}
 	if application.System.IsMobile() {
 		if err := configureMobileTemporaryStorage(dataDir); err != nil {
 			return apperror.Wrap(apperror.Storage, err, "应用临时存储不可用")
@@ -323,7 +363,10 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 	logDir := filepath.Join(dataDir, "applog")
 	if err := applog.Init(logDir); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to init applog: %v\n", err)
+	} else {
+		a.logOpen = true
 	}
+	applog.InfoFields("application starting", applog.Fields{"app_version": updater.EffectiveVersion(), "go_version": goruntime.Version(), "wails_version": wailsVersionFromBuildInfo(), "goos": goruntime.GOOS, "goarch": goruntime.GOARCH, "pid": os.Getpid()})
 
 	// 把 db 层的日志桥接到 applog（避免 db 直接依赖 applog 产生循环）。
 	// 必须排在 InitDB 之前：InitDB 里的顺序迁移就往这里写「已应用迁移 vN」「补列 …」，
@@ -349,8 +392,10 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 	}
 
 	if err := db.InitDB(dataDir); err != nil {
-		panic(fmt.Sprintf("Failed to init database: %v", err))
+		return apperror.Wrap(apperror.Storage, err, "应用数据库无法打开")
 	}
+	a.databaseOpen = true
+	a.releaseDetails = cacheservice.SetDetailService(a.details)
 	rawPolicy, err := a.settings.Get(netpolicy.SettingsKey)
 	if err != nil {
 		return err
@@ -371,11 +416,21 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 	}
 	a.requestPolicy = requestPolicy
 	netpolicy.Install(requestPolicy)
+	if err := a.startOutboundPool(); err != nil {
+		return err
+	}
 
 	a.readingState = db.NewReadingStateStore(db.DB())
-	a.downloadStore = db.NewDownloadTaskStore(db.DB())
-	if err := a.loadPersistedTasks(); err != nil {
-		a.downloadRestoreErr = err
+	a.downloads = downloadengine.New(a.background.Context(), downloadengine.Options{
+		DataDirectory: a.getDataDir, Directory: a.downloadDir,
+		Store: db.NewDownloadTaskStore(db.DB()), Budget: a.networkBudget,
+		Progress: func(status downloadengine.Status) {
+			if a.app != nil {
+				a.app.Event.Emit("download:progress", status)
+			}
+		},
+	})
+	if err := a.downloads.Restore(ctx); err != nil {
 		applog.Error("恢复下载任务失败: %v", err)
 	}
 
@@ -424,7 +479,8 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 		"schema_version": strconv.Itoa(schemaVersion),
 	})
 	applog.InfoFields("application ready", applog.Fields{
-		"data_dir":         dataDir,
+		"schema_version":   schemaVersion,
+		"mode":             a.currentMode(),
 		"background_tasks": len(a.background.ActiveTasks()),
 	})
 
@@ -432,7 +488,9 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 	a.window.LoadCloseBehavior()
 
 	// 应用窗口设置（尺寸、是否可调整大小）
-	a.window.ApplySettings()
+	if err := a.window.ApplySettings(ctx); err != nil {
+		return err
+	}
 
 	// 启动时自动检查更新（每天一次）
 	if application.System.IsDesktop() {
@@ -443,6 +501,7 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 		})
 	}
 
+	committed = true
 	return nil
 }
 
@@ -454,7 +513,7 @@ func (a *App) getDataDir() string {
 		}
 	}
 	if dir, err := os.UserConfigDir(); err == nil && strings.TrimSpace(dir) != "" {
-		return filepath.Join(dir, "CCZJ Video")
+		return storagepaths.DesktopRoot(dir)
 	}
 	// Keep a deterministic fallback for unusual restricted environments.
 	exe, err := os.Executable()
@@ -562,138 +621,10 @@ func copyFile(src, dst string) error {
 
 // ======================== Video Download ========================
 
-// VideoDownloadReq 前端发起的下载请求
-type VideoDownloadReq struct {
-	TaskId   string `json:"task_id"`
-	Url      string `json:"url"`
-	Filename string `json:"filename"` // 不含目录的文件名（含扩展名）
-	SaveDir  string `json:"save_dir"` // 可选：自定义保存目录
-	Force    bool   `json:"force"`    // 强制覆盖已有任务（用于重复下载确认后）
-}
-
-// VideoDownloadStatus 下载状态（用于 GetDownloadProgress 与事件推送）
-type VideoDownloadStatus struct {
-	TaskId     string          `json:"task_id"`
-	Url        string          `json:"url"`
-	Filename   string          `json:"filename"`
-	SavePath   string          `json:"save_path"`
-	Total      int64           `json:"total"`
-	Downloaded int64           `json:"downloaded"`
-	SpeedBps   float64         `json:"speed_bps"`
-	EtaSec     float64         `json:"eta_sec"`
-	Status     string          `json:"status"` // queued / downloading / done / error / cancelled
-	Error      string          `json:"error,omitempty"`
-	StartTime  int64           `json:"start_time"`
-	EndTime    int64           `json:"end_time,omitempty"`
-	Chunks     []ChunkProgress `json:"chunks,omitempty"` // 多连接并行下载的每个分块进度
-}
-
-// ChunkProgress 单个并发连接的分块进度
-type ChunkProgress struct {
-	ID    int   `json:"id"`
-	Start int64 `json:"start"`
-	End   int64 `json:"end"`
-	Done  int64 `json:"done"` // 本块已下载字节数
-}
-
-// downloadTask 内部状态
-type downloadTask struct {
-	mu                sync.Mutex
-	status            VideoDownloadStatus
-	run               *downloadservice.Run // protected by App.downloadMu
-	cancelRequested   bool
-	persistenceFailed bool
-	transferComplete  bool
-	finalizing        bool
-	finalSize         int64
-	boundarySynced    bool
-	checkpointBytes   int64
-	checkpointIndex   int
-	httpClient        *http.Client
-	paused            bool     // 是否处于暂停状态
-	segIndex          int      // 下一个要下载的分片索引（m3u8 断点恢复用）
-	segments          []string // m3u8 的分片 URL 列表
-	// playlist 是带密钥/初始化段/字节区间的分片列表，落盘顺序。segments 只剩 URL 的
-	// 老任务读不出这些，所以两者并存：有 playlist 用它，否则退回 segments。
-	playlist []downloadservice.Segment
-	isM3u8   bool // 是否 m3u8 任务
-	hasTotal bool // 是否已估算出 total（续传时不再重算）
-}
-
-type persistedTask = downloadservice.Checkpoint
-
-func sanitizeFilename(name string) string {
-	if name == "" {
-		name = "video"
-	}
-	replacer := strings.NewReplacer(
-		"/", "_", "\\", "_", ":", "_", "*", "_", "?", "_",
-		`"`, "_", "<", "_", ">", "_", "|", "_", "\n", "_", "\r", "_", "\t", "_",
-	)
-	out := replacer.Replace(name)
-	// 去除首尾空白与点（Windows 不允许以点结尾的目录）
-	out = strings.TrimSpace(out)
-	out = strings.Trim(out, ".")
-	// Windows rejects paths longer than this in practice, so cap the byte length
-	// while keeping multibyte titles intact.
-	const maxFilenameBytes = 180
-	if len(out) > maxFilenameBytes {
-		ext := filepath.Ext(out)
-		// A name like "a." + 200 chars yields an extension longer than the cap;
-		// keeping it would push the base slice below zero.
-		if len(ext) >= maxFilenameBytes/2 {
-			ext = ""
-		}
-		out = truncateUTF8(strings.TrimSuffix(out, ext), maxFilenameBytes-len(ext)) + ext
-		// Truncation can re-expose a trailing dot or space, both illegal on Windows.
-		out = strings.TrimRight(out, " .")
-	}
-	if out == "" {
-		out = "video"
-	}
-	return out
-}
-
-// truncateUTF8 cuts to maxBytes on a rune boundary so a Chinese title is never
-// left with half a character.
-func truncateUTF8(s string, maxBytes int) string {
-	if maxBytes <= 0 {
-		return ""
-	}
-	if len(s) <= maxBytes {
-		return s
-	}
-	for maxBytes > 0 && !utf8.RuneStart(s[maxBytes]) {
-		maxBytes--
-	}
-	return s[:maxBytes]
-}
-
-// ensureFilenameExt 根据 URL 的扩展名补齐 filename（若 filename 没有扩展名）
-func ensureFilenameExt(filename, urlStr string) string {
-	if strings.Contains(filepath.Base(filename), ".") {
-		// 如果扩展名是 .m3u8，替换为 .ts（分片合并后的容器）
-		if strings.EqualFold(filepath.Ext(filename), ".m3u8") {
-			return strings.TrimSuffix(filename, filepath.Ext(filename)) + ".ts"
-		}
-		return filename
-	}
-	// 去掉 query / fragment
-	u := urlStr
-	if i := strings.IndexAny(u, "?#"); i >= 0 {
-		u = u[:i]
-	}
-	base := filepath.Base(u)
-	ext := filepath.Ext(base)
-	if strings.EqualFold(ext, ".m3u8") {
-		// m3u8 的分片拼接后仍是有效的 MPEG-TS，保存为 .ts 即可
-		ext = ".ts"
-	}
-	if ext == "" || len(ext) > 8 {
-		ext = ".mp4"
-	}
-	return filename + ext
-}
+// VideoDownloadReq preserves the public binding shape while the download
+// engine owns task admission, transfer state and file publication.
+type VideoDownloadReq = downloadengine.Request
+type VideoDownloadStatus = downloadengine.Status
 
 // StartVideoDownload 启动一个下载任务（非阻塞）
 // ======================== Migrate ========================
@@ -711,8 +642,8 @@ func (a *App) CheckUpdate(ctx context.Context) (*updater.UpdateInfo, error) {
 }
 
 // DownloadUpdate 下载更新包，通过事件向前端推送进度
-func (a *App) DownloadUpdate(downloadURL string) (string, error) {
-	return a.update.Download(downloadURL)
+func (a *App) DownloadUpdate(ctx context.Context, downloadURL string) (string, error) {
+	return runHostRequest(a, ctx, "app.DownloadUpdate", func(ctx context.Context) (string, error) { return a.update.DownloadContext(ctx, downloadURL) })
 }
 
 // InstallUpdate 安装更新并退出当前程序
@@ -801,72 +732,35 @@ func (a *App) startupCheckUpdate(ctx context.Context) {
 }
 
 func (a *App) ServiceShutdown() error {
-	if a.mobileMedia != nil {
-		if err := a.mobileMedia.Close(); err != nil {
-			applog.Warn("mobile media shutdown: %v", err)
-		}
+	a.shutdownMu.Lock()
+	defer a.shutdownMu.Unlock()
+	select {
+	case <-a.shutdownDone:
+		return nil
+	default:
 	}
-	// 移除系统托盘图标（如果存在）
 	if systemTray != nil {
 		systemTray.Destroy()
+		systemTray = nil
 	}
-
-	// 记录退出时间（下次启动"补采"可使用）
-	handler.TouchLastExit()
-	// 取消并等待后台任务收尾：采集引擎收到取消后最多还跑完当前页的提交，下载立刻断开。
-	// db.Close 必须排在这个等待之后 —— 否则正在提交的那一批会写到已经关掉的句柄上，
-	// 日志里只是一行 "database is closed"，实际丢掉的是整页采集结果。
-	if group := a.modeWork(); group != nil && group != a.background && !group.Stop(shutdownDrainTimeout) {
-		return apperror.New(apperror.Timeout, "当前模式后台任务尚未停止")
+	if a.databaseOpen {
+		collectionservice.TouchLastExit()
 	}
-	if !a.background.Stop(shutdownDrainTimeout) {
-		return apperror.New(apperror.Timeout, "后台任务尚未停止，数据库保持打开以完成收尾")
+	if err := a.releaseRuntime(); err != nil {
+		applog.Error("应用关闭未完成: %v", err)
+		return err
 	}
-	readCtx, cancelReads := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancelReads()
-	if a.readingImages != nil {
-		if err := a.readingImages.Close(readCtx); err != nil {
-			return err
+	if a.update != nil {
+		if err := a.update.InstallOnShutdown(a.relaunching.Load()); err != nil {
+			applog.Warn("退出时安装未完成: %v", err)
 		}
 	}
-	if a.danmaku != nil {
-		if err := a.danmaku.Close(readCtx); err != nil {
-			return err
-		}
-	}
-	if a.danmakuHTTP != nil {
-		a.danmakuHTTP.CloseIdleConnections()
-	}
-	if a.library != nil {
-		if err := a.library.Close(readCtx); err != nil {
-			return err
-		}
-	}
-	if a.hlsProxy != nil {
-		a.hlsProxy.Close()
-	}
-	if a.requestPolicy != nil {
-		if err := a.requestPolicy.Close(readCtx); err != nil {
-			return err
-		}
-	}
-	if a.stopComments != nil {
-		if err := a.stopComments(readCtx); err != nil {
-			return err
-		}
-	}
-
 	applog.Info("应用正常退出")
-	// 库先关、日志最后关：关库时 WAL 归并可能失败并要报出来，日志要是先关了，
-	// 丢掉的恰好是唯一那条「这次退出没收干净」的记录。
-	db.Close()
-	// 「退出时安装」在这里兑现，排在关库之后：脚本接下来要 move 的正是这个进程占着的
-	// exe，越靠近退出起脚本，它越少烧那 30 次重试。返回值不往上抛——原因已经记进日志，
-	// 而这里唯一要紧的是别拦住用户本来就想要的关闭。
-	_ = a.update.InstallOnShutdown(a.relaunching.Load())
-	applog.Default().Close()
+	if a.logOpen {
+		applog.Default().Close()
+		a.logOpen = false
+	}
 	a.shutdownOnce.Do(func() { close(a.shutdownDone) })
-
 	return nil
 }
 

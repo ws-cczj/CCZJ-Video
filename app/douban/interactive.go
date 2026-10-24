@@ -24,6 +24,9 @@ func fetchInteractiveDoubanContext(ctx context.Context, url, referer, label stri
 	} else if !ok {
 		return "", apperror.New(apperror.Unavailable, "douban 限速中，请稍后重试")
 	}
+	if left := remainingBlock(); left > 0 {
+		return "", apperror.Newf(apperror.Unavailable, "douban 反爬静默中，剩余 %s", left.Round(time.Minute))
+	}
 	doc, challenge, err := fetchDoubanOnceContext(ctx, url, referer)
 	if isSecChallengeURL(challenge) {
 		if solveErr := solveDoubanChallengeContext(ctx, challenge, url); solveErr != nil {

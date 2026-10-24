@@ -84,7 +84,7 @@ func TestAntiCrawlBreakerEscalatesAndClears(t *testing.T) {
 	}
 }
 
-func TestExpiredBlockIsClearedOnRead(t *testing.T) {
+func TestExpiredBlockAllowsProbeButRetainsStrikes(t *testing.T) {
 	resetBlock(t)
 	blockMu.Lock()
 	blockUntil = time.Now().Add(-time.Second)
@@ -97,8 +97,8 @@ func TestExpiredBlockIsClearedOnRead(t *testing.T) {
 	blockMu.Lock()
 	strikes := blockStrikes
 	blockMu.Unlock()
-	if strikes != 0 {
-		t.Fatalf("过期静默期未清零命中数，got %d，期望 0", strikes)
+	if strikes != 2 {
+		t.Fatalf("过期静默期应保留命中数直到正常响应，got %d，期望 2", strikes)
 	}
 }
 

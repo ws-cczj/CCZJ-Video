@@ -3,7 +3,6 @@ package backup
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -13,6 +12,7 @@ import (
 	"cczjVideo/app/apperror"
 	"cczjVideo/app/applog"
 	"cczjVideo/app/db"
+	"cczjVideo/app/files"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -63,11 +63,14 @@ func (s *Service) Archives(dataDir string) ([]ArchiveInfo, error) {
 // only a file name: the path is rebuilt under dataDir/schema-backups, so the
 // frontend cannot ask the backend to open an arbitrary database.
 func (s *Service) RestoreArchive(dataDir, name string) (Result, error) {
+	return s.RestoreArchiveContext(context.Background(), dataDir, name)
+}
+func (s *Service) RestoreArchiveContext(ctx context.Context, dataDir, name string) (Result, error) {
 	path, err := s.archivePath(dataDir, name)
 	if err != nil {
 		return Result{}, err
 	}
-	payload, err := readArchive(path)
+	payload, err := readArchiveContext(ctx, path)
 	if err != nil {
 		return Result{}, err
 	}
@@ -76,7 +79,7 @@ func (s *Service) RestoreArchive(dataDir, name string) (Result, error) {
 		"favorites": len(payload.Favorites),
 		"history":   len(payload.History),
 	})
-	return s.Import(payload, "archive:"+name)
+	return s.ImportContext(ctx, payload, "archive:"+name)
 }
 
 func (s *Service) archivePath(dataDir, name string) (string, error) {
@@ -113,82 +116,53 @@ func withinDir(path, dir string) bool {
 // query_only. Reading the original in place would mean trusting its journal mode
 // (a WAL snapshot cannot be opened read-only without touching its -shm file),
 // and a copy is the only way to be sure the snapshot itself is never written.
-func readArchive(path string) (Payload, error) {
-	database, closeDatabase, err := readOnlyCopy(path)
+func readArchive(path string) (Payload, error) { return readArchiveContext(context.Background(), path) }
+func readArchiveContext(ctx context.Context, path string) (Payload, error) {
+	database, closeDatabase, err := readOnlyCopyContext(ctx, path)
 	if err != nil {
 		return Payload{}, err
 	}
 	defer closeDatabase()
-
-	payload := Payload{Kind: payloadKind, Version: payloadVersion, Exported: time.Now().Format(time.RFC3339)}
-	settings, err := db.ReadAllSettings(database)
+	snapshot, err := db.ReadBackupSnapshot(ctx, database)
 	if err != nil {
-		return Payload{}, apperror.Wrap(apperror.Corrupt, err, "archive has no readable settings table")
+		return Payload{}, apperror.Wrap(apperror.Corrupt, err, "read archive snapshot")
 	}
-	favorites, err := db.ReadFavorites(database)
-	if err != nil {
-		return Payload{}, apperror.Wrap(apperror.Corrupt, err, "archive has no readable favorites")
-	}
-	history, err := db.ReadHistory(database)
-	if err != nil {
-		return Payload{}, apperror.Wrap(apperror.Corrupt, err, "archive has no readable history")
-	}
-	videos, err := db.ReadLinkedVideoMeta(database)
-	if err != nil {
-		return Payload{}, apperror.Wrap(apperror.Corrupt, err, "archive has no readable metadata")
-	}
-	// 归档里的源只有定义没有目录，且合并阶段对本机已有的源不动，
-	// 所以这里读的是归档自己的 sources 表。
-	sources, err := db.ReadSources(database)
-	if err != nil {
-		return Payload{}, apperror.Wrap(apperror.Corrupt, err, "archive has no readable sources")
-	}
-	payload.Settings = settings
-	payload.Favorites = favorites
-	payload.History = history
-	payload.Videos = videos
-	payload.Sources = sources
-	var readingTables int
-	if err := database.Get(&readingTables, `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='reading_state'`); err != nil {
-		return Payload{}, err
-	}
-	if readingTables != 0 {
-		reading, err := db.NewReadingStateStore(database).ReadBackup(context.Background())
-		if err != nil {
-			return Payload{}, apperror.Wrap(apperror.Corrupt, err, "归档中的阅读记录无法读取")
-		}
-		payload.Reading = reading
-	}
-	return payload, nil
+	return Payload{Kind: payloadKind, Version: payloadVersion, Exported: time.Now().Format(time.RFC3339), Settings: snapshot.Settings, Sources: snapshot.Sources, Videos: snapshot.Videos, Favorites: snapshot.Favorites, History: snapshot.History, Reading: snapshot.Reading}, nil
 }
 
 // readOnlyCopy 把源库连同 WAL/SHM 复制成一份临时副本，再以 query_only 打开。
 // 返回的关闭函数负责关掉句柄并删掉副本：副本落在源文件旁边的 .restore-scratch 里，
 // 用完不留下第二份库。
 func readOnlyCopy(path string) (*sqlx.DB, func(), error) {
-	scratchDir := filepath.Join(filepath.Dir(path), ".restore-scratch")
-	if err := os.MkdirAll(scratchDir, 0755); err != nil {
+	return readOnlyCopyContext(context.Background(), path)
+}
+func readOnlyCopyContext(ctx context.Context, path string) (*sqlx.DB, func(), error) {
+	root := filepath.Join(filepath.Dir(path), ".restore-scratch")
+	if err := os.MkdirAll(root, 0700); err != nil {
 		return nil, nil, apperror.Wrap(apperror.Storage, err, "create scratch directory")
 	}
-	scratch := filepath.Join(scratchDir, "read-"+fmt.Sprintf("%d", time.Now().UnixNano())+".db")
+	directory, err := os.MkdirTemp(root, "read-")
+	if err != nil {
+		return nil, nil, err
+	}
+	cleanup := func() { _ = os.RemoveAll(directory); _ = os.Remove(root) }
+	scratch := filepath.Join(directory, "snapshot.db")
 	for _, suffix := range []string{"", "-wal", "-shm"} {
-		if err := copyFile(path+suffix, scratch+suffix); err != nil {
-			_ = os.RemoveAll(scratchDir)
+		if err := copyFileContext(ctx, path+suffix, scratch+suffix); err != nil {
+			cleanup()
 			return nil, nil, err
 		}
 	}
-	database, err := sqlx.Connect("sqlite", scratch+"?_pragma=busy_timeout(3000)&_pragma=query_only(TRUE)")
+	database, err := sqlx.ConnectContext(ctx, "sqlite", scratch+"?_pragma=busy_timeout(3000)&_pragma=query_only(TRUE)")
 	if err != nil {
-		_ = os.RemoveAll(scratchDir)
+		cleanup()
 		return nil, nil, apperror.Wrap(apperror.Corrupt, err, "open copy read-only")
 	}
-	return database, func() {
-		_ = database.Close()
-		_ = os.RemoveAll(scratchDir)
-	}, nil
+	return database, func() { _ = database.Close(); cleanup() }, nil
 }
 
-func copyFile(from, to string) error {
+func copyFile(from, to string) error { return copyFileContext(context.Background(), from, to) }
+func copyFileContext(ctx context.Context, from, to string) error {
 	if from == to {
 		return nil
 	}
@@ -204,7 +178,7 @@ func copyFile(from, to string) error {
 	if err != nil {
 		return apperror.Wrap(apperror.Storage, err, fmt.Sprintf("create %s", to))
 	}
-	if _, err := io.Copy(target, source); err != nil {
+	if _, err := files.CopyContext(ctx, target, source); err != nil {
 		_ = target.Close()
 		return apperror.Wrap(apperror.Storage, err, fmt.Sprintf("copy %s", from))
 	}

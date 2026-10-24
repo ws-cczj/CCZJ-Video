@@ -23,7 +23,8 @@ function bind<A extends unknown[], T>(name: keyof typeof policies, call: (...arg
   }
 }
 
-${names.map(name => `export const ${name} = bind('${name}', bindings.${name})`).join('\n')}
+${names.map(name => name === 'WriteLog' ? `const writeLog = bind('WriteLog', bindings.WriteLog)
+export const WriteLog = (entry: Omit<Parameters<typeof bindings.WriteLog>[0], 'fields'> & { fields?: Record<string, string> }) => writeLog({ ...entry, fields: entry.fields ?? {} })` : `export const ${name} = bind('${name}', bindings.${name})`).join('\n')}
 
 export { normalizeApiError, ApiFailure, toApiFailure } from './errors'
 export type { ApiError, ApiErrorCode } from './errors'

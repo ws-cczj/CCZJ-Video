@@ -53,7 +53,7 @@ var (
 	chartCacheMu   sync.RWMutex
 	chartCacheData []DoubanChartItem
 	chartCacheTime time.Time
-	chartCacheTTL  = 1 * time.Hour
+	chartCacheTTL  = 7 * 24 * time.Hour
 	// Avoid immediately repeating the same blocked request when startup
 	// preload and the Home view ask for the chart close together.
 	chartFailureTime    time.Time
@@ -91,7 +91,8 @@ func fetchChartHTML(urlStr string) (string, error) {
 // chartStaleCeiling 是「一份旧榜单还值得直接摆上首页」的年龄上限。豆瓣限速可能连着几轮都
 // 抢不到槽位，而热榜本身变化很慢——首页宁可显示昨天的榜单，也不要空着等一次网络。超过这个
 // 年龄就当没有，回到「手里没东西、只能等一次实抓」的老路。
-const chartStaleCeiling = 7 * 24 * time.Hour
+// 一周更新一次；更新失败时再保留一周旧榜单供展示，不延长其新鲜时间。
+const chartStaleCeiling = 14 * 24 * time.Hour
 
 // chartFetchMu 只把真正的抓取串起来。它和 chartCacheMu 分开是有意的：以前抓取一路握着缓存
 // 写锁，于是一份过期榜单的读要跟着在限速闸门后面等上半分钟；现在读缓存从不被抓取挡住。

@@ -1,6 +1,8 @@
 package db
 
 import (
+	"cczjVideo/app/apperror"
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -61,14 +63,21 @@ type mergeCandidateRow struct {
 // 排序保证同一组的行相邻：先按归一化标题、再按豆瓣 ID。每组只有两三条，
 // 界面按组渲染，一次合并一组，不做批量勾选。
 func ListIdentityMergeCandidates(limit int) ([]MergeCandidate, error) {
-	if instance == nil {
-		return nil, errors.New("database not initialized")
+	return ListIdentityMergeCandidatesContext(context.Background(), limit)
+}
+func ListIdentityMergeCandidatesContext(ctx context.Context, limit int) ([]MergeCandidate, error) {
+	return NewMediaStore(DB).ListIdentityMergeCandidates(ctx, limit)
+}
+func (s *MediaStore) ListIdentityMergeCandidates(ctx context.Context, limit int) ([]MergeCandidate, error) {
+	database, err := s.open(ctx)
+	if err != nil {
+		return nil, err
 	}
 	if limit <= 0 || limit > 2000 {
 		limit = 600
 	}
 	var rows []mergeCandidateRow
-	err := instance.Select(&rows, `
+	err = database.SelectContext(ctx, &rows, `
 		SELECT g.id AS global_id, COALESCE(g.douban_id,'') AS douban_id, COALESCE(g.name_norm,'') AS name_norm,
 			COALESCE(g.type_id,0) AS type_id, COALESCE(g.vod_name,'') AS vod_name, COALESCE(g.year,'') AS year,
 			COALESCE(gt.type_name,'') AS type_name, COALESCE(g.douban_score,'') AS douban_score, COALESCE(g.pic,'') AS pic,
@@ -140,43 +149,70 @@ func groupMergeCandidates(rows []mergeCandidateRow) []MergeCandidate {
 // 合并会改指目录投影、收藏和观看进度，任何一步失败整体回滚。
 // 只有"确属同一片"的组才允许并：豆瓣 ID 完全一致，或归一化标题完全一致。
 // 这一条是给界面兜底的——传进来的 id 列表来自前端，不能什么组合都接受。
+type IdentityMergeChange struct {
+	KeepID        int64
+	Merged        int
+	CatalogChange CatalogChange
+}
+
 func MergeGlobalVideoIdentities(globalIDs []int64) (int64, int, error) {
-	if instance == nil {
-		return 0, 0, errors.New("database not initialized")
+	change, err := NewMediaStore(DB).MergeIdentities(context.Background(), globalIDs)
+	return change.KeepID, change.Merged, err
+}
+func (s *MediaStore) MergeIdentities(ctx context.Context, globalIDs []int64) (IdentityMergeChange, error) {
+	database, err := s.open(ctx)
+	if err != nil {
+		return IdentityMergeChange{}, err
 	}
+	release, err := ownCatalogIdentityWrite(ctx)
+	if err != nil {
+		return IdentityMergeChange{}, err
+	}
+	defer release()
 	ids, err := normalizeMergeIDs(globalIDs)
 	if err != nil {
-		return 0, 0, err
+		return IdentityMergeChange{}, apperror.Wrap(apperror.Validation, err, "身份列表无效")
 	}
-	tx, err := instance.Beginx()
+	tx, err := database.BeginTxx(ctx, nil)
 	if err != nil {
-		return 0, 0, fmt.Errorf("begin identity merge: %w", err)
+		return IdentityMergeChange{}, fmt.Errorf("begin identity merge: %w", err)
 	}
 	defer tx.Rollback()
 
-	rows, err := loadDupGroupByIDs(tx, ids)
+	rows, err := loadDupGroupByIDsContext(ctx, tx, ids)
 	if err != nil {
-		return 0, 0, err
+		return IdentityMergeChange{}, err
 	}
 	if len(rows) != len(ids) {
-		return 0, 0, fmt.Errorf("有 %d 条身份已经不存在，请刷新后重试", len(ids)-len(rows))
+		return IdentityMergeChange{}, apperror.New(apperror.NotFound, "身份已不存在，请刷新后重试")
 	}
 	if !mergeableGroup(rows) {
-		return 0, 0, errors.New("这几条既不是同一个豆瓣条目，也不是同一个归一化标题，不能合并")
+		return IdentityMergeChange{}, apperror.New(apperror.Validation, "身份的片名、年份或豆瓣信息不足以支持合并")
 	}
-	merged, err := mergeDupGroup(tx, rows)
+	keys := []string{}
+	marks, args := []string{}, []any{}
+	for _, id := range ids {
+		marks = append(marks, "?")
+		args = append(args, id)
+	}
+	if err := tx.SelectContext(ctx, &keys, `SELECT DISTINCT source_key FROM source_videos WHERE global_id IN (`+strings.Join(marks, ",")+`)`, args...); err != nil {
+		return IdentityMergeChange{}, err
+	}
+
+	merged, err := mergeDupGroupContext(ctx, tx, rows)
 	if err != nil {
-		return 0, 0, err
+		return IdentityMergeChange{}, err
 	}
 	keep := rows[pickMergeSurvivor(rows)].id
 	if err := tx.Commit(); err != nil {
-		return 0, 0, fmt.Errorf("commit identity merge: %w", err)
+		return IdentityMergeChange{}, fmt.Errorf("commit identity merge: %w", err)
 	}
-	return keep, merged, nil
+	catalogIdentityRevision.Add(1)
+	return IdentityMergeChange{KeepID: keep, Merged: merged, CatalogChange: CatalogChange{Affected: merged, Sources: keys}}, nil
 }
 
-// IdentitySourceKeys 返回这些身份在目录里用到的源，供缓存失效层决定该清哪些源。
-// 必须在合并之前查：身份一旦被并掉，被并那条用过哪些源就再也查不回来了。
+// IdentitySourceKeys retains a read-only compatibility snapshot. Merge callers
+// publish the source set read within the merge transaction instead.
 func IdentitySourceKeys(globalIDs []int64) ([]string, error) {
 	if instance == nil {
 		return nil, errors.New("database not initialized")
@@ -204,25 +240,37 @@ func IdentitySourceKeys(globalIDs []int64) ([]string, error) {
 // mergeableGroup 判断这组身份是否可比：所有非空豆瓣 ID 必须一致；
 // 一致不了时，归一化标题必须全部相同。
 func mergeableGroup(rows []dupGlobalVideoRow) bool {
-	doubanIdx := mergeColumnIndex("douban_id")
-	norms := make(map[string]bool, len(rows))
-	doubans := make(map[string]bool, len(rows))
-	for i := range rows {
-		norms[normalizeTitle(rows[i].vodName)] = true
+	norms, years, doubans := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	known := 0
+	doubanIdx, yearIdx := mergeColumnIndex("douban_id"), mergeColumnIndex("year")
+	for _, row := range rows {
+		norms[normalizeTitle(row.vodName)] = true
+		if yearIdx >= 0 {
+			if year := strings.TrimSpace(row.Values[yearIdx]); year != "" {
+				years[year] = true
+			}
+		}
 		if doubanIdx >= 0 {
-			if value := strings.TrimSpace(rows[i].Values[doubanIdx]); value != "" {
-				doubans[value] = true
+			if id := strings.TrimSpace(row.Values[doubanIdx]); id != "" {
+				doubans[id] = true
+				known++
 			}
 		}
 	}
-	if len(doubans) == 1 {
+	if len(doubans) > 1 {
+		return false
+	}
+	if known == len(rows) && known > 0 {
 		return true
 	}
-	return len(doubans) == 0 && len(norms) == 1
+	return len(norms) == 1 && !norms[""] && len(years) <= 1
 }
 
 // loadDupGroupByIDs 按显式 id 列表读出一组待合并记录，列顺序与 loadDupGroup 相同。
 func loadDupGroupByIDs(tx *sqlx.Tx, ids []int64) ([]dupGlobalVideoRow, error) {
+	return loadDupGroupByIDsContext(context.Background(), tx, ids)
+}
+func loadDupGroupByIDsContext(ctx context.Context, tx *sqlx.Tx, ids []int64) ([]dupGlobalVideoRow, error) {
 	marks := make([]string, 0, len(ids))
 	args := make([]any, 0, len(ids))
 	for _, id := range ids {

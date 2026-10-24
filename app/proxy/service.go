@@ -3,6 +3,7 @@ package proxy
 
 import (
 	"cczjVideo/app/apperror"
+	"cczjVideo/app/netaddress"
 	"cczjVideo/app/netpolicy"
 	"cczjVideo/app/netstats"
 	"context"
@@ -309,13 +310,5 @@ func targetNotAllowed(u *url.URL) error {
 
 // IsPublicAddr reports whether addr is safe for the UI image proxy.
 func IsPublicAddr(addr netip.Addr) bool {
-	addr = addr.Unmap()
-	if !addr.IsValid() || !addr.IsGlobalUnicast() || addr.IsPrivate() || addr.IsLoopback() || addr.IsLinkLocalUnicast() || addr.IsMulticast() || addr.IsUnspecified() {
-		return false
-	}
-	if addr.Is4() {
-		ip := addr.As4()
-		return !(ip[0] == 100 && ip[1]&0xc0 == 0x40)
-	}
-	return true
+	return netaddress.IsPublic(addr)
 }

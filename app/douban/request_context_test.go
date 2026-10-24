@@ -34,7 +34,7 @@ func TestUserCancellationDoesNotTriggerDoubanAntiCrawlBackoff(t *testing.T) {
 		return nil, request.Context().Err()
 	})}
 	done := make(chan error, 1)
-	go func() { _, err := fetchDoubanContext(ctx, "https://movie.douban.com/subject/123", false); done <- err }()
+	go func() { _, err := fetchDoubanContext(ctx, "https://movie.douban.com/subject/123"); done <- err }()
 	<-started
 	cancel()
 	select {

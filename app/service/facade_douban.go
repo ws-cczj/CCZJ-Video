@@ -69,11 +69,13 @@ type DoubanUpdateVideoReq struct {
 }
 
 // DoubanUpdateVideo 手动为某个视频补全豆瓣信息（搜索+解析详情，存入全局表）
-func (a *App) DoubanUpdateVideo(req DoubanUpdateVideoReq) (*douban.DoubanInfo, error) {
-	if req.Keyword == "" {
-		return nil, apperror.New(apperror.Validation, "关键词不能为空")
-	}
-	return a.schedulers.UpdateDoubanByKeyword(req.Keyword)
+func (a *App) DoubanUpdateVideo(ctx context.Context, req DoubanUpdateVideoReq) (*douban.DoubanInfo, error) {
+	return runRequest(a, ctx, "douban.DoubanUpdateVideo", func(ctx context.Context) (*douban.DoubanInfo, error) {
+		if req.Keyword == "" {
+			return nil, apperror.New(apperror.Validation, "关键词不能为空")
+		}
+		return a.schedulers.UpdateDoubanByKeyword(ctx, req.Keyword)
+	})
 }
 
 // DoubanChart 获取豆瓣热榜视频（立即返回，带匹配状态）
@@ -87,8 +89,10 @@ func (a *App) DoubanChartResolve(subjectID string) (*douban.ChartVideoItem, erro
 }
 
 // DoubanTriggerNow 立即触发一次豆瓣信息补全
-func (a *App) DoubanTriggerNow() (int, error) {
-	return a.schedulers.TriggerDouban()
+func (a *App) DoubanTriggerNow(ctx context.Context) (int, error) {
+	return runRequest(a, ctx, "douban.DoubanTriggerNow", func(ctx context.Context) (int, error) {
+		return a.schedulers.TriggerDouban(ctx)
+	})
 }
 
 // DoubanStatus 返回豆瓣调度器状态

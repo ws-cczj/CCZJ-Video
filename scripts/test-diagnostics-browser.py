@@ -17,6 +17,7 @@ def main():
     parser.add_argument('--url', default='http://127.0.0.1:9248')
     parser.add_argument('--channel', default=None)
     parser.add_argument('--lifecycle-only', action='store_true')
+    parser.add_argument('--proxy-pool-only', action='store_true')
     args = parser.parse_args()
     bindings = (ROOT / 'frontend/bindings/cczjVideo/app/service/app.js').read_text(encoding='utf-8')
     names = re.findall(r'export function (\w+)\(', bindings)
@@ -53,6 +54,10 @@ def main():
       }
     '''
     metrics = {'uptime_seconds': 120, 'goroutines': 20, 'cache': [], 'network': {'categories': []},
+               'outbound_proxy': {'enabled': True, 'ready': True, 'healthy': 8, 'publicAttempts': 123, 'localFallbacks': 2, 'refreshing': False, 'lastError': '', 'sources': [
+                   {'id': 'kuaidaili', 'state': 'ready', 'candidates': 12, 'nextAttempt': 1792764285, 'lastError': ''},
+                   {'id': 'qiyunip', 'state': 'error', 'candidates': 0, 'nextAttempt': 1792764285, 'lastError': 'http_403'},
+                   {'id': 'zdaye', 'state': 'disabled', 'candidates': 0, 'nextAttempt': 0, 'lastError': ''}]},
                'resources': {'sampled_at_ms': 1, 'native_available': True, 'private_bytes': 100*1024**2,
                              'tree_private_bytes': 350*1024**2, 'working_set_bytes': 80*1024**2,
                              'system_total_bytes': 16*1024**3, 'system_available_bytes': 4*1024**3,
@@ -74,6 +79,27 @@ def main():
             page.wait_for_load_state('networkidle')
             expect(page.locator('.diag')).to_be_visible()
             page.wait_for_function('(window.__metricCalls || 0) >= 1')
+            if args.proxy_pool_only:
+                page.locator('.diag-nav [data-section="activity"]').click()
+                expect(page.get_by_role('heading', name='公共代理池', exact=True)).to_be_visible()
+                for width in (1280, 390):
+                    page.set_viewport_size({'width': width, 'height': 900})
+                    pool_heading = page.get_by_role('heading', name='公共代理池', exact=True)
+                    pool_heading.scroll_into_view_if_needed()
+                    expect(page.get_by_text('健康节点', exact=True)).to_be_visible()
+                    expect(page.get_by_text('本机代理回退', exact=True)).to_be_visible()
+                    expect(page.get_by_text('kuaidaili', exact=True)).to_be_visible()
+                    expect(page.get_by_text('更新失败，退避中 · http_403', exact=True)).to_be_visible()
+                    expect(page.get_by_text('已停用', exact=True)).to_be_visible()
+                    assert page.locator('.diag-content').evaluate('(el) => el.scrollWidth <= el.clientWidth + 1'), 'proxy diagnostics overflow horizontally'
+                    page.screenshot(path=str(ROOT / f'dist/audit/outbound-proxy-{width}.png'))
+                    page.get_by_text('qiyunip', exact=True).scroll_into_view_if_needed()
+                    page.screenshot(path=str(ROOT / f'dist/audit/outbound-proxy-sources-{width}.png'))
+                page.evaluate("window.__metrics.outbound_proxy.lastError = 'refresh failed'")
+                expect(page.get_by_text('代理源更新或验证失败，保留尚未过期节点；无可用节点时使用已配置的本机代理。', exact=True)).to_be_visible(timeout=6000)
+                assert not errors, errors
+                print('Proxy pool diagnostics passed: desktop, 390px mobile, populated metrics and refresh failure')
+                return
             page.evaluate('window.diagnosticsTest.state.active = false')
             page.wait_for_timeout(100)
             before = page.evaluate('window.__metricCalls')
@@ -142,11 +168,18 @@ def main():
                 page.goto(args.url + '/tests/browser/diagnostics.html?settings')
                 page.wait_for_load_state('networkidle')
                 expect(page.locator('.settings-page.is-diagnostics .diag')).to_be_visible()
-                assert page.locator('.main-content').evaluate('(el) => el.scrollHeight <= el.clientHeight + 1'), 'Settings diagnostic page exceeded host height'
+                # Embedded diagnostics deliberately shares Settings' scroll
+                # owner; the standalone panel above retains its own scroller.
+                assert page.locator('.diag-content').evaluate('(el) => getComputedStyle(el).overflowY') == 'visible', 'embedded diagnostics restored a nested scroll trap'
                 page.locator('.diag-nav [data-section="collection"]').click()
-                page.locator('.diag-content').evaluate('(el) => el.scrollTop = el.scrollHeight')
+                page.locator('.main-content').evaluate('(el) => el.scrollTop = 0')
+                bounds = page.locator('.diag-content').bounding_box()
+                page.mouse.move(bounds['x'] + min(100, bounds['width']/2), min(700, bounds['y'] + 60))
+                page.mouse.wheel(0, 600)
+                page.wait_for_function("document.querySelector('.main-content').scrollTop > 0")
+                page.get_by_role('button', name='导出诊断报告', exact=True).scroll_into_view_if_needed()
                 expect(page.get_by_role('button', name='导出诊断报告', exact=True)).to_be_in_viewport()
-                assert page.locator('.main-content').evaluate('(el) => el.scrollTop === 0'), 'Settings host scrolled instead of section content'
+                assert page.locator('.diag-content').evaluate('(el) => el.scrollTop === 0'), 'embedded section consumed scrolling independently of Settings'
                 page.locator('.diag-nav [data-section="overview"]').click()
                 page.screenshot(path=str(ROOT / 'dist/audit/diagnostics-settings-preview.png'))
                 # Match the narrower content area beside the application's sidebar.
@@ -155,6 +188,7 @@ def main():
                 page.locator('.main-content').evaluate("el => el.style.width = ''")
                 page.set_viewport_size({'width': 760, 'height': 800})
                 page.locator('.diag-nav [data-section="network"]').click()
+                page.get_by_role('button', name='导出诊断报告', exact=True).scroll_into_view_if_needed()
                 expect(page.get_by_role('button', name='导出诊断报告', exact=True)).to_be_in_viewport()
                 assert page.locator('.main-content').evaluate('(el) => el.scrollWidth <= el.clientWidth + 1'), 'narrow page overflows horizontally'
                 page.screenshot(path=str(ROOT / 'dist/audit/diagnostics-narrow-preview.png'))

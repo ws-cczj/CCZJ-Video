@@ -1,5 +1,7 @@
-"""Live source selection and reading UI against production Go services in a
-temporary SQLite database. Wails transport is replaced; native UI is not tested.
+"""Compatibility source import and live reading against production Go services
+in temporary SQLite. The old import panel is mounted explicitly by the harness;
+current builtin directory routes are covered by test-reading-routing.py.
+Wails transport is replaced; native UI is not tested.
 """
 import argparse
 import json
@@ -64,12 +66,15 @@ fetch('/__live_reading',{method:'POST',body:JSON.stringify({method,args}),signal
                         route.fulfill(status=error.code,body=body,content_type='application/json')
                 page.route('**/__live_reading',bridge)
                 def visit(path):
-                    page.goto('http://127.0.0.1:9297/tests/browser/reading.html#'+path)
+                    page.goto('http://127.0.0.1:9297/tests/browser/reading.html?legacy-source-import#'+path)
                     page.wait_for_load_state('networkidle')
                     expect(page.locator('.cczj-mobile-route-scene[data-route-active=true]').last).to_have_attribute('data-path',path.split('?')[0],timeout=10000)
                 visit('/novel/sources')
                 page.locator('.library-sources-tabs').get_by_role('button',name='添加源',exact=True).click()
-                expect(page.locator('.source-candidate')).to_have_count(4)
+                expected_novel={row['id'] for row in rpc('LibraryPreviewSources',['novel','',''])['candidates'] if row['compatible']}
+                novel_count=len(expected_novel)
+                expect(page.locator('.source-candidate')).to_have_count(novel_count)
+                assert set(page.locator('.source-candidate').evaluate_all('(rows)=>rows.map(row=>row.dataset.sourceId)'))==expected_novel, 'visible import candidates differ from the compatible backend catalog'
                 # Shipped observations expire after 24 hours; browsing them is not a fresh live test.
                 shipped=next(row for row in json.loads((ROOT/'app/library/source_catalog.json').read_text(encoding='utf-8')) if row['name']=='酷我小说')
                 quality=shipped['quality']
@@ -80,12 +85,13 @@ fetch('/__live_reading',{method:'POST',body:JSON.stringify({method,args}),signal
                 fq.get_by_role('button',name='检测详情',exact=True).click()
                 expect(fq).to_contain_text('内置适配')
                 page.get_by_role('button',name='更多小说源',exact=True).click()
-                expect(page.locator('.source-catalog-selection')).to_contain_text('2801',timeout=15000)
+                community_count=len(rpc('LibraryPreviewSources',['novel','community',''])['candidates'])
+                expect(page.locator('.source-catalog-selection')).to_contain_text(re.compile(r'\b'+str(community_count)+r'\b'),timeout=15000)
                 page.locator('.source-catalog-search input').fill('69书吧')
                 blocked=page.locator('.source-candidate').filter(has_text='69书吧')
                 expect(blocked.first.locator('input[type=checkbox]')).to_be_disabled()
                 page.get_by_role('button',name='已适配源',exact=True).click()
-                expect(page.locator('.source-candidate')).to_have_count(4)
+                expect(page.locator('.source-candidate')).to_have_count(novel_count)
                 kuwo=page.locator('.source-candidate').filter(has_text='酷我小说')
                 kuwo.locator('input[type=checkbox]').check()
                 page.get_by_role('button',name='导入所选 (1)',exact=True).click()

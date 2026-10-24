@@ -65,7 +65,7 @@ def main():
             def navigate(path):
                 page.evaluate('(path)=>location.hash=path',path)
                 expect(page.locator('.cczj-mobile-route-scene[data-route-active=true]').last).to_have_attribute('data-path',path)
-            page.goto('http://127.0.0.1:9303/tests/browser/reading.html#/novel/shelf');page.wait_for_load_state('networkidle')
+            page.goto('http://127.0.0.1:9303/tests/browser/reading.html?legacy-source-import#/novel/shelf');page.wait_for_load_state('networkidle')
             def check(name,work):
                 try:work();results.append(dict(name=name,passed=True));print('PASS',name,flush=True)
                 except Exception as e:results.append(dict(name=name,passed=False,error=str(e)));page.screenshot(path=str(output/(name+'.png')));print('FAIL',name,str(e)[:300],flush=True)

@@ -35,6 +35,9 @@ const maxExportBytes = 256 << 20
 // maxExportRecords 限制单次导出的记录条数，超过则要求用户缩小筛选范围。
 const maxExportRecords = 200000
 
+// Bound decoded records as well as output; retained files may span many days.
+const maxCollectedLogBytes = 64 << 20
+
 // LogPageReq 描述一次历史文件分页 / 检索。
 type LogPageReq struct {
 	Filename string   `json:"filename"`
@@ -67,6 +70,7 @@ type LogFileInfo struct {
 
 // LogStats 是日志面板概览卡的数据源。
 type LogStats struct {
+	applog.Health
 	Dir      string `json:"dir"`
 	Level    string `json:"level"`
 	Debug    bool   `json:"debug"`
@@ -81,7 +85,7 @@ type LogStats struct {
 	Goos     string `json:"goos"`
 }
 
-// ExportLogsReq 描述一次导出。Paths 为空时导出内存缓冲。
+// ExportLogsReq exports retained history plus memory-only records by default.
 type ExportLogsReq struct {
 	Path     string   `json:"path"`
 	Filename string   `json:"filename"` // 非空则导出该文件（配合筛选）
@@ -134,14 +138,16 @@ func (a *App) GetLogLevel() string {
 
 // SetLogLevel 运行时切换日志级别并持久化，立即生效、无需重启。
 func (a *App) SetLogLevel(level string) (string, error) {
+	a.settingsWriteMu.Lock()
+	defer a.settingsWriteMu.Unlock()
 	parsed, err := parseLogLevel(level)
 	if err != nil {
 		return applog.LevelName(), err
 	}
-	applog.SetMinLevel(parsed)
 	if err := db.SetSetting("log_level", parsed.String()); err != nil {
-		applog.Warn("applog: 保存 log_level 设置失败: %v", err)
+		return applog.LevelName(), apperror.Wrap(apperror.Storage, err, "日志级别保存失败")
 	}
+	applog.SetMinLevel(parsed)
 	applog.Info("日志级别已切换为 %s", parsed.String())
 	return parsed.String(), nil
 }
@@ -170,6 +176,7 @@ func (a *App) GetLogRecords(sinceSeq uint64, limit int) []applog.Record {
 func (a *App) GetLogStats() (LogStats, error) {
 	logger := applog.Default()
 	stats := LogStats{
+		Health:   logger.Health(),
 		Dir:      logger.Dir(),
 		Level:    applog.LevelName(),
 		Debug:    applog.IsDebug(),
@@ -237,7 +244,11 @@ func (a *App) ReadLogPage(req LogPageReq) (*LogPageResp, error) {
 	defer file.Close()
 
 	resp := &LogPageResp{Filename: filepath.Base(name), FirstRow: -1, LastRow: -1}
+	if stat, err := file.Stat(); err == nil {
+		resp.SizeBytes = stat.Size()
+	}
 	window := make([]applog.Record, 0, limit)
+	eligible := 0
 	rows := make([]int, 0, limit)
 	_, stopped, err := scanLogLines(file, func(rec applog.Record, row int) bool {
 		resp.TotalRows = row + 1
@@ -248,6 +259,7 @@ func (a *App) ReadLogPage(req LogPageReq) (*LogPageResp, error) {
 		if req.StartRow >= 0 && row >= req.StartRow {
 			return true
 		}
+		eligible++
 		window = append(window, rec)
 		rows = append(rows, row)
 		if len(window) > limit {
@@ -263,7 +275,7 @@ func (a *App) ReadLogPage(req LogPageReq) (*LogPageResp, error) {
 	if len(window) > 0 {
 		resp.FirstRow = rows[0]
 		resp.LastRow = rows[len(rows)-1]
-		resp.HasEarlier = rows[0] > 0
+		resp.HasEarlier = eligible > len(window)
 	}
 	resp.Records = window
 	return resp, nil
@@ -303,7 +315,7 @@ func scanLogLines(r io.Reader, onRecord func(applog.Record, int) bool) (lines in
 
 // collectFileRecords 流式收集一个日志文件中匹配筛选条件的记录（旧→新）。
 // 返回的 truncated 为 true 表示命中数或读取量达到上限，结果不完整。
-func (a *App) collectFileRecords(name string, levels map[string]bool, query string, maxRecords int) ([]applog.Record, bool, error) {
+func (a *App) collectFileRecords(name string, levels map[string]bool, query string, maxRecords, maxBytes int) ([]applog.Record, bool, error) {
 	path := filepath.Join(applog.Default().Dir(), filepath.Base(name))
 	file, err := os.Open(path)
 	if err != nil {
@@ -312,11 +324,13 @@ func (a *App) collectFileRecords(name string, levels map[string]bool, query stri
 	defer file.Close()
 	out := make([]applog.Record, 0, 256)
 	truncated := false
+	collectedBytes := 0
 	_, stopped, err := scanLogLines(file, func(rec applog.Record, _ int) bool {
 		if !recordMatches(rec, levels, query) {
 			return true
 		}
-		if maxRecords > 0 && len(out) >= maxRecords {
+		collectedBytes += logRecordBytes(rec)
+		if (maxRecords > 0 && len(out) >= maxRecords) || collectedBytes > maxBytes {
 			truncated = true
 			return false
 		}
@@ -346,7 +360,7 @@ func (a *App) ExportLogs(req ExportLogsReq) (*ExportLogsResult, error) {
 	}
 	target := strings.TrimSpace(req.Path)
 	if target == "" {
-		target = filepath.Join(a.getDataDir(), "exports", "logs", time.Now().Format("cczj-logs-20060102-150405")+ext)
+		target = filepath.Join(a.getDataDir(), "exports", "logs", time.Now().Format("cczj-logs-20060102-150405.000000000")+ext)
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return nil, apperror.Wrap(apperror.Storage, err, "创建导出目录失败")
 		}
@@ -357,19 +371,47 @@ func (a *App) ExportLogs(req ExportLogsReq) (*ExportLogsResult, error) {
 	levels := normalizeLevelNames(req.Levels)
 
 	var records []applog.Record
+	collectedBytes := 0
 	if strings.TrimSpace(req.Filename) == "" {
+		// The live ring is bounded; exporting only it silently discards the earlier
+		// steps needed to investigate a report made after a busy collection run.
+		seen := make(map[string]bool)
+		if req.SinceSeq == 0 {
+			names := applog.Default().ListFiles()
+			sort.Strings(names)
+			for _, name := range names {
+				rows, truncated, err := a.collectFileRecords(name, levels, req.Query, maxExportRecords+1-len(records), maxCollectedLogBytes-collectedBytes)
+				if err != nil {
+					return nil, err
+				}
+				if truncated || len(records)+len(rows) > maxExportRecords {
+					return nil, apperror.New(apperror.Validation, "保留日志超过导出上限，请选择历史文件并缩小筛选范围")
+				}
+				for _, rec := range rows {
+					collectedBytes += logRecordBytes(rec)
+					if rec.SessionID != "" {
+						seen[fmt.Sprintf("%s:%d", rec.SessionID, rec.Seq)] = true
+					}
+				}
+				records = append(records, rows...)
+			}
+		}
 		snapshot := applog.Default().Snapshot()
-		records = make([]applog.Record, 0, len(snapshot))
 		for _, rec := range snapshot {
 			if rec.Seq <= req.SinceSeq {
 				continue
 			}
-			if recordMatches(rec, levels, req.Query) {
+			if !seen[fmt.Sprintf("%s:%d", rec.SessionID, rec.Seq)] && recordMatches(rec, levels, req.Query) {
+				collectedBytes += logRecordBytes(rec)
+				if collectedBytes > maxCollectedLogBytes {
+					return nil, apperror.New(apperror.Validation, "导出内容过大，请选择历史文件并缩小筛选范围")
+				}
 				records = append(records, rec)
 			}
 		}
+		sort.SliceStable(records, func(i, j int) bool { return records[i].TS < records[j].TS })
 	} else {
-		fileRecords, truncated, err := a.collectFileRecords(req.Filename, levels, req.Query, maxExportRecords)
+		fileRecords, truncated, err := a.collectFileRecords(req.Filename, levels, req.Query, maxExportRecords, maxCollectedLogBytes)
 		if err != nil {
 			return nil, err
 		}
@@ -379,56 +421,110 @@ func (a *App) ExportLogs(req ExportLogsReq) (*ExportLogsResult, error) {
 		records = fileRecords
 	}
 
-	out, err := os.Create(target)
+	if len(records) > maxExportRecords {
+		return nil, apperror.New(apperror.Validation, "日志记录超过导出上限，请缩小筛选范围")
+	}
+	out, err := os.CreateTemp(filepath.Dir(target), ".logs-export-*")
 	if err != nil {
 		return nil, apperror.Wrap(apperror.Storage, err, "创建导出文件失败")
 	}
-	defer out.Close()
-
-	buf := &strings.Builder{}
+	defer func() { _ = out.Close(); _ = os.Remove(out.Name()) }()
+	buffer := bufio.NewWriterSize(out, 64<<10)
+	writer := &logExportWriter{target: buffer}
+	var writeErr error
+	emit := func(value string) {
+		if writeErr == nil {
+			_, writeErr = io.WriteString(writer, value)
+		}
+	}
 	switch format {
 	case "json":
-		encoded, jsonErr := json.MarshalIndent(records, "", "  ")
-		if jsonErr != nil {
-			return nil, jsonErr
+		emit("[\n")
+		encoder := json.NewEncoder(writer)
+		for i, rec := range records {
+			if i > 0 {
+				emit(",\n")
+			}
+			if writeErr != nil {
+				break
+			}
+			writeErr = encoder.Encode(rec)
 		}
-		buf.Write(encoded)
-		buf.WriteString("\n")
+		emit("]\n")
 	case "csv":
-		writer := csv.NewWriter(buf)
-		_ = writer.Write([]string{"seq", "time", "level", "caller", "message"})
+		csvWriter := csv.NewWriter(writer)
+		_ = csvWriter.Write([]string{"seq", "time", "level", "caller", "message", "session_id", "persisted"})
 		for _, rec := range records {
-			_ = writer.Write([]string{
+			if writeErr != nil {
+				break
+			}
+			writeErr = csvWriter.Write([]string{
 				fmt.Sprint(rec.Seq),
 				time.UnixMilli(rec.TS).Format("2006-01-02 15:04:05.000"),
 				rec.Level,
 				rec.Caller,
 				rec.Message,
+				rec.SessionID,
+				fmt.Sprint(rec.Persisted),
 			})
 		}
-		writer.Flush()
-		if err := writer.Error(); err != nil {
-			return nil, err
+		csvWriter.Flush()
+		if writeErr == nil {
+			writeErr = csvWriter.Error()
 		}
 	default:
 		for _, rec := range records {
-			buf.WriteString(formatExportLine(rec))
-			buf.WriteString("\n")
+			emit(formatExportLine(rec) + "\n")
+			if writeErr != nil {
+				break
+			}
 		}
 	}
-	data := []byte(buf.String())
-	if int64(len(data)) > maxExportBytes {
-		return nil, apperror.Newf(apperror.Validation, "导出内容过大（%d MB），请缩小筛选范围", len(data)>>20)
+	if writeErr != nil {
+		return nil, writeErr
 	}
-	if _, err := out.Write(data); err != nil {
+	if err := buffer.Flush(); err != nil {
 		return nil, err
 	}
-	applog.Info("日志已导出：%s（%d 条）", target, len(records))
-	return &ExportLogsResult{Path: target, Lines: len(records), Bytes: int64(len(data))}, nil
+	if err := out.Sync(); err != nil {
+		return nil, err
+	}
+	if err := out.Close(); err != nil {
+		return nil, err
+	}
+	if err := os.Rename(out.Name(), target); err != nil {
+		return nil, apperror.Wrap(apperror.Storage, err, "保存导出文件失败")
+	}
+	applog.InfoFields("logs exported", applog.Fields{"records": len(records), "bytes": writer.bytes, "format": format})
+	return &ExportLogsResult{Path: target, Lines: len(records), Bytes: writer.bytes}, nil
+}
+
+func logRecordBytes(rec applog.Record) int {
+	return len(rec.Message) + len(rec.Caller) + len(rec.SessionID) + 128
+}
+
+type logExportWriter struct {
+	target io.Writer
+	bytes  int64
+}
+
+func (w *logExportWriter) Write(data []byte) (int, error) {
+	if w.bytes+int64(len(data)) > maxExportBytes {
+		return 0, apperror.New(apperror.Validation, "导出内容过大，请缩小筛选范围")
+	}
+	n, err := w.target.Write(data)
+	w.bytes += int64(n)
+	if err == nil && n != len(data) {
+		err = io.ErrShortWrite
+	}
+	return n, err
 }
 
 func formatExportLine(rec applog.Record) string {
 	ts := time.UnixMilli(rec.TS).Format("2006-01-02 15:04:05.000")
+	if rec.SessionID != "" {
+		rec.Message = fmt.Sprintf("[session=%s seq=%d persisted=%t] %s", rec.SessionID, rec.Seq, rec.Persisted, rec.Message)
+	}
 	if rec.Caller == "" {
 		return fmt.Sprintf("[%s] [%s] %s", ts, rec.Level, rec.Message)
 	}
@@ -452,26 +548,36 @@ func (a *App) StartLogStream() (bool, error) {
 		return true, nil
 	}
 	records, cancel := applog.Default().Subscribe()
-	ctx, stop := context.WithCancel(context.Background())
+	ctx, stop := context.WithCancel(a.background.Context())
 	logStream.cancel = stop
 	app := application.Get()
 	if app == nil {
+		stop()
 		cancel()
 		logStream.count--
 		logStream.cancel = nil
 		return false, apperror.New(apperror.Unavailable, "应用尚未就绪")
 	}
-	go func() {
+	if !a.background.Go("logStream", func(context.Context) {
 		defer cancel()
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case rec := <-records:
+			case rec, ok := <-records:
+				if !ok {
+					return
+				}
 				app.Event.Emit("app:log", rec)
 			}
 		}
-	}()
+	}) {
+		cancel()
+		stop()
+		logStream.cancel = nil
+		logStream.count = 0
+		return false, apperror.New(apperror.Cancelled, "应用正在退出")
+	}
 	return true, nil
 }
 

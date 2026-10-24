@@ -326,6 +326,10 @@ onBeforeUnmount(()=>window.removeEventListener('cczj:android-overlay-back',onOve
 <template>
   <div class="log-panel cczj-flex cczj-flex-col cczj-gap-2">
     <p v-if="logs.connectionError" class="log-hint" role="status">{{t('logs.connectionRetry')}}</p>
+    <p v-if="logs.stats?.last_write_error || logs.stats?.unpersisted" class="log-hint" role="alert">{{ t('logs.diskFailure', { count: logs.stats?.unpersisted || 0 }) }} {{ logs.stats?.last_write_error || t('logs.writerRecovered') }}</p>
+    <p v-if="logs.missingRecords" class="log-hint" role="status">{{ t('logs.missingRecords', { count: logs.missingRecords }) }}</p>
+    <p v-if="logs.stats?.level === 'WARN' || logs.stats?.level === 'ERROR'" class="log-hint" role="status">{{ t('logs.detailSuppressed') }}</p>
+    <p class="log-hint">{{ t('logs.exportScope') }}</p>
     <!-- 概览卡 -->
     <section class="block">
       <div class="block-hd cczj-flex cczj-items-center cczj-justify-between">
@@ -481,6 +485,7 @@ onBeforeUnmount(()=>window.removeEventListener('cczj:android-overlay-back',onOve
           <span v-if="logs.fileInfo" class="log-hint">
             {{ t('logs.fileRows', { shown: logs.fileRecords.length, total: logs.fileInfo.total_rows, matched: logs.fileInfo.match_rows }) }}
           </span>
+          <span v-if="logs.fileInfo?.truncated" class="log-hint" role="status">{{ t('logs.historyTruncated') }}</span>
         </div>
       </div>
 
@@ -563,12 +568,14 @@ onBeforeUnmount(()=>window.removeEventListener('cczj:android-overlay-back',onOve
             <span v-if="selected.sourceKey">source: {{ selected.sourceKey }}</span>
             <span v-if="selected.caller">{{ selected.caller }}</span>
             <span v-if="selected.seq">#{{ selected.seq }}</span>
+            <span v-if="selected.sessionId">{{ selected.sessionId }}</span>
+            <span v-if="selected.persisted === false">{{ t('logs.memoryOnly') }}</span>
           </div>
           <div class="log-detail-msg">{{ selected.message }}</div>
         </div>
         <div class="cczj-flex cczj-gap-3">
           <Button variant="secondary" size="sm" @click="copyRecord(selected)"><Icon name="copy" :size="12" /> {{ t('logs.copyLine') }}</Button>
-          <Button variant="ghost" size="sm" @click="selected = null"><Icon name="close" :size="12" /></Button>
+          <Button variant="ghost" size="sm" :aria-label="t('common.close')" @click="selected = null"><Icon name="close" :size="12" /></Button>
         </div>
       </div>
     </section>

@@ -1,195 +1,35 @@
 <script setup lang="ts">
-defineOptions({ name: 'PlayLinePicker' })
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import * as AppMod from '../api/app'
-import { useErrorStore } from '../stores/error'
+import { ProbePlayLines, type PlayLineQuality } from '../api/playback'
+import { createRequestScope } from '../api/requestScope'
 import { useGeneration } from '../composables/useGeneration'
-import Icon from './Icon.vue'
-import { humanizeBytes } from '../utils'
-import { playLineLabel } from '../utils/playLines'
-import type { PlayLine, PlayLineSpeedItem, PlayLineSpeedResponse } from '../types'
+import { useSourceStore } from '../stores/source'
+import { Button } from './ui'
+import PlaybackRouteList from '../player/views/PlaybackRouteList.vue'
+import type { PlayLine } from '../types'
+import type { SourceOption } from '../player/page/useSourceCatalog'
 
-const props = defineProps<{
-  lines: PlayLine[]
-  modelValue: number
-  sourceKey: string
-  vodId: string
-  globalId?: number
-  epNum?: number
-}>()
-
-const emit = defineEmits<{ 'update:modelValue': [index: number] }>()
-
-const { t } = useI18n()
-const errorStore = useErrorStore()
-const speedGen = useGeneration()
-
-const results = ref<Record<number, PlayLineSpeedItem>>({})
-const bestIndex = ref(-2)
-const testing = ref(false)
-
-// 换影片后线路下标指向的是另一批地址，旧的测速结果挂在新芯片上会是假数据。
-watch(() => props.lines, () => {
-  speedGen.invalidate()
-  testing.value = false
-  results.value = {}
-  bestIndex.value = -2
-})
-
-const showPicker = computed(() => props.lines.length > 1)
-
-function itemFor(line: PlayLine): PlayLineSpeedItem | undefined {
-  return results.value[line.index]
+const props=defineProps<{lines:PlayLine[];modelValue:number;sourceKey:string;vodId:string;globalId?:number;epNum?:number}>()
+const emit=defineEmits<{'update:modelValue':[index:number]}>()
+const {t}=useI18n(),sources=useSourceStore(),scope=createRequestScope(),generation=useGeneration()
+const results=ref<PlayLineQuality[]>([]),state=ref<'pending'|'ready'|'failed'>('pending')
+const options=computed<SourceOption[]>(()=>[{source_key:props.sourceKey,name:sources.sources.find(s=>s.source_key===props.sourceKey)?.name||t('playLine.title'),probe:'local',vod_id:props.vodId,lines:results.value,qualityState:state.value}])
+async function probe():Promise<void>{
+  scope.cancel();const seq=generation.begin();results.value=[];state.value='pending'
+  if(!props.sourceKey||!props.vodId||!props.lines.length)return
+  try{
+    const value=await scope.run(()=>ProbePlayLines({source_key:props.sourceKey,vod_id:props.vodId,global_id:props.globalId||0,ep_num:props.epNum||0}))
+    if(generation.isCurrent(seq)){results.value=value;state.value='ready'}
+  }catch{if(generation.isCurrent(seq))state.value='failed'}
 }
-
-function chipName(line: PlayLine, i: number): string {
-  return playLineLabel(line, t('playLine.ordinal', { n: i + 1 }))
-}
-
-function speedText(line: PlayLine): string {
-  const item = itemFor(line)
-  if (!item) return ''
-  if (!item.ok) return t('playLine.unavailable')
-  if (item.bytes_per_sec > 0) return `${humanizeBytes(item.bytes_per_sec)}/s`
-  // bytes_per_sec 为 0 表示这次下载快过本机时钟精度、量不出吞吐，不是慢线路。
-  return item.latency_ms > 0 ? `${item.latency_ms} ms` : t('playLine.available')
-}
-
-function isDead(line: PlayLine): boolean {
-  const item = itemFor(line)
-  return !!item && !item.ok
-}
-
-function choose(i: number): void {
-  if (i !== props.modelValue) emit('update:modelValue', i)
-}
-
-async function runSpeedTest(): Promise<void> {
-  if (testing.value || !props.sourceKey) return
-  const my = speedGen.begin()
-  testing.value = true
-  try {
-    const resp = (await (AppMod as any).SpeedTestPlayLines({
-      source_key: props.sourceKey,
-      vod_id: props.vodId,
-      global_id: props.globalId ?? 0,
-      ep_num: props.epNum ?? 0,
-    })) as PlayLineSpeedResponse | null
-    if (!speedGen.isCurrent(my)) return
-    const items: Record<number, PlayLineSpeedItem> = {}
-    for (const item of resp?.items || []) items[Number(item.index)] = item
-    results.value = items
-    bestIndex.value = Number(resp?.best_index ?? -1)
-    if (bestIndex.value < 0) errorStore.warn(t('playLine.allFailed'))
-  } catch (err) {
-    if (!speedGen.isCurrent(my)) return
-    errorStore.fromError(t('playLine.testFailed'), err, 'PlayLinePicker')
-  } finally {
-    if (speedGen.isCurrent(my)) testing.value = false
-  }
-}
+watch(()=>[props.sourceKey,props.vodId,props.globalId,props.epNum,props.lines],()=>{void probe()},{immediate:true})
+onBeforeUnmount(()=>{generation.invalidate();scope.cancel()})
+function choose(_source:string,line?:number):void{const index=props.lines.findIndex(item=>item.index===line);if(index>=0&&index!==props.modelValue)emit('update:modelValue',index)}
 </script>
-
 <template>
-  <div v-if="showPicker" class="line-picker cczj-flex cczj-flex-wrap cczj-items-center cczj-gap-2">
-    <span class="line-picker-title cczj-text-sm cczj-font-medium cczj-text-muted">{{ t('playLine.title') }}</span>
-    <div class="line-chips cczj-flex cczj-flex-wrap cczj-items-center cczj-gap-2 cczj-flex-1">
-      <button v-for="(line, i) in lines" :key="`line-${line.index}`" type="button" class="line-chip"
-        :class="{ active: i === modelValue, dead: isDead(line) }" :disabled="testing" @click="choose(i)"
-        :title="chipName(line, i) + (speedText(line) ? ` · ${speedText(line)}` : '')">
-        <span class="line-chip-name cczj-truncate">{{ chipName(line, i) }}</span>
-        <span v-if="speedText(line)" class="line-chip-speed">{{ speedText(line) }}</span>
-        <span v-if="line.index === bestIndex" class="line-chip-best">
-          <Icon name="check" :size="10" />
-          <span>{{ t('playLine.fastest') }}</span>
-        </span>
-      </button>
-    </div>
-    <button type="button" class="line-test-btn" :disabled="testing || !sourceKey" @click="runSpeedTest"
-      :title="t('playLine.speedTestTip')">
-      <Icon name="refresh" :size="12" :class="{ 'line-test-spin': testing }" />
-      <span>{{ testing ? t('playLine.testing') : t('playLine.speedTest') }}</span>
-    </button>
+  <div v-if="lines.length" class="line-picker cczj-flex cczj-flex-col cczj-gap-4">
+    <PlaybackRouteList :sources="options" :active-key="sourceKey" :active-line="lines[modelValue]?.index??-1" :lines="lines" :selectable="()=>false" @choose="choose" />
+    <Button v-if="state==='failed'" size="sm" variant="text" @click="probe">{{t('playLine.retryQuality')}}</Button>
   </div>
 </template>
-
-<style scoped>
-.line-picker {
-  @apply cczj-gap-4;
-}
-
-.line-chips {
-  @apply cczj-gap-4;
-}
-
-.line-chip {
-  @apply cczj-inline-flex cczj-items-center cczj-gap-3;
-  max-width: 220px;
-  padding: 4px 10px;
-  @apply cczj-rounded-md cczj-border;
-  background: var(--bg-secondary);
-  @apply cczj-text-secondary cczj-text-sm;
-  line-height: 1.4;
-  @apply cczj-cursor-pointer;
-  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
-}
-
-.line-chip:hover:not(:disabled) {
-  border-color: var(--border-strong);
-  @apply cczj-text-primary;
-}
-
-.line-chip.active {
-  @apply cczj-border-primary;
-  background: var(--bg-hover);
-  @apply cczj-text-primary;
-}
-
-.line-chip.dead {
-  @apply cczj-opacity-60;
-}
-
-.line-chip.dead .line-chip-speed {
-  @apply cczj-text-danger;
-}
-
-.line-chip-name {
-  @apply cczj-min-w-0;
-}
-
-.line-chip-speed {
-  @apply cczj-flex-shrink-0 cczj-text-muted cczj-text-11;
-}
-
-.line-chip-best {
-  @apply cczj-inline-flex cczj-items-center cczj-gap-1 cczj-flex-shrink-0 cczj-text-accent cczj-text-11;
-}
-
-.line-test-btn {
-  @apply cczj-inline-flex cczj-items-center cczj-gap-2;
-  padding: 4px 10px;
-  @apply cczj-rounded-md cczj-border;
-  background: transparent;
-  @apply cczj-text-secondary cczj-text-sm cczj-cursor-pointer;
-  transition: border-color 0.15s ease, color 0.15s ease;
-}
-
-.line-test-btn:hover:not(:disabled) {
-  @apply cczj-border-primary cczj-text-accent;
-}
-
-.line-test-btn:disabled {
-  @apply cczj-opacity-60 cczj-cursor-default;
-}
-
-.line-test-spin {
-  animation: line-test-rotate 1s linear infinite;
-}
-
-@keyframes line-test-rotate {
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>

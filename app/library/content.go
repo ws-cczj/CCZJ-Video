@@ -13,6 +13,7 @@ import (
 	"cczjVideo/app/db"
 	"cczjVideo/app/library/matching"
 	"cczjVideo/app/model"
+	"cczjVideo/app/operation"
 	"cczjVideo/app/provider"
 )
 
@@ -29,18 +30,18 @@ import (
 func (s *Service) Detail(ctx context.Context, itemID int, refresh bool) (*ItemDetail, error) {
 	release := s.priority.begin()
 	defer release()
-	row, err := db.GetLibraryItem(itemID)
+	row, err := db.GetLibraryItemContext(ctx, itemID)
 	if err != nil {
 		return nil, apperror.Wrap(apperror.Storage, err, "读取作品失败")
 	}
-	resolved, resolveErr := s.resolve(row.SourceKey, model.SourceKind(row.Kind))
+	resolved, resolveErr := s.resolveContext(ctx, row.SourceKey, model.SourceKind(row.Kind))
 	if resolveErr != nil {
 		// 源被删了或配置坏了，但书还在书架上：仍然返回条目本身，
 		// 让界面能显示成"来源已下架"，而不是整页报错。
 		// 源被删时 DeleteSource 已经把这些行转成 lifecycle_state='deleted'，
 		// 所以 toDTO 自然会把 Available 置成 false，不需要另有一条孤儿分支。
 		detail := &ItemDetail{Item: s.toDTO(model.SourceKind(row.Kind), row, map[string]string{})}
-		chapters, listErr := s.chaptersOf(itemID)
+		chapters, listErr := s.chaptersOf(ctx, itemID)
 		if listErr == nil {
 			detail.Chapters = chapters
 			detail.ChapterCount = len(chapters)
@@ -56,12 +57,12 @@ func (s *Service) Detail(ctx context.Context, itemID int, refresh bool) (*ItemDe
 		// 刷新之后必须重读这一行：refreshDetailAndToc 已经把新标题、新简介、
 		// 新封面写进库了，继续用刷新前那个 row 构造 DTO，界面上看到的就还是旧数据，
 		// 而用户刚刚点的是"刷新"。
-		if refreshed, err := db.GetLibraryItem(itemID); err == nil {
+		if refreshed, err := db.GetLibraryItemContext(ctx, itemID); err == nil {
 			row = refreshed
 		}
 	}
 	detail := &ItemDetail{Item: s.toDTO(model.SourceKind(row.Kind), row, map[string]string{})}
-	chapters, err := s.chaptersOf(itemID)
+	chapters, err := s.chaptersOf(ctx, itemID)
 	if err != nil {
 		return nil, err
 	}
@@ -70,10 +71,10 @@ func (s *Service) Detail(ctx context.Context, itemID int, refresh bool) (*ItemDe
 	return detail, nil
 }
 
-func (s *Service) chaptersOf(itemID int) ([]*Chapter, error) {
+func (s *Service) chaptersOf(ctx context.Context, itemID int) ([]*Chapter, error) {
 	// 连已下架的一起取：阅读进度可能指着其中一章，界面要能显示成
 	// "这一章取不到了"，而不是让进度停在一个看不见的位置上。
-	rows, err := db.ListLibraryChapters(itemID, true)
+	rows, err := db.ListLibraryChaptersContext(ctx, itemID, true)
 	if err != nil {
 		return nil, apperror.Wrap(apperror.Storage, err, "读取目录失败")
 	}
@@ -234,11 +235,11 @@ func splitSchemeHost(raw string) (string, string, error) {
 func (s *Service) RefreshToc(ctx context.Context, itemID int) (*ItemDetail, error) {
 	release := s.priority.begin()
 	defer release()
-	row, err := db.GetLibraryItem(itemID)
+	row, err := db.GetLibraryItemContext(ctx, itemID)
 	if err != nil {
 		return nil, apperror.Wrap(apperror.Storage, err, "读取作品失败")
 	}
-	resolved, err := s.resolve(row.SourceKey, model.SourceKind(row.Kind))
+	resolved, err := s.resolveContext(ctx, row.SourceKey, model.SourceKind(row.Kind))
 	if err != nil {
 		return nil, err
 	}
@@ -262,16 +263,18 @@ func (s *Service) RefreshToc(ctx context.Context, itemID int) (*ItemDetail, erro
 func (s *Service) ChapterText(ctx context.Context, chapterID int) (*ChapterText, error) {
 	release := s.priority.begin()
 	defer release()
-	row, err := s.chapterRow(chapterID)
+	row, err := s.chapterRow(ctx, chapterID)
 	if err != nil {
 		return nil, err
 	}
-	resolved, err := s.resolve(row.sourceKey, model.SourceKind(row.kind))
+	resolved, err := s.resolveContext(ctx, row.sourceKey, model.SourceKind(row.kind))
 	if err != nil {
 		return nil, err
 	}
 	key := s.textCacheKey(resolved, row)
+	request := ctx
 	result, err := s.textReads.Do(ctx, key, func(ctx context.Context) (*ChapterText, error) {
+		ctx, _ = operation.OwnedContext(ctx, request, "reading.chapter_text", applog.Fields{"mode": row.kind, "source_key": row.sourceKey, "item_id": row.itemID, "chapter_id": chapterID})
 		if cached, ok := s.readTextCache(key); ok {
 			return &ChapterText{ChapterID: chapterID, Paragraphs: cached.Paragraphs, FromCache: true, Warnings: contentWarnings(cached)}, nil
 		}
@@ -389,12 +392,12 @@ type chapterRow struct {
 	nextChapterURL string
 }
 
-func (s *Service) chapterRow(chapterID int) (*chapterRow, error) {
-	chapter, err := db.GetLibraryChapter(chapterID)
+func (s *Service) chapterRow(ctx context.Context, chapterID int) (*chapterRow, error) {
+	chapter, err := db.GetLibraryChapterContext(ctx, chapterID)
 	if err != nil {
 		return nil, apperror.Wrap(apperror.Storage, err, "读取章节失败")
 	}
-	item, err := db.GetLibraryItem(chapter.ItemID)
+	item, err := db.GetLibraryItemContext(ctx, chapter.ItemID)
 	if err != nil {
 		return nil, apperror.Wrap(apperror.Storage, err, "读取章节所属作品失败")
 	}
@@ -404,13 +407,13 @@ func (s *Service) chapterRow(chapterID int) (*chapterRow, error) {
 		title: chapter.Title, ord: chapter.Ord, isVolume: chapter.IsVolume,
 		access: string(chapter.Access),
 	}
-	resolved, err := s.resolve(item.SourceKey, model.SourceKind(item.Kind))
+	resolved, err := s.resolveContext(ctx, item.SourceKey, model.SourceKind(item.Kind))
 	if err == nil {
 		row.url = requestURL(resolved, chapter.RemoteURL, chapter.RemoteID)
 		// 下一章的地址：按 ord 找下一行。找不到就算了——它只是一个额外的
 		// 防吞保护，没有它正文提取照样工作，只是"下一页"规则写得太宽时
 		// 可能把下一章的开头带进来。
-		if next, nextErr := db.GetLibraryChapterByOrd(item.Id, chapter.Ord+1); nextErr == nil && next != nil {
+		if next, nextErr := db.GetLibraryChapterByOrdContext(ctx, item.Id, chapter.Ord+1); nextErr == nil && next != nil {
 			row.nextChapterURL = requestURL(resolved, next.RemoteURL, next.RemoteID)
 		}
 	}
@@ -454,11 +457,11 @@ func (s *Service) RefreshChapterPages(ctx context.Context, chapterID int) (*Chap
 func (s *Service) chapterPages(ctx context.Context, chapterID int, refresh bool) (*ChapterPages, error) {
 	release := s.priority.begin()
 	defer release()
-	row, err := s.chapterRow(chapterID)
+	row, err := s.chapterRow(ctx, chapterID)
 	if err != nil {
 		return nil, err
 	}
-	resolved, err := s.resolve(row.sourceKey, model.SourceKind(row.kind))
+	resolved, err := s.resolveContext(ctx, row.sourceKey, model.SourceKind(row.kind))
 	if err != nil {
 		return nil, err
 	}
@@ -470,7 +473,9 @@ func (s *Service) chapterPages(ctx context.Context, chapterID int, refresh bool)
 	epoch := s.pageEpoch
 	s.pageMu.Unlock()
 	flightKey := fmt.Sprintf("%s:%d", key, epoch)
+	request := ctx
 	result, err := s.pageReads.Do(ctx, flightKey, func(ctx context.Context) (*ChapterPages, error) {
+		ctx, _ = operation.OwnedContext(ctx, request, "reading.chapter_pages", applog.Fields{"mode": row.kind, "source_key": row.sourceKey, "item_id": row.itemID, "chapter_id": chapterID})
 		if cached, ok := s.readPagesCache(key); ok && !refresh {
 			return &ChapterPages{ChapterID: chapterID, Pages: s.proxyPages(cached, row, resolved), FromCache: true}, nil
 		}

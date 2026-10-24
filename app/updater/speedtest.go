@@ -1,7 +1,7 @@
 package updater
 
 import (
-	"cczjVideo/app/netpolicy"
+	"cczjVideo/app/parallel"
 	"context"
 	"fmt"
 	"net/http"
@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"cczjVideo/app/applog"
-	"cczjVideo/app/netstats"
 )
 
 // DownloadProgress 下载进度回调
@@ -26,7 +25,7 @@ type speedTestResult struct {
 
 // speedTestSources 并发测试所有下载源的连接延迟（HEAD 请求）
 // 返回按延迟从快到慢排序的候选列表，跳过测试失败的源
-func speedTestSources(originalURL string) []speedTestResult {
+func speedTestSources(ctx context.Context, client *http.Client, originalURL string) []speedTestResult {
 	// 构建所有候选源
 	candidates := []struct{ url, source string }{
 		{originalURL, "直连GitHub"},
@@ -37,61 +36,37 @@ func speedTestSources(originalURL string) []speedTestResult {
 		})
 	}
 
-	type result struct {
-		url, source string
-		latency     time.Duration
-		err         error
-	}
-	resultsCh := make(chan result, len(candidates))
-
-	for _, c := range candidates {
-		go func(url, source string) {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-
-			client := &http.Client{
-				Timeout: 12 * time.Second,
-				Transport: netpolicy.WrapTransport(string(netstats.CategoryUpdate), netstats.WrapTransport(netstats.CategoryUpdate, &http.Transport{
-					TLSHandshakeTimeout:   8 * time.Second,
-					ResponseHeaderTimeout: 10 * time.Second,
-				})),
-			}
-			defer client.CloseIdleConnections()
-
-			start := time.Now()
-			req, err := http.NewRequestWithContext(ctx, "HEAD", url, nil)
-			if err != nil {
-				resultsCh <- result{url, source, 0, err}
-				return
-			}
+	measured := make([]speedTestResult, len(candidates))
+	if err := parallel.Each(ctx, len(candidates), 5, func(ctx context.Context, index int) error {
+		candidate := candidates[index]
+		call, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		start := time.Now()
+		req, err := http.NewRequestWithContext(call, http.MethodHead, candidate.url, nil)
+		if err == nil {
 			req.Header.Set("User-Agent", "CCZJ-Video-Updater/1.0")
-
-			resp, err := client.Do(req)
-			latency := time.Since(start)
-			if err != nil {
-				resultsCh <- result{url, source, latency, err}
-				return
+			var response *http.Response
+			response, err = client.Do(req)
+			if err == nil {
+				response.Body.Close()
+				if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusPartialContent {
+					err = fmt.Errorf("HTTP %d", response.StatusCode)
+				}
 			}
-			resp.Body.Close()
-
-			if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
-				resultsCh <- result{url, source, latency, fmt.Errorf("HTTP %d", resp.StatusCode)}
-				return
-			}
-			resultsCh <- result{url, source, latency, nil}
-		}(c.url, c.source)
+		}
+		measured[index] = speedTestResult{candidate.url, candidate.source, time.Since(start), err}
+		return ctx.Err()
+	}); err != nil {
+		return nil
 	}
-
-	// 收集所有结果
-	var results []speedTestResult
-	for i := 0; i < len(candidates); i++ {
-		r := <-resultsCh
-		if r.err != nil {
-			applog.Info("[Updater] 测速 %s 失败: %v", r.source, r.err)
+	results := make([]speedTestResult, 0, len(measured))
+	for _, result := range measured {
+		if result.err != nil {
+			applog.Info("[Updater] 测速 %s 失败: %v", result.source, result.err)
 			continue
 		}
-		applog.Info("[Updater] 测速 %s: %dms", r.source, r.latency.Milliseconds())
-		results = append(results, speedTestResult{r.url, r.source, r.latency, nil})
+		applog.Info("[Updater] 测速 %s: %dms", result.source, result.latency.Milliseconds())
+		results = append(results, result)
 	}
 
 	// 按延迟从快到慢排序
@@ -103,22 +78,11 @@ func speedTestSources(originalURL string) []speedTestResult {
 
 // downloadSpeedTest 通过 Range 下载一小段数据来测量实际吞吐量
 // 返回测量的字节/秒速度，失败返回 0
-func downloadSpeedTest(url string) float64 {
+func downloadSpeedTest(request context.Context, client *http.Client, url string) float64 {
 	const testSize = 512 * 1024 // 512KB
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(request, 15*time.Second)
 	defer cancel()
-
-	client := &http.Client{
-		Timeout: 18 * time.Second,
-		// 512KB 的 Range 取样是本项目里最接近「带宽实测」的一次请求，
-		// 它的字节数与耗时进诊断页的吞吐表，比任何估算都有说服力。
-		Transport: netpolicy.WrapTransport(string(netstats.CategoryUpdate), netstats.WrapTransport(netstats.CategoryUpdate, &http.Transport{
-			TLSHandshakeTimeout:   8 * time.Second,
-			ResponseHeaderTimeout: 10 * time.Second,
-		})),
-	}
-	defer client.CloseIdleConnections()
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -165,29 +129,17 @@ func downloadSpeedTest(url string) float64 {
 
 // rankSourcesByThroughput 对候选源进行真实吞吐量测试，按下载速度排序
 // 仅测试前 maxTest 个候选源（HEAD 延迟排序后的前 N 个），避免并发抢占带宽
-func rankSourcesByThroughput(candidates []speedTestResult, maxTest int) []speedTestResult {
+func rankSourcesByThroughput(ctx context.Context, client *http.Client, candidates []speedTestResult, maxTest int) []speedTestResult {
 	if len(candidates) <= maxTest {
 		maxTest = len(candidates)
 	}
 
-	type throughputResult struct {
-		idx int
-		bps float64
-	}
-	resultsCh := make(chan throughputResult, maxTest)
-
-	for i := 0; i < maxTest; i++ {
-		go func(idx int, url string) {
-			bps := downloadSpeedTest(url)
-			resultsCh <- throughputResult{idx, bps}
-		}(i, candidates[i].url)
-	}
-
-	// 收集吞吐量结果
-	bpsMap := make(map[int]float64, maxTest)
-	for i := 0; i < maxTest; i++ {
-		r := <-resultsCh
-		bpsMap[r.idx] = r.bps
+	bpsMap := make([]float64, maxTest)
+	if err := parallel.Each(ctx, maxTest, 3, func(ctx context.Context, index int) error {
+		bpsMap[index] = downloadSpeedTest(ctx, client, candidates[index].url)
+		return ctx.Err()
+	}); err != nil {
+		return nil
 	}
 
 	// 构建带吞吐量值的结果列表

@@ -4,8 +4,13 @@ import (
 	"cczjVideo/app/apperror"
 	"cczjVideo/app/applog"
 	"cczjVideo/app/service"
+	"cczjVideo/app/storagepaths"
 	appwindow "cczjVideo/app/window"
 	"embed"
+	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 
@@ -21,13 +26,30 @@ var appIcon []byte
 
 // buildApp 装配 Wails 应用：注册 service.App 作为唯一绑定入口，挂上同域 HLS
 // 代理中间件、无边框主窗口和系统托盘。业务逻辑一律不在这一层。
-func buildApp() *application.App {
+func buildApp() (*application.App, error) {
+	windowsOptions := application.WindowsOptions{}
+	if runtime.GOOS == "windows" {
+		configDir, err := os.UserConfigDir()
+		if err != nil {
+			return nil, fmt.Errorf("resolve application storage: %w", err)
+		}
+		exe, err := os.Executable()
+		if err != nil {
+			return nil, err
+		}
+		profile, err := storagepaths.WindowsWebview(configDir, filepath.Base(exe))
+		if err != nil {
+			return nil, fmt.Errorf("open browser storage: %w", err)
+		}
+		windowsOptions.WebviewUserDataPath = profile
+	}
 	myApp := service.NewApp()
 
 	// 单实例回调要在窗口创建前声明，Options 只能用闭包引用它。
 	var mainWindow *application.WebviewWindow
 
 	options := application.Options{
+		Windows:      windowsOptions,
 		MarshalError: apperror.Marshal,
 		Name:         "CCZJ Video",
 		// 强制单实例：桌面上重复图标只会把已在跑的窗口叫到前台。两份进程会同时写
@@ -82,8 +104,22 @@ func buildApp() *application.App {
 	// Android owns its Activity, screen geometry and lifecycle. Desktop-only
 	// tray, DPI and drag/drop handlers must not control that native host.
 	if application.System.IsMobile() {
-		return app
+		return app, nil
 	}
+	mainWindow.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
+		if app.Context().Err() != nil {
+			return
+		}
+		if myApp.GetCloseBehavior() {
+			event.Cancel()
+			mainWindow.Hide()
+			return
+		}
+		// Closing the main window is application exit; explicit Quit bypasses
+		// this user-close hook and runs service shutdown for active tasks.
+		event.Cancel()
+		app.Quit()
+	})
 
 	// 原生拖放交给应用的只有被拖条目的绝对路径（WebView2 的 File 对象读不出目录内容），
 	// 所以这里只把路径转给界面：装哪个、失败怎么报由扩展包面板决定，落盘闸门在 app/plugin。
@@ -154,5 +190,5 @@ func buildApp() *application.App {
 		mainWindow.Focus()
 	})
 
-	return app
+	return app, nil
 }

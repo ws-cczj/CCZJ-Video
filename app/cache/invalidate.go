@@ -1,6 +1,6 @@
 // 统一缓存失效层。
 //
-// 这条链路上有三类派生缓存：Go 进程内的详情缓存（detail.Default）、豆瓣侧的本机镜像
+// 这条链路上有三类派生缓存：应用装配的详情实例、豆瓣侧的本机镜像
 // （热榜匹配、评论），以及前端自己的一堆（详情 localStorage、海报、TS 片段内存+IndexedDB）。
 // 数据被改动（删片、改源、清库、一轮采集写库）之后，"谁该丢掉旧内容"这件事以前散落在各个
 // 调用点，结果就是大多数地方压根没做。这里收拢成唯一入口：Go 侧直接清自己的，前端侧靠
@@ -12,6 +12,7 @@
 package cache
 
 import (
+	"context"
 	"sync"
 
 	"cczjVideo/app/applog"
@@ -44,7 +45,34 @@ type EventPublisher func(name string, data any)
 var (
 	publishMu sync.Mutex
 	publisher EventPublisher
+	details   *detail.Service
 )
+
+// SetDetailService connects legacy package-level invalidation to the same
+// instance used by video requests. The host releases it after work has drained.
+func SetDetailService(value *detail.Service) func() {
+	publishMu.Lock()
+	previous := details
+	details = value
+	publishMu.Unlock()
+	return func() {
+		publishMu.Lock()
+		if details == value {
+			details = previous
+		}
+		publishMu.Unlock()
+	}
+}
+
+func detailService() *detail.Service {
+	publishMu.Lock()
+	value := details
+	publishMu.Unlock()
+	if value == nil {
+		return detail.Default
+	}
+	return value
+}
 
 // SetEventPublisher 接上失效事件的出口，重复调用以最后一次为准。
 func SetEventPublisher(pub EventPublisher) {
@@ -55,85 +83,79 @@ func SetEventPublisher(pub EventPublisher) {
 
 // DeleteCatalogVideo 软删除一条目录条目，并在删除成功后让它的全部缓存作废。
 //
-// 为什么不直接调 db.DeleteCatalogVideo：详情缓存的键是 source_key:global_id，而 global_id
-// 只能在行还是 active 时查得到（目录查询过滤掉了已删除行）。先解析、再删除、后失效，
-// 顺序错了就只能整源清空。
+// 兼容内部入口复用同一存储事务和提交结果；新业务从 media 进入。
 func DeleteCatalogVideo(sourceKey, vodID, reason string) error {
-	var globalID int64
-	if item, err := db.GetCatalogItem(sourceKey, vodID); err == nil && item != nil {
-		globalID = item.GlobalID
-	}
-	if err := db.DeleteCatalogVideo(sourceKey, vodID); err != nil {
+	return DeleteCatalogVideoContext(context.Background(), sourceKey, vodID, reason)
+}
+func DeleteCatalogVideoContext(ctx context.Context, sourceKey, vodID, reason string) error {
+	change, err := db.NewMediaStore(db.DB).DeleteCatalog(ctx, sourceKey, vodID)
+	if err != nil {
 		return err
 	}
-	InvalidateVideo(sourceKey, vodID, globalID, reason)
+	PublishCatalogChange(change, reason)
 	return nil
 }
 
 // RestoreCatalogVideo 把回收站里的一条放回视频库，并让它作废过的缓存重新可取。
 // 恢复后必须失效：删除期间前端和详情缓存可能存着"这条不存在"或旧字段的结果。
 func RestoreCatalogVideo(sourceKey, vodID, reason string) error {
-	var globalID int64
-	if item, err := db.GetRecycleItem(sourceKey, vodID); err == nil && item != nil {
-		globalID = item.GlobalId
-	}
-	if err := db.RestoreCatalogVideo(sourceKey, vodID); err != nil {
+	change, err := db.NewMediaStore(db.DB).RestoreCatalog(context.Background(), sourceKey, vodID)
+	if err != nil {
 		return err
 	}
-	InvalidateVideo(sourceKey, vodID, globalID, reason)
+	PublishCatalogChange(change, reason)
 	return nil
 }
 
 // PurgeCatalogVideo 彻底删除一条回收站条目。同样先解析 global_id 再删，
 // 删完就再也查不到了。
 func PurgeCatalogVideo(sourceKey, vodID, reason string) (int, error) {
-	var globalID int64
-	if item, err := db.GetRecycleItem(sourceKey, vodID); err == nil && item != nil {
-		globalID = item.GlobalId
-	}
-	deleted, err := db.PurgeCatalogVideo(sourceKey, vodID)
+	change, err := db.NewMediaStore(db.DB).PurgeCatalog(context.Background(), sourceKey, vodID)
 	if err != nil {
 		return 0, err
 	}
-	InvalidateVideo(sourceKey, vodID, globalID, reason)
-	return deleted, nil
+	PublishCatalogChange(change, reason)
+	return change.Affected, nil
 }
 
 // ClearRecycleBin 清空回收站。按受影响的源整体失效，而不是逐条发事件——
 // 回收站可能攒着几千条，逐条广播前端也处理不完。
 func ClearRecycleBin(sourceKey, reason string) (int, error) {
-	keys, err := db.RecycleSourceKeys(sourceKey)
+	change, err := db.NewMediaStore(db.DB).ClearCatalogRecycleBin(context.Background(), sourceKey)
 	if err != nil {
 		return 0, err
 	}
-	deleted, err := db.ClearRecycleBin(sourceKey)
-	if err != nil {
-		return 0, err
-	}
-	for _, key := range keys {
-		InvalidateSource(key, reason)
-	}
-	return deleted, nil
+	PublishCatalogChange(change, reason)
+	return change.Affected, nil
 }
 
 // MergeGlobalVideoIdentities 把用户确认的几条身份并成一条，并让受影响源的缓存作废。
 //
 // 为什么整源失效而不是逐条：详情缓存的键是 source_key:global_id，合并既改写了存活行的字段，
-// 又把兄弟行的归属搬走了，前端手里可能同时缓存着这两条身份的详细结果。先查源再合并，
-// 是因为合并之后被并掉的身份就再也查不出它用过哪些源。
+// 又把兄弟行的归属搬走了，前端手里可能同时缓存着这两条身份的详细结果。
+// 受影响来源由合并事务返回，发布阶段不再另取一次数据库快照。
 func MergeGlobalVideoIdentities(globalIDs []int64, reason string) (int64, int, error) {
-	keys, err := db.IdentitySourceKeys(globalIDs)
+	change, err := db.NewMediaStore(db.DB).MergeIdentities(context.Background(), globalIDs)
 	if err != nil {
 		return 0, 0, err
 	}
-	keep, merged, err := db.MergeGlobalVideoIdentities(globalIDs)
-	if err != nil {
-		return 0, 0, err
+	PublishCatalogChange(change.CatalogChange, reason)
+	return change.KeepID, change.Merged, nil
+}
+
+// PublishCatalogChange runs only after a successful commit. Cancellation after
+// commit cannot skip invalidation; failed or no-op mutations publish nothing.
+func PublishCatalogChange(change db.CatalogChange, reason string) {
+	if change.Affected == 0 {
+		return
 	}
-	for _, key := range keys {
+	if change.SourceKey != "" && change.VodID != "" {
+		InvalidateVideo(change.SourceKey, change.VodID, change.GlobalID, reason)
+		return
+	}
+	for _, key := range change.Sources {
 		InvalidateSource(key, reason)
 	}
-	return keep, merged, nil
 }
 
 // InvalidateVideo 让单条视频的派生缓存作废。globalID 传 0 表示调用方拿不到身份，
@@ -142,7 +164,7 @@ func InvalidateVideo(sourceKey, vodID string, globalID int64, reason string) {
 	if sourceKey == "" || vodID == "" {
 		return
 	}
-	detail.Default.InvalidateVideo(sourceKey, globalID)
+	detailService().InvalidateVideo(sourceKey, globalID)
 	applog.Debug("[Cache] 失效单条缓存 %s:%s (global=%d) 原因=%s", sourceKey, vodID, globalID, reason)
 	emit(InvalidateEventPayload{Scope: ScopeVideo, SourceKey: sourceKey, VodIDs: []string{vodID}, Reason: reason})
 }
@@ -153,7 +175,7 @@ func InvalidateSource(sourceKey, reason string) {
 	if sourceKey == "" {
 		return
 	}
-	detail.Default.InvalidateSource(sourceKey)
+	detailService().InvalidateSource(sourceKey)
 	douban.ClearChartMatchCache()
 	applog.Debug("[Cache] 失效整源缓存 %s 原因=%s", sourceKey, reason)
 	emit(InvalidateEventPayload{Scope: ScopeSource, SourceKey: sourceKey, Reason: reason})
@@ -179,7 +201,7 @@ type Row struct {
 // Stats 汇总当前存活的缓存条目与读法计数。热榜匹配只是「查过一次就记住」的映射，
 // 没有新鲜度概念，所以它只有条目数——它存在的意义是让用户确认「清除缓存」真的清到了东西。
 func Stats() []Row {
-	detailStats := detail.Default.Stats()
+	detailStats := detailService().Stats()
 	chart := douban.ChartCacheStats()
 	comments := douban.CommentCacheStats()
 	return []Row{

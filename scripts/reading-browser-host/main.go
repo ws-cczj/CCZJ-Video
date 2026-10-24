@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"cczjVideo/app/apperror"
+	"cczjVideo/app/applog"
 	"cczjVideo/app/db"
 	"cczjVideo/app/library"
 	"cczjVideo/app/model"
@@ -29,6 +30,8 @@ func main() {
 	root, err := os.MkdirTemp("", "cczj-reading-browser-")
 	must(err)
 	defer os.RemoveAll(root)
+	must(applog.Init(filepath.Join(root, "logs")))
+	defer applog.Default().Close()
 	must(db.InitDB(filepath.Join(root, "data")))
 	defer db.Close()
 	owner, cancel := signal.NotifyContext(context.Background(), os.Interrupt)

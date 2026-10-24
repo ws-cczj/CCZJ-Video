@@ -26,10 +26,11 @@ export interface DesktopPlaybackCommands {
   interaction(): void
 }
 
-export type MobilePanel = 'more' | 'speed' | 'episodes' | 'cast'
+export type MobilePanel = 'more' | 'speed' | 'episodes' | 'cast' | 'lines'
 export interface MobileChromeHandle {
   readonly pinned: boolean
   readonly menuOpen: boolean
+  readonly linesOpen: boolean
   readonly category: 'quality' | 'playback' | 'tools'
   toggle(panel: MobilePanel): void
   close(panel?: MobilePanel | 'quick'): void

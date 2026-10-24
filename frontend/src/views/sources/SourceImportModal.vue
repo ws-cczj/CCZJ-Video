@@ -1,11 +1,16 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, onBeforeUnmount } from 'vue'
 import type { ComponentPublicInstance } from 'vue'
 import { tr } from '../../locales'
 import { ImportSourceFromBase64 } from '../../api/app'
 import { useSourceStore } from '../../stores/source'
 import Icon from '../../components/Icon.vue'
 import { Button, Modal } from '../../components/ui'
+import { readFileDataURL } from '../../api/fileTransfer'
+import { createRequestScope } from '../../api/requestScope'
+import { normalizeApiError } from '../../api/errors'
+import { useGeneration } from '../../composables/useGeneration'
+import { useErrorStore } from '../../stores/error'
 
 /**
  * 导入采集源弹窗：拖拽 / 选择 json、json.gz、json.br，读成 base64 交后端。
@@ -18,6 +23,11 @@ const props = defineProps<{ modelValue: boolean }>()
 const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
 
 const sourceStore = useSourceStore()
+const requests = createRequestScope()
+const generation = useGeneration()
+const errorStore = useErrorStore()
+function releaseImport(): void { generation.invalidate(); requests.cancel(); importLoading.value = false }
+onBeforeUnmount(releaseImport)
 
 const importDragging = ref(false)
 const importFile = ref<File | null>(null)
@@ -35,11 +45,13 @@ watch(() => props.modelValue, (open) => {
     importFile.value = null
     importLoading.value = false
   } else {
+    releaseImport()
     importFile.value = null
   }
 })
 
 function closeImportDialog(): void {
+  releaseImport()
   emit('update:modelValue', false)
 }
 
@@ -55,6 +67,7 @@ function onImportDragLeave(): void {
 function onImportDrop(e: DragEvent): void {
   e.preventDefault()
   importDragging.value = false
+  if (importLoading.value) return
   const file = e.dataTransfer?.files?.[0]
   if (!file) return
   const name = file.name.toLowerCase()
@@ -63,32 +76,35 @@ function onImportDrop(e: DragEvent): void {
 }
 
 function onImportFileClick(): void {
+  if (importLoading.value) return
   importFileInput.value?.click()
 }
 
 function onImportFileSelected(e: Event): void {
+  if (importLoading.value) return
   const file = (e.target as HTMLInputElement).files?.[0]
   if (!file) return
   importFile.value = file
+  ;(e.target as HTMLInputElement).value = ''
 }
 
 async function doImportSource(): Promise<void> {
-  if (!importFile.value) return
+  if (!importFile.value || importLoading.value) return
   importLoading.value = true
+  const ticket = generation.begin()
   const file = importFile.value
-  const reader = new FileReader()
-  reader.onload = async () => {
-    try {
-      const b64 = (reader.result as string).split(',')[1]
-      await ImportSourceFromBase64(file.name, b64)
-      await sourceStore.loadSources(true)
-      closeImportDialog()
-    } catch (e) {
-      console.error('import failed', e)
-      importLoading.value = false
-    }
+  try {
+    const data = await requests.run(() => readFileDataURL(file))
+    if (!generation.isCurrent(ticket)) return
+    await requests.run(() => ImportSourceFromBase64(file.name, data.split(',')[1] || ''))
+    if (!generation.isCurrent(ticket)) return
+    await sourceStore.loadSources(true)
+    if (generation.isCurrent(ticket)) closeImportDialog()
+  } catch (error) {
+    if (generation.isCurrent(ticket) && normalizeApiError(error).code !== 'CANCELLED') errorStore.fromError(tr('sources.importFailed'), error, 'SourceImportModal')
+  } finally {
+    if (generation.isCurrent(ticket)) importLoading.value = false
   }
-  reader.readAsDataURL(file)
 }
 </script>
 
@@ -104,13 +120,19 @@ async function doImportSource(): Promise<void> {
     <p class="modal-desc">{{ tr('sources.importDesc') }}</p>
     <div
       class="import-drop-zone"
+      role="button"
+      :tabindex="importLoading ? -1 : 0"
+      :aria-label="tr('sources.dropHint')"
+      :aria-disabled="importLoading"
       :class="{ dragging: importDragging, filled: !!importFile }"
       @dragover="onImportDragOver"
       @dragleave="onImportDragLeave"
       @drop="onImportDrop"
       @click="onImportFileClick"
+      @keydown.enter.prevent="onImportFileClick"
+      @keydown.space.prevent="onImportFileClick"
     >
-      <input type="file" accept=".json,.json.gz,.json.br" :ref="bindFileInput" style="display:none" @change="onImportFileSelected" />
+      <input type="file" accept=".json,.json.gz,.json.br" :ref="bindFileInput" class="cczj-hidden" :disabled="importLoading" @change="onImportFileSelected" />
       <template v-if="importFile">
         <Icon name="database" :size="28" />
         <p class="import-file-name">{{ importFile.name }}</p>
@@ -147,6 +169,10 @@ async function doImportSource(): Promise<void> {
   @apply cczj-border-primary;
   background: var(--accent-alpha-10);
   @apply cczj-text-primary;
+}
+.import-drop-zone:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .import-drop-zone.dragging {
   @apply cczj-border-primary;

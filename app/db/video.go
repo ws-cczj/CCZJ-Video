@@ -3,6 +3,7 @@ package db
 import (
 	"cczjVideo/app/apperror"
 	"cczjVideo/app/model"
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -29,7 +30,10 @@ func resolveGlobalTypeIdInt(typeName string) int64 {
 
 // GetVideoById projects a catalog item into the legacy model used by handlers.
 func GetVideoById(sourceKey, vodID string) (*model.Video, error) {
-	catalog, err := GetCatalogItem(sourceKey, vodID)
+	return GetVideoByIdContext(context.Background(), sourceKey, vodID)
+}
+func GetVideoByIdContext(ctx context.Context, sourceKey, vodID string) (*model.Video, error) {
+	catalog, err := GetCatalogItemContext(ctx, sourceKey, vodID)
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +53,10 @@ func InsTypeIfNotExist(sourceKey string, typeID model.FlexibleString, typeName s
 }
 
 func GetTypes(sourceKey string) ([]*model.VType, error) {
-	rows, err := ExportSourceTypes(sourceKey)
+	return GetTypesContext(context.Background(), sourceKey)
+}
+func GetTypesContext(ctx context.Context, sourceKey string) ([]*model.VType, error) {
+	rows, err := ExportSourceTypesContext(ctx, sourceKey)
 	if err != nil {
 		return nil, err
 	}
@@ -95,6 +102,25 @@ func SetSetting(key, value string) error {
 	return err
 }
 
+// SetSettings commits related settings together; a failed value leaves the
+// previous configuration intact rather than publishing half a window geometry.
+func SetSettings(ctx context.Context, values map[string]string) error {
+	if instance == nil {
+		return ErrDBNotOpen
+	}
+	tx, err := instance.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() // Commit makes the deferred rollback a no-op.
+	for key, value := range values {
+		if _, err := tx.ExecContext(ctx, `INSERT OR REPLACE INTO settings(key,value) VALUES (?,?)`, key, value); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 type TableColumn struct {
 	Cid       int    `db:"cid" json:"cid"`
 	Name      string `db:"name" json:"name"`
@@ -105,12 +131,15 @@ type TableColumn struct {
 }
 
 func GetTableColumns(tableName string) ([]TableColumn, error) {
+	return GetTableColumnsContext(context.Background(), tableName)
+}
+func GetTableColumnsContext(ctx context.Context, tableName string) ([]TableColumn, error) {
 	// This is only used for fixed schema introspection in the source UI.
 	if tableName != "source_videos" && tableName != "global_types" {
 		return nil, fmt.Errorf("unsupported table: %s", tableName)
 	}
 	var cols []TableColumn
-	err := instance.Select(&cols, fmt.Sprintf(`SELECT cid,name,COALESCE(type,'') col_type,"notnull",COALESCE(dflt_value,'') dflt_value,pk FROM pragma_table_info('%s')`, tableName))
+	err := instance.SelectContext(ctx, &cols, fmt.Sprintf(`SELECT cid,name,COALESCE(type,'') col_type,"notnull",COALESCE(dflt_value,'') dflt_value,pk FROM pragma_table_info('%s')`, tableName))
 	return cols, err
 }
 
@@ -118,15 +147,24 @@ func GetTableColumns(tableName string) ([]TableColumn, error) {
 // 清空目录必须连水位线一起作废并整体成功：只删了一半却留着旧游标，下一轮增量
 // 会认为自己已经覆盖过这段时间，被清掉的数据就永远补不回来了。
 func TruncateSource(sourceKey string) error {
-	tx, err := instance.Beginx()
+	return TruncateSourceContext(context.Background(), sourceKey)
+}
+func TruncateSourceContext(ctx context.Context, sourceKey string) error {
+	if err := model.ValidateSourceKey(sourceKey); err != nil {
+		return err
+	}
+	tx, err := instance.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin source truncate: %w", err)
 	}
 	defer tx.Rollback()
-	if _, err := tx.Exec(`DELETE FROM source_types WHERE source_key=?`, sourceKey); err != nil {
+	if err := rememberCatalogRetirements(ctx, tx, "source_key=?", sourceKey); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(`DELETE FROM source_videos WHERE source_key=?`, sourceKey); err != nil {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM source_types WHERE source_key=?`, sourceKey); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM source_videos WHERE source_key=?`, sourceKey); err != nil {
 		return err
 	}
 	if err := ResetCollectCursor(tx, sourceKey); err != nil {
@@ -147,8 +185,11 @@ type SourceVideoRef struct {
 // 「没有这一条」和「查询失败」必须分开：以前两者都回一句 global_id not found，
 // 库锁了、列缺了都会被当成"这条还没采集"，界面显示空结果，日志里什么都没有。
 func GetGlobalIdForVideo(sourceKey, vodID string) (int64, error) {
+	return GetGlobalIdForVideoContext(context.Background(), sourceKey, vodID)
+}
+func GetGlobalIdForVideoContext(ctx context.Context, sourceKey, vodID string) (int64, error) {
 	var id int64
-	err := instance.Get(&id, `SELECT global_id FROM source_videos WHERE source_key=? AND source_vod_id=? AND lifecycle_state='active' AND `+catalogTypeVisibilityClause("source_videos"), sourceKey, vodID)
+	err := instance.GetContext(ctx, &id, `SELECT global_id FROM source_videos WHERE source_key=? AND source_vod_id=? AND lifecycle_state='active' AND `+catalogTypeVisibilityClause("source_videos"), sourceKey, vodID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, apperror.Newf(apperror.NotFound, "global_id not found: %s/%s", sourceKey, vodID)
 	}
@@ -162,10 +203,13 @@ func GetGlobalIdForVideo(sourceKey, vodID string) (int64, error) {
 }
 
 func FindSourcesByGlobalId(globalID int64) ([]SourceVideoRef, error) {
+	return FindSourcesByGlobalIdContext(context.Background(), globalID)
+}
+func FindSourcesByGlobalIdContext(ctx context.Context, globalID int64) ([]SourceVideoRef, error) {
 	if globalID <= 0 {
 		return nil, fmt.Errorf("invalid global_id: %d", globalID)
 	}
 	var out []SourceVideoRef
-	err := instance.Select(&out, `SELECT source_key,source_vod_id AS vod_id,vod_name FROM source_videos WHERE global_id=? AND lifecycle_state='active' AND `+catalogTypeVisibilityClause("source_videos")+` ORDER BY source_key`, globalID)
+	err := instance.SelectContext(ctx, &out, `SELECT source_key,source_vod_id AS vod_id,vod_name FROM source_videos WHERE global_id=? AND lifecycle_state='active' AND `+catalogTypeVisibilityClause("source_videos")+` ORDER BY source_key`, globalID)
 	return out, err
 }

@@ -171,7 +171,8 @@ export function useVideoInfo(deps: {
     // 网络模式
     let networkMode = ''
     try {
-      networkMode = (TsCache as any).getNetworkMode?.() || ''
+      const mode = TsCache.getNetworkMode()
+      networkMode = t(mode === 'normal' ? 'player.networkNormal' : mode === 'bandwidth_limited' ? 'player.networkLimited' : 'player.networkUnstable')
     } catch { }
 
     // 画质模式

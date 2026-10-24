@@ -20,6 +20,9 @@ export function setM3u8Cache(url: string, text: string): void {
   const previous = m3u8TextCache.get(url)
   if (previous !== undefined) { cacheBytes -= previous.length * 2; m3u8TextCache.delete(url) }
   if (!text.replace(/^\uFEFF/, '').trimStart().startsWith('#EXTM3U') || text.length * 2 > M3U8_CACHE_BYTES) return
+  // Live media playlists change at the same URL; replaying a cached version
+  // prevents HLS from discovering the next segment after the first window.
+  if (/#EXT(?:INF:|-X-(?:TARGETDURATION|MEDIA-SEQUENCE|PART):)/.test(text) && !/#EXT-X-ENDLIST\s*(?:$|\n)/.test(text)) return
   m3u8TextCache.set(url, text)
   cacheBytes += text.length * 2
   // 超限淘汰最旧（Map 迭代顺序 = 插入顺序，第一个即最久未用）

@@ -21,6 +21,7 @@ export interface PlayerPanelModel {
     readonly loading: boolean
     readonly label: (probe: SourceProbe) => string
     readonly selectable: (source: SourceOption) => boolean
+    readonly retry:()=>void
   }
   readonly episodes: {
     readonly items: Episode[]

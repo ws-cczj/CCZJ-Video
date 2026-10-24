@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"cczjVideo/app/applog"
+	"cczjVideo/app/db"
 )
 
 // TestMain 把 applog 单例绑到临时目录，避免测试灌进用户真实的日志文件。
@@ -17,7 +18,12 @@ func TestMain(m *testing.M) {
 	if err := applog.Init(dir); err != nil {
 		panic(err)
 	}
+	if err := db.InitDB(dir); err != nil {
+		panic(err)
+	}
 	code := m.Run()
+	testTasks.Stop(time.Second)
+	db.Close()
 	applog.Default().Close()
 	_ = os.RemoveAll(dir)
 	os.Exit(code)
@@ -26,7 +32,7 @@ func TestMain(m *testing.M) {
 // 豆瓣的间隔下限是限速闸门的一部分，不能因为谁传了个 0 或负数就变成忙等。
 // 门面还得把夹取后的真实值回传，否则设置项显示 1 秒、实际跑 1 分钟。
 func TestSetDoubanIntervalNeverGoesBelowTheFloor(t *testing.T) {
-	svc := NewSchedulerService(5 * time.Minute)
+	svc := NewSchedulerService(5*time.Minute, testRuns())
 
 	for _, in := range []time.Duration{0, -time.Hour, time.Second, 30 * time.Second} {
 		if got := svc.SetDoubanInterval(in); got < time.Minute {
@@ -49,5 +55,5 @@ func TestSetDoubanIntervalNeverGoesBelowTheFloor(t *testing.T) {
 // 关停顺序不保证 Start 跑过：构造完直接 Stop 也得活着回来。
 // 采集调度器在这时还是 nil，解引用就是一次启动崩溃。
 func TestStopBeforeStartDoesNotPanic(t *testing.T) {
-	NewSchedulerService(time.Minute).Stop()
+	NewSchedulerService(time.Minute, testRuns()).Stop()
 }

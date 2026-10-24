@@ -6,7 +6,7 @@
  * `.toggle`（深色模式那枚复选框）留在这份样式里，不依赖父级。
  */
 defineOptions({ name: 'ThemeEditorModal' })
-import { ref, reactive } from 'vue'
+import { ref, reactive, watch, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '../../components/Icon.vue'
 import { Button, Modal } from '../../components/ui'
@@ -14,6 +14,9 @@ import { useThemeStore, readSurfaceAlpha, isPackAssetRef, type CustomTheme, type
 import { useErrorStore } from '../../stores/error'
 import { pickColorFromImage } from '../../utils/imagePalette'
 import { isMobileRuntime } from '../../api/runtime'
+import { createRequestScope } from '../../api/requestScope'
+import { readFileDataURL } from '../../api/fileTransfer'
+import { normalizeApiError } from '../../api/errors'
 
 const { t } = useI18n()
 const mobile = isMobileRuntime()
@@ -30,6 +33,12 @@ const editing = reactive<CustomTheme & { __mode: 'create' | 'edit' }>({
 const backgroundImageUrl = ref<string | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 let previousThemeId = ''
+const imageRequests = createRequestScope()
+let imageGeneration = 0, disposed = false
+let paletteAbort: AbortController | null = null
+function releaseImages(): void { imageGeneration++; imageRequests.cancel(); paletteAbort?.abort(); paletteAbort = null }
+watch(editorOpen, open => { if (!open) releaseImages() }, { flush: 'sync' })
+onBeforeUnmount(() => { disposed = true; releaseImages(); if (editorOpen.value) closeEditor() })
 
 function colorToHex(c: string): string {
   const m = c.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/)
@@ -79,6 +88,7 @@ function seedSurfaceAlphas(p: ColorPalette): void {
 }
 
 function openCreate(): void {
+  releaseImages()
   previousThemeId = themeStore.currentId
   const cur = themeStore.current
   // 与 openEdit/openEditPreset 一致：先清空 editing，否则上次编辑的语义色会残留到新建主题
@@ -103,6 +113,7 @@ function openCreate(): void {
 }
 
 function openEditPreset(preset: { id: string; name: string; primary: string; palette: ColorPalette; mode: 'dark' | 'light'; bgImage?: string }): void {
+  releaseImages()
   previousThemeId = themeStore.currentId
   const existingOverride = themeStore.customThemes.find((c) => c.id === preset.id)
   Object.keys(editing).forEach((k) => { delete (editing as any)[k] })
@@ -146,6 +157,7 @@ function openEditPreset(preset: { id: string; name: string; primary: string; pal
 function openEdit(id: string): void {
   const existing = themeStore.customThemes.find((c) => c.id === id)
   if (!existing) return
+  releaseImages()
   previousThemeId = themeStore.currentId
   const copy: any = JSON.parse(JSON.stringify(existing))
   // 先清理 editing 所有字段，再合并现有主题字段 + __mode: 'edit'，确保编辑模式正确
@@ -182,6 +194,7 @@ function closeEditor(): void {
 
 // 预览：把 editing 作为临时主题推入并切换
 function applyPreview(): void {
+  if (disposed || !editorOpen.value) return
   const preview: CustomTheme = {
     id: '__preview__',
     name: editing.name || t('settings.previewTheme'),
@@ -276,8 +289,14 @@ function deriveFromPrimary(): void {
 // 图片选择
 async function applyImagePalette(): Promise<void> {
   const src = bgSrc(editing.backgroundImage)
-  if (!src) return
-  const picked = await pickColorFromImage(src)
+  if (!src || disposed || !editorOpen.value) return
+  const generation = imageGeneration
+  paletteAbort?.abort()
+  const abort = new AbortController()
+  paletteAbort = abort
+  const picked = await pickColorFromImage(src, abort.signal)
+  if (paletteAbort === abort) paletteAbort = null
+  if (disposed || !editorOpen.value || abort.signal.aborted || generation !== imageGeneration || src !== bgSrc(editing.backgroundImage)) return
   if (!picked) {
     errorStore.warn(t('settings.pickFromImage'), t('settings.pickFromImageFailed'), '', 'Settings.applyImagePalette')
     return
@@ -287,24 +306,34 @@ async function applyImagePalette(): Promise<void> {
   errorStore.info(t('settings.pickFromImage'), picked, '', 'Settings.applyImagePalette')
 }
 
-function onImageSelected(evt: Event): void {
-  const input = evt.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (!file) return
-  const reader = new FileReader()
-  reader.onload = () => {
-    const url = reader.result as string
+async function loadBackgroundImage(file: File): Promise<void> {
+  releaseImages()
+  const generation = imageGeneration
+  try {
+    const url = await imageRequests.run(() => readFileDataURL(file))
+    if (disposed || !editorOpen.value || generation !== imageGeneration) return
     backgroundImageUrl.value = url
     editing.backgroundImage = url
     applyPreview()
     void applyImagePalette()
+  } catch (error) {
+    if (!disposed && editorOpen.value && generation === imageGeneration && normalizeApiError(error).code !== 'CANCELLED') {
+      errorStore.fromError(t('settings.backgroundPreview'), error, 'ThemeEditorModal.backgroundImage')
+    }
   }
-  reader.readAsDataURL(file)
+}
+
+function onImageSelected(evt: Event): void {
+  const input = evt.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  void loadBackgroundImage(file)
   // 同一张图换一次也要能重新取色：清掉 value，否则再选同一文件不触发 change
   input.value = ''
 }
 
 function clearBackgroundImage(): void {
+  releaseImages()
   backgroundImageUrl.value = null
   editing.backgroundImage = undefined
   applyPreview()
@@ -319,15 +348,7 @@ function onDragLeave(): void { /* hover state handled by CSS */ }
 function onDrop(e: DragEvent): void {
   const file = e.dataTransfer?.files?.[0]
   if (!file || !file.type.startsWith('image/')) return
-  const reader = new FileReader()
-  reader.onload = () => {
-    const url = reader.result as string
-    backgroundImageUrl.value = url
-    editing.backgroundImage = url
-    applyPreview()
-    void applyImagePalette()
-  }
-  reader.readAsDataURL(file)
+  void loadBackgroundImage(file)
 }
 
 defineExpose({ openCreate, openEdit, openEditPreset, applyPreview })
@@ -418,7 +439,12 @@ defineExpose({ openCreate, openEdit, openEditPreset, applyPreview })
       <div
         class="bg-drop-zone cczj-relative cczj-flex cczj-items-center cczj-justify-center cczj-overflow-hidden cczj-cursor-pointer"
         :class="{ 'has-image': !!backgroundImageUrl }"
+        :role="backgroundImageUrl ? undefined : 'button'"
+        :tabindex="backgroundImageUrl ? -1 : 0"
+        :aria-label="t(mobile ? 'mobile.chooseBackground' : 'settings.dropImage')"
         @click="onDropZoneClick"
+        @keydown.enter.prevent="onDropZoneClick"
+        @keydown.space.prevent="onDropZoneClick"
         @dragover.prevent="onDragOver"
         @dragleave="onDragLeave"
         @drop.prevent="onDrop"
@@ -547,6 +573,7 @@ defineExpose({ openCreate, openEdit, openEditPreset, applyPreview })
   @apply cczj-transition-fast;
 }
 .bg-drop-zone:hover { @apply cczj-border-primary; background: var(--bg-hover); }
+.bg-drop-zone:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .bg-drop-zone.has-image { border-style: solid; @apply cczj-cursor-default; padding: 0; }
 .bg-drop-zone.has-image:hover { background: var(--bg-card); }
 .bg-drop-zone img {

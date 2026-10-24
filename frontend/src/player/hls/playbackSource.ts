@@ -3,6 +3,7 @@ import { extractBitrateFromUrl, type StreamVariantInfo } from '../useVideoInfo'
 import { createPlaybackSession } from '../playbackSession'
 import { proxyHlsURL } from './proxy'
 import { useHlsEngine } from './useHlsEngine'
+import { adaptiveForwardBuffer } from '../../utils/ts-cache/network'
 
 type Lease = ReturnType<ReturnType<typeof createPlaybackSession>['capture']>
 type SourceError = 'unsupported' | 'load_failed' | 'fatal' | 'timeout'
@@ -16,6 +17,8 @@ export function createPlaybackSource(deps: {
   recovering?: (detail: string) => void
   unrecoverable: () => void
   bufferChanged: () => void
+  networkPolicy?: (detail: Record<string, unknown>) => void
+  networkIssue?: (detail: Record<string, unknown>) => void
 }) {
   const engine = useHlsEngine()
   let networkTimer: ReturnType<typeof setTimeout> | null = null
@@ -60,21 +63,39 @@ export function createPlaybackSource(deps: {
     }
     deps.streams(streams)
 
+    const fragPolicy = Hls.DefaultConfig?.fragLoadPolicy?.default
     const hls = engine.create(video, {
       enableWorker: false, lowLatencyMode: false,
       maxBufferLength: 30, maxMaxBufferLength: 60, backBufferLength: 30,
       maxBufferSize: 60 * 1000 * 1000,
-      fragLoadingTimeOut: 15000, fragLoadingMaxRetry: 8, fragLoadingRetryDelay: 500,
-      manifestLoadingTimeOut: 10000, manifestLoadingMaxRetry: 3, manifestLoadingRetryDelay: 700,
+      ...(fragPolicy ? { fragLoadPolicy: { default: { ...fragPolicy,
+        maxTimeToFirstByteMs: 10000, maxLoadTimeMs: TsCache.adaptiveFragmentTimeout(),
+        timeoutRetry: { maxNumRetry: 3, retryDelayMs: 1000, maxRetryDelayMs: 4000 },
+        errorRetry: { maxNumRetry: 3, retryDelayMs: 1000, maxRetryDelayMs: 4000 },
+      } } } : {}),
       loader: TsCache.TsCacheLoader,
     }, Hls)
 
-    TsCache.setAbrSwitchCallback(lease.guard((target: number) => {
-      if (!hls.levels || hls.levels.length <= 1) return
-      const current = hls.currentLevel >= 0 ? hls.currentLevel : hls.nextAutoLevel
-      const next = target === -1 ? Math.max(0, current - 1) : target
-      if (next >= 0 && next < hls.levels.length) hls.nextAutoLevel = next
-    }))
+    let policySignature = ''
+    const applyNetworkPolicy = () => {
+      if (!hls.config) return
+      const stats = TsCache.stats()
+      const forward = adaptiveForwardBuffer()
+      hls.config.maxMaxBufferLength = Math.max(60, forward)
+      hls.config.maxBufferLength = forward
+      if (hls.config.fragLoadPolicy?.default) hls.config.fragLoadPolicy.default.maxLoadTimeMs = stats.fragmentTimeout
+      const signature = `${stats.networkMode}:${hls.currentLevel}:${forward}:${stats.fragmentTimeout}:${stats.concurrency}`
+      if (signature === policySignature) return
+      policySignature = signature
+      deps.networkPolicy?.({ network_mode: stats.networkMode, bandwidth_bps: Math.round(hls.bandwidthEstimate || 0),
+        measured_bps: stats.measuredBps, download_ratio: stats.downloadRatio, buffer_ahead_seconds: stats.playbackBufferAhead,
+        level: hls.currentLevel, levels: hls.levels?.length || 0, forward_seconds: forward,
+        background_connections: stats.concurrency, fragment_timeout_ms: stats.fragmentTimeout })
+    }
+    // HLS's ABR controller owns level changes, including in-flight abandonment.
+    // A second fixed-duration downswitch rule would conflict with its samples.
+    if (Hls.Events.FRAG_BUFFERED) hls.on(Hls.Events.FRAG_BUFFERED, lease.guard(() => { cancelNetworkTimeout(); deps.bufferChanged(); applyNetworkPolicy() }))
+    if (Hls.Events.LEVEL_SWITCHED) hls.on(Hls.Events.LEVEL_SWITCHED, lease.guard(applyNetworkPolicy))
     hls.on(Hls.Events.LEVEL_LOADED, lease.guard((_event: unknown, data: any) => {
       const fragments = data?.details?.fragments ?? []
       if (fragments.length) {
@@ -84,9 +105,18 @@ export function createPlaybackSource(deps: {
       }
     }))
     hls.on(Hls.Events.FRAG_CHANGED, lease.guard((_event: unknown, data: any) => {
+      deps.bufferChanged()
       if (data?.frag?.url) TsCache.notifyCurrentTs(absolute(data.frag.url, playbackURL))
     }))
     hls.on(Hls.Events.ERROR, lease.guard((_event: unknown, data: any) => {
+      if (data?.type === Hls.ErrorTypes.NETWORK_ERROR) {
+        applyNetworkPolicy()
+        deps.networkIssue?.({ reason: String(data.details || ''), fatal: !!data.fatal,
+          fragment_number: data.frag?.sn, level: data.frag?.level ?? hls.currentLevel,
+          fragment_seconds: data.frag?.duration, loaded_bytes: data.frag?.stats?.loaded,
+          retry: data.frag?.stats?.retry, position_seconds: video.currentTime,
+          buffer_ahead_seconds: TsCache.stats().playbackBufferAhead })
+      }
       if (!data?.fatal) return
       const detail = String(data.details || data.type || '')
       if (['manifestLoadError', 'manifestParsingError', 'manifestIncompatibleCodecsError', 'manifestLoadTimeOut'].includes(detail)) {

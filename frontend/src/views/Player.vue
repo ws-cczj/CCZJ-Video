@@ -12,6 +12,7 @@ import { useErrorStore } from '../stores/error'
 import VideoPlayer from '../components/VideoPlayer.vue'
 import Icon from '../components/Icon.vue'
 import PlayerInformationPanel from '../player/views/PlayerInformationPanel.vue'
+import PlaybackRouteList from '../player/views/PlaybackRouteList.vue'
 import PlayerPanelToggle from '../player/views/PlayerPanelToggle.vue'
 import type { PlayerPanelModel } from '../player/page/panelModel'
 import DoubanComments from '../components/DoubanComments.vue'
@@ -113,6 +114,7 @@ const { sourceOptions, activeSourceKey, readySourceCount, probingCount,
   buildSourceOptions, probeLabel, sourceSelectable, searchCatalogSource, snapshot:sourceCatalogSnapshot } = useSourceCatalog({
   sources: () => sourceStore.sources,
   identity: () => ({sourceKey:sourceKey.value,vodId:String(vodId.value),name:video.value?.vod_name || ''}),
+  episode:()=>Number(episodes.value[currentEpIndex.value]?.ep_num||0),
 })
 const sourceSearchLoading = ref(false)
 /* ==================== 选集正序/倒序 ==================== */
@@ -317,8 +319,9 @@ async function ensureCatalogEntry(opt: SourceOption): Promise<void> {
   }
 }
 
-async function switchToSource(sk: string): Promise<void> {
-  if (pageDisposed || sourceSearchLoading.value || !sk || sk === activeSourceKey.value) return
+async function switchToSource(sk: string,lineIndex?:number): Promise<void> {
+  if (pageDisposed || sourceSearchLoading.value || !sk) return
+  if(sk===activeSourceKey.value){if(lineIndex!==undefined){const index=videoStore.lines.findIndex(line=>line.index===lineIndex);if(index>=0)onLineChange(index)};return}
   sourceSearchLoading.value = true
   try {
     // 探测已经拿到 vod_id 的源，直接切（来自本库命中或源站搜索）
@@ -326,7 +329,7 @@ async function switchToSource(sk: string): Promise<void> {
     if (existing?.vod_id) {
       await ensureCatalogEntry(existing)
       if (pageDisposed) return
-      await loadFromSource(sk, existing.vod_id)
+      await loadFromSource(sk, existing.vod_id,lineIndex)
       return
     }
     // 回退：远端搜索该源中的同名视频
@@ -351,7 +354,7 @@ async function switchToSource(sk: string): Promise<void> {
       await ensureCatalogEntry(sourceOptions.value[idx])
     }
     if (pageDisposed) return
-    await loadFromSource(sk, String(match.vod_id))
+    await loadFromSource(sk, String(match.vod_id),lineIndex)
   } catch (e) {
     if (pageDisposed) return
     console.error('[Player] 切换源失败:', e)
@@ -365,19 +368,20 @@ async function switchToSource(sk: string): Promise<void> {
   }
 }
 
-async function loadFromSource(sk: string, vid: string): Promise<void> {
+async function loadFromSource(sk: string, vid: string,lineIndex?:number): Promise<void> {
   if (pageDisposed) return
-  activeSourceKey.value = sk
   const prevEpNum = episodes.value[currentEpIndex.value]?.ep_num ?? undefined
   loading.value = true
   try {
     await videoStore.loadDetail(sk, vid)
     if (pageDisposed) return
+    if(lineIndex!==undefined){const index=videoStore.lines.findIndex(line=>line.index===lineIndex);if(index>=0)videoStore.setActiveLine(index)}
     if (!video.value || !episodes.value.length) {
       loading.value = false
       errorStore.warn(t('player.sourceNoEpisodes'), t('player.sourceNoEpisodesDetail', { source: sk }), '', 'Player')
       return
     }
+    activeSourceKey.value = sk
 
     // 尽量保持当前集数：按 ep_num 匹配，匹配不到则回退到第 0 集
     let targetIdx = 0
@@ -550,7 +554,7 @@ const panelModel:PlayerPanelModel = reactive({
   catalog: {
     get items(){return sourceOptions.value},get activeKey(){return activeSourceKey.value},
     get readyCount(){return readySourceCount.value},get probingCount(){return probingCount.value},
-    get loading(){return sourceSearchLoading.value},label:probeLabel,selectable:sourceSelectable,
+    get loading(){return sourceSearchLoading.value},label:probeLabel,selectable:sourceSelectable,retry:()=>{void buildSourceOptions()},
   },
   episodes: {
     get items(){return sortedEpisodes.value},get current(){return currentEpIndex.value},get ascending(){return episodeSortAsc.value},
@@ -578,6 +582,10 @@ const panelModel:PlayerPanelModel = reactive({
             @toggle-favorite="toggleFavorite" @back="goBack" @prev="prevEpisode" @next="nextEpisode"
             @show-comments="showCommentsModal = true"
             :force-play-token="_playToken">
+            <template v-if="mobile" #lines="{close}">
+              <PlaybackRouteList mobile :sources="sourceOptions" :active-key="activeSourceKey" :active-line="videoStore.lines[videoStore.activeLineIndex]?.index??-1" :lines="videoStore.lines" :busy="sourceSearchLoading" :selectable="sourceSelectable" @choose="(key,line)=>{void switchToSource(key,line);close()}" />
+              <Button class="cczj-mt-4" variant="overlay" @click="buildSourceOptions">{{t('playLine.retryQuality')}}</Button>
+            </template>
             <template v-if="mobile && episodes.length" #episodes="{close}">
               <div class="cczj-mobile-drawer-episode-head"><span>{{t('detail.totalEpisodes',{count:episodes.length})}}</span><button @click="toggleEpisodeSort"><Icon :name="episodeSortAsc?'chevron-down':'chevron-up'" :size="14" />{{t(episodeSortAsc?'detail.ascOrder':'detail.descOrder')}}</button></div>
               <div class="cczj-mobile-drawer-episode-grid"><button v-for="(ep,i) in sortedEpisodes" :key="origIdx(i)" :aria-current="origIdx(i)===currentEpIndex?'step':undefined" :title="epLabel(origIdx(i),ep)" @click="goToEpisode(origIdx(i));close()"><span>{{epLabel(origIdx(i),ep)}}</span><small v-if="getEpWatchPct(origIdx(i))>0">{{Math.round(getEpWatchPct(origIdx(i)))}}%</small></button></div>
@@ -590,7 +598,7 @@ const panelModel:PlayerPanelModel = reactive({
         </div>
 
         <!-- ============= 右侧选集面板 ============= -->
-        <PlayerInformationPanel :model="panelModel" :collapsed="sidePanelCollapsed" @source="switchToSource" @episode="goToEpisode" @line="onLineChange" @sort="toggleEpisodeSort" @close="goBack" />
+        <PlayerInformationPanel :model="panelModel" :collapsed="sidePanelCollapsed" @source="switchToSource" @episode="goToEpisode" @sort="toggleEpisodeSort" @close="goBack" @open-lines="playerView?.openLines()" />
       </div>
     </template>
 

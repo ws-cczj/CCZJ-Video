@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"cczjVideo/app/db"
+	downloadengine "cczjVideo/app/download/engine"
 	"cczjVideo/app/lifecycle"
 	"cczjVideo/app/netstats"
 )
@@ -152,9 +153,21 @@ func TestModeSwitchPausesDownloadAndRetainsManualResumeCheckpoint(t *testing.T) 
 		t.Fatal(err)
 	}
 	a := NewApp()
-	a.downloadStore = db.NewDownloadTaskStore(db.DB())
+	store := db.NewDownloadTaskStore(db.DB())
+	a.downloads = downloadengine.New(a.background.Context(), downloadengine.Options{
+		DataDirectory: a.getDataDir, Directory: a.downloadDir, Store: store,
+	})
 	a.modeTasks = lifecycle.NewGroup()
-	t.Cleanup(func() { a.modeWork().Stop(time.Second); a.background.Stop(time.Second); db.Close() })
+	t.Cleanup(func() {
+		a.modeWork().Stop(time.Second)
+		a.background.Stop(time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		if err := a.downloads.Close(ctx); err != nil {
+			t.Error(err)
+		}
+		db.Close()
+	})
 	if _, err := a.downloadDir.Set(filepath.Join(root, "downloads")); err != nil {
 		t.Fatal(err)
 	}
@@ -181,19 +194,22 @@ func TestModeSwitchPausesDownloadAndRetainsManualResumeCheckpoint(t *testing.T) 
 	if err := a.SetSetting(applicationModeKey, "novel"); err != nil {
 		t.Fatal(err)
 	}
-	task, _ := a.downloads.Get("mode-pause")
-	if task.snapshot().Status != "paused" || !runFinished(task.run) || a.downloadExecutor.Stats().Accepted != 0 {
-		t.Fatal("switch left download running", task.snapshot())
+	task, err := a.downloads.Progress("mode-pause")
+	if err != nil || task.Status != "paused" || a.downloads.Stats().Accepted != 0 {
+		t.Fatal("switch left download running", task, err)
 	}
 	if _, err := a.ResumeDownload(context.Background(), "mode-pause"); err == nil {
 		t.Fatal("reading mode resumed video download")
 	}
 	// The same recovery path used at process restart must retain the pause.
-	if err := a.loadPersistedTasks(); err != nil {
+	reloaded := downloadengine.New(a.background.Context(), downloadengine.Options{
+		DataDirectory: a.getDataDir, Directory: a.downloadDir, Store: store,
+	})
+	if err := reloaded.Restore(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	restored, _ := a.downloads.Get("mode-pause")
-	if restored.snapshot().Status != "paused" {
+	restored, err := reloaded.Progress("mode-pause")
+	if err != nil || restored.Status != "paused" {
 		t.Fatal("recovery resumed a paused download")
 	}
 }

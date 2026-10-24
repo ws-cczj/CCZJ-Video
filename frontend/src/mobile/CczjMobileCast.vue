@@ -4,10 +4,11 @@ import { ref, watch, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '../components/Icon.vue'
 import { Button } from '../components/ui'
+import CczjMobilePlayerDrawer from './CczjMobilePlayerDrawer.vue'
 import { DiscoverCastDevices, PlayCastVideo, ControlCastVideo, normalizeApiError } from '../api/app'
 import { createPlayerPlatform } from '../player/platform'
 const platform=createPlayerPlatform()
-const props = defineProps<{ open: boolean; url: string; title: string; position: number; host?:HTMLElement }>()
+const props = defineProps<{ open: boolean; url: string; title: string; position: number; host?:HTMLElement; fullscreen?:boolean }>()
 const emit = defineEmits<{ close: []; connected: [] }>()
 const { t } = useI18n()
 const devices = ref<{ id: string; name: string }[]>([])
@@ -63,9 +64,8 @@ watch(() => props.url, () => { selected.value = null; paused.value = false })
 onBeforeUnmount(() => { disposed = true; stopDiscovery() })
 </script>
 <template>
- <Teleport :to="host || 'body'">
-  <div v-if="open" class="cczj-mobile-cast" role="dialog" aria-modal="true" :aria-label="t('mobile.cast')" @click.stop @pointerdown.stop @wheel.stop>
-    <div class="cczj-mobile-cast-heading"><strong><Icon name="cast" :size="20" />{{ t('mobile.cast') }}</strong><button :aria-label="t('common.close')" @click="emit('close')"><Icon name="close" :size="20" /></button></div>
+ <CczjMobilePlayerDrawer :host="host" :open="open" :fullscreen="!!fullscreen" :title="t('mobile.cast')" @close="emit('close')">
+  <div v-if="open" class="cczj-mobile-cast">
     <p>{{ t('mobile.castHint') }}</p>
     <p v-if="error" class="cczj-mobile-cast-error" role="alert">{{ error }}</p>
     <template v-if="selected">
@@ -83,5 +83,5 @@ onBeforeUnmount(() => { disposed = true; stopDiscovery() })
       <p v-if="busy" role="status">{{ t('mobile.castConnecting') }}</p>
     </template>
   </div>
- </Teleport>
+ </CczjMobilePlayerDrawer>
 </template>

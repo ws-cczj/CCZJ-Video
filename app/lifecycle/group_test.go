@@ -41,6 +41,34 @@ func TestGroupStopIsIdempotent(t *testing.T) {
 	group.Stop(time.Second)
 }
 
+func TestChildOwnerStopsWithParentAndRejectsLateWork(t *testing.T) {
+	parent := NewGroup()
+	child := NewGroupWithContext(parent.Context())
+	started, finished := make(chan struct{}), make(chan struct{})
+	child.Go("child I/O", func(ctx context.Context) {
+		close(started)
+		<-ctx.Done()
+		close(finished)
+	})
+	<-started
+	parent.Cancel()
+	select {
+	case <-finished:
+	case <-time.After(time.Second):
+		t.Fatal("child did not follow parent cancellation")
+	}
+	if child.Go("late", func(context.Context) { t.Error("late work executed") }) {
+		t.Fatal("cancelled parent still admitted child work")
+	}
+	if release, accepted := child.Track("late request"); accepted {
+		release()
+		t.Fatal("cancelled parent still admitted a tracked request")
+	}
+	if !child.Stop(time.Second) || !parent.Stop(time.Second) {
+		t.Fatal("owner did not drain")
+	}
+}
+
 func TestTrackedRequestsDrainAndCannotReenterStoppedOwner(t *testing.T) {
 	group := NewGroup()
 	release, ok := group.Track("request")

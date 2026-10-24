@@ -5,6 +5,7 @@ import (
 	"cczjVideo/app/applog"
 	backupservice "cczjVideo/app/backup"
 	fileservice "cczjVideo/app/files"
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,14 +18,18 @@ import (
 // BackupExport writes settings, favorites, watch history and the metadata they
 // point at into one Brotli-compressed JSON file. An empty destination puts the
 // file under dataDir/exports and returns that path.
-func (a *App) BackupExport(destination string) (string, error) {
-	return backupservice.NewService().Export(a.getDataDir(), destination)
+func (a *App) BackupExport(ctx context.Context, destination string) (string, error) {
+	return runHostRequest(a, ctx, "backup.BackupExport", func(ctx context.Context) (string, error) {
+		return backupservice.NewService().ExportContext(ctx, a.getDataDir(), destination)
+	})
 }
 
 // BackupImportFromBase64 merges a backup chosen in the browser. Merge only ever
 // adds or refreshes: it never deletes local rows.
-func (a *App) BackupImportFromBase64(filename string, b64Content string) (backupservice.Result, error) {
-	return backupservice.NewService().ImportBase64(filename, b64Content)
+func (a *App) BackupImportFromBase64(ctx context.Context, filename string, b64Content string) (backupservice.Result, error) {
+	return runHostRequest(a, ctx, "backup.BackupImportFromBase64", func(ctx context.Context) (backupservice.Result, error) {
+		return backupservice.NewService().ImportBase64Context(ctx, filename, b64Content)
+	})
 }
 
 // BackupArchives lists the pre-migration snapshots the app keeps on disk.
@@ -34,8 +39,10 @@ func (a *App) BackupArchives() ([]backupservice.ArchiveInfo, error) {
 
 // BackupRestoreArchive merges one snapshot by file name; the path is rebuilt
 // under dataDir/schema-backups so only the archive directory is reachable.
-func (a *App) BackupRestoreArchive(name string) (backupservice.Result, error) {
-	return backupservice.NewService().RestoreArchive(a.getDataDir(), name)
+func (a *App) BackupRestoreArchive(ctx context.Context, name string) (backupservice.Result, error) {
+	return runHostRequest(a, ctx, "backup.BackupRestoreArchive", func(ctx context.Context) (backupservice.Result, error) {
+		return backupservice.NewService().RestoreArchiveContext(ctx, a.getDataDir(), name)
+	})
 }
 
 // BackupExports lists the backup files already in dataDir/exports, newest first.
@@ -46,8 +53,10 @@ func (a *App) BackupExports() ([]backupservice.ArchiveInfo, error) {
 }
 
 // BackupImportFile merges one file from dataDir/exports by name.
-func (a *App) BackupImportFile(name string) (backupservice.Result, error) {
-	return backupservice.NewService().ImportFile(a.getDataDir(), name)
+func (a *App) BackupImportFile(ctx context.Context, name string) (backupservice.Result, error) {
+	return runHostRequest(a, ctx, "backup.BackupImportFile", func(ctx context.Context) (backupservice.Result, error) {
+		return backupservice.NewService().ImportFileContext(ctx, a.getDataDir(), name)
+	})
 }
 
 func (a *App) OpenFolder(path string) (string, error) {

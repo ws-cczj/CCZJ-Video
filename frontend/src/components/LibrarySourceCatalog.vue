@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import type { LibraryKind } from '../api/library'
 import { previewSources, checkSourceCandidate, importSources, sourceStatus, compareSources, visibleSourceCandidates, type SourceCandidate, type SourcePreview, type SourceImportResult, type SourceCatalogMode } from '../api/sourceCatalog'
 import { normalizeApiError } from '../api/app'
+import { readFileText } from '../api/fileTransfer'
 import { Button, Spinner } from './ui'
 
 const props=defineProps<{kind:LibraryKind}>()
@@ -22,7 +23,7 @@ let generation=0,disposed=false
 async function track<T>(request:Promise<T>&{cancel?:()=>unknown}):Promise<T>{pending.add(request);try{return await request}finally{pending.delete(request)}}
 function cancel(){generation++;for(const request of pending){try{void Promise.resolve(request.cancel?.()).catch(()=>{})}catch{}};pending.clear();checking.value=new Set()}
 async function load(input='',origin=''){
-  if(importing.value)return
+  if(importing.value||disposed)return
   catalogMode.value = input === 'community' || input === 'community:refresh' ? 'community' : origin || input ? 'custom' : 'bundled'
   community.value=input==='community'||input==='community:refresh'
   cancel();const token=generation;loading.value=true;error.value='';message.value='';selected.value=new Set()
@@ -32,9 +33,16 @@ async function load(input='',origin=''){
 }
 async function loadCommunity(){community.value=true;await load('community')}
 async function readFile(event:Event){
-  const file=(event.target as HTMLInputElement).files?.[0];if(!file)return
-  try{if(file.size>32*1024*1024){error.value=t('sourceCatalog.tooLarge');return}community.value=false;await load(await file.text(),file.name)}catch(raw){error.value=normalizeApiError(raw).message}
-  if(fileInput.value)fileInput.value.value=''
+  const input=event.target as HTMLInputElement,file=input.files?.[0];input.value=''
+  if(!file||disposed||importing.value)return
+  if(file.size>32*1024*1024){error.value=t('sourceCatalog.tooLarge');return}
+  cancel();const token=generation;loading.value=true;error.value=''
+  try{
+    const text=await track(readFileText(file,32*1024*1024))
+    if(token!==generation||disposed)return
+    await load(text,file.name)
+  }catch(raw){if(token===generation&&!disposed)error.value=normalizeApiError(raw).message}
+  finally{if(token===generation&&!disposed)loading.value=false}
 }
 const candidates=computed(()=>preview.value?.candidates??[])
 const displayCandidates=computed(()=>visibleSourceCandidates(candidates.value,catalogMode.value))

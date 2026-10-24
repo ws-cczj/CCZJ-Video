@@ -38,6 +38,7 @@ export const ComicTrending = bind('ComicTrending', bindings.ComicTrending)
 export const CompressDetailJSONBrotli = bind('CompressDetailJSONBrotli', bindings.CompressDetailJSONBrotli)
 export const ConfirmShutdown = bind('ConfirmShutdown', bindings.ConfirmShutdown)
 export const ControlCastVideo = bind('ControlCastVideo', bindings.ControlCastVideo)
+export const CreateSource = bind('CreateSource', bindings.CreateSource)
 export const DanmakuBind = bind('DanmakuBind', bindings.DanmakuBind)
 export const DanmakuBinding = bind('DanmakuBinding', bindings.DanmakuBinding)
 export const DanmakuEpisodes = bind('DanmakuEpisodes', bindings.DanmakuEpisodes)
@@ -163,6 +164,7 @@ export const OpenPluginDirectory = bind('OpenPluginDirectory', bindings.OpenPlug
 export const PauseCollect = bind('PauseCollect', bindings.PauseCollect)
 export const PauseDownload = bind('PauseDownload', bindings.PauseDownload)
 export const PlayCastVideo = bind('PlayCastVideo', bindings.PlayCastVideo)
+export const ProbePlayLines = bind('ProbePlayLines', bindings.ProbePlayLines)
 export const ProbeSource = bind('ProbeSource', bindings.ProbeSource)
 export const ProbeSources = bind('ProbeSources', bindings.ProbeSources)
 export const ProxyImage = bind('ProxyImage', bindings.ProxyImage)
@@ -225,7 +227,8 @@ export const WindowSetFullscreen = bind('WindowSetFullscreen', bindings.WindowSe
 export const WindowSetResizable = bind('WindowSetResizable', bindings.WindowSetResizable)
 export const WindowSetSize = bind('WindowSetSize', bindings.WindowSetSize)
 export const WindowToggleMax = bind('WindowToggleMax', bindings.WindowToggleMax)
-export const WriteLog = bind('WriteLog', bindings.WriteLog)
+const writeLog = bind('WriteLog', bindings.WriteLog)
+export const WriteLog = (entry: Omit<Parameters<typeof bindings.WriteLog>[0], 'fields'> & { fields?: Record<string, string> }) => writeLog({ ...entry, fields: entry.fields ?? {} })
 
 export { normalizeApiError, ApiFailure, toApiFailure } from './errors'
 export type { ApiError, ApiErrorCode } from './errors'

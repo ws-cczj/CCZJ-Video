@@ -13,13 +13,20 @@ const MAX_BYTES = 65536, LIFETIME = 12 * 60 * 60 * 1000
 const pages: Record<ApplicationMode, string[]> = {
   video: ['/', '/search', '/recent', '/favorites', '/history', '/recommendations', '/downloads'],
   novel: ['/novel', '/novel/categories', '/novel/search', '/novel/shelf', '/novel/settings'],
-  comic: ['/comic', '/comic/categories', '/comic/search', '/comic/library', '/comic/me'],
+  comic: ['/comic', '/comic/categories', '/comic/search', '/comic/library', '/comic/settings'],
 }
 const record = (value: unknown): Record<string, unknown> | null => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null
 function route(mode: ApplicationMode, value: unknown): string | null {
   if (typeof value !== 'string' || value.length > 2048 || /[\\\x00-\x20#]/.test(value)) return null
-  const path = value.split('?')[0]!
-  return pages[mode].includes(path) && routeMode(path) === mode ? value : null
+  const previousPath = value.split('?')[0]!
+  const path = previousPath === '/comic/me' ? '/comic/settings' : previousPath
+  return pages[mode].includes(path) && routeMode(path) === mode ? path + value.slice(previousPath.length) : null
+}
+function scrollKey(mode: ApplicationMode, value: string): string | null {
+  const ordinary = route(mode, value)
+  if (ordinary) return ordinary
+  const settings = /^(\/(?:novel|comic)\/settings):([a-zA-Z0-9_-]{1,64})$/.exec(value)
+  return settings && route(mode, settings[1]) ? value : null
 }
 function scalars(value: unknown): ViewState {
   const source = record(value), result: ViewState = {}
@@ -63,8 +70,8 @@ export function createModeSessions(storage: SessionStorage, clock = Date.now) {
       if (value?.version === 1) for (const mode of APPLICATION_MODE_KEYS) {
         const item = record(source?.[mode])
         if (!item || !fresh(item.at) || !route(mode, item.route)) continue
-        const state: Snapshot = { at: item.at, route: String(item.route), scroll: {}, views: {} }
-        for (const [path, top] of Object.entries(record(item.scroll) || {}).slice(0, 12)) if (route(mode, path) && typeof top === 'number' && Number.isFinite(top) && top >= 0 && top <= 1e7) state.scroll[path] = top
+        const state: Snapshot = { at: item.at, route: route(mode, item.route)!, scroll: {}, views: {} }
+        for (const [path, top] of Object.entries(record(item.scroll) || {}).slice(0, 12)) { const key=scrollKey(mode,path); if (key && typeof top === 'number' && Number.isFinite(top) && top >= 0 && top <= 1e7) state.scroll[key] = top }
         for (const [key, fields] of Object.entries(record(item.views) || {}).slice(0, 8)) if (viewKey(key)) state.views[key] = scalars(fields)
         trim(state);modes[mode] = state
       }
@@ -78,12 +85,13 @@ export function createModeSessions(storage: SessionStorage, clock = Date.now) {
   return {
     rememberRoute(mode: ApplicationMode, path: string) { const valid = route(mode, path); if (valid) { const state = get(mode); state.route = valid; state.at = clock();trim(state) } },
     rememberScroll(mode: ApplicationMode, path: string, top: number) {
-      if (!route(mode, path) || !Number.isFinite(top) || top < 0) return
-      const state = get(mode); state.at = clock(); delete state.scroll[path]; state.scroll[path] = Math.min(top, 1e7)
+      const key=scrollKey(mode,path)
+      if (!key || !Number.isFinite(top) || top < 0) return
+      const state = get(mode); state.at = clock(); delete state.scroll[key]; state.scroll[key] = Math.min(top, 1e7)
       for (const key of Object.keys(state.scroll).slice(0, -12)) delete state.scroll[key]
       trim(state)
     },
-    scroll(mode: ApplicationMode, path: string) { return get(mode).scroll[path] ?? 0 },
+    scroll(mode: ApplicationMode, path: string) { const key=scrollKey(mode,path); return key ? get(mode).scroll[key] ?? 0 : 0 },
     saveView(mode: ApplicationMode, key: string, value: ViewState) {
       if (!viewKey(key)) return
       const state = get(mode); state.at = clock(); delete state.views[key]; state.views[key] = scalars(value)

@@ -1,6 +1,9 @@
 package backup
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -37,17 +40,20 @@ func (c LegacyCounts) Empty() bool {
 // PeekLegacy 只数旧库里的收藏、历史与采集源，不碰当前库。
 // 提示框要先有据可依，才谈得上让用户点合并。
 func (s *Service) PeekLegacy(legacyDir string) (LegacyCounts, error) {
+	return s.PeekLegacyContext(context.Background(), legacyDir)
+}
+func (s *Service) PeekLegacyContext(ctx context.Context, legacyDir string) (LegacyCounts, error) {
 	var counts LegacyCounts
-	err := withLegacyDB(legacyDir, func(database *sqlx.DB) error {
+	err := withLegacyDBContext(ctx, legacyDir, func(database *sqlx.DB) error {
 		// 认不出的旧库（没有这些表）在这里就报错：那已经说明它不是本应用的库，
 		// 后面的合并也不会有结果，不如把原话交给界面。
-		if err := database.QueryRow(`SELECT count(*) FROM favorites`).Scan(&counts.Favorites); err != nil {
+		if err := database.QueryRowContext(ctx, `SELECT count(*) FROM favorites`).Scan(&counts.Favorites); err != nil {
 			return err
 		}
-		if err := database.QueryRow(`SELECT count(*) FROM watch_history`).Scan(&counts.History); err != nil {
+		if err := database.QueryRowContext(ctx, `SELECT count(*) FROM watch_history`).Scan(&counts.History); err != nil {
 			return err
 		}
-		return database.QueryRow(`SELECT count(*) FROM sources`).Scan(&counts.Sources)
+		return database.QueryRowContext(ctx, `SELECT count(*) FROM sources`).Scan(&counts.Sources)
 	})
 	return counts, err
 }
@@ -55,7 +61,10 @@ func (s *Service) PeekLegacy(legacyDir string) (LegacyCounts, error) {
 // MergeLegacy 把旧库里的采集源、收藏、历史以及它们指向的元数据并进当前库。
 // 旧库保持只读；合并是追加，本机已有的值一律保留。
 func (s *Service) MergeLegacy(legacyDir string) (Result, error) {
-	payload, err := readLegacyPayload(legacyDir)
+	return s.MergeLegacyContext(context.Background(), legacyDir)
+}
+func (s *Service) MergeLegacyContext(ctx context.Context, legacyDir string) (Result, error) {
+	payload, err := readLegacyPayloadContext(ctx, legacyDir)
 	if err != nil {
 		return Result{}, err
 	}
@@ -63,7 +72,7 @@ func (s *Service) MergeLegacy(legacyDir string) (Result, error) {
 	if counts.Empty() {
 		return Result{}, apperror.New(apperror.NotFound, "旧库里没有可找回的收藏、历史或采集源")
 	}
-	return s.Import(payload, "legacy:"+legacyDir)
+	return s.ImportContext(ctx, payload, "legacy:"+legacyDir)
 }
 
 // readLegacyPayload 逐项读旧库，某一项读不出只丢那一项：2.0.x 的库里可能没有
@@ -73,39 +82,45 @@ func (s *Service) MergeLegacy(legacyDir string) (Result, error) {
 // 设置一概不读：那是一份可能停在几个版本之前的偏好，把用户现在的主题、数据新鲜度
 // 之类盖掉，比少带几项设置糟得多。
 func readLegacyPayload(legacyDir string) (Payload, error) {
+	return readLegacyPayloadContext(context.Background(), legacyDir)
+}
+func readLegacyPayloadContext(ctx context.Context, legacyDir string) (Payload, error) {
 	payload := Payload{
 		Kind:     payloadKind,
 		Version:  payloadVersion,
 		Exported: time.Now().Format(time.RFC3339),
 	}
-	var failures []string
-	err := withLegacyDB(legacyDir, func(database *sqlx.DB) error {
-		if rows, readErr := db.ReadFavorites(database); readErr != nil {
-			failures = append(failures, "favorites: "+readErr.Error())
+	var failures []error
+	err := withLegacyDBContext(ctx, legacyDir, func(database *sqlx.DB) error {
+		if rows, readErr := db.ReadFavoritesContext(ctx, database); readErr != nil {
+			failures = append(failures, fmt.Errorf("favorites: %w", readErr))
 		} else {
 			payload.Favorites = rows
 		}
-		if rows, readErr := db.ReadHistory(database); readErr != nil {
-			failures = append(failures, "history: "+readErr.Error())
+		if rows, readErr := db.ReadHistoryContext(ctx, database); readErr != nil {
+			failures = append(failures, fmt.Errorf("history: %w", readErr))
 		} else {
 			payload.History = rows
 		}
-		if rows, readErr := db.ReadLinkedVideoMeta(database); readErr != nil {
-			failures = append(failures, "metadata: "+readErr.Error())
+		if rows, readErr := db.ReadLinkedVideoMetaContext(ctx, database); readErr != nil {
+			failures = append(failures, fmt.Errorf("metadata: %w", readErr))
 		} else {
 			payload.Videos = rows
 		}
-		if rows, readErr := db.ReadSources(database); readErr != nil {
-			failures = append(failures, "sources: "+readErr.Error())
+		if rows, readErr := db.ReadSourcesContext(ctx, database); readErr != nil {
+			failures = append(failures, fmt.Errorf("sources: %w", readErr))
 		} else {
 			payload.Sources = rows
 		}
 		if len(payload.Favorites)+len(payload.History)+len(payload.Sources)+len(payload.Videos) == 0 && len(failures) > 0 {
-			return apperror.Newf(apperror.Corrupt, "旧库读不出任何内容（%v）", failures)
+			return apperror.Wrap(apperror.Corrupt, errors.Join(failures...), "旧库读不出任何内容")
 		}
 		return nil
 	})
 	if err != nil {
+		return Payload{}, err
+	}
+	if err := ctx.Err(); err != nil {
 		return Payload{}, err
 	}
 	for _, failure := range failures {
@@ -119,7 +134,10 @@ func readLegacyPayload(legacyDir string) (Payload, error) {
 // 先原地打开：旧库可能有几百 MB，为了给合并读几张表先整份复制一遍，界面会当场
 // 卡住。原地打不开（目录只读、或 -wal 待恢复却没处写 -shm）才退回临时副本——
 // 与归档恢复同一条底线：绝不改用户那份旧库。
-func withLegacyDB(legacyDir string, fn func(database *sqlx.DB) error) error {
+func withLegacyDB(legacyDir string, fn func(*sqlx.DB) error) error {
+	return withLegacyDBContext(context.Background(), legacyDir, fn)
+}
+func withLegacyDBContext(ctx context.Context, legacyDir string, fn func(*sqlx.DB) error) error {
 	if legacyDir == "" {
 		return apperror.New(apperror.Validation, "没有旧数据目录可读")
 	}
@@ -132,14 +150,17 @@ func withLegacyDB(legacyDir string, fn func(database *sqlx.DB) error) error {
 		return apperror.New(apperror.Corrupt, "旧数据库是个空文件")
 	}
 
-	database, err := sqlx.Connect("sqlite", path+"?_pragma=busy_timeout(3000)&_pragma=query_only(TRUE)")
+	database, err := sqlx.ConnectContext(ctx, "sqlite", path+"?_pragma=busy_timeout(3000)&_pragma=query_only(TRUE)")
 	if err == nil {
 		defer database.Close()
 		return fn(database)
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	applog.Warn("[Legacy] 旧库无法原地只读打开，改用临时副本: %v", err)
 
-	copied, closeCopy, copyErr := readOnlyCopy(path)
+	copied, closeCopy, copyErr := readOnlyCopyContext(ctx, path)
 	if copyErr != nil {
 		return copyErr
 	}

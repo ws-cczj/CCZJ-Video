@@ -3,9 +3,13 @@
 package backup
 
 import (
+	"cczjVideo/app/files"
 	"cczjVideo/app/payload"
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +17,7 @@ import (
 
 	"cczjVideo/app/apperror"
 	"cczjVideo/app/applog"
+	"cczjVideo/app/cache"
 	"cczjVideo/app/db"
 	"cczjVideo/app/model"
 
@@ -91,56 +96,33 @@ var machineLocalSettings = map[string]bool{
 // exportableSources 决定备份里是否带上源定义。源带着 API 地址，收藏与历史
 // 的「从哪打开」坐标才有意义；目录本体仍走采集源导出，不塞进这里。
 func (s *Service) buildPayload(dataDir string) (Payload, error) {
-	settings, err := db.ReadAllSettings(db.DB())
+	return s.buildPayloadContext(context.Background(), dataDir)
+}
+func (s *Service) buildPayloadContext(ctx context.Context, dataDir string) (Payload, error) {
+	snapshot, err := db.ReadBackupSnapshot(ctx, db.DB())
 	if err != nil {
-		return Payload{}, apperror.Wrap(apperror.Storage, err, "read settings")
+		return Payload{}, apperror.Wrap(apperror.Storage, err, "read backup snapshot")
 	}
-	portableSettings := make([]db.BackupSetting, 0, len(settings))
-	for _, setting := range settings {
+	settings := make([]db.BackupSetting, 0, len(snapshot.Settings))
+	for _, setting := range snapshot.Settings {
 		if !machineLocalSettings[setting.Key] {
-			portableSettings = append(portableSettings, setting)
+			settings = append(settings, setting)
 		}
 	}
-	settings = portableSettings
-	favorites, err := db.ReadFavorites(db.DB())
-	if err != nil {
-		return Payload{}, apperror.Wrap(apperror.Storage, err, "read favorites")
-	}
-	history, err := db.ReadHistory(db.DB())
-	if err != nil {
-		return Payload{}, apperror.Wrap(apperror.Storage, err, "read history")
-	}
-	videos, err := db.ReadLinkedVideoMeta(db.DB())
-	if err != nil {
-		return Payload{}, apperror.Wrap(apperror.Storage, err, "read linked metadata")
-	}
-	sources, err := db.GetAllSources()
-	if err != nil {
-		return Payload{}, apperror.Wrap(apperror.Storage, err, "read sources")
-	}
-	reading, err := db.NewReadingStateStore(db.DB()).ReadBackup(context.Background())
-	if err != nil {
-		return Payload{}, apperror.Wrap(apperror.Storage, err, "read reading state")
-	}
-	return Payload{
-		Kind:      payloadKind,
-		Version:   payloadVersion,
-		Exported:  time.Now().Format(time.RFC3339),
-		App:       filepath.Base(dataDir),
-		Settings:  settings,
-		Sources:   sources,
-		Videos:    videos,
-		Favorites: favorites,
-		History:   history,
-		Reading:   reading,
-	}, nil
+	return Payload{Kind: payloadKind, Version: payloadVersion, Exported: time.Now().Format(time.RFC3339), App: filepath.Base(dataDir), Settings: settings, Sources: snapshot.Sources, Videos: snapshot.Videos, Favorites: snapshot.Favorites, History: snapshot.History, Reading: snapshot.Reading}, nil
 }
 
 // Export writes the full backup as a Brotli-compressed JSON file. An empty
 // destination puts it under dataDir/exports, same as the source export does.
 func (s *Service) Export(dataDir, destination string) (string, error) {
-	payload, err := s.buildPayload(dataDir)
+	return s.ExportContext(context.Background(), dataDir, destination)
+}
+func (s *Service) ExportContext(ctx context.Context, dataDir, destination string) (string, error) {
+	payload, err := s.buildPayloadContext(ctx, dataDir)
 	if err != nil {
+		return "", err
+	}
+	if err := checkItemLimit(payload); err != nil {
 		return "", err
 	}
 	path, err := s.destinationPath(dataDir, destination)
@@ -151,7 +133,15 @@ func (s *Service) Export(dataDir, destination string) (string, error) {
 	if err != nil {
 		return "", apperror.Wrap(apperror.Internal, err, "encode backup")
 	}
-	if err := writeCompressed(path, encoded); err != nil {
+	if len(encoded) > maxBackupBytes {
+		return "", apperror.New(apperror.Validation, "backup exceeds import size limit")
+	}
+	if strings.TrimSpace(destination) == "" {
+		path, err = files.WriteUnique(ctx, filepath.Dir(path), "backup_"+time.Now().Format(defaultExportAt)+"_*.json.br", func(writer io.Writer) error { return compressBackup(writer, encoded) })
+	} else {
+		err = writeCompressedContext(ctx, path, encoded)
+	}
+	if err != nil {
 		return "", err
 	}
 	applog.InfoFields("backup exported", applog.Fields{
@@ -186,55 +176,50 @@ func (s *Service) destinationPath(dataDir, destination string) (string, error) {
 }
 
 func writeCompressed(path string, encoded []byte) error {
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-	if err != nil {
-		return apperror.Wrap(apperror.Storage, err, "create backup file")
-	}
-	writer := brotli.NewWriterLevel(file, 6)
-	if _, err := writer.Write(encoded); err != nil {
-		_ = writer.Close()
-		_ = file.Close()
-		_ = os.Remove(path)
-		return apperror.Wrap(apperror.Storage, err, "write backup file")
-	}
-	if err := writer.Close(); err != nil {
-		_ = file.Close()
-		_ = os.Remove(path)
-		return apperror.Wrap(apperror.Storage, err, "close backup file")
-	}
-	if err := file.Close(); err != nil {
-		return apperror.Wrap(apperror.Storage, err, "close backup file")
-	}
-	return nil
+	return writeCompressedContext(context.Background(), path, encoded)
+}
+func writeCompressedContext(ctx context.Context, path string, encoded []byte) error {
+	return apperror.Wrap(apperror.Storage, files.WriteAtomic(ctx, path, func(writer io.Writer) error { return compressBackup(writer, encoded) }), "write backup file")
+}
+func compressBackup(destination io.Writer, encoded []byte) error {
+	writer := brotli.NewWriterLevel(destination, 6)
+	_, err := writer.Write(encoded)
+	return errors.Join(err, writer.Close())
 }
 
 // ImportBase64 decodes a backup chosen in the browser and merges it.
 func (s *Service) ImportBase64(filename, b64Content string) (Result, error) {
+	return s.ImportBase64Context(context.Background(), filename, b64Content)
+}
+func (s *Service) ImportBase64Context(ctx context.Context, filename, b64Content string) (Result, error) {
 	if strings.TrimSpace(b64Content) == "" {
 		return Result{}, apperror.New(apperror.Validation, "backup content is empty")
 	}
-	raw, err := payload.Base64(context.Background(), b64Content, maxBackupBytes)
+	raw, err := payload.Base64(ctx, b64Content, maxBackupBytes)
 	if err != nil {
 		return Result{}, apperror.Wrap(apperror.Validation, err, "decode base64")
 	}
-	return s.ImportBytes(filename, raw, "base64")
+	return s.ImportBytesContext(ctx, filename, raw, "base64")
 }
 
 // ImportBytes decompresses by filename suffix (falling back to gzip magic) and
 // merges the payload.
 func (s *Service) ImportBytes(filename string, raw []byte, origin string) (Result, error) {
+	return s.ImportBytesContext(context.Background(), filename, raw, origin)
+}
+func (s *Service) ImportBytesContext(ctx context.Context, filename string, raw []byte, origin string) (Result, error) {
 	if len(raw) > maxBackupBytes {
 		return Result{}, apperror.Newf(apperror.Validation, "backup too large: limit %d MiB", maxBackupBytes>>20)
 	}
-	decoded, err := decompress(filename, raw)
+	decoded, err := payload.UnpackBytes(ctx, filename, raw, payload.Limits{Input: maxBackupBytes, Output: maxBackupBytes})
 	if err != nil {
 		return Result{}, err
 	}
-	var payload Payload
-	if err := json.Unmarshal(decoded, &payload); err != nil {
+	var imported Payload
+	if err := payload.JSON(ctx, decoded, &imported, false); err != nil {
 		return Result{}, apperror.Wrap(apperror.Corrupt, err, "parse backup JSON")
 	}
-	return s.Import(payload, origin)
+	return s.ImportContext(ctx, imported, origin)
 }
 
 func decompress(filename string, raw []byte) ([]byte, error) {
@@ -244,28 +229,61 @@ func decompress(filename string, raw []byte) ([]byte, error) {
 // Import merges a payload into the live database. Nothing here deletes local
 // rows: a backup is an addition, and the user's own data always wins a conflict.
 func (s *Service) Import(payload Payload, origin string) (Result, error) {
+	return s.ImportContext(context.Background(), payload, origin)
+}
+
+// ImportContext commits all categories together and never treats storage failure as a skipped record.
+func (s *Service) ImportContext(ctx context.Context, payload Payload, origin string) (Result, error) {
+	if err := ctx.Err(); err != nil {
+		return Result{}, err
+	}
 	if payload.Kind != payloadKind {
 		return Result{}, apperror.Newf(apperror.Corrupt, "not a CCZJ backup file (kind=%q)", payload.Kind)
 	}
 	if payload.Version != 1 && payload.Version != payloadVersion {
 		return Result{}, apperror.Newf(apperror.Unsupported, "unsupported backup version %d (this build reads %d)", payload.Version, payloadVersion)
 	}
-	items := len(payload.Favorites) + len(payload.History) + len(payload.Videos)
-	if items > maxBackupItems {
-		return Result{}, apperror.Newf(apperror.Validation, "backup holds %d entries, limit is %d", items, maxBackupItems)
+	if err := checkItemLimit(payload); err != nil {
+		return Result{}, err
 	}
 	var result Result
-	readingApplied, err := db.NewReadingStateStore(db.DB()).MergeBackup(context.Background(), payload.Reading)
+	change := db.CatalogChange{}
+	err := db.WriteBackup(ctx, db.DB(), func(writer *db.BackupWriter) error {
+		applied, err := writer.MergeReading(payload.Reading)
+		if err != nil {
+			return err
+		}
+		result.ReadingApplied = applied
+		if err := s.mergeSources(writer, payload.Sources, &result); err != nil {
+			return err
+		}
+		if err := s.mergeSettings(writer, payload.Settings, &result); err != nil {
+			return err
+		}
+		ids, err := s.resolveIdentities(writer, payload)
+		if err != nil {
+			return err
+		}
+		if err := s.mergeMeta(writer, payload.Videos, ids, &result); err != nil {
+			return err
+		}
+		if err := s.mergeFavorites(writer, payload.Favorites, ids, &result); err != nil {
+			return err
+		}
+		if err := s.mergeHistory(writer, payload.History, ids, &result); err != nil {
+			return err
+		}
+		change.Affected = result.SourcesAdded + result.MetaApplied + result.FavoritesAdded + result.HistoryApplied
+		if change.Affected > 0 {
+			change.Sources, err = writer.SourceKeys()
+			return err
+		}
+		return nil
+	})
 	if err != nil {
-		return Result{}, apperror.Wrap(apperror.Corrupt, err, "读取或合并阅读备份失败")
+		return Result{}, apperror.Wrap(apperror.Storage, err, "恢复备份失败")
 	}
-	result.ReadingApplied = readingApplied
-	s.mergeSources(payload.Sources, &result)
-	s.mergeSettings(payload.Settings, &result)
-	ids := s.resolveIdentities(payload)
-	s.mergeMeta(payload.Videos, ids, &result)
-	s.mergeFavorites(payload.Favorites, ids, &result)
-	s.mergeHistory(payload.History, ids, &result)
+	cache.PublishCatalogChange(change, "backup restored")
 	applog.InfoFields("backup imported", applog.Fields{
 		"origin":           origin,
 		"settings_applied": result.SettingsApplied,
@@ -277,30 +295,48 @@ func (s *Service) Import(payload Payload, origin string) (Result, error) {
 	return result, nil
 }
 
-func (s *Service) mergeSources(sources []*model.Source, result *Result) {
+// Export and import must agree: a published backup must fit the reader's limits.
+func checkItemLimit(payload Payload) error {
+	items := len(payload.Favorites) + len(payload.History) + len(payload.Videos) + len(payload.Settings) + len(payload.Sources)
+	if payload.Reading != nil {
+		items += len(payload.Reading.Records) + len(payload.Reading.Items) + len(payload.Reading.Chapters)
+	}
+	if items > maxBackupItems {
+		return apperror.Newf(apperror.Validation, "backup holds %d entries, limit is %d", items, maxBackupItems)
+	}
+	return nil
+}
+
+func (s *Service) mergeSources(writer *db.BackupWriter, sources []*model.Source, result *Result) error {
 	for _, source := range sources {
 		if source == nil {
+			result.SourcesSkipped++
 			continue
 		}
 		key := strings.TrimSpace(source.SourceKey)
-		if model.ValidateSourceKey(key) != nil {
+		if model.ValidateSourceKey(key) != nil || model.ValidateSourceKind(source.GetKind()) != nil {
 			result.SourcesSkipped++
 			continue
 		}
-		if existing, err := db.GetSourceByKey(key); err == nil && existing != nil {
-			// 本机已有的源保持原样：备份里的地址可能是旧机器的临时可用镜像。
+		_, err := writer.Source(key)
+		if err == nil {
 			result.SourcesSkipped++
 			continue
 		}
-		if err := db.AddSource(source); err != nil {
-			result.SourcesSkipped++
-			continue
+		if !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		copy := *source
+		copy.SourceKey = key
+		if err := writer.AddSource(&copy); err != nil {
+			return err
 		}
 		result.SourcesAdded++
 	}
+	return nil
 }
 
-func (s *Service) mergeSettings(settings []db.BackupSetting, result *Result) {
+func (s *Service) mergeSettings(writer *db.BackupWriter, settings []db.BackupSetting, result *Result) error {
 	for _, setting := range settings {
 		key := strings.TrimSpace(setting.Key)
 		if key == "" || machineLocalSettings[key] {
@@ -308,24 +344,28 @@ func (s *Service) mergeSettings(settings []db.BackupSetting, result *Result) {
 			continue
 		}
 		if key == "default_source_key" && strings.TrimSpace(setting.Value) != "" {
-			// 默认源指向一个本机不存在的源会让界面开在空列表上，宁可不搬。
-			if existing, err := db.GetSourceByKey(setting.Value); err != nil || existing == nil {
-				result.SettingsSkipped++
-				continue
+			if _, err := writer.Source(setting.Value); err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					result.SettingsSkipped++
+					continue
+				}
+				return err
 			}
 		}
-		if existing, err := db.GetSetting(key); err == nil && existing == setting.Value {
-			// 值没变就不算「写入」：否则把自己导出的备份再导回去会报出几项改动，
-			// 用户看到的计数和实际发生的写入对不上。
+		existing, err := writer.Setting(key)
+		if err != nil {
+			return err
+		}
+		if existing == setting.Value {
 			result.SettingsSkipped++
 			continue
 		}
-		if err := db.SetSetting(key, setting.Value); err != nil {
-			result.SettingsSkipped++
-			continue
+		if err := writer.SetSetting(key, setting.Value); err != nil {
+			return err
 		}
 		result.SettingsApplied++
 	}
+	return nil
 }
 
 // identityKey 是「标题+年份」的查表键，与 db 侧身份解析的输入一一对应。
@@ -335,7 +375,7 @@ func identityKey(vodName, year string) string {
 
 // resolveIdentities resolves every title the payload mentions in one batch, so
 // a large history does not turn into one full-table read per row.
-func (s *Service) resolveIdentities(payload Payload) map[string]int64 {
+func (s *Service) resolveIdentities(writer *db.BackupWriter, payload Payload) (map[string]int64, error) {
 	seen := make(map[string]bool, len(payload.Favorites)+len(payload.History)+len(payload.Videos))
 	identities := make([]db.BackupIdentity, 0, len(payload.Favorites)+len(payload.History)+len(payload.Videos))
 	collect := func(vodName, year string) {
@@ -358,48 +398,45 @@ func (s *Service) resolveIdentities(payload Payload) map[string]int64 {
 	for _, item := range payload.History {
 		collect(item.VodName, item.Year)
 	}
-	ids, err := db.ResolveBackupIdentities(identities)
+	ids, err := writer.ResolveIdentities(identities)
 	lookup := make(map[string]int64, len(ids))
 	if err != nil {
-		applog.Error("[backup] 身份解析失败，收藏与历史将只按已能解析的条目合并: %v", err)
-		return lookup
+		return nil, err
 	}
 	for i, identity := range identities {
 		lookup[identityKey(identity.VodName, identity.Year)] = ids[i]
 	}
-	return lookup
+	return lookup, nil
 }
 
-func (s *Service) mergeMeta(videos []db.BackupVideoMeta, ids map[string]int64, result *Result) {
+func (s *Service) mergeMeta(writer *db.BackupWriter, videos []db.BackupVideoMeta, ids map[string]int64, result *Result) error {
 	for _, meta := range videos {
 		globalID := ids[identityKey(meta.VodName, meta.Year)]
 		if globalID <= 0 {
 			result.Unresolved++
 			continue
 		}
-		applied, err := db.MergeVideoMetaFromBackup(globalID, meta)
+		applied, err := writer.MergeMeta(globalID, meta)
 		if err != nil {
-			applog.Warn("[backup] 合并全局元数据失败 global_id=%d: %v", globalID, err)
-			continue
+			return err
 		}
 		if applied {
 			result.MetaApplied++
 		}
 	}
+	return nil
 }
 
-func (s *Service) mergeFavorites(favorites []db.BackupFavorite, ids map[string]int64, result *Result) {
+func (s *Service) mergeFavorites(writer *db.BackupWriter, favorites []db.BackupFavorite, ids map[string]int64, result *Result) error {
 	for _, item := range favorites {
 		globalID := ids[identityKey(item.VodName, item.Year)]
 		if globalID <= 0 {
 			result.Unresolved++
 			continue
 		}
-		added, err := db.MergeFavoriteFromBackup(globalID, strings.TrimSpace(item.SourceKey), strings.TrimSpace(item.VodID), item.CreatedAt)
+		added, err := writer.MergeFavorite(globalID, strings.TrimSpace(item.SourceKey), strings.TrimSpace(item.VodID), item.CreatedAt)
 		if err != nil {
-			applog.Warn("[backup] 合并收藏失败 %q: %v", item.VodName, err)
-			result.FavoritesSkipped++
-			continue
+			return err
 		}
 		if added {
 			result.FavoritesAdded++
@@ -407,21 +444,20 @@ func (s *Service) mergeFavorites(favorites []db.BackupFavorite, ids map[string]i
 			result.FavoritesSkipped++
 		}
 	}
+	return nil
 }
 
-func (s *Service) mergeHistory(history []db.BackupHistory, ids map[string]int64, result *Result) {
+func (s *Service) mergeHistory(writer *db.BackupWriter, history []db.BackupHistory, ids map[string]int64, result *Result) error {
 	for _, item := range history {
 		globalID := ids[identityKey(item.VodName, item.Year)]
 		if globalID <= 0 {
 			result.Unresolved++
 			continue
 		}
-		applied, err := db.MergeHistoryFromBackup(globalID, strings.TrimSpace(item.SourceKey), strings.TrimSpace(item.VodID),
+		applied, err := writer.MergeHistory(globalID, strings.TrimSpace(item.SourceKey), strings.TrimSpace(item.VodID),
 			item.EpNum, item.Position, item.UpdatedAt)
 		if err != nil {
-			applog.Warn("[backup] 合并历史失败 %q ep=%d: %v", item.VodName, item.EpNum, err)
-			result.HistorySkipped++
-			continue
+			return err
 		}
 		if applied {
 			result.HistoryApplied++
@@ -429,4 +465,5 @@ func (s *Service) mergeHistory(history []db.BackupHistory, ids map[string]int64,
 			result.HistorySkipped++
 		}
 	}
+	return nil
 }

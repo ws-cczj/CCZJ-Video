@@ -5,14 +5,31 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
 	"cczjVideo/app/resource"
+	"cczjVideo/app/storagepaths"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 func main() {
+	profile := os.Args[2]
+	if profile == "@cczj" {
+		configDir, err := os.UserConfigDir()
+		if err != nil {
+			panic(err)
+		}
+		exe, err := os.Executable()
+		if err != nil {
+			panic(err)
+		}
+		profile, err = storagepaths.WindowsWebview(configDir, filepath.Base(exe))
+		if err != nil {
+			panic(err)
+		}
+	}
 	renderOffscreen := os.Getenv("CCZJ_PROBE_RENDER_OFFSCREEN") == "1"
 	browserArgs := []string{"--remote-debugging-address=127.0.0.1", "--remote-debugging-port=" + os.Args[3], "--autoplay-policy=no-user-gesture-required", "--disable-background-timer-throttling"}
 	if renderOffscreen {
@@ -26,7 +43,7 @@ func main() {
 		browserArgs = append(browserArgs, extra...)
 	}
 	app := application.New(application.Options{Name: "CCZJ Playback Resource Probe", Windows: application.WindowsOptions{
-		WebviewUserDataPath: os.Args[2], AdditionalBrowserArgs: browserArgs,
+		WebviewUserDataPath: profile, AdditionalBrowserArgs: browserArgs,
 	}})
 	app.Window.NewWithOptions(application.WebviewWindowOptions{Name: "probe", Title: "CCZJ Playback Resource Probe", Width: 1280, Height: 800, URL: os.Args[1], Hidden: !renderOffscreen,
 		InitialPosition: application.WindowXY, X: -16000, Y: -16000, Windows: application.WindowsWindow{HiddenOnTaskbar: true},

@@ -3,6 +3,7 @@ package db
 import (
 	"cczjVideo/app/model"
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 
@@ -16,7 +17,7 @@ func GetAllSources() ([]*model.Source, error) {
 // GetEnabledSources 返回**视频**采集池：启用中的、kind 为 video 的源。
 //
 // kind 过滤不是可选的。小说与漫画源现在和视频源同表（ADR 0016），而这个函数的
-// 两个调用方——定时采集调度器（app/handler/scheduler.go:174）与豆瓣热榜匹配
+// 两个调用方——定时采集调度器（app/collection/scheduler.go）与豆瓣热榜匹配
 // （app/douban/chart.go:455、chart_match.go:15）——都会拿返回的 api_url 当 MAC-CMS
 // 接口去拉分页。一个启用的书源进了这个列表，就会被当成视频源发一轮
 // ?ac=detail&pg=1 的请求，然后连败三次被自动停用。
@@ -59,7 +60,27 @@ func GetSourceByKeyContext(ctx context.Context, key string) (*model.Source, erro
 	return &s, nil
 }
 
-func AddSource(s *model.Source) error {
+func AddSource(s *model.Source) error { return AddSourceContext(context.Background(), s) }
+func AddSourceContext(ctx context.Context, s *model.Source) error {
+	return insertSourceContext(ctx, instance, s)
+}
+func CreateSourceWithDefault(ctx context.Context, s *model.Source) error {
+	tx, err := instance.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := insertSourceContext(ctx, tx, s); err != nil {
+		return err
+	}
+	if s.GetKind() == model.SourceKindVideo {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO settings(key,value) VALUES('default_source_key',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE COALESCE(settings.value,'')=''`, s.SourceKey); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+func insertSourceContext(ctx context.Context, executor sqlx.ExtContext, s *model.Source) error {
 	if s == nil {
 		return fmt.Errorf("source is required")
 	}
@@ -72,12 +93,36 @@ func AddSource(s *model.Source) error {
 	if err := model.ValidateSourceKind(model.SourceKind(s.Kind)); err != nil {
 		return err
 	}
-	_, err := instance.NamedExec(`INSERT INTO sources (source_key, name, api_url, enabled, collect_limit, collect_hours, adv_config, schedule_config, strategy_config, kind)
+	_, err := sqlx.NamedExecContext(ctx, executor, `INSERT INTO sources (source_key, name, api_url, enabled, collect_limit, collect_hours, adv_config, schedule_config, strategy_config, kind)
 		VALUES (:source_key, :name, :api_url, :enabled, :collect_limit, :collect_hours, :adv_config, :schedule_config, :strategy_config, :kind)`, s)
 	return err
 }
 
-func UpdateSource(s *model.Source) error {
+func UpdateSource(s *model.Source) error { return UpdateSourceContext(context.Background(), s) }
+func UpdateSourceContext(ctx context.Context, s *model.Source) error {
+	return updateSourceContext(ctx, instance, s, false)
+}
+func UpdateSourceMetadataContext(ctx context.Context, s *model.Source) error {
+	tx, err := instance.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var enabled int
+	if err := tx.GetContext(ctx, &enabled, `SELECT enabled FROM sources WHERE source_key=?`, s.SourceKey); err != nil {
+		return err
+	}
+	if err := updateSourceContext(ctx, tx, s, true); err != nil {
+		return err
+	}
+	if enabled != 1 && s.Enabled == 1 {
+		if err := ResetSourceHealth(tx, s.SourceKey); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+func updateSourceContext(ctx context.Context, executor sqlx.ExtContext, s *model.Source, preserve bool) error {
 	if s == nil {
 		return fmt.Errorf("source is required")
 	}
@@ -94,12 +139,25 @@ func UpdateSource(s *model.Source) error {
 	// kind 刻意**不在** SET 里：一个源属于哪个模式是它的身份，改名或改接口地址
 	// 都不该顺带把它从视频源变成书源——那会让已经采集的目录与已经加入书架的
 	// 条目全部失去归属。要换模式就删掉重建。
-	_, err := instance.NamedExec(`UPDATE sources SET name=:name, api_url=:api_url, enabled=:enabled,
+	result, err := sqlx.NamedExecContext(ctx, executor, `UPDATE sources SET name=:name, api_url=:api_url, enabled=:enabled,
 		collect_limit=:collect_limit, collect_hours=:collect_hours,
-		adv_config=:adv_config, schedule_config=:schedule_config, strategy_config=:strategy_config,
+		adv_config=CASE WHEN :preserve AND :adv_config='' THEN adv_config ELSE :adv_config END, schedule_config=CASE WHEN :preserve AND :schedule_config='' THEN schedule_config ELSE :schedule_config END, strategy_config=CASE WHEN :preserve AND :strategy_config='' THEN strategy_config ELSE :strategy_config END,
 		auto_disabled_at=0
-		WHERE source_key=:source_key`, s)
-	return err
+		WHERE source_key=:source_key`, struct {
+		*model.Source
+		Preserve bool `db:"preserve"`
+	}{s, preserve})
+	if err != nil {
+		return err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 // AutoDisableSource 把连续失败的源停用，并记下停用时刻。
@@ -158,17 +216,40 @@ func RecoverAutoDisabledSources(before time.Time) ([]string, error) {
 // 定时计划走调度入口，策略（含扩展包适配）必须只动这一列，否则一次改名就会抹掉配置。
 // 传空串表示清除声明式策略，回到内置 standard_cms。
 func SetSourceStrategyConfig(key, strategyConfig string) error {
+	return SetSourceStrategyConfigContext(context.Background(), key, strategyConfig)
+}
+
+// SetSourceScheduleConfigContext updates only the scheduler-owned column.
+func SetSourceScheduleConfigContext(ctx context.Context, key, config string) error {
+	result, err := instance.ExecContext(ctx, `UPDATE sources SET schedule_config=? WHERE source_key=? AND kind='video'`, config, key)
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+func SetSourceStrategyConfigContext(ctx context.Context, key, strategyConfig string) error {
 	if err := model.ValidateSourceKey(key); err != nil {
 		return err
 	}
-	res, err := instance.Exec(`UPDATE sources SET strategy_config=? WHERE source_key=?`, strategyConfig, key)
+	res, err := instance.ExecContext(ctx, `UPDATE sources SET strategy_config=? WHERE source_key=?`, strategyConfig, key)
 	if err != nil {
 		return err
 	}
 	// UPDATE 命中 0 行不报错，所以这里自己判定：前端报的是"这个源已改用某适配"，
 	// 源不存在时不能让它静默成功。
-	if n, err := res.RowsAffected(); err == nil && n == 0 {
-		return fmt.Errorf("来源 %s 不存在", key)
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return sql.ErrNoRows
 	}
 	return nil
 }
@@ -182,16 +263,17 @@ func migrateSourceAutoDisable(tx *sqlx.Tx) error {
 	return addColumnIfMissing(tx, "sources", "auto_disabled_at", "INTEGER NOT NULL DEFAULT 0")
 }
 
-func DeleteSource(key string) error {
+func DeleteSource(key string) error { return DeleteSourceContext(context.Background(), key) }
+func DeleteSourceContext(ctx context.Context, key string) error {
 	if err := model.ValidateSourceKey(key); err != nil {
 		return err
 	}
-	tx, err := instance.Beginx()
+	tx, err := instance.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin source deletion: %w", err)
 	}
 	defer tx.Rollback()
-	if _, err := tx.Exec(`UPDATE source_videos SET lifecycle_state='deleted', updated_at=CURRENT_TIMESTAMP WHERE source_key=?`, key); err != nil {
+	if _, err := tx.ExecContext(ctx, `UPDATE source_videos SET lifecycle_state='deleted', updated_at=CURRENT_TIMESTAMP WHERE source_key=?`, key); err != nil {
 		return fmt.Errorf("retire source catalog: %w", err)
 	}
 	// 小说/漫画的作品与章节同样只退役不删行：书架与阅读进度还指着它们，
@@ -199,7 +281,7 @@ func DeleteSource(key string) error {
 	if err := RetireLibraryItemsOfSource(tx, key); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(`DELETE FROM sources WHERE source_key = ?`, key); err != nil {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM sources WHERE source_key = ?`, key); err != nil {
 		return fmt.Errorf("delete source record: %w", err)
 	}
 	if err := ResetCollectCursor(tx, key); err != nil {
@@ -212,41 +294,4 @@ func DeleteSource(key string) error {
 		return fmt.Errorf("commit source deletion: %w", err)
 	}
 	return nil
-}
-
-func GetSourceStats() ([]model.SourceStat, error) {
-	sources, err := GetAllSources()
-	if err != nil {
-		return nil, err
-	}
-	var stats []model.SourceStat
-	for _, s := range sources {
-		stats = append(stats, model.SourceStat{
-			SourceKey:    s.SourceKey,
-			Name:         s.Name,
-			VideoCount:   itemCount(s),
-			EpisodeCount: 0,
-		})
-	}
-	return stats, nil
-}
-
-// itemCount 按源的模式数它的存量。视频源数目录行，小说/漫画源数作品条——
-// 三种模式共用一张 sources 表之后，一个书源在 source_videos 里永远是 0 条，
-// 源列表上会显示成"这个源什么都没采到"，看着像坏了。
-func itemCount(s *model.Source) int {
-	if s.IsVideo() {
-		return catalogCount(s.SourceKey)
-	}
-	count, err := CountLibraryItems(s.GetKind(), s.SourceKey)
-	if err != nil {
-		return 0
-	}
-	return count
-}
-
-func catalogCount(sourceKey string) int {
-	var count int
-	_ = instance.Get(&count, `SELECT COUNT(*) FROM source_videos WHERE source_key=? AND lifecycle_state='active'`, sourceKey)
-	return count
 }

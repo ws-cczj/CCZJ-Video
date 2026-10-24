@@ -8,11 +8,8 @@ import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 import com.wails.app.BuildConfig;
 
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.json.JSONObject;
 
 /**
  * WailsJSBridge provides the JavaScript interface that allows the web frontend
@@ -24,9 +21,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class WailsJSBridge {
     private static final String TAG = "WailsJSBridge";
     private static final boolean DEBUG = BuildConfig.DEBUG;
-    private static final int CORE_THREADS = 2;
-    private static final int MAX_THREADS = 4;
-    private static final int QUEUE_CAPACITY = 64;
 
     private final WailsBridge bridge;
     private volatile WebView webView;
@@ -34,27 +28,14 @@ public class WailsJSBridge {
     private final CczjDiagnosticFiles diagnosticFiles;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final AtomicBoolean closed = new AtomicBoolean(false);
-    private final ThreadPoolExecutor executor;
+    private final CczjRuntimeDispatcher dispatcher;
 
     public WailsJSBridge(WailsBridge bridge, WebView webView, CczjPlayerDevice player, CczjDiagnosticFiles diagnosticFiles) {
         this.bridge = bridge;
         this.webView = webView;
         this.player = player;
         this.diagnosticFiles = diagnosticFiles;
-        this.executor = new ThreadPoolExecutor(
-                CORE_THREADS,
-                MAX_THREADS,
-                30L,
-                TimeUnit.SECONDS,
-                new ArrayBlockingQueue<>(QUEUE_CAPACITY),
-                runnable -> {
-                    Thread thread = new Thread(runnable, "wails-js");
-                    thread.setDaemon(true);
-                    return thread;
-                },
-                new ThreadPoolExecutor.AbortPolicy()
-        );
-        this.executor.allowCoreThreadTimeOut(true);
+        this.dispatcher = new CczjRuntimeDispatcher(bridge::handleRuntimeCall, this::sendCallback);
     }
 
     /**
@@ -66,7 +47,7 @@ public class WailsJSBridge {
         if (!closed.compareAndSet(false, true)) return;
         mainHandler.removeCallbacksAndMessages(this);
         webView = null;
-        executor.shutdownNow();
+        dispatcher.close();
     }
 
     @JavascriptInterface public String playerState() { return player.state(); }
@@ -131,22 +112,26 @@ public class WailsJSBridge {
         if (closed.get()) return;
         if (DEBUG) Log.d(TAG, "InvokeAsync called: " + payload);
 
-        // Handle off the JS thread so we don't block the WebView.
         try {
-            executor.execute(() -> {
-                if (closed.get()) return;
-                try {
-                    String response = bridge.handleRuntimeCall(payload);
-                    sendCallback(callbackId, response, null);
-                } catch (Exception e) {
-                    Log.e(TAG, "Error in async invoke", e);
-                    sendCallback(callbackId, null, e.getMessage());
-                }
-            });
-        } catch (RejectedExecutionException e) {
-            // A full queue is a real transport error; report it instead of
-            // leaving the JavaScript promise waiting forever.
-            sendCallback(callbackId, null, "Android bridge is busy; try again");
+            JSONObject request = new JSONObject(payload);
+            int object = request.optInt("object", -1);
+            JSONObject args = request.optJSONObject("args");
+            String callID = args == null ? null : args.optString("call-id", null);
+            if (object == 10 && callID != null) {
+                dispatcher.cancel(callbackId, callID, payload);
+                return;
+            }
+            String cancelPayload = null;
+            if (object == 0 && callID != null) {
+                JSONObject cancel = new JSONObject(payload);
+                cancel.put("object", 10);
+                cancel.put("method", 0);
+                cancel.put("args", new JSONObject().put("call-id", callID));
+                cancelPayload = cancel.toString();
+            }
+            dispatcher.submit(callbackId, payload, object == 0 ? callID : null, cancelPayload);
+        } catch (Exception failure) {
+            sendCallback(callbackId, null, "Invalid Android runtime request");
         }
     }
 

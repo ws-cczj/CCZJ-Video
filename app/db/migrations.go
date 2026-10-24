@@ -48,6 +48,7 @@ var migrations = []migration{
 	{version: 17, note: "逐视频逐弹幕源的匹配失败冷却", apply: migrateDanmakuMatchFailures},
 	{version: 18, note: "小说与漫画分别保留源检测、作品覆盖与章节证据", apply: migrateReadingRouting},
 	{version: 19, note: "阅读搜索实测反馈与源质量抽检分开保存", apply: migrateReadingSearchHealth},
+	{version: 20, note: "目录彻底删除的退役坐标：保留用户记录并继续隐藏", apply: migrateCatalogRetirements},
 }
 
 // migrateDoubanAttemptClock 给豆瓣补全队列加一个「最近一次尝试」时钟。

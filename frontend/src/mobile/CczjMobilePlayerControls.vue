@@ -3,8 +3,8 @@ import './player/presentation.css'
 import { useI18n } from 'vue-i18n'
 import Icon from '../components/Icon.vue'
 import { formatPlaybackTime as fmt } from '../player/videoInfoFormat'
-defineProps<{ playing: boolean; pip: boolean; canPip:boolean; canFullscreen:boolean; current: number; duration: number; hasEpisodes: boolean; episodesOpen: boolean }>()
-const emit = defineEmits<{ play: []; fullscreen: []; pip: []; episodesPanel: [] }>()
+defineProps<{ playing: boolean; pip: boolean; canPip:boolean; canFullscreen:boolean; current: number; duration: number; hasEpisodes: boolean; episodesOpen: boolean;hasLines?:boolean;linesOpen?:boolean }>()
+const emit = defineEmits<{ play: []; fullscreen: []; pip: []; episodesPanel: [];linesPanel:[] }>()
 const { t } = useI18n()
 </script>
 <template>
@@ -12,6 +12,7 @@ const { t } = useI18n()
     <button class="cczj-mobile-play" :aria-label="playing ? t('player.pause') : t('player.play')" @click="emit('play')"><Icon :name="playing ? 'pause' : 'play'" :size="22" /></button>
     <span class="cczj-mobile-player-time">{{ fmt(current) }} <span>/ {{ fmt(duration) }}</span></span>
     <button v-if="hasEpisodes" :aria-label="t('detail.episodes')" :aria-expanded="episodesOpen" @click="emit('episodesPanel')">{{ t('detail.episodes') }}</button>
+    <button v-if="hasLines" :aria-label="t('playLine.switch')" :aria-expanded="linesOpen" @click="emit('linesPanel')">{{t('playLine.title')}}</button>
     <button :aria-label="t('player.pipWithHotkey')" :aria-pressed="pip" :disabled="!canPip" @click="emit('pip')"><Icon name="pip" :size="22" /></button>
     <button class="cczj-mobile-fullscreen" :aria-label="t('player.fullscreen')" :disabled="!canFullscreen" @click="emit('fullscreen')"><Icon name="fullscreen" :size="22" /></button>
   </div>

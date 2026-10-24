@@ -5,6 +5,9 @@
 import { ref, reactive, computed } from 'vue'
 import { readStorage, removeStorage, writeStorage } from '../platform/storage'
 import { tr } from '../locales'
+import { DownloadUpdate } from '../api/app'
+import { normalizeApiError } from '../api/errors'
+import { createRequestScope } from '../api/requestScope'
 
 /** 弹窗是否打开 */
 export const updateModalOpen = ref(false)
@@ -23,6 +26,44 @@ export const updateDownloadProgress = reactive({
   speed_bps: 0,
   percent: 0,
 })
+
+const downloadRequests = createRequestScope()
+let activeDownload: Promise<string> | null = null
+
+/** The document owns one update download; hiding the modal keeps it running. */
+export async function downloadUpdateArtifact(url: string, version: string): Promise<void> {
+  if (activeDownload) return
+  updateDownloading.value = true
+  updateDownloaded.value = false
+  updateDownloadError.value = false
+  updateDownloadPath.value = ''
+  clearDownloadState()
+  Object.assign(updateDownloadProgress, { downloaded: 0, total: 0, percent: 0, speed_bps: 0 })
+  const request = downloadRequests.run(() => DownloadUpdate(url))
+  activeDownload = request
+  try {
+    const path = await request
+    if (activeDownload !== request) return
+    updateDownloadPath.value = path
+    updateDownloaded.value = true
+    if (version) saveDownloadState(path, version, url)
+  } catch (error) {
+    if (activeDownload === request && normalizeApiError(error).code !== 'CANCELLED') updateDownloadError.value = true
+    throw error
+  } finally {
+    if (activeDownload === request) {
+      activeDownload = null
+      updateDownloading.value = false
+    }
+  }
+}
+
+/** Release the actual binding and invalidate its late value before another document owner starts. */
+export function stopUpdateDownload(): void {
+  activeDownload = null
+  downloadRequests.cancel()
+  updateDownloading.value = false
+}
 
 export interface UpdateDownloadProgressPayload {
   downloaded?: number

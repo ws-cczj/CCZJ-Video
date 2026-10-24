@@ -1,6 +1,7 @@
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import * as AppMod from '../../api/app'
+import { ProbePlayLines, type PlayLineQuality } from '../../api/playback'
 import { findBestMatch, probeNameOf, searchSourceWithFallback } from './sourceMatching'
 
 export type SourceProbe = 'probing' | 'local' | 'remote' | 'missing' | 'failed'
@@ -10,12 +11,15 @@ export interface SourceOption {
   vod_id?: string  // 该源中对应视频的 vod_id
   probe: SourceProbe
   hit?: any        // probe 为 remote 时的源站搜索原始条目，切换前要先入库
+  lines?:PlayLineQuality[]
+  qualityState?:'pending'|'ready'|'failed'
 }
 
 /** Discovery state belongs to one page, never to a retained global store. */
 export function useSourceCatalog(deps: {
   sources: () => ReadonlyArray<{source_key?:string;name?:string}>
   identity: () => {sourceKey:string;vodId:string;name:string}
+  episode?:()=>number
 }) {
 const { t } = useI18n()
 const sourceOptions = ref<SourceOption[]>([])
@@ -67,6 +71,7 @@ async function buildSourceOptions(): Promise<void> {
       // 能进到这个页面就说明这一条在本库里，当前源直接算 local。
       vod_id: isCurrent ? String(deps.identity().vodId) : undefined,
       probe: isCurrent ? 'local' as SourceProbe : 'probing' as SourceProbe,
+      qualityState:'pending' as const,
     }
   })
   activeSourceKey.value = deps.identity().sourceKey
@@ -104,25 +109,33 @@ async function probeLocalLibrary(generation: number): Promise<void> {
 
 /** 源站探测：本库没命中的源逐个去搜，结果一条一条显示出来。 */
 async function probeRemoteSources(vodName: string, generation: number): Promise<void> {
-  const pending = sourceOptions.value.filter((o) => o.probe === 'probing')
+  const pending = [...sourceOptions.value].sort((a,b)=>Number(b.source_key===activeSourceKey.value)-Number(a.source_key===activeSourceKey.value))
   if (pending.length === 0) return
-  if (!vodName) {
-    for (const opt of pending) opt.probe = 'failed'
-    return
-  }
   let cursor = 0
   const worker = async (): Promise<void> => {
     for (; ;) {
       if (generation !== probeGeneration) return
       const opt = pending[cursor++]
       if (!opt) return
-      const outcome = await probeSourceRemote(opt.source_key, vodName)
-      if (generation !== probeGeneration) return
-      // 用户可能已经手动切过这个源，那一行的结论以本地为准，不覆盖。
-      if (opt.source_key === activeSourceKey.value) continue
-      opt.probe = outcome.probe
-      opt.vod_id = outcome.vodId ?? undefined
-      opt.hit = outcome.hit
+      if(opt.probe==='probing') {
+        if(!vodName){opt.probe='failed';opt.qualityState='failed';continue}
+        const outcome = await probeSourceRemote(opt.source_key, vodName)
+        if (generation !== probeGeneration) return
+        if (opt.source_key !== activeSourceKey.value) {
+          opt.probe = outcome.probe
+          opt.vod_id = outcome.vodId ?? undefined
+          opt.hit = outcome.hit
+        }
+      }
+      if(!opt.vod_id){opt.qualityState='failed';continue}
+      try {
+        const lines=await owned(ProbePlayLines({source_key:opt.source_key,vod_id:opt.vod_id,global_id:0,ep_num:deps.episode?.()||0}))
+        if(generation!==probeGeneration)return
+        opt.lines=lines;opt.qualityState='ready'
+      } catch {
+        if(generation!==probeGeneration)return
+        opt.qualityState='failed'
+      }
     }
   }
   await Promise.all(Array.from({ length: Math.min(PROBE_CONCURRENCY, pending.length) }, worker))

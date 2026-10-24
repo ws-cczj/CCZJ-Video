@@ -1,11 +1,13 @@
 package updater
 
 import (
-	"cczjVideo/app/netpolicy"
+	"cczjVideo/app/files"
+	"cczjVideo/app/parallel"
+	"cczjVideo/app/payload"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -13,12 +15,10 @@ import (
 	goruntime "runtime"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"cczjVideo/app/apperror"
 	"cczjVideo/app/applog"
-	"cczjVideo/app/netstats"
 )
 
 // checksumsAssetName 是发布产物里的校验清单，由 build/windows/package.ps1 生成。
@@ -107,12 +107,14 @@ func checksumChannels() []checksumChannel {
 const requiredParties = 2
 
 // fetchChecksums 从单个完整 URL 取回并解析清单。
-func fetchChecksums(url string) (map[string]string, error) {
-	client := &http.Client{
-		Timeout:   20 * time.Second,
-		Transport: netpolicy.WrapTransport(string(netstats.CategoryUpdate), netstats.WrapTransport(netstats.CategoryUpdate, nil)),
+func fetchChecksums(request context.Context, client *http.Client, url string) (map[string]string, error) {
+	ctx, cancel := context.WithTimeout(request, 20*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
 	}
-	resp, err := client.Get(url)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +122,7 @@ func fetchChecksums(url string) (map[string]string, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	body, err := payload.Read(ctx, resp.Body, 1<<20)
 	if err != nil {
 		return nil, err
 	}
@@ -212,43 +214,47 @@ func decideChecksums(direct map[string]string, directErr error, votes []checksum
 }
 
 // fetchReleaseChecksums 读取某个 tag 下的校验清单：直连优先，取不回来时才由多家加速站互相印证。
-func fetchReleaseChecksums(owner, repo, tag string) (map[string]string, error) {
+func fetchReleaseChecksums(ctx context.Context, client *http.Client, owner, repo, tag string) (map[string]string, error) {
 	if owner != repoOwner || repo != repoName {
 		return nil, apperror.Newf(apperror.Validation, "资源不属于本应用仓库 %s/%s", repoOwner, repoName)
 	}
 	base := fmt.Sprintf("https://github.com/%s/%s/releases/download/%s/%s", owner, repo, tag, checksumsAssetName)
+	return fetchChecksumChannels(ctx, client, base, checksumChannels())
+}
+
+func fetchChecksumChannels(ctx context.Context, client *http.Client, base string, channels []checksumChannel) (map[string]string, error) {
+	if len(channels) == 0 {
+		return nil, apperror.New(apperror.Internal, "缺少校验清单通道")
+	}
 
 	// 代理与直连同时发车：直连在这条路上是慢的那一个，串行试完再回退等于把
 	// 「点下载」到「开始传字节」的时间全花在一次注定超时的等待上。
-	channels := checksumChannels()
-	var wg sync.WaitGroup
-	votesCh := make(chan checksumVote, len(channels)-1)
-	for _, ch := range channels[1:] {
-		wg.Add(1)
-		go func(ch checksumChannel) {
-			defer wg.Done()
-			sums, err := fetchChecksums(ch.prefix + base)
-			// 通道容量够所有 goroutine 写完，没人读也不会把它们挂住。
-			votesCh <- checksumVote{party: ch.party, sums: sums, err: err}
-		}(ch)
+	work, stop := context.WithCancel(ctx)
+	defer stop()
+	votes := make([]checksumVote, len(channels))
+	err := parallel.Each(work, len(channels), 5, func(ctx context.Context, index int) error {
+		channel := channels[index]
+		sums, err := fetchChecksums(ctx, client, channel.prefix+base)
+		votes[index] = checksumVote{party: channel.party, sums: sums, err: err}
+		if index == 0 && err == nil {
+			stop()
+		}
+		return nil
+	})
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
 	}
-
-	direct, directErr := fetchChecksums(channels[0].prefix + base)
-	if directErr == nil {
-		wg.Wait()
+	direct, directErr := votes[0].sums, votes[0].err
+	if directErr == nil && len(direct) > 0 {
 		applog.Info("[Updater] 校验清单来源: %s", channels[0].party)
 		return direct, nil
 	}
+	if err != nil {
+		return nil, err
+	}
 	applog.Warn("[Updater] 校验清单直连失败: %v，改问加速站", directErr)
 
-	wg.Wait()
-	close(votesCh)
-	var votes []checksumVote
-	for vote := range votesCh {
-		votes = append(votes, vote)
-	}
-
-	sums, party, err := decideChecksums(direct, directErr, votes)
+	sums, party, err := decideChecksums(direct, directErr, votes[1:])
 	if err != nil {
 		return nil, err
 	}
@@ -257,14 +263,15 @@ func fetchReleaseChecksums(owner, repo, tag string) (map[string]string, error) {
 }
 
 // fileSHA256 计算文件摘要。
-func fileSHA256(path string) (string, error) {
+func fileSHA256(path string) (string, error) { return fileSHA256Context(context.Background(), path) }
+func fileSHA256Context(ctx context.Context, path string) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return "", err
 	}
 	defer f.Close()
 	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
+	if _, err := files.CopyContext(ctx, h, f); err != nil {
 		return "", err
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
@@ -274,12 +281,12 @@ func fileSHA256(path string) (string, error) {
 //
 // 失败必须挡住而不是放行，否则这一层等于没有——第三方代理替换 31MB 的 exe 之后，
 // InstallUpdate 会照着用户点下去的按钮把它换进应用目录。
-func requireArtifact(rawURL string) (string, error) {
+func requireArtifact(ctx context.Context, client *http.Client, rawURL string) (string, error) {
 	owner, repo, tag, file, ok := parseReleaseAsset(rawURL)
 	if !ok {
 		return "", apperror.New(apperror.Validation, "下载地址不是 GitHub Release 资源，无法校验")
 	}
-	checksums, err := fetchReleaseChecksums(owner, repo, tag)
+	checksums, err := fetchReleaseChecksums(ctx, client, owner, repo, tag)
 	if err != nil {
 		// fetchReleaseChecksums 给的是带码错误，话里已经说清是直连没通还是各家对不上；
 		// 再套一层只会把两句话拼成一句更长的。
@@ -296,10 +303,13 @@ func requireArtifact(rawURL string) (string, error) {
 // verifyArtifact 比对下载结果。调用方拿到错误后必须删掉文件，
 // 不能留在应用目录里等着被 InstallUpdate 执行。
 func verifyArtifact(path, expected string) error {
+	return verifyArtifactContext(context.Background(), path, expected)
+}
+func verifyArtifactContext(ctx context.Context, path, expected string) error {
 	if expected == "" {
 		return fmt.Errorf("缺少期望摘要")
 	}
-	actual, err := fileSHA256(path)
+	actual, err := fileSHA256Context(ctx, path)
 	if err != nil {
 		return err
 	}

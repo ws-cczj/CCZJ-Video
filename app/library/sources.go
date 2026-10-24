@@ -158,7 +158,7 @@ func (s *Service) UpdateSource(sourceKey, name, apiURL, document string) error {
 			return apperror.Wrap(apperror.Validation, err, "源配置不合法")
 		}
 	} else {
-		// 传空表示"不改配置"，与 handler.UpdateSource 对三个 JSON 列的处理一致：
+		// 传空表示"不改配置"，与 source.UpdateSource 对三个 JSON 列的处理一致：
 		// db.UpdateSource 是无条件整列覆盖，所以空值必须沿用库里的原值，
 		// 否则用户改一次源名就把配置抹掉了。
 		document = existing.StrategyConfig

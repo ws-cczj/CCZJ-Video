@@ -1,9 +1,9 @@
 <script setup lang="ts">
 defineOptions({ name: 'UpdateModal' })
-import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
+import { computed, ref, shallowRef, watch, onMounted, onUnmounted } from 'vue'
 import { tr } from '../locales'
 import {
-  CheckUpdate, DownloadUpdate, InstallUpdate, FileExists,
+  CheckUpdate, InstallUpdate, FileExists,
   IgnoreVersion, GetPendingUpdateInfo, ClearPendingUpdateInfo, GetLastInstallReport,
   ScheduleInstallOnExit, CancelInstallOnExit, GetPendingInstall,
 } from '../api/app'
@@ -13,7 +13,7 @@ import {
   updateDownloading, updateDownloaded, updateDownloadPath, updateDownloadProgress,
   updateDownloadError,
   updateController, fmtSize, fmtSpeed,
-  saveDownloadState, loadDownloadState, clearDownloadState,
+  loadDownloadState, clearDownloadState, downloadUpdateArtifact, stopUpdateDownload,
   applyUpdateDownloadProgress,
 } from '../stores/updateState'
 import { licensePending } from '../stores/licenseState'
@@ -22,8 +22,11 @@ import { Button, Modal, MotionTransition } from './ui'
 import { onBackendEvent } from '../api/events'
 import { isMobileRuntime } from '../api/runtime'
 import { openAndroidUpdateInstaller } from '../platform/updateInstaller'
+import { normalizeApiError } from '../api/errors'
+import { createRequestScope } from '../api/requestScope'
 
 const errorStore = useErrorStore()
+const reads = createRequestScope()
 
 // 本地状态（不共享）
 const installing = ref(false)
@@ -36,6 +39,7 @@ let stopUpdateAvailable: (() => void) | null = null
 let checkRequest: ReturnType<typeof CheckUpdate> | null = null
 let pendingPollTimer: ReturnType<typeof setTimeout> | undefined
 let disposed = false
+let planGeneration = 0
 
 interface UpdateInfoData {
   has_update: boolean
@@ -51,7 +55,7 @@ interface UpdateInfoData {
   already_downloaded_path?: string
   already_downloaded_version?: string
 }
-const updateInfo = ref<UpdateInfoData | null>(null)
+const updateInfo = shallowRef<UpdateInfoData | null>(null)
 
 const backgroundTitle = computed(() => {
   if (updateDownloadError.value) return tr('update.downloadFailed')
@@ -86,51 +90,38 @@ async function doCheckUpdate(): Promise<void> {
   const deadline = setTimeout(() => { void request.cancel() }, 30_000)
   try {
     const info = await request
-    if (!info) return
+    if (disposed || checkRequest !== request || !info) return
     updateInfo.value = info
     if (info.has_update) {
       // 检查是否有已下载的安装包
       await checkAlreadyDownloaded(info)
+      if (disposed || checkRequest !== request) return
       updateModalOpen.value = true
     } else {
       errorStore.info(tr('update.checking'), tr('update.latestVersion', { version: info.current_version }))
     }
   } catch (e: any) {
+    if (disposed || checkRequest !== request || normalizeApiError(e).code === 'CANCELLED') return
     checkFailed.value = true
     updateModalOpen.value = true
   } finally {
     clearTimeout(deadline)
-    if (checkRequest === request) checkRequest = null
-    updateChecking.value = false
+    if (checkRequest === request) {
+      checkRequest = null
+      updateChecking.value = false
+    }
   }
 }
 
 // ---------- 下载更新 ----------
 async function doDownload(): Promise<void> {
   if (!updateInfo.value?.download_url || updateDownloading.value) return
-  updateDownloading.value = true
-  updateDownloadError.value = false
-  clearDownloadState()
-  updateDownloaded.value = false
-  updateDownloadPath.value = ''
-  updateDownloadProgress.downloaded = 0
-  updateDownloadProgress.total = 0
-  updateDownloadProgress.percent = 0
-  updateDownloadProgress.speed_bps = 0
   const requestedUpdate = updateInfo.value
   try {
-    const path = await DownloadUpdate(requestedUpdate.download_url)
-    updateDownloadPath.value = path
-    updateDownloaded.value = true
-    // 持久化下载状态，下次启动时可检查
-    if (requestedUpdate.latest_version) {
-      saveDownloadState(path, requestedUpdate.latest_version, requestedUpdate.download_url)
-    }
+    await downloadUpdateArtifact(requestedUpdate.download_url, requestedUpdate.latest_version)
   } catch (e: any) {
-    updateDownloadError.value = true
+    if (disposed || normalizeApiError(e).code === 'CANCELLED') return
     errorStore.fromError(tr('update.downloadFailed'), e, 'UpdateModal.downloadUpdate')
-  } finally {
-    updateDownloading.value = false
   }
 }
 
@@ -169,13 +160,18 @@ function plannedForThisArtifact(plan: any): boolean {
 }
 
 async function refreshOnExitPlan(): Promise<void> {
+  const generation = ++planGeneration
+  const path = updateDownloadPath.value
   if (!updateDownloaded.value || !updateDownloadPath.value) {
     onExitPlanned.value = false
     return
   }
   try {
-    onExitPlanned.value = plannedForThisArtifact(await GetPendingInstall())
+    const plan = await reads.run(() => GetPendingInstall())
+    if (disposed || generation !== planGeneration || path !== updateDownloadPath.value) return
+    onExitPlanned.value = plannedForThisArtifact(plan)
   } catch {
+    if (disposed || generation !== planGeneration || path !== updateDownloadPath.value) return
     // 问不到就当没安排：按钮写「退出时安装」，点下去仍然会正确地安排或报错。
     onExitPlanned.value = false
   }
@@ -222,11 +218,11 @@ async function reportLastInstall(): Promise<void> {
   installReportRead = true
   let report: any = null
   try {
-    report = await GetLastInstallReport()
+    report = await reads.run(GetLastInstallReport)
   } catch {
     return // 问不到回执就闭嘴：凭空说「上次更新失败」比沉默更糟
   }
-  if (!report?.failed) return
+  if (disposed || !report?.failed) return
   // 认不出的回执原样留在日志里，界面只说这件已经确定的事：没换成。
   const details: Record<string, string> = {
     swap_failed: tr('update.installReportSwap'),
@@ -290,6 +286,7 @@ function onUpdateAvailable(data: UpdateInfoData): void {
     updateInfo.value = data
     // 检查是否有已下载的安装包
     checkAlreadyDownloaded(data).then(() => {
+      if (disposed || updateInfo.value !== data) return
       updateModalOpen.value = true
     })
   }
@@ -298,7 +295,7 @@ function onUpdateAvailable(data: UpdateInfoData): void {
 // 检查是否有已下载的安装包
 // Go 后端扫描结果是包的版本与校验状态的权威来源。
 async function checkAlreadyDownloaded(info: UpdateInfoData): Promise<void> {
-  if (updateDownloading.value) return
+  if (disposed || updateInfo.value !== info || updateDownloading.value) return
   updateDownloaded.value = false
   updateDownloadPath.value = ''
   updateDownloadError.value = false
@@ -306,7 +303,8 @@ async function checkAlreadyDownloaded(info: UpdateInfoData): Promise<void> {
   const backendPath = info.already_downloaded_path
   if (backendPath && info.already_downloaded_version === info.latest_version) {
     try {
-      const exists = await FileExists(backendPath)
+      const exists = await reads.run(() => FileExists(backendPath))
+      if (disposed || updateInfo.value !== info || updateDownloading.value) return
       if (exists) {
         updateDownloadPath.value = backendPath
         updateDownloaded.value = true
@@ -316,6 +314,7 @@ async function checkAlreadyDownloaded(info: UpdateInfoData): Promise<void> {
   }
 
   // A legacy cache only proves existence, not release or integrity.
+  if (disposed || updateInfo.value !== info || updateDownloading.value) return
   clearDownloadState()
 }
 
@@ -349,12 +348,13 @@ onMounted(async () => {
     if (updateModalOpen.value || pollRetries >= maxPollRetries) return
     pollRetries++
     try {
-      const pending = await GetPendingUpdateInfo()
+      const pending = await reads.run(GetPendingUpdateInfo)
       if (disposed) return
       if (pending && pending.has_update) {
         updateInfo.value = pending
         // 检查是否有已下载的安装包
         await checkAlreadyDownloaded(pending)
+        if (disposed || updateInfo.value !== pending) return
         updateModalOpen.value = true
         return
       }
@@ -370,8 +370,13 @@ onMounted(async () => {
 
 onUnmounted(() => {
   disposed = true
+  stopUpdateDownload()
+  reads.cancel()
+  if (updateController.checkUpdate === doCheckUpdate) updateController.checkUpdate = null
   if (pendingPollTimer !== undefined) clearTimeout(pendingPollTimer)
   void checkRequest?.cancel()
+  if (checkRequest) updateChecking.value = false
+  checkRequest = null
   stopDownloadProgress?.()
   stopUpdateAvailable?.()
   stopDownloadProgress = null

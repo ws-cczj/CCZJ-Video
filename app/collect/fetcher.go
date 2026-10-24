@@ -1,11 +1,17 @@
 package collect
 
 import (
+	"bufio"
+	"bytes"
 	"cczjVideo/app/apperror"
 	"cczjVideo/app/netpolicy"
+	"cczjVideo/app/operation"
+	"compress/flate"
 	"compress/gzip"
+	"compress/zlib"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -59,13 +65,17 @@ func (f *FlexInt) UnmarshalJSON(b []byte) error {
 func (f FlexInt) Int() int { return int(f) }
 
 type FetchResult struct {
-	Code      int            `json:"code"`
-	Page      FlexInt        `json:"page"`
-	Pagecount FlexInt        `json:"pagecount"`
-	Limit     FlexInt        `json:"limit"`
-	Total     FlexInt        `json:"total"`
-	Msg       string         `json:"msg"`
-	List      []*model.Video `json:"list"`
+	RawCount      int            `json:"-"`
+	SearchLimited bool           `json:"-"`
+	HTTPStatus    int            `json:"-"`
+	ResponseBytes int            `json:"-"`
+	Code          int            `json:"code"`
+	Page          FlexInt        `json:"page"`
+	Pagecount     FlexInt        `json:"pagecount"`
+	Limit         FlexInt        `json:"limit"`
+	Total         FlexInt        `json:"total"`
+	Msg           string         `json:"msg"`
+	List          []*model.Video `json:"list"`
 	// CodeText is the code the source actually returned, normalised to text so
 	// 1, "1" and true are all comparable against a declarative ok_codes list.
 	// The MAC-CMS path leaves it empty and keeps using Code.
@@ -74,6 +84,26 @@ type FetchResult struct {
 	// set for declared envelopes only; the MAC-CMS verdict stays Code == 1.
 	OK bool `json:"-"`
 }
+
+// APIError preserves the remote protocol code for operation-specific decisions.
+// A collection refusal must not change the meaning of a detail or list request.
+type APIError struct {
+	Code    int
+	Message string
+}
+
+func (e *APIError) Error() string { return fmt.Sprintf("api error: code=%d msg=%s", e.Code, e.Message) }
+
+var errSearchUnsupported = errors.New("source keyword search unsupported")
+
+// ResponseError retains HTTP evidence when decompression or decoding fails.
+type ResponseError struct {
+	StatusCode int
+	Err        error
+}
+
+func (e *ResponseError) Error() string { return e.Err.Error() }
+func (e *ResponseError) Unwrap() error { return e.Err }
 
 // HTTPError preserves transport semantics for retry policy decisions. Callers
 // must not infer a status code by parsing an error message.
@@ -231,7 +261,28 @@ func FetchVideoDetailWithStrategy(ctx context.Context, strategy SourceStrategy, 
 	return nil, apperror.New(apperror.NotFound, "video not found")
 }
 
-func doFetchShape(ctx context.Context, target string, fieldMapping map[string]string, shape *ResponseShape) (*FetchResult, error) {
+func doFetchShape(ctx context.Context, target string, fieldMapping map[string]string, shape *ResponseShape) (output *FetchResult, failure error) {
+	began := time.Now()
+	stage := "request"
+	fields := operation.Fields(ctx, applog.Fields{"url": applog.SafeURL(target), "method": "GET", "decoder": "cms", "mapping_sha256": ""})
+	config, _ := json.Marshal(struct {
+		Mapping map[string]string
+		Shape   *ResponseShape
+	}{fieldMapping, shape})
+	fields["mapping_sha256"] = applog.Fingerprint(config)
+	if shape != nil {
+		fields["decoder"], fields["list_path"] = "declared", shape.withDefaults().ListPath
+	}
+	defer func() {
+		fields["stage"], fields["duration_ms"] = stage, time.Since(began).Milliseconds()
+		if failure != nil {
+			fields["outcome"], fields["code"], fields["error"] = "failed", apperror.Public(failure).Code, apperror.Diagnostic(failure)
+			applog.WarnFields("source fetch finished", fields)
+		} else {
+			fields["outcome"] = "success"
+			applog.InfoFields("source fetch finished", fields)
+		}
+	}()
 	req, err := http.NewRequestWithContext(ctx, "GET", target, nil)
 	if err != nil {
 		return nil, apperror.Wrap(apperror.Validation, err, "create request")
@@ -242,13 +293,23 @@ func doFetchShape(ctx context.Context, target string, fieldMapping map[string]st
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, apperror.Wrap(apperror.Unavailable, err, fmt.Sprintf("fetch %s", target))
+		return nil, apperror.Wrap(apperror.Unavailable, err, "请求源站失败")
 	}
 	defer resp.Body.Close()
+	fields["http_status"], fields["content_type"], fields["encoding"] = resp.StatusCode, resp.Header.Get("Content-Type"), resp.Header.Get("Content-Encoding")
+	if resp.Request != nil {
+		fields["response_url"] = applog.SafeURL(resp.Request.URL.String())
+	}
+	defer func() {
+		if failure != nil {
+			failure = &ResponseError{StatusCode: resp.StatusCode, Err: failure}
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, &HTTPError{StatusCode: resp.StatusCode, RetryAfter: retryAfter(resp.Header.Get("Retry-After")), URL: target}
 	}
+	stage = "decompress"
 	if resp.ContentLength > maxFetchResponseBytes {
 		return nil, apperror.Newf(apperror.Corrupt, "response exceeds %d bytes", maxFetchResponseBytes)
 	}
@@ -257,8 +318,11 @@ func doFetchShape(ctx context.Context, target string, fieldMapping map[string]st
 	if err != nil {
 		return nil, apperror.Wrap(apperror.Corrupt, err, "decompress")
 	}
+	defer bodyReader.Close()
 
+	stage = "read_body"
 	body, err := io.ReadAll(io.LimitReader(bodyReader, maxFetchResponseBytes+1))
+	fields["response_bytes"], fields["response_sha256"] = len(body), applog.Fingerprint(body)
 	if err != nil {
 		return nil, apperror.Wrap(apperror.Unavailable, err, "read body")
 	}
@@ -266,14 +330,14 @@ func doFetchShape(ctx context.Context, target string, fieldMapping map[string]st
 		return nil, apperror.Newf(apperror.Corrupt, "response exceeds %d bytes", maxFetchResponseBytes)
 	}
 
-	// ⭐ 预检：响应体是否为 JSON 格式，避免将纯文本错误消息当作 JSON 解析
+	stage = "decode"
+	body = bytes.TrimPrefix(body, []byte{0xef, 0xbb, 0xbf})
 	trimmed := strings.TrimSpace(string(body))
+	if trimmed == "暂不支持搜索" {
+		return nil, apperror.Wrap(apperror.Unsupported, errSearchUnsupported, "采集接口暂不支持搜索")
+	}
 	if len(trimmed) > 0 && trimmed[0] != '{' && trimmed[0] != '[' {
-		preview := trimmed
-		if len(preview) > 300 {
-			preview = preview[:300]
-		}
-		return nil, apperror.Newf(apperror.Corrupt, "源站返回了非JSON响应: %s", preview)
+		return nil, apperror.New(apperror.Corrupt, "源站返回了非JSON响应")
 	}
 
 	var result *FetchResult
@@ -285,86 +349,110 @@ func doFetchShape(ctx context.Context, target string, fieldMapping map[string]st
 	if err != nil {
 		return nil, err
 	}
+	if result.OK && shape == nil {
+		for i, video := range result.List {
+			if video == nil || strings.TrimSpace(video.VodId.String()) == "" || strings.TrimSpace(video.VodName) == "" {
+				return nil, apperror.Newf(apperror.Corrupt, "采集接口第 %d 条记录缺少影片标识或名称", i+1)
+			}
+		}
+	}
 
-	logFetchedPage(target, result)
+	result.HTTPStatus = resp.StatusCode
+	result.ResponseBytes = len(body)
+	fields["api_code"], fields["normalized_count"], fields["total"], fields["page"], fields["page_count"] = result.Code, len(result.List), result.Total.Int(), result.Page.Int(), result.Pagecount.Int()
+	fields["raw_count"], fields["decode_dropped_count"] = result.RawCount, result.RawCount-len(result.List)
+	if shape != nil {
+		fields["api_code"] = result.CodeText
+	}
+	ids := make([]string, 0, 5)
+	for _, video := range result.List {
+		if video != nil && len(ids) < 5 {
+			ids = append(ids, video.VodId.String())
+		}
+	}
+	fields["sample_ids"] = ids
 
 	if !result.OK {
 		if shape == nil {
-			return nil, apperror.Newf(apperror.Unavailable, "api error: code=%d msg=%s", result.Code, result.Msg)
+			return nil, apperror.Wrap(apperror.Unavailable, &APIError{Code: result.Code, Message: result.Msg}, "采集接口返回失败")
 		}
 		return nil, apperror.Newf(apperror.Unavailable, "api error: code=%s msg=%s", result.CodeText, result.Msg)
 	}
+	stage = "decoded"
 	return result, nil
 }
 
-// decodeCMSEnvelope is the flat MAC-CMS decode used by every strategy that does
-// not declare a response shape. Its behaviour is unchanged by the declarative
-// work: the same mapping-aware list parse, the same best-effort metadata read,
-// and the same "code == 1 means ok" verdict.
+// decodeCMSEnvelope validates the flat MAC-CMS envelope, including numeric
+// strings. A missing list is a protocol error rather than a successful empty page.
 func decodeCMSEnvelope(body []byte, fieldMapping map[string]string) (*FetchResult, error) {
 	result := &FetchResult{}
 
 	videos, err := ParseVideosWithMapping(body, fieldMapping)
 	if err != nil {
-		return nil, apperror.Wrap(apperror.Corrupt, err, fmt.Sprintf("parse json with mapping (body preview: %s)", bodyPreview(body)))
+		return nil, apperror.Wrap(apperror.Corrupt, err, "parse json with mapping")
 	}
 	result.List = videos
 
 	var meta struct {
-		Code      int     `json:"code"`
-		Page      FlexInt `json:"page"`
-		Pagecount FlexInt `json:"pagecount"`
-		Limit     FlexInt `json:"limit"`
-		Total     FlexInt `json:"total"`
-		Msg       string  `json:"msg"`
+		Code      json.RawMessage `json:"code"`
+		List      json.RawMessage `json:"list"`
+		Page      FlexInt         `json:"page"`
+		Pagecount FlexInt         `json:"pagecount"`
+		Limit     FlexInt         `json:"limit"`
+		Total     FlexInt         `json:"total"`
+		Msg       string          `json:"msg"`
 	}
-	if err := json.Unmarshal(body, &meta); err == nil {
-		result.Code = meta.Code
-		result.Page = meta.Page
-		result.Pagecount = meta.Pagecount
-		result.Limit = meta.Limit
-		result.Total = meta.Total
-		result.Msg = meta.Msg
+	if err := json.Unmarshal(body, &meta); err != nil {
+		return nil, apperror.Wrap(apperror.Corrupt, err, "parse CMS metadata")
 	}
+	var code FlexInt
+	if len(meta.Code) > 0 {
+		if err := json.Unmarshal(meta.Code, &code); err != nil {
+			return nil, apperror.Wrap(apperror.Corrupt, err, "parse CMS response code")
+		}
+	}
+	result.Code = code.Int()
+	result.Page = meta.Page
+	result.Pagecount = meta.Pagecount
+	result.Limit = meta.Limit
+	result.Total = meta.Total
+	result.Msg = meta.Msg
 	result.OK = result.Code == 1
+	var rawRows []json.RawMessage
+	if json.Unmarshal(meta.List, &rawRows) == nil {
+		result.RawCount = len(rawRows)
+	}
+	if result.OK && len(meta.List) == 0 {
+		return nil, apperror.New(apperror.Corrupt, "采集接口返回成功但缺少 list 字段")
+	}
 	return result, nil
 }
 
-// logFetchedPage keeps the one place the raw page is logged, so a shaped decode
-// cannot drift from what the MAC-CMS path already reported.
-func logFetchedPage(target string, result *FetchResult) {
-	applog.Info("[FETCH] 原始响应 - URL: %s, Code: %d, Total: %d, ListSize: %d", target, result.Code, result.Total.Int(), len(result.List))
-	if len(result.List) > 0 {
-		for i, v := range result.List {
-			if v == nil {
-				continue
-			}
-			applog.Info("[FETCH] 视频[%d]原始数据 - vod_id: %s, vod_name: %s, vod_actor: %s, vod_director: %s, vod_content: %s, vod_pic: %s",
-				i, v.VodId.String(), v.VodName, v.VodActor, v.VodDirector, truncate(v.VodContent, 100), v.VodPic)
-		}
-	}
-}
-
-func bodyPreview(body []byte) string {
-	preview := string(body)
-	if len(preview) > 300 {
-		preview = preview[:300]
-	}
-	return preview
-}
-
-func decompress(r io.Reader, encoding string) (io.Reader, error) {
-	switch strings.ToLower(encoding) {
-	case "gzip", "deflate":
+func decompress(r io.Reader, encoding string) (io.ReadCloser, error) {
+	switch strings.ToLower(strings.TrimSpace(encoding)) {
+	case "gzip":
 		gzReader, err := gzip.NewReader(r)
 		if err != nil {
 			return nil, fmt.Errorf("gzip decompress: %w", err)
 		}
 		return gzReader, nil
+	case "deflate":
+		buffered := bufio.NewReader(r)
+		header, err := buffered.Peek(2)
+		if err != nil {
+			return nil, fmt.Errorf("deflate header: %w", err)
+		}
+		if header[0]&0x0f == 8 && (int(header[0])*256+int(header[1]))%31 == 0 {
+			return zlib.NewReader(buffered)
+		}
+		// Older servers emit raw DEFLATE rather than the RFC 1950 wrapper.
+		return flate.NewReader(buffered), nil
 	case "br":
 		return io.NopCloser(brotli.NewReader(r)), nil
-	default:
+	case "", "identity":
 		return io.NopCloser(r), nil
+	default:
+		return nil, fmt.Errorf("unsupported content encoding %q", encoding)
 	}
 }
 

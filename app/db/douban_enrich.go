@@ -3,6 +3,7 @@ package db
 import (
 	"cczjVideo/app/applog"
 	"cczjVideo/app/model"
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -78,6 +79,10 @@ func GetDoubanInfoByKeyword(keyword string) (*DoubanInfoRow, error) {
 // 原来是按 updated_at（或 id）排，失败行不动那些列，于是每轮都取到同一批队头，
 // 后面的记录永远饿死。
 func GetIncompleteDoubanInfo(limit int) ([]*DoubanInfoRow, error) {
+	return GetIncompleteDoubanInfoContext(context.Background(), limit)
+}
+
+func GetIncompleteDoubanInfoContext(ctx context.Context, limit int) ([]*DoubanInfoRow, error) {
 	if limit <= 0 {
 		limit = 5
 	}
@@ -104,7 +109,7 @@ func GetIncompleteDoubanInfo(limit int) ([]*DoubanInfoRow, error) {
 		)
 		AND (douban_cooldown_until IS NULL OR douban_cooldown_until < ?)
 		ORDER BY douban_last_attempt_at ASC, updated_at ASC LIMIT ?`
-	err := instance.Select(&rows, q,
+	err := instance.SelectContext(ctx, &rows, q,
 		time.Now().Format(doubanCooldownFormat), limit)
 	if err != nil {
 		applog.Error("[Douban] GetIncompleteDoubanInfo query failed: %v", err)
@@ -116,6 +121,10 @@ func GetIncompleteDoubanInfo(limit int) ([]*DoubanInfoRow, error) {
 // GetDoubanInfoMissingSubjectID 获取 douban_id 为空的记录（排除冷却期内的记录）
 // 排序同样按「上次被豆瓣试过」的时刻轮转，理由见 GetIncompleteDoubanInfo。
 func GetDoubanInfoMissingSubjectID(limit int) ([]*DoubanInfoRow, error) {
+	return GetDoubanInfoMissingSubjectIDContext(context.Background(), limit)
+}
+
+func GetDoubanInfoMissingSubjectIDContext(ctx context.Context, limit int) ([]*DoubanInfoRow, error) {
 	if limit <= 0 {
 		limit = 5
 	}
@@ -144,7 +153,7 @@ func GetDoubanInfoMissingSubjectID(limit int) ([]*DoubanInfoRow, error) {
 		WHERE (gv.douban_id = '' OR gv.douban_id IS NULL)
 		AND (gv.douban_cooldown_until IS NULL OR gv.douban_cooldown_until < ?)
 		ORDER BY gv.douban_last_attempt_at ASC, gv.id ASC LIMIT ?`
-	err := instance.Select(&rows, q,
+	err := instance.SelectContext(ctx, &rows, q,
 		time.Now().Format(doubanCooldownFormat), limit)
 	if err != nil {
 		applog.Error("[Douban] GetDoubanInfoMissingSubjectID query failed: %v", err)

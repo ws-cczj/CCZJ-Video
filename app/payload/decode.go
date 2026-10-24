@@ -13,22 +13,12 @@ import (
 	"strings"
 
 	"cczjVideo/app/apperror"
+	"cczjVideo/app/files"
 	"github.com/andybalholm/brotli"
 )
 
 // Limits separates the wire budget from the decompressed content budget.
 type Limits struct{ Input, Output int64 }
-type contextReader struct {
-	ctx    context.Context
-	source io.Reader
-}
-
-func (r contextReader) Read(p []byte) (int, error) {
-	if err := r.ctx.Err(); err != nil {
-		return 0, err
-	}
-	return r.source.Read(p)
-}
 
 // Read rejects rather than silently truncates a payload exceeding maximum.
 // The caller owns closing the source; a blocking source must also use ctx for I/O.
@@ -36,7 +26,7 @@ func Read(ctx context.Context, source io.Reader, maximum int64) ([]byte, error) 
 	if maximum < 1 || maximum >= 1<<40 {
 		return nil, apperror.New(apperror.Internal, "无效的数据容量限制")
 	}
-	data, err := io.ReadAll(io.LimitReader(contextReader{ctx, source}, maximum+1))
+	data, err := io.ReadAll(io.LimitReader(files.ReaderWithContext(ctx, source), maximum+1))
 	if err != nil {
 		return nil, apperror.Wrap(apperror.Corrupt, err, "读取数据失败")
 	}

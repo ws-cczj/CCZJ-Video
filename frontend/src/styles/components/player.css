@@ -765,8 +765,3 @@
 
 /* Hidden subtitle picker belongs to the media owner. */
 .subtitle-file-input { @apply cczj-hidden; }
-
-.cczj-player-preparation{@apply cczj-absolute;left:20px;bottom:96px;z-index:25;@apply cczj-flex cczj-items-center cczj-gap-4;max-width:calc(100% - 40px);box-sizing:border-box;padding:6px 10px;border:1px solid rgba(255,255,255,.1);border-radius:7px;background:rgba(14,16,20,.86);@apply cczj-pointer-events-none;color:#eceef2;font:500 12px/1.5 system-ui,sans-serif;letter-spacing:.02em}
-.cczj-player-preparation i{width:5px;height:5px;@apply cczj-rounded-50;background:#65c7e8;@apply cczj-flex-none}.cczj-player-preparation span{@apply cczj-overflow-hidden cczj-whitespace-nowrap;text-overflow:ellipsis}
-.cczj-preparation-enter-active,.cczj-preparation-leave-active{transition:opacity .18s ease,transform .18s ease}.cczj-preparation-enter-from,.cczj-preparation-leave-to{@apply cczj-opacity-0;transform:translateY(3px)}
-@media(prefers-reduced-motion:reduce){.cczj-preparation-enter-active,.cczj-preparation-leave-active{@apply cczj-transition-none}}

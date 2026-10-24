@@ -90,7 +90,7 @@ func waitCondition(t *testing.T, condition func() bool) {
 	}
 }
 
-func TestHealthyLegacyQueriesKeepTheirCadence(t *testing.T) {
+func TestHealthyQueriesReuseResponsesDuringCooldown(t *testing.T) {
 	store := fixtureStore(t)
 	now := time.Unix(1792380000, 0)
 	manager := fixtureManager(t, store, &now)
@@ -104,17 +104,17 @@ func TestHealthyLegacyQueriesKeepTheirCadence(t *testing.T) {
 			}
 		}
 	}
-	if calls.Load() != 10 {
-		t.Fatal("successful existing requests rescheduled", calls.Load())
+	if calls.Load() != 5 {
+		t.Fatal("same query reached upstream during cooldown", calls.Load())
 	}
 	database, _ := store.db()
 	var count int
-	if err := database.QueryRow(`SELECT COUNT(*) FROM network_request_limits`).Scan(&count); err != nil || count != 0 {
-		t.Fatal("legacy success created persistent cooldown", count, err)
+	if err := database.QueryRow(`SELECT COUNT(*) FROM network_request_limits`).Scan(&count); err != nil || count != 5 {
+		t.Fatal("query cooldown was not persisted", count, err)
 	}
 }
 
-func TestLegacyRetryPolicyIsNotReplacedByFiveMinuteCooldown(t *testing.T) {
+func TestFailedQueryRetainsCauseAndCooldown(t *testing.T) {
 	now := time.Unix(1792380000, 0)
 	manager := fixtureManager(t, fixtureStore(t), &now)
 	failure := errors.New("connection reset")
@@ -122,11 +122,11 @@ func TestLegacyRetryPolicyIsNotReplacedByFiveMinuteCooldown(t *testing.T) {
 	base := roundTripFunc(func(*http.Request) (*http.Response, error) { calls.Add(1); return nil, failure })
 	for i := 0; i < 2; i++ {
 		_, err := manager.RoundTrip("collect", base, request(context.Background(), "https://source.example/list"))
-		if !errors.Is(err, failure) || apperror.Public(err).RetryAfterSeconds != 0 {
-			t.Fatal("legacy retry changed", err)
+		if !errors.Is(err, failure) || apperror.Public(err).RetryAfterSeconds != 330 {
+			t.Fatal("failure lost cause or cooldown", err)
 		}
 	}
-	if calls.Load() != 2 {
+	if calls.Load() != 1 {
 		t.Fatal(calls.Load())
 	}
 }
@@ -206,7 +206,7 @@ func TestDifferentSegmentsSourcesAndSessionsNeverShareResponses(t *testing.T) {
 	}
 }
 
-func TestConcurrentLegacyQueriesCoalesceWithoutCachingFutureReads(t *testing.T) {
+func TestConcurrentQueriesCoalesceAndReuseUntilCooldownExpires(t *testing.T) {
 	now := time.Unix(1792380000, 0)
 	manager := fixtureManager(t, fixtureStore(t), &now)
 	var calls atomic.Int32
@@ -243,8 +243,14 @@ func TestConcurrentLegacyQueriesCoalesceWithoutCachingFutureReads(t *testing.T) 
 	}
 	response, err := manager.RoundTrip("novel", base, request(context.Background(), "https://source.example/catalog"))
 	readResponse(t, response, err)
+	if calls.Load() != 1 {
+		t.Fatal("cached catalog refetched during cooldown")
+	}
+	now = now.Add(330 * time.Second)
+	response, err = manager.RoundTrip("novel", base, request(context.Background(), "https://source.example/catalog"))
+	readResponse(t, response, err)
 	if calls.Load() != 2 {
-		t.Fatal("future catalog read unexpectedly cached")
+		t.Fatal("catalog did not refresh after cooldown")
 	}
 }
 
@@ -270,7 +276,7 @@ func TestWaitingCallerCancellationLeavesOwnerRequestRunning(t *testing.T) {
 	}
 }
 
-func TestUnshareableLegacyResponseDoesNotRejectWaitingCaller(t *testing.T) {
+func TestUnshareableQueryResponseKeepsCooldownForWaitingCaller(t *testing.T) {
 	for _, scenario := range []string{"no-store", "large", "http-error"} {
 		t.Run(scenario, func(t *testing.T) {
 			now := time.Unix(1792380000, 0)
@@ -308,11 +314,21 @@ func TestUnshareableLegacyResponseDoesNotRejectWaitingCaller(t *testing.T) {
 				t.Fatal(err)
 			}
 			first.Body.Close()
-			if err = <-done; err != nil {
-				t.Fatal("legacy caller rejected", err)
+			want := apperror.RateLimited
+			if scenario == "http-error" {
+				want = apperror.NotFound
 			}
+			if err = <-done; !apperror.Is(err, want) || apperror.Public(err).RetryAfterSeconds != 330 {
+				t.Fatal("waiting query lost cooldown or failure classification", err)
+			}
+			if calls.Load() != 1 {
+				t.Fatal("non-shareable query repeated during cooldown", calls.Load())
+			}
+			now = now.Add(330 * time.Second)
+			next, err := manager.RoundTrip("novel", base, req)
+			readResponse(t, next, err)
 			if calls.Load() != 2 {
-				t.Fatal("non-shareable body reused", calls.Load())
+				t.Fatal("query stayed blocked after cooldown", calls.Load())
 			}
 		})
 	}
@@ -419,15 +435,15 @@ func TestBurstProtectionDoesNotChangeNormalCadence(t *testing.T) {
 	manager.SetSettings(Settings{Frequency: "low"})
 	base := roundTripFunc(func(*http.Request) (*http.Response, error) { return reply(200, "ok", ""), nil })
 	for i := 0; i < 10; i++ {
-		response, err := manager.RoundTrip("collect", base, request(context.Background(), "https://source.example/list"))
+		response, err := manager.RoundTrip("collect", base, request(context.Background(), fmt.Sprintf("https://source.example/list?page=%d", i)))
 		readResponse(t, response, err)
 	}
-	_, err := manager.RoundTrip("collect", base, request(context.Background(), "https://source.example/list"))
+	_, err := manager.RoundTrip("collect", base, request(context.Background(), "https://source.example/list?page=10"))
 	if !apperror.Is(err, apperror.RateLimited) || apperror.Public(err).RetryAfterSeconds > 3 {
 		t.Fatal(err)
 	}
 	now = now.Add(time.Second)
-	response, err := manager.RoundTrip("collect", base, request(context.Background(), "https://source.example/list"))
+	response, err := manager.RoundTrip("collect", base, request(context.Background(), "https://source.example/list?page=10"))
 	readResponse(t, response, err)
 }
 

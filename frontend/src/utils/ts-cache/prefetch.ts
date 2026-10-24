@@ -1,13 +1,12 @@
 /* eslint-disable no-console */
 /**
- * 预取 + 取回链路：排队、去重、并发/交错、超时与 abort、对冲请求。
+ * 预取 + 取回链路：排队、去重、前台优先、超时与取消。
  *
  * 会话号（cacheSession）是这里的生命线：切集 / 换视频 / 失效都会 beginCacheSession()
  * 把在途请求全部 abort 并作废其结果，回写的每一处都要重新核对 generation，
  * 否则旧集的字节会污染刚清空的缓存。
  */
 import {
-  HEDGE_STAGGER_MS,
   LOG_PREFIX,
   MAX_QUEUE_PER_EPISODE,
   PREFETCH_AHEAD_NEXT_EPISODE,
@@ -18,6 +17,7 @@ import { diskLoad, diskSave } from './disk-cache'
 import { cacheHas, cacheSet } from './memory-cache'
 import {
   adaptiveConcurrency,
+  adaptiveBufferOffset,
   adaptiveFragmentTimeout,
   adaptivePrefetchCount,
   adaptiveSpreadStep,
@@ -29,7 +29,6 @@ import {
   episodeIndex,
   epKeyFrom,
   fireListeners,
-  netDiag,
   prefetchState,
   session,
   telemetry,
@@ -40,10 +39,6 @@ import { recordFetchDuration } from './telemetry'
 // ====== 会话与在途计数 ======
 
 function pendingKey(url: string, generation = prefetchState.cacheSession): string {
-  return `${generation}:${segmentCacheKey(url)}`
-}
-
-function hedgeKey(url: string, generation = prefetchState.cacheSession): string {
   return `${generation}:${segmentCacheKey(url)}`
 }
 
@@ -82,7 +77,8 @@ function enqueue(job: FetchJob): boolean {
   prefetchState.pendingUrls.add(pendingKey(job.url, generation))
   prefetchState.epQueueCount.set(job.episodeKey, cnt + 1)
   const scopedJob = { ...job, generation }
-  if (scopedJob.priority === 1) prefetchState.queue.unshift(scopedJob); else prefetchState.queue.push(scopedJob)
+  prefetchState.queue.push(scopedJob)
+  prefetchState.queue.sort((a,b) => a.priority - b.priority)
   return true
 }
 
@@ -99,48 +95,52 @@ function drainQueue(): void {
     const generation = job.generation ?? prefetchState.cacheSession
     const active = activeInflight() + 1
     prefetchState.inflightBySession.set(generation, active)
-    // ⭐ 交错启动：每个分片间隔 ~1s，避免服务器敏感封禁
-    if (active > 1) {
-      const staggerDelay = (active - 1) * 1000
-      window.setTimeout(() => {
-        runOne(job).finally(() => {
-          finishInflight(generation)
-          if (generation === prefetchState.cacheSession) drainQueue()
-        })
-      }, staggerDelay)
-    } else {
-      runOne(job).finally(() => {
-        finishInflight(generation)
-        if (generation === prefetchState.cacheSession) drainQueue()
-      })
-    }
+    runOne(job).finally(() => {
+      finishInflight(generation)
+      if (generation === prefetchState.cacheSession) drainQueue()
+    })
   }
 }
 
 function canPrefetch(): boolean {
-  return session.enabled && session.playbackBufferAhead >= Math.max(12, session.targetDuration * 2)
+  return session.enabled && prefetchState.foregroundActive === 0 && adaptiveConcurrency() > 0 && session.playbackBufferAhead / session.playbackRate >= Math.max(20, session.targetDuration * 3)
 }
 
 /**
  * 播放器上报"前方还有多少秒缓冲"。它决定后台预取能不能开工，
  * 所以由预取层自己持有：够就立刻尝试排空队列。
  */
-export function setPlaybackBufferAhead(seconds: number): void {
+export function beginForegroundFetch(): () => void {
+  prefetchState.foregroundActive++
+  for (const controller of prefetchState.prefetchControllers) controller.abort()
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    prefetchState.foregroundActive = Math.max(0,prefetchState.foregroundActive - 1)
+    if (canPrefetch()) scheduleDrain()
+  }
+}
+
+export function setPlaybackBufferAhead(seconds: number, playbackRate = 1): void {
+  session.playbackRate = Number.isFinite(playbackRate) && playbackRate > 0 ? playbackRate : 1
   session.playbackBufferAhead = Number.isFinite(seconds) ? Math.max(0, seconds) : 0
   if (canPrefetch()) scheduleDrain()
+  else for (const controller of prefetchState.prefetchControllers) controller.abort()
 }
 
 async function runOne(job: FetchJob): Promise<void> {
   const generation = job.generation ?? prefetchState.cacheSession
-  if (generation !== prefetchState.cacheSession) return
   const timeout = adaptiveFragmentTimeout()
   let ctrl: AbortController | null = null
   let timeoutID: number | null = null
   try {
+    if (generation !== prefetchState.cacheSession || !canPrefetch() || cacheHas(job.url)) return
     // Read only this scheduled segment. Without this check, removing eager
     // episode restoration would cause prefetch to download disk hits again.
     const stored = await diskLoad(job.url)
-    if (generation !== prefetchState.cacheSession) return
+    if (generation !== prefetchState.cacheSession || !canPrefetch()) return
+    if (cacheHas(job.url)) return
     if (stored) {
       cacheSet(job.url, stored, job.episodeKey)
       fireListeners()
@@ -178,72 +178,6 @@ async function runOne(job: FetchJob): Promise<void> {
   }
 }
 
-// ====== 对冲请求（Hedge Fetch）======
-//
-// 对紧邻播放位置的关键分片开两个并发请求（同一文件），取最快返回的，另一个 abort。
-// 能大幅降低尾部延迟，避免单个慢请求拖住整个播放流水线。
-// 第二个请求延迟 HEDGE_STAGGER_MS 后发射，避免同时冲击服务器。
-
-export function hedgeFetch(url: string): Promise<ArrayBuffer | null> {
-  const ctrl1 = new AbortController()
-  const ctrl2 = new AbortController()
-  const sessionCtrl = new AbortController()
-  prefetchState.prefetchControllers.add(sessionCtrl)
-  const timeout = adaptiveFragmentTimeout()
-  let settleRequest: ((value: ArrayBuffer | null) => void) | null = null
-  let staggerTimer: number | null = null
-  let timeoutTimer: number | null = null
-
-  const doFetch = (signal: AbortSignal) => {
-    const init: RequestInit = { signal }
-    return fetch(url, init)
-  }
-
-  const racePromise = new Promise<ArrayBuffer | null>((resolve) => {
-    let settled = false
-    const settle = (value: ArrayBuffer | null) => {
-      if (!settled) { settled = true; resolve(value) }
-    }
-    settleRequest = settle
-
-    // 请求1：立即发射
-    doFetch(ctrl1.signal)
-      .then((r) => r.ok ? r.arrayBuffer() : Promise.reject(new Error('http ' + r.status)))
-      .then((buf) => { settle(buf); try { ctrl2.abort() } catch { } })
-      .catch(() => { /* let the delayed hedge try the same segment */ })
-
-    // 请求2：延迟发射（错开避免服务器压力）
-    staggerTimer = window.setTimeout(() => {
-      if (settled || ctrl2.signal.aborted) return
-      doFetch(ctrl2.signal)
-        .then((r) => r.ok ? r.arrayBuffer() : Promise.reject(new Error('http ' + r.status)))
-        .then((buf) => { settle(buf); try { ctrl1.abort() } catch { } })
-        .catch(() => { if (!settled && !ctrl2.signal.aborted) settle(null) })
-    }, HEDGE_STAGGER_MS)
-  })
-
-  sessionCtrl.signal.addEventListener('abort', () => {
-    try { ctrl1.abort() } catch { }
-    try { ctrl2.abort() } catch { }
-    settleRequest?.(null)
-  }, { once: true })
-
-  // 全局超时保护
-  return Promise.race([
-    racePromise,
-    new Promise<ArrayBuffer | null>((resolve) => {
-      timeoutTimer = window.setTimeout(() => {
-        sessionCtrl.abort()
-        resolve(null)
-      }, timeout)
-    }),
-  ]).finally(() => {
-    if (staggerTimer != null) window.clearTimeout(staggerTimer)
-    if (timeoutTimer != null) window.clearTimeout(timeoutTimer)
-    prefetchState.prefetchControllers.delete(sessionCtrl)
-  })
-}
-
 // ====== 预取入口 ======
 
 export async function prefetchFirst(count: number): Promise<number> {
@@ -253,7 +187,7 @@ export async function prefetchFirst(count: number): Promise<number> {
   const want = Math.min(count, Math.min(adaptivePrefetchCount(), segs.length))
   const end = Math.min(want, segs.length)
   let added = 0
-  for (let i = end - 1; i >= 0; i--) {
+  for (let i = 0; i < end; i++) {
     if (enqueue({ url: segs[i], episodeKey: session.currentEpKey, priority: 1 })) added++
   }
   if (added > 0) scheduleDrain()
@@ -271,7 +205,7 @@ export async function prefetchNextEpisode(count: number): Promise<number> {
   if (segs.length === 0) return 0
   const end = Math.min(count, segs.length)
   let added = 0
-  for (let i = end - 1; i >= 0; i--) {
+  for (let i = 0; i < end; i++) {
     if (enqueue({ url: segs[i], episodeKey: nextEpKey, priority: 2 })) added++
   }
   if (added > 0) { console.log(`${LOG_PREFIX} ⏭ 预取 #${nextIdx} 集`); scheduleDrain() }
@@ -331,7 +265,7 @@ export function prefetchFromSegments(segUrls: string[], epIdx: number, startFrom
   const start = Math.max(0, startFrom)
   const end = Math.min(segUrls.length, start + Math.min(count, adaptivePrefetchCount()))
   let added = 0
-  for (let i = end - 1; i >= start; i--) {
+  for (let i = start; i < end; i++) {
     if (enqueue({ url: segUrls[i], episodeKey: epKey, priority: 1 })) added++
   }
   if (added > 0) scheduleDrain()
@@ -341,108 +275,31 @@ export function prefetchFromSegments(segUrls: string[], epIdx: number, startFrom
 export function notifyCurrentTs(absUrl: string): void {
   if (!session.enabled || !absUrl || !session.currentEpKey) return
   const segs = episodeIndex.segmentsByEpisode.get(session.currentEpKey) || []
-  if (segs.length === 0) return
   const pos = findSegmentIndex(segs, absUrl)
   if (pos < 0) return
-
-  // 1. 标记当前及之前的片段为"已播放"
-  let playedSet = episodeIndex.playedSegmentsByEpisode.get(session.currentEpKey)
-  if (!playedSet) { playedSet = new Set<number>(); episodeIndex.playedSegmentsByEpisode.set(session.currentEpKey, playedSet) }
-  for (let i = 0; i <= pos; i++) playedSet.add(i)
-
-  const totalActual = segs.length
-  const remaining = totalActual - pos - 1
+  let played = episodeIndex.playedSegmentsByEpisode.get(session.currentEpKey)
+  if (!played) { played = new Set(); episodeIndex.playedSegmentsByEpisode.set(session.currentEpKey, played) }
+  for (let i = 0; i <= pos; i++) played.add(i)
+  const remaining = segs.length - pos - 1
   if (remaining <= 0) return
-
-  // 2. 三级区域权重预取
-  //   紧急区 (pos+1 ~ pos+2): 对冲请求，双并发取最快
-  //   温热区 (pos+3 ~ pos+15): 密集预取，高优先
-  //   冷区   (pos+16+):        稀疏预取，广覆盖
-  const totalCount = Math.min(adaptivePrefetchCount(), remaining)
-  const spreadStep = adaptiveSpreadStep()
-  let addedCount = 0
-
-  // --- 紧急区：对冲请求（仅拥堵时启用）---
-  if (netDiag.mode === 'server_congested') {
-    let hedgeAdded = 0
-    for (let offset = 1; offset <= 2 && pos + offset < segs.length; offset++) {
-      const idx = pos + offset
-      if (playedSet.has(idx)) continue
-      const u = segs[idx]
-      if (cacheHas(u) || prefetchState.pendingUrls.has(pendingKey(u)) || netDiag.hedgeInFlight.has(hedgeKey(u))) continue
-      // 对冲：双请求取最快
-      hedgeAdded++
-      addedCount++
-      netDiag.hedgeInFlight.add(hedgeKey(u))
-      const t0 = performance.now()
-      const generation = prefetchState.cacheSession
-      const episode = session.currentEpKey
-      hedgeFetch(u).then((buf) => {
-        if (buf && generation === prefetchState.cacheSession) {
-          const elapsed = performance.now() - t0
-          cacheSet(u, buf, episode, null, elapsed)
-          diskSave(u, buf, episode).catch(() => { })
-          recordFetchDuration(elapsed, buf.byteLength)
-          fireListeners()
-        }
-      }).finally(() => { netDiag.hedgeInFlight.delete(hedgeKey(u, generation)) })
-    }
-    if (hedgeAdded > 0) {
-      console.log(`${LOG_PREFIX} 🚨 紧急对冲: ${hedgeAdded} 片 (pos=${pos}, mode=${netDiag.mode})`)
-    }
+  // Old queued positions are no longer useful after a seek. Keep only the
+  // current contiguous window, ordered nearest-first, beyond HLS's own buffer.
+  const start = Math.min(segs.length,pos + adaptiveBufferOffset())
+  const end = Math.min(segs.length,start + adaptivePrefetchCount())
+  for (let i = prefetchState.queue.length - 1; i >= 0; i--) {
+    const job = prefetchState.queue[i]
+    if (job.episodeKey !== session.currentEpKey) continue
+    const index = findSegmentIndex(segs,job.url)
+    if (index >= start && index < end) continue
+    prefetchState.queue.splice(i,1)
+    prefetchState.pendingUrls.delete(pendingKey(job.url,job.generation))
+    const count = (prefetchState.epQueueCount.get(job.episodeKey) || 1) - 1
+    if (count > 0) prefetchState.epQueueCount.set(job.episodeKey,count)
+    else prefetchState.epQueueCount.delete(job.episodeKey)
   }
-
-  // --- 温热区：密集预取 (pos+3 ~ pos+15) ---
-  const warmStart = 3
-  const warmEnd = Math.min(15, remaining)
-  for (let offset = warmStart; offset <= warmEnd && addedCount < totalCount; offset++) {
-    const idx = pos + offset
-    if (idx >= segs.length) break
-    if (playedSet.has(idx)) continue
-    const u = segs[idx]
-    if (cacheHas(u) || prefetchState.pendingUrls.has(pendingKey(u)) || netDiag.hedgeInFlight.has(hedgeKey(u))) continue
-    if (enqueue({ url: u, episodeKey: session.currentEpKey, priority: 1 })) addedCount++
+  for (let i = start; i < end; i++) if (!played.has(i)) enqueue({url:segs[i],episodeKey:session.currentEpKey,priority:1})
+  if (canPrefetch() && remaining <= PREFETCH_TRIGGER_WHEN_LESS_THAN && session.playbackBufferAhead >= Math.min(30,remaining * session.targetDuration)) {
+    void prefetchNextEpisode(PREFETCH_AHEAD_NEXT_EPISODE)
   }
-
-  // --- 冷区：稀疏预取 (pos+16+, 按 spreadStep 间距) ---
-  const coldStart = Math.max(16, warmEnd + 1)
-  for (let offset = coldStart; addedCount < totalCount && pos + offset < segs.length; offset += spreadStep) {
-    const idx = pos + offset
-    if (playedSet.has(idx)) continue
-    const u = segs[idx]
-    if (cacheHas(u) || prefetchState.pendingUrls.has(pendingKey(u)) || netDiag.hedgeInFlight.has(hedgeKey(u))) continue
-    if (enqueue({ url: u, episodeKey: session.currentEpKey, priority: 2 })) addedCount++
-  }
-
-  if (pos % 5 === 0) {
-    const h = telemetry.curEpStats.hits, m = telemetry.curEpStats.misses
-    const total = h + m
-    const rate = total === 0 ? 0 : h / total
-    console.log(
-      `${LOG_PREFIX} pos=${pos}/${totalActual}, prefetch=${addedCount}, ` +
-      `命中率=${(rate * 100).toFixed(1)}%, mode=${netDiag.mode}, conc=${adaptiveConcurrency()}`
-    )
-  }
-
-  // 3. 下一集预取：进度到 30% 或剩余 ≤12 片时触发
-  if (session.currentEpIdx + 1 < session.episodes.length && (pos / Math.max(totalActual, 1) >= 0.3 || remaining <= PREFETCH_TRIGGER_WHEN_LESS_THAN)) {
-    const nextEp = session.episodes[session.currentEpIdx + 1]
-    if (nextEp) {
-      const nextEpKey = epKeyFrom(nextEp, session.currentEpIdx + 1)
-      const nextSegs = episodeIndex.segmentsByEpisode.get(nextEpKey) || []
-      if (nextSegs.length > 0) {
-        const nextPlayed = episodeIndex.playedSegmentsByEpisode.get(nextEpKey)
-        let nextAdded = 0
-        const nextCount = Math.min(PREFETCH_AHEAD_NEXT_EPISODE, nextSegs.length)
-        for (let i = 0; i < nextSegs.length && nextAdded < nextCount; i++) {
-          if (nextPlayed && nextPlayed.has(i)) continue
-          if (cacheHas(nextSegs[i]) || prefetchState.pendingUrls.has(pendingKey(nextSegs[i]))) continue
-          if (enqueue({ url: nextSegs[i], episodeKey: nextEpKey, priority: 2 })) nextAdded++
-        }
-        if (nextAdded > 0) console.log(`${LOG_PREFIX} ⏭ 自动预取 #${session.currentEpIdx + 1} 集 (${nextAdded} 片)`)
-      }
-    }
-  }
-
   scheduleDrain()
 }

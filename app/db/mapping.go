@@ -1,21 +1,50 @@
 package db
 
 import (
+	"context"
 	"fmt"
+	"github.com/jmoiron/sqlx"
 	"math"
 	"strings"
 )
+
+// MediaStore owns context-aware favorite/history persistence. The host supplies
+// the database resolver because services are assembled before storage opens.
+type MediaStore struct{ database func() *sqlx.DB }
+
+func NewMediaStore(database func() *sqlx.DB) *MediaStore { return &MediaStore{database: database} }
+func (s *MediaStore) open(ctx context.Context) (*sqlx.DB, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if s == nil || s.database == nil {
+		return nil, fmt.Errorf("media database is unavailable")
+	}
+	database := s.database()
+	if database == nil {
+		return nil, fmt.Errorf("media database is unavailable")
+	}
+	return database, nil
+}
 
 // AddFavoriteByIdentity records a global favorite using the catalog identity
 // already resolved by the caller. A title is not an identity: using it here
 // can merge unrelated films or series with the same name.
 func AddFavoriteByIdentity(globalID int64, sourceKey, vodID string) error {
+	return NewMediaStore(DB).AddFavoriteByIdentity(context.Background(), globalID, sourceKey, vodID)
+}
+func (s *MediaStore) AddFavoriteByIdentity(ctx context.Context, globalID int64, sourceKey, vodID string) error {
+	database, err := s.open(ctx)
+	if err != nil {
+		return err
+	}
+
 	if globalID <= 0 || strings.TrimSpace(sourceKey) == "" || strings.TrimSpace(vodID) == "" {
 		return fmt.Errorf("invalid favorite identity")
 	}
 	// A favorite is global. Keep one source coordinate only for opening it in
 	// the UI, instead of creating duplicate list entries for every mirror.
-	_, err := instance.Exec(`INSERT INTO favorites (global_id, source_key, vod_id)
+	_, err = database.ExecContext(ctx, `INSERT INTO favorites (global_id, source_key, vod_id)
 		SELECT ?, ?, ?
 		WHERE NOT EXISTS (SELECT 1 FROM favorites WHERE global_id = ?)`, globalID, sourceKey, vodID, globalID)
 	return err
@@ -25,16 +54,30 @@ func AddFavoriteByIdentity(globalID int64, sourceKey, vodID string) error {
 
 // RemoveFavoriteByGlobalID 按 global_id 删除所有源的收藏
 func RemoveFavoriteByGlobalID(globalID int, sourceKey string) error {
+	return NewMediaStore(DB).RemoveFavoriteByGlobalID(context.Background(), globalID, sourceKey)
+}
+func (s *MediaStore) RemoveFavoriteByGlobalID(ctx context.Context, globalID int, sourceKey string) error {
+	database, err := s.open(ctx)
+	if err != nil {
+		return err
+	}
+
 	_ = sourceKey // retained for generated binding compatibility
-	_, err := instance.Exec(`DELETE FROM favorites WHERE global_id = ?`, globalID)
+	_, err = database.ExecContext(ctx, `DELETE FROM favorites WHERE global_id = ?`, globalID)
 	return err
 }
 
 // IsFavoriteByGlobalID 按 global_id 检查是否已收藏（跨所有源）
-func IsFavoriteByGlobalID(globalID int) bool {
+
+func (s *MediaStore) IsFavoriteByGlobalID(ctx context.Context, globalID int) (bool, error) {
+	database, err := s.open(ctx)
+	if err != nil {
+		return false, err
+	}
+
 	var count int
-	_ = instance.Get(&count, `SELECT COUNT(1) FROM favorites WHERE global_id = ?`, globalID)
-	return count > 0
+	err = database.GetContext(ctx, &count, `SELECT COUNT(1) FROM favorites WHERE global_id = ?`, globalID)
+	return count > 0, err
 }
 
 // FavWithVideo 收藏条目（含视频信息）
@@ -68,6 +111,14 @@ func catalogProjectionFilter(alias string) string {
 
 // GetFavorites 分页获取收藏列表（JOIN global_video + source_videos，一次给齐卡片字段）
 func GetFavorites(page, pageSize int) ([]FavWithVideo, error) {
+	return NewMediaStore(DB).GetFavorites(context.Background(), page, pageSize)
+}
+func (s *MediaStore) GetFavorites(ctx context.Context, page, pageSize int) ([]FavWithVideo, error) {
+	database, err := s.open(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	var results []FavWithVideo
 	q := `SELECT f.id, f.global_id, f.source_key, f.vod_id,
 		CASE WHEN g.vod_name <> '' THEN g.vod_name ELSE COALESCE(sv.vod_name, '') END as vod_name,
@@ -80,9 +131,9 @@ func GetFavorites(page, pageSize int) ([]FavWithVideo, error) {
 		FROM favorites f
 		JOIN global_video g ON f.global_id = g.id
 		LEFT JOIN source_videos sv ON sv.source_key = f.source_key AND sv.source_vod_id = f.vod_id
-		WHERE ` + catalogProjectionFilter("sv") + `
+		WHERE (` + catalogProjectionFilter("sv") + `) AND NOT EXISTS (SELECT 1 FROM catalog_retirements cr WHERE cr.source_key=f.source_key AND cr.source_vod_id=f.vod_id)
 		ORDER BY f.created_at DESC LIMIT ? OFFSET ?`
-	err := instance.Select(&results, q, pageSize, (page-1)*pageSize)
+	err = database.SelectContext(ctx, &results, q, pageSize, (page-1)*pageSize)
 	return results, err
 }
 
@@ -92,13 +143,21 @@ func GetFavorites(page, pageSize int) ([]FavWithVideo, error) {
 // catalog identity. The unique key is source-aware, so all read/delete paths
 // use the same complete coordinate.
 func SaveWatchHistoryByIdentity(globalID int64, sourceKey, vodID string, epNum int, position float64) error {
+	return NewMediaStore(DB).SaveWatchHistoryByIdentity(context.Background(), globalID, sourceKey, vodID, epNum, position)
+}
+func (s *MediaStore) SaveWatchHistoryByIdentity(ctx context.Context, globalID int64, sourceKey, vodID string, epNum int, position float64) error {
+	database, err := s.open(ctx)
+	if err != nil {
+		return err
+	}
+
 	if globalID <= 0 || strings.TrimSpace(sourceKey) == "" || strings.TrimSpace(vodID) == "" || epNum <= 0 {
 		return fmt.Errorf("invalid watch history identity")
 	}
 	if math.IsNaN(position) || math.IsInf(position, 0) || position < 0 {
 		return fmt.Errorf("invalid watch position")
 	}
-	_, err := instance.Exec(`INSERT INTO watch_history (global_id, source_key, vod_id, ep_num, position, updated_at)
+	_, err = database.ExecContext(ctx, `INSERT INTO watch_history (global_id, source_key, vod_id, ep_num, position, updated_at)
 		VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 		ON CONFLICT(global_id, source_key, ep_num) DO UPDATE SET
 		vod_id=excluded.vod_id, position=excluded.position, updated_at=CURRENT_TIMESTAMP`, globalID, sourceKey, vodID, epNum, position)
@@ -106,56 +165,103 @@ func SaveWatchHistoryByIdentity(globalID int64, sourceKey, vodID string, epNum i
 }
 
 func GetWatchHistoryByIdentity(globalID int64, sourceKey, vodID string, epNum int) (float64, error) {
+	return NewMediaStore(DB).GetWatchHistoryByIdentity(context.Background(), globalID, sourceKey, vodID, epNum)
+}
+func (s *MediaStore) GetWatchHistoryByIdentity(ctx context.Context, globalID int64, sourceKey, vodID string, epNum int) (float64, error) {
+	database, err := s.open(ctx)
+	if err != nil {
+		return 0, err
+	}
+
 	var position float64
-	err := instance.Get(&position, `SELECT position FROM watch_history WHERE global_id=? AND source_key=? AND vod_id=? AND ep_num=?`, globalID, sourceKey, vodID, epNum)
+	err = database.GetContext(ctx, &position, `SELECT position FROM watch_history WHERE global_id=? AND source_key=? AND vod_id=? AND ep_num=?`, globalID, sourceKey, vodID, epNum)
 	return position, err
 }
 
 // HistEntry 观看历史条目
 type HistEntry struct {
-	GlobalID  int     `json:"global_id" db:"global_id"`
-	SourceKey string  `json:"source_key" db:"source_key"`
-	VodId     string  `json:"vod_id" db:"vod_id"`
-	VodName   string  `json:"vod_name" db:"vod_name"`
-	VodPic    string  `json:"vod_pic" db:"vod_pic"`
-	EpNum     int     `json:"ep_num" db:"ep_num"`
-	Position  float64 `json:"position" db:"position"`
-	UpdatedAt string  `json:"updated_at" db:"updated_at"`
+	GlobalID   int     `json:"global_id" db:"global_id"`
+	SourceKey  string  `json:"source_key" db:"source_key"`
+	VodId      string  `json:"vod_id" db:"vod_id"`
+	VodName    string  `json:"vod_name" db:"vod_name"`
+	VodPic     string  `json:"vod_pic" db:"vod_pic"`
+	VodRemarks string  `json:"vod_remarks" db:"vod_remarks"`
+	EpNum      int     `json:"ep_num" db:"ep_num"`
+	Position   float64 `json:"position" db:"position"`
+	UpdatedAt  string  `json:"updated_at" db:"updated_at"`
 }
 
 // GetRecentHistory 获取最近观看历史
 func GetRecentHistory(limit int) ([]HistEntry, error) {
+	return NewMediaStore(DB).GetRecentHistory(context.Background(), limit)
+}
+func (s *MediaStore) GetRecentHistory(ctx context.Context, limit int) ([]HistEntry, error) {
+	database, err := s.open(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	var entries []HistEntry
-	q := `SELECT h.global_id, h.source_key, h.vod_id, g.vod_name, g.pic as vod_pic, h.ep_num, h.position, h.updated_at
+	q := `SELECT h.global_id, h.source_key, h.vod_id, CASE WHEN g.vod_name<>'' THEN g.vod_name ELSE COALESCE(sv.vod_name,'') END AS vod_name, CASE WHEN g.pic<>'' THEN g.pic ELSE COALESCE(sv.vod_pic,'') END AS vod_pic, COALESCE(sv.vod_remarks,'') AS vod_remarks, h.ep_num, h.position, h.updated_at
 		FROM watch_history h
 		JOIN global_video g ON h.global_id = g.id
 		LEFT JOIN source_videos sv ON sv.source_key = h.source_key AND sv.source_vod_id = h.vod_id
-		WHERE ` + catalogProjectionFilter("sv") + `
+		WHERE (` + catalogProjectionFilter("sv") + `) AND NOT EXISTS (SELECT 1 FROM catalog_retirements cr WHERE cr.source_key=h.source_key AND cr.source_vod_id=h.vod_id)
 		ORDER BY h.updated_at DESC LIMIT ?`
-	err := instance.Select(&entries, q, limit)
+	err = database.SelectContext(ctx, &entries, q, limit)
 	return entries, err
 }
 
 // DeleteHistoryItem 删除单条观看历史
 func DeleteHistoryItem(globalID int, epNum int) error {
-	_, err := instance.Exec(`DELETE FROM watch_history WHERE global_id = ? AND ep_num = ?`, globalID, epNum)
+	return NewMediaStore(DB).DeleteHistoryItem(context.Background(), globalID, epNum)
+}
+func (s *MediaStore) DeleteHistoryItem(ctx context.Context, globalID int, epNum int) error {
+	database, err := s.open(ctx)
+	if err != nil {
+		return err
+	}
+
+	_, err = database.ExecContext(ctx, `DELETE FROM watch_history WHERE global_id = ? AND ep_num = ?`, globalID, epNum)
 	return err
 }
 
 func DeleteHistoryItemByIdentity(globalID int64, sourceKey, vodID string, epNum int) error {
-	_, err := instance.Exec(`DELETE FROM watch_history WHERE global_id=? AND source_key=? AND vod_id=? AND ep_num=?`, globalID, sourceKey, vodID, epNum)
+	return NewMediaStore(DB).DeleteHistoryItemByIdentity(context.Background(), globalID, sourceKey, vodID, epNum)
+}
+func (s *MediaStore) DeleteHistoryItemByIdentity(ctx context.Context, globalID int64, sourceKey, vodID string, epNum int) error {
+	database, err := s.open(ctx)
+	if err != nil {
+		return err
+	}
+
+	_, err = database.ExecContext(ctx, `DELETE FROM watch_history WHERE global_id=? AND source_key=? AND vod_id=? AND ep_num=?`, globalID, sourceKey, vodID, epNum)
 	return err
 }
 
 // DeleteHistoryByVideo 按 source_key+vod_id 删除（兼容旧调用）
 func DeleteHistoryByVideo(sourceKey string, vodId string) error {
-	_, err := instance.Exec(`DELETE FROM watch_history WHERE source_key = ? AND vod_id = ?`, sourceKey, vodId)
+	return NewMediaStore(DB).DeleteHistoryByVideo(context.Background(), sourceKey, vodId)
+}
+func (s *MediaStore) DeleteHistoryByVideo(ctx context.Context, sourceKey string, vodId string) error {
+	database, err := s.open(ctx)
+	if err != nil {
+		return err
+	}
+
+	_, err = database.ExecContext(ctx, `DELETE FROM watch_history WHERE source_key = ? AND vod_id = ?`, sourceKey, vodId)
 	return err
 }
 
 // ClearAllHistory 清空全部观看历史
-func ClearAllHistory() (int64, error) {
-	res, err := instance.Exec(`DELETE FROM watch_history`)
+func ClearAllHistory() (int64, error) { return NewMediaStore(DB).ClearAllHistory(context.Background()) }
+func (s *MediaStore) ClearAllHistory(ctx context.Context) (int64, error) {
+	database, err := s.open(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	res, err := database.ExecContext(ctx, `DELETE FROM watch_history`)
 	if err != nil {
 		return 0, err
 	}
@@ -163,7 +269,15 @@ func ClearAllHistory() (int64, error) {
 }
 
 func GetWatchedEpisodesByIdentity(globalID int64, sourceKey, vodID string) ([]int, error) {
+	return NewMediaStore(DB).GetWatchedEpisodesByIdentity(context.Background(), globalID, sourceKey, vodID)
+}
+func (s *MediaStore) GetWatchedEpisodesByIdentity(ctx context.Context, globalID int64, sourceKey, vodID string) ([]int, error) {
+	database, err := s.open(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	var epNums []int
-	err := instance.Select(&epNums, `SELECT ep_num FROM watch_history WHERE global_id=? AND source_key=? AND vod_id=? ORDER BY ep_num ASC`, globalID, sourceKey, vodID)
+	err = database.SelectContext(ctx, &epNums, `SELECT ep_num FROM watch_history WHERE global_id=? AND source_key=? AND vod_id=? ORDER BY ep_num ASC`, globalID, sourceKey, vodID)
 	return epNums, err
 }

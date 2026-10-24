@@ -73,6 +73,7 @@ export const useErrorStore = defineStore('error', () => {
         message: `${e.title} — ${e.message}`,
         source: e.source || '',
         detail: e.detail || '',
+        fields: { request_id: e.requestId || '', code: e.code || '', ui_time: String(e.time) },
       }).catch(() => { /* ignore */ })
     } catch { /* ignore */ }
 

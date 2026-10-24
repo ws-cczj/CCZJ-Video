@@ -191,7 +191,7 @@ func (op ParamConfig) actionParamName() string {
 }
 
 func buildOperationURL(base string, op ParamConfig, values map[string]string) string {
-	u, err := url.Parse(base)
+	u, err := url.Parse(strings.TrimSpace(base))
 	if err != nil {
 		return ""
 	}

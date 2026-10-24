@@ -9,6 +9,7 @@ package netstats
 
 import (
 	"cczjVideo/app/netpolicy"
+	"cczjVideo/app/outbound"
 	"context"
 	"errors"
 	"io"
@@ -177,7 +178,7 @@ func WrapTransport(cat Category, base http.RoundTripper) http.RoundTripper {
 	if base == nil {
 		base = http.DefaultTransport
 	}
-	return &counterTransport{cat: cat, base: base}
+	return outbound.WrapTransport(string(cat), base, func(selected http.RoundTripper) http.RoundTripper { return &counterTransport{cat: cat, base: selected} })
 }
 
 type counterTransport struct {

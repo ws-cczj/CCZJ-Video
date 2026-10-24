@@ -2,7 +2,9 @@ package library
 
 import (
 	"cczjVideo/app/apperror"
+	"cczjVideo/app/applog"
 	"cczjVideo/app/db"
+	"cczjVideo/app/operation"
 	"cczjVideo/app/provider"
 	"context"
 	"encoding/json"
@@ -30,7 +32,9 @@ func (s *Service) TrendingComics(ctx context.Context, board string, refresh bool
 	if board != "china" && board != "japan" {
 		return nil, apperror.New(apperror.Validation, "漫画榜单无效")
 	}
+	request := ctx
 	return s.trendReads.Do(ctx, board, func(ctx context.Context) (*ComicTrendPage, error) {
+		ctx, _ = operation.OwnedContext(ctx, request, "reading.comic_trending", applog.Fields{"mode": "comic", "board": board})
 		release := s.priority.begin()
 		defer release()
 		key := "comic.trending.v1." + board

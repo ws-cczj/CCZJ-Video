@@ -1,7 +1,11 @@
 {
-  "version": "2.4.1",
-  "desc": "Added\r\n\r\n- 一键 GitHub 发布：同步版本与更新说明、验证代码、提交源码、构建 Windows 与 Android 安装包、上传并核对全部附件后正式发布；失败可重试。\r\n\r\nFixed\r\n\r\n- 投屏发现改为逐个局域网接口发送，补充通用 SSDP 查询与重发，避免只响应根设备或首包丢失的接收端被漏掉。\r\n- Android 增加系统无线投屏设置入口，搜索准备阶段失败后不再一直停留在搜索状态，可恢复重试。\r\n\r\nValidation\r\n\r\n- 独立验收 APK 已对接官方 Kodi 21.3，验证真实 SSDP 发现、媒体拉取及播放／暂停／继续／跳转／停止，以及从系统设置返回后再次搜索。同模拟器接收端不代替海康电视、实体手机或路由器的无线组播验证。",
+  "version": "2.4.2",
+  "desc": "Changed\r\n\r\n- 按业务职责整理视频、来源、采集、下载、阅读和更新模块，统一请求上下文、后台任务归属与资源释放；退出时先取消工作，再等待收尾和关闭数据库。\r\n- 功能与接口全景图改为一张可缩放、拖动、搜索的离线画布，关联功能模块、接口调用、数据与生命周期，支持导出 SVG。\r\n- 文件读取、取消、原子写入和共享网络预算集中复用；应用级更新与备份在模式切换后继续运行，关闭应用时统一收尾。\r\n- 完善播放线路与画质信息、请求诊断和网络策略，减少重复取数与过期响应覆盖。\r\n\r\nFixed\r\n\r\n- 修复 Android 同进程 Activity 重建导致应用单例崩溃，以及阻塞请求占满执行器后取消无法及时送达的问题。\r\n- 修复 Windows 更改 EXE 文件名后浏览器进度与缓存不可见；固定资料目录并接续既有资料。修复关闭到托盘未接线、窗口设置存储失败仍报成功及启动失败未清理资源。\r\n- 修复源修改、采集调度、详情刷新和豆瓣补全的取消与重入问题，避免停用任务再次被旧定时器启动。\r\n- 修复目录彻底删除、清空与身份合并时收藏和历史可见性不一致、观看坐标丢失及并发写入使用旧身份的问题。\r\n- 备份恢复改为单事务，失败或取消全部回滚；导出使用一致快照、独立临时副本与唯一文件名，提前拒绝无法由自身导入器接受的超限内容。\r\n- 修复更新下载取消不彻底、并发下载进度混杂，以及隐藏或关闭弹窗后的迟到结果覆盖。\r\n- 修复小说／漫画模式和设置滚动恢复、播放进度校验及写入失败重试；保留各模式的数据身份。\r\n- 修复主题图片读取在弹窗关闭后恢复全局预览，统一来源、备份、主题与字幕的文件取消，补齐键盘文件选择入口。\r\n\r\nValidation\r\n\r\n- 覆盖 Go、前端、类型检查、生产构建、CSS 复用、文档链接、版本与发布脚本验证；浏览器回归涵盖播放、阅读、缓存、主题、插件、更新和诊断。\r\n- Windows 使用隔离资料验证原生生命周期、目录与备份链路；Android amd64 验收包验证同进程重建、真实 HTTP 取消、系统文件选择及安装器权限／取消交接。发布 APK 为沿用既有签名的 ARM64 预览版。\r\n- Wails Go／JavaScript runtime 继续配套使用 beta.30；已评估 beta.30–34 的事件与生命周期变化，本版不强制升级。实体电视、ARM64 手机／鸿蒙 4 及长期设备资源趋势未取得本版完整验收结论。",
   "history": [
+    {
+      "version": "2.4.1",
+      "desc": "Added\r\n\r\n- 一键 GitHub 发布：同步版本与更新说明、验证代码、提交源码、构建 Windows 与 Android 安装包、上传并核对全部附件后正式发布；失败可重试。\r\n\r\nFixed\r\n\r\n- 投屏发现改为逐个局域网接口发送，补充通用 SSDP 查询与重发，避免只响应根设备或首包丢失的接收端被漏掉。\r\n- Android 增加系统无线投屏设置入口，搜索准备阶段失败后不再一直停留在搜索状态，可恢复重试。\r\n\r\nValidation\r\n\r\n- 独立验收 APK 已对接官方 Kodi 21.3，验证真实 SSDP 发现、媒体拉取及播放／暂停／继续／跳转／停止，以及从系统设置返回后再次搜索。同模拟器接收端不代替海康电视、实体手机或路由器的无线组播验证。"
+    },
     {
       "version": "2.4.0",
       "desc": "【2.4.0 小说、漫画与移动阅读】\n\n新增小说与漫画独立模式：小说书城与阅读器采用温暖的书页风格，漫画漫游与阅读器采用独立视觉设计。\n\n- 小说、漫画分别管理书架、进度、内置来源和章节／话次匹配。\n- 多源搜索最多五路并发，支持继续扩展；低分源保留备用，后台按模式巡检。\n- 搜索、阅读与翻页支持取消和迟到响应防护，阅读记录保存在 SQLite。\n- 优化移动端播放器、阅读交互与模式切换；修复阅读底栏换行。\n- 发布统一 Windows EXE 与 Android ARM64 APK，更新包按平台和架构选择并校验 SHA256。Android 安装交由系统确认。\n\nAndroid 仍为预览版，鸿蒙 4 真机兼容性尚待验证。"
@@ -45,18 +49,18 @@
   ],
   "assets": [
     {
-      "name": "cczjVideo-windows-amd64-2.4.1.exe",
-      "browser_download_url": "https://github.com/ws-cczj/CCZJ-Video/releases/download/v2.4.1/cczjVideo-windows-amd64-2.4.1.exe",
+      "name": "cczjVideo-windows-amd64-2.4.2.exe",
+      "browser_download_url": "https://github.com/ws-cczj/CCZJ-Video/releases/download/v2.4.2/cczjVideo-windows-amd64-2.4.2.exe",
       "size": 0
     },
     {
-      "name": "cczjVideo-windows-amd64-2.4.1-portable.zip",
-      "browser_download_url": "https://github.com/ws-cczj/CCZJ-Video/releases/download/v2.4.1/cczjVideo-windows-amd64-2.4.1-portable.zip",
+      "name": "cczjVideo-windows-amd64-2.4.2-portable.zip",
+      "browser_download_url": "https://github.com/ws-cczj/CCZJ-Video/releases/download/v2.4.2/cczjVideo-windows-amd64-2.4.2-portable.zip",
       "size": 0
     },
     {
-      "name": "cczjVideo-android-arm64-2.4.1.apk",
-      "browser_download_url": "https://github.com/ws-cczj/CCZJ-Video/releases/download/v2.4.1/cczjVideo-android-arm64-2.4.1.apk",
+      "name": "cczjVideo-android-arm64-2.4.2.apk",
+      "browser_download_url": "https://github.com/ws-cczj/CCZJ-Video/releases/download/v2.4.2/cczjVideo-android-arm64-2.4.2.apk",
       "size": 0
     }
   ]

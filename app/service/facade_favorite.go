@@ -2,6 +2,7 @@ package service
 
 import (
 	"cczjVideo/app/db"
+	"context"
 	"encoding/json"
 )
 
@@ -28,18 +29,18 @@ func (r *FavReq) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (a *App) AddFavorite(req FavReq) error {
-	return a.media.AddFavorite(req.SourceKey, req.VodId)
+func (a *App) AddFavorite(ctx context.Context, req FavReq) error {
+	return runRequestError(a, ctx, "video.AddFavorite", func(ctx context.Context) error { return a.media.AddFavorite(ctx, req.SourceKey, req.VodId) })
 }
 
-func (a *App) RemoveFavorite(req FavReq) error {
-	return a.media.RemoveFavorite(req.SourceKey, req.VodId)
+func (a *App) RemoveFavorite(ctx context.Context, req FavReq) error {
+	return runRequestError(a, ctx, "video.RemoveFavorite", func(ctx context.Context) error { return a.media.RemoveFavorite(ctx, req.SourceKey, req.VodId) })
 }
 
-func (a *App) IsFavorite(req FavReq) (bool, error) {
-	return a.media.IsFavorite(req.SourceKey, req.VodId)
+func (a *App) IsFavorite(ctx context.Context, req FavReq) (bool, error) {
+	return runRequest(a, ctx, "video.IsFavorite", func(ctx context.Context) (bool, error) { return a.media.IsFavorite(ctx, req.SourceKey, req.VodId) })
 }
 
-func (a *App) GetFavorites(page, pageSize int) ([]db.FavWithVideo, error) {
-	return a.media.Favorites(page, pageSize)
+func (a *App) GetFavorites(ctx context.Context, page, pageSize int) ([]db.FavWithVideo, error) {
+	return runRequest(a, ctx, "video.GetFavorites", func(ctx context.Context) ([]db.FavWithVideo, error) { return a.media.Favorites(ctx, page, pageSize) })
 }

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"cczjVideo/app/applog"
 	"cczjVideo/app/db"
 	"cczjVideo/app/model"
 )
@@ -21,11 +22,15 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	testDirs.data = dir
+	if err := applog.Init(dir); err != nil {
+		panic(err)
+	}
 	if err := db.InitDB(dir); err != nil {
 		panic(err)
 	}
 	code := m.Run()
 	db.Close()
+	applog.Default().Close()
 	_ = os.RemoveAll(dir)
 	os.Exit(code)
 }

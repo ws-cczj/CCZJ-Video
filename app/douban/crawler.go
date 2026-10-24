@@ -358,27 +358,18 @@ func awaitDoubanSlotContext(ctx context.Context, caller string, budget time.Dura
 }
 
 func fetchHTML(urlStr string) (string, error) {
-	return fetchDouban(urlStr, false)
+	return fetchDoubanContext(context.Background(), urlStr)
 }
 
-// fetchDouban 抓取一个豆瓣地址。ignoreBlock 只跳过“本地静默期”这一道闸门：
-// 兜底的 JSON 接口是另一套防护、实测不受影响；若连它也拦掉，兜底就永远是死代码。
-// 限速和反爬计数照常生效，所以 JSON 接口一旦被封同样会续上静默期。
-//
+// fetchDoubanContext 抓取一个豆瓣地址，网页与 JSON 兜底共享静默期和限速。
 // 命中 sec.douban.com 验证跳转时先自解 proof-of-work 再重试，解成了就不算被封。
-func fetchDouban(urlStr string, ignoreBlock bool) (string, error) {
-	return fetchDoubanContext(context.Background(), urlStr, ignoreBlock)
-}
-
-func fetchDoubanContext(ctx context.Context, urlStr string, ignoreBlock bool) (string, error) {
+func fetchDoubanContext(ctx context.Context, urlStr string) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
-	if !ignoreBlock {
-		if left := remainingBlock(); left > 0 {
-			applog.Warn("[Douban] 反爬静默中（剩余 %s），跳过请求: %s", left.Round(time.Second), urlStr)
-			return "", blockedError(urlStr, fmt.Sprintf("本地反爬熔断静默中，剩余 %s", left.Round(time.Second)))
-		}
+	if left := remainingBlock(); left > 0 {
+		applog.Debug("[Douban] 反爬静默中（剩余 %s），跳过请求: %s", left.Round(time.Second), urlStr)
+		return "", blockedError(urlStr, fmt.Sprintf("本地反爬熔断静默中，剩余 %s", left.Round(time.Second)))
 	}
 	wait, ok, slotErr := awaitDoubanSlotContext(ctx, "搜索/详情", crawlerWaitBudget)
 	if slotErr != nil {
@@ -387,6 +378,10 @@ func fetchDoubanContext(ctx context.Context, urlStr string, ignoreBlock bool) (s
 	if !ok {
 		return "", blockedError(urlStr, fmt.Sprintf(
 			"本地限速需等待 %s，超过本次可等待的 %s", wait.Round(time.Second), crawlerWaitBudget))
+	}
+	// 等待限速槽位期间，其他请求也可能触发熔断。
+	if left := remainingBlock(); left > 0 {
+		return "", blockedError(urlStr, fmt.Sprintf("本地反爬熔断静默中，剩余 %s", left.Round(time.Second)))
 	}
 
 	applog.Info("[Douban] Fetching URL: %s", urlStr)
@@ -419,7 +414,7 @@ func fetchDoubanContext(ctx context.Context, urlStr string, ignoreBlock bool) (s
 	}
 	if err != nil {
 		var httpErr *doubanFetchError
-		if !errors.As(err, &httpErr) {
+		if !errors.As(err, &httpErr) && apperror.Public(err).RetryAfterSeconds == 0 {
 			// 超时/连接失败同样该触发静默期：豆瓣对被标记的 IP 会接受连接但
 			// 一直不给响应，不收手的话每条请求都要白烧两次 15s 超时。
 			applog.Warn("[Douban] 请求未得到响应，进入反爬静默：%v", err)
@@ -428,11 +423,8 @@ func fetchDoubanContext(ctx context.Context, urlStr string, ignoreBlock bool) (s
 		return "", err
 	}
 
-	// 兜底接口成功不代表详情页解封了：解除熔断会让下一条又去打一次注定被挡的
-	// 网页，静默期也就失去了省请求的意义。这里只在正常路径上解除。
-	if !ignoreBlock {
-		noteDoubanSuccess()
-	}
+	// 正常响应解除共享熔断；网页是否可再次探测仍由 detailProbeAllowed 管理。
+	noteDoubanSuccess()
 	return html, nil
 }
 
@@ -491,14 +483,15 @@ func fetchDoubanOnceContext(ctx context.Context, urlStr, requestReferer string) 
 				AntiCrawl:  true,
 			}
 		}
-		if challenged {
+		rejected := challenged || resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusTooManyRequests
+		if rejected {
 			noteAntiCrawl()
 		}
 		return "", "", &doubanFetchError{
 			URL:        urlStr,
 			StatusCode: resp.StatusCode,
 			Location:   location,
-			AntiCrawl:  challenged,
+			AntiCrawl:  rejected,
 		}
 	}
 
@@ -598,7 +591,7 @@ func SearchSubjectIDContext(ctx context.Context, keyword string, meta SearchMeta
 
 		fullURL := searchURL + "?" + params.Encode()
 
-		html, err := fetchDoubanContext(ctx, fullURL, false)
+		html, err := fetchDoubanContext(ctx, fullURL)
 		if err != nil {
 			if ctx.Err() != nil {
 				return "", ctx.Err()
@@ -608,6 +601,9 @@ func SearchSubjectIDContext(ctx context.Context, keyword string, meta SearchMeta
 				applog.Warn("[Douban] '%s' returned an anti-crawl page; keeping the record retryable", kw)
 			}
 			lastErr = err
+			if remainingBlock() > 0 || apperror.Public(err).RetryAfterSeconds > 0 {
+				break
+			}
 			continue
 		}
 		if payload, ok := decodeSearchPage(html); ok && payload.ErrorInfo != "" && len(payload.Items) == 0 {
@@ -636,7 +632,7 @@ func SearchSubjectIDContext(ctx context.Context, keyword string, meta SearchMeta
 			// 多个 ID 时取第一个等于抽签，页面顺序一变就挂到另一部片上。
 			if id, ok := uniqueFallbackSubjectID(html); ok {
 				applog.Info("[Douban] New parser found 0 candidates, page points at exactly one subject %s for '%s'", id, kw)
-				db.ClearDoubanSearchFailure(meta.GlobalID)
+				db.ClearDoubanSearchFailureContext(ctx, meta.GlobalID)
 				return id, nil
 			}
 			applog.Warn("[Douban] No candidates parsed for '%s' (HTML len=%d)", kw, len(html))
@@ -664,7 +660,7 @@ func SearchSubjectIDContext(ctx context.Context, keyword string, meta SearchMeta
 				keyword, match.SubjectID, match.Title, match.Year, score)
 
 			if score >= doubanMatchThreshold {
-				db.ClearDoubanSearchFailure(meta.GlobalID)
+				db.ClearDoubanSearchFailureContext(ctx, meta.GlobalID)
 				return match.SubjectID, nil
 			}
 
@@ -683,7 +679,7 @@ func SearchSubjectIDContext(ctx context.Context, keyword string, meta SearchMeta
 	// 只有确实拿到正常搜索页、但没有找到候选时才累计“搜索无结果”。
 	// 网络错误、重定向和验证页不能触发 24 小时冷却，否则临时故障会被放大。
 	if hadUsableSearchResponse {
-		_ = db.MarkDoubanSearchFailure(meta.GlobalID)
+		_ = db.MarkDoubanSearchFailureContext(ctx, meta.GlobalID)
 	} else {
 		applog.Warn("[Douban] Search failed before a usable result page; skip cooldown for '%s'", keyword)
 	}

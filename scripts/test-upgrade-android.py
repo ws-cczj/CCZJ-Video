@@ -12,6 +12,7 @@ from pathlib import Path
 import subprocess
 import threading
 import time
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 from urllib.request import urlopen
@@ -48,6 +49,13 @@ class Device:
         target = next(t for t in targets if t.get('url', '').startswith('https://wails.localhost'))
         self.socket = websocket.create_connection(target['webSocketDebuggerUrl'], timeout=55, origin='http://localhost')
         self.call('Runtime.enable')
+        self.ready()
+
+    def ready(self):
+        deadline=time.monotonic()+25
+        while not self.js('!!document.querySelector("#app")?.__vue_app__?.config.globalProperties.$pinia?._s.get("applicationMode")?.loaded'):
+            if time.monotonic()>deadline:raise RuntimeError('Native Vue application did not finish loading')
+            time.sleep(.1)
         self.call('Log.enable')
 
     def close(self):
@@ -78,8 +86,29 @@ class Device:
         return result.get('result', {}).get('value')
 
     def rpc(self, name, *args):
-        path, alias = MODULE.compiled_binding(name)
-        return self.js('(async()=>{const m=await import('+json.dumps(path)+');return await m['+json.dumps(alias)+'](...'+json.dumps(args)+')})()')
+        try:
+            path, alias = MODULE.compiled_binding(name)
+        except ValueError:
+            # Compatibility bindings can be tree-shaken out of the current UI.
+            # Exercise their actual native contract rather than requiring Vite
+            # to export an otherwise unused JavaScript wrapper.
+            import re
+            source = (ROOT/'frontend/bindings/cczjVideo/app/service/app.js').read_text(encoding='utf-8')
+            method = re.search(r'export function '+re.escape(name)+r'\([^)]*\)\s*\{\s*return \$Call.ByID\((\d+)', source)
+            if not method:raise
+            identity = 'upgrade-compat-'+uuid.uuid4().hex
+            payload = json.dumps(dict(object=0,method=0,args={'methodID':int(method[1]),'args':args,'call-id':identity}))
+            return self.js('''new Promise((resolve,reject)=>{
+              const previous=window._wailsAndroidCallback,id='''+json.dumps(identity)+''';
+              const timer=setTimeout(()=>{window._wailsAndroidCallback=previous;reject(Error('Native compatibility call timed out'))},30000);
+              window._wailsAndroidCallback=(key,response,error)=>{
+                if(key!==id){previous?.(key,response,error);return}
+                clearTimeout(timer);window._wailsAndroidCallback=previous;
+                try{if(error)throw Error(error);const value=JSON.parse(response);if(!value.ok)throw Error(JSON.stringify(value.error));resolve(value.text?JSON.parse(value.text):value.data)}catch(e){reject(e)}
+              };
+              wails.invokeAsync(id,'''+json.dumps(payload)+''');
+            })''')
+        return self.js('(async()=>{const m=await import('+json.dumps(path)+');try{return await m['+json.dumps(alias)+'](...'+json.dumps(args)+')}catch(error){throw Error(JSON.stringify({code:error.code,message:error.message}))}})()')
 
     def restart(self):
         self.close()
@@ -96,14 +125,18 @@ class Device:
         return json.loads(raw) if raw else None
 
     def visit(self, route):
+        self.ready()
         mode = 'novel' if route.startswith('/novel') else 'comic' if route.startswith('/comic') else 'video'
         current = self.store('applicationMode', 's.mode')
-        if current != mode:
+        if current != mode or self.rpc('GetSetting','application_mode') != mode:
             self.rpc('SetSetting', 'application_mode', mode)
             self.js('location.href='+json.dumps('https://wails.localhost/?application-mode='+mode+'#'+route))
             time.sleep(2)
+            self.ready()
         self.js('location.hash='+json.dumps(route))
         time.sleep(1.5)
+        assert self.store('applicationMode','s.mode')==mode
+        assert self.rpc('GetRuntimeMetrics')['scope']['mode']==mode
 
     def store(self, name, expression):
         return self.js('(async()=>{const s=document.querySelector("#app").__vue_app__.config.globalProperties.$pinia._s.get('+json.dumps(name)+');if(!s)throw Error("Store not mounted");const value=await ('+expression+');return value===undefined?null:JSON.parse(JSON.stringify(value))})()')
@@ -242,6 +275,8 @@ def main():
 
     try:
         device.connect()
+        device.rpc('SetSetting','outbound_proxy_pool_v1','{"enabled":false}')
+        device.restart()
         device.js('[...document.querySelectorAll("button")].find(b=>b.textContent.includes("同意并继续")&&!b.disabled)?.click()')
         check('embedded-host',lambda: require(device.js('Array.from(document.scripts).some(s=>s.src.includes("/assets/"))&&!Array.from(document.scripts).some(s=>s.src.includes("@vite"))'), 'Expected offline embedded frontend'))
         def markers():
@@ -265,6 +300,9 @@ def main():
                     for old in device.rpc('LibrarySources',kind):
                         if old['name'].startswith('验收'):
                             device.rpc('LibraryDeleteSource',old['sourceKey'])
+                # The fixture assertions count only the controlled sources.
+                # This is the disposable acceptance DB, never the preview app.
+                device.sql("UPDATE sources SET enabled=0 WHERE kind IN ('novel','comic')")
                 device.sql('DELETE FROM reading_state; DELETE FROM reading_state_imports; DELETE FROM library_chapters; DELETE FROM library_items')
                 device.js('Object.keys(localStorage).filter(k=>k.startsWith("cczj.novel.")||k.startsWith("cczj.comic.")).forEach(k=>localStorage.removeItem(k))')
                 for mode,kind in [('nA','novel'),('nB','novel'),('cA','comic')]:
@@ -446,6 +484,7 @@ def main():
                 return dict(export=path,importResult=result,remappedProgress=progress,repeatKeptNewer=True,v1Accepted=True,futureRejected=True)
             check('native-backup-v2-cross-catalog-identity-and-version-compatibility',backup_identity)
         def downloads():
+            device.visit('/')
             task='acceptance-resume-'+str(int(time.time()))
             initial=device.rpc('StartVideoDownload',dict(task_id=task,url=f'http://127.0.0.1:{port}/download.bin',filename=task+'.bin',save_dir='',force=False))
             time.sleep(.8)

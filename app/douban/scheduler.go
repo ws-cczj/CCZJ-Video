@@ -1,6 +1,7 @@
 package douban
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -13,8 +14,8 @@ type Scheduler struct {
 	interval time.Duration
 	ticker   *time.Ticker
 	running  bool
-	stopCh   chan struct{}
 	doneCh   chan struct{}
+	cancel   context.CancelFunc
 	// reconfigure 由 SetInterval 投递新间隔。ticker 归启动协程所有，
 	// 包外只通过通道改它，避免两处同时换指针。
 	reconfigure chan time.Duration
@@ -25,6 +26,9 @@ type Scheduler struct {
 }
 
 func NewScheduler(interval time.Duration) *Scheduler {
+	if interval < time.Minute {
+		interval = time.Minute
+	}
 	return &Scheduler{
 		updater:  NewUpdater(),
 		interval: interval,
@@ -32,22 +36,27 @@ func NewScheduler(interval time.Duration) *Scheduler {
 }
 
 func (s *Scheduler) Start() {
+	s.StartContext(context.Background())
+}
+
+func (s *Scheduler) StartContext(owner context.Context) {
 	s.mu.Lock()
-	if s.running {
+	if s.running || owner.Err() != nil {
 		s.mu.Unlock()
 		applog.Info("[Douban] Scheduler already running")
 		return
 	}
 
 	s.running = true
+	ctx, cancel := context.WithCancel(owner)
+	s.cancel = cancel
+	s.updater.SetContext(ctx)
 	s.ticker = time.NewTicker(s.interval)
-	s.stopCh = make(chan struct{})
 	s.doneCh = make(chan struct{})
 	s.reconfigure = make(chan time.Duration, 1)
 	s.anchor = time.Now()
 	s.lastTick = time.Time{}
 	ticker := s.ticker
-	stopCh := s.stopCh
 	doneCh := s.doneCh
 	reconfigure := s.reconfigure
 	interval := s.interval
@@ -56,11 +65,20 @@ func (s *Scheduler) Start() {
 	applog.Info("[Douban] Scheduler started, interval: %s", interval)
 
 	go func() {
-		defer close(doneCh)
+		defer func() {
+			ticker.Stop()
+			cancel()
+			s.mu.Lock()
+			if s.doneCh == doneCh {
+				s.running = false
+				s.ticker, s.doneCh, s.reconfigure, s.cancel = nil, nil, nil, nil
+			}
+			close(doneCh)
+			s.mu.Unlock()
+		}()
 		for {
 			select {
-			case <-stopCh:
-				applog.Info("[Douban] Scheduler ticker stopped")
+			case <-ctx.Done():
 				return
 			case next := <-reconfigure:
 				ticker.Stop()
@@ -73,12 +91,15 @@ func (s *Scheduler) Start() {
 				continue
 			case <-ticker.C:
 			}
+			if ctx.Err() != nil {
+				return
+			}
 			s.mu.Lock()
 			s.lastTick = time.Now()
 			s.anchor = s.lastTick
 			s.mu.Unlock()
 			applog.Info("[Douban] Scheduler tick triggered")
-			count, err := s.updater.UpdateBatch()
+			count, err := s.updater.UpdateBatchContext(ctx)
 			if err != nil {
 				applog.Error("[Douban] Scheduler batch update ERROR: %v", err)
 			} else if count > 0 {
@@ -94,22 +115,18 @@ func (s *Scheduler) Stop() {
 	s.mu.Lock()
 	if !s.running {
 		s.mu.Unlock()
+		s.updater.RequestStop()
 		applog.Info("[Douban] Scheduler already stopped")
 		return
 	}
 
-	s.running = false
 	ticker := s.ticker
-	stopCh := s.stopCh
 	doneCh := s.doneCh
-	s.ticker = nil
-	s.stopCh = nil
-	s.doneCh = nil
-	s.reconfigure = nil
+	cancel := s.cancel
 	if ticker != nil {
 		ticker.Stop()
 	}
-	close(stopCh)
+	cancel()
 	s.mu.Unlock()
 
 	applog.Info("[Douban] Stopping scheduler (graceful)...")
@@ -126,7 +143,7 @@ func (s *Scheduler) Stop() {
 func (s *Scheduler) IsRunning() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.running
+	return s.running || s.updater.IsRunning()
 }
 
 func (s *Scheduler) Updater() *Updater {
@@ -134,8 +151,12 @@ func (s *Scheduler) Updater() *Updater {
 }
 
 func (s *Scheduler) TriggerNow() (int, error) {
+	return s.TriggerNowContext(context.Background())
+}
+
+func (s *Scheduler) TriggerNowContext(ctx context.Context) (int, error) {
 	applog.Info("[Douban] Manual trigger requested")
-	return s.updater.UpdateBatch()
+	return s.updater.UpdateBatchContext(ctx)
 }
 
 // SetInterval 改轮询间隔。调度器在跑就立刻重建计时，不用重启应用。
@@ -144,15 +165,24 @@ func (s *Scheduler) SetInterval(d time.Duration) {
 		d = time.Minute
 	}
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.interval = d
 	reconfigure := s.reconfigure
-	s.mu.Unlock()
 	if reconfigure == nil {
 		return
 	}
 	select {
 	case reconfigure <- d:
 	default:
+		// Preserve the newest setting while a batch keeps the loop busy.
+		select {
+		case <-reconfigure:
+		default:
+		}
+		select {
+		case reconfigure <- d:
+		default:
+		}
 	}
 }
 

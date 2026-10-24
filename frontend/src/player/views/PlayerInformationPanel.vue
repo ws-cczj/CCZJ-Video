@@ -4,13 +4,13 @@ import { useI18n } from 'vue-i18n'
 import { Window } from '../../api/runtime'
 import { presentationProfile } from '../../platform/presentation'
 import Icon from '../../components/Icon.vue'
-import PlayLinePicker from '../../components/PlayLinePicker.vue'
+import PlaybackRouteList from './PlaybackRouteList.vue'
 import DoubanComments from '../../components/DoubanComments.vue'
 import { Button } from '../../components/ui'
 import type { PlayerPanelModel } from '../page/panelModel'
 
 const props = defineProps<{model:PlayerPanelModel;collapsed:boolean}>()
-const emit = defineEmits<{source:[key:string];episode:[index:number];line:[index:number];sort:[];close:[]}>()
+const emit = defineEmits<{source:[key:string,line?:number];episode:[index:number];sort:[];close:[];openLines:[]}>()
 const { t } = useI18n()
 const mobile = presentationProfile().ui === 'mobile'
 const details = props.model.details, catalog = props.model.catalog, episodeList = props.model.episodes
@@ -69,23 +69,11 @@ function onMinimizeApp():void { try { Window.Minimise() } catch { /* Host owns a
               </div>
             </div>
 
-            <div class="source-list cczj-flex cczj-gap-2">
-              <button v-for="src in catalog.items" :key="src.source_key" class="source-item cczj-flex cczj-items-center cczj-gap-2 cczj-px-3 cczj-py-2 cczj-rounded cczj-transition cczj-cursor-pointer"
-                :class="[`probe-${src.probe}`, { active: src.source_key === catalog.activeKey }]"
-                @click="emit('source',src.source_key)"
-                :disabled="!catalog.selectable(src) || catalog.loading"
-                :title="catalog.label(src.probe)">
-                <span class="source-name cczj-truncate">{{ src.name }}</span>
-                <span class="source-probe cczj-text-xs">{{ catalog.label(src.probe) }}</span>
-                <span v-if="src.source_key === catalog.activeKey" class="source-active-dot cczj-w-2 cczj-h-2 cczj-rounded-full cczj-bg-accent"></span>
-              </button>
-            </div>
-
-            <PlayLinePicker v-if="details.lines.length > 1" class="cczj-mt-4" :lines="details.lines"
-              :model-value="details.activeLineIndex" :source-key="details.sourceKey" :vod-id="String(details.vodId)"
-              :global-id="Number(details.video?.global_id || details.globalId || 0)"
-              :ep-num="episodeList.currentNumber"
-              @update:model-value="emit('line',Number($event))" />
+            <Button v-if="mobile" @click="emit('openLines')">{{t('playLine.switch')}}</Button>
+            <template v-else>
+              <PlaybackRouteList :sources="catalog.items" :active-key="catalog.activeKey" :active-line="details.lines[details.activeLineIndex]?.index??-1" :lines="details.lines" :busy="catalog.loading" :selectable="catalog.selectable" @choose="(key,line)=>emit('source',key,line)" />
+              <Button class="cczj-mt-4" variant="text" size="sm" @click="catalog.retry">{{t('playLine.retryQuality')}}</Button>
+            </template>
 
             <!-- 选集区（仅当有剧集时显示） -->
             <template v-if="episodeList.items.length > 0">

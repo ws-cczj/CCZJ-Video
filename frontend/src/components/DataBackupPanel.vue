@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from './Icon.vue'
 import { Button } from './ui'
@@ -19,11 +19,22 @@ import { useErrorStore } from '../stores/error'
 import { useConfirmStore } from '../stores/confirm'
 import { isMobileRuntime } from '../api/runtime'
 import { revealDiagnosticExport } from '../platform/diagnosticFiles'
+import { createRequestScope } from '../api/requestScope'
+import { readFileDataURL } from '../api/fileTransfer'
+import { normalizeApiError } from '../api/errors'
+import { useGeneration } from '../composables/useGeneration'
 
 const { t } = useI18n()
 const mobile = isMobileRuntime()
 const errorStore = useErrorStore()
 const confirmStore = useConfirmStore()
+const requests = createRequestScope()
+const filesGeneration = useGeneration(), archivesGeneration = useGeneration(), legacyGeneration = useGeneration()
+let disposed = false
+onBeforeUnmount(() => { disposed = true; requests.cancel(); filesGeneration.invalidate(); archivesGeneration.invalidate(); legacyGeneration.invalidate() })
+function reportError(title: string, error: unknown, location = 'DataBackupPanel'): void {
+  if (!disposed && normalizeApiError(error).code !== 'CANCELLED') errorStore.fromError(title, error, location)
+}
 
 // 后端返回的是逐类计数，界面按数字讲结果：绑定里的模型类型不直接 import，
 // 与同页其他面板保持一致用宽松类型接。
@@ -54,16 +65,16 @@ function fmtBytes(value: number): string {
 
 // Keep a local backup even when the user cancels Android's share chooser.
 async function doExport(): Promise<void> {
+  if (disposed || busy.value) return
   busy.value = 'export'
   try {
-    exportPath.value = await BackupExport('') as string
-    errorStore.info(t('backup.exportOkTitle'), mobile ? t('mobile.backupSaved') : t('backup.exportOk', { path: exportPath.value }))
+    const path = await requests.run(() => BackupExport(''))
+    if (disposed) return
+    exportPath.value = path
+    errorStore.info(t('backup.exportOkTitle'), mobile ? t('mobile.backupSaved') : t('backup.exportOk', { path }))
     await loadFiles()
-  } catch (e: any) {
-    errorStore.fromError(t('backup.exportFailed'), e, 'DataBackupPanel')
-  } finally {
-    busy.value = ''
-  }
+  } catch (error) { reportError(t('backup.exportFailed'), error) }
+  finally { busy.value = '' }
 }
 
 async function openExportFolder(): Promise<void> {
@@ -72,7 +83,7 @@ async function openExportFolder(): Promise<void> {
     if (mobile) await revealDiagnosticExport(exportPath.value)
     else await OpenFolder(exportPath.value)
   } catch (e: any) {
-    errorStore.fromError(t(mobile ? 'mobile.shareFailed' : 'backup.openFolderFailed'), e, 'DataBackupPanel')
+    reportError(t(mobile ? 'mobile.shareFailed' : 'backup.openFolderFailed'), e, 'DataBackupPanel')
   }
 }
 
@@ -84,56 +95,44 @@ async function onFileSelected(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = ''
-  if (!file) return
-  const ok = await confirmStore.confirm({
-    title: t('backup.import'),
-    message: t('backup.importConfirm', { name: file.name }),
-  })
-  if (!ok) return
+  if (!file || disposed || busy.value) return
+  const ok = await confirmStore.confirm({ title: t('backup.import'), message: t('backup.importConfirm', { name: file.name }) })
+  if (!ok || disposed || busy.value) return
   busy.value = 'import'
   try {
-    const dataUrl = await readAsDataURL(file)
-    const result = await BackupImportFromBase64(file.name, dataUrl.split(',')[1] || '')
-    lastResult.value = result
-  } catch (e: any) {
-    errorStore.fromError(t('backup.importFailed'), e, 'DataBackupPanel')
-  } finally {
-    busy.value = ''
-  }
-}
-
-function readAsDataURL(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result || ''))
-    reader.onerror = () => reject(reader.error || new Error('read failed'))
-    reader.readAsDataURL(file)
-  })
+    const data = await requests.run(() => readFileDataURL(file))
+    if (disposed) return
+    const result = await requests.run(() => BackupImportFromBase64(file.name, data.split(',')[1] || ''))
+    if (!disposed) lastResult.value = result
+  } catch (error) { reportError(t('backup.importFailed'), error) }
+  finally { busy.value = '' }
 }
 
 async function loadArchives(): Promise<void> {
+  if (disposed || mobile) return
+  const ticket = archivesGeneration.begin()
   archivesLoading.value = true
   try {
-    archives.value = (await BackupArchives()) as any[]
-  } catch (e: any) {
-    archives.value = []
-    errorStore.fromError(t('backup.archivesFailed'), e, 'DataBackupPanel')
-  } finally {
-    archivesLoading.value = false
-  }
+    const rows = await requests.run(BackupArchives)
+    if (!disposed && archivesGeneration.isCurrent(ticket)) archives.value = rows
+  } catch (error) {
+    if (archivesGeneration.isCurrent(ticket)) { archives.value = []; reportError(t('backup.archivesFailed'), error) }
+  } finally { if (archivesGeneration.isCurrent(ticket)) archivesLoading.value = false }
 }
 
 async function restoreArchive(archive: any): Promise<void> {
+  if (disposed || busy.value) return
   const ok = await confirmStore.confirm({
     title: t('backup.archiveRestore'),
     message: t('backup.archiveRestoreConfirm', { name: archive.name }),
   })
-  if (!ok) return
+  if (!ok || disposed || busy.value) return
   busy.value = `archive:${archive.name}`
   try {
-    lastResult.value = await BackupRestoreArchive(archive.name)
+    const result = await requests.run(() => BackupRestoreArchive(archive.name))
+    if (!disposed) lastResult.value = result
   } catch (e: any) {
-    errorStore.fromError(t('backup.archiveRestoreFailed'), e, 'DataBackupPanel')
+    reportError(t('backup.archiveRestoreFailed'), e)
   } finally {
     busy.value = ''
   }
@@ -150,58 +149,62 @@ async function restartApp(): Promise<void> {
 // 旧数据找回：路径由后端算（exe 旁边的 data），前端递不进任意目录；
 // 状态非空说明这台机器已经处理过一次，后端也就不再重读那份旧库。
 async function loadLegacy(): Promise<void> {
+  if (disposed || mobile) return
+  const ticket = legacyGeneration.begin()
   legacyLoading.value = true
   try {
-    legacy.value = await LegacyDataNotice()
-  } catch (e: any) {
-    legacy.value = null
-    errorStore.fromError(t('legacy.readFailed'), e, 'DataBackupPanel.loadLegacy')
-  } finally {
-    legacyLoading.value = false
-  }
+    const notice = await requests.run(LegacyDataNotice)
+    if (!disposed && legacyGeneration.isCurrent(ticket)) legacy.value = notice
+  } catch (error) {
+    if (legacyGeneration.isCurrent(ticket)) { legacy.value = null; reportError(t('legacy.readFailed'), error, 'DataBackupPanel.loadLegacy') }
+  } finally { if (legacyGeneration.isCurrent(ticket)) legacyLoading.value = false }
 }
 
 async function mergeLegacy(): Promise<void> {
-  if (!legacy.value?.available) return
+  if (!legacy.value?.available || disposed || busy.value) return
   const ok = await confirmStore.confirm({
     title: t('legacy.title'),
     message: t('legacy.mergeConfirm', { dir: legacy.value.legacy_dir }),
   })
-  if (!ok) return
+  if (!ok || disposed || busy.value) return
   busy.value = 'legacy'
   try {
-    legacyResult.value = await LegacyDataMerge()
+    const result = await requests.run(LegacyDataMerge)
+    if (disposed) return
+    legacyResult.value = result
     await loadLegacy()
   } catch (e: any) {
-    errorStore.fromError(t('legacy.mergeFailed'), e, 'DataBackupPanel.mergeLegacy')
+    reportError(t('legacy.mergeFailed'), e, 'DataBackupPanel.mergeLegacy')
   } finally {
     busy.value = ''
   }
 }
 
 async function loadFiles(): Promise<void> {
+  if (disposed) return
+  const ticket = filesGeneration.begin()
   filesLoading.value = true
   try {
-    files.value = (await BackupExports()) as any[]
-  } catch (e: any) {
-    files.value = []
-    errorStore.fromError(t('backup.filesFailed'), e, 'DataBackupPanel')
-  } finally {
-    filesLoading.value = false
-  }
+    const rows = await requests.run(BackupExports)
+    if (!disposed && filesGeneration.isCurrent(ticket)) files.value = rows
+  } catch (error) {
+    if (filesGeneration.isCurrent(ticket)) { files.value = []; reportError(t('backup.filesFailed'), error) }
+  } finally { if (filesGeneration.isCurrent(ticket)) filesLoading.value = false }
 }
 
 async function importFile(item: any): Promise<void> {
+  if (disposed || busy.value) return
   const ok = await confirmStore.confirm({
     title: t('backup.import'),
     message: t('backup.importConfirm', { name: item.name }),
   })
-  if (!ok) return
+  if (!ok || disposed || busy.value) return
   busy.value = `file:${item.name}`
   try {
-    lastResult.value = await BackupImportFile(item.name)
+    const result = await requests.run(() => BackupImportFile(item.name))
+    if (!disposed) lastResult.value = result
   } catch (e: any) {
-    errorStore.fromError(t('backup.importFailed'), e, 'DataBackupPanel')
+    reportError(t('backup.importFailed'), e)
   } finally {
     busy.value = ''
   }

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { effectScope, ref } from 'vue'
 import { useSubtitles } from '../src/player/useSubtitles'
 import { findActiveCue, parseSubtitle } from '../src/utils/subtitles'
@@ -16,13 +16,26 @@ function choose(name: string, read: () => Promise<string>, size = 100): Event {
   return { target: { value: name, files: [{ name, size, text: read }] } } as unknown as Event
 }
 const scopes: ReturnType<typeof effectScope>[] = []
+class SubtitleReader {
+  static opened: SubtitleReader[] = []
+  result = ''
+  onload: (() => void) | null = null
+  onerror: (() => void) | null = null
+  onabort: (() => void) | null = null
+  abort = vi.fn(() => this.onabort?.())
+  constructor() { SubtitleReader.opened.push(this) }
+  readAsText(file: File): void {
+    void file.text().then(value => { this.result = value; this.onload?.() }, () => this.onerror?.())
+  }
+}
+beforeEach(() => { SubtitleReader.opened = []; vi.stubGlobal('FileReader', SubtitleReader) })
 function setup() {
   const scope = effectScope()
   scopes.push(scope)
   const subtitles = scope.run(() => useSubtitles({ current: ref(1), fileInput: ref(null) }))!
   return { scope, subtitles }
 }
-afterEach(() => { scopes.splice(0).forEach(scope => scope.stop()) })
+afterEach(() => { scopes.splice(0).forEach(scope => scope.stop()); vi.unstubAllGlobals() })
 
 describe('local subtitle input boundaries', () => {
   it('keeps the most recently selected file when reads finish out of order', async () => {
@@ -58,6 +71,7 @@ describe('local subtitle input boundaries', () => {
     const read = deferred()
     const pending = subtitles.onSubtitleFileChosen(choose('old.srt', () => read.promise))
     scope.stop()
+    expect(SubtitleReader.opened[0]!.abort).toHaveBeenCalledOnce()
     read.resolve(text('old'))
     await pending
     expect(subtitles.subtitleCues.value).toHaveLength(0)

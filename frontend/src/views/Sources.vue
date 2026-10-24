@@ -183,11 +183,20 @@ async function deleteSourceConfirm(key: string): Promise<void> {
   await sourceStore.loadSources(true)
 }
 
-function handleSetDefault(source: any): void {
+const defaultSourceSaving = ref(false)
+
+async function handleSetDefault(source: any): Promise<void> {
   const key = sk(source)
-  if (key === sourceStore.currentSourceKey) return
-  sourceStore.switchSource(key)
-  errorStore.info(tr('sources.defaultSwitchedTitle'), tr('sources.defaultSwitched', { name: source.name }))
+  if (defaultSourceSaving.value || key === sourceStore.currentSourceKey) return
+  defaultSourceSaving.value = true
+  try {
+    await sourceStore.switchSource(key)
+    errorStore.info(tr('sources.defaultSwitchedTitle'), tr('sources.defaultSwitched', { name: source.name }))
+  } catch (e) {
+    errorStore.fromError(tr('sources.saveFailed'), e, 'Sources.setDefault')
+  } finally {
+    defaultSourceSaving.value = false
+  }
 }
 
 // === 采集操作 ===
@@ -450,6 +459,7 @@ onBeforeUnmount(stopProbeLoop)
         :cooling="coolingText(sk(s))"
         :probe-busy="probingKey === sk(s) || probingAll"
         :is-default="sk(s) === sourceStore.currentSourceKey"
+        :default-busy="defaultSourceSaving"
         :schedule-visible="scheduleVisible.has(sk(s))"
         :schedule-form="scheduleForms.get(sk(s)) || null"
         :doc="paramsDoc"

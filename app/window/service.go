@@ -2,9 +2,12 @@
 package window
 
 import (
+	"context"
 	"strconv"
+	"sync"
 	"sync/atomic"
 
+	"cczjVideo/app/apperror"
 	"cczjVideo/app/settings"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -30,6 +33,7 @@ type Service struct {
 	current        CurrentWindow
 	settings       *settings.Service
 	minimizeToTray atomic.Bool
+	writeMu        sync.Mutex
 }
 
 // NewService creates a window service using the supplied active-window provider.
@@ -48,13 +52,18 @@ func (s *Service) CloseBehavior() bool {
 }
 
 // SetCloseBehavior changes and persists the main-window close behavior.
-func (s *Service) SetCloseBehavior(minimize bool) {
-	s.minimizeToTray.Store(minimize)
+func (s *Service) SetCloseBehavior(ctx context.Context, minimize bool) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
 	value := "0"
 	if minimize {
 		value = "1"
 	}
-	_ = s.settings.Set("close_to_tray", value)
+	if err := s.settings.SetMany(ctx, map[string]string{"close_to_tray": value}); err != nil {
+		return apperror.Wrap(apperror.Storage, err, "保存窗口关闭行为失败")
+	}
+	s.minimizeToTray.Store(minimize)
+	return nil
 }
 
 // LoadCloseBehavior restores the persisted close behavior while preserving the default on first run.
@@ -116,15 +125,20 @@ func (s *Service) ReloadTitleBar() {
 }
 
 // SetResizable changes and persists the active window's resizable state.
-func (s *Service) SetResizable(resizable bool) {
-	if w := s.currentWindow(); w != nil {
-		w.SetResizable(resizable)
-	}
+func (s *Service) SetResizable(ctx context.Context, resizable bool) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
 	value := "1"
 	if !resizable {
 		value = "0"
 	}
-	_ = s.settings.Set("window_resizable", value)
+	if err := s.settings.SetMany(ctx, map[string]string{"window_resizable": value}); err != nil {
+		return apperror.Wrap(apperror.Storage, err, "保存窗口调整设置失败")
+	}
+	if w := s.currentWindow(); w != nil {
+		w.SetResizable(resizable)
+	}
+	return nil
 }
 
 // Resizable reports whether the active window can be resized.
@@ -134,18 +148,22 @@ func (s *Service) Resizable() bool {
 }
 
 // SetSize clamps, applies, and persists the active window size.
-func (s *Service) SetSize(width, height int) {
+func (s *Service) SetSize(ctx context.Context, width, height int) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
 	if width < MinimumWidth {
 		width = MinimumWidth
 	}
 	if height < MinimumHeight {
 		height = MinimumHeight
 	}
+	if err := s.settings.SetMany(ctx, map[string]string{"window_width": strconv.Itoa(width), "window_height": strconv.Itoa(height)}); err != nil {
+		return apperror.Wrap(apperror.Storage, err, "保存窗口尺寸失败")
+	}
 	if w := s.currentWindow(); w != nil {
 		w.SetSize(width, height)
 	}
-	_ = s.settings.Set("window_width", strconv.Itoa(width))
-	_ = s.settings.Set("window_height", strconv.Itoa(height))
+	return nil
 }
 
 // Size returns the active window size, or zero values before a window exists.
@@ -159,10 +177,10 @@ func (s *Service) Size() Size {
 }
 
 // ApplySettings restores persisted size and resizable state at application startup.
-func (s *Service) ApplySettings() {
+func (s *Service) ApplySettings(ctx context.Context) error {
 	w := s.currentWindow()
 	if w == nil {
-		return
+		return nil
 	}
 
 	width, widthErr := s.settings.Get("window_width")
@@ -172,7 +190,9 @@ func (s *Service) ApplySettings() {
 		parsedHeight, heightParseErr := strconv.Atoi(height)
 		if widthParseErr == nil && heightParseErr == nil && parsedWidth > 0 && parsedHeight > 0 {
 			if parsedWidth < MinimumWidth || parsedHeight < MinimumHeight {
-				s.SetSize(parsedWidth, parsedHeight)
+				if err := s.SetSize(ctx, parsedWidth, parsedHeight); err != nil {
+					return err
+				}
 			} else {
 				w.SetSize(parsedWidth, parsedHeight)
 			}
@@ -182,6 +202,7 @@ func (s *Service) ApplySettings() {
 	if value, err := s.settings.Get("window_resizable"); err == nil {
 		w.SetResizable(value != "0")
 	}
+	return nil
 }
 
 func (s *Service) currentWindow() application.Window {

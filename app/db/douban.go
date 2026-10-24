@@ -2,6 +2,7 @@ package db
 
 import (
 	"cczjVideo/app/applog"
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -89,6 +90,10 @@ func GetGlobalVideoByID(id int) (*GlobalVideoRow, error) {
 
 // UpsertDoubanInfo 更新 global_video 中的豆瓣相关字段（兼容 updater.go 的调用方式）
 func UpsertDoubanInfo(info *DoubanInfoRow) error {
+	return UpsertDoubanInfoContext(context.Background(), info)
+}
+
+func UpsertDoubanInfoContext(ctx context.Context, info *DoubanInfoRow) error {
 	if info == nil || info.GlobalID <= 0 {
 		return fmt.Errorf("global_id is empty")
 	}
@@ -115,7 +120,7 @@ func UpsertDoubanInfo(info *DoubanInfoRow) error {
 		updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?`
 
-	_, err := instance.Exec(q,
+	_, err := instance.ExecContext(ctx, q,
 		info.SubjectID, info.SubjectID,
 		info.Rating, info.Rating,
 		info.Votes, info.Votes,
@@ -201,6 +206,10 @@ type doubanSiblingDonor struct {
 // 这里补上缺失的那一步：不去合并本地主记录，只把兄弟的豆瓣字段抄过来。
 // 只填空、不覆盖，且不动 vod_name/type_id/year 这些采集侧字段。
 func InheritDoubanFieldsFromSiblings() (int, error) {
+	return InheritDoubanFieldsFromSiblingsContext(context.Background())
+}
+
+func InheritDoubanFieldsFromSiblingsContext(ctx context.Context) (int, error) {
 	q := `SELECT
 		g.id AS global_id,
 		g.douban_id,
@@ -231,7 +240,7 @@ func InheritDoubanFieldsFromSiblings() (int, error) {
 		WHERE TRIM(COALESCE(g.douban_score, '')) = ''`
 
 	var donors []*doubanSiblingDonor
-	if err := instance.Select(&donors, q); err != nil {
+	if err := instance.SelectContext(ctx, &donors, q); err != nil {
 		applog.Error("[Douban] InheritDoubanFieldsFromSiblings query failed: %v", err)
 		return 0, err
 	}
@@ -258,7 +267,7 @@ func InheritDoubanFieldsFromSiblings() (int, error) {
 
 	// 一次回填可能涉及上千条兄弟记录：逐条自动提交就是上千次 fsync，
 	// 整批包进一个事务才和它「批量补数据」的身份相称。
-	tx, err := instance.Beginx()
+	tx, err := instance.BeginTxx(ctx, nil)
 	if err != nil {
 		return 0, fmt.Errorf("begin sibling inherit: %w", err)
 	}
@@ -269,12 +278,12 @@ func InheritDoubanFieldsFromSiblings() (int, error) {
 		if d == nil {
 			continue
 		}
-		if _, err := tx.Exec(update,
+		if _, err := tx.ExecContext(ctx, update,
 			d.Score, d.Votes, d.Writer, d.Genre, d.Area, d.Lang, d.ReleaseDate,
 			d.SeasonCount, d.EpisodeCount, d.Duration, d.Aka, d.Imdb, d.Pic, d.DoubanHotness,
 			d.GlobalID); err != nil {
 			applog.Error("[Douban] 同豆瓣ID回填失败 global_id=%d douban_id=%s: %v", d.GlobalID, d.DoubanID, err)
-			continue
+			return 0, err
 		}
 		inherited++
 		applog.Info("[Douban] 同豆瓣ID %s：global_id=%d 继承了兄弟记录的豆瓣字段", d.DoubanID, d.GlobalID)

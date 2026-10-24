@@ -1,7 +1,7 @@
 package db
 
 import (
-	"fmt"
+	"context"
 	"math"
 	"strings"
 
@@ -91,15 +91,21 @@ func metaColumnSQL() string {
 // ReadAllSettings 返回整张设置表。备份文件要保全，导出侧不做筛选；
 // 机器本地键由导入侧跳过。
 func ReadAllSettings(database *sqlx.DB) ([]BackupSetting, error) {
+	return ReadAllSettingsContext(context.Background(), database)
+}
+func ReadAllSettingsContext(ctx context.Context, database sqlx.QueryerContext) ([]BackupSetting, error) {
 	var rows []BackupSetting
-	err := database.Select(&rows, `SELECT key, value FROM settings ORDER BY key`)
+	err := sqlx.SelectContext(ctx, database, &rows, `SELECT key, value FROM settings ORDER BY key`)
 	return rows, err
 }
 
 // ReadFavorites 取出全部收藏，带上解析身份所需的标题与年份。
 func ReadFavorites(database *sqlx.DB) ([]BackupFavorite, error) {
+	return ReadFavoritesContext(context.Background(), database)
+}
+func ReadFavoritesContext(ctx context.Context, database sqlx.QueryerContext) ([]BackupFavorite, error) {
 	var rows []BackupFavorite
-	err := database.Select(&rows, `SELECT COALESCE(g.vod_name,'') vod_name, COALESCE(g.year,'') year,
+	err := sqlx.SelectContext(ctx, database, &rows, `SELECT COALESCE(g.vod_name,'') vod_name, COALESCE(g.year,'') year,
 			f.source_key, f.vod_id,
 			COALESCE(strftime('`+backupTimeFormat+`', f.created_at),'') created_at
 		FROM favorites f
@@ -110,8 +116,11 @@ func ReadFavorites(database *sqlx.DB) ([]BackupFavorite, error) {
 
 // ReadHistory 取出全部观看历史进度。
 func ReadHistory(database *sqlx.DB) ([]BackupHistory, error) {
+	return ReadHistoryContext(context.Background(), database)
+}
+func ReadHistoryContext(ctx context.Context, database sqlx.QueryerContext) ([]BackupHistory, error) {
 	var rows []BackupHistory
-	err := database.Select(&rows, `SELECT COALESCE(g.vod_name,'') vod_name, COALESCE(g.year,'') year,
+	err := sqlx.SelectContext(ctx, database, &rows, `SELECT COALESCE(g.vod_name,'') vod_name, COALESCE(g.year,'') year,
 			h.source_key, h.vod_id, h.ep_num, h.position,
 			COALESCE(strftime('`+backupTimeFormat+`', h.updated_at),'') updated_at
 		FROM watch_history h
@@ -123,8 +132,11 @@ func ReadHistory(database *sqlx.DB) ([]BackupHistory, error) {
 // ReadLinkedVideoMeta 只导出被收藏或历史引用到的全局元数据：
 // 全表 v_video 可以有几十万行，搬进备份文件既没必要也会让文件失控。
 func ReadLinkedVideoMeta(database *sqlx.DB) ([]BackupVideoMeta, error) {
+	return ReadLinkedVideoMetaContext(context.Background(), database)
+}
+func ReadLinkedVideoMetaContext(ctx context.Context, database sqlx.QueryerContext) ([]BackupVideoMeta, error) {
 	var rows []BackupVideoMeta
-	err := database.Select(&rows, `SELECT `+metaColumnSQL()+` FROM global_video g
+	err := sqlx.SelectContext(ctx, database, &rows, `SELECT `+metaColumnSQL()+` FROM global_video g
 		WHERE g.id IN (SELECT global_id FROM favorites UNION SELECT global_id FROM watch_history)
 		ORDER BY g.id`)
 	return rows, err
@@ -132,8 +144,11 @@ func ReadLinkedVideoMeta(database *sqlx.DB) ([]BackupVideoMeta, error) {
 
 // ReadSources 让归档读取和活库共用同一条查询。
 func ReadSources(database *sqlx.DB) ([]*model.Source, error) {
+	return ReadSourcesContext(context.Background(), database)
+}
+func ReadSourcesContext(ctx context.Context, database sqlx.QueryerContext) ([]*model.Source, error) {
 	var sources []*model.Source
-	err := database.Select(&sources, `SELECT * FROM sources ORDER BY id`)
+	err := sqlx.SelectContext(ctx, database, &sources, `SELECT * FROM sources ORDER BY id`)
 	return sources, err
 }
 
@@ -150,41 +165,26 @@ func ResolveBackupIdentities(items []BackupIdentity) ([]int64, error) {
 	if len(items) == 0 {
 		return nil, nil
 	}
-	tx, err := instance.Beginx()
-	if err != nil {
-		return nil, fmt.Errorf("begin identity resolve: %w", err)
-	}
-	rollback := func() { _ = tx.Rollback() }
-	candidates, err := loadGlobalCandidates(tx)
-	if err != nil {
-		rollback()
-		return nil, err
-	}
-	index := newGlobalVideoIndex(candidates)
-	ids := make([]int64, len(items))
-	for i, item := range items {
-		id, _, err := resolveGlobalVideoID(tx, index, item.VodName, item.Year, 0)
-		if err != nil {
-			rollback()
-			return nil, fmt.Errorf("resolve %q: %w", item.VodName, err)
-		}
-		ids[i] = id
-	}
-	if err := tx.Commit(); err != nil {
-		rollback()
-		return nil, fmt.Errorf("commit identity resolve: %w", err)
-	}
-	return ids, nil
+	var ids []int64
+	err := WriteBackup(context.Background(), instance, func(writer *BackupWriter) error {
+		var err error
+		ids, err = writer.ResolveIdentities(items)
+		return err
+	})
+	return ids, err
 }
 
 // MergeFavoriteFromBackup 写入一条收藏，已有同一 global_id 时保持原样。
 // 收藏是「只增不删」的：备份里没有的条目不能被视为用户想删掉。
 // 返回是否真的写入。
 func MergeFavoriteFromBackup(globalID int64, sourceKey, vodID, createdAt string) (bool, error) {
+	return mergeBackupFavorite(context.Background(), instance, globalID, sourceKey, vodID, createdAt)
+}
+func mergeBackupFavorite(ctx context.Context, executor sqlx.ExtContext, globalID int64, sourceKey, vodID, createdAt string) (bool, error) {
 	if globalID <= 0 || sourceKey == "" || vodID == "" {
 		return false, nil
 	}
-	res, err := instance.Exec(`INSERT INTO favorites (global_id, source_key, vod_id, created_at)
+	res, err := executor.ExecContext(ctx, `INSERT INTO favorites (global_id, source_key, vod_id, created_at)
 		SELECT ?, ?, ?, CASE ? WHEN '' THEN CURRENT_TIMESTAMP ELSE ? END
 		WHERE NOT EXISTS (SELECT 1 FROM favorites WHERE global_id = ?)`,
 		globalID, sourceKey, vodID, createdAt, createdAt, globalID)
@@ -198,13 +198,16 @@ func MergeFavoriteFromBackup(globalID int64, sourceKey, vodID, createdAt string)
 // MergeHistoryFromBackup 写入一条进度，仅当导入的 updated_at 比本机更新。
 // 返回是否真的写入。
 func MergeHistoryFromBackup(globalID int64, sourceKey, vodID string, epNum int, position float64, updatedAt string) (bool, error) {
+	return mergeBackupHistory(context.Background(), instance, globalID, sourceKey, vodID, epNum, position, updatedAt)
+}
+func mergeBackupHistory(ctx context.Context, executor sqlx.ExtContext, globalID int64, sourceKey, vodID string, epNum int, position float64, updatedAt string) (bool, error) {
 	if globalID <= 0 || sourceKey == "" || vodID == "" || epNum <= 0 {
 		return false, nil
 	}
 	if math.IsNaN(position) || math.IsInf(position, 0) || position < 0 {
 		return false, nil
 	}
-	res, err := instance.Exec(`INSERT INTO watch_history (global_id, source_key, vod_id, ep_num, position, updated_at)
+	res, err := executor.ExecContext(ctx, `INSERT INTO watch_history (global_id, source_key, vod_id, ep_num, position, updated_at)
 		VALUES (?, ?, ?, ?, ?, CASE ? WHEN '' THEN CURRENT_TIMESTAMP ELSE ? END)
 		ON CONFLICT(global_id, source_key, ep_num) DO UPDATE SET
 		vod_id=excluded.vod_id, position=excluded.position, updated_at=excluded.updated_at
@@ -221,6 +224,9 @@ func MergeHistoryFromBackup(globalID int64, sourceKey, vodID string, epNum int, 
 // 本机已有的值一律保留：导入是补全，不是覆盖。
 // 返回是否有列被改动。
 func MergeVideoMetaFromBackup(globalID int64, meta BackupVideoMeta) (bool, error) {
+	return mergeBackupMeta(context.Background(), instance, globalID, meta)
+}
+func mergeBackupMeta(ctx context.Context, executor sqlx.ExtContext, globalID int64, meta BackupVideoMeta) (bool, error) {
 	if globalID <= 0 {
 		return false, nil
 	}
@@ -240,7 +246,7 @@ func MergeVideoMetaFromBackup(globalID int64, meta BackupVideoMeta) (bool, error
 		return false, nil
 	}
 	args = append(args, globalID)
-	res, err := instance.Exec(`UPDATE global_video SET `+strings.Join(setParts, ", ")+` WHERE id=?`, args...)
+	res, err := executor.ExecContext(ctx, `UPDATE global_video SET `+strings.Join(setParts, ", ")+` WHERE id=?`, args...)
 	if err != nil {
 		return false, err
 	}

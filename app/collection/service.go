@@ -3,11 +3,12 @@ package collection
 
 import (
 	"cczjVideo/app/apperror"
-	"cczjVideo/app/applog"
-	"cczjVideo/app/cache"
+
 	"cczjVideo/app/collect"
-	"cczjVideo/app/handler"
+
+	"cczjVideo/app/db"
 	"cczjVideo/app/model"
+
 	"context"
 	"fmt"
 	"time"
@@ -21,6 +22,7 @@ type BackgroundFunc func(name string, fn func(context.Context)) bool
 
 // Service starts and controls collection runs without depending on Wails.
 type Service struct {
+	registry   *Registry
 	emit       EmitFunc
 	background BackgroundFunc
 	// appCtx 是应用生命周期上下文（lifecycle.Group 的那一个，创建后不再更换）。
@@ -31,16 +33,36 @@ type Service struct {
 
 // NewService constructs a collection service.
 func NewService(emit EmitFunc, background BackgroundFunc, appCtx context.Context) *Service {
-	return &Service{emit: emit, background: background, appCtx: appCtx}
+	if emit == nil {
+		emit = func(string, any) {}
+	}
+	return &Service{registry: newRegistry(), emit: emit, background: background, appCtx: appCtx}
 }
 
 // SetContextProvider is wired before startup; each run captures its mode owner.
 func (s *Service) SetContextProvider(provider func() context.Context) { s.contextProvider = provider }
 
 // Start begins a manual collection run for a source.
-func (s *Service) Start(req handler.CollectReq) (*handler.CollectStatus, error) {
+func (s *Service) Start(ctx context.Context, req CollectReq) (*CollectStatus, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := model.ValidateSourceKey(req.SourceKey); err != nil {
+		return nil, apperror.Wrap(apperror.Validation, err, "采集源身份无效")
+	}
+	source, err := db.GetSourceByKeyContext(ctx, req.SourceKey)
+	if err != nil {
+		return nil, err
+	}
+	if source.GetKind() != model.SourceKindVideo {
+		return nil, apperror.New(apperror.Unsupported, "采集只支持视频源")
+	}
+	if req.Mode != "" && req.Mode != "full" && req.Mode != "incremental" && req.Mode != "once" {
+		return nil, apperror.New(apperror.Validation, "采集模式无效")
+	}
+
 	operationID := fmt.Sprintf("collect-%d", time.Now().UnixNano())
-	entry := handler.GetOrCreateEngine(req.SourceKey)
+	var entry *engineEntry
 
 	mode := model.CollectMode(req.Mode)
 	if mode == "" {
@@ -91,57 +113,47 @@ func (s *Service) Start(req handler.CollectReq) (*handler.CollectStatus, error) 
 	if err := owner.Err(); err != nil {
 		return nil, err
 	}
+	owner, operationID = runContext(owner, ctx, req.SourceKey)
 	engine.SetContext(owner)
-	if !entry.TryBindEngine(engine, string(mode)) {
+	var accepted bool
+	entry, accepted = s.registry.bind(req.SourceKey, engine, string(mode))
+	if !accepted {
+		engine.Stop()
 		return nil, apperror.Newf(apperror.Conflict, "采集源 %s 正在采集中", req.SourceKey)
 	}
 
-	run := func(context.Context) {
-		stats, err := engine.Run()
-		outcome := handler.OutcomeFromRun(stats, err)
-		applog.InfoFields("collection finished", applog.Fields{
-			"operation_id": operationID,
-			"source_key":   req.SourceKey,
-			"mode":         string(mode),
-			"saved":        outcome.Saved,
-			"error_kind":   outcome.ErrorKind,
-			"error":        outcome.Log,
-		})
-		entry.FinishEngine(engine, outcome)
-		handler.RecordCollectHealth(req.SourceKey, outcome, err)
-		// 只有真的写进库才需要失效缓存：定时任务每轮都会跑，空跑一次就把整源缓存清光
-		// 只会让下一次点开详情多打一趟采集接口。
-		if outcome.Saved > 0 {
-			cache.InvalidateSource(req.SourceKey, fmt.Sprintf("采集写入 %d 条", outcome.Saved))
-		}
-		payload := handler.CollectDonePayload(req.SourceKey, string(mode), outcome)
-		payload["operation_id"] = operationID
-		s.emit("collect:done", payload)
-	}
+	run := func(context.Context) { s.execute(engine, entry, req.SourceKey, string(mode), operationID) }
+
 	if !s.background("collection:"+req.SourceKey, run) {
-		entry.FinishEngine(engine, handler.RunOutcome{Log: "application is shutting down"})
+		engine.Stop()
+		entry.FinishEngine(engine, RunOutcome{Log: "application is shutting down"})
 		return nil, apperror.New(apperror.Cancelled, "application is shutting down")
 	}
 
-	return handler.GetCollectStatus(req.SourceKey), nil
+	return s.registry.GetCollectStatus(req.SourceKey), nil
 }
 
 // Pause pauses a source collection run.
 func (s *Service) Pause(sourceKey string) bool {
-	return handler.PauseCollect(sourceKey)
+	return s.registry.PauseCollect(sourceKey)
 }
 
 // Resume resumes a source collection run.
 func (s *Service) Resume(sourceKey string) bool {
-	return handler.ResumeCollect(sourceKey)
+	return s.registry.ResumeCollect(sourceKey)
 }
 
 // Stop requests a source collection run to stop.
 func (s *Service) Stop(sourceKey string) bool {
-	return handler.StopCollect(sourceKey)
+	return s.registry.StopCollect(sourceKey)
 }
 
 // Status returns the current state for a source collection run.
-func (s *Service) Status(sourceKey string) *handler.CollectStatus {
-	return handler.GetCollectStatus(sourceKey)
+func (s *Service) Status(sourceKey string) *CollectStatus {
+	return s.registry.GetCollectStatus(sourceKey)
 }
+
+func (s *Service) Quiesce(ctx context.Context, key string) (func(), error) {
+	return s.registry.quiesce(ctx, key)
+}
+func (s *Service) Forget(key string) { s.registry.forget(key) }

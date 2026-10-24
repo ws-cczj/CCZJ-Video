@@ -1,5 +1,7 @@
 package service
 
+import "context"
+
 // ======================== Window / Title Bar ========================
 //
 // 拖动逻辑由 Wails 自身的 CSS 自定义属性机制实现：
@@ -39,8 +41,8 @@ func (a *App) SetTitleBarTheme(theme string) error {
 }
 
 // WindowSetResizable 设置窗口是否可拖动调整大小
-func (a *App) WindowSetResizable(resizable bool) {
-	a.window.SetResizable(resizable)
+func (a *App) WindowSetResizable(ctx context.Context, resizable bool) error {
+	return a.window.SetResizable(ctx, resizable)
 }
 
 // WindowGetResizable 返回窗口是否可调整大小
@@ -49,8 +51,8 @@ func (a *App) WindowGetResizable() bool {
 }
 
 // WindowSetSize 设置窗口尺寸
-func (a *App) WindowSetSize(width, height int) {
-	a.window.SetSize(width, height)
+func (a *App) WindowSetSize(ctx context.Context, width, height int) error {
+	return a.window.SetSize(ctx, width, height)
 }
 
 // WindowSizeResp 窗口尺寸响应
@@ -66,6 +68,6 @@ func (a *App) WindowGetSize() *WindowSizeResp {
 }
 
 // ApplyWindowSettings 从数据库加载并应用窗口设置（启动时调用）
-func (a *App) ApplyWindowSettings() {
-	a.window.ApplySettings()
+func (a *App) ApplyWindowSettings(ctx context.Context) error {
+	return a.window.ApplySettings(ctx)
 }

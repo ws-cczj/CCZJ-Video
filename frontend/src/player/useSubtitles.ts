@@ -1,6 +1,8 @@
 import { computed, onScopeDispose, ref, shallowRef, type Ref } from 'vue'
 import { findActiveCue, parseSubtitle, type SubtitleCue } from '../utils/subtitles'
 import { tr } from '../locales'
+import { createRequestScope } from '../api/requestScope'
+import { readFileText } from '../api/fileTransfer'
 
 export interface SubtitlesDeps {
   /** 当前播放位置（秒）：字幕靠它挑出该显示哪一条 */
@@ -23,6 +25,7 @@ export function useSubtitles(deps: SubtitlesDeps) {
   const subtitleError = ref('')
   let generation = 0
   let disposed = false
+  const reads = createRequestScope()
   const maxFileBytes = 8 * 1024 * 1024
 
   const activeSubtitle = computed(() => {
@@ -41,13 +44,14 @@ export function useSubtitles(deps: SubtitlesDeps) {
     input.value = ''
     if (!file || disposed) return
     const token = ++generation
+    reads.cancel()
     subtitleError.value = ''
     if (file.size > maxFileBytes) {
       subtitleError.value = tr('player.subtitleTooLarge')
       return
     }
     try {
-      const text = await file.text()
+      const text = await reads.run(() => readFileText(file, maxFileBytes))
       if (disposed || token !== generation) return
       const cues = parseSubtitle(text)
       if (cues.length === 0) {
@@ -65,6 +69,7 @@ export function useSubtitles(deps: SubtitlesDeps) {
 
   function clearSubtitle(): void {
     generation++
+    reads.cancel()
     subtitleCues.value = []
     subtitleName.value = ''
     subtitleError.value = ''

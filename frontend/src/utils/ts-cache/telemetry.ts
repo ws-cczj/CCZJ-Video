@@ -9,12 +9,15 @@ import { fireListeners, session, telemetry } from './store'
  * 别处只读，避免「谁都能记一笔」导致统计口径漂移。
  */
 
-export function recordFetchDuration(ms: number, bytes: number): void {
+export function recordFetchDuration(ms: number, bytes: number, mediaSeconds = session.targetDuration): void {
+  if (!(ms > 0) || !(bytes > 0)) return
   telemetry.recentFetchDurations.push(ms)
   telemetry.recentFetchBytes.push(bytes)
+  telemetry.recentMediaSeconds.push(mediaSeconds > 0 ? mediaSeconds : session.targetDuration)
   if (telemetry.recentFetchDurations.length > SPEED_SAMPLE_COUNT) {
     telemetry.recentFetchDurations.shift()
     telemetry.recentFetchBytes.shift()
+    telemetry.recentMediaSeconds.shift()
   }
 }
 

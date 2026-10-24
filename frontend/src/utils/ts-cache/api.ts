@@ -61,9 +61,9 @@ export function setEpisodes(list: EpisodeLite[]): void {
   telemetry.curEpStats = { hits: 0, misses: 0 }
   telemetry.recentFetchDurations.length = 0
   telemetry.recentFetchBytes.length = 0
+  telemetry.recentMediaSeconds.length = 0
   // ⭐ v3: 重置网络诊断状态（新视频 = 新网络环境）
   resetNetworkDiagnosis()
-  netDiag.hedgeInFlight.clear()
 
   session.currentVodId = newVodId
   session.currentSourceKey = session.episodes[0]?.source_key ? String(session.episodes[0].source_key) : ''
@@ -169,6 +169,11 @@ export function stats() {
     cacheMB: cache.totalCacheBytes / 1024 / 1024,
     // ⭐ v3: 网络诊断信息
     networkMode: netDiag.mode,
+    measuredBps: Math.round(netDiag.throughputBps),
+    downloadRatio: netDiag.downloadRatio,
+    playbackBufferAhead: session.playbackBufferAhead,
+    foregroundRequests: prefetchState.foregroundActive,
+    requestFailures: netDiag.failureCount,
     concurrency: adaptiveConcurrency(),
     fragmentTimeout: adaptiveFragmentTimeout(),
     consecutiveSlowSegs: netDiag.consecutiveSlowSegs,
@@ -210,11 +215,11 @@ export function clear(): void {
   clearM3u8TextCache()
   beginCacheSession()
   prefetchState.pendingUrls.clear()
-  netDiag.hedgeInFlight.clear()
   telemetry.epStats.clear()
   telemetry.curEpStats = { hits: 0, misses: 0 }
   telemetry.recentFetchDurations.length = 0
   telemetry.recentFetchBytes.length = 0
+  telemetry.recentMediaSeconds.length = 0
   // ⭐ v3: 重置网络诊断状态
   resetNetworkDiagnosis()
   netDiag.abrSwitchCallback = null

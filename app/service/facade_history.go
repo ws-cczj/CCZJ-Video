@@ -1,7 +1,8 @@
 package service
 
 import (
-	"cczjVideo/app/handler"
+	"cczjVideo/app/media"
+	"context"
 	"encoding/json"
 )
 
@@ -35,35 +36,45 @@ func (r *HistoryReq) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (a *App) SaveWatchHistory(req HistoryReq) error {
-	return a.media.SaveHistory(req.SourceKey, req.VodId, req.EpNum, req.Position)
+func (a *App) SaveWatchHistory(ctx context.Context, req HistoryReq) error {
+	return runRequestError(a, ctx, "video.SaveWatchHistory", func(ctx context.Context) error {
+		return a.media.SaveHistory(ctx, req.SourceKey, req.VodId, req.EpNum, req.Position)
+	})
 }
 
-func (a *App) GetRecentHistory(limit int) ([]*handler.HistoryItemWithVideo, error) {
-	return a.media.RecentHistory(limit)
+func (a *App) GetRecentHistory(ctx context.Context, limit int) ([]*media.HistoryItemWithVideo, error) {
+	return runRequest(a, ctx, "video.GetRecentHistory", func(ctx context.Context) ([]*media.HistoryItemWithVideo, error) {
+		return a.media.RecentHistory(ctx, limit)
+	})
 }
 
 // GetHistoryPosition 返回某集上次播放到的位置（秒），无记录时为 0。
-func (a *App) GetHistoryPosition(req HistoryReq) (float64, error) {
-	return a.media.HistoryPosition(req.SourceKey, req.VodId, req.EpNum)
+func (a *App) GetHistoryPosition(ctx context.Context, req HistoryReq) (float64, error) {
+	return runRequest(a, ctx, "video.GetHistoryPosition", func(ctx context.Context) (float64, error) {
+		return a.media.HistoryPosition(ctx, req.SourceKey, req.VodId, req.EpNum)
+	})
 }
 
 // DeleteHistoryItem 删除单条观看历史
-func (a *App) DeleteHistoryItem(req HistoryReq) error {
-	return a.media.DeleteHistoryItem(req.SourceKey, req.VodId, req.EpNum)
+func (a *App) DeleteHistoryItem(ctx context.Context, req HistoryReq) error {
+	return runRequestError(a, ctx, "video.DeleteHistoryItem", func(ctx context.Context) error {
+		return a.media.DeleteHistoryItem(ctx, req.SourceKey, req.VodId, req.EpNum)
+	})
 }
 
 // DeleteHistoryByVideo 删除某个视频的全部观看历史
-func (a *App) DeleteHistoryByVideo(req FavReq) error {
-	return a.media.DeleteHistoryByVideo(req.SourceKey, req.VodId)
+func (a *App) DeleteHistoryByVideo(ctx context.Context, req FavReq) error {
+	return runRequestError(a, ctx, "video.DeleteHistoryByVideo", func(ctx context.Context) error { return a.media.DeleteHistoryByVideo(ctx, req.SourceKey, req.VodId) })
 }
 
 // ClearAllHistory 清空全部观看历史，返回删除的条数
-func (a *App) ClearAllHistory() (int, error) {
-	return a.media.ClearHistory()
+func (a *App) ClearAllHistory(ctx context.Context) (int, error) {
+	return runRequest(a, ctx, "video.ClearAllHistory", func(ctx context.Context) (int, error) { return a.media.ClearHistory(ctx) })
 }
 
 // GetWatchedEpisodes 返回指定视频已观看的所有集数
-func (a *App) GetWatchedEpisodes(req FavReq) ([]int, error) {
-	return a.media.WatchedEpisodes(req.SourceKey, req.VodId)
+func (a *App) GetWatchedEpisodes(ctx context.Context, req FavReq) ([]int, error) {
+	return runRequest(a, ctx, "video.GetWatchedEpisodes", func(ctx context.Context) ([]int, error) {
+		return a.media.WatchedEpisodes(ctx, req.SourceKey, req.VodId)
+	})
 }

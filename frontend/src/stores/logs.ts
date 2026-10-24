@@ -19,6 +19,8 @@ export type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR'
 export type LogOrigin = 'app' | 'collect' | 'douban' | 'scheduler' | 'update' | 'ui'
 
 export interface LogRecord {
+  sessionId?: string
+  persisted?: boolean
   /** 列表 key：后端序号，或历史文件的行号 */
   key: string
   seq: number
@@ -60,7 +62,7 @@ const UI_PREFIX = /^([\w.\-]{1,64}) :: /
 /**
  * 后端各模块用行首 [标记] 自报身份（applog 原样透传，不做归类）。这里按标记还原来源，
  * 顺序即优先级：`[collect:源]` > 显式前缀 > 前端 Toast 的 `xxx :: `，都没命中才算「系统」。
- * 不再用调用文件兜底：caller 只带文件名，app/douban/scheduler.go 和 app/handler/scheduler.go
+ * 不再用调用文件兜底：caller 只带文件名，app/douban/scheduler.go 和 app/collection/scheduler.go
  * 会撞成同一个 scheduler.go，把豆瓣的定时补全误记成采集调度。
  * 新增模块前缀时只需往这张表里加一行。
  */
@@ -75,7 +77,7 @@ const PREFIX_ORIGINS: Array<{ re: RegExp; origin: LogOrigin }> = [
  * 后端把采集、调度、前端 Toast 都写进同一条日志流，这里用行首标记还原来源，
  * 这样时间线只需要消费 app:log 一个事件，天然不会出现重复行。
  */
-function classify(raw: { message?: string; caller?: string; level?: string; ts?: number; seq?: number }): LogRecord {
+function classify(raw: { message?: string; caller?: string; level?: string; ts?: number; seq?: number; session_id?: string; persisted?: boolean }): LogRecord {
   let message = raw.message || ''
   let origin: LogOrigin = 'app'
   let sourceKey: string | undefined
@@ -92,9 +94,14 @@ function classify(raw: { message?: string; caller?: string; level?: string; ts?:
   } else if (ui) {
     origin = 'ui'
     message = message.slice(ui[0].length)
+  } else if (/source_key="([^"]+)"/.test(message)) {
+    origin = 'collect'
+    sourceKey = /source_key="([^"]+)"/.exec(message)?.[1]
   }
   return {
-    key: String(raw.seq ?? 0),
+    key: `${raw.session_id || ''}:${raw.seq ?? 0}`,
+    sessionId: raw.session_id,
+    persisted: raw.persisted,
     seq: Number(raw.seq ?? 0),
     ts: Number(raw.ts ?? Date.now()),
     level: normalizeLevel(raw.level),
@@ -118,7 +125,7 @@ export function logRecordToLine(rec: LogRecord): string {
   const stamp = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} `
     + `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${pad(date.getMilliseconds(), 3)}`
   const head = rec.caller ? `[${stamp}] [${rec.level}] [${rec.caller}] ` : `[${stamp}] [${rec.level}] `
-  return head + rec.message
+  return head + (rec.sessionId ? `[session=${rec.sessionId} seq=${rec.seq} persisted=${rec.persisted !== false}] ` : '') + rec.message
 }
 
 export const useLogsStore = defineStore('logs', () => {
@@ -131,6 +138,15 @@ export const useLogsStore = defineStore('logs', () => {
   const paused = ref(false)
   const loading = ref(false)
   const connectionError = ref(false)
+  const missingRecords = ref(0)
+  let sessionId = ''
+  // Events can skip a record. Only ring snapshots may advance this cursor.
+  let pulledSeq = 0
+  function adoptSession(next: string | undefined): void {
+    if (!next || next === sessionId) return
+    if (sessionId) { records.value = []; lastSeq.value = 0; pulledSeq = 0; missingRecords.value = 0 }
+    sessionId = next
+  }
 
   const query = ref('')
   const levelFilter = ref<LogLevel[]>([])
@@ -175,26 +191,37 @@ export const useLogsStore = defineStore('logs', () => {
     appendMany([rec])
   }
   function appendMany(items:LogRecord[]):void {
-    let seq=lastSeq.value
-    const accepted:LogRecord[]=[]
-    for(const rec of items){if(rec.seq&&rec.seq<=seq)continue;if(rec.seq)seq=rec.seq;accepted.push(rec)}
-    if(!accepted.length)return
-    records.value=[...records.value,...accepted].slice(-MAX_RECORDS)
-    lastSeq.value=seq
+    if (!items.length) return
+    adoptSession(items[items.length - 1]?.sessionId)
+    const merged = new Map(records.value.map(rec => [rec.seq, rec]))
+    for (const rec of items) if (rec.seq > 0) merged.set(rec.seq, rec)
+    records.value = Array.from(merged.values()).sort((a,b) => a.seq - b.seq).slice(-MAX_RECORDS)
+    lastSeq.value = records.value[records.value.length - 1]?.seq || 0
+  }
+  function appendSnapshot(items: LogRecord[]): void {
+    const mapped = items.sort((a,b) => a.seq - b.seq)
+    const first = mapped[0]?.seq || 0
+    if (pulledSeq && first > pulledSeq + 1) {
+      const retained = records.value.filter(rec => rec.seq > pulledSeq && rec.seq < first).length
+      missingRecords.value += Math.max(0, first - pulledSeq - 1 - retained)
+    }
+    appendMany(mapped)
+    pulledSeq = mapped[mapped.length - 1]?.seq || pulledSeq
   }
 
   /** 从内存环形缓冲补齐增量；暂停时不消费，恢复后一次拉回全部内容 */
-  async function pull(limit = 1000): Promise<void> {
+  async function pull(limit = MAX_RECORDS): Promise<void> {
     if (paused.value || !attached.value || pulling) return
     pulling=true
     const generation=streamGeneration
     try {
-      pullRequest=GetLogRecords(lastSeq.value, limit)
-      const rows = (await pullRequest) as Array<{
-        seq: number; ts: number; level: string; caller: string; message: string
-      }>
+      pullRequest=GetLogRecords(pulledSeq, limit)
+      const [rows, snapshot] = await Promise.all([pullRequest, GetLogStats()])
       if(generation!==streamGeneration||!attached.value||paused.value)return
-      if(Array.isArray(rows))appendMany(rows.map(classify))
+      adoptSession(snapshot?.session_id)
+      stats.value = snapshot as Record<string, any>
+      level.value = normalizeLevel(String(snapshot?.level || ''))
+      if(Array.isArray(rows)) appendSnapshot(rows.map(classify))
       connectionError.value=false
     } catch {
       if(generation===streamGeneration)connectionError.value=true
@@ -239,17 +266,14 @@ export const useLogsStore = defineStore('logs', () => {
         ])
         if (token !== bootstrapGeneration) return false
         stats.value = snapshot as Record<string, any>
+        adoptSession(stats.value?.session_id)
         level.value = normalizeLevel(String(stats.value?.level || ''))
         files.value = Array.isArray(filenames) ? filenames as typeof files.value : []
         // Events can arrive while a manual refresh reads the ring. Merge by
         // sequence without clearing the screen or dropping the newer tail.
-        const merged = new Map(records.value.map(row => [row.seq, row]))
-        if (Array.isArray(rows)) for (const row of rows) {
-          const record = classify(row)
-          merged.set(record.seq, record)
+        if (Array.isArray(rows)) {
+          appendSnapshot(rows.map(classify))
         }
-        records.value = Array.from(merged.values()).sort((a, b) => a.seq - b.seq).slice(-MAX_RECORDS)
-        lastSeq.value = records.value[records.value.length - 1]?.seq || 0
         connectionError.value = false
         return true
       } catch {
@@ -266,7 +290,7 @@ export const useLogsStore = defineStore('logs', () => {
     if (attached.value) return
     attached.value = true
     const generation=++streamGeneration
-    detachEvents.push(onBackendEvent<{ seq?: number; ts?: number; level?: string; caller?: string; message?: string }>(
+    detachEvents.push(onBackendEvent<{ seq?: number; ts?: number; level?: string; caller?: string; message?: string; session_id?: string; persisted?: boolean }>(
       'app:log',
       (payload) => {
         if (paused.value) return
@@ -308,6 +332,8 @@ export const useLogsStore = defineStore('logs', () => {
     const removed = await ClearLogs()
     records.value = []
     lastSeq.value = 0
+    pulledSeq = 0
+    missingRecords.value = 0
     await refreshStats()
     return Number(removed) || 0
   }
@@ -437,6 +463,7 @@ export const useLogsStore = defineStore('logs', () => {
     paused,
     loading,
     connectionError,
+    missingRecords,
     query,
     levelFilter,
     originFilter,

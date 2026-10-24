@@ -1,10 +1,11 @@
 package service
 
 import (
+	"cczjVideo/app/collect"
+	sourceservice "cczjVideo/app/source"
 	"context"
+	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"runtime"
 	"runtime/debug"
@@ -21,12 +22,13 @@ import (
 	"cczjVideo/app/diagnosticrecording"
 	"cczjVideo/app/douban"
 	downloadservice "cczjVideo/app/download"
-	"cczjVideo/app/handler"
+
 	"cczjVideo/app/model"
 	"cczjVideo/app/netbudget"
 	"cczjVideo/app/netpolicy"
 	"cczjVideo/app/netstats"
 	"cczjVideo/app/operation"
+	"cczjVideo/app/outbound"
 	"cczjVideo/app/parallel"
 	"cczjVideo/app/proxy"
 	"cczjVideo/app/resource"
@@ -54,7 +56,6 @@ const (
 
 	sourceProbeConcurrency = 4
 	sourceProbeTimeout     = 10 * time.Second
-	sourceProbeSampleBytes = 4096
 
 	// sourceProbeMinInterval 是同一个源两次探测之间的最小间隔。一次探测等价于
 	// 手动点一次「采集第 1 页」，源站并不希望它被反复戳；5 分钟也和采集调度
@@ -74,7 +75,7 @@ const (
 	sourceHealthRecentDots = 12
 	// sourceDeadStreak 引用策略层的阈值，不另写一份。判定"源可能已失效"和
 	// 自动停用必须是同一个数字，否则诊断页提示的连败次数和实际停用条件对不上。
-	sourceDeadStreak = handler.SourceDeadStreak
+	sourceDeadStreak = sourceservice.SourceDeadStreak
 )
 
 // DiagEnv 是构建与运行环境，出问题时报备用的最小集合。
@@ -216,6 +217,7 @@ type Diagnostics struct {
 type RuntimeMetrics struct {
 	Operations       []operation.Stat               `json:"operations"`
 	NetworkPolicy    []netpolicy.Stat               `json:"network_policy"`
+	OutboundProxy    *outbound.Status               `json:"outbound_proxy,omitempty"`
 	Danmaku          *danmaku.Stats                 `json:"danmaku,omitempty"`
 	Scope            DiagnosticScope                `json:"scope"`
 	DownloadExecutor *downloadservice.ExecutorStats `json:"download_executor,omitempty"`
@@ -276,6 +278,10 @@ func (a *App) runtimeMetrics() *RuntimeMetrics {
 	if a.networkBudget != nil {
 		snapshot.NetworkBudget = a.networkBudget.Snapshot()
 	}
+	if a.outboundPool != nil {
+		status := a.outboundPool.Snapshot()
+		snapshot.OutboundProxy = &status
+	}
 	if a.requestPolicy != nil {
 		categories := map[string]bool{a.currentMode(): true, "update": true}
 		if a.currentMode() == "video" {
@@ -288,8 +294,8 @@ func (a *App) runtimeMetrics() *RuntimeMetrics {
 	if a.operations != nil {
 		snapshot.Operations = a.operations.Snapshot(a.currentMode())
 	}
-	if a.currentMode() == "video" && a.downloadExecutor != nil {
-		stats := a.downloadExecutor.Stats()
+	if a.currentMode() == "video" && a.downloads != nil {
+		stats := a.downloads.Stats()
 		snapshot.DownloadExecutor = &stats
 	}
 	if a.currentMode() == "video" && a.danmaku != nil {
@@ -527,9 +533,9 @@ func (a *App) diagnosticsCollect(note func(string, ...any)) DiagCollect {
 	return snap
 }
 
-// ProbeSources 有界并发探测视频采集源接口：带 ac=videolist&pg=1 发一次 GET，
-// 记录状态码与首包耗时。只读前 4KB 用于判断返回的是不是列表结构，
-// 不把整个响应灌进内存。结果会落一条巡检样本进 source_health，
+// ProbeSources 使用源实际配置的列表策略与采集解码器进行有界探测。
+// 请求一条记录；实际响应仍受采集器的响应大小上限约束，记录整次请求耗时。
+// 结果会落一条巡检样本进 source_health，
 // 所以手动点一次「探测」和页面自动探到的那一次是同一份历史。
 //
 // 每个源最多 sourceProbeMinInterval 探一次：还在冷却里的源直接不发请求，
@@ -541,6 +547,7 @@ func (a *App) ProbeSources(ctx context.Context) ([]SourceProbe, error) {
 // ProbeSource 探测单个采集源。与「探测全部」共用同一道闸门、同一份巡检样本，
 // 所以单独点某一个源不会绕过节流，也不会让健康度历史分成两套口径。
 func (a *App) ProbeSource(ctx context.Context, sourceKey string) (*SourceProbe, error) {
+	ctx = operation.WithFields(ctx, applog.Fields{"source_key": sourceKey})
 	return runRequest(a, ctx, "video.ProbeSource", func(ctx context.Context) (*SourceProbe, error) {
 		source, err := db.GetSourceByKeyContext(ctx, sourceKey)
 		if err != nil {
@@ -554,12 +561,11 @@ func (a *App) ProbeSource(ctx context.Context, sourceKey string) (*SourceProbe, 
 		}
 		last, retryAfter, allowed := admitSourceProbe(source.SourceKey, time.Now())
 		if !allowed {
+			operation.Stage(ctx, "probe_cooldown", applog.Fields{"retry_after_seconds": retryAfter, "previous_sample_unix": last.LastSampleUnix})
 			probe := coolingProbe(source, last, retryAfter)
 			return &probe, nil
 		}
-		client := &http.Client{Timeout: sourceProbeTimeout, Transport: netpolicy.WrapTransport(string(netstats.CategoryCollect), netstats.WrapTransport(netstats.CategoryCollect, nil))}
-		defer client.CloseIdleConnections()
-		probe := probeSource(ctx, client, source)
+		probe := probeSource(ctx, source)
 		recordPatrolSample(ctx, probe)
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -585,16 +591,15 @@ func (a *App) probeAllSources(ctx context.Context) ([]SourceProbe, error) {
 		}
 	}
 	out := make([]SourceProbe, len(enabled))
-	client := &http.Client{Timeout: sourceProbeTimeout, Transport: netpolicy.WrapTransport(string(netstats.CategoryCollect), netstats.WrapTransport(netstats.CategoryCollect, nil))}
-	defer client.CloseIdleConnections()
 	err = parallel.Each(ctx, len(enabled), sourceProbeConcurrency, func(ctx context.Context, i int) error {
 		// Reserve cooldown only when a worker can actually issue the request.
 		last, retryAfter, allowed := admitSourceProbe(enabled[i].SourceKey, time.Now())
 		if !allowed {
+			operation.Stage(ctx, "probe_cooldown", applog.Fields{"source_key": enabled[i].SourceKey, "retry_after_seconds": retryAfter, "previous_sample_unix": last.LastSampleUnix})
 			out[i] = coolingProbe(enabled[i], last, retryAfter)
 			return nil
 		}
-		out[i] = probeSource(ctx, client, enabled[i])
+		out[i] = probeSource(ctx, enabled[i])
 		recordPatrolSample(ctx, out[i])
 		return ctx.Err()
 	})
@@ -616,7 +621,7 @@ func recordPatrolSample(ctx context.Context, probe SourceProbe) {
 	if ctx.Err() != nil {
 		return
 	}
-	handler.RecordSourceHealthSample(probe.SourceKey, db.SourceHealthKindPatrol, probe.OK,
+	sourceservice.RecordSourceHealthSample(probe.SourceKey, db.SourceHealthKindPatrol, probe.OK,
 		probe.LatencyMS, 0, probe.Error)
 }
 
@@ -763,7 +768,7 @@ func coolingProbe(source *model.Source, last db.SourceHealth, retryAfterSec int)
 		SourceKey:     source.SourceKey,
 		Name:          source.Name,
 		Enabled:       source.Enabled == 1,
-		URL:           collectProbeURL(source.ApiUrl),
+		URL:           sourceProbeURL(source),
 		OK:            last.LastOK,
 		Error:         last.LastError,
 		Skipped:       true,
@@ -772,68 +777,48 @@ func coolingProbe(source *model.Source, last db.SourceHealth, retryAfterSec int)
 	}
 }
 
-func probeSource(ctx context.Context, client *http.Client, source *model.Source) SourceProbe {
-	probe := SourceProbe{
-		SourceKey:     source.SourceKey,
-		Name:          source.Name,
-		Enabled:       source.Enabled == 1,
-		ProbeTimeUnix: time.Now().Unix(),
+func sourceProbeURL(source *model.Source) string {
+	strategy := collect.CreateStrategyFromSource(source)
+	if strategy == nil {
+		return ""
 	}
-	target := collectProbeURL(source.ApiUrl)
-	probe.URL = target
-	if target == "" {
+	return strategy.BuildListUrl(1, collect.FetchOptions{Limit: 1})
+}
+
+func probeSource(ctx context.Context, source *model.Source) SourceProbe {
+	ctx = operation.WithFields(ctx, applog.Fields{"source_key": source.SourceKey, "capability": "list", "source_config_sha256": applog.Fingerprint([]byte(source.ApiUrl + "\x00" + source.StrategyConfig + "\x00" + source.AdvConfigRaw))})
+	probe := SourceProbe{SourceKey: source.SourceKey, Name: source.Name,
+		Enabled: source.Enabled == 1, ProbeTimeUnix: time.Now().Unix()}
+	strategy := collect.CreateStrategyFromSource(source)
+	if strategy == nil {
 		probe.Error = "接口地址为空"
 		return probe
 	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
-	if err != nil {
-		probe.Error = err.Error()
-		return probe
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36 Edg/137.0.0.0")
-	req.Header.Set("Accept", "application/json,text/plain,*/*")
-
+	probe.URL = strategy.BuildListUrl(1, collect.FetchOptions{Limit: 1})
+	ctx = operation.WithFields(ctx, applog.Fields{"strategy": strategy.GetStrategyName()})
+	ctx, cancel := context.WithTimeout(ctx, sourceProbeTimeout)
+	defer cancel()
 	start := time.Now()
-	resp, err := client.Do(req)
-	if err != nil {
-		probe.LatencyMS = time.Since(start).Milliseconds()
-		probe.Error = err.Error()
-		return probe
-	}
-	defer resp.Body.Close()
-
-	buf := make([]byte, sourceProbeSampleBytes)
-	read, readErr := io.ReadFull(resp.Body, buf)
-	probe.StatusCode = resp.StatusCode
+	result, err := collect.FetchWithStrategy(ctx, strategy, probe.URL)
 	probe.LatencyMS = time.Since(start).Milliseconds()
-	probe.SampleKB = (read + 1023) / 1024
-	body := string(buf[:read])
-	switch {
-	case resp.StatusCode != http.StatusOK:
-		probe.Error = fmt.Sprintf("HTTP %d", resp.StatusCode)
-	case !strings.Contains(body, `"list`):
-		probe.Error = "响应里没有 list 字段，接口可能已改版或被拦截"
-		if readErr != nil && read == 0 {
-			probe.Error = "响应为空"
+	if err != nil {
+		probe.Error = applog.DiagnosticText(apperror.Diagnostic(err).Error(), 2048)
+		var httpErr *collect.HTTPError
+		if errors.As(err, &httpErr) {
+			probe.StatusCode = httpErr.StatusCode
 		}
-	default:
+		var responseErr *collect.ResponseError
+		if errors.As(err, &responseErr) {
+			probe.StatusCode = responseErr.StatusCode
+		}
+	} else {
 		probe.OK = true
+		probe.StatusCode = result.HTTPStatus
+		probe.SampleKB = (result.ResponseBytes + 1023) / 1024
 	}
+	applog.InfoFields("source probe complete", operation.Fields(ctx, applog.Fields{
+		"ok": probe.OK, "status": probe.StatusCode, "duration_ms": probe.LatencyMS, "error": probe.Error}))
 	return probe
-}
-
-// collectProbeURL 在源地址上补齐列表参数，已有 query 时用 & 续接。
-func collectProbeURL(apiURL string) string {
-	apiURL = strings.TrimSpace(apiURL)
-	if apiURL == "" {
-		return ""
-	}
-	separator := "?"
-	if strings.Contains(apiURL, "?") {
-		separator = "&"
-	}
-	return apiURL + separator + "ac=videolist&pg=1"
 }
 
 // GetDoubanIntervalMinutes 返回当前生效的豆瓣补全轮询间隔（分钟）。
@@ -869,10 +854,15 @@ func (a *App) GetLogKeepDays() int {
 
 // SetLogKeepDays 改日志保留天数，立刻按新值清理一次并持久化。
 func (a *App) SetLogKeepDays(days int) (int, error) {
-	applied := applog.SetKeepDays(days)
-	if err := db.SetSetting(settingLogKeepDays, strconv.Itoa(applied)); err != nil {
-		return applied, apperror.Wrap(apperror.Storage, err, "保留天数已生效但保存失败")
+	a.settingsWriteMu.Lock()
+	defer a.settingsWriteMu.Unlock()
+	if days < 1 {
+		days = 1
 	}
+	if err := db.SetSetting(settingLogKeepDays, strconv.Itoa(days)); err != nil {
+		return applog.Default().KeepDays(), apperror.Wrap(apperror.Storage, err, "日志保留天数保存失败")
+	}
+	applied := applog.SetKeepDays(days)
 	applog.Info("日志保留天数设为 %d 天", applied)
 	return applied, nil
 }

@@ -3,6 +3,7 @@
 Servers are supplied by with_server.py. No public source quality is inferred
 from the synthetic alternative/chapter responses used for interaction tests.
 """
+import argparse
 import json
 from pathlib import Path
 import re
@@ -10,15 +11,20 @@ from urllib.request import Request, urlopen
 from playwright.sync_api import sync_playwright, expect
 
 ROOT=Path(__file__).resolve().parent.parent
-OUT=ROOT/'reports/reading-routing-2026-10-22'
-OUT.mkdir(exist_ok=True)
+parser=argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--url',default='http://127.0.0.1:9299')
+parser.add_argument('--backend',default='http://127.0.0.1:9298')
+parser.add_argument('--output',type=Path,default=ROOT/'dist/audit/reading-routing')
+options=parser.parse_args()
+OUT=options.output
+OUT.mkdir(parents=True,exist_ok=True)
 names=re.findall(r'export function (\w+)\(', (ROOT/'frontend/bindings/cczjVideo/app/service/app.js').read_text(encoding='utf-8'))
 mock="import {CancellablePromise} from '/tests/browser/runtime.ts';\n"
 mock+="""function invoke(method,args){const controller=new AbortController();return new CancellablePromise((resolve,reject)=>{fetch('/__reading_route_rpc',{method:'POST',body:JSON.stringify({method,args}),signal:controller.signal}).then(async r=>{const data=await r.json();if(!r.ok)throw Object.assign(new Error(data.message),{code:data.code});return data}).then(resolve,reject)},()=>controller.abort())}\n"""
 mock+='\n'.join('export function '+name+'(...args){return '+('invoke('+json.dumps(name)+',args)' if name.startswith(('Library','ReadingState','Novel','Comic')) else "CancellablePromise.resolve('')")+';}' for name in names)
 calls=[]
 def rpc(method,args):
-    with urlopen(Request('http://127.0.0.1:9298/rpc',json.dumps(dict(method=method,args=args)).encode(),{'Content-Type':'application/json'}),timeout=40) as r:return json.load(r)
+    with urlopen(Request(options.backend+'/rpc',json.dumps(dict(method=method,args=args)).encode(),{'Content-Type':'application/json'}),timeout=40) as r:return json.load(r)
 def fixture(method,args):
     kind='novel' if method.startswith('Novel') else 'comic'
     item=dict(id=101 if kind=='novel' else 202,kind=kind,sourceKey='fixture_'+kind,sourceName='备用书源' if kind=='novel' else '备用漫源',remoteId='fixture',title='章节对应验证' if kind=='novel' else '话次对应验证',author='测试作者',available=True)
@@ -37,7 +43,7 @@ with sync_playwright() as p:
         page.route('**/__reading_route_rpc',bridge)
         inventories={}
         for kind,heading,selector in [('novel','书从这里来','.book-source-ledger li'),('comic','漫画补给站','.manga-source-card')]:
-            page.goto('http://127.0.0.1:9299/tests/browser/reading.html#/'+kind+'/sources');page.wait_for_load_state('networkidle')
+            page.goto(options.url+'/tests/browser/reading.html#/'+kind+'/sources');page.wait_for_load_state('networkidle')
             expect(page.get_by_role('heading',name=heading)).to_be_visible();page.wait_for_selector(selector)
             inventories[kind]=page.locator(selector).count();assert inventories[kind]>0
             assert page.locator('textarea').count()==0
@@ -48,7 +54,7 @@ with sync_playwright() as p:
             page.set_viewport_size({'width':390,'height':844});page.wait_for_timeout(120)
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth+1')
             page.screenshot(path=str(OUT/(kind+'-mobile.png')),full_page=True);page.set_viewport_size({'width':1360,'height':1000})
-        page.goto('http://127.0.0.1:9299/tests/browser/source-switch.html');page.wait_for_load_state('networkidle')
+        page.goto(options.url+'/tests/browser/source-switch.html');page.wait_for_load_state('networkidle')
         page.get_by_role('button',name=re.compile('备用书源')).click();expect(page.get_by_role('button',name='第五章 落雨')).to_be_visible()
         page.get_by_role('button',name=re.compile('备用漫源')).click();expect(page.get_by_role('button',name='第4.5话 星光')).to_be_visible()
         page.get_by_role('button',name='第4.5话 星光').click()

@@ -1,10 +1,12 @@
 package window
 
 import (
+	"context"
 	"os"
 	"strconv"
 	"testing"
 
+	"cczjVideo/app/apperror"
 	"cczjVideo/app/db"
 	"cczjVideo/app/settings"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -59,7 +61,7 @@ func TestLoadCloseBehaviorPreservesTheFirstRunDefault(t *testing.T) {
 func TestCloseBehaviorRoundTripsBothWays(t *testing.T) {
 	svc := newSvc(t)
 
-	svc.SetCloseBehavior(false)
+	svc.SetCloseBehavior(context.Background(), false)
 	if svc.CloseBehavior() {
 		t.Fatal("SetCloseBehavior(false) 之后应立即生效")
 	}
@@ -69,7 +71,7 @@ func TestCloseBehaviorRoundTripsBothWays(t *testing.T) {
 		t.Fatal("重开应用后应恢复成「直接退出」")
 	}
 
-	svc.SetCloseBehavior(true)
+	svc.SetCloseBehavior(context.Background(), true)
 	if stored(t, "close_to_tray") != "1" {
 		t.Fatalf("持久化的值 = %q, 期望 \"1\"", stored(t, "close_to_tray"))
 	}
@@ -83,7 +85,7 @@ func TestCloseBehaviorRoundTripsBothWays(t *testing.T) {
 // 尺寸必须夹到下限再落盘：存进去 0，下次启动恢复出的就是一个看不见的窗口。
 func TestSetSizeClampsBeforePersisting(t *testing.T) {
 	svc := newSvc(t)
-	svc.SetSize(640, 360)
+	svc.SetSize(context.Background(), 640, 360)
 
 	if got := stored(t, "window_width"); got != strconv.Itoa(MinimumWidth) {
 		t.Fatalf("落盘宽度 = %q, 期望下限 %d", got, MinimumWidth)
@@ -92,7 +94,7 @@ func TestSetSizeClampsBeforePersisting(t *testing.T) {
 		t.Fatalf("落盘高度 = %q, 期望下限 %d", got, MinimumHeight)
 	}
 
-	svc.SetSize(1920, 1080)
+	svc.SetSize(context.Background(), 1920, 1080)
 	if got := stored(t, "window_width"); got != "1920" {
 		t.Fatalf("大于下限的宽度应原样落盘, 得到 %q", got)
 	}
@@ -115,9 +117,9 @@ func TestWindowMethodsAreSafeBeforeAWindowExists(t *testing.T) {
 		t.Fatal("没有窗口时切换最大化应返回 false")
 	}
 	svc.SetFullscreen(true)
-	svc.SetResizable(false)
+	svc.SetResizable(context.Background(), false)
 	svc.ReloadTitleBar()
-	svc.ApplySettings()
+	svc.ApplySettings(context.Background())
 	if svc.Resizable() {
 		t.Fatal("没有窗口时不该报告可调整大小")
 	}
@@ -127,13 +129,14 @@ func TestWindowMethodsAreSafeBeforeAWindowExists(t *testing.T) {
 type restoredWindow struct {
 	application.Window
 	width, height int
+	resizable     bool
 }
 
 func (w *restoredWindow) SetSize(width, height int) application.Window {
 	w.width, w.height = width, height
 	return w
 }
-func (w *restoredWindow) SetResizable(bool) application.Window { return w }
+func (w *restoredWindow) SetResizable(v bool) application.Window { w.resizable = v; return w }
 func TestLegacyWindowSizeUsesTheCurrentMinimum(t *testing.T) {
 	store := settings.NewService()
 	if err := store.Set("window_width", "800"); err != nil {
@@ -144,11 +147,59 @@ func TestLegacyWindowSizeUsesTheCurrentMinimum(t *testing.T) {
 	}
 	w := &restoredWindow{}
 	svc := NewService(func() application.Window { return w }, store)
-	svc.ApplySettings()
+	svc.ApplySettings(context.Background())
 	if w.width != 960 || w.height != 600 {
 		t.Fatalf("legacy size restored to %dx%d; want 960x600", w.width, w.height)
 	}
 	if stored(t, "window_width") != "960" || stored(t, "window_height") != "600" {
 		t.Fatal("legacy size was not normalized in storage")
+	}
+}
+
+func TestFailedSettingsWritesLeaveWindowAndPreferencesUnchanged(t *testing.T) {
+	store := settings.NewService()
+	for _, key := range []string{"close_to_tray", "window_resizable", "window_width", "window_height"} {
+		value := "1"
+		if key == "window_width" {
+			value = "1280"
+		}
+		if key == "window_height" {
+			value = "800"
+		}
+		if err := store.Set(key, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	w := &restoredWindow{width: 1280, height: 800, resizable: true}
+	svc := NewService(func() application.Window { return w }, store)
+	if _, err := db.DB().Exec(`CREATE TRIGGER reject_window_settings BEFORE INSERT ON settings
+		WHEN NEW.key IN ('close_to_tray','window_resizable','window_height')
+		BEGIN SELECT RAISE(ABORT,'injected write failure'); END`); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, err := db.DB().Exec(`DROP TRIGGER reject_window_settings`); err != nil {
+			t.Error(err)
+		}
+	})
+	for _, tc := range []struct {
+		name  string
+		write func() error
+	}{
+		{"close", func() error { return svc.SetCloseBehavior(context.Background(), false) }},
+		{"resizable", func() error { return svc.SetResizable(context.Background(), false) }},
+		{"atomic size", func() error { return svc.SetSize(context.Background(), 1920, 1080) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.write(); !apperror.Is(err, apperror.Storage) {
+				t.Fatalf("expected storage failure, got %v", err)
+			}
+		})
+	}
+	if !svc.CloseBehavior() || !w.resizable || w.width != 1280 || w.height != 800 {
+		t.Fatalf("failed write changed live state: %+v", w)
+	}
+	if stored(t, "window_width") != "1280" || stored(t, "window_height") != "800" {
+		t.Fatal("partially committed window size")
 	}
 }

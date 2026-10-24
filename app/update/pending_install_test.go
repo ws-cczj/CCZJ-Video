@@ -15,7 +15,7 @@ import (
 func newDBBackedService(t *testing.T) *Service {
 	t.Helper()
 	// settings 就是那张表，这里打真库（TestMain 已经把库开在临时目录里）。
-	return NewService(settings.NewService(), nil)
+	return NewService(settings.NewService(), nil, nil)
 }
 
 // 点下「退出时安装」不该装任何东西，更不该把来路不明的路径留在库里：

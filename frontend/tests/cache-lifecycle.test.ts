@@ -10,6 +10,7 @@ vi.mock('../src/utils/ts-cache/disk-cache', () => ({ diskSave: vi.fn(async () =>
 beforeEach(() => {
   vi.useFakeTimers()
   vi.stubGlobal('window', globalThis)
+  vi.stubGlobal('self', globalThis)
   cacheClear()
   beginCacheSession()
   session.enabled = true
@@ -28,6 +29,7 @@ describe('segment memory bounds and asynchronous session release', () => {
     const loader = new TsCacheLoader({})
     const success = vi.fn(), error = vi.fn()
     loader.load({ url: 'https://test/movie.mp4', type: 'manifest' }, {}, { onSuccess: success, onError: error })
+    await vi.dynamicImportSettled()
     await vi.advanceTimersByTimeAsync(0)
     expect(text).not.toHaveBeenCalled()
     expect(success).not.toHaveBeenCalled()
@@ -65,6 +67,8 @@ describe('segment memory bounds and asynchronous session release', () => {
     loader.abort()
     expect(latestAbort).not.toHaveBeenCalled()
     loader.destroy()
+    // HLS consumes these stats after FragmentLoader destroys the loader.
+    expect(loader.stats.aborted).toBe(false)
   })
   it('does not evict useful entries or retain a single segment larger than the entire budget', () => {
     cacheSet('https://test/small.ts', new ArrayBuffer(64), 'test')

@@ -15,7 +15,6 @@ func CleanHTML(html string) string {
 	if html == "" {
 		return html
 	}
-	applog.Info("[CleanHTML] 输入: len=%d, content=%s", len(html), truncate(html, 100))
 	html = strings.TrimPrefix(strings.TrimSuffix(html, "`"), "`")
 	html = strings.Trim(html, "`\"' ")
 
@@ -42,7 +41,6 @@ func CleanHTML(html string) string {
 	if len(text) > 1800 {
 		text = text[:1800] + "..."
 	}
-	applog.Info("[CleanHTML] 输出: len=%d, content=%s", len(text), truncate(text, 100))
 	return text
 }
 
@@ -276,6 +274,9 @@ func ParseVideosWithMapping(rawData []byte, fieldMapping map[string]string) ([]*
 		}
 		videos = append(videos, v)
 	}
+	if len(result.List) > 0 && len(videos) == 0 {
+		return nil, fmt.Errorf("no usable objects in video list")
+	}
 	return videos, nil
 }
 
@@ -284,7 +285,7 @@ func ParseVideosWithMapping(rawData []byte, fieldMapping map[string]string) ([]*
 // 列表元素不再假定是 MAC CMS 的形状：任何 JSON 对象都能解析，字段名由
 // field_mapping（优先级最高，见 collectFieldCandidates）或内置别名表决定。
 // 单个对象按一条记录处理，方便详情接口复用同一个路径声明。
-// 解析不了的单条记录只跳过并告警，与 ParseVideosWithMapping 一致。
+// 部分无效记录告警并跳过；全部无效时返回错误，不能伪装成空列表。
 func parseVideosFromValue(node any, fieldMapping map[string]string) ([]*model.Video, error) {
 	items, err := videoValueItems(node)
 	if err != nil {
@@ -303,6 +304,9 @@ func parseVideosFromValue(node any, fieldMapping map[string]string) ([]*model.Vi
 			continue
 		}
 		videos = append(videos, v)
+	}
+	if len(items) > 0 && len(videos) == 0 {
+		return nil, fmt.Errorf("no usable objects in video list")
 	}
 	return videos, nil
 }

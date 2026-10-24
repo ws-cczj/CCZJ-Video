@@ -1,6 +1,7 @@
 package updater
 
 import (
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"net/http"
@@ -31,7 +32,7 @@ func TestDownloadFallsBackAndOnlyPublishesVerifiedBytes(t *testing.T) {
 			defer server.Close()
 			digest := fmt.Sprintf("%x", sha256.Sum256([]byte(payload)))
 			var progressCalls int
-			got, err := downloadFromSources(dir, "https://github.com/ws-cczj/CCZJ-Video/releases/download/v9.1.0/app.exe", digest,
+			got, err := downloadFromSources(context.Background(), dir, "https://github.com/ws-cczj/CCZJ-Video/releases/download/v9.1.0/app.exe", digest,
 				[]speedTestResult{{url: server.URL + "/bad", source: "bad"}, {url: server.URL + "/good", source: "good"}}, server.Client(),
 				func(downloaded, total int64, speed float64) { progressCalls++ })
 			if err != nil {
@@ -67,7 +68,7 @@ func TestDownloadChecksumFailureCleansPartialArtifact(t *testing.T) {
 	dir := t.TempDir()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = fmt.Fprint(w, "bad payload") }))
 	defer server.Close()
-	_, err := downloadFromSources(dir, "https://github.com/ws-cczj/CCZJ-Video/releases/download/v9.1.0/app.exe", strings.Repeat("a", 64),
+	_, err := downloadFromSources(context.Background(), dir, "https://github.com/ws-cczj/CCZJ-Video/releases/download/v9.1.0/app.exe", strings.Repeat("a", 64),
 		[]speedTestResult{{url: server.URL, source: "bad"}}, server.Client(), nil)
 	if apperror.CodeOf(err) != apperror.Corrupt {
 		t.Fatalf("lost checksum failure: %v", err)

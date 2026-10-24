@@ -1,9 +1,11 @@
 package updater
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -99,10 +101,10 @@ func TestParseChecksums(t *testing.T) {
 
 func TestFetchReleaseChecksumsRejectsForeignRepoBeforeAnyRequest(t *testing.T) {
 	// 校验清单必须来自本应用仓库；否则会拿别人发布的哈希来给产物背书。
-	if _, err := fetchReleaseChecksums("evil", "CCZJ-Video", "v1.0.0"); err == nil {
+	if _, err := fetchReleaseChecksums(context.Background(), http.DefaultClient, "evil", "CCZJ-Video", "v1.0.0"); err == nil {
 		t.Fatal("expected foreign owner to be rejected")
 	}
-	if _, err := fetchReleaseChecksums(repoOwner, "other-repo", "v1.0.0"); err == nil {
+	if _, err := fetchReleaseChecksums(context.Background(), http.DefaultClient, repoOwner, "other-repo", "v1.0.0"); err == nil {
 		t.Fatal("expected foreign repo to be rejected")
 	}
 }
@@ -110,7 +112,7 @@ func TestFetchReleaseChecksumsRejectsForeignRepoBeforeAnyRequest(t *testing.T) {
 func TestRequireArtifactRejectsNonReleaseURL(t *testing.T) {
 	// 下载源必须是 GitHub Release 资源，否则连该取哪个 tag 的清单都不知道。
 	for _, u := range []string{"", "https://example.com/a.exe", "not a url"} {
-		if _, err := requireArtifact(u); err == nil {
+		if _, err := requireArtifact(context.Background(), http.DefaultClient, u); err == nil {
 			t.Fatalf("expected %q to be rejected", u)
 		}
 	}

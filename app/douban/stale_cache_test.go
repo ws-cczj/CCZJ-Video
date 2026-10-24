@@ -96,7 +96,7 @@ func TestStaleChartServesOldThenRevalidatesInBackground(t *testing.T) {
 	isolateChartCache(t)
 	clearRateClock()
 
-	setChartCache([]DoubanChartItem{chartItem("111111", "旧榜单")}, time.Now().Add(-2*time.Hour))
+	setChartCache([]DoubanChartItem{chartItem("111111", "旧榜单")}, time.Now().Add(-chartCacheTTL-time.Hour))
 
 	var calls atomic.Int32
 	started := make(chan struct{}, 4)
@@ -133,7 +133,7 @@ func TestStaleChartServesOldThenRevalidatesInBackground(t *testing.T) {
 func TestChartBackgroundRefreshSkippedWhenOneIsRunning(t *testing.T) {
 	isolateChartCache(t)
 	clearRateClock()
-	setChartCache([]DoubanChartItem{chartItem("111111", "旧榜单")}, time.Now().Add(-2*time.Hour))
+	setChartCache([]DoubanChartItem{chartItem("111111", "旧榜单")}, time.Now().Add(-chartCacheTTL-time.Hour))
 
 	var calls atomic.Int32
 	fetchChartPage = func(string) (string, error) {

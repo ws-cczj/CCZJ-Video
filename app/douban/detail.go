@@ -71,8 +71,7 @@ func parseSubjectAbstract(subjectID, body string) (*DoubanInfo, error) {
 }
 
 // fetchDetailByAbstract 在详情页被反爬拦截时改走 JSON 接口。
-// ignoreBlock 是必须的：详情页那次 302 已经给自己记了一轮静默期，
-// 若连兜底请求都被本地闸门挡住，这条路径永远不会执行。
+// JSON 接口也会触发反爬，必须与网页共享静默期；只有闸门允许时才尝试兜底。
 func fetchDetailByAbstract(subjectID string) (*DoubanInfo, error) {
 	return fetchDetailByAbstractContext(context.Background(), subjectID)
 }
@@ -81,7 +80,7 @@ func fetchDetailByAbstractContext(ctx context.Context, subjectID string) (*Douba
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	body, err := fetchDoubanContext(ctx, fmt.Sprintf(subjectAbstractURL, subjectID), true)
+	body, err := fetchDoubanContext(ctx, fmt.Sprintf(subjectAbstractURL, subjectID))
 	if err != nil {
 		return nil, err
 	}
@@ -111,16 +110,17 @@ func ParseDetailContext(ctx context.Context, subjectID string) (*DoubanInfo, err
 
 	urlStr := fmt.Sprintf(detailURL, subjectID)
 
-	html, err := fetchDoubanContext(ctx, urlStr, false)
+	html, err := fetchDoubanContext(ctx, urlStr)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		// /subject/<id>/ 网页层面无条件被 302 到 sec.douban.com 的 JS 验证页，
-		// 不带登录 Cookie 就永远拿不到。这里降级到同站 JSON 接口，而不是让整次
-		// 更新失败——评分/导演/演员/类型/集数这些主要字段都还能拿到。
+		// 网页被远端拦截时降低网页探测频率；共享静默期内不再尝试 JSON 兜底。
 		if isRemoteAntiCrawl(err) {
 			markDetailChallenged()
+		}
+		if remainingBlock() > 0 || apperror.Public(err).RetryAfterSeconds > 0 {
+			return nil, err
 		}
 		applog.Info("[Douban] Detail page unavailable for %s (%v), falling back to subject_abstract", subjectID, err)
 		info, fallbackErr := fetchDetailByAbstractContext(ctx, subjectID)
@@ -372,13 +372,17 @@ func truncate(s string, maxLen int) string {
 // 这里不再重复查冷却：SearchSubjectID 已经按 global_id 查过本行了，第二次查
 // 只能按关键词查，等于给同一条记录套上两套不同的冷却口径。
 func FetchDoubanInfo(keyword string, meta SearchMeta) (*DoubanInfo, error) {
+	return FetchDoubanInfoContext(context.Background(), keyword, meta)
+}
+
+func FetchDoubanInfoContext(ctx context.Context, keyword string, meta SearchMeta) (*DoubanInfo, error) {
 	applog.Info("[Douban] Fetching complete info for keyword: %s", keyword)
 
-	subjectID, err := SearchSubjectID(keyword, meta)
+	subjectID, err := SearchSubjectIDContext(ctx, keyword, meta)
 	if err != nil {
 		applog.Error("[Douban] FetchDoubanInfo failed at search step for '%s': %v", keyword, err)
 		return nil, err
 	}
 
-	return ParseDetail(subjectID)
+	return ParseDetailContext(ctx, subjectID)
 }

@@ -2,9 +2,13 @@ package detail
 
 import (
 	"cczjVideo/app/apperror"
+	"cczjVideo/app/applog"
 	"cczjVideo/app/collect"
 	"cczjVideo/app/db"
+	"cczjVideo/app/lifecycle"
 	"cczjVideo/app/model"
+	"cczjVideo/app/operation"
+	"cczjVideo/app/workflight"
 	"context"
 	"errors"
 	"fmt"
@@ -38,15 +42,13 @@ type cacheEntry struct {
 	created time.Time
 	bytes   int64
 }
-type call struct {
-	done   chan struct{}
-	result *Result
-	err    error
-}
 type Service struct {
 	mu         sync.Mutex
 	cache      map[string]cacheEntry
-	flights    map[string]*call
+	flights    *workflight.Group[*Result]
+	owner      *lifecycle.Group
+	refreshing map[string]bool
+	revision   uint64
 	ttl        time.Duration
 	maxEntries int
 	maxBytes   int64
@@ -86,8 +88,22 @@ func FreshnessTTL(raw string) time.Duration {
 	}
 }
 
-func New(ttl time.Duration) *Service {
-	return &Service{cache: map[string]cacheEntry{}, flights: map[string]*call{}, ttl: ttl, maxEntries: 256, maxBytes: 32 << 20, retryDelay: func(n int) time.Duration { return time.Duration(n) * 100 * time.Millisecond }}
+func New(ttl time.Duration) *Service { return NewWithContext(context.Background(), ttl) }
+
+func NewWithContext(parent context.Context, ttl time.Duration) *Service {
+	owner := lifecycle.NewGroupWithContext(parent)
+	return &Service{cache: map[string]cacheEntry{}, flights: workflight.New[*Result](owner.Context(), 64), owner: owner, refreshing: map[string]bool{}, ttl: ttl, maxEntries: 256, maxBytes: 32 << 20, retryDelay: func(n int) time.Duration { return time.Duration(n) * 100 * time.Millisecond }}
+}
+
+// Close rejects new work and joins shared fetches and stale refreshes before
+// their catalog/settings database can be closed.
+func (s *Service) Close(ctx context.Context) error {
+	s.owner.Cancel()
+	err := s.flights.Close(ctx)
+	if !s.owner.StopContext(ctx) {
+		err = errors.Join(err, ctx.Err())
+	}
+	return err
 }
 
 // ttlNow 每次落缓存都重新读设置，所以改档位立刻生效、不需要重启。库里读不到或值是空的
@@ -104,6 +120,7 @@ func (s *Service) ttlNow() time.Duration {
 // detail can never outlive its request strategy.
 func (s *Service) InvalidateSource(sourceKey string) {
 	s.mu.Lock()
+	s.revision++
 	defer s.mu.Unlock()
 	for key, entry := range s.cache {
 		if strings.HasPrefix(key, sourceKey+":") {
@@ -121,6 +138,7 @@ func (s *Service) InvalidateVideo(sourceKey string, globalID int64) {
 		return
 	}
 	s.mu.Lock()
+	s.revision++
 	defer s.mu.Unlock()
 	key := fmt.Sprintf("%s:%d", sourceKey, globalID)
 	if entry, ok := s.cache[key]; ok {
@@ -160,16 +178,16 @@ func (s *Service) GetByGlobalContext(ctx context.Context, sourceKey string, glob
 	if strings.TrimSpace(sourceKey) == "" || globalID <= 0 {
 		return nil, apperror.New(apperror.Validation, "source_key and global_id are required")
 	}
-	catalog, err := db.GetCatalogItemByGlobalID(sourceKey, globalID)
+	catalog, err := db.GetCatalogItemByGlobalIDContext(ctx, sourceKey, globalID)
 	if err != nil {
-		return nil, apperror.Wrap(apperror.NotFound, err, "catalog lookup")
+		return nil, apperror.Wrap(apperror.Storage, err, "catalog lookup")
 	}
 	return s.getCatalogContext(ctx, catalog, len(refresh) > 0 && refresh[0])
 }
 func (s *Service) GetContext(ctx context.Context, sourceKey, vodID string, refresh ...bool) (*Result, error) {
-	catalog, err := db.GetCatalogItem(sourceKey, vodID)
+	catalog, err := db.GetCatalogItemContext(ctx, sourceKey, vodID)
 	if err != nil {
-		return nil, apperror.Wrap(apperror.NotFound, err, "catalog lookup")
+		return nil, apperror.Wrap(apperror.Storage, err, "catalog lookup")
 	}
 	return s.getCatalogContext(ctx, catalog, len(refresh) > 0 && refresh[0])
 }
@@ -177,77 +195,118 @@ func (s *Service) getCatalog(catalog *db.CatalogItem, refresh ...bool) (*Result,
 	return s.getCatalogContext(context.Background(), catalog, refresh...)
 }
 func (s *Service) getCatalogContext(ctx context.Context, catalog *db.CatalogItem, refresh ...bool) (*Result, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := s.owner.Context().Err(); err != nil {
+		return nil, err
+	}
 	force := len(refresh) > 0 && refresh[0]
 	key := fmt.Sprintf("%s:%d", catalog.SourceKey, catalog.GlobalID)
-
 	s.mu.Lock()
+	revision := s.revision
 	cached, has := s.cache[key]
-	switch {
-	case !force && has && time.Now().Before(cached.expires):
+	if !force && has && time.Now().Before(cached.expires) {
 		s.hits++
 		s.mu.Unlock()
-		return cached.result, nil
-	case !force && has && cached.result != nil:
-		// 过期不是等待的理由：旧数据先交出去让界面立刻有内容，同时让一次后台刷新去补缓存。
-		// 刷新结果只在下一次读时被看见，所以用户看到的是「先出画面、变了才换」，没有转圈。
+		return cloneResult(cached.result), nil
+	}
+	if !force && has && cached.result != nil {
 		s.staleHits++
-		s.startFlight(key, catalog, ctx, backgroundFetchTimeout)
+		flightKey := fmt.Sprintf("%s@%d", key, revision)
+		if !s.refreshing[flightKey] {
+			s.refreshing[flightKey] = true
+			if !s.owner.Go("detail.refresh", func(owner context.Context) {
+				defer func() { s.mu.Lock(); delete(s.refreshing, flightKey); s.mu.Unlock() }()
+				run, cancel := context.WithTimeout(owner, backgroundFetchTimeout)
+				defer cancel()
+				_, _ = s.fetchShared(run, ctx, catalog, key, revision)
+			}) {
+				delete(s.refreshing, flightKey)
+			}
+		}
 		s.mu.Unlock()
-		return cached.result, nil
+		return cloneResult(cached.result), nil
 	}
 	s.misses++
-	active := s.startFlight(key, catalog, ctx, 0)
 	s.mu.Unlock()
-	select {
-	case <-active.done:
-		return active.result, active.err
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
+	result, err := s.fetchShared(ctx, ctx, catalog, key, revision)
+	return cloneResult(result), cloneError(err)
 }
 
-// startFlight 在锁内登记一次共享取数：已经有人在跑就复用，绝不重开第二趟。
-func (s *Service) startFlight(key string, catalog *db.CatalogItem, ctx context.Context, timeout time.Duration) *call {
-	if active := s.flights[key]; active != nil {
-		return active
-	}
-	active := &call{done: make(chan struct{})}
-	s.flights[key] = active
-	go s.runFlight(key, catalog, ctx, active, timeout)
-	return active
+func (s *Service) fetchShared(waiter, request context.Context, catalog *db.CatalogItem, key string, revision uint64) (*Result, error) {
+	return s.flights.Do(waiter, fmt.Sprintf("%s@%d", key, revision), func(owner context.Context) (*Result, error) {
+		run, _ := operation.OwnedContext(owner, request, "video.detail.fetch", applog.Fields{"mode": "video", "source_key": catalog.SourceKey, "global_id": catalog.GlobalID})
+		result, err := s.fetchContext(run, catalog)
+		if run.Err() != nil {
+			return nil, run.Err()
+		}
+		ttl := s.ttlNow()
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if err == nil {
+			s.fetchOK++
+		} else {
+			s.fetchFail++
+		}
+		// Invalidation can race HTTP. Never publish into a newer catalog generation.
+		if revision == s.revision {
+			if err == nil {
+				s.putCache(key, cloneResult(result), ttl)
+			} else if stale, ok := s.cache[key]; ok && stale.result != nil {
+				stale.expires = time.Now().Add(ttl)
+				s.cache[key] = stale
+			}
+		}
+		return result, err
+	})
 }
 
-// runFlight 独立跑完一次取数并收尾：写结果、从 flights 摘掉、关闭 done。HTTP 全程在锁外，
-// 锁只在「落缓存 + 摘飞单」时拿一次。
-func (s *Service) runFlight(key string, catalog *db.CatalogItem, ctx context.Context, active *call, timeout time.Duration) {
-	// WithoutCancel: this fetch is shared with every follower. Cancelling it
-	// because the caller who happened to arrive first navigated away would fail a
-	// request that is already paid for and still wanted by the others.
-	runCtx := context.WithoutCancel(ctx)
-	if timeout > 0 {
-		var cancel context.CancelFunc
-		runCtx, cancel = context.WithTimeout(runCtx, timeout)
-		defer cancel()
+func cloneResult(value *Result) *Result {
+	if value == nil {
+		return nil
 	}
-	active.result, active.err = s.fetchContext(runCtx, catalog)
-	// 新鲜度时长在拿缓存锁之前读：它落在 SQLite 上，别把一次数据库查询塞进互斥锁里。
-	ttl := s.ttlNow()
-	s.mu.Lock()
-	if active.err == nil {
-		s.fetchOK++
-		s.putCache(key, active.result, ttl)
-	} else if stale, ok := s.cache[key]; ok && stale.result != nil {
-		s.fetchFail++
-		// 后台刷新失败不该把还能顶用的旧数据一起拖走：给它续一个窗口，免得之后每次读
-		// 都撞一次坏请求。等结果的调用方照旧拿到错误，行为与改造前一致。
-		stale.expires = time.Now().Add(ttl)
-		s.cache[key] = stale
-	} else {
-		s.fetchFail++
+	out := *value
+	if value.Video != nil {
+		copy := *value.Video
+		out.Video = &copy
 	}
-	delete(s.flights, key)
-	s.mu.Unlock()
-	close(active.done)
+	if value.Catalog != nil {
+		copy := *value.Catalog
+		out.Catalog = &copy
+	}
+	out.Episodes = cloneEpisodes(value.Episodes)
+	out.Lines = append([]*model.PlayLine(nil), value.Lines...)
+	for i, line := range out.Lines {
+		if line != nil {
+			copy := *line
+			copy.Episodes = cloneEpisodes(line.Episodes)
+			out.Lines[i] = &copy
+		}
+	}
+	return &out
+}
+func cloneEpisodes(values []*model.Episode) []*model.Episode {
+	out := append([]*model.Episode(nil), values...)
+	for i, value := range out {
+		if value != nil {
+			copy := *value
+			out[i] = &copy
+		}
+	}
+	return out
+}
+func cloneError(err error) error {
+	var failure *Error
+	if errors.As(err, &failure) {
+		copy := *failure
+		if failure.Fallback != nil {
+			v := *failure.Fallback
+			copy.Fallback = &v
+		}
+		return &copy
+	}
+	return err
 }
 
 func resultSize(r *Result) int64 {
@@ -294,7 +353,7 @@ func (s *Service) fetchContext(ctx context.Context, catalog *db.CatalogItem) (*R
 	if s.requestFn != nil {
 		request = func() (*model.Video, error) { return s.requestFn(catalog) }
 	} else {
-		source, err := db.GetSourceByKey(catalog.SourceKey)
+		source, err := db.GetSourceByKeyContext(ctx, catalog.SourceKey)
 		if err != nil {
 			return nil, err
 		}

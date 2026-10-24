@@ -1,6 +1,7 @@
 package cast
 
 import (
+	"cczjVideo/app/lifecycle"
 	"cczjVideo/app/netpolicy"
 	"context"
 	"crypto/sha256"
@@ -230,6 +231,18 @@ func validateMedia(raw string) error {
 	return nil
 }
 func (s *Service) Play(id, media, title string) error {
+	return s.PlayContext(context.Background(), id, media, title)
+}
+
+// PlayContext ties both SOAP steps to the caller and application lifetime.
+func (s *Service) PlayContext(request context.Context, id, media, title string) error {
+	ctx, release := lifecycle.WithShutdown(request, s.ctx)
+	defer release()
+	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if e := validateMedia(media); e != nil {
 		return e
 	}
@@ -237,8 +250,6 @@ func (s *Service) Play(id, media, title string) error {
 	if e != nil {
 		return e
 	}
-	ctx, cancel := context.WithTimeout(s.ctx, 8*time.Second)
-	defer cancel()
 	mime := "video/mp4"
 	u, _ := url.Parse(media)
 	if strings.HasSuffix(strings.ToLower(u.Path), ".m3u8") {
@@ -251,6 +262,18 @@ func (s *Service) Play(id, media, title string) error {
 	return soap(ctx, d, "Play", "<Speed>1</Speed>")
 }
 func (s *Service) Control(id, action string, seconds float64) error {
+	return s.ControlContext(context.Background(), id, action, seconds)
+}
+
+// ControlContext stops an in-flight device request when its owner leaves.
+func (s *Service) ControlContext(request context.Context, id, action string, seconds float64) error {
+	ctx, release := lifecycle.WithShutdown(request, s.ctx)
+	defer release()
+	ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
+	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	d, e := s.device(id)
 	if e != nil {
 		return e
@@ -269,7 +292,5 @@ func (s *Service) Control(id, action string, seconds float64) error {
 	default:
 		return errors.New("不支持的投屏操作")
 	}
-	ctx, cancel := context.WithTimeout(s.ctx, 4*time.Second)
-	defer cancel()
 	return soap(ctx, d, action, args)
 }

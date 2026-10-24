@@ -1,11 +1,13 @@
 package media
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"testing"
 
 	"cczjVideo/app/apperror"
+	"cczjVideo/app/db"
 	"cczjVideo/app/model"
 )
 
@@ -21,13 +23,13 @@ func TestIdentityFailuresRemainDistinguishable(t *testing.T) {
 		{"invalid", apperror.New(apperror.Validation, "invalid key"), apperror.Validation},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			s := NewService(func(string, string) (*model.Video, error) { return nil, tt.cause })
-			for _, err := range []error{s.AddFavorite("source", "1"), s.SaveHistory("source", "1", 1, 5)} {
+			s := NewService(func(context.Context, string, string) (*model.Video, error) { return nil, tt.cause }, db.NewMediaStore(db.DB), nil)
+			for _, err := range []error{s.AddFavorite(context.Background(), "source", "1"), s.SaveHistory(context.Background(), "source", "1", 1, 5)} {
 				if apperror.CodeOf(err) != tt.code || !errors.Is(err, tt.cause) {
 					t.Fatalf("classification or cause lost: %v", err)
 				}
 			}
-			_, err := s.IsFavorite("source", "1")
+			_, err := s.IsFavorite(context.Background(), "source", "1")
 			if errors.Is(tt.cause, sql.ErrNoRows) {
 				if err != nil {
 					t.Fatalf("missing favorite should be false: %v", err)

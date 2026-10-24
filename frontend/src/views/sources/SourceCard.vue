@@ -26,6 +26,7 @@ const props = defineProps<{
   cooling: string
   probeBusy: boolean
   isDefault: boolean
+  defaultBusy?: boolean
   scheduleVisible: boolean
   scheduleForm: ScheduleForm | null
   doc: ParamsDoc | null
@@ -139,7 +140,7 @@ const {
       <button class="icon-btn sched-btn" @click="emit('schedule-toggle')" :title="scheduleStateFor(props.sourceKey)?.enabled ? tr('sources.scheduleEnabledTitle') : tr('sources.scheduleConfigTitle')">
         <Icon name="clock" :size="14" />
       </button>
-      <button class="icon-btn default-btn" :class="{ active: props.isDefault }" @click="emit('set-default')" :title="props.isDefault ? tr('sources.isDefault') : tr('sources.setAsDefault')">
+      <button class="icon-btn default-btn" :class="{ active: props.isDefault }" :disabled="props.defaultBusy" :aria-busy="props.defaultBusy" @click="emit('set-default')" :title="props.isDefault ? tr('sources.isDefault') : tr('sources.setAsDefault')">
         <Icon name="star" :size="14" />
       </button>
       <button class="icon-btn edit-btn" @click="emit('edit')" :title="tr('common.edit')">

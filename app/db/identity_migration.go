@@ -1,6 +1,9 @@
 package db
 
 import (
+	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -217,6 +220,9 @@ func pickMergeSurvivor(rows []dupGlobalVideoRow) int {
 
 // mergeDupGroup 补齐存活行、改指三张引用表、删掉被并掉的行，返回删除条数。
 func mergeDupGroup(tx *sqlx.Tx, rows []dupGlobalVideoRow) (int, error) {
+	return mergeDupGroupContext(context.Background(), tx, rows)
+}
+func mergeDupGroupContext(ctx context.Context, tx *sqlx.Tx, rows []dupGlobalVideoRow) (int, error) {
 	keep := &rows[pickMergeSurvivor(rows)]
 	changed := make(map[int]string, len(normMergeTextColumns))
 	victims := make([]*dupGlobalVideoRow, 0, len(rows)-1)
@@ -247,20 +253,20 @@ func mergeDupGroup(tx *sqlx.Tx, rows []dupGlobalVideoRow) (int, error) {
 			keep.cooldown = row.cooldown
 		}
 	}
-	if err := writeMergedValues(tx, keep, changed); err != nil {
+	if err := writeMergedValues(ctx, tx, keep, changed); err != nil {
 		return 0, err
 	}
 	for _, victim := range victims {
-		if err := repointCatalogReferences(tx, keep.id, victim.id); err != nil {
+		if err := repointCatalogReferences(ctx, tx, keep.id, victim.id); err != nil {
 			return 0, err
 		}
-		if err := mergeFavorites(tx, keep.id, victim.id); err != nil {
+		if err := mergeFavorites(ctx, tx, keep.id, victim.id); err != nil {
 			return 0, err
 		}
-		if err := mergeWatchHistory(tx, keep.id, victim.id); err != nil {
+		if err := mergeWatchHistory(ctx, tx, keep.id, victim.id); err != nil {
 			return 0, err
 		}
-		if _, err := tx.Exec(`DELETE FROM global_video WHERE id=?`, victim.id); err != nil {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM global_video WHERE id=?`, victim.id); err != nil {
 			return 0, fmt.Errorf("delete duplicate global_video %d: %w", victim.id, err)
 		}
 	}
@@ -269,7 +275,7 @@ func mergeDupGroup(tx *sqlx.Tx, rows []dupGlobalVideoRow) (int, error) {
 
 // writeMergedValues 把补齐后的字段与合并后的重试状态写回存活行。列名全部来自
 // 代码里写死的常量，值全部走绑定参数。
-func writeMergedValues(tx *sqlx.Tx, keep *dupGlobalVideoRow, changed map[int]string) error {
+func writeMergedValues(ctx context.Context, tx *sqlx.Tx, keep *dupGlobalVideoRow, changed map[int]string) error {
 	set := make([]string, 0, len(normMergeTextColumns)+2)
 	args := make([]any, 0, len(normMergeTextColumns)+3)
 	for idx, column := range normMergeTextColumns {
@@ -286,7 +292,7 @@ func writeMergedValues(tx *sqlx.Tx, keep *dupGlobalVideoRow, changed map[int]str
 	args = append(args, keep.id)
 
 	query := fmt.Sprintf(`UPDATE global_video SET %s, updated_at = CURRENT_TIMESTAMP WHERE id=?`, strings.Join(set, ", "))
-	if _, err := tx.Exec(query, args...); err != nil {
+	if _, err := tx.ExecContext(ctx, query, args...); err != nil {
 		return fmt.Errorf("merge fields into global_video %d: %w", keep.id, err)
 	}
 	return nil
@@ -294,8 +300,8 @@ func writeMergedValues(tx *sqlx.Tx, keep *dupGlobalVideoRow, changed map[int]str
 
 // repointCatalogReferences 改指目录投影。source_videos 的唯一键不含 global_id，
 // 所以这里不可能冲突，直接 UPDATE。
-func repointCatalogReferences(tx *sqlx.Tx, keepID, victimID int64) error {
-	if _, err := tx.Exec(`UPDATE source_videos SET global_id=? WHERE global_id=?`, keepID, victimID); err != nil {
+func repointCatalogReferences(ctx context.Context, tx *sqlx.Tx, keepID, victimID int64) error {
+	if _, err := tx.ExecContext(ctx, `UPDATE source_videos SET global_id=? WHERE global_id=?`, keepID, victimID); err != nil {
 		return fmt.Errorf("repoint source_videos to global_video %d: %w", keepID, err)
 	}
 	return nil
@@ -303,11 +309,11 @@ func repointCatalogReferences(tx *sqlx.Tx, keepID, victimID int64) error {
 
 // mergeFavorites 把收藏并到存活行。同一 (source_key, vod_id) 在两侧都收藏过
 // 时才会冲突，那时存活行本来就有这条收藏，删掉重复行不丢信息。
-func mergeFavorites(tx *sqlx.Tx, keepID, victimID int64) error {
-	if _, err := tx.Exec(`UPDATE OR IGNORE favorites SET global_id=? WHERE global_id=?`, keepID, victimID); err != nil {
+func mergeFavorites(ctx context.Context, tx *sqlx.Tx, keepID, victimID int64) error {
+	if _, err := tx.ExecContext(ctx, `UPDATE OR IGNORE favorites SET global_id=? WHERE global_id=?`, keepID, victimID); err != nil {
 		return fmt.Errorf("repoint favorites to global_video %d: %w", keepID, err)
 	}
-	if _, err := tx.Exec(`DELETE FROM favorites WHERE global_id=?`, victimID); err != nil {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM favorites WHERE global_id=?`, victimID); err != nil {
 		return fmt.Errorf("drop merged favorites of %d: %w", victimID, err)
 	}
 	return nil
@@ -315,38 +321,43 @@ func mergeFavorites(tx *sqlx.Tx, keepID, victimID int64) error {
 
 // mergeWatchHistory 逐集并观看进度：同一集只在两侧之一出现时直接改指，
 // 两侧都看过时保留更大的进度，绝不因为唯一键冲突把用户看到的位置丢掉。
-func mergeWatchHistory(tx *sqlx.Tx, keepID, victimID int64) error {
+func mergeWatchHistory(ctx context.Context, tx *sqlx.Tx, keepID, victimID int64) error {
 	var entries []struct {
 		ID        int64   `db:"id"`
 		SourceKey string  `db:"source_key"`
+		VodID     string  `db:"vod_id"`
 		EpNum     int     `db:"ep_num"`
 		Position  float64 `db:"position"`
 		UpdatedAt string  `db:"updated_at"`
 	}
-	if err := tx.Select(&entries, `SELECT id, source_key, ep_num, position, COALESCE(updated_at,'') AS updated_at
+	if err := tx.SelectContext(ctx, &entries, `SELECT id, source_key, vod_id, ep_num, position, COALESCE(updated_at,'') AS updated_at
 		FROM watch_history WHERE global_id=? ORDER BY ep_num ASC`, victimID); err != nil {
 		return fmt.Errorf("read watch history of %d: %w", victimID, err)
 	}
 	for _, entry := range entries {
 		var existing struct {
-			ID       int64   `db:"id"`
-			Position float64 `db:"position"`
+			ID        int64   `db:"id"`
+			Position  float64 `db:"position"`
+			UpdatedAt string  `db:"updated_at"`
 		}
-		err := tx.Get(&existing, `SELECT id, position FROM watch_history WHERE global_id=? AND source_key=? AND ep_num=? LIMIT 1`,
+		err := tx.GetContext(ctx, &existing, `SELECT id, position, COALESCE(updated_at,'') AS updated_at FROM watch_history WHERE global_id=? AND source_key=? AND ep_num=? LIMIT 1`,
 			keepID, entry.SourceKey, entry.EpNum)
-		if err != nil {
-			if _, err := tx.Exec(`UPDATE watch_history SET global_id=? WHERE id=?`, keepID, entry.ID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			if _, err := tx.ExecContext(ctx, `UPDATE watch_history SET global_id=? WHERE id=?`, keepID, entry.ID); err != nil {
 				return fmt.Errorf("repoint watch history to global_video %d: %w", keepID, err)
 			}
 			continue
 		}
-		if entry.Position > existing.Position {
-			if _, err := tx.Exec(`UPDATE watch_history SET position=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-				entry.Position, existing.ID); err != nil {
+		if err != nil {
+			return fmt.Errorf("read existing watch history: %w", err)
+		}
+		if entry.Position > existing.Position || (entry.Position == existing.Position && entry.UpdatedAt > existing.UpdatedAt) {
+			if _, err := tx.ExecContext(ctx, `UPDATE watch_history SET vod_id=?,position=?,updated_at=? WHERE id=?`,
+				entry.VodID, entry.Position, entry.UpdatedAt, existing.ID); err != nil {
 				return fmt.Errorf("merge watch progress on global_video %d: %w", keepID, err)
 			}
 		}
-		if _, err := tx.Exec(`DELETE FROM watch_history WHERE id=?`, entry.ID); err != nil {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM watch_history WHERE id=?`, entry.ID); err != nil {
 			return fmt.Errorf("drop merged watch history %d: %w", entry.ID, err)
 		}
 	}

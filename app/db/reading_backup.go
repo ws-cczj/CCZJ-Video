@@ -2,11 +2,14 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/jmoiron/sqlx"
 	"strings"
 	"time"
 
+	"cczjVideo/app/apperror"
 	"cczjVideo/app/model"
 	"cczjVideo/app/readingstate"
 )
@@ -24,11 +27,22 @@ type BackupReading struct {
 // ReadReadingBackup includes the catalog referenced by durable records. Local
 // item/chapter IDs are translated during merge; they are never portable identity.
 func (s *ReadingStateStore) ReadBackup(ctx context.Context) (*BackupReading, error) {
-	tx, err := s.database.BeginTxx(ctx, nil)
+	tx, err := s.database.BeginTxx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
+	result, err := readReadingBackup(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func readReadingBackup(ctx context.Context, tx *sqlx.Tx) (*BackupReading, error) {
 	var rows []struct {
 		Kind   string `db:"kind"`
 		Bucket string `db:"bucket"`
@@ -129,9 +143,6 @@ func (s *ReadingStateStore) ReadBackup(ctx context.Context) (*BackupReading, err
 		}
 	}
 	result.Chapters = keptChapters
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
 	return result, nil
 }
 
@@ -139,12 +150,31 @@ func (s *ReadingStateStore) MergeBackup(ctx context.Context, backup *BackupReadi
 	if backup == nil {
 		return 0, nil
 	}
+	tx, err := s.database.BeginTxx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	applied, err := mergeReadingBackup(ctx, tx, backup)
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return applied, nil
+}
+
+func mergeReadingBackup(ctx context.Context, tx *sqlx.Tx, backup *BackupReading) (int, error) {
+	if backup == nil {
+		return 0, nil
+	}
 	if len(backup.Records)+len(backup.Items)+len(backup.Chapters) > 200000 {
-		return 0, fmt.Errorf("reading backup exceeds item limit")
+		return 0, apperror.Wrap(apperror.Corrupt, fmt.Errorf("reading backup exceeds item limit"), "")
 	}
 	for _, r := range backup.Records {
 		if err := r.Validate(r.Kind); err != nil {
-			return 0, err
+			return 0, apperror.Wrap(apperror.Corrupt, err, "")
 		}
 	}
 	items := make(map[int]*model.LibraryItem)
@@ -152,20 +182,20 @@ func (s *ReadingStateStore) MergeBackup(ctx context.Context, backup *BackupReadi
 	for _, chapter := range backup.Chapters {
 		if chapter != nil {
 			if chaptersByID[chapter.Id] != nil {
-				return 0, fmt.Errorf("duplicate backup chapter identity")
+				return 0, apperror.Wrap(apperror.Corrupt, fmt.Errorf("duplicate backup chapter identity"), "")
 			}
 			chaptersByID[chapter.Id] = chapter
 		}
 	}
 	for _, item := range backup.Items {
 		if item == nil || item.Id <= 0 || item.RemoteID == "" || item.Title == "" {
-			return 0, fmt.Errorf("invalid reading backup item")
+			return 0, apperror.Wrap(apperror.Corrupt, fmt.Errorf("invalid reading backup item"), "")
 		}
 		if err := readingstate.ValidateKind(item.Kind); err != nil {
-			return 0, err
+			return 0, apperror.Wrap(apperror.Corrupt, err, "")
 		}
 		if items[item.Id] != nil {
-			return 0, fmt.Errorf("duplicate backup item identity")
+			return 0, apperror.Wrap(apperror.Corrupt, fmt.Errorf("duplicate backup item identity"), "")
 		}
 		items[item.Id] = item
 	}
@@ -179,7 +209,7 @@ func (s *ReadingStateStore) MergeBackup(ctx context.Context, backup *BackupReadi
 		json.Unmarshal([]byte(r.Value), &value)
 		item := items[value.ItemID]
 		if item == nil || item.Kind+"\x00"+item.SourceKey+"\x00"+item.RemoteID != r.Key {
-			return 0, fmt.Errorf("reading backup record has no matching catalog identity")
+			return 0, apperror.Wrap(apperror.Corrupt, fmt.Errorf("reading backup record has no matching catalog identity"), "")
 		}
 		if r.Bucket == "progress" {
 			var fields map[string]any
@@ -190,15 +220,10 @@ func (s *ReadingStateStore) MergeBackup(ctx context.Context, backup *BackupReadi
 			}
 			chapter := chaptersByID[int(fields[field].(float64))]
 			if chapter != nil && chapter.ItemID != value.ItemID {
-				return 0, fmt.Errorf("reading progress references another item's chapter")
+				return 0, apperror.Wrap(apperror.Corrupt, fmt.Errorf("reading progress references another item's chapter"), "")
 			}
 		}
 	}
-	tx, err := s.database.BeginTxx(ctx, nil)
-	if err != nil {
-		return 0, err
-	}
-	defer tx.Rollback()
 	ids := make(map[int]int)
 	chapterIDs := make(map[int]int)
 	for oldID, item := range items {
@@ -214,10 +239,10 @@ func (s *ReadingStateStore) MergeBackup(ctx context.Context, backup *BackupReadi
 	}
 	for _, chapter := range backup.Chapters {
 		if chapter == nil || chapter.Id <= 0 || ids[chapter.ItemID] == 0 || chapter.RemoteID == "" {
-			return 0, fmt.Errorf("invalid reading backup chapter")
+			return 0, apperror.Wrap(apperror.Corrupt, fmt.Errorf("invalid reading backup chapter"), "")
 		}
 		if chapterIDs[chapter.Id] != 0 {
-			return 0, fmt.Errorf("duplicate backup chapter identity")
+			return 0, apperror.Wrap(apperror.Corrupt, fmt.Errorf("duplicate backup chapter identity"), "")
 		}
 		_, err := tx.ExecContext(ctx, `INSERT INTO library_chapters(item_id,remote_id,remote_url,title,ord,volume,is_volume,access,remote_uploaded_at,lifecycle_state) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(item_id,remote_id) DO NOTHING`, ids[chapter.ItemID], chapter.RemoteID, chapter.RemoteURL, chapter.Title, chapter.Ord, chapter.Volume, boolToInt(chapter.IsVolume), chapter.Access, chapter.RemoteUploadedAt, chapter.LifecycleState)
 		if err != nil {
@@ -275,9 +300,6 @@ func (s *ReadingStateStore) MergeBackup(ctx context.Context, backup *BackupReadi
 		if _, err := tx.ExecContext(ctx, `INSERT INTO reading_state_imports(kind,imported_at) VALUES(?,?) ON CONFLICT DO NOTHING`, strings.TrimSpace(r.Kind), time.Now().UnixMilli()); err != nil {
 			return 0, err
 		}
-	}
-	if err := tx.Commit(); err != nil {
-		return 0, err
 	}
 	return applied, nil
 }

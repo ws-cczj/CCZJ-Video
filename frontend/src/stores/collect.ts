@@ -139,7 +139,7 @@ function toLastRun(raw: any): LastRunInfo {
   return info
 }
 
-// collect:done 事件载荷，与后端 handler.CollectDonePayload 一一对应。
+// collect:done 事件载荷，与后端 collection.CollectDonePayload 一一对应。
 export interface CollectDoneEvent {
   source_key: string
   operation_id?: string

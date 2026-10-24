@@ -1,19 +1,18 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { tr } from '../../locales'
-import { AddSource, UpdateSource, SetSourceStrategy } from '../../api/app'
+import { CreateSource, UpdateSource, SetSourceStrategy } from '../../api/app'
 import { usePluginStore } from '../../stores/plugins'
 import { useErrorStore } from '../../stores/error'
 import { useSourceStore } from '../../stores/source'
 import { extractDomainKey } from '../../utils'
 import { Button, Modal } from '../../components/ui'
-import { useSourceDisplay, type EditSource } from './useSourceDisplay'
+import type { EditSource } from './useSourceDisplay'
 
 /**
  * 新建/编辑采集源弹窗。
  *
- * 表单状态和保存链路一起搬过来，顺序保持拆分前一致：写库 → 关窗 → 只在策略
- * 真的变了时才调 SetSourceStrategy。定时配置（schedule_config）与 adv_config
+ * 保存源与变更的策略，刷新列表成功后再关闭弹窗。定时配置（schedule_config）与 adv_config
  * 不在这份 payload 里，改源名不会抹掉它们。
  *
  * 弹窗由页面决定何时打开（传 modelValue + 待编辑的那一行），下面的 watch 只做
@@ -26,7 +25,6 @@ const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
 const sourceStore = useSourceStore()
 const errorStore = useErrorStore()
 const pluginStore = usePluginStore()
-const { sk } = useSourceDisplay()
 
 // === 采集适配策略选择 ===
 // 内置 MAC CMS 永远可选；扩展包适配由 app/plugin 注册表提供；库里那份认不出来的
@@ -36,6 +34,8 @@ const ADAPTER_KEEP = 'keep'
 
 const form = ref({ name: '', api_url: '', collect_limit: 0, collect_hours: 0, enabled: true, adapter: ADAPTER_BUILTIN })
 const showAdvanced = ref(false)
+const saving = ref(false)
+const createdSourceKey = ref('')
 /** 打开编辑弹窗时库里的 strategy_config，用于判断这次保存是否真的要动策略列。 */
 const storedStrategy = ref('')
 
@@ -66,6 +66,7 @@ function adapterOfStored(stored?: string): string {
 
 watch([() => props.modelValue, () => props.source], ([open, source]) => {
   if (!open) return
+  createdSourceKey.value = ''
   if (source) {
     storedStrategy.value = (source.strategy_config || '').trim()
     form.value = {
@@ -85,11 +86,12 @@ watch([() => props.modelValue, () => props.source], ([open, source]) => {
 }, { immediate: true })
 
 async function save(): Promise<void> {
-  const editing = props.source?.source_key || ''
+  if (saving.value) return
+  const editing = props.source?.source_key || createdSourceKey.value
   const payload = {
     source_key: editing,
     name: form.value.name,
-    api_url: form.value.api_url,
+    api_url: form.value.api_url.trim(),
     collect_limit: Number(form.value.collect_limit) || 0,
     collect_hours: Number(form.value.collect_hours) || 0,
     enabled: form.value.enabled ? 1 : 0,
@@ -102,26 +104,31 @@ async function save(): Promise<void> {
     errorStore.warn(tr('sources.adapterGoneTitle'), tr('sources.adapterGoneMsg'))
     return
   }
+  saving.value = true
   try {
     let key = editing
     if (editing) {
       await UpdateSource(payload as any)
-    } else {
-      const before = new Set(sourceStore.sources.map(sk))
-      await AddSource(payload as any)
       await sourceStore.loadSources(true)
-      // 后端分配独立身份；地址和建议名称都不是持久标识。
-      const created = sourceStore.sources.find(s => !before.has(sk(s)))
-      key = created ? sk(created) : ''
+    } else {
+      const created = await CreateSource({ ...payload, strategy_config: target ?? '' } as any)
+      if (!created?.source_key) throw new Error(tr('sources.addKeyNotFound'))
+      key = created.source_key
+      createdSourceKey.value = key
+      storedStrategy.value = target ?? ''
+      await sourceStore.loadSources(true)
     }
-    emit('update:modelValue', false)
     if (target !== null && target !== storedStrategy.value) {
       if (!key) throw new Error(tr('sources.addKeyNotFound'))
       await SetSourceStrategy(key, target)
+      storedStrategy.value = target
       await sourceStore.loadSources(true)
     }
+    emit('update:modelValue', false)
   } catch (e) {
     errorStore.fromError(tr('sources.saveFailed'), e, 'Sources.save')
+  } finally {
+    saving.value = false
   }
 }
 </script>
@@ -133,6 +140,8 @@ async function save(): Promise<void> {
     :title="props.source ? tr('sources.edit') : tr('sources.add')"
     width="520px"
     :show-footer="true"
+    :closable="!saving"
+    :mask-closable="!saving"
     @update:model-value="(v: boolean) => !v && emit('update:modelValue', false)"
   >
     <p class="modal-desc">{{ tr('sources.formDesc') }}</p>
@@ -174,8 +183,8 @@ async function save(): Promise<void> {
       </label>
     </div>
     <template #footer>
-      <Button variant="secondary" size="md" @click="emit('update:modelValue', false)">{{ tr('common.cancel') }}</Button>
-      <Button variant="primary" size="md" :disabled="!form.api_url" @click="save">{{ tr('common.save') }}</Button>
+      <Button variant="secondary" size="md" :disabled="saving" @click="emit('update:modelValue', false)">{{ tr('common.cancel') }}</Button>
+      <Button variant="primary" size="md" :loading="saving" :disabled="!form.api_url.trim()" @click="save">{{ tr('common.save') }}</Button>
     </template>
   </Modal>
 </template>

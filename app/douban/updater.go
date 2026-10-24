@@ -1,24 +1,30 @@
 package douban
 
 import (
+	"context"
 	"sync"
 
+	"cczjVideo/app/apperror"
 	"cczjVideo/app/applog"
 	"cczjVideo/app/db"
+	"cczjVideo/app/lifecycle"
+	"cczjVideo/app/operation"
 )
 
 type Updater struct {
-	batchSize     int
-	mu            sync.Mutex
-	enabled       bool
-	running       bool
-	stopRequested bool
+	batchSize int
+	mu        sync.Mutex
+	enabled   bool
+	running   bool
+	owner     context.Context
+	cancel    context.CancelFunc
 }
 
 func NewUpdater() *Updater {
 	return &Updater{
 		batchSize: 2,
 		enabled:   true,
+		owner:     context.Background(),
 	}
 }
 
@@ -35,30 +41,36 @@ func (u *Updater) IsRunning() bool {
 	return u.running
 }
 
-// RequestStop 请求优雅停止当前批量更新（完成当前记录后停止）
+// SetContext changes the owner used by subsequent batches.
+func (u *Updater) SetContext(ctx context.Context) {
+	u.mu.Lock()
+	u.owner = ctx
+	u.mu.Unlock()
+}
+
+// RequestStop cancels the active batch, including rate waits and network I/O.
 func (u *Updater) RequestStop() {
 	u.mu.Lock()
-	u.stopRequested = true
+	cancel := u.cancel
 	u.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
 	applog.Info("[Douban] Updater graceful stop requested")
 }
 
-// isStopRequested 检查是否请求了停止
-func (u *Updater) isStopRequested() bool {
-	u.mu.Lock()
-	defer u.mu.Unlock()
-	return u.stopRequested
-}
-
-// resetStop 重置停止标志
-func (u *Updater) resetStop() {
-	u.mu.Lock()
-	u.stopRequested = false
-	u.mu.Unlock()
-}
-
 func (u *Updater) UpdateBatch() (int, error) {
+	return u.UpdateBatchContext(context.Background())
+}
+
+func (u *Updater) UpdateBatchContext(request context.Context) (int, error) {
 	u.mu.Lock()
+	ctx, cancel := lifecycle.WithShutdown(request, u.owner)
+	if err := ctx.Err(); err != nil {
+		u.mu.Unlock()
+		cancel()
+		return 0, err
+	}
 	if !u.enabled || u.running {
 		if !u.enabled {
 			applog.Info("[Douban] UpdateBatch skipped: updater is disabled")
@@ -66,11 +78,14 @@ func (u *Updater) UpdateBatch() (int, error) {
 			applog.Info("[Douban] UpdateBatch skipped: already running")
 		}
 		u.mu.Unlock()
+		cancel()
 		return 0, nil
 	}
 	u.running = true
-	u.stopRequested = false
+	u.cancel = cancel
 	u.mu.Unlock()
+	defer cancel()
+	ctx, _ = operation.OwnedContext(ctx, request, "douban.batch", applog.Fields{"mode": "video"})
 
 	// 批量补全是无人值守任务，标记后请求间隔走更宽的档位。
 	batchMode.Store(true)
@@ -78,36 +93,53 @@ func (u *Updater) UpdateBatch() (int, error) {
 		batchMode.Store(false)
 		u.mu.Lock()
 		u.running = false
+		u.cancel = nil
 		u.mu.Unlock()
 	}()
 
 	applog.Info("[Douban] Starting batch update, batch size: %d", u.batchSize)
 	totalUpdated := 0
+	if remainingBlock() > 0 {
+		applog.Debug("[Douban] 反爬静默中，跳过本轮补全")
+		return 0, nil
+	}
 
 	// 步骤0: 同一 douban_id 的兄弟记录先互相继承字段，省掉重复抓取，
 	// 也解掉「有豆瓣ID却永远补不全」的饿死记录。
-	if inherited, err := db.InheritDoubanFieldsFromSiblings(); err != nil {
+	if inherited, err := db.InheritDoubanFieldsFromSiblingsContext(ctx); err != nil {
+		if ctx.Err() != nil {
+			return totalUpdated, ctx.Err()
+		}
 		applog.Warn("[Douban] 同豆瓣ID字段继承失败: %v", err)
 	} else if inherited > 0 {
 		applog.Info("[Douban] 同豆瓣ID字段继承完成: %d 条记录补齐", inherited)
 	}
 
 	// 步骤1: 为 subject_id 为空的记录搜索豆瓣
-	missingID, err := db.GetDoubanInfoMissingSubjectID(u.batchSize)
+	missingID, err := db.GetDoubanInfoMissingSubjectIDContext(ctx, u.batchSize)
 	if err != nil {
+		if ctx.Err() != nil {
+			return totalUpdated, ctx.Err()
+		}
 		applog.Error("[Douban] ERROR: failed to get records missing subject_id: %v", err)
 	} else {
 		applog.Info("[Douban] Found %d records missing subject_id", len(missingID))
 		for i, row := range missingID {
-			if u.isStopRequested() {
-				applog.Info("[Douban] Stop requested, halting batch after %d/%d records (fillSubjectID)", i, len(missingID))
-				break
+			if err := ctx.Err(); err != nil {
+				return totalUpdated, err
 			}
+			if remainingBlock() > 0 {
+				return totalUpdated, nil
+			}
+
 			if row == nil || row.VodName == "" {
 				continue
 			}
 			applog.Info("[Douban] [%d/%d] Filling subject_id for: %s", i+1, len(missingID), row.VodName)
-			if err := u.fillSubjectID(row); err != nil {
+			if err := u.fillSubjectID(ctx, row); err != nil {
+				if ctx.Err() != nil {
+					return totalUpdated, ctx.Err()
+				}
 				applog.Warn("[Douban] [%d/%d] FAILED to fill subject_id for '%s': %v", i+1, len(missingID), row.VodName, err)
 				continue
 			}
@@ -117,21 +149,30 @@ func (u *Updater) UpdateBatch() (int, error) {
 	}
 
 	// 步骤2: 为有 subject_id 但信息不完整的记录解析豆瓣详情页
-	incomplete, err := db.GetIncompleteDoubanInfo(u.batchSize)
+	incomplete, err := db.GetIncompleteDoubanInfoContext(ctx, u.batchSize)
 	if err != nil {
+		if ctx.Err() != nil {
+			return totalUpdated, ctx.Err()
+		}
 		applog.Error("[Douban] ERROR: failed to get incomplete records: %v", err)
 	} else {
 		applog.Info("[Douban] Found %d incomplete records (has subject_id but missing details)", len(incomplete))
 		for i, row := range incomplete {
-			if u.isStopRequested() {
-				applog.Info("[Douban] Stop requested, halting batch after %d/%d records (fillDetail)", i, len(incomplete))
-				break
+			if err := ctx.Err(); err != nil {
+				return totalUpdated, err
 			}
+			if remainingBlock() > 0 {
+				return totalUpdated, nil
+			}
+
 			if row == nil || row.SubjectID == "" {
 				continue
 			}
 			applog.Info("[Douban] [%d/%d] Filling detail for subject %s (%s)", i+1, len(incomplete), row.SubjectID, row.VodName)
-			if err := u.fillDetail(row); err != nil {
+			if err := u.fillDetail(ctx, row); err != nil {
+				if ctx.Err() != nil {
+					return totalUpdated, ctx.Err()
+				}
 				applog.Warn("[Douban] [%d/%d] FAILED to fill detail for subject '%s': %v", i+1, len(incomplete), row.SubjectID, err)
 				continue
 			}
@@ -141,10 +182,10 @@ func (u *Updater) UpdateBatch() (int, error) {
 	}
 
 	applog.Info("[Douban] Batch update completed: %d records updated", totalUpdated)
-	return totalUpdated, nil
+	return totalUpdated, ctx.Err()
 }
 
-func (u *Updater) fillSubjectID(row *db.DoubanInfoRow) error {
+func (u *Updater) fillSubjectID(ctx context.Context, row *db.DoubanInfoRow) error {
 	meta := SearchMeta{
 		GlobalID: row.GlobalID,
 		VodName:  row.VodName,
@@ -158,9 +199,11 @@ func (u *Updater) fillSubjectID(row *db.DoubanInfoRow) error {
 
 	// 打点在请求之前：队列按「上次被试过」轮转，只在成功时打点等于让一直失败的行
 	// 永远霸占队头，后面的记录一次也轮不到。
-	_ = db.MarkDoubanAttempt(row.GlobalID)
+	if err := db.MarkDoubanAttemptContext(ctx, row.GlobalID); err != nil {
+		return err
+	}
 
-	subjectID, err := SearchSubjectID(row.VodName, meta)
+	subjectID, err := SearchSubjectIDContext(ctx, row.VodName, meta)
 	if err != nil {
 		return err
 	}
@@ -168,13 +211,15 @@ func (u *Updater) fillSubjectID(row *db.DoubanInfoRow) error {
 	applog.Debug("[Douban] Upserting subject_id '%s' for '%s' (global_id=%d)", subjectID, row.VodName, row.GlobalID)
 	updated := *row
 	updated.SubjectID = subjectID
-	return db.UpsertDoubanInfo(&updated)
+	return db.UpsertDoubanInfoContext(ctx, &updated)
 }
 
-func (u *Updater) fillDetail(row *db.DoubanInfoRow) error {
-	_ = db.MarkDoubanAttempt(row.GlobalID)
+func (u *Updater) fillDetail(ctx context.Context, row *db.DoubanInfoRow) error {
+	if err := db.MarkDoubanAttemptContext(ctx, row.GlobalID); err != nil {
+		return err
+	}
 
-	info, err := ParseDetail(row.SubjectID)
+	info, err := ParseDetailContext(ctx, row.SubjectID)
 	if err != nil {
 		return err
 	}
@@ -250,7 +295,7 @@ func (u *Updater) fillDetail(row *db.DoubanInfoRow) error {
 	}
 
 	applog.Debug("[Douban] Upserting %d fields for subject '%s' (global_id=%d)", updatedFields, row.SubjectID, row.GlobalID)
-	err = db.UpsertDoubanInfo(&updated)
+	err = db.UpsertDoubanInfoContext(ctx, &updated)
 	if err != nil {
 		return err
 	}
@@ -258,15 +303,19 @@ func (u *Updater) fillDetail(row *db.DoubanInfoRow) error {
 	// 详情页获取成功但未获取到评分 → 设置24小时冷静期（隔天再尝试）
 	if info.Rating == "" && updated.Rating == "" {
 		applog.Info("[Douban] Detail fetched but no rating for '%s' (subject=%s), setting 24h cooldown", row.VodName, row.SubjectID)
-		db.SetDoubanCooldown(row.GlobalID)
+		return db.SetDoubanCooldownContext(ctx, row.GlobalID)
 	}
 
 	return nil
 }
 
 func (u *Updater) UpdateSingleByKeyword(keyword string) (*DoubanInfo, error) {
+	return u.UpdateSingleByKeywordContext(context.Background(), keyword)
+}
+
+func (u *Updater) UpdateSingleByKeywordContext(ctx context.Context, keyword string) (*DoubanInfo, error) {
 	applog.Info("[Douban] Manual update for keyword: %s", keyword)
-	info, err := FetchDoubanInfo(keyword, SearchMeta{VodName: keyword})
+	info, err := FetchDoubanInfoContext(ctx, keyword, SearchMeta{VodName: keyword})
 	if err != nil {
 		applog.Error("[Douban] Manual update FAILED for '%s': %v", keyword, err)
 		return nil, err
@@ -274,9 +323,10 @@ func (u *Updater) UpdateSingleByKeyword(keyword string) (*DoubanInfo, error) {
 
 	if info != nil {
 		// 获取或创建 global_video 记录
-		globalID, err := db.GetOrCreateGlobalID(keyword, 0)
+		globalID, err := db.GetOrCreateGlobalIDContext(ctx, keyword, 0)
 		if err != nil {
 			applog.Error("[Douban] Failed to get/create global_video for '%s': %v", keyword, err)
+			return nil, apperror.Wrap(apperror.Storage, err, "保存豆瓣补全结果失败")
 		} else {
 			row := &db.DoubanInfoRow{
 				GlobalID:     int(globalID),
@@ -298,8 +348,9 @@ func (u *Updater) UpdateSingleByKeyword(keyword string) (*DoubanInfo, error) {
 				PosterURL:    info.PosterURL,
 				Hotness:      info.Hotness,
 			}
-			if err := db.UpsertDoubanInfo(row); err != nil {
+			if err := db.UpsertDoubanInfoContext(ctx, row); err != nil {
 				applog.Error("[Douban] Failed to upsert manual update for '%s': %v", keyword, err)
+				return nil, apperror.Wrap(apperror.Storage, err, "保存豆瓣补全结果失败")
 			} else {
 				applog.Info("[Douban] Manual update SUCCESS for '%s': subject_id=%s, rating=%s", keyword, info.SubjectID, info.Rating)
 			}

@@ -18,14 +18,22 @@ import (
 // EmitFunc sends a named event to the frontend.
 type EmitFunc func(name string, data any)
 
+// downloadRunner is the consumer seam for package I/O; Service owns admission
+// and events while updater owns checksums, HTTP and staged files.
+type downloadRunner interface {
+	DownloadContext(context.Context, string, updater.DownloadProgress) (string, error)
+}
+
 // settingLicenseTermsVersion 由前端在用户同意条款时写入（值是当前条款版本）。
 // 空着就代表这台机器还没签过 —— 键名必须与前端 stores/licenseState.ts 保持一致。
 const settingLicenseTermsVersion = "license_terms_version"
 
 // Service owns pending update state and update-related persisted settings.
 type Service struct {
-	settings *settings.Service
-	emit     EmitFunc
+	settings   *settings.Service
+	emit       EmitFunc
+	downloader downloadRunner
+	downloadMu sync.Mutex
 
 	mu      sync.Mutex
 	pending *updater.UpdateInfo
@@ -47,10 +55,14 @@ type InstallReport struct {
 }
 
 // NewService creates an update service.
-func NewService(settingService *settings.Service, emit EmitFunc) *Service {
+func NewService(settingService *settings.Service, emit EmitFunc, downloader downloadRunner) *Service {
+	if downloader == nil {
+		downloader = updater.NewDownloader(nil)
+	}
 	return &Service{
-		settings: settingService,
-		emit:     emit,
+		settings:   settingService,
+		emit:       emit,
+		downloader: downloader,
 	}
 }
 
@@ -70,7 +82,22 @@ func (s *Service) CheckContext(ctx context.Context) (*updater.UpdateInfo, error)
 
 // Download downloads an update package and emits progress updates.
 func (s *Service) Download(downloadURL string) (string, error) {
-	return updater.DownloadUpdate(downloadURL, func(downloaded, total int64, speedBps float64) {
+	return s.DownloadContext(context.Background(), downloadURL)
+}
+
+// DownloadContext shares cancellation and network ownership across every phase.
+func (s *Service) DownloadContext(ctx context.Context, downloadURL string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	if !s.downloadMu.TryLock() {
+		return "", apperror.New(apperror.Conflict, "")
+	}
+	defer s.downloadMu.Unlock()
+	return s.downloader.DownloadContext(ctx, downloadURL, func(downloaded, total int64, speedBps float64) {
+		if ctx.Err() != nil {
+			return
+		}
 		s.emitEvent("update:download:progress", map[string]any{
 			"downloaded": downloaded,
 			"total":      total,

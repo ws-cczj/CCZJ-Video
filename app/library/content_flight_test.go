@@ -8,11 +8,17 @@ import (
 	"testing"
 	"time"
 
+	"cczjVideo/app/applog"
 	"cczjVideo/app/model"
+	"cczjVideo/app/operation"
 )
 
 func TestChapterColdBurstSharesOneContentRead(t *testing.T) {
 	s := setupLibraryTest(t)
+	metadata := make(chan applog.Fields, 1)
+	if err := s.fetcher.WrapTransport(func(base http.RoundTripper) http.RoundTripper { return readingIdentityTransport{base, metadata} }); err != nil {
+		t.Fatal(err)
+	}
 	base := fakeSource()
 	defer base.Close()
 	started, release := make(chan struct{}), make(chan struct{})
@@ -51,8 +57,9 @@ func TestChapterColdBurstSharesOneContentRead(t *testing.T) {
 		t.Fatal("fixture has no content chapter")
 	}
 	results := make(chan error, 8)
+	request, parent := operation.WithIdentity(context.Background(), "rpc.LibraryChapterText")
 	for range 8 {
-		go func() { _, err := s.ChapterText(context.Background(), chapterID); results <- err }()
+		go func() { _, err := s.ChapterText(request, chapterID); results <- err }()
 	}
 	select {
 	case <-started:
@@ -77,7 +84,23 @@ func TestChapterColdBurstSharesOneContentRead(t *testing.T) {
 	if reads.Load() != 1 {
 		t.Fatalf("content upstream reads = %d", reads.Load())
 	}
+	fields := <-metadata
+	if fields["pipeline"] != "reading.chapter_text" || fields["parent_request_id"] != parent.RequestID || fields["request_id"] == parent.RequestID || fields["mode"] != "novel" || fields["source_key"] != "shared_text" || fields["chapter_id"] != chapterID {
+		t.Fatalf("content HTTP lost operation context: %+v", fields)
+	}
 	if err := s.Close(context.Background()); err != nil {
 		t.Fatal(err)
 	}
+}
+
+type readingIdentityTransport struct {
+	base     http.RoundTripper
+	metadata chan<- applog.Fields
+}
+
+func (t readingIdentityTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	if request.URL.Path == "/c/1.html" {
+		t.metadata <- operation.Fields(request.Context(), nil)
+	}
+	return t.base.RoundTrip(request)
 }

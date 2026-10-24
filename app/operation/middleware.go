@@ -15,6 +15,7 @@ import (
 type Meta struct{ Name, Mode, Pipeline string }
 type Result struct {
 	Meta
+	Fields    applog.Fields
 	RequestID string
 	Duration  time.Duration
 	Err       error
@@ -22,18 +23,21 @@ type Result struct {
 type Observer func(Result)
 
 // Run keeps panic diagnostics private and gives errors a correlation ID. It
-// neither logs arguments nor invents a success value after cancellation/panic.
+// logs only explicitly selected context fields, never arbitrary arguments, and
+// does not invent a success value after cancellation/panic.
 func Run[T any](ctx context.Context, meta Meta, observe Observer, handler func(context.Context) (T, error)) (value T, err error) {
 	ctx, identity := WithIdentity(ctx, meta.Pipeline)
+	ctx = WithFields(ctx, applog.Fields{"operation": meta.Name, "mode": meta.Mode})
 	id := identity.RequestID
 	began := time.Now()
+	Stage(ctx, "started", nil)
 	defer func() {
 		if failure := recover(); failure != nil {
 			err = apperror.Wrap(apperror.Internal, fmt.Errorf("panic: %v\n%s", failure, debug.Stack()), "操作失败，请查看日志")
 		}
 		err = apperror.WithOperation(err, meta.Name, id)
 		if observe != nil {
-			observe(Result{Meta: meta, RequestID: id, Duration: time.Since(began), Err: err})
+			observe(Result{Meta: meta, Fields: Fields(ctx, nil), RequestID: id, Duration: time.Since(began), Err: err})
 		}
 	}()
 	if err = ctx.Err(); err != nil {
@@ -42,12 +46,21 @@ func Run[T any](ctx context.Context, meta Meta, observe Observer, handler func(c
 	return handler(ctx)
 }
 func Log(result Result) {
+	fields := applog.Fields{"operation": result.Name, "pipeline": result.Pipeline, "request_id": result.RequestID, "mode": result.Mode, "duration_ms": result.Duration.Milliseconds(), "outcome": "success"}
+	for key, value := range result.Fields {
+		if _, reserved := fields[key]; !reserved {
+			fields[key] = value
+		}
+	}
 	if result.Err == nil {
+		applog.InfoFields("operation finished", fields)
 		return
 	}
 	code := apperror.Public(result.Err).Code
-	fields := applog.Fields{"operation": result.Name, "pipeline": result.Pipeline, "request_id": result.RequestID, "mode": result.Mode, "duration_ms": result.Duration.Milliseconds(), "code": code, "error": apperror.Diagnostic(result.Err)}
+	fields["code"], fields["error"], fields["outcome"] = code, apperror.Diagnostic(result.Err), "failed"
 	if code == apperror.Cancelled {
+		fields["outcome"] = "cancelled"
+		applog.InfoFields("operation finished", fields)
 		return
 	}
 	if apperror.Describe(code).Level == "error" {

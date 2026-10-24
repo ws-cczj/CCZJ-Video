@@ -1,6 +1,8 @@
 package applog
 
 import (
+	"crypto/rand"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -54,6 +56,7 @@ type Logger struct {
 	currentDay  string // YYYY-MM-DD
 	keepDays    int    // 保留最近多少天的日志
 	minLevel    Level  // 最低输出级别，低于此级别的日志被丢弃
+	health      Health
 
 	ring    []Record // 环形缓冲，存放最近 DefaultRingSize 条
 	head    int      // 下一条写入位置（单调递增，取模使用）
@@ -65,30 +68,38 @@ type Logger struct {
 }
 
 var defaultLogger *Logger
-var once sync.Once
+var defaultMu sync.Mutex
 
 // Init 初始化默认 Logger
 func Init(logDir string) error {
-	var err error
-	once.Do(func() {
-		os.MkdirAll(logDir, 0755)
-		defaultLogger = &Logger{
-			logDir:   logDir,
-			keepDays: 30,
+	defaultMu.Lock()
+	defer defaultMu.Unlock()
+	if defaultLogger == nil {
+		defaultLogger = &Logger{logDir: logDir, keepDays: 30}
+	}
+	l := defaultLogger
+	l.mu.Lock()
+	if l.logDir != logDir {
+		if l.currentFile != nil {
+			_ = l.currentFile.Close()
+			l.currentFile = nil
 		}
-		err = defaultLogger.rotateIfNeeded()
-		if err == nil {
-			defaultLogger.cleanOld()
-			defaultLogger.writeInternal(LevelInfo, "===== 应用启动 =====", 3)
-		}
-	})
+		l.logDir, l.currentDay = logDir, ""
+	}
+	err := l.rotateIfNeeded()
+	if err != nil {
+		l.health.LastWriteError = DiagnosticText(err.Error(), 2048)
+	}
+	l.mu.Unlock()
 	return err
 }
 
 // Default 返回已初始化的默认 logger
 func Default() *Logger {
+	defaultMu.Lock()
+	defer defaultMu.Unlock()
 	if defaultLogger == nil {
-		_ = Init(defaultLogDir())
+		defaultLogger = &Logger{logDir: defaultLogDir(), keepDays: 30}
 	}
 	return defaultLogger
 }
@@ -134,6 +145,10 @@ func InfoFields(message string, fields Fields) {
 	Default().log(LevelInfo, 3, "%s%s", message, formatFields(fields))
 }
 
+func InfoFieldsAt(extra int, message string, fields Fields) {
+	Default().log(LevelInfo, 3+extra, "%s%s", message, formatFields(fields))
+}
+
 // WarnFields writes a warning message with deterministically ordered fields.
 func WarnFields(message string, fields Fields) {
 	Default().log(LevelWarn, 3, "%s%s", message, formatFields(fields))
@@ -155,7 +170,12 @@ func formatFields(fields Fields) string {
 	sort.Strings(keys)
 	parts := make([]string, 0, len(keys))
 	for _, key := range keys {
-		parts = append(parts, fmt.Sprintf("%s=%q", key, fmt.Sprint(fields[key])))
+		value := fmt.Sprint(fields[key])
+		switch strings.ToLower(key) {
+		case "authorization", "cookie", "password", "token", "access_token", "api_key", "apikey", "secret":
+			value = "[redacted]"
+		}
+		parts = append(parts, fmt.Sprintf("%s=%q", key, DiagnosticText(value, 2048)))
 	}
 	return " fields{" + strings.Join(parts, ",") + "}"
 }
@@ -170,24 +190,28 @@ func (l *Logger) Write(level Level, msg string) {
 	l.writeInternal(level, msg, 2)
 }
 
-func (l *Logger) writeInternal(level Level, msg string, skip int) {
+func (l *Logger) WriteChecked(level Level, msg string, fields Fields) error {
+	return l.writeInternal(level, msg+formatFields(fields), 2)
+}
+
+func (l *Logger) writeInternal(level Level, msg string, skip int) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	// 级别过滤（与写盘同一把锁，避免 minLevel 数据竞争）
 	if level < l.minLevel {
-		return
-	}
-
-	if err := l.rotateIfNeeded(); err != nil {
-		fmt.Fprintf(os.Stderr, "[applog] rotate failed: %v\n", err)
-		return
-	}
-	if l.currentFile == nil {
-		return
+		return nil
 	}
 
 	now := time.Now()
+	if l.health.SessionID == "" {
+		var id [12]byte
+		if _, err := rand.Read(id[:]); err == nil {
+			l.health.SessionID = fmt.Sprintf("%x", id)
+		} else {
+			l.health.SessionID = fmt.Sprintf("%d-%d", os.Getpid(), now.UnixNano())
+		}
+	}
 	ts := now.Format("2006-01-02 15:04:05.000")
 	// 获取调用者信息
 	_, file, line, ok := runtime.Caller(skip)
@@ -200,16 +224,38 @@ func (l *Logger) writeInternal(level Level, msg string, skip int) {
 	// 确保 msg 单行
 	msg = strings.ReplaceAll(msg, "\r", " ")
 	msg = strings.ReplaceAll(msg, "\n", " ")
+	msg = DiagnosticText(msg, 16<<10)
+	if l.health.LastWriteError != "" {
+		msg += fmt.Sprintf(" log_writer_retry{previous_failures=%d}", l.health.WriteFailures)
+	}
+	msg = fmt.Sprintf("[session=%s seq=%d] %s", l.health.SessionID, l.seq+1, msg)
 	var lineStr string
 	if caller != "" {
 		lineStr = fmt.Sprintf("[%s] [%s] [%s] %s\n", ts, level.String(), caller, msg)
 	} else {
 		lineStr = fmt.Sprintf("[%s] [%s] %s\n", ts, level.String(), msg)
 	}
-	if _, err := l.currentFile.WriteString(lineStr); err != nil {
-		fmt.Fprintf(os.Stderr, "[applog] write failed: %v\n", err)
+	err := l.rotateIfNeeded()
+	if err == nil {
+		_, err = l.currentFile.WriteString(lineStr)
 	}
-	l.pushLocked(level, now, caller, msg)
+	if err != nil {
+		l.health.WriteFailures++
+		l.health.Unpersisted++
+		l.health.LastWriteError = DiagnosticText(err.Error(), 2048)
+		fmt.Fprintf(os.Stderr, "[applog] write failed: %v\n", err)
+		if l.currentFile != nil {
+			_ = l.currentFile.Close()
+			l.currentFile = nil
+		}
+	} else {
+		l.health.LastWriteError = ""
+		l.health.LastWriteTS = now.UnixMilli()
+	}
+	// Failed writes stay available in memory and exports with persisted=false.
+	_, message, _ := bracketField(msg)
+	l.pushLocked(level, now, caller, strings.TrimPrefix(message, " "), err == nil)
+	return err
 }
 
 // rotateIfNeeded 若当前日期变化则切换文件
@@ -223,6 +269,9 @@ func (l *Logger) rotateIfNeeded() error {
 		_ = l.currentFile.Close()
 		l.currentFile = nil
 	}
+	if err := os.MkdirAll(l.logDir, 0755); err != nil {
+		return err
+	}
 	filename := filepath.Join(l.logDir, fmt.Sprintf("cczj-%s.log", day))
 	f, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
@@ -232,11 +281,16 @@ func (l *Logger) rotateIfNeeded() error {
 	// 检查文件是否为空，如果是空文件则写入UTF-8 BOM标记（Windows记事本兼容）
 	info, err := f.Stat()
 	if err == nil && info.Size() == 0 {
-		_, _ = f.Write([]byte{0xEF, 0xBB, 0xBF})
+		_, err = f.Write([]byte{0xEF, 0xBB, 0xBF})
+	}
+	if err != nil {
+		_ = f.Close()
+		return err
 	}
 
 	l.currentFile = f
 	l.currentDay = day
+	l.cleanOld()
 	return nil
 }
 
@@ -278,7 +332,7 @@ func (l *Logger) Close() {
 }
 
 // Dir 返回日志目录
-func (l *Logger) Dir() string { return l.logDir }
+func (l *Logger) Dir() string { l.mu.Lock(); defer l.mu.Unlock(); return l.logDir }
 
 // KeepDays 返回日志保留天数
 func (l *Logger) KeepDays() int {
@@ -306,6 +360,12 @@ func SetKeepDays(days int) int {
 
 // ListFiles 返回可用的日志文件名列表（按时间倒序）
 func (l *Logger) ListFiles() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.listFilesLocked()
+}
+
+func (l *Logger) listFilesLocked() []string {
 	files, err := os.ReadDir(l.logDir)
 	if err != nil {
 		return nil
@@ -328,7 +388,7 @@ func (l *Logger) ListFiles() []string {
 // 参数 tailLines：只返回末尾 N 行（0 表示全部）
 func (l *Logger) ReadFile(name string) (string, error) {
 	clean := filepath.Base(name)
-	p := filepath.Join(l.logDir, clean)
+	p := filepath.Join(l.Dir(), clean)
 	data, err := os.ReadFile(p)
 	if err != nil {
 		return "", err
@@ -338,31 +398,35 @@ func (l *Logger) ReadFile(name string) (string, error) {
 
 // Clear 删除所有日志文件
 func (l *Logger) Clear() int {
-	files := l.ListFiles()
+	count, _ := l.ClearChecked()
+	return count
+}
+
+func (l *Logger) ClearChecked() (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	files := l.listFilesLocked()
 	count := 0
+	var failure error
+	if l.currentFile != nil {
+		failure = l.currentFile.Close()
+		l.currentFile = nil
+	}
 	for _, name := range files {
-		if name == fmt.Sprintf("cczj-%s.log", l.currentDay) {
-			l.mu.Lock()
-			if l.currentFile != nil {
-				_ = l.currentFile.Close()
-				l.currentFile = nil
-			}
-			_ = os.Remove(filepath.Join(l.logDir, name))
-			_ = l.rotateIfNeeded()
-			l.mu.Unlock()
-			count++
-			continue
-		}
 		if err := os.Remove(filepath.Join(l.logDir, name)); err == nil {
 			count++
+		} else {
+			failure = errors.Join(failure, err)
 		}
 	}
+	failure = errors.Join(failure, l.rotateIfNeeded())
+	if failure != nil {
+		return count, failure
+	}
 	// 清空后内存时间线也归零，seq 保持单调以免前端出现重复序号
-	l.mu.Lock()
 	for i := range l.ring {
 		l.ring[i] = Record{}
 	}
 	l.head, l.count = 0, 0
-	l.mu.Unlock()
-	return count
+	return count, nil
 }

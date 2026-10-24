@@ -1,12 +1,80 @@
 package db
 
 import (
+	"context"
+	"database/sql"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 )
+
+func TestWriteTransactionsReserveBeforeReadingWhileReadOnlySnapshotsStayConcurrent(t *testing.T) {
+	database, err := sqlx.Connect("sqlite", sqliteDSN(filepath.Join(t.TempDir(), "ownership.db")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	database.SetMaxOpenConns(4)
+	if _, err := database.Exec(`CREATE TABLE counter(value INTEGER);INSERT INTO counter VALUES(0)`); err != nil {
+		t.Fatal(err)
+	}
+	for _, readOnly := range []bool{false, true} {
+		tx, err := database.BeginTxx(context.Background(), &sql.TxOptions{ReadOnly: readOnly})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var value int
+		if err := tx.Get(&value, `SELECT value FROM counter`); err != nil {
+			tx.Rollback()
+			t.Fatal(err)
+		}
+		written := make(chan error, 1)
+		go func() { _, err := database.Exec(`UPDATE counter SET value=value+1`); written <- err }()
+		if readOnly {
+			select {
+			case err := <-written:
+				if err != nil {
+					t.Fatal(err)
+				}
+			case <-time.After(time.Second):
+				tx.Rollback()
+				t.Fatal("read-only snapshot blocks a WAL writer")
+			}
+			if err := tx.Commit(); err != nil {
+				t.Fatal(err)
+			}
+			continue
+		}
+		select {
+		case err := <-written:
+			tx.Rollback()
+			t.Fatalf("another writer passed a pending read/write transaction: %v", err)
+		case <-time.After(100 * time.Millisecond):
+		}
+		if _, err := tx.Exec(`UPDATE counter SET value=value+10`); err != nil {
+			tx.Rollback()
+			t.Fatal("read-to-write upgrade lost its snapshot", err)
+		}
+		if err := tx.Commit(); err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case err := <-written:
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("writer did not continue after commit")
+		}
+	}
+	var result int
+	if err := database.Get(&result, `SELECT value FROM counter`); err != nil || result != 12 {
+		t.Fatal("committed updates lost", result, err)
+	}
+}
 
 // WAL 的账要在退出时结清，否则代价是看不见的：写入一直堆在 -wal 里，主库看着没变大，
 // -wal 却只增不减；进程退出时没人归并，下次启动还得先重放一遍才读到最新数据。

@@ -2,6 +2,7 @@ package db
 
 import (
 	"cczjVideo/app/applog"
+	"context"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -149,15 +150,39 @@ func hasCommonToken(a, b string) bool {
 
 // GetOrCreateGlobalID 按标题取或建 global_video 记录。阶梯只有一份实现，见 identity.go。
 func GetOrCreateGlobalID(vodName string, typeId int64) (int64, error) {
-	return GetOrCreateGlobalIDWithMeta(vodName, "", typeId)
+	return GetOrCreateGlobalIDContext(context.Background(), vodName, typeId)
+}
+
+func GetOrCreateGlobalIDContext(ctx context.Context, vodName string, typeId int64) (int64, error) {
+	return getOrCreateGlobalIDContext(ctx, vodName, "", typeId)
 }
 
 // GetOrCreateGlobalIDWithMeta 带元数据的身份解析，用于采集入库、豆瓣补全、收藏与历史。
 // year 只参与别名档和相似度档的校验；typeId=0 表示「不知道类型」，此时不限类型匹配。
 func GetOrCreateGlobalIDWithMeta(vodName, year string, typeId int64) (int64, error) {
-	id, tier, err := resolveGlobalVideoID(instance, nil, vodName, year, typeId)
+	return getOrCreateGlobalIDContext(context.Background(), vodName, year, typeId)
+}
+
+func getOrCreateGlobalIDContext(ctx context.Context, vodName, year string, typeId int64) (int64, error) {
+	release, err := ownCatalogIdentityWrite(ctx)
 	if err != nil {
 		return 0, err
+	}
+	defer release()
+	tx, err := instance.BeginTxx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	id, tier, err := resolveGlobalVideoID(tx, nil, vodName, year, typeId)
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	if tier == tierNew {
+		catalogIdentityRevision.Add(1)
 	}
 	if tier != tierNew {
 		applog.Info("[global] 身份匹配(%s): %q (year=%q, type_id=%d) -> global_id=%d", tier, vodName, year, typeId, id)

@@ -77,6 +77,10 @@ python scripts/test-update-installer-android.py --device emulator-5554 --output 
 
 最新结果见 [移动设置验收](../reports/mobile-settings-2026-10-22/README.md)、[阅读性能验收](../reports/reading-performance-2026-10-22/README.md)；原始移动方案保存在[历史归档](../reports/history/mobile.md)。
 
+弱网与源保存验收使用 `python scripts/test-playback-weak-network-android.py --device <adb设备号>`。先安装内嵌当前 `frontend/dist` 的 acceptance Debug 包；脚本复用 WebView 调试与 adb reverse，在原生手机表单保存临时源，检查立即显示、搜索拒绝后的同源网页建议回退和日志，再在原生播放器实际解码 HLS，经历 3 Mbps → 650 Kbps → 3 Mbps 的总带宽变化。`--scenario offline` 增加五秒断流。结束删除临时源并恢复设置、路由，不清空应用数据；证据位于 `dist/audit/weak-network/android-*.json`。MuMu 上的安装、源操作与弱网播放结论仅适用于该 Android 宿主，仍不等于实体手机的蜂窝切换、功耗和解码兼容性通过。
+
+线路清晰度的原生验收入口为 `python scripts/test-playback-routes-android.py --device <adb设备号>`，同样要求当前 acceptance Debug 包。现有脚本覆盖 Go 元数据探测、远端预览不入库、清晰度排序后的实际触摸切换；其左下角提示断言和底栏全屏线路选择器属于旧布局。当前改为加载区阶段文案、右上角全屏线路入口、可拖动的底部抽屉及全屏上下集按钮，按用户要求仅完成代码，未运行新验收或打包。再次运行脚本前应同步这些交互断言，旧截图不作为新布局通过证据。说明与桌面验收入口见[播放线路清晰度](request-pipelines.md#播放线路清晰度)，证据放 `dist/audit/playback-routes/`。
+
 ## 移动路由共享背景
 
 `MobileRouteStage` 在路由场景之外保留一个背景层，页面本身透明。视频模式沿用用户主题图片和遮罩，路由通过有限、稳定的取景坐标移动同一背景；取景区域预留 15% 边缘，只动画 transform。手势预览插值坐标，取消恢复原取景；设置子页、返回和连续导航不重建图片层。背景与内容同向但位移更小，页面内容改为完整滑出，避免透明页面相互叠字。桌面维持原绘制方式，小说／漫画保留各自画布色，阅读器及播放器继续拥有不透明的内容底色。系统减少动态效果、页面动画关闭都禁用背景过渡。

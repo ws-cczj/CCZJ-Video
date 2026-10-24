@@ -18,8 +18,10 @@ type sourceExportPayload = sourceservice.Payload
 
 // ExportSource 导出某个源的所有数据到 .json.br 文件（Brotli 压缩），返回绝对路径
 // 前端拿到文件路径后可以在系统文件管理器中复制/传给他人
-func (a *App) ExportSource(sourceKey string) (string, error) {
-	return sourceservice.NewService().Export(a.getDataDir(), sourceKey)
+func (a *App) ExportSource(ctx context.Context, sourceKey string) (string, error) {
+	return runRequest(a, ctx, "source.ExportSource", func(ctx context.Context) (string, error) {
+		return a.sources.ExportContext(ctx, a.getDataDir(), sourceKey)
+	})
 }
 
 func (a *App) ImportSource(ctx context.Context, filePath string) (string, error) {
@@ -75,9 +77,5 @@ func (a *App) decodeSourceImport(ctx context.Context, name string, reader io.Rea
 	if imported.Source == nil {
 		return "", apperror.New(apperror.Corrupt, "文件中缺少 source 信息")
 	}
-	return a.persistImportedSource(imported, origin)
-}
-
-func (a *App) persistImportedSource(payload sourceExportPayload, origin string) (string, error) {
-	return sourceservice.NewService().Import(payload, origin)
+	return a.sources.ImportContext(ctx, imported, origin)
 }

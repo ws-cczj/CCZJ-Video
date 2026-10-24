@@ -331,7 +331,7 @@ func decodeShapedEnvelope(body []byte, shape *ResponseShape, fieldMapping map[st
 
 	doc, err := decodeJSONDocument(body)
 	if err != nil {
-		return nil, apperror.Wrap(apperror.Corrupt, err, fmt.Sprintf("parse json with mapping (body preview: %s)", bodyPreview(body)))
+		return nil, apperror.Wrap(apperror.Corrupt, err, "parse json with mapping")
 	}
 
 	result := &FetchResult{}
@@ -398,5 +398,8 @@ func decodeShapedEnvelope(body []byte, shape *ResponseShape, fieldMapping map[st
 		return nil, fmt.Errorf("list path %q: %w", shape.ListPath, err)
 	}
 	result.List = videos
+	if items, countErr := videoValueItems(listNode); countErr == nil {
+		result.RawCount = len(items)
+	}
 	return result, nil
 }

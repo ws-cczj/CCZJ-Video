@@ -64,10 +64,16 @@ def main():
                 const input=document.querySelector('.settings-group-active input[type=file]');
                 input.addEventListener('change',()=>{const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=()=>window.__cczjFileRead={name:file.name,text:reader.result};reader.onerror=()=>window.__cczjFileRead={error:String(reader.error)};reader.readAsText(file)},{once:true,capture:true});
             })()''')
-            point=view.evaluate("(()=>{const e=[...document.querySelectorAll('.settings-group-active button')].find(e=>e.innerText.trim()==='导入备份');e.scrollIntoView({block:'center',behavior:'instant'});const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()")
+            view.evaluate("(()=>{const e=[...document.querySelectorAll('.settings-group-active button')].find(e=>e.innerText.trim()==='导入备份');e.scrollIntoView({block:'center',behavior:'instant'})})()")
+            # Route transitions and scroll anchoring can move the button after
+            # scrollIntoView; obtain touch coordinates only after layout settles.
+            time.sleep(.6)
+            point=view.evaluate("(()=>{const e=[...document.querySelectorAll('.settings-group-active button')].find(e=>e.innerText.trim()==='导入备份');const r=e.getBoundingClientRect();if(r.top<0||r.bottom>innerHeight)throw Error('Import button outside viewport');return {x:r.x+r.width/2,y:r.y+r.height/2}})()")
+            view.screenshot(args.output/'before-document-picker.png')
             view.call('Input.dispatchTouchEvent',dict(type='touchStart',touchPoints=[point]));view.call('Input.dispatchTouchEvent',dict(type='touchEnd',touchPoints=[]))
             time.sleep(1.5)
             current=nodes()
+            (args.output/'picker-nodes.json').write_text(json.dumps([n.attrib for n in current],ensure_ascii=False,indent=2),encoding='utf-8')
             selected=next((n for n in current if n.get('text')==name),None)
             if selected is None:
                 nav=next(n for n in current if re.search(r'显示根目录|导航|Show roots|navigation',n.get('content-desc',''),re.I))

@@ -40,10 +40,18 @@ def main():
 
     def rpc(method, params):
         calls.append(method)
-        if method in ('LibraryNovelContext','LibraryRefreshNovelContext'):
+        if method in ('LibraryNovelContext','LibraryRefreshNovelContext','LibraryComicContext','LibraryRefreshComicContext'):
             location=params[0]
             view=rpc('LibraryItem',[location['itemId'],False])
-            rows=view['chapters'];current=next((row for row in rows if row['remoteId']==location['remoteId']),None) if location['remoteId'] else next((row for row in rows if row['id']==location['chapterId']),rows[0] if location['first'] and rows else None)
+            rows=view['chapters']
+            if location['remoteId']:
+                current=next((row for row in rows if row['remoteId']==location['remoteId']),None)
+            elif location['chapterId']:
+                current=next((row for row in rows if row['id']==location['chapterId']),None)
+            elif location['first']:
+                current=rows[0] if rows else None
+            else:
+                current=next((row for row in rows if row['ord']==location['ord']),None)
             index=rows.index(current) if current else -1
             return dict(item=view['item'],chapter=current,previous=None,next=None,index=index,count=len(rows),cacheIdentity='fixture:'+str(current['id']) if current else '')
         if method == 'ReadingStateLoad':
@@ -92,7 +100,7 @@ def main():
             except OSError:
                 time.sleep(.2)
         names = re.findall(r'export function (\w+)\(', (ROOT/'frontend/bindings/cczjVideo/app/service/app.js').read_text(encoding='utf-8'))
-        remote = {'LibraryNovelContext','LibraryRefreshNovelContext','ReadingStateLoad', 'ReadingStateApply', 'LibraryCatalogPage', 'LibraryResolveRefs', 'LibraryItem', 'LibraryRefreshToc', 'LibraryRefreshReadingToc', 'LibraryChapterText', 'LibraryChapterPages', 'LibraryRefreshChapterPages', 'LibrarySources'}
+        remote = {'LibraryNovelContext','LibraryRefreshNovelContext','LibraryComicContext','LibraryRefreshComicContext','ReadingStateLoad', 'ReadingStateApply', 'LibraryCatalogPage', 'LibraryResolveRefs', 'LibraryItem', 'LibraryRefreshToc', 'LibraryRefreshReadingToc', 'LibraryChapterText', 'LibraryChapterPages', 'LibraryRefreshChapterPages', 'LibrarySources'}
         mock = "import { CancellablePromise } from '/tests/browser/runtime.ts';\n"
         mock += """
         function invoke(method,args){ const controller=new AbortController(); return new CancellablePromise((resolve,reject)=>{

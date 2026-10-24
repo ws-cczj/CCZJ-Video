@@ -203,7 +203,7 @@ public class MainActivity extends AppCompatActivity {
             throw new IllegalStateException("Cannot configure application temporary storage", error);
         }
         // Initialize the native Go library
-        bridge = new WailsBridge(this);
+        bridge = WailsBridge.attach(this);
         bridge.initialize();
         goReadyAt = android.os.SystemClock.elapsedRealtime() - activityStartedAt;
 
@@ -1112,7 +1112,7 @@ public class MainActivity extends AppCompatActivity {
         }
         if (playerDevice != null) playerDevice.close();
         if (bridge != null) {
-            bridge.shutdown();
+            bridge.detach(this);
         }
         if (webView != null) {
             webView.destroy();

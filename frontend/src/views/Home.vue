@@ -192,18 +192,17 @@ const recommendGroups = ref<RecommendGroup[]>([])
 
 const carouselSlides = ref<Video[]>([])
 const DOUBAN_CHART_CACHE_KEY = 'cczj_douban_chart_cache_v1'
-// 与 Go 侧 chartCacheTTL 同值：这一小时内连绑定都不用发。
-const DOUBAN_CHART_TTL = 60 * 60 * 1000
-// 过了 TTL 不等于不能看，只代表该悄悄换新的了。上限之内一律先上屏，
-// 只有首次（或榜单已经老到没有参考价值）才真的让首页等一次网络。
-const DOUBAN_CHART_STALE_CEILING = 7 * 24 * 60 * 60 * 1000
+// 浏览器缓存只用于立即展示；七天抓取周期由 Go 快照的真实抓取时间决定。
+const DOUBAN_CHART_STALE_CEILING = 14 * 24 * 60 * 60 * 1000
 let chartLoadInFlight: Promise<any[]> | null = null
 let chartSignatureValue = ''
 
 function readChartCache(): { items: any[]; age: number } | null {
   const cached = readStorage<{ cachedAt: number; items: any[] } | null>(DOUBAN_CHART_CACHE_KEY, null)
-  if (!cached || !Array.isArray(cached.items) || cached.items.length === 0) return null
-  return { items: cached.items, age: Date.now() - (cached.cachedAt || 0) }
+  if (!cached || !Array.isArray(cached.items) || cached.items.length === 0 || !Number.isFinite(cached.cachedAt)) return null
+  const age = Date.now() - cached.cachedAt
+  if (age < 0 || age >= DOUBAN_CHART_STALE_CEILING) return null
+  return { items: cached.items, age }
 }
 
 // 榜单条目 + 后端异步补上的匹配状态。签名不变就别重新赋值轮播：
@@ -264,9 +263,8 @@ function refreshChartCache(): Promise<any[]> {
 
 async function loadDoubanChartData(): Promise<any[]> {
   const cached = readChartCache()
-  if (cached && cached.age < DOUBAN_CHART_TTL) return cached.items
   if (cached) {
-    // 旧的先摆上，新的悄悄换。这里不等，等就等于把「缓存过期」又变回一次转圈。
+    // 先展示，再向 Go 取缓存；不能把旧数据收到的时间当成抓取时间再延长七天。
     void refreshChartCache()
     return cached.items
   }

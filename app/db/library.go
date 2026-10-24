@@ -2,6 +2,7 @@ package db
 
 import (
 	"cczjVideo/app/model"
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -422,8 +423,11 @@ func boolToInt(v bool) int {
 
 // GetLibraryChapter 按本地 id 取一章。
 func GetLibraryChapter(id int) (*model.LibraryChapter, error) {
+	return GetLibraryChapterContext(context.Background(), id)
+}
+func GetLibraryChapterContext(ctx context.Context, id int) (*model.LibraryChapter, error) {
 	var chapter model.LibraryChapter
-	if err := instance.Get(&chapter, `SELECT * FROM library_chapters WHERE id=?`, id); err != nil {
+	if err := instance.GetContext(ctx, &chapter, `SELECT * FROM library_chapters WHERE id=?`, id); err != nil {
 		return nil, err
 	}
 	return &chapter, nil
@@ -436,8 +440,11 @@ func GetLibraryChapter(id int) (*model.LibraryChapter, error) {
 // 没有它正文提取照样工作。所以这里用 (nil, nil) 而不是 sql.ErrNoRows，
 // 免得调用方为了一个可选信息去分辨"没有下一章"和"查库失败"。
 func GetLibraryChapterByOrd(itemID, ord int) (*model.LibraryChapter, error) {
+	return GetLibraryChapterByOrdContext(context.Background(), itemID, ord)
+}
+func GetLibraryChapterByOrdContext(ctx context.Context, itemID, ord int) (*model.LibraryChapter, error) {
 	var chapter model.LibraryChapter
-	err := instance.Get(&chapter,
+	err := instance.GetContext(ctx, &chapter,
 		`SELECT * FROM library_chapters WHERE item_id=? AND ord=? AND lifecycle_state='active' LIMIT 1`,
 		itemID, ord)
 	if err != nil {
@@ -495,8 +502,11 @@ func ListLibraryItemsByKind(kind model.SourceKind, includeRetired bool) ([]*mode
 // GetLibraryItem 按本地 id 取一部作品。书架与进度存的是复合键，但界面内部导航
 // 拿着的是本地 id，两条路都要能走。
 func GetLibraryItem(id int) (*model.LibraryItem, error) {
+	return GetLibraryItemContext(context.Background(), id)
+}
+func GetLibraryItemContext(ctx context.Context, id int) (*model.LibraryItem, error) {
 	var item model.LibraryItem
-	if err := instance.Get(&item, `SELECT * FROM library_items WHERE id=?`, id); err != nil {
+	if err := instance.GetContext(ctx, &item, `SELECT * FROM library_items WHERE id=?`, id); err != nil {
 		return nil, err
 	}
 	return &item, nil
@@ -524,6 +534,9 @@ func GetLibraryItemByRemote(kind model.SourceKind, sourceKey, remoteID string) (
 // 那一章从源里消失了也要能在界面上显示成"这一章取不到了"，
 // 否则用户看到的是目录里凭空少一章、进度却停在不存在的位置上。
 func ListLibraryChapters(itemID int, includeRetired bool) ([]*model.LibraryChapter, error) {
+	return ListLibraryChaptersContext(context.Background(), itemID, includeRetired)
+}
+func ListLibraryChaptersContext(ctx context.Context, itemID int, includeRetired bool) ([]*model.LibraryChapter, error) {
 	query := `SELECT * FROM library_chapters WHERE item_id=?`
 	args := []any{itemID}
 	if !includeRetired {
@@ -531,7 +544,7 @@ func ListLibraryChapters(itemID int, includeRetired bool) ([]*model.LibraryChapt
 	}
 	query += ` ORDER BY ord, id`
 	var chapters []*model.LibraryChapter
-	if err := instance.Select(&chapters, query, args...); err != nil {
+	if err := instance.SelectContext(ctx, &chapters, query, args...); err != nil {
 		return nil, fmt.Errorf("list library chapters: %w", err)
 	}
 	return chapters, nil

@@ -22,6 +22,9 @@ import * as backup$0 from "../backup/models.js";
 import * as cast$0 from "../cast/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as collection$0 from "../collection/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as danmaku$0 from "../danmaku/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -34,10 +37,13 @@ import * as diagnosticrecording$0 from "../diagnosticrecording/models.js";
 import * as douban$0 from "../douban/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as handler$0 from "../handler/models.js";
+import * as engine$0 from "../download/engine/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as library$0 from "../library/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as media$0 from "../media/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as model$0 from "../model/models.js";
@@ -50,6 +56,9 @@ import * as provider$0 from "../provider/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as readingstate$0 from "../readingstate/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as source$0 from "../source/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as update$0 from "../update/models.js";
@@ -165,11 +174,11 @@ export function BackupRestoreArchive(name) {
 }
 
 /**
- * @param {string} taskId
+ * @param {string} taskID
  * @returns {$CancellablePromise<boolean>}
  */
-export function CancelDownload(taskId) {
-    return $Call.ByID(1583870197, taskId);
+export function CancelDownload(taskID) {
+    return $Call.ByID(1583870197, taskID);
 }
 
 /**
@@ -216,8 +225,8 @@ export function ClearPendingUpdateInfo() {
 
 /**
  * ClearRecycleBin 清空回收站。
- * @param {handler$0.RecycleListReq} req
- * @returns {$CancellablePromise<handler$0.RecycleResult | null>}
+ * @param {media$0.RecycleListReq} req
+ * @returns {$CancellablePromise<media$0.RecycleResult | null>}
  */
 export function ClearRecycleBin(req) {
     return $Call.ByID(853364054, req).then(/** @type {($result: any) => any} */(($result) => {
@@ -319,6 +328,18 @@ export function ControlCastVideo(id, action, seconds) {
 }
 
 /**
+ * CreateSource acknowledges the allocated identity and initial strategy in the
+ * same write, so callers never infer the created source from a later list read.
+ * @param {model$0.Source | null} s
+ * @returns {$CancellablePromise<model$0.Source | null>}
+ */
+export function CreateSource(s) {
+    return $Call.ByID(2817784226, s).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType20($result);
+    }));
+}
+
+/**
  * @param {danmaku$0.Binding} binding
  * @returns {$CancellablePromise<void>}
  */
@@ -332,7 +353,7 @@ export function DanmakuBind(binding) {
  */
 export function DanmakuBinding(key) {
     return $Call.ByID(2758507841, key).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType20($result);
+        return $$createType22($result);
     }));
 }
 
@@ -343,7 +364,7 @@ export function DanmakuBinding(key) {
  */
 export function DanmakuEpisodes(provider, ref) {
     return $Call.ByID(2484184430, provider, ref).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType22($result);
+        return $$createType24($result);
     }));
 }
 
@@ -353,7 +374,7 @@ export function DanmakuEpisodes(provider, ref) {
  */
 export function DanmakuMatch(request) {
     return $Call.ByID(2376402113, request).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType23($result);
+        return $$createType25($result);
     }));
 }
 
@@ -364,7 +385,7 @@ export function DanmakuMatch(request) {
  */
 export function DanmakuSearch(provider, query) {
     return $Call.ByID(2106378748, provider, query).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType25($result);
+        return $$createType27($result);
     }));
 }
 
@@ -384,7 +405,7 @@ export function DanmakuUnbind(key) {
  */
 export function DanmakuWindow(key, positionMS, freshDays) {
     return $Call.ByID(1951360540, key, positionMS, freshDays).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType27($result);
+        return $$createType29($result);
     }));
 }
 
@@ -425,7 +446,7 @@ export function DeleteSource(key) {
 /**
  * DeleteVideo 把指定源里的一条视频移入回收站（软删除）。收藏和历史不删，
  * 只是跟着目录行一起隐藏，恢复后原样回来。
- * @param {handler$0.DeleteVideoReq} req
+ * @param {media$0.DeleteVideoReq} req
  * @returns {$CancellablePromise<void>}
  */
 export function DeleteVideo(req) {
@@ -437,7 +458,7 @@ export function DeleteVideo(req) {
  */
 export function DiscoverCastDevices() {
     return $Call.ByID(338219454).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType29($result);
+        return $$createType31($result);
     }));
 }
 
@@ -447,7 +468,7 @@ export function DiscoverCastDevices() {
  */
 export function DoubanChart() {
     return $Call.ByID(3633955378).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType31($result);
+        return $$createType33($result);
     }));
 }
 
@@ -458,7 +479,7 @@ export function DoubanChart() {
  */
 export function DoubanChartResolve(subjectID) {
     return $Call.ByID(2696723730, subjectID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType32($result);
+        return $$createType34($result);
     }));
 }
 
@@ -469,7 +490,7 @@ export function DoubanChartResolve(subjectID) {
  */
 export function DoubanDetail(req) {
     return $Call.ByID(2818697375, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType34($result);
+        return $$createType36($result);
     }));
 }
 
@@ -480,7 +501,7 @@ export function DoubanDetail(req) {
  */
 export function DoubanGetAll(req) {
     return $Call.ByID(2619093073, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType36($result);
+        return $$createType38($result);
     }));
 }
 
@@ -491,7 +512,7 @@ export function DoubanGetAll(req) {
  */
 export function DoubanSearch(req) {
     return $Call.ByID(2673907054, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType38($result);
+        return $$createType40($result);
     }));
 }
 
@@ -501,7 +522,7 @@ export function DoubanSearch(req) {
  */
 export function DoubanStatus() {
     return $Call.ByID(3246315936).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType39($result);
+        return $$createType41($result);
     }));
 }
 
@@ -520,7 +541,7 @@ export function DoubanTriggerNow() {
  */
 export function DoubanUpdateVideo(req) {
     return $Call.ByID(409764154, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType41($result);
+        return $$createType43($result);
     }));
 }
 
@@ -541,7 +562,7 @@ export function DownloadUpdate(downloadURL) {
  */
 export function ExportDiagnosticsReport(frontendJSON) {
     return $Call.ByID(2304146369, frontendJSON).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType43($result);
+        return $$createType45($result);
     }));
 }
 
@@ -554,7 +575,7 @@ export function ExportDiagnosticsReport(frontendJSON) {
  */
 export function ExportLogs(req) {
     return $Call.ByID(2796678590, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType45($result);
+        return $$createType47($result);
     }));
 }
 
@@ -584,7 +605,7 @@ export function FileExists(path) {
  */
 export function FindSourcesByGlobalId(globalId) {
     return $Call.ByID(3720248185, globalId).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType47($result);
+        return $$createType49($result);
     }));
 }
 
@@ -622,7 +643,7 @@ export function GetCloseBehavior() {
 
 /**
  * GetCollectSchedule 返回采集调度器配置与运行状态
- * @returns {$CancellablePromise<handler$0.SchedulerStatus | null>}
+ * @returns {$CancellablePromise<collection$0.SchedulerStatus | null>}
  */
 export function GetCollectSchedule() {
     return $Call.ByID(1325905564).then(/** @type {($result: any) => any} */(($result) => {
@@ -633,7 +654,7 @@ export function GetCollectSchedule() {
 /**
  * GetCollectStatus 返回指定 source 的采集状态
  * @param {string} sourceKey
- * @returns {$CancellablePromise<handler$0.CollectStatus | null>}
+ * @returns {$CancellablePromise<collection$0.CollectStatus | null>}
  */
 export function GetCollectStatus(sourceKey) {
     return $Call.ByID(3019320799, sourceKey).then(/** @type {($result: any) => any} */(($result) => {
@@ -645,7 +666,7 @@ export function GetCollectStatus(sourceKey) {
  * GetCollectStatuses bounds one IPC snapshot and deduplicates identities before
  * reading memory. These short lock-protected reads do not benefit from workers.
  * @param {string[]} keys
- * @returns {$CancellablePromise<(handler$0.CollectStatus | null)[]>}
+ * @returns {$CancellablePromise<(collection$0.CollectStatus | null)[]>}
  */
 export function GetCollectStatuses(keys) {
     return $Call.ByID(2191542919, keys).then(/** @type {($result: any) => any} */(($result) => {
@@ -701,11 +722,11 @@ export function GetDownloadDir() {
 }
 
 /**
- * @param {string} taskId
+ * @param {string} taskID
  * @returns {$CancellablePromise<$models.VideoDownloadStatus | null>}
  */
-export function GetDownloadProgress(taskId) {
-    return $Call.ByID(3137031638, taskId).then(/** @type {($result: any) => any} */(($result) => {
+export function GetDownloadProgress(taskID) {
+    return $Call.ByID(3137031638, taskID).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType62($result);
     }));
 }
@@ -884,7 +905,7 @@ export function GetPluginDirectory() {
 
 /**
  * @param {number} limit
- * @returns {$CancellablePromise<(handler$0.HistoryItemWithVideo | null)[]>}
+ * @returns {$CancellablePromise<(media$0.HistoryItemWithVideo | null)[]>}
  */
 export function GetRecentHistory(limit) {
     return $Call.ByID(1166984082, limit).then(/** @type {($result: any) => any} */(($result) => {
@@ -904,8 +925,8 @@ export function GetRecommend(req) {
 
 /**
  * GetRecycleBin 列出回收站（软删除）的目录条目，source_key 留空表示跨源。
- * @param {handler$0.RecycleListReq} req
- * @returns {$CancellablePromise<handler$0.RecycleListResp | null>}
+ * @param {media$0.RecycleListReq} req
+ * @returns {$CancellablePromise<media$0.RecycleListResp | null>}
  */
 export function GetRecycleBin(req) {
     return $Call.ByID(1748409807, req).then(/** @type {($result: any) => any} */(($result) => {
@@ -943,7 +964,7 @@ export function GetSimilarVideos(req) {
 /**
  * GetSourceDetail 返回某个 source_key 的字段定义和示例数据
  * @param {string} sourceKey
- * @returns {$CancellablePromise<handler$0.SourceDetail | null>}
+ * @returns {$CancellablePromise<source$0.SourceDetail | null>}
  */
 export function GetSourceDetail(sourceKey) {
     return $Call.ByID(2597841381, sourceKey).then(/** @type {($result: any) => any} */(($result) => {
@@ -954,7 +975,7 @@ export function GetSourceDetail(sourceKey) {
 /**
  * GetSourceParamsDoc 返回采集接口参数规范，供前端展示规则指南
  * @param {string} sourceKey
- * @returns {$CancellablePromise<handler$0.SourceParamsDoc | null>}
+ * @returns {$CancellablePromise<source$0.SourceParamsDoc | null>}
  */
 export function GetSourceParamsDoc(sourceKey) {
     return $Call.ByID(1529784668, sourceKey).then(/** @type {($result: any) => any} */(($result) => {
@@ -984,7 +1005,7 @@ export function GetSwapBackupInfo() {
 }
 
 /**
- * @param {handler$0.GetTypesReq} req
+ * @param {media$0.GetTypesReq} req
  * @returns {$CancellablePromise<(model$0.VType | null)[]>}
  */
 export function GetTypes(req) {
@@ -994,8 +1015,8 @@ export function GetTypes(req) {
 }
 
 /**
- * @param {handler$0.VideoDetailReq} req
- * @returns {$CancellablePromise<handler$0.VideoDetailResp | null>}
+ * @param {media$0.VideoDetailReq} req
+ * @returns {$CancellablePromise<media$0.VideoDetailResp | null>}
  */
 export function GetVideoDetail(req) {
     return $Call.ByID(2872254585, req).then(/** @type {($result: any) => any} */(($result) => {
@@ -1004,8 +1025,8 @@ export function GetVideoDetail(req) {
 }
 
 /**
- * @param {handler$0.VideoListReq} req
- * @returns {$CancellablePromise<handler$0.VideoListResp | null>}
+ * @param {media$0.VideoListReq} req
+ * @returns {$CancellablePromise<media$0.VideoListResp | null>}
  */
 export function GetVideoList(req) {
     return $Call.ByID(2333127456, req).then(/** @type {($result: any) => any} */(($result) => {
@@ -1027,7 +1048,7 @@ export function GetWatchedEpisodes(req) {
 /**
  * GetYearsAndAreas 返回当前源下所有可选的年份/地区，供前端筛选下拉框使用
  * @param {string} sourceKey
- * @returns {$CancellablePromise<handler$0.YearsResp | null>}
+ * @returns {$CancellablePromise<media$0.YearsResp | null>}
  */
 export function GetYearsAndAreas(sourceKey) {
     return $Call.ByID(3741290708, sourceKey).then(/** @type {($result: any) => any} */(($result) => {
@@ -1071,9 +1092,8 @@ export function ImportSourceFromBase64(filename, b64Content) {
 }
 
 /**
- * ImportSourceVideos 将用户挑选的源站搜索视频入库（压缩字段 + 合并写入）
- * sourceKey 用于确定入库的目标源表；videos 中携带的豆瓣信息也会写入全局 douban_info 表
- * 返回成功入库的条数
+ * ImportSourceVideos stores catalog projections of explicitly selected videos.
+ * The domain validates video-source ownership and returns the accepted count.
  * @param {string} sourceKey
  * @param {(model$0.Video | null)[]} videos
  * @returns {$CancellablePromise<number>}
@@ -1465,7 +1485,7 @@ export function ListDownloads() {
  * 这些组不会自动合并：剩下的都是"标题差个年份/清晰度"或"同名挂在不同类型下"的情况，
  * 判断错了要搬走收藏和观看进度，所以只列出来等人点。
  * @param {number} limit
- * @returns {$CancellablePromise<handler$0.MergeCandidatesResp | null>}
+ * @returns {$CancellablePromise<media$0.MergeCandidatesResp | null>}
  */
 export function ListIdentityMergeCandidates(limit) {
     return $Call.ByID(3979086165, limit).then(/** @type {($result: any) => any} */(($result) => {
@@ -1485,8 +1505,8 @@ export function ListPlugins() {
 
 /**
  * MergeGlobalVideoIdentities 合并用户确认的一组身份，返回存活 id 和被并掉的条数。
- * @param {handler$0.MergeIdentitiesReq} req
- * @returns {$CancellablePromise<handler$0.MergeIdentitiesResp | null>}
+ * @param {media$0.MergeIdentitiesReq} req
+ * @returns {$CancellablePromise<media$0.MergeIdentitiesResp | null>}
  */
 export function MergeGlobalVideoIdentities(req) {
     return $Call.ByID(1126943779, req).then(/** @type {($result: any) => any} */(($result) => {
@@ -1578,7 +1598,7 @@ export function OpenPluginDirectory() {
 
 /**
  * PauseCollect 暂停指定 source_key 的采集
- * @param {handler$0.CollectReq} req
+ * @param {collection$0.CollectReq} req
  * @returns {$CancellablePromise<boolean>}
  */
 export function PauseCollect(req) {
@@ -1586,11 +1606,11 @@ export function PauseCollect(req) {
 }
 
 /**
- * @param {string} taskId
+ * @param {string} taskID
  * @returns {$CancellablePromise<boolean>}
  */
-export function PauseDownload(taskId) {
-    return $Call.ByID(4060580411, taskId);
+export function PauseDownload(taskID) {
+    return $Call.ByID(4060580411, taskID);
 }
 
 /**
@@ -1604,6 +1624,17 @@ export function PlayCastVideo(id, url, title) {
 }
 
 /**
+ * ProbePlayLines reads declared playlist quality without downloading segments.
+ * @param {media$0.PlayLineSpeedReq} req
+ * @returns {$CancellablePromise<(media$0.PlayLineQualityItem | null)[]>}
+ */
+export function ProbePlayLines(req) {
+    return $Call.ByID(1924265112, req).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType143($result);
+    }));
+}
+
+/**
  * ProbeSource 探测单个采集源。与「探测全部」共用同一道闸门、同一份巡检样本，
  * 所以单独点某一个源不会绕过节流，也不会让健康度历史分成两套口径。
  * @param {string} sourceKey
@@ -1611,14 +1642,14 @@ export function PlayCastVideo(id, url, title) {
  */
 export function ProbeSource(sourceKey) {
     return $Call.ByID(3656666958, sourceKey).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType142($result);
+        return $$createType145($result);
     }));
 }
 
 /**
- * ProbeSources 有界并发探测视频采集源接口：带 ac=videolist&pg=1 发一次 GET，
- * 记录状态码与首包耗时。只读前 4KB 用于判断返回的是不是列表结构，
- * 不把整个响应灌进内存。结果会落一条巡检样本进 source_health，
+ * ProbeSources 使用源实际配置的列表策略与采集解码器进行有界探测。
+ * 请求一条记录；实际响应仍受采集器的响应大小上限约束，记录整次请求耗时。
+ * 结果会落一条巡检样本进 source_health，
  * 所以手动点一次「探测」和页面自动探到的那一次是同一份历史。
  * 
  * 每个源最多 sourceProbeMinInterval 探一次：还在冷却里的源直接不发请求，
@@ -1627,7 +1658,7 @@ export function ProbeSource(sourceKey) {
  */
 export function ProbeSources() {
     return $Call.ByID(1486404871).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType143($result);
+        return $$createType146($result);
     }));
 }
 
@@ -1642,8 +1673,8 @@ export function ProxyImage(urlStr) {
 
 /**
  * PurgeVideo 彻底删除一条回收站条目。
- * @param {handler$0.RecycleReq} req
- * @returns {$CancellablePromise<handler$0.RecycleResult | null>}
+ * @param {media$0.RecycleReq} req
+ * @returns {$CancellablePromise<media$0.RecycleResult | null>}
  */
 export function PurgeVideo(req) {
     return $Call.ByID(1064747585, req).then(/** @type {($result: any) => any} */(($result) => {
@@ -1668,7 +1699,7 @@ export function QuitApp() {
  */
 export function ReadLogPage(req) {
     return $Call.ByID(951167816, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType145($result);
+        return $$createType148($result);
     }));
 }
 
@@ -1724,17 +1755,16 @@ export function ReadingStateApply(kind, changesJSON) {
  */
 export function ReadingStateLoad(kind, legacyJSON) {
     return $Call.ByID(2857846006, kind, legacyJSON).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType147($result);
+        return $$createType150($result);
     }));
 }
 
 /**
- * Removal is durable before unregistering; a stale worker cannot recreate it.
- * @param {string} taskId
+ * @param {string} taskID
  * @returns {$CancellablePromise<boolean>}
  */
-export function RemoveDownload(taskId) {
-    return $Call.ByID(755249543, taskId);
+export function RemoveDownload(taskID) {
+    return $Call.ByID(755249543, taskID);
 }
 
 /**
@@ -1770,7 +1800,7 @@ export function RestartApp() {
 
 /**
  * RestoreVideo 把一条回收站条目放回视频库。
- * @param {handler$0.RecycleReq} req
+ * @param {media$0.RecycleReq} req
  * @returns {$CancellablePromise<void>}
  */
 export function RestoreVideo(req) {
@@ -1779,7 +1809,7 @@ export function RestoreVideo(req) {
 
 /**
  * ResumeCollect 恢复指定 source_key 的采集
- * @param {handler$0.CollectReq} req
+ * @param {collection$0.CollectReq} req
  * @returns {$CancellablePromise<boolean>}
  */
 export function ResumeCollect(req) {
@@ -1787,11 +1817,11 @@ export function ResumeCollect(req) {
 }
 
 /**
- * @param {string} taskId
+ * @param {string} taskID
  * @returns {$CancellablePromise<boolean>}
  */
-export function ResumeDownload(taskId) {
-    return $Call.ByID(1050334332, taskId);
+export function ResumeDownload(taskID) {
+    return $Call.ByID(1050334332, taskID);
 }
 
 /**
@@ -1806,10 +1836,9 @@ export function RollbackUpdate() {
 /**
  * RunSourceAction 统一执行数据源管理操作
  * action:
- *   - truncate       // 仅清空该源的视频/剧集/分类数据（保留 source 元信息）
- *   - recreate       // 删除并重建该源的三张表（数据全部丢失）
- *   - delete_source  // 删除该源的所有表 + sources 记录
- *   - delete_video   // 删除单条 vod_id（同时清理剧集）
+ *   - truncate / recreate: 退役源目录并重置采集游标，保留源配置
+ *   - delete_source: 退役源内容并删除源配置
+ *   - delete_video: 将一条目录放入回收站，保留收藏和历史
  * @param {$models.SourceActionReq} req
  * @returns {$CancellablePromise<string>}
  */
@@ -1850,7 +1879,7 @@ export function ScheduleInstallOnExit(filePath, version) {
  */
 export function SchemaNotice() {
     return $Call.ByID(1184465708).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType148($result);
+        return $$createType151($result);
     }));
 }
 
@@ -1862,11 +1891,11 @@ export function SchemaNotice() {
  * @param {string} keyword
  * @param {number} page
  * @param {number} pageSize
- * @returns {$CancellablePromise<handler$0.SearchSourceResult | null>}
+ * @returns {$CancellablePromise<source$0.SearchSourceResult | null>}
  */
 export function SearchSource(sourceKey, keyword, page, pageSize) {
     return $Call.ByID(3664031674, sourceKey, keyword, page, pageSize).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType150($result);
+        return $$createType153($result);
     }));
 }
 
@@ -1878,17 +1907,17 @@ export function SearchSource(sourceKey, keyword, page, pageSize) {
  * @param {number} page
  * @param {number} pageSize
  * @param {string} requestID
- * @returns {$CancellablePromise<handler$0.SearchSourceResult | null>}
+ * @returns {$CancellablePromise<source$0.SearchSourceResult | null>}
  */
 export function SearchSourceRequest(sourceKey, keyword, page, pageSize, requestID) {
     return $Call.ByID(600422519, sourceKey, keyword, page, pageSize, requestID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType150($result);
+        return $$createType153($result);
     }));
 }
 
 /**
- * @param {handler$0.VideoSearchReq} req
- * @returns {$CancellablePromise<handler$0.VideoListResp | null>}
+ * @param {media$0.VideoSearchReq} req
+ * @returns {$CancellablePromise<media$0.VideoListResp | null>}
  */
 export function SearchVideos(req) {
     return $Call.ByID(4044799011, req).then(/** @type {($result: any) => any} */(($result) => {
@@ -1917,12 +1946,12 @@ export function SetCloseBehavior(minimize) {
 
 /**
  * SetCollectSchedule 修改采集调度配置（持久化到 settings）
- * @param {handler$0.CollectScheduleConfig} cfg
- * @returns {$CancellablePromise<handler$0.CollectScheduleConfig>}
+ * @param {collection$0.CollectScheduleConfig} cfg
+ * @returns {$CancellablePromise<collection$0.CollectScheduleConfig>}
  */
 export function SetCollectSchedule(cfg) {
     return $Call.ByID(2657596784, cfg).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType151($result);
+        return $$createType154($result);
     }));
 }
 
@@ -1993,7 +2022,7 @@ export function SetSetting(key, value) {
 
 /**
  * SetSourceSchedule 设置单个源的调度配置
- * @param {handler$0.SourceScheduleReq} req
+ * @param {collection$0.SourceScheduleReq} req
  * @returns {$CancellablePromise<void>}
  */
 export function SetSourceSchedule(req) {
@@ -2003,13 +2032,13 @@ export function SetSourceSchedule(req) {
 /**
  * SetSourceStrategy 换掉某个采集源用的适配策略文档。扩展包把策略文档原样交给前端，
  * 前端再原样交回来，所以这里只转发不解释；空串表示退回内置的 standard_cms。
- * handler.SetSourceStrategy 已经让该源的缓存失效。
+ * sourceservice.SetSourceStrategy 已经让该源的缓存失效。
  * @param {string} sourceKey
- * @param {string} strategyConfig
+ * @param {string} config
  * @returns {$CancellablePromise<void>}
  */
-export function SetSourceStrategy(sourceKey, strategyConfig) {
-    return $Call.ByID(2951886653, sourceKey, strategyConfig);
+export function SetSourceStrategy(sourceKey, config) {
+    return $Call.ByID(2951886653, sourceKey, config);
 }
 
 /**
@@ -2030,24 +2059,24 @@ export function SetTitleBarTheme(theme) {
  */
 export function SourceProbeTimeline() {
     return $Call.ByID(2708450711).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType153($result);
+        return $$createType156($result);
     }));
 }
 
 /**
- * SpeedTestPlayLines 并发测量一个视频各条播放线路的速度，返回按快慢排好的结果。
- * @param {handler$0.PlayLineSpeedReq} req
- * @returns {$CancellablePromise<handler$0.PlayLineSpeedResp | null>}
+ * SpeedTestPlayLines retains the explicit speed measurement binding for older clients.
+ * @param {media$0.PlayLineSpeedReq} req
+ * @returns {$CancellablePromise<media$0.PlayLineSpeedResp | null>}
  */
 export function SpeedTestPlayLines(req) {
     return $Call.ByID(3808625327, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType155($result);
+        return $$createType158($result);
     }));
 }
 
 /**
- * @param {handler$0.CollectReq} req
- * @returns {$CancellablePromise<handler$0.CollectStatus | null>}
+ * @param {collection$0.CollectReq} req
+ * @returns {$CancellablePromise<collection$0.CollectStatus | null>}
  */
 export function StartCollect(req) {
     return $Call.ByID(3723794385, req).then(/** @type {($result: any) => any} */(($result) => {
@@ -2074,6 +2103,8 @@ export function StartLogStream() {
 }
 
 /**
+ * StartVideoDownload validates application-mode admission; the download engine
+ * owns the accepted task independently from this short binding call.
  * @param {$models.VideoDownloadReq} req
  * @returns {$CancellablePromise<$models.VideoDownloadStatus | null>}
  */
@@ -2093,7 +2124,7 @@ export function StopBackgroundCollect() {
 
 /**
  * StopCollect 停止指定 source_key 的采集
- * @param {handler$0.CollectReq} req
+ * @param {collection$0.CollectReq} req
  * @returns {$CancellablePromise<boolean>}
  */
 export function StopCollect(req) {
@@ -2167,7 +2198,7 @@ export function WindowGetResizable() {
  */
 export function WindowGetSize() {
     return $Call.ByID(4147060312).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType157($result);
+        return $$createType160($result);
     }));
 }
 
@@ -2240,7 +2271,7 @@ const $$createType1 = $Create.Array($$createType0);
 const $$createType2 = backup$0.Result.createFrom;
 const $$createType3 = updater$0.UpdateInfo.createFrom;
 const $$createType4 = $Create.Nullable($$createType3);
-const $$createType5 = handler$0.RecycleResult.createFrom;
+const $$createType5 = media$0.RecycleResult.createFrom;
 const $$createType6 = $Create.Nullable($$createType5);
 const $$createType7 = provider$0.BrowseChannel.createFrom;
 const $$createType8 = $Create.Array($$createType7);
@@ -2254,41 +2285,41 @@ const $$createType15 = library$0.SourceDirectory.createFrom;
 const $$createType16 = $Create.Nullable($$createType15);
 const $$createType17 = library$0.ComicTrendPage.createFrom;
 const $$createType18 = $Create.Nullable($$createType17);
-const $$createType19 = danmaku$0.Binding.createFrom;
+const $$createType19 = model$0.Source.createFrom;
 const $$createType20 = $Create.Nullable($$createType19);
-const $$createType21 = danmaku$0.Episode.createFrom;
-const $$createType22 = $Create.Array($$createType21);
-const $$createType23 = danmaku$0.MatchResult.createFrom;
-const $$createType24 = danmaku$0.Candidate.createFrom;
-const $$createType25 = $Create.Array($$createType24);
-const $$createType26 = danmaku$0.Window.createFrom;
-const $$createType27 = $Create.Nullable($$createType26);
-const $$createType28 = cast$0.Device.createFrom;
-const $$createType29 = $Create.Array($$createType28);
-const $$createType30 = douban$0.ChartVideoItem.createFrom;
+const $$createType21 = danmaku$0.Binding.createFrom;
+const $$createType22 = $Create.Nullable($$createType21);
+const $$createType23 = danmaku$0.Episode.createFrom;
+const $$createType24 = $Create.Array($$createType23);
+const $$createType25 = danmaku$0.MatchResult.createFrom;
+const $$createType26 = danmaku$0.Candidate.createFrom;
+const $$createType27 = $Create.Array($$createType26);
+const $$createType28 = danmaku$0.Window.createFrom;
+const $$createType29 = $Create.Nullable($$createType28);
+const $$createType30 = cast$0.Device.createFrom;
 const $$createType31 = $Create.Array($$createType30);
-const $$createType32 = $Create.Nullable($$createType30);
-const $$createType33 = $models.DoubanDetailResp.createFrom;
-const $$createType34 = $Create.Nullable($$createType33);
-const $$createType35 = $models.DoubanGetAllResp.createFrom;
+const $$createType32 = douban$0.ChartVideoItem.createFrom;
+const $$createType33 = $Create.Array($$createType32);
+const $$createType34 = $Create.Nullable($$createType32);
+const $$createType35 = $models.DoubanDetailResp.createFrom;
 const $$createType36 = $Create.Nullable($$createType35);
-const $$createType37 = $models.DoubanSearchResp.createFrom;
+const $$createType37 = $models.DoubanGetAllResp.createFrom;
 const $$createType38 = $Create.Nullable($$createType37);
-const $$createType39 = $Create.Map($Create.Any, $Create.Any);
-const $$createType40 = douban$0.DoubanInfo.createFrom;
-const $$createType41 = $Create.Nullable($$createType40);
-const $$createType42 = $models.DiagnosticsExport.createFrom;
+const $$createType39 = $models.DoubanSearchResp.createFrom;
+const $$createType40 = $Create.Nullable($$createType39);
+const $$createType41 = $Create.Map($Create.Any, $Create.Any);
+const $$createType42 = douban$0.DoubanInfo.createFrom;
 const $$createType43 = $Create.Nullable($$createType42);
-const $$createType44 = $models.ExportLogsResult.createFrom;
+const $$createType44 = $models.DiagnosticsExport.createFrom;
 const $$createType45 = $Create.Nullable($$createType44);
-const $$createType46 = db$0.SourceVideoRef.createFrom;
-const $$createType47 = $Create.Array($$createType46);
-const $$createType48 = model$0.Source.createFrom;
-const $$createType49 = $Create.Nullable($$createType48);
-const $$createType50 = $Create.Array($$createType49);
-const $$createType51 = handler$0.SchedulerStatus.createFrom;
+const $$createType46 = $models.ExportLogsResult.createFrom;
+const $$createType47 = $Create.Nullable($$createType46);
+const $$createType48 = db$0.SourceVideoRef.createFrom;
+const $$createType49 = $Create.Array($$createType48);
+const $$createType50 = $Create.Array($$createType20);
+const $$createType51 = collection$0.SchedulerStatus.createFrom;
 const $$createType52 = $Create.Nullable($$createType51);
-const $$createType53 = handler$0.CollectStatus.createFrom;
+const $$createType53 = collection$0.CollectStatus.createFrom;
 const $$createType54 = $Create.Nullable($$createType53);
 const $$createType55 = $Create.Array($$createType54);
 const $$createType56 = $models.Diagnostics.createFrom;
@@ -2296,7 +2327,7 @@ const $$createType57 = $Create.Nullable($$createType56);
 const $$createType58 = diagnosticrecording$0.Status.createFrom;
 const $$createType59 = douban$0.DoubanCommentsResp.createFrom;
 const $$createType60 = $Create.Nullable($$createType59);
-const $$createType61 = $models.VideoDownloadStatus.createFrom;
+const $$createType61 = engine$0.Status.createFrom;
 const $$createType62 = $Create.Nullable($$createType61);
 const $$createType63 = db$0.FavWithVideo.createFrom;
 const $$createType64 = $Create.Array($$createType63);
@@ -2311,19 +2342,19 @@ const $$createType72 = applog$0.Record.createFrom;
 const $$createType73 = $Create.Array($$createType72);
 const $$createType74 = $models.LogStats.createFrom;
 const $$createType75 = update$0.PendingInstall.createFrom;
-const $$createType76 = handler$0.HistoryItemWithVideo.createFrom;
+const $$createType76 = media$0.HistoryItemWithVideo.createFrom;
 const $$createType77 = $Create.Nullable($$createType76);
 const $$createType78 = $Create.Array($$createType77);
 const $$createType79 = model$0.Video.createFrom;
 const $$createType80 = $Create.Nullable($$createType79);
 const $$createType81 = $Create.Array($$createType80);
-const $$createType82 = handler$0.RecycleListResp.createFrom;
+const $$createType82 = media$0.RecycleListResp.createFrom;
 const $$createType83 = $Create.Nullable($$createType82);
 const $$createType84 = $models.RuntimeMetrics.createFrom;
 const $$createType85 = $Create.Nullable($$createType84);
-const $$createType86 = handler$0.SourceDetail.createFrom;
+const $$createType86 = source$0.SourceDetail.createFrom;
 const $$createType87 = $Create.Nullable($$createType86);
-const $$createType88 = handler$0.SourceParamsDoc.createFrom;
+const $$createType88 = source$0.SourceParamsDoc.createFrom;
 const $$createType89 = $Create.Nullable($$createType88);
 const $$createType90 = model$0.SourceStat.createFrom;
 const $$createType91 = $Create.Array($$createType90);
@@ -2331,12 +2362,12 @@ const $$createType92 = update$0.RollbackInfo.createFrom;
 const $$createType93 = model$0.VType.createFrom;
 const $$createType94 = $Create.Nullable($$createType93);
 const $$createType95 = $Create.Array($$createType94);
-const $$createType96 = handler$0.VideoDetailResp.createFrom;
+const $$createType96 = media$0.VideoDetailResp.createFrom;
 const $$createType97 = $Create.Nullable($$createType96);
-const $$createType98 = handler$0.VideoListResp.createFrom;
+const $$createType98 = media$0.VideoListResp.createFrom;
 const $$createType99 = $Create.Nullable($$createType98);
 const $$createType100 = $Create.Array($Create.Any);
-const $$createType101 = handler$0.YearsResp.createFrom;
+const $$createType101 = media$0.YearsResp.createFrom;
 const $$createType102 = $Create.Nullable($$createType101);
 const $$createType103 = plugin$0.Info.createFrom;
 const $$createType104 = $Create.Nullable($$createType103);
@@ -2369,27 +2400,30 @@ const $$createType130 = $Create.Array($$createType107);
 const $$createType131 = library$0.TestOutcome.createFrom;
 const $$createType132 = $Create.Nullable($$createType131);
 const $$createType133 = $Create.Array($$createType61);
-const $$createType134 = handler$0.MergeCandidatesResp.createFrom;
+const $$createType134 = media$0.MergeCandidatesResp.createFrom;
 const $$createType135 = $Create.Nullable($$createType134);
 const $$createType136 = $Create.Array($$createType103);
-const $$createType137 = handler$0.MergeIdentitiesResp.createFrom;
+const $$createType137 = media$0.MergeIdentitiesResp.createFrom;
 const $$createType138 = $Create.Nullable($$createType137);
 const $$createType139 = library$0.NovelBrowsePage.createFrom;
 const $$createType140 = $Create.Nullable($$createType139);
-const $$createType141 = $models.SourceProbe.createFrom;
+const $$createType141 = media$0.PlayLineQualityItem.createFrom;
 const $$createType142 = $Create.Nullable($$createType141);
-const $$createType143 = $Create.Array($$createType141);
-const $$createType144 = $models.LogPageResp.createFrom;
+const $$createType143 = $Create.Array($$createType142);
+const $$createType144 = $models.SourceProbe.createFrom;
 const $$createType145 = $Create.Nullable($$createType144);
-const $$createType146 = readingstate$0.Record.createFrom;
-const $$createType147 = $Create.Array($$createType146);
-const $$createType148 = $models.SchemaCompat.createFrom;
-const $$createType149 = handler$0.SearchSourceResult.createFrom;
-const $$createType150 = $Create.Nullable($$createType149);
-const $$createType151 = handler$0.CollectScheduleConfig.createFrom;
-const $$createType152 = $models.SourceProbeTimeline.createFrom;
-const $$createType153 = $Create.Array($$createType152);
-const $$createType154 = handler$0.PlayLineSpeedResp.createFrom;
-const $$createType155 = $Create.Nullable($$createType154);
-const $$createType156 = $models.WindowSizeResp.createFrom;
-const $$createType157 = $Create.Nullable($$createType156);
+const $$createType146 = $Create.Array($$createType144);
+const $$createType147 = $models.LogPageResp.createFrom;
+const $$createType148 = $Create.Nullable($$createType147);
+const $$createType149 = readingstate$0.Record.createFrom;
+const $$createType150 = $Create.Array($$createType149);
+const $$createType151 = $models.SchemaCompat.createFrom;
+const $$createType152 = source$0.SearchSourceResult.createFrom;
+const $$createType153 = $Create.Nullable($$createType152);
+const $$createType154 = collection$0.CollectScheduleConfig.createFrom;
+const $$createType155 = $models.SourceProbeTimeline.createFrom;
+const $$createType156 = $Create.Array($$createType155);
+const $$createType157 = media$0.PlayLineSpeedResp.createFrom;
+const $$createType158 = $Create.Nullable($$createType157);
+const $$createType159 = $models.WindowSizeResp.createFrom;
+const $$createType160 = $Create.Nullable($$createType159);

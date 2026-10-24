@@ -4,7 +4,7 @@ import (
 	"cczjVideo/app/apperror"
 	"cczjVideo/app/db"
 	"cczjVideo/app/douban"
-	"cczjVideo/app/handler"
+
 	"cczjVideo/app/model"
 	"context"
 	"fmt"
@@ -14,20 +14,21 @@ import (
 
 // SchedulerService owns application access to collection and Douban schedulers.
 type SchedulerService struct {
+	runs      *Service
 	mu        sync.Mutex
 	active    context.Context
-	scheduler *handler.Scheduler
+	scheduler *Scheduler
 	douban    *douban.Scheduler
 }
 
 // NewSchedulerService constructs the scheduler facade.
-func NewSchedulerService(interval time.Duration) *SchedulerService {
-	return &SchedulerService{douban: douban.NewScheduler(interval)}
+func NewSchedulerService(interval time.Duration, runs *Service) *SchedulerService {
+	return &SchedulerService{runs: runs, douban: douban.NewScheduler(interval)}
 }
 
 // Start starts collection and Douban schedulers using the application context.
 func (s *SchedulerService) Start(ctx context.Context) {
-	scheduler := handler.GetScheduler()
+	scheduler := s.collectionScheduler()
 	// 应用上下文只在这里注入：调度器可能在更早的一次只读查询里就被建出来，
 	// 那一刻它挂在的是"永不取消"。取消信号送不到采集引擎，退出时那一轮就会
 	// 继续往已经关掉的库里写。
@@ -42,15 +43,14 @@ func (s *SchedulerService) Start(ctx context.Context) {
 	doubanScheduler := s.douban
 	scheduler.Start()
 	doubanScheduler.Updater().Enable(true)
-	doubanScheduler.Start()
+	doubanScheduler.StartContext(ctx)
 	s.mu.Unlock()
 
 	// Keep the application task alive until shutdown so lifecycle.Group can
 	// cancel and wait for both schedulers before the database is closed.
 	<-ctx.Done()
 	s.Stop()
-	// Legacy Douban I/O stops at its next record boundary. Keep the owner alive
-	// until it really finishes; a timed-out mode switch must not claim isolation.
+	// Keep the mode owner registered until collection and Douban have drained.
 	for s.IsRunning() {
 		time.Sleep(50 * time.Millisecond)
 	}
@@ -76,15 +76,15 @@ func (s *SchedulerService) Stop() {
 }
 
 // Status returns collection scheduler state.
-func (s *SchedulerService) Status() *handler.SchedulerStatus {
+func (s *SchedulerService) Status() *SchedulerStatus {
 	scheduler := s.collectionScheduler()
 	status := scheduler.Status()
 	return &status
 }
 
 // SetConfig persists and reloads the collection scheduler configuration.
-func (s *SchedulerService) SetConfig(cfg handler.CollectScheduleConfig) (handler.CollectScheduleConfig, error) {
-	if err := handler.SetScheduleConfig(cfg); err != nil {
+func (s *SchedulerService) SetConfig(cfg CollectScheduleConfig) (CollectScheduleConfig, error) {
+	if err := SetScheduleConfig(cfg); err != nil {
 		return cfg, err
 	}
 	scheduler := s.collectionScheduler()
@@ -97,34 +97,54 @@ func (s *SchedulerService) SetConfig(cfg handler.CollectScheduleConfig) (handler
 	} else {
 		scheduler.Stop()
 	}
-	return handler.GetScheduleConfig(), nil
+	return GetScheduleConfig(), nil
 }
 
 // Trigger starts collection work immediately without changing schedules.
-func (s *SchedulerService) Trigger(sourceKey, mode string, hours int) {
+func (s *SchedulerService) Trigger(ctx context.Context, sourceKey, mode string, hours int) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	if sourceKey != "" {
+		row, err := db.GetSourceByKeyContext(ctx, sourceKey)
+		if err != nil {
+			return false, err
+		}
+		if row.GetKind() != model.SourceKindVideo {
+			return false, apperror.New(apperror.Unsupported, "采集只支持视频源")
+		}
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.active == nil || s.active.Err() != nil {
-		return
+		return false, apperror.New(apperror.Conflict, "视频采集调度尚未启动")
 	}
 	scheduler := s.scheduler
 	collectMode := model.CollectMode(mode)
 	if collectMode == "" {
 		collectMode = model.CollectModeFull
 	}
+	if collectMode != model.CollectModeFull && collectMode != model.CollectModeIncremental && collectMode != model.CollectModeOnce {
+		return false, apperror.New(apperror.Validation, "采集模式无效")
+	}
 	if sourceKey != "" {
 		scheduler.TriggerOne(sourceKey, collectMode, hours)
-		return
+		return true, nil
 	}
 	scheduler.TriggerNow()
+	return true, nil
 }
 
 // SetSourceSchedule updates one source's schedule and its active timer.
-func (s *SchedulerService) SetSourceSchedule(req handler.SourceScheduleReq) error {
-	source, err := db.GetSourceByKey(req.SourceKey)
+func (s *SchedulerService) SetSourceSchedule(ctx context.Context, req SourceScheduleReq) error {
+	source, err := db.GetSourceByKeyContext(ctx, req.SourceKey)
 	if err != nil {
 		return apperror.Wrap(apperror.NotFound, err, fmt.Sprintf("采集源 %s 不存在", req.SourceKey))
 	}
+	if source.GetKind() != model.SourceKindVideo {
+		return apperror.New(apperror.Unsupported, "采集调度只支持视频源")
+	}
+
 	interval := req.IntervalMin
 	if interval < 1 {
 		interval = 1
@@ -134,7 +154,7 @@ func (s *SchedulerService) SetSourceSchedule(req handler.SourceScheduleReq) erro
 		Mode:        model.CollectMode(req.Mode),
 		IntervalMin: interval,
 	})
-	if err := db.UpdateSource(source); err != nil {
+	if err := db.SetSourceScheduleConfigContext(ctx, req.SourceKey, source.ScheduleCfgRaw); err != nil {
 		return err
 	}
 	scheduler := s.collectionScheduler()
@@ -151,37 +171,33 @@ func (s *SchedulerService) IsRunning() bool {
 	if s.collectionScheduler().IsRunning() {
 		return true
 	}
-	sources, err := handler.GetAllSources()
-	if err == nil {
-		for _, source := range sources {
-			if status := handler.GetCollectStatus(source.SourceKey); status != nil && status.Running {
-				return true
-			}
-		}
+	if s.runs.registry.isRunning() {
+		return true
 	}
+
 	return s.douban.IsRunning()
 }
 
 // UpdateDoubanByKeyword performs a manual Douban update.
-func (s *SchedulerService) UpdateDoubanByKeyword(keyword string) (*douban.DoubanInfo, error) {
+func (s *SchedulerService) UpdateDoubanByKeyword(ctx context.Context, keyword string) (*douban.DoubanInfo, error) {
 	s.mu.Lock()
 	active := s.active != nil && s.active.Err() == nil
 	s.mu.Unlock()
 	if !active {
 		return nil, apperror.New(apperror.Conflict, "请在视频模式使用豆瓣补全")
 	}
-	return s.douban.Updater().UpdateSingleByKeyword(keyword)
+	return s.douban.Updater().UpdateSingleByKeywordContext(ctx, keyword)
 }
 
 // TriggerDouban starts one Douban batch update.
-func (s *SchedulerService) TriggerDouban() (int, error) {
+func (s *SchedulerService) TriggerDouban(ctx context.Context) (int, error) {
 	s.mu.Lock()
 	active := s.active != nil && s.active.Err() == nil
 	s.mu.Unlock()
 	if !active {
 		return 0, apperror.New(apperror.Conflict, "请在视频模式使用豆瓣补全")
 	}
-	return s.douban.TriggerNow()
+	return s.douban.TriggerNowContext(ctx)
 }
 
 // DoubanStatus returns scheduler and update state.
@@ -205,11 +221,22 @@ func (s *SchedulerService) SetDoubanInterval(d time.Duration) time.Duration {
 	return interval
 }
 
-func (s *SchedulerService) collectionScheduler() *handler.Scheduler {
+func (s *SchedulerService) collectionScheduler() *Scheduler {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.scheduler == nil {
-		s.scheduler = handler.GetScheduler()
+		s.scheduler = NewScheduler(s.runs)
 	}
 	return s.scheduler
+}
+
+func (s *SchedulerService) StopCollection() { s.collectionScheduler().Stop() }
+
+// SourceChanged observes committed source changes without restarting a stopped scheduler.
+func (s *SchedulerService) SourceChanged(key string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.active != nil && s.active.Err() == nil && s.scheduler != nil {
+		s.scheduler.UpdateSourceSchedule(key)
+	}
 }

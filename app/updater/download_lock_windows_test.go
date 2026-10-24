@@ -3,6 +3,7 @@
 package updater
 
 import (
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"net/http"
@@ -41,7 +42,7 @@ func TestDownloadWithLockedPreviousArtifact(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = fmt.Fprint(w, payload) }))
 	defer server.Close()
 	digest := fmt.Sprintf("%x", sha256.Sum256([]byte(payload)))
-	got, err := downloadFromSources(dir, "https://github.com/ws-cczj/CCZJ-Video/releases/download/v9/app.exe", digest,
+	got, err := downloadFromSources(context.Background(), dir, "https://github.com/ws-cczj/CCZJ-Video/releases/download/v9/app.exe", digest,
 		[]speedTestResult{{url: server.URL, source: "fixture"}}, server.Client(), nil)
 	if err != nil {
 		t.Fatalf("locked old update must not block a new download: %v", err)

@@ -7,7 +7,7 @@
 import { Create as $Create } from "@wailsio/runtime";
 
 /**
- * Record 是一条已落盘日志的结构化视图，字段顺序与文件行格式一一对应。
+ * Record includes memory-only evidence when disk writes fail.
  */
 export class Record {
     /**
@@ -15,6 +15,20 @@ export class Record {
      * @param {Partial<Record>} [$$source = {}] - The source object to create the Record.
      */
     constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["session_id"] = undefined;
+        }
+        if (!("persisted" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["persisted"] = false;
+        }
         if (!("seq" in $$source)) {
             /**
              * @member

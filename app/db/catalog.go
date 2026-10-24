@@ -2,6 +2,7 @@ package db
 
 import (
 	"cczjVideo/app/model"
+	"context"
 	cryptorand "crypto/rand"
 	"encoding/base64"
 	"fmt"
@@ -52,7 +53,11 @@ func ReviveDeletedCatalogItems() bool {
 }
 
 func UpsertCatalogItems(sourceKey string, videos []*model.Video) error {
-	return upsertCatalogItems(nil, sourceKey, videos, ReviveDeletedCatalogItems())
+	return UpsertCatalogItemsContext(context.Background(), sourceKey, videos)
+}
+
+func UpsertCatalogItemsContext(ctx context.Context, sourceKey string, videos []*model.Video) error {
+	return upsertCatalogItems(ctx, nil, sourceKey, videos, ReviveDeletedCatalogItems())
 }
 
 // UpsertCatalogItemsWithRevival ignores the setting and always restores deleted
@@ -60,7 +65,11 @@ func UpsertCatalogItems(sourceKey string, videos []*model.Video) error {
 // so a previous deletion (usually produced by the same import earlier) must not
 // keep it hidden.
 func UpsertCatalogItemsWithRevival(sourceKey string, videos []*model.Video) error {
-	return upsertCatalogItems(nil, sourceKey, videos, true)
+	return UpsertCatalogItemsWithRevivalContext(context.Background(), sourceKey, videos)
+}
+
+func UpsertCatalogItemsWithRevivalContext(ctx context.Context, sourceKey string, videos []*model.Video) error {
+	return upsertCatalogItems(ctx, nil, sourceKey, videos, true)
 }
 
 // UpsertCatalogItemsBatch works like UpsertCatalogItems but reuses the identity
@@ -68,10 +77,17 @@ func UpsertCatalogItemsWithRevival(sourceKey string, videos []*model.Video) erro
 // once instead of once per page. Callers that loop over pages must pass a batch;
 // one-off writes keep using UpsertCatalogItems.
 func UpsertCatalogItemsBatch(batch *CatalogBatch, sourceKey string, videos []*model.Video) error {
-	return upsertCatalogItems(batch, sourceKey, videos, ReviveDeletedCatalogItems())
+	return UpsertCatalogItemsBatchContext(context.Background(), batch, sourceKey, videos)
 }
 
-func upsertCatalogItems(batch *CatalogBatch, sourceKey string, videos []*model.Video, revive bool) (err error) {
+func UpsertCatalogItemsBatchContext(ctx context.Context, batch *CatalogBatch, sourceKey string, videos []*model.Video) error {
+	return upsertCatalogItems(ctx, batch, sourceKey, videos, ReviveDeletedCatalogItems())
+}
+
+func upsertCatalogItems(ctx context.Context, batch *CatalogBatch, sourceKey string, videos []*model.Video, revive bool) (err error) {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := model.ValidateSourceKey(sourceKey); err != nil {
 		return err
 	}
@@ -82,16 +98,33 @@ func upsertCatalogItems(batch *CatalogBatch, sourceKey string, videos []*model.V
 	if len(videos) == 0 {
 		return nil
 	}
+	release, err := ownCatalogIdentityWrite(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
+
 	resolver, err := batch.begin()
 	if err != nil {
 		return fmt.Errorf("load catalog identities: %w", err)
 	}
 	defer func() { batch.end(err) }()
-	tx, err := instance.Beginx()
+	tx, err := instance.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin catalog upsert: %w", err)
 	}
 	defer tx.Rollback()
+	if err := writeCatalogProjection(ctx, tx, resolver, sourceKey, videos, revive); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit catalog upsert: %w", err)
+	}
+	return nil
+}
+
+func writeCatalogProjection(ctx context.Context, tx *sqlx.Tx, resolver *catalogIdentityResolver, sourceKey string, videos []*model.Video, revive bool) error {
 	// Spelled out in SQL instead of bound per row: sqlite's ON CONFLICT DO
 	// UPDATE cannot read the target column through a placeholder without
 	// disturbing the VALUES binding order, and both branches are literals here.
@@ -105,6 +138,9 @@ func upsertCatalogItems(batch *CatalogBatch, sourceKey string, videos []*model.V
 	rows := make([]catalogUpsertRow, 0, len(videos))
 	typeRows := make(map[string]sourceTypeUpsertRow)
 	for _, v := range videos {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if v == nil || strings.TrimSpace(v.VodId.String()) == "" || strings.TrimSpace(v.VodName) == "" {
 			continue
 		}
@@ -123,21 +159,26 @@ func upsertCatalogItems(batch *CatalogBatch, sourceKey string, videos []*model.V
 	if len(rows) == 0 {
 		return nil
 	}
-	if _, err := tx.NamedExec(q, rows); err != nil {
+	if _, err := tx.NamedExecContext(ctx, q, rows); err != nil {
 		return fmt.Errorf("upsert source catalog: %w", err)
 	}
+	// A successful catalog write makes this coordinate real again. Keep marker
+	// removal in the same transaction as the projection, including batch imports.
+	for _, row := range rows {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM catalog_retirements WHERE source_key=? AND source_vod_id=?`, row.SourceKey, row.SourceVodID); err != nil {
+			return err
+		}
+	}
+
 	if len(typeRows) > 0 {
 		rows := make([]sourceTypeUpsertRow, 0, len(typeRows))
 		for _, row := range typeRows {
 			rows = append(rows, row)
 		}
-		if _, err := tx.NamedExec(`INSERT INTO source_types(source_key,source_type_id,global_type_id,type_name,updated_at) VALUES (:source_key,:source_type_id,:global_type_id,:type_name,CURRENT_TIMESTAMP)
+		if _, err := tx.NamedExecContext(ctx, `INSERT INTO source_types(source_key,source_type_id,global_type_id,type_name,updated_at) VALUES (:source_key,:source_type_id,:global_type_id,:type_name,CURRENT_TIMESTAMP)
 			ON CONFLICT(source_key,source_type_id) DO UPDATE SET global_type_id=excluded.global_type_id,type_name=excluded.type_name,updated_at=CURRENT_TIMESTAMP`, rows); err != nil {
 			return fmt.Errorf("upsert source type mapping: %w", err)
 		}
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit catalog upsert: %w", err)
 	}
 	return nil
 }
@@ -186,8 +227,10 @@ type catalogIdentityResolver struct {
 // 锁一律在 Beginx 之前取得、提交之后释放，不会和 SQLite 写锁形成环等待。
 // 任何一页写失败都会作废批次：内存索引里不能留着已回滚事务建出的 global_id。
 type CatalogBatch struct {
-	mu    sync.Mutex
-	ident *catalogIdentityResolver
+	mu       sync.Mutex
+	ident    *catalogIdentityResolver
+	revision uint64
+	database *sqlx.DB
 }
 
 func NewCatalogBatch() *CatalogBatch { return &CatalogBatch{} }
@@ -198,13 +241,15 @@ func (b *CatalogBatch) begin() (*catalogIdentityResolver, error) {
 		return newCatalogIdentityResolver(instance)
 	}
 	b.mu.Lock()
-	if b.ident == nil {
+	if b.ident == nil || b.revision != catalogIdentityRevision.Load() || b.database != instance {
 		ident, err := newCatalogIdentityResolver(instance)
 		if err != nil {
 			b.mu.Unlock()
 			return nil, err
 		}
 		b.ident = ident
+		b.revision = catalogIdentityRevision.Load()
+		b.database = instance
 	}
 	return b.ident, nil
 }
@@ -378,6 +423,9 @@ func ExistingCatalogVodIDs(sourceKey string, vodIDs []string) (map[string]bool, 
 // keyword. Unlike GetCatalogVideoPage it deliberately ignores type and remarks
 // so a keyword that happens to name a category does not flood the results.
 func SearchCatalogByTitle(sourceKey, keyword string, limit int) ([]*model.Video, error) {
+	return SearchCatalogByTitleContext(context.Background(), sourceKey, keyword, limit)
+}
+func SearchCatalogByTitleContext(ctx context.Context, sourceKey, keyword string, limit int) ([]*model.Video, error) {
 	if limit <= 0 {
 		limit = 24
 	}
@@ -386,7 +434,7 @@ func SearchCatalogByTitle(sourceKey, keyword string, limit int) ([]*model.Video,
 		WHERE source_key=? AND lifecycle_state='active' AND ` + catalogTypeVisibilityClause("source_videos") + ` AND vod_name LIKE ?
 		ORDER BY vod_time DESC, id DESC LIMIT ?`
 	var rows []catalogTitleRow
-	if err := instance.Select(&rows, q, sourceKey, "%"+strings.TrimSpace(keyword)+"%", limit); err != nil {
+	if err := instance.SelectContext(ctx, &rows, q, sourceKey, "%"+strings.TrimSpace(keyword)+"%", limit); err != nil {
 		return nil, err
 	}
 	out := make([]*model.Video, 0, len(rows))
@@ -416,8 +464,11 @@ type catalogTitleRow struct {
 }
 
 func GetCatalogItem(sourceKey, vodID string) (*CatalogItem, error) {
+	return GetCatalogItemContext(context.Background(), sourceKey, vodID)
+}
+func GetCatalogItemContext(ctx context.Context, sourceKey, vodID string) (*CatalogItem, error) {
 	var item CatalogItem
-	err := instance.Get(&item, `SELECT id,source_key,source_vod_id,global_id,source_type_id,global_type_id,type_name,vod_name,vod_pic,vod_remarks,vod_year,vod_area,vod_time,lifecycle_state FROM source_videos WHERE source_key=? AND source_vod_id=? AND lifecycle_state='active' AND `+catalogTypeVisibilityClause("source_videos"), sourceKey, vodID)
+	err := instance.GetContext(ctx, &item, `SELECT id,source_key,source_vod_id,global_id,source_type_id,global_type_id,type_name,vod_name,vod_pic,vod_remarks,vod_year,vod_area,vod_time,lifecycle_state FROM source_videos WHERE source_key=? AND source_vod_id=? AND lifecycle_state='active' AND `+catalogTypeVisibilityClause("source_videos"), sourceKey, vodID)
 	if err != nil {
 		return nil, err
 	}
@@ -425,8 +476,11 @@ func GetCatalogItem(sourceKey, vodID string) (*CatalogItem, error) {
 }
 
 func GetCatalogItemByGlobalID(sourceKey string, globalID int64) (*CatalogItem, error) {
+	return GetCatalogItemByGlobalIDContext(context.Background(), sourceKey, globalID)
+}
+func GetCatalogItemByGlobalIDContext(ctx context.Context, sourceKey string, globalID int64) (*CatalogItem, error) {
 	var item CatalogItem
-	err := instance.Get(&item, `SELECT id,source_key,source_vod_id,global_id,source_type_id,global_type_id,type_name,vod_name,vod_pic,vod_remarks,vod_year,vod_area,vod_time,lifecycle_state FROM source_videos WHERE source_key=? AND global_id=? AND lifecycle_state='active' AND `+catalogTypeVisibilityClause("source_videos")+` ORDER BY updated_at DESC LIMIT 1`, sourceKey, globalID)
+	err := instance.GetContext(ctx, &item, `SELECT id,source_key,source_vod_id,global_id,source_type_id,global_type_id,type_name,vod_name,vod_pic,vod_remarks,vod_year,vod_area,vod_time,lifecycle_state FROM source_videos WHERE source_key=? AND global_id=? AND lifecycle_state='active' AND `+catalogTypeVisibilityClause("source_videos")+` ORDER BY updated_at DESC LIMIT 1`, sourceKey, globalID)
 	if err != nil {
 		return nil, err
 	}
@@ -451,6 +505,9 @@ func GetCatalogVideos(sourceKey string, filter FilterParams) ([]*model.Video, in
 }
 
 func GetCatalogVideoPage(sourceKey string, filter FilterParams) (*CatalogPage, error) {
+	return GetCatalogVideoPageContext(context.Background(), sourceKey, filter)
+}
+func GetCatalogVideoPageContext(ctx context.Context, sourceKey string, filter FilterParams) (*CatalogPage, error) {
 	if filter.PageSize <= 0 {
 		filter.PageSize = 20
 	}
@@ -479,7 +536,7 @@ func GetCatalogVideoPage(sourceKey string, filter FilterParams) (*CatalogPage, e
 	}
 	clause := strings.Join(where, " AND ")
 	var total int
-	if err := instance.Get(&total, "SELECT COUNT(*) FROM source_videos WHERE "+clause, args...); err != nil {
+	if err := instance.GetContext(ctx, &total, "SELECT COUNT(*) FROM source_videos WHERE "+clause, args...); err != nil {
 		return nil, err
 	}
 	orderColumn := "vod_time"
@@ -512,7 +569,7 @@ func GetCatalogVideoPage(sourceKey string, filter FilterParams) (*CatalogPage, e
 		CursorValue string `db:"cursor_value"`
 	}
 	var rows []row
-	if err := instance.Select(&rows, q, args...); err != nil {
+	if err := instance.SelectContext(ctx, &rows, q, args...); err != nil {
 		return nil, err
 	}
 	hasMore := len(rows) > filter.PageSize
@@ -569,19 +626,25 @@ type CatalogExportRow struct {
 // Callers can encode directly to an output stream without constructing an
 // unbounded in-memory slice or relying on a synthetic oversized page size.
 func StreamCatalogExport(sourceKey string, visit func(CatalogExportRow) error) error {
+	return StreamCatalogExportContext(context.Background(), sourceKey, visit)
+}
+func StreamCatalogExportContext(ctx context.Context, sourceKey string, visit func(CatalogExportRow) error) error {
 	if err := model.ValidateSourceKey(sourceKey); err != nil {
 		return err
 	}
 	if visit == nil {
 		return fmt.Errorf("catalog export visitor is required")
 	}
-	rows, err := instance.Queryx(`SELECT source_vod_id,source_type_id,type_name,vod_name,vod_pic,vod_remarks,vod_year,vod_area,vod_time
+	rows, err := instance.QueryxContext(ctx, `SELECT source_vod_id,source_type_id,type_name,vod_name,vod_pic,vod_remarks,vod_year,vod_area,vod_time
 		FROM source_videos WHERE source_key=? AND lifecycle_state='active' AND `+catalogTypeVisibilityClause("source_videos")+` ORDER BY id`, sourceKey)
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
 	for rows.Next() {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		var row CatalogExportRow
 		if err := rows.StructScan(&row); err != nil {
 			return err
@@ -594,18 +657,24 @@ func StreamCatalogExport(sourceKey string, visit func(CatalogExportRow) error) e
 }
 
 func GetCatalogYearsAndAreas(sourceKey string) ([]string, []string, error) {
+	return GetCatalogYearsAndAreasContext(context.Background(), sourceKey)
+}
+func GetCatalogYearsAndAreasContext(ctx context.Context, sourceKey string) ([]string, []string, error) {
 	var years, areas []string
 	visibility := `lifecycle_state='active' AND ` + catalogTypeVisibilityClause("source_videos")
-	if err := instance.Select(&years, `SELECT DISTINCT vod_year FROM source_videos WHERE source_key=? AND `+visibility+` AND vod_year!='' ORDER BY vod_year DESC`, sourceKey); err != nil {
+	if err := instance.SelectContext(ctx, &years, `SELECT DISTINCT vod_year FROM source_videos WHERE source_key=? AND `+visibility+` AND vod_year!='' ORDER BY vod_year DESC`, sourceKey); err != nil {
 		return nil, nil, err
 	}
-	if err := instance.Select(&areas, `SELECT DISTINCT vod_area FROM source_videos WHERE source_key=? AND `+visibility+` AND vod_area!='' ORDER BY vod_area`, sourceKey); err != nil {
+	if err := instance.SelectContext(ctx, &areas, `SELECT DISTINCT vod_area FROM source_videos WHERE source_key=? AND `+visibility+` AND vod_area!='' ORDER BY vod_area`, sourceKey); err != nil {
 		return nil, nil, err
 	}
 	return years, areas, nil
 }
 
 func GetCatalogRecommend(sourceKey string, limit int, excludeIDs []string) ([]*model.Video, error) {
+	return GetCatalogRecommendContext(context.Background(), sourceKey, limit, excludeIDs)
+}
+func GetCatalogRecommendContext(ctx context.Context, sourceKey string, limit int, excludeIDs []string) ([]*model.Video, error) {
 	if limit <= 0 {
 		return []*model.Video{}, nil
 	}
@@ -620,7 +689,7 @@ func GetCatalogRecommend(sourceKey string, limit int, excludeIDs []string) ([]*m
 		where += " AND source_vod_id NOT IN (" + strings.Join(marks, ",") + ")"
 	}
 	var maxID int64
-	if err := instance.Get(&maxID, "SELECT COALESCE(MAX(id),0) FROM source_videos WHERE "+where, args...); err != nil {
+	if err := instance.GetContext(ctx, &maxID, "SELECT COALESCE(MAX(id),0) FROM source_videos WHERE "+where, args...); err != nil {
 		return nil, err
 	}
 	if maxID == 0 {
@@ -643,7 +712,7 @@ func GetCatalogRecommend(sourceKey string, limit int, excludeIDs []string) ([]*m
 	selectRows := func(extra string, extraArgs ...any) error {
 		queryArgs := append(append([]any{}, args...), extraArgs...)
 		var batch []row
-		if err := instance.Select(&batch, "SELECT source_vod_id,global_id,source_type_id,type_name,vod_name,vod_pic,vod_remarks,vod_year,vod_area,vod_time FROM source_videos WHERE "+where+extra+" ORDER BY id LIMIT ?", append(queryArgs, limit-len(rows))...); err != nil {
+		if err := instance.SelectContext(ctx, &batch, "SELECT source_vod_id,global_id,source_type_id,type_name,vod_name,vod_pic,vod_remarks,vod_year,vod_area,vod_time FROM source_videos WHERE "+where+extra+" ORDER BY id LIMIT ?", append(queryArgs, limit-len(rows))...); err != nil {
 			return err
 		}
 		rows = append(rows, batch...)
@@ -683,7 +752,10 @@ func randomCatalogStart(maxID int64) int64 {
 	return n.Int64() + 1
 }
 func DeleteCatalogVideo(sourceKey, vodID string) error {
-	_, err := instance.Exec(`UPDATE source_videos SET lifecycle_state='deleted',updated_at=CURRENT_TIMESTAMP WHERE source_key=? AND source_vod_id=?`, sourceKey, vodID)
+	return DeleteCatalogVideoContext(context.Background(), sourceKey, vodID)
+}
+func DeleteCatalogVideoContext(ctx context.Context, sourceKey, vodID string) error {
+	_, err := NewMediaStore(DB).DeleteCatalog(ctx, sourceKey, vodID)
 	return err
 }
 
@@ -694,32 +766,42 @@ type SourceTypeExport struct {
 }
 
 func ExportSourceTypes(sourceKey string) ([]SourceTypeExport, error) {
+	return ExportSourceTypesContext(context.Background(), sourceKey)
+}
+func ExportSourceTypesContext(ctx context.Context, sourceKey string) ([]SourceTypeExport, error) {
 	var out []SourceTypeExport
-	err := instance.Select(&out, `SELECT source_type_id,COALESCE(global_type_id,0) global_type_id,type_name FROM source_types WHERE source_key=? ORDER BY source_type_id`, sourceKey)
+	err := instance.SelectContext(ctx, &out, `SELECT source_type_id,COALESCE(global_type_id,0) global_type_id,type_name FROM source_types WHERE source_key=? ORDER BY source_type_id`, sourceKey)
 	return out, err
 }
 
 // ImportSourceTypes 覆盖导入某个源的类型映射。整批包进一个事务：逐条自动提交
 // 不但每次导入都要抢一遍库级写锁，中途失败还会留下半新半旧的映射。
 func ImportSourceTypes(sourceKey string, rows []SourceTypeExport) error {
+	return ImportSourceTypesContext(context.Background(), sourceKey, rows)
+}
+func ImportSourceTypesContext(ctx context.Context, sourceKey string, rows []SourceTypeExport) error {
+	tx, err := instance.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := writeSourceTypes(ctx, tx, sourceKey, rows); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+func writeSourceTypes(ctx context.Context, tx *sqlx.Tx, sourceKey string, rows []SourceTypeExport) error {
 	if len(rows) == 0 {
 		return nil
 	}
-	tx, err := instance.Beginx()
-	if err != nil {
-		return fmt.Errorf("begin source type import: %w", err)
-	}
-	defer tx.Rollback()
+
 	params := make([]sourceTypeUpsertRow, 0, len(rows))
 	for _, r := range rows {
 		params = append(params, sourceTypeUpsertRow{SourceKey: sourceKey, SourceTypeID: r.SourceTypeID, GlobalTypeID: r.GlobalTypeID, TypeName: r.TypeName})
 	}
-	if _, err := tx.NamedExec(`INSERT INTO source_types(source_key,source_type_id,global_type_id,type_name,updated_at) VALUES (:source_key,:source_type_id,:global_type_id,:type_name,CURRENT_TIMESTAMP)
+	if _, err := tx.NamedExecContext(ctx, `INSERT INTO source_types(source_key,source_type_id,global_type_id,type_name,updated_at) VALUES (:source_key,:source_type_id,:global_type_id,:type_name,CURRENT_TIMESTAMP)
 		ON CONFLICT(source_key,source_type_id) DO UPDATE SET global_type_id=excluded.global_type_id,type_name=excluded.type_name,updated_at=CURRENT_TIMESTAMP`, params); err != nil {
 		return fmt.Errorf("import source types: %w", err)
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit source type import: %w", err)
 	}
 	return nil
 }

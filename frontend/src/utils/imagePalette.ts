@@ -56,30 +56,35 @@ function toHsl(r: number, g: number, b: number): [number, number, number] {
   return [((hue % 360) + 360) % 360, saturation, lightness]
 }
 
-async function readPixels(src: string): Promise<Uint8ClampedArray | null> {
+async function readPixels(src: string, signal?: AbortSignal): Promise<Uint8ClampedArray | null> {
+  if (signal?.aborted) return null
   const img = new Image()
-  img.src = src
+  let stop: (() => void) | undefined
   try {
-    await img.decode()
-  } catch {
-    return null
-  }
-  const longest = Math.max(img.naturalWidth, img.naturalHeight)
-  if (!longest) return null
-  const scale = Math.min(1, SAMPLE_SIZE / longest)
-  const w = Math.max(1, Math.round(img.naturalWidth * scale))
-  const h = Math.max(1, Math.round(img.naturalHeight * scale))
-  const canvas = document.createElement('canvas')
-  canvas.width = w
-  canvas.height = h
-  const ctx = canvas.getContext('2d', { willReadFrequently: true })
-  if (!ctx) return null
-  ctx.drawImage(img, 0, 0, w, h)
-  // 远程图未开 CORS 时画布会被污染，这里读不出像素 —— 当作取色失败，不抛错。
-  try {
+    img.src = src
+    await Promise.race([img.decode(), new Promise<void>(resolve => {
+      stop = () => { img.src = ''; resolve() }
+      signal?.addEventListener('abort', stop, { once: true })
+    })])
+    if (signal?.aborted) return null
+    const longest = Math.max(img.naturalWidth, img.naturalHeight)
+    if (!longest) return null
+    const scale = Math.min(1, SAMPLE_SIZE / longest)
+    const w = Math.max(1, Math.round(img.naturalWidth * scale))
+    const h = Math.max(1, Math.round(img.naturalHeight * scale))
+    const canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })
+    if (!ctx) return null
+    ctx.drawImage(img, 0, 0, w, h)
+    // 远程图未开 CORS 时画布会被污染，按取色失败处理。
     return ctx.getImageData(0, 0, w, h).data
   } catch {
     return null
+  } finally {
+    if (stop) signal?.removeEventListener('abort', stop)
+    img.src = ''
   }
 }
 
@@ -116,8 +121,8 @@ function inkFallback(pixels: Uint8ClampedArray): string | null {
 /**
  * 取背景图的主色。返回 `#rrggbb`；读不到像素（图损坏、跨域污染画布）时返回 null。
  */
-export async function pickColorFromImage(src: string): Promise<string | null> {
-  const pixels = await readPixels(src)
+export async function pickColorFromImage(src: string, signal?: AbortSignal): Promise<string | null> {
+  const pixels = await readPixels(src, signal)
   if (!pixels) return null
 
   const bins = new Map<number, Bin>()

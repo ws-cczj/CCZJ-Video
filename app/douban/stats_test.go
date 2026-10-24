@@ -38,7 +38,7 @@ func TestChartCountersClassifyFreshStaleAndMiss(t *testing.T) {
 	}
 
 	// 过期但仍能展示：记 stale_hits，刷新在后台补。
-	setChartCache([]DoubanChartItem{chartItem("111111", "过期榜单")}, time.Now().Add(-2*time.Hour))
+	setChartCache([]DoubanChartItem{chartItem("111111", "过期榜单")}, time.Now().Add(-chartCacheTTL-time.Hour))
 	if _, err := FetchDoubanChart(); err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestChartCountersRecordSkipAndFailure(t *testing.T) {
 	resetChartCounters(t)
 	clearRateClock()
 
-	setChartCache([]DoubanChartItem{chartItem("111111", "过期榜单")}, time.Now().Add(-2*time.Hour))
+	setChartCache([]DoubanChartItem{chartItem("111111", "过期榜单")}, time.Now().Add(-chartCacheTTL-time.Hour))
 	var calls int
 	fetchChartPage = func(string) (string, error) {
 		calls++
@@ -92,7 +92,7 @@ func TestChartCountersRecordSkipAndFailure(t *testing.T) {
 
 	// 抓失败 → fetchFail；随后的退避期内不再抓，记成 skipped。
 	fetchChartPage = func(string) (string, error) { return "", fmt.Errorf("源站不通") }
-	setChartCache([]DoubanChartItem{chartItem("222222", "过期榜单")}, time.Now().Add(-2*time.Hour))
+	setChartCache([]DoubanChartItem{chartItem("222222", "过期榜单")}, time.Now().Add(-chartCacheTTL-time.Hour))
 	if _, err := refreshChart(false); err != nil {
 		t.Fatal(err)
 	}

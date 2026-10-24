@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"cczjVideo/app/apperror"
+	"cczjVideo/app/applog"
 )
 
 // DiagnosticsExport names the report and profiles written by an explicit export.
@@ -39,11 +40,28 @@ func (a *App) ExportDiagnosticsReport(frontendJSON string) (*DiagnosticsExport, 
 		return nil, err
 	}
 	metrics := a.runtimeMetrics()
+	logs := applog.Default().Snapshot()
+	available := len(logs)
+	bytes, first := 0, len(logs)
+	for first > 0 {
+		size := logRecordBytes(logs[first-1])
+		if bytes+size > 8<<20 {
+			break
+		}
+		bytes += size
+		first--
+	}
+	logs = logs[first:]
 	report := map[string]any{
 		"format_version": 1, "captured_at": time.Now().Format(time.RFC3339), "diagnostics": diagnostics,
 		"runtime": metrics, "frontend": json.RawMessage(frontendJSON),
-		"profile_scope": "shared_host_process",
-		"logs_scope":    "untagged_host_logs_omitted",
+		"profile_scope":          "shared_host_process",
+		"logs_scope":             "shared_host_process_recent_ring",
+		"logs":                   logs,
+		"logs_truncated":         first > 0,
+		"logs_records_available": available,
+		"logs_health":            applog.Default().Health(),
+		"logs_capacity":          applog.Default().RingCap(),
 	}
 	result, err := writeDiagnosticsReport(filepath.Join(a.getDataDir(), "exports", "diagnostics"), report)
 	if err != nil {

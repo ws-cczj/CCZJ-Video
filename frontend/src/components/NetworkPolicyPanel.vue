@@ -17,7 +17,7 @@ onMounted(load);onBeforeUnmount(()=>{disposed=true})
   <h2>{{t('networkPolicy.title')}}</h2><p>{{t('networkPolicy.description')}}</p>
   <p v-if="error" role="alert">{{error}} <Button v-if="!ready" variant="ghost" @click="load">{{t('common.retry')}}</Button></p>
   <div class="cczj-network-policy-controls" :aria-busy="saving"><label for="global-network-frequency">{{t('networkPolicy.frequency')}}</label><Select id="global-network-frequency" v-model="settings.frequency" :options="frequencies" :ariaLabel="t('networkPolicy.frequency')" :disabled="!ready||saving" @change="saved=false" /><Button :disabled="!ready||saving" @click="save">{{saving?t('common.loading'):t('common.save')}}</Button><span role="status">{{saved?t('networkPolicy.saved'):!ready&&!error?t('common.loading'):''}}</span></div>
-  <details><summary>{{t('networkPolicy.details')}}</summary><p>{{t('networkPolicy.queryHint')}}</p><p>{{t('networkPolicy.streamHint')}}</p><p>{{t('networkPolicy.persistenceHint')}}</p></details>
+  <details><summary>{{t('networkPolicy.details')}}</summary><p>{{t('networkPolicy.queryHint')}}</p><p>{{t('networkPolicy.streamHint')}}</p><p>{{t('networkPolicy.persistenceHint')}}</p><p>{{t('networkPolicy.proxyHint')}}</p></details>
  </section>
 </template>
 <style scoped>

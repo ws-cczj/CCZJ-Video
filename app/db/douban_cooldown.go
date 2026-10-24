@@ -2,6 +2,7 @@ package db
 
 import (
 	"cczjVideo/app/applog"
+	"context"
 	"database/sql"
 	"errors"
 	"time"
@@ -23,8 +24,12 @@ const searchFailureCooldownThreshold = 5
 
 // SetDoubanCooldown 为指定 global_id 设置24小时冷静期（用于详情拿到但无评分）
 func SetDoubanCooldown(globalID int) error {
+	return SetDoubanCooldownContext(context.Background(), globalID)
+}
+
+func SetDoubanCooldownContext(ctx context.Context, globalID int) error {
 	cooldownUntil := time.Now().Add(doubanCooldownHours * time.Hour).Format(doubanCooldownFormat)
-	_, err := instance.Exec(`UPDATE global_video SET douban_cooldown_until = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+	_, err := instance.ExecContext(ctx, `UPDATE global_video SET douban_cooldown_until = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
 		cooldownUntil, globalID)
 	if err != nil {
 		applog.Error("[Douban] SetDoubanCooldown failed for global_id=%d: %v", globalID, err)
@@ -37,10 +42,14 @@ func SetDoubanCooldown(globalID int) error {
 // 空跑也必须打点：批量队列按最近尝试时间轮转，只在成功时打点等于让持续失败的行
 // 永远霸占队头。刻意不动 updated_at——那一列是兄弟记录继承和列表排序的依据。
 func MarkDoubanAttempt(globalID int) error {
+	return MarkDoubanAttemptContext(context.Background(), globalID)
+}
+
+func MarkDoubanAttemptContext(ctx context.Context, globalID int) error {
 	if globalID <= 0 {
 		return nil
 	}
-	_, err := instance.Exec(`UPDATE global_video SET `+doubanAttemptColumn+` = ? WHERE id = ?`,
+	_, err := instance.ExecContext(ctx, `UPDATE global_video SET `+doubanAttemptColumn+` = ? WHERE id = ?`,
 		time.Now().Format(doubanCooldownFormat), globalID)
 	if err != nil {
 		applog.Error("[Douban] MarkDoubanAttempt failed for global_id=%d: %v", globalID, err)
@@ -87,11 +96,15 @@ func IsDoubanSearchOnCooldown(globalID int) bool {
 // 这里也不再 GetOrCreateGlobalID：为一次失败的搜索去新建 global_video 行，
 // 等于让采集结果凭空多出一条永远补不全的记录。
 func MarkDoubanSearchFailure(globalID int) error {
+	return MarkDoubanSearchFailureContext(context.Background(), globalID)
+}
+
+func MarkDoubanSearchFailureContext(ctx context.Context, globalID int) error {
 	if globalID <= 0 {
 		return nil
 	}
 	var row doubanFailuresRow
-	if err := instance.Get(&row, `SELECT COALESCE(douban_search_failures, 0) AS douban_search_failures
+	if err := instance.GetContext(ctx, &row, `SELECT COALESCE(douban_search_failures, 0) AS douban_search_failures
 		FROM global_video WHERE id = ?`, globalID); err != nil {
 		return err
 	}
@@ -100,7 +113,7 @@ func MarkDoubanSearchFailure(globalID int) error {
 	if newCount >= searchFailureCooldownThreshold {
 		cooldownUntil = time.Now().Add(doubanCooldownHours * time.Hour).Format(doubanCooldownFormat)
 	}
-	_, err := instance.Exec(`UPDATE global_video SET douban_search_failures = ?, douban_cooldown_until = COALESCE(NULLIF(?, ''), douban_cooldown_until) WHERE id = ?`,
+	_, err := instance.ExecContext(ctx, `UPDATE global_video SET douban_search_failures = ?, douban_cooldown_until = COALESCE(NULLIF(?, ''), douban_cooldown_until) WHERE id = ?`,
 		newCount, cooldownUntil, globalID)
 	if err != nil {
 		applog.Error("[Douban] MarkDoubanSearchFailure failed for global_id=%d: %v", globalID, err)
@@ -115,10 +128,14 @@ func MarkDoubanSearchFailure(globalID int) error {
 // ClearDoubanSearchFailure 搜索成功时清掉本行的失败计数与冷却。
 // 只清这一行：同名的其它记录各有各的尝试结果，不该跟着一起放行。
 func ClearDoubanSearchFailure(globalID int) error {
+	return ClearDoubanSearchFailureContext(context.Background(), globalID)
+}
+
+func ClearDoubanSearchFailureContext(ctx context.Context, globalID int) error {
 	if globalID <= 0 {
 		return nil
 	}
-	_, err := instance.Exec(`UPDATE global_video SET douban_search_failures = 0, douban_cooldown_until = NULL WHERE id = ?`, globalID)
+	_, err := instance.ExecContext(ctx, `UPDATE global_video SET douban_search_failures = 0, douban_cooldown_until = NULL WHERE id = ?`, globalID)
 	if err != nil {
 		applog.Error("[Douban] ClearDoubanSearchFailure failed for global_id=%d: %v", globalID, err)
 	}

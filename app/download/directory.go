@@ -14,6 +14,7 @@ type SettingSaver func(key, value string) error
 // Directory owns the mutable download-directory preference.
 type Directory struct {
 	mu         sync.RWMutex
+	setMu      sync.Mutex
 	custom     string
 	save       SettingSaver
 	homeDir    func() (string, error)
@@ -56,6 +57,8 @@ func (d *Directory) Get() string {
 
 // Set validates, creates and persists a custom directory. An empty directory resets to default.
 func (d *Directory) Set(directory string) (string, error) {
+	d.setMu.Lock()
+	defer d.setMu.Unlock()
 	directory = strings.TrimSpace(directory)
 	if directory != "" {
 		if info, err := os.Stat(directory); err == nil && !info.IsDir() {
@@ -69,13 +72,13 @@ func (d *Directory) Set(directory string) (string, error) {
 		}
 	}
 
-	d.mu.Lock()
-	d.custom = directory
-	d.mu.Unlock()
 	if d.save != nil {
 		if err := d.save("download_dir", directory); err != nil {
 			return d.Get(), apperror.Wrap(apperror.Storage, err, "persist download directory")
 		}
 	}
+	d.mu.Lock()
+	d.custom = directory
+	d.mu.Unlock()
 	return d.Get(), nil
 }

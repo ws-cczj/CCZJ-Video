@@ -14,6 +14,7 @@
 | 阅读源排名与章节／话次匹配 | [策略设计](reading-source-routing-design.md) · [实现入口](reading-source-routing-implementation.md) |
 | 阅读源质量检查与新源复测 | [质量基准](reading-source-quality-benchmark.md) |
 | 构建与 GitHub 发布 | [发布与自动更新](releases.md) |
+| 功能与接口全景图 | [生成与操作](development.md#开发与检查)，输出同一可缩放画布，公开绑定全部归入功能链 |
 | 全项目待核查范围 | [整改任务书](project-remediation.md)，其中待办需对照当前实现确认 |
 | 领域用语与架构选择 | [术语](../CONTEXT.md) · [ADR 目录](adr/) |
 

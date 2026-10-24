@@ -33,7 +33,7 @@ export interface CacheEntry {
   fetchMs: number         // 当初真下载这些字节用了多久（0 = 未知），命中时据此回报耗时
 }
 
-export type NetworkMode = 'normal' | 'server_congested' | 'local_network_slow'
+export type NetworkMode = 'normal' | 'bandwidth_limited' | 'unstable'
 
 export interface EpisodeCounter { hits: number; misses: number }
 
@@ -63,6 +63,7 @@ export const session = {
   // hls.js owns playback buffering. Background fetches start only once there is
   // sufficient media ahead, so they cannot compete with first play or recovery.
   playbackBufferAhead: 0,
+  playbackRate: 1,
   // 当前这批剧集所属的采集源：epKeyFrom 在没有 ep.source_key 时兜底用它
   currentSourceKey: '',
 }
@@ -82,6 +83,7 @@ export const prefetchState = {
   cacheSession: 0,
   inflightBySession: new Map<number, number>(),
   prefetchControllers: new Set<AbortController>(),
+  foregroundActive: 0,
   debounceTimer: null as number | null,
 }
 
@@ -93,6 +95,7 @@ export const telemetry = {
   recentFetchDurations: [] as number[],
   // 与 recentFetchDurations 一一对应的字节数：只有耗时算不出速率，也就无法判断命中该折算成多久
   recentFetchBytes: [] as number[],
+  recentMediaSeconds: [] as number[],
   // 为当前集使用一个可变引用，减少每次查找
   curEpStats: { hits: 0, misses: 0 } as EpisodeCounter,
 }
@@ -107,10 +110,10 @@ export const netDiag = {
   fastFetchStreak: 0,      // 连续快请求计数（<1s 计一次）
   consecutiveSlowSegs: 0,  // 连续慢分片计数（触发 ABR 降级）
   abrSwitchCallback: null as ((targetLevel: number) => void) | null,
-  normalCooldown: 0,         // 冷却倒计时：>0 时阻止切入 congested / local_network_slow
-  congestedReentryCount: 0,  // 冷却结束后，连续确认 congested 的计数
-  slowReentryCount: 0,       // 冷却结束后，连续确认 local_network_slow 的计数
-  hedgeInFlight: new Set<string>(),  // 正在进行对冲请求的 URL
+  throughputBps: 0,
+  downloadRatio: 0,
+  recoveryStreak: 0,
+  failureCount: 0,
 }
 
 /**

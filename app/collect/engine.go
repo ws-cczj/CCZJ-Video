@@ -33,6 +33,7 @@ type Engine struct {
 	stop    bool
 	pageGap time.Duration // 页间等待时长
 	ctx     context.Context
+	cancel  context.CancelFunc
 	// catalogBatch 让整轮采集只载入一遍 global_video 身份，而不是每页重读全表。
 	catalogBatch *db.CatalogBatch
 }
@@ -77,7 +78,16 @@ func NewEngineV2(
 func (e *Engine) SetContext(ctx context.Context) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.ctx = ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if e.cancel != nil {
+		e.cancel()
+	}
+	e.ctx, e.cancel = context.WithCancel(ctx)
+	if e.stop {
+		e.cancel()
+	}
 }
 
 // SetPageGap 设置页间等待时长（覆盖默认 30s）
@@ -131,6 +141,9 @@ func (e *Engine) Stop() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.stop = true
+	if e.cancel != nil {
+		e.cancel()
+	}
 }
 
 // IsPaused 返回当前是否处于暂停状态
@@ -299,6 +312,12 @@ func joinPages(pages []int) string {
 // Run 执行采集。返回的 RunStats 始终可用（含耗时、落库条数与失败页码）；
 // error 为 nil 表示全部落地，*CollectError 表示有整页没落地，其他错误表示致命失败。
 func (e *Engine) Run() (*RunStats, error) {
+	e.mu.Lock()
+	cancel := e.cancel
+	e.mu.Unlock()
+	if cancel != nil {
+		defer cancel()
+	}
 	e.log("开始采集: " + e.sourceKey)
 	startTime := time.Now()
 	stats := &RunStats{}
@@ -311,6 +330,9 @@ func (e *Engine) Run() (*RunStats, error) {
 
 	// finish 统一收口：耗时和"部分失败"错误只在这一处生成，避免某个返回点漏报。
 	finish := func(err error) (*RunStats, error) {
+		if e.IsStopped() || e.context().Err() != nil {
+			stats.Stopped = true
+		}
 		stats.ElapsedSeconds = time.Since(startTime).Seconds()
 		if err != nil {
 			return stats, err
@@ -322,7 +344,7 @@ func (e *Engine) Run() (*RunStats, error) {
 		return stats, nil
 	}
 
-	src, err := db.GetSourceByKey(e.sourceKey)
+	src, err := db.GetSourceByKeyContext(e.context(), e.sourceKey)
 	if err != nil {
 		return finish(apperror.Wrap(apperror.Storage, err, "获取采集源配置失败"))
 	}
@@ -639,7 +661,7 @@ func (e *Engine) saveVideos(videos []*model.Video) error {
 	// are projected directly into the durable catalog; playback data is fetched
 	// only when a user opens the detail view. 源数据里携带的豆瓣字段也由同一条
 	// 页事务写进 global_video，不再另跑一趟。
-	if err := db.UpsertCatalogItemsBatch(e.catalogBatch, e.sourceKey, videos); err != nil {
+	if err := db.UpsertCatalogItemsBatchContext(e.context(), e.catalogBatch, e.sourceKey, videos); err != nil {
 		return fmt.Errorf("upsert catalog: %w", err)
 	}
 

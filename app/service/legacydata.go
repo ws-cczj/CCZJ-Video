@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"time"
@@ -79,7 +80,10 @@ func (a *App) legacyDataCandidateDir() string {
 
 // LegacyDataNotice 报告旧数据目录里那份库的现状：在不在、多大、能找回多少收藏历史与源。
 // 已经自动迁移过或已合并过的，available 为假，但目录与状态照实返回，设置页仍能让用户看清。
-func (a *App) LegacyDataNotice() (LegacyNotice, error) {
+func (a *App) LegacyDataNotice(ctx context.Context) (LegacyNotice, error) {
+	return runHostRequest(a, ctx, "backup.LegacyDataNotice", a.legacyDataNotice)
+}
+func (a *App) legacyDataNotice(ctx context.Context) (LegacyNotice, error) {
 	notice := LegacyNotice{Status: legacyDataStatus()}
 	dir := a.legacyDataCandidateDir()
 	if dir == "" {
@@ -95,9 +99,9 @@ func (a *App) LegacyDataNotice() (LegacyNotice, error) {
 		notice.StatusAt = displayLegacyStatusAt(legacyDataStatusAt())
 		return notice, nil
 	}
-	counts, err := backupservice.NewService().PeekLegacy(dir)
+	counts, err := backupservice.NewService().PeekLegacyContext(ctx, dir)
 	if err != nil {
-		notice.Reason = err.Error()
+		notice.Reason = apperror.Public(err).Message
 		applog.Warn("[Legacy] 旧库预读失败 %s: %v", dir, err)
 		return notice, nil
 	}
@@ -140,12 +144,15 @@ func displayLegacyStatusAt(raw string) string {
 
 // LegacyDataMerge 把旧库里的采集源、收藏、历史与元数据并进当前库。
 // 路径由后端自己算（同 LegacyDataNotice），前端递不进任意目录。
-func (a *App) LegacyDataMerge() (backupservice.Result, error) {
+func (a *App) LegacyDataMerge(ctx context.Context) (backupservice.Result, error) {
+	return runHostRequest(a, ctx, "backup.LegacyDataMerge", a.legacyDataMerge)
+}
+func (a *App) legacyDataMerge(ctx context.Context) (backupservice.Result, error) {
 	dir := a.legacyDataCandidateDir()
 	if dir == "" {
 		return backupservice.Result{}, apperror.New(apperror.NotFound, "没有找到旧数据目录里的数据库")
 	}
-	result, err := backupservice.NewService().MergeLegacy(dir)
+	result, err := backupservice.NewService().MergeLegacyContext(ctx, dir)
 	if err != nil {
 		return backupservice.Result{}, err
 	}

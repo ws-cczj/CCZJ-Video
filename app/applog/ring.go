@@ -1,21 +1,24 @@
 package applog
 
 import (
+	"fmt"
 	"strings"
 	"time"
 )
 
 // DefaultRingSize 是内存日志环形缓冲的容量。
-// 它只保留最近的若干条，用于界面实时展示与增量拉取；落盘文件仍是权威来源。
+// 它只保留最近的若干条，用于界面实时展示与增量拉取；写盘失败的记录仅存在这里。
 const DefaultRingSize = 5000
 
-// Record 是一条已落盘日志的结构化视图，字段顺序与文件行格式一一对应。
+// Record includes memory-only evidence when disk writes fail.
 type Record struct {
-	Seq     uint64 `json:"seq"`
-	TS      int64  `json:"ts"` // unix 毫秒
-	Level   string `json:"level"`
-	Caller  string `json:"caller"`
-	Message string `json:"message"`
+	SessionID string `json:"session_id,omitempty"`
+	Persisted bool   `json:"persisted"`
+	Seq       uint64 `json:"seq"`
+	TS        int64  `json:"ts"` // unix 毫秒
+	Level     string `json:"level"`
+	Caller    string `json:"caller"`
+	Message   string `json:"message"`
 }
 
 // Subscribe 注册一个实时日志订阅者。返回的通道容量有限，
@@ -149,18 +152,20 @@ func (l *Logger) orderedLocked(since uint64, limit int) []Record {
 	return out
 }
 
-// pushLocked 把一条已写盘的记录放入环形缓冲并广播给订阅者。调用方需持有 l.mu。
-func (l *Logger) pushLocked(level Level, ts time.Time, caller, msg string) {
+// pushLocked 放入环形缓冲并广播；persisted 表示文件写入成功。调用方需持有 l.mu。
+func (l *Logger) pushLocked(level Level, ts time.Time, caller, msg string, persisted bool) {
 	if len(l.ring) == 0 {
 		l.ring = make([]Record, DefaultRingSize)
 	}
 	l.seq++
 	rec := Record{
-		Seq:     l.seq,
-		TS:      ts.UnixMilli(),
-		Level:   level.String(),
-		Caller:  caller,
-		Message: msg,
+		SessionID: l.health.SessionID,
+		Persisted: persisted,
+		Seq:       l.seq,
+		TS:        ts.UnixMilli(),
+		Level:     level.String(),
+		Caller:    caller,
+		Message:   msg,
 	}
 	n := len(l.ring)
 	l.ring[l.head%n] = rec
@@ -197,10 +202,18 @@ func ParseRecordLine(line string) (Record, bool) {
 	if _, known := parseLevel(level); !known {
 		return Record{}, false
 	}
-	rec := Record{TS: ts.UnixMilli(), Level: level}
+	rec := Record{TS: ts.UnixMilli(), Level: level, Persisted: true}
 	if caller, tail, ok := bracketField(rest); ok {
 		rec.Caller = caller
 		rec.Message = strings.TrimPrefix(tail, " ")
+		if metadata, message, ok := bracketField(rec.Message); ok && strings.HasPrefix(metadata, "session=") {
+			if n, _ := fmt.Sscanf(metadata, "session=%s seq=%d", &rec.SessionID, &rec.Seq); n == 2 {
+				if strings.Contains(metadata, "persisted=false") {
+					rec.Persisted = false
+				}
+				rec.Message = strings.TrimPrefix(message, " ")
+			}
+		}
 		return rec, true
 	}
 	rec.Message = rest

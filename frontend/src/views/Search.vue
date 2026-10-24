@@ -450,6 +450,10 @@ function removeHistoryItem(kw: string): void {
 const sourceSearching = ref(false)
 const sourceSearchResults = ref<Video[]>([])
 const sourceSearchTotal = ref(0)
+const sourceSearchLimited = ref(false)
+const sourceSearchFiltered = ref(0)
+const sourceSearchUnclassified = ref(0)
+const sourceSearchError = ref('')
 const sourceSearchPage = ref(1)
 const sourceSearchPageCount = ref(1)
 const sourceSearchPageSize = ref(50)
@@ -533,6 +537,12 @@ async function doSourceSearch(page: number = 1): Promise<void> {
   sourceSearchRequestId = requestId
   clearSearchResults()
   sourceSearching.value = true
+  sourceSearchError.value = ''
+  sourceSearchLimited.value = false
+  sourceSearchFiltered.value = 0
+  sourceSearchUnclassified.value = 0
+  sourceSearchTotal.value = 0
+  sourceSearchPageCount.value = 1
   hasSourceSearched.value = true
   // 切换到新搜索或新页时清空当前结果
   sourceSearchResults.value = []
@@ -545,6 +555,9 @@ async function doSourceSearch(page: number = 1): Promise<void> {
     sourceSearchRequest = request
     const resp = (await request) as any
     if (generation !== sourceSearchGeneration || keyword.value.trim() !== kw || currentSearchSource.value !== sourceKey) return
+    sourceSearchLimited.value = resp?.limited === true
+    sourceSearchFiltered.value = resp?.filtered_count ?? 0
+    sourceSearchUnclassified.value = resp?.unclassified_count ?? 0
     // 仅更新分页元数据
     sourceSearchTotal.value = resp?.total || sourceSearchResults.value.length
     const pc = resp?.page_count || 0
@@ -562,7 +575,9 @@ async function doSourceSearch(page: number = 1): Promise<void> {
       markImported(remoteVideos.filter(v => v.in_catalog).map(v => String(v.vod_id ?? '')).filter(Boolean))
     }
   } catch (e) {
-    if (generation === sourceSearchGeneration && normalizeApiError(e).code !== 'CANCELLED') console.warn(t('search.sourceSearchFailed'), e)
+    if (generation === sourceSearchGeneration && normalizeApiError(e).code !== 'CANCELLED') {
+      sourceSearchError.value = normalizeApiError(e).message
+    }
   } finally {
     if (generation === sourceSearchGeneration) {
       sourceSearchRequest = null; sourceSearchRequestId = ''
@@ -628,6 +643,10 @@ function clearSourceResults(): void {
   sourceSearching.value = false
   sourceSearchResults.value = []
   sourceSearchTotal.value = 0
+  sourceSearchError.value = ''
+  sourceSearchLimited.value = false
+  sourceSearchFiltered.value = 0
+  sourceSearchUnclassified.value = 0
   sourceSearchPage.value = 1
   sourceSearchPageCount.value = 1
   hasSourceSearched.value = false
@@ -986,6 +1005,13 @@ function onSourceVideoClick(v: Video): void {
       </div>
     </div>
 
+    <p v-if="hasKeyword && hasSourceSearched && !sourceSearching && sourceSearchLimited" class="cczj-text-sm cczj-text-muted cczj-mb-4" role="status">{{ t('search.limitedSourceResults') }}</p>
+    <p v-if="hasKeyword && hasSourceSearched && !sourceSearching && sourceSearchFiltered > 0" class="cczj-text-sm cczj-text-muted cczj-mb-4" role="status">{{ t('search.filteredSourceResults', { count: sourceSearchFiltered, unknown: sourceSearchUnclassified }) }}</p>
+
+    <EmptyState v-if="hasKeyword && hasSourceSearched && !sourceSearching && sourceSearchError" :title="t('search.sourceSearchFailed')" :description="sourceSearchError">
+      <Button variant="primary" @click="doSourceSearch(sourceSearchPage)">{{ t('common.retry') }}</Button>
+    </EmptyState>
+
     <!-- 搜索中顶部紧凑进度条（已开始出现结果后，进度条移到结果区顶部） -->
     <div v-if="hasKeyword && sourceSearching && sourceSearchResults.length > 0" class="source-inline-progress cczj-mb-3">
       <div class="sip-bar">
@@ -1121,14 +1147,17 @@ function onSourceVideoClick(v: Video): void {
         </div>
       </div>
 
-      <!-- 分页控件 -->
+    </div>
+
+      <!-- 空页也保留源站分页，分类过滤不能阻止用户继续翻页。 -->
       <div
-        v-if="!sourceSearching && sourceSearchPageCount > 1"
+        v-if="hasKeyword && hasSourceSearched && !sourceSearching && !sourceSearchError && sourceSearchPageCount > 1"
         class="source-search-pagination cczj-flex cczj-items-center cczj-justify-center cczj-gap-2 cczj-my-4"
       >
         <button
           class="page-btn cczj-cursor-pointer cczj-rounded"
           :disabled="sourceSearchPage <= 1"
+          :aria-label="t('search.prevPage')"
           @click="goSourceSearchPage(sourceSearchPage - 1)"
         >
           <Icon name="back" :size="12" />
@@ -1145,22 +1174,22 @@ function onSourceVideoClick(v: Video): void {
         <button
           class="page-btn cczj-cursor-pointer cczj-rounded"
           :disabled="sourceSearchPage >= sourceSearchPageCount"
+          :aria-label="t('search.nextPage')"
           @click="goSourceSearchPage(sourceSearchPage + 1)"
         >
           <Icon name="chevron-right" :size="12" />
         </button>
         <span class="page-info cczj-text-sm cczj-text-muted">{{ t('search.pageInfo', { page: sourceSearchPage, total: sourceSearchPageCount }) }} · {{ t('search.totalItems', { count: sourceSearchTotal }) }}</span>
       </div>
-    </div>
 
     <div
-      v-if="hasKeyword && hasSourceSearched && !sourceSearching && sourceSearchResults.length === 0"
+      v-if="hasKeyword && hasSourceSearched && !sourceSearching && !sourceSearchError && sourceSearchResults.length === 0"
       class="cczj-mb-4"
     >
       <EmptyState
         icon="📡"
-        :title="t('search.noSourceResults')"
-        :description="t('search.noSourceResultsHint')"
+        :title="t(sourceSearchFiltered > 0 ? 'search.filteredSourcePage' : sourceSearchLimited ? 'search.noSourceCandidates' : 'search.noSourceResults')"
+        :description="sourceSearchFiltered > 0 ? undefined : t('search.noSourceResultsHint')"
       />
     </div>
 

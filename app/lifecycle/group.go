@@ -22,7 +22,13 @@ type Group struct {
 
 // NewGroup creates a background task group.
 func NewGroup() *Group {
-	ctx, cancel := context.WithCancel(context.Background())
+	return NewGroupWithContext(context.Background())
+}
+
+// NewGroupWithContext creates an independently awaited owner whose cancellation
+// follows its parent. Closing the child never cancels the parent.
+func NewGroupWithContext(parent context.Context) *Group {
+	ctx, cancel := context.WithCancel(parent)
 	return &Group{ctx: ctx, cancel: cancel, done: make(chan struct{}), tasks: make(map[string]int)}
 }
 
@@ -48,7 +54,7 @@ func (g *Group) ActiveTasks() map[string]int {
 // release as well as Go tasks, without allocating a waiter goroutine per call.
 func (g *Group) Track(name string) (release func(), accepted bool) {
 	g.mu.Lock()
-	if g.stopped {
+	if g.stopped || g.ctx.Err() != nil {
 		g.mu.Unlock()
 		return func() {}, false
 	}
@@ -73,7 +79,7 @@ func (g *Group) Track(name string) (release func(), accepted bool) {
 // when shutdown has started, ensuring WaitGroup.Add never races with Wait.
 func (g *Group) Go(name string, fn func(context.Context)) bool {
 	g.mu.Lock()
-	if g.stopped {
+	if g.stopped || g.ctx.Err() != nil {
 		g.mu.Unlock()
 		applog.Warn("background task %s was rejected during shutdown", name)
 		return false
@@ -103,6 +109,14 @@ func (g *Group) Go(name string, fn func(context.Context)) bool {
 
 // Stop cancels all tasks and waits up to timeout for their completion.
 func (g *Group) Stop(timeout time.Duration) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return g.StopContext(ctx)
+}
+
+// Cancel rejects new work and signals all owned tasks before waiting begins.
+// Separate owners can therefore be cancelled together without serial drain delays.
+func (g *Group) Cancel() {
 	g.stopOnce.Do(func() {
 		g.mu.Lock()
 		g.stopped = true
@@ -113,17 +127,22 @@ func (g *Group) Stop(timeout time.Duration) bool {
 			close(g.done)
 		}()
 	})
+}
+
+// StopContext cancels work and waits within the caller's shared shutdown deadline.
+func (g *Group) StopContext(ctx context.Context) bool {
+	g.Cancel()
 	select {
 	case <-g.done:
 		return true
-	case <-time.After(timeout):
+	case <-ctx.Done():
 		g.mu.Lock()
 		pending := make([]string, 0, len(g.tasks))
 		for name := range g.tasks {
 			pending = append(pending, name)
 		}
 		g.mu.Unlock()
-		applog.Warn("background tasks did not stop within %s: %v", timeout, pending)
+		applog.Warn("background tasks did not stop: %v (%v)", pending, ctx.Err())
 		return false
 	}
 }

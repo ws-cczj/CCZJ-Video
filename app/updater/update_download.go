@@ -1,7 +1,9 @@
 package updater
 
 import (
+	"cczjVideo/app/netbudget"
 	"cczjVideo/app/netpolicy"
+	"context"
 	"io"
 	"net/http"
 	"os"
@@ -17,6 +19,20 @@ import (
 )
 
 var mobileUpdateDirectory atomic.Value
+
+// Downloader owns the HTTP transport shared by checksum, probes and package I/O.
+// Its budget is supplied by application assembly, including the response bodies.
+type Downloader struct{ budget *netbudget.Budget }
+
+func NewDownloader(budget *netbudget.Budget) *Downloader { return &Downloader{budget: budget} }
+
+func (d *Downloader) client() *http.Client {
+	transport := netpolicy.WrapTransport("update", netstats.WrapTransport(netstats.CategoryUpdate, &http.Transport{MaxIdleConns: 10, IdleConnTimeout: 60 * time.Second, TLSHandshakeTimeout: 15 * time.Second}))
+	if d.budget != nil {
+		transport = d.budget.Wrap("update", transport)
+	}
+	return &http.Client{Timeout: DownloadTimeout, Transport: transport}
+}
 
 // SetMobileUpdateDirectory is supplied by application assembly before requests.
 func SetMobileUpdateDirectory(directory func() string) { mobileUpdateDirectory.Store(directory) }
@@ -99,6 +115,18 @@ func scanDownloadedArtifacts(appDir, exeName, version string) (string, string) {
 // 先并发测速所有下载源（直连+代理），选最快的下载；失败自动回退下一个源
 // 返回下载文件的本地路径
 func DownloadUpdate(downloadURL string, progress DownloadProgress) (string, error) {
+	return NewDownloader(nil).DownloadContext(context.Background(), downloadURL, progress)
+}
+
+// DownloadContext keeps every phase under the caller's lifetime and waits for probes.
+func (d *Downloader) DownloadContext(ctx context.Context, downloadURL string, progress DownloadProgress) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, DownloadTimeout)
+	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	client := d.client()
+	defer client.CloseIdleConnections()
 	applog.Info("[Updater] 开始下载: %s", downloadURL)
 
 	// 确定保存路径：应用同目录
@@ -109,7 +137,7 @@ func DownloadUpdate(downloadURL string, progress DownloadProgress) (string, erro
 	applog.Info("[Updater] 应用目录: %s", appDir)
 
 	// 下载前先要到可信摘要：拿不到就不下载，而不是下完再警告一句。
-	expectedSHA, err := requireArtifact(downloadURL)
+	expectedSHA, err := requireArtifact(ctx, client, downloadURL)
 	if err != nil {
 		return "", err
 	}
@@ -119,38 +147,41 @@ func DownloadUpdate(downloadURL string, progress DownloadProgress) (string, erro
 	if progress != nil {
 		progress(0, 0, 0) // 通知前端：开始连接
 	}
-	candidates := speedTestSources(downloadURL)
+	candidates := speedTestSources(ctx, client, downloadURL)
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	if len(candidates) == 0 {
 		return "", apperror.New(apperror.Unavailable, "所有下载源均不可用")
 	}
 	applog.Info("[Updater] HEAD 测速完成，进行吞吐量测试...")
 
 	// 对前 3 个候选源进行真实吞吐量测试（Range 下载 512KB）
-	sources := rankSourcesByThroughput(candidates, 3)
+	sources := rankSourcesByThroughput(ctx, client, candidates, 3)
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	if len(sources) > 0 {
 		applog.Info("[Updater] 吞吐量测试完成，最快源: %s", sources[0].source)
 	}
 
 	// ====== 按速度顺序尝试下载 ======
-	client := &http.Client{
-		Timeout: DownloadTimeout,
-		Transport: netpolicy.WrapTransport("update-download", netstats.WrapTransport(netstats.CategoryUpdate, &http.Transport{
-			MaxIdleConns:        10,
-			IdleConnTimeout:     60 * time.Second,
-			TLSHandshakeTimeout: 15 * time.Second,
-		})),
-	}
-	defer client.CloseIdleConnections()
-	return downloadFromSources(appDir, downloadURL, expectedSHA, sources, client, progress)
+	return downloadFromSources(ctx, appDir, downloadURL, expectedSHA, sources, client, progress)
 }
 
 // downloadFromSources writes and verifies a package after checksum and source selection.
-func downloadFromSources(appDir, downloadURL, expectedSHA string, sources []speedTestResult, client *http.Client, progress DownloadProgress) (string, error) {
+func downloadFromSources(ctx context.Context, appDir, downloadURL, expectedSHA string, sources []speedTestResult, client *http.Client, progress DownloadProgress) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	var lastErr error
 	for i, src := range sources {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
 		applog.Info("[Updater] 使用下载源 [%d/%d] %s", i+1, len(sources), src.source)
 
-		req, err := http.NewRequest("GET", src.url, nil)
+		req, err := http.NewRequestWithContext(ctx, "GET", src.url, nil)
 		if err != nil {
 			continue
 		}
@@ -189,11 +220,14 @@ func downloadFromSources(appDir, downloadURL, expectedSHA string, sources []spee
 			return "", apperror.Wrap(apperror.Storage, err, "创建文件失败")
 		}
 		partialPath := out.Name()
-		downloaded, copyErr := copyUpdateResponse(out, resp, progress)
+		downloaded, copyErr := copyUpdateResponse(ctx, out, resp, progress)
 		closeErr := out.Close()
 		resp.Body.Close()
 		if copyErr != nil {
 			_ = os.Remove(partialPath)
+			if err := ctx.Err(); err != nil {
+				return "", err
+			}
 			applog.Warn("[Updater] 源 %s 下载失败: %v", src.source, copyErr)
 			if apperror.CodeOf(copyErr) == apperror.Storage {
 				return "", copyErr
@@ -215,11 +249,15 @@ func downloadFromSources(appDir, downloadURL, expectedSHA string, sources []spee
 			continue
 		}
 
-		if err := verifyArtifact(partialPath, expectedSHA); err != nil {
+		if err := verifyArtifactContext(ctx, partialPath, expectedSHA); err != nil {
 			applog.Error("[Updater] 校验失败，删除产物: %v", err)
 			_ = os.Remove(partialPath)
 			lastErr = apperror.Wrap(apperror.Corrupt, err, "更新包校验失败")
 			continue
+		}
+		if err := ctx.Err(); err != nil {
+			_ = os.Remove(partialPath)
+			return "", err
 		}
 		savePath := strings.TrimSuffix(partialPath, ".part") + filepath.Ext(updateStagingName(downloadURL))
 		if err := os.Rename(partialPath, savePath); err != nil {
@@ -245,7 +283,7 @@ func downloadFromSources(appDir, downloadURL, expectedSHA string, sources []spee
 	return "", apperror.New(apperror.Unavailable, "所有下载源均失败")
 }
 
-func copyUpdateResponse(out io.Writer, resp *http.Response, progress DownloadProgress) (int64, error) {
+func copyUpdateResponse(ctx context.Context, out io.Writer, resp *http.Response, progress DownloadProgress) (int64, error) {
 	total := resp.ContentLength
 	if progress != nil {
 		progress(0, total, 0)
@@ -255,6 +293,9 @@ func copyUpdateResponse(out io.Writer, resp *http.Response, progress DownloadPro
 	lastTime := time.Now()
 	startTime := lastTime
 	for {
+		if err := ctx.Err(); err != nil {
+			return downloaded, err
+		}
 		if time.Since(startTime) > DownloadTimeout {
 			return downloaded, apperror.Newf(apperror.Timeout, "下载超时（超过 %v）", DownloadTimeout)
 		}

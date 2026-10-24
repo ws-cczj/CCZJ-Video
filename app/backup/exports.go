@@ -1,10 +1,13 @@
 package backup
 
 import (
+	"cczjVideo/app/payload"
+	"context"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"cczjVideo/app/apperror"
 	"cczjVideo/app/applog"
@@ -26,6 +29,7 @@ func (s *Service) Exports(dataDir string) ([]ArchiveInfo, error) {
 		return nil, apperror.Wrap(apperror.Storage, err, "read export directory")
 	}
 	files := make([]ArchiveInfo, 0, len(entries))
+	modified := make(map[string]time.Time, len(entries))
 	for _, entry := range entries {
 		if entry.IsDir() || !isBackupFileName(entry.Name()) {
 			continue
@@ -39,24 +43,39 @@ func (s *Service) Exports(dataDir string) ([]ArchiveInfo, error) {
 			ModifiedAt: info.ModTime().Format("2006-01-02 15:04:05"),
 			SizeBytes:  info.Size(),
 		})
+		modified[entry.Name()] = info.ModTime()
 	}
-	sort.Slice(files, func(i, j int) bool { return files[i].Name > files[j].Name })
+	sort.Slice(files, func(i, j int) bool {
+		left, right := modified[files[i].Name], modified[files[j].Name]
+		if left.Equal(right) {
+			return files[i].Name > files[j].Name
+		}
+		return left.After(right)
+	})
 	return files, nil
 }
 
 // ImportFile merges one file from the exports directory. The caller passes a file
 // name only, so the backend decides which directory may be read.
 func (s *Service) ImportFile(dataDir, name string) (Result, error) {
+	return s.ImportFileContext(context.Background(), dataDir, name)
+}
+func (s *Service) ImportFileContext(ctx context.Context, dataDir, name string) (Result, error) {
 	path, err := s.exportPath(dataDir, name)
 	if err != nil {
 		return Result{}, err
 	}
-	raw, err := os.ReadFile(path)
+	file, err := os.Open(path)
+	if err != nil {
+		return Result{}, apperror.Wrap(apperror.Storage, err, "read backup file")
+	}
+	defer file.Close()
+	raw, err := payload.Read(ctx, file, maxBackupBytes)
 	if err != nil {
 		return Result{}, apperror.Wrap(apperror.Storage, err, "read backup file")
 	}
 	applog.InfoFields("importing backup file", applog.Fields{"file": name, "bytes": len(raw)})
-	return s.ImportBytes(name, raw, "exports:"+name)
+	return s.ImportBytesContext(ctx, name, raw, "exports:"+name)
 }
 
 func (s *Service) exportPath(dataDir, name string) (string, error) {

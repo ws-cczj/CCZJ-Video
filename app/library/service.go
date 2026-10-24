@@ -12,6 +12,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -47,6 +48,7 @@ const (
 
 // Service 是阅读模式的资源载入服务。
 type Service struct {
+	stopReads      context.CancelFunc
 	fetcher        *provider.Fetcher
 	textCache      *proxy.BlobStore
 	limits         provider.Limits
@@ -81,6 +83,7 @@ func NewService(dataDir func() string) *Service {
 }
 
 func NewServiceWithRuntime(dataDir func() string, owner context.Context, budget *netbudget.Budget) *Service {
+	owner, stopReads := context.WithCancel(owner)
 	fetcher := provider.NewFetcher()
 	fetcher.ConfigureBudget(budget)
 	gate := quality.NewNetworkGate()
@@ -88,6 +91,7 @@ func NewServiceWithRuntime(dataDir func() string, owner context.Context, budget 
 	// of WrapTransport are guaranteed here, before publication.
 	_ = fetcher.WrapTransport(gate.Wrap)
 	return &Service{
+		stopReads:   stopReads,
 		readingGate: gate,
 		textReads:   workflight.New[*ChapterText](owner, 64),
 		pageReads:   workflight.New[*ChapterPages](owner, 64),
@@ -100,17 +104,13 @@ func NewServiceWithRuntime(dataDir func() string, owner context.Context, budget 
 }
 
 func (s *Service) Close(ctx context.Context) error {
+	// A slow reader must not postpone cancellation of the other content kinds.
+	s.stopReads()
 	first := s.textReads.Close(ctx)
 	second := s.pageReads.Close(ctx)
 	third := s.trendReads.Close(ctx)
 	s.fetcher.Close()
-	if first != nil {
-		return first
-	}
-	if second != nil {
-		return second
-	}
-	return third
+	return errors.Join(first, second, third)
 }
 
 func (s *Service) SetMaintenanceLauncher(launch func(string, func(context.Context)) bool) {
@@ -271,7 +271,10 @@ func SourcesHeaders(sourceKey string) map[string]string {
 
 // resolve 取出一个源并解析它的文档。
 func (s *Service) resolve(sourceKey string, kind model.SourceKind) (*resolvedSource, error) {
-	source, err := db.GetSourceByKey(sourceKey)
+	return s.resolveContext(context.Background(), sourceKey, kind)
+}
+func (s *Service) resolveContext(ctx context.Context, sourceKey string, kind model.SourceKind) (*resolvedSource, error) {
+	source, err := db.GetSourceByKeyContext(ctx, sourceKey)
 	if err != nil {
 		return nil, apperror.Wrap(apperror.Storage, err, fmt.Sprintf("读取来源 %s 失败", sourceKey))
 	}

@@ -1,6 +1,7 @@
 package detail
 
 import (
+	"cczjVideo/app/applog"
 	"cczjVideo/app/collect"
 	"cczjVideo/app/db"
 	"cczjVideo/app/model"
@@ -16,8 +17,12 @@ var testDBDir string
 
 func TestMain(m *testing.M) {
 	testDBDir, _ = os.MkdirTemp("", "cczj-detail-test-")
+	if err := applog.Init(testDBDir); err != nil {
+		panic(err)
+	}
 	code := m.Run()
 	db.Close()
+	applog.Default().Close()
 	_ = os.RemoveAll(testDBDir)
 	os.Exit(code)
 }

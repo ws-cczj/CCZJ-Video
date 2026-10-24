@@ -1,7 +1,10 @@
 // Package settings provides the application settings boundary.
 package settings
 
-import "cczjVideo/app/db"
+import (
+	"cczjVideo/app/db"
+	"context"
+)
 
 // Service owns access to persisted application settings.
 type Service struct{}
@@ -19,4 +22,9 @@ func (s *Service) Get(key string) (string, error) {
 // Set persists a setting value.
 func (s *Service) Set(key, value string) error {
 	return db.SetSetting(key, value)
+}
+
+// SetMany atomically saves values that form one logical preference.
+func (s *Service) SetMany(ctx context.Context, values map[string]string) error {
+	return db.SetSettings(ctx, values)
 }

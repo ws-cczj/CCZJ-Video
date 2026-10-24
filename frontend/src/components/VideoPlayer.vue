@@ -145,6 +145,8 @@ function revealMobileControls():void {chrome.reveal()}
 const loading = ref(true)
 const preparationStage = ref<'video'|'accessories'|'danmaku'|'ready'|'complete'>('video')
 const accessoriesReady = ref(false), prepared = ref(false), preparationNote = ref('')
+const preparationMessage = computed(() => preparationStage.value === 'ready' && preparationNote.value
+  ? preparationNote.value : t(`playerPreparation.${preparationStage.value}`))
 const autoplayStarting = ref(false)
 let preparingAccessories = false, settleDanmaku: ((status:string) => void) | undefined
 const videoReady = ref(false)
@@ -246,14 +248,18 @@ function updateBuffer(): void {
     TsCache.setPlaybackBufferAhead(0)
     return
   }
-  // 用最后一段 buffer 的结尾来表示"已缓冲到的最远位置"
-  const end = buf.end(buf.length - 1)
+  // A distant range left after seeking cannot feed the current playback point.
+  let end = v.currentTime
+  for (let i = 0; i < buf.length; i++) {
+    if (buf.start(i) <= end + .05 && buf.end(i) > end) end = buf.end(i)
+  }
   bufferPct.value = Math.max(0, Math.min(100, (end / v.duration) * 100))
-  TsCache.setPlaybackBufferAhead(Math.max(0, end - v.currentTime))
+  TsCache.setPlaybackBufferAhead(Math.max(0, end - v.currentTime), v.playbackRate)
 }
 
 // 缓存监控
-const telemetry=usePlaybackTelemetry({video:getVideoEl,url:()=>props.url,cachedBitrate:()=>extractBitrateFromCachedTs(),t})
+const telemetry=usePlaybackTelemetry({video:getVideoEl,url:()=>props.url,cachedBitrate:()=>extractBitrateFromCachedTs(),t,
+  stall:(phase,detail)=>logStartup(`player_buffering_${phase}`,detail)})
 const {cacheStats,loadingCached,loadingTotal,loadingSpeed,loadingElapsed,startLoadingStats,stopLoadingStats,
   resetPerfBaseline,alignPlaybackClock,endStall}=telemetry
 const { videoInfo, extractBitrateFromCachedTs } = useVideoInfo({
@@ -342,6 +348,8 @@ const source = createPlaybackSource({
   recovering:detail=>playerEvents.issue('source',detail,true),
   unrecoverable: destroyPlayer,
   bufferChanged: updateBuffer,
+  networkPolicy: detail => logStartup('player_network_policy', detail),
+  networkIssue: detail => logStartup('player_network_issue', detail),
 })
 
 async function loadHls(video: HTMLVideoElement, url: string, continuation?:number): Promise<void> {
@@ -423,6 +431,7 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
     resumeStreaming(video)
   })
   on('pause', () => {
+    endStall('paused')
     if(!firstPlayingLogged)logStartup('player_startup_pause',{prepared:prepared.value,autoplay_pending:autoplayStarting.value})
     playback.cancel()
     resume.save()
@@ -462,6 +471,7 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
   })
   on('waiting', () => {
     if (video.paused || video.ended) return
+    updateBuffer()
     telemetry.beginStall()
     loading.value = true
     startLoadingStats()
@@ -471,13 +481,13 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
     loading.value=false
     if(!firstPlayingLogged){firstPlayingLogged=true;logStartup('player_media_playing',{prepared:prepared.value})}
     perf.markFirstFrame()
-    endStall()
+    endStall('playing')
     mediaSession.later(()=>{if(prepared.value)preparationStage.value='complete'},1200)
   })
   on('canplay', () => {
     flushPendingSeek()
     videoReady.value = true
-    endStall()
+    endStall('ready')
     loading.value = !prepared.value || autoplayStarting.value || (autoPlayEnabled.value&&!video.hasAttribute('data-autoplay-done'))
     // ⭐ 修复：视频解码出帧后才触发自动播放，避免 AbortError
     tryAutoplay(video)
@@ -868,11 +878,12 @@ const controlState = {
   get muted(){return muted.value}, get hasPrev(){return props.hasPrev}, get hasNext(){return props.hasNext},
 }
 const controlSource={get url(){return props.url},get title(){return props.title}}
-const mobileCommands={video:getVideoEl,play:togglePlay,fullscreen:toggleFullscreen,pip:togglePiP,speed:changeSpeed,interaction:keepVisible}
+const mobileCommands={video:getVideoEl,play:togglePlay,previous:()=>{if(props.hasPrev)emit('prev')},next:()=>{if(props.hasNext)emit('next')},
+  fullscreen:toggleFullscreen,pip:togglePiP,speed:changeSpeed,interaction:keepVisible}
 const desktopCommands = {video:getVideoEl,play:togglePlay,previous:()=>emit('prev'),next:()=>emit('next'),
   fullscreen:toggleFullscreen,mute:toggleMute,volume:onVolumeInput,speed:changeSpeed,interaction:keepVisible}
 
-defineExpose({ togglePiP, toggleFullscreen, video:getVideoEl, overlayHost:()=>wrapperRef.value })
+defineExpose({ togglePiP, toggleFullscreen, video:getVideoEl, overlayHost:()=>wrapperRef.value,openLines:()=>mobileChrome.value?.toggle('lines') })
 </script>
 
 <template>
@@ -894,6 +905,7 @@ defineExpose({ togglePiP, toggleFullscreen, video:getVideoEl, overlayHost:()=>wr
       <PlayerDanmakuButtons v-if="mobile&&!isFullscreen&&danmakuKey" mobile :enabled="!!danmakuRef?.enabled" :ready="!!danmakuRef?.ready" :expanded="!!danmakuRef?.engaged" @toggle="danmakuRef?.toggle();keepVisible()" @settings="(anchor,hover)=>{danmakuRef?.open(anchor,hover);keepVisible()}" @leave="danmakuRef?.scheduleClose()" @dismiss="danmakuRef?.close()" />
       <button v-if="mobile" class="cczj-mobile-player-favorite" :aria-label="t(isFav?'detail.removeFav':'detail.addFav')" :aria-pressed="isFav" :disabled="favBusy" @click.stop="emit('toggleFavorite')"><Icon name="star" :size="21" /></button>
       <button v-if="mobile && isFullscreen && controlState.canCast" class="cczj-mobile-player-cast" :aria-label="t('mobile.cast')" @click.stop="mobileChrome?.toggle('cast')"><Icon name="cast" :size="22" /></button>
+      <button v-if="mobile && isFullscreen && $slots.lines" class="cczj-mobile-player-lines" :aria-label="t('playLine.switch')" :aria-expanded="!!mobileChrome?.linesOpen" @click.stop="mobileChrome?.toggle('lines');keepVisible()"><Icon name="list" :size="20" /><span>{{t('playLine.title')}}</span></button>
       <button v-if="mobile" class="cczj-mobile-player-more-button" :aria-label="t('mobile.playerMore')" :aria-expanded="!!mobileChrome?.menuOpen" @click.stop="mobileChrome?.toggle('more'); keepVisible()"><Icon name="more" :size="22" /></button>
       <button v-show="!mobile" class="fav-btn-in-player" :class="{ 'is-fav': isFav }" :disabled="favBusy"
         :aria-label="isFav ? t('detail.removeFav') : t('player.addFavorite')"
@@ -916,7 +928,6 @@ defineExpose({ togglePiP, toggleFullscreen, video:getVideoEl, overlayHost:()=>wr
 
     <video class="native-video" :poster="mobile ? mobileVideoPoster : undefined" playsinline preload="auto" @click.stop="mobile ? onWrapperClick($event) : togglePlay()"></video>
     <PlayerDanmaku v-if="danmakuKey&&accessoriesReady" ref="danmakuRef" :media-key="danmakuKey" :media-title="mediaTitle" :media-year="mediaYear" :media-kind="mediaKind" :episode-label="episodeLabel" :current="current" :duration="duration" :playing="playing&&!loading" :fullscreen="isFullscreen" :mobile="mobile" :host="wrapperRef" :video="getVideoEl" @prepared="onDanmakuPrepared" />
-    <Transition name="cczj-preparation"><div v-if="preparationStage!=='complete'&&loading&&!errorMsg" class="cczj-player-preparation" role="status" aria-live="polite"><i aria-hidden="true"></i><span>{{preparationStage==='ready'&&preparationNote?preparationNote:t(`playerPreparation.${preparationStage}`)}}</span></div></Transition>
     <div v-show="activeSubtitle" class="vp-subtitle" :class="{ 'with-controls': showControls }">
       <span>{{ activeSubtitle }}</span>
     </div>
@@ -934,7 +945,7 @@ defineExpose({ togglePiP, toggleFullscreen, video:getVideoEl, overlayHost:()=>wr
 
     <div v-if="mobile && loading" class="cczj-mobile-video-loading" :class="{ 'cczj-mobile-video-loading-initial': !videoReady }" role="status" aria-live="polite">
       <img :src="loadingGif" class="loading-spinner" alt="" aria-hidden="true" />
-      <span>{{ t('mobile.videoLoading') }}<span v-if="loadingElapsed > 0"> · {{ loadingElapsed }}s</span></span>
+      <span>{{ preparationStage !== 'complete' ? preparationMessage : t('mobile.videoLoading') }}<span v-if="loadingElapsed > 0"> · {{ loadingElapsed }}s</span></span>
     </div>
     <div v-if="!mobile && loading" class="loading">
       <div class="loading-overlay">
@@ -942,8 +953,9 @@ defineExpose({ togglePiP, toggleFullscreen, video:getVideoEl, overlayHost:()=>wr
         <img :src="loadingGif" class="loading-spinner" :alt="t('common.loading')" />
         <!-- 缓冲信息 -->
         <div class="loading-info">
-          <div class="loading-text">
-            <template v-if="loadingTotal > 0">{{ t('player.cachedSegments', { cached: loadingCached, total: loadingTotal }) }}</template>
+          <div class="loading-text" role="status" aria-live="polite">
+            <template v-if="preparationStage !== 'complete'">{{ preparationMessage }}</template>
+            <template v-else-if="loadingTotal > 0">{{ t('player.cachedSegments', { cached: loadingCached, total: loadingTotal }) }}</template>
             <template v-else>{{ t('player.connecting') }} {{ loadingElapsed }}s</template>
           </div>
           <div class="loading-speed" v-if="loadingSpeed">{{ loadingSpeed }}</div>
@@ -1032,6 +1044,7 @@ defineExpose({ togglePiP, toggleFullscreen, video:getVideoEl, overlayHost:()=>wr
       @tools-host="mobileMoreTarget=$event" @tools-closed="closeSharedTools" @category-changed="showSubtitlePanel=showReportAd=false" @quick-opened="closeSharedTools">
       <template v-if="danmakuKey" #danmaku><PlayerDanmakuButtons mobile :enabled="!!danmakuRef?.enabled" :ready="!!danmakuRef?.ready" :expanded="!!danmakuRef?.engaged" @toggle="danmakuRef?.toggle();keepVisible()" @settings="(anchor,hover)=>{danmakuRef?.open(anchor,hover);keepVisible()}" @leave="danmakuRef?.scheduleClose()" @dismiss="danmakuRef?.close()" /></template>
       <template v-if="$slots.episodes" #episodes="slotProps"><slot name="episodes" :close="slotProps.close" /></template>
+      <template v-if="$slots.lines" #lines="slotProps"><slot name="lines" :close="slotProps.close" /></template>
     </CczjMobilePlayerChrome>
     </div>
     </Transition>

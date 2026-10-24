@@ -1,8 +1,9 @@
-// Package netpolicy provides shared outbound guardrails while preserving the
-// existing cadence, cookies, address checks and retry policy of each module.
+// Package netpolicy provides shared tiered query cooldowns and outbound guardrails.
 package netpolicy
 
 import (
+	"cczjVideo/app/applog"
+	"cczjVideo/app/operation"
 	"context"
 	"fmt"
 	"net/http"
@@ -163,7 +164,7 @@ func (m *Manager) prune(now time.Time) {
 }
 
 // Burst ceilings sit well above the modules' ordinary request cadence. They
-// reject accidental storms without rescheduling successful legacy requests.
+// reject storms across distinct queries in addition to per-query cooldowns.
 func (m *Manager) burstAllowed(host string, now time.Time) bool {
 	p := profiles[m.settings.Frequency]
 	for key, value := range m.buckets {
@@ -199,8 +200,23 @@ func (m *Manager) burstAllowed(host string, now time.Time) bool {
 	}
 	return true
 }
-func (m *Manager) RoundTrip(category string, base http.RoundTripper, original *http.Request) (*http.Response, error) {
+func (m *Manager) RoundTrip(category string, base http.RoundTripper, original *http.Request) (result *http.Response, failure error) {
 	query := queryRequest(category, original)
+	decision, began := "network", time.Now()
+	defer func() {
+		if _, traced := operation.IdentityFromContext(original.Context()); !traced || !query {
+			return
+		}
+		fields := applog.Fields{"category": category, "decision": decision, "url": applog.SafeURL(original.URL.String()), "duration_ms": time.Since(began).Milliseconds()}
+		if result != nil {
+			fields["http_status"] = result.StatusCode
+		}
+		if failure != nil {
+			public := apperror.Public(failure)
+			fields["code"], fields["retry_after_seconds"] = public.Code, public.RetryAfterSeconds
+		}
+		operation.Stage(original.Context(), "request_policy", fields)
+	}()
 	if category == "update-download" {
 		category = "update"
 	}
@@ -214,9 +230,9 @@ func (m *Manager) RoundTrip(category string, base http.RoundTripper, original *h
 	if err != nil {
 		return nil, err
 	}
-	// Only the newly introduced danmaku reads adopt the five-minute minimum.
-	// Legacy healthy queries retain their existing cache and polling schedule.
-	longCooldown := category == "danmaku" && query
+	// All queries use the selected tier. Continuous transfers remain excluded
+	// by queryRequest; module caches can retain successful data for longer.
+	longCooldown := query
 	m.mu.Lock()
 	if m.closed || m.owner.Err() != nil {
 		m.mu.Unlock()
@@ -225,7 +241,9 @@ func (m *Manager) RoundTrip(category string, base http.RoundTripper, original *h
 	now := m.now()
 	m.prune(now)
 	if current := m.entries[key]; current != nil {
+		decision = "query_cooldown"
 		if current.done != nil {
+			decision = "shared_wait"
 			if m.waiting >= 128 {
 				m.stat(category).Blocked++
 				m.mu.Unlock()
@@ -260,19 +278,16 @@ func (m *Manager) RoundTrip(category string, base http.RoundTripper, original *h
 				return nil, err
 			}
 			if reply != nil {
+				decision = "shared_reuse"
 				return reply.response(original), nil
 			}
 			if failure != nil {
 				return nil, failure
 			}
-			if !longCooldown {
-				// An oversized, partial or no-store response cannot be shared.
-				// Preserve each legacy caller's ability to obtain its own body.
-				return m.RoundTrip(category, base, original)
-			}
 			return nil, cooldown(until, m.now())
 		}
 		if current.reply != nil {
+			decision = "cached_response"
 			m.stat(category).Reused++
 			response := current.reply.response(original)
 			m.mu.Unlock()
@@ -288,16 +303,19 @@ func (m *Manager) RoundTrip(category string, base http.RoundTripper, original *h
 		return nil, cooldown(until, now)
 	}
 	if until := m.hosts[host]; until.After(now) {
+		decision = "host_cooldown"
 		m.stat(category).Blocked++
 		m.mu.Unlock()
 		return nil, cooldown(until, now)
 	}
 	if (query && len(m.entries) >= maxRequestKeys) || len(m.active) >= maxActiveRequests {
+		decision = "capacity"
 		m.stat(category).Blocked++
 		m.mu.Unlock()
 		return nil, cooldown(now.Add(time.Second), now)
 	}
 	if query && !m.burstAllowed(host, now) {
+		decision = "burst_limit"
 		m.stat(category).Blocked++
 		until := now.Add(time.Second + max(0, min(2*time.Second, m.jitter(2*time.Second))))
 		m.mu.Unlock()
@@ -307,10 +325,12 @@ func (m *Manager) RoundTrip(category string, base http.RoundTripper, original *h
 	if longCooldown {
 		next, allowed, reserveErr := m.store.reserveRequest(original.Context(), key, host, now, now.Add(m.interval()))
 		if reserveErr != nil {
+			decision = "ledger_failed"
 			m.mu.Unlock()
 			return nil, apperror.Wrap(apperror.Storage, reserveErr, "保存请求冷却记录失败")
 		}
 		if !allowed {
+			decision = "persisted_cooldown"
 			m.stat(category).Blocked++
 			m.mu.Unlock()
 			return nil, cooldown(next, now)

@@ -5,7 +5,10 @@ import (
 	"cczjVideo/app/applog"
 	"cczjVideo/app/danmaku"
 	"cczjVideo/app/netpolicy"
+	"cczjVideo/app/operation"
+	"cczjVideo/app/outbound"
 	"cczjVideo/app/proxy"
+	"context"
 	"encoding/json"
 	"strings"
 )
@@ -17,11 +20,41 @@ func (a *App) GetSetting(key string) (string, error) {
 }
 
 func (a *App) SetSetting(key, value string) error {
+	fields := applog.Fields{"setting_key": key, "value_sha256": applog.Fingerprint([]byte(value))}
+	if key == "default_source_key" || key == applicationModeKey {
+		fields["value"] = value
+	}
+	ctx := operation.WithFields(context.Background(), fields)
+	work := func(context.Context) (bool, error) {
+		return true, a.setSetting(key, value)
+	}
+	if key == applicationModeKey {
+		// Switching stops the previous mode owner; registering this request in
+		// that group would make shutdown wait for the switch itself.
+		_, err := operation.Run(ctx, operation.Meta{Name: "settings.SetSetting", Mode: a.currentMode(), Pipeline: "rpc.SetSetting"}, operation.Log, work)
+		return err
+	}
+	_, err := runRequest(a, ctx, "settings.SetSetting", work)
+	return err
+}
+
+func (a *App) setSetting(key, value string) error {
 	if key == applicationModeKey {
 		return a.switchApplicationMode(value)
 	}
 	a.settingsWriteMu.Lock()
 	defer a.settingsWriteMu.Unlock()
+	if key == outbound.SettingsKey {
+		config, err := outbound.DecodeConfig(value)
+		if err != nil {
+			return apperror.Wrap(apperror.Validation, err, "公共代理池配置无效")
+		}
+		raw, err := json.Marshal(config)
+		if err != nil {
+			return err
+		}
+		return a.settings.Set(key, string(raw)) // Configuration is applied on restart.
+	}
 	if key == netpolicy.SettingsKey {
 		settings, err := netpolicy.DecodeSettings(value)
 		if err != nil {

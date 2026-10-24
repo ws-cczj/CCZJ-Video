@@ -81,9 +81,12 @@ public class WailsBridge {
         System.loadLibrary("wails");
     }
 
-    private final Activity activity;
+    private static WailsBridge processBridge;
+    private volatile Activity activity;
+    private final Context appContext;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
-    private WebView webView;
+    private volatile WebView webView;
+    private volatile long hostGeneration = 0;
     private volatile boolean initialized = false;
     private SharedPreferences cachedSecurePrefs;
     private boolean securePrefsResolved = false;
@@ -101,6 +104,7 @@ public class WailsBridge {
     private boolean proximityWanted = false;
     private boolean torchOn = false;
     private boolean pendingLocationRequest = false;
+    private LocationListener locationListener;
 
     // Native methods - implemented in Go
     private static native void nativeInit(WailsBridge bridge);
@@ -122,14 +126,85 @@ public class WailsBridge {
     private static native void nativeEmitSystemEvent(String name, String json);
     private static native void nativeEmitEvent(String name, String json);
 
-    public WailsBridge(Activity activity) {
+    private WailsBridge(Activity activity) {
         this.activity = activity;
+        this.appContext = activity.getApplicationContext();
+    }
+
+    /** The Go runtime and its JNI bridge belong to the process. Activities only
+     * attach a host; recreating one must never run application.main a second time. */
+    public static synchronized WailsBridge attach(Activity activity) {
+        if (processBridge == null) processBridge = new WailsBridge(activity);
+        else {
+            if (processBridge.activity != null) processBridge.detach(processBridge.activity);
+            processBridge.activity = activity;
+            processBridge.hostGeneration++;
+        }
+        return processBridge;
+    }
+
+    /** Release Activity-owned work without shutting down the process runtime. */
+    public synchronized void detach(Activity owner) {
+        if (activity != owner) return;
+        hostGeneration++;
+        mainHandler.removeCallbacksAndMessages(null);
+        webView = null;
+        SensorManager sensors = (SensorManager) owner.getSystemService(Context.SENSOR_SERVICE);
+        if (sensors != null) {
+            if (accelListener != null) sensors.unregisterListener(accelListener);
+            if (proximityListener != null) sensors.unregisterListener(proximityListener);
+        }
+        accelListener = null;
+        proximityListener = null;
+        motionWanted = false;
+        proximityWanted = false;
+        if (locationListener != null) {
+            LocationManager locations = (LocationManager) owner.getSystemService(Context.LOCATION_SERVICE);
+            if (locations != null) locations.removeUpdates(locationListener);
+            locationListener = null;
+        }
+        pendingLocationRequest = false;
+        if (tts != null) { tts.stop(); tts.shutdown(); tts = null; }
+        if (keyboardListener != null) {
+            owner.getWindow().getDecorView().setOnApplyWindowInsetsListener(null);
+            keyboardListener = null;
+        }
+        if (torchOn) {
+            try {
+                CameraManager camera = (CameraManager) owner.getSystemService(Context.CAMERA_SERVICE);
+                for (String id : camera.getCameraIdList()) {
+                    if (Boolean.TRUE.equals(camera.getCameraCharacteristics(id).get(CameraCharacteristics.FLASH_INFO_AVAILABLE))) {
+                        camera.setTorchMode(id, false);
+                    }
+                }
+            } catch (Exception failure) { Log.w(TAG, "Unable to release torch: " + failure); }
+            torchOn = false;
+        }
+        activity = null;
+    }
+
+    private void postToActivity(Runnable action) {
+        final long generation = hostGeneration;
+        final Activity owner = activity;
+        if (owner == null) return;
+        mainHandler.post(() -> {
+            if (hostGeneration == generation && activity == owner) action.run();
+        });
+    }
+
+    /** Called only after the Go application has completed its shutdown path. */
+    public void finishApplication() {
+        mainHandler.post(() -> {
+            Activity owner = activity;
+            if (owner != null) owner.finishAndRemoveTask();
+            android.os.Process.killProcess(android.os.Process.myPid());
+        });
     }
 
     /**
      * Initialize the native Go library
      */
-    public void initialize() {
+    public synchronized void initialize() {
         if (initialized) {
             return;
         }
@@ -139,21 +214,6 @@ public class WailsBridge {
             Log.i(TAG, "Wails bridge initialized");
         } catch (Exception e) {
             Log.e(TAG, "Failed to initialize Wails bridge", e);
-        }
-    }
-
-    /**
-     * Shutdown the native Go library
-     */
-    public void shutdown() {
-        if (!initialized) {
-            return;
-        }
-        try {
-            nativeShutdown();
-            initialized = false;
-        } catch (Exception e) {
-            Log.e(TAG, "Error during shutdown", e);
         }
     }
 
@@ -287,7 +347,10 @@ public class WailsBridge {
             Log.w(TAG, "executeJavaScript: no WebView attached");
             return;
         }
-        mainHandler.post(() -> view.evaluateJavascript(js, null));
+        final long generation = hostGeneration;
+        mainHandler.post(() -> {
+            if (webView == view && hostGeneration == generation) view.evaluateJavascript(js, null);
+        });
     }
 
     // Facilities called from Go via JNI
@@ -356,7 +419,7 @@ public class WailsBridge {
     }
 
     public boolean isDarkMode() {
-        int mode = activity.getResources().getConfiguration().uiMode
+        int mode = appContext.getResources().getConfiguration().uiMode
                 & Configuration.UI_MODE_NIGHT_MASK;
         return mode == Configuration.UI_MODE_NIGHT_YES;
     }
@@ -370,7 +433,7 @@ public class WailsBridge {
      */
     public void runOnMainThread(final int callbackID) {
         // Guard against the callback firing after shutdown() tore down the Go side
-        mainHandler.post(() -> {
+        postToActivity(() -> {
             if (initialized) nativeMainThreadCallback(callbackID);
         });
     }
@@ -401,7 +464,7 @@ public class WailsBridge {
     }
 
     public void showToast(final String message) {
-        mainHandler.post(() -> Toast.makeText(activity, message, Toast.LENGTH_SHORT).show());
+        postToActivity(() -> Toast.makeText(activity, message, Toast.LENGTH_SHORT).show());
     }
 
     public void vibrate(int durationMs) {
@@ -426,7 +489,7 @@ public class WailsBridge {
      * Present the Android share chooser. json: {"text": "...", "url": "..."}.
      */
     public void share(final String json) {
-        mainHandler.post(() -> {
+        postToActivity(() -> {
             try {
                 JSONObject opts = new JSONObject(json);
                 String text = opts.optString("text", "");
@@ -454,7 +517,7 @@ public class WailsBridge {
      * Open a URL in the system browser.
      */
     public void openURL(final String url) {
-        mainHandler.post(() -> {
+        postToActivity(() -> {
             try {
                 Intent view = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
                 view.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -469,7 +532,7 @@ public class WailsBridge {
      * Keep the screen on (1) or release the hold (0) via FLAG_KEEP_SCREEN_ON.
      */
     public void setKeepAwake(final int enabled) {
-        mainHandler.post(() -> {
+        postToActivity(() -> {
             if (enabled != 0) {
                 activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
             } else {
@@ -483,7 +546,7 @@ public class WailsBridge {
      * state and availability.
      */
     public void setTorch(final int enabled) {
-        mainHandler.post(() -> {
+        postToActivity(() -> {
             try {
                 CameraManager cm = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
                 String flashId = null;
@@ -537,7 +600,7 @@ public class WailsBridge {
      * Set window brightness, 0-100. A negative value restores the system default.
      */
     public void setBrightness(final int pct) {
-        mainHandler.post(() -> {
+        postToActivity(() -> {
             try {
                 WindowManager.LayoutParams lp = activity.getWindow().getAttributes();
                 lp.screenBrightness = pct < 0 ? WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
@@ -594,7 +657,7 @@ public class WailsBridge {
      * Lock orientation to "portrait", "landscape" or "auto".
      */
     public void setOrientation(final String mode) {
-        mainHandler.post(() -> {
+        postToActivity(() -> {
             int o = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
             if ("portrait".equals(mode)) o = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT;
             else if ("landscape".equals(mode)) o = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;
@@ -620,7 +683,7 @@ public class WailsBridge {
      * "light" = light (white) icons; "dark" = dark icons.
      */
     public void setStatusBar(final String json) {
-        mainHandler.post(() -> {
+        postToActivity(() -> {
             try {
                 JSONObject opts = new JSONObject(json);
                 String style = opts.optString("style", "default");
@@ -669,7 +732,7 @@ public class WailsBridge {
      * emitted as "common:biometric" {ok, error}.
      */
     public void authenticate(final String reason) {
-        mainHandler.post(() -> {
+        postToActivity(() -> {
             try {
                 int allowed = BiometricManager.Authenticators.BIOMETRIC_WEAK
                         | BiometricManager.Authenticators.DEVICE_CREDENTIAL;
@@ -709,7 +772,7 @@ public class WailsBridge {
      * POST_NOTIFICATIONS runtime permission on Android 13+.
      */
     public void postNotification(final String json) {
-        mainHandler.post(() -> {
+        postToActivity(() -> {
             try {
                 JSONObject opts = new JSONObject(json);
                 String title = opts.optString("title", "Notification");
@@ -919,7 +982,7 @@ public class WailsBridge {
      * {lat,lng,accuracy} or {error}. Requests ACCESS_FINE_LOCATION on first use.
      */
     public void getLocation() {
-        mainHandler.post(() -> {
+        postToActivity(() -> {
             try {
                 if (!hasLocationPermission()) {
                     pendingLocationRequest = true;
@@ -953,12 +1016,17 @@ public class WailsBridge {
                         : lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
                         ? LocationManager.NETWORK_PROVIDER : null;
                 if (provider == null) { emitLocationError("no location provider enabled"); return; }
-                lm.requestSingleUpdate(provider, new LocationListener() {
-                    @Override public void onLocationChanged(Location location) { emitLocation(location); }
+                if (locationListener != null) lm.removeUpdates(locationListener);
+                final long generation = hostGeneration;
+                locationListener = new LocationListener() {
+                    @Override public void onLocationChanged(Location location) {
+                        if (hostGeneration == generation) emitLocation(location);
+                    }
                     @Override public void onProviderEnabled(String p) {}
                     @Override public void onProviderDisabled(String p) {}
                     @Override public void onStatusChanged(String p, int s, android.os.Bundle e) {}
-                }, Looper.getMainLooper());
+                };
+                lm.requestSingleUpdate(provider, locationListener, Looper.getMainLooper());
             } catch (Exception e) {
                 Log.e(TAG, "getLocation failed", e);
                 emitLocationError("exception");
@@ -979,7 +1047,7 @@ public class WailsBridge {
     /** Start (1) / stop (0) accelerometer updates, streamed as "common:motion". */
     public void setMotion(final int enabled) {
         motionWanted = enabled != 0;
-        mainHandler.post(() -> {
+        postToActivity(() -> {
             SensorManager sm = (SensorManager) activity.getSystemService(Context.SENSOR_SERVICE);
             if (sm == null) return;
             if (enabled != 0) {
@@ -1011,7 +1079,7 @@ public class WailsBridge {
     /** Enable (1) / disable (0) the proximity sensor, reported as "common:proximity". */
     public void setProximity(final int enabled) {
         proximityWanted = enabled != 0;
-        mainHandler.post(() -> {
+        postToActivity(() -> {
             SensorManager sm = (SensorManager) activity.getSystemService(Context.SENSOR_SERVICE);
             if (sm == null) return;
             if (enabled != 0) {
@@ -1041,7 +1109,7 @@ public class WailsBridge {
      * kept so foregrounding can restore the sensors.
      */
     private void pauseFeaturesForBackground() {
-        mainHandler.post(() -> {
+        postToActivity(() -> {
             SensorManager sm = (SensorManager) activity.getSystemService(Context.SENSOR_SERVICE);
             if (sm != null) {
                 if (accelListener != null) { sm.unregisterListener(accelListener); accelListener = null; }
@@ -1061,7 +1129,7 @@ public class WailsBridge {
 
     /** Speak text via TextToSpeech (lazily initialised). */
     public void speak(final String text) {
-        mainHandler.post(() -> {
+        postToActivity(() -> {
             if (text == null || text.isEmpty()) return;
             if (tts == null) {
                 tts = new TextToSpeech(activity, status -> {
@@ -1078,7 +1146,7 @@ public class WailsBridge {
 
     /** Stop any in-progress speech. */
     public void stopSpeak() {
-        mainHandler.post(() -> {
+        postToActivity(() -> {
             if (tts != null) tts.stop();
         });
     }
@@ -1086,7 +1154,7 @@ public class WailsBridge {
     /** Disk space as {"free":bytes,"total":bytes}. */
     public String getStorageJson() {
         try {
-            StatFs stat = new StatFs(activity.getFilesDir().getAbsolutePath());
+            StatFs stat = new StatFs(appContext.getFilesDir().getAbsolutePath());
             long free = stat.getAvailableBytes();
             long total = stat.getTotalBytes();
             return new JSONObject().put("free", free).put("total", total).toString();
@@ -1098,7 +1166,7 @@ public class WailsBridge {
     /** Absolute path to the app's private internal files directory
      *  (getFilesDir()), suitable for databases and other persistent files. */
     public String getStoragePath() {
-        java.io.File dir = activity.getFilesDir();
+        java.io.File dir = appContext.getFilesDir();
         return dir != null ? dir.getAbsolutePath() : "";
     }
 
@@ -1157,7 +1225,7 @@ public class WailsBridge {
      * {visible,height} (height in px) via an inset listener on the content view.
      */
     public void setKeyboardWatch(final int enabled) {
-        mainHandler.post(() -> {
+        postToActivity(() -> {
             final View content = activity.getWindow().getDecorView();
             if (enabled != 0) {
                 if (keyboardListener != null) return;
@@ -1196,7 +1264,7 @@ public class WailsBridge {
      * state as "common:screenCapture" {protected}.
      */
     public void setScreenProtect(final int enabled) {
-        mainHandler.post(() -> {
+        postToActivity(() -> {
             if (enabled != 0) {
                 activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
             } else {
@@ -1211,7 +1279,7 @@ public class WailsBridge {
 
     /** Capture a photo with the system camera. Result → "common:capture" event. */
     public void capturePhoto(final String json) {
-        mainHandler.post(() -> {
+        postToActivity(() -> {
             if (activity instanceof MainActivity) {
                 ((MainActivity) activity).launchCameraCapture(false);
             } else {
@@ -1222,7 +1290,7 @@ public class WailsBridge {
 
     /** Capture a video with the system camera. Result → "common:capture" event. */
     public void captureVideo(final String json) {
-        mainHandler.post(() -> {
+        postToActivity(() -> {
             if (activity instanceof MainActivity) {
                 ((MainActivity) activity).launchCameraCapture(true);
             } else {
@@ -1236,7 +1304,7 @@ public class WailsBridge {
      * background work (with an ongoing notification). json: {"title","text"}.
      */
     public void startForegroundService(final String json) {
-        mainHandler.post(() -> {
+        postToActivity(() -> {
             try {
                 String title = "Wails", text = "Running in the background";
                 try {
@@ -1264,7 +1332,7 @@ public class WailsBridge {
 
     /** Stop the foreground service. */
     public void stopForegroundService() {
-        mainHandler.post(() -> {
+        postToActivity(() -> {
             try {
                 activity.stopService(new Intent(activity, WailsForegroundService.class));
                 emitEvent("android:foregroundService", "{\"running\":false}");
@@ -1282,7 +1350,7 @@ public class WailsBridge {
      * original buttons array, or -1 when dismissed without a matching button.
      */
     public void showMessageDialog(final int callbackID, final String optionsJson) {
-        mainHandler.post(() -> {
+        postToActivity(() -> {
             try {
                 JSONObject options = new JSONObject(optionsJson);
                 String title = options.optString("title", "");
@@ -1380,7 +1448,7 @@ public class WailsBridge {
         } catch (Exception ignored) {
         }
         final boolean allowMultiple = multiple;
-        mainHandler.post(() -> {
+        postToActivity(() -> {
             if (activity instanceof MainActivity) {
                 ((MainActivity) activity).launchFilePicker(callbackID, allowMultiple);
             } else {

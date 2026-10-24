@@ -1,6 +1,24 @@
 import { expect, it } from 'vitest'
 import { createModeSessions } from '../src/modes/modeSessions'
 
+it('persists reading settings routes and independent group scroll across documents',()=>{
+ const f=fixture(),sessions=createModeSessions(f.storage,f.now)
+ sessions.rememberRoute('comic','/comic/settings?group=appearance')
+ sessions.rememberScroll('comic','/comic/settings:appearance',120)
+ sessions.rememberScroll('novel','/novel/settings:reading',480)
+ sessions.rememberScroll('novel','/novel/settings:index',35)
+ sessions.rememberScroll('video','/novel/settings:reading',999)
+ sessions.prepare('comic')
+ const restored=createModeSessions(f.storage,f.now)
+ expect(restored.resumeRoute('comic')).toBe('/comic/settings?group=appearance')
+ expect(restored.scroll('comic','/comic/settings:appearance')).toBe(120)
+ expect(restored.scroll('novel','/novel/settings:reading')).toBe(480)
+ expect(restored.scroll('novel','/novel/settings:index')).toBe(35)
+ expect(restored.scroll('video','/novel/settings:reading')).toBe(0)
+ restored.rememberRoute('comic','/comic/me')
+ expect(restored.resumeRoute('comic')).toBe('/comic/settings')
+})
+
 function fixture(){const values=new Map<string,string>();let now=100000;return{storage:{read:(key:string)=>values.get(key)??null,write:(key:string,value:string)=>{values.set(key,value);return true},remove:(key:string)=>{values.delete(key)}},values,now:()=>now,advance:(ms:number)=>{now+=ms}}}
 it('restores scalar view state and routes without retaining runtime resources',()=>{
  const f=fixture(),sessions=createModeSessions(f.storage,f.now)

@@ -6,7 +6,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 )
@@ -40,12 +39,10 @@ func tempLogger(t *testing.T) *Logger {
 	if err := l.rotateIfNeeded(); err != nil {
 		t.Fatalf("rotateIfNeeded: %v", err)
 	}
-	once = sync.Once{}
 	defaultLogger = l
 	// 句柄不关掉 Windows 下删不掉 TempDir，所以 Cleanup 里必须 Close
 	t.Cleanup(func() {
 		l.Close()
-		once = sync.Once{}
 		defaultLogger = nil
 	})
 	return l

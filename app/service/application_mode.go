@@ -77,13 +77,8 @@ func (a *App) switchApplicationMode(next string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownDrainTimeout)
 	defer cancel()
 	if previous == "video" && a.downloads != nil {
-		for _, task := range a.downloads.Snapshot() {
-			s := task.snapshot()
-			if s.Status == "queued" || s.Status == "downloading" {
-				if _, err := a.PauseDownload(ctx, s.TaskId); err != nil {
-					return err
-				}
-			}
+		if err := a.downloads.PauseAll(ctx); err != nil {
+			return err
 		}
 	}
 	if a.recording != nil {

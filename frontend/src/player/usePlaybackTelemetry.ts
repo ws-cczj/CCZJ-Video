@@ -3,7 +3,7 @@ import { usePerfStore } from '../stores/perf'
 import { TsCache } from '../utils/tsCache'
 import { extractBitrateFromUrl } from './useVideoInfo'
 
-export function usePlaybackTelemetry(deps:{video:()=>HTMLVideoElement|null;url:()=>string;cachedBitrate:()=>number;t:(key:string)=>string}) {
+export function usePlaybackTelemetry(deps:{video:()=>HTMLVideoElement|null;url:()=>string;cachedBitrate:()=>number;t:(key:string)=>string;stall?:(phase:string,detail:Record<string,unknown>)=>void}) {
 const perf=usePerfStore()
 const t=deps.t
 // ------ 播放质量取样 ------
@@ -21,7 +21,7 @@ function resetPerfBaseline(video: HTMLVideoElement): void {
   _perfFramesRaw = q ? q.totalVideoFrames : 0
   _perfDroppedRaw = q ? q.droppedVideoFrames : 0
   alignPlaybackClock(video)
-  _stallSince = 0
+  endStall('replaced')
 }
 
 // Align after an explicit seek so even short skips are not counted as watching.
@@ -61,12 +61,26 @@ function samplePerf(video: HTMLVideoElement): void {
   perf.setMedia(w && h ? `${w}x${h}` : '', bitrate)
 }
 
-// 卡顿结算：waiting 到恢复出声之间就是用户看到的「转圈」。seek 也算，
-// 因为对播放器来说那同样是一段没有画面的等待。
-function endStall(): void {
+function stallContext(): Record<string,unknown> {
+  const video=deps.video(),stats=TsCache.stats(),hls=(video as any)?.__hls
+  return {position_seconds:video?.currentTime || 0,seeking:video?.seeking || false,playback_rate:video?.playbackRate || 1,
+    buffer_ahead_seconds:stats.playbackBufferAhead,network_mode:stats.networkMode,
+    bandwidth_bps:Math.round(hls?.bandwidthEstimate || 0),level:hls?.currentLevel ?? -1}
+}
+
+// Waiting ends on a playable frame, pause, replacement or disposal; user pauses
+// must not inflate a network stall by the entire time playback stays paused.
+function endStall(reason='ready'): void {
   if (!_stallSince) return
-  perf.addStall(performance.now() - _stallSince)
+  const elapsed=performance.now() - _stallSince
+  perf.addStall(elapsed)
   _stallSince = 0
+  deps.stall?.('finished',{...stallContext(),duration_ms:Math.round(elapsed),reason})
+}
+function beginStall():void {
+  if(_stallSince)return
+  _stallSince=performance.now()
+  deps.stall?.('started',stallContext())
 }
 
 // Loading indicator: HLS owns buffering; this poll only presents cache statistics.
@@ -163,6 +177,7 @@ function start():void {
   cacheStatsTimer=window.setInterval(updateCacheStats,1000)
 }
 function stop():void {
+  endStall('disposed')
   if(cacheStatsTimer!==null)window.clearInterval(cacheStatsTimer)
   cacheStatsTimer=null
   stopLoadingStats()
@@ -173,5 +188,5 @@ function reset():void {
 }
 onBeforeUnmount(stop)
 return {cacheStats,loadingCached,loadingTotal,loadingSpeed,loadingElapsed,startLoadingStats,stopLoadingStats,
-  resetPerfBaseline,alignPlaybackClock,endStall,beginStall:()=>{if(!_stallSince)_stallSince=performance.now()},start,stop,reset}
+  resetPerfBaseline,alignPlaybackClock,endStall,beginStall,start,stop,reset}
 }

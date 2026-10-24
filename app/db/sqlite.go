@@ -67,8 +67,11 @@ func safeLog(level, msg string) {
 //     不减，采集一轮攒下的几十 MB 就一直躺在数据目录里。
 //   - wal_autocheckpoint：显式钉住默认值（约 4MB 触发一次被动归并）。
 //   - busy_timeout：抢不到写锁时排队，而不是立刻把 SQLITE_BUSY 冒到界面上。
+//   - txlock：写事务先取得写入资格再读，避免 WAL 读快照升级为写时立即 BUSY。
+//     modernc 对 ReadOnly 事务仍用 deferred，纯读取不占用写入资格。
 func sqliteDSN(dbPath string) string {
 	return dbPath + "?_pragma=journal_mode(WAL)" +
+		"&_txlock=immediate" +
 		"&_pragma=busy_timeout(5000)" +
 		"&_pragma=journal_size_limit(" + strconv.Itoa(walTruncateBytes) + ")" +
 		"&_pragma=wal_autocheckpoint(" + strconv.Itoa(walAutoCheckpointPages) + ")" +

@@ -28,7 +28,7 @@ var blockBackoffSteps = []time.Duration{
 }
 
 // remainingBlock 返回仍在静默期内的剩余时长；不在静默期返回 0。
-// 顺带把到期的静默期清零，避免下一次 noteDoubanSuccess 之前一直误判。
+// 到期后允许探测，保留命中数；只有正常响应才清零，下一次被拦才能递增退避。
 func remainingBlock() time.Duration {
 	blockMu.Lock()
 	defer blockMu.Unlock()
@@ -39,7 +39,6 @@ func remainingBlock() time.Duration {
 		return left
 	}
 	blockUntil = time.Time{}
-	blockStrikes = 0
 	return 0
 }
 

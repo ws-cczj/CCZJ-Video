@@ -1,6 +1,6 @@
 # 发布与自动更新
 
-构建版本来源为仓库根目录 `version.json`。一键发布默认采用 CHANGELOG 最上方的版本段落，并同步版本文件；也可用 `-Version` 明确选择。例如 2.4.1 对应 Windows 文件版本 2.4.1.0、Android versionCode 20401。发布脚本读取同版本说明，统一生成应用内更新文案和 GitHub Release 正文。
+构建版本来源为仓库根目录 `version.json`。一键发布默认采用 CHANGELOG 最上方的版本段落，并同步版本文件；也可用 `-Version` 明确选择。例如 2.4.2 对应 Windows 文件版本 2.4.2.0、Android versionCode 20402。发布脚本读取同版本说明，统一生成应用内更新文案和 GitHub Release 正文。
 
 ## 一键发布
 
@@ -17,7 +17,7 @@ GitHub CLI 是仅在发布电脑使用的官方 MIT 工具，不进入 EXE／APK
 平时在 CHANGELOG 中写好目标版本的一段说明，然后双击 `build/publish.cmd`，或运行 `task publish`。脚本会将**所有未被 Git 忽略的改动**提交为 `Release v版本号`，因此先把当前工作区整理为要发布的内容。也可以指定下一版本：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File build/release.ps1 -Publish -Commit -Version 2.4.1
+powershell -NoProfile -ExecutionPolicy Bypass -File build/release.ps1 -Publish -Commit -Version 2.4.2
 ```
 
 流程会同步 `version.json`、README、更新下载地址和历史说明，验证整个仓库，然后提交、构建并校验 Windows EXE／便携 ZIP／ARM64 APK。标签必须指向实际构建的干净提交；不允许把旧产物配上新 HEAD，也不移动既有版本标签。
@@ -54,11 +54,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File build/release.ps1 -NoOpen
 
 ## 发布附件与手动上传
 
-每个版本发布八个文件，名称大小写必须原样保留。以下以 2.4.1 为例：
+每个版本发布八个文件，名称大小写必须原样保留。以下以 2.4.2 为例：
 
-- `cczjVideo-windows-amd64-2.4.1.exe`
-- `cczjVideo-windows-amd64-2.4.1-portable.zip`
-- `cczjVideo-android-arm64-2.4.1.apk`
+- `cczjVideo-windows-amd64-2.4.2.exe`
+- `cczjVideo-windows-amd64-2.4.2-portable.zip`
+- `cczjVideo-android-arm64-2.4.2.apk`
 - `checksums.txt`
 - `version.json`
 - `artifact-manifest.json`
@@ -68,7 +68,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File build/release.ps1 -NoOpen
 仍可手动创建普通公开 Release，标签指向实际源码提交，正文复制 `release-notes.md` 并上传全部附件。只传 EXE 或 APK 会缺少自动更新的校验依据。独立检查命令：
 
 ```powershell
-node scripts/check-release-artifacts.mjs dist/releases/v2.4.1
+node scripts/check-release-artifacts.mjs dist/releases/v2.4.2
 ```
 
 ## 自动更新行为
@@ -82,6 +82,14 @@ Android 下载匹配架构的 APK 到应用私有更新目录，校验后交给�
 ## 验证范围
 
 发布流程测试覆盖版本同步、构建失败、源码与产物不匹配、漏传、远端校验不符、网络失败、草稿分页查询与重试、公开版本重试和首次源码上传的超时预算，纳入 `scripts/verify.ps1`。
+
+2.4.2 发布收尾的原始日志位于 `dist/audit/release-2.4.2`。完整仓库验证通过，前端为 74 文件／350 项测试；架构画布的 31 条功能链覆盖全部 216 个公开绑定。Android amd64 隔离验收的 16 项检查通过，覆盖正文／漫画图片、共享取消、分页、SQLite 旧值导入与重启恢复、写失败重试、备份身份还原，以及下载暂停、重启续传和 4 MiB 逐字节校验。拥塞检查实测六个下载名额占用、一条等待时，播放仍取得独立额度。
+
+Android 系统文件选择返回真实文件内容；安装交接拒绝错误包名与摘要不符，权限缺失转入系统设置，取消安装保持原版本。这些结果来自独立 `acceptance` 包，不代替 `preview` ARM64 在实体手机的升级验收。发布 APK 仍核对包名、versionCode 20402、ARM64、非调试与既有签名。
+
+补充的播放验收使用当前 2.4.2 amd64 APK：详情自动探测声明的 1080P／720P、保留原线路身份、实际播放切线、加载与续播布局、原生全屏中的线路抽屉通过，桌面面板排序及长名称布局通过。模拟器中的旧临时来源在测试期间停用，结束后恢复，避免已关闭的历史服务器抢占网络预算。日志为 `android-playback-routes.log` 和 `browser-playback-routes.log`；声明的分辨率不等同于合成短片的实际编码尺寸。
+
+Windows production 隔离实例已验证窗口关闭／主动退出、启动失败、目录与备份绑定；替换／回滚的真实批处理成功、锁占用失败与退出安装由 Go 测试覆盖。正式 EXE 的 WebView2 初始化会清除外部浏览器参数，外部设置的 CDP 端口无法连接；按用户要求不使用 computer-use，未取得真实正式 EXE 升级／回滚的界面验收结论。实体电视、ARM64 手机／鸿蒙 4 与长期设备资源趋势仍需现场验证。
 
 2026-10-23 已通过 GitHub CLI 实际发布 [v2.4.0](https://github.com/ws-cczj/CCZJ-Video/releases/tag/v2.4.0) 和 [v2.4.1](https://github.com/ws-cczj/CCZJ-Video/releases/tag/v2.4.1)：各上传八个文件，远端附件大小和 SHA256 与本地清单一致，2.4.1 设为最新版本。对应源码提交分别为 `e140d1888c87c72d5237aa3c9131654d99a85bd2` 与 `7e867886a80ac945030631e9a4514c178f5c26d4`，主分支包含两个提交；2.4.0 从独立历史检出重建，未用 2.4.1 产物替代。
 

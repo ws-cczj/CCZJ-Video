@@ -978,7 +978,7 @@ onBeforeUnmount(() => {
             </Button>
           </div>
         </div>
-        <PlayLinePicker v-if="video && videoStore.lines.length > 1" class="cczj-mb-4" :lines="videoStore.lines"
+        <PlayLinePicker v-if="video && videoStore.lines.length" class="cczj-mb-4" :lines="videoStore.lines"
           :model-value="videoStore.activeLineIndex" :source-key="sourceKey" :vod-id="String(vodId)"
           :global-id="Number(video.global_id || 0)" @update:model-value="videoStore.setActiveLine(Number($event))" />
         <div class="episodes-grid cczj-grid cczj-gap-2">

@@ -99,8 +99,8 @@ export const useDownloadStore = defineStore('download', () => {
         try {
           const ret = await SetDownloadDir(saved)
           if (typeof ret === 'string' && ret) dir.value = ret
-        } catch {
-          dir.value = saved
+        } catch (e) {
+          useErrorStore().fromError(tr('downloads.setDirFailed'), e, 'Downloads.restoreDir')
         }
       }
     } catch { /* 忽略 */ }
@@ -155,17 +155,8 @@ export const useDownloadStore = defineStore('download', () => {
 
   async function setDir(newDir: string): Promise<void> {
     newDir = (newDir || '').trim()
-    try {
-      // 1) 推送到 Go 后端（设置进程内的 customDownloadDir，后端会自动持久化）
-      try {
-        const ret = await SetDownloadDir(newDir)
-        if (typeof ret === 'string' && ret) dir.value = ret
-      } catch {
-        // 忽略
-      }
-    } catch (e: any) {
-      throw new Error(e?.message || tr('downloads.setDirFailed'))
-    }
+    // Publish only the directory acknowledged by the durable backend write.
+    dir.value = await SetDownloadDir(newDir)
   }
 
   async function startDownload(opts: {
