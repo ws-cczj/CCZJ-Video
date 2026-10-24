@@ -33,8 +33,11 @@ if ($LASTEXITCODE -ne 0) { Write-Error 'Request policies or generated request ad
 # retry policy or a UI grouping stops firing with no compile error and no failing test.
 # Comment lines are excluded: apperror's own doc comment spells out the forbidden call as
 # the rule's wording, and matching that would fail the gate on the file that defines it.
-$errorTextMatching = @(rg -n 'strings\.Contains\(\s*(err|e|lastErr)\.Error\(\)' app -g '*.go' -g '!*_test.go' |
-    Where-Object { $_ -notmatch ':\s*//' })
+# Use built-in scanning so a clean Windows runner needs no ripgrep installation.
+$errorTextMatching = @(Get-ChildItem -LiteralPath app -Recurse -File -Filter '*.go' |
+    Where-Object { $_.Name -notlike '*_test.go' } |
+    Select-String -CaseSensitive -Pattern 'strings\.Contains\(\s*(err|e|lastErr)\.Error\(\)' |
+    Where-Object { $_.Line -notmatch '^\s*//' })
 if ($errorTextMatching) {
     Write-Error "Classify errors with apperror.CodeOf / errors.Is / errors.As, never by message text.`n$($errorTextMatching -join "`n")"
 }
@@ -44,8 +47,10 @@ if ($errorTextMatching) {
 # subsystem program it starts: the old tasklist poll painted roughly 150 flashing black
 # windows during one 30s wait (reported on the desktop 2026-10-06). Comment lines are
 # excluded because procs_windows.go names the forbidden call while explaining why.
-$handoffSubprocess = @(rg -n 'exec\.|\btasklist\b|os/exec' app/handoff -g '*.go' -g '!*_test.go' |
-    Where-Object { $_ -notmatch ':\s*//' })
+$handoffSubprocess = @(Get-ChildItem -LiteralPath app/handoff -Recurse -File -Filter '*.go' |
+    Where-Object { $_.Name -notlike '*_test.go' } |
+    Select-String -CaseSensitive -Pattern 'exec\.|\btasklist\b|os/exec' |
+    Where-Object { $_.Line -notmatch '^\s*//' })
 if ($handoffSubprocess) {
     Write-Error "app/handoff must not spawn subprocesses while waiting for the old instance; read the snapshot in procs_windows.go.`n$($handoffSubprocess -join "`n")"
 }

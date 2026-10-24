@@ -68,5 +68,5 @@ jobs:
           go test -race -count=1
           ./app/apperror ./app/media ./app/provider ./app/library
           ./app/lifecycle ./app/collect ./app/collection ./app/cache
-          ./app/detail ./app/download ./app/db ./app/plugin ./app/proxy ./app/netstats ./app/resource ./app/diagnosticrecording
+          ./app/detail ./app/download ./app/download/engine ./app/db ./app/plugin ./app/proxy ./app/netstats ./app/resource ./app/diagnosticrecording
           ./app/netbudget ./app/workflight ./app/readingstate
