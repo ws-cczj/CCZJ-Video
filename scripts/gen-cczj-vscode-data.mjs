@@ -35,7 +35,9 @@ const outputs = [
   ['docs/cczj-utilities-cheatsheet.md',doc],
 ]
 if (process.argv.includes('--check')) {
-  const stale = outputs.filter(([path, text])=>!existsSync(join(root,path))||readFileSync(join(root,path),'utf8')!==text)
+  // Git may check out generated text with CRLF on Windows. Compare content
+  // using the generator's LF convention without ignoring other differences.
+  const stale = outputs.filter(([path, text])=>!existsSync(join(root,path))||readFileSync(join(root,path),'utf8').replace(/\r\n/g,'\n')!==text)
   if (stale.length) {console.error('CCZJ CSS data is stale: '+stale.map(([path])=>path).join(', ')+'. Run npm --prefix frontend run gen:css-data.');process.exitCode=1}
   else console.log(`CCZJ CSS data: ${values.length} classes, documentation and editor data are current`)
 } else {
