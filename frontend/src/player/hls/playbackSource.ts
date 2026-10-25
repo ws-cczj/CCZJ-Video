@@ -4,6 +4,8 @@ import { createPlaybackSession } from '../playbackSession'
 import { proxyHlsURL } from './proxy'
 import { useHlsEngine } from './useHlsEngine'
 import { adaptiveForwardBuffer } from '../../utils/ts-cache/network'
+import { playbackTransportURL } from '../../platform/mediaTransport'
+import { isIOSRuntime } from '../../api/runtime'
 
 type Lease = ReturnType<ReturnType<typeof createPlaybackSession>['capture']>
 type SourceError = 'unsupported' | 'load_failed' | 'fatal' | 'timeout'
@@ -35,7 +37,14 @@ export function createPlaybackSource(deps: {
   }
 
   async function load(video: HTMLVideoElement, url: string, lease: Lease): Promise<boolean> {
-    const playbackURL = proxyHlsURL(url)
+    const playbackURL = await playbackTransportURL(proxyHlsURL(url), lease.signal)
+    if (!lease.current()) return false
+    // Native HLS keeps iPhone playback and PiP in AVPlayer. MSE/Hls.js is still
+    // available for hosts without native HLS support.
+    if (isIOSRuntime() && video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = playbackURL
+      return true
+    }
     TsCache.enable()
     const Hls = await engine.loadRuntime()
     if (!lease.current()) return false

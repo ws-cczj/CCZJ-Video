@@ -1,15 +1,18 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { tr } from '../locales'
 import Icon from '../components/Icon.vue'
 import { useDownloadStore } from '../stores/download'
 import Sidebar from '../components/Sidebar.vue'
 import { MotionTransition } from '../components/ui'
 import { createDesktopRouteScenes } from './desktopRouteScene'
+import { shortDramaScene } from '../player/shortDrama/scene'
 const scene = createDesktopRouteScenes()
 const cached = ['Home','Search','Sources','Favorites','History','Recent','Downloads','Settings']
 const dl = useDownloadStore(), router = useRouter()
+const route=useRoute()
+const shortDramaPlayback=computed(()=>shortDramaScene(route,false)==='playback')
 // 下载悬浮球显示逻辑：任务<1 时不显示；任务>=1 且鼠标靠近右下角时显示
 const fabVisible = ref(false)
 function handleFabMouseMove(e: MouseEvent): void {
@@ -39,11 +42,11 @@ onBeforeUnmount(() => window.removeEventListener('mousemove',handleFabMouseMove)
 </script>
 <template>
   <div class="app-body">
-    <Sidebar />
-    <main class="main-content">
+    <Sidebar v-if="!shortDramaPlayback" />
+    <main class="main-content" :class="{'short-drama-host': $route.path === '/short-drama'}">
       <router-view v-slot="{ Component }">
         <MotionTransition preset="page" mode="out-in">
-          <KeepAlive :include="cached"><component v-if="Component" :is="scene(Component)" :view="Component" :key="$route.name === 'player' ? `player:${String($route.params.sourceKey || '')}:${String($route.params.globalId || '')}` : $route.path" /></KeepAlive>
+          <KeepAlive :include="cached"><component v-if="Component" :is="scene(Component)" :view="Component" :class="{ 'cczj-h-full': $route.path === '/short-drama' }" :key="$route.name === 'player' ? `player:${String($route.params.sourceKey || '')}:${String($route.params.globalId || '')}` : $route.path" /></KeepAlive>
         </MotionTransition>
       </router-view>
     </main>
@@ -62,3 +65,7 @@ onBeforeUnmount(() => window.removeEventListener('mousemove',handleFabMouseMove)
     </button>
 
 </template>
+
+<style scoped>
+.main-content.short-drama-host { padding: 0; @apply cczj-overflow-hidden; }
+</style>

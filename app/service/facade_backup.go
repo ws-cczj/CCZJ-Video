@@ -60,6 +60,9 @@ func (a *App) BackupImportFile(ctx context.Context, name string) (backupservice.
 }
 
 func (a *App) OpenFolder(path string) (string, error) {
+	if goruntime.GOOS == "ios" || goruntime.GOOS == "android" {
+		return "", apperror.New(apperror.Unsupported, "移动端请使用文件分享入口")
+	}
 	if strings.TrimSpace(path) == "" {
 		return "", apperror.New(apperror.Validation, "路径为空")
 	}

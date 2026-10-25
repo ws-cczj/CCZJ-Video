@@ -1,0 +1,19 @@
+version: '3'
+
+tasks:
+  prepare:
+    summary: Generate iOS scaffold with the pinned Wails CLI (also works on Windows)
+    cmds:
+      - python build/ios/build.py --prepare-only
+  build:
+    summary: Build an iPhone IPA for personal re-signing on macOS with full Xcode
+    cmds:
+      - python3 build/ios/build.py --platform device
+  simulator:
+    summary: Build an iOS simulator app on macOS with full Xcode
+    cmds:
+      - python3 build/ios/build.py --platform simulator
+  test:
+    summary: Check startup and local SQLite persistence in a disposable iOS simulator
+    cmds:
+      - python3 scripts/test-ios-simulator.py

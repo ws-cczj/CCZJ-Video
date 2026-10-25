@@ -9,6 +9,7 @@
 | 目录职责、复用入口与开发检查 | [开发与复用指南](development.md) |
 | 公共 UI、主题、工具类与 CSS 组合 | [CCZJ 样式复用](cczj-styles.md) · [生成速查表](cczj-utilities-cheatsheet.md) |
 | Android 构建、热更新与原生验收 | [Android 开发](android.md) |
+| iOS 本地应用、云端打包、自签与验收 | [iOS 开发](ios.md) |
 | 请求合并、写入策略、取消与事件身份 | [请求通道](request-pipelines.md) |
 | 扩展包格式、信任与能力 | [扩展包规范](plugins.md) · [采集策略 Schema](source-strategy-v2.schema.json) |
 | 阅读源排名与章节／话次匹配 | [策略设计](reading-source-routing-design.md) · [实现入口](reading-source-routing-implementation.md) |

@@ -798,6 +798,13 @@ export class VideoListReq {
      * @param {Partial<VideoListReq>} [$$source = {}] - The source object to create the VideoListReq.
      */
     constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {boolean | undefined}
+             */
+            this["short_drama"] = undefined;
+        }
         if (!("source_key" in $$source)) {
             /**
              * @member

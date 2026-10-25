@@ -29,7 +29,7 @@
 .manga-search input::placeholder { color: var(--comic-muted); }
 .cczj-comic-shell.manga-room .manga-search input:focus-visible { outline: none; }
 .manga-search button { @apply cczj-grid; place-items: center; width: 44px; height: 46px; padding: 0; @apply cczj-flex-shrink-0; border: 0; background: transparent; color: var(--comic-ink); }
-.manga-channels { @apply cczj-flex cczj-items-center; gap: 12px; overflow-x: auto; scrollbar-width: none; margin-bottom: 24px; }
+.manga-channels { @apply cczj-flex cczj-items-center; gap: 12px; @apply cczj-overflow-x-auto; scrollbar-width: none; margin-bottom: 24px; }
 .manga-channels::-webkit-scrollbar { @apply cczj-hidden; }
 .manga-channels button { @apply cczj-flex cczj-items-center; gap: 7px; @apply cczj-flex-shrink-0; min-height: 44px; padding: 0 16px; border: 0; border-radius: 7px; background: transparent; color: var(--comic-muted); font-size: 13px; transition: background var(--cczj-motion-normal,220ms), color var(--cczj-motion-normal,220ms); }
 .manga-channels button[aria-pressed="true"] { color: var(--comic-accent); background: var(--comic-soft); font-weight: 650; }

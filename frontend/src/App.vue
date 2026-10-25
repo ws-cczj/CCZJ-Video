@@ -3,6 +3,9 @@ import { onMounted, onUnmounted, computed, defineAsyncComponent, watch } from 'v
 import { useRouter } from 'vue-router'
 import { tr } from './locales'
 import TitleBar from './components/TitleBar.vue'
+import './player/shortDrama/presentation.css'
+import { shortDramaScene } from './player/shortDrama/scene'
+import { presentationProfile } from './platform/presentation'
 import { useApplicationMode } from './modes/applicationMode'
 import { APPLICATION_MODES, APPLICATION_MODE_KEYS, modeHome, routeMode } from './modes/definitions'
 
@@ -36,6 +39,7 @@ const modeShells = Object.fromEntries(APPLICATION_MODE_KEYS.map(mode => [mode, d
 const activeShell = computed(() => modeShells[appMode.mode])
 
 const router = useRouter()
+const shortDramaPlayback = computed(() => shortDramaScene(router.currentRoute.value, presentationProfile().ui === 'mobile') === 'playback')
 function onAndroidBack(event: Event): void {
   if (event.defaultPrevented) return
   // Dispatch overlay handling in a separate phase. Window listeners installed
@@ -125,7 +129,7 @@ onUnmounted(() => {
 
   <!-- 投放标记刻意不在这一层：带着它整窗都是投放区，拖到播放器上也会静默装一个扩展包。
        现在只有「设置 → 扩展包」那张卡片带 data-file-drop-target。 -->
-  <div class="app-shell" :data-application-mode="appMode.mode">
+  <div class="app-shell" :class="{'cczj-short-drama-surface':shortDramaPlayback}" :data-application-mode="appMode.mode">
     <!-- 自定义标题栏：最顶部一条，背景色与页面主背景一致 -->
     <TitleBar v-if="!isMobileRuntime()" />
 

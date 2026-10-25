@@ -7,7 +7,7 @@ import PlayerSpeedControls from './PlayerSpeedControls.vue'
 import { useTimeJump } from '../useTimeJump'
 import { formatPlaybackTime as fmt } from '../videoInfoFormat'
 import type { PlaybackControlState, DesktopPlaybackCommands } from './controlState'
-const props = defineProps<{ playback: PlaybackControlState; commands: DesktopPlaybackCommands; visible: boolean }>()
+const props = defineProps<{ playback: PlaybackControlState; commands: DesktopPlaybackCommands; visible: boolean; minimal?: boolean }>()
 const emit = defineEmits<{toolsHost:[element:HTMLElement|null]}>()
 const { t } = useI18n()
 const showVolumePanel = ref(false), showSpeedPanel = ref(false)
@@ -23,7 +23,7 @@ onBeforeUnmount(() => emit('toolsHost',null))
 defineExpose({ engaged, close })
 </script>
 <template>
-    <div class="ctrl-bar" v-show="visible || engaged" @click.stop @mousedown.stop
+    <div class="ctrl-bar" :class="{'ctrl-bar-minimal':minimal}" v-show="visible || engaged" @click.stop @mousedown.stop
       @pointerdown.stop @dblclick.stop @wheel.stop>
       <div class="ctrl-primary">
       <!-- 上一集 -->
@@ -61,8 +61,9 @@ defineExpose({ engaged, close })
       <div class="ctrl-center"><slot name="danmaku" /></div>
       <div class="ctrl-secondary">
       <slot name="quality" />
-      <PlayerVolumeControls v-model:open="showVolumePanel" :volume="playback.volume" :muted="playback.muted" @mute="commands.mute()" @input="commands.volume" @interaction="commands.interaction()" />
-      <PlayerSpeedControls v-model:open="showSpeedPanel" :speed="playback.speed" @change="selectSpeed" @interaction="showVolumePanel=false;commands.interaction()" />
+      <PlayerVolumeControls v-if="!minimal" v-model:open="showVolumePanel" :volume="playback.volume" :muted="playback.muted" @mute="commands.mute()" @input="commands.volume" @interaction="commands.interaction()" />
+      <PlayerSpeedControls v-if="!minimal" v-model:open="showSpeedPanel" :speed="playback.speed" @change="selectSpeed" @interaction="showVolumePanel=false;commands.interaction()" />
+      <slot name="actions" />
       <div ref="toolsHost" style="display:contents" />
       <!-- 全屏 -->
       <button class="ctrl-btn" data-player-action="fullscreen" :disabled="!playback.canFullscreen" @click="commands.fullscreen()" :aria-label="playback.fullscreen ? t('player.exitFullscreen') : t('player.fullscreenHotkey')" :title="playback.fullscreen ? t('player.exitFullscreen') : t('player.fullscreenHotkey')">

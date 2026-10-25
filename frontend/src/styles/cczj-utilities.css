@@ -676,6 +676,9 @@
 .cczj-overflow-x-hidden {
   overflow-x: hidden;
 }
+.cczj-overflow-x-auto {
+  overflow-x: auto;
+}
 .cczj-overflow-y-auto {
   overflow-y: auto;
 }

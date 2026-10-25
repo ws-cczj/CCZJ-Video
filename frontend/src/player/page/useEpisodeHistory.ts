@@ -6,6 +6,7 @@ export function useEpisodeHistory(deps: {
   identity: () => {sourceKey:string;vodId:string;name:string;globalId?:number}
   episodes: () => ReadonlyArray<{ep_num?:number}>
   currentIndex: () => number
+  onPersistenceError?: (error: unknown) => void
 }) {
 let progressEvents = 0
 let progressUIUpdates = 0
@@ -58,7 +59,7 @@ function syncHistoryToDb(position: number, force = false): void {
     vod_name: deps.identity().name || '',
     ep_num: ep.ep_num ?? (deps.currentIndex() + 1),
     position,
-  } as any).catch(() => { })
+  } as any).catch(error => { deps.onPersistenceError?.(error) })
 }
 
 /**
@@ -120,7 +121,7 @@ function recordHistory(idx: number): void {
       vod_name: deps.identity().name || '',
       ep_num: epNum,
       position,
-    } as any).catch(() => { })
+    } as any).catch(error => { deps.onPersistenceError?.(error) })
   } catch { /* ignore */ }
 }
 

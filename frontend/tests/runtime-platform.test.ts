@@ -19,5 +19,6 @@ describe('native environment bootstrap before mounting mobile UI', () => {
     await runtime.initializeRuntimeEnvironment()
     expect(runtime.isMobileRuntime()).toBe(mobile)
     expect(runtime.isDesktopRuntime()).toBe(desktop)
+    expect(runtime.isIOSRuntime()).toBe(os === 'ios')
   })
 })

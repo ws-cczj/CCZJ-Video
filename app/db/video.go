@@ -12,6 +12,7 @@ import (
 
 // FilterParams defines the catalog filters shared by browsing and exports.
 type FilterParams struct {
+	ShortDrama                                bool
 	TypeId, Year, Area, Keyword, Sort, Cursor string
 	RecentDays                                int
 	Page, PageSize                            int

@@ -6,6 +6,8 @@ import { formatPlaybackTime } from '../player/videoInfoFormat'
 export function useMobilePlayerGestures(options: {
   enabled: boolean; device: PlayerPlatform['device']; video: () => HTMLVideoElement | null; visible: () => void; onVolume: (value: number) => void
   onStart?: () => void
+  interaction?: 'portrait'
+  onSwipe?: (direction: 'previous' | 'next') => void
 }) {
   const locked = ref(false)
   const hud = ref('')
@@ -23,6 +25,7 @@ export function useMobilePlayerGestures(options: {
   let suppressClick = false
   let hold: ReturnType<typeof setTimeout> | undefined
   let boosted: { video: HTMLVideoElement; rate: number } | null = null
+  let swipe = 0
   function clearHold(): void { if (hold) clearTimeout(hold); hold = undefined }
   function restoreRate(): void {
     const saved = boosted
@@ -75,9 +78,24 @@ export function useMobilePlayerGestures(options: {
     if (!s || e.pointerId !== s.id || locked.value) return
     if (kind.value === 'speed') { e.preventDefault(); return }
     const dx = e.clientX - s.x, dy = e.clientY - s.y
+    if (options.interaction === 'portrait') {
+      if (Math.hypot(dx, dy) < 10) return
+      clearHold()
+      suppressClick = true
+      swipe = Math.abs(dy) > Math.abs(dx) * 1.4 ? dy : 0
+      ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+      e.preventDefault()
+      return
+    }
     if (!kind.value) {
       if (Math.hypot(dx, dy) < 10) return
       clearHold()
+      // iOS owns output volume through hardware/system controls. Do not show
+      // a changing percentage for a video.volume assignment WebKit ignores.
+      if (Math.abs(dx) < Math.abs(dy) && !s.side && !options.device.volumeSupported) {
+        suppressClick = true
+        return
+      }
       kind.value = Math.abs(dx) >= Math.abs(dy) ? 'seek' : s.side ? 'brightness' : 'volume'
       active.value = true
       options.onStart?.()
@@ -108,6 +126,12 @@ export function useMobilePlayerGestures(options: {
     clearHold()
     start = null
     active.value = false
+    const direction = swipe
+    swipe = 0
+    if (options.interaction === 'portrait' && Math.abs(direction) >= 50 && e.type === 'pointerup') {
+      options.onSwipe?.(direction < 0 ? 'next' : 'previous')
+      return
+    }
     if (boosting.value) {
       restoreRate(); kind.value = ''; hud.value = ''; options.visible(); return
     }
@@ -123,7 +147,7 @@ export function useMobilePlayerGestures(options: {
   }
   function cancel(): void {
     clearHold(); restoreRate()
-    start = null; active.value = false; hud.value = ''; kind.value = ''; seekTarget.value = -1; compact.value = false
+    start = null; swipe = 0; active.value = false; hud.value = ''; kind.value = ''; seekTarget.value = -1; compact.value = false
     if (hide) clearTimeout(hide)
     if (collapse) clearTimeout(collapse)
   }

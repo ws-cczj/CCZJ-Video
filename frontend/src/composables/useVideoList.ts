@@ -1,5 +1,7 @@
 import { computed, onActivated, onDeactivated, onScopeDispose, reactive, ref, watch } from 'vue'
-import { GetVideoList, SearchVideos } from '../api/app'
+import { SearchVideos } from '../api/app'
+import { GetVideoPage } from '../api/video'
+import { normalizeApiError } from '../api/errors'
 import type { Video } from '../types'
 import { useErrorStore } from '../stores/error'
 import { useVideoStore } from '../stores/video'
@@ -14,9 +16,12 @@ export interface VideoFilter {
   keyword: string
   recent_days?: number
   sort?: string // '' = 默认; 'rating' = 按评分; 'hot' = 按热度
+  short_drama?: boolean
 }
 
 export interface VideoListOptions {
+  /** A retained child scene can suspend reads without discarding its page. */
+  enabled?: () => boolean
   /**
    * 列表之外的派生结构（首页的轮播、推荐分组）在同一视频被删除时的清理钩子。
    * 每个新的删除通知都会调用一次，跨源也会，所以视图要先比对 sourceKey 再动手。
@@ -42,6 +47,7 @@ export function useVideoList(options: VideoListOptions = {}) {
   const page = ref(1)
   const nextCursor = ref('')
   const loading = ref(false)
+  const error = ref('')
   const interrupted = ref(false)
   let active = true
   const sourceKey = ref('')
@@ -53,6 +59,9 @@ export function useVideoList(options: VideoListOptions = {}) {
   onActivated(() => { active = true })
   onDeactivated(() => { active = false; interrupted.value = loading.value; cancelRequests() })
   onScopeDispose(cancelRequests)
+  watch(() => options.enabled?.() ?? true, enabled => {
+    if (!enabled) { interrupted.value = loading.value; cancelRequests() }
+  }, {flush:'sync'})
 
   const errorStore = useErrorStore()
   const videoStore = useVideoStore()
@@ -71,13 +80,14 @@ export function useVideoList(options: VideoListOptions = {}) {
   }
 
   async function load(key: string, filter: VideoFilter, p = 1, pageSize = 50): Promise<void> {
-    if (!key || !active) return
+    if (!key || !active || options.enabled?.() === false) return
     if (p > 1 && (!nextCursor.value || key !== sourceKey.value)) return
     if (p === 1) nextCursor.value = ''
     requests.cancel()
     interrupted.value = false
     const my = gen.begin()
     loading.value = true
+    error.value = ''
     sourceKey.value = key
     try {
       const req = {
@@ -88,27 +98,30 @@ export function useVideoList(options: VideoListOptions = {}) {
         keyword: filter.keyword ?? '',
         sort: filter.sort ?? '',
         recent_days: filter.recent_days ?? 0,
+        short_drama: filter.short_drama ?? false,
         cursor: p > 1 ? nextCursor.value : '',
         page: p,
         page_size: pageSize,
       } as any
-      const resp = (await requests.run(() => GetVideoList(req))) as any
+      const resp = await requests.run(() => GetVideoPage(req))
       if (settle(my)) return
       const list: Video[] = Array.isArray(resp?.videos) ? resp.videos : []
       nextCursor.value = typeof resp?.next_cursor === 'string' ? resp.next_cursor : ''
       applyPage(list, typeof resp?.total === 'number' ? resp.total : list.length, p)
     } catch (e: any) {
       if (settle(my)) return
+      error.value = normalizeApiError(e).message
       errorStore.fromError(tr('errors.loadVideosFailed'), e, 'videoList.load')
     }
   }
 
   async function search(key: string, keyword: string, p = 1, pageSize = 50): Promise<void> {
-    if (!key || !active) return
+    if (!key || !active || options.enabled?.() === false) return
     requests.cancel()
     interrupted.value = false
     const my = gen.begin()
     loading.value = true
+    error.value = ''
     sourceKey.value = key
     try {
       const resp = (await requests.run(() => SearchVideos({
@@ -126,6 +139,7 @@ export function useVideoList(options: VideoListOptions = {}) {
       localVideos.value = localVideos.value.filter(v => !remoteIds.has(String(v.vod_id ?? '')))
     } catch (e: any) {
       if (settle(my)) return
+      error.value = normalizeApiError(e).message
       errorStore.fromError(tr('errors.searchFailed'), e, 'videoList.search')
     }
   }
@@ -149,6 +163,7 @@ export function useVideoList(options: VideoListOptions = {}) {
     page.value = 1
     nextCursor.value = ''
     loading.value = false
+    error.value = ''
   }
 
   const stopWatchingDeletion = watch(() => videoStore.lastDeletion, (notice) => {
@@ -169,6 +184,7 @@ export function useVideoList(options: VideoListOptions = {}) {
     page,
     nextCursor,
     loading,
+    error,
     interrupted,
     sourceKey,
     hasNext: computed(() => videos.value.length < total.value),

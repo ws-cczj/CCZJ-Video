@@ -3,6 +3,8 @@
 Uses the existing player browser fixture. Media is locally generated H.264/AAC;
 bandwidth is shared by all connections, including prefetch and duplicate reads.
 Only unrelated Wails bindings are replaced. Results describe this controlled link.
+--media-url explicitly tests a real upstream instead; synthetic bandwidth changes
+then do not apply to that upstream.
 """
 import argparse, json, mimetypes, os, re, shutil, subprocess, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -60,7 +62,11 @@ def prepare_media(directory):
     (directory/'master.m3u8').write_text('#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=350000,RESOLUTION=320x180\nlow/index.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=1550000,RESOLUTION=640x360\nhigh/index.m3u8\n')
 
 def main():
-    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--tag',default='current');parser.add_argument('--seconds',type=float,default=70);parser.add_argument('--channel',default='msedge');parser.add_argument('--scenario',choices=['adaptive','single','single-high','offline'],default='adaptive');parser.add_argument('--output',default='dist/audit/weak-network');args=parser.parse_args()
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--tag',default='current');parser.add_argument('--seconds',type=float,default=70);parser.add_argument('--channel',default='msedge');parser.add_argument('--scenario',choices=['adaptive','single','single-high','offline'],default='adaptive');parser.add_argument('--output',default='dist/audit/weak-network')
+    parser.add_argument('--media-url',help='Opt in to a real upstream through the production HLS relay; synthetic bandwidth changes do not apply')
+    args=parser.parse_args()
+    if args.media_url and (urlparse(args.media_url).scheme not in ('http','https') or args.scenario!='single'):
+        parser.error('--media-url requires an HTTP(S) URL and --scenario single')
     if not re.fullmatch(r'[a-zA-Z0-9_-]{1,48}',args.tag):raise ValueError('invalid tag')
     from playwright.sync_api import sync_playwright
     output=ROOT/args.output;output.mkdir(parents=True,exist_ok=True)
@@ -84,7 +90,7 @@ def main():
                 body=route.fetch().text()+'''\nTsCache.setEpisodes([{source_key:'weak_fixture',vod_id:'weak',ep_num:1,ep_url:'fixture'}]);TsCache.setCurrentEpisode(0);'''
                 route.fulfill(body=body,content_type='text/javascript')
             page.route('**/tests/browser/player.ts',fixture)
-            media=f'http://127.0.0.1:{media_port}/media/'+('low/index.m3u8' if args.scenario=='single' else 'high/index.m3u8' if args.scenario=='single-high' else 'master.m3u8')
+            media=args.media_url or f'http://127.0.0.1:{media_port}/media/'+('low/index.m3u8' if args.scenario=='single' else 'high/index.m3u8' if args.scenario=='single-high' else 'master.m3u8')
             page.goto('http://127.0.0.1:9355/tests/browser/player.html?resume=0&media='+quote(media,safe=''))
             page.wait_for_selector('video');page.evaluate('''()=>{window.weakEvents=[];const v=document.querySelector('video');v.muted=true;for(const name of ['waiting','playing','stalled','error','seeking','seeked'])v.addEventListener(name,()=>weakEvents.push({event:name,wall:performance.now(),time:v.currentTime,ready:v.readyState}));return v.play()}''')
             started=time.monotonic();samples=[];phase=None
@@ -97,7 +103,7 @@ def main():
             events=page.evaluate('weakEvents');page.evaluate('document.querySelector("video").pause()')
             fault=page.evaluate('''async(url)=>{const {TsCacheLoader}=await import('/src/utils/ts-cache/loader.ts');const loader=new TsCacheLoader({});const state={progress:0,timeout:0,error:0,success:0};loader.load({url,type:'media-fragment',responseType:'arraybuffer'},{timeout:500,loadPolicy:{maxTimeToFirstByteMs:500,maxLoadTimeMs:500,errorRetry:null,timeoutRetry:null},maxRetry:0,retryDelay:0,maxRetryDelay:0,highWaterMark:4096},{onSuccess:()=>state.success++,onError:()=>state.error++,onTimeout:()=>state.timeout++,onProgress:()=>state.progress++});await new Promise(r=>setTimeout(r,1200));const value={...state,loaded:loader.stats.loaded,first:loader.stats.loading.first};loader.destroy();return value}''',f'http://127.0.0.1:9355/__cczj/hls?u='+__import__('base64').urlsafe_b64encode(f'http://127.0.0.1:{media_port}/stall.ts'.encode()).decode().rstrip('='))
             page.evaluate('playerTest.state.open=false');time.sleep(.3)
-            result={'tag':args.tag,'scenario':args.scenario,'samples':samples,'events':events,'fault':fault,'requests':Media.link.records,'errors':errors,'console':console,'media_seconds':samples[-1]['time'] if samples else 0}
+            result={'tag':args.tag,'scenario':args.scenario,'live_media':bool(args.media_url),'samples':samples,'events':events,'fault':fault,'requests':Media.link.records,'errors':errors,'console':console,'media_seconds':samples[-1]['time'] if samples else 0}
             active_wait=None;stalls=[]
             for event in events:
                 if event['event']=='waiting' and event['time']>.1 and active_wait is None:active_wait=event['wall']

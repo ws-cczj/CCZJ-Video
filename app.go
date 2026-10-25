@@ -49,6 +49,14 @@ func buildApp() (*application.App, error) {
 	var mainWindow *application.WebviewWindow
 
 	options := application.Options{
+		DisableDefaultSignalHandler: runtime.GOOS == "ios",
+		IOS: application.IOSOptions{
+			EnableInlineMediaPlayback:       true,
+			EnableAutoplayWithoutUserAction: true,
+			DisableBounce:                   true,
+			DisableLinkPreview:              true,
+			BackgroundColour:                application.RGBA{Red: 20, Green: 20, Blue: 40, Alpha: 255},
+		},
 		Windows:      windowsOptions,
 		MarshalError: apperror.Marshal,
 		Name:         "CCZJ Video",
@@ -101,7 +109,7 @@ func buildApp() (*application.App, error) {
 			DisableFramelessWindowDecorations: false,
 		},
 	})
-	// Android owns its Activity, screen geometry and lifecycle. Desktop-only
+	// Mobile hosts own screen geometry and lifecycle. Desktop-only
 	// tray, DPI and drag/drop handlers must not control that native host.
 	if application.System.IsMobile() {
 		return app, nil

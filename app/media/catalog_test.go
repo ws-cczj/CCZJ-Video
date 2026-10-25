@@ -4,8 +4,29 @@ import (
 	"cczjVideo/app/db"
 	"cczjVideo/app/model"
 	"context"
+	"encoding/json"
 	"testing"
 )
+
+func TestVideoListDecodesShortDramaBoundary(t *testing.T) {
+	for _, tc := range []struct {
+		name, payload string
+		short         bool
+	}{
+		{"short drama", `{"source_key":"test","short_drama":true,"page_size":24}`, true},
+		{"existing caller", `{"source_key":"test","page_size":24}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := VideoListReq{ShortDrama: true}
+			if err := json.Unmarshal([]byte(tc.payload), &req); err != nil {
+				t.Fatal(err)
+			}
+			if req.ShortDrama != tc.short || req.PageSize != 24 {
+				t.Fatalf("decoded request: %+v", req)
+			}
+		})
+	}
+}
 
 func TestSearchLocalCatalogDropsRemoteHitsAndCapsResults(t *testing.T) {
 	const sourceKey = "local_supplement_test"

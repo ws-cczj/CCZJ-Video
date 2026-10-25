@@ -50,12 +50,22 @@ export function getDetailPath(sourceKey: string, video: { global_id?: string | n
 // 获取播放器路由路径（独立播放页面）
 export function getPlayerPath(
   sourceKey: string,
-  video: { global_id?: string | number; vod_g_id?: string | number; vod_id?: string | number; id?: number },
+  video: { global_id?: string | number; vod_g_id?: string | number; vod_id?: string | number; id?: number; type_name?: string },
   epIndex: number,
+  lineIndex?: number,
 ): string {
   const globalId = video.global_id
   const id = globalId !== undefined && globalId !== null && String(globalId) !== '' ? globalId : 0
+  if (/短剧|短劇|短片剧/.test(video.type_name ?? '')) {
+    return getShortDramaPath(sourceKey,video,epIndex,lineIndex)
+  }
   return `/player/${sourceKey}/${id}/${epIndex}?vod=${encodeURIComponent(String(getVideoId(video)))}`
+}
+
+export function getShortDramaPath(sourceKey:string, video:{global_id?:string|number;vod_g_id?:string|number;vod_id?:string|number;id?:number}, epIndex=0, lineIndex?:number):string {
+  const query=new URLSearchParams({source:sourceKey,vod:String(getVideoId(video)),global_id:String(video.global_id || 0),episode:String(epIndex)})
+  if(lineIndex!==undefined)query.set('line',String(lineIndex))
+  return `/short-drama?${query}`
 }
 
 // 解析 URL 获取域名部分

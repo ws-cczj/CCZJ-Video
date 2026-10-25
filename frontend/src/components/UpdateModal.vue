@@ -20,7 +20,7 @@ import { licensePending } from '../stores/licenseState'
 import Icon from './Icon.vue'
 import { Button, Modal, MotionTransition } from './ui'
 import { onBackendEvent } from '../api/events'
-import { isMobileRuntime } from '../api/runtime'
+import { isMobileRuntime, isIOSRuntime } from '../api/runtime'
 import { openAndroidUpdateInstaller } from '../platform/updateInstaller'
 import { normalizeApiError } from '../api/errors'
 import { createRequestScope } from '../api/requestScope'
@@ -326,6 +326,7 @@ watch(licensePending, (pending) => { if (!pending) void reportLastInstall() }, {
 watch([updateDownloaded, updateDownloadPath], () => { void refreshOnExitPlan() }, { immediate: true })
 
 onMounted(async () => {
+  if (isIOSRuntime()) return
   stopDownloadProgress = onBackendEvent('update:download:progress', applyUpdateDownloadProgress)
   stopUpdateAvailable = onBackendEvent('update:available', onUpdateAvailable)
 

@@ -34,6 +34,9 @@ func (a *App) OpenFileInExplorer(path string) bool {
 	if _, err := os.Stat(path); err != nil {
 		return false
 	}
+	if goruntime.GOOS == "ios" {
+		return shareIOSFile(path, a.getDataDir(), a.downloadDir.Get()) == nil
+	}
 
 	// Windows: 使用 explorer /select, 定位到具体文件
 	if goruntime.GOOS == "windows" {

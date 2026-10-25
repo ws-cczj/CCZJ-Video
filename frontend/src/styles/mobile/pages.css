@@ -72,7 +72,7 @@
 .cczj-mobile-shell .cczj-mobile-page .detail-nav { @apply cczj-flex-wrap; }
 .cczj-mobile-shell .cczj-mobile-page :is(.sc-row,.sc-field,.card-expanded .ops-row,.task-footer,.task-header) { @apply cczj-flex-wrap cczj-min-w-0; }
 .cczj-mobile-shell .cczj-mobile-page .fav-layout { @apply cczj-flex-col cczj-gap-7; }
-.cczj-mobile-shell .cczj-mobile-page .fav-folders { @apply cczj-w-full cczj-max-w-full cczj-flex-row; overflow-x: auto; @apply cczj-pb-2; }
+.cczj-mobile-shell .cczj-mobile-page .fav-folders { @apply cczj-w-full cczj-max-w-full cczj-flex-row; @apply cczj-overflow-x-auto; @apply cczj-pb-2; }
 .cczj-mobile-shell .cczj-mobile-page .folder-row { @apply cczj-flex-shrink-0; min-width: 100px; }
 .cczj-mobile-shell .cczj-mobile-page .fav-main { @apply cczj-min-w-0; }
 .cczj-mobile-shell .cczj-mobile-page .history-cards { grid-template-columns: minmax(0,1fr); }

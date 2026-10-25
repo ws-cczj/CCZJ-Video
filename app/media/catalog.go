@@ -15,6 +15,7 @@ import (
 )
 
 type VideoListReq struct {
+	ShortDrama bool   `json:"short_drama,omitempty"`
 	SourceKey  string `json:"source_key"`
 	RecentDays int    `json:"recent_days"`
 	// type_id 同时支持字符串与数字，保存为字符串
@@ -30,6 +31,7 @@ type VideoListReq struct {
 
 func (r *VideoListReq) UnmarshalJSON(data []byte) error {
 	var raw struct {
+		ShortDrama bool            `json:"short_drama"`
 		SourceKey  string          `json:"source_key"`
 		RecentDays json.RawMessage `json:"recent_days"`
 		TypeId     json.RawMessage `json:"type_id"`
@@ -45,6 +47,7 @@ func (r *VideoListReq) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	r.SourceKey = raw.SourceKey
+	r.ShortDrama = raw.ShortDrama
 	if v, err := payload.ScalarInt(raw.RecentDays, 0); err == nil {
 		r.RecentDays = v
 	}
@@ -81,6 +84,7 @@ func (s *Service) List(ctx context.Context, req VideoListReq) (*VideoListResp, e
 	}
 
 	filter := db.FilterParams{
+		ShortDrama: req.ShortDrama,
 		TypeId:     req.TypeId,
 		Year:       req.Year,
 		Area:       req.Area,

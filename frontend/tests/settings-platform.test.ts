@@ -4,8 +4,8 @@ import { createPinia } from 'pinia'
 import { renderToString } from '@vue/server-renderer'
 import { createI18n } from 'vue-i18n'
 
-const platform = vi.hoisted(() => ({ mobile: true }))
-vi.mock('../src/api/runtime', async original => ({ ...await original<object>(), isMobileRuntime: () => platform.mobile }))
+const platform = vi.hoisted(() => ({ mobile: true, ios: false }))
+vi.mock('../src/api/runtime', async original => ({ ...await original<object>(), isMobileRuntime: () => platform.mobile, isIOSRuntime: () => platform.ios }))
 vi.mock('../src/router', () => ({ default: {} }))
 vi.mock('../src/locales', () => ({ tr: (key: string) => key, setLocale: async () => {} }))
 vi.mock('../src/stores/theme', () => ({ useThemeStore: () => ({ current: { name: 'Test', mode: 'light' } }) }))
@@ -41,4 +41,14 @@ it('offers update checks on mobile without desktop restart or rollback controls'
   expect(html).toContain('检查更新')
   expect(html).not.toContain('> 重启应用')
   expect(html).not.toContain('退回上一版')
+})
+
+it('explains iOS signing updates without mounting an APK update action', async () => {
+  platform.mobile = true; platform.ios = true
+  try {
+    const html = await render(SettingsAboutGroup, { appVersion: '2.4.0' })
+    expect(html).toContain('重新签名')
+    expect(html).not.toContain('检查更新')
+    expect(html).not.toContain('APK')
+  } finally { platform.ios = false }
 })

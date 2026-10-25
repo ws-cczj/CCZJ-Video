@@ -36,6 +36,7 @@ Windows 的 SQLite 位于 `%APPDATA%/CCZJ Video`。浏览器资料目录由 `app
 | 视频列表、搜索、详情、线路、收藏与历史 | [`media`](../app/media/)、[`detail`](../app/detail/)、[`MediaStore`](../app/db/mapping.go)、[请求与所有权](request-pipelines.md#视频查询详情与用户记录)；复用应用详情实例和请求上下文 |
 | 设置写入与浏览器缓存 | [`settingsQueue.ts`](../frontend/src/api/settingsQueue.ts)、[`platform/storage.ts`](../frontend/src/platform/storage.ts)、[`debouncedWrite.ts`](../frontend/src/platform/debouncedWrite.ts) |
 | 文件分享、安装器、平台选择 | [`platform`](../frontend/src/platform/)、[`build/android`](../build/android/) |
+| iOS 本地宿主、待签名 IPA 与模拟器启动检查 | [`build/ios`](../build/ios/)、[iOS 开发](ios.md) |
 | 阅读目录工具、桌面输入设置 | [`ChapterTools.vue`](../frontend/src/reading/ChapterTools.vue)、[`ReaderInputPreferences.vue`](../frontend/src/reading/ReaderInputPreferences.vue)，通过模式和偏好显式传入 |
 | 阅读热缓存、搜索返回快照 | [`contentCache.ts`](../frontend/src/reading/contentCache.ts)、[`useSearchReturn.ts`](../frontend/src/reading/useSearchReturn.ts)，按阅读器／页面拥有，失败、取消与卸载清理 |
 | 阅读持久化、书目与来源 | [`app/readingstate`](../app/readingstate/)、[`app/library`](../app/library/)、[`app/provider`](../app/provider/)、[`app/source`](../app/source/) |
@@ -53,6 +54,26 @@ Windows 的 SQLite 位于 `%APPDATA%/CCZJ Video`。浏览器资料目录由 `app
 | 模拟器 WebView 控制 | [`scripts/android_webview.py`](../scripts/android_webview.py)，复用连接、进程就绪等待与端口释放 |
 
 入口表用于定位，不代表所有场景都要多包一层。新增职责放在所属模块，修改共享接口时同步所有消费者和验证。
+
+## 短剧播放
+
+`/short-drama` 在桌面侧栏和移动底栏首页右侧提供入口；移动历史记录保留兼容路由，不再占用底栏。桌面默认进入海报剧场，点击卡片后进入单剧播放器并收起侧栏；随机播放通过 `?view=feed` 进入推荐流。移动默认刷推荐，顶部切到 `?view=theatre` 展示两列选剧列表。`ShortDramaTheatre.vue` 复用 `VideoCard` 和 `useVideoList` 的游标分页、搜索与错误状态，返回剧场保留列表和滚动位置，隐藏列表通过 `enabled` 取消在途请求。新页面不复制首页数组或另建列表请求队列。
+
+列表通过既有 `GetVideoList.short_drama` 可选字段进入媒体查询，分页和总数计算前即筛掉普通影片；与 `GetRecommend.short_drama` 共用目录中的分类边界，包含来源分类及全局映射，并遵守可见、未回收和当前来源规则。未提供短剧字段的旧列表调用保持普通列表语义。缺失更新时间的来源仍可使用带 id 决胜的游标翻页。`player/shortDrama/useShortDramaFeed.ts` 拥有每批最多五部的推荐、单部详情、集数及请求取消；剧场显示或页面隐藏时释放播放器，重新进入后恢复所选剧目与集数，不按标题猜测短剧，也不以普通影片填充不足的数量。
+
+`VideoPlayer` 的 `presentation="portrait"` 共用 HLS、平台传输、缓存和续播，装配 `PortraitPlayerControls`，不挂载横屏控制条。竖屏固定从正常速度播放，长按临时加速并在释放／取消时恢复；不写入横屏倍速偏好。`useEpisodeHistory` 持续保存 SQLite 历史并反馈写入失败。选集与简介复用现有播放器抽屉；进度条拖动在释放时提交，取消不跳转。
+
+播放队列按入口区分：推荐流上下切换、滚轮／键盘及播放结束均切到不同短剧；点击剧场卡片、剧名或在抽屉选择任一集（含当前集）进入单剧队列，所有切换与自动连播只在本剧集数内进行，末集播放结束后停止并显示已播完。两端都提供返回剧场和返回推荐入口；手机通过画面上下滑动切换，选集提供可见的触摸入口，观看区不常驻上下集按钮。`getPlayerPath` 根据视频分类将短剧详情的播放入口送往 `/short-drama?source=…&vod=…&global_id=…&episode=…&line=…`；已由数据库确认分类的剧场卡片通过 `getShortDramaPath` 进入同一播放器，保留来源身份、集数索引及所选线路。直接进入时不请求推荐，也不改写全局当前来源。隐藏再进入保留本次选集，换具体剧目或返回推荐时取消旧请求。
+
+选剧列表沿用应用原有主题，包括侧栏、标题栏、搜索框、卡片和手机底栏。仅进入竖屏播放器后，`player/shortDrama/presentation.css` 才为应用外壳、观看区和 Teleport 抽屉提供局部中性色板：桌面标题栏、右侧抽屉及手机底栏统一为 `#18191c`。`shortDramaScene` 集中判断已提交路由的选剧／播放状态，外壳与视图共同使用；返回剧场或离开短剧即恢复用户主题，不写入全局主题变量或偏好。播放器抽屉将普通属性转发到遮罩根节点，使传入的局部色板在 Teleport 后仍然有效，其他抽屉保留原来的背景默认值。
+
+桌面视频保持 9:16 并优先铺满可用高度，两侧使用当前视频中央色带形成横向一致的低分辨率虚化背景；背景复用播放器进度回调，最多每 400ms 绘制一次 72×128 Canvas，不新建解码器、定时循环、图片导出或网络请求，页面隐藏即移除。桌面剧名与最多三行简介／当前集数收在观看区左下方，细进度条横贯桌面底部状态栏上沿；状态栏复用 `PlayerDesktopControls` 的精简模式，常驻播放／暂停、时间与时间跳转、队列状态、选集、画中画和全屏入口；按最初的竖屏交互要求，不挂载清晰度、倍速及音量面板，视频高度预留状态栏空间，切换胶囊靠右侧放置，避免把全部信息挤在中央视频上。`VideoPlayer.portraitControlsHost` 允许把同一份竖屏底部控件 Teleport 到观看区，拖动状态和媒体控制仍归原播放器所有；长按提示、中央暂停入口仍在视频内部。全屏复用既有呈现控制器，通过可选的 `fullscreenRoot` 指向整个短剧观看页，使底栏与选集抽屉留在全屏内；画中画仍由原媒体实例及平台适配持有。桌面右侧提供收藏、选集与简介入口，收藏复用 `usePlaybackFavorites` 和收藏夹弹窗，显式使用播放来源身份。弹窗挂载到独立的观看页覆盖层宿主，避免 Teleport 到其自身父节点时破坏视图切换锚点。两端页头覆盖渐变保护层，不重复展示总集数或悬浮计数。移动端保持底部信息和进度条在画面内，保留底栏，实际竖屏内容填充观看区，横屏内容仍完整显示。移动端时间仅在拖动、悬停和键盘焦点时展开，媒体就绪后暂停才显示中央继续播放入口。滚轮连续事件限制为一次切换，方向键／PageUp／PageDown 按当前队列切换、空格暂停；弹层和表单控件保留自己的输入行为。桌面抽屉限制在观看区内，展开时视频、底部信息与进度条一起让位。
+
+设计参考：[抖音短剧入口](https://www.douyin.com/series)、[官方短剧播放器文档](https://developer.open-douyin.com/docs/resource/zh-CN/mini-app/develop/industry-plugin/playlet-plugin/playlet/playlet-extension)。官方文档明确支持透明导航、播放进度续播和选集事件；其同剧集滑动语义属于小程序官方播放器，不能据此声称抖音所有推荐页都采用同一流程。本项目按用户确认的入口语义区分推荐流和单剧队列。公开历史截图仅用于信息层级参考，未作为当前抖音原生 App 的逐项实测结论。
+
+选集每 20 集分组，使用来源真实集数，支持正倒序和定位当前；分组用文字与下划线区分，集数网格通常五列、窄屏自动减少列数，当前集用主题色描边和小圆点标记，完整的有意义集名在网格上方补充展示。抽屉固定保留剧名、计数和分组，网格独立滚动；移动端初始高度为视口的 72%，可通过既有拖动手柄调整。自动定位只横向移动分组条，纵向滚动由集数网格承担，避免定位标签后再次遮住当前集。
+
+浏览器替身验收运行 `python scripts/test-short-drama-browser.py --channel chrome`（需要 Python Playwright 和 FFmpeg），覆盖桌面／移动布局、真实竖屏媒体、长按、进度条、80 集长标题抽屉、320px 窄屏当前集完整可见及文字不溢出、页面离开与重入、空状态和请求失败重试。独立 acceptance APK 的原生验收运行 `python scripts/test-short-drama-android.py --device emulator-5554`，复用既有 Android CDP／绑定入口，验证真实 CMS 导入、Go 推荐、HLS 播放、触摸、SQLite 进度与返回键；测试创建的临时来源和设置会在结束后清理／恢复。截图与测试媒体输出到 `dist/audit/short-drama`。
 
 ## CCZJ 工具类与组件
 

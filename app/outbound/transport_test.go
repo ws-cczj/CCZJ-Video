@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/netip"
 	"net/url"
@@ -57,6 +58,91 @@ func responseText(t *testing.T, response *http.Response, err error) string {
 		t.Fatal(err)
 	}
 	return string(raw)
+}
+
+func TestMediaRequestsKeepCallerTransport(t *testing.T) {
+	for _, category := range []string{"playback", "lineprobe", "download"} {
+		for _, state := range []string{"refreshing", "exhausted", "healthy"} {
+			t.Run(category+"/"+state, func(t *testing.T) {
+				var proxyCalls, counted, proxyChecks atomic.Int32
+				badProxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					proxyCalls.Add(1)
+					w.WriteHeader(http.StatusForbidden)
+				}))
+				defer badProxy.Close()
+				p := fixturePool(t, badProxy.URL, badProxy.URL)
+				if state == "refreshing" {
+					p.nodes = nil
+					p.ready = make(chan struct{})
+				} else if state == "exhausted" {
+					p.nodes = nil
+				}
+				target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.URL.Path == "/master.m3u8" {
+						http.SetCookie(w, &http.Cookie{Name: "session", Value: "media", Path: "/"})
+						fmt.Fprint(w, "#EXTM3U\nchild.m3u8\n")
+						return
+					}
+					cookie, err := r.Cookie("session")
+					if err != nil || cookie.Value != "media" || r.Header.Get("Referer") != "http://media.example/" {
+						http.Error(w, "lost media session", http.StatusForbidden)
+						return
+					}
+					if r.URL.Path == "/segment.ts" {
+						if r.Header.Get("Range") != "bytes=2-" {
+							t.Error("media Range lost")
+						}
+						w.Header().Set("Content-Range", "bytes 2-6/7")
+						w.WriteHeader(http.StatusPartialContent)
+						fmt.Fprint(w, "chunk")
+						return
+					}
+					fmt.Fprint(w, "#EXTM3U\nsegment.ts\n")
+				}))
+				defer target.Close()
+				base := &http.Transport{
+					Proxy: func(*http.Request) (*url.URL, error) { proxyChecks.Add(1); return nil, nil },
+					DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+						if address != "media.example:80" {
+							return nil, fmt.Errorf("unexpected media route %s", address)
+						}
+						return (&net.Dialer{}).DialContext(ctx, network, target.Listener.Addr().String())
+					},
+				}
+				defer base.CloseIdleConnections()
+				jar, err := cookiejar.New(nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				client := &http.Client{Timeout: 300 * time.Millisecond, Jar: jar, Transport: WrapTransport(category, base, func(selected http.RoundTripper) http.RoundTripper {
+					return rtFunc(func(r *http.Request) (*http.Response, error) { counted.Add(1); return selected.RoundTrip(r) })
+				})}
+				for _, path := range []string{"master.m3u8", "child.m3u8", "segment.ts"} {
+					req, err := http.NewRequest(http.MethodGet, "http://media.example/"+path, nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+					req.Header.Set("Referer", "http://media.example/")
+					if path == "segment.ts" {
+						req.Header.Set("Range", "bytes=2-")
+					}
+					response, err := client.Do(req)
+					body := responseText(t, response, err)
+					if path == "segment.ts" {
+						if response.StatusCode != http.StatusPartialContent || body != "chunk" {
+							t.Fatalf("segment: status=%d body=%q", response.StatusCode, body)
+						}
+					} else if response.StatusCode != http.StatusOK || !strings.HasPrefix(body, "#EXTM3U") {
+						t.Fatalf("playlist: status=%d body=%q", response.StatusCode, body)
+					}
+				}
+				status := p.Snapshot()
+				if proxyCalls.Load() != 0 || status.PublicAttempts != 0 || status.LocalFallbacks != 0 || counted.Load() != 3 || proxyChecks.Load() != 3 {
+					t.Fatalf("media route changed: proxy=%d pool=%+v counted=%d callerProxy=%d", proxyCalls.Load(), status, counted.Load(), proxyChecks.Load())
+				}
+			})
+		}
+	}
 }
 
 func TestPoolExhaustionPrecedesLocalFallbackAndNeverDialsTarget(t *testing.T) {
@@ -111,7 +197,7 @@ func TestPoolFailureNeverFallsThroughToDirect(t *testing.T) {
 		direct.Add(1)
 		return nil, errors.New("direct forbidden")
 	}}
-	client := &http.Client{Transport: WrapTransport("playback", base, identityTransport)}
+	client := &http.Client{Transport: WrapTransport("collect", base, identityTransport)}
 	if _, err := client.Get("http://public.example/video"); err == nil || direct.Load() != 0 {
 		t.Fatalf("direct=%d err=%v", direct.Load(), err)
 	}
@@ -190,7 +276,7 @@ func TestCONNECTStreamingRangeCancellationAndTLSValidation(t *testing.T) {
 	roots := x509.NewCertPool()
 	roots.AddCert(target.Certificate())
 	trusted.TLSClientConfig.RootCAs = roots
-	client := &http.Client{Transport: WrapTransport("playback", trusted, identityTransport)}
+	client := &http.Client{Transport: WrapTransport("reading-image", trusted, identityTransport)}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, "GET", target.URL, nil)
@@ -269,6 +355,86 @@ func TestConcurrentRequestsKeepStableSiteRoute(t *testing.T) {
 	}
 }
 
+func TestTargetConnectionFailureDoesNotQuarantineOtherSites(t *testing.T) {
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Hostname() == "blocked.example" {
+			connection, _, err := w.(http.Hijacker).Hijack()
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			connection.Close()
+			return
+		}
+		fmt.Fprint(w, "public")
+	}))
+	defer proxy.Close()
+	local := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { fmt.Fprint(w, "local") }))
+	defer local.Close()
+	p := fixturePool(t, local.URL, proxy.URL)
+	client := &http.Client{Transport: WrapTransport("collect", &http.Transport{}, identityTransport)}
+	defer client.CloseIdleConnections()
+	for _, step := range []struct{ target, want string }{
+		{"http://working.example/master", "public"},
+		{"http://blocked.example/search", "local"},
+		{"http://working.example/child", "public"},
+	} {
+		response, err := client.Get(step.target)
+		if got := responseText(t, response, err); got != step.want {
+			t.Fatalf("%s routed through %q, want %q", step.target, got, step.want)
+		}
+	}
+	if len(p.candidates("blocked.example")) != 0 || len(p.candidates("working.example")) != 1 {
+		t.Fatal("a target failure must cool only that site's route")
+	}
+}
+
+func TestUnreachableProxyIsStillQuarantinedGlobally(t *testing.T) {
+	local := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { fmt.Fprint(w, "local") }))
+	defer local.Close()
+	p := fixturePool(t, local.URL, "http://8.8.8.8:8080")
+	p.dialProxy = func(ctx context.Context, network, address string) (net.Conn, error) {
+		if address == "8.8.8.8:8080" {
+			return nil, errors.New("proxy connection refused")
+		}
+		return (&net.Dialer{}).DialContext(ctx, network, address)
+	}
+	client := &http.Client{Transport: WrapTransport("collect", &http.Transport{}, identityTransport)}
+	defer client.CloseIdleConnections()
+	response, err := client.Get("http://working.example/data")
+	if got := responseText(t, response, err); got != "local" {
+		t.Fatal(got)
+	}
+	if len(p.candidates("unrelated.example")) != 0 {
+		t.Fatal("unreachable proxy stayed eligible for other sites")
+	}
+}
+
+func TestFailedCONNECTOnlyCoolsTargetSite(t *testing.T) {
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodConnect {
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		fmt.Fprint(w, "public")
+	}))
+	defer proxy.Close()
+	p := fixturePool(t, "", proxy.URL)
+	client := &http.Client{Transport: WrapTransport("collect", &http.Transport{}, identityTransport)}
+	defer client.CloseIdleConnections()
+	if response, err := client.Get("https://blocked.example/data"); err == nil {
+		response.Body.Close()
+		t.Fatal("failed CONNECT was reported as success")
+	}
+	response, err := client.Get("http://working.example/data")
+	if got := responseText(t, response, err); got != "public" {
+		t.Fatal(got)
+	}
+	if len(p.candidates("blocked.example")) != 0 || len(p.candidates("working.example")) != 1 {
+		t.Fatal("CONNECT rejection quarantined unrelated sites")
+	}
+}
+
 func TestShutdownCancelsRequestsWaitingForInitialPool(t *testing.T) {
 	p := fixturePool(t, "", []string{}...)
 	p.ready = make(chan struct{})
@@ -323,12 +489,12 @@ func TestProxyCloneKeepsNegotiatedHTTP2Support(t *testing.T) {
 	}
 }
 
-func TestAllBackendCategoriesRouteThroughPool(t *testing.T) {
+func TestInformationCategoriesRouteThroughPool(t *testing.T) {
 	var attempts atomic.Int32
 	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { attempts.Add(1); io.WriteString(w, "proxied") }))
 	defer proxy.Close()
 	fixturePool(t, "", proxy.URL)
-	for _, category := range []string{"collect", "douban", "reading", "novel", "comic", "danmaku", "image", "reading-image", "playback", "lineprobe", "download", "update"} {
+	for _, category := range []string{"collect", "douban", "reading", "novel", "comic", "danmaku", "image", "reading-image", "update"} {
 		client := &http.Client{Transport: WrapTransport(category, &http.Transport{}, identityTransport)}
 		response, err := client.Get("http://public.example/request")
 		if got := responseText(t, response, err); got != "proxied" {
@@ -336,7 +502,7 @@ func TestAllBackendCategoriesRouteThroughPool(t *testing.T) {
 		}
 		client.CloseIdleConnections()
 	}
-	if attempts.Load() != 12 {
+	if attempts.Load() != 9 {
 		t.Fatal(attempts.Load())
 	}
 }

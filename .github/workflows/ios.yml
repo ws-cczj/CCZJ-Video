@@ -1,0 +1,57 @@
+name: iOS build and simulator smoke test
+
+# Manual only: no signing credentials, Apple account, release upload or recurring
+# macOS jobs. Device artifacts must be re-signed locally before installation.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [device, simulator]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install the project's Wails CLI
+        shell: bash
+        run: |
+          version=$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v3)
+          go install "github.com/wailsapp/wails/v3/cmd/wails3@$version"
+      - name: Install frontend dependencies
+        run: npm --prefix frontend ci
+      - name: Build local iOS app
+        run: python3 build/ios/build.py --platform ${{ matrix.platform }}
+      - name: Check simulator startup and SQLite persistence
+        if: matrix.platform == 'simulator'
+        run: python3 scripts/test-ios-simulator.py
+      - name: Upload device IPA for personal signing
+        if: matrix.platform == 'device'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-device-requires-signing
+          path: bin/ios/device/*-resign.ipa
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload simulator evidence
+        if: always() && matrix.platform == 'simulator'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-simulator-evidence
+          path: dist/audit/ios-simulator/
+          if-no-files-found: warn
+          retention-days: 14

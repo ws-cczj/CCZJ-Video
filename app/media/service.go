@@ -36,6 +36,12 @@ func (s *Service) Recommend(ctx context.Context, sourceKey string, limit int, ex
 	return db.GetCatalogRecommendContext(ctx, sourceKey, limit, excludeIDs)
 }
 
+// ShortDramaRecommendations owns the feed batch size; ordinary recommendations
+// keep their existing behavior. Source and visibility rules remain in the catalog.
+func (s *Service) ShortDramaRecommendations(ctx context.Context, sourceKey string, excludeIDs []string) ([]*model.Video, error) {
+	return db.GetShortDramaRecommendContext(ctx, sourceKey, 5, excludeIDs)
+}
+
 // Similar returns videos sharing a type with the requested video.
 func (s *Service) Similar(ctx context.Context, sourceKey, typeID string, limit int, excludeIDs []string) ([]*model.Video, error) {
 	if limit <= 0 {

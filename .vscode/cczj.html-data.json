@@ -755,6 +755,10 @@
           "description": "**[10. 溢出 (Overflow)]**\n```css\n.cczj-overflow-x-hidden { overflow-x: hidden; }\n```"
         },
         {
+          "name": "cczj-overflow-x-auto",
+          "description": "**[10. 溢出 (Overflow)]**\n```css\n.cczj-overflow-x-auto { overflow-x: auto; }\n```"
+        },
+        {
           "name": "cczj-overflow-y-auto",
           "description": "**[10. 溢出 (Overflow)]**\n```css\n.cczj-overflow-y-auto { overflow-y: auto; }\n```"
         },

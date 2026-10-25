@@ -324,6 +324,7 @@ async function loadRecommendations(): Promise<void> {
         source_key: sourceStore.currentSourceKey,
         limit: 24,
         exclude_ids: exclude,
+        short_drama: false,
       })) as unknown as Video[]
       const liked = Array.isArray(raw) ? raw : []
       if (liked.length > 0) {

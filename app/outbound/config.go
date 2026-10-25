@@ -17,7 +17,8 @@ import (
 const SettingsKey = "outbound_proxy_pool_v1"
 const snapshotKey = "outbound_proxy_pool_snapshot_v1"
 
-// Config applies to all public backend HTTP categories, including transfers.
+// Config applies to public backend information requests. Media playback,
+// probing and downloads retain their caller-owned transports.
 type Config struct {
 	Enabled        bool           `json:"enabled"`
 	Sources        []string       `json:"sources"`

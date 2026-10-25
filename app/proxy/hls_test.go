@@ -18,7 +18,7 @@ func TestHLSPlaylistRewritesAllURIForms(t *testing.T) {
 		t.Fatal(err)
 	}
 	playlist := "#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI=\"keys/key.bin\"\n#EXT-X-MAP:URI=\"init.mp4\"\n#EXT-X-I-FRAME-STREAM-INF:BANDWIDTH=1,URI=\"iframe.m3u8\"\nchild/level.m3u8\n"
-	rewritten := s.rewritePlaylist(playlist, base, "")
+	rewritten := s.rewritePlaylist(playlist, base, "", "")
 	for _, upstream := range []string{
 		"https://media.example.test/path/keys/key.bin",
 		"https://media.example.test/path/init.mp4",

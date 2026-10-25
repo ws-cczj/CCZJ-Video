@@ -72,6 +72,7 @@ const router = createRouter({
       path: '/search',
       component: () => import('../views/Search.vue'),
     },
+    { path: '/short-drama', component: () => import('../views/ShortDrama.vue'), meta: { title: 'shortDrama.title' } },
     {
       path: '/recent',
       component: () => import('../views/Recent.vue'),

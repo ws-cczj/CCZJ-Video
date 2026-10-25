@@ -188,7 +188,8 @@ func (s *HLSService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if bytes.HasPrefix(bytes.TrimSpace(body), []byte("#EXTM3U")) {
-			body = []byte(s.rewritePlaylist(string(body), finalURL, referer))
+			route, _ := r.Context().Value(hlsProxyRouteKey{}).(string)
+			body = []byte(s.rewritePlaylist(string(body), finalURL, referer, route))
 			w.Header().Set("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8")
 			w.Header().Set("Cache-Control", "no-store")
 			w.Header().Set("Content-Length", fmt.Sprint(len(body)))
@@ -252,13 +253,21 @@ func (s *HLSService) fetch(ctx context.Context, initial *url.URL, rangeHeader, r
 	return nil, nil, fmt.Errorf("too many redirects")
 }
 
-func (s *HLSService) rewritePlaylist(playlist string, base *url.URL, referer string) string {
+// A mobile streaming bridge supplies a capability-bearing route for native
+// AVPlayer. Every child playlist, key and segment must retain that route.
+type hlsProxyRouteKey struct{}
+
+func (s *HLSService) rewritePlaylist(playlist string, base *url.URL, referer, route string) string {
 	proxyURI := func(raw string) string {
 		u, err := base.Parse(strings.TrimSpace(raw))
 		if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
 			return raw
 		}
-		return s.urlFor(u.String(), referer)
+		out := s.urlFor(u.String(), referer)
+		if route != "" {
+			out = route + strings.TrimPrefix(out, "/__cczj/hls")
+		}
+		return out
 	}
 	lines := strings.Split(playlist, "\n")
 	for i, line := range lines {

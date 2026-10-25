@@ -7,11 +7,26 @@ import MobileRouteStage from './MobileRouteStage.vue'
 import CczjMobileNavigation from './CczjMobileNavigation.vue'
 import { pluginSettingsTabs } from '../plugins/registry'
 import { useThemeStore } from '../stores/theme'
+import '../player/shortDrama/presentation.css'
+import { shortDramaScene } from '../player/shortDrama/scene'
 
 const route = useRoute()
 const router = useRouter()
 const theme = useThemeStore()
+const shortDramaPlayback = computed(() => shortDramaScene(route, true) === 'playback')
 const themeStyle = computed(() => {
+  if (shortDramaPlayback.value) return {
+    '--cczj-mobile-canvas':'var(--cczj-drama-chrome)',
+    '--cczj-mobile-surface':'var(--cczj-drama-chrome)',
+    '--cczj-mobile-chrome':'var(--cczj-drama-chrome)',
+    '--cczj-mobile-control':'var(--cczj-drama-control)',
+    '--cczj-mobile-secondary':'var(--cczj-drama-chrome)',
+    '--cczj-mobile-ink':'var(--cczj-drama-ink)',
+    '--cczj-mobile-secondary-ink':'var(--cczj-drama-secondary)',
+    '--cczj-mobile-muted':'var(--cczj-drama-muted)',
+    '--cczj-mobile-line':'var(--cczj-drama-border)',
+    '--cczj-mobile-wallpaper-veil':'transparent',
+  }
   const current = theme.current
   const p = current.palette
   const dark = current.mode === 'dark'
@@ -29,7 +44,7 @@ const themeStyle = computed(() => {
     '--cczj-mobile-wallpaper-veil': picture ? (dark ? 'rgba(10,13,18,.24)' : 'rgba(248,250,252,.3)') : 'transparent' }
 })
 const cached = ['Home', 'Search', 'Sources', 'Favorites', 'History', 'Recent', 'Downloads', 'Settings']
-const primary = ['/', '/search', '/favorites', '/history', '/settings']
+const primary = ['/', '/short-drama', '/search', '/favorites', '/settings']
 function secondary(location:RouteLocationNormalizedLoaded):boolean { return !primary.includes(location.path) || (location.path==='/settings' && !!location.query.group) }
 const titles: Record<string, string> = {
   '/': 'sidebar.home', '/search': 'sidebar.search', '/favorites': 'sidebar.favorites',
@@ -56,7 +71,7 @@ function back(): void {
 </script>
 
 <template>
-  <div class="cczj-mobile-shell" :style="themeStyle">
+  <div class="cczj-mobile-shell" :class="{'cczj-short-drama-surface':shortDramaPlayback}" :style="themeStyle">
     <MobileRouteStage :mobile="true" :cache="cached">
     <template #default="{Component,route:shownRoute}">
       <header v-if="shownRoute.name!=='player' && secondary(shownRoute)" class="cczj-mobile-header">
@@ -65,7 +80,7 @@ function back(): void {
         <router-link v-if="shownRoute.path!=='/search' && shownRoute.path!=='/settings'" class="cczj-mobile-icon-button" to="/search" :aria-label="tr('sidebar.search')"><Icon name="search" :size="21" /></router-link>
         <router-link v-if="shownRoute.path!=='/settings'" class="cczj-mobile-icon-button" to="/settings" :aria-label="tr('sidebar.settings')"><Icon name="settings" :size="21" /></router-link>
       </header>
-      <main class="cczj-mobile-content main-content" :class="{ 'cczj-mobile-page':shownRoute.name!=='player','cczj-mobile-media-content':shownRoute.name==='player' }"><component :is="Component" /></main>
+      <main class="cczj-mobile-content main-content" :class="{ 'cczj-mobile-page':shownRoute.name!=='player' && shownRoute.path!=='/short-drama','cczj-mobile-media-content':shownRoute.name==='player' || shownRoute.path==='/short-drama' }"><component :is="Component" /></main>
       </template>
     <template #navigation="{route:shownRoute}"><CczjMobileNavigation v-if="shownRoute.name!=='player' && !secondary(shownRoute)" :path="shownRoute.path" /></template>
     </MobileRouteStage>

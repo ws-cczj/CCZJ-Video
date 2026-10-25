@@ -8,14 +8,17 @@ let presentationOwner: symbol | undefined
  * behind the platform adapter and do not create media or HLS resources. */
 export function usePlayerPresentationMode(deps: {
   platform: PlayerPlatform; wrapperRef: Ref<HTMLDivElement | undefined>; video: () => HTMLVideoElement | null
+  fullscreenRoot?: () => HTMLElement | undefined
   visible: () => void; failure: (operation:string,error:unknown) => void; unavailable: (capability:'fullscreen'|'pip') => void
 }) {
   const { platform } = deps
   const owner = Symbol('player-presentation')
   presentationOwner = owner
   let disposed = false, fullscreenGeneration = 0, pipGeneration = 0
+  let stopElementPip: (() => void) | undefined
   const isFullscreen = ref(false), isPiP = ref(false)
   const owns = () => !disposed && presentationOwner === owner
+  const fullscreenRoot = () => deps.fullscreenRoot?.() ?? deps.wrapperRef.value
   function reflectFullscreen(value: boolean): void {
     isFullscreen.value = value
     if (value) document.body.setAttribute('data-player-fullscreen', '1')
@@ -25,7 +28,7 @@ export function usePlayerPresentationMode(deps: {
     if (!owns()) return
     const token = ++fullscreenGeneration
     const current = () => owns() && token === fullscreenGeneration
-    const root = deps.wrapperRef.value
+    const root = fullscreenRoot()
     try {
       if (isFullscreen.value) {
         await platform.fullscreen.exit(root, current)
@@ -44,7 +47,7 @@ export function usePlayerPresentationMode(deps: {
     } catch (error) { if (current()) deps.failure('fullscreen',error) }
   }
   function onFsChange(): void {
-    if (owns()) reflectFullscreen(platform.fullscreen.browserActive(deps.wrapperRef.value))
+    if (owns()) reflectFullscreen(platform.fullscreen.browserActive(fullscreenRoot()))
   }
   function onNativePip(event: Event): void {
     if (!owns()) return
@@ -65,7 +68,7 @@ export function usePlayerPresentationMode(deps: {
     const video = deps.video()
     if (!video || video.readyState < 1) return
     try {
-      if (document.pictureInPictureElement === video) {
+      if (platform.pip.active(video)) {
         await platform.pip.exit(video)
         if (current()) isPiP.value = false
         return
@@ -97,10 +100,20 @@ export function usePlayerPresentationMode(deps: {
     if (platform.pip.kind === 'device') {
       window.addEventListener('cczj:player-pip', onNativePip)
       window.addEventListener('cczj:player-pip-error', onNativePipError)
+    } else {
+      void nextTick().then(() => {
+        const video = deps.video()
+        if (!owns() || !video) return
+        const changed = () => { if (owns()) isPiP.value = platform.pip.active(video) }
+        const events = ['enterpictureinpicture', 'leavepictureinpicture', 'webkitpresentationmodechanged']
+        for (const event of events) video.addEventListener(event, changed)
+        stopElementPip = () => { for (const event of events) video.removeEventListener(event, changed) }
+      })
     }
   })
   onBeforeUnmount(() => {
     disposed = true; fullscreenGeneration++; pipGeneration++
+    stopElementPip?.()
     document.removeEventListener('fullscreenchange', onFsChange)
     document.removeEventListener('webkitfullscreenchange', onFsChange)
     window.removeEventListener('cczj:player-pip', onNativePip)
@@ -108,7 +121,7 @@ export function usePlayerPresentationMode(deps: {
     if (presentationOwner !== owner) return
     presentationOwner = undefined
     void platform.pip.exit(deps.video()).catch(() => {})
-    void platform.fullscreen.release(deps.wrapperRef.value, () => presentationOwner === undefined).catch(() => {})
+    void platform.fullscreen.release(fullscreenRoot(), () => presentationOwner === undefined).catch(() => {})
     document.body.removeAttribute('data-player-fullscreen')
     document.body.removeAttribute('data-player-pip')
   })

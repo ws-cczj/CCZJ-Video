@@ -9,6 +9,68 @@ import (
 	"time"
 )
 
+// AVPlayer fetches the rewritten children itself; unlike Android's WebView
+// interceptor it cannot put the capability prefix back onto root-relative URLs.
+func TestIOSMediaBridgeRetainsCapabilityForPlaylistKeysAndRanges(t *testing.T) {
+	hls := NewHLSService()
+	defer hls.Close()
+	hls.client.Transport = roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+		body := "#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI=\"key.bin\"\nchild.m3u8\nsegment.ts\n"
+		header := http.Header{"Content-Type": {"application/vnd.apple.mpegurl"}}
+		status := http.StatusOK
+		if r.URL.Path == "/segment.ts" {
+			if r.Header.Get("Range") != "bytes=0-2" || r.Header.Get("Referer") != "https://1.1.1.1/" {
+				t.Error("lost native media range or referer")
+			}
+			body, status = "abc", http.StatusPartialContent
+			header = http.Header{"Content-Type": {"video/mp2t"}, "Content-Range": {"bytes 0-2/3"}}
+		}
+		return &http.Response{StatusCode: status, Header: header, Body: io.NopCloser(strings.NewReader(body))}, nil
+	})
+	bridge := NewMediaBridge(context.Background(), hls)
+	defer bridge.Close()
+	endpoint, err := bridge.Endpoint()
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := http.Get(endpoint + strings.Replace(hls.URL("https://1.1.1.1/master.m3u8"), "/__cczj/hls", "/__cczj/ios-hls", 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	playlist, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != 200 {
+		t.Fatalf("native playlist status %d", response.StatusCode)
+	}
+	origin := endpoint[:strings.LastIndex(endpoint, "/")]
+	for _, name := range []string{"key.bin", "child.m3u8", "segment.ts"} {
+		child := strings.TrimPrefix(endpoint, origin) + strings.Replace(hls.urlFor("https://1.1.1.1/"+name, "https://1.1.1.1/"), "/__cczj/hls", "/__cczj/ios-hls", 1)
+		if !strings.Contains(string(playlist), child) {
+			t.Fatalf("child lost capability: %s", name)
+		}
+		request, err := http.NewRequest(http.MethodGet, origin+child, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("Range", "bytes=0-2")
+		stream, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, readErr := io.ReadAll(stream.Body)
+		stream.Body.Close()
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		if name == "segment.ts" && (stream.StatusCode != 206 || string(data) != "abc") {
+			t.Fatalf("native segment did not stream: %d", stream.StatusCode)
+		}
+	}
+}
+
 func TestMediaBridgeStreamsBeforeEOFAndPreservesRange(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()

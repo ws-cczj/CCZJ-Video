@@ -117,6 +117,7 @@ export interface PlayLineSpeedResponse {
 export interface VideoListResponse {
   videos: Video[]
   total: number
+  next_cursor?: string
 }
 
 // 收藏

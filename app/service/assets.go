@@ -19,7 +19,7 @@ func AssetMiddleware(a *App, mobile bool) func(http.Handler) http.Handler {
 					pipeline = "http.image"
 				case "/__cczj/hls":
 					pipeline = "http.hls"
-				case "/__cczj/android-media":
+				case "/__cczj/android-media", "/__cczj/mobile-media":
 					pipeline = "http.androidMedia"
 				}
 				ctx, identity := operation.WithIdentity(r.Context(), pipeline)
@@ -33,7 +33,7 @@ func AssetMiddleware(a *App, mobile bool) func(http.Handler) http.Handler {
 				r = r.WithContext(ctx)
 			}
 			switch r.URL.Path {
-			case "/__cczj/android-media":
+			case "/__cczj/android-media", "/__cczj/mobile-media":
 				if mobile {
 					a.serveMobileMediaEndpoint(w, r)
 					return

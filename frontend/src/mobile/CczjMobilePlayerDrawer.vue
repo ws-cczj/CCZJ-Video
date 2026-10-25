@@ -1,10 +1,11 @@
 <script setup lang="ts">
+defineOptions({ inheritAttrs: false })
 import './player/presentation.css'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '../components/Icon.vue'
 
-const props = defineProps<{ open:boolean; title:string; fullscreen:boolean; host?:HTMLElement; kind?:'quick'|'more'; lazy?:boolean; placement?:'right'|'bottom' }>()
+const props = defineProps<{ open:boolean; title:string; fullscreen:boolean; host?:HTMLElement; contained?:boolean; solid?:boolean; initialHeight?:number; kind?:'quick'|'more'; lazy?:boolean; placement?:'right'|'bottom' }>()
 const emit = defineEmits<{close:[]}>()
 const { t } = useI18n()
 const panel = ref<HTMLElement>()
@@ -47,7 +48,7 @@ const contentPresent = ref(props.open)
 let returnFocus: HTMLElement | null = null
 watch(() => props.open, async open => {
   if (open) {
-    sheetHeight.value = 60
+    sheetHeight.value = Math.min(90,Math.max(30,props.initialHeight ?? 60))
     contentPresent.value = true
     returnFocus = document.activeElement as HTMLElement | null
     await nextTick()
@@ -71,9 +72,9 @@ onBeforeUnmount(() => { stopResize();if (props.open && returnFocus?.isConnected)
 </script>
 
 <template>
-  <Teleport :to="fullscreen && host ? host : 'body'">
+  <Teleport :to="(fullscreen || contained) && host ? host : 'body'">
     <Transition :name="placement==='bottom'?'cczj-mobile-player-sheet':'cczj-mobile-player-drawer'" @after-leave="afterClose">
-      <div v-show="open" class="cczj-mobile-quick-mask" :class="{'cczj-mobile-quick-fullscreen':fullscreen,'cczj-mobile-player-more-mask':kind==='more','cczj-mobile-player-more-fullscreen':kind==='more'&&fullscreen,'cczj-mobile-player-bottom-mask':placement==='bottom'}" @click.self="emit('close')" @pointerdown.stop @wheel.stop @keydown.stop="onKey">
+      <div v-bind="$attrs" v-show="open" class="cczj-mobile-quick-mask" :class="{'cczj-mobile-quick-fullscreen':fullscreen || contained,'cczj-player-contained-drawer':contained,'cczj-player-solid-drawer':solid,'cczj-mobile-player-more-mask':kind==='more','cczj-mobile-player-more-fullscreen':kind==='more'&&fullscreen,'cczj-mobile-player-bottom-mask':placement==='bottom'}" @click.self="emit('close')" @pointerdown.stop @wheel.stop @keydown.stop="onKey">
         <section ref="panel" class="cczj-mobile-drawer-panel cczj-mobile-quick-panel" :class="{'cczj-mobile-player-more':kind==='more'}" :style="sheetStyle" role="dialog" :aria-label="title" aria-modal="true" @click.stop @dblclick.stop>
           <button v-if="placement==='bottom'" type="button" class="cczj-mobile-sheet-handle" role="slider" :aria-label="t('mobile.resizeDrawer')" aria-orientation="vertical" :aria-valuemin="30" :aria-valuemax="90" :aria-valuenow="Math.round(sheetHeight)" :aria-valuetext="t('mobile.drawerHeight',{percent:Math.round(sheetHeight)})" @pointerdown.stop="startResize" @pointermove.stop="resize" @pointerup.stop="stopResize" @pointercancel.stop="stopResize" @lostpointercapture.stop="stopResize" @keydown="resizeWithKey"><span aria-hidden="true" /></button>
           <header><strong>{{title}}</strong><button :aria-label="t('common.close')" @click="emit('close')"><Icon name="close" :size="22" /></button></header>

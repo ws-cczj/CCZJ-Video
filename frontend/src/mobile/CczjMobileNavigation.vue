@@ -6,9 +6,9 @@ const route = useRoute()
 const props=defineProps<{path?:string}>()
 const items = [
   { path: '/', icon: 'home', label: 'sidebar.home' },
+  { path: '/short-drama', icon: 'film', label: 'shortDrama.navTitle' },
   { path: '/search', icon: 'search', label: 'sidebar.search' },
   { path: '/favorites', icon: 'star', label: 'sidebar.favorites' },
-  { path: '/history', icon: 'clock', label: 'sidebar.history' },
   { path: '/settings', icon: 'settings', label: 'sidebar.settings' },
 ]
 function active(path: string): boolean {

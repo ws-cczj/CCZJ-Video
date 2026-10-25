@@ -71,7 +71,7 @@ function onMinimizeApp():void { try { Window.Minimise() } catch { /* Host owns a
 
             <Button v-if="mobile" @click="emit('openLines')">{{t('playLine.switch')}}</Button>
             <template v-else>
-              <PlaybackRouteList :sources="catalog.items" :active-key="catalog.activeKey" :active-line="details.lines[details.activeLineIndex]?.index??-1" :lines="details.lines" :busy="catalog.loading" :selectable="catalog.selectable" @choose="(key,line)=>emit('source',key,line)" />
+              <PlaybackRouteList dark :sources="catalog.items" :active-key="catalog.activeKey" :active-line="details.lines[details.activeLineIndex]?.index??-1" :lines="details.lines" :busy="catalog.loading" :selectable="catalog.selectable" @choose="(key,line)=>emit('source',key,line)" />
               <Button class="cczj-mt-4" variant="text" size="sm" @click="catalog.retry">{{t('playLine.retryQuality')}}</Button>
             </template>
 

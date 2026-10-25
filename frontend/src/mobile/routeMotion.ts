@@ -1,6 +1,6 @@
 import type { RouteLocationNormalizedLoaded } from 'vue-router'
 type RouteShape=Pick<RouteLocationNormalizedLoaded,'path'|'query'|'name'|'params'>
-export const primaryTabs=[['/','/search','/favorites','/history','/settings'],['/novel','/novel/shelf','/novel/settings'],['/comic','/comic/library','/comic/settings']]
+export const primaryTabs=[['/','/short-drama','/search','/favorites','/settings'],['/novel','/novel/shelf','/novel/settings'],['/comic','/comic/library','/comic/settings']]
 export function routeScreenKey(route:RouteShape):string {
   if(/^\/(novel|comic)\/read\//.test(route.path))return route.path.split('/').slice(0,4).join('/')
   if(route.name==='player')return `player:${String(route.params.sourceKey||'')}:${String(route.params.globalId||'')}`

@@ -21,6 +21,11 @@ export function isMobileRuntime(): boolean {
   return System.IsMobile()
 }
 
+/** Platform-specific capabilities use the initialized host, never the user agent. */
+export function isIOSRuntime(): boolean {
+  return runtimeOS === 'ios'
+}
+
 
 /** Full document navigation also works inside the Android WebView. */
 export function reloadApplication(url: string): void { window.location.replace(url) }

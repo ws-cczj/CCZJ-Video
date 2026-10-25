@@ -17,7 +17,7 @@ import { useErrorStore } from '../../stores/error'
 import { useConfirmStore } from '../../stores/confirm'
 import { useDownloadStore } from '../../stores/download'
 import { formatTime } from '../../utils'
-import { isMobileRuntime } from '../../api/runtime'
+import { isMobileRuntime, isIOSRuntime } from '../../api/runtime'
 import {
   GetSetting, RestartApp, GetSwapBackupInfo, RollbackUpdate,
 } from '../../api/app'
@@ -114,9 +114,10 @@ async function rollbackUpdate(): Promise<void> {
         </div>
       </div>
 
-      <p v-if="isMobileRuntime()" class="desc">{{ t('mobile.previewUpdate') }}</p>
+      <p v-if="isMobileRuntime()" class="desc">{{ t(isIOSRuntime() ? 'mobile.iosUpdate' : 'mobile.previewUpdate') }}</p>
       <div class="about-actions cczj-flex cczj-gap-5">
         <Button
+          v-if="!isIOSRuntime()"
           variant="primary"
           size="md"
           :loading="updateChecking"

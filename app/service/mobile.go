@@ -5,7 +5,7 @@ import (
 	"net/http"
 )
 
-// serveMobileMediaEndpoint provides the Android host a small endpoint record;
+// serveMobileMediaEndpoint provides mobile hosts a small endpoint record;
 // video bytes themselves are streamed over its private loopback connection.
 func (a *App) serveMobileMediaEndpoint(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet || a.mobileMedia == nil {

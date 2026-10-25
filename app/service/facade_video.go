@@ -142,10 +142,14 @@ type RecommendReq struct {
 	SourceKey  string   `json:"source_key"`
 	Limit      int      `json:"limit"`
 	ExcludeIds []string `json:"exclude_ids"`
+	ShortDrama bool     `json:"short_drama,omitempty"`
 }
 
 func (a *App) GetRecommend(ctx context.Context, req RecommendReq) ([]*model.Video, error) {
 	return runRequest(a, ctx, "video.GetRecommend", func(ctx context.Context) ([]*model.Video, error) {
+		if req.ShortDrama {
+			return a.media.ShortDramaRecommendations(ctx, req.SourceKey, req.ExcludeIds)
+		}
 		return a.media.Recommend(ctx, req.SourceKey, req.Limit, req.ExcludeIds)
 	})
 }

@@ -1,0 +1,54 @@
+/* Immersive playback has one local palette, including teleported drawers.
+ * Saved theme variables on :root remain owned by the theme store. */
+.cczj-short-drama-surface {
+  color-scheme: dark;
+  --cczj-drama-chrome: #18191c;
+  --cczj-drama-control: #24252a;
+  --cczj-drama-ink: #f4f4f5;
+  --cczj-drama-secondary: #a7a9b2;
+  --cczj-drama-muted: #757883;
+  --cczj-drama-border: #ffffff0f;
+  --bg-primary: var(--cczj-drama-chrome);
+  --bg-secondary: var(--cczj-drama-chrome);
+  --bg-card: var(--cczj-drama-control);
+  --bg-input: var(--cczj-drama-control);
+  --bg-hover: #ffffff0d;
+  --bg-image: none;
+  --border: var(--cczj-drama-border);
+  --border-strong: #ffffff26;
+  --text-primary: var(--cczj-drama-ink);
+  --text-secondary: var(--cczj-drama-secondary);
+  --text-muted: var(--cczj-drama-muted);
+  --accent: var(--cczj-drama-ink);
+  --accent-dim: #fff;
+  --accent-contrast: var(--cczj-drama-chrome);
+  --accent-rgb: 244, 244, 245;
+  --accent-alpha-5: #f4f4f50d;
+  --accent-alpha-10: #f4f4f51a;
+  --accent-alpha-15: #f4f4f526;
+  --accent-alpha-20: #f4f4f533;
+  --accent-alpha-25: #f4f4f540;
+  --accent-alpha-30: #f4f4f54d;
+  --accent-alpha-35: #f4f4f559;
+  --accent-alpha-40: #f4f4f566;
+  --btn-solid: var(--cczj-drama-ink);
+  --btn-solid-text: var(--cczj-drama-chrome);
+  --btn-solid-hover: #fff;
+  --btn-solid-alpha-20: #f4f4f533;
+  --btn-solid-alpha-35: #f4f4f559;
+  --btn-min: var(--bg-hover);
+  --btn-min-contrast: var(--text-primary);
+  --btn-hide: var(--bg-hover);
+  --btn-hide-contrast: var(--text-primary);
+  --cczj-player-drawer-surface: var(--cczj-drama-chrome);
+}
+.app-shell.cczj-short-drama-surface { background: var(--cczj-drama-chrome); }
+.app-shell.cczj-short-drama-surface .titlebar { background: var(--cczj-drama-chrome); border-bottom-color: var(--border); }
+.app-shell.cczj-short-drama-surface .app-badge { box-shadow: none; }
+.cczj-short-drama-surface .sidebar { background: var(--cczj-drama-chrome); border-right-color: var(--border); backdrop-filter: none; -webkit-backdrop-filter: none; }
+.cczj-short-drama-surface .sidebar .section-label .line { background: var(--border); }
+.cczj-short-drama-surface .sidebar .section-label .label-text { color: var(--text-muted); }
+.cczj-short-drama-surface .sidebar .nav-item { color: var(--text-secondary); font-weight: 400; }
+.cczj-short-drama-surface .sidebar .nav-item:hover { color: var(--text-primary); background: var(--bg-hover); }
+.cczj-short-drama-surface .sidebar .nav-item.active { color: var(--text-primary); background: var(--accent-alpha-10); font-weight: 600; }
+.cczj-short-drama-surface .sidebar .sidebar-footer { border-top-color: var(--border); }

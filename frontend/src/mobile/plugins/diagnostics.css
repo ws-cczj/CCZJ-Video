@@ -7,7 +7,7 @@
 .cczj-mobile-plugin-diagnostics .diag-export-bar { @apply cczj-flex-wrap; overflow-wrap:anywhere; }
 .cczj-mobile-plugin-diagnostics .diag-export-bar>span { flex-basis:100%; white-space:normal; }
 .cczj-mobile-plugin-diagnostics .diag-workspace { @apply cczj-flex cczj-flex-col cczj-min-h-0; gap:0; }
-.cczj-mobile-plugin-diagnostics.diag .diag-nav { @apply cczj-flex-row cczj-flex-nowrap; overflow-x:auto; @apply cczj-max-w-full cczj-gap-2; padding:8px 0; @apply cczj-border-bottom cczj-flex-shrink-0; }
+.cczj-mobile-plugin-diagnostics.diag .diag-nav { @apply cczj-flex-row cczj-flex-nowrap; @apply cczj-overflow-x-auto; @apply cczj-max-w-full cczj-gap-2; padding:8px 0; @apply cczj-border-bottom cczj-flex-shrink-0; }
 .cczj-mobile-plugin-diagnostics .diag-nav button { min-height:44px; @apply cczj-flex-shrink-0 cczj-whitespace-nowrap cczj-px-6-py-4; }
 .cczj-mobile-plugin-diagnostics :is(.diag-nav-caption,.diag-nav-footnote,.diag-nav button small) { @apply cczj-hidden; }
 .cczj-mobile-plugin-diagnostics .diag-content { @apply cczj-overflow-visible cczj-min-h-0; padding:14px 0 0; }

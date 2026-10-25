@@ -444,7 +444,7 @@ function playEpisode(epIndex: number): void {
     const epUrl = resolveEpisodeUrl(ep)
     if (epUrl) TsCache.fetchAndParseM3u8(proxyHlsURL(epUrl)).catch(() => { })
   } catch { /* ignore */ }
-  router.push(getPlayerPath(sourceKey.value, v, epIndex))
+  router.push(getPlayerPath(sourceKey.value, v, epIndex, videoStore.lines[videoStore.activeLineIndex]?.index))
 }
 
 function playFromHistory(): void {

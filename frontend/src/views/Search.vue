@@ -200,6 +200,7 @@ async function loadRecommendations(): Promise<void> {
     let freshVideos: Video[] = []
     try {
       const resp = (await GetVideoList({
+        short_drama: false,
         source_key: currentSearchSource.value,
         type_id: '0',
         year: '',

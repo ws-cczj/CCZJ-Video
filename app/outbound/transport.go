@@ -26,6 +26,13 @@ type routeTransport struct {
 
 // WrapTransport retains the caller's transport settings and per-attempt accounting.
 func WrapTransport(category string, base http.RoundTripper, decorate func(http.RoundTripper) http.RoundTripper) http.RoundTripper {
+	// Keep a media session on its caller-owned transport. Pool readiness and
+	// node/site cooldowns must not delay playback or change the egress between
+	// a playlist, its keys and segments, probes, and a resumed download.
+	switch category {
+	case "playback", "lineprobe", "download":
+		return decorate(base)
+	}
 	return &routeTransport{base: base, decorate: decorate, category: category}
 }
 
@@ -92,7 +99,7 @@ func (t *routeTransport) route(p *Pool, req *http.Request) (*http.Response, erro
 		p.mu.Lock()
 		p.status.PublicAttempts++
 		p.mu.Unlock()
-		response, err, wrote := t.attempt(p, base, endpoint, req, "public_proxy")
+		response, err, wrote, connected := t.attempt(p, base, endpoint, req, "public_proxy")
 		if err == nil && !retryStatus(response.StatusCode) {
 			return response, nil
 		}
@@ -102,7 +109,9 @@ func (t *routeTransport) route(p *Pool, req *http.Request) (*http.Response, erro
 			}
 			return nil, req.Context().Err()
 		}
-		p.failed(n.URL, site, err == nil)
+		// A reachable proxy can still be refused or reset by this destination.
+		// Do not evict it from unrelated sites' in-flight routing in that case.
+		p.failed(n.URL, site, err == nil || connected)
 		if !canReplay(req, t.category, wrote) {
 			return response, err
 		}
@@ -123,7 +132,7 @@ func (t *routeTransport) route(p *Pool, req *http.Request) (*http.Response, erro
 	p.mu.Lock()
 	p.status.LocalFallbacks++
 	p.mu.Unlock()
-	response, err, _ := t.attempt(p, base, endpoint, req, "local_proxy")
+	response, err, _, _ := t.attempt(p, base, endpoint, req, "local_proxy")
 	return response, err
 }
 
@@ -145,13 +154,14 @@ func (t *routeTransport) direct(p *Pool, base *http.Transport, req *http.Request
 	return response, nil
 }
 
-func (t *routeTransport) attempt(p *Pool, base *http.Transport, endpoint *url.URL, req *http.Request, route string) (result *http.Response, failure error, sent bool) {
+func (t *routeTransport) attempt(p *Pool, base *http.Transport, endpoint *url.URL, req *http.Request, route string) (result *http.Response, failure error, sent, connected bool) {
 	began := time.Now()
 	defer func() {
 		if _, traced := operation.IdentityFromContext(req.Context()); !traced {
 			return
 		}
 		fields := applog.Fields{"route": route, "category": t.category, "proxy_sha256": applog.Fingerprint([]byte(endpoint.String())), "duration_ms": time.Since(began).Milliseconds(), "url": applog.SafeURL(req.URL.String())}
+		fields["proxy_connected"], fields["request_sent"] = connected, sent
 		if result != nil {
 			fields["http_status"] = result.StatusCode
 		}
@@ -162,29 +172,39 @@ func (t *routeTransport) attempt(p *Pool, base *http.Transport, endpoint *url.UR
 	}()
 	transport, release, err := p.lease(base, endpoint)
 	if err != nil {
-		return nil, err, false
+		return nil, err, false, false
 	}
 	copy := req.Clone(req.Context())
 	if req.Body != nil && req.GetBody != nil {
 		copy.Body, err = req.GetBody()
 		if err != nil {
 			release()
-			return nil, err, false
+			return nil, err, false, false
 		}
 	}
 	var wrote atomic.Bool
-	copy = copy.WithContext(httptrace.WithClientTrace(copy.Context(), &httptrace.ClientTrace{WroteHeaders: func() { wrote.Store(true) }, WroteRequest: func(httptrace.WroteRequestInfo) { wrote.Store(true) }}))
+	var reached atomic.Bool
+	copy = copy.WithContext(httptrace.WithClientTrace(copy.Context(), &httptrace.ClientTrace{
+		ConnectDone: func(_, _ string, err error) {
+			if err == nil {
+				reached.Store(true)
+			}
+		},
+		GotConn:      func(httptrace.GotConnInfo) { reached.Store(true) },
+		WroteHeaders: func() { wrote.Store(true) },
+		WroteRequest: func(httptrace.WroteRequestInfo) { wrote.Store(true) },
+	}))
 	response, err := t.decorate(transport).RoundTrip(copy)
 	if err != nil {
 		release()
-		return response, err, wrote.Load()
+		return response, err, wrote.Load(), reached.Load()
 	}
 	if response.Body == nil {
 		release()
 	} else {
 		response.Body = &releasedBody{ReadCloser: response.Body, release: release}
 	}
-	return response, nil, wrote.Load()
+	return response, nil, wrote.Load(), reached.Load()
 }
 
 type releasedBody struct {

@@ -513,6 +513,9 @@ func GetCatalogVideoPageContext(ctx context.Context, sourceKey string, filter Fi
 	}
 	where := []string{"source_key=?", "lifecycle_state='active'", catalogTypeVisibilityClause("source_videos")}
 	args := []any{sourceKey}
+	if filter.ShortDrama {
+		where = append(where, catalogShortDramaClause)
+	}
 	if strings.TrimSpace(filter.TypeId) != "" && filter.TypeId != "all" {
 		where = append(where, "source_type_id=?")
 		args = append(args, filter.TypeId)
@@ -598,7 +601,8 @@ func decodeCatalogCursor(cursor string) (string, int, error) {
 		return "", 0, err
 	}
 	parts := strings.Split(string(decoded), "\x00")
-	if len(parts) != 2 || parts[0] == "" {
+	// Some sources omit vod_time; an empty sort value still has a valid id tie-breaker.
+	if len(parts) != 2 {
 		return "", 0, fmt.Errorf("malformed cursor")
 	}
 	id, err := strconv.Atoi(parts[1])
@@ -675,11 +679,31 @@ func GetCatalogRecommend(sourceKey string, limit int, excludeIDs []string) ([]*m
 	return GetCatalogRecommendContext(context.Background(), sourceKey, limit, excludeIDs)
 }
 func GetCatalogRecommendContext(ctx context.Context, sourceKey string, limit int, excludeIDs []string) ([]*model.Video, error) {
+	return getCatalogRecommend(ctx, sourceKey, limit, excludeIDs, false)
+}
+
+// GetShortDramaRecommendContext uses the catalog sampler with an explicit type
+// boundary. A title containing “短剧” alone must never classify a feature film.
+func GetShortDramaRecommendContext(ctx context.Context, sourceKey string, limit int, excludeIDs []string) ([]*model.Video, error) {
+	return getCatalogRecommend(ctx, sourceKey, limit, excludeIDs, true)
+}
+
+// Browsing and random recommendations must use the same source/global type
+// boundary, including providers whose local category is mapped to a short drama.
+const catalogShortDramaClause = `(type_name LIKE '%短剧%' OR type_name LIKE '%短劇%' OR type_name LIKE '%短片剧%' OR EXISTS (
+	SELECT 1 FROM source_types st JOIN global_types gt ON gt.id=st.global_type_id
+	WHERE st.source_key=source_videos.source_key AND st.source_type_id=source_videos.source_type_id
+	AND (gt.type_name LIKE '%短剧%' OR gt.type_name LIKE '%短劇%')))`
+
+func getCatalogRecommend(ctx context.Context, sourceKey string, limit int, excludeIDs []string, shortDrama bool) ([]*model.Video, error) {
 	if limit <= 0 {
 		return []*model.Video{}, nil
 	}
 	args := []any{sourceKey}
 	where := "source_key=? AND lifecycle_state='active' AND " + catalogTypeVisibilityClause("source_videos")
+	if shortDrama {
+		where += " AND " + catalogShortDramaClause
+	}
 	if len(excludeIDs) > 0 {
 		marks := make([]string, len(excludeIDs))
 		for i, id := range excludeIDs {

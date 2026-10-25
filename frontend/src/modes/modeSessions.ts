@@ -11,7 +11,7 @@ interface Snapshot { at: number; route: string; scroll: Record<string, number>; 
 const STATE_KEY = 'cczj.mode.sessions.v1', TICKET_KEY = 'cczj.mode.handoff.v1'
 const MAX_BYTES = 65536, LIFETIME = 12 * 60 * 60 * 1000
 const pages: Record<ApplicationMode, string[]> = {
-  video: ['/', '/search', '/recent', '/favorites', '/history', '/recommendations', '/downloads'],
+  video: ['/', '/short-drama', '/search', '/recent', '/favorites', '/history', '/recommendations', '/downloads'],
   novel: ['/novel', '/novel/categories', '/novel/search', '/novel/shelf', '/novel/settings'],
   comic: ['/comic', '/comic/categories', '/comic/search', '/comic/library', '/comic/settings'],
 }

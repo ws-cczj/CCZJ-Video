@@ -2111,6 +2111,13 @@ export class RecommendReq {
              */
             this["exclude_ids"] = [];
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {boolean | undefined}
+             */
+            this["short_drama"] = undefined;
+        }
 
         Object.assign(this, $$source);
     }

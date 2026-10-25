@@ -28,7 +28,7 @@
 @media (max-width: 1180px) {
   .settings-page { grid-template-columns: minmax(0, 1fr); gap: 18px; }
   .settings-navigation { @apply cczj-flex cczj-gap-3; top: -8px; z-index: 5; }
-  .tabs { @apply cczj-flex-1 cczj-flex-row; overflow-x: auto; @apply cczj-p-3; scrollbar-width: none; }
+  .tabs { @apply cczj-flex-1 cczj-flex-row; @apply cczj-overflow-x-auto; @apply cczj-p-3; scrollbar-width: none; }
   .nav-scroll { @apply cczj-grid; place-items: center; @apply cczj-self-stretch; width: 28px; @apply cczj-flex-shrink-0; padding: 0; @apply cczj-border cczj-rounded-md; background: var(--bg-card); @apply cczj-text-secondary cczj-cursor-pointer; transition: background-color var(--cczj-motion-fast), color var(--cczj-motion-fast); }
   .nav-scroll:hover { background: var(--bg-hover); @apply cczj-text-accent; }
   .nav-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

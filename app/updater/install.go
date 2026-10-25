@@ -35,6 +35,9 @@ func exitProcess() {
 // Windows: 创建批处理脚本，等待旧进程退出后替换 exe 并重启
 // 其他平台: 直接启动新版本（或让用户手动处理）
 func InstallUpdate(filePath string) error {
+	if runtime.GOOS == "ios" {
+		return apperror.New(apperror.Unsupported, "iOS 更新需要在电脑上重新签名并覆盖安装")
+	}
 	if err := ValidateInstallArtifact(filePath); err != nil {
 		return err
 	}

@@ -30,7 +30,7 @@
 .room-search input { background: transparent; border: 0; @apply cczj-min-w-0; width: 100%; color: var(--novel-ink); font: inherit; font-size: 13px; min-height: 48px; }
 .room-search input::placeholder { color: var(--novel-muted); opacity: 1; }
 .room-search button { border: 0; @apply cczj-grid; place-items: center; width: 44px; height: 48px; background: transparent; @apply cczj-flex-shrink-0; }
-.room-wayfinding { @apply cczj-flex; position: relative; gap: 6px; @apply cczj-items-center; min-height: 48px; overflow-x: auto; scrollbar-width: none; }
+.room-wayfinding { @apply cczj-flex; position: relative; gap: 6px; @apply cczj-items-center; min-height: 48px; @apply cczj-overflow-x-auto; scrollbar-width: none; }
 .room-wayfinding::-webkit-scrollbar { @apply cczj-hidden; }
 .room-wayfinding button { position: relative; z-index: 1; @apply cczj-flex-shrink-0; min-height: 48px; border: 0; background: transparent; padding: 0 15px; font-size: 13px; color: var(--novel-muted); white-space: nowrap; }
 .room-wayfinding button[aria-pressed="true"] { color: var(--novel-red); font-weight: 600; }

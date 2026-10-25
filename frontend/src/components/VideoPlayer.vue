@@ -4,6 +4,7 @@ import PlayerSubtitleControls from '../player/views/PlayerSubtitleControls.vue'
 import PlayerPreferencesControls from '../player/views/PlayerPreferencesControls.vue'
 import PlayerAdReportControls from '../player/views/PlayerAdReportControls.vue'
 import PlayerQualityControls from '../player/views/PlayerQualityControls.vue'
+import PortraitPlayerControls from '../player/views/PortraitPlayerControls.vue'
 import Icon from './Icon.vue'
 import { MotionTransition } from './ui'
 import { TsCache } from '../utils/tsCache'
@@ -63,6 +64,9 @@ const desktopToolsTarget=ref<HTMLElement|null>(null)
 
 const props = withDefaults(defineProps<{
   url: string
+  presentation?: 'portrait'
+  portraitControlsHost?: HTMLElement
+  portraitPresentationHost?: HTMLElement
   autoplay?: boolean
   hasPrev?: boolean
   hasNext?: boolean
@@ -93,7 +97,9 @@ const props = withDefaults(defineProps<{
   resolveResume: undefined,
 })
 
-const emit = defineEmits(['back', 'prev', 'next', 'toggleFavorite', 'toggleAutoplay', 'showComments'])
+const portrait = props.presentation === 'portrait'
+const portraitContent = ref(false)
+const emit = defineEmits(['back', 'prev', 'next', 'toggleFavorite', 'toggleAutoplay', 'showComments', 'swipe', 'progress', 'ended'])
 const mediaSession = createPlaybackSession()
 const { t } = useI18n()
 const perf = usePerfStore()
@@ -126,6 +132,7 @@ const duration = ref(0)
 const speed = ref(1)
 const {isFullscreen,isPiP,toggleFullscreen,togglePiP} = usePlayerPresentationMode({
   platform,wrapperRef,video:getVideoEl,visible:keepVisible,
+  fullscreenRoot:()=>props.portraitPresentationHost ?? wrapperRef.value,
   failure:(operation,error)=>{
     playerEvents.issue(operation,error instanceof Error?error.name:'PLATFORM_OPERATION_FAILED',false)
     if(operation==='pip'){
@@ -221,7 +228,7 @@ const resume = usePlaybackResume({
   getVideo: getVideoEl,
   getKey: () => playbackResumeKey(props.videoKey, props.url),
   resolveResume: () => props.resolveResume?.(),
-  settings: { read: readSetting, write: writeSetting },
+  settings: { read: (key, fallback) => portrait && key === 'auto_resume_jump' ? '1' : readSetting(key, fallback), write: writeSetting },
 })
 const { savedTime, showResumePrompt, resumeRemainSec, dismissResumePrompt,
   flushPendingSeek, jumpToSavedTime } = resume
@@ -286,7 +293,7 @@ const playback = createPlaybackControl({
 })
 function safePlay(auto: boolean): Promise<void> { return playback.play(auto) }
 function tryAutoplay(video:HTMLVideoElement):void {
-  if (!prepared.value || !videoReady.value || !autoPlayEnabled.value || video.hasAttribute('data-autoplay-done')) return
+  if (!prepared.value || !videoReady.value || (!portrait && !autoPlayEnabled.value) || video.hasAttribute('data-autoplay-done')) return
   video.setAttribute('data-autoplay-done','1')
   if(!video.paused)return
   const session=mediaSession.capture()
@@ -312,7 +319,7 @@ async function prepareAccessories(video:HTMLVideoElement):Promise<void> {
   const complete=await preparePlayback({
     signal:session.signal,
     stage:stage=>{preparationStage.value=stage;logStartup('player_preparation',{stage})},
-    accessories:async()=>{await initThumbSampler();await usePluginStore().ensureLoaded();if(session.current())onMediaReady()},
+    accessories:async()=>{if(portrait)return;await initThumbSampler();await usePluginStore().ensureLoaded();if(session.current())onMediaReady()},
     danmaku:()=>{
       if(!props.danmakuKey)return Promise.resolve()
       const pending=new Promise<string>(resolve=>{settleDanmaku=resolve})
@@ -394,7 +401,7 @@ function setupPlayer(continuation?:number): void {
   _retryCount = 0
   // Android uses one native media volume; desktop retains its saved element gain.
   restorePlaybackVolume(video)
-  const savedSpeed = parseFloat(readSetting('speed', '1'))
+  const savedSpeed = portrait ? 1 : parseFloat(readSetting('speed', '1'))
   if (isFinite(savedSpeed) && savedSpeed >= 0.5 && savedSpeed <= 3) {
     try { video.playbackRate = savedSpeed; speed.value = savedSpeed } catch { /* ignore */ }
   }
@@ -446,12 +453,14 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
     if (video.duration) duration.value = video.duration
     updateBuffer()
     resume.track()
+    if (portrait) emit('progress', video.currentTime, video.duration)
   })
   on('loadedmetadata', () => {
+    portraitContent.value = video.videoHeight > video.videoWidth
     logStartup('player_metadata_loaded',{duration_ms:Math.round(video.duration*1000)})
     duration.value = video.duration
     restorePlaybackVolume(video)
-    const savedSpeed = parseFloat(readSetting('speed', '1'))
+    const savedSpeed = portrait ? 1 : parseFloat(readSetting('speed', '1'))
     if (isFinite(savedSpeed) && savedSpeed >= 0.5 && savedSpeed <= 3) {
       try { video.playbackRate = savedSpeed; speed.value = savedSpeed } catch { /* ignore */ }
     }
@@ -500,10 +509,11 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
     writeSetting('volume', String(video.volume))
     writeSetting('muted', video.muted ? '1' : '0')
     // ⭐ 统一由 volumechange 触发 toast，覆盖所有场景（滚轮/键盘/按钮）
-    if (!mobile) showVolumeToastRef()
+    if (!mobile && !portrait) showVolumeToastRef()
   })
   on('ratechange', () => {
     speed.value = video.playbackRate
+    if (portrait) return
     if (gestures.boosting.value) return
     // load() resets playbackRate to defaultPlaybackRate when switching media.
     // Keep the selected default, while temporary holds never change it.
@@ -515,11 +525,13 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
   on('ended', () => {
     // 播放结束：移除当前进度（下次不跳回结尾）
     resume.ended()
+    if (portrait) { emit('ended'); return }
     // 「自动连播」原先是个没有接线的开关：勾上了也没有任何代码消费它。
     if (autoNextEnabled.value && props.hasNext) emit('next')
   })
   on('error', () => {
     loading.value = false
+    if (portrait) { errorMsg.value = t('player.errLoadFailed'); showNetworkError.value = true }
     // 媒体元素自己的错误只在换源回退直连时出现（hls.js 路径的错误走 Hls.Events.ERROR）。
     // 首播耗时不结算：这次装载根本没有出画，记它会把它算成一次成功的快。
     endStall()
@@ -528,6 +540,7 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
 }
 
 function destroyPlayerInternal(video: HTMLVideoElement): void {
+  portraitContent.value = false
   playback.cancel()
   mediaSession.reset()
   preparationStage.value='video';prepared.value=false;autoplayStarting.value=false;accessoriesReady.value=false;preparingAccessories=false;preparationNote.value='';settleDanmaku=undefined
@@ -635,7 +648,7 @@ watch(thumbPreviewState,(value,previous)=>{
 })
 const detachResourceSnapshot = registerPlayerResourceSnapshot(() => ({
   quality_mode: qualityMode.value, enhancement_active: hasPipeline(),
-  presentation: {profile:platform.profile,controls:mobile?'mobile':'desktop',
+  presentation: {profile:platform.profile,controls:portrait?'portrait':mobile?'mobile':'desktop',
     fullscreen_adapter:platform.fullscreen.kind,pip_adapter:platform.pip.kind,
     native_volume:!!platform.device.read()},
   hls: source.snapshot(), thumbnail: thumbnailSnapshot(), issues:playerEvents.snapshot(),
@@ -693,7 +706,7 @@ function changeSpeed(s: number): void {
   mobileChrome.value?.close('speed')
 }
 
-const gestures = useMobilePlayerGestures({ enabled: mobile, device:platform.device, video: getVideoEl, visible: revealMobileControls, onVolume: setMobileVolume,
+const gestures = useMobilePlayerGestures({ enabled: mobile || portrait, interaction: portrait ? 'portrait' : undefined, onSwipe: direction => emit('swipe', direction), device:platform.device, video: getVideoEl, visible: revealMobileControls, onVolume: setMobileVolume,
   onStart: () => { cancelMobileTap(); toggleShow(false) } })
 const { locked: mobileLocked, hud: gestureHud, kind: gestureKind, seekTarget: gestureSeekTarget, level: gestureLevel, compact: gestureCompact, brightness: mobileBrightness } = gestures
 watch([gestureKind, gestureSeekTarget, mobileScrubTime], ([kind, target, scrub]) => {
@@ -746,6 +759,7 @@ function cancelMobileTap(): void {
   mobileTapPoint = undefined
 }
 function onWrapperClick(event?: MouseEvent): void {
+  if (portrait) { if (!gestures.consumeClick()) togglePlay(); return }
   if (mobile) {
     if (gestures.consumeClick()) return
     mobileControlsEngaged.value = true
@@ -872,7 +886,7 @@ watch(loading, (val) => {
 
 const controlState = {
   get canPip(){void videoReady.value;const video=getVideoEl();return !!video&&platform.pip.supported(video)},
-  get canFullscreen(){return platform.fullscreen.supported(wrapperRef.value)}, get canCast(){return platform.cast.supported},
+  get canFullscreen(){return platform.fullscreen.supported(props.portraitPresentationHost ?? wrapperRef.value)}, get canCast(){return platform.cast.supported},
   get pip(){return isPiP.value}, get playing(){return playing.value}, get current(){return current.value}, get duration(){return duration.value},
   get fullscreen(){return isFullscreen.value}, get speed(){return speed.value}, get volume(){return volume.value},
   get muted(){return muted.value}, get hasPrev(){return props.hasPrev}, get hasNext(){return props.hasNext},
@@ -883,17 +897,41 @@ const mobileCommands={video:getVideoEl,play:togglePlay,previous:()=>{if(props.ha
 const desktopCommands = {video:getVideoEl,play:togglePlay,previous:()=>emit('prev'),next:()=>emit('next'),
   fullscreen:toggleFullscreen,mute:toggleMute,volume:onVolumeInput,speed:changeSpeed,interaction:keepVisible}
 
-defineExpose({ togglePiP, toggleFullscreen, video:getVideoEl, overlayHost:()=>wrapperRef.value,openLines:()=>mobileChrome.value?.toggle('lines') })
+function portraitSeek(seconds: number): void {
+  const video = getVideoEl()
+  if (video && Number.isFinite(video.duration) && video.duration > 0) {
+    video.currentTime = Math.max(0, Math.min(video.duration, seconds))
+    current.value = video.currentTime
+  }
+}
+function enablePortraitSound(): void {
+  const video = getVideoEl()
+  if (video) { video.muted = false; if (video.volume === 0) video.volume = 1; if (video.paused) togglePlay() }
+}
+
+defineExpose({ togglePiP, toggleFullscreen, togglePlay, video:getVideoEl, overlayHost:()=>wrapperRef.value,openLines:()=>mobileChrome.value?.toggle('lines') })
 </script>
 
 <template>
-  <div class="player-wrapper" :class="{ fullscreen: isFullscreen, 'cczj-mobile-video': mobile, 'cczj-mobile-player-locked': mobileLocked, 'cursor-hidden': !mobile && playing && !showControls, 'show-controls': showControls }"
+  <div class="player-wrapper" :class="{ fullscreen: isFullscreen && !portraitPresentationHost, 'cczj-mobile-video': mobile, 'portrait-player': portrait, 'portrait-content': portrait && portraitContent, 'cczj-mobile-player-locked': mobileLocked, 'cursor-hidden': !portrait && !mobile && playing && !showControls, 'show-controls': showControls }"
     ref="wrapperRef" :style="mobile ? {'--cczj-mobile-image-brightness': .25 + mobileBrightness * 1.5} : undefined" tabindex="0" @mousemove="if (!mobile) { toggleShow(true); mouseInside = true; updateEnhancementCompare($event) }" @mouseenter="mouseInside = true"
-    @mouseleave="onMouseLeave" @click="onWrapperClick" @dblclick.stop="!mobile && toggleFullscreen()" @wheel.prevent="onWheel"
-    @pointerdown.capture="onControlPointerDown" @pointerdown="gestures.down" @pointermove="gestures.move" @pointerup="gestures.end" @pointercancel="gestures.end" @lostpointercapture.self="gestures.end" @contextmenu="mobile && $event.preventDefault()">
+    @mouseleave="onMouseLeave" @click="onWrapperClick" @dblclick.stop="!mobile && !portrait && toggleFullscreen()" @wheel.prevent="!portrait && onWheel($event)"
+    @pointerdown.capture="onControlPointerDown" @pointerdown="gestures.down" @pointermove="gestures.move" @pointerup="gestures.end" @pointercancel="gestures.end" @lostpointercapture.self="gestures.end" @contextmenu="(mobile || portrait) && $event.preventDefault()">
+    <PortraitPlayerControls v-if="portrait" :controls-host="portraitControlsHost" :ready="prepared && !loading" :current="current" :duration="duration" :playing="playing" :boosting="gestures.boosting.value" :muted="muted" @play="togglePlay" @seek="portraitSeek" @sound="enablePortraitSound">
+      <slot name="portrait-info" />
+      <template #status>
+        <PlayerDesktopControls v-if="!mobile" :playback="controlState" :commands="desktopCommands" :visible="true" minimal>
+          <template #danmaku><slot name="portrait-summary" /></template>
+          <template #actions>
+            <slot name="portrait-actions" />
+            <button class="ctrl-btn" :disabled="!controlState.canPip" :aria-label="t(isPiP ? 'player.exitPip' : 'player.pipWithHotkey')" :title="t(isPiP ? 'player.exitPip' : 'player.pipWithHotkey')" @click="togglePiP"><Icon :name="isPiP ? 'pip-exit' : 'pip'" :size="18" /></button>
+          </template>
+        </PlayerDesktopControls>
+      </template>
+    </PortraitPlayerControls>
     <!-- 顶部栏：标题 + 缓存统计 + 收藏按钮 -->
     <Transition name="cczj-mobile-player-chrome" :css="mobile">
-    <div v-show="showTitleBar && !mobileLocked && controlsVisible" class="player-title-bar" @click.stop @dblclick.stop>
+    <div v-if="!portrait" v-show="showTitleBar && !mobileLocked && controlsVisible" class="player-title-bar" @click.stop @dblclick.stop>
       <button v-if="mobile" class="cczj-mobile-player-back" :aria-label="t('common.back')" @click="isFullscreen ? toggleFullscreen() : emit('back')"><Icon name="chevron-left" :size="22" /></button>
       <span v-show="!mobile || isFullscreen" class="player-title">{{ title || url }}</span>
       <span v-if="!mobile && isHls(url) && cacheStats.totalSegments > 0" class="cache-info"
@@ -924,9 +962,9 @@ defineExpose({ togglePiP, toggleFullscreen, video:getVideoEl, overlayHost:()=>wr
             的拖拽识别（参考 TitleBar.vue 的稳定写法：只设 --wails-draggable: drag）。
          3) z-index 高于 player-title-bar，保证拖拽区不被标题栏遮住；标题栏容器
             pointer-events:none，仅按钮区单独 pointer-events:auto。 -->
-    <div v-show="mouseInside" class="player-drag-handle" :title="t('player.dragMoveWindow')" />
+    <div v-if="!portrait" v-show="mouseInside" class="player-drag-handle" :title="t('player.dragMoveWindow')" />
 
-    <video class="native-video" :poster="mobile ? mobileVideoPoster : undefined" playsinline preload="auto" @click.stop="mobile ? onWrapperClick($event) : togglePlay()"></video>
+    <video class="native-video" :poster="mobile ? mobileVideoPoster : undefined" playsinline preload="auto" @click.stop="(mobile || portrait) ? onWrapperClick($event) : togglePlay()"></video>
     <PlayerDanmaku v-if="danmakuKey&&accessoriesReady" ref="danmakuRef" :media-key="danmakuKey" :media-title="mediaTitle" :media-year="mediaYear" :media-kind="mediaKind" :episode-label="episodeLabel" :current="current" :duration="duration" :playing="playing&&!loading" :fullscreen="isFullscreen" :mobile="mobile" :host="wrapperRef" :video="getVideoEl" @prepared="onDanmakuPrepared" />
     <div v-show="activeSubtitle" class="vp-subtitle" :class="{ 'with-controls': showControls }">
       <span>{{ activeSubtitle }}</span>
@@ -971,13 +1009,13 @@ defineExpose({ togglePiP, toggleFullscreen, video:getVideoEl, overlayHost:()=>wr
     <div v-if="errorMsg" class="player-error">
       <span>⚠</span>
       <span>{{ errorMsg }}</span>
-      <div v-if="showNetworkError" class="error-actions">
+      <div v-if="showNetworkError || portrait" class="error-actions">
         <button class="error-btn error-btn-primary" @click.stop="retryPlayback()">{{ t('player.retryPlayback') }}</button>
       </div>
     </div>
 
     <!-- B 站风格：底部左侧继续播放提示（小胶囊，仅在有记忆时出现） -->
-    <div v-if="showResumePrompt && !mobile" class="resume-bili" @click.stop>
+    <div v-if="showResumePrompt && !mobile && !portrait" class="resume-bili" @click.stop>
       <span class="resume-bili-text">{{ t('player.resumeLocatedAt') }} <b>{{ savedTime != null ? fmt(savedTime) : '00:00' }}</b></span>
       <button class="resume-bili-link" @click.stop="jumpToSavedTime(false)">{{ t('player.jumpBack') }}</button>
       <button class="resume-bili-link" @click.stop="jumpToSavedTime(true)">{{ t('player.jumpBackRemember') }}</button>
@@ -986,11 +1024,11 @@ defineExpose({ togglePiP, toggleFullscreen, video:getVideoEl, overlayHost:()=>wr
       </button>
     </div>
 
-    <div v-if="mobile && showResumePrompt && !mobileLocked" class="cczj-mobile-resume" :class="{'cczj-mobile-resume-lowered':!controlsVisible}" @click.stop @pointerdown.stop>
+    <div v-if="mobile && !portrait && showResumePrompt && !mobileLocked" class="cczj-mobile-resume" :class="{'cczj-mobile-resume-lowered':!controlsVisible}" @click.stop @pointerdown.stop>
       <button @click="jumpToSavedTime(false)"><Icon name="play" :size="14" />{{ t('mobile.resume') }} <b>{{ savedTime != null ? fmt(savedTime) : '00:00' }}</b></button>
       <button :aria-label="t('common.close')" @click="dismissResumePrompt"><Icon name="close" :size="16" /></button>
     </div>
-    <CczjMobileGestureOverlay v-if="mobile" :kind="mobileScrubTime >= 0 ? 'seek' : gestureKind" :hud="mobileScrubTime >= 0 ? t('mobile.gestureSeek') : gestureHud"
+    <CczjMobileGestureOverlay v-if="mobile && !portrait" :kind="mobileScrubTime >= 0 ? 'seek' : gestureKind" :hud="mobileScrubTime >= 0 ? t('mobile.gestureSeek') : gestureHud"
       :level="gestureLevel" :compact="gestureCompact" :target="mobileScrubTime >= 0 ? mobileScrubTime : gestureSeekTarget" :duration="duration"
       :image="thumbPreviewImg" :image-visible="thumbPreviewVisible" :preview-state="thumbPreviewState" :image-time="thumbPreviewTime" />
     <button v-if="mobile && isFullscreen && (controlsVisible || mobileLocked)" class="cczj-mobile-player-lock" :aria-label="t(mobileLocked ? 'mobile.unlock' : 'mobile.lock')" :aria-pressed="mobileLocked" @click.stop="gestures.toggleLock()" @pointerdown.stop><Icon :name="mobileLocked ? 'lock' : 'unlock'" :size="21" /></button>
@@ -1002,15 +1040,15 @@ defineExpose({ togglePiP, toggleFullscreen, video:getVideoEl, overlayHost:()=>wr
     <PlayerEnhancementWarning v-if="showAiWarning" :open="showAiWarning" @cancel="cancelAiMode" @confirm="confirmAiMode" />
 
     <!-- 暂停图标：右下角大字，仅暂停时显示 -->
-    <button v-show="prepared && !autoplayStarting && !playing && !loading && (!mobile || !mobileLocked)" type="button" class="pause-overlay" :aria-label="t('player.play')" @pointerdown.stop @click.stop="togglePlay">
+    <button v-show="!portrait && prepared && !autoplayStarting && !playing && !loading && (!mobile || !mobileLocked)" type="button" class="pause-overlay" :aria-label="t('player.play')" @pointerdown.stop @click.stop="togglePlay">
       <img :src="pauseImg" class="pause-icon" alt="" />
     </button>
 
     <!-- 进度条（独立行，在控制条上方） -->
-    <Transition name="cczj-mobile-player-chrome"><div v-if="mobile" v-show="!mobileLocked && controlsVisible" class="cczj-mobile-control-shade" /></Transition>
+    <Transition name="cczj-mobile-player-chrome"><div v-if="mobile && !portrait" v-show="!mobileLocked && controlsVisible" class="cczj-mobile-control-shade" /></Transition>
     <!-- ⭐ @mousemove.stop 阻止冒泡到 player-wrapper，避免悬停进度条时触发控制栏和音量弹出 -->
     <Transition name="cczj-mobile-player-chrome" :css="mobile">
-    <div :class="mobile ? 'cczj-mobile-control-stack' : 'cczj-player-desktop-control-stack'" v-show="!mobile || (!mobileLocked && controlsVisible)">
+    <div v-if="!portrait" :class="mobile ? 'cczj-mobile-control-stack' : 'cczj-player-desktop-control-stack'" v-show="!mobile || (!mobileLocked && controlsVisible)">
     <div class="progress-bar-wrapper" v-show="mobile || (!mobileLocked && (controlsVisible || qualityOpen || showVideoInfo))" @click.stop
       @mousedown.stop @dblclick.stop @mousemove.stop>
       <div class="progress-container" ref="progressContainerRef" @mousedown.stop="onProgressMouseDown"
@@ -1048,7 +1086,7 @@ defineExpose({ togglePiP, toggleFullscreen, video:getVideoEl, overlayHost:()=>wr
     </CczjMobilePlayerChrome>
     </div>
     </Transition>
-    <PlayerDesktopControls v-if="!mobile" ref="desktopControls" :playback="controlState" :commands="desktopCommands"
+    <PlayerDesktopControls v-if="!mobile && !portrait" ref="desktopControls" :playback="controlState" :commands="desktopCommands"
       :visible="showControls || !playing || qualityOpen || showVideoInfo || showPlaybackSettings || showSubtitlePanel || showReportAd || !!danmakuRef?.engaged"
       @tools-host="desktopToolsTarget=$event">
       <template v-if="danmakuKey" #danmaku><PlayerDanmakuButtons :enabled="!!danmakuRef?.enabled" :ready="!!danmakuRef?.ready" :expanded="!!danmakuRef?.engaged" @toggle="danmakuRef?.toggle();keepVisible()" @settings="(anchor,hover)=>{danmakuRef?.open(anchor,hover);keepVisible()}" @leave="danmakuRef?.scheduleClose()" @dismiss="danmakuRef?.close()" /></template>
@@ -1105,3 +1143,9 @@ defineExpose({ togglePiP, toggleFullscreen, video:getVideoEl, overlayHost:()=>wr
 </template>
 
 <style scoped src="../styles/components/player.css"></style>
+
+<style scoped>
+.player-wrapper.portrait-player { height: 100%; aspect-ratio: auto; @apply cczj-min-h-0; border-radius: inherit; touch-action: none; }
+.portrait-player :deep(.native-video) { object-fit: contain; }
+.portrait-player.cczj-mobile-video.portrait-content .native-video { object-fit: cover; }
+</style>

@@ -241,6 +241,7 @@
 | `cczj-overflow-scroll` | `overflow: scroll;` |
 | `cczj-overflow-visible` | `overflow: visible;` |
 | `cczj-overflow-x-hidden` | `overflow-x: hidden;` |
+| `cczj-overflow-x-auto` | `overflow-x: auto;` |
 | `cczj-overflow-y-auto` | `overflow-y: auto;` |
 | `cczj-overflow-y-hidden` | `overflow-y: hidden;` |
 

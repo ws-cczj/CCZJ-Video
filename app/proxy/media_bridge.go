@@ -71,6 +71,9 @@ func (b *MediaBridge) Endpoint() (string, error) {
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			path, authorized := strings.CutPrefix(r.URL.Path, prefix)
 			handler := b.handlers[path]
+			if path == "/__cczj/ios-hls" {
+				handler = b.handlers["/__cczj/hls"]
+			}
 			if !authorized || handler == nil {
 				http.NotFound(w, r)
 				return
@@ -81,6 +84,9 @@ func (b *MediaBridge) Endpoint() (string, error) {
 				return
 			}
 			forward := r.Clone(r.Context())
+			if path == "/__cczj/ios-hls" {
+				forward = forward.WithContext(context.WithValue(forward.Context(), hlsProxyRouteKey{}, prefix+path))
+			}
 			forward.URL.Path = path
 			forward.URL.RawPath = ""
 			forward.RequestURI = forward.URL.RequestURI()
