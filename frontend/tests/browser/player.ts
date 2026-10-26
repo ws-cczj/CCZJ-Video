@@ -21,6 +21,7 @@ if ((window as unknown as { wails?: unknown }).wails) await initializeRuntimeEnv
 await loadPlatformPresentation()
 
 writeStorage('vp_settings', { auto_resume_jump: new URLSearchParams(location.search).get('resume') === '0' ? '0' : '1', ai_warning_accepted: '1' })
+writeStorage('cczj_auto_play', new URLSearchParams(location.search).has('autoplay'))
 const state = reactive({ open: !new URLSearchParams(location.search).has('closed'), episode: 1, line: 1 })
 const mediaURL = new URLSearchParams(location.search).get('media') || `${location.origin}/tests/browser/sample.webm`
 const bareVideo = new URLSearchParams(location.search).has('bare')
@@ -31,9 +32,9 @@ const app = createApp(defineComponent({
     url: /^(data|blob):/.test(mediaURL) ? mediaURL : `${mediaURL}${mediaURL.includes('?') ? '&' : '?'}line=${state.line}`,
     videoKey: `browser-episode-${state.episode}`,
     title: `Episode ${state.episode}`,
-    autoplay: false,
+    autoplay: new URLSearchParams(location.search).has('autoplay'),
     hasNext: true,
-    resolveResume: async () => 0,
+    resolveResume: async () => Number(new URLSearchParams(location.search).get('saved')) || 0,
     onNext: () => { state.episode++; state.line++ },
   }) : h('p', 'Player closed'), h(ConfirmModal)])
   },

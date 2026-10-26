@@ -16,9 +16,11 @@ import (
 )
 
 type PlayLineQualityItem struct {
-	Index int    `json:"index"`
-	Name  string `json:"name"`
-	EpNum int    `json:"ep_num"`
+	Index             int    `json:"index"`
+	Name              string `json:"name"`
+	EpNum             int    `json:"ep_num"`
+	Code              string `json:"code,omitempty"`
+	RetryAfterSeconds int    `json:"retry_after_seconds,omitempty"`
 	proxy.PlaylistQuality
 }
 
@@ -73,6 +75,9 @@ func (s *Service) ProbePlayLines(ctx context.Context, req PlayLineSpeedReq) ([]*
 		items[i].EpNum = ep.EpNum
 		fields := applog.Fields{"source_key": req.SourceKey, "vod_id": req.VodId, "line_index": lines[i].Index, "ep_num": ep.EpNum, "ok": quality.OK, "width": quality.Width, "height": quality.Height, "bandwidth": quality.Bandwidth}
 		if probeErr != nil {
+			public := apperror.Public(probeErr)
+			items[i].Code = string(public.Code)
+			items[i].RetryAfterSeconds = public.RetryAfterSeconds
 			fields["reason"] = applog.DiagnosticText(probeErr.Error(), 1024)
 		}
 		operation.Stage(ctx, "playlist_quality", fields)

@@ -19,6 +19,7 @@ export interface PlayerPanelModel {
     readonly readyCount: number
     readonly probingCount: number
     readonly loading: boolean
+    readonly refreshing?: boolean
     readonly label: (probe: SourceProbe) => string
     readonly selectable: (source: SourceOption) => boolean
     readonly retry:()=>void

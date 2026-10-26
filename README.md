@@ -1,6 +1,6 @@
 # CCZJ Video
 
-Current release: **v2.4.4**
+Current release: **v2.4.5**
 
 视频、小说与漫画多源聚合应用，使用 Wails v3、Vue 3、TypeScript 和 Go。Windows 10/11 版需要 WebView2 运行时，Android 版目前为预览版。
 

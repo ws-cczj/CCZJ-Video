@@ -309,6 +309,20 @@ export class PlayLineQualityItem {
              */
             this["ep_num"] = 0;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["code"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["retry_after_seconds"] = undefined;
+        }
         if (!("ok" in $$source)) {
             /**
              * @member

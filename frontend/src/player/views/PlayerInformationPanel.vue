@@ -71,7 +71,8 @@ function onMinimizeApp():void { try { Window.Minimise() } catch { /* Host owns a
             </div>
 
               <PlaybackRouteList dark :sources="catalog.items" :active-key="catalog.activeKey" :active-line="details.lines[details.activeLineIndex]?.index??-1" :lines="details.lines" :busy="catalog.loading" :selectable="catalog.selectable" @choose="(key,line)=>emit('source',key,line)" />
-              <Button class="cczj-mt-4" variant="text" size="sm" @click="catalog.retry">{{t('playLine.retryQuality')}}</Button>
+              <Button class="cczj-mt-4" variant="text" size="sm" :loading="catalog.refreshing" @click="catalog.retry">{{t('playLine.retryQuality')}}</Button>
+              <p class="cczj-text-xs cczj-text-muted cczj-mt-2">{{t('playLine.cooldownHint')}}</p>
             </template>
 
             <!-- 选集区（仅当有剧集时显示） -->
@@ -83,11 +84,11 @@ function onMinimizeApp():void { try { Window.Minimise() } catch { /* Host owns a
                   <span class="side-count cczj-text-xs cczj-text-muted">{{ t('detail.totalEpisodes', { count: episodeList.items.length }) }}</span>
                 </div>
                 <div class="side-section-right">
-                  <button class="sort-toggle-btn cczj-flex cczj-items-center cczj-gap-1 cczj-px-2 cczj-py-1 cczj-rounded cczj-transition cczj-cursor-pointer" :title="episodeList.ascending ? t('detail.sortAscTip') : t('detail.sortDescTip')"
+                  <Button variant="text" size="sm" class="sort-toggle-btn" :title="episodeList.ascending ? t('detail.sortAscTip') : t('detail.sortDescTip')"
                     @click="emit('sort')">
                     <Icon :name="episodeList.ascending ? 'chevron-down' : 'chevron-up'" :size="12" />
                     <span class="sort-label cczj-text-xs">{{ episodeList.ascending ? t('detail.ascOrder') : t('detail.descOrder') }}</span>
-                  </button>
+                  </Button>
                 </div>
               </div>
 
@@ -96,7 +97,7 @@ function onMinimizeApp():void { try { Window.Minimise() } catch { /* Host owns a
                   active: episodeList.originalIndex(i) === episodeList.current,
                   watched: episodeList.watched(episodeList.originalIndex(i)),
                   future: episodeList.originalIndex(i) > episodeList.current && !episodeList.watched(episodeList.originalIndex(i)),
-                }" @click="emit('episode',episodeList.originalIndex(i))"
+                }" :aria-current="episodeList.originalIndex(i) === episodeList.current ? 'step' : undefined" @click="emit('episode',episodeList.originalIndex(i))"
                   :title="episodeList.label(episodeList.originalIndex(i), ep) + (episodeList.percent(episodeList.originalIndex(i)) > 0 ? t('detail.watchedProgress', { pct: Math.round(episodeList.percent(episodeList.originalIndex(i))) }) : '')">
                   <span class="ep-item-num cczj-truncate">{{ episodeList.label(episodeList.originalIndex(i), ep) }}</span>
                   <span v-show="episodeList.originalIndex(i) === episodeList.current" class="ep-playing-badge cczj-absolute cczj-top-1 cczj-right-1 cczj-flex">

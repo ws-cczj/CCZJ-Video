@@ -3,11 +3,14 @@ package proxy
 import (
 	"bufio"
 	"bytes"
+	"cczjVideo/app/apperror"
+	"cczjVideo/app/netpolicy"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"regexp"
 	"strconv"
 	"strings"
@@ -26,6 +29,7 @@ var manifestBandwidth = regexp.MustCompile(`(?:^|,)(?:AVERAGE-)?BANDWIDTH=(\d+)(
 // ProbePlaylistQuality reads only playlist metadata. A media playlist without
 // RESOLUTION is valid but unknown; neither a URL nor a bitrate proves its size.
 func ProbePlaylistQuality(ctx context.Context, raw string) (PlaylistQuality, error) {
+	ctx = netpolicy.WithQueryCooldown(ctx)
 	ctx, cancel := context.WithTimeout(ctx, lineProbeTimeout)
 	defer cancel()
 	target, err := parsePublicHTTPURL(raw)
@@ -33,6 +37,10 @@ func ProbePlaylistQuality(ctx context.Context, raw string) (PlaylistQuality, err
 		return PlaylistQuality{}, err
 	}
 	referer := RefererOrigin(raw)
+	// Playback retains redirect cookies and the original referring origin.
+	// Keep the jar local so independent route checks cannot share a session.
+	client := *lineProbeClient
+	client.Jar, _ = cookiejar.New(nil)
 	for hop := 0; hop <= lineMaxRedirects; hop++ {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, target.String(), nil)
 		if err != nil {
@@ -43,7 +51,7 @@ func ProbePlaylistQuality(ctx context.Context, raw string) (PlaylistQuality, err
 		if referer != "" {
 			req.Header.Set("Referer", referer)
 		}
-		resp, err := lineProbeClient.Do(req)
+		resp, err := client.Do(req)
 		if err != nil {
 			return PlaylistQuality{}, err
 		}
@@ -53,7 +61,6 @@ func ProbePlaylistQuality(ctx context.Context, raw string) (PlaylistQuality, err
 			if locErr != nil {
 				return PlaylistQuality{}, locErr
 			}
-			referer = RefererOrigin(target.String())
 			target, err = parsePublicHTTPURL(next.String())
 			if err != nil {
 				return PlaylistQuality{}, err
@@ -62,7 +69,15 @@ func ProbePlaylistQuality(ctx context.Context, raw string) (PlaylistQuality, err
 		}
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			resp.Body.Close()
-			return PlaylistQuality{}, fmt.Errorf("playlist HTTP %d", resp.StatusCode)
+			code := apperror.Unavailable
+			if resp.StatusCode == http.StatusTooManyRequests {
+				code = apperror.RateLimited
+			}
+			if resp.StatusCode == http.StatusForbidden {
+				code = apperror.PermissionDenied
+			}
+			retry, _ := strconv.Atoi(resp.Header.Get("Retry-After"))
+			return PlaylistQuality{}, &apperror.Error{Code: code, Message: "播放列表探测未完成", Cause: fmt.Errorf("playlist HTTP %d", resp.StatusCode), RetryAfterSeconds: retry}
 		}
 		reader := bufio.NewReader(resp.Body)
 		prefix, prefixErr := reader.Peek(512)

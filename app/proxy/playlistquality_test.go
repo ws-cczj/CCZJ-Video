@@ -61,3 +61,32 @@ func TestPlaylistQualityDoesNotReportSuccessWhenBodyStalls(t *testing.T) {
 		t.Fatalf("stalled metadata must time out: %+v %v", quality, err)
 	}
 }
+
+func TestPlaylistQualityKeepsPlaybackRefererAndRedirectCookies(t *testing.T) {
+	SetAllowPrivateTargets(true)
+	defer SetAllowPrivateTargets(false)
+	var origin string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/start" {
+			http.SetCookie(w, &http.Cookie{Name: "media_session", Value: "accepted", Path: "/"})
+			http.Redirect(w, r, "/playlist", http.StatusFound)
+			return
+		}
+		cookie, err := r.Cookie("media_session")
+		if err != nil || cookie.Value != "accepted" || r.Referer() != origin+"/" {
+			http.Error(w, "missing playback context", http.StatusForbidden)
+			return
+		}
+		fmt.Fprint(w, "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=1280x720\nmedia.m3u8\n")
+	}))
+	defer server.Close()
+	origin = server.URL
+	quality, err := ProbePlaylistQuality(context.Background(), server.URL+"/start")
+	if err != nil || !quality.OK || quality.Height != 720 {
+		t.Fatalf("probe must use the same redirect session as playback: %+v %v", quality, err)
+	}
+	// Cookies belong to this probe and must not authenticate another one.
+	if quality, err := ProbePlaylistQuality(context.Background(), server.URL+"/playlist"); err == nil || quality.OK {
+		t.Fatalf("probe leaked cookies into another session: %+v %v", quality, err)
+	}
+}

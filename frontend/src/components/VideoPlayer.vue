@@ -298,19 +298,50 @@ const playback = createPlaybackControl({
   onMuted: () => { muted.value = true },
   onUnsupported: () => { errorMsg.value = t('player.errFormatUnsupported'); loading.value = false },
 })
-function safePlay(auto: boolean): Promise<void> { return playback.play(auto) }
+function safePlay(auto: boolean) { return playback.play(auto) }
+let autoplayAttempt=0, autoplayRetries=0, resumePlaybackRequested=false, castPauseGuard=false
+function setCasting(active:boolean):void {
+  castPauseGuard=active
+  if(!active)return
+  autoplayAttempt++;autoplayStarting.value=false;resumePlaybackRequested=false
+  playback.cancel()
+  const video=getVideoEl()
+  video?.setAttribute('data-autoplay-done','1')
+  video?.pause()
+  playing.value=false;loading.value=false
+}
 function tryAutoplay(video:HTMLVideoElement):void {
-  if (!prepared.value || !videoReady.value || (!portrait && !autoPlayEnabled.value) || video.hasAttribute('data-autoplay-done')) return
+  if (castPauseGuard || !prepared.value || !videoReady.value || autoplayStarting.value || (!portrait && !autoPlayEnabled.value && !resumePlaybackRequested) || video.hasAttribute('data-autoplay-done')) return
   video.setAttribute('data-autoplay-done','1')
   if(!video.paused)return
   const session=mediaSession.capture()
+  const attempt=++autoplayAttempt
+  const automatic=!resumePlaybackRequested
+  resumePlaybackRequested=false
   autoplayStarting.value=true
   logStartup('player_autoplay_requested')
-  void safePlay(true).finally(()=>{
-    if(!session.current())return
+  void safePlay(automatic).then(outcome=>{
+    if(!session.current()||attempt!==autoplayAttempt)return
     autoplayStarting.value=false
+    // Seeking to history or replacing the MSE buffer can interrupt play(). A
+    // later canplay must be allowed to finish the same automatic start.
+    if(outcome==='interrupted'){
+      video.removeAttribute('data-autoplay-done')
+      // canplay can precede the interrupted promise's rejection. Retry once
+      // here as well; later readiness events can still start an unready video.
+      if(autoplayRetries++<1)mediaSession.later(()=>{if(video.paused&&!video.seeking&&video.readyState>=2)tryAutoplay(video)},50)
+    }
     if(video.paused){loading.value=false;logStartup('player_autoplay_blocked')}
   })
+}
+watch(autoPlayEnabled,enabled=>{if(enabled){const video=getVideoEl();if(video){video.removeAttribute('data-autoplay-done');tryAutoplay(video)}}})
+function continueWatching():void {
+  castPauseGuard=false
+  autoplayAttempt++;autoplayStarting.value=false
+  jumpToSavedTime(false)
+  const video=getVideoEl()
+  if(!prepared.value || !videoReady.value){resumePlaybackRequested=true;return}
+  if(video?.paused){video.setAttribute('data-autoplay-done','1');void safePlay(false)}
 }
 function onDanmakuPrepared(key:string,status:string):void {
   if(key!==props.danmakuKey)return
@@ -432,6 +463,9 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
   if (!mobile) bindOsdListeners(video, signal)
 
   on('play', () => {
+    // Android may restore a background video's previous play state on return.
+    // A confirmed cast owns automatic playback until stopped or a local click.
+    if(castPauseGuard){video.pause();playing.value=false;return}
     playing.value = true
     const ready = video.readyState >= 2 && video.videoWidth > 0
     loading.value = !ready
@@ -447,7 +481,7 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
   on('pause', () => {
     endStall('paused')
     if(!firstPlayingLogged)logStartup('player_startup_pause',{prepared:prepared.value,autoplay_pending:autoplayStarting.value})
-    playback.cancel()
+    if(!autoplayStarting.value)playback.cancel()
     if(resume.canPersist())emit('progress',video.currentTime,video.duration,true)
     resume.save()
     playing.value = false
@@ -494,6 +528,7 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
     startLoadingStats()
   })
   on('playing', () => {
+    if(castPauseGuard){video.pause();playing.value=false;return}
     playing.value=true
     loading.value=false
     if(!firstPlayingLogged){firstPlayingLogged=true;logStartup('player_media_playing',{prepared:prepared.value})}
@@ -550,6 +585,7 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
 function destroyPlayerInternal(video: HTMLVideoElement): void {
   portraitContent.value = false
   playback.cancel()
+  autoplayAttempt++;autoplayRetries=0;resumePlaybackRequested=false;castPauseGuard=false
   mediaSession.reset()
   preparationStage.value='video';prepared.value=false;autoplayStarting.value=false;accessoriesReady.value=false;preparingAccessories=false;preparationNote.value='';settleDanmaku=undefined
   resume.reset()
@@ -586,10 +622,13 @@ function destroyPlayer(): void {
 function togglePlay(): void {
   const v = getVideoEl()
   if (!v || !prepared.value) return
+  castPauseGuard=false
+  autoplayAttempt++;autoplayStarting.value=false
   v.setAttribute('data-autoplay-done','1')
   if (v.paused) {
     safePlay(false) // 用户点击，不允许静音 fallback
   } else {
+    playback.cancel()
     v.pause()
   }
   keepVisible()
@@ -901,7 +940,7 @@ const controlState = {
 }
 const controlSource={get url(){return props.url},get title(){return props.title}}
 const mobileCommands={video:getVideoEl,play:togglePlay,previous:()=>{if(props.hasPrev)emit('prev')},next:()=>{if(props.hasNext)emit('next')},
-  fullscreen:toggleFullscreen,pip:togglePiP,speed:changeSpeed,interaction:keepVisible}
+  fullscreen:toggleFullscreen,pip:togglePiP,speed:changeSpeed,cast:setCasting,interaction:keepVisible}
 const desktopCommands = {video:getVideoEl,play:togglePlay,previous:()=>emit('prev'),next:()=>emit('next'),
   fullscreen:toggleFullscreen,mute:toggleMute,volume:onVolumeInput,speed:changeSpeed,interaction:keepVisible}
 
@@ -950,7 +989,7 @@ defineExpose({ togglePiP, toggleFullscreen, togglePlay, video:getVideoEl, canPer
       </span>
       <button v-if="mobile" class="cczj-mobile-player-favorite" :aria-label="t(isFav?'detail.removeFav':'detail.addFav')" :aria-pressed="isFav" :disabled="favBusy" @click.stop="emit('toggleFavorite')"><Icon name="star" :size="21" /></button>
       <button v-if="mobile && isFullscreen && controlState.canCast" class="cczj-mobile-player-cast" :aria-label="t('mobile.cast')" @click.stop="mobileChrome?.toggle('cast')"><Icon name="cast" :size="22" /></button>
-      <button v-if="mobile && $slots.lines" class="cczj-mobile-player-lines" :aria-label="t('playLine.switch')" :aria-expanded="!!mobileChrome?.linesOpen" @click.stop="mobileChrome?.toggle('lines');keepVisible()"><Icon name="list" :size="20" /><span>{{t('playLine.title')}}</span></button>
+      <button v-if="mobile && $slots.lines" class="cczj-mobile-player-lines" :aria-label="t('playLine.switch')" :aria-expanded="!!mobileChrome?.linesOpen" @click.stop="mobileChrome?.toggle('lines');keepVisible()">{{t('playLine.switch')}}</button>
       <button v-if="mobile" class="cczj-mobile-player-more-button" :aria-label="t('mobile.playerMore')" :aria-expanded="!!mobileChrome?.menuOpen" @click.stop="mobileChrome?.toggle('more'); keepVisible()"><Icon name="more" :size="22" /></button>
       <button v-show="!mobile" class="fav-btn-in-player" :class="{ 'is-fav': isFav }" :disabled="favBusy"
         :aria-label="isFav ? t('detail.removeFav') : t('player.addFavorite')"
@@ -1032,7 +1071,7 @@ defineExpose({ togglePiP, toggleFullscreen, togglePlay, video:getVideoEl, canPer
     </div>
 
     <div v-if="mobile && !portrait && showResumePrompt && !mobileLocked" class="cczj-mobile-resume" :class="{'cczj-mobile-resume-lowered':!controlsVisible}" @click.stop @pointerdown.stop>
-      <button @click="jumpToSavedTime(false)"><Icon name="play" :size="14" />{{ t('mobile.resume') }} <b>{{ savedTime != null ? fmt(savedTime) : '00:00' }}</b></button>
+      <button @click="continueWatching"><Icon name="play" :size="14" />{{ t('mobile.resume') }} <b>{{ savedTime != null ? fmt(savedTime) : '00:00' }}</b></button>
       <button :aria-label="t('common.close')" @click="dismissResumePrompt"><Icon name="close" :size="16" /></button>
     </div>
     <CczjMobileGestureOverlay v-if="mobile && !portrait" :kind="mobileScrubTime >= 0 ? 'seek' : gestureKind" :hud="mobileScrubTime >= 0 ? t('mobile.gestureSeek') : gestureHud"

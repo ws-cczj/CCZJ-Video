@@ -141,4 +141,11 @@ describe('play and pause', () => {
     expect(onUnsupported).toHaveBeenCalledOnce()
     expect(video.play).toHaveBeenCalledOnce()
   })
+
+  it('distinguishes an interrupted automatic start so readiness can retry it', async () => {
+    const { video, playback } = setup('AbortError')
+    expect(await playback.play(true)).toBe('interrupted')
+    expect(await playback.play(true)).toBe('playing')
+    expect(video.muted).toBe(false)
+  })
 })

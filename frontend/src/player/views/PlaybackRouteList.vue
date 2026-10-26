@@ -18,6 +18,7 @@ const rows=computed(()=>props.sources.flatMap(source=>{
 function active(row:typeof rows.value[number]):boolean{return row.source.source_key===props.activeKey&&row.index===props.activeLine}
 function quality(row:typeof rows.value[number]):string {
   if(row.tier)return `${row.tier}P`
+  if(row.source.qualityState==='limited'||row.quality?.code==='RATE_LIMITED')return t('playLine.qualityLimited')
   if(row.quality&&!row.quality.ok)return t('playLine.qualityFailed')
   if(row.source.probe==='probing')return t('player.probeProbing')
   if(row.source.probe==='missing'||row.source.probe==='failed')return t(row.source.probe==='missing'?'player.probeMissing':'player.probeFailed')
@@ -26,7 +27,9 @@ function quality(row:typeof rows.value[number]):string {
 function badge(row:typeof rows.value[number]):string {
   if(row.tier)return `${row.tier}P`
   if(row.source.probe==='missing')return t('player.probeMissing')
-  if(row.source.probe==='failed'||row.source.qualityState==='failed'||(row.quality&&!row.quality.ok))return t('playLine.failedShort')
+  if(row.source.qualityState==='limited'||row.quality?.code==='RATE_LIMITED')return t('playLine.limitedShort')
+  if(row.source.probe==='failed')return t('player.probeFailed')
+  if(row.source.qualityState==='failed'||(row.quality&&!row.quality.ok))return t('playLine.unmeasuredShort')
   return t(row.source.probe==='probing'||row.source.qualityState==='pending'?'playLine.probingShort':'playLine.unknownShort')
 }
 function description(row:typeof rows.value[number]):string {
@@ -57,5 +60,6 @@ function description(row:typeof rows.value[number]):string {
 .route-quality {grid-column:2;grid-row:1 / span 2;padding:3px 7px;border:1px solid var(--route-border,var(--border));border-radius:6px;}
 .route-name {grid-column:1;grid-row:2;color:var(--route-muted,var(--text-secondary));}
 .route-item.active {border-color:var(--route-active,var(--accent));color:var(--route-active,var(--accent));background:var(--route-active-bg,var(--bg-hover));@apply cczj-opacity-100;}
-.playback-routes-mobile {max-height:none;@apply cczj-overflow-visible;}
+.playback-routes-mobile {max-height:none;--route-text:var(--cczj-player-action-ink,#e5e9f0);--route-muted:var(--route-text);--route-bg:var(--cczj-player-action-bg,#24262b);--route-active:var(--route-text);--route-active-bg:var(--route-bg);@apply cczj-overflow-visible;}
+.playback-routes-mobile .route-item.active { border-color:var(--route-text); outline:1px solid var(--route-bg); outline-offset:2px; }
 </style>

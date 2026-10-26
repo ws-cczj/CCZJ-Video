@@ -110,7 +110,7 @@ const panelToggle = ref<InstanceType<typeof PlayerPanelToggle>|null>(null)
  * - missing / failed：源站回答"没有" / 源站根本没答上来（失败的那只允许再点一次重试）
  */
 const { sourceOptions, activeSourceKey, readySourceCount, probingCount,
-  buildSourceOptions, probeLabel, sourceSelectable, searchCatalogSource, snapshot:sourceCatalogSnapshot } = useSourceCatalog({
+  buildSourceOptions, probeLabel, sourceSelectable, searchCatalogSource, refreshing:qualityRefreshing, snapshot:sourceCatalogSnapshot } = useSourceCatalog({
   sources: () => sourceStore.sources,
   identity: () => ({sourceKey:sourceKey.value,vodId:String(vodId.value),name:video.value?.vod_name || ''}),
   episode:()=>Number(episodes.value[currentEpIndex.value]?.ep_num||0),
@@ -515,7 +515,7 @@ const panelModel:PlayerPanelModel = reactive({
   catalog: {
     get items(){return sourceOptions.value},get activeKey(){return activeSourceKey.value},
     get readyCount(){return readySourceCount.value},get probingCount(){return probingCount.value},
-    get loading(){return sourceSearchLoading.value},label:probeLabel,selectable:sourceSelectable,retry:()=>{void buildSourceOptions()},
+    get loading(){return sourceSearchLoading.value},get refreshing(){return qualityRefreshing.value},label:probeLabel,selectable:sourceSelectable,retry:()=>{void buildSourceOptions()},
   },
   episodes: {
     get items(){return sortedEpisodes.value},get current(){return currentEpIndex.value},get ascending(){return episodeSortAsc.value},
@@ -546,7 +546,8 @@ const panelModel:PlayerPanelModel = reactive({
             :force-play-token="_playToken">
             <template v-if="mobile" #lines="{close}">
               <PlaybackRouteList mobile :sources="sourceOptions" :active-key="activeSourceKey" :active-line="videoStore.lines[videoStore.activeLineIndex]?.index??-1" :lines="videoStore.lines" :busy="sourceSearchLoading" :selectable="sourceSelectable" @choose="(key,line)=>{void switchToSource(key,line);close()}" />
-              <Button class="cczj-mt-4" variant="overlay" @click="buildSourceOptions">{{t('playLine.retryQuality')}}</Button>
+              <Button class="player-route-retry cczj-mt-4" variant="ghost" :loading="qualityRefreshing" @click="buildSourceOptions">{{t('playLine.retryQuality')}}</Button>
+              <p class="cczj-mobile-drawer-hint cczj-mt-4">{{t('playLine.cooldownHint')}}</p>
             </template>
             <template v-if="mobile && episodes.length" #episodes="{close}">
               <div class="cczj-mobile-drawer-episode-head"><span>{{t('detail.totalEpisodes',{count:episodes.length})}}</span><button @click="toggleEpisodeSort"><Icon :name="episodeSortAsc?'chevron-down':'chevron-up'" :size="14" />{{t(episodeSortAsc?'detail.ascOrder':'detail.descOrder')}}</button></div>

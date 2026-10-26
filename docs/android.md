@@ -46,6 +46,8 @@ wails3 task android:dev DEVICE=emulator-5554
 
 应用内设备列表使用 DLNA／UPnP AVTransport，电视或盒子需要开启相应接收服务。同一 Wi-Fi 不是协议兼容的保证；海康部分交互屏提供 [WonderCast、Miracast 或 Chromecast](https://pro-av.hikvision.com/en/products/interactive-flat-panel-display/interactive-flat-panels/ultra-series/)，不能据此认定未知型号支持 DLNA。Android 投屏面板提供“打开系统无线投屏”入口，通过 `ACTION_CAST_SETTINGS` 进入系统连接；WonderCast 专用接收仍需配套助手。
 
+投屏面板以附近设备和刷新为主要入口，网络排查说明收进“连接帮助”，不提供没有配套接收端的扫码连接。接收端确认 PLAYING 且没有媒体错误后才暂停手机播放；如果设备报告了位置，还须看到时间大于零。发送指令成功、电视尚未播放或状态请求失败时不提前中断本地播放。确认投屏后阻止 Android 返回前台时自动恢复手机视频，停止投屏、换片或用户明确点击本地播放后解除这项保护。
+
 `app/cast/discovery.go` 在每个有效私网 IPv4 组播接口上发送 MediaRenderer、AVTransport、根设备和全部设备查询，间隔 1.1 秒重发一次，接收窗口 4.5 秒，总任务最多 8 秒。描述获取使用三路有界队列，按地址去重；只接受与回复发送端同 IP 的私网 HTTP 描述和控制地址，不跟随跳转。请求取消或宿主退出会关闭套接字、停止描述请求并等待工作结束。Android Wi-Fi 组播锁仅在搜索期间持有；准备阶段失败和关闭面板也必须释放搜索状态。
 
 回归检查：
@@ -55,9 +57,15 @@ $env:CCZJ_TEST_LAN='1'
 go test ./app/cast -run 'TestSSDP|TestDiscoveryLAN' -count=1 -v
 python scripts/test-cast-browser.py --port 19320
 python scripts/test-cast-android.py --device emulator-5554 --host-ip <接收端可访问的电脑局域网IPv4>
+# 连同实际播放页触摸、连接状态与停止操作一起检查：
+python scripts/test-cast-android.py --device emulator-5554 --host-ip <接收端可访问的电脑局域网IPv4> --ui
 ```
 
 浏览器脚本需在 19320 端口启动前端 Vite，验证生产投屏面板的取消、迟到结果、错误重试、系统设置失败恢复及横竖屏。原生脚本使用独立 acceptance Debug 包，并要求另行安装、启用一个真正的 DLNA 接收端；测试会发送合成视频、控制接收端、打开系统投屏设置并按返回键验证再次搜索。Kodi 可从[官方 Android 下载页](https://kodi.tv/download/android/)获取，按[官方 UPnP 设置说明](https://kodi.wiki/view/Settings/Services/UPnP_DLNA)开启接收能力。同模拟器测试先打开 Kodi，等待接收服务启动，再运行脚本，避免接收应用在后台被系统冻结。
+
+MuMu 的接收测试还需要完成 Kodi 首次启动权限流程，开启 UPnP support 和 Allow remote control via UPnP；仅安装 APK 不会启用接收服务。2026-10-27 复测时这两个开关关闭、应用停在权限提示，发送端得到空列表。完成接收端初始化并重启后，实际发现、视频拉取、播放位置前进、暂停／继续／跳转／停止及系统设置返回后再搜索通过，证据在 `dist/audit/cast-pairing/native/`。同模拟器后台接收端长时间闲置可能被挂起，脚本先把 Kodi 带到前台再搜索；这项准备不替代真实路由器和实体电视验收。
+
+加 `--ui` 会创建一个临时视频源，在生产播放页点开“更多设置 → 工具 → 投屏到电视”，选择真实接收端，确认接收端拉取媒体、界面显示已播放后手机暂停，并通过面板停止投屏。结束时删除测试源，恢复原有源启用状态、私网设置和页面；证据在 `dist/audit/cast-pairing/native-ui/`。
 
 2.4.4 使用 Kodi 21.3，在 MuMu 中验证真实 SSDP、描述请求、SOAP 操作、接收端拉取视频，以及 `GetTransportInfo` 返回 PLAYING、`GetPositionInfo` 的播放时间实际前进。暂停／继续／跳转／停止及系统设置返回后再次搜索通过，证据在 `dist/audit/cast-244/`。同模拟器接收端需要保持前台视频 Surface；脚本在发起播放前切到 Kodi。Go 投屏测试和本机 race 检查通过。海康实体电视、鸿蒙 4 手机、Windows 原生投屏及路由器 Wi-Fi 组播尚未连接验收，不把同模拟器接收端测试算作这些环境通过。
 

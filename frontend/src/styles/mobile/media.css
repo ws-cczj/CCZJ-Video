@@ -58,14 +58,19 @@
 .cczj-mobile-overview-favorite { @apply cczj-grid; place-items:center; @apply cczj-flex-shrink-0; min-width:44px; min-height:44px; border:0; @apply cczj-text-secondary; background:transparent; }
 .cczj-mobile-overview-favorite[aria-pressed=true] { @apply cczj-text-accent; }
 .cczj-mobile-overview-favorite[aria-pressed=true] svg { fill:currentColor; }
-.cczj-mobile-shell .cczj-mobile-player .side-section { @apply cczj-p-8; }
+.cczj-mobile-shell .cczj-mobile-player .side-section { padding:8px var(--cczj-mobile-section-padding) 16px; }
 .cczj-mobile-shell .cczj-mobile-player .side-blurb { @apply cczj-text-secondary; }
-.cczj-mobile-shell .cczj-mobile-player .side-section-title { @apply cczj-flex-nowrap cczj-gap-4; }
+.cczj-mobile-shell .cczj-mobile-player .side-section-title { @apply cczj-flex-nowrap cczj-gap-4; margin:0 0 8px; min-height:36px; }
 .cczj-mobile-shell .cczj-mobile-player .source-list { @apply cczj-flex-wrap cczj-overflow-visible; }
 .cczj-mobile-shell .cczj-mobile-player .source-item { @apply cczj-max-w-full; min-height: 44px; background: var(--bg-input); @apply cczj-text-primary cczj-border-gray-300; }
-.cczj-mobile-shell .cczj-mobile-player .ep-grid { grid-template-columns: repeat(3,minmax(0,1fr)); }
-.cczj-mobile-shell .cczj-mobile-player .ep-item { @apply cczj-min-w-0; min-height: 44px; background: var(--bg-input); @apply cczj-text-primary; }
-.cczj-mobile-shell .cczj-mobile-player .ep-item.active { @apply cczj-text-accent; background: var(--accent-alpha-15); @apply cczj-border-primary; }
+.cczj-mobile-shell .cczj-mobile-player .ep-grid { grid-template-columns: repeat(3,minmax(0,1fr)); @apply cczj-gap-4 cczj-p-2 cczj-overflow-visible; }
+.cczj-mobile-shell .cczj-mobile-player .ep-item { @apply cczj-min-w-0 cczj-shadow-none; min-height:44px; height:48px; transform:none; }
+.cczj-mobile-shell .cczj-mobile-player .ep-item.active { border-color:#40a9ff; @apply cczj-font-semibold; outline:0; transform:none; }
+.cczj-mobile-shell .cczj-mobile-player .ep-item .ep-watched-progress { height:3px; }
+.cczj-mobile-shell .cczj-mobile-player .player-col-side .ep-item .ep-watched-pct,
+.cczj-mobile-shell .cczj-mobile-player .player-col-side .ep-item.active .ep-watched-pct { color:var(--cczj-player-episode-percent); background:transparent; padding:0; }
+.cczj-mobile-shell .cczj-mobile-player .player-col-side .ep-item .ep-watched-progress,
+.cczj-mobile-shell .cczj-mobile-player .player-col-side .ep-item.active .ep-watched-progress { background:var(--cczj-player-episode-progress); }
 @media (min-width: 600px) {
   .cczj-mobile-shell .cczj-mobile-detail .detail-header { grid-template-columns: 150px minmax(0,1fr); }
   .cczj-mobile-shell .cczj-mobile-detail .poster-frame { width: 150px; }
@@ -78,13 +83,17 @@
 .cczj-mobile-shell .cczj-mobile-player .side-title { @apply cczj-text-primary; text-shadow: none; }
 .cczj-mobile-shell .cczj-mobile-player .side-section-title-left { @apply cczj-text-primary; }
 .cczj-mobile-shell .cczj-mobile-player :is(.side-count,.side-empty) { @apply cczj-text-muted; }
-.cczj-mobile-shell .cczj-mobile-player .sort-toggle-btn { min-height: 44px; height: auto; @apply cczj-text-secondary; background: var(--bg-input); @apply cczj-border-gray-300; }
+.cczj-mobile-shell .cczj-mobile-player .sort-toggle-btn { min-width:58px; min-height:var(--cczj-mobile-control-sm); height:auto; padding:0 8px; border-color:transparent; border-radius:8px; }
+.cczj-mobile-shell .cczj-mobile-player .player-col-side :is(.ep-item,.sort-toggle-btn) {
+  background:var(--cczj-player-action-bg); color:var(--cczj-player-action-ink);
+}
+.cczj-mobile-shell .cczj-mobile-player .player-col-side .ep-item:not(.active):not(.watched) { background:color-mix(in srgb,var(--cczj-player-action-bg) 5%,var(--cczj-player-theme-surface)); color:var(--cczj-player-action-bg); border-color:color-mix(in srgb,var(--cczj-player-action-bg) 40%,transparent); }
+.cczj-mobile-shell .cczj-mobile-player .player-col-side .ep-item.watched:not(.active) { border-color:transparent; }
 .cczj-mobile-shell .cczj-mobile-player .side-section-title-left .bullet { background: var(--accent); }
 .cczj-mobile-shell .cczj-mobile-player .source-item.active { @apply cczj-text-primary cczj-border-primary; background: var(--accent-alpha-10); @apply cczj-shadow-none; transform: none; animation: none; }
 .cczj-mobile-shell .cczj-mobile-player .source-item.active::before { background: var(--accent); }
 .cczj-mobile-shell .cczj-mobile-player .source-item .source-probe { @apply cczj-text-secondary cczj-opacity-100; }
 .cczj-mobile-shell .cczj-mobile-player .source-active-dot { background: var(--accent); @apply cczj-shadow-none; }
-.cczj-mobile-shell .cczj-mobile-player .ep-item { @apply cczj-border-gray-300; }
 /* Mobile player gestures and native fullscreen; all desktop actions reuse their existing handlers. */
 .cczj-mobile-home-search { @apply cczj-flex cczj-items-center cczj-gap-5; min-height: 44px; margin: 0 0 12px; padding: 0 12px; @apply cczj-text-secondary; background: var(--cczj-mobile-surface); @apply cczj-border cczj-rounded-lg cczj-no-underline cczj-text-13; }
 .cczj-mobile-home-search > span { @apply cczj-flex-1; }
@@ -145,12 +154,5 @@
 .cczj-mobile-shell .cczj-mobile-detail .episodes-section .cczj-mobile-batch-download { flex-basis: 100%; }
 .cczj-mobile-shell .cczj-mobile-player .side-section-title-left { @apply cczj-min-w-0 cczj-flex-wrap; gap: 5px; }
 .cczj-mobile-shell .cczj-mobile-player .side-section-right { @apply cczj-flex-shrink-0; }
-/* One control stack owns progress spacing and enters along the bottom edge. */
-.cczj-mobile-shell .cczj-mobile-player .ep-item.active { background:#202329; @apply cczj-text-white cczj-border-primary; animation-name:cczj-mobile-episode-pulse; }
-@keyframes cczj-mobile-episode-pulse {
-  0%,100% { box-shadow:0 0 0 1px var(--accent-alpha-15),0 2px 6px var(--accent-alpha-15); }
-  50% { box-shadow:0 0 0 1px var(--accent-alpha-20),0 2px 9px var(--accent-alpha-20); }
-}
-.cczj-mobile-shell .cczj-mobile-player .sort-toggle-btn,.cczj-mobile-shell .cczj-mobile-player .sort-toggle-btn:is(:hover,:active,:focus) { min-width:58px; @apply cczj-items-center; background:var(--bg-input); @apply cczj-text-secondary cczj-border-gray-300; transition:background-color .15s ease; }
 .cczj-mobile-shell .cczj-mobile-detail .episodes-section .section-head-right > button:is(:hover,:active,:focus) { @apply cczj-text-secondary; }
 .cczj-mobile-shell .cczj-mobile-detail .episodes-section .section-head-right > button.ui-btn--primary:is(:hover,:active,:focus) { color:var(--btn-solid-text); }

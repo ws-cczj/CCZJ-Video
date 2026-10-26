@@ -2,6 +2,7 @@ import { computed, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import * as AppMod from '../../api/app'
 import { ProbePlayLines, type PlayLineQuality } from '../../api/playback'
+import { normalizeApiError } from '../../api/errors'
 import { findBestMatch, probeNameOf, searchSourceWithFallback } from './sourceMatching'
 
 export type SourceProbe = 'probing' | 'local' | 'remote' | 'missing' | 'failed'
@@ -12,12 +13,13 @@ export interface SourceOption {
   probe: SourceProbe
   hit?: any        // probe 为 remote 时的源站搜索原始条目，切换前要先入库
   lines?:PlayLineQuality[]
-  qualityState?:'pending'|'ready'|'failed'
+  qualityState?:'pending'|'ready'|'failed'|'limited'
+  qualityRetryAt?:number
 }
 
 /** Discovery state belongs to one page, never to a retained global store. */
 export function useSourceCatalog(deps: {
-  sources: () => ReadonlyArray<{source_key?:string;name?:string}>
+  sources: () => ReadonlyArray<{source_key?:string;name?:string;enabled?:number|boolean}>
   identity: () => {sourceKey:string;vodId:string;name:string}
   episode?:()=>number
 }) {
@@ -26,6 +28,7 @@ const sourceOptions = ref<SourceOption[]>([])
 const activeSourceKey = ref('')
 const readySourceCount = computed(() => sourceOptions.value.filter((s) => s.probe === 'local' || s.probe === 'remote').length)
 const probingCount = computed(() => sourceOptions.value.filter((s) => s.probe === 'probing').length)
+const refreshing = ref(false)
 
 const PROBE_CONCURRENCY = 2
 const REMOTE_PROBE_TTL = 10 * 60 * 1000
@@ -34,6 +37,7 @@ type ProbeOutcome = { probe: SourceProbe; vodId: string | null; hit?: any }
 const remoteProbeCache = new Map<string, { outcome: ProbeOutcome; at: number }>()
 let probeGeneration = 0
 let disposed = false
+let catalogueIdentity = ''
 type PendingRequest = Promise<any> & {cancel?:()=>void|Promise<void>}
 const requests = new Set<PendingRequest>()
 const cancellationRequested = new WeakSet<PendingRequest>()
@@ -60,24 +64,38 @@ function searchCatalogSource(source:string,name:string):Promise<any[]> {
 
 async function buildSourceOptions(): Promise<void> {
   if (disposed || !deps.sources().length) return
+  const identity = deps.identity()
+  const currentIdentity = `${identity.sourceKey}:${identity.vodId}:${deps.episode?.()||0}`
+  if(refreshing.value && catalogueIdentity === currentIdentity)return
   cancelRequests()
   const generation = ++probeGeneration
+  const previous = catalogueIdentity === currentIdentity ? sourceOptions.value : []
+  catalogueIdentity = currentIdentity
+  refreshing.value = true
   const vodName = probeNameOf(deps.identity().name)
-  sourceOptions.value = deps.sources().map((s: any) => {
+  sourceOptions.value = deps.sources().filter(s=>s.source_key===identity.sourceKey || (s.enabled!==0 && s.enabled!==false)).map((s) => {
     const isCurrent = s.source_key === deps.identity().sourceKey
+    const known = previous.find(row=>row.source_key===s.source_key)
     return {
       source_key: s.source_key || '',
       name: s.name || s.source_key || '',
       // 能进到这个页面就说明这一条在本库里，当前源直接算 local。
-      vod_id: isCurrent ? String(deps.identity().vodId) : undefined,
-      probe: isCurrent ? 'local' as SourceProbe : 'probing' as SourceProbe,
-      qualityState:'pending' as const,
+      vod_id: isCurrent ? String(deps.identity().vodId) : known?.vod_id,
+      probe: isCurrent ? 'local' as SourceProbe : known?.vod_id ? known.probe : 'probing' as SourceProbe,
+      hit:known?.hit,
+      lines:known?.lines,
+      qualityRetryAt:known?.qualityRetryAt,
+      qualityState:known?.qualityRetryAt && known.qualityRetryAt>Date.now() ? 'limited' as const : known?.lines?.some(line=>line.ok) ? 'ready' as const : 'pending' as const,
     }
   })
   activeSourceKey.value = deps.identity().sourceKey
 
-  await probeLocalLibrary(generation)
-  await probeRemoteSources(vodName, generation)
+  try {
+    await probeLocalLibrary(generation)
+    await probeRemoteSources(vodName, generation)
+  } finally {
+    if(generation===probeGeneration)refreshing.value=false
+  }
 }
 
 /** 本库探测：把已经有同一 global_id 副本的源标成 local。 */
@@ -128,13 +146,23 @@ async function probeRemoteSources(vodName: string, generation: number): Promise<
         }
       }
       if(!opt.vod_id){opt.qualityState='failed';continue}
+      if(opt.qualityRetryAt && opt.qualityRetryAt>Date.now())continue
       try {
-        const lines=await owned(ProbePlayLines({source_key:opt.source_key,vod_id:opt.vod_id,global_id:0,ep_num:deps.episode?.()||0}))
+        const lines:PlayLineQuality[]=await owned(ProbePlayLines({source_key:opt.source_key,vod_id:opt.vod_id,global_id:0,ep_num:deps.episode?.()||0}))
         if(generation!==probeGeneration)return
-        opt.lines=lines;opt.qualityState='ready'
-      } catch {
+        opt.lines=lines.map(line=>{
+          const previous=opt.lines?.find(item=>item.index===line.index&&item.ok)
+          return line.code==='RATE_LIMITED'&&previous?{...previous,code:line.code,retry_after_seconds:line.retry_after_seconds}:line
+        })
+        opt.qualityState=lines.length&&lines.every(line=>line.code==='RATE_LIMITED')?'limited':'ready'
+        const retry=Math.max(0,...lines.map(line=>line.retry_after_seconds||0))
+        opt.qualityRetryAt=retry?Date.now()+retry*1000:undefined
+      } catch (error) {
         if(generation!==probeGeneration)return
-        opt.qualityState='failed'
+        const failure=normalizeApiError(error)
+        if(failure.code==='CANCELLED')continue
+        opt.qualityState=failure.code==='RATE_LIMITED'?'limited':'failed'
+        if(failure.retryAfterSeconds||failure.code==='RATE_LIMITED')opt.qualityRetryAt=Date.now()+(failure.retryAfterSeconds||300)*1000
       }
     }
   }
@@ -156,7 +184,7 @@ async function probeSourceRemote(sourceKeyOf: string, vodName: string): Promise<
   } catch {
     outcome = { probe: 'failed', vodId: null }
   }
-  if (!disposed && generation === probeGeneration) remoteProbeCache.set(cacheKey, { outcome, at: Date.now() })
+  if (!disposed && generation === probeGeneration && outcome.probe !== 'failed') remoteProbeCache.set(cacheKey, { outcome, at: Date.now() })
   return outcome
 }
 
@@ -179,7 +207,7 @@ function sourceSelectable(src: SourceOption): boolean {
 
 
 onBeforeUnmount(() => { disposed = true; probeGeneration++; cancelRequests(); remoteProbeCache.clear() })
-return { sourceOptions, activeSourceKey, readySourceCount, probingCount, buildSourceOptions, probeLabel, sourceSelectable, searchCatalogSource,
+return { sourceOptions, activeSourceKey, readySourceCount, probingCount, refreshing, buildSourceOptions, probeLabel, sourceSelectable, searchCatalogSource,
   snapshot:()=>({pending_requests:requests.size,requests_started:requestsStarted,requests_settled:requestsSettled,
     requests_failed:requestsFailed,cancellations_requested:cancellationsRequested,source_count:sourceOptions.value.length,disposed}) }
 }

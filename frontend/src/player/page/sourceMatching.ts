@@ -1,17 +1,9 @@
 import * as AppMod from '../../api/app'
 
-/** 模糊匹配视频名称（去除空格、大小写统一、允许包含关系） */
+/** Normalise typography without dropping season or companion-work identity. */
 function fuzzyMatchVod(name1: string, name2: string): boolean {
-  const n1 = name1.replace(/\s+/g, '').toLowerCase()
-  const n2 = name2.replace(/\s+/g, '').toLowerCase()
-  if (n1 === n2) return true
-  if (n1.includes(n2) || n2.includes(n1)) return true
-  // 允许去掉常见后缀（第一季/第二季等）后匹配
-  const seasonRe = /第[一二三四五六七八九十\d]+季$/
-  const s1 = n1.replace(seasonRe, '')
-  const s2 = n2.replace(seasonRe, '')
-  if (s1 && s2 && (s1 === s2 || s1.includes(s2) || s2.includes(s1))) return true
-  return false
+  const normalise = (name:string)=>probeNameOf(name).replace(/[\s·:：\-—_（）()[\]]/g,'').toLowerCase()
+  return normalise(name1) === normalise(name2)
 }
 
 export function findBestMatch(list: any[], vodName: string): any | null {
@@ -22,8 +14,7 @@ export function findBestMatch(list: any[], vodName: string): any | null {
   // 模糊匹配
   const fuzzy = list.find((v: any) => fuzzyMatchVod(v.vod_name || '', vodName))
   if (fuzzy) return fuzzy
-  // 兆底第一条
-  return list[0]
+  return null
 }
 
 /** 搜索源并自动回退：原名 → 去空格版 → 去季后缀版 */

@@ -233,6 +233,18 @@ def main():
                 page.wait_for_function('window.__scriptSyncDone === true')
                 assert page.evaluate('window.__scriptExecutions') == 2
                 expect(page.get_by_role('button', name='信任并运行', exact=True)).to_have_count(0)
+                # An interrupted automatic play must retry without a user click.
+                page.add_init_script('''
+                  const originalPlay=HTMLMediaElement.prototype.play;
+                  let interrupted=false;
+                  HTMLMediaElement.prototype.play=function(){
+                    if(this.classList.contains('native-video')&&!interrupted){interrupted=true;return Promise.reject(new DOMException('seek interrupted startup','AbortError'))}
+                    return originalPlay.call(this);
+                  };
+                ''')
+                page.goto(url + '/tests/browser/player.html?autoplay=1&saved=7')
+                page.wait_for_function("document.querySelector('video')?.currentTime >= 6 && !document.querySelector('video').paused")
+                assert not page.locator('.resume-bili').count(), 'remembered auto resume still asked for confirmation'
                 assert not errors, errors
                 print('Browser regressions passed: page disposal and late startup, Wails 3 fullscreen and stale replies, live animations, lazy thumbnail capture, idle/close decoder release, playback, line resume, episode reset, rapid switch, Film WebGL rebuild and script consent')
             finally:

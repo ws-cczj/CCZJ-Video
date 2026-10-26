@@ -107,6 +107,13 @@ func Install(manager *Manager) { active.Store(manager) }
 
 type categoryKey struct{}
 type scopeKey struct{}
+type queryCooldownKey struct{}
+
+// WithQueryCooldown marks a bounded metadata read made through a media client.
+// It uses the same persisted tier as other queries; playback stays continuous.
+func WithQueryCooldown(ctx context.Context) context.Context {
+	return context.WithValue(ctx, queryCooldownKey{}, true)
+}
 
 func WithCategory(ctx context.Context, category string) context.Context {
 	return context.WithValue(ctx, categoryKey{}, category)

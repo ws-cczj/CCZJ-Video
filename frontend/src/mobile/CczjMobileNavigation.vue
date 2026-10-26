@@ -23,21 +23,27 @@ function active(path: string): boolean {
 <template>
   <nav class="cczj-mobile-navigation" :aria-label="tr('sidebar.browse')">
     <router-link v-for="item in items" :key="item.path" :to="item.path" :class="{ 'cczj-mobile-navigation-active': active(item.path), 'cczj-mobile-navigation-featured': item.path === '/search' }" :aria-current="active(item.path) ? 'page' : undefined" :aria-label="tr(item.label)">
-      <span class="cczj-mobile-navigation-icon"><Icon :name="item.icon" :size="item.path === '/search' ? 29 : 21" /></span>
-      <span v-if="item.path !== '/search'">{{ tr(item.label) }}</span>
+      <span class="cczj-mobile-navigation-icon"><Icon :name="item.icon" :size="item.path === '/search' ? 23 : 21" /></span>
+      <span>{{ tr(item.label) }}</span>
     </router-link>
   </nav>
 </template>
 
 <style scoped>
 .cczj-mobile-navigation a { font-weight: 500; }
+.cczj-mobile-navigation { @apply cczj-relative; z-index:2; isolation:isolate; background:transparent; backdrop-filter:none; -webkit-backdrop-filter:none; }
+.cczj-mobile-navigation::before {
+  content:''; @apply cczj-absolute; inset:0; z-index:-1;
+  background:var(--cczj-mobile-surface);
+}
 .cczj-mobile-navigation a.cczj-mobile-navigation-active { color: var(--accent-dim) !important; }
 .cczj-mobile-navigation a .cczj-mobile-navigation-icon { @apply cczj-transition-none; }
 .cczj-mobile-navigation a:active .cczj-mobile-navigation-icon { transform: none; }
 .cczj-mobile-navigation-featured .cczj-mobile-navigation-icon {
-  width: 44px;
-  height: 44px;
-  color: inherit;
+  width:48px; height:48px; margin-top:-20px; margin-bottom:0;
+  border-radius:50%; background:var(--btn-solid); color:var(--btn-solid-text);
+  box-shadow:0 3px 10px #0002;
 }
+.cczj-mobile-navigation a.cczj-mobile-navigation-featured { gap:4px; }
 .cczj-mobile-navigation-featured .cczj-mobile-navigation-icon :deep(svg) { color: inherit; }
 </style>

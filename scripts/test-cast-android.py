@@ -20,15 +20,21 @@ def main():
  parser.add_argument('--device',default='emulator-5554')
  parser.add_argument('--host-ip',required=True,help='LAN IPv4 reachable by the receiver; not the emulator host alias')
  parser.add_argument('--receiver-name',default='Kodi')
+ parser.add_argument('--ui',action='store_true',help='Also connect through the actual mobile player panel using a disposable source')
  parser.add_argument('--output',type=Path,default=ROOT/'dist/audit/cast-discovery/native')
  args=parser.parse_args();args.output.mkdir(parents=True,exist_ok=True)
  media=ROOT/'.cache/cast-validation';media.mkdir(parents=True,exist_ok=True)
  if not (media/'movie.mp4').exists():
   subprocess.run(['ffmpeg','-hide_banner','-loglevel','error','-f','lavfi','-i','testsrc2=size=320x180:rate=15','-f','lavfi','-i','anullsrc','-t','90','-c:v','libx264','-preset','ultrafast','-pix_fmt','yuv420p','-g','30','-c:a','aac','-movflags','+faststart',str(media/'movie.mp4')],check=True)
  requests=[]
+ identity=str(time.time_ns())
  class Media(fixtures.MediaFixture):
   directory=media
   def do_GET(self,head=False):
+   if self.path.startswith('/cms'):
+    row=dict(vod_id=identity,vod_name='CCZJ casting audit '+identity,type_id='1',type_name='剧情片',vod_play_from='DLNA',vod_play_url=f'第01集$http://{args.host_ip}:{self.server.server_port}/media/movie.mp4')
+    data=json.dumps(dict(code=1,page=1,pagecount=1,total=1,list=[row]),ensure_ascii=False).encode()
+    self.send_response(200);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(data)));self.end_headers();self.wfile.write(data);return
    requests.append(dict(path=self.path,range=self.headers.get('Range',''),peer=self.client_address[0]));super().do_GET(head)
   def log_message(self,*_):pass
  server=ThreadingHTTPServer((args.host_ip,0),Media)
@@ -36,6 +42,11 @@ def main():
  adb=['adb','-s',args.device]
  result=dict(passed=False,device=args.device,environment='emulator' if args.device.startswith('emulator-') else 'unclassified',receiver=args.receiver_name,checks=[],limitations=['Not a Hikvision physical-TV test.','A receiver on the same emulator does not validate a router or phone Wi-Fi driver.'])
  try:
+  if args.receiver_name=='Kodi':
+   # MuMu may freeze the background receiver after inactivity. Bring its
+   # real receiving surface up before moving to the sender for discovery.
+   subprocess.run(adb+['shell','am','start','-W','-n','org.xbmc.kodi/.Splash'],check=True,capture_output=True)
+   time.sleep(1)
   with AndroidWebView(args.device,application_id='com.cczj.video.acceptance') as view:
    def rpc(name,*values):
     path,alias=compiled.compiled_binding(name)
@@ -110,6 +121,68 @@ def main():
      finally:view.evaluate('window.wails.playerMulticast(false)')
      assert any(device['id']==result['devices'][0]['id'] for device in restored),'Discovery did not recover after system settings'
      result['checks'].append('Back from system settings resumes the native bridge and discovers the receiver again')
+    if args.ui:
+     original_url=view.evaluate('location.href');original_private=rpc('GetAllowPrivateNetwork');source=None;enabled=[]
+     def wait(expression,timeout=20):
+      deadline=time.monotonic()+timeout
+      while not view.evaluate(expression):
+       assert time.monotonic()<deadline,expression
+       time.sleep(.1)
+     def tap(expression):
+      point=view.evaluate('(()=>{const e='+expression+';if(!e)throw Error("missing touch target");const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()')
+      view.call('Input.dispatchTouchEvent',dict(type='touchStart',touchPoints=[point]));view.call('Input.dispatchTouchEvent',dict(type='touchEnd',touchPoints=[]))
+     try:
+      rpc('SetAllowPrivateNetwork',True)
+      enabled=[item for item in rpc('GetAllSources') if item['enabled']]
+      for item in enabled:rpc('UpdateSource',dict(item,enabled=0))
+      source=rpc('CreateSource',dict(name='Casting audit '+identity,api_url=f'http://{args.host_ip}:{server.server_port}/cms',enabled=1,kind='video'))
+      key=source['source_key'];search=rpc('SearchSourceRequest',key,'CCZJ casting audit',1,20,'cast-ui-'+identity)
+      rpc('ImportSourceVideos',key,search['videos']);global_id=rpc('GetGlobalIdForVideo',key,identity)
+      view.evaluate('location.hash='+json.dumps(f'/player/{key}/{global_id}/0?vod={identity}'))
+      wait('!!document.querySelector(".cczj-mobile-video video")')
+      wait('document.querySelector("video").readyState>=2')
+      view.evaluate('document.querySelector("video").play()');wait('document.querySelector("video").currentTime>.2')
+      if not view.evaluate('document.querySelector(".cczj-mobile-video").classList.contains("show-controls")'):
+       tap('document.querySelector("video")')
+      wait('document.querySelector(".cczj-mobile-video").classList.contains("show-controls")');time.sleep(.35)
+      tap('document.querySelector(".cczj-mobile-player-more-button")')
+      wait('!!document.querySelector(".cczj-mobile-player-categories")');time.sleep(.35)
+      tap('[...document.querySelectorAll(".cczj-mobile-player-categories button")].at(-1)')
+      cast_button='document.querySelector('+json.dumps('.cczj-mobile-more-actions button[aria-label="投屏到电视"]')+')'
+      wait('!!'+cast_button);time.sleep(.35)
+      tap(cast_button)
+      wait('document.querySelector(".cczj-mobile-cast-list button")?.innerText.includes("Kodi")')
+      view.screenshot(args.output/'mobile-device-list.png')
+      assert view.evaluate('!document.querySelector(".cczj-mobile-player-lines svg")'),'route switch still has an icon'
+      assert view.evaluate('document.querySelector(".cczj-mobile-cast-help").open===false'),'help text is not collapsed'
+      before_requests=len(requests)
+      tap('document.querySelector(".cczj-mobile-cast-list button")')
+      subprocess.run(adb+['shell','am','start','-W','-n','org.xbmc.kodi/.Splash'],check=True,capture_output=True)
+      wait('document.querySelector(".cczj-mobile-cast-session")?.innerText.includes("电视已确认播放")',25)
+      assert len(requests)>before_requests,'UI connection did not make the receiver fetch video'
+      wait('document.querySelector("video").paused')
+      result['checks'].append('actual mobile player casts through the device-list touch action; receiver playback is confirmed and local playback pauses only afterwards')
+      subprocess.run(adb+['shell','am','start','-W','-n','com.cczj.video.acceptance/com.wails.app.MainActivity'],check=True,capture_output=True)
+      wait('document.querySelector("video").paused')
+      wait('document.querySelector(".cczj-mobile-play")?.getAttribute("aria-label")==="播放"')
+      time.sleep(.5);view.screenshot(args.output/'mobile-connected.png')
+      stop_button='[...document.querySelectorAll(".cczj-mobile-cast-actions button")].find(e=>e.innerText.trim()==="停止投屏")'
+      tap(stop_button);wait('!document.querySelector(".cczj-mobile-cast-session")')
+      result['checks'].append('actual mobile panel stops casting; help stays collapsed and the route switch contains text only')
+      tap('document.querySelector(".cczj-mobile-cast").closest("section").querySelector("header button")')
+      if not view.evaluate('document.querySelector(".cczj-mobile-video").classList.contains("show-controls")'):tap('document.querySelector("video")')
+      wait('document.querySelector(".cczj-mobile-video").classList.contains("show-controls")');time.sleep(.35)
+      tap('document.querySelector(".cczj-mobile-play")');wait('!document.querySelector("video").paused')
+      result['checks'].append('returning to the sender keeps local video paused during casting; stopping releases casting and local playback can resume')
+      view.evaluate('location.hash="/"');wait('!!document.querySelector(".cczj-mobile-navigation")');time.sleep(.35)
+      assert view.evaluate('(()=>{const s=getComputedStyle(document.querySelector(".cczj-mobile-navigation"),"::before");return (s.getPropertyValue("mask-image")||s.getPropertyValue("-webkit-mask-image")||"none")==="none"})()'),'navigation still has a search cutout'
+      view.screenshot(args.output/'mobile-navigation.png')
+      result['checks'].append('mobile navigation search cutout is closed while the search action remains in place')
+     finally:
+      view.evaluate('location.href='+json.dumps(original_url))
+      if source:rpc('DeleteSource',source['source_key'])
+      for item in enabled:rpc('UpdateSource',item)
+      rpc('SetAllowPrivateNetwork',original_private)
     result['passed']=True
    finally:
     if selected:

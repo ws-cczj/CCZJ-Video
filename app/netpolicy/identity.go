@@ -49,6 +49,9 @@ func identity(req *http.Request, category string) (string, string, error) {
 	return "request:" + hex.EncodeToString(hash.Sum(nil)), "host:" + hex.EncodeToString(host[:]), nil
 }
 func queryRequest(category string, req *http.Request) bool {
+	if req.Context().Value(queryCooldownKey{}) == true && req.Header.Get("Range") == "" {
+		return req.Method == http.MethodGet || req.Method == http.MethodHead
+	}
 	switch category {
 	case "playback", "download", "image", "reading-image", "lineprobe", "cast", "update-download":
 		return false

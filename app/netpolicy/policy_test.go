@@ -114,6 +114,33 @@ func TestHealthyQueriesReuseResponsesDuringCooldown(t *testing.T) {
 	}
 }
 
+func TestMediaMetadataUsesPersistedFiveMinuteCooldownWithoutThrottlingPlayback(t *testing.T) {
+	store := fixtureStore(t)
+	now := time.Unix(1792380000, 0)
+	manager := fixtureManager(t, store, &now)
+	var calls atomic.Int32
+	base := roundTripFunc(func(*http.Request) (*http.Response, error) { calls.Add(1); return reply(200, "#EXTM3U\n", ""), nil })
+	metadata := request(WithQueryCooldown(context.Background()), "https://media.example/index.m3u8")
+	response, err := manager.RoundTrip("lineprobe", base, metadata)
+	readResponse(t, response, err)
+	now = now.Add(299 * time.Second)
+	response, err = manager.RoundTrip("lineprobe", base, metadata)
+	readResponse(t, response, err)
+	if calls.Load() != 1 {
+		t.Fatal("metadata reached upstream before five minutes", calls.Load())
+	}
+	restarted := fixtureManager(t, store, &now)
+	_, err = restarted.RoundTrip("lineprobe", base, metadata)
+	if apperror.CodeOf(err) != apperror.RateLimited || apperror.Public(err).RetryAfterSeconds < 1 {
+		t.Fatal("restart bypassed metadata cooldown", err)
+	}
+	response, err = manager.RoundTrip("playback", base, request(context.Background(), "https://media.example/index.m3u8"))
+	readResponse(t, response, err)
+	if calls.Load() != 2 {
+		t.Fatal("metadata cooldown blocked playback", calls.Load())
+	}
+}
+
 func TestFailedQueryRetainsCauseAndCooldown(t *testing.T) {
 	now := time.Unix(1792380000, 0)
 	manager := fixtureManager(t, fixtureStore(t), &now)
