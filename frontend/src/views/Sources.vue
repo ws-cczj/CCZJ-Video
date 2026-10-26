@@ -278,7 +278,14 @@ function probeOf(key: string): Record<string, any> | null {
 function rememberProbes(list: Record<string, any>[]): void {
   const next = { ...probes.value }
   for (const probe of list) {
-    if (probe && probe.source_key) next[probe.source_key] = probe
+    if (probe && probe.source_key) {
+      const previous = next[probe.source_key]
+      // A cooldown repeats the same stored sample, not a new HTTP response.
+      // Keep its typed evidence while this page still owns the fresh result.
+      next[probe.source_key] = probe.skipped && previous?.probe_time_unix === probe.probe_time_unix
+        ? { ...probe, failure_kind: previous.failure_kind, status_code: previous.status_code }
+        : probe
+    }
   }
   probes.value = next
 }
@@ -456,6 +463,7 @@ onBeforeUnmount(stopProbeLoop)
         :mode="getMode(sk(s))"
         :hours="getHours(sk(s))"
         :slots="slotsOf(sk(s))"
+        :probe="probeOf(sk(s))"
         :cooling="coolingText(sk(s))"
         :probe-busy="probingKey === sk(s) || probingAll"
         :is-default="sk(s) === sourceStore.currentSourceKey"

@@ -16,6 +16,7 @@ export function usePlaybackResume(deps: {
   getVideo: () => HTMLVideoElement | null
   getKey: () => string
   resolveResume: () => Promise<number> | undefined
+  shouldResume?: () => boolean
   settings: { read: (key: string, fallback: string) => string; write: (key: string, value: string) => void }
 }) {
   const savedTime = ref<number | null>(null)
@@ -23,6 +24,7 @@ export function usePlaybackResume(deps: {
   const resumeRemainSec = ref(5)
   let generation = 0
   let key = ''
+  let resolving = false
   let pendingSeek: number | null = null
   let promptTimer: ReturnType<typeof setInterval> | null = null
   let saveTimer: ReturnType<typeof setInterval> | null = null
@@ -39,6 +41,7 @@ export function usePlaybackResume(deps: {
     if (saveTimer !== null) clearInterval(saveTimer)
     saveTimer = null
     key = ''
+    resolving = false
     pendingSeek = null
     savedTime.value = null
   }
@@ -70,14 +73,20 @@ export function usePlaybackResume(deps: {
       return
     }
     const token = generation
+    resolving = true
     let seconds = readPlaybackTime(key)
-    if (seconds <= 5) {
-      try { seconds = (await deps.resolveResume()) || 0 } catch { seconds = 0 }
+    if (seconds <= 5 || deps.shouldResume?.()) {
+      try {
+        const durable = (await deps.resolveResume()) || 0
+        if (durable > 5 || seconds <= 5) seconds = durable
+      } catch { /* Keep a usable local checkpoint when durable storage is unavailable. */ }
     }
-    if (token !== generation || !Number.isFinite(seconds) || seconds <= 5) return
+    if (token !== generation) return
+    resolving = false
+    if (!Number.isFinite(seconds) || seconds <= 5) return
     savedTime.value = seconds
-    if (deps.settings.read('auto_resume_jump', '0') === '1') {
-      seekWhenReady(Math.max(0, seconds - 1))
+    if (deps.shouldResume?.() || deps.settings.read('auto_resume_jump', '0') === '1') {
+      seekWhenReady(deps.shouldResume?.() ? seconds : Math.max(0, seconds - 1))
       return
     }
     showResumePrompt.value = true
@@ -93,9 +102,14 @@ export function usePlaybackResume(deps: {
     dismissResumePrompt()
   }
 
+  function canPersist(): boolean {
+    const video = deps.getVideo()
+    return !!key && !!video && !resolving && pendingSeek === null && !showResumePrompt.value && !video.seeking && video.readyState >= 1
+  }
+
   function save(): void {
     const video = deps.getVideo()
-    if (!video || !key || video.ended) return
+    if (!video || !key || video.ended || !canPersist()) return
     savePlaybackTime(key, video.currentTime, video.duration)
     deps.settings.write('volume', String(video.volume))
     deps.settings.write('muted', video.muted ? '1' : '0')
@@ -111,5 +125,5 @@ export function usePlaybackResume(deps: {
   }
 
   return { savedTime, showResumePrompt, resumeRemainSec, load, track, save, reset,
-    ended, flushPendingSeek, jumpToSavedTime, dismissResumePrompt }
+    ended, flushPendingSeek, jumpToSavedTime, dismissResumePrompt, canPersist }
 }

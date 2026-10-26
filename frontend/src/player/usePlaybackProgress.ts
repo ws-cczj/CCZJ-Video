@@ -1,16 +1,17 @@
 import { readStorage, removeStorage, writeStorage } from '../platform/storage'
 
 const RESUME_THRESHOLD_SEC = 5
+const storageKey=(key:string)=>key.startsWith('vp_t_')?key:`vp_t_${key}`
 
 export function readPlaybackTime(videoKey: string): number {
-  const value = readStorage<number | null>(`vp_t_${videoKey}`, null)
+  const value = readStorage<number | null>(storageKey(videoKey), null) ?? readStorage<number | null>(`vp_t_${videoKey}`, null)
   const seconds = value ? Number(value) : 0
   return Number.isFinite(seconds) ? seconds : 0
 }
 
 export function writePlaybackTime(videoKey: string, seconds: number): void {
   if (!videoKey) return
-  writeStorage(`vp_t_${videoKey}`, seconds)
+  writeStorage(storageKey(videoKey), seconds)
 }
 
 export function savePlaybackTime(videoKey: string, seconds: number, duration: number): void {
@@ -20,5 +21,6 @@ export function savePlaybackTime(videoKey: string, seconds: number, duration: nu
 }
 
 export function clearPlaybackTime(videoKey: string): void {
-  removeStorage(`vp_t_${videoKey}`)
+  removeStorage(storageKey(videoKey))
+  if(storageKey(videoKey)!==`vp_t_${videoKey}`)removeStorage(`vp_t_${videoKey}`)
 }

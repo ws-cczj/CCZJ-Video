@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import Icon from '../../components/Icon.vue'
-defineProps<{mobile:boolean;autoplay:boolean;autoNext:boolean;autoResume:boolean}>()
+defineProps<{mobile:boolean;autoplay:boolean;autoNext:boolean;autoResume:boolean;hasDanmaku?:boolean}>()
 const open=defineModel<boolean>('open',{required:true})
-const emit=defineEmits<{autoplay:[];autoNext:[];autoResume:[];interaction:[];shortcuts:[]}>()
+const emit=defineEmits<{autoplay:[];autoNext:[];autoResume:[];interaction:[];shortcuts:[];danmakuSettings:[]}>()
 const {t}=useI18n()
 </script>
 <template>
@@ -31,6 +31,9 @@ const {t}=useI18n()
             <label class="ps-toggle"><input type="checkbox" :checked="autoResume" @change="emit('autoResume')" /><span class="ps-switch"></span></label>
           </div>
           <div class="playback-settings-divider"></div>
+          <button v-if="hasDanmaku" class="playback-settings-link" data-player-action="danmaku-settings" @click.stop="open=false;emit('danmakuSettings')">
+            <Icon name="danmaku-settings" :size="16" /><span>{{t('danmaku.settings')}}</span><Icon name="chevron-right" :size="12" />
+          </button>
           <button v-if="!mobile" class="playback-settings-link" @click.stop="open = false; emit('shortcuts')">
             <Icon name="keyboard" :size="14" />
             <span>{{ t('player.shortcutSettings') }}</span>

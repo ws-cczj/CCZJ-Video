@@ -177,3 +177,66 @@ func TestIsFavoriteOnUnknownVideoIsFalseNotError(t *testing.T) {
 }
 
 func newTestMedia() *Service { return NewService(db.GetVideoByIdContext, db.NewMediaStore(db.DB), nil) }
+
+func TestHistoryDurationSurvivesLegacyWrites(t *testing.T) {
+	svc := newTestMedia()
+	source, vod, gid := seedCatalog(t, "history_duration")
+	ctx := context.Background()
+	if err := svc.SaveHistory(ctx, source, vod, 5, 99, 100); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SaveHistory(ctx, source, vod, 5, 80); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := svc.RecentHistory(ctx, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, row := range rows {
+		if int64(row.GlobalID) == gid {
+			found = true
+			if row.Position != 80 || row.Duration != 100 {
+				t.Fatalf("progress lost duration: %+v", row)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("missing saved history")
+	}
+	backup, err := db.ReadHistory(db.DB())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range backup {
+		if row.SourceKey == source && row.Duration != 100 {
+			t.Fatalf("backup lost duration: %+v", row)
+		}
+	}
+}
+
+func TestRecentHistoryTiesUseLastInsertedEpisode(t *testing.T) {
+	svc := newTestMedia()
+	source, vod, gid := seedCatalog(t, "history_order")
+	for episode := 1; episode <= 5; episode++ {
+		if err := svc.SaveHistory(context.Background(), source, vod, episode, float64(episode*10), 100); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := db.DB().Exec("UPDATE watch_history SET updated_at='2026-10-26 12:00:00' WHERE global_id=?", gid); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := svc.RecentHistory(context.Background(), 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range rows {
+		if int64(row.GlobalID) == gid {
+			if row.EpNum != 5 {
+				t.Fatalf("continued wrong episode: %+v", row)
+			}
+			return
+		}
+	}
+	t.Fatal("missing history")
+}

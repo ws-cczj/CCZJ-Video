@@ -35,11 +35,18 @@ func selectSourceCollectVideos(ctx context.Context, executor sqlx.ExtContext, so
 		return selection, err
 	}
 	denied := map[string]bool{}
+	known := map[string]bool{}
 	globalNames := map[int64]string{}
 	for _, row := range types {
+		known[normalizeTypeName(row.TypeName)] = true
 		globalNames[int64(row.Id)] = row.TypeName
 		if row.CollectEnabled == 0 {
 			denied[normalizeTypeName(row.TypeName)] = true
+		}
+	}
+	for _, key := range defaultBlockedTypeKeys {
+		if !known[key] {
+			denied[key] = true
 		}
 	}
 	sourceTypes := []SourceTypeExport{}

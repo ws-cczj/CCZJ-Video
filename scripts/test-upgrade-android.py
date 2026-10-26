@@ -24,6 +24,9 @@ DB = 'files/CCZJ Video/cczj_video.db'
 SPEC = importlib.util.spec_from_file_location('diagnostics', ROOT/'scripts/collect-android-diagnostics.py')
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
+VIEW_SPEC=importlib.util.spec_from_file_location('android_webview',ROOT/'scripts/android_webview.py')
+VIEW_MODULE=importlib.util.module_from_spec(VIEW_SPEC)
+VIEW_SPEC.loader.exec_module(VIEW_MODULE)
 
 
 class Device:
@@ -43,13 +46,18 @@ class Device:
 
     def connect(self):
         self.close()
-        pid = self.native('shell', 'pidof', PACKAGE).split()[0]
-        self.port = self.native('forward', 'tcp:0', 'localabstract:webview_devtools_remote_'+pid)
-        targets = json.load(urlopen('http://127.0.0.1:'+self.port+'/json/list', timeout=10))
-        target = next(t for t in targets if t.get('url', '').startswith('https://wails.localhost'))
-        self.socket = websocket.create_connection(target['webSocketDebuggerUrl'], timeout=55, origin='http://localhost')
-        self.call('Runtime.enable')
-        self.ready()
+        transport=VIEW_MODULE.AndroidWebView(application_id=PACKAGE)
+        transport.adb=self.adb
+        transport.__enter__()
+        self.socket,self.port=transport.socket,transport.port
+        transport.socket=transport.port=None
+        self.socket.settimeout(55)
+        try:
+            self.call('Runtime.enable')
+            self.ready()
+        except BaseException:
+            self.close()
+            raise
 
     def ready(self):
         deadline=time.monotonic()+25

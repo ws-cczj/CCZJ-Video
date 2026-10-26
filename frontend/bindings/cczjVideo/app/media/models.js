@@ -123,6 +123,13 @@ export class HistoryItemWithVideo {
              */
             this["position"] = 0;
         }
+        if (!("duration" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["duration"] = 0;
+        }
         if (!("updated_at" in $$source)) {
             /**
              * @member

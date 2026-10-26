@@ -145,7 +145,7 @@ func (s *MediaStore) GetFavorites(ctx context.Context, page, pageSize int) ([]Fa
 func SaveWatchHistoryByIdentity(globalID int64, sourceKey, vodID string, epNum int, position float64) error {
 	return NewMediaStore(DB).SaveWatchHistoryByIdentity(context.Background(), globalID, sourceKey, vodID, epNum, position)
 }
-func (s *MediaStore) SaveWatchHistoryByIdentity(ctx context.Context, globalID int64, sourceKey, vodID string, epNum int, position float64) error {
+func (s *MediaStore) SaveWatchHistoryByIdentity(ctx context.Context, globalID int64, sourceKey, vodID string, epNum int, position float64, durations ...float64) error {
 	database, err := s.open(ctx)
 	if err != nil {
 		return err
@@ -157,10 +157,17 @@ func (s *MediaStore) SaveWatchHistoryByIdentity(ctx context.Context, globalID in
 	if math.IsNaN(position) || math.IsInf(position, 0) || position < 0 {
 		return fmt.Errorf("invalid watch position")
 	}
-	_, err = database.ExecContext(ctx, `INSERT INTO watch_history (global_id, source_key, vod_id, ep_num, position, updated_at)
-		VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+	duration := 0.0
+	if len(durations) > 0 {
+		duration = durations[0]
+	}
+	if math.IsNaN(duration) || math.IsInf(duration, 0) || duration < 0 {
+		return fmt.Errorf("invalid watch duration")
+	}
+	_, err = database.ExecContext(ctx, `INSERT INTO watch_history (global_id, source_key, vod_id, ep_num, position, duration, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%d %H:%M:%f','now'))
 		ON CONFLICT(global_id, source_key, ep_num) DO UPDATE SET
-		vod_id=excluded.vod_id, position=excluded.position, updated_at=CURRENT_TIMESTAMP`, globalID, sourceKey, vodID, epNum, position)
+		vod_id=excluded.vod_id, position=excluded.position, duration=CASE WHEN excluded.duration>0 THEN excluded.duration ELSE watch_history.duration END, updated_at=strftime('%Y-%m-%d %H:%M:%f','now')`, globalID, sourceKey, vodID, epNum, position, duration)
 	return err
 }
 
@@ -188,6 +195,7 @@ type HistEntry struct {
 	VodRemarks string  `json:"vod_remarks" db:"vod_remarks"`
 	EpNum      int     `json:"ep_num" db:"ep_num"`
 	Position   float64 `json:"position" db:"position"`
+	Duration   float64 `json:"duration" db:"duration"`
 	UpdatedAt  string  `json:"updated_at" db:"updated_at"`
 }
 
@@ -202,12 +210,12 @@ func (s *MediaStore) GetRecentHistory(ctx context.Context, limit int) ([]HistEnt
 	}
 
 	var entries []HistEntry
-	q := `SELECT h.global_id, h.source_key, h.vod_id, CASE WHEN g.vod_name<>'' THEN g.vod_name ELSE COALESCE(sv.vod_name,'') END AS vod_name, CASE WHEN g.pic<>'' THEN g.pic ELSE COALESCE(sv.vod_pic,'') END AS vod_pic, COALESCE(sv.vod_remarks,'') AS vod_remarks, h.ep_num, h.position, h.updated_at
+	q := `SELECT h.global_id, h.source_key, h.vod_id, CASE WHEN g.vod_name<>'' THEN g.vod_name ELSE COALESCE(sv.vod_name,'') END AS vod_name, CASE WHEN g.pic<>'' THEN g.pic ELSE COALESCE(sv.vod_pic,'') END AS vod_pic, COALESCE(sv.vod_remarks,'') AS vod_remarks, h.ep_num, h.position, h.duration, h.updated_at
 		FROM watch_history h
 		JOIN global_video g ON h.global_id = g.id
 		LEFT JOIN source_videos sv ON sv.source_key = h.source_key AND sv.source_vod_id = h.vod_id
 		WHERE (` + catalogProjectionFilter("sv") + `) AND NOT EXISTS (SELECT 1 FROM catalog_retirements cr WHERE cr.source_key=h.source_key AND cr.source_vod_id=h.vod_id)
-		ORDER BY h.updated_at DESC LIMIT ?`
+		ORDER BY h.updated_at DESC, h.id DESC LIMIT ?`
 	err = database.SelectContext(ctx, &entries, q, limit)
 	return entries, err
 }

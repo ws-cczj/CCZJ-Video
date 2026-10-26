@@ -708,6 +708,7 @@ type SourceProbe struct {
 	LatencyMS     int64  `json:"latency_ms"`
 	SampleKB      int    `json:"sample_kb"`
 	Error         string `json:"error"`
+	FailureKind   string `json:"failure_kind,omitempty"`
 	Skipped       bool   `json:"skipped"`
 	RetryAfterSec int    `json:"retry_after_sec"`
 	ProbeTimeUnix int64  `json:"probe_time_unix"`
@@ -792,6 +793,7 @@ func probeSource(ctx context.Context, source *model.Source) SourceProbe {
 	strategy := collect.CreateStrategyFromSource(source)
 	if strategy == nil {
 		probe.Error = "接口地址为空"
+		probe.FailureKind = "configuration"
 		return probe
 	}
 	probe.URL = strategy.BuildListUrl(1, collect.FetchOptions{Limit: 1})
@@ -803,6 +805,7 @@ func probeSource(ctx context.Context, source *model.Source) SourceProbe {
 	probe.LatencyMS = time.Since(start).Milliseconds()
 	if err != nil {
 		probe.Error = applog.DiagnosticText(apperror.Diagnostic(err).Error(), 2048)
+		probe.FailureKind = collect.FetchFailureKind(err)
 		var httpErr *collect.HTTPError
 		if errors.As(err, &httpErr) {
 			probe.StatusCode = httpErr.StatusCode
@@ -817,7 +820,7 @@ func probeSource(ctx context.Context, source *model.Source) SourceProbe {
 		probe.SampleKB = (result.ResponseBytes + 1023) / 1024
 	}
 	applog.InfoFields("source probe complete", operation.Fields(ctx, applog.Fields{
-		"ok": probe.OK, "status": probe.StatusCode, "duration_ms": probe.LatencyMS, "error": probe.Error}))
+		"ok": probe.OK, "status": probe.StatusCode, "duration_ms": probe.LatencyMS, "failure_kind": probe.FailureKind, "error": probe.Error}))
 	return probe
 }
 

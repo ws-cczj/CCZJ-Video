@@ -1,6 +1,7 @@
 package outbound
 
 import (
+	"cczjVideo/app/apperror"
 	"context"
 	"crypto/x509"
 	"errors"
@@ -18,6 +19,31 @@ import (
 	"testing"
 	"time"
 )
+
+func TestEmptyPoolWithoutFallbackReturnsError(t *testing.T) {
+	fixturePool(t, "")
+	req, _ := http.NewRequest("GET", "https://example.com/search", nil)
+	response, err := WrapTransport("danmaku", &http.Transport{}, identityTransport).RoundTrip(req)
+	if response != nil || err == nil || apperror.Public(err).Code != apperror.Unavailable {
+		t.Fatalf("empty pool must report unavailable, got response=%v err=%v", response, err)
+	}
+}
+
+func TestSystemWithoutProxyFallsBackToHostDirectConnection(t *testing.T) {
+	p := fixturePool(t, "system")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("search result")) }))
+	defer server.Close()
+	base := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, "tcp", server.Listener.Addr().String())
+	}}
+	defer base.CloseIdleConnections()
+	req, _ := http.NewRequest("GET", "http://example.test/search", nil)
+	transport := &routeTransport{base: base, decorate: identityTransport, category: "collect"}
+	response, err := transport.fallback(p, base, nil, req, nil)
+	if got := responseText(t, response, err); got != "search result" {
+		t.Fatal(got)
+	}
+}
 
 type rtFunc func(*http.Request) (*http.Response, error)
 
@@ -171,7 +197,7 @@ func TestPoolExhaustionPrecedesLocalFallbackAndNeverDialsTarget(t *testing.T) {
 		return nil, errors.New("direct forbidden")
 	}}
 	var counted atomic.Int32
-	client := &http.Client{Transport: WrapTransport("update", base, func(base http.RoundTripper) http.RoundTripper {
+	client := &http.Client{Transport: WrapTransport("douban", base, func(base http.RoundTripper) http.RoundTripper {
 		return rtFunc(func(r *http.Request) (*http.Response, error) { counted.Add(1); return base.RoundTrip(r) })
 	})}
 	response, err := client.Get("http://public.example/data")
@@ -197,7 +223,7 @@ func TestPoolFailureNeverFallsThroughToDirect(t *testing.T) {
 		direct.Add(1)
 		return nil, errors.New("direct forbidden")
 	}}
-	client := &http.Client{Transport: WrapTransport("collect", base, identityTransport)}
+	client := &http.Client{Transport: WrapTransport("danmaku", base, identityTransport)}
 	if _, err := client.Get("http://public.example/video"); err == nil || direct.Load() != 0 {
 		t.Fatalf("direct=%d err=%v", direct.Load(), err)
 	}
@@ -214,7 +240,7 @@ func TestLANStaysDirectAndMixedDNSIsRejected(t *testing.T) {
 		return []netip.Addr{netip.MustParseAddr("127.0.0.1")}, nil
 	}
 	proxyURL, _ := url.Parse(proxy.URL)
-	client := &http.Client{Transport: WrapTransport("image", &http.Transport{Proxy: http.ProxyURL(proxyURL)}, identityTransport)}
+	client := &http.Client{Transport: WrapTransport("danmaku", &http.Transport{Proxy: http.ProxyURL(proxyURL)}, identityTransport)}
 	response, err := client.Get(lan.URL)
 	if got := responseText(t, response, err); got != "LAN" {
 		t.Fatal(got)
@@ -276,7 +302,7 @@ func TestCONNECTStreamingRangeCancellationAndTLSValidation(t *testing.T) {
 	roots := x509.NewCertPool()
 	roots.AddCert(target.Certificate())
 	trusted.TLSClientConfig.RootCAs = roots
-	client := &http.Client{Transport: WrapTransport("reading-image", trusted, identityTransport)}
+	client := &http.Client{Transport: WrapTransport("danmaku", trusted, identityTransport)}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, "GET", target.URL, nil)
@@ -297,7 +323,7 @@ func TestCONNECTStreamingRangeCancellationAndTLSValidation(t *testing.T) {
 	if _, err := io.ReadAll(response.Body); err == nil {
 		t.Fatal("cancel did not stop streamed body")
 	}
-	untrusted := &http.Client{Transport: WrapTransport("image", &http.Transport{}, identityTransport)}
+	untrusted := &http.Client{Transport: WrapTransport("danmaku", &http.Transport{}, identityTransport)}
 	if _, err = untrusted.Get(target.URL); err == nil {
 		t.Fatal("untrusted certificate was accepted")
 	}
@@ -334,7 +360,7 @@ func TestConcurrentRequestsKeepStableSiteRoute(t *testing.T) {
 	defer pa.Close()
 	defer pb.Close()
 	fixturePool(t, "", pa.URL, pb.URL)
-	client := &http.Client{Transport: WrapTransport("reading", &http.Transport{}, identityTransport)}
+	client := &http.Client{Transport: WrapTransport("danmaku", &http.Transport{}, identityTransport)}
 	var wg sync.WaitGroup
 	for i := 0; i < 16; i++ {
 		wg.Add(1)
@@ -372,7 +398,7 @@ func TestTargetConnectionFailureDoesNotQuarantineOtherSites(t *testing.T) {
 	local := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { fmt.Fprint(w, "local") }))
 	defer local.Close()
 	p := fixturePool(t, local.URL, proxy.URL)
-	client := &http.Client{Transport: WrapTransport("collect", &http.Transport{}, identityTransport)}
+	client := &http.Client{Transport: WrapTransport("danmaku", &http.Transport{}, identityTransport)}
 	defer client.CloseIdleConnections()
 	for _, step := range []struct{ target, want string }{
 		{"http://working.example/master", "public"},
@@ -399,7 +425,7 @@ func TestUnreachableProxyIsStillQuarantinedGlobally(t *testing.T) {
 		}
 		return (&net.Dialer{}).DialContext(ctx, network, address)
 	}
-	client := &http.Client{Transport: WrapTransport("collect", &http.Transport{}, identityTransport)}
+	client := &http.Client{Transport: WrapTransport("danmaku", &http.Transport{}, identityTransport)}
 	defer client.CloseIdleConnections()
 	response, err := client.Get("http://working.example/data")
 	if got := responseText(t, response, err); got != "local" {
@@ -420,7 +446,7 @@ func TestFailedCONNECTOnlyCoolsTargetSite(t *testing.T) {
 	}))
 	defer proxy.Close()
 	p := fixturePool(t, "", proxy.URL)
-	client := &http.Client{Transport: WrapTransport("collect", &http.Transport{}, identityTransport)}
+	client := &http.Client{Transport: WrapTransport("danmaku", &http.Transport{}, identityTransport)}
 	defer client.CloseIdleConnections()
 	if response, err := client.Get("https://blocked.example/data"); err == nil {
 		response.Body.Close()
@@ -441,7 +467,7 @@ func TestShutdownCancelsRequestsWaitingForInitialPool(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, "GET", "https://public.example", nil)
-	_, err := WrapTransport("collect", &http.Transport{}, identityTransport).RoundTrip(req)
+	_, err := WrapTransport("danmaku", &http.Transport{}, identityTransport).RoundTrip(req)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatal(err)
 	}
@@ -450,7 +476,7 @@ func TestShutdownCancelsRequestsWaitingForInitialPool(t *testing.T) {
 	// Closed pools must fail before waiting on a never-started refresh.
 	ctx, cancel = context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
-	_, err = WrapTransport("collect", &http.Transport{}, identityTransport).RoundTrip(req.WithContext(ctx))
+	_, err = WrapTransport("danmaku", &http.Transport{}, identityTransport).RoundTrip(req.WithContext(ctx))
 	if err == nil {
 		t.Fatal("closed pool admitted request")
 	}
@@ -489,12 +515,12 @@ func TestProxyCloneKeepsNegotiatedHTTP2Support(t *testing.T) {
 	}
 }
 
-func TestInformationCategoriesRouteThroughPool(t *testing.T) {
+func TestOnlyDoubanAndDanmakuRouteThroughPool(t *testing.T) {
 	var attempts atomic.Int32
 	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { attempts.Add(1); io.WriteString(w, "proxied") }))
 	defer proxy.Close()
 	fixturePool(t, "", proxy.URL)
-	for _, category := range []string{"collect", "douban", "reading", "novel", "comic", "danmaku", "image", "reading-image", "update"} {
+	for _, category := range []string{"douban", "danmaku"} {
 		client := &http.Client{Transport: WrapTransport(category, &http.Transport{}, identityTransport)}
 		response, err := client.Get("http://public.example/request")
 		if got := responseText(t, response, err); got != "proxied" {
@@ -502,7 +528,7 @@ func TestInformationCategoriesRouteThroughPool(t *testing.T) {
 		}
 		client.CloseIdleConnections()
 	}
-	if attempts.Load() != 9 {
+	if attempts.Load() != 2 {
 		t.Fatal(attempts.Load())
 	}
 }

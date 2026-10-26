@@ -51,13 +51,35 @@ def main():
     assert len({device['id'] for device in devices})==len(devices)
     result['checks'].append('multicast discovery and validated HTTP description return the independent receiver once')
     url=f'http://{args.host_ip}:{server.server_port}/media/movie.mp4'
+    if args.receiver_name=='Kodi':
+     # Android needs a foreground receiver surface to create its video decoder.
+     subprocess.run(adb+['shell','am','start','-n','org.xbmc.kodi/.Splash'],check=True,capture_output=True)
     rpc('PlayCastVideo',selected['id'],url,'CCZJ DLNA acceptance')
     deadline=time.monotonic()+15
     while not requests and time.monotonic()<deadline:time.sleep(.1)
     assert requests,'Receiver accepted SOAP but never fetched video'
     result['checks'].append('SetAVTransportURI and Play accepted; receiver fetched the actual MP4')
+    deadline=time.monotonic()+15
+    status={}
+    while time.monotonic()<deadline:
+     status=rpc('GetCastStatus',selected['id'])
+     if status['state']=='PLAYING' and status['has_position'] and status['position']>0 and status['duration']>0:break
+     time.sleep(.3)
+    assert status.get('state')=='PLAYING' and status.get('position',0)>0 and status.get('duration',0)>0,status
+    result['receiver_status']=status
+    result['checks'].append('receiver GetTransportInfo confirms PLAYING and returns actual playback position')
+
     for action,seconds in [('Pause',0),('Play',0),('Seek',12)]:
-     rpc('ControlCastVideo',selected['id'],action,seconds);time.sleep(.3)
+     rpc('ControlCastVideo',selected['id'],action,seconds)
+     deadline=time.monotonic()+6
+     while True:
+      state=rpc('GetCastStatus',selected['id'])
+      if (action=='Pause' and state['state']=='PAUSED_PLAYBACK') or (action=='Play' and state['state']=='PLAYING') or (action=='Seek' and state['has_position'] and 9<=state['position']<=18):break
+      if time.monotonic()>=deadline:break
+      time.sleep(.2)
+     if action=='Pause':assert state['state']=='PAUSED_PLAYBACK',state
+     elif action=='Play':assert state['state']=='PLAYING',state
+     elif state['has_position']:assert 9<=state['position']<=18,state
     result['checks'].append('Pause, resume and seek accepted by receiver')
     if args.receiver_name=='Kodi':
      subprocess.run(adb+['shell','am','start','-n','org.xbmc.kodi/.Splash'],check=True,capture_output=True);time.sleep(1)

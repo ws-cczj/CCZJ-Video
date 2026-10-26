@@ -1555,6 +1555,13 @@ export class HistoryReq {
              */
             this["position"] = 0;
         }
+        if (!("duration" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["duration"] = 0;
+        }
 
         Object.assign(this, $$source);
     }
@@ -2579,6 +2586,13 @@ export class SourceProbe {
              * @type {string}
              */
             this["error"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["failure_kind"] = undefined;
         }
         if (!("skipped" in $$source)) {
             /**

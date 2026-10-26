@@ -27,6 +27,10 @@
 }
 .log-card-path {
   @apply cczj-text-11 cczj-text-primary;
+  max-width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
   font-family: ui-monospace, Consolas, monospace;
   @apply cczj-cursor-pointer;
 }
@@ -40,6 +44,11 @@
 .log-levels-label {
   @apply cczj-text-sm cczj-text-secondary;
 }
+.log-overview-summary { @apply cczj-text-xs cczj-text-muted cczj-font-normal; margin-left: 8px; }
+.log-filter-groups, .log-toolbar, .log-export-toolbar { margin-top: 10px; }
+.log-export-scope { margin-top: 8px; }
+.log-export-scope summary { @apply cczj-cursor-pointer; }
+.log-export-scope p { line-height: 1.6; }
 .log-seg {
   @apply cczj-px-5-py-2 cczj-text-11;
   border-radius: 999px;
@@ -165,6 +174,7 @@
   @apply cczj-border-bottom cczj-cursor-pointer cczj-whitespace-nowrap;
 }
 .log-row:hover { background: var(--bg-hover); }
+.log-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .log-row.row-error { background: rgba(239, 68, 68, 0.07); }
 .log-row.row-warn { background: rgba(245, 158, 11, 0.06); }
 /* 必须在 row-error/row-warn 之后：同为双类选择器，靠后的才不会被行底色吃掉 */
@@ -244,14 +254,6 @@
   border-radius: 10px;
   background: var(--bg-card);
   @apply cczj-gap-6;
-}
-.log-detail-meta {
-  @apply cczj-gap-5 cczj-text-11 cczj-text-muted;
-}
-.log-detail-msg {
-  @apply cczj-mt-3;
-  font-family: ui-monospace, Consolas, 'Courier New', monospace;
-  @apply cczj-text-sm cczj-text-primary cczj-whitespace-pre cczj-break-all;
 }
 @media (max-width: 1100px) {
   .log-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

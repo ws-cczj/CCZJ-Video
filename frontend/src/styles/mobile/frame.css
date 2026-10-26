@@ -1,5 +1,9 @@
 /* Android/iOS presentation only. Desktop pages never acquire this root. */
 html[data-cczj-platform="mobile"] {
+  --cczj-mobile-control-sm: clamp(36px, 10vw, 40px);
+  --cczj-mobile-control-md: clamp(40px, 11vw, 44px);
+  --cczj-mobile-control-lg: clamp(44px, 12vw, 48px);
+  --cczj-mobile-section-padding: clamp(12px, 4vw, 16px);
   --cczj-mobile-canvas: #f4f6f9; --cczj-mobile-surface: #fff;
   --cczj-mobile-ink: #202837; --cczj-mobile-muted: #657184; --cczj-mobile-line: #e6eaf0;
 }
@@ -17,13 +21,12 @@ html[data-cczj-platform="mobile"] .app-shell { padding: 0; @apply cczj-h-full; }
 }
 .cczj-mobile-shell *, .cczj-mobile-content { scrollbar-width: none; }
 .cczj-mobile-shell ::-webkit-scrollbar, .cczj-mobile-content::-webkit-scrollbar { @apply cczj-hidden; width: 0; height: 0; }
-.cczj-mobile-header { @apply cczj-relative; z-index: 1; @apply cczj-flex-shrink-0 cczj-flex cczj-items-center cczj-gap-4; min-height: 56px; padding: 4px 8px 4px 16px; background: var(--cczj-mobile-chrome); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
-.cczj-mobile-header::after { content: ''; @apply cczj-absolute; inset: auto 0 -12px; height: 12px; background: linear-gradient(var(--cczj-mobile-chrome), transparent); @apply cczj-pointer-events-none; }
+.cczj-mobile-header { @apply cczj-relative; z-index: 1; @apply cczj-flex-shrink-0 cczj-flex cczj-items-center cczj-gap-4; min-height: 52px; padding: 0 8px 0 12px; background: transparent; }
 .cczj-mobile-heading { @apply cczj-flex-1 cczj-min-w-0; }
 .cczj-mobile-brand { @apply cczj-flex cczj-items-center cczj-gap-4; font-size: 15px; letter-spacing: .01em; }
 .cczj-mobile-brand > svg { color: var(--accent-dim); }
 .cczj-mobile-heading h1 { margin: 0; @apply cczj-text-lg; line-height: 1.4; font-weight: 650; @apply cczj-whitespace-nowrap cczj-overflow-hidden; text-overflow: ellipsis; }
-.cczj-mobile-icon-button { @apply cczj-inline-flex cczj-justify-center cczj-items-center cczj-flex-shrink-0; min-width: 48px; min-height: 48px; border: 0; border-radius: 10px; background: transparent; color: var(--cczj-mobile-ink); @apply cczj-no-underline; }
+.cczj-mobile-icon-button { @apply cczj-inline-flex cczj-justify-center cczj-items-center cczj-flex-shrink-0; min-width: 44px; min-height: 44px; border: 0; border-radius: 10px; background: transparent; color: var(--cczj-mobile-ink); @apply cczj-no-underline; }
 .cczj-mobile-icon-button:active { background: var(--bg-secondary); }
 .cczj-mobile-shell .cczj-mobile-content { @apply cczj-flex-1 cczj-min-w-0 cczj-min-h-0 cczj-w-full cczj-overflow-y-auto cczj-overflow-x-hidden; padding: 12px 16px 24px; scrollbar-gutter: auto; overscroll-behavior-y: contain; background: transparent; }
 .cczj-mobile-page > * { max-width: 900px; @apply cczj-ml-auto cczj-mr-auto; }
@@ -60,6 +63,15 @@ html[data-cczj-platform="mobile"] .app-shell { padding: 0; @apply cczj-h-full; }
 .cczj-mobile-tools-section { margin-block:22px; }
 html[data-cczj-platform="mobile"] :is(.ui-modal,.modal,.modal-container,.confirm-modal) { max-width: calc(100vw - 24px); max-height: calc(100dvh - 32px); background: var(--cczj-mobile-surface); }
 html[data-cczj-platform="mobile"] :is(.ui-modal-overlay,.modal-mask) { @apply cczj-p-6; }
+html[data-cczj-platform="mobile"] .ui-modal { border-radius: 16px; box-shadow: 0 12px 36px #0003; }
+html[data-cczj-platform="mobile"] .ui-modal__header { padding: 16px 20px; }
+html[data-cczj-platform="mobile"] .ui-modal__title { font-size: 18px; }
+html[data-cczj-platform="mobile"] .ui-modal__body { padding: 20px; font-size: 14px; line-height: 1.65; }
+html[data-cczj-platform="mobile"] .ui-modal__footer { padding: 12px 20px; @apply cczj-flex-wrap; }
+html[data-cczj-platform="mobile"] .ui-modal .ui-btn { min-height: 44px; border-radius: 10px; box-shadow: none; font-size: 14px; }
+html[data-cczj-platform="mobile"] .bg-download-indicator { left: 16px; right: 16px; bottom: 76px; border-radius: 12px; box-shadow: 0 4px 16px #0002; }
+html[data-cczj-platform="mobile"] .bg-download-icon { border-radius: 8px; }
+html[data-cczj-platform="mobile"] :is(.update-icon,.update-done-icon,.update-fail-icon,.update-loading-icon) { width: 48px; height: 48px; border-radius: 12px; box-shadow: none; }
 html[data-cczj-platform="mobile"] .select-panel { background: var(--cczj-mobile-surface); max-width: calc(100vw - 24px); }
 
 /* One continuous theme-aware wash behind the search entry and first poster. */

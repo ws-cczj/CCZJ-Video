@@ -83,6 +83,7 @@ function flush(): void {
 }
 const feed = useShortDramaFeed(currentSourceKey, active, flush, entry)
 const { items, episodeIndex, video, episodes, episode, url, detail, loading, error, series, completed, canPrevious, canNext, effectiveSource } = feed
+const hasPlayback = computed(() => active.value && !!url.value && !loading.value && !error.value)
 function discover(): void {
   if (entry.value) void router.push(mobile ? '/short-drama' : '/short-drama?view=feed')
   else feed.discover()
@@ -132,10 +133,10 @@ onBeforeUnmount(() => window.removeEventListener('cczj:android-overlay-back', ba
 </script>
 
 <template>
-  <section ref="stage" class="short-drama cczj-relative cczj-flex cczj-flex-col cczj-min-h-0 cczj-overflow-hidden" :class="{ 'cczj-short-drama-surface': !browsing, 'short-drama-mobile': mobile, 'drama-drawer-open': !mobile && !!drawer }" :data-cczj-no-tab-swipe="browsing ? undefined : ''" @wheel="wheel" @keydown="keydown">
+  <section ref="stage" class="short-drama cczj-relative cczj-flex cczj-flex-col cczj-min-h-0 cczj-overflow-hidden" :class="{ 'cczj-short-drama-surface': hasPlayback, 'short-drama-mobile': mobile, 'drama-drawer-open': !mobile && !!drawer }" :data-cczj-no-tab-swipe="hasPlayback ? '' : undefined" @wheel="wheel" @keydown="keydown">
     <ShortDramaTheatre v-show="browsing" :active="sceneActive && browsing" :mobile="mobile" @play="openSeries" @random="randomPlay"/>
     <template v-if="!browsing">
-    <canvas v-if="!mobile && active" ref="backdrop" class="drama-ambience cczj-absolute cczj-pointer-events-none" width="72" height="128" aria-hidden="true" />
+    <canvas v-if="!mobile && hasPlayback" ref="backdrop" class="drama-ambience cczj-absolute cczj-pointer-events-none" width="72" height="128" aria-hidden="true" />
     <header class="drama-header cczj-flex cczj-items-center cczj-justify-between cczj-gap-4" @pointerdown.stop>
       <div class="drama-heading cczj-flex cczj-items-center cczj-gap-5">
         <Button v-if="!mobile || entry" class="drama-return" variant="text" icon :aria-label="t('shortDrama.returnTheatre')" @click="showTheatre"><Icon name="chevron-left" :size="22"/></Button>
@@ -149,7 +150,7 @@ onBeforeUnmount(() => window.removeEventListener('cczj:android-overlay-back', ba
     <div class="drama-stage cczj-flex cczj-flex-1 cczj-items-center cczj-justify-center cczj-min-h-0">
       <div class="drama-frame cczj-relative">
       <div class="drama-screen cczj-h-full cczj-relative cczj-overflow-hidden">
-        <VideoPlayer v-if="active && url && !loading && !error" ref="player" presentation="portrait" :portrait-controls-host="mobile ? undefined : controlsHost" :portrait-presentation-host="mobile ? undefined : stage" :url="url" :video-key="videoKey" :autoplay="true" :show-title-bar="false" :resolve-resume="history.resolveDbResumePosition" @swipe="feed.step" @progress="progress" @ended="feed.ended">
+        <VideoPlayer v-if="hasPlayback" ref="player" presentation="portrait" :portrait-controls-host="mobile ? undefined : controlsHost" :portrait-presentation-host="mobile ? undefined : stage" :url="url" :video-key="videoKey" :autoplay="true" :show-title-bar="false" :resolve-resume="history.resolveDbResumePosition" @swipe="feed.step" @progress="progress" @ended="feed.ended">
           <template #portrait-summary>
             <div class="drama-status-queue cczj-flex cczj-items-center cczj-gap-4 cczj-min-w-0"><Icon name="list" :size="16"/><span class="cczj-truncate">{{t(series ? 'shortDrama.series' : 'shortDrama.forYou')}} · {{t('shortDrama.currentEpisode',{num:episode?.ep_num??episodeIndex+1})}}</span></div>
           </template>
@@ -167,11 +168,11 @@ onBeforeUnmount(() => window.removeEventListener('cczj:android-overlay-back', ba
             </div>
           </template>
         </VideoPlayer>
-        <div v-else class="drama-placeholder cczj-text-white cczj-h-full cczj-flex cczj-flex-col cczj-items-center cczj-justify-center cczj-gap-6" role="status" aria-live="polite">
+        <div v-else class="drama-placeholder cczj-h-full cczj-flex cczj-flex-col cczj-items-center cczj-justify-center cczj-gap-6" role="status" aria-live="polite">
           <template v-if="loading"><Spinner /><p>{{ t('shortDrama.loading') }}</p></template>
           <Empty v-else :title="error ? t('shortDrama.loadFailed') : t('shortDrama.empty')" :description="error || t(effectiveSource ? 'shortDrama.emptyHint' : 'shortDrama.noSource')">
             <Button v-if="effectiveSource" @click="feed.retry">{{ t('common.retry') }}</Button>
-            <router-link v-else class="cczj-text-accent" to="/sources">{{ t('sidebar.sources') }}</router-link>
+            <router-link v-if="!error" class="cczj-text-accent" to="/sources">{{ t('sidebar.sources') }}</router-link>
           </Empty>
         </div>
         </div>
@@ -197,7 +198,7 @@ onBeforeUnmount(() => window.removeEventListener('cczj:android-overlay-back', ba
         <ShortDramaCatalog v-else :episodes="episodes" :current="episodeIndex" :open="drawer === 'episodes'" :progress="history.getEpWatchPct" @select="selectEpisode" />
       </div>
     </CczjMobilePlayerDrawer>
-    <FavFolderModal v-if="!mobile && active" v-model="showFavFolderModal" :teleport-to="overlayHost" @confirm="confirmAddToFolder" />
+    <FavFolderModal v-if="!mobile && active" v-model="showFavFolderModal" :busy="favBusy" :teleport-to="overlayHost" @confirm="confirmAddToFolder" />
     </template>
     <div ref="overlayHost" />
   </section>
@@ -207,23 +208,24 @@ onBeforeUnmount(() => window.removeEventListener('cczj:android-overlay-back', ba
 .short-drama { height: 100%; color: var(--text-primary); --cczj-player-contained-width: min(360px,45%); }
 .short-drama.cczj-short-drama-surface { background: var(--cczj-drama-chrome); }
 .drama-ambience { inset: -12%; width: 124%; height: 124%; filter: blur(64px); opacity: .24; }
-.drama-header { @apply cczj-absolute cczj-flex-shrink-0; inset: 0 0 auto; z-index: 40; padding: 12px 24px 36px; background: linear-gradient(#0007,transparent); pointer-events: none; }
+.drama-header { @apply cczj-absolute cczj-flex-shrink-0; inset: 0 0 auto; z-index: 40; padding: 12px 24px 36px; pointer-events: none; }
+.cczj-short-drama-surface .drama-header { background: linear-gradient(#0007,transparent); }
 .drama-header > * { @apply cczj-pointer-events-auto; }
 .drama-heading h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: .02em; }
-.drama-heading > span { color: #ffffffa6; font-size: 12px; }
-.drama-return { min-width: 48px; min-height: 48px; border-radius: 50%; background: #0003; color: #ffffffbf; }
-.drama-mobile-tab { @apply cczj-relative; min-height: 44px; padding: 4px 0; font-size: 17px; font-weight: 400; color: #ffffff9c; }
-.drama-mobile-tab-active { color: #fff; font-weight: 600; }
+.drama-heading > span { color: var(--text-muted); font-size: 12px; }
+.drama-return { min-width: 48px; min-height: 48px; border-radius: 50%; background: var(--bg-hover); color: var(--text-secondary); }
+.drama-mobile-tab { @apply cczj-relative; min-height: 44px; padding: 4px 0; font-size: 17px; font-weight: 400; color: var(--text-secondary); }
+.drama-mobile-tab-active { color: var(--text-primary); font-weight: 600; }
 .drama-mobile-tab-active::after { content: ''; @apply cczj-absolute cczj-bottom-0; left: calc(50% - 9px); width: 18px; height: 2px; background: currentColor; }
-.drama-refresh { min-width: 44px; min-height: 44px; color: #ffffffc4; font-weight: 400; }
+.drama-refresh { min-width: 44px; min-height: 44px; color: var(--text-secondary); font-weight: 400; }
 .drama-stage { @apply cczj-relative; container-type: size; padding: 0 76px 44px; }
 .drama-frame { @apply cczj-flex-shrink-0; width: min(calc(100cqh * 9 / 16),100cqw); aspect-ratio: 9 / 16; }
-.drama-screen { width: 100%; background: var(--cczj-drama-chrome); }
+.drama-screen { width: 100%; }
+.cczj-short-drama-surface .drama-screen { background: var(--cczj-drama-chrome); }
 .drama-screen :deep(.portrait-player) { background: var(--cczj-drama-chrome); }
 .drama-screen :deep(.native-video) { background: var(--cczj-drama-chrome); }
 .drama-drawer-open .drama-stage,.drama-drawer-open .drama-header { margin-right: var(--cczj-player-contained-width); }
 .drama-placeholder { padding: 16px; text-align: center; }
-.drama-placeholder :deep(.empty-title), .drama-placeholder :deep(.empty-desc) { color: #e5e7eb; }
 .drama-info { @apply cczj-min-w-0 cczj-w-full; text-shadow: 0 1px 5px #0009; transition: opacity .15s; }
 .short-drama:not(.short-drama-mobile) .drama-info { max-width: min(360px,calc(100% - 64px)); }
 .short-drama:not(.short-drama-mobile) .drama-title { font-size: 16px; }
@@ -256,7 +258,8 @@ onBeforeUnmount(() => window.removeEventListener('cczj:android-overlay-back', ba
 .short-drama-mobile .drama-stage { padding: 0; }
 .short-drama-mobile .drama-frame { width: 100%; height: 100%; aspect-ratio: auto; }
 .short-drama-mobile .drama-screen { border-radius: 0; }
-.short-drama-mobile .drama-header { padding: 8px 16px 32px; background: linear-gradient(#000b,transparent); }
+.short-drama-mobile .drama-header { padding: 8px 16px 32px; }
+.short-drama-mobile.cczj-short-drama-surface .drama-header { background: linear-gradient(#000b,transparent); }
 .short-drama-mobile .drama-heading h1 { font-size: 18px; }
 .short-drama-mobile .drama-heading > span { font-size: 12px; }
 .short-drama-mobile .drama-title { font-size: 17px; }

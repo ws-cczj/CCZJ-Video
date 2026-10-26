@@ -14,7 +14,7 @@ let historyWrites = 0
 const epProgressMap = ref<Record<number, number>>({})
 
 function epKeyOf(idx: number): string {
-  return epProgressKey(deps.identity().globalId, deps.identity().name, deps.episodes()[idx]?.ep_num ?? idx)
+  return epProgressKey(deps.identity().globalId, deps.identity().name, deps.episodes()[idx]?.ep_num ?? (idx+1))
 }
 
 // 从独立存储刷新 UI 可见的进度百分比表
@@ -41,7 +41,7 @@ function isWatchedEp(idx: number): boolean { return getEpWatchPct(idx) > 0 }
 let lastHistorySyncAt = 0
 const HISTORY_SYNC_INTERVAL_MS = 10000
 
-function syncHistoryToDb(position: number, force = false): void {
+function syncHistoryToDb(position: number, force = false, duration?: number): void {
   // 刚起播的 0~5 秒不写库：否则每次重看都会把上次记住的位置冲掉。
   if (position <= 5) return
   if (!force) {
@@ -58,7 +58,7 @@ function syncHistoryToDb(position: number, force = false): void {
     vod_id: String(deps.identity().vodId),
     vod_name: deps.identity().name || '',
     ep_num: ep.ep_num ?? (deps.currentIndex() + 1),
-    position,
+    position, duration,
   } as any).catch(error => { deps.onPersistenceError?.(error) })
 }
 
@@ -80,12 +80,12 @@ async function resolveDbResumePosition(): Promise<number> {
 }
 
 // 写入当前集播放时持续写入独立存储（position/duration 会在用户播放过程中不断被写入
-function updateCurrentEpProgress(position: number, duration?: number): void {
+function updateCurrentEpProgress(position: number, duration?: number, force=false): void {
   if (deps.currentIndex() < 0) return
   progressEvents++
   const k = epKeyOf(deps.currentIndex())
   saveEpProgress(k, position, duration)
-  syncHistoryToDb(position)
+  syncHistoryToDb(position, force, Number.isFinite(duration)?duration:undefined)
   // 同时同步 UI
   const store = loadEpProgress()
   const index = deps.currentIndex()
@@ -102,31 +102,8 @@ function updateCurrentEpProgress(position: number, duration?: number): void {
   } catch { /* ignore */ }
 }
 
-function recordHistory(idx: number): void {
-  if (!deps.identity().vodId) return
-  const ep = deps.episodes()[idx]
-  if (!ep) return
-  const epNum = ep.ep_num ?? (idx + 1)
-  const progKey = epProgressKey(deps.identity().globalId, deps.identity().name, epNum)
-  const entry = loadEpProgress()[progKey]
-  const position = entry?.position ?? 0
-  // 本地没有进度时不写库，否则会把数据库里记住的位置清零。
-  if (position <= 0) return
-  lastHistorySyncAt = Date.now()
-  try {
-    historyWrites++
-    SaveWatchHistory({
-      source_key: deps.identity().sourceKey,
-      vod_id: String(deps.identity().vodId),
-      vod_name: deps.identity().name || '',
-      ep_num: epNum,
-      position,
-    } as any).catch(error => { deps.onPersistenceError?.(error) })
-  } catch { /* ignore */ }
-}
-
 
 return { epKeyOf, refreshEpProgressUI, getEpWatchPct, isWatchedEp,
-  syncHistoryToDb, resolveDbResumePosition, updateCurrentEpProgress, recordHistory,
+  syncHistoryToDb, resolveDbResumePosition, updateCurrentEpProgress,
   snapshot: () => ({progress_events:progressEvents,progress_ui_updates:progressUIUpdates,history_writes:historyWrites}) }
 }

@@ -14,6 +14,7 @@
  */
 
 import { readStorage, removeStorage, writeStorage } from '../platform/storage'
+import { parseTimestamp } from './time'
 
 const PROG_KEY = 'cczj_ep_prog_v1'
 const TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 天
@@ -120,7 +121,7 @@ export function saveEpProgress(
     const store = _ensureCache()
     const prev = store[key]
     const nextPos = position
-    const nextDur = duration !== undefined && Number.isFinite(duration) && duration > 0 ? duration : prev?.duration
+    const nextDur = duration !== undefined && Number.isFinite(duration) && duration > 0 ? duration : (prev?.duration && position <= prev.duration + 1 ? prev.duration : undefined)
     store[key] = {
       position: nextPos,
       duration: nextDur,
@@ -128,6 +129,21 @@ export function saveEpProgress(
     }
     _scheduleFlush()
   } catch { /* ignore */ }
+}
+
+/** Merge SQLite history without treating a metadata refresh as new playback. */
+export function mergeEpHistory(key:string,record:{position?:number;duration?:number;updated_at?:string}):void {
+ const position=Number(record.position)||0,duration=Number(record.duration)||0
+ if(!key||!Number.isFinite(position)||position<0)return
+ const store=loadEpProgress(),previous=store[key]
+ const updatedAt=parseTimestamp(record.updated_at||'')||0
+ if(previous&&previous.updatedAt>updatedAt){
+   if(!previous.duration&&duration>0&&previous.position<=duration+1){store[key]={...previous,duration};_scheduleFlush()}
+   return
+ }
+ const next={position,duration:duration>0?duration:(previous?.duration&&position<=previous.duration+1?previous.duration:undefined),updatedAt:updatedAt||Date.now()}
+ if(previous&&previous.position===next.position&&previous.duration===next.duration)return
+ store[key]=next;_scheduleFlush()
 }
 
 /** 读取单条进度（会做过期校验）。不存在返回 undefined。 */
@@ -138,17 +154,17 @@ export function getEpProgress(key: string): EpProgressEntry | undefined {
   return entry
 }
 
-/** 计算进度百分比 0-100。条目存在即表示"已开始观看"，position=0 时返回 1%；position>0 但无 duration 时返回 15%。 */
+/** 计算进度百分比 0-100。条目存在即表示"已开始观看"，没有真实总时长时不编造百分比。 */
 export function getEpProgressPct(entry: EpProgressEntry | undefined): number {
   if (!entry) return 0
   const pos = Number(entry.position) || 0
-  // 条目存在但 position=0：用户点开过但还没播放，标记为 1%
-  if (pos <= 0) return 1
+  // 尚未实际播放或未知总时长时不显示百分比。
+  if (pos <= 0) return 0
   const dur = entry.duration && entry.duration > 0 ? Number(entry.duration) : 0
   if (dur > 0) {
     return Math.round(Math.min(100, Math.max(1, (pos / dur) * 100)))
   }
-  return 15
+  return 0
 }
 
 /** 清除所有进度数据（内存 + localStorage）。 */

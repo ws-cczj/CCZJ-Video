@@ -13,15 +13,29 @@
 .cczj-mobile-shell .cczj-mobile-settings .item-control { @apply cczj-min-w-0 cczj-max-w-full; flex-shrink: 1; @apply cczj-flex-wrap cczj-justify-end; }
 .cczj-mobile-shell .cczj-mobile-settings .item-control .select-dropdown { @apply cczj-min-w-0; width: 145px; }
 .cczj-mobile-shell .cczj-mobile-settings :is(.row,.actions,.btn-row,.preview-controls,.motion-controls) { @apply cczj-flex-wrap cczj-gap-4 cczj-min-w-0; }
-.cczj-mobile-shell .cczj-mobile-settings :is(.block,.adv-card,.motion-card,.pack-card) { @apply cczj-min-w-0 cczj-max-w-full cczj-p-8; }
+.cczj-mobile-shell .cczj-mobile-settings :is(.block,.adv-card,.motion-card,.pack-card) { @apply cczj-min-w-0 cczj-max-w-full; padding: var(--cczj-mobile-section-padding); }
 .cczj-mobile-shell .cczj-mobile-settings :is(input,textarea,.select-dropdown,.ui-seg) { @apply cczj-max-w-full cczj-min-w-0; }
 .cczj-mobile-shell .cczj-mobile-settings :is(.ui-seg,.seg) { @apply cczj-flex-wrap; }
 .cczj-mobile-shell .cczj-mobile-settings .data-preferences { @apply cczj-min-w-0; }
 .cczj-mobile-shell .cczj-mobile-settings :is(.theme-cards,.pack-grid) { grid-template-columns: minmax(0,1fr); }
 
 .cczj-mobile-shell .cczj-mobile-settings .theme-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.cczj-mobile-shell .cczj-mobile-settings .theme-group { padding-bottom: 76px; }
+.cczj-mobile-shell .cczj-mobile-settings .theme-edit-fab.ui-btn {
+  @apply cczj-fixed;
+  z-index: 65;
+  right: max(20px, env(safe-area-inset-right, 0px));
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border-radius: 16px;
+  box-shadow: 0 4px 16px var(--accent-alpha-35);
+}
 .cczj-mobile-shell .cczj-mobile-settings .theme-card { min-height: 112px; padding: 14px 8px; }
-.cczj-mobile-shell .cczj-mobile-settings .theme-card :is(.card-actions-top,.card-actions) { opacity: 1; }
+.cczj-mobile-shell .cczj-mobile-settings .theme-card,.cczj-mobile-shell .cczj-mobile-settings .theme-card.active { border-radius: 12px; box-shadow: none; }
+.cczj-mobile-shell .cczj-mobile-settings .theme-card .swatch { border-radius: 10px; box-shadow: none; }
+.cczj-mobile-shell .cczj-mobile-settings .theme-card .check { width: 22px; height: 22px; border-radius: 6px; box-shadow: none; }
 .cczj-mobile-shell .cczj-mobile-settings .theme-card .swatch { width: 36px; height: 36px; }
 .cczj-mobile-shell .cczj-mobile-settings .theme-card .swatch.small { width: 18px; height: 18px; }
 .cczj-mobile-shell .cczj-mobile-settings.is-diagnostics { height: auto; }
@@ -38,6 +52,7 @@
 /* Mobile preference pages use one section at a time, with no second back row. */
 .cczj-mobile-shell .cczj-mobile-settings-index { padding: 2px 0 8px; }
 .cczj-mobile-settings-category { margin: 20px 0; }
+.cczj-mobile-settings-category:first-child { margin-top: 0; }
 .cczj-mobile-settings-category h2 { margin: 0 0 9px 4px; @apply cczj-text-secondary cczj-text-sm cczj-font-medium; }
 .cczj-mobile-settings-copy { @apply cczj-flex cczj-flex-col; gap: 5px; }
 .cczj-mobile-settings-copy strong { @apply cczj-text-base cczj-font-semibold; }

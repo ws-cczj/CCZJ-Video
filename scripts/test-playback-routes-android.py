@@ -99,7 +99,9 @@ def main():
         wait('!document.querySelector(".cczj-mobile-video-loading")')
         first_playing=layout();assert first_playing['prep'] is None,first_playing
         evidence['hints']['first_playing']=first_playing
-        tap('[...document.querySelectorAll(".side-section button")].find(e=>e.textContent.trim()==="切换线路")')
+        if not d.js('document.querySelector(".player-wrapper").classList.contains("show-controls")'):tap('document.querySelector("video")')
+        wait('document.querySelector(".cczj-mobile-player-lines")?.getBoundingClientRect().height>0')
+        tap('document.querySelector(".cczj-mobile-player-lines")')
         wait('!![...document.querySelectorAll("[role=dialog]")].find(e=>e.getAttribute("aria-label")==="切换线路"&&e.getBoundingClientRect().height>0)')
         row_selector='.playback-routes-mobile [data-source="'+keys[0]+'"]'
         wait('document.querySelectorAll('+json.dumps(row_selector)+').length===3 && document.querySelector(".playback-routes-mobile").textContent.includes("1080P")')

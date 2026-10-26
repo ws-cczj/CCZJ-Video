@@ -37,6 +37,58 @@ func TestMigrationsAreOrdered(t *testing.T) {
 	}
 }
 
+func TestV20UpgradePreservesHistoryAndAddsOptionalDuration(t *testing.T) {
+	dir := t.TempDir()
+	database := openFreshSQLite(t, dir)
+	_, err := database.Exec(`CREATE TABLE watch_history (id INTEGER PRIMARY KEY, ep_num INTEGER, position REAL, updated_at TEXT);
+		INSERT INTO watch_history VALUES (1, 5, 1671.566798, '2026-10-26 03:40:00');
+		CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
+		INSERT INTO settings VALUES ('cczj_fav_folders', '[{"id":"saved","name":"My folder"}]');
+		PRAGMA user_version=20;`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prevInstance, prevDir := instance, dataDir
+	instance, dataDir = database, dir
+	defer func() { instance, dataDir = prevInstance, prevDir }()
+	if err := runMigrations(); err != nil {
+		t.Fatal(err)
+	}
+	var position, duration float64
+	if err := database.QueryRow(`SELECT position,duration FROM watch_history WHERE id=1`).Scan(&position, &duration); err != nil {
+		t.Fatal(err)
+	}
+	if position != 1671.566798 || duration != 0 {
+		t.Fatalf("upgrade changed old progress: %v/%v", position, duration)
+	}
+	var folders string
+	if err := database.Get(&folders, `SELECT value FROM settings WHERE key='cczj_fav_folders'`); err != nil || folders != `[{"id":"saved","name":"My folder"}]` {
+		t.Fatalf("folder setting lost: %s %v", folders, err)
+	}
+	backups, err := filepath.Glob(filepath.Join(dir, "schema-backups", "*.db"))
+	if err != nil || len(backups) != 1 {
+		t.Fatalf("expected pre-upgrade backup: %v %v", backups, err)
+	}
+	before, err := sqlx.Connect("sqlite", backups[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer before.Close()
+	version, err := schemaVersion(before)
+	if err != nil || version != 20 {
+		t.Fatalf("backup is not original schema: %d %v", version, err)
+	}
+	if _, err := database.Exec(`UPDATE watch_history SET duration=2883.42913 WHERE id=1`); err != nil {
+		t.Fatal(err)
+	}
+	if err := runMigrations(); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Get(&duration, `SELECT duration FROM watch_history WHERE id=1`); err != nil || duration != 2883.42913 {
+		t.Fatalf("restart reset duration: %v %v", duration, err)
+	}
+}
+
 func TestNetworkRequestLimitMigrationPreservesV15Bindings(t *testing.T) {
 	database := openFreshSQLite(t, t.TempDir())
 	tx, err := database.Beginx()

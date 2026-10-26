@@ -18,18 +18,25 @@ func TestCancelledUpdateCheckDoesNotVisitRetryOrFallbackSources(t *testing.T) {
 	t.Cleanup(func() { http.DefaultTransport = old })
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	started := make(chan struct{})
+	started := make(chan struct{}, 3)
 	var calls atomic.Int32
+	var settled atomic.Int32
 	http.DefaultTransport = checkCancellationTransport(func(request *http.Request) (*http.Response, error) {
-		if calls.Add(1) == 1 {
-			close(started)
-		}
+		calls.Add(1)
+		started <- struct{}{}
 		<-request.Context().Done()
+		settled.Add(1)
 		return nil, request.Context().Err()
 	})
 	done := make(chan error, 1)
 	go func() { _, err := CheckUpdateContext(ctx); done <- err }()
-	<-started
+	for range 3 {
+		select {
+		case <-started:
+		case <-time.After(time.Second):
+			t.Fatal("metadata batch did not start")
+		}
+	}
 	cancel()
 	select {
 	case err := <-done:
@@ -39,7 +46,7 @@ func TestCancelledUpdateCheckDoesNotVisitRetryOrFallbackSources(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("update check continued after cancellation")
 	}
-	if calls.Load() != 1 {
+	if calls.Load() != 3 || settled.Load() != 3 {
 		t.Fatal("cancelled update check visited other sources", calls.Load())
 	}
 }

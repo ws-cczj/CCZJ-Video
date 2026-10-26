@@ -4,7 +4,7 @@
  * 三处图标，全部来自这个文件夹本身：
  *   1. 扩展包卡片上那枚 —— manifest 的 "icon": "icon.png"，由应用去包目录读；
  *   2. 侧边栏那一项 —— cczj.nav 的 icon 用的是应用内置图标名（不是包里的文件）；
- *   3. 这一页的 26 枚 —— 先读 icons.json 拿到清单，再逐张 readAsset 出 data URL。
+ *   3. 这一页的 38 枚 —— 先读 icons.json 拿到清单，再逐张 readAsset 出 data URL。
  *
  * 和别的 script 包一样：不能写 import（源码从 blob URL 加载，没有模块解析器），
  * 组件写成 h() 渲染函数（应用打包的是 Vue 运行时版，没有模板编译器）。
@@ -27,7 +27,7 @@ export function setup(cczj) {
       pluginPacks: {
         iconGallery: {
           nav: '图标画廊',
-          lead: '这一页的 26 枚图标都是包目录 icons/ 里的 PNG，运行时一张张读进来画成 <img>。看到图就说明「文件夹 → Go → 界面」这条链路是通的。',
+          lead: '这一页的 38 枚图标都是包目录 icons/ 里的 PNG，运行时一张张读进来画成 <img>。看到图就说明「文件夹 → Go → 界面」这条链路是通的。',
           filter: '按名字或文件名筛选',
           count: '{n} / {total} 枚',
           loading: '正在从包目录读图标…',
@@ -48,7 +48,7 @@ export function setup(cczj) {
       pluginPacks: {
         iconGallery: {
           nav: 'Icon Gallery',
-          lead: 'All 26 tiles here are PNG files in this pack\'s icons/ folder, read one by one at runtime and drawn as <img>. If they show up, the folder → Go → UI path works.',
+          lead: 'All 38 tiles here are PNG files in this pack\'s icons/ folder, read one by one at runtime and drawn as <img>. If they show up, the folder → Go → UI path works.',
           filter: 'Filter by name or file',
           count: '{n} / {total} tiles',
           loading: 'Reading icons from the pack folder…',

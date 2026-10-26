@@ -316,7 +316,7 @@ func (r *catalogIdentityResolver) resolveTypeID(exec sqlx.Ext, typeName string) 
 			return candidate.ID, nil
 		}
 	}
-	result, err := exec.Exec(`INSERT OR IGNORE INTO global_types(type_name) VALUES (?)`, typeName)
+	result, err := exec.Exec(`INSERT OR IGNORE INTO global_types(type_name,collect_enabled) VALUES (?,?)`, typeName, initialTypeCollectEnabled(typeName))
 	if err != nil {
 		return 0, err
 	}

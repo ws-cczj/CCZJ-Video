@@ -50,6 +50,11 @@ const PlayerDesktopControls = defineAsyncComponent(()=>import('../player/views/P
 const desktopControls=ref<{engaged:boolean;close:()=>void}|null>(null)
 const CczjMobilePlayerChrome=defineAsyncComponent(()=>import('../mobile/CczjMobilePlayerChrome.vue'))
 const mobileChrome=ref<MobileChromeHandle|null>(null)
+async function openDanmakuSettings():Promise<void>{
+  mobileChrome.value?.close()
+  await nextTick()
+  danmakuRef.value?.open(wrapperRef.value)
+}
 const CczjMobileGestureOverlay = defineAsyncComponent(()=>import('../mobile/CczjMobileGestureOverlay.vue'))
 
 const PlayerEnhancementWarning=defineAsyncComponent(()=>import('../player/views/PlayerEnhancementWarning.vue'))
@@ -82,6 +87,7 @@ const props = withDefaults(defineProps<{
   favBusy?: boolean
   doubanId?: string
   /** 取当前集在后端 watch_history 里的位置（秒），本地缓存缺失时兜底 */
+  resumeImmediately?: boolean
   resolveResume?: () => Promise<number>
 }>(), {
   autoplay: true,
@@ -228,6 +234,7 @@ const resume = usePlaybackResume({
   getVideo: getVideoEl,
   getKey: () => playbackResumeKey(props.videoKey, props.url),
   resolveResume: () => props.resolveResume?.(),
+  shouldResume: () => props.resumeImmediately === true,
   settings: { read: (key, fallback) => portrait && key === 'auto_resume_jump' ? '1' : readSetting(key, fallback), write: writeSetting },
 })
 const { savedTime, showResumePrompt, resumeRemainSec, dismissResumePrompt,
@@ -441,6 +448,7 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
     endStall('paused')
     if(!firstPlayingLogged)logStartup('player_startup_pause',{prepared:prepared.value,autoplay_pending:autoplayStarting.value})
     playback.cancel()
+    if(resume.canPersist())emit('progress',video.currentTime,video.duration,true)
     resume.save()
     playing.value = false
     loading.value = !prepared.value || autoplayStarting.value
@@ -453,7 +461,7 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
     if (video.duration) duration.value = video.duration
     updateBuffer()
     resume.track()
-    if (portrait) emit('progress', video.currentTime, video.duration)
+    if (resume.canPersist()) emit('progress', video.currentTime, video.duration)
   })
   on('loadedmetadata', () => {
     portraitContent.value = video.videoHeight > video.videoWidth
@@ -909,7 +917,7 @@ function enablePortraitSound(): void {
   if (video) { video.muted = false; if (video.volume === 0) video.volume = 1; if (video.paused) togglePlay() }
 }
 
-defineExpose({ togglePiP, toggleFullscreen, togglePlay, video:getVideoEl, overlayHost:()=>wrapperRef.value,openLines:()=>mobileChrome.value?.toggle('lines') })
+defineExpose({ togglePiP, toggleFullscreen, togglePlay, video:getVideoEl, canPersistProgress:resume.canPersist, overlayHost:()=>wrapperRef.value })
 </script>
 
 <template>
@@ -940,10 +948,9 @@ defineExpose({ togglePiP, toggleFullscreen, togglePlay, video:getVideoEl, overla
         {{ t('player.cachedCountShort', { count: cacheStats.entries }) }}<span v-if="cacheStats.queued + cacheStats.inflight > 0"> · {{ t('player.prefetching') }}</span><span v-else> · {{ t('player.ready') }}</span> ·
         {{ t('player.hitRateShort') }} {{ (cacheStats.hitRate * 100).toFixed(0) }}%
       </span>
-      <PlayerDanmakuButtons v-if="mobile&&!isFullscreen&&danmakuKey" mobile :enabled="!!danmakuRef?.enabled" :ready="!!danmakuRef?.ready" :expanded="!!danmakuRef?.engaged" @toggle="danmakuRef?.toggle();keepVisible()" @settings="(anchor,hover)=>{danmakuRef?.open(anchor,hover);keepVisible()}" @leave="danmakuRef?.scheduleClose()" @dismiss="danmakuRef?.close()" />
       <button v-if="mobile" class="cczj-mobile-player-favorite" :aria-label="t(isFav?'detail.removeFav':'detail.addFav')" :aria-pressed="isFav" :disabled="favBusy" @click.stop="emit('toggleFavorite')"><Icon name="star" :size="21" /></button>
       <button v-if="mobile && isFullscreen && controlState.canCast" class="cczj-mobile-player-cast" :aria-label="t('mobile.cast')" @click.stop="mobileChrome?.toggle('cast')"><Icon name="cast" :size="22" /></button>
-      <button v-if="mobile && isFullscreen && $slots.lines" class="cczj-mobile-player-lines" :aria-label="t('playLine.switch')" :aria-expanded="!!mobileChrome?.linesOpen" @click.stop="mobileChrome?.toggle('lines');keepVisible()"><Icon name="list" :size="20" /><span>{{t('playLine.title')}}</span></button>
+      <button v-if="mobile && $slots.lines" class="cczj-mobile-player-lines" :aria-label="t('playLine.switch')" :aria-expanded="!!mobileChrome?.linesOpen" @click.stop="mobileChrome?.toggle('lines');keepVisible()"><Icon name="list" :size="20" /><span>{{t('playLine.title')}}</span></button>
       <button v-if="mobile" class="cczj-mobile-player-more-button" :aria-label="t('mobile.playerMore')" :aria-expanded="!!mobileChrome?.menuOpen" @click.stop="mobileChrome?.toggle('more'); keepVisible()"><Icon name="more" :size="22" /></button>
       <button v-show="!mobile" class="fav-btn-in-player" :class="{ 'is-fav': isFav }" :disabled="favBusy"
         :aria-label="isFav ? t('detail.removeFav') : t('player.addFavorite')"
@@ -1108,7 +1115,7 @@ defineExpose({ togglePiP, toggleFullscreen, togglePlay, video:getVideoEl, overla
         <Icon name="layers" :size="16" />
       </button>
 
-      <PlayerPreferencesControls v-show="!mobile || mobileMoreCategory==='playback'" v-model:open="showPlaybackSettings" :mobile="mobile" :autoplay="autoPlayEnabled" :auto-next="autoNextEnabled" :auto-resume="mobileAutoResume" @autoplay="toggleAutoPlay" @auto-next="toggleAutoNext" @auto-resume="toggleMobileAutoResume" @interaction="keepVisible" @shortcuts="showShortcutModal=true" />
+      <PlayerPreferencesControls v-show="!mobile || mobileMoreCategory==='playback'" v-model:open="showPlaybackSettings" :mobile="mobile" :autoplay="autoPlayEnabled" :auto-next="autoNextEnabled" :auto-resume="mobileAutoResume" :has-danmaku="!!danmakuKey" @danmaku-settings="openDanmakuSettings" @autoplay="toggleAutoPlay" @auto-next="toggleAutoNext" @auto-resume="toggleMobileAutoResume" @interaction="keepVisible" @shortcuts="showShortcutModal=true" />
       <PlayerSubtitleControls v-show="!mobile || mobileMoreCategory==='tools'" v-model:open="showSubtitlePanel" v-model:visible="subtitleVisible" :name="subtitleName" :count="subtitleCues.length" :error="subtitleError" @pick="openSubtitlePicker" @clear="clearSubtitle" @interaction="keepVisible" />
       <input ref="subtitleFileRef" type="file" accept=".srt,.vtt,text/plain" class="subtitle-file-input"
         @change="onSubtitleFileChosen" />

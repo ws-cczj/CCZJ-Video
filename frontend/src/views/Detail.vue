@@ -3,7 +3,7 @@ defineOptions({ name: 'Detail' })
 import { ref, computed, onMounted, onBeforeUnmount, onActivated, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { GetRecentHistory, SaveWatchHistory, AddFavorite, RemoveFavorite, IsFavorite, DeleteVideo, GetVideoList, GetSimilarVideos, DoubanUpdateVideo, normalizeApiError, FindSourcesByGlobalId } from '../api/app'
+import { GetRecentHistory, DeleteVideo, GetVideoList, GetSimilarVideos, DoubanUpdateVideo, normalizeApiError, FindSourcesByGlobalId } from '../api/app'
 import { useSourceStore } from '../stores/source'
 import { useVideoStore } from '../stores/video'
 import { useDownloadStore } from '../stores/download'
@@ -14,11 +14,12 @@ import PlayLinePicker from '../components/PlayLinePicker.vue'
 import RemoteImage from '../components/RemoteImage.vue'
 import { Button, Modal, Tag, Spinner as LoadingSpinner } from '../components/ui'
 import FavFolderModal from '../components/FavFolderModal.vue'
+import { usePlaybackFavorites } from '../player/page/usePlaybackFavorites'
 import { getDetailPath, getSearchPath, getPlayerPath, humanizeBytes, buildEpisodeFilename, buildSingleFilename, sanitizeFilename, resolveEpisodeUrl, stripHtmlTags } from '../utils'
 import { TsCache } from '../utils/tsCache'
 import { proxyHlsURL } from '../player/hls/proxy'
 import { computeRecommendations, type RecommendItem, extractYear } from '../utils/recommend'
-import { epProgressKey, loadEpProgress, getEpProgressPct, flushEpProgress } from '../utils/episodeProgress'
+import { epProgressKey, loadEpProgress, getEpProgressPct, flushEpProgress, mergeEpHistory } from '../utils/episodeProgress'
 import { bumpFavoritesRefresh } from '../stores/favoritesSync'
 import type { Video, HistoryItem, Episode } from '../types'
 import { readStorage, writeStorage } from '../platform/storage'
@@ -149,6 +150,11 @@ async function refreshLastWatched(): Promise<void> {
         if (video.value?.global_id) return h.global_id === video.value.global_id
         return String(h.vod_id) === String(vodId.value)
       })
+      for(const row of matches){
+        const index=epNumToIdx.get(Number(row.ep_num))
+        if(index!==undefined)mergeEpHistory(epKeyOf(eps[index],index),row)
+      }
+      refreshEpProgress()
       // 回到真正看过的那一集：history 按时间倒序，只点了几秒的记录会把"继续观看"带回片头。
       found = matches.find((h) => Number(h.position) > 5) || matches[0] || null
     }
@@ -210,74 +216,9 @@ const expandOverview = ref(false)
 const overviewText = computed(() => stripHtmlTags(video.value?.vod_content || ''))
 
 /* ==================== 收藏状态 ==================== */
-const isFav = ref(false)
-const favBusy = ref(false)
-const showFavFolderModal = ref(false)
-
-async function refreshFav(): Promise<void> {
-  if (!vodId.value) return
-  try {
-    const val = await IsFavorite({ source_key: sourceKey.value, vod_id: String(vodId.value), global_id: video.value?.global_id || 0 }) as boolean
-    isFav.value = !!val
-  } catch { /* ignore */ }
-}
-async function toggleFavorite(): Promise<void> {
-  if (!vodId.value || favBusy.value) return
-  // 若已收藏 → 直接取消
-  if (isFav.value) {
-    favBusy.value = true
-    try {
-      await RemoveFavorite({ source_key: sourceKey.value, vod_id: String(vodId.value), global_id: video.value?.global_id || 0 })
-      // 清除 mapping
-      const key = `${sourceKey.value}-${vodId.value}`
-      try {
-        const raw = JSON.stringify(readStorage<Record<string, string>>('cczj_fav_mapping', {}))
-        if (raw) {
-          const obj = JSON.parse(raw) as Record<string, string>
-          delete obj[key]
-          writeStorage('cczj_fav_mapping', obj)
-        }
-      } catch { /* ignore */ }
-      isFav.value = false
-      bumpFavoritesRefresh()
-    } catch (e) {
-      // 点「取消收藏」却什么都没发生，是最容易被当成软件坏了的静默失败。
-      errorStore.error(t('detail.favRemoveFailed'), normalizeApiError(e).message, '', 'Detail')
-    } finally {
-      favBusy.value = false
-    }
-    return
-  }
-  // 未收藏 → 先展示选择文件夹弹窗
-  showFavFolderModal.value = true
-}
-
-async function confirmAddToFolder(folderId: string): Promise<void> {
-  if (!vodId.value) return
-  favBusy.value = true
-  showFavFolderModal.value = false
-  try {
-    await AddFavorite({
-      source_key: sourceKey.value,
-      vod_id: String(vodId.value),
-      vod_name: video.value?.vod_name || '',
-    } as any)
-    // 写入 mapping：关联到选择的文件夹
-    try {
-      const key = `${sourceKey.value}-${vodId.value}`
-      const raw = JSON.stringify(readStorage<Record<string, string>>('cczj_fav_mapping', {}))
-      const obj: Record<string, string> = raw ? JSON.parse(raw) : {}
-      obj[key] = folderId
-      writeStorage('cczj_fav_mapping', obj)
-    } catch { /* ignore */ }
-    isFav.value = true
-    bumpFavoritesRefresh()
-  } catch (e) {
-    errorStore.error(t('detail.favAddFailed'), normalizeApiError(e).message, '', 'Detail')
-  } finally {
-    favBusy.value = false
-  }
-}
+const {isFav,favBusy,showFavFolderModal,refreshFav,toggleFavorite,confirmAddToFolder}=usePlaybackFavorites(()=>({
+ source_key:sourceKey.value,vod_id:String(vodId.value),global_id:video.value?.global_id||0,vod_name:video.value?.vod_name||'',
+}))
 
 // ==================== 元数据标签 ====================
 const directorList = computed(() => {
@@ -423,28 +364,18 @@ function onEpisodeClick(sortedI: number, ep: Episode): void {
   playEpisode(origIdx(sortedI))
 }
 
-function playEpisode(epIndex: number): void {
+function playEpisode(epIndex: number, resume = false): void {
   const v = video.value
   if (!v) return
-  // 点击即记录观看历史
+  // 选集只准备媒体；实际播放位置由播放器上报。
   try {
     const ep = videoStore.episodes[epIndex]
-    const epNum = ep?.ep_num ?? (epIndex + 1)
-    const progKey = epProgressKey(v.global_id, v.vod_name, epNum)
-    const entry = loadEpProgress()[progKey]
-    SaveWatchHistory({
-      source_key: sourceKey.value,
-      vod_id: String(vodId.value),
-      vod_name: v.vod_name || '',
-      ep_num: epNum,
-      position: entry?.position ?? 0,
-    } as any).catch(() => { })
     // 预取点击剧集的 m3u8 文本（轻量，跳转到播放页时可命中缓存）
     TsCache.setCurrentEpisode(epIndex)
     const epUrl = resolveEpisodeUrl(ep)
     if (epUrl) TsCache.fetchAndParseM3u8(proxyHlsURL(epUrl)).catch(() => { })
   } catch { /* ignore */ }
-  router.push(getPlayerPath(sourceKey.value, v, epIndex, videoStore.lines[videoStore.activeLineIndex]?.index))
+  router.push(getPlayerPath(sourceKey.value, v, epIndex, videoStore.lines[videoStore.activeLineIndex]?.index, resume))
 }
 
 function playFromHistory(): void {
@@ -456,7 +387,7 @@ function playFromHistory(): void {
       if (String(last.vod_id) === String(vodId.value)) {
         const idx = videoStore.episodes.findIndex((e) => Number(e.ep_num) === Number(last.ep_num))
         if (idx >= 0) {
-          playEpisode(idx)
+          playEpisode(idx, true)
           return
         }
       }
@@ -836,12 +767,12 @@ onBeforeUnmount(() => {
             <span v-if="video.vod_remarks" class="badge-float cczj-absolute cczj-top-2 cczj-right-2 cczj-rounded cczj-px-2 cczj-py-1 cczj-text-xs">{{ video.vod_remarks }}</span>
           </div>
           <div class="poster-actions cczj-flex cczj-flex-col cczj-gap-2">
-            <Button v-if="mobile && videoStore.episodes.length" variant="primary" @click="playEpisode(lastWatched?.epIdx ?? 0)">
+            <Button v-if="mobile && videoStore.episodes.length" variant="primary" @click="playEpisode(lastWatched?.epIdx ?? 0, !!lastWatched)">
               <Icon name="play" :size="16" />{{ lastWatched ? t('detail.continueWatching') : t('player.play') }}
             </Button>
             <div v-if="!mobile && videoStore.episodes.length > 0" class="poster-action-group">
               <!-- 继续上次观看 → 有历史时显示 -->
-              <button v-if="lastWatched" class="continue-btn cczj-inline-flex cczj-items-center cczj-justify-center cczj-gap-4 cczj-cursor-pointer cczj-rounded cczj-px-3 cczj-py-2 cczj-w-full cczj-text-13 cczj-font-semibold cczj-transition" @click="playEpisode(lastWatched.epIdx)">
+              <button v-if="lastWatched" class="continue-btn cczj-inline-flex cczj-items-center cczj-justify-center cczj-gap-4 cczj-cursor-pointer cczj-rounded cczj-px-3 cczj-py-2 cczj-w-full cczj-text-13 cczj-font-semibold cczj-transition" @click="playEpisode(lastWatched.epIdx, true)">
                 <Icon name="play" :size="12" />
                 <span class="continue-main cczj-flex-1">{{ t('detail.continueWatching') }} · {{ lastWatched.epName }}</span>
                 <span v-if="lastWatched.position > 0" class="continue-pct cczj-text-xs cczj-text-muted">{{ Math.min(100,
@@ -978,7 +909,7 @@ onBeforeUnmount(() => {
             </Button>
           </div>
         </div>
-        <PlayLinePicker v-if="video && videoStore.lines.length" class="cczj-mb-4" :lines="videoStore.lines"
+        <PlayLinePicker v-if="!mobile && video && videoStore.lines.length" class="cczj-mb-4" :lines="videoStore.lines"
           :model-value="videoStore.activeLineIndex" :source-key="sourceKey" :vod-id="String(vodId)"
           :global-id="Number(video.global_id || 0)" @update:model-value="videoStore.setActiveLine(Number($event))" />
         <div class="episodes-grid cczj-grid cczj-gap-2">
@@ -1127,7 +1058,7 @@ onBeforeUnmount(() => {
 
     <!-- ==================== 选择收藏夹弹窗 ==================== -->
     <FavFolderModal
-      v-model="showFavFolderModal"
+      v-model="showFavFolderModal" :busy="favBusy"
       @confirm="confirmAddToFolder"
     />
   </div>

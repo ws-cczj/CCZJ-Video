@@ -2,7 +2,7 @@
 /**
  * 「主题外观」分组：预设 + 自定义主题两张卡片网格（浅色 / 深色各一张）。
  *
- * 卡片只负责「选哪个主题」和「发起编辑」，编辑态在 ThemeEditorModal 里，
+ * 桌面卡片负责选择与发起编辑；手机通过悬浮入口编辑当前主题。编辑态在 ThemeEditorModal 里，
  * 由这里通过函数式模板 ref 拿实例调用它的 open* 方法——和拆分前在同一份
  * setup 作用域里直接调函数是同一个调用序列。
  */
@@ -13,10 +13,18 @@ import Icon from '../../components/Icon.vue'
 import { useThemeStore, type ColorPalette } from '../../stores/theme'
 import { useConfirmStore } from '../../stores/confirm'
 import ThemeEditorModal from './ThemeEditorModal.vue'
+import { Button } from '../../components/ui'
+import { presentationProfile } from '../../platform/presentation'
 
 const { t } = useI18n()
 const themeStore = useThemeStore()
 const confirmStore = useConfirmStore()
+const mobile = presentationProfile().ui === 'mobile'
+function editCurrent(): void {
+  const preset = themeStore.themes.find(item => item.id === themeStore.currentId)
+  if (preset) editor.value?.openEditPreset(preset)
+  else editor.value?.openEdit(themeStore.currentId)
+}
 
 /** ThemeEditorModal 用 defineExpose 交出来的三个打开入口 + 预览重绘。 */
 type ThemeEditorHandle = InstanceType<typeof ThemeEditorModal>
@@ -109,7 +117,7 @@ function pickTheme(id: string): void {
 <template>
  <div v-if="themeStore.saveError" role="alert" class="cczj-theme-save-error">{{themeStore.saveError}} <button type="button" @click="themeStore.retrySettings()">{{t('common.retry')}}</button></div>
 
-  <div class="panel group-card cczj-flex cczj-flex-col cczj-gap-2">
+  <div class="panel group-card theme-group cczj-flex cczj-flex-col cczj-gap-2">
     <section class="block">
       <h3>{{ t('settings.themeColor') }}</h3>
 
@@ -134,7 +142,7 @@ function pickTheme(id: string): void {
           ]"
           @click="pickTheme(preset.id)"
         >
-          <span class="card-actions-top cczj-absolute cczj-flex cczj-gap-2" @click.stop>
+          <span v-if="!mobile" class="card-actions-top cczj-absolute cczj-flex cczj-gap-2" @click.stop>
             <button class="mini-btn cczj-inline-flex cczj-items-center cczj-justify-center" @click="editor?.openEditPreset(preset)" :title="t('settings.editTheme')">
               <Icon name="pencil" :size="12" />
             </button>
@@ -164,7 +172,7 @@ function pickTheme(id: string): void {
           ]"
           @click="pickTheme(c.id)"
         >
-          <span class="card-actions-top cczj-absolute cczj-flex cczj-gap-2" @click.stop>
+          <span v-if="!mobile" class="card-actions-top cczj-absolute cczj-flex cczj-gap-2" @click.stop>
             <button class="mini-btn cczj-inline-flex cczj-items-center cczj-justify-center" @click="editor?.openEdit(c.id)" :title="t('settings.editTheme')">
               <Icon name="pencil" :size="12" />
             </button>
@@ -172,7 +180,7 @@ function pickTheme(id: string): void {
           <span v-if="!c.backgroundImage" class="swatch" :style="{ background: c.primary }"></span>
           <span v-if="c.backgroundImage" class="swatch small" :style="{ background: c.primary }"></span>
           <span class="label cczj-truncate" :style="{ color: c.text }">{{ c.name }}</span>
-          <span class="card-actions cczj-absolute cczj-flex cczj-gap-2" @click.stop>
+          <span v-if="!mobile" class="card-actions cczj-absolute cczj-flex cczj-gap-2" @click.stop>
             <button class="mini-btn danger" @click="onDeleteTheme(c.id, c.name)" :title="t('common.delete')">
               <Icon name="x" :size="12" />
             </button>
@@ -206,7 +214,7 @@ function pickTheme(id: string): void {
           ]"
           @click="pickTheme(preset.id)"
         >
-          <span class="card-actions-top cczj-absolute cczj-flex cczj-gap-2" @click.stop>
+          <span v-if="!mobile" class="card-actions-top cczj-absolute cczj-flex cczj-gap-2" @click.stop>
             <button class="mini-btn cczj-inline-flex cczj-items-center cczj-justify-center" @click="editor?.openEditPreset(preset)" :title="t('settings.editTheme')">
               <Icon name="pencil" :size="12" />
             </button>
@@ -235,7 +243,7 @@ function pickTheme(id: string): void {
           ]"
           @click="pickTheme(c.id)"
         >
-          <span class="card-actions-top cczj-absolute cczj-flex cczj-gap-2" @click.stop>
+          <span v-if="!mobile" class="card-actions-top cczj-absolute cczj-flex cczj-gap-2" @click.stop>
             <button class="mini-btn cczj-inline-flex cczj-items-center cczj-justify-center" @click="editor?.openEdit(c.id)" :title="t('settings.editTheme')">
               <Icon name="pencil" :size="12" />
             </button>
@@ -243,7 +251,7 @@ function pickTheme(id: string): void {
           <span v-if="!c.backgroundImage" class="swatch" :style="{ background: c.primary }"></span>
           <span v-if="c.backgroundImage" class="swatch small" :style="{ background: c.primary }"></span>
           <span class="label cczj-truncate" :style="{ color: c.text }">{{ c.name }}</span>
-          <span class="card-actions cczj-absolute cczj-flex cczj-gap-2" @click.stop>
+          <span v-if="!mobile" class="card-actions cczj-absolute cczj-flex cczj-gap-2" @click.stop>
             <button class="mini-btn danger" @click="onDeleteTheme(c.id, c.name)" :title="t('common.delete')">
               <Icon name="x" :size="12" />
             </button>
@@ -255,6 +263,7 @@ function pickTheme(id: string): void {
     <!-- ========== 主题编辑器 弹窗 ========== -->
     <ThemeEditorModal :ref="bindEditor" />
   </div>
+  <Button v-if="mobile" class="theme-edit-fab" variant="primary" :aria-label="t('settings.editTheme')" :title="t('settings.editTheme')" @click="editCurrent"><Icon name="pencil" :size="22" /></Button>
 </template>
 
 <style scoped>

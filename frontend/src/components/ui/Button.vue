@@ -65,9 +65,9 @@ const accessibleLabel = computed(() => props.ariaLabel
 }
 
 /* ========== Size ========== */
-.ui-btn--sm  { padding: 5px 12px; @apply cczj-text-sm; border-radius: 3px; }
-.ui-btn--md  { @apply cczj-px-8-py-4 cczj-text-13; }
-.ui-btn--lg  { padding: 10px 22px; @apply cczj-text-base; }
+.ui-btn--sm  { --cczj-control-height: var(--cczj-mobile-control-sm, 36px); padding: 5px 12px; @apply cczj-text-sm; border-radius: 3px; }
+.ui-btn--md  { --cczj-control-height: var(--cczj-mobile-control-md, 44px); @apply cczj-px-8-py-4 cczj-text-13; }
+.ui-btn--lg  { --cczj-control-height: var(--cczj-mobile-control-lg, 48px); padding: 10px 22px; @apply cczj-text-base; }
 
 .ui-btn--icon.ui-btn--sm  { padding: 5px; width: 28px; height: 28px; }
 .ui-btn--icon.ui-btn--md  { padding: 7px; width: 34px; height: 34px; }

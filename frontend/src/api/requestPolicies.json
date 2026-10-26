@@ -26,6 +26,7 @@
   "CompressDetailJSONBrotli": "isolated",
   "ConfirmShutdown": "isolated",
   "ControlCastVideo": "write",
+  "GetCastStatus": "read",
   "DanmakuBind": "write",
   "DanmakuBinding": "read",
   "DanmakuEpisodes": "read",

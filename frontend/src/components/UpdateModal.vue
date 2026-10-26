@@ -40,6 +40,8 @@ let checkRequest: ReturnType<typeof CheckUpdate> | null = null
 let pendingPollTimer: ReturnType<typeof setTimeout> | undefined
 let disposed = false
 let planGeneration = 0
+let presentationGeneration = 0
+let dismissedVersion = ''
 
 interface UpdateInfoData {
   has_update: boolean
@@ -84,24 +86,26 @@ async function doCheckUpdate(): Promise<void> {
   }
   updateChecking.value = true
   checkFailed.value = false
+  dismissedVersion = ''
+  const generation = ++presentationGeneration
   const request = CheckUpdate()
   checkRequest = request
   // A manual check must finish even when several upstream mirrors time out.
   const deadline = setTimeout(() => { void request.cancel() }, 30_000)
   try {
     const info = await request
-    if (disposed || checkRequest !== request || !info) return
+    if (disposed || checkRequest !== request || generation !== presentationGeneration || !info) return
     updateInfo.value = info
     if (info.has_update) {
       // 检查是否有已下载的安装包
       await checkAlreadyDownloaded(info)
-      if (disposed || checkRequest !== request) return
+      if (disposed || checkRequest !== request || generation !== presentationGeneration) return
       updateModalOpen.value = true
     } else {
       errorStore.info(tr('update.checking'), tr('update.latestVersion', { version: info.current_version }))
     }
   } catch (e: any) {
-    if (disposed || checkRequest !== request || normalizeApiError(e).code === 'CANCELLED') return
+    if (disposed || checkRequest !== request || generation !== presentationGeneration || updateDownloading.value || updateDownloaded.value) return
     checkFailed.value = true
     updateModalOpen.value = true
   } finally {
@@ -116,6 +120,8 @@ async function doCheckUpdate(): Promise<void> {
 // ---------- 下载更新 ----------
 async function doDownload(): Promise<void> {
   if (!updateInfo.value?.download_url || updateDownloading.value) return
+  presentationGeneration++
+  checkFailed.value = false
   const requestedUpdate = updateInfo.value
   try {
     await downloadUpdateArtifact(requestedUpdate.download_url, requestedUpdate.latest_version)
@@ -262,6 +268,10 @@ async function doIgnore(): Promise<void> {
 
 // ---------- 关闭弹窗（支持后台下载） ----------
 function onClose(): void {
+  presentationGeneration++
+  dismissedVersion = updateInfo.value?.latest_version || ''
+  checkFailed.value = false
+  void checkRequest?.cancel()
   if (updateDownloading.value) {
     // 正在下载：最小化到后台，不重置状态
     updateModalOpen.value = false
@@ -281,12 +291,15 @@ function onClose(): void {
 function onUpdateAvailable(data: UpdateInfoData): void {
   if (updateDownloading.value || installing.value) return
   if (data && data.has_update) {
+    if (data.latest_version === dismissedVersion) return
     // 条款还没同意时不抢先弹更新窗：一次只问用户一个必须回答的问题。
     if (licensePending.value) return
+    const generation = ++presentationGeneration
+    checkFailed.value = false
     updateInfo.value = data
     // 检查是否有已下载的安装包
     checkAlreadyDownloaded(data).then(() => {
-      if (disposed || updateInfo.value !== data) return
+      if (disposed || updateInfo.value !== data || generation !== presentationGeneration || updateDownloading.value) return
       updateModalOpen.value = true
     })
   }
@@ -323,7 +336,10 @@ watch(licensePending, (pending) => { if (!pending) void reportLastInstall() }, {
 
 // 手上一份包变成另一份包（下载完成、或后端扫出已下载的包）时重新问一次安排状态。
 // immediate 是因为下载状态可能在这个组件挂载前就被恢复了，那种情况下也得显示对。
-watch([updateDownloaded, updateDownloadPath], () => { void refreshOnExitPlan() }, { immediate: true })
+watch([updateDownloaded, updateDownloadPath], () => {
+  if (updateDownloaded.value) checkFailed.value = false
+  void refreshOnExitPlan()
+}, { immediate: true })
 
 onMounted(async () => {
   if (isIOSRuntime()) return
@@ -346,16 +362,18 @@ onMounted(async () => {
       pendingPollTimer = setTimeout(pollPending, pollInterval)
       return
     }
-    if (updateModalOpen.value || pollRetries >= maxPollRetries) return
+    if (updateModalOpen.value || updateDownloading.value || updateDownloaded.value || dismissedVersion || updateChecking.value || pollRetries >= maxPollRetries) return
     pollRetries++
     try {
       const pending = await reads.run(GetPendingUpdateInfo)
-      if (disposed) return
+      if (disposed || updateDownloading.value || updateDownloaded.value || dismissedVersion || updateChecking.value) return
       if (pending && pending.has_update) {
+        const generation = ++presentationGeneration
+        checkFailed.value = false
         updateInfo.value = pending
         // 检查是否有已下载的安装包
         await checkAlreadyDownloaded(pending)
-        if (disposed || updateInfo.value !== pending) return
+        if (disposed || updateInfo.value !== pending || generation !== presentationGeneration) return
         updateModalOpen.value = true
         return
       }

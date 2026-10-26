@@ -475,8 +475,10 @@ export default { setup(cczj) { ... } }   // default 是带 setup 的对象
   出网要靠服务商放行 CORS，密钥只能明文留在本机 `localStorage`。会改动应用状态的工具一律先弹确认，
   删除、清空、还原备份、卸载包这类绑定根本不在表里。
 - `docs/examples/icon-gallery/` — 专门看图标的那一份：卡片图标是包目录的 `icon.png`，
-  页面里 26 枚图标先由 `icons.json` 列出清单、再逐张走 `ReadPluginAsset` 从 `icons/` 读出来。
+  页面里 38 枚图标先由 `icons.json` 列出清单、再逐张走 `ReadPluginAsset` 从 `icons/` 读出来。
   整个文件夹拖进设置页就能一次验完「拖拽安装 → 校验 → 图标显示」这条链路。
 
 另有三份随应用自带的包在 `app/plugin/builtin/`（§1.2）：`motion-effects`、`logs-panel`、
 `diagnostics-panel`。它们是 `settingsTab` 的参考实现——想给设置页加分组，照它们写就行。
+
+图标画廊新增的 Lucide 预览来自 lucide-static 0.468.0，主界面复用 `Icon.vue` 的 24×24 线框图标；采集源改用数据库／采集含义，弹幕源使用弹幕设置，短剧使用场记板。来源为 [Lucide](https://lucide.dev/icons/)，许可随包保留在 `LUCIDE-LICENSE`，应用发布资源包含 `licenses/lucide.txt`。

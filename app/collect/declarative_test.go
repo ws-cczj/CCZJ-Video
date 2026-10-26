@@ -433,7 +433,7 @@ func TestDeclarativeMappingBeatsAliasTable(t *testing.T) {
 	config := `{"version":2,"strategy":"declarative","response":{"list_path":"rows"},` +
 		`"field_mapping":{"label":"vod_name","shot":"vod_pic"}}`
 	strategy := strategyFromJSON(t, "https://example.test/v2/rows", config)
-	body := `{"code":1,"rows":[{"label":"映射优先","shot":"https://c/map.jpg","vod_name":"别名标题","vod_pic":"https://c/alias.jpg"}]}`
+	body := `{"code":1,"rows":[{"vod_id":"mapping-1","label":"映射优先","shot":"https://c/map.jpg","vod_name":"别名标题","vod_pic":"https://c/alias.jpg"}]}`
 	withStubBody(t, body)
 
 	result, err := FetchWithStrategy(context.Background(), strategy, strategy.BuildListUrl(1, FetchOptions{}))

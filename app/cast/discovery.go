@@ -2,6 +2,8 @@ package cast
 
 import (
 	"bufio"
+	"cczjVideo/app/applog"
+	"cczjVideo/app/operation"
 	"context"
 	"errors"
 	"fmt"
@@ -110,7 +112,16 @@ type discoveryJob struct {
 func (s *Service) discoverAt(group *net.UDPAddr) ([]Device, error) {
 	return s.discoverAtContext(context.Background(), group)
 }
-func (s *Service) discoverAtContext(request context.Context, group *net.UDPAddr) ([]Device, error) {
+func (s *Service) discoverAtContext(request context.Context, group *net.UDPAddr) (result []Device, failure error) {
+	started := time.Now()
+	operation.Stage(request, "cast.discovery.start", nil)
+	defer func() {
+		if failure != nil {
+			traceFailure(request, "cast.discovery.failed", failure, applog.Fields{"elapsed_ms": elapsed(started)})
+		} else {
+			operation.Stage(request, "cast.discovery.complete", applog.Fields{"device_count": len(result), "elapsed_ms": elapsed(started)})
+		}
+	}()
 	if err := request.Err(); err != nil {
 		return nil, err
 	}
@@ -128,6 +139,9 @@ func (s *Service) discoverAtContext(request context.Context, group *net.UDPAddr)
 	sockets, err := discoverySockets(group)
 	if err != nil {
 		return nil, err
+	}
+	for _, socket := range sockets {
+		operation.Stage(ctx, "cast.discovery.interface", applog.Fields{"local_address": socket.LocalAddr().String()})
 	}
 	// A separate receive lifetime lets HTTP descriptions finish after the final
 	// SSDP response, while request cancellation still interrupts both stages.
@@ -172,7 +186,13 @@ func (s *Service) discoverAtContext(request context.Context, group *net.UDPAddr)
 				if ctx.Err() != nil {
 					return
 				}
+				operation.Stage(ctx, "cast.description.start", applog.Fields{"location": applog.SafeURL(job.location), "peer": job.peer.String()})
 				device, err := resolve(ctx, job.location, job.peer)
+				if err != nil {
+					traceFailure(ctx, "cast.description.failed", err, applog.Fields{"location": applog.SafeURL(job.location), "peer": job.peer.String()})
+				} else {
+					operation.Stage(ctx, "cast.device.discovered", applog.Fields{"cast_device_id": device.ID, "device_name": device.Name, "location": applog.SafeURL(job.location)})
+				}
 				if err == nil {
 					s.mu.Lock()
 					s.devices[device.ID] = device
@@ -194,6 +214,7 @@ func (s *Service) discoverAtContext(request context.Context, group *net.UDPAddr)
 				}
 			}
 		}
+		operation.Stage(ctx, "cast.discovery.sent", applog.Fields{"query_count": sent, "interface_count": len(sockets)})
 		if sent == 0 {
 			return last
 		}
@@ -203,6 +224,7 @@ func (s *Service) discoverAtContext(request context.Context, group *net.UDPAddr)
 	retry := time.NewTimer(1100 * time.Millisecond)
 	defer retry.Stop()
 	seen := map[string]bool{}
+	packetsReceived, rejected, malformed := 0, 0, 0
 collect:
 	for sendErr == nil {
 		select {
@@ -211,8 +233,10 @@ collect:
 		case <-retry.C:
 			sendErr = send()
 		case packet := <-packets:
+			packetsReceived++
 			response, err := http.ReadResponse(bufio.NewReader(strings.NewReader(packet.data)), nil)
 			if err != nil {
+				malformed++
 				continue
 			}
 			if response.Body != nil {
@@ -223,6 +247,10 @@ collect:
 				continue
 			}
 			if _, err := endpoint(location, packet.peer); err != nil {
+				rejected++
+				if rejected <= 8 {
+					traceFailure(ctx, "cast.discovery.rejected", err, applog.Fields{"location": applog.SafeURL(location), "peer": packet.peer.String(), "code": "CAST_ENDPOINT_REJECTED"})
+				}
 				continue
 			}
 			// Mark only admitted jobs; queue pressure must not discard later replies.
@@ -233,6 +261,7 @@ collect:
 			}
 		}
 	}
+	operation.Stage(ctx, "cast.discovery.received", applog.Fields{"packet_count": packetsReceived, "rejected_count": rejected, "malformed_count": malformed, "description_count": len(seen)})
 	stopReceive()
 	closeSockets()
 	readers.Wait()

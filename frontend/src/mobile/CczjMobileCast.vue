@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import './player/presentation.css'
-import { ref, watch, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '../components/Icon.vue'
 import { Button } from '../components/ui'
 import CczjMobilePlayerDrawer from './CczjMobilePlayerDrawer.vue'
-import { DiscoverCastDevices, PlayCastVideo, ControlCastVideo, normalizeApiError } from '../api/app'
+import { DiscoverCastDevices, PlayCastVideo, ControlCastVideo, GetCastStatus, normalizeApiError } from '../api/app'
 import { createPlayerPlatform } from '../player/platform'
+import { createRequestScope } from '../api/requestScope'
+import { formatPlaybackTime } from '../player/videoInfoFormat'
 const platform=createPlayerPlatform()
 const props = defineProps<{ open: boolean; url: string; title: string; position: number; host?:HTMLElement; fullscreen?:boolean }>()
 const emit = defineEmits<{ close: []; connected: [] }>()
@@ -15,6 +17,27 @@ const devices = ref<{ id: string; name: string }[]>([])
 const scanning = ref(false), busy = ref(false), error = ref('')
 const selected = ref<{ id: string; name: string } | null>(null)
 const paused = ref(false)
+const remote=ref<{state:string;transport_status:string;position:number;duration:number;has_position:boolean}|null>(null)
+const statusError=ref(''),statusScope=createRequestScope(),controlScope=createRequestScope()
+let statusTimer:ReturnType<typeof setTimeout>|undefined,statusRevision=0,sessionRevision=0
+const remoteLabel=computed(()=>{
+ if(remote.value?.transport_status==='ERROR_OCCURRED')return t('mobile.castReceiverError')
+ if(remote.value?.state==='PLAYING'&&remote.value.has_position&&remote.value.position<=0)return t('mobile.castChecking')
+ return t(remote.value?.state==='PLAYING'?'mobile.castPlaying':remote.value?.state==='PAUSED_PLAYBACK'?'mobile.castPaused':remote.value?.state==='STOPPED'||remote.value?.state==='NO_MEDIA_PRESENT'?'mobile.castNotPlaying':'mobile.castChecking')
+})
+function stopStatus():void {statusRevision++;clearTimeout(statusTimer);statusTimer=undefined;statusScope.cancel()}
+async function refreshStatus():Promise<void>{
+ stopStatus()
+ if(disposed||!props.open||!selected.value)return
+ const token=statusRevision,id=selected.value.id
+ try{
+  const value=await statusScope.run(()=>GetCastStatus(id))
+  if(token!==statusRevision||disposed||selected.value?.id!==id)return
+  remote.value=value;statusError.value=''
+  paused.value=value.state==='PAUSED_PLAYBACK'
+ }catch(error){if(token===statusRevision&&!disposed&&normalizeApiError(error).code!=='CANCELLED'){remote.value=null;statusError.value=t('mobile.castUnconfirmed')}}
+ finally{if(token===statusRevision&&!disposed&&props.open&&selected.value)statusTimer=setTimeout(()=>{void refreshStatus()},3000)}
+}
 let disposed = false
 let discovery: ReturnType<typeof DiscoverCastDevices> | undefined
 let scanGeneration=0
@@ -38,10 +61,11 @@ async function scan(): Promise<void> {
 }
 async function connect(device: { id: string; name: string }): Promise<void> {
   if (busy.value) return
-  busy.value = true; error.value = ''
-  try { await PlayCastVideo(device.id, props.url, props.title); if (!disposed) { selected.value = device; paused.value = false; emit('connected') } }
-  catch (e) { if (!disposed) error.value = String(e) }
-  finally { busy.value = false }
+  const token=sessionRevision
+  busy.value = true; error.value = '';remote.value=null;statusError.value=''
+  try { await controlScope.run(()=>PlayCastVideo(device.id, props.url, props.title)); if (!disposed&&token===sessionRevision) { selected.value = device; paused.value = false; emit('connected');void refreshStatus() } }
+  catch (e) { if (!disposed&&token===sessionRevision&&normalizeApiError(e).code!=='CANCELLED') error.value = normalizeApiError(e).message }
+  finally { if(token===sessionRevision)busy.value = false }
 }
 function systemCast():void {
   stopDiscovery()
@@ -51,17 +75,21 @@ function systemCast():void {
 }
 async function control(action: string): Promise<void> {
   if (!selected.value || busy.value) return
+  const token=sessionRevision,id=selected.value.id
+  stopStatus()
   busy.value = true; error.value = ''
   try {
-    await ControlCastVideo(selected.value.id, action, action === 'Seek' ? props.position : 0)
-    if (action === 'Stop') selected.value = null
-    else if (action !== 'Seek') paused.value = action === 'Pause'
-  } catch (e) { if (!disposed) error.value = String(e) }
-  finally { busy.value = false }
+    await controlScope.run(()=>ControlCastVideo(id, action, action === 'Seek' ? props.position : 0))
+    if(disposed||token!==sessionRevision)return
+    if (action === 'Stop') {stopStatus();selected.value = null;remote.value=null}
+    else {if (action !== 'Seek')paused.value = action === 'Pause';void refreshStatus()}
+  } catch (e) { if (!disposed&&token===sessionRevision&&normalizeApiError(e).code!=='CANCELLED') {error.value = normalizeApiError(e).message;void refreshStatus()} }
+  finally { if(token===sessionRevision)busy.value = false }
 }
-watch(() => props.open, value => { if (!value) stopDiscovery();else if (!selected.value) void scan() })
-watch(() => props.url, () => { selected.value = null; paused.value = false })
-onBeforeUnmount(() => { disposed = true; stopDiscovery() })
+function cancelControls():void{sessionRevision++;controlScope.cancel();busy.value=false}
+watch(() => props.open, value => { if (!value) {cancelControls();stopDiscovery();stopStatus()}else if (!selected.value) void scan();else void refreshStatus() })
+watch(() => props.url, () => {cancelControls();stopStatus(); selected.value = null; paused.value = false;remote.value=null })
+onBeforeUnmount(() => { disposed = true;cancelControls();stopStatus(); stopDiscovery() })
 </script>
 <template>
  <CczjMobilePlayerDrawer :host="host" :open="open" :fullscreen="!!fullscreen" :title="t('mobile.cast')" @close="emit('close')">
@@ -69,7 +97,7 @@ onBeforeUnmount(() => { disposed = true; stopDiscovery() })
     <p>{{ t('mobile.castHint') }}</p>
     <p v-if="error" class="cczj-mobile-cast-error" role="alert">{{ error }}</p>
     <template v-if="selected">
-      <strong>{{ selected.name }}</strong><p role="status">{{ t('mobile.castSent') }}</p>
+      <strong>{{ selected.name }}</strong><p role="status">{{ remoteLabel }}</p><p v-if="remote?.has_position">{{formatPlaybackTime(remote.position)}} / {{formatPlaybackTime(remote.duration)}}</p><p v-if="statusError" role="status">{{statusError}}</p>
       <div class="cczj-mobile-cast-actions"><button :disabled="busy" @click="control(paused ? 'Play' : 'Pause')">{{ t(paused ? 'player.play' : 'player.pause') }}</button><button :disabled="busy" @click="control('Stop')">{{ t('mobile.castStop') }}</button><button :disabled="busy || position <= 0" @click="control('Seek')">{{ t('mobile.castSeek') }}</button></div>
     </template>
     <template v-else>

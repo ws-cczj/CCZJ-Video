@@ -59,6 +59,7 @@ public class MainActivity extends AppCompatActivity {
     private WebView webView;
     private WailsJSBridge jsBridge;
     private long activityStartedAt;
+    private Integer systemBarColor;
     private volatile long goReadyAt, pageStartedAt, pageCommittedAt, pageFinishedAt;
 
     public String startupState() {
@@ -77,11 +78,28 @@ public class MainActivity extends AppCompatActivity {
         if (color == null || !color.matches("#[0-9a-fA-F]{6}")) return;
         getSharedPreferences("cczj-presentation", MODE_PRIVATE).edit()
                 .putInt("launch_background", android.graphics.Color.parseColor(color)).apply();
-        runOnUiThread(this::applyLaunchBarContrast);
+        runOnUiThread(() -> { systemBarColor = null; applyLaunchBarContrast(); });
+    }
+
+    public void setSystemBarColor(String color) {
+        if (color == null || (!color.isEmpty() && !color.matches("#[0-9a-fA-F]{6}"))) return;
+        runOnUiThread(() -> {
+            systemBarColor = color.isEmpty() ? null : android.graphics.Color.parseColor(color);
+            applyLaunchBarContrast();
+        });
     }
 
     private void applyLaunchBarContrast() {
-        boolean lightSurface = android.graphics.Color.luminance(launchBackground()) > 0.5f;
+        int color = launchBackground();
+        int barColor = systemBarColor == null ? color : systemBarColor;
+        boolean lightSurface = android.graphics.Color.luminance(barColor) > 0.5f;
+        getWindow().setStatusBarColor(barColor);
+        getWindow().setNavigationBarColor(barColor);
+        if (fullscreenView == null) {
+            getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(barColor));
+            android.view.View container = findViewById(R.id.main_container);
+            if (container != null) container.setBackgroundColor(barColor);
+        }
         androidx.core.view.WindowInsetsControllerCompat controller =
                 androidx.core.view.WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
         controller.setAppearanceLightStatusBars(lightSurface);
@@ -183,6 +201,19 @@ public class MainActivity extends AppCompatActivity {
         }
         configureFrontendDev(getIntent());
         setContentView(R.layout.activity_main);
+        // One owner applies system insets. Consuming them here prevents older
+        // WebViews from reserving a second status-bar strip inside the page.
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        android.view.View content = findViewById(R.id.main_container);
+        content.setFitsSystemWindows(false);
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(content, (view, insets) -> {
+            if (fullscreenView == null) {
+                androidx.core.graphics.Insets bars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars() | androidx.core.view.WindowInsetsCompat.Type.displayCutout());
+                view.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+            }
+            return androidx.core.view.WindowInsetsCompat.CONSUMED;
+        });
+        androidx.core.view.ViewCompat.requestApplyInsets(content);
         getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(launchBackground()));
         findViewById(R.id.main_container).setBackgroundColor(launchBackground());
         applyLaunchBarContrast();
@@ -488,6 +519,8 @@ public class MainActivity extends AppCompatActivity {
         webView.setVisibility(android.view.View.VISIBLE);
         androidx.core.view.WindowCompat.getInsetsController(getWindow(), webView)
                 .show(androidx.core.view.WindowInsetsCompat.Type.systemBars());
+        applyLaunchBarContrast();
+        androidx.core.view.ViewCompat.requestApplyInsets(container);
         if (fullscreenCallback != null) {
             fullscreenCallback.onCustomViewHidden();
             fullscreenCallback = null;

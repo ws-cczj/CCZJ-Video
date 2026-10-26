@@ -3,7 +3,8 @@ import { computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, pro
 import { useRoute,useRouter,loadRouteLocation,routeLocationKey,routerViewLocationKey,type RouteLocationNormalizedLoaded } from 'vue-router'
 import { primaryTabs,routeDirection,routeScreenKey } from './routeMotion'
 import { useTabSwipe } from './useTabSwipe'
-import { routeBackdropFocus } from './routeBackdrop'
+import { routeBackdropFocus, routeBackdropFrame } from './routeBackdrop'
+import { useBackdropSystemBars } from '../platform/backdropSystemBars'
 const props=withDefaults(defineProps<{mobile:boolean;cache?:string[]}>(),{cache:()=>[]})
 const router=useRouter(),route=useRoute(),direction=ref<'forward'|'back'>('forward')
 const primary=(path:string,query:RouteLocationNormalizedLoaded['query']={})=>props.mobile&&!(['/settings','/novel/settings','/comic/settings'].includes(path)&&query.group)&&primaryTabs.some(tabs=>tabs.includes(path))
@@ -12,12 +13,14 @@ const primaryEntries=computed(()=>Array.from(entries.values()))
 const secondary=shallowRef<RouteLocationNormalizedLoaded>({...route})
 const offset=ref(0),settling=ref(false),committing=ref(false),dragFrom=ref(''),previewPath=ref(''),previewEdge=ref(1)
 const dragging=computed(()=>!!dragFrom.value)
+const backdropElement=ref<HTMLElement>()
+useBackdropSystemBars(backdropElement,()=>routeScreenKey(route))
 const backdropStyle=computed(()=>{
  const origin=routeBackdropFocus(route.path,String(route.query.group||''))
  const target=previewPath.value?routeBackdropFocus(previewPath.value):origin
  const fraction=dragging.value?Math.min(1,Math.abs(offset.value)/Math.max(1,innerWidth)):0
  const x=origin.x+(target.x-origin.x)*fraction,y=origin.y+(target.y-origin.y)*fraction
- return {transform:`translate3d(${(0.5-x)*20}%,${(0.5-y)*12}%,0)`}
+ return routeBackdropFrame(route.path,{x,y})
 })
 const chapterChange=ref(false)
 let previous={...route} as RouteLocationNormalizedLoaded,position=Number(router.options.history.state.position)||0
@@ -112,7 +115,7 @@ onMounted(()=>requestAnimationFrame(notifyScroll))
 onBeforeUnmount(()=>{alive=false;revision++;clearTimeout(timer);finishWait?.()})
 </script>
 <template><div class="cczj-mobile-route-stage" :class="{'cczj-mobile-shared-backdrop':mobile,'cczj-mobile-tab-dragging':dragging,'cczj-mobile-tab-settling':settling}" @touchstart.passive="swipe.touchStart" @touchmove="swipe.touchMove" @touchend="swipe.touchEnd" @touchcancel="swipe.cancel" @click.capture="swipe.click">
- <div v-if="mobile" class="cczj-mobile-route-backdrop" aria-hidden="true" :style="backdropStyle" />
+ <div v-if="mobile" ref="backdropElement" class="cczj-mobile-route-backdrop" aria-hidden="true" :style="backdropStyle" />
  <div class="cczj-mobile-route-viewport">
   <template v-for="entry in primaryEntries" :key="entry.path"><router-view :route="entry" v-slot="{Component}"><Transition :name="name" :css="!dragging&&!committing" @before-enter="enterTab" @before-leave="leaveTab" @after-enter="notifyScroll"><KeepAlive><component v-if="Component&&tabVisible(entry.path)" :is="scene(Component)" :key="entry.path" :view="Component" :location="entry" :frame="$slots.default" :class="{'cczj-mobile-route-current':primary(route.path,route.query)&&entry.path===route.path,'cczj-mobile-route-preview':dragging&&entry.path===previewPath&&entry.path!==route.path}" :style="tabStyle(entry.path)" @vue:mounted="syncTab" @vue:updated="syncTab" /></KeepAlive></Transition></router-view></template>
   <router-view v-if="!mobile||!primary(secondary.path,secondary.query)" :route="secondary" v-slot="{Component}"><Transition :name="name" :css="!chapterChange" :mode="mobile?undefined:'out-in'" @before-enter="activate" @before-leave="deactivate" @after-enter="notifyScroll" @enter-cancelled="deactivate"><KeepAlive :include="cache"><component v-if="Component&&(!mobile||!primary(route.path,route.query))" :is="scene(Component)" :key="routeScreenKey(secondary)" :view="Component" :location="secondary" :frame="$slots.default" /></KeepAlive></Transition></router-view>

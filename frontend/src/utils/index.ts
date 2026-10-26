@@ -2,6 +2,7 @@
 import { readStorage } from '../platform/storage'
 import { createDebouncedWriter } from '../platform/debouncedWrite'
 import { tr } from '../locales'
+import { parseTimestamp } from './time'
 
 // 格式化时间显示
 // 数据库里的时间戳是 UTC 裸串（SQLite CURRENT_TIMESTAMP，形如 '2026-09-28 03:41:00'）。
@@ -9,10 +10,7 @@ import { tr } from '../locales'
 // 因此这里给缺少时区标识的串补 'Z' 再解析；已自带 Z / ±hh:mm 的原样解析，不重复加。
 export function formatTime(dateStr: string): string {
   if (!dateStr) return ''
-  const normalized = dateStr.replace(' ', 'T')
-  const hasTz = /(?:z|[+-]\d{2}:?\d{2})$/i.test(normalized)
-  const hasTime = /\d{2}:\d{2}/.test(normalized)
-  const d = new Date(!hasTz && hasTime ? `${normalized}Z` : normalized)
+  const d = new Date(parseTimestamp(dateStr))
   if (isNaN(d.getTime())) return dateStr.replace('T', ' ').slice(0, 16)
   const now = new Date()
   const diff = now.getTime() - d.getTime()
@@ -53,13 +51,14 @@ export function getPlayerPath(
   video: { global_id?: string | number; vod_g_id?: string | number; vod_id?: string | number; id?: number; type_name?: string },
   epIndex: number,
   lineIndex?: number,
+  resume = false,
 ): string {
   const globalId = video.global_id
   const id = globalId !== undefined && globalId !== null && String(globalId) !== '' ? globalId : 0
   if (/短剧|短劇|短片剧/.test(video.type_name ?? '')) {
-    return getShortDramaPath(sourceKey,video,epIndex,lineIndex)
+    return getShortDramaPath(sourceKey,video,epIndex,lineIndex) + (resume ? '&resume=1' : '')
   }
-  return `/player/${sourceKey}/${id}/${epIndex}?vod=${encodeURIComponent(String(getVideoId(video)))}`
+  return `/player/${sourceKey}/${id}/${epIndex}?vod=${encodeURIComponent(String(getVideoId(video)))}` + (resume ? '&resume=1' : '')
 }
 
 export function getShortDramaPath(sourceKey:string, video:{global_id?:string|number;vod_g_id?:string|number;vod_id?:string|number;id?:number}, epIndex=0, lineIndex?:number):string {

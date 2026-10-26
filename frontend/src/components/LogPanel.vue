@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from './Icon.vue'
-import { Button } from './ui'
+import { Button, Modal, Segment as ChoiceSegment } from './ui'
+import LogRecordDetails from './LogRecordDetails.vue'
 import { GetLogContent, OpenFileInExplorer } from '../api/app'
 import { revealDiagnosticExport, revealLogDirectory } from '../platform/diagnosticFiles'
+import { presentationProfile } from '../platform/presentation'
 import { useViewActivity } from '../composables/useViewActivity'
 import { useConfirmStore } from '../stores/confirm'
 import { useErrorStore } from '../stores/error'
@@ -35,7 +37,15 @@ const tab = ref<PanelTab>('live')
 const autoScroll = ref(true)
 const exportFormat = ref<'log' | 'csv' | 'json'>('log')
 const lastExportPath = ref('')
+const exporting = ref(false)
+const mobileExport = presentationProfile().ui === 'mobile'
 const selected = ref<LogRecord | null>(null)
+const overviewOpen = ref(!mobileExport)
+const filtersOpen = ref(!mobileExport)
+const formatOptions = ['log', 'csv', 'json'].map(value => ({ value, label: value.toUpperCase() }))
+function setExportFormat(value: string | number): void {
+  if (value === 'log' || value === 'csv' || value === 'json') exportFormat.value = value
+}
 
 // ---------- 实时时间线：定高窗口化渲染 ----------
 const ROW_H = computed(()=>props.rowHeight)
@@ -201,15 +211,20 @@ async function revealLogFile(): Promise<void> {
 }
 
 async function doExport(): Promise<void> {
+  if (exporting.value) return
+  exporting.value = true
   try {
     const result = await logs.exportToFile({
       filename: tab.value === 'live' ? '' : (currentFile.value || logs.currentFileLabel),
       format: exportFormat.value,
     })
     lastExportPath.value = result.path
-    errorStore.info(t('logs.exportOkTitle'), t('logs.exportOk', { lines: result.lines, path: result.path }))
+    if (mobileExport && !disposed && viewActive.value) await revealDiagnosticExport(result.path)
+    errorStore.info(t('logs.exportOkTitle'), t(mobileExport ? 'logs.mobileExportReady' : 'logs.exportOk', { lines: result.lines, path: result.path }))
   } catch (e: any) {
     errorStore.fromError(t('logs.exportFailed'), e, 'LogPanel')
+  } finally {
+    exporting.value = false
   }
 }
 
@@ -315,12 +330,6 @@ onBeforeUnmount(() => {
   cancelFileFilter()
   void logs.detach()
 })
-function onOverlayBack(event:Event):void {
-  if(props.detailMode!=='sheet'||!selected.value||!viewActive.value)return
-  event.preventDefault();event.stopImmediatePropagation();selected.value=null
-}
-onMounted(()=>{if(props.detailMode==='sheet')window.addEventListener('cczj:android-overlay-back',onOverlayBack)})
-onBeforeUnmount(()=>window.removeEventListener('cczj:android-overlay-back',onOverlayBack))
 </script>
 
 <template>
@@ -329,11 +338,11 @@ onBeforeUnmount(()=>window.removeEventListener('cczj:android-overlay-back',onOve
     <p v-if="logs.stats?.last_write_error || logs.stats?.unpersisted" class="log-hint" role="alert">{{ t('logs.diskFailure', { count: logs.stats?.unpersisted || 0 }) }} {{ logs.stats?.last_write_error || t('logs.writerRecovered') }}</p>
     <p v-if="logs.missingRecords" class="log-hint" role="status">{{ t('logs.missingRecords', { count: logs.missingRecords }) }}</p>
     <p v-if="logs.stats?.level === 'WARN' || logs.stats?.level === 'ERROR'" class="log-hint" role="status">{{ t('logs.detailSuppressed') }}</p>
-    <p class="log-hint">{{ t('logs.exportScope') }}</p>
+    <p v-if="!mobileExport" class="log-hint">{{ t('logs.exportScope') }}</p>
     <!-- 概览卡 -->
     <section class="block">
       <div class="block-hd cczj-flex cczj-items-center cczj-justify-between">
-        <h3>{{ t('logs.overview') }}</h3>
+        <h3>{{ t('logs.overview') }}<span v-if="mobileExport" class="log-overview-summary">{{ logs.level }} · {{ stats.buffered ?? 0 }}</span></h3>
         <div class="cczj-flex cczj-items-center cczj-gap-4">
           <span class="log-live" :class="{ on: logs.attached && !logs.paused }">
             <Icon :name="logs.paused ? 'pause' : 'play'" :size="11" />
@@ -342,10 +351,13 @@ onBeforeUnmount(()=>window.removeEventListener('cczj:android-overlay-back',onOve
           <Button variant="secondary" size="sm" @click="refresh">
             <Icon name="refresh" :size="12" /> {{ t('common.refresh') }}
           </Button>
+          <Button v-if="mobileExport" variant="ghost" size="sm" :aria-expanded="overviewOpen" :aria-label="t('logs.overview')" @click="overviewOpen = !overviewOpen">
+            <Icon :name="overviewOpen ? 'chevron-up' : 'chevron-down'" :size="16" />
+          </Button>
         </div>
       </div>
 
-      <div class="log-grid cczj-grid">
+      <div v-if="overviewOpen" class="log-grid cczj-grid">
         <div class="log-card">
           <div class="log-card-icon lvl-info"><Icon name="sliders" :size="16" /></div>
           <div class="log-card-body">
@@ -374,37 +386,37 @@ onBeforeUnmount(()=>window.removeEventListener('cczj:android-overlay-back',onOve
           <div class="log-card-icon lvl-pink"><Icon name="folder" :size="16" /></div>
           <div class="log-card-body cczj-min-w-0">
             <div class="log-card-label">{{ t('logs.dir') }}</div>
-            <div class="log-card-path cczj-truncate" :title="t('logs.copyTitle')" @click="copyText(stats.dir || '', t('logs.copyTitle'))">{{ stats.dir || '—' }}</div>
+            <button class="log-card-path cczj-truncate" :title="t('logs.copyTitle')" @click="copyText(stats.dir || '', t('logs.copyTitle'))">{{ stats.dir || '—' }}</button>
             <div class="log-card-note">{{ stats.goos }}/{{ stats.goarch }}</div>
           </div>
         </div>
       </div>
 
-      <div class="log-levels cczj-flex cczj-flex-wrap cczj-items-center cczj-gap-4">
+      <div v-if="overviewOpen" class="log-levels cczj-flex cczj-flex-wrap cczj-items-center cczj-gap-4">
         <span class="log-levels-label">{{ t('logs.switchLevel') }}</span>
-        <button
-          v-for="level in ['DEBUG', 'INFO', 'WARN', 'ERROR']"
-          :key="level"
-          class="log-seg"
-          :class="{ active: logs.level === level }"
-          @click="switchLevel(level)"
-        >{{ level }}</button>
+        <ChoiceSegment :model-value="logs.level" :options="['DEBUG', 'INFO', 'WARN', 'ERROR'].map(value => ({ value, label: value }))" size="sm" @update:model-value="switchLevel(String($event))" />
         <span class="log-levels-hint">{{ t('logs.levelImmediate') }}</span>
       </div>
     </section>
 
     <!-- 筛选与操作 -->
-    <section class="block">
+    <section class="block log-controls">
       <div class="cczj-flex cczj-flex-wrap cczj-items-center cczj-gap-4">
         <div class="log-search cczj-flex cczj-items-center">
           <Icon name="search" :size="13" />
-          <input v-model="logs.query" type="text" :placeholder="t('logs.searchPlaceholder')" />
+          <input v-model="logs.query" type="search" :aria-label="t('logs.searchPlaceholder')" :placeholder="t('logs.searchPlaceholder')" />
         </div>
+        <Button v-if="mobileExport" variant="secondary" size="sm" :aria-expanded="filtersOpen" @click="filtersOpen = !filtersOpen">
+          <Icon name="sliders" :size="14" /> {{ t('logs.filters') }}
+        </Button>
+      </div>
+      <div v-if="filtersOpen" class="log-filter-groups cczj-flex cczj-flex-wrap cczj-items-center cczj-gap-4">
         <button
           v-for="chip in levelChips"
           :key="chip.level"
           class="log-chip"
           :class="{ active: chip.active }"
+          :aria-pressed="chip.active"
           @click="toggleInList(logs.levelFilter, chip.level)"
         >
           <span class="log-dot" :class="`lvl-${chip.level.toLowerCase()}`"></span>
@@ -418,17 +430,18 @@ onBeforeUnmount(()=>window.removeEventListener('cczj:android-overlay-back',onOve
           :key="chip.origin"
           class="log-chip log-chip-origin"
           :class="{ active: chip.active }"
+          :aria-pressed="chip.active"
           :disabled="!chip.count"
           @click="toggleInList(logs.originFilter, chip.origin)"
         >{{ chip.label }} <em>{{ chip.count }}</em></button>
       </div>
 
-      <div class="cczj-flex cczj-flex-wrap cczj-items-center cczj-gap-4" style="margin-top: 10px;">
+      <div v-if="!mobileExport || filtersOpen" class="log-toolbar cczj-flex cczj-flex-wrap cczj-items-center cczj-gap-4">
         <Button variant="secondary" size="sm" @click="togglePause">
           <Icon :name="logs.paused ? 'play' : 'pause'" :size="12" />
           {{ logs.paused ? t('logs.resume') : t('logs.pause') }}
         </Button>
-        <Button variant="secondary" size="sm" :class="{ 'log-toggle-on': autoScroll }" @click="autoScroll = !autoScroll">
+        <Button variant="secondary" size="sm" :aria-pressed="autoScroll" :class="{ 'log-toggle-on': autoScroll }" @click="autoScroll = !autoScroll">
           <Icon name="arrow-up" :size="12" /> {{ t('logs.autoScroll') }}
         </Button>
         <Button variant="secondary" size="sm" @click="copyVisible">
@@ -440,22 +453,22 @@ onBeforeUnmount(()=>window.removeEventListener('cczj:android-overlay-back',onOve
         <Button v-if="localFileActions" variant="secondary" size="sm" @click="revealLogFile">
           <Icon name="file-text" :size="12" /> {{ t('logs.reveal') }}
         </Button>
+      </div>
+      <div class="log-export-toolbar cczj-flex cczj-flex-wrap cczj-items-center cczj-gap-4">
         <div class="log-export-actions cczj-flex cczj-items-center cczj-gap-3">
-          <button
-            v-for="fmt in (['log', 'csv', 'json'] as const)"
-            :key="fmt"
-            class="log-seg"
-            :class="{ active: exportFormat === fmt }"
-            @click="exportFormat = fmt"
-          >{{ fmt.toUpperCase() }}</button>
-          <Button variant="primary" size="sm" @click="doExport">
+          <ChoiceSegment :model-value="exportFormat" :options="formatOptions" size="sm" @update:model-value="setExportFormat" />
+          <Button variant="primary" size="sm" :loading="exporting" @click="doExport">
             <Icon name="download" :size="12" /> {{ t('logs.export') }}
           </Button>
           <Button v-if="lastExportPath" variant="secondary" size="sm" @click="revealExport">
-            <Icon name="folder" :size="12" /> {{ t(exportActionLabel) }}
+            <Icon name="folder" :size="12" /> {{ t(mobileExport ? 'logs.shareExport' : exportActionLabel) }}
           </Button>
         </div>
-        <Button variant="danger" size="sm" @click="doClear">
+        <details v-if="mobileExport && filtersOpen" class="log-export-scope log-hint">
+          <summary>{{ t('logs.exportScopeTitle') }}</summary>
+          <p>{{ t('logs.exportScope') }}</p>
+        </details>
+        <Button v-if="!mobileExport || filtersOpen" variant="danger" size="sm" @click="doClear">
           <Icon name="trash" :size="12" /> {{ t('logs.clear') }}
         </Button>
       </div>
@@ -473,13 +486,14 @@ onBeforeUnmount(()=>window.removeEventListener('cczj:android-overlay-back',onOve
           :key="item.id"
           class="log-tab"
           :class="{ active: tab === item.id }"
+          :aria-pressed="tab === item.id"
           @click="tab = item.id"
         >
           <Icon :name="item.icon" :size="13" />
           <span>{{ item.label }}</span>
         </button>
         <div v-if="tab === 'file'" class="cczj-flex cczj-items-center cczj-gap-4 log-file-picker">
-          <select class="log-select" :value="currentFile" @change="pickFile">
+          <select class="log-select" :aria-label="t('logs.tabFile')" :value="currentFile" @change="pickFile">
             <option v-for="option in fileOptions" :key="option.name" :value="option.name">{{ option.label }}</option>
           </select>
           <span v-if="logs.fileInfo" class="log-hint">
@@ -506,6 +520,8 @@ onBeforeUnmount(()=>window.removeEventListener('cczj:android-overlay-back',onOve
           class="log-row cczj-flex cczj-items-center"
           :class="[`row-${rec.level.toLowerCase()}`, { picked: selected?.key === rec.key && selected?.origin === rec.origin }]"
           :style="{ height: ROW_H + 'px' }"
+          role="button" tabindex="0"
+          @keydown.enter="selected = rec" @keydown.space.prevent="selected = rec"
           @click="selected = rec"
         >
           <span class="log-ts">{{ formatLogTime(rec.ts) }}</span>
@@ -534,6 +550,8 @@ onBeforeUnmount(()=>window.removeEventListener('cczj:android-overlay-back',onOve
             :key="`${rec.origin}-${rec.key}`"
             class="log-row cczj-flex cczj-items-center"
             :class="[`row-${rec.level.toLowerCase()}`, { picked: selected?.key === rec.key && selected?.origin === rec.origin }]"
+            role="button" tabindex="0"
+            @keydown.enter="selected = rec" @keydown.space.prevent="selected = rec"
             @click="selected = rec"
           >
             <span class="log-ts">{{ formatLogTime(rec.ts) }}</span>
@@ -559,26 +577,14 @@ onBeforeUnmount(()=>window.removeEventListener('cczj:android-overlay-back',onOve
       </div>
 
       <!-- 选中详情 -->
-      <div v-if="selected" class="log-detail cczj-flex cczj-items-start cczj-gap-7">
-        <div class="cczj-flex-1 cczj-min-w-0">
-          <div class="log-detail-meta cczj-flex cczj-flex-wrap cczj-items-center">
-            <span class="log-lvl" :class="`lvl-${selected.level.toLowerCase()}`">{{ selected.level }}</span>
-            <span>{{ new Date(selected.ts).toLocaleString() }}</span>
-            <span>{{ logs.describeOrigin(selected.origin) }}</span>
-            <span v-if="selected.sourceKey">source: {{ selected.sourceKey }}</span>
-            <span v-if="selected.caller">{{ selected.caller }}</span>
-            <span v-if="selected.seq">#{{ selected.seq }}</span>
-            <span v-if="selected.sessionId">{{ selected.sessionId }}</span>
-            <span v-if="selected.persisted === false">{{ t('logs.memoryOnly') }}</span>
-          </div>
-          <div class="log-detail-msg">{{ selected.message }}</div>
-        </div>
-        <div class="cczj-flex cczj-gap-3">
-          <Button variant="secondary" size="sm" @click="copyRecord(selected)"><Icon name="copy" :size="12" /> {{ t('logs.copyLine') }}</Button>
-          <Button variant="ghost" size="sm" :aria-label="t('common.close')" @click="selected = null"><Icon name="close" :size="12" /></Button>
-        </div>
+      <div v-if="selected && detailMode === 'inline'" class="log-detail cczj-flex cczj-items-start cczj-gap-7">
+        <LogRecordDetails class="cczj-flex-1 cczj-min-w-0" :record="selected" :origin-label="logs.describeOrigin(selected.origin)" @copy="copyRecord(selected)" />
+        <Button variant="ghost" size="sm" :aria-label="t('common.close')" @click="selected = null"><Icon name="close" :size="12" /></Button>
       </div>
     </section>
+    <Modal :model-value="!!selected && detailMode === 'sheet' && viewActive" :title="t('logs.recordDetail')" width="640px" @update:model-value="selected = null">
+      <LogRecordDetails v-if="selected" :record="selected" :origin-label="logs.describeOrigin(selected.origin)" @copy="copyRecord(selected)" />
+    </Modal>
   </div>
 </template>
 

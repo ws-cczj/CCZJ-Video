@@ -49,6 +49,23 @@ var migrations = []migration{
 	{version: 18, note: "小说与漫画分别保留源检测、作品覆盖与章节证据", apply: migrateReadingRouting},
 	{version: 19, note: "阅读搜索实测反馈与源质量抽检分开保存", apply: migrateReadingSearchHealth},
 	{version: 20, note: "目录彻底删除的退役坐标：保留用户记录并继续隐藏", apply: migrateCatalogRetirements},
+	{version: 21, note: "福利与简繁伦理分类默认禁用，不删除已有内容", apply: migrateDefaultTypePolicy},
+	{version: 22, note: "保存每集总时长以恢复真实观看进度", apply: func(tx *sqlx.Tx) error {
+		return addColumnIfMissing(tx, "watch_history", "duration", "REAL NOT NULL DEFAULT 0")
+	}},
+}
+
+func migrateDefaultTypePolicy(tx *sqlx.Tx) error {
+	exists, err := tableExists(tx, "global_types")
+	if err != nil || !exists {
+		return err
+	}
+	for _, key := range defaultBlockedTypeKeys {
+		if _, err := tx.Exec(`UPDATE global_types SET collect_enabled=0 WHERE cczj_type_key(type_name)=?`, key); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // migrateDoubanAttemptClock 给豆瓣补全队列加一个「最近一次尝试」时钟。

@@ -259,25 +259,20 @@ func getKeys(m map[string]interface{}) []string {
 // ParseVideosWithMapping 批量解析视频（兼容 FetchResult 结构）
 func ParseVideosWithMapping(rawData []byte, fieldMapping map[string]string) ([]*model.Video, error) {
 	var result struct {
-		List []json.RawMessage `json:"list"`
+		List json.RawMessage `json:"list"`
 	}
 	if err := json.Unmarshal(rawData, &result); err != nil {
 		return nil, err
 	}
 
-	videos := make([]*model.Video, 0, len(result.List))
-	for i, item := range result.List {
-		v, err := ParseVideoWithMapping(item, fieldMapping)
-		if err != nil {
-			applog.Warn("[FieldMapping] 解析第 %d 条视频失败: %v", i, err)
-			continue
-		}
-		videos = append(videos, v)
+	if len(result.List) == 0 {
+		return nil, nil
 	}
-	if len(result.List) > 0 && len(videos) == 0 {
-		return nil, fmt.Errorf("no usable objects in video list")
+	node, err := decodeJSONDocument(result.List)
+	if err != nil {
+		return nil, err
 	}
-	return videos, nil
+	return parseVideosFromValue(node, fieldMapping)
 }
 
 // parseVideosFromValue 解析 response.list_path 取到的节点。

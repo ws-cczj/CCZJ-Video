@@ -42,6 +42,7 @@ type BackupHistory struct {
 	VodID     string  `db:"vod_id" json:"vod_id"`
 	EpNum     int     `db:"ep_num" json:"ep_num"`
 	Position  float64 `db:"position" json:"position"`
+	Duration  float64 `db:"duration" json:"duration,omitempty"`
 	UpdatedAt string  `db:"updated_at" json:"updated_at"`
 }
 
@@ -119,9 +120,18 @@ func ReadHistory(database *sqlx.DB) ([]BackupHistory, error) {
 	return ReadHistoryContext(context.Background(), database)
 }
 func ReadHistoryContext(ctx context.Context, database sqlx.QueryerContext) ([]BackupHistory, error) {
+	// Pre-v22 snapshots are read-only and must remain restorable without migration.
+	var hasDuration int
+	if err := sqlx.GetContext(ctx, database, &hasDuration, `SELECT COUNT(*) FROM pragma_table_info('watch_history') WHERE name='duration'`); err != nil {
+		return nil, err
+	}
+	duration := "0 AS duration"
+	if hasDuration > 0 {
+		duration = "h.duration"
+	}
 	var rows []BackupHistory
 	err := sqlx.SelectContext(ctx, database, &rows, `SELECT COALESCE(g.vod_name,'') vod_name, COALESCE(g.year,'') year,
-			h.source_key, h.vod_id, h.ep_num, h.position,
+			h.source_key, h.vod_id, h.ep_num, h.position, `+duration+`,
 			COALESCE(strftime('`+backupTimeFormat+`', h.updated_at),'') updated_at
 		FROM watch_history h
 		LEFT JOIN global_video g ON g.id = h.global_id
@@ -200,19 +210,23 @@ func mergeBackupFavorite(ctx context.Context, executor sqlx.ExtContext, globalID
 func MergeHistoryFromBackup(globalID int64, sourceKey, vodID string, epNum int, position float64, updatedAt string) (bool, error) {
 	return mergeBackupHistory(context.Background(), instance, globalID, sourceKey, vodID, epNum, position, updatedAt)
 }
-func mergeBackupHistory(ctx context.Context, executor sqlx.ExtContext, globalID int64, sourceKey, vodID string, epNum int, position float64, updatedAt string) (bool, error) {
+func mergeBackupHistory(ctx context.Context, executor sqlx.ExtContext, globalID int64, sourceKey, vodID string, epNum int, position float64, updatedAt string, durations ...float64) (bool, error) {
 	if globalID <= 0 || sourceKey == "" || vodID == "" || epNum <= 0 {
 		return false, nil
 	}
 	if math.IsNaN(position) || math.IsInf(position, 0) || position < 0 {
 		return false, nil
 	}
-	res, err := executor.ExecContext(ctx, `INSERT INTO watch_history (global_id, source_key, vod_id, ep_num, position, updated_at)
-		VALUES (?, ?, ?, ?, ?, CASE ? WHEN '' THEN CURRENT_TIMESTAMP ELSE ? END)
+	duration := 0.0
+	if len(durations) > 0 && durations[0] > 0 && !math.IsInf(durations[0], 0) && !math.IsNaN(durations[0]) {
+		duration = durations[0]
+	}
+	res, err := executor.ExecContext(ctx, `INSERT INTO watch_history (global_id, source_key, vod_id, ep_num, position, duration, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, CASE ? WHEN '' THEN CURRENT_TIMESTAMP ELSE ? END)
 		ON CONFLICT(global_id, source_key, ep_num) DO UPDATE SET
-		vod_id=excluded.vod_id, position=excluded.position, updated_at=excluded.updated_at
+		vod_id=excluded.vod_id, position=excluded.position, duration=CASE WHEN excluded.duration>0 THEN excluded.duration ELSE watch_history.duration END, updated_at=excluded.updated_at
 		WHERE watch_history.updated_at < excluded.updated_at`,
-		globalID, sourceKey, vodID, epNum, position, updatedAt, updatedAt)
+		globalID, sourceKey, vodID, epNum, position, duration, updatedAt, updatedAt)
 	if err != nil {
 		return false, err
 	}

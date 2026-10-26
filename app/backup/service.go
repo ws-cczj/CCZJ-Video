@@ -455,7 +455,7 @@ func (s *Service) mergeHistory(writer *db.BackupWriter, history []db.BackupHisto
 			continue
 		}
 		applied, err := writer.MergeHistory(globalID, strings.TrimSpace(item.SourceKey), strings.TrimSpace(item.VodID),
-			item.EpNum, item.Position, item.UpdatedAt)
+			item.EpNum, item.Position, item.UpdatedAt, item.Duration)
 		if err != nil {
 			return err
 		}

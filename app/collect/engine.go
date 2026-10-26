@@ -220,6 +220,12 @@ func fetchPageWithRetry(ctx context.Context, apiUrl string, page int, opts Fetch
 			return res, nil
 		}
 		lastErr = err
+		// A repeat download cannot repair an adapter, configuration or explicit
+		// business refusal. Keep retries for transport and transient HTTP errors.
+		switch FetchFailureKind(err) {
+		case "decode", "configuration", "source", "cancelled":
+			return nil, err
+		}
 		// Shared admission owns long cooldowns. Do not sleep through minutes of
 		// backoff in this page worker or repeatedly call a known blocked request.
 		var upstream *HTTPError

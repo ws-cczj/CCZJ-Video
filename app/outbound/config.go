@@ -17,8 +17,8 @@ import (
 const SettingsKey = "outbound_proxy_pool_v1"
 const snapshotKey = "outbound_proxy_pool_snapshot_v1"
 
-// Config applies to public backend information requests. Media playback,
-// probing and downloads retain their caller-owned transports.
+// Config limits public pool use to Douban (including its images) and danmaku; other information
+// requests use LocalProxy. Media retains its caller-owned transport.
 type Config struct {
 	Enabled        bool           `json:"enabled"`
 	Sources        []string       `json:"sources"`

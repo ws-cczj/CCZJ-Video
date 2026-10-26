@@ -88,17 +88,24 @@ type FetchResult struct {
 // APIError preserves the remote protocol code for operation-specific decisions.
 // A collection refusal must not change the meaning of a detail or list request.
 type APIError struct {
-	Code    int
-	Message string
+	Code     int
+	CodeText string
+	Message  string
 }
 
-func (e *APIError) Error() string { return fmt.Sprintf("api error: code=%d msg=%s", e.Code, e.Message) }
+func (e *APIError) Error() string {
+	if e.CodeText != "" {
+		return fmt.Sprintf("api error: code=%s msg=%s", e.CodeText, e.Message)
+	}
+	return fmt.Sprintf("api error: code=%d msg=%s", e.Code, e.Message)
+}
 
 var errSearchUnsupported = errors.New("source keyword search unsupported")
 
 // ResponseError retains HTTP evidence when decompression or decoding fails.
 type ResponseError struct {
 	StatusCode int
+	Stage      string
 	Err        error
 }
 
@@ -276,6 +283,7 @@ func doFetchShape(ctx context.Context, target string, fieldMapping map[string]st
 	defer func() {
 		fields["stage"], fields["duration_ms"] = stage, time.Since(began).Milliseconds()
 		if failure != nil {
+			fields["failure_kind"] = FetchFailureKind(failure)
 			fields["outcome"], fields["code"], fields["error"] = "failed", apperror.Public(failure).Code, apperror.Diagnostic(failure)
 			applog.WarnFields("source fetch finished", fields)
 		} else {
@@ -302,7 +310,7 @@ func doFetchShape(ctx context.Context, target string, fieldMapping map[string]st
 	}
 	defer func() {
 		if failure != nil {
-			failure = &ResponseError{StatusCode: resp.StatusCode, Err: failure}
+			failure = &ResponseError{StatusCode: resp.StatusCode, Stage: stage, Err: failure}
 		}
 	}()
 
@@ -333,6 +341,13 @@ func doFetchShape(ctx context.Context, target string, fieldMapping map[string]st
 	stage = "decode"
 	body = bytes.TrimPrefix(body, []byte{0xef, 0xbb, 0xbf})
 	trimmed := strings.TrimSpace(string(body))
+	if shape == nil && strings.HasPrefix(trimmed, "<") && (strings.HasPrefix(trimmed, "<?xml") || strings.HasPrefix(trimmed, "<rss")) {
+		body, err = normalizeCMSXML(body)
+		if err != nil {
+			return nil, apperror.Wrap(apperror.Corrupt, err, "源站 XML 响应无效")
+		}
+		trimmed = strings.TrimSpace(string(body))
+	}
 	if trimmed == "暂不支持搜索" {
 		return nil, apperror.Wrap(apperror.Unsupported, errSearchUnsupported, "采集接口暂不支持搜索")
 	}
@@ -347,14 +362,21 @@ func doFetchShape(ctx context.Context, target string, fieldMapping map[string]st
 		result, err = decodeShapedEnvelope(body, shape, fieldMapping)
 	}
 	if err != nil {
-		return nil, err
+		return nil, apperror.Wrap(apperror.Corrupt, err, "源响应无法解析，请检查响应结构和字段映射")
 	}
-	if result.OK && shape == nil {
+	if result.OK {
+		valid := result.List[:0]
 		for i, video := range result.List {
 			if video == nil || strings.TrimSpace(video.VodId.String()) == "" || strings.TrimSpace(video.VodName) == "" {
-				return nil, apperror.Newf(apperror.Corrupt, "采集接口第 %d 条记录缺少影片标识或名称", i+1)
+				applog.Warn("[FieldMapping] 第 %d 条记录缺少影片标识或名称", i+1)
+				continue
 			}
+			valid = append(valid, video)
 		}
+		if len(result.List) > 0 && len(valid) == 0 {
+			return nil, apperror.New(apperror.Corrupt, "源响应无法解析：所有记录均缺少影片标识或名称")
+		}
+		result.List = valid
 	}
 
 	result.HTTPStatus = resp.StatusCode
@@ -373,10 +395,7 @@ func doFetchShape(ctx context.Context, target string, fieldMapping map[string]st
 	fields["sample_ids"] = ids
 
 	if !result.OK {
-		if shape == nil {
-			return nil, apperror.Wrap(apperror.Unavailable, &APIError{Code: result.Code, Message: result.Msg}, "采集接口返回失败")
-		}
-		return nil, apperror.Newf(apperror.Unavailable, "api error: code=%s msg=%s", result.CodeText, result.Msg)
+		return nil, apperror.Wrap(apperror.Unavailable, &APIError{Code: result.Code, CodeText: result.CodeText, Message: result.Msg}, "采集接口返回失败")
 	}
 	stage = "decoded"
 	return result, nil
@@ -386,12 +405,6 @@ func doFetchShape(ctx context.Context, target string, fieldMapping map[string]st
 // strings. A missing list is a protocol error rather than a successful empty page.
 func decodeCMSEnvelope(body []byte, fieldMapping map[string]string) (*FetchResult, error) {
 	result := &FetchResult{}
-
-	videos, err := ParseVideosWithMapping(body, fieldMapping)
-	if err != nil {
-		return nil, apperror.Wrap(apperror.Corrupt, err, "parse json with mapping")
-	}
-	result.List = videos
 
 	var meta struct {
 		Code      json.RawMessage `json:"code"`
@@ -418,12 +431,23 @@ func decodeCMSEnvelope(body []byte, fieldMapping map[string]string) (*FetchResul
 	result.Total = meta.Total
 	result.Msg = meta.Msg
 	result.OK = result.Code == 1
-	var rawRows []json.RawMessage
-	if json.Unmarshal(meta.List, &rawRows) == nil {
-		result.RawCount = len(rawRows)
+	if !result.OK {
+		return result, nil
 	}
-	if result.OK && len(meta.List) == 0 {
+	if len(meta.List) == 0 {
 		return nil, apperror.New(apperror.Corrupt, "采集接口返回成功但缺少 list 字段")
+	}
+	node, err := decodeJSONDocument(meta.List)
+	if err != nil {
+		return nil, apperror.Wrap(apperror.Corrupt, err, "parse CMS list")
+	}
+	videos, err := parseVideosFromValue(node, fieldMapping)
+	if err != nil {
+		return nil, apperror.Wrap(apperror.Corrupt, err, "parse json with mapping")
+	}
+	result.List = videos
+	if items, err := videoValueItems(node); err == nil {
+		result.RawCount = len(items)
 	}
 	return result, nil
 }

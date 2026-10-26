@@ -157,7 +157,6 @@ onMounted(async () => {
     <!-- 顶部分组切换 tab。扩展包的分组会随启停增删，所以这一条用 list 过渡：
          新分组淡入落位，右边的分组平滑让位，而不是整条忽然横移一格。 -->
     <div v-if="mobile && !mobileGroup" class="cczj-mobile-settings-index">
-      <p class="cczj-mobile-intro">{{ t('mobile.settingsDescription') }}</p>
       <template v-for="(category,index) in mobileCategories" :key="category.title"><section class="cczj-mobile-settings-category">
         <h2>{{ category.title }}</h2>
         <nav class="cczj-mobile-menu" :aria-label="category.title">

@@ -158,8 +158,8 @@ func TestIconGalleryExamplePackReadsEveryIcon(t *testing.T) {
 		t.Fatalf("卡片图标不是 PNG data URL: %q", card[:min(len(card), 40)])
 	}
 	// plugin.json + main.js + gallery.css + icon.png + icons.json + icons/*.png
-	if info.Files != 31 {
-		t.Fatalf("扫描数出的文件数 = %d，期望 31（子目录 icons/ 也得数进来）", info.Files)
+	if info.Files != 44 {
+		t.Fatalf("扫描数出的文件数 = %d，期望 44（子目录 icons/ 也得数进来）", info.Files)
 	}
 
 	list, err := service.ReadFile(info.ID, "icons.json")
@@ -172,8 +172,8 @@ func TestIconGalleryExamplePackReadsEveryIcon(t *testing.T) {
 	if err := json.Unmarshal([]byte(list), &entries); err != nil {
 		t.Fatalf("icons.json 不是合法 JSON: %v", err)
 	}
-	if len(entries) != 26 {
-		t.Fatalf("清单应有 26 枚图标，实际 %d", len(entries))
+	if len(entries) != 38 {
+		t.Fatalf("清单应有 38 枚图标，实际 %d", len(entries))
 	}
 	for _, entry := range entries {
 		rel := "icons/" + entry.File
@@ -188,8 +188,8 @@ func TestIconGalleryExamplePackReadsEveryIcon(t *testing.T) {
 }
 
 // 用户接下来要做的动作是把 docs/examples/icon-gallery 整个文件夹拖进窗口。这条路的
-// 单测用的都是小合成包，这里换成真文件夹过一遍：31 个文件、嵌套的 icons/、一张卡片图
-// 加 26 张 PNG，都在 §6 的个数与体积上限之内。装不上就是交付了一个拖不动的样例。
+// 单测用的都是小合成包，这里换成真文件夹过一遍：44 个文件、嵌套的 icons/、一张卡片图
+// 加 38 张 PNG 与许可文件，都在 §6 的个数与体积上限之内。装不上就是交付了一个拖不动的样例。
 func TestIconGalleryExamplePackInstallsByDrag(t *testing.T) {
 	service, pluginsDir, _ := testService(t)
 	packDir := filepath.Join(repoDir(t), "docs", "examples", "icon-gallery")
@@ -203,8 +203,8 @@ func TestIconGalleryExamplePackInstallsByDrag(t *testing.T) {
 	if info.Dir != filepath.Join(pluginsDir, "icon-gallery") {
 		t.Fatalf("包目录 = %q", info.Dir)
 	}
-	if info.Files != 31 {
-		t.Fatalf("安装后注册表数出的文件数 = %d，期望 31", info.Files)
+	if info.Files != 44 {
+		t.Fatalf("安装后注册表数出的文件数 = %d，期望 44", info.Files)
 	}
 	assertStagingClean(t, service)
 	if _, statErr := os.Stat(filepath.Join(info.Dir, "icons", "home.png")); statErr != nil {

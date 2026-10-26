@@ -14,3 +14,7 @@ func (a *App) PlayCastVideo(ctx context.Context, id, url, title string) error {
 func (a *App) ControlCastVideo(ctx context.Context, id, action string, seconds float64) error {
 	return runRequestError(a, ctx, "cast.ControlCastVideo", func(ctx context.Context) error { return a.cast.ControlContext(ctx, id, action, seconds) })
 }
+
+func (a *App) GetCastStatus(ctx context.Context, id string) (cast.Status, error) {
+	return runRequest(a, ctx, "cast.GetCastStatus", func(ctx context.Context) (cast.Status, error) { return a.cast.StatusContext(ctx, id) })
+}

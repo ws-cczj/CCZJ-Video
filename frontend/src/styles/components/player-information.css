@@ -319,18 +319,18 @@
   @apply cczj-opacity-100;
 }
 
-/* 已观看：绿色高亮（明显态） */
+/* 文字沿用所在面板：桌面深色面板与手机主题面板分别继承各自前景色。 */
 .ep-item.watched {
-  background: linear-gradient(180deg, rgba(76, 175, 80, 0.18) 0%, rgba(139, 195, 74, 0.10) 100%);
-  border-color: rgba(76, 175, 80, 0.55);
-  color: #e8f5e9;
+  background: var(--accent-alpha-10);
+  border-color: var(--accent-alpha-35);
+  color: inherit;
   @apply cczj-cursor-pointer cczj-font-medium;
 }
 
 .ep-item.watched:hover {
-  background: linear-gradient(180deg, rgba(76, 175, 80, 0.08) 0%, rgba(76, 175, 80, 0.04) 100%);
-  border-color: rgba(76, 175, 80, 0.25);
-  color: rgba(255, 255, 255, 0.75);
+  background: var(--accent-alpha-15);
+  border-color: var(--accent-alpha-35);
+  color: inherit;
   transform: none;
   @apply cczj-shadow-none;
 }
@@ -339,7 +339,7 @@
 .ep-watched-progress {
   @apply cczj-absolute cczj-left-0 cczj-bottom-0;
   height: 4px;
-  background: linear-gradient(90deg, #4caf50 0%, #8bc34a 100%);
+  background: var(--accent);
   z-index: 1;
   @apply cczj-pointer-events-none;
 }
@@ -348,10 +348,10 @@
   @apply cczj-absolute;
   top: 3px;
   @apply cczj-right-1;
-  font-size: 9px;
+  @apply cczj-text-11;
   @apply cczj-font-semibold;
-  color: #4caf50;
-  background: rgba(0, 0, 0, 0.45);
+  color: var(--text-secondary);
+  background: var(--bg-card);
   padding: 1px 4px;
   border-radius: 3px;
   line-height: 1.3;

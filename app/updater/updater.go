@@ -102,10 +102,7 @@ var githubProxies = []string{
 	"https://v6.gh-proxy.org/",
 }
 
-// maxRetryPerSource 每个源的最大重试次数（参考 lx-music-desktop 的 3 次重试）
-const maxRetryPerSource = 3
-
-// versionInfoSources 多渠道版本信息获取源（按优先级排列）
+// versionInfoSources 多渠道版本信息获取源（按有限批次的派发顺序排列）
 type versionInfoSource struct {
 	url    string
 	source string // "github_api" | "github_raw" | "jsdelivr" | "gitee"
@@ -168,7 +165,7 @@ type UpdateInfo struct {
 }
 
 // CheckUpdate 检查 GitHub 是否有新版本
-// 多渠道回退策略：GitHub API → 代理 → 多源 version.json（无缓存）
+// 多渠道回退策略：GitHub API 与镜像竞速，失败后竞速 version.json 来源（无缓存）
 func CheckUpdate() (*UpdateInfo, error) {
 	return CheckUpdateContext(context.Background())
 }
@@ -257,79 +254,32 @@ func buildUpdateInfoFromVersionInfo(verInfo *VersionInfo) *UpdateInfo {
 }
 
 // fetchReleaseFromSources 尝试从多个源获取 GitHub Release（含代理）
-// 每个源最多重试 maxRetryPerSource 次
+// 每个来源尝试一次，首个有效结果取消并等待其他请求。
 func fetchReleaseFromSources() (*GitHubRelease, error) {
 	return fetchReleaseFromSourcesContext(context.Background())
 }
 
 func fetchReleaseFromSourcesContext(ctx context.Context) (*GitHubRelease, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
 	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", repoOwner, repoName)
-
-	// 先尝试直连
-	for retry := 0; retry < maxRetryPerSource; retry++ {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		release, err := fetchReleaseContext(ctx, apiURL)
-		if err == nil {
-			return release, nil
-		}
-		applog.Warn("[Updater] GitHub API 直连第%d次失败: %v", retry+1, err)
-	}
-
-	// 尝试代理
+	urls := []string{apiURL}
 	for _, proxy := range githubProxies {
-		proxyURL := proxy + apiURL
-		for retry := 0; retry < maxRetryPerSource; retry++ {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-			applog.Info("[Updater] 尝试代理: %s [第%d次]", proxy, retry+1)
-			release, err := fetchReleaseContext(ctx, proxyURL)
-			if err == nil {
-				applog.Info("[Updater] 代理 %s 成功", proxy)
-				return release, nil
-			}
-			applog.Warn("[Updater] 代理 %s 第%d次失败: %v", proxy, retry+1, err)
-		}
-		applog.Warn("[Updater] 代理 %s 已重试%d次均失败，切换下一个代理", proxy, maxRetryPerSource)
+		urls = append(urls, proxy+apiURL)
 	}
-
-	return nil, fmt.Errorf("所有 GitHub Release 源均失败")
+	return firstUpdateSource(ctx, urls, fetchReleaseContext)
 }
 
 // fetchVersionInfoFromSources 多渠道获取 version.json（参考 lx-music-desktop）
-// 每个源最多重试 maxRetryPerSource 次，失败后自动切换到下一个源
+// 最多三路有限并发，每个来源的截止时间由 firstUpdateSource 管理。
 func fetchVersionInfoFromSources() (*VersionInfo, error) {
 	return fetchVersionInfoFromSourcesContext(context.Background())
 }
 
 func fetchVersionInfoFromSourcesContext(ctx context.Context) (*VersionInfo, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	var lastErr error
+	urls := make([]string, 0, len(versionInfoSources))
 	for _, source := range versionInfoSources {
-		for retry := 0; retry < maxRetryPerSource; retry++ {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-			applog.Info("[Updater] 尝试获取版本信息: %s (%s) [第%d次]",
-				source.url, source.source, retry+1)
-			info, err := fetchVersionInfoContext(ctx, source.url)
-			if err == nil {
-				applog.Info("[Updater] 版本信息获取成功: %s", source.source)
-				return info, nil
-			}
-			lastErr = err
-			applog.Warn("[Updater] 源 %s 第%d次失败: %v", source.source, retry+1, err)
-		}
-		applog.Warn("[Updater] 源 %s 已重试%d次均失败，切换下一个源", source.source, maxRetryPerSource)
+		urls = append(urls, source.url)
 	}
-	return nil, fmt.Errorf("所有版本信息源均失败: %w", lastErr)
+	return firstUpdateSource(ctx, urls, fetchVersionInfoContext)
 }
 
 // fetchVersionInfo 从指定 URL 获取 version.json

@@ -60,7 +60,7 @@ watch([keyword,recent],()=>load())
     <div v-if="list.loading && !list.videos.length" class="theatre-empty cczj-flex cczj-items-center cczj-justify-center" role="status"><Spinner :label="t('common.loading')"/></div>
     <Empty v-else-if="!list.videos.length" class="theatre-empty" :title="list.error ? t('shortDrama.loadFailed') : t('shortDrama.empty')" :description="list.error || t(!currentSourceKey ? 'shortDrama.noSource' : keyword ? 'shortDrama.noMatches' : 'shortDrama.emptyHint')">
       <Button v-if="currentSourceKey" @click="load()">{{t('common.retry')}}</Button>
-      <router-link v-else to="/sources">{{t('sidebar.sources')}}</router-link>
+      <router-link v-if="!list.error && !keyword" to="/sources">{{t('sidebar.sources')}}</router-link>
     </Empty>
     <div v-else class="theatre-grid cczj-grid cczj-gap-8">
       <VideoCard v-for="item in list.videos" :key="item.vod_id" :video="item" :data-vod-id="item.vod_id" @click="emit('play',item)">

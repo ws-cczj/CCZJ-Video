@@ -24,7 +24,10 @@ def main():
                'GetLastInstallReport', 'ScheduleInstallOnExit', 'CancelInstallOnExit', 'GetPendingInstall'}
     mock = '\n'.join(f'export async function {name}() {{ return ""; }}' for name in names if name not in special)
     mock += '''
-      export async function CheckUpdate() { return window.__updateInfo; }
+      export async function CheckUpdate() {
+        if(window.__holdCheck)return new Promise((resolve,reject)=>{window.__finishCheck=resolve;window.__failCheck=reject});
+        return window.__updateInfo;
+      }
       export async function GetPendingUpdateInfo() { return null; }
       export async function GetLastInstallReport() { return {}; }
       export async function DownloadUpdate(url) {
@@ -53,8 +56,17 @@ def main():
             page.wait_for_load_state('networkidle')
             # Inspect the mounted DOM before delivering backend events.
             assert page.get_by_role('dialog').count() == 0
+            # A background result wins over a late failed manual check. Repeated
+            # notifications cannot reopen a dismissed/download-in-progress modal.
+            page.evaluate('window.__holdCheck=true;void window.updateTest.check()')
+            page.wait_for_function('!!window.__failCheck')
             page.evaluate("window._wails.dispatchWailsEvent({name: 'update:available', data: window.__updateInfo})")
             expect(page.get_by_role('dialog')).to_be_visible()
+            page.evaluate('window.__failCheck(new Error("late upstream failure"));window.__holdCheck=false')
+            expect(page.get_by_text('获取更新信息失败',exact=True)).to_have_count(0)
+            page.get_by_role('button',name='关闭',exact=True).click()
+            page.evaluate("window._wails.dispatchWailsEvent({name:'update:available',data:window.__updateInfo})")
+            expect(page.get_by_role('dialog')).to_have_count(0)
             # A stale local cache must not be accepted as the new release.
             page.evaluate("localStorage.setItem('cczj_update_download_state', JSON.stringify({path:'C:/old/CCZJ-Video-Update.exe',version:'9.1.0',url:''}))")
             page.evaluate('void window.updateTest.check()')

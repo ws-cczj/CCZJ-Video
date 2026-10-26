@@ -1,8 +1,11 @@
 package cast
 
 import (
+	"cczjVideo/app/apperror"
+	"cczjVideo/app/applog"
 	"cczjVideo/app/lifecycle"
 	"cczjVideo/app/netpolicy"
+	"cczjVideo/app/operation"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -30,6 +33,7 @@ type renderer struct {
 	endpoint string
 	service  string
 	seen     time.Time
+	session  string
 }
 type Service struct {
 	ctx     context.Context
@@ -173,7 +177,38 @@ func escaped(value string) string {
 	_ = xml.EscapeText(&b, []byte(value))
 	return b.String()
 }
-func soap(ctx context.Context, d renderer, action string, args string) error {
+
+type soapEnvelope struct {
+	XMLName xml.Name `xml:"Envelope"`
+	Body    struct {
+		Fault *struct {
+			Code        string `xml:"detail>UPnPError>errorCode"`
+			Description string `xml:"detail>UPnPError>errorDescription"`
+		} `xml:"Fault"`
+		Transport struct {
+			State  string `xml:"CurrentTransportState"`
+			Status string `xml:"CurrentTransportStatus"`
+		} `xml:"GetTransportInfoResponse"`
+		Position struct {
+			Time     string `xml:"RelTime"`
+			Duration string `xml:"TrackDuration"`
+		} `xml:"GetPositionInfoResponse"`
+	} `xml:"Body"`
+}
+
+func soap(ctx context.Context, d renderer, action, args string, output ...*soapEnvelope) (failure error) {
+	ctx = traceDevice(ctx, d)
+	start := time.Now()
+	fields := applog.Fields{"action": action}
+	operation.Stage(ctx, "cast.soap.start", fields)
+	defer func() {
+		fields["elapsed_ms"] = elapsed(start)
+		if failure != nil {
+			traceFailure(ctx, "cast.soap.failed", failure, fields)
+		} else {
+			operation.Stage(ctx, "cast.soap.complete", fields)
+		}
+	}()
 	body := `<?xml version="1.0"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body><u:` + action + ` xmlns:u="` + d.service + `"><InstanceID>0</InstanceID>` + args + `</u:` + action + `></s:Body></s:Envelope>`
 	req, e := http.NewRequestWithContext(ctx, http.MethodPost, d.endpoint, strings.NewReader(body))
 	if e != nil {
@@ -186,29 +221,33 @@ func soap(ctx context.Context, d renderer, action string, args string) error {
 		return e
 	}
 	defer response.Body.Close()
+	fields["http_status"] = response.StatusCode
 	data, e := readBounded(response.Body)
+	fields["response_bytes"], fields["response_sha256"] = len(data), applog.Fingerprint(data)
 	if e != nil {
+		fields["code"] = "CAST_RESPONSE_TOO_LARGE"
 		return e
 	}
-	var envelope struct {
-		Body struct {
-			Fault *struct {
-				Code        string `xml:"detail>UPnPError>errorCode"`
-				Description string `xml:"detail>UPnPError>errorDescription"`
-			} `xml:"Fault"`
-		} `xml:"Body"`
-	}
+	var envelope soapEnvelope
 	if e = xml.Unmarshal(data, &envelope); e != nil {
+		fields["code"] = "CAST_INVALID_RESPONSE"
 		return fmt.Errorf("DLNA 返回无效响应: %w", e)
 	}
 	if fault := envelope.Body.Fault; fault != nil {
-		return fmt.Errorf("DLNA %s: %s", fault.Code, fault.Description)
+		fields["code"] = "CAST_SOAP_FAULT"
+		fields["upnp_code"] = fault.Code
+		return fmt.Errorf("DLNA %s: %s", fault.Code, applog.DiagnosticText(fault.Description, 256))
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		fields["code"] = "CAST_HTTP_ERROR"
 		return fmt.Errorf("DLNA HTTP %d", response.StatusCode)
+	}
+	if len(output) > 0 && output[0] != nil {
+		*output[0] = envelope
 	}
 	return nil
 }
+
 func (s *Service) device(id string) (renderer, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -244,12 +283,20 @@ func (s *Service) PlayContext(request context.Context, id, media, title string) 
 		return err
 	}
 	if e := validateMedia(media); e != nil {
+		traceFailure(ctx, "cast.media.rejected", e, applog.Fields{"code": "CAST_INVALID_MEDIA"})
 		return e
 	}
 	d, e := s.device(id)
 	if e != nil {
+		traceFailure(ctx, "cast.device.unavailable", e, applog.Fields{"cast_device_id": id})
 		return e
 	}
+	d.session = apperror.NewRequestID()
+	s.mu.Lock()
+	s.devices[d.ID] = d
+	s.mu.Unlock()
+	ctx = traceDevice(ctx, d)
+	operation.Stage(ctx, "cast.media.prepare", applog.Fields{"media_url": applog.SafeURL(media), "media_sha256": applog.Fingerprint([]byte(media))})
 	mime := "video/mp4"
 	u, _ := url.Parse(media)
 	if strings.HasSuffix(strings.ToLower(u.Path), ".m3u8") {
@@ -276,8 +323,10 @@ func (s *Service) ControlContext(request context.Context, id, action string, sec
 	}
 	d, e := s.device(id)
 	if e != nil {
+		traceFailure(ctx, "cast.device.unavailable", e, applog.Fields{"cast_device_id": id, "action": action})
 		return e
 	}
+	ctx = traceDevice(ctx, d)
 	args := ""
 	switch action {
 	case "Play":
@@ -285,12 +334,16 @@ func (s *Service) ControlContext(request context.Context, id, action string, sec
 	case "Pause", "Stop":
 	case "Seek":
 		if math.IsNaN(seconds) || math.IsInf(seconds, 0) || seconds < 0 || seconds > 7*24*3600 {
-			return errors.New("无效的投屏进度")
+			err := errors.New("无效的投屏进度")
+			traceFailure(ctx, "cast.control.rejected", err, applog.Fields{"action": action, "code": "CAST_INVALID_POSITION"})
+			return err
 		}
 		n := int(seconds)
 		args = fmt.Sprintf("<Unit>REL_TIME</Unit><Target>%02d:%02d:%02d</Target>", n/3600, n/60%60, n%60)
 	default:
-		return errors.New("不支持的投屏操作")
+		err := errors.New("不支持的投屏操作")
+		traceFailure(ctx, "cast.control.rejected", err, applog.Fields{"action": action, "code": "CAST_UNSUPPORTED_ACTION"})
+		return err
 	}
 	return soap(ctx, d, action, args)
 }

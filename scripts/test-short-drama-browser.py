@@ -94,7 +94,18 @@ def main():
                     page.route('**/bindings/cczjVideo/app/service/app*', lambda route: route.fulfill(body=mock, content_type='text/javascript'))
                     page.goto(origin+'/tests/browser/short-drama.html')
                     page.wait_for_load_state('networkidle')
+                    chrome=page.locator('.cczj-mobile-navigation' if mobile else '.titlebar')
+                    chrome_background=chrome.evaluate('(el)=>getComputedStyle(el).backgroundColor')
                     ready = "!!document.querySelector('video') && document.querySelector('video').readyState>=2 && !document.querySelector('video').paused"
+                    def assert_shell_theme():
+                        assert chrome.evaluate('(el)=>getComputedStyle(el).backgroundColor')==chrome_background, 'short dramas changed the navigation/title bar background'
+                        expect(page.locator('.app-shell.cczj-short-drama-surface,.cczj-mobile-shell.cczj-short-drama-surface')).to_have_count(0)
+                        shell=page.locator('.cczj-mobile-shell' if mobile else '.app-shell')
+                        for prop in ['--accent','--text-primary','--bg-primary']:
+                            assert shell.evaluate('(el,p)=>getComputedStyle(el).getPropertyValue(p).trim()',prop)==page.evaluate('(p)=>getComputedStyle(document.documentElement).getPropertyValue(p).trim()',prop), 'short dramas changed application chrome: '+prop
+                        if mobile:
+                            assert shell.evaluate('(el)=>getComputedStyle(el).getPropertyValue("--cczj-mobile-canvas").trim()')==page.evaluate('getComputedStyle(document.documentElement).getPropertyValue("--bg-primary").trim()')
+                    assert_shell_theme()
                     def inspect_theatre():
                         theatre=page.locator('.drama-theatre')
                         expect(theatre).to_be_visible()
@@ -170,6 +181,7 @@ def main():
                         inspect_theatre()
                     page.wait_for_function(ready)
                     base_theme=page.evaluate('''()=>({accent:getComputedStyle(document.documentElement).getPropertyValue('--accent'),background:getComputedStyle(document.documentElement).getPropertyValue('--bg-primary'),theme:document.documentElement.dataset.theme})''')
+                    assert_shell_theme()
                     if mobile:
                         expect(page.locator('.portrait-status')).to_have_count(0)
                     else:
@@ -218,7 +230,7 @@ def main():
                     if mobile: expect(page.locator('.drama-switch')).to_have_count(0)
                     if not mobile:
                         expect(page.locator('.sidebar')).to_have_count(0)
-                        assert page.locator('.titlebar').evaluate('(el)=>getComputedStyle(el).backgroundColor')=='rgb(24, 25, 28)'
+                        assert_shell_theme()
                     assert page.locator('.portrait-track').evaluate('(e)=>e.getBoundingClientRect().height')<=4
                     def geometry():
                         return page.evaluate('''()=>{
@@ -455,12 +467,18 @@ def main():
                     page.evaluate('window.__recommendError=true')
                     page.get_by_role('button', name='换一批', exact=True).click()
                     expect(page.get_by_text('fixture outage', exact=True)).to_be_visible()
+                    assert_shell_theme()
+                    expect(page.locator('.short-drama.cczj-short-drama-surface')).to_have_count(0)
                     page.evaluate('window.__recommendError=false')
                     page.get_by_role('button', name='重试', exact=True).click()
                     page.wait_for_function(ready)
                     page.evaluate('window.__empty=true')
                     page.get_by_role('button', name='换一批', exact=True).click()
                     expect(page.locator('.drama-placeholder').get_by_text('还没有可播放的短剧', exact=True)).to_be_visible()
+                    assert_shell_theme()
+                    expect(page.locator('.short-drama.cczj-short-drama-surface')).to_have_count(0)
+                    assert page.locator('.drama-placeholder .empty-title').evaluate('(el)=>getComputedStyle(el).color')==page.locator('.short-drama').evaluate('(el)=>getComputedStyle(el).color')
+                    page.screenshot(path=str(OUT/f'{label}-empty-theme.png'))
                     page.evaluate('window.__empty=false')
                     page.get_by_role('button', name='重试', exact=True).click()
                     page.wait_for_function(ready)

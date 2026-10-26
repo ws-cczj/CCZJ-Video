@@ -111,12 +111,12 @@ func (s *Service) Favorites(ctx context.Context, page, pageSize int) ([]db.FavWi
 }
 
 // SaveHistory records progress for a source episode under its global video.
-func (s *Service) SaveHistory(ctx context.Context, sourceKey, vodID string, epNum int, position float64) error {
+func (s *Service) SaveHistory(ctx context.Context, sourceKey, vodID string, epNum int, position float64, duration ...float64) error {
 	globalID, err := s.catalogGlobalID(ctx, sourceKey, vodID)
 	if err != nil {
 		return err
 	}
-	return s.store.SaveWatchHistoryByIdentity(ctx, globalID, sourceKey, vodID, epNum, position)
+	return s.store.SaveWatchHistoryByIdentity(ctx, globalID, sourceKey, vodID, epNum, position, duration...)
 }
 
 // HistoryPosition returns the last watched position (seconds) of one episode.
@@ -147,7 +147,7 @@ func (s *Service) RecentHistory(ctx context.Context, limit int) ([]*HistoryItemW
 	}
 	out := make([]*HistoryItemWithVideo, 0, len(raw))
 	for _, r := range raw {
-		out = append(out, &HistoryItemWithVideo{GlobalID: r.GlobalID, SourceKey: r.SourceKey, VodId: r.VodId, EpNum: r.EpNum, Position: r.Position, UpdatedAt: r.UpdatedAt, VodName: r.VodName, VodPic: r.VodPic, VodRemarks: r.VodRemarks})
+		out = append(out, &HistoryItemWithVideo{GlobalID: r.GlobalID, SourceKey: r.SourceKey, VodId: r.VodId, EpNum: r.EpNum, Position: r.Position, Duration: r.Duration, UpdatedAt: r.UpdatedAt, VodName: r.VodName, VodPic: r.VodPic, VodRemarks: r.VodRemarks})
 	}
 	return out, nil
 }

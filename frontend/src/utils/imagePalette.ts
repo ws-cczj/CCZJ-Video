@@ -56,7 +56,8 @@ function toHsl(r: number, g: number, b: number): [number, number, number] {
   return [((hue % 360) + 360) % 360, saturation, lightness]
 }
 
-async function readPixels(src: string, signal?: AbortSignal): Promise<Uint8ClampedArray | null> {
+export interface ImagePixels { width: number; height: number; data: Uint8ClampedArray }
+export async function readImagePixels(src: string, signal?: AbortSignal): Promise<ImagePixels | null> {
   if (signal?.aborted) return null
   const img = new Image()
   let stop: (() => void) | undefined
@@ -79,7 +80,7 @@ async function readPixels(src: string, signal?: AbortSignal): Promise<Uint8Clamp
     if (!ctx) return null
     ctx.drawImage(img, 0, 0, w, h)
     // 远程图未开 CORS 时画布会被污染，按取色失败处理。
-    return ctx.getImageData(0, 0, w, h).data
+    return {width:w, height:h, data:ctx.getImageData(0, 0, w, h).data}
   } catch {
     return null
   } finally {
@@ -122,8 +123,9 @@ function inkFallback(pixels: Uint8ClampedArray): string | null {
  * 取背景图的主色。返回 `#rrggbb`；读不到像素（图损坏、跨域污染画布）时返回 null。
  */
 export async function pickColorFromImage(src: string, signal?: AbortSignal): Promise<string | null> {
-  const pixels = await readPixels(src, signal)
-  if (!pixels) return null
+  const sample = await readImagePixels(src, signal)
+  if (!sample) return null
+  const pixels = sample.data
 
   const bins = new Map<number, Bin>()
   let total = 0

@@ -1,4 +1,13 @@
 /* Mobile polish shares desktop theme semantics; it never styles desktop roots. */
+.cczj-mobile-shell .cczj-mobile-page .cczj-mobile-danmaku-sources { padding-top: 0; }
+.cczj-mobile-shell .cczj-mobile-page .cczj-mobile-danmaku-sources .cczj-danmaku-source-hero { padding: 0 0 8px; border: 0; }
+.cczj-mobile-shell .cczj-mobile-page .cczj-mobile-danmaku-sources .cczj-danmaku-source-total { margin-top: 0; }
+.cczj-mobile-shell .cczj-mobile-page .cczj-mobile-danmaku-sources fieldset { margin: 4px 0 12px; gap: 12px; }
+.cczj-mobile-shell .cczj-mobile-page .cczj-mobile-danmaku-sources .cczj-danmaku-source-card { padding: var(--cczj-mobile-section-padding); }
+.cczj-mobile-shell .cczj-mobile-page .cczj-mobile-danmaku-sources .cczj-danmaku-source-features { margin: 10px 0; }
+.cczj-mobile-shell .cczj-mobile-page .cczj-mobile-danmaku-sources .cczj-danmaku-source-actions { margin-top: 10px; }
+.cczj-mobile-shell .cczj-mobile-page .cczj-mobile-danmaku-sources .cczj-danmaku-source-actions label { min-height: var(--cczj-mobile-control-md); }
+.cczj-mobile-shell .cczj-mobile-page .cczj-mobile-danmaku-sources .cczj-danmaku-source-notes { margin-top: 16px; padding-top: 12px; }
 .cczj-mobile-shell .cczj-mobile-search-history { margin: 20px 0; }
 .cczj-mobile-shell .cczj-mobile-search-history-heading { @apply cczj-flex cczj-items-center cczj-gap-6 cczj-mb-4; }
 .cczj-mobile-shell .cczj-mobile-search-history-heading h2 { @apply cczj-flex-1 cczj-min-w-0 cczj-flex cczj-items-center cczj-gap-3; margin: 0; @apply cczj-text-base cczj-leading-normal; }
@@ -16,7 +25,7 @@
 .cczj-mobile-shell .cczj-mobile-history-actions .ui-btn { @apply cczj-min-w-0 cczj-justify-center; }
 .cczj-mobile-shell .cczj-mobile-page { --cczj-mobile-radius: 14px; }
 .cczj-mobile-shell .cczj-mobile-page :is(.filter-section,.source-card,.toolbar,.scheduler-bar,.history-card,.task-card,.basic-section,.recommend-section) { border-radius: var(--cczj-mobile-radius); }
-.cczj-mobile-shell .cczj-mobile-page .ui-btn { @apply cczj-rounded-md; }
+.cczj-mobile-shell .cczj-mobile-page .ui-btn { border-radius: 10px; min-height: var(--cczj-control-height, var(--cczj-mobile-control-md)); box-shadow: none; }
 .cczj-mobile-shell .cczj-mobile-page .home .recommend-group { @apply cczj-p-7 cczj-border; border-radius: var(--cczj-mobile-radius); background: var(--bg-card); @apply cczj-gap-6; }
 .cczj-mobile-shell .cczj-mobile-page .home .recommend-groups { @apply cczj-gap-10; }
 .cczj-mobile-shell .cczj-mobile-page .home .group-head { @apply cczj-flex cczj-flex-col cczj-items-start cczj-gap-2; }

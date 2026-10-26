@@ -1,5 +1,5 @@
-/* Immersive playback has one local palette, including teleported drawers.
- * Saved theme variables on :root remain owned by the theme store. */
+/* Only a populated viewing scene and its teleported drawers use this palette.
+ * Application chrome, navigation and empty states keep the user's theme. */
 .cczj-short-drama-surface {
   color-scheme: dark;
   --cczj-drama-chrome: #18191c;
@@ -42,13 +42,3 @@
   --btn-hide-contrast: var(--text-primary);
   --cczj-player-drawer-surface: var(--cczj-drama-chrome);
 }
-.app-shell.cczj-short-drama-surface { background: var(--cczj-drama-chrome); }
-.app-shell.cczj-short-drama-surface .titlebar { background: var(--cczj-drama-chrome); border-bottom-color: var(--border); }
-.app-shell.cczj-short-drama-surface .app-badge { box-shadow: none; }
-.cczj-short-drama-surface .sidebar { background: var(--cczj-drama-chrome); border-right-color: var(--border); backdrop-filter: none; -webkit-backdrop-filter: none; }
-.cczj-short-drama-surface .sidebar .section-label .line { background: var(--border); }
-.cczj-short-drama-surface .sidebar .section-label .label-text { color: var(--text-muted); }
-.cczj-short-drama-surface .sidebar .nav-item { color: var(--text-secondary); font-weight: 400; }
-.cczj-short-drama-surface .sidebar .nav-item:hover { color: var(--text-primary); background: var(--bg-hover); }
-.cczj-short-drama-surface .sidebar .nav-item.active { color: var(--text-primary); background: var(--accent-alpha-10); font-weight: 600; }
-.cczj-short-drama-surface .sidebar .sidebar-footer { border-top-color: var(--border); }

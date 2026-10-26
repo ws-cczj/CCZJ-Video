@@ -23,6 +23,7 @@ const props = defineProps<{
   mode: string
   hours: number
   slots: ProbeSlot[]
+  probe?: Record<string, any> | null
   cooling: string
   probeBusy: boolean
   isDefault: boolean
@@ -87,6 +88,15 @@ const {
         <span class="expand-arrow">{{ props.expanded ? '▴' : '▾' }}</span>
       </div>
     </div>
+
+    <details v-if="props.probe?.failure_kind && !props.probe.ok" class="source-probe-outcome">
+      <summary class="cczj-flex cczj-items-center cczj-gap-4">
+        <Tag variant="warning" size="sm">{{ tr(`sources.probeFailureKinds.${props.probe.failure_kind}`) }}</Tag>
+        <span v-if="props.probe.status_code" class="cczj-text-xs cczj-text-muted">HTTP {{ props.probe.status_code }}</span>
+        <Icon name="chevron-down" :size="14" />
+      </summary>
+      <p>{{ props.probe.error }}</p>
+    </details>
 
     <!-- 折叠时的迷你进度条（仅运行时显示） -->
     <div v-if="(isRunning(props.sourceKey) || isPaused(props.sourceKey)) && !props.expanded" class="mini-progress">
@@ -175,6 +185,9 @@ const {
 </template>
 
 <style scoped>
+.source-probe-outcome { padding: 0 16px 8px; }
+.source-probe-outcome summary { min-height: 44px; @apply cczj-cursor-pointer; }
+.source-probe-outcome p { margin: 4px 0; overflow-wrap: anywhere; @apply cczj-text-xs cczj-text-secondary; }
 
 /* === 卡片 === */
 .source-card {

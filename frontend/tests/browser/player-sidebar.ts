@@ -18,7 +18,7 @@ const episodes=Array.from({length:20},(_,index)=>({ep_num:index+1,ep_name:`Episo
 const model:PlayerPanelModel={
  details:{video:null,overview:'',sourceKey:'',vodId:'',globalId:0,get lines(){return lines.value},get activeLineIndex(){return activeLine.value}},
  catalog:{get items(){return sources.value},get activeKey(){return activeKey.value},get readyCount(){return sources.value.length},probingCount:0,loading:false,label:()=>'',selectable:()=>true,retry:()=>{}},
- episodes:{items:episodes,current:0,currentNumber:1,ascending:true,originalIndex:index=>index,percent:()=>0,watched:()=>false,label:(_,ep)=>ep.ep_name||''},
+ episodes:{items:episodes,current:0,currentNumber:1,ascending:true,originalIndex:index=>index,percent:index=>index>0&&index<5?99:0,watched:index=>index>0&&index<5,label:(_,ep)=>ep.ep_name||''},
 }
 const choose=(key:string,line?:number)=>{chosen.value={key,line};activeLine.value=lines.value.findIndex(item=>item.index===line);activeKey.value=key}
 const app=createApp({render:()=>mobile?h('div',{class:'player-page'},[h('div',{class:'cczj-h-full cczj-p-4 cczj-overflow-y-auto'},[

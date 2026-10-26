@@ -63,6 +63,11 @@ public class WailsJSBridge {
         android.content.Context context = view.getContext();
         if (context instanceof MainActivity) ((MainActivity) context).cacheLaunchBackground(color);
     }
+    @JavascriptInterface public void setSystemBarColor(String color) {
+        WebView view = webView;
+        if (view != null && view.getContext() instanceof MainActivity)
+            ((MainActivity) view.getContext()).setSystemBarColor(color);
+    }
     @JavascriptInterface public void playerVolume(double value) { player.volume(value); }
     @JavascriptInterface public void playerBrightness(double value) { player.brightness(value); }
     @JavascriptInterface public void playerRestoreBrightness() { player.restoreBrightness(); }

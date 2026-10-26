@@ -15,7 +15,7 @@ import { getDetailPath } from '../utils'
 import { useConfirmStore } from '../stores/confirm'
 import { useErrorStore } from '../stores/error'
 import type { Video, Favorite } from '../types'
-import { readStorage, writeStorage } from '../platform/storage'
+import { useFavoriteFoldersStore, type FavFolder } from '../stores/favoriteFolders'
 import { isMobileRuntime } from '../api/runtime'
 import { useHoldToEdit } from '../mobile/useHoldToEdit'
 
@@ -29,44 +29,11 @@ type FavItem = Omit<Favorite, 'video'> & {
   folderId: string
 }
 
-interface FavFolder {
-  id: string
-  name: string
-  default: boolean
-}
-
-const FOLDERS_KEY = 'cczj_fav_folders'
-const MAPPING_KEY = 'cczj_fav_mapping' // key(source-vod_id) -> folderId
-
-// 默认夹的名字不落盘：落的是译文就会把当前语言冻进 localStorage，切语言后名字不变。
-const folders = ref<FavFolder[]>([{ id: 'default', name: '', default: true }])
-const activeFolderId = ref<string>('default')
-const mapping = ref<Record<string, string>>({}) // favKey -> folderId
-
-function loadFoldersFromStorage(): void {
-  try {
-    const savedFolders = readStorage<FavFolder[] | null>(FOLDERS_KEY, null)
-    if (savedFolders) folders.value = savedFolders
-    // 确保至少有默认夹
-    if (!folders.value.some(f => f.default)) {
-      folders.value.unshift({ id: 'default', name: '', default: true })
-    }
-  } catch { /* ignore */ }
-  mapping.value = readStorage<Record<string, string>>(MAPPING_KEY, {})
-}
-
-function persistFolders(): boolean {
-  if (writeStorage(FOLDERS_KEY, folders.value)) return true
-  // 写失败以前完全没有痕迹，用户看到的就是「建夹成功，重启后没了」。
-  errorStore.error(tr('favorites.saveFailed'), tr('favorites.saveFailedDetail'), '', 'Favorites')
-  return false
-}
-
-function persistMapping(): boolean {
-  if (writeStorage(MAPPING_KEY, mapping.value)) return true
-  errorStore.error(tr('favorites.saveFailed'), tr('favorites.saveFailedDetail'), '', 'Favorites')
-  return false
-}
+const folderStore=useFavoriteFoldersStore()
+const {folders,mapping}=storeToRefs(folderStore)
+const activeFolderId=ref('default')
+const persistFolders=folderStore.persistFolders
+const persistMapping=folderStore.persistMapping
 
 // 根据后端返回的 fav 推断目标 folderId；若不存在映射，归到默认夹
 function resolveFolderId(f: { source_key: string; vod_id: string }): string {
@@ -102,6 +69,7 @@ const batchRemoving = ref(false)
 
 // 新建/重命名/删除 文件夹相关状态
 const showFolderModal = ref(false)
+const folderSaving=ref(false)
 const folderEditTarget = ref<FavFolder | null>(null) // null 表示新建
 const folderEditName = ref('')
 const showMoveModal = ref(false)
@@ -176,7 +144,8 @@ async function loadFavorites(): Promise<void> {
   try {
     // 文件夹映射是详情页/播放页直接写 localStorage 的，而这一页在 KeepAlive 下不会重挂。
     // 不重新读盘，刚从详情页归进某个夹的收藏就会按旧映射落回默认夹——看起来像"收藏没显示"。
-    loadFoldersFromStorage()
+    await folderStore.load()
+    if(!folders.value.some(row=>row.id===activeFolderId.value))activeFolderId.value='default'
     await fetchFavoritePage(1)
   } catch (e) {
     const err = normalizeApiError(e)
@@ -264,7 +233,7 @@ async function onRemove(fav: FavItem, evt: Event): Promise<void> {
     const k = favKey(fav)
     if (mapping.value[k]) {
       delete mapping.value[k]
-      persistMapping()
+      await persistMapping()
     }
   } catch (e) {
     const err = normalizeApiError(e)
@@ -303,7 +272,7 @@ async function onRemoveSelected(): Promise<void> {
         'Favorites',
       )
     }
-    persistMapping()
+    await persistMapping()
     selectedKeys.value = new Set()
     manageMode.value = false
   } finally {
@@ -324,23 +293,17 @@ function openRenameFolder(folder: FavFolder): void {
   showFolderModal.value = true
 }
 
-function saveFolder(): void {
-  const name = folderEditName.value.trim()
-  if (!name) return
-  if (folderEditTarget.value) {
-    // 重命名
-    const idx = folders.value.findIndex(f => f.id === folderEditTarget.value!.id)
-    if (idx >= 0) {
-      folders.value[idx].name = name
-      persistFolders()
-    }
-  } else {
-    // 新建
-    const id = 'folder_' + Date.now()
-    folders.value.push({ id, name, default: false })
-    persistFolders()
-  }
-  showFolderModal.value = false
+async function saveFolder():Promise<void> {
+ const name=folderEditName.value.trim()
+ if(!name||folderSaving.value)return
+ folderSaving.value=true
+ const previous=folders.value
+ const target=folderEditTarget.value
+ folders.value=target?previous.map(row=>row.id===target.id?{...row,name}:row):[...previous,{id:'folder_'+Date.now(),name,default:false}]
+ try{
+   if(!await persistFolders()){folders.value=previous;return}
+   showFolderModal.value=false
+ }finally{folderSaving.value=false}
 }
 
 async function deleteFolder(folder: FavFolder): Promise<void> {
@@ -361,8 +324,8 @@ async function deleteFolder(folder: FavFolder): Promise<void> {
   }
   folders.value = folders.value.filter(f => f.id !== folder.id)
   if (activeFolderId.value === folder.id) activeFolderId.value = 'default'
-  persistFolders()
-  persistMapping()
+  await persistFolders()
+  await persistMapping()
 }
 
 function moveSelectedToFolder(): void {
@@ -424,7 +387,7 @@ function onFolderDrop(folder: FavFolder, e: DragEvent): void {
   moveKeysToFolder(keys, folder.id)
 }
 
-function moveKeysToFolder(keys: string[], folderId: string): void {
+async function moveKeysToFolder(keys: string[], folderId: string): Promise<void> {
   // 已经在目标夹的不算一次移动，否则拖到自己身上也会弹「已移动 1 部」。
   const moved = keys.filter((k) => (mapping.value[k] || 'default') !== folderId)
   if (moved.length === 0) return
@@ -438,7 +401,7 @@ function moveKeysToFolder(keys: string[], folderId: string): void {
     for (const k of moved) rest.delete(k)
     selectedKeys.value = rest
   }
-  if (!persistMapping()) return
+  if (!await persistMapping()) return
   errorStore.info(
     tr('favorites.movedTitle'),
     tr('favorites.movedTo', { count: moved.length, name: getFolderName(folderId) }),
@@ -578,7 +541,7 @@ watch([mapping, folders], () => {
 
     <!-- 新建/重命名收藏夹弹窗 -->
     <Modal v-model="showFolderModal" :title="folderEditTarget ? tr('favorites.renameFolder') : tr('favorites.newFolder')" :show-footer="true"
-      :ok-text="folderEditTarget ? tr('common.save') : tr('favorites.create')" :ok-disabled="!folderEditName.trim()" @ok="saveFolder"
+      :ok-text="folderEditTarget ? tr('common.save') : tr('favorites.create')" :ok-disabled="!folderEditName.trim()" :ok-loading="folderSaving" :closable="!folderSaving" :mask-closable="!folderSaving" @ok="saveFolder"
       @cancel="showFolderModal = false" width="420px">
       <input v-model="folderEditName" type="text" class="folder-input cczj-w-full cczj-p-3 cczj-rounded cczj-border cczj-bg-secondary" :placeholder="tr('favorites.folderNamePlaceholder')" @keyup.enter="saveFolder"
         autofocus />

@@ -54,7 +54,8 @@ with AndroidWebView() as p:
      if chosen==theme and group in ['basic','basic&section=home','basic&section=data','advanced','theme']:p.screenshot(OUT/f'{width}-{group.replace("&section=","-")}.png')
     if chosen==theme:
      visit('/settings?group=theme')
-     p.evaluate("document.querySelector('.theme-card .mini-btn').click()")
+     assert p.evaluate("document.querySelectorAll('.theme-card .mini-btn').length===0")
+     p.evaluate("document.querySelector('.theme-edit-fab').click()")
      time.sleep(.4)
      editor=p.evaluate("(()=>{const d=document.querySelector('[role=dialog]');return {overflow:d.scrollWidth>d.clientWidth,small:[...d.querySelectorAll('button,input:not([hidden]):not([type=checkbox])')].filter(e=>e.getBoundingClientRect().width).filter(e=>{const r=e.getBoundingClientRect();return r.width<44||r.height<44||r.left<0||r.right>innerWidth}).length,colors:d.querySelectorAll('input[type=color][aria-label]').length}})()")
      assert not editor['overflow'] and not editor['small'] and editor['colors']>=10,editor

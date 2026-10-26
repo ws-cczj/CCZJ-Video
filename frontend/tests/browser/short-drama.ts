@@ -8,7 +8,6 @@ import DesktopVideoShell from '../../src/modes/DesktopVideoShell.vue'
 import TitleBar from '../../src/components/TitleBar.vue'
 import '../../src/player/shortDrama/presentation.css'
 import { useThemeStore } from '../../src/stores/theme'
-import { shortDramaScene } from '../../src/player/shortDrama/scene'
 import { useSourceStore } from '../../src/stores/source'
 import { loadPlatformPresentation, presentationProfile } from '../../src/platform/presentation'
 import { writeStorage } from '../../src/platform/storage'
@@ -27,7 +26,7 @@ const router = createRouter({ history: createMemoryHistory(), routes: [
 await router.push('/short-drama')
 const app = createApp(defineComponent({ setup() {
   return () => h('div', {
-    class:['app-shell cczj-h-full cczj-flex cczj-flex-col',{'cczj-short-drama-surface':shortDramaScene(router.currentRoute.value,presentationProfile().ui==='mobile')==='playback'}],
+    class:'app-shell cczj-h-full cczj-flex cczj-flex-col',
   }, presentationProfile().ui === 'mobile' ? [h(CczjMobileShell)] : [h(TitleBar),h(DesktopVideoShell)])
 } }))
 app.use(createPinia()).use(i18n).use(router)

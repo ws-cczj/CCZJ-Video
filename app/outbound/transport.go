@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -24,7 +25,8 @@ type routeTransport struct {
 	category string
 }
 
-// WrapTransport retains the caller's transport settings and per-attempt accounting.
+// WrapTransport limits public proxy routing to Douban (including its images) and danmaku. Other
+// information requests use the local proxy; media retains its caller transport.
 func WrapTransport(category string, base http.RoundTripper, decorate func(http.RoundTripper) http.RoundTripper) http.RoundTripper {
 	// Keep a media session on its caller-owned transport. Pool readiness and
 	// node/site cooldowns must not delay playback or change the egress between
@@ -48,7 +50,7 @@ func (t *routeTransport) CloseIdleConnections() {
 }
 func (t *routeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	p := installed.Load()
-	if p == nil || !p.config.Enabled {
+	if p == nil {
 		return t.decorate(t.base).RoundTrip(req)
 	}
 	ctx, cancel := p.requestContext(req.Context())
@@ -82,12 +84,23 @@ func (t *routeTransport) route(p *Pool, req *http.Request) (*http.Response, erro
 		}
 		return t.decorate(t.base).RoundTrip(req)
 	}
-	if err := p.waitReady(req.Context()); err != nil {
-		return nil, err
-	}
 	base, ok := t.base.(*http.Transport)
 	if !ok {
-		return nil, apperror.New(apperror.Unsupported, "该出站传输未支持公共代理")
+		return nil, apperror.New(apperror.Unsupported, "该出站传输不支持代理路由")
+	}
+	if !p.config.Enabled || !usesPublicPool(t.category, req.URL) {
+		endpoint, err := localProxy(p.config.LocalProxy)
+		if err != nil {
+			return nil, apperror.Wrap(apperror.Validation, err, "本机代理配置无效")
+		}
+		if endpoint == nil {
+			return t.direct(p, base, req)
+		}
+		response, err, _, _ := t.attempt(p, base, endpoint, req, "local_proxy")
+		return response, err
+	}
+	if err := p.waitReady(req.Context()); err != nil {
+		return nil, err
 	}
 	site := req.URL.Hostname()
 	if domain, err := publicsuffix.EffectiveTLDPlusOne(site); err == nil {
@@ -126,7 +139,32 @@ func (t *routeTransport) route(p *Pool, req *http.Request) (*http.Response, erro
 	if err != nil {
 		return nil, apperror.Wrap(apperror.Validation, err, "本机代理配置无效")
 	}
+	return t.fallback(p, base, endpoint, req, lastErr)
+}
+
+func usesPublicPool(category string, target *url.URL) bool {
+	if category == "douban" || category == "danmaku" {
+		return true
+	}
+	if target == nil || (category != "image" && category != "reading-image") {
+		return false
+	}
+	// Route by the actual image origin, including every redirect hop. A Referer
+	// or a hostname merely containing "douban" cannot enroll another site.
+	host := strings.TrimSuffix(strings.ToLower(target.Hostname()), ".")
+	return host == "doubanio.com" || strings.HasSuffix(host, ".doubanio.com") || host == "douban.com" || strings.HasSuffix(host, ".douban.com")
+}
+
+func (t *routeTransport) fallback(p *Pool, base *http.Transport, endpoint *url.URL, req *http.Request, lastErr error) (*http.Response, error) {
 	if endpoint == nil {
+		// "system" means use the host's network settings; no configured proxy
+		// is a normal direct connection on phones, not an unavailable transport.
+		if p.config.LocalProxy == "system" {
+			return t.direct(p, base, req)
+		}
+		if lastErr == nil {
+			return nil, apperror.New(apperror.Unavailable, "公共代理池不可用，且未配置本机代理")
+		}
 		return nil, apperror.Wrap(apperror.Unavailable, lastErr, "公共代理池不可用，且未配置本机代理")
 	}
 	p.mu.Lock()
@@ -226,7 +264,8 @@ func routeScore(site, endpoint string) uint64 {
 	return binary.BigEndian.Uint64(sum[:8])
 }
 func retryStatus(status int) bool {
-	return status == 403 || status == 407 || status == 429 || status == 502 || status == 503 || status == 504
+	// Bilibili uses 412 for an egress rejected by its anti-crawl gateway.
+	return status == 403 || status == 407 || status == 412 || status == 429 || status == 502 || status == 503 || status == 504
 }
 func canReplay(req *http.Request, category string, wrote bool) bool {
 	if req.Body != nil && req.GetBody == nil {
@@ -235,5 +274,5 @@ func canReplay(req *http.Request, category string, wrote bool) bool {
 	if !wrote || req.Method == http.MethodGet || req.Method == http.MethodHead {
 		return true
 	}
-	return req.Method == http.MethodPost && (category == "collect" || category == "danmaku" || category == "reading" || category == "novel" || category == "comic")
+	return req.Method == http.MethodPost && category == "danmaku"
 }

@@ -43,3 +43,59 @@ export class Device {
         return new Device(/** @type {Partial<Device>} */($$parsedSource));
     }
 }
+
+export class Status {
+    /**
+     * Creates a new Status instance.
+     * @param {Partial<Status>} [$$source = {}] - The source object to create the Status.
+     */
+    constructor($$source = {}) {
+        if (!("state" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["state"] = "";
+        }
+        if (!("transport_status" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["transport_status"] = "";
+        }
+        if (!("position" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["position"] = 0;
+        }
+        if (!("duration" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["duration"] = 0;
+        }
+        if (!("has_position" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["has_position"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Status instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {Status}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new Status(/** @type {Partial<Status>} */($$parsedSource));
+    }
+}

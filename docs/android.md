@@ -59,7 +59,9 @@ python scripts/test-cast-android.py --device emulator-5554 --host-ip <接收端�
 
 浏览器脚本需在 19320 端口启动前端 Vite，验证生产投屏面板的取消、迟到结果、错误重试、系统设置失败恢复及横竖屏。原生脚本使用独立 acceptance Debug 包，并要求另行安装、启用一个真正的 DLNA 接收端；测试会发送合成视频、控制接收端、打开系统投屏设置并按返回键验证再次搜索。Kodi 可从[官方 Android 下载页](https://kodi.tv/download/android/)获取，按[官方 UPnP 设置说明](https://kodi.wiki/view/Settings/Services/UPnP_DLNA)开启接收能力。同模拟器测试先打开 Kodi，等待接收服务启动，再运行脚本，避免接收应用在后台被系统冻结。
 
-本次使用官方稳定版 Kodi 21.3，在 MuMu 中验证真实 SSDP、描述请求、SOAP 播放控制及接收端拉取和播放视频，证据在 `dist/audit/cast-discovery/`。Go 常规测试、局域网回归和 vet 已通过；本机 race 测试二进制启动失败（Windows `0xc0000139`），未获得 race 结论。海康实体电视、鸿蒙 4 手机、Windows 原生投屏及路由器 Wi-Fi 组播尚未连接验收，不把同模拟器接收端测试算作这些环境通过。
+2.4.4 使用 Kodi 21.3，在 MuMu 中验证真实 SSDP、描述请求、SOAP 操作、接收端拉取视频，以及 `GetTransportInfo` 返回 PLAYING、`GetPositionInfo` 的播放时间实际前进。暂停／继续／跳转／停止及系统设置返回后再次搜索通过，证据在 `dist/audit/cast-244/`。同模拟器接收端需要保持前台视频 Surface；脚本在发起播放前切到 Kodi。Go 投屏测试和本机 race 检查通过。海康实体电视、鸿蒙 4 手机、Windows 原生投屏及路由器 Wi-Fi 组播尚未连接验收，不把同模拟器接收端测试算作这些环境通过。
+
+投屏诊断按 `cast_device_id` 和 `cast_session_id` 串联各次控制请求，RPC 的 request／operation 身份保留。`cast.discovery.*` 记录接口、查询次数、收到／拒绝的回复与耗时；`cast.description.*` 区分发现后设备描述失败；`cast.soap.*` 记录操作、HTTP 状态、UPnP 错误码、响应大小／摘要和耗时；`cast.status` 记录接收端播放状态及位置。空设备列表不等于视频错误，SOAP 成功不等于解码成功；持续 STOPPED／ERROR_OCCURRED 与无法取得状态分别显示。日志不保存原始视频响应和完整带签名查询地址。
 
 ## 可重复验收
 
@@ -79,10 +81,30 @@ python scripts/test-update-installer-android.py --device emulator-5554 --output 
 
 弱网与源保存验收使用 `python scripts/test-playback-weak-network-android.py --device <adb设备号>`。先安装内嵌当前 `frontend/dist` 的 acceptance Debug 包；脚本复用 WebView 调试与 adb reverse，在原生手机表单保存临时源，检查立即显示、搜索拒绝后的同源网页建议回退和日志，再在原生播放器实际解码 HLS，经历 3 Mbps → 650 Kbps → 3 Mbps 的总带宽变化。`--scenario offline` 增加五秒断流。结束删除临时源并恢复设置、路由，不清空应用数据；证据位于 `dist/audit/weak-network/android-*.json`。MuMu 上的安装、源操作与弱网播放结论仅适用于该 Android 宿主，仍不等于实体手机的蜂窝切换、功耗和解码兼容性通过。
 
-线路清晰度的原生验收入口为 `python scripts/test-playback-routes-android.py --device <adb设备号>`，同样要求当前 acceptance Debug 包。现有脚本覆盖 Go 元数据探测、远端预览不入库、清晰度排序后的实际触摸切换；其左下角提示断言和底栏全屏线路选择器属于旧布局。当前改为加载区阶段文案、右上角全屏线路入口、可拖动的底部抽屉及全屏上下集按钮，按用户要求仅完成代码，未运行新验收或打包。再次运行脚本前应同步这些交互断言，旧截图不作为新布局通过证据。说明与桌面验收入口见[播放线路清晰度](request-pipelines.md#播放线路清晰度)，证据放 `dist/audit/playback-routes/`。
+线路清晰度的原生验收入口为 `python scripts/test-playback-routes-android.py --device <adb设备号>`，要求当前 acceptance Debug 包。脚本覆盖 Go 元数据探测、远端预览不入库、清晰度排序后的实际触摸切换、加载区阶段文案与续播提示避让，以及右上角全屏线路入口和底部抽屉。说明与桌面验收入口见[播放线路清晰度](request-pipelines.md#播放线路清晰度)，证据放 `dist/audit/playback-routes/`；以每次运行的实际结果为准。
 
 ## 移动路由共享背景
 
-`MobileRouteStage` 在路由场景之外保留一个背景层，页面本身透明。视频模式沿用用户主题图片和遮罩，路由通过有限、稳定的取景坐标移动同一背景；取景区域预留 15% 边缘，只动画 transform。手势预览插值坐标，取消恢复原取景；设置子页、返回和连续导航不重建图片层。背景与内容同向但位移更小，页面内容改为完整滑出，避免透明页面相互叠字。桌面维持原绘制方式，小说／漫画保留各自画布色，阅读器及播放器继续拥有不透明的内容底色。系统减少动态效果、页面动画关闭都禁用背景过渡。
+手机播放器按钮位置回归使用 `python scripts/test-mobile-player-layout.py --device emulator-5554`，只操作 acceptance 包。复用原生绑定与媒体服务，验证普通播放／全屏的右上角线路入口、底部弹幕开关、线路抽屉和 320／360px 控件边界；结束恢复来源、设置与页面。界面截图使用无时间码的本地验收片，弱网测试片自带的时间码不属于播放器界面。截图与结果位于 `dist/audit/mobile-player-layout`。
 
-重复验收：安装与当前 `frontend/dist` 匹配的独立 acceptance Debug 包后，运行 `python scripts/test-mobile-backdrop.py --device emulator-5554`。脚本在宿主中临时展示已有内置水墨背景，不持久修改用户主题；检查单背景节点、跨页、滑动取消、动画逐帧边缘覆盖、减少动态效果和模式隔离，结束恢复模式和页面。证据放 `dist/audit/shared-backdrop/`；帧回调不是硬件 FPS，MuMu 验证不能代替鸿蒙真机。
+系统栏安全区统一由 `MainActivity` 的根视图消费，WebView 不重复预留顶部高度；栏色和图标明暗跟随当前应用模式的主题画布，短剧不再单独覆盖系统栏或手机底栏，退出全屏后重新应用。手机次级页面标题栏保持透明，沿用共享主题背景，不再铺设固定白色／黑色横条；返回键与标题保留。主题页通过右下角悬浮按钮编辑当前主题，不在卡片列表上方占用操作区。日志导出生成在应用私有 `exports/logs` 下，随后直接打开系统分享界面；只有在分享目标中保存后才会出现在用户选定的文件夹中，取消分享不代表已写入下载目录。
+
+对应隔离回归运行 `python scripts/test-mobile-feedback-android.py`，先安装当前前端对应的 acceptance Debug 包。它验证 XML 源搜索、浅色／深色主题与编辑入口、短剧推荐及剧场不覆盖外壳与原生栏色，以及导出后打开系统选择器并在取消后保留分享入口；测试来源、网络许可和主题恢复到进入前状态。截图位于 `dist/audit/mobile-feedback`，模拟器结论不代替华为真机验收。
+
+`MobileRouteStage` 在路由场景之外保留一个背景层，页面本身透明。视频模式沿用用户主题图片和遮罩，路由通过有限、稳定的取景坐标移动同一背景；背景使用五列、两行的固定画布：五个视频主路由等宽分区，子页使用稳定的第二行取景；小说／漫画按各自三个主路由划分。只动画 transform，预览页不加边缘阴影，避免同一张图上出现竖向色带。手势预览插值坐标，取消恢复原取景；设置子页、返回和连续导航不重建图片层。背景与内容同向但位移更小，页面内容改为完整滑出，避免透明页面相互叠字。桌面维持原绘制方式，小说／漫画保留各自画布色，阅读器及播放器继续拥有不透明的内容底色。系统减少动态效果、页面动画关闭都禁用背景过渡。
+
+重复验收：安装与当前 `frontend/dist` 匹配的独立 acceptance Debug 包后，运行 `python scripts/test-mobile-backdrop.py --device emulator-5554`。脚本在宿主中临时展示已有内置水墨背景，不持久修改用户主题；检查单背景节点、跨页、滑动取消、动画逐帧边缘覆盖、减少动态效果和模式隔离，结束恢复模式和页面。证据放 `dist/audit/shared-backdrop/`；逐帧检查同时确认主路由间位移等于一个视口宽度、滑动预览没有边缘阴影；帧回调不是硬件 FPS，MuMu 验证不能代替鸿蒙真机。
+
+移动端日志复用共享 LogPanel：概览和级别／来源筛选默认收起，搜索与记录列表靠前；输出级别和导出格式使用统一 Segment，日志详情使用统一 Modal 并支持系统返回关闭。列表保留固定 76px 双行窗口化渲染，完整长记录在详情中换行，历史文件和原始文本共用原有读取、取消与导出接口。回归入口 `scripts/test-mobile-logs-layout.py` 覆盖窄屏、中英文、浅深主题、筛选、长记录和历史查看；导出系统交互沿用 `scripts/test-mobile-feedback-android.py`。
+
+设置首页省去总说明，分组及工具页不重复提供右上角搜索／设置链接；弹幕源页复用宿主标题。移动小／中／大按钮使用公共密度变量按屏宽变化，最小高度分别在 36～40px、40～44px、44～48px 间调整，内容或字体变大时允许自然撑高；页面留白使用共享 section-padding，不能把每个控件强制改成同一高度。
+
+视频壁纸的主路由取景向下偏移 6% 视口高度。短剧的禁止横向切页标记仅随实际播放场景挂载，空态、错误和加载态可以切换主路由。`backdropSystemBars` 复用有界图片像素读取，按当前取景顶部、背景透明度和页面遮罩计算原生栏色；Java 桥接只更新临时外观及系统图标明暗，不覆盖 SQLite 主题或开屏缓存。原生根容器同时更新，兼容系统将状态栏设为透明的情况。
+
+真实目录验收使用 `scripts/test-real-catalog-android.py --snapshot <桌面库只读快照>`，只向 acceptance 包装载视频来源、目录、收藏和历史，并在首次操作前保留该包原库。真实桌面库不写入，目录数据不打入 APK。检查首页、搜索、收藏、短剧空态双向滑动，以及原生栏色桥接和开屏缓存隔离；结果及截图归入 `dist/audit/real-mobile/`。
+
+五项底部导航的中间搜索入口只显示简洁的搜索线条图标，横向与纵向居中，通过可访问名称保留搜索语义。图标外部保持透明，不加底板、边框或投影。其余四项保留文字，选中时仅改变颜色；底栏背景、入口尺寸与位置固定，不使用浮起、缩放或扩散动画。回归入口为 `scripts/test-mobile-navigation.py`。
+
+播放状态验收运行 `scripts/test-playback-state-android.py`：使用独立来源验证前四集 99%、第五集 15% 的继续观看、收藏夹选择、重启后收藏，以及弹幕字号滑杆与保存。退出时删除本次来源并恢复设置和 WebView 缓存。真实目录导入前归档旧进度缓存，导入后清掉测试目录遗留的编号缓存，从复制的 SQLite 历史重建进度，避免相同 global_id 命中旧测试片段。此脚本只用于 acceptance 包，不用于真机 preview 数据。
+
+手机详情页的选集区直接展示集数，不挂载 `PlayLinePicker` 的来源探测和重试卡片；播放时通过右上角线路抽屉选择。桌面详情页保留线路选择。

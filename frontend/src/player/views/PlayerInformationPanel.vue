@@ -10,7 +10,7 @@ import { Button } from '../../components/ui'
 import type { PlayerPanelModel } from '../page/panelModel'
 
 const props = defineProps<{model:PlayerPanelModel;collapsed:boolean}>()
-const emit = defineEmits<{source:[key:string,line?:number];episode:[index:number];sort:[];close:[];openLines:[]}>()
+const emit = defineEmits<{source:[key:string,line?:number];episode:[index:number];sort:[];close:[]}>()
 const { t } = useI18n()
 const mobile = presentationProfile().ui === 'mobile'
 const details = props.model.details, catalog = props.model.catalog, episodeList = props.model.episodes
@@ -58,6 +58,7 @@ function onMinimizeApp():void { try { Window.Minimise() } catch { /* Host owns a
           <!-- 选源区 + 选集区 -->
           <section v-show="!mobile || mobilePlayerTab === 'overview'" class="side-section cczj-flex-1 cczj-overflow-y-auto cczj-p-4 cczj-flex cczj-flex-col">
             <!-- 源列表 -->
+            <template v-if="!mobile">
             <div class="side-section-title cczj-flex cczj-items-center cczj-justify-between cczj-gap-2 cczj-mb-3">
               <div class="side-section-title-left cczj-flex cczj-items-center cczj-gap-2">
                 <span class="bullet cczj-w-2 cczj-h-2 cczj-rounded-full cczj-bg-accent"></span>
@@ -69,8 +70,6 @@ function onMinimizeApp():void { try { Window.Minimise() } catch { /* Host owns a
               </div>
             </div>
 
-            <Button v-if="mobile" @click="emit('openLines')">{{t('playLine.switch')}}</Button>
-            <template v-else>
               <PlaybackRouteList dark :sources="catalog.items" :active-key="catalog.activeKey" :active-line="details.lines[details.activeLineIndex]?.index??-1" :lines="details.lines" :busy="catalog.loading" :selectable="catalog.selectable" @choose="(key,line)=>emit('source',key,line)" />
               <Button class="cczj-mt-4" variant="text" size="sm" @click="catalog.retry">{{t('playLine.retryQuality')}}</Button>
             </template>

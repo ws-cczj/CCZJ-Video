@@ -146,6 +146,7 @@ export interface HistoryItem {
   ep_num: number
   vod_name?: string
   position?: number
+  duration?: number
   created_at?: string
   updated_at?: string
 }

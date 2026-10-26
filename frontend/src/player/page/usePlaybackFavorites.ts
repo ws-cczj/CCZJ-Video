@@ -1,6 +1,6 @@
 import { ref, watch, onBeforeUnmount } from 'vue'
 import { AddFavorite, RemoveFavorite, IsFavorite } from '../../api/app'
-import { readStorage, writeStorage } from '../../platform/storage'
+import { useFavoriteFoldersStore } from '../../stores/favoriteFolders'
 import { bumpFavoritesRefresh } from '../../stores/favoritesSync'
 import { useErrorStore } from '../../stores/error'
 import { tr } from '../../locales'
@@ -8,21 +8,13 @@ import { tr } from '../../locales'
 type FavoriteIdentity={source_key:string;vod_id:string;global_id:number;vod_name:string}
 export function usePlaybackFavorites(identity:()=>FavoriteIdentity) {
   const isFav=ref(false),favBusy=ref(false),showFavFolderModal=ref(false)
-  const errors=useErrorStore()
+  const errors=useErrorStore(),folderStore=useFavoriteFoldersStore()
   let disposed=false,queryGeneration=0
   let pending: (Promise<unknown>&{cancel?:()=>void|Promise<void>})|undefined
   const key=(value:FavoriteIdentity)=>`${value.source_key}-${value.vod_id}`
   const current=(value:FavoriteIdentity)=>!disposed&&key(value)===key(identity())
   function cancelQuery():void {try{void Promise.resolve(pending?.cancel?.()).catch(()=>{})}catch{/* Settled request. */}pending=undefined}
   watch(()=>key(identity()),()=>{queryGeneration++;cancelQuery();isFav.value=false;showFavFolderModal.value=false})
-  function mapping():Record<string,string> {
-    const raw=readStorage<unknown>('cczj_fav_mapping',{})
-    if(!raw||typeof raw!=='object'||Array.isArray(raw))return {}
-    return Object.fromEntries(Object.entries(raw).filter((entry):entry is [string,string]=>typeof entry[1]==='string'))
-  }
-  function saveMapping(value:Record<string,string>):void {
-    if(!writeStorage('cczj_fav_mapping',value))errors.error(tr('favorites.saveFailed'),tr('favorites.saveFailedDetail'),'','Player')
-  }
   async function refreshFav():Promise<void> {
     const captured=identity(),token=++queryGeneration
     cancelQuery()
@@ -42,7 +34,7 @@ export function usePlaybackFavorites(identity:()=>FavoriteIdentity) {
     favBusy.value=true
     try{
       await RemoveFavorite(captured)
-      const folders=mapping();delete folders[key(captured)];saveMapping(folders)
+      await folderStore.load();delete folderStore.mapping[key(captured)];await folderStore.persistMapping()
       if(current(captured))isFav.value=false
       bumpFavoritesRefresh()
     }catch(error){if(!disposed)errors.fromError(tr('favorites.saveFailed'),error,'Player.favorite')}
@@ -51,10 +43,14 @@ export function usePlaybackFavorites(identity:()=>FavoriteIdentity) {
   async function confirmAddToFolder(folderId:string):Promise<void> {
     const captured=identity()
     if(!captured.vod_id||favBusy.value||disposed)return
-    favBusy.value=true;showFavFolderModal.value=false
+    favBusy.value=true
     try{
+      await folderStore.load()
       await AddFavorite(captured)
-      const folders=mapping();folders[key(captured)]=folderId;saveMapping(folders)
+      if(current(captured))isFav.value=true
+      folderStore.mapping[key(captured)]=folderId
+      if(!await folderStore.persistMapping())return
+      if(current(captured))showFavFolderModal.value=false
       if(current(captured))isFav.value=true
       bumpFavoritesRefresh()
     }catch(error){if(!disposed)errors.fromError(tr('favorites.saveFailed'),error,'Player.favorite')}

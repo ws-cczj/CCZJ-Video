@@ -19,7 +19,7 @@ function reason(code:string):string {
 const ranges=computed(()=>[
  {key:'area' as const,label:t('danmaku.area'),min:.25,max:.9,step:.05,value:Math.round(preferences.value.area*100)+'%'},
  {key:'opacity' as const,label:t('danmaku.opacity'),min:.25,max:1,step:.05,value:Math.round(preferences.value.opacity*100)+'%'},
- {key:'fontSize' as const,label:t('danmaku.fontSize'),min:16,max:36,step:1,value:String(preferences.value.fontSize)},
+ {key:'fontSize' as const,label:t('danmaku.fontSize'),min:16,max:36,step:1,value:Math.round(preferences.value.fontSize/24*100)+'%'},
  {key:'speed' as const,label:t('danmaku.speed'),min:50,max:180,step:10,value:String(preferences.value.speed)},
 ])
 let previousFocus:HTMLElement|null=null
@@ -67,7 +67,7 @@ defineExpose({open,close,scheduleClose,toggle,ready:preferencesReady,engaged:ope
         <button :aria-pressed="preferences.fixed" @click="preferences.fixed=!preferences.fixed"><Icon name="panels" :size="22" />{{t('danmaku.fixedType')}}</button>
         <button :aria-pressed="preferences.colored" @click="preferences.colored=!preferences.colored"><Icon name="palette" :size="22" />{{t('danmaku.colored')}}</button>
        </div>
-       <label v-for="range in ranges" :key="range.key" class="cczj-danmaku-range"><span>{{range.label}}</span><input v-model.number="preferences[range.key]" type="range" :min="range.min" :max="range.max" :step="range.step" /><output>{{range.value}}</output></label>
+       <label v-for="range in ranges" :key="range.key" class="cczj-danmaku-range"><span>{{range.label}}</span><input v-model.number="preferences[range.key]" type="range" :aria-label="range.label" :aria-valuetext="range.value" :min="range.min" :max="range.max" :step="range.step" /><output>{{range.value}}</output></label>
       </fieldset>
       <div class="cczj-danmaku-availability" role="status"><strong v-if="binding">{{sourceName}} · {{episodeLabel}}</strong><span v-if="comments">{{t('danmaku.fragmentCount',{count:comments.items.length})}} · {{t(comments.cached?'danmaku.fromCache':'danmaku.fromSource')}}</span><p>{{t('danmaku.autoHint')}}</p></div>
       <details v-if="attempts.length" class="cczj-danmaku-cache cczj-danmaku-match-details"><summary>{{t('danmaku.matchDetails')}}</summary><p v-for="attempt in attempts" :key="attempt.provider"><strong>{{builtinDanmakuSources.find(source=>source.id===attempt.provider)?.name}} · {{t(`danmaku.attempts.${attempt.status}`)}}</strong><span v-if="attempt.code" class="cczj-danmaku-match-reason">{{reason(attempt.code)}} <code>{{attempt.code}}</code></span><small v-if="attempt.stage">{{t('danmaku.matchStage')}}: {{te(`danmaku.stages.${attempt.stage}`)?t(`danmaku.stages.${attempt.stage}`):attempt.stage}} · {{attempt.elapsedMs||0}} ms</small><small v-if="attempt.detail">{{attempt.detail}}</small><small v-if="attempt.retryAt">{{t('danmaku.matchRetryAt',{time:new Date(attempt.retryAt*1000).toLocaleString()})}}</small></p><p v-if="traceId">{{t('danmaku.matchLogId')}}<code>{{traceId}}</code></p><p>{{t('danmaku.matchLogHint')}}</p></details>

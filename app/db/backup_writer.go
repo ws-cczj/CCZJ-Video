@@ -87,8 +87,8 @@ func (w *BackupWriter) MergeMeta(id int64, meta BackupVideoMeta) (bool, error) {
 func (w *BackupWriter) MergeFavorite(id int64, key, vodID, createdAt string) (bool, error) {
 	return mergeBackupFavorite(w.ctx, w.tx, id, key, vodID, createdAt)
 }
-func (w *BackupWriter) MergeHistory(id int64, key, vodID string, episode int, position float64, updatedAt string) (bool, error) {
-	return mergeBackupHistory(w.ctx, w.tx, id, key, vodID, episode, position, updatedAt)
+func (w *BackupWriter) MergeHistory(id int64, key, vodID string, episode int, position float64, updatedAt string, duration ...float64) (bool, error) {
+	return mergeBackupHistory(w.ctx, w.tx, id, key, vodID, episode, position, updatedAt, duration...)
 }
 func (w *BackupWriter) MergeReading(backup *BackupReading) (int, error) {
 	return mergeReadingBackup(w.ctx, w.tx, backup)

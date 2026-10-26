@@ -52,7 +52,7 @@ func GetAllGlobalTypes() ([]*GlobalTypeRow, error) {
 	err := instance.Select(&rows, `SELECT id,type_name,sort,created_at,CASE WHEN EXISTS(
 	 SELECT 1 FROM global_types denied WHERE denied.collect_enabled=0
 	 AND cczj_type_key(denied.type_name)=cczj_type_key(global_types.type_name)) THEN 0 ELSE collect_enabled END AS collect_enabled
-	 FROM global_types ORDER BY sort ASC, id ASC`)
+	 FROM global_types ORDER BY collect_enabled DESC, sort ASC, type_name COLLATE NOCASE ASC, id ASC`)
 	if err != nil {
 		applog.Error("[GlobalTypes] GetAllGlobalTypes failed: %v", err)
 		return nil, err
@@ -100,6 +100,19 @@ func normalizeTypeName(s string) string {
 
 var typeNameTraditional = strings.NewReplacer("倫", "伦", "類", "类", "劇", "剧", "紀", "纪", "錄", "录", "動", "动", "畫", "画", "電", "电", "視", "视", "綜", "综", "藝", "艺")
 
+var defaultBlockedTypeKeys = []string{"福利", "伦理"}
+
+// Defaults apply to a new category; an explicit saved choice still takes precedence.
+func initialTypeCollectEnabled(name string) int {
+	key := normalizeTypeName(name)
+	for _, blocked := range defaultBlockedTypeKeys {
+		if key == blocked {
+			return 0
+		}
+	}
+	return 1
+}
+
 // stripTypeNameSuffixes 剥掉「类/片/剧」这一类纯修饰后缀，每个至多剥一次：
 // 「电视剧类」剥成「电视」，「卡通片」剥成「卡通」。再往下就要把词根啃掉了，
 // 所以「电」「动」这种不在这条路上。
@@ -136,7 +149,7 @@ func UpsertGlobalType(typeName string) error {
 			return nil // 已存在同义类型
 		}
 	}
-	_, err := instance.Exec(`INSERT OR IGNORE INTO global_types (type_name) VALUES (?)`, typeName)
+	_, err := instance.Exec(`INSERT OR IGNORE INTO global_types (type_name,collect_enabled) VALUES (?,?)`, typeName, initialTypeCollectEnabled(typeName))
 	if err != nil {
 		applog.Error("[GlobalTypes] UpsertGlobalType failed for '%s': %v", typeName, err)
 	}
@@ -185,7 +198,7 @@ func GetOrCreateGlobalTypeId(typeName string) (int64, error) {
 	}
 
 	// 4. 不存在则插入
-	res, err := instance.Exec(`INSERT OR IGNORE INTO global_types (type_name) VALUES (?)`, typeName)
+	res, err := instance.Exec(`INSERT OR IGNORE INTO global_types (type_name,collect_enabled) VALUES (?,?)`, typeName, initialTypeCollectEnabled(typeName))
 	if err != nil {
 		return 0, fmt.Errorf("insert global_types: %w", err)
 	}
@@ -252,14 +265,14 @@ func GetEnabledCollectTypes() ([]*GlobalTypeRow, error) {
 }
 
 // IsTypeCollectEnabled 检查某个类型是否启用了采集
-// 默认值：类型不存在时返回 true（默认启用采集）
+// Unknown categories use the same defaults as category creation.
 func IsTypeCollectEnabled(typeName string) bool {
 	typeName = strings.TrimSpace(typeName)
 	if typeName == "" {
 		return true
 	}
 	var enabled bool
-	if err := instance.Get(&enabled, `SELECT NOT EXISTS(SELECT 1 FROM global_types WHERE collect_enabled=0 AND cczj_type_key(type_name)=?)`, normalizeTypeName(typeName)); err != nil {
+	if err := instance.Get(&enabled, `SELECT COALESCE(MIN(collect_enabled),?) FROM global_types WHERE cczj_type_key(type_name)=?`, initialTypeCollectEnabled(typeName), normalizeTypeName(typeName)); err != nil {
 		applog.Error("[GlobalTypes] cannot read type policy: %v", err)
 		return false
 	}

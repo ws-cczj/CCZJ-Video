@@ -295,9 +295,9 @@
 }
 
 .episode-btn.watched {
-  background: var(--accent);
+  background: var(--accent-alpha-10);
   @apply cczj-border-primary;
-  color: var(--accent-contrast);
+  color: var(--text-primary);
   @apply cczj-font-medium;
 }
 
@@ -311,7 +311,7 @@
 .ep-progress-fill {
   @apply cczj-absolute cczj-left-0 cczj-bottom-0;
   height: 3px;
-  background: rgba(255, 255, 255, 0.6);
+  background: var(--accent);
   border-radius: 0 2px 2px 0;
   @apply cczj-pointer-events-none;
   transition: width 0.25s ease;
@@ -325,8 +325,8 @@
   @apply cczj-absolute;
   right: 6px;
   @apply cczj-top-1 cczj-text-xs cczj-font-semibold;
-  color: rgba(255, 255, 255, 0.9);
-  background: rgba(0, 0, 0, 0.25);
+  color: var(--text-secondary);
+  background: var(--bg-card);
   padding: 1px 5px;
   border-radius: 10px;
   line-height: 1.4;
@@ -334,8 +334,8 @@
 }
 
 .episode-btn:hover .ep-progress-pct {
-  @apply cczj-text-accent;
-  background: var(--accent-alpha-10);
+  color: var(--text-secondary);
+  background: var(--bg-card);
 }
 
 .ep-num {

@@ -13,6 +13,7 @@ type HistoryReq struct {
 	VodId     string  `json:"vod_id"`
 	EpNum     int     `json:"ep_num"`
 	Position  float64 `json:"position"`
+	Duration  float64 `json:"duration"`
 }
 
 func (r *HistoryReq) UnmarshalJSON(data []byte) error {
@@ -21,6 +22,7 @@ func (r *HistoryReq) UnmarshalJSON(data []byte) error {
 		VodId     json.RawMessage `json:"vod_id"`
 		EpNum     json.RawMessage `json:"ep_num"`
 		Position  json.RawMessage `json:"position"`
+		Duration  json.RawMessage `json:"duration"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
@@ -33,12 +35,15 @@ func (r *HistoryReq) UnmarshalJSON(data []byte) error {
 	if v, err := parseFloat(raw.Position, 0); err == nil {
 		r.Position = v
 	}
+	if v, err := parseFloat(raw.Duration, 0); err == nil {
+		r.Duration = v
+	}
 	return nil
 }
 
 func (a *App) SaveWatchHistory(ctx context.Context, req HistoryReq) error {
 	return runRequestError(a, ctx, "video.SaveWatchHistory", func(ctx context.Context) error {
-		return a.media.SaveHistory(ctx, req.SourceKey, req.VodId, req.EpNum, req.Position)
+		return a.media.SaveHistory(ctx, req.SourceKey, req.VodId, req.EpNum, req.Position, req.Duration)
 	})
 }
 

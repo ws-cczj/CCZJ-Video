@@ -224,6 +224,27 @@ def main():
                 page.set_viewport_size({'width':1296,'height':1000})
                 page.locator('.main-content').evaluate('(el)=>el.scrollTop=0')
                 page.screenshot(animations='disabled',path=str(output/'motion-ink.png'))
+                # Mount the real shared log panel in the existing settings seam.
+                page.evaluate('''async()=>{
+                  const [{pluginSettingsTabs},{default:LogPanel},{markRaw}]=await Promise.all([import('/src/plugins/registry.ts'),import('/src/components/LogPanel.vue'),import('/node_modules/.vite/deps/vue.js')]);
+                  pluginSettingsTabs.value.find(item=>item.id==='logs').component=markRaw(LogPanel);
+                }''')
+                page.locator('.tab[data-group="logs"]').click()
+                page.locator('.log-search input').wait_for(state='visible')
+                page.evaluate('''()=>{const logs=document.querySelector('#app').__vue_app__.config.globalProperties.$pinia._s.get('logs');logs.setPaused(true);logs.records=Array.from({length:500},(_,i)=>({key:'desktop-'+i,seq:i+1,ts:Date.now()+i,level:'INFO',origin:'app',caller:'long/path/'.repeat(40),message:'Desktop log layout '+i+' '+('diagnostic details '.repeat(80))}));}''')
+                for width in [960,1280]:
+                    page.set_viewport_size({'width':width,'height':800})
+                    page.locator('.main-content').evaluate('(el)=>el.scrollTop=0')
+                    page.wait_for_timeout(150)
+                    assert page.locator('.log-row').count()<60
+                    assert page.locator('.log-list').evaluate('el=>el.scrollWidth<=el.clientWidth+1')
+                    page.locator('.log-row').first.focus()
+                    page.keyboard.press('Enter')
+                    page.locator('.log-record-message').wait_for(state='visible')
+                    assert page.locator('.log-record-message').evaluate('el=>el.scrollWidth<=el.clientWidth+1')
+                    page.screenshot(animations='disabled',path=str(output/f'logs-{width}.png'))
+                    page.locator('.log-detail button[aria-label]').click()
+                    page.locator('.log-detail').wait_for(state='detached')
                 page.close()
                 # Image decoding is asynchronous; switching themes cannot restart the splash image.
                 splash=make_page("HTMLImageElement.prototype.decode=function(){return new Promise(resolve=>window.__finishDecode=resolve)};")

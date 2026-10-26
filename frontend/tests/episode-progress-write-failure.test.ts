@@ -51,3 +51,32 @@ it('keeps valid rows and rejects invalid positions, durations and timestamps', a
   progress.saveEpProgress('good', 50, Infinity)
   expect(progress.getEpProgress('good')?.duration).toBe(100)
 })
+
+it('does not invent a percentage for history without duration',async()=>{
+ const progress=await import('../src/utils/episodeProgress')
+ expect(progress.getEpProgressPct({position:120,updatedAt:Date.now()})).toBe(0)
+ expect(progress.getEpProgressPct({position:0,duration:100,updatedAt:Date.now()})).toBe(0)
+ expect(progress.getEpProgressPct({position:99,duration:100,updatedAt:Date.now()})).toBe(99)
+})
+it('rejects an incompatible old duration and preserves a newer local position',async()=>{
+ const progress=await import('../src/utils/episodeProgress')
+ progress.saveEpProgress('real-1',20,40)
+ progress.mergeEpHistory('real-1',{position:2790,updated_at:new Date(Date.now()+1000).toISOString()})
+ expect(progress.loadEpProgress()['real-1'].position).toBe(2790)
+ expect(progress.loadEpProgress()['real-1'].duration).toBeUndefined()
+ progress.mergeEpHistory('real-1',{position:7,duration:2830,updated_at:new Date(Date.now()-1000).toISOString()})
+ expect(progress.loadEpProgress()['real-1'].position).toBe(2790)
+ expect(progress.loadEpProgress()['real-1'].duration).toBe(2830)
+})
+
+it('compares SQLite UTC timestamps against local checkpoints without a timezone shift',async()=>{
+ const progress=await import('../src/utils/episodeProgress')
+ const {parseTimestamp}=await import('../src/utils/time')
+ const stamp='2026-10-26 12:30:10.125'
+ expect(parseTimestamp(stamp)).toBe(Date.parse('2026-10-26T12:30:10.125Z'))
+ expect(parseTimestamp('2026-10-26T20:30:10.125+08:00')).toBe(parseTimestamp(stamp))
+ vi.setSystemTime(Date.parse('2026-10-26T12:30:09Z'))
+ progress.saveEpProgress('utc-1',7,100)
+ progress.mergeEpHistory('utc-1',{position:99,duration:100,updated_at:stamp})
+ expect(progress.loadEpProgress()['utc-1'].position).toBe(99)
+})

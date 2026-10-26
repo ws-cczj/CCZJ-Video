@@ -1,7 +1,8 @@
 """Render the production desktop panel; check quality order and original line IDs.
 Playlist parsing and native switching are exercised by the Android companion.
 """
-import argparse, json, os, subprocess, time
+import argparse, io, json, os, re, subprocess, time
+from PIL import Image
 from pathlib import Path
 from urllib.request import urlopen
 from playwright.sync_api import sync_playwright
@@ -30,6 +31,19 @@ try:
         assert '720P' in page.locator('.route-item[data-source=source_a][data-line="2"]').inner_text(),'608-pixel encoded height must use a conventional tier'
         assert '1080' in page.locator('.route-item[data-source=source_a][data-line="2"]').get_attribute('title') and '608' in page.locator('.route-item[data-source=source_a][data-line="2"]').get_attribute('title'),'original dimensions must remain available'
         page.locator('.route-item[data-source=source_a][data-line="2"]').click();assert page.evaluate('sidebarProbe.chosen()')==dict(key='source_a',line=2)
+        watched=page.locator('.ep-item.watched:not(.active)').first
+        def contrast():
+            watched.scroll_into_view_if_needed()
+            box=watched.bounding_box()
+            rgb=[float(v) for v in re.findall(r'[\d.]+',watched.locator('.ep-item-num').evaluate('(e)=>getComputedStyle(e).color'))][:3]
+            background=Image.open(io.BytesIO(page.screenshot())).convert('RGB').getpixel((int(box['x']+10),int(box['y']+10)))
+            def lum(values):
+                values=[v/255 for v in values]
+                return sum((v/12.92 if v<=.04045 else ((v+.055)/1.055)**2.4)*weight for v,weight in zip(values,[.2126,.7152,.0722]))
+            a,b=lum(rgb),lum(background)
+            ratio=(max(a,b)+.05)/(min(a,b)+.05)
+            assert ratio>=4.5,dict(foreground=rgb,background=background,ratio=ratio)
+        contrast();watched.hover();contrast()
         for width in [1280,1024]:
             page.set_viewport_size(dict(width=width,height=800));page.wait_for_timeout(250)
             assert page.locator('.route-item').evaluate_all('(items)=>items.every(e=>e.getBoundingClientRect().right<=e.closest("aside").getBoundingClientRect().right+1)')

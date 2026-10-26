@@ -20,11 +20,11 @@ interface NavItem {
 
 const navItems = computed<NavItem[]>(() => [
   { path: '/', label: t('sidebar.home'), icon: 'home' },
-  { path: '/short-drama', label: t('shortDrama.title'), icon: 'film' },
+  { path: '/short-drama', label: t('shortDrama.title'), icon: 'clapperboard' },
   { path: '/search', label: t('sidebar.search'), icon: 'search' },
   { path: '/recent', label: t('sidebar.recent'), icon: 'clock' },
   { path: '/favorites', label: t('sidebar.favorites'), icon: 'star' },
-  { path: '/history', label: t('sidebar.history'), icon: 'clock' },
+  { path: '/history', label: t('sidebar.history'), icon: 'history' },
 ])
 
 const toolItems = computed<NavItem[]>(() => [

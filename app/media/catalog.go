@@ -124,6 +124,7 @@ type HistoryItemWithVideo struct {
 	VodId      string  `json:"vod_id"`
 	EpNum      int     `json:"ep_num"`
 	Position   float64 `json:"position"`
+	Duration   float64 `json:"duration"`
 	UpdatedAt  string  `json:"updated_at"`
 	VodName    string  `json:"vod_name"`
 	VodPic     string  `json:"vod_pic"`

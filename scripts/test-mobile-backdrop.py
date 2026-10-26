@@ -20,7 +20,7 @@ with AndroidWebView(args.device,application_id='com.cczj.video.acceptance') as v
  def route(path):
   view.evaluate('document.querySelector("#app").__vue_app__.config.globalProperties.$router.push('+json.dumps(path)+')')
   wait('location.hash==='+json.dumps('#'+path)+'&&!document.querySelector("[class*=route-forward-enter-active],[class*=route-back-enter-active]")')
-  time.sleep(.35)
+  wait('document.querySelector(".cczj-mobile-route-backdrop").getAnimations().every(animation=>animation.playState!=="running")')
  original_url=view.evaluate('location.href');original_mode=rpc('GetSetting','application_mode')
  try:
   rpc('SetSetting','application_mode','video')
@@ -36,6 +36,11 @@ with AndroidWebView(args.device,application_id='com.cczj.video.acceptance') as v
   image=view.evaluate('getComputedStyle(window.__backgroundAudit).backgroundImage')
   result['image']=image
   origin=view.evaluate('window.__backgroundAudit.style.transform')
+  for index,path in enumerate(['/','/short-drama','/search','/favorites','/settings']):
+   route(path)
+   atlas=view.evaluate('''(()=>{const e=window.__backgroundAudit,s=e.parentElement.getBoundingClientRect();return {w:e.getBoundingClientRect().width,stage:s.width,x:new DOMMatrixReadOnly(getComputedStyle(e).transform).m41}})()''')
+   assert abs(atlas['w']-5*atlas['stage'])<1 and abs(atlas['x']+index*atlas['stage'])<1,atlas
+  result['checks'].append('five primary tabs occupy five equal viewport cells of one panorama')
   for path in ['/settings?group=basic','/settings?group=theme','/settings','/history','/favorites','/settings']:
    route(path)
    assert view.evaluate('document.querySelectorAll(".cczj-mobile-route-backdrop").length===1&&window.__backgroundAudit===document.querySelector(".cczj-mobile-route-backdrop")')
@@ -51,6 +56,8 @@ with AndroidWebView(args.device,application_id='com.cczj.video.acceptance') as v
   for step in range(1,5):view.call('Input.dispatchTouchEvent',dict(type='touchMove',touchPoints=[dict(x=x-geometry['width']*.18*step/4,y=y)]));time.sleep(.025)
   wait('!!document.querySelector(".cczj-mobile-tab-dragging")')
   moved=view.evaluate('window.__backgroundAudit.style.transform');assert moved!=before,(before,moved)
+  assert view.evaluate('getComputedStyle(document.querySelector(".cczj-mobile-route-preview")).boxShadow')=='none'
+  view.screenshot(args.output/'swipe-midpoint.png')
   view.call('Input.dispatchTouchEvent',dict(type='touchEnd',touchPoints=[]))
   wait('!document.querySelector(".cczj-mobile-tab-dragging")');time.sleep(.4)
   assert view.evaluate('location.hash')=='#/favorites'
@@ -64,7 +71,7 @@ with AndroidWebView(args.device,application_id='com.cczj.video.acceptance') as v
   view.call('Emulation.setEmulatedMedia',dict(features=[dict(name='prefers-reduced-motion',value='reduce')]))
   route('/settings')
   assert view.evaluate('getComputedStyle(window.__backgroundAudit).transitionDuration')=='0s',view.evaluate('({duration:getComputedStyle(window.__backgroundAudit).transitionDuration,flag:document.documentElement.dataset.motionPages,css:document.querySelector(".cczj-mobile-route-stage").className})')
-  assert view.evaluate('getComputedStyle(window.__backgroundAudit).transform')=='none'
+  assert view.evaluate('Math.abs(new DOMMatrixReadOnly(getComputedStyle(window.__backgroundAudit).transform).m41+innerWidth*4)<1')
   view.call('Emulation.setEmulatedMedia',dict(features=[]))
   time.sleep(.3) # The motion store applies the media-query change asynchronously.
   view.evaluate('document.documentElement.dataset.motionPages="off"');route('/history')

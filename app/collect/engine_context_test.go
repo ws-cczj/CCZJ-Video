@@ -19,3 +19,20 @@ func TestFetchPageWithRetryHonorsCanceledContext(t *testing.T) {
 		t.Fatalf("canceled retry took %v", elapsed)
 	}
 }
+
+func TestFetchPageDoesNotRedownloadInvalidResponse(t *testing.T) {
+	for _, item := range []struct{ body, kind string }{
+		{`{"code":1,"list":"not an array"}`, "decode"},
+		{`{"code":1002,"msg":"search refused","list":"refused"}`, "source"},
+	} {
+		t.Run(item.kind, func(t *testing.T) {
+			stub := withStubBody(t, item.body)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			_, err := fetchPageWithRetry(ctx, "https://example.test/api", 1, FetchOptions{}, nil)
+			if got := FetchFailureKind(err); got != item.kind || len(stub.requested) != 1 {
+				t.Fatalf("failure=%s requests=%d error=%v", got, len(stub.requested), err)
+			}
+		})
+	}
+}

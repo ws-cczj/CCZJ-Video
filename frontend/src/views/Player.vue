@@ -20,7 +20,7 @@ import { Button, Modal } from '../components/ui'
 import FavFolderModal from '../components/FavFolderModal.vue'
 import { resolveEpisodeUrl, stripHtmlTags } from '../utils'
 import { TsCache } from '../utils/tsCache'
-import { loadEpProgress, saveEpProgress, flushEpProgress } from '../utils/episodeProgress'
+import { loadEpProgress, mergeEpHistory, flushEpProgress } from '../utils/episodeProgress'
 import { presentationProfile } from '../platform/presentation'
 const mobile = presentationProfile().ui === 'mobile'
 import { usePlaybackFavorites } from '../player/page/usePlaybackFavorites'
@@ -29,7 +29,6 @@ import { findBestMatch, probeNameOf } from '../player/page/sourceMatching'
 import { useEpisodeHistory } from '../player/page/useEpisodeHistory'
 import { useDesktopPlaybackKeys } from '../player/page/useDesktopPlaybackKeys'
 import type { HistoryItem } from '../types'
-import { createMediaProgressTracker } from '../player/mediaProgressTracker'
 import { recordDiagnosticEvent } from '../diagnostics/recording'
 
 const route = useRoute()
@@ -141,13 +140,11 @@ function origIdx(sortedI: number): number {
  */
 // 缓存每一集的进度百分比（0-100）
 const { epKeyOf, refreshEpProgressUI, getEpWatchPct, isWatchedEp, syncHistoryToDb,
-  resolveDbResumePosition, updateCurrentEpProgress, recordHistory, snapshot:historySnapshot } = useEpisodeHistory({
+  resolveDbResumePosition, updateCurrentEpProgress, snapshot:historySnapshot } = useEpisodeHistory({
   identity: () => ({sourceKey:sourceKey.value,vodId:String(vodId.value),name:video.value?.vod_name || '',globalId:video.value?.global_id}),
   episodes: () => episodes.value, currentIndex: () => currentEpIndex.value,
 })
 
-// Debug: 跟踪进度更新频率
-let _epUpdateCount = 0
 
 /* ==================== 自定义快捷键 ==================== */
 const mouseInside = ref(false)
@@ -158,17 +155,6 @@ useDesktopPlaybackKeys({
   fullscreen:()=>{void playerView.value?.toggleFullscreen()},pip:()=>{void playerView.value?.togglePiP()},
 })
 
-// Page progress tracking owns its retry timer and aborts listeners on replacement.
-const progressTracker = createMediaProgressTracker({
-  getVideo: () => playerView.value?.video() || null,
-  progress: (v) => {
-    _epUpdateCount++
-    updateCurrentEpProgress(v.currentTime, v.duration)
-  },
-  metadata: (v) => updateCurrentEpProgress(v.currentTime, v.duration),
-  missing: () => console.warn('[Player] 视频元素未找到，进度追踪已停止（已尝试 20 次）'),
-})
-function bindVideoTimeTracking(): void { progressTracker.bind() }
 let pageDisposed = false
 
 const {isFav,favBusy,showFavFolderModal,refreshFav,toggleFavorite,confirmAddToFolder}=usePlaybackFavorites(()=>({
@@ -190,15 +176,13 @@ function goToEpisode(idx: number): void {
   if (idx === currentEpIndex.value) return
   try {
     const v = playerView.value?.video()
-    if (v && !isNaN(v.currentTime)) {
-      syncHistoryToDb(v.currentTime, true)
+    if (v && playerView.value?.canPersistProgress() && !isNaN(v.currentTime)) {
+      syncHistoryToDb(v.currentTime, true, v.duration)
     }
   } catch { /* ignore */ }
-  recordHistory(idx)
   currentEpIndex.value = idx
   _playToken.value++
   try { TsCache.setCurrentEpisode(idx) } catch { }
-  progressTracker.schedule()
   const canonicalID = video.value?.global_id || globalId.value || vodId.value
   router.replace(`/player/${sourceKey.value}/${canonicalID}/${idx}?vod=${encodeURIComponent(String(vodId.value))}`).catch(() => { })
 }
@@ -233,7 +217,6 @@ function onLineChange(index: number): void {
     )
     TsCache.setCurrentEpisode(targetIdx)
   } catch { /* 缓存映射失败不该挡住切线路 */ }
-  progressTracker.schedule()
   const canonicalID = video.value?.global_id || globalId.value || vodId.value
   router.replace(`/player/${sourceKey.value}/${canonicalID}/${targetIdx}?vod=${encodeURIComponent(String(vodId.value))}`).catch(() => { })
 }
@@ -416,7 +399,6 @@ async function loadFromSource(sk: string, vid: string,lineIndex?:number): Promis
     // 刷新进度和收藏状态
     refreshEpProgressUI()
     refreshFav().catch(() => { })
-    if (targetIdx >= 0) recordHistory(targetIdx)
   } catch (e) {
     if (pageDisposed) return
     console.error('[Player] loadFromSource 失败:', e)
@@ -428,11 +410,6 @@ async function loadFromSource(sk: string, vid: string,lineIndex?:number): Promis
 
 watch(currentEpIndex, (idx) => {
   // 播放中 → 把该集加入进度（即使没有具体位置，也标记为"开始看过"）
-  if (idx >= 0 && !isWatchedEp(idx)) {
-    const k = epKeyOf(idx)
-    saveEpProgress(k, 0, undefined)
-    refreshEpProgressUI()
-  }
   try { TsCache.setCurrentEpisode(idx) } catch { }
 })
 
@@ -444,13 +421,12 @@ watch(epIndexParam, (idx) => {
   currentEpIndex.value = idx
   _playToken.value++
   try { TsCache.setCurrentEpisode(idx) } catch { }
-  progressTracker.schedule()
 })
 
-// 源切换/重新加载后，VideoPlayer 被销毁重建，需重新绑定 timeupdate 监听
+// 源切换完成后刷新选集进度；媒体进度由 VideoPlayer 统一上报。
 watch(loading, (val) => {
   if (!val) {
-    bindVideoTimeTracking()
+    refreshEpProgressUI()
   }
 })
 
@@ -471,10 +447,6 @@ onMounted(async () => {
   logPageStartup('detail_ready')
   // 探测要打源站，慢的时候几秒才回一条，不能挡住播放器起播：结果自己逐条回填。
   void buildSourceOptions()
-  // 首集（或恢复的上一集）也记录历史
-  if (currentEpIndex.value >= 0 && episodes.value.length > 0) {
-    recordHistory(currentEpIndex.value)
-  }
   // 从后端加载已观看集数（含 position）作为补充
   try {
     const history = await GetRecentHistory(50) as any[]
@@ -494,16 +466,10 @@ onMounted(async () => {
           if (idx !== undefined) {
             const k = epKeyOf(idx)
             // 仅在本地无数据时用后端历史作为占位（避免覆盖用户实际播放进度）
-            const local = loadEpProgress()
-            if (!local[k]) saveEpProgress(k, Number(h.position) || 0, undefined)
+            mergeEpHistory(k,h)
           }
         }
       }
-      refreshEpProgressUI()
-    }
-    // 当前集至少也要"已观看过"
-    if (currentEpIndex.value >= 0 && !isWatchedEp(currentEpIndex.value)) {
-      saveEpProgress(epKeyOf(currentEpIndex.value), 0, undefined)
       refreshEpProgressUI()
     }
   } catch { /* ignore */ }
@@ -513,23 +479,18 @@ onMounted(async () => {
 
   // 页面级键盘监听
 
-  // 视频时间跟踪（延迟到 VideoPlayer 挂载后）
-  progressTracker.schedule(200)
-
   // 页面可见性变化时刷新进度（从其他页面返回时同步）
   document.addEventListener('visibilitychange', onVisibilityChange)
 })
 
 onBeforeUnmount(() => {
   pageDisposed = true
-  progressTracker.stop()
   // 让在飞的源站探测结果作废：离开页面之后再回写没有意义，也会拖住退出。
   flushEpProgress()
-  console.log(`[Player] ✔ 组件卸载，进度已 flush 到 localStorage (共 ${_epUpdateCount} 次 timeupdate)`)
   try {
     const v = playerView.value?.video()
-    if (v && !isNaN(v.currentTime)) {
-      syncHistoryToDb(v.currentTime, true)
+    if (v && playerView.value?.canPersistProgress() && !isNaN(v.currentTime)) {
+      syncHistoryToDb(v.currentTime, true, v.duration)
       console.log(`[Player] ✔ 强制同步历史记录到后端: position=${v.currentTime.toFixed(1)}s`)
     }
   } catch { /* ignore */ }
@@ -578,7 +539,8 @@ const panelModel:PlayerPanelModel = reactive({
           <VideoPlayer ref="playerView" :url="currentUrl" :autoplay="true" :has-prev="hasPrev" :has-next="hasNext"
             :video-key="currentVideoKey" :danmaku-key="danmakuKey" :media-title="video?.vod_name||''" :media-year="video?.vod_year||''" :media-kind="video?.type_name||''" :episode-label="currentEpName" :show-title-bar="true" :title="mobile ? `${video?.vod_name || ''} · ${currentEpName}` : currentEpName" :is-fav="isFav"
             :fav-busy="favBusy" :douban-id="video?.vod_douban_id || ''"
-            :resolve-resume="resolveDbResumePosition"
+            :resolve-resume="resolveDbResumePosition" :resume-immediately="route.query.resume === '1'"
+            @progress="updateCurrentEpProgress"
             @toggle-favorite="toggleFavorite" @back="goBack" @prev="prevEpisode" @next="nextEpisode"
             @show-comments="showCommentsModal = true"
             :force-play-token="_playToken">
@@ -598,7 +560,7 @@ const panelModel:PlayerPanelModel = reactive({
         </div>
 
         <!-- ============= 右侧选集面板 ============= -->
-        <PlayerInformationPanel :model="panelModel" :collapsed="sidePanelCollapsed" @source="switchToSource" @episode="goToEpisode" @sort="toggleEpisodeSort" @close="goBack" @open-lines="playerView?.openLines()" />
+        <PlayerInformationPanel :model="panelModel" :collapsed="sidePanelCollapsed" @source="switchToSource" @episode="goToEpisode" @sort="toggleEpisodeSort" @close="goBack" />
       </div>
     </template>
 
@@ -615,7 +577,7 @@ const panelModel:PlayerPanelModel = reactive({
 
     <!-- 收藏夹选择弹窗 -->
     <FavFolderModal
-      v-model="showFavFolderModal"
+      v-model="showFavFolderModal" :busy="favBusy"
       :teleport-to="playerOverlayTarget"
       @confirm="confirmAddToFolder"
     />

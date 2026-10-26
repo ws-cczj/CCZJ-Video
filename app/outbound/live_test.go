@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"cczjVideo/app/apperror"
+	"cczjVideo/app/danmaku"
 	"cczjVideo/app/db"
 	"cczjVideo/app/lifecycle"
 	"cczjVideo/app/netpolicy"
@@ -19,8 +21,9 @@ import (
 	"cczjVideo/app/settings"
 )
 
-// Explicit opt-in only: bounded default-source update plus one real chart query.
-func TestLiveAutomaticPoolAndChart(t *testing.T) {
+// Live checks share the real pool, persistent cooldown and lifecycle.
+func newLiveAutomaticPool(t *testing.T) *outbound.Pool {
+	t.Helper()
 	if os.Getenv("CCZJ_OUTBOUND_POOL_LIVE") != "1" {
 		t.Skip("set CCZJ_OUTBOUND_POOL_LIVE=1 for bounded public proxy pool validation")
 	}
@@ -57,6 +60,12 @@ func TestLiveAutomaticPoolAndChart(t *testing.T) {
 	if !owner.Go("outbound.pool.live", func(ctx context.Context) { pool.Run(ctx) }) {
 		t.Fatal("failed to launch pool")
 	}
+	return pool
+}
+
+// Explicit opt-in only: bounded default-source update plus one real chart query.
+func TestLiveAutomaticPoolAndChart(t *testing.T) {
+	pool := newLiveAutomaticPool(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
 	client := &http.Client{Timeout: 100 * time.Second, Transport: netpolicy.WrapTransport("douban", netstats.WrapTransport(netstats.CategoryDouban, &http.Transport{})), CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
@@ -95,5 +104,88 @@ func TestLiveAutomaticPoolAndChart(t *testing.T) {
 	t.Log("repeat reused response without new public proxy or local fallback attempts")
 	if status.Healthy == 0 || status.PublicAttempts == 0 {
 		t.Fatal("chart used only fallback; automatic pool not validated")
+	}
+}
+
+// A homepage or exit-IP response cannot establish danmaku availability. Exercise
+// each provider's real search, episode and decoded comment-window path.
+func TestLiveAutomaticPoolAndDanmaku(t *testing.T) {
+	pool := newLiveAutomaticPool(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for !pool.Snapshot().Ready {
+		select {
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		case <-ticker.C:
+		}
+	}
+	encoded, _ := json.Marshal(pool.Snapshot())
+	t.Logf("initial pool: %s", encoded)
+	for _, statement := range danmaku.Schema {
+		if _, err := db.DB().DB.Exec(statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+	httpClient := &http.Client{Transport: netpolicy.WrapTransport("danmaku", netstats.WrapTransport(netstats.CategoryDanmaku, &http.Transport{})), CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		if len(via) > 3 || !danmaku.AllowedURL(req.URL) {
+			return http.ErrUseLastResponse
+		}
+		return nil
+	}}
+	defer httpClient.CloseIdleConnections()
+	service := danmaku.NewService(danmaku.NewStore(func() *sql.DB { return db.DB().DB }), danmaku.NewClient(httpClient), context.Background())
+	defer service.Close(context.Background())
+	for _, spec := range []struct{ provider, query, ref string }{
+		{"bilibili", "凡人修仙传", "BV17x411w7KC"},
+		{"qq", "兰香如故", "c4102g9a01t"},
+		{"iqiyi", "狂飙", "3493131456125200"},
+	} {
+		t.Run(spec.provider, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+			checkRoute := func(before outbound.Status, stage string, err error) {
+				after := pool.Snapshot()
+				t.Logf("%s code=%s public_attempts=%d local_fallbacks=%d", stage, apperror.CodeOf(err), after.PublicAttempts-before.PublicAttempts, after.LocalFallbacks-before.LocalFallbacks)
+				if err == nil && (after.PublicAttempts == before.PublicAttempts || after.LocalFallbacks != before.LocalFallbacks) {
+					t.Errorf("%s did not exclusively validate public proxies", stage)
+				}
+			}
+			before := pool.Snapshot()
+			candidates, err := service.Search(ctx, spec.provider, spec.query)
+			checkRoute(before, "search", err)
+			t.Logf("search candidates=%d", len(candidates))
+			if err != nil {
+				t.Errorf("search: %v", err)
+			}
+			before = pool.Snapshot()
+			episodes, err := service.Episodes(ctx, spec.provider, spec.ref)
+			checkRoute(before, "episodes", err)
+			if err != nil || len(episodes) == 0 {
+				t.Fatalf("episodes: count=%d error=%v", len(episodes), err)
+			}
+			key := "public-proxy-live:" + spec.provider
+			if err = service.Bind(ctx, danmaku.Binding{LocalKey: key, Confirmed: true, Episode: episodes[0]}); err != nil {
+				t.Fatal(err)
+			}
+			before = pool.Snapshot()
+			window, err := service.ReadWindow(ctx, key, 0, 1)
+			checkRoute(before, "comment_window", err)
+			if err != nil {
+				t.Fatal("comment window:", err)
+			}
+			t.Logf("decoded comments=%d skipped=%d cached=%t", len(window.Items), window.Skipped, window.Cached)
+			if window.Cached || len(window.Items) == 0 {
+				t.Fatal("probe did not obtain a fresh populated comment window")
+			}
+			before = pool.Snapshot()
+			second, err := service.ReadWindow(ctx, key, 0, 1)
+			after := pool.Snapshot()
+			if err != nil || !second.Cached || after.PublicAttempts != before.PublicAttempts || after.LocalFallbacks != before.LocalFallbacks {
+				t.Fatal("repeat window did not reuse the decoded cache", err)
+			}
+		})
 	}
 }

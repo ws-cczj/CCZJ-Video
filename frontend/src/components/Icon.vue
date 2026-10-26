@@ -49,10 +49,11 @@ defineProps<{ name: string; size?: number }>()
       <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
     </g>
 
-    <g v-else-if="name === 'source'">
-      <circle cx="12" cy="12" r="3" />
-      <path d="M12 2v3M12 19v3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M2 12h3M19 12h3M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12" />
-    </g>
+    <g v-else-if="name === 'source' || name === 'database-zap'"><ellipse cx="12" cy="5" rx="9" ry="3" />
+  <path d="M3 5V19A9 3 0 0 0 15 21.84" />
+  <path d="M21 5V8" />
+  <path d="M21 12L18 17H22L19 22" />
+  <path d="M3 12A9 3 0 0 0 14.59 14.87" /></g>
 
     <g v-else-if="name === 'play'">
       <polygon points="5 3 19 12 5 21 5 3" />
@@ -256,12 +257,7 @@ defineProps<{ name: string; size?: number }>()
       <polyline points="6 9 12 15 18 9" />
     </g>
 
-    <g v-else-if="name === 'grid'">
-      <rect x="3" y="3" width="7" height="7" />
-      <rect x="14" y="3" width="7" height="7" />
-      <rect x="14" y="14" width="7" height="7" />
-      <rect x="3" y="14" width="7" height="7" />
-    </g>
+
 
     <g v-else-if="name === 'pencil'">
       <path d="M12 20h9" />
@@ -307,15 +303,60 @@ defineProps<{ name: string; size?: number }>()
       <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
     </g>
 
+    <!-- Lucide 0.468.0, ISC; see public/licenses/lucide.txt. -->
+    <g v-else-if="name === 'clapperboard'"><path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z" />
+  <path d="m6.2 5.3 3.1 3.9" />
+  <path d="m12.4 3.4 3.1 4" />
+  <path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /></g>
+    <g v-else-if="name === 'captions'"><rect width="18" height="14" x="3" y="5" rx="2" ry="2" />
+  <path d="M7 15h4M15 15h2M7 11h2M13 11h4" /></g>
+    <g v-else-if="name === 'history'"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+  <path d="M3 3v5h5" />
+  <path d="M12 7v5l4 2" /></g>
+    <g v-else-if="name === 'library-big'"><rect width="8" height="18" x="3" y="3" rx="1" />
+  <path d="M7 3v18" />
+  <path d="M20.4 18.9c.2.5-.1 1.1-.6 1.3l-1.9.7c-.5.2-1.1-.1-1.3-.6L11.1 5.1c-.2-.5.1-1.1.6-1.3l1.9-.7c.5-.2 1.1.1 1.3.6Z" /></g>
+    <g v-else-if="name === 'folder-heart'"><path d="M11 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v1.5" />
+  <path d="M13.9 17.45c-1.2-1.2-1.14-2.8-.2-3.73a2.43 2.43 0 0 1 3.44 0l.36.34.34-.34a2.43 2.43 0 0 1 3.45-.01c.95.95 1 2.53-.2 3.74L17.5 21Z" /></g>
+    <g v-else-if="name === 'scan-search'"><path d="M3 7V5a2 2 0 0 1 2-2h2" />
+  <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+  <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+  <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+  <circle cx="12" cy="12" r="3" />
+  <path d="m16 16-1.9-1.9" /></g>
+    <g v-else-if="name === 'list-filter'"><path d="M3 6h18" />
+  <path d="M7 12h10" />
+  <path d="M10 18h4" /></g>
+    <g v-else-if="name === 'chart-no-axes-combined'"><path d="M12 16v5" />
+  <path d="M16 14v7" />
+  <path d="M20 10v11" />
+  <path d="m22 3-8.646 8.646a.5.5 0 0 1-.708 0L9.354 8.354a.5.5 0 0 0-.707 0L2 15" />
+  <path d="M4 18v3" />
+  <path d="M8 14v7" /></g>
+    <g v-else-if="name === 'shield-check'"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
+  <path d="m9 12 2 2 4-4" /></g>
+    <g v-else-if="name === 'folder-cog'"><circle cx="18" cy="18" r="3" />
+  <path d="M10.3 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v3.3" />
+  <path d="m21.7 19.4-.9-.3" />
+  <path d="m15.2 16.9-.9-.3" />
+  <path d="m16.6 21.7.3-.9" />
+  <path d="m19.1 15.2.3-.9" />
+  <path d="m19.6 21.7-.4-1" />
+  <path d="m16.8 15.3-.4-1" />
+  <path d="m14.3 19.6 1-.4" />
+  <path d="m20.7 16.8 1-.4" /></g>
+    <g v-else-if="name === 'hard-drive-download'"><path d="M12 2v8" />
+  <path d="m16 6-4 4-4-4" />
+  <rect width="20" height="8" x="2" y="14" rx="2" />
+  <path d="M6 18h.01" />
+  <path d="M10 18h.01" /></g>
+
     <!-- fallback -->
     <g v-else-if="name === 'arrow-up'">
       <line x1="12" y1="19" x2="12" y2="5" />
       <polyline points="5 12 12 5 19 12" />
     </g>
-    <g v-else-if="name === 'copy'">
-      <rect x="9" y="9" width="11" height="11" rx="2" ry="2" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-    </g>
+
     <g v-else-if="name === 'globe'">
       <circle cx="12" cy="12" r="9" />
       <line x1="3" y1="12" x2="21" y2="12" />
@@ -429,6 +470,19 @@ defineProps<{ name: string; size?: number }>()
       <line x1="14" y1="10" x2="17" y2="10" />
       <line x1="7" y1="14" x2="17" y2="14" />
     </g>
+
+    <!-- Lucide 0.468.0, ISC; see public/licenses/lucide.txt. -->
+
+
+
+
+
+
+
+
+
+
+
 
     <!-- fallback -->
     <g v-else>
