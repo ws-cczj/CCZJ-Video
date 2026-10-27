@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { tr } from '../../locales'
 import { CreateSource, UpdateSource, SetSourceStrategy } from '../../api/app'
+import { normalizeApiError } from '../../api/errors'
 import { usePluginStore } from '../../stores/plugins'
 import { useErrorStore } from '../../stores/error'
 import { useSourceStore } from '../../stores/source'
@@ -126,7 +127,8 @@ async function save(): Promise<void> {
     }
     emit('update:modelValue', false)
   } catch (e) {
-    errorStore.fromError(tr('sources.saveFailed'), e, 'Sources.save')
+    const error=normalizeApiError(e)
+    errorStore.fromError(tr('sources.saveFailed'), error.code==='SOURCE_URL_DUPLICATE' ? {...error,message:tr('sources.duplicateApiUrl')} : e, 'Sources.save')
   } finally {
     saving.value = false
   }

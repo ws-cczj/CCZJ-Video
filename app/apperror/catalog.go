@@ -31,6 +31,7 @@ var definitions = map[Code]Definition{
 	PermissionDenied:       {"当前操作被拒绝", http.StatusForbidden, "warn"},
 	RateLimited:            {"请求过于频繁，请稍后重试", http.StatusTooManyRequests, "warn"},
 	DownloadDuplicate:      {"下载文件已存在", http.StatusConflict, "warn"},
+	SourceURLDuplicate:     {"该请求地址已存在", http.StatusConflict, "warn"},
 }
 
 func Describe(code Code) Definition {

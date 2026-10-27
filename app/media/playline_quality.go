@@ -49,7 +49,7 @@ func (s *Service) ProbePlayLines(ctx context.Context, req PlayLineSpeedReq) ([]*
 		if strategy == nil {
 			return nil, apperror.New(apperror.Unavailable, "source strategy unavailable")
 		}
-		video, fetchErr := collect.FetchVideoDetailWithStrategy(ctx, strategy, strategy.BuildDetailUrl(req.VodId))
+		video, fetchErr := collect.FetchVideoDetailWithStrategy(ctx, strategy, req.VodId)
 		if fetchErr != nil {
 			return nil, fetchErr
 		}

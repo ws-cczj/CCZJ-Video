@@ -71,10 +71,10 @@
 .ctrl-primary,.ctrl-secondary{@apply cczj-flex cczj-items-center cczj-gap-3;flex:0 0 auto;@apply cczj-min-w-0}
 .ctrl-secondary{@apply cczj-justify-end cczj-gap-1}.ctrl-center{@apply cczj-flex cczj-items-center cczj-justify-center;flex:1 1 auto;min-width:max-content;margin-inline:12px}
 @container player-controls (max-width:760px){.time-display{@apply cczj-hidden}}
-.ctrl-bar-minimal .time-display { @apply cczj-flex; font-size: 14px; font-weight: 500; }
+.ctrl-bar-minimal .time-display { @apply cczj-flex; font-size: calc(14rem / 14); font-weight: 500; }
 .ctrl-bar-minimal .time-current { color: #fff; }
 .ctrl-bar-minimal .time-duration,.ctrl-bar-minimal .time-sep { color: #ffffffa6; }
-.ctrl-bar-minimal .time-sep { margin: 0 4px; font-size: 13px; }
+.ctrl-bar-minimal .time-sep { margin: 0 4px; font-size: calc(13rem / 14); }
 .ctrl-bar-minimal .ctrl-btn:hover:not(:disabled) { background: #ffffff14; color: #fff; }
 .ctrl-bar-minimal .ctrl-center { @apply cczj-min-w-0; }
 

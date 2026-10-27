@@ -25,8 +25,15 @@ export function backdropEdgeColor(image:ImagePixels, frame:Frame, veil:number[])
   return blendColor(sum,veil)
 }
 
+/** The top wash also exists on plain themes, without a wallpaper to sample. */
+export function systemBarSurface(base:string,wash:number[],cinema=false):string {
+  if(cinema)return '#000000'
+  if(!/^#[\da-f]{6}$/i.test(base))return ''
+  return blendColor([0,2,4].map(offset=>parseInt(base.slice(offset+1,offset+3),16)),wash)
+}
+
 /** Transient system-bar colours do not overwrite the persisted launch canvas. */
-export function useBackdropSystemBars(element:Ref<HTMLElement|undefined>, screen:()=>string):void {
+export function useBackdropSystemBars(element:Ref<HTMLElement|undefined>, screen:()=>string,cinema:()=>boolean=()=>false):void {
   const bridge=(window as unknown as {wails?:{setSystemBarColor?:(color:string)=>void}}).wails
   if(!bridge?.setSystemBarColor)return
   let generation=0, disposed=false, request:AbortController|undefined
@@ -36,30 +43,34 @@ export function useBackdropSystemBars(element:Ref<HTMLElement|undefined>, screen
     if(disposed||!node)return
     const token=++generation
     request?.abort();request=new AbortController()
+    const splash=document.documentElement.dataset.cczjSplashColor
+    if(splash){bridge?.setSystemBarColor?.(splash);return}
+    const scene=node.parentElement?.querySelector('[data-route-active="true"]')
+    if(cinema()||scene?.querySelector('[data-cczj-media-active=true]')){bridge?.setSystemBarColor?.('#000000');return}
     const style=getComputedStyle(node)
     const fallback=style.getPropertyValue('--route-backdrop-color').trim()
+    const publish=(base:string)=>{
+      const wash=scene&&/rgba?\(([^)]+)\)/.exec(getComputedStyle(scene,'::before').backgroundImage)
+      bridge?.setSystemBarColor?.(systemBarSurface(base,wash?wash[1].split(',').map(Number):[]))
+    }
     const match=/url\((?:"([^"]*)"|'([^']*)'|([^)]*))\)/.exec(style.backgroundImage)
     const src=match?.[1]||match?.[2]||match?.[3]
-    if(!src){cached=undefined;bridge?.setSystemBarColor?.(/^#[\da-f]{6}$/i.test(fallback)?fallback:'');return}
+    if(!src){cached=undefined;publish(fallback);return}
     const image=cached?.src===src?cached.image:await readImagePixels(src,request.signal)
     if(disposed||token!==generation)return
-    if(!image){bridge?.setSystemBarColor?.('');return}
+    if(!image){publish(fallback);return}
     cached={src,image}
     const translation=/translate3d\(([-\d.]+)%,([-\d.]+)%/.exec(node.style.transform)
     const veil=style.getPropertyValue('--route-backdrop-veil').match(/[\d.]+/g)?.map(Number)||[]
-    let color=backdropEdgeColor(image,{width:node.offsetWidth,height:node.offsetHeight,viewWidth:node.parentElement?.clientWidth||innerWidth,x:Number(translation?.[1]||0)/100*node.offsetWidth,y:Number(translation?.[2]||0)/100*node.offsetHeight,background:fallback},veil)
-    const scene=node.parentElement?.querySelector('[data-route-active="true"]')
-    // The page may add a top-edge wash above the shared wallpaper.
-    const wash=scene&&/rgba?\(([^)]+)\)/.exec(getComputedStyle(scene,'::before').backgroundImage)
-    if(wash)color=blendColor([0,2,4].map(offset=>parseInt(color.slice(offset+1,offset+3),16)),wash[1].split(',').map(Number))
-    bridge?.setSystemBarColor?.(color)
+    publish(backdropEdgeColor(image,{width:node.offsetWidth,height:node.offsetHeight,viewWidth:node.parentElement?.clientWidth||innerWidth,x:Number(translation?.[1]||0)/100*node.offsetWidth,y:Number(translation?.[2]||0)/100*node.offsetHeight,background:fallback},veil))
   }
   let observer:MutationObserver|undefined
   const refresh=()=>{void update()}
-  watch([element,screen],refresh,{flush:'post'})
+  watch([element,screen,cinema],refresh,{flush:'post'})
   onMounted(()=>{
     observer=new MutationObserver(refresh)
-    observer.observe(document.documentElement,{attributes:true,attributeFilter:['style','data-theme']})
+    observer.observe(document.documentElement,{attributes:true,attributeFilter:['style','data-theme','data-cczj-splash-color']})
+    if(element.value?.parentElement)observer.observe(element.value.parentElement,{subtree:true,attributes:true,attributeFilter:['data-cczj-media-active','data-route-active']})
     window.addEventListener('resize',refresh)
     refresh()
   })

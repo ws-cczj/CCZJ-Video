@@ -213,7 +213,7 @@ onBeforeUnmount(() => {
 }
 
 .title {
-  font-size: 15px;
+  font-size: calc(15rem / 14);
   line-height: 1.4;
   margin: 0;
   transition: color 0.15s ease;

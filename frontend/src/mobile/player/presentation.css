@@ -1,4 +1,11 @@
 /* Mobile player chrome and detached overlays own these selectors. */
+/* Error placement follows Video.js ErrorDisplay's centred player overlay:
+   https://docs.videojs.com/error-display.js.html — actions reuse our Button. */
+.cczj-mobile-playback-error { @apply cczj-absolute cczj-flex cczj-items-center cczj-justify-center cczj-text-white; inset:0; z-index:40; background:rgba(8,9,11,.96); padding:12px; box-sizing:border-box; }
+.cczj-mobile-playback-error-body { @apply cczj-flex cczj-flex-col cczj-items-center cczj-gap-5 cczj-min-w-0 cczj-max-h-full cczj-overflow-y-auto; max-width:360px; --bg-secondary:#292b31; --bg-hover:#393c43; --text-primary:#fff; --text-secondary:#f0f1f4; --border:#ffffff38; }
+.cczj-mobile-playback-error-body > p { margin:0; @apply cczj-text-base cczj-text-center; line-height:1.5; overflow-wrap:anywhere; }
+.cczj-mobile-playback-error-actions { @apply cczj-flex cczj-flex-wrap cczj-items-center cczj-justify-center cczj-gap-4; }
+.cczj-mobile-playback-error-actions .ui-btn { min-height:40px; @apply cczj-text-sm; white-space:normal; }
 /* Resolve on the theme root before drawers establish their local palette. */
 html[data-cczj-platform=mobile] {
   --cczj-player-action-bg:var(--text-primary);
@@ -84,7 +91,7 @@ body[data-player-pip] .cczj-mobile-video > :not(video):not(.vp-subtitle) { displ
 body[data-player-pip] .cczj-mobile-video video { @apply cczj-w-full cczj-h-full; object-fit: contain; background: black; }
 
 .cczj-mobile-video.fullscreen .volume-popup.show { transform: translateY(0); }
-.cczj-mobile-video.fullscreen .cache-info { display: inline-flex !important; font-size: 9px; max-width: 210px; }
+.cczj-mobile-video.fullscreen .cache-info { display: inline-flex !important; font-size: calc(9rem / 14); max-width: 210px; }
 
 .cczj-mobile-player-locked { user-select: none; }
 
@@ -112,7 +119,7 @@ html[data-motion-overlays='off'] .cczj-mobile-video [class*='cczj-mobile-player-
 .cczj-mobile-player-more { @apply cczj-flex cczj-flex-col; width: min(460px,100%); max-height: min(75dvh,560px); @apply cczj-min-h-0; padding: 8px 16px calc(16px + env(safe-area-inset-bottom,0px)); border-radius: 16px 16px 0 0; background: #1b1d21; box-sizing: border-box; }
 .cczj-mobile-player-more-fullscreen .cczj-mobile-player-more { width: min(360px,85%); @apply cczj-max-h-full; border-radius: 14px 0 0 14px; }
 .cczj-mobile-player-more header { @apply cczj-flex-shrink-0 cczj-flex cczj-items-center cczj-justify-between; min-height: 48px; padding-bottom: 6px; }
-.cczj-mobile-player-more header strong { font-size: 15px; }
+.cczj-mobile-player-more header strong { font-size: calc(15rem / 14); }
 .cczj-mobile-player-more header > button { min-width: 44px; min-height: 44px; border: 0; background: transparent; color: white; @apply cczj-grid; place-items: center; }
 .cczj-mobile-player-more-body { @apply cczj-flex-1 cczj-min-h-0 cczj-overflow-y-auto; overscroll-behavior: contain; scrollbar-width: none; touch-action: pan-y; }
 .cczj-mobile-player-more-body::-webkit-scrollbar { @apply cczj-hidden; }
@@ -208,7 +215,7 @@ html[data-motion-overlays='off'] .cczj-mobile-video [class*='cczj-mobile-player-
 .cczj-mobile-sheet-handle:focus-visible { outline:2px solid #9cddff;outline-offset:-2px;@apply cczj-rounded-md; }
 .cczj-mobile-player-bottom-mask .cczj-mobile-quick-body .cczj-mobile-speed-options { @apply cczj-flex cczj-flex-nowrap cczj-gap-4; padding:4px 0; @apply cczj-overflow-x-auto; scrollbar-width:none; touch-action:pan-x; scroll-snap-type:x proximity; }
 .cczj-mobile-player-bottom-mask .cczj-mobile-speed-options::-webkit-scrollbar { @apply cczj-hidden; }
-.cczj-mobile-player-bottom-mask .cczj-mobile-quick-body .cczj-mobile-speed-options button { flex:0 0 64px; min-height:44px; font-size:15px; scroll-snap-align:center; }
+.cczj-mobile-player-bottom-mask .cczj-mobile-quick-body .cczj-mobile-speed-options button { flex:0 0 64px; min-height:44px; font-size:calc(15rem / 14); scroll-snap-align:center; }
 .cczj-mobile-player-sheet-enter-active,.cczj-mobile-player-sheet-leave-active { transition:background-color var(--cczj-motion-normal); }
 .cczj-mobile-player-sheet-enter-active .cczj-mobile-drawer-panel,.cczj-mobile-player-sheet-leave-active .cczj-mobile-drawer-panel { transition:transform var(--cczj-motion-normal) var(--cczj-motion-ease-standard),opacity var(--cczj-motion-normal); }
 .cczj-mobile-player-sheet-enter-from,.cczj-mobile-player-sheet-leave-to { background:transparent; }
@@ -280,6 +287,6 @@ html[data-motion-overlays=off] .cczj-mobile-level-feedback,html[data-motion-over
 .cczj-mobile-drawer-episode-grid { @apply cczj-grid; grid-template-columns:repeat(3,minmax(0,1fr)); @apply cczj-gap-4; }
 .cczj-mobile-drawer-episode-grid button { @apply cczj-relative cczj-min-w-0; min-height:56px; padding:10px 5px; border:0; border-radius:9px; color:#e9eaf0; background:#ffffff0d; font:inherit; @apply cczj-text-sm; }
 .cczj-mobile-drawer-episode-grid button > span { @apply cczj-block cczj-whitespace-nowrap cczj-overflow-hidden; text-overflow:ellipsis; }
-.cczj-mobile-drawer-episode-grid small { @apply cczj-block; margin-top:3px; font-size:9px; opacity:.65; }
+.cczj-mobile-drawer-episode-grid small { @apply cczj-block; margin-top:3px; font-size:calc(9rem / 14); opacity:.65; }
 .cczj-mobile-drawer-episode-grid button[aria-current=step] { background:#f1f2f4; color:#141518; @apply cczj-font-bold; }
 @keyframes cczj-mobile-preview-spin { to { transform:rotate(360deg); } }

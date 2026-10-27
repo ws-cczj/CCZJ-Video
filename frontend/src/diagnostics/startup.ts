@@ -1,7 +1,7 @@
 import { shallowRef } from 'vue'
 import { modeSessions } from '../modes/sessionRuntime'
 
-type StartupPhase = 'modules_ready' | 'runtime' | 'locale' | 'motion' | 'mode' | 'mode_shell' | 'theme' | 'vue_mount' | 'first_screen' | 'first_render_opportunity' | 'image_decode' | 'splash_reveal' | 'splash_closed'
+type StartupPhase = 'modules_ready' | 'runtime' | 'typography' | 'locale' | 'motion' | 'mode' | 'mode_shell' | 'theme' | 'vue_mount' | 'first_screen' | 'first_render_opportunity' | 'image_decode' | 'splash_reveal' | 'splash_closed'
 interface StartupEvent { phase: StartupPhase; at_ms: number; duration_ms?: number; failed?: boolean }
 export const startupRevision = shallowRef(0)
 const events: StartupEvent[] = []

@@ -24,6 +24,6 @@ function keyLabel(code:string):string{return ({ArrowLeft:'←',ArrowRight:'→',
  <p class="reading-input-help">{{t('novel.desktopHelp')}}</p>
 </template></template>
 <style scoped>
-.reading-input-row{padding:14px 0;border-bottom:1px solid var(--reader-line,var(--novel-line));font-size:13px;}
-.reading-input-help{font-size:12px;line-height:1.8;color:var(--reader-muted,var(--novel-muted));}
+.reading-input-row{padding:14px 0;border-bottom:1px solid var(--reader-line,var(--novel-line));font-size:calc(13rem / 14);}
+.reading-input-help{font-size:calc(12rem / 14);line-height:1.8;color:var(--reader-muted,var(--novel-muted));}
 </style>

@@ -112,7 +112,7 @@ class Device:
               window._wailsAndroidCallback=(key,response,error)=>{
                 if(key!==id){previous?.(key,response,error);return}
                 clearTimeout(timer);window._wailsAndroidCallback=previous;
-                try{if(error)throw Error(error);const value=JSON.parse(response);if(!value.ok)throw Error(JSON.stringify(value.error));resolve(value.text?JSON.parse(value.text):value.data)}catch(e){reject(e)}
+                try{if(error)throw Error(error);const value=JSON.parse(response);if(!value.ok)throw Error(JSON.stringify(value.error));resolve('text' in value?value.text:value.data)}catch(e){reject(e)}
               };
               wails.invokeAsync(id,'''+json.dumps(payload)+''');
             })''')

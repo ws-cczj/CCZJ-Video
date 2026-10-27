@@ -29,7 +29,7 @@ var manifestBandwidth = regexp.MustCompile(`(?:^|,)(?:AVERAGE-)?BANDWIDTH=(\d+)(
 // ProbePlaylistQuality reads only playlist metadata. A media playlist without
 // RESOLUTION is valid but unknown; neither a URL nor a bitrate proves its size.
 func ProbePlaylistQuality(ctx context.Context, raw string) (PlaylistQuality, error) {
-	ctx = netpolicy.WithQueryCooldown(ctx)
+	ctx = netpolicy.WithProbeCooldown(ctx)
 	ctx, cancel := context.WithTimeout(ctx, lineProbeTimeout)
 	defer cancel()
 	target, err := parsePublicHTTPURL(raw)

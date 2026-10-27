@@ -43,7 +43,7 @@ export function useShortDramaFeed(source: Ref<string>, active: Ref<boolean>, bef
     loading.value = false
     completed.value = false
   }
-  async function open(index: number, resumeEpisode = false): Promise<void> {
+  async function open(index: number, resumeEpisode = false, recoverMissing = true): Promise<void> {
     const item = items.value[index]
     if (!active.value || !item?.vod_id) return
     invalidate()
@@ -65,10 +65,18 @@ export function useShortDramaFeed(source: Ref<string>, active: Ref<boolean>, bef
       detail.value = { ...result, episodes: available }
       episodeIndex.value = Math.min(episodeIndex.value, Math.max(0, available.length - 1))
     } catch (cause) {
-      if (generation.isCurrent(token) && normalizeApiError(cause).code !== 'CANCELLED') error.value = normalizeApiError(cause).message
+      if (!generation.isCurrent(token)) return
+      const failure = normalizeApiError(cause)
+      if (failure.code === 'NOT_FOUND' && !entry.value) {
+        // A kept-alive batch can outlive source removal or catalog recycling.
+        // Re-read once; retry must also query the catalog, not this retired ID.
+        retryBatch = true
+        if (recoverMissing) { await refresh(false); return }
+      }
+      if (failure.code !== 'CANCELLED') error.value = failure.message
     } finally { if (generation.isCurrent(token)) loading.value = false }
   }
-  async function refresh(): Promise<void> {
+  async function refresh(recoverMissing = true): Promise<void> {
     if (entry.value) return
     if (!active.value || !source.value) return
     invalidate()
@@ -87,7 +95,7 @@ export function useShortDramaFeed(source: Ref<string>, active: Ref<boolean>, bef
       if (!generation.isCurrent(token)) return
       items.value = batch; batchSource = sourceKey; selected.value = 0; episodeIndex.value = 0
       loading.value = false
-      if (batch.length) await open(0)
+      if (batch.length) await open(0, false, recoverMissing)
     } catch (cause) {
       if (generation.isCurrent(token) && normalizeApiError(cause).code !== 'CANCELLED') error.value = normalizeApiError(cause).message
     } finally { if (generation.isCurrent(token)) loading.value = false }
@@ -131,7 +139,12 @@ export function useShortDramaFeed(source: Ref<string>, active: Ref<boolean>, bef
   }
   watch([effectiveSource, active, entry], ([key, enabled, target]) => {
     if (!enabled) { invalidate(); return }
-    if (!key) { invalidate(); items.value = []; return }
+    if (!key) {
+      invalidate(); items.value = []; error.value = ''; playbackSource.value = ''
+      batchSource = ''; entryKey = ''; selected.value = 0; episodeIndex.value = 0
+      series.value = false; retryBatch = true
+      return
+    }
     if (target) {
       const nextKey = JSON.stringify(target)
       if (nextKey !== entryKey) {

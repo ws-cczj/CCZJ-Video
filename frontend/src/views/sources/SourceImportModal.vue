@@ -101,7 +101,8 @@ async function doImportSource(): Promise<void> {
     await sourceStore.loadSources(true)
     if (generation.isCurrent(ticket)) closeImportDialog()
   } catch (error) {
-    if (generation.isCurrent(ticket) && normalizeApiError(error).code !== 'CANCELLED') errorStore.fromError(tr('sources.importFailed'), error, 'SourceImportModal')
+    const failure=normalizeApiError(error)
+    if (generation.isCurrent(ticket) && failure.code !== 'CANCELLED') errorStore.fromError(tr('sources.importFailed'), failure.code==='SOURCE_URL_DUPLICATE' ? {...failure,message:tr('sources.duplicateApiUrl')} : error, 'SourceImportModal')
   } finally {
     if (generation.isCurrent(ticket)) importLoading.value = false
   }
@@ -185,7 +186,7 @@ async function doImportSource(): Promise<void> {
 }
 .import-hint-main {
   margin: 0;
-  font-size: 15px;
+  font-size: calc(15rem / 14);
   @apply cczj-font-medium cczj-text-primary;
 }
 .import-hint-sub {

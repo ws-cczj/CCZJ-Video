@@ -1,6 +1,7 @@
 package douban
 
 import (
+	"context"
 	"encoding/json"
 	"regexp"
 	"strconv"
@@ -378,6 +379,13 @@ func upsertChartItems(items []DoubanChartItem) {
 
 // GetChartVideos 获取热榜视频列表（立即返回，带匹配状态）
 func GetChartVideos() ([]ChartVideoItem, error) {
+	hasCatalog, err := db.HasVisibleVideoCatalogContext(context.Background())
+	if err != nil {
+		return nil, apperror.Wrap(apperror.Storage, err, "读取视频目录失败")
+	}
+	if !hasCatalog {
+		return []ChartVideoItem{}, nil
+	}
 	// 1. 获取热榜数据
 	chartItems, err := FetchDoubanChart()
 	if err != nil {

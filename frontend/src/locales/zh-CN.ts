@@ -68,10 +68,10 @@ export default {
     proxyRefreshFailed:'代理源更新或验证失败，保留尚未过期节点；无可用节点时使用已配置的本机代理。',
     details: '查看请求与缓存说明',
     title:'网络请求策略', description:'视频、小说、漫画共用一套请求频率策略，由后端出站中间件统一执行。', frequency:'频率档位', saved:'已保存并生效',
-    frequencies:{standard:'标准 · 相同请求 5–6 分钟',steady:'稳健 · 相同请求 10–12 分钟',low:'低频 · 相同请求 30–35 分钟'},
-    queryHint:'搜索、详情、目录、评论、采集和更新查询统一采用所选档位的随机冷却；相同请求优先复用可用响应，拦截短时异常突发，并遵守源站限流。不同请求分别计时，各模块更长的内容缓存继续有效。',
-    streamHint:'播放、图片、下载、测速及设备控制保持原有连续传输，不套用五分钟间隔。各模块原有并发与超时限制继续生效。',
-    persistenceHint:'所有查询的相同请求采用随机冷却：标准 5–6 分钟、稳健 10–12 分钟、低频 30–35 分钟；失败和已准入后的取消也占用间隔。请求冷却与源站限流等待可跨重启保留。',
+    frequencies:{standard:'标准',steady:'稳健',low:'低频'},
+    queryHint:'搜索、详情、目录、评论、采集和更新查询不设置五分钟冷却。同一时刻的相同查询合并，短时异常突发按所选档位限制，并遵守源站限流。各模块原有内容缓存继续有效。',
+    streamHint:'播放、图片、下载、吞吐测速及设备控制保持原有连续传输。播放列表清晰度探测遵守五分钟探测间隔，各模块原有并发与超时限制继续生效。',
+    persistenceHint:'采集源探测与播放列表清晰度探测共用至少五分钟的探测间隔，探测记录与源站限流等待跨重启保留。频率档位不改变探测间隔；弹幕失败重试仍使用所选档位的退避时间。',
     diagnosticScope:'仅当前模式及共享更新服务的请求策略计数；缓存复用和策略拦截不会计入真实出站流量。', requests:'出站请求', reused:'响应复用', blocked:'策略拦截',
   },
   danmakuSources: {
@@ -1270,6 +1270,9 @@ export default {
   },
   // 采集源页
   sources: {
+    duplicateApiUrl: '该请求地址已存在，请编辑已有采集源，或使用不同的接口地址。',
+    collectionTip: '采集进度和操作可在对应采集源中查看。',
+    openCollection: '查看该源采集',
     importFailed: '导入采集源失败',
     title: '采集源管理',
     add: '添加采集源',
@@ -1449,7 +1452,8 @@ export default {
   // 视频类型管理
   videoTypes: {
     title: '视频类型管理',
-    typesTitle: '视频类型',
+    typesTitle: '分类列表',
+    collectionStatus: '采集状态',
     collectEnabled: '采集启用',
     searchPlaceholder: '搜索类型...',
     emptyTitle: '暂无类型数据',
@@ -1500,8 +1504,10 @@ export default {
     downloadedTitle: '更新包已下载完成',
     verifying: '正在校验更新包…',
     readyToInstall: '点击选择安装时间',
+    readyToInstallMobile: '打开更新详情后可安装新版',
     clickToRetry: '点击重试下载',
     downloadedMsg: '「立即更新」会关掉当前程序，换好新版后自动重开。',
+    downloadedMobileMsg: '点击「立即更新」打开系统安装器，确认覆盖安装后保留应用数据。',
     downloadedMsg2: '不想现在断就点「退出时安装」：这次继续用，退出那一刻才替换，换完不自动打开。',
     downloading: '正在下载更新...',
     downloadingShort: '正在下载更新',

@@ -1,6 +1,10 @@
 # Android 开发与验收
 
-Android 当前为预览版。手机通常使用 ARM64，MuMu 使用 x86_64；二者需要分别编译原生库，不能通过改 APK 文件名互换。最低 Android API 24。构建版本由根目录 `version.json` 注入。
+当前项目按用户要求由用户操作 MuMu 或真机验收，代理默认只负责修改、编译、静态检查及安装交付。用户再次明确要求代理操作设备时，只通过 ADB／WebView 调试端口，不使用 computer-use，也不新增或扩写自动化测试代码、夹具及验收脚本。下文已有脚本作为历史入口保留，不作为默认验收流程。
+
+移动系统栏跟随当前可见表面：启动动画显示期间使用启动背景；首页、短剧、搜索、收藏和设置五个主路由共用顶部渐变，系统栏对背景叠加渐变后取色；普通播放页和已实际显示视频的短剧使用黑底白字。短剧空状态和剧场目录沿用页面背景，不能仅根据短剧路由切黑。视频加载失败在播放器内部居中显示，提供重试、切换线路和返回的真实入口。样式参考 [Video.js ErrorDisplay](https://docs.videojs.com/error-display.js.html) 与 [Android SplashScreen](https://developer.android.com/develop/ui/views/launch/splash-screen)，复用项目控件与原生桥接。
+
+Android 当前为预览版。手机通常使用 ARM64，MuMu 的原生架构通常为 x86_64；先用 `adb shell getprop ro.product.cpu.abilist` 核对可运行的 ABI，部分 MuMu 实例同时支持 ARM64 发布包。仅支持 x86_64 的设备需要对应原生库，不能通过改 APK 文件名互换。最低 Android API 24。构建版本由根目录 `version.json` 注入。
 
 ## 环境与构建
 
@@ -21,6 +25,26 @@ powershell -NoProfile -ExecutionPolicy Bypass -File build/android/build.ps1 `
 ```
 
 预览包名是 `com.cczj.video.preview`，验收包名是 `com.cczj.video.acceptance`。`-SkipFrontend` 只用于前端已构建且之后没有改动的情况。Release 签名选择、不可调试 APK 检查与 GitHub 文件准备见 [发布流程](releases.md)。
+
+## 覆盖升级与数据排查
+
+相同包名、相同签名的覆盖安装应保留应用数据；构建脚本使用 `adb install -r`（见 [Android 官方安装参数](https://developer.android.com/tools/adb#move)）。2.4.3 与当前版本都使用宿主 `getFilesDir()/CCZJ Video/cczj_video.db`；SQLite 在迁移前保存 `schema-backups`，不通过删库升级。预览与验收包使用不同私有目录，不能用验收包的空库判断预览包数据丢失。
+
+覆盖后列表为空时，先保留现场并在设置中导出诊断和启动日志，核对版本、包名、`data_dir`、schema 版本、来源身份／启用状态、目录数量与分类可见规则。无数据提示只表示当前列表为空，不能据此认定物理数据库被删除。`yyzy_tv` 不是运行时内置的视频来源；来源由用户添加或导入、备份恢复及原有数据库保留，具体现场以源保存／导入日志为准。诊断前不要卸载、清除应用数据或重建库；需要恢复时先导出当前内容备份，再核实已有迁移备份。
+
+真实 Release 的数据比对可使用同证书 instrumentation，Android 会校验测试包和目标包的签名。`scripts/android-upgrade-audit.py` 使用本机既有预览密钥构建测试包，停止预览进程后复制 SQLite、WAL／SHM 和日志，记录版本、UID、安装时间、目录、代理／VPN 和逐表摘要；不替换目标 APK，不注入业务数据。每次使用新的 label，避免混用快照。安装新版本前后分别执行：
+
+```powershell
+python scripts/android-upgrade-audit.py --device emulator-5554 --label before-install
+# 在应用内下载并经系统安装器覆盖安装，然后保存另一份快照
+python scripts/android-upgrade-audit.py --device emulator-5554 --label after-install
+# 明确需要重新测试下载时：先保存快照，再仅删除私有 updates 目录的暂存 APK 及校验文件
+python scripts/android-upgrade-audit.py --device emulator-5554 --label before-redownload --delete-downloads
+```
+
+2026-10-27 在支持 ARM64 的 MuMu 中安装原始 2.4.4 Release，实际添加来源并采集 62 条目录、收藏一部影片、播放至 343.555189 秒，再从应用内下载并交给系统覆盖为原始 2.4.5 Release。八张业务表的行数和内容摘要全部一致，UID、首次安装时间和数据目录不变；升级后界面仍可见收藏。证据位于 `dist/audit/upgrade-244-245/`。这条链路未复现丢失，不能代替用户手机上 2.4.3 升级现场的诊断。
+
+重下载前已删除上次暂存 APK。Android 默认代理和全局代理均为空、VPN 未启用；Windows 的 Clash 仅启用手动代理，无 TUN 路由。实际 Android 下载日志显示 GitHub 直连超时，选择 `v6.gh-proxy.org` 完成 55,703,193 字节下载并通过校验。本次结果说明该环境无需本机 Clash 代理即可完成更新，不保证所有网络和公共前缀持续可用。
 
 ## MuMu 原生应用的前端热更新
 
@@ -79,9 +103,16 @@ Python 环境要求见 `scripts/native-profile-requirements.txt`，WebView 调�
 python scripts/test-mobile-settings-capabilities.py --device emulator-5554 --output dist/audit/mobile-settings
 python scripts/test-android-file-input.py --device emulator-5554 --output dist/audit/android-file-input
 python scripts/test-update-installer-android.py --device emulator-5554 --output dist/audit/update-installer
+python scripts/test-update-installer-android.py --device emulator-5554 --output dist/audit/update-notifications/native-markdown --presentation-only
+python scripts/test-collection-tips-android.py --device emulator-5554 --source-url <真实视频采集API>
+python scripts/test-typography-android.py --device emulator-5554
 ```
 
 安装交接脚本使用本地 APK 样本，需先准备对应验收与发布产物，具体前置条件见脚本。其他原生脚本可能默认连接预览包，运行前检查参数和数据影响。没有获得恢复方案时，不通过清空用户应用数据绕过问题。
+
+采集 Tips 脚本只向 acceptance 包创建临时来源，执行两次真实单页采集，检查顶部提示、触摸关闭、自动消失和跳转展开，再删除自己的来源。2026-10-27 当前本地构建在 MuMu 通过，证据位于 `dist/audit/update-notifications/native/`；浏览器的更新完成、后台下载和 320／390／1280px 提示回归复用 `scripts/test-update-browser.py`。
+
+字号脚本通过基础设置的实际下拉框切换 12px 与 20px，比较标签、按钮、标题与下拉框的计算字号，重启后再检查持久化；结束恢复原设置。证据放 `dist/audit/page-polish/`。逐页浏览器检查见[样式复用](cczj-styles.md#字体与大字号布局)，不把 Android 后端支持的浏览器页面验收表述成 Windows 原生窗口验收。
 
 长按临时倍速回归用 `scripts/test-player-hold.py`：默认连接本地 Vite 测试页，`--android --device emulator-5554` 连接预览包的原生 WebView，复用 Android 调试入口装入当前前端。它用本地循环视频检查真实触摸、持续倍速提示、松手／取消／全屏／换集恢复及选定倍速不被临时值覆盖，结束恢复原页面和播放器偏好。开发宿主通过不代替正式 APK 或华为真机验收。
 
@@ -111,7 +142,7 @@ python scripts/test-update-installer-android.py --device emulator-5554 --output 
 
 真实目录验收使用 `scripts/test-real-catalog-android.py --snapshot <桌面库只读快照>`，只向 acceptance 包装载视频来源、目录、收藏和历史，并在首次操作前保留该包原库。真实桌面库不写入，目录数据不打入 APK。检查首页、搜索、收藏、短剧空态双向滑动，以及原生栏色桥接和开屏缓存隔离；结果及截图归入 `dist/audit/real-mobile/`。
 
-五项底部导航的中间搜索入口只显示简洁的搜索线条图标，横向与纵向居中，通过可访问名称保留搜索语义。图标外部保持透明，不加底板、边框或投影。其余四项保留文字，选中时仅改变颜色；底栏背景、入口尺寸与位置固定，不使用浮起、缩放或扩散动画。回归入口为 `scripts/test-mobile-navigation.py`。
+五项底部导航的中间搜索入口使用 48px 主题色圆形按钮，保留搜索图标与“搜索”文字。所有入口的文字底部对齐，圆形和点击区域完整留在底栏内，不用负边距覆盖短剧进度条；选中时沿用主题强调色，不使用缩放或扩散动画。
 
 播放状态验收运行 `scripts/test-playback-state-android.py`：使用独立来源验证前四集 99%、第五集 15% 的继续观看、收藏夹选择、重启后收藏，以及弹幕字号滑杆与保存。退出时删除本次来源并恢复设置和 WebView 缓存。真实目录导入前归档旧进度缓存，导入后清掉测试目录遗留的编号缓存，从复制的 SQLite 历史重建进度，避免相同 global_id 命中旧测试片段。此脚本只用于 acceptance 包，不用于真机 preview 数据。
 

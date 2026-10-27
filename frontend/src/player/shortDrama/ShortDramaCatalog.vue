@@ -63,10 +63,10 @@ watch(() => props.current, () => { if (props.open) void locate() })
 </template>
 
 <style scoped>
-.drama-catalog-count { color: var(--text-secondary); font-size: 13px; }
-.drama-current { margin: 0; color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
+.drama-catalog-count { color: var(--text-secondary); font-size: calc(13rem / 14); }
+.drama-current { margin: 0; color: var(--text-secondary); font-size: calc(13rem / 14); line-height: 1.5; }
 .drama-ranges { @apply cczj-flex-shrink-0; border-bottom: 1px solid #ffffff0c; scrollbar-width: none; }
-.drama-range { @apply cczj-flex-shrink-0 cczj-relative; min-height: 44px; padding: 8px 12px; font-size: 12px; font-weight: 400; border-radius: 0; }
+.drama-range { @apply cczj-flex-shrink-0 cczj-relative; min-height: 44px; padding: 8px 12px; font-size: calc(12rem / 14); font-weight: 400; border-radius: 0; }
 .drama-range[aria-pressed=true] { color: var(--accent); }
 .drama-range[aria-pressed=true]::after { content: ''; @apply cczj-absolute; height: 2px; left: 12px; right: 12px; bottom: 0; background: currentColor; border-radius: 2px; }
 .drama-episode-grid { grid-template-columns: repeat(auto-fit,minmax(56px,1fr)); grid-auto-rows: max-content; align-content: start; scrollbar-width: none; }
@@ -74,8 +74,8 @@ watch(() => props.current, () => { if (props.open) void locate() })
 .drama-episode { @apply cczj-min-w-0; min-height: 56px; padding: 12px 6px; border-radius: 8px; background: #ffffff06; border-color: #ffffff05; color: #d2d2d8; font-weight: 400; }
 .drama-episode[aria-current=true] { color: var(--accent); background: var(--accent-alpha-10); border-color: var(--accent-alpha-30); }
 .drama-episode :deep(.ui-btn__content) { @apply cczj-flex-col cczj-min-w-0 cczj-w-full; gap: 6px; }
-.drama-episode-number { font-size: 16px; font-variant-numeric: tabular-nums; }
-.drama-episode-name { @apply cczj-max-w-full; font-size: 12px; line-height: 1.45; }
+.drama-episode-number { font-size: calc(16rem / 14); font-variant-numeric: tabular-nums; }
+.drama-episode-name { @apply cczj-max-w-full; font-size: calc(12rem / 14); line-height: 1.45; }
 .drama-episode-name { white-space: normal; overflow-wrap: anywhere; }
 .drama-current-dot { top: 6px; right: 6px; width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
 .drama-watched { top: 5px; right: 5px; color: #ffffff5c; }

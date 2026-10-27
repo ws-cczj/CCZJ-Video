@@ -19,7 +19,7 @@
 .cczj-novel-shell .novel-reader-seek input { @apply cczj-min-w-0 cczj-flex-1;accent-color:var(--novel-red);min-height:44px; }
 .cczj-novel-shell .novel-reader-bottom nav { @apply cczj-grid;grid-template-columns:repeat(4,minmax(0,1fr));@apply cczj-gap-6 cczj-mt-4; }
 .cczj-novel-shell .novel-reader-bottom nav button { @apply cczj-flex-col;gap:7px;min-height:60px;@apply cczj-text-sm; }
-.cczj-novel-shell .novel-reader-aa { font-size:22px;line-height:24px; }
+.cczj-novel-shell .novel-reader-aa { font-size:calc(22rem / 14);line-height:24px; }
 .cczj-novel-shell .novel-reader-dim { @apply cczj-absolute;inset:0;background:#000;@apply cczj-pointer-events-none;z-index:60; }
 .cczj-novel-shell .novel-reader-help { margin:16px 0 0;@apply cczj-text-sm;color:var(--novel-muted);line-height:1.8; }
 .cczj-novel-shell .novel-preference-row button[aria-pressed=true] { border-color:var(--novel-red); }

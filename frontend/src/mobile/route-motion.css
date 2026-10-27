@@ -20,7 +20,7 @@ html[data-motion-pages='off'] .cczj-mobile-route-backdrop,html[data-cczj-motion=
 .cczj-mobile-shared-backdrop .cczj-mobile-route-forward-leave-to,.cczj-mobile-shared-backdrop .cczj-mobile-route-back-enter-from { transform:translate3d(-100%,0,0); }
 html[data-motion-pages='off'] .cczj-mobile-route-stage:not(.cczj-mobile-tab-dragging) .cczj-mobile-route-scene { transition:none !important;transform:none !important; }
 html[data-motion-pages='off'] .cczj-mobile-tab-dragging .cczj-mobile-route-scene { transition:none !important; }
-.cczj-mobile-route-scene[data-path="/"]::before { content:'';@apply cczj-absolute;z-index:-1;inset:0 0 auto;height:clamp(160px,32vh,240px);background:linear-gradient(180deg,var(--cczj-mobile-chrome) 0%,var(--cczj-mobile-chrome) 12%,transparent 100%);@apply cczj-pointer-events-none; }
+.cczj-mobile-shell .cczj-mobile-route-scene:is([data-path="/"],[data-path="/short-drama"],[data-path="/search"],[data-path="/favorites"],[data-path="/settings"])::before { content:'';@apply cczj-absolute;z-index:-1;inset:0 0 auto;height:clamp(160px,32vh,240px);background:linear-gradient(180deg,var(--cczj-mobile-chrome) 0%,var(--cczj-mobile-chrome) 12%,transparent 100%);@apply cczj-pointer-events-none; }
 
 /* Shared touch actions use each mode's existing colour tokens. */
 [data-cczj-hold-enabled=true] { @apply cczj-relative; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }

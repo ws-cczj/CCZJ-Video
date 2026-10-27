@@ -192,16 +192,16 @@
 
 | 类名 | 生效样式 |
 | --- | --- |
-| `cczj-text-xs` | `font-size: 10px;` |
-| `cczj-text-sm` | `font-size: 12px;` |
-| `cczj-text-base` | `font-size: 14px;` |
-| `cczj-text-md` | `font-size: 14px;` |
-| `cczj-text-lg` | `font-size: 16px;` |
-| `cczj-text-xl` | `font-size: 18px;` |
-| `cczj-text-2xl` | `font-size: 20px;` |
-| `cczj-text-11` | `font-size: 11px;` |
-| `cczj-text-12` | `font-size: 12px;` |
-| `cczj-text-13` | `font-size: 13px;` |
+| `cczj-text-xs` | `font-size: calc(10rem / 14);` |
+| `cczj-text-sm` | `font-size: calc(12rem / 14);` |
+| `cczj-text-base` | `font-size: calc(14rem / 14);` |
+| `cczj-text-md` | `font-size: calc(14rem / 14);` |
+| `cczj-text-lg` | `font-size: calc(16rem / 14);` |
+| `cczj-text-xl` | `font-size: calc(18rem / 14);` |
+| `cczj-text-2xl` | `font-size: calc(20rem / 14);` |
+| `cczj-text-11` | `font-size: calc(11rem / 14);` |
+| `cczj-text-12` | `font-size: calc(12rem / 14);` |
+| `cczj-text-13` | `font-size: calc(13rem / 14);` |
 | `cczj-font-normal` | `font-weight: 400;` |
 | `cczj-font-medium` | `font-weight: 500;` |
 | `cczj-font-semibold` | `font-weight: 600;` |
@@ -369,7 +369,7 @@
 | `cczj-max-w-72` | `max-width: 288px;` |
 | `cczj-max-h-64` | `max-height: 256px;` |
 | `cczj-z-20` | `z-index: 20;` |
-| `cczj-text-4xl` | `font-size: 36px; line-height: 1.15;` |
+| `cczj-text-4xl` | `font-size: calc(36rem / 14); line-height: 1.15;` |
 | `cczj-rounded-l` | `border-radius: 6px 0 0 6px;` |
 | `cczj-bg-border` | `background: var(--border);` |
 | `cczj-bg-danger-alpha` | `background: var(--danger-alpha-10);` |

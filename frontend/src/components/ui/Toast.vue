@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { tr } from '../../locales'
+import Button from './Button.vue'
 defineProps<{
   /** 等级：info / warn / error */
   level?: 'info' | 'warn' | 'error'
@@ -9,10 +10,12 @@ defineProps<{
   time?: string
   /** 明细内容（可展开） */
   detail?: string
+  actionLabel?: string
 }>()
 
 const emit = defineEmits<{
   (e: 'close'): void
+  (e: 'action'): void
 }>()
 
 const iconMap: Record<string, string> = {
@@ -24,7 +27,7 @@ const levelIcon = (lvl: string) => iconMap[lvl] || 'i'
 </script>
 
 <template>
-  <div class="ui-toast cczj-flex cczj-items-start cczj-gap-5" :class="`ui-toast--${level || 'info'}`" role="alert">
+  <div class="ui-toast cczj-relative cczj-flex cczj-items-start cczj-gap-5" :class="`ui-toast--${level || 'info'}`" role="alert">
     <!-- 左侧图标 -->
     <div class="ui-toast__icon cczj-flex cczj-items-center cczj-justify-center cczj-flex-shrink-0" :class="`ui-toast__icon--${level || 'info'}`">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -54,6 +57,7 @@ const levelIcon = (lvl: string) => iconMap[lvl] || 'i'
           </details>
         </div>
       </slot>
+      <Button v-if="actionLabel" variant="secondary" size="sm" class="cczj-mt-4" @click="emit('action')">{{ actionLabel }}</Button>
     </div>
 
     <!-- 关闭按钮 -->
@@ -67,8 +71,9 @@ const levelIcon = (lvl: string) => iconMap[lvl] || 'i'
 
 <style scoped>
 .ui-toast {
-  min-width: 280px;
-  max-width: 420px;
+  box-sizing: border-box;
+  min-width: min(280px, calc(100vw - 24px));
+  max-width: min(420px, calc(100vw - 24px));
   background: var(--bg-card);
   @apply cczj-border;
   border-radius: var(--radius-lg);
@@ -145,6 +150,8 @@ const levelIcon = (lvl: string) => iconMap[lvl] || 'i'
 
 /* 关闭按钮 */
 .ui-toast__close {
+  min-width: 32px;
+  min-height: 32px;
   background: transparent;
   border: none;
   @apply cczj-cursor-pointer;

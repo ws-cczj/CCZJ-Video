@@ -1,4 +1,4 @@
-// Package netpolicy provides shared tiered query cooldowns and outbound guardrails.
+// Package netpolicy provides probe cooldowns and shared outbound guardrails.
 package netpolicy
 
 import (
@@ -107,12 +107,15 @@ func Install(manager *Manager) { active.Store(manager) }
 
 type categoryKey struct{}
 type scopeKey struct{}
-type queryCooldownKey struct{}
+type probeCooldownKey struct{}
 
-// WithQueryCooldown marks a bounded metadata read made through a media client.
-// It uses the same persisted tier as other queries; playback stays continuous.
-func WithQueryCooldown(ctx context.Context) context.Context {
-	return context.WithValue(ctx, queryCooldownKey{}, true)
+// ProbeInterval is the minimum interval between identical diagnostic probes.
+const ProbeInterval = 5 * time.Minute
+
+// WithProbeCooldown opts a diagnostic request into the persisted probe gate.
+// Ordinary searches, details, collection and playback never opt into this gate.
+func WithProbeCooldown(ctx context.Context) context.Context {
+	return context.WithValue(ctx, probeCooldownKey{}, true)
 }
 
 func WithCategory(ctx context.Context, category string) context.Context {
@@ -149,10 +152,6 @@ func (m *Manager) stat(category string) *Stat {
 		m.stats[category] = &Stat{Category: category}
 	}
 	return m.stats[category]
-}
-func (m *Manager) interval() time.Duration {
-	p := profiles[m.settings.Frequency]
-	return p.minimum + max(0, min(p.jitter, m.jitter(p.jitter)))
 }
 func (m *Manager) prune(now time.Time) {
 	for key, value := range m.entries {
@@ -237,9 +236,7 @@ func (m *Manager) RoundTrip(category string, base http.RoundTripper, original *h
 	if err != nil {
 		return nil, err
 	}
-	// All queries use the selected tier. Continuous transfers remain excluded
-	// by queryRequest; module caches can retain successful data for longer.
-	longCooldown := query
+	longCooldown := query && original.Context().Value(probeCooldownKey{}) == true
 	m.mu.Lock()
 	if m.closed || m.owner.Err() != nil {
 		m.mu.Unlock()
@@ -291,6 +288,9 @@ func (m *Manager) RoundTrip(category string, base http.RoundTripper, original *h
 			if failure != nil {
 				return nil, failure
 			}
+			if !longCooldown {
+				return m.RoundTrip(category, base, original)
+			}
 			return nil, cooldown(until, m.now())
 		}
 		if current.reply != nil {
@@ -330,7 +330,7 @@ func (m *Manager) RoundTrip(category string, base http.RoundTripper, original *h
 	}
 	until := now.Add(time.Second)
 	if longCooldown {
-		next, allowed, reserveErr := m.store.reserveRequest(original.Context(), key, host, now, now.Add(m.interval()))
+		next, allowed, reserveErr := m.store.reserveRequest(original.Context(), key, host, now, now.Add(ProbeInterval))
 		if reserveErr != nil {
 			decision = "ledger_failed"
 			m.mu.Unlock()

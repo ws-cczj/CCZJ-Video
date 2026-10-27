@@ -15,6 +15,16 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
+// HasVisibleVideoCatalogContext excludes disabled, reading and empty sources.
+// Home chart work only has a purpose when a playable video catalog exists.
+func HasVisibleVideoCatalogContext(ctx context.Context) (bool, error) {
+	var exists bool
+	err := instance.GetContext(ctx, &exists, `SELECT EXISTS(SELECT 1 FROM source_videos sv
+	 JOIN sources s ON s.source_key=sv.source_key WHERE s.kind='video' AND s.enabled=1
+	 AND sv.lifecycle_state='active' AND `+catalogTypeVisibilityClause("sv")+`)`)
+	return exists, err
+}
+
 // CatalogItem is the intentionally small, durable projection of a source item.
 // Detail text and all playback/download URLs must never be added here.
 type CatalogItem struct {

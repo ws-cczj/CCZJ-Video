@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.cczj.video.upgradeaudit">
+    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="35" />
+    <application android:label="CCZJ Upgrade Audit" android:hasCode="true" />
+    <instrumentation android:name="com.cczj.video.upgradeaudit.UpgradeAudit" android:targetPackage="com.cczj.video.preview" android:functionalTest="true" />
+</manifest>

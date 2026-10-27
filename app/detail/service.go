@@ -362,7 +362,7 @@ func (s *Service) fetchContext(ctx context.Context, catalog *db.CatalogItem) (*R
 			return nil, apperror.New(apperror.Unavailable, "source strategy unavailable")
 		}
 		request = func() (*model.Video, error) {
-			return collect.FetchVideoDetailWithURLContext(ctx, strategy.BuildDetailUrl(catalog.SourceVodID), strategy.GetFieldMapping())
+			return collect.FetchVideoDetailWithStrategy(ctx, strategy, catalog.SourceVodID)
 		}
 	}
 	var last error
@@ -374,6 +374,9 @@ func (s *Service) fetchContext(ctx context.Context, catalog *db.CatalogItem) (*R
 		}
 		attempts = attempt
 		video, fetchErr := request()
+		if fetchErr == nil && video != nil && video.VodId.String() != "" && video.VodId.String() != catalog.SourceVodID {
+			fetchErr = apperror.New(apperror.Corrupt, "源站详情与请求的影片身份不一致")
+		}
 		if fetchErr == nil && video != nil {
 			if video.VodId.String() == "" {
 				video.VodId = model.FlexibleString(catalog.SourceVodID)
@@ -416,6 +419,9 @@ func firstLineEpisodes(lines []*model.PlayLine) []*model.Episode {
 
 func isRetryable(err error) bool {
 	if err == nil {
+		return false
+	}
+	if apperror.Is(err, apperror.Corrupt) || apperror.Is(err, apperror.Validation) || apperror.Is(err, apperror.NotFound) {
 		return false
 	}
 	var httpErr *collect.HTTPError

@@ -19,7 +19,7 @@
 .cczj-novel-shell .novel-main { @apply cczj-flex-1 cczj-min-w-0 cczj-min-h-0; padding: 0; @apply cczj-w-full cczj-overflow-y-auto cczj-overflow-x-hidden; background: transparent; scrollbar-gutter: auto; overscroll-behavior-y: contain;}
 .cczj-novel-shell .novel-page { @apply cczj-w-full; max-width: 1180px; margin: 0 auto; padding: 28px 24px 44px;}
 .cczj-novel-shell .novel-section-heading { @apply cczj-flex cczj-items-center cczj-justify-between cczj-gap-6; margin: 30px 0 18px;}
-.cczj-novel-shell .novel-section-heading h1,.cczj-novel-shell .novel-section-heading h2 { margin: 0; font-size: 21px; @apply cczj-font-bold; letter-spacing: -.03em;}
+.cczj-novel-shell .novel-section-heading h1,.cczj-novel-shell .novel-section-heading h2 { margin: 0; font-size: calc(21rem / 14); @apply cczj-font-bold; letter-spacing: -.03em;}
 .cczj-novel-shell .novel-section-heading p { margin: 8px 0 0; @apply cczj-text-13; color: var(--novel-muted);}
 .cczj-novel-shell .novel-section-heading > :is(a,span) { @apply cczj-inline-flex cczj-items-center; gap: 3px; color: var(--novel-muted); @apply cczj-text-sm;}
 .cczj-novel-shell .novel-small-link { @apply cczj-inline-flex cczj-items-center cczj-gap-1; min-height: 44px; color: var(--novel-muted); @apply cczj-text-sm;}
@@ -29,7 +29,7 @@
 .cczj-novel-shell .novel-text-button { min-height: 44px; min-width: 44px; border: 0; color: var(--novel-muted); background: transparent; @apply cczj-text-13;}
 .cczj-novel-shell .novel-cover-grid { @apply cczj-grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 28px;}
 .cczj-novel-shell .novel-book-card { @apply cczj-block cczj-min-w-0;}
-.cczj-novel-shell .novel-book-art { @apply cczj-relative cczj-w-full; font-size: 22px;}
+.cczj-novel-shell .novel-book-art { @apply cczj-relative cczj-w-full; font-size: calc(22rem / 14);}
 .cczj-novel-shell .novel-book-copy h3 { @apply cczj-text-lg; font-weight: 650; @apply cczj-leading-normal; margin: 12px 0 5px; @apply cczj-overflow-hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;}
 .cczj-novel-shell .novel-book-copy p { margin: 0 0 5px; @apply cczj-text-sm; color: var(--novel-muted);}
 .cczj-novel-shell .novel-book-copy small { @apply cczj-text-sm; color: var(--novel-muted);}
@@ -56,24 +56,24 @@
 .cczj-novel-shell .novel-empty h1,.cczj-novel-shell .novel-empty h2 { margin: 0; @apply cczj-text-2xl;}
 .cczj-novel-shell .novel-empty p { @apply cczj-text-base; color: var(--novel-muted); line-height: 1.7; margin: 0;}
 .cczj-novel-shell .novel-shelf-item { @apply cczj-min-w-0 cczj-text-2xl;}
-.cczj-novel-shell .novel-shelf-item h2 { font-size: 15px; margin: 12px 0 6px; @apply cczj-leading-normal;}
+.cczj-novel-shell .novel-shelf-item h2 { font-size: calc(15rem / 14); margin: 12px 0 6px; @apply cczj-leading-normal;}
 .cczj-novel-shell .novel-shelf-item p { @apply cczj-text-sm; color: var(--novel-muted); margin: 0;}
 .cczj-novel-shell .novel-remove-book { min-height: 44px; @apply cczj-mt-3 cczj-w-full; border: 0; @apply cczj-rounded-md; background: #ad302c0d; color: var(--novel-red); @apply cczj-text-sm;}
 .cczj-novel-shell .novel-book-detail { max-width: 960px; padding-bottom: 24px;}
 .cczj-novel-shell .novel-book-hero { @apply cczj-flex cczj-items-center; gap: 30px; margin: 4px 0 30px;}
-.cczj-novel-shell .novel-detail-cover { flex: 0 0 148px; width: 148px; font-size: 21px;}
-.cczj-novel-shell .novel-book-hero h1 { font-size: 30px; @apply cczj-leading-normal; margin: 8px 0;}
+.cczj-novel-shell .novel-detail-cover { flex: 0 0 148px; width: 148px; font-size: calc(21rem / 14);}
+.cczj-novel-shell .novel-book-hero h1 { font-size: calc(30rem / 14); @apply cczj-leading-normal; margin: 8px 0;}
 .cczj-novel-shell .novel-book-hero p { @apply cczj-text-base; color: var(--novel-muted); margin: 0 0 14px;}
 .cczj-novel-shell .novel-author-label { @apply cczj-ml-6 cczj-text-sm;}
 .cczj-novel-shell .novel-book-badges { @apply cczj-flex cczj-flex-wrap cczj-gap-4;}
 .cczj-novel-shell .novel-book-badges span { @apply cczj-text-sm; color: #716858; padding: 4px 8px; border-radius: 5px; background: #efebe3;}
 .cczj-novel-shell .novel-detail-tabs { @apply cczj-flex; gap: 28px; border-bottom: 1px solid var(--novel-line);}
-.cczj-novel-shell .novel-detail-tabs button { padding: 10px 0; min-height: 48px; border: 0; background: transparent; color: var(--novel-muted); font-size: 15px;}
+.cczj-novel-shell .novel-detail-tabs button { padding: 10px 0; min-height: 48px; border: 0; background: transparent; color: var(--novel-muted); font-size: calc(15rem / 14);}
 .cczj-novel-shell .novel-detail-tabs button[aria-selected=true] { color: var(--novel-ink); font-weight: 650; box-shadow: inset 0 -2px var(--novel-red);}
 .cczj-novel-shell .novel-detail-tabs small { color: var(--novel-muted); @apply cczj-text-sm cczj-ml-2;}
 .cczj-novel-shell .novel-description { padding: 24px 0;}
-.cczj-novel-shell .novel-description > h2 { font-size: 19px; margin: 0 0 16px; line-height: 1.6;}
-.cczj-novel-shell .novel-description > p { font-size: 15px; line-height: 1.9; color: #646158; margin: 0 0 20px;}
+.cczj-novel-shell .novel-description > h2 { font-size: calc(19rem / 14); margin: 0 0 16px; line-height: 1.6;}
+.cczj-novel-shell .novel-description > p { font-size: calc(15rem / 14); line-height: 1.9; color: #646158; margin: 0 0 20px;}
 .cczj-novel-shell .novel-description > .novel-demo-note { @apply cczj-text-sm;}
 .cczj-novel-shell .novel-latest-chapter { @apply cczj-flex cczj-items-center cczj-gap-6; padding: 16px 0; min-height: 60px; @apply cczj-w-full; background: transparent; border: 0; border-block: 1px solid var(--novel-line); @apply cczj-text-13; text-align: start; color: var(--novel-ink);}
 .cczj-novel-shell .novel-latest-chapter > span { color: var(--novel-muted); @apply cczj-text-sm;}
@@ -86,21 +86,21 @@
 .cczj-novel-shell .novel-detail-actions { @apply cczj-sticky; bottom: -1px; @apply cczj-grid; grid-template-columns: 1fr 1.5fr; @apply cczj-gap-6; padding: 12px 0; background: var(--novel-canvas); border-top: 1px solid var(--novel-line);}
 .cczj-novel-shell .novel-reader-profile { @apply cczj-flex cczj-items-center; gap: 18px; padding: 12px 0 28px;}
 .cczj-novel-shell .novel-profile-icon { @apply cczj-grid; place-items: center; width: 64px; height: 64px; border-radius: 20px; background: #eee6d9; color: #8e5539;}
-.cczj-novel-shell .novel-reader-profile h1 { font-size: 24px; margin: 0 0 8px;}
+.cczj-novel-shell .novel-reader-profile h1 { font-size: calc(24rem / 14); margin: 0 0 8px;}
 .cczj-novel-shell .novel-reader-profile p { margin: 0; color: var(--novel-muted); @apply cczj-text-base;}
 .cczj-novel-shell .novel-reading-stats { @apply cczj-grid; grid-template-columns: 1fr 1fr; padding: 24px 0; border-block: 1px solid var(--novel-line);}
 .cczj-novel-shell .novel-reading-stats > :is(a,div) { @apply cczj-flex cczj-flex-col cczj-items-center cczj-gap-4;}
-.cczj-novel-shell .novel-reading-stats strong { font-size: 25px; @apply cczj-font-semibold; font-variant-numeric: tabular-nums;}
+.cczj-novel-shell .novel-reading-stats strong { font-size: calc(25rem / 14); @apply cczj-font-semibold; font-variant-numeric: tabular-nums;}
 .cczj-novel-shell .novel-reading-stats span { color: var(--novel-muted); @apply cczj-text-13;}
 .cczj-novel-shell .novel-me { max-width: 800px;}
 .cczj-novel-shell .novel-menu { @apply cczj-mt-12; background: var(--novel-surface); @apply cczj-rounded-lg; border: 1px solid var(--novel-line);}
 .cczj-novel-shell .novel-menu > a { @apply cczj-flex cczj-items-center cczj-gap-7; min-height: 76px; @apply cczj-px-8-py-6;}
 .cczj-novel-shell .novel-menu > a + a { border-top: 1px solid var(--novel-line);}
-.cczj-novel-shell .novel-menu > a > span { @apply cczj-flex-1; font-size: 15px;}
+.cczj-novel-shell .novel-menu > a > span { @apply cczj-flex-1; font-size: calc(15rem / 14);}
 .cczj-novel-shell .novel-menu small { @apply cczj-block cczj-text-sm; color: var(--novel-muted); margin-top: 5px;}
 .cczj-novel-shell .novel-settings { max-width: 800px;}
 .cczj-novel-shell .novel-settings-section { margin-bottom: 28px; padding: 20px; background: var(--novel-surface); border: 1px solid var(--novel-line); @apply cczj-rounded-lg;}
-.cczj-novel-shell .novel-settings-section > h2 { margin: 0 0 8px; font-size: 15px;}
+.cczj-novel-shell .novel-settings-section > h2 { margin: 0 0 8px; font-size: calc(15rem / 14);}
 .cczj-novel-shell .novel-settings-section > p { @apply cczj-text-13; line-height: 1.8; color: var(--novel-muted);}
 .cczj-novel-shell .novel-storage-error { @apply cczj-px-8-py-6; margin: 0; color: #9b2626; background: #fff0e9; @apply cczj-text-13; line-height: 1.7;}
 /* The reading canvas has independent color/font preferences. */
@@ -140,9 +140,9 @@
   .cczj-novel-shell .novel-filter-layout { grid-template-columns: 68px minmax(0,1fr); @apply cczj-gap-8; }.cczj-novel-shell .novel-genres { @apply cczj-gap-3; }.cczj-novel-shell .novel-genres button { padding: 10px 12px; @apply cczj-text-13;}
   .cczj-novel-shell .novel-catalog-results .novel-book-row .novel-book-art { width: 64px; flex-basis: 64px; @apply cczj-text-xs; }.cczj-novel-shell .novel-catalog-results .novel-book-row { @apply cczj-gap-5; }.cczj-novel-shell .novel-catalog-results .novel-book-summary { @apply cczj-hidden;}
   .cczj-novel-shell .novel-filter-options { @apply cczj-flex-wrap cczj-gap-2; padding-bottom: 14px; }.cczj-novel-shell .novel-filter-options button { padding: 4px 7px; min-width: 44px; }.cczj-novel-shell .novel-shelf-item { @apply cczj-text-base; }.cczj-novel-shell .novel-shelf-item h2 { @apply cczj-text-base;}
-  .cczj-novel-shell .novel-book-hero { @apply cczj-gap-10; margin: 10px 0 24px; }.cczj-novel-shell .novel-detail-cover { width: 110px; flex-basis: 110px; font-size: 15px; }.cczj-novel-shell .novel-book-hero h1 { font-size: 22px; }.cczj-novel-shell .novel-book-hero p { @apply cczj-text-13;}
-  .cczj-novel-shell .novel-detail-actions { @apply cczj-bottom-0; padding: 10px 0 calc(10px + env(safe-area-inset-bottom,0px)); }.cczj-novel-shell .novel-description > h2 { font-size: 17px;}
-  .cczj-novel-shell .novel-settings-section { @apply cczj-p-8; }.cczj-novel-shell .novel-reader-profile { padding: 14px 0 24px; }.cczj-novel-shell .novel-reader-profile h1 { font-size: 22px;}
+  .cczj-novel-shell .novel-book-hero { @apply cczj-gap-10; margin: 10px 0 24px; }.cczj-novel-shell .novel-detail-cover { width: 110px; flex-basis: 110px; font-size: calc(15rem / 14); }.cczj-novel-shell .novel-book-hero h1 { font-size: calc(22rem / 14); }.cczj-novel-shell .novel-book-hero p { @apply cczj-text-13;}
+  .cczj-novel-shell .novel-detail-actions { @apply cczj-bottom-0; padding: 10px 0 calc(10px + env(safe-area-inset-bottom,0px)); }.cczj-novel-shell .novel-description > h2 { font-size: calc(17rem / 14);}
+  .cczj-novel-shell .novel-settings-section { @apply cczj-p-8; }.cczj-novel-shell .novel-reader-profile { padding: 14px 0 24px; }.cczj-novel-shell .novel-reader-profile h1 { font-size: calc(22rem / 14);}
   .cczj-novel-shell .novel-reading-paper { padding: 84px 24px 88px; }.cczj-novel-shell .novel-reader-bottom button { @apply cczj-flex-wrap; column-gap: 4px; row-gap: 2px; @apply cczj-text-11;}
   .cczj-novel-shell .novel-preference-row { @apply cczj-text-13; }.cczj-novel-shell .novel-reader-colors { @apply cczj-gap-3; }.cczj-novel-shell .novel-preference-row button { padding-inline: 10px;}
 }
@@ -176,11 +176,11 @@
 .cczj-novel-shell .novel-settings-entry { min-height: 92px; color: inherit; font: inherit; text-align: start; cursor: pointer; transition: border-color var(--cczj-motion-fast), background-color var(--cczj-motion-fast); }
 .cczj-novel-shell .novel-settings-entry:hover { border-color: var(--novel-red); background: #fffdfa; }
 .cczj-novel-shell .novel-settings-entry-icon { width: 44px; height: 44px; flex: 0 0 44px; place-items: center; border-radius: 12px; color: var(--novel-red); background: #ad302c0d; }
-.cczj-novel-shell .novel-settings-entry strong { font-size: 15px; }
+.cczj-novel-shell .novel-settings-entry strong { font-size: calc(15rem / 14); }
 .cczj-novel-shell .novel-settings-entry small { color: var(--novel-muted); line-height: 1.5; }
 .cczj-novel-shell .novel-settings-subhead { margin: 16px 0 24px; }
 .cczj-novel-shell .novel-settings-subhead p { margin: 0 0 2px; }
-.cczj-novel-shell .novel-settings-subhead h1 { margin: 0; font-size: 24px; }
+.cczj-novel-shell .novel-settings-subhead h1 { margin: 0; font-size: calc(24rem / 14); }
 .cczj-novel-shell .novel-settings-card { max-width: 820px; }
 .cczj-novel-shell .novel-settings-card-hint { margin: 0 0 12px; line-height: 1.65; }
 @media (max-width: 720px) {

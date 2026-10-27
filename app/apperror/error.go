@@ -41,7 +41,8 @@ const (
 	RateLimited            Code = "RATE_LIMITED"
 
 	// DownloadDuplicate 是既有下载流程的界面契约：前端按这个码弹「是否覆盖」。
-	DownloadDuplicate Code = "DOWNLOAD_DUPLICATE"
+	DownloadDuplicate  Code = "DOWNLOAD_DUPLICATE"
+	SourceURLDuplicate Code = "SOURCE_URL_DUPLICATE"
 )
 
 // Error 是带码错误。它同时是普通 Go error：Message 给人看，Cause 给日志和 errors.Is 用。

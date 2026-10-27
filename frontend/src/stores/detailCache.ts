@@ -153,7 +153,8 @@ export async function readDetailCache(
   if (!entry) return null
 
   const detail = await decode(entry)
-  if (!detail?.video) {
+  if (!detail?.video || (vodId && String(detail.video.vod_id) !== vodId) ||
+    (!vodId && globalId > 0 && Number(detail.video.global_id) !== globalId)) {
     delete entries[key]
     persistDetails.schedule()
     return null
@@ -172,6 +173,8 @@ export async function writeDetailCache(
   globalId = 0,
 ): Promise<void> {
   if (!sourceKey || (!vodId && !globalId) || !response.video) return
+  if ((vodId && String(response.video.vod_id) !== vodId) ||
+    (!vodId && globalId > 0 && Number(response.video.global_id) !== globalId)) return
   const entries = detailEntries()
   entries[makeKey(sourceKey, vodId, globalId)] = await encode(response)
   trim(entries)

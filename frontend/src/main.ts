@@ -13,6 +13,7 @@ import { syncPluginScripts } from './plugins/runtime'
 import { startDropWatch } from './plugins/dropInstall'
 import { initializeRuntimeEnvironment } from './api/runtime'
 import { loadPlatformPresentation } from './platform/presentation'
+import { loadTypography } from './platform/typography'
 import { useThemeStore } from './stores/theme'
 import { markStartup, startupTask } from './diagnostics/startup'
 import { APPLICATION_MODES } from './modes/definitions'
@@ -46,7 +47,7 @@ startCacheInvalidation()
 // 动画开关和语言一起等：先挂载再把 data-cczj-motion 补上，启动那几段动效照样会跑一遍，
 // 那正是把动画关掉的人最不想看见的一下。
 const motion = useMotionStore()
-Promise.all([runtimeReady, startupTask('locale',loadLocale), startupTask('motion',()=>motion.load()), startupTask('mode',()=>useApplicationMode().load()), startupTask('theme',()=>useThemeStore().load())]).finally(() => {
+Promise.all([runtimeReady, startupTask('typography',loadTypography), startupTask('locale',loadLocale), startupTask('motion',()=>motion.load()), startupTask('mode',()=>useApplicationMode().load()), startupTask('theme',()=>useThemeStore().load())]).finally(() => {
   app.mount('#app')
   markStartup('vue_mount')
   requestAnimationFrame(()=>requestAnimationFrame(()=>markStartup('first_render_opportunity')))

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 defineOptions({ name: 'UpdateModal' })
-import { computed, ref, shallowRef, watch, onMounted, onUnmounted } from 'vue'
+import { computed, defineAsyncComponent, ref, shallowRef, watch, onMounted, onUnmounted } from 'vue'
 import { tr } from '../locales'
 import {
   CheckUpdate, InstallUpdate, FileExists,
@@ -18,7 +18,7 @@ import {
 } from '../stores/updateState'
 import { licensePending } from '../stores/licenseState'
 import Icon from './Icon.vue'
-import { Button, Modal, MotionTransition } from './ui'
+import { Button, Modal } from './ui'
 import { onBackendEvent } from '../api/events'
 import { isMobileRuntime, isIOSRuntime } from '../api/runtime'
 import { openAndroidUpdateInstaller } from '../platform/updateInstaller'
@@ -26,6 +26,7 @@ import { normalizeApiError } from '../api/errors'
 import { createRequestScope } from '../api/requestScope'
 
 const errorStore = useErrorStore()
+const MarkdownContent = defineAsyncComponent(() => import('./MarkdownContent.vue'))
 const reads = createRequestScope()
 
 // 本地状态（不共享）
@@ -60,7 +61,6 @@ interface UpdateInfoData {
 const updateInfo = shallowRef<UpdateInfoData | null>(null)
 
 const backgroundTitle = computed(() => {
-  if (updateDownloadError.value) return tr('update.downloadFailed')
   if (updateDownloaded.value) return tr(onExitPlanned.value ? 'update.onExitTitle' : 'update.downloadedTitle')
   if (updateDownloadProgress.downloaded === 0) return tr('update.connecting')
   if (updateDownloadProgress.total > 0 && updateDownloadProgress.downloaded >= updateDownloadProgress.total) return tr('update.verifying')
@@ -68,15 +68,30 @@ const backgroundTitle = computed(() => {
 })
 
 const backgroundDetail = computed(() => {
-  if (updateDownloadError.value) return tr('update.clickToRetry')
   if (updateDownloaded.value) return onExitPlanned.value
     ? tr('update.onExitTarget', { version: updateInfo.value?.latest_version || '' })
-    : tr('update.readyToInstall')
+    : tr(isMobileRuntime() ? 'update.readyToInstallMobile' : 'update.readyToInstall')
   if (updateDownloadProgress.total > 0 && updateDownloadProgress.downloaded > 0) {
     return `${updateDownloadProgress.percent}% · ${fmtSpeed(updateDownloadProgress.speed_bps) || fmtSize(updateDownloadProgress.downloaded)}`
   }
   return updateDownloadProgress.downloaded > 0 ? fmtSize(updateDownloadProgress.downloaded) : '...'
 })
+
+let backgroundTipId = ''
+watch([updateDownloading, updateDownloaded, updateDownloadError, licensePending], () => {
+  if (backgroundTipId) errorStore.dismiss(backgroundTipId)
+  backgroundTipId = ''
+  if (licensePending.value || updateDownloadError.value || !(updateDownloading.value || updateDownloaded.value)) return
+  backgroundTipId = errorStore.push({
+    level: 'info',
+    title: backgroundTitle.value,
+    message: backgroundDetail.value,
+    source: 'update.status',
+    autoDismiss: 5000,
+    actionLabel: tr('common.details'),
+    action: () => { updateModalOpen.value = true },
+  }).id
+}, { immediate: true })
 
 // ---------- 检查更新 ----------
 async function doCheckUpdate(): Promise<void> {
@@ -388,6 +403,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  if (backgroundTipId) errorStore.dismiss(backgroundTipId)
   disposed = true
   stopUpdateDownload()
   reads.cancel()
@@ -440,8 +456,8 @@ onUnmounted(() => {
             <p class="update-done-path">{{ updateDownloadPath }}</p>
           </div>
           <div class="update-done-hint">
-            <p>{{ tr('update.downloadedMsg') }}</p>
-            <p>{{ tr('update.downloadedMsg2') }}</p>
+            <p>{{ tr(isMobileRuntime() ? 'update.downloadedMobileMsg' : 'update.downloadedMsg') }}</p>
+            <p v-if="!isMobileRuntime()">{{ tr('update.downloadedMsg2') }}</p>
           </div>
         </div>
       </template>
@@ -501,7 +517,7 @@ onUnmounted(() => {
         <!-- 更新内容 -->
         <div v-if="updateInfo.release_notes" class="update-notes">
           <h4>{{ tr('update.changelog') }}</h4>
-          <div class="update-notes-body">{{ updateInfo.release_notes }}</div>
+          <MarkdownContent class="update-notes-body" :content="updateInfo.release_notes" />
         </div>
 
         <!-- 历史版本 -->
@@ -509,7 +525,7 @@ onUnmounted(() => {
           <h4>{{ tr('update.history') }}</h4>
           <div v-for="(ver, index) in updateInfo.history" :key="index" class="update-history-item">
             <h5>v{{ ver.version }}</h5>
-            <pre>{{ ver.desc }}</pre>
+            <MarkdownContent class="update-history-body" :content="ver.desc" />
           </div>
         </div>
 
@@ -574,35 +590,6 @@ onUnmounted(() => {
     </template>
   </Modal>
 
-  <!-- 后台下载悬浮指示器（当弹窗关闭但正在下载时显示） -->
-  <Teleport to="body">
-    <MotionTransition preset="slide-up">
-      <div
-        v-if="(updateDownloading || updateDownloaded || updateDownloadError) && !updateModalOpen"
-        class="bg-download-indicator"
-        role="button"
-        tabindex="0"
-        @click="updateModalOpen = true"
-        @keydown.enter="updateModalOpen = true"
-        @keydown.space.prevent="updateModalOpen = true"
-      >
-        <div class="bg-download-icon" :class="{ 'is-idle': !updateDownloading }">
-          <Icon :name="updateDownloadError ? 'alert-circle' : (updateDownloaded ? 'check' : 'download')" :size="14" />
-        </div>
-        <div class="bg-download-info">
-          <span class="bg-download-title">{{ backgroundTitle }}</span>
-          <span class="bg-download-pct">{{ backgroundDetail }}</span>
-        </div>
-        <div v-if="updateDownloading" class="bg-download-track">
-          <div
-            class="bg-download-fill"
-            :class="{ 'cczj-motion-progress-indeterminate': updateDownloadProgress.total <= 0 }"
-            :style="updateDownloadProgress.total > 0 ? { width: updateDownloadProgress.percent + '%' } : {}"
-          ></div>
-        </div>
-      </div>
-    </MotionTransition>
-  </Teleport>
 </template>
 
 <style scoped>
@@ -616,7 +603,7 @@ onUnmounted(() => {
 .update-latest { @apply cczj-text-accent cczj-font-bold; font-family: ui-monospace, Menlo, Monaco, Consolas, monospace; }
 .update-notes { @apply cczj-mb-8; }
 .update-notes h4 { font-size: 0.86rem; @apply cczj-font-semibold cczj-text-secondary; margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.5px; }
-.update-notes-body { background: var(--bg-secondary); @apply cczj-border; border-radius: 10px; padding: 12px 14px; font-size: 0.93rem; line-height: 1.6; @apply cczj-text-secondary; max-height: 200px; @apply cczj-overflow-y-auto cczj-whitespace-pre; word-break: break-word; }
+.update-notes-body { background: var(--bg-secondary); @apply cczj-border; border-radius: 10px; padding: 12px 14px; font-size: 0.93rem; @apply cczj-text-secondary; max-height: 200px; @apply cczj-overflow-y-auto; }
 .update-progress-full { @apply cczj-w-full; max-width: 400px; }
 .update-progress-full .progress-track { @apply cczj-h-2; background: var(--bg-secondary); @apply cczj-border cczj-rounded-sm cczj-overflow-hidden cczj-mb-4 cczj-relative; }
 .update-progress-full .progress-track.indeterminate .progress-fill {
@@ -644,7 +631,7 @@ onUnmounted(() => {
 .update-history h4 { font-size: 0.91rem; @apply cczj-font-semibold cczj-text-primary; margin: 0 0 10px; }
 .update-history-item { @apply cczj-mb-6; padding: 10px 12px; background: var(--bg-secondary); @apply cczj-rounded-md; }
 .update-history-item h5 { font-size: 0.89rem; @apply cczj-font-semibold cczj-text-primary; margin: 0 0 6px; }
-.update-history-item pre { font-size: 0.82rem; @apply cczj-text-secondary cczj-whitespace-pre; margin: 0; @apply cczj-leading-normal; font-family: inherit; }
+.update-history-body { font-size: 0.82rem; @apply cczj-text-secondary; }
 
 /* 下载中界面 */
 .update-downloading-card { padding: 24px 0; @apply cczj-text-center; }
@@ -663,48 +650,4 @@ onUnmounted(() => {
 /* 后台下载提示文字 */
 .bg-hint { font-size: 0.82rem; @apply cczj-text-muted; }
 
-/* ====== 后台下载悬浮指示器 ====== */
-.bg-download-indicator {
-  @apply cczj-fixed;
-  right: 24px;
-  bottom: 88px;
-  z-index: var(--z-fab);
-  @apply cczj-flex cczj-items-center cczj-gap-4 cczj-px-7-py-5;
-  background: var(--bg-card);
-  border: 1px solid var(--accent);
-  border-radius: 24px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15), 0 0 0 3px var(--accent-alpha-10);
-  @apply cczj-cursor-pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  min-width: 160px;
-}
-.bg-download-indicator:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2), 0 0 0 4px var(--accent-alpha-15);
-}
-.bg-download-icon {
-  width: 28px; height: 28px; @apply cczj-rounded-50;
-  background: var(--accent); color: var(--accent-contrast);
-  @apply cczj-flex cczj-items-center cczj-justify-center cczj-flex-shrink-0;
-  /* 反馈型转圈不吃时长令牌：动画关掉时它得继续转，否则看不出还在下载。 */
-  animation: cczj-spin 800ms linear infinite;
-}
-.bg-download-info {
-  @apply cczj-flex cczj-flex-col cczj-flex-1 cczj-min-w-0;
-}
-.bg-download-icon.is-idle { animation: none; }
-.bg-download-title { font-size: 0.79rem; @apply cczj-font-semibold cczj-text-primary; }
-.bg-download-pct { font-size: 0.72rem; @apply cczj-text-muted; font-family: ui-monospace, monospace; }
-.bg-download-track {
-  @apply cczj-absolute cczj-bottom-0; left: 12px; right: 12px;
-  height: 3px; background: var(--bg-secondary); @apply cczj-rounded-xs cczj-overflow-hidden;
-}
-.bg-download-fill {
-  @apply cczj-h-full; background: var(--accent); @apply cczj-rounded-xs; transition: width var(--cczj-motion-normal) var(--cczj-motion-ease-standard);
-}
-.bg-download-fill.cczj-motion-progress-indeterminate {
-  width: 30%;
-}
-
-/* 后台指示器过渡动画 */
 </style>

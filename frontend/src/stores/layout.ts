@@ -56,9 +56,10 @@ export const useLayoutStore = defineStore('layout', () => {
 
   const gridStyle = computed(() => {
     const style = DENSITY_STYLE[density.value]
+    const totalGap = (columns.value - 1) * Number.parseFloat(style.gap)
     return {
       display: 'grid',
-      gridTemplateColumns: `repeat(${columns.value}, minmax(${style.minWidth}, 1fr))`,
+      gridTemplateColumns: `repeat(auto-fill, minmax(min(100%, max(${style.minWidth}, calc((100% - ${totalGap}px) / ${columns.value}))), 1fr))`,
       gap: style.gap,
     }
   })

@@ -184,25 +184,6 @@ func BuildQueryUrl(apiUrl string, page int, opts FetchOptions) string {
 	return u.String()
 }
 
-// FetchVideoDetailWithURL is the operation-aware detail fetch entry point.
-// Its URL must have been produced by a SourceStrategy; it never adds params.
-func FetchVideoDetailWithURL(detailURL string, fieldMapping map[string]string) (*model.Video, error) {
-	return FetchVideoDetailWithURLContext(context.Background(), detailURL, fieldMapping)
-}
-
-// FetchVideoDetailWithURLContext lets detail callers cancel an in-flight
-// source request when the consumer has navigated away.
-func FetchVideoDetailWithURLContext(ctx context.Context, detailURL string, fieldMapping map[string]string) (*model.Video, error) {
-	result, err := doFetchContext(ctx, detailURL, fieldMapping)
-	if err != nil {
-		return nil, err
-	}
-	if len(result.List) > 0 {
-		return result.List[0], nil
-	}
-	return nil, apperror.New(apperror.NotFound, "video not found")
-}
-
 // FetchPageURL consumes an operation-aware URL without adding parameters.
 func FetchPageURL(target string, fieldMapping map[string]string) (*FetchResult, error) {
 	if strings.TrimSpace(target) == "" {
@@ -252,18 +233,25 @@ func FetchWithStrategy(ctx context.Context, strategy SourceStrategy, target stri
 	return doFetchShape(ctx, target, strategy.GetFieldMapping(), shapeOfStrategy(strategy))
 }
 
-// FetchVideoDetailWithStrategy is FetchVideoDetailWithURLContext for sources that
-// describe their own envelope: the detail list may live anywhere the strategy
-// says it does.
-func FetchVideoDetailWithStrategy(ctx context.Context, strategy SourceStrategy, detailURL string) (*model.Video, error) {
+// FetchVideoDetailWithStrategy builds and decodes the source's detail request,
+// returning only the requested source ID, even if the upstream returns a list.
+func FetchVideoDetailWithStrategy(ctx context.Context, strategy SourceStrategy, vodID string) (*model.Video, error) {
+	vodID = strings.TrimSpace(vodID)
+	if vodID == "" {
+		return nil, apperror.New(apperror.Validation, "video ID is required")
+	}
+	detailURL := strategy.BuildDetailUrl(vodID)
 	result, err := FetchWithStrategy(ctx, strategy, detailURL)
 	if err != nil {
 		return nil, err
 	}
 	for _, video := range result.List {
-		if video != nil {
+		if video != nil && video.VodId.String() == vodID {
 			return video, nil
 		}
+	}
+	if len(result.List) > 0 {
+		return nil, apperror.New(apperror.Corrupt, "源站详情与请求的影片身份不一致")
 	}
 	return nil, apperror.New(apperror.NotFound, "video not found")
 }

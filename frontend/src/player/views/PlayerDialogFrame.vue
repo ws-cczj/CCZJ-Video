@@ -84,7 +84,7 @@ onBeforeUnmount(restoreFocus)
   @apply cczj-flex cczj-items-center cczj-justify-between;
   padding: 14px 18px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: 15px;
+  font-size: calc(15rem / 14);
   @apply cczj-font-semibold cczj-text-white;
 }
 

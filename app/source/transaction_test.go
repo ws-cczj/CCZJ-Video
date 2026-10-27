@@ -25,7 +25,7 @@ func TestCreateSourceRollsBackIfDefaultPreferenceCannotBeSaved(t *testing.T) {
 		db.DB().Exec(`DROP TRIGGER reject_source_default`)
 		_ = db.SetSetting("default_source_key", previous)
 	})
-	row := &model.Source{SourceKey: "atomic_source_default", Name: "Atomic default", ApiUrl: "https://example.invalid", Enabled: 1}
+	row := &model.Source{SourceKey: "atomic_source_default", Name: "Atomic default", ApiUrl: "https://example.invalid/atomic_source_default", Enabled: 1}
 	if err := NewService().Add(context.Background(), row); err == nil {
 		t.Fatal("partial source creation reported success")
 	}
@@ -36,7 +36,7 @@ func TestCreateSourceRollsBackIfDefaultPreferenceCannotBeSaved(t *testing.T) {
 
 func TestExportDoesNotOverwriteAndCancellationLeavesNoFile(t *testing.T) {
 	key := "export_unique_cancel"
-	if err := db.AddSource(&model.Source{SourceKey: key, Name: key, ApiUrl: "https://example.invalid"}); err != nil {
+	if err := db.AddSource(&model.Source{SourceKey: key, Name: key, ApiUrl: "https://example.invalid/" + key}); err != nil {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
@@ -122,7 +122,7 @@ func TestImportRejectsInvalidCatalogBeforeWritingSource(t *testing.T) {
 
 func TestImportRollsBackConfigurationAndTypesOnCatalogFailure(t *testing.T) {
 	key := "import_atomic_bundle"
-	if err := db.AddSource(&model.Source{SourceKey: key, Name: "Before", ApiUrl: "https://example.invalid", Enabled: 1}); err != nil {
+	if err := db.AddSource(&model.Source{SourceKey: key, Name: "Before", ApiUrl: "https://example.invalid/" + key, Enabled: 1}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.DB().Exec(`CREATE TRIGGER reject_import_catalog BEFORE INSERT ON source_videos WHEN NEW.source_key='import_atomic_bundle' BEGIN SELECT RAISE(ABORT,'reject catalog');END`); err != nil {
@@ -134,7 +134,7 @@ func TestImportRollsBackConfigurationAndTypesOnCatalogFailure(t *testing.T) {
 		t.Fatal("failed catalog import reported success")
 	}
 	src, err := db.GetSourceByKey(key)
-	if err != nil || src.Name != "Before" || src.ApiUrl != "https://example.invalid" {
+	if err != nil || src.Name != "Before" || src.ApiUrl != "https://example.invalid/"+key {
 		t.Fatalf("configuration partially committed: %+v %v", src, err)
 	}
 	types, err := db.ExportSourceTypes(key)

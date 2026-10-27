@@ -1,6 +1,7 @@
 package netpolicy
 
 import (
+	"cczjVideo/app/apperror"
 	"context"
 	"net/http"
 	"strings"
@@ -20,22 +21,27 @@ func TestSettingsRejectUnknownOrMalformedValues(t *testing.T) {
 		}
 	}
 }
-func TestJitterIsPositiveAndBoundedForEachTier(t *testing.T) {
-	for frequency, p := range profiles {
-		manager := New(nil, context.Background(), Settings{Frequency: frequency})
-		defer manager.cancel()
-		minimum, maximum := p.minimum+p.jitter, p.minimum
-		for i := 0; i < 100; i++ {
-			got := manager.interval()
-			minimum = min(minimum, got)
-			maximum = max(maximum, got)
-			if got < p.minimum || got > p.minimum+p.jitter {
-				t.Fatal(frequency, got)
+func TestProbeIntervalIsFiveMinutesForEveryTier(t *testing.T) {
+	for _, frequency := range []string{"standard", "steady", "low"} {
+		t.Run(frequency, func(t *testing.T) {
+			store := fixtureStore(t)
+			now := time.Unix(1792380000, 0)
+			manager := fixtureManager(t, store, &now)
+			manager.SetSettings(Settings{Frequency: frequency})
+			base := roundTripFunc(func(*http.Request) (*http.Response, error) { return reply(200, "sample", ""), nil })
+			req := probeRequest(context.Background(), "https://source.example/probe")
+			response, err := manager.RoundTrip("collect", base, req)
+			readResponse(t, response, err)
+			now = now.Add(299 * time.Second)
+			restarted := fixtureManager(t, store, &now)
+			_, err = restarted.RoundTrip("collect", base, req)
+			if apperror.Public(err).RetryAfterSeconds != 1 {
+				t.Fatalf("probe interval changed with tier: %v", err)
 			}
-		}
-		if minimum == maximum {
-			t.Fatal("non-random interval", frequency)
-		}
+			now = now.Add(time.Second)
+			response, err = restarted.RoundTrip("collect", base, req)
+			readResponse(t, response, err)
+		})
 	}
 }
 func TestRequestIdentityIgnoresOnlyKnownSignatureFields(t *testing.T) {

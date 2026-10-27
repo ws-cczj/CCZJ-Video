@@ -1,6 +1,7 @@
 <script setup lang="ts">
 defineOptions({ name: 'Sources' })
-import { onMounted, onActivated, onDeactivated, onBeforeUnmount, ref, computed } from 'vue'
+import { onMounted, onActivated, onDeactivated, onBeforeUnmount, ref, computed, watch, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
 import { useSourceStore } from '../stores/source'
 import { useCollectStore } from '../stores/collect'
 import { useErrorStore } from '../stores/error'
@@ -74,6 +75,17 @@ function getHours(key: string): number {
 // === 展开状态 ===
 // 按 source_key 记，不按序号：一次只展开一张卡，卡片重排也不会串位。
 const expandedKey = ref<string | null>(null)
+const route = useRoute()
+watch([() => route.query.source, () => sourceStore.sources], async ([key]) => {
+  if (typeof key !== 'string' || !sourceStore.sources.some(source => sk(source) === key)) return
+  search.value = ''
+  statusFilter.value = 'all'
+  expandedKey.value = key
+  await nextTick()
+  if (route.query.source !== key) return
+  Array.from(document.querySelectorAll<HTMLElement>('[data-collection-source]'))
+    .find(element => element.dataset.collectionSource === key)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+}, { immediate: true })
 const paramsDoc = ref<ParamsDoc | null>(null)
 const paramsDocLoading = ref(false)
 
@@ -459,6 +471,7 @@ onBeforeUnmount(stopProbeLoop)
         :key="sk(s)"
         :source="s"
         :source-key="sk(s)"
+        :data-collection-source="sk(s)"
         :expanded="expandedKey === sk(s)"
         :mode="getMode(sk(s))"
         :hours="getHours(sk(s))"
@@ -516,7 +529,7 @@ onBeforeUnmount(stopProbeLoop)
   @apply cczj-flex cczj-justify-between cczj-items-end cczj-mb-10 cczj-gap-10;
 }
 .page-title h1 {
-  font-size: 28px;
+  font-size: calc(28rem / 14);
   @apply cczj-font-bold;
   margin: 0 0 6px;
 }

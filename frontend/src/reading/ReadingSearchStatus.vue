@@ -35,7 +35,7 @@ const { t } = useI18n()
 </template>
 
 <style scoped>
-.reading-search-status { color: var(--reading-muted); font-size: 12px; margin: 0 0 20px; }
+.reading-search-status { color: var(--reading-muted); font-size: calc(12rem / 14); margin: 0 0 20px; }
 .reading-search-status p { margin: 0; line-height: 1.8; }
 .reading-search-status .reading-search-match-note { margin-top: 8px; color: var(--reading-ink); }
 .reading-search-issues { margin-top: 8px; }

@@ -148,7 +148,7 @@ function isActive(path: string): boolean {
   margin: 3px 0;
   padding: 11px 14px;
   border: none;
-  font-size: 15px;
+  font-size: calc(15rem / 14);
   font-family: inherit;
 }
 

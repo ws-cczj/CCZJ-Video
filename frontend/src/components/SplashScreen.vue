@@ -119,11 +119,15 @@ const bgStyle = computed(() => {
   const t = theme.current
   return { backgroundColor: t.palette?.bgApp || (t.mode === 'dark' ? '#1a1a1e' : '#ffffff') }
 })
+// The visible splash owns system-bar colours until its exit transition ends.
+const stopSplashSurface=watch(()=>bgStyle.value.backgroundColor,color=>{document.documentElement.dataset.cczjSplashColor=color},{immediate:true})
+function releaseSplashSurface():void { stopSplashSurface(); delete document.documentElement.dataset.cczjSplashColor }
+onBeforeUnmount(releaseSplashSurface)
 
 </script>
 
 <template>
-  <MotionTransition preset="fade">
+  <MotionTransition preset="fade" @after-leave="releaseSplashSurface">
     <div v-if="show" class="splash-wrap cczj-fixed cczj-items-center cczj-justify-center cczj-flex cczj-z-max"
       :style="bgStyle">
       <div class="splash-brand cczj-motion-ornament" :class="{ready}">

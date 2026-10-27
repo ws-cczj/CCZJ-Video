@@ -45,7 +45,7 @@
 .cczj-mobile-shell .cczj-mobile-settings .diag-content { @apply cczj-overflow-visible; padding: 16px 0; scrollbar-gutter: auto; }
 .cczj-mobile-shell .cczj-mobile-settings .diag-nav { @apply cczj-flex-wrap cczj-overflow-visible; }
 .cczj-mobile-shell .cczj-mobile-settings .diag-page-header { @apply cczj-flex-wrap cczj-gap-6; }
-.cczj-mobile-shell .cczj-mobile-settings .diag-page-title h1 { font-size: 21px; }
+.cczj-mobile-shell .cczj-mobile-settings .diag-page-title h1 { font-size: calc(21rem / 14); }
 .cczj-mobile-shell .cczj-mobile-settings .diag-page-actions { @apply cczj-flex-wrap; }
 .cczj-mobile-shell .cczj-mobile-settings :is(.resource-cards,.diag-summary-links) { grid-template-columns: repeat(2,minmax(0,1fr)); }
 

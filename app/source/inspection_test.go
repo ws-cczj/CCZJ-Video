@@ -12,7 +12,7 @@ import (
 
 func TestSourceInspectionCountsOnlyItsOwnCatalog(t *testing.T) {
 	for _, key := range []string{"inspect_one", "inspect_two"} {
-		if err := db.AddSource(&model.Source{SourceKey: key, Name: key, ApiUrl: "https://example.invalid"}); err != nil {
+		if err := db.AddSource(&model.Source{SourceKey: key, Name: key, ApiUrl: "https://example.invalid/" + key}); err != nil {
 			t.Fatal(err)
 		}
 		if err := db.UpsertCatalogItems(key, []*model.Video{{VodId: "v1", VodName: key, TypeId: "t1", TypeName: "Inspection"}}); err != nil {
@@ -31,7 +31,7 @@ func TestSourceInspectionCountsOnlyItsOwnCatalog(t *testing.T) {
 }
 
 func TestSourceStatsCannotReportZeroWhenCatalogStorageFails(t *testing.T) {
-	if err := db.AddSource(&model.Source{SourceKey: "inspect_failure", Name: "Failure", ApiUrl: "https://example.invalid"}); err != nil {
+	if err := db.AddSource(&model.Source{SourceKey: "inspect_failure", Name: "Failure", ApiUrl: "https://example.invalid/inspect_failure"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.DB().Exec(`ALTER TABLE source_videos RENAME TO source_videos_probe`); err != nil {

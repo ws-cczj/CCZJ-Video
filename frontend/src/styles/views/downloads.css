@@ -10,7 +10,7 @@
   @apply cczj-flex cczj-justify-between cczj-items-start cczj-gap-8 cczj-mb-6 cczj-flex-wrap;
 }
 .page-header h1 {
-  font-size: 22px;
+  font-size: calc(22rem / 14);
   @apply cczj-font-semibold;
   margin: 0 0 4px 0;
 }
@@ -158,7 +158,7 @@
   border-right: 1px solid rgba(0, 0, 0, 0.15);
 }
 .chunk-label {
-  font-size: 7px;
+  font-size: calc(7rem / 14);
   @apply cczj-font-bold;
   color: rgba(255, 255, 255, 0.85);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);

@@ -44,6 +44,14 @@ func TestV20UpgradePreservesHistoryAndAddsOptionalDuration(t *testing.T) {
 		INSERT INTO watch_history VALUES (1, 5, 1671.566798, '2026-10-26 03:40:00');
 		CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
 		INSERT INTO settings VALUES ('cczj_fav_folders', '[{"id":"saved","name":"My folder"}]');
+		CREATE TABLE sources (source_key TEXT PRIMARY KEY, name TEXT, api_url TEXT);
+		INSERT INTO sources VALUES ('user_source','用户自己的源','https://source.example/api');
+		CREATE TABLE global_video (id INTEGER PRIMARY KEY, vod_name TEXT);
+		INSERT INTO global_video VALUES (42,'原有影片');
+		CREATE TABLE source_videos (source_key TEXT, source_vod_id TEXT, global_id INTEGER);
+		INSERT INTO source_videos VALUES ('user_source','12345',42);
+		CREATE TABLE favorites (global_id INTEGER, source_key TEXT, vod_id TEXT);
+		INSERT INTO favorites VALUES (42,'user_source','12345');
 		PRAGMA user_version=20;`)
 	if err != nil {
 		t.Fatal(err)
@@ -60,6 +68,17 @@ func TestV20UpgradePreservesHistoryAndAddsOptionalDuration(t *testing.T) {
 	}
 	if position != 1671.566798 || duration != 0 {
 		t.Fatalf("upgrade changed old progress: %v/%v", position, duration)
+	}
+	for _, table := range []string{"sources", "global_video", "source_videos", "favorites"} {
+		var count int
+		if err := database.Get(&count, `SELECT COUNT(*) FROM `+table); err != nil || count != 1 {
+			t.Fatalf("upgrade lost existing %s: count=%d err=%v", table, count, err)
+		}
+	}
+	var source, vod string
+	var globalID int64
+	if err := database.QueryRow(`SELECT source_key,source_vod_id,global_id FROM source_videos`).Scan(&source, &vod, &globalID); err != nil || source != "user_source" || vod != "12345" || globalID != 42 {
+		t.Fatalf("upgrade changed source identity: %s/%s/%d err=%v", source, vod, globalID, err)
 	}
 	var folders string
 	if err := database.Get(&folders, `SELECT value FROM settings WHERE key='cczj_fav_folders'`); err != nil || folders != `[{"id":"saved","name":"My folder"}]` {

@@ -1,6 +1,7 @@
 package source
 
 import (
+	"fmt"
 	"testing"
 
 	"cczjVideo/app/db"
@@ -10,8 +11,8 @@ import (
 func TestAddSourceAllocatesIndependentIdentityAndKeepsExplicitKeys(t *testing.T) {
 	const address = "https://api.example.com/video"
 	seen := make(map[string]bool)
-	for _, key := range []string{"", "", "legacy_kept"} {
-		row := &model.Source{SourceKey: key, ApiUrl: address, Enabled: 1}
+	for i, key := range []string{"", "", "legacy_kept"} {
+		row := &model.Source{SourceKey: key, ApiUrl: fmt.Sprintf("%s?account=%d", address, i), Enabled: 1}
 		if err := AddSource(row); err != nil {
 			t.Fatal(err)
 		}

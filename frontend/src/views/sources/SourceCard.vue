@@ -237,7 +237,7 @@ const {
 .status-dot.error { background: var(--danger); box-shadow: 0 0 6px var(--danger-alpha-10); }
 .status-dot.idle { background: var(--text-muted); }
 .card-name {
-  font-size: 15px; @apply cczj-font-semibold; margin: 0;
+  font-size: calc(15rem / 14); @apply cczj-font-semibold; margin: 0;
   @apply cczj-whitespace-nowrap cczj-overflow-hidden; text-overflow: ellipsis;
 }
 .mode-badge {

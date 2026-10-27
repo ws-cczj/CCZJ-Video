@@ -1,12 +1,14 @@
 <script setup lang="ts">
-defineProps<{ icon?: string; title: string; description?: string }>()
+import { computed } from 'vue'
+const props = defineProps<{ icon?: string; title: string; description?: string }>()
+const descriptionText = computed(() => props.description?.trim() === props.title.trim() ? '' : props.description)
 </script>
 
 <template>
   <div class="empty-state cczj-flex cczj-flex-col cczj-items-center cczj-justify-center cczj-gap-6">
     <div class="empty-icon"><slot name="icon">{{ icon || '📭' }}</slot></div>
     <h3 class="empty-title">{{ title }}</h3>
-    <p v-if="description" class="empty-desc">{{ description }}</p>
+    <p v-if="descriptionText" class="empty-desc">{{ descriptionText }}</p>
     <slot></slot>
   </div>
 </template>

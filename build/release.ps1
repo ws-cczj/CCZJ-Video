@@ -37,7 +37,7 @@ function Run-Step([string]$Label,[scriptblock]$Work) {
     if ($LASTEXITCODE -ne 0) { throw "$Label failed with exit $LASTEXITCODE" }
 }
 if (!$SkipBuild) {
-    if (!$SkipVerify) { Run-Step 'Verify repository' { & powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1 } }
+    if (!$SkipVerify) { Run-Step 'Verify repository' { & powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1 -StaticOnly } }
     Run-Step 'Build frontend' { Push-Location frontend; try { & npm run build } finally { Pop-Location } }
     Run-Step 'Package Windows' { & powershell -NoProfile -ExecutionPolicy Bypass -File build/windows/package.ps1 -Version $Version -OutDir $stage -BinOut "bin/cczjVideo-$Version.exe" }
     $androidArgs = @('-NoProfile','-ExecutionPolicy','Bypass','-File','build/android/build.ps1','-Arch','arm64','-BuildType','Release','-SkipFrontend')

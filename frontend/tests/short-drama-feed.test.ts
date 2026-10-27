@@ -20,10 +20,45 @@ function fixture(initialEntry: ShortDramaEntry | null = null) {
   return { feed, source, active, beforeChange, entry }
 }
 beforeEach(() => {
+  vi.mocked(GetShortDramaRecommendations).mockReset()
+  vi.mocked(GetVideoDetail).mockReset()
   vi.mocked(GetShortDramaRecommendations).mockImplementation(() => CancellablePromise.resolve([{ vod_id: 'one' }, { vod_id: 'two' }]))
   vi.mocked(GetVideoDetail).mockImplementation(request => CancellablePromise.resolve(detail(request.vod_id)))
 })
 afterEach(() => scope?.stop())
+
+it('clears an old failure when the selected source is removed', async () => {
+  vi.mocked(GetVideoDetail).mockReturnValueOnce(CancellablePromise.reject({ code:'NOT_FOUND', message:'catalog lookup' }))
+  vi.mocked(GetShortDramaRecommendations).mockReturnValueOnce(CancellablePromise.resolve([{vod_id:'deleted'}])).mockReturnValueOnce(CancellablePromise.resolve([]))
+  const { feed, source } = fixture(); await settle()
+  source.value = ''; await settle()
+  expect(feed.error.value).toBe('')
+  expect(feed.items.value).toEqual([])
+  expect(feed.url.value).toBe('')
+  expect(feed.playbackSource.value).toBe('')
+})
+
+it('reloads a stale cached recommendation batch when its catalog entry was deleted', async () => {
+  const { feed, active } = fixture(); await settle()
+  active.value = false; await settle()
+  vi.mocked(GetVideoDetail).mockReturnValueOnce(CancellablePromise.reject({code:'NOT_FOUND',message:'catalog lookup'}))
+  vi.mocked(GetShortDramaRecommendations).mockReturnValueOnce(CancellablePromise.resolve([])).mockReturnValueOnce(CancellablePromise.resolve([]))
+  active.value = true; await settle()
+  expect(feed.items.value).toEqual([])
+  expect(feed.error.value).toBe('')
+  expect(feed.url.value).toBe('')
+})
+
+it('bounds recovery if refreshed catalog entries also disappear and lets retry reload the batch', async () => {
+  vi.mocked(GetVideoDetail).mockImplementation(() => CancellablePromise.reject({code:'NOT_FOUND',message:'catalog lookup'}))
+  const { feed } = fixture(); await settle()
+  await vi.waitFor(() => expect(feed.error.value).toBe('catalog lookup'))
+  expect(GetVideoDetail).toHaveBeenCalledTimes(2)
+  vi.mocked(GetShortDramaRecommendations).mockReturnValueOnce(CancellablePromise.resolve([])).mockReturnValueOnce(CancellablePromise.resolve([]))
+  await feed.retry()
+  expect(feed.items.value).toEqual([])
+  expect(feed.error.value).toBe('')
+})
 
 it('uses different titles for both manual navigation and automatic playback in recommendations', async () => {
   const { feed } = fixture(); await settle()

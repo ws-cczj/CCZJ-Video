@@ -17,14 +17,13 @@ type Settings struct {
 	Frequency string `json:"frequency"`
 }
 type profile struct {
-	minimum, jitter time.Duration
-	burst, rate     float64
+	burst, rate float64
 }
 
 var profiles = map[string]profile{
-	"standard": {5 * time.Minute, time.Minute, 30, 10},
-	"steady":   {10 * time.Minute, 2 * time.Minute, 20, 6},
-	"low":      {30 * time.Minute, 5 * time.Minute, 10, 3},
+	"standard": {30, 10},
+	"steady":   {20, 6},
+	"low":      {10, 3},
 }
 
 func DecodeSettings(raw string) (Settings, error) {

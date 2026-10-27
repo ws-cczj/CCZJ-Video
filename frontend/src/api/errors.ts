@@ -12,6 +12,7 @@ export type ApiErrorCode =
   | 'PERMISSION_DENIED'
   | 'RATE_LIMITED'
   | 'DOWNLOAD_DUPLICATE'
+  | 'SOURCE_URL_DUPLICATE'
   | 'INTERNAL'
 
 export interface ApiError {

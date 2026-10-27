@@ -99,7 +99,7 @@
 .cczj-mobile-tool:active,.cczj-mobile-settings-entry:active,.cczj-mobile-search-history-term:active { transform: scale(.985); }
 .cczj-mobile-shell .cczj-mobile-page .carousel { border-radius: var(--cczj-mobile-radius); }
 .cczj-mobile-shell .cczj-mobile-page .carousel-viewport { border-radius: var(--cczj-mobile-radius); }
-.cczj-mobile-shell .cczj-mobile-page .slide-title { font-size: 24px; letter-spacing: 0; }
+.cczj-mobile-shell .cczj-mobile-page .slide-title { font-size: calc(24rem / 14); letter-spacing: 0; }
 .cczj-mobile-shell .cczj-mobile-page .slide-btn { min-height: 44px; @apply cczj-rounded-md; }
 .cczj-mobile-shell .cczj-mobile-page .slide-btn-primary { background: var(--btn-solid); color: var(--btn-solid-text); }
 .cczj-mobile-shell .cczj-mobile-page .slide-tag { border-radius: 5px; }

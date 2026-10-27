@@ -48,6 +48,7 @@ class Fixture(SimpleHTTPRequestHandler):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--device', default='emulator-5554')
+    parser.add_argument('--catalog-recovery', action='store_true', help='Check stale catalog and deleted-source recovery with native bindings')
     args = parser.parse_args()
     OUT.mkdir(parents=True,exist_ok=True)
     media = OUT/'native-media';media.mkdir(exist_ok=True)
@@ -96,6 +97,25 @@ def main():
         assert device.js('document.querySelectorAll(".cczj-mobile-player-controls,.ctrl-bar").length')==0
         assert device.js('[...document.querySelectorAll(".cczj-mobile-navigation a")].map(e=>e.getAttribute("href"))')==['#/','#/short-drama','#/search','#/favorites','#/settings']
         shot('android-playback');checks.append('embedded short-drama route autoplays actual portrait HLS with mobile navigation')
+        if args.catalog_recovery:
+            device.visit('/settings')
+            device.rpc('RunSourceAction',dict(source_key=key,action='truncate',vod_id=''))
+            device.visit('/short-drama')
+            wait('document.body.innerText.includes("还没有可播放的短剧") && !document.body.innerText.includes("短剧加载失败") && !document.querySelector("video")')
+            shot('android-cleared-catalog')
+            checks.append('retired cached entries refresh to an empty catalog instead of catalog lookup failure')
+            device.rpc('ImportSourceVideos',key,result['videos'])
+            tap('.drama-placeholder .ui-btn');wait(ready)
+            checks.append('retry after importing catalog entries plays native HLS again')
+            device.visit('/settings')
+            device.rpc('DeleteSource',key);key=''
+            device.visit('/short-drama')
+            wait('document.body.innerText.includes("请先添加视频源并采集短剧内容。") && !document.body.innerText.includes("短剧加载失败") && !document.querySelector("video")')
+            shot('android-deleted-source')
+            checks.append('reentry refreshes removed sources and clears stale errors and media')
+            (OUT/'android-catalog-recovery-result.json').write_text(json.dumps(dict(checks=checks,scope='isolated acceptance APK; native Go/SQLite/CMS/HLS; targeted catalog recovery'),ensure_ascii=False,indent=2),encoding='utf-8')
+            print(json.dumps(checks,ensure_ascii=False))
+            return
         first=device.js('document.querySelector(".drama-title").textContent')
         device.js('document.querySelector("video").currentTime=document.querySelector("video").duration-.1;true')
         wait('document.querySelector(".drama-title").textContent!=='+json.dumps(first));wait(ready)
@@ -203,6 +223,7 @@ def main():
             device.visit('/sources')
             if key: device.rpc('DeleteSource',key)
             device.rpc('SetSetting','default_source_key',original['default'] or '')
+            device.store('source','s.loadSources(true)')
             device.rpc('SetSetting','application_mode',original['mode'] or 'video')
             device.rpc('SetAllowPrivateNetwork',original['private'])
             device.js('localStorage.'+('removeItem("vp_settings")' if original['settings'] is None else 'setItem("vp_settings",'+json.dumps(original['settings'])+')'))

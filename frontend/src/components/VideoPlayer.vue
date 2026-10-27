@@ -6,7 +6,7 @@ import PlayerAdReportControls from '../player/views/PlayerAdReportControls.vue'
 import PlayerQualityControls from '../player/views/PlayerQualityControls.vue'
 import PortraitPlayerControls from '../player/views/PortraitPlayerControls.vue'
 import Icon from './Icon.vue'
-import { MotionTransition } from './ui'
+import { Button, MotionTransition } from './ui'
 import { TsCache } from '../utils/tsCache'
 import { usePerfStore } from '../stores/perf'
 import { usePluginStore } from '../stores/plugins'
@@ -1052,7 +1052,18 @@ defineExpose({ togglePiP, toggleFullscreen, togglePlay, video:getVideoEl, canPer
       </div>
     </div>
 
-    <div v-if="errorMsg" class="player-error">
+    <div v-if="errorMsg && mobile" class="cczj-mobile-playback-error" role="alert" @click.stop @pointerdown.stop>
+      <div class="cczj-mobile-playback-error-body">
+        <p>{{ errorMsg }}</p>
+        <div class="cczj-mobile-playback-error-actions">
+          <Button size="sm" variant="secondary" @click.stop="retryPlayback">{{ t('player.retryPlayback') }}</Button>
+          <Button v-if="$slots.lines" size="sm" variant="secondary" @click.stop="mobileChrome?.toggle('lines');keepVisible()">{{ t('playLine.switch') }}</Button>
+          <Button v-else-if="portrait && hasNext" size="sm" variant="secondary" @click.stop="emit('next')">{{ t('player.next') }}</Button>
+          <Button v-if="showTitleBar" size="sm" variant="text" @click.stop="emit('back')">{{ t('common.back') }}</Button>
+        </div>
+      </div>
+    </div>
+    <div v-else-if="errorMsg" class="player-error">
       <span>⚠</span>
       <span>{{ errorMsg }}</span>
       <div v-if="showNetworkError || portrait" class="error-actions">
@@ -1086,7 +1097,7 @@ defineExpose({ togglePiP, toggleFullscreen, togglePlay, video:getVideoEl, canPer
     <PlayerEnhancementWarning v-if="showAiWarning" :open="showAiWarning" @cancel="cancelAiMode" @confirm="confirmAiMode" />
 
     <!-- 暂停图标：右下角大字，仅暂停时显示 -->
-    <button v-show="!portrait && prepared && !autoplayStarting && !playing && !loading && (!mobile || !mobileLocked)" type="button" class="pause-overlay" :aria-label="t('player.play')" @pointerdown.stop @click.stop="togglePlay">
+    <button v-show="!errorMsg && !portrait && prepared && !autoplayStarting && !playing && !loading && (!mobile || !mobileLocked)" type="button" class="pause-overlay" :aria-label="t('player.play')" @pointerdown.stop @click.stop="togglePlay">
       <img :src="pauseImg" class="pause-icon" alt="" />
     </button>
 

@@ -371,7 +371,7 @@ func TestDeclarativeCollectsNestedEnvelope(t *testing.T) {
 
 	// Detail decodes from the declared list path too.
 	withStubBody(t, `{"code":"0","data":{"message":"ok","list":[{"vid":"a1","name":"影片甲详情","pic":"https://c/1.jpg"}]}}`)
-	detail, err := FetchVideoDetailWithStrategy(context.Background(), strategy, strategy.BuildDetailUrl("a1"))
+	detail, err := FetchVideoDetailWithStrategy(context.Background(), strategy, "a1")
 	if err != nil {
 		t.Fatalf("detail: %v", err)
 	}

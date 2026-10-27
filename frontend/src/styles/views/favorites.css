@@ -8,7 +8,7 @@
 
 .page-header h2 {
   @apply cczj-gap-5;
-  font-size: 22px;
+  font-size: calc(22rem / 14);
   @apply cczj-font-bold;
   margin: 0 0 4px;
   @apply cczj-text-accent;

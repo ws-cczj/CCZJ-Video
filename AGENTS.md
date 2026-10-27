@@ -23,6 +23,8 @@
 
 ## 前端组件与 CCZJ 样式
 
+- 样式整改先查找成熟开源产品或官方组件的现成实现，注明参考来源，适配本项目已有控件与主题；不要凭空另造视觉样式或额外引入一套 UI 框架。移动端问题以 MuMu／真机实际显示为验收依据。
+
 - Vue 使用 Composition API、`<script setup lang="ts">`。交互控件先复用 `frontend/src/components/ui` 的 Button、Modal、Select、Segment、NumberField、Spinner、Empty、MotionTransition、MotionList；图标复用 `Icon.vue`。已有控件能表达时，不复制按钮的禁用／加载／焦点样式，不另写通用弹窗或下拉框。
 - `frontend/src/styles/cczj-utilities.css` 是工具类唯一来源，实际类名为小写 `cczj-*`。`cczj-mobile-*`、`cczj-novel-*` 等业务前缀不等于已经复用工具库；不要创建大小写别名或另一份工具类定义。
 - 工具库缺少适合复用的样式时，直接扩展现有工具库，并在真实调用处使用；不要因为缺类退回多处复制。新增类保持单一职责、稳定语义和现有命名／单位，先检查是否已有等价类。仅服务单个页面的特殊排版、配色或动画不必提取；不为凑复用而增加无消费者的工具类。
@@ -83,20 +85,20 @@
 
 ## 验证与协作
 
-保留其他开发者正在进行的改动，针对共享文件做小范围补丁。先确认已知失败基线，再为行为变化添加能捕获真实故障的测试；不要靠调大阈值、删除断言或强制类型转换制造全绿。
+保留其他开发者正在进行的改动，针对共享文件做小范围补丁。按用户要求，本项目不新增或扩写自动化测试代码、测试夹具和验收脚本；界面及行为验收由用户在 MuMu／真机上完成。未经用户再次明确要求，代理只做代码修改、必要的编译、类型检查、样式与文档静态检查及安装交付，不主动操作设备验收。已有测试保留，不以测试通过代替实际设备验收。
+
+禁止使用 `computer-use` 技能及窗口／屏幕坐标自动化操作本项目。设备操作统一通过已连接的 ADB 端口、WebView 调试端口或应用已有调试接口直接控制；不新增测试或验收脚本替代实际操作。
 
 常用验证：
 
 ```powershell
-go test ./app/apperror ./app/db ./app/media ./app/lifecycle
-cd frontend
-npm run test
-npm run build
+go build ./app/...
+npm --prefix frontend run build
 ```
 
-样式与文档变动先运行 `npm --prefix frontend run check:css-reuse`、`npm --prefix frontend run check:css-data`、`node scripts/check-document-links.mjs`。新页面或样式调整须检查桌面与移动；行为修复先确认能失败的复现，再验证原链路。
+样式与文档变动先运行 `npm --prefix frontend run check:css-reuse`、`npm --prefix frontend run check:css-data`、`node scripts/check-document-links.mjs`。交付时说明改动及尚待用户验收的行为；用户验收范围包含启动、空状态、已有数据、失败及恢复操作。
 
-完整验证在仓库根目录运行：
+已有自动化验证入口保留供用户明确要求时使用，不作为本项目默认验收流程：
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1

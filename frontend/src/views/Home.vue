@@ -4,6 +4,9 @@ defineOptions({ name: 'Home' })
 import { ref, computed, onMounted, onActivated, onDeactivated, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useModeViewState } from '../modes/useModeViewState'
 import { startupTask } from '../diagnostics/startup'
+import { useGeneration } from '../composables/useGeneration'
+import { useViewActivity } from '../composables/useViewActivity'
+import { createRequestScope } from '../api/requestScope'
 import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -196,6 +199,24 @@ const DOUBAN_CHART_CACHE_KEY = 'cczj_douban_chart_cache_v1'
 const DOUBAN_CHART_STALE_CEILING = 14 * 24 * 60 * 60 * 1000
 let chartLoadInFlight: Promise<any[]> | null = null
 let chartSignatureValue = ''
+const recommendationGeneration = useGeneration()
+const recommendationRequests = createRequestScope()
+const viewActive = useViewActivity()
+
+function clearRecommendations(): void {
+  recommendationGeneration.invalidate()
+  recommendationRequests.cancel()
+  chartLoadInFlight = null
+  chartSignatureValue = ''
+  carouselSlides.value = []
+  recommendGroups.value = []
+  recommendLoading.value = false
+}
+
+watch(viewActive, active => {
+  if (!active) clearRecommendations()
+  else if (!recommendLoading.value && !homePageWasDeactivated) void loadRecommendations()
+})
 
 function readChartCache(): { items: any[]; age: number } | null {
   const cached = readStorage<{ cachedAt: number; items: any[] } | null>(DOUBAN_CHART_CACHE_KEY, null)
@@ -239,11 +260,12 @@ function applyChart(chart: any[]): void {
 
 // 请求一趟热榜并写缓存。同一时刻只跑一趟；后台那一趟回来时也会自己 applyChart，
 // 所以调用方不必等它。
-function refreshChartCache(): Promise<any[]> {
+function refreshChartCache(generation: number): Promise<any[]> {
   if (chartLoadInFlight) return chartLoadInFlight
   chartLoadInFlight = (async () => {
     try {
-      const chart = (await DoubanChart()) as any[]
+      const chart = (await recommendationRequests.run(() => DoubanChart())) as any[]
+      if (!recommendationGeneration.isCurrent(generation)) return []
       if (Array.isArray(chart) && chart.length > 0) {
         writeStorage(DOUBAN_CHART_CACHE_KEY, { cachedAt: Date.now(), items: chart })
         applyChart(chart)
@@ -255,40 +277,40 @@ function refreshChartCache(): Promise<any[]> {
       console.warn('加载豆瓣热榜失败，使用旧缓存:', error)
       return readChartCache()?.items || []
     } finally {
-      chartLoadInFlight = null
+      if (recommendationGeneration.isCurrent(generation)) chartLoadInFlight = null
     }
   })()
   return chartLoadInFlight
 }
 
-async function loadDoubanChartData(): Promise<any[]> {
+async function loadDoubanChartData(generation: number): Promise<any[]> {
   const cached = readChartCache()
   if (cached) {
     // 先展示，再向 Go 取缓存；不能把旧数据收到的时间当成抓取时间再延长七天。
-    void refreshChartCache()
+    void refreshChartCache(generation)
     return cached.items
   }
-  return refreshChartCache()
+  return refreshChartCache(generation)
 }
 
 async function loadRecommendations(): Promise<void> {
-  if (!sourceStore.currentSourceKey) return
+  clearRecommendations()
+  const sourceKey = sourceStore.currentSourceKey
+  if (!sourceKey || !viewActive.value) return
+  const generation = recommendationGeneration.begin()
   recommendLoading.value = true
-  // 不清空 recommendGroups：这些是本地库查询，重跑一次通常几十毫秒。先把上一页留着，
-  // 结尾整体替换，首页就不会每次刷新都白一下。
-  // 冷启动时这一趟和下面的历史/推荐并行发，谁先回来谁先上屏。
-  const chartPromise = loadDoubanChartData()
-
   try {
+    let hasCatalog = false
     const usedIds = new Set<string>()
     const groups: RecommendGroup[] = []
 
     // 1) 继续观看
     let historyItems: any[] = []
     try {
-      const hist = await GetRecentHistory(30)
+      const hist = await recommendationRequests.run(() => GetRecentHistory(30))
       if (Array.isArray(hist)) historyItems = hist
     } catch { /* ignore */ }
+    if (!recommendationGeneration.isCurrent(generation)) return
 
     if (historyItems.length > 0) {
       const continueItems: ContinueItem[] = []
@@ -302,7 +324,7 @@ async function loadRecommendations(): Promise<void> {
           vod_pic: h.vod_pic || '',
           vod_remarks: h.vod_remarks || '',
           type_name: '',
-          source_key: h.source_key || sourceStore.currentSourceKey || '',
+          source_key: h.source_key || sourceKey,
           ep_num: h.ep_num,
           global_id: h.global_id,
         } as ContinueItem)
@@ -317,16 +339,17 @@ async function loadRecommendations(): Promise<void> {
       })
     }
 
-    // 2) 猜你喜欢（后端 GetRecommend 排除已出现的 id）
+    // 同时确认当前源有目录；历史去重在展示时处理，不能把仅有的目录项排除后误判为空。
     try {
-      const exclude = Array.from(usedIds)
-      const raw = (await GetRecommend({
-        source_key: sourceStore.currentSourceKey,
+      const raw = (await recommendationRequests.run(() => GetRecommend({
+        source_key: sourceKey,
         limit: 24,
-        exclude_ids: exclude,
+        exclude_ids: [],
         short_drama: false,
-      })) as unknown as Video[]
+      }))) as unknown as Video[]
+      if (!recommendationGeneration.isCurrent(generation)) return
       const liked = Array.isArray(raw) ? raw : []
+      hasCatalog = liked.length > 0
       if (liked.length > 0) {
         const items: Video[] = []
         const seen = new Set<string>()
@@ -348,8 +371,10 @@ async function loadRecommendations(): Promise<void> {
         }
       }
     } catch (e) {
+      if (!recommendationGeneration.isCurrent(generation)) return
       errorStore.fromError(t('errors.loadRecommendFailed'), e, 'home.recommendations')
     }
+    if (!recommendationGeneration.isCurrent(generation)) return
 
     // 3) 最新上线：从当前 videos 取前若干条，跳过已出现
     const allVideos: Video[] = Array.isArray(list.videos) ? list.videos : []
@@ -373,14 +398,17 @@ async function loadRecommendations(): Promise<void> {
 
     // 0) 热榜：从豆瓣热榜获取数据用于轮播图（立即展示，带匹配状态）
     try {
-      applyChart(await chartPromise)
+      if (hasCatalog && recommendationGeneration.isCurrent(generation)) {
+        const chart = await loadDoubanChartData(generation)
+        if (recommendationGeneration.isCurrent(generation)) applyChart(chart)
+      }
     } catch (e) {
       console.warn('加载豆瓣热榜失败:', e)
     }
 
-    recommendGroups.value = groups
+    if (recommendationGeneration.isCurrent(generation)) recommendGroups.value = groups
   } finally {
-    recommendLoading.value = false
+    if (recommendationGeneration.isCurrent(generation)) recommendLoading.value = false
   }
 }
 
@@ -498,6 +526,8 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  clearRecommendations()
+  if (applyTimer) clearTimeout(applyTimer)
 })
 
 // KeepAlive activates right after mounting as well; gating on a real
@@ -509,13 +539,18 @@ onActivated(async () => {
 })
 
 onDeactivated(() => {
+  clearRecommendations()
+  if (applyTimer) { clearTimeout(applyTimer); applyTimer = null }
   homePageWasDeactivated = true
   showContinueRemoval.value = false
   pendingContinueRemoval.value = null
 })
 
 watch(() => sourceStore.currentSourceKey, async (key: string) => {
-  if (!key || suppressSourceWatch) return
+  if (suppressSourceWatch) return
+  clearRecommendations()
+  list.reset()
+  if (!key || !viewActive.value) return
   resetFilters()
   checkpointSource.value=key
   await videoStore.loadTypes(key)
@@ -732,7 +767,7 @@ const { editing: editingContinue, finish: finishContinueEditing, vHoldToEdit } =
 
 .filter-head h3 {
   margin: 0;
-  font-size: 17px;
+  font-size: calc(17rem / 14);
 }
 
 /* chip 行 */
@@ -760,7 +795,7 @@ const { editing: editingContinue, finish: finishContinueEditing, vHoldToEdit } =
 }
 
 .filter-status .highlight {
-  font-size: 15px;
+  font-size: calc(15rem / 14);
 }
 
 @media (max-width: 720px) {

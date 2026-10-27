@@ -532,34 +532,34 @@
    ============================================================ */
 /* 字体大小 */
 .cczj-text-xs {
-  font-size: 10px;
+  font-size: calc(10rem / 14);
 }
 .cczj-text-sm {
-  font-size: 12px;
+  font-size: calc(12rem / 14);
 }
 .cczj-text-base {
-  font-size: 14px;
+  font-size: calc(14rem / 14);
 }
 .cczj-text-md {
-  font-size: 14px;
+  font-size: calc(14rem / 14);
 }
 .cczj-text-lg {
-  font-size: 16px;
+  font-size: calc(16rem / 14);
 }
 .cczj-text-xl {
-  font-size: 18px;
+  font-size: calc(18rem / 14);
 }
 .cczj-text-2xl {
-  font-size: 20px;
+  font-size: calc(20rem / 14);
 }
 .cczj-text-11 {
-  font-size: 11px;
+  font-size: calc(11rem / 14);
 }
 .cczj-text-12 {
-  font-size: 12px;
+  font-size: calc(12rem / 14);
 }
 .cczj-text-13 {
-  font-size: 13px;
+  font-size: calc(13rem / 14);
 }
 
 /* 字重 */
@@ -977,7 +977,7 @@
 
 /* 字体 */
 .cczj-text-4xl {
-  font-size: 36px;
+  font-size: calc(36rem / 14);
   line-height: 1.15;
 }
 

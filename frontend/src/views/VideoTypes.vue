@@ -6,9 +6,11 @@ import { useErrorStore } from '../stores/error'
 import { useVideoStore } from '../stores/video'
 import Icon from '../components/Icon.vue'
 import { Button, Badge, Spinner, Empty } from '../components/ui'
+import { presentationProfile } from '../platform/presentation'
 
 const errorStore = useErrorStore()
 const videoStore = useVideoStore()
+const mobile = presentationProfile().ui === 'mobile'
 
 const types = ref<any[]>([])
 const loading = ref(false)
@@ -88,10 +90,11 @@ onMounted(async () => {
 
 <template>
   <div class="video-types-page">
+    <header v-if="!mobile"><h1 class="page-title cczj-text-2xl cczj-font-bold">{{ tr('videoTypes.title') }}</h1></header>
     <!-- 状态栏 -->
     <div class="status-card">
       <div class="status-header">
-        <h3 class="status-title">{{ tr('videoTypes.title') }}</h3>
+        <h3 class="status-title">{{ tr('videoTypes.collectionStatus') }}</h3>
         <div class="status-actions">
           <Button variant="secondary" size="sm" @click="loadTypes">
             <Icon name="refresh" :size="12" /> {{ tr('common.refresh') }}
@@ -165,6 +168,7 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.page-title { margin: 0; }
 .video-types-page {
   @apply cczj-flex cczj-flex-col cczj-gap-8;
 }

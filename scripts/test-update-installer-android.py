@@ -22,12 +22,49 @@ COMPILED = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(COMPILED)
 
 
+def check_presentation(args):
+    """Native rendering check with a substituted update event, no download/install."""
+    result_path = args.output/'presentation-result.json'
+    result_path.unlink(missing_ok=True)
+    notes = '## ['+(ROOT/'CHANGELOG.md').read_text(encoding='utf-8').split('## [', 2)[1]
+    info = dict(has_update=True, current_version='2.4.5', latest_version='99.0.'+str(int(time.time())), release_name='Markdown presentation acceptance', release_notes=notes+'\n\n<script>window.__unsafeRelease=true</script>', download_url='', asset_name='', asset_size=0, published_at='', history=[dict(version='2.4.4',desc='### History\n\n- **Markdown** and `code`')])
+    with AndroidWebView(args.device, application_id=PACKAGE) as view:
+        original = view.evaluate('location.href')
+        def wait(expression):
+            deadline = time.monotonic()+15
+            while not view.evaluate(expression):
+                if time.monotonic() > deadline: raise AssertionError(expression)
+                time.sleep(.1)
+        try:
+            wait('!!document.querySelector("#app")?.__vue_app__?.config.globalProperties.$pinia?._s.get("applicationMode")?.loaded')
+            wait('!document.querySelector(".splash-wrap")')
+            view.evaluate('window._wails.dispatchWailsEvent('+json.dumps(dict(name='update:available',data=info))+')')
+            wait('!!document.querySelector(".update-notes-body h2") && !!document.querySelector(".update-history-body strong")')
+            assert view.evaluate('document.querySelectorAll(".update-notes-body li").length') > 2
+            assert view.evaluate('document.querySelector(".update-history-body code").textContent') == 'code'
+            assert not view.evaluate('!!window.__unsafeRelease || !!document.querySelector(".update-notes-body script")')
+            assert view.evaluate('(()=>{const e=document.querySelector(".update-notes-body");return e.scrollWidth<=e.clientWidth+1})()')
+            wait('getComputedStyle(document.querySelector(".ui-modal-overlay")).opacity==="1" && getComputedStyle(document.querySelector(".ui-modal")).opacity==="1" && !document.querySelector(".ui-modal-overlay.cczj-motion-fade-enter-active,.ui-modal.cczj-motion-dialog-enter-active")')
+            view.evaluate('(async()=>{await Promise.all(document.querySelector(".ui-modal-overlay").getAnimations({subtree:true}).map(a=>a.finished.catch(()=>{})));await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));return true})()')
+            view.screenshot(args.output/'native-markdown.png')
+            view.evaluate('document.querySelector(".ui-modal__close").click()')
+            wait('!document.querySelector("[role=dialog]")')
+            result_path.write_text(json.dumps(dict(passed=True,scope='native acceptance WebView; real CHANGELOG rendered via substituted update event; no download/install',checks=['release headings and lists','history emphasis and code','raw HTML remains text','narrow layout','close button']),indent=2),encoding='utf-8')
+            print('Native update Markdown presentation passed')
+        finally:
+            view.evaluate('location.reload()' if view.evaluate('location.href') == original else 'location.replace('+json.dumps(original)+')')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--device', required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--presentation-only', action='store_true', help='Render current CHANGELOG using an update-event substitute; skip APK handoff')
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
+    if args.presentation_only:
+        check_presentation(args)
+        return
     adb = ['adb', '-s', args.device]
 
     def native(*command):

@@ -241,7 +241,7 @@
 }
 
 .show-more-arrow {
-  font-size: 9px;
+  font-size: calc(9rem / 14);
   @apply cczj-opacity-70;
 }
 

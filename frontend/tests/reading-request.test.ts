@@ -28,3 +28,14 @@ it('never starts follow-up work after the page cancels the first binding', async
   expect(firstCancelled).toHaveBeenCalledOnce()
   expect(next).not.toHaveBeenCalled()
 })
+
+it('keeps cancellation when an uncancellable binding reports a late failure', async () => {
+  let rejectBinding!: (reason: unknown) => void
+  const binding = new Promise<string>((_resolve, reject) => { rejectBinding = reject })
+  const result = readingRequest(request => request(binding))
+  const rejected = expect(result).rejects.toMatchObject({name:'CancelError',cause:'view left'})
+  await result.cancel('view left')
+  rejectBinding({code:'UNAVAILABLE',message:'late source failure'})
+  await rejected
+  await new Promise(resolve => setTimeout(resolve, 0))
+})

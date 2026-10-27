@@ -12,7 +12,7 @@ func (s *Store) loadActive(ctx context.Context, now time.Time) (map[string]time.
 	if err != nil {
 		return nil, err
 	}
-	rows, err := database.QueryContext(ctx, `SELECT request_key,next_at FROM network_request_limits WHERE next_at>? ORDER BY CASE WHEN request_key LIKE 'host:%' THEN 0 ELSE 1 END,next_at LIMIT ?`, now.UnixMilli(), maxRequestKeys+512)
+	rows, err := database.QueryContext(ctx, `SELECT request_key,next_at FROM network_request_limits WHERE next_at>? AND (request_key LIKE 'probe:%' OR request_key LIKE 'host:%') ORDER BY CASE WHEN request_key LIKE 'host:%' THEN 0 ELSE 1 END,next_at LIMIT ?`, now.UnixMilli(), maxRequestKeys+512)
 	if err != nil {
 		return nil, err
 	}

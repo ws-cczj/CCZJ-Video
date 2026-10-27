@@ -23,7 +23,7 @@ html[data-cczj-platform="mobile"] .app-shell { padding: 0; @apply cczj-h-full; }
 .cczj-mobile-shell ::-webkit-scrollbar, .cczj-mobile-content::-webkit-scrollbar { @apply cczj-hidden; width: 0; height: 0; }
 .cczj-mobile-header { @apply cczj-relative; z-index: 1; @apply cczj-flex-shrink-0 cczj-flex cczj-items-center cczj-gap-4; min-height: 52px; padding: 0 8px 0 12px; background: transparent; }
 .cczj-mobile-heading { @apply cczj-flex-1 cczj-min-w-0; }
-.cczj-mobile-brand { @apply cczj-flex cczj-items-center cczj-gap-4; font-size: 15px; letter-spacing: .01em; }
+.cczj-mobile-brand { @apply cczj-flex cczj-items-center cczj-gap-4; font-size: calc(15rem / 14); letter-spacing: .01em; }
 .cczj-mobile-brand > svg { color: var(--accent-dim); }
 .cczj-mobile-heading h1 { margin: 0; @apply cczj-text-lg; line-height: 1.4; font-weight: 650; @apply cczj-whitespace-nowrap cczj-overflow-hidden; text-overflow: ellipsis; }
 .cczj-mobile-icon-button { @apply cczj-inline-flex cczj-justify-center cczj-items-center cczj-flex-shrink-0; min-width: 44px; min-height: 44px; border: 0; border-radius: 10px; background: transparent; color: var(--cczj-mobile-ink); @apply cczj-no-underline; }
@@ -39,7 +39,7 @@ html[data-cczj-platform="mobile"] .app-shell { padding: 0; @apply cczj-h-full; }
 .cczj-mobile-shell :is(button, a, input, textarea, select):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .cczj-mobile-intro { margin: 0 0 12px; @apply cczj-text-secondary cczj-text-sm; line-height: 1.6; }
 .cczj-mobile-manage { @apply cczj-min-w-0 cczj-pb-4; }
-.cczj-mobile-section-title { font-size: 15px; @apply cczj-font-bold; margin: 24px 0 12px; }
+.cczj-mobile-section-title { font-size: calc(15rem / 14); @apply cczj-font-bold; margin: 24px 0 12px; }
 .cczj-mobile-settings-entry { @apply cczj-flex cczj-gap-6 cczj-items-center cczj-p-7; border-radius: 14px; background: var(--cczj-mobile-surface); border: 1px solid var(--cczj-mobile-line); @apply cczj-no-underline; color: inherit; }
 .cczj-mobile-settings-entry > div { @apply cczj-min-w-0 cczj-flex-1; }
 .cczj-mobile-settings-entry h2 { margin: 0 0 4px; @apply cczj-text-lg; }
@@ -65,14 +65,11 @@ html[data-cczj-platform="mobile"] :is(.ui-modal,.modal,.modal-container,.confirm
 html[data-cczj-platform="mobile"] :is(.ui-modal-overlay,.modal-mask) { @apply cczj-p-6; }
 html[data-cczj-platform="mobile"] .ui-modal { border-radius: 16px; box-shadow: 0 12px 36px #0003; }
 html[data-cczj-platform="mobile"] .ui-modal__header { padding: 16px 20px; }
-html[data-cczj-platform="mobile"] .ui-modal__title { font-size: 18px; }
-html[data-cczj-platform="mobile"] .ui-modal__body { padding: 20px; font-size: 14px; line-height: 1.65; }
+html[data-cczj-platform="mobile"] .ui-modal__title { font-size: calc(18rem / 14); }
+html[data-cczj-platform="mobile"] .ui-modal__body { padding: 20px; font-size: calc(14rem / 14); line-height: 1.65; }
 html[data-cczj-platform="mobile"] .ui-modal__footer { padding: 12px 20px; @apply cczj-flex-wrap; }
-html[data-cczj-platform="mobile"] .ui-modal .ui-btn { min-height: 44px; border-radius: 10px; box-shadow: none; font-size: 14px; }
+html[data-cczj-platform="mobile"] .ui-modal .ui-btn { min-height: 44px; border-radius: 10px; box-shadow: none; font-size: calc(14rem / 14); }
 html[data-cczj-platform="mobile"] .bg-download-indicator { left: 16px; right: 16px; bottom: 76px; border-radius: 12px; box-shadow: 0 4px 16px #0002; }
 html[data-cczj-platform="mobile"] .bg-download-icon { border-radius: 8px; }
 html[data-cczj-platform="mobile"] :is(.update-icon,.update-done-icon,.update-fail-icon,.update-loading-icon) { width: 48px; height: 48px; border-radius: 12px; box-shadow: none; }
 html[data-cczj-platform="mobile"] .select-panel { background: var(--cczj-mobile-surface); max-width: calc(100vw - 24px); }
-
-/* One continuous theme-aware wash behind the search entry and first poster. */
-.cczj-mobile-home::after { content: ''; @apply cczj-absolute; z-index: -1; inset: 0 0 auto; height: clamp(160px,32vh,240px); background: linear-gradient(180deg,var(--cczj-mobile-chrome) 0%,var(--cczj-mobile-chrome) 12%,transparent 100%); @apply cczj-pointer-events-none; }

@@ -13,7 +13,10 @@ export function applicationRequest<T>(work: (request: <R>(pending: Pending<R>) =
   function check(): void { if (cancelled) throw new CancelError('Request cancelled', { cause: cancellationCause }) }
   // The runtime recognises this exact cancellation type and cause when an
   // already-cancelled composition receives its underlying rejection later.
-  function failure(error:unknown):unknown { return error instanceof CancelError ? error : toApiFailure(error) }
+  function failure(error:unknown):unknown {
+    if (cancelled) return new CancelError('Request cancelled', { cause: cancellationCause })
+    return error instanceof CancelError ? error : toApiFailure(error)
+  }
   async function request<R>(pending: Pending<R>): Promise<R> {
     if (cancelled) { cancel(pending); check() }
     active.add(pending)

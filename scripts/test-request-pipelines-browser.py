@@ -16,7 +16,7 @@ def main():
     parser.add_argument('--channel', default='msedge')
     parser.add_argument('--port', type=int, default=9321)
     args = parser.parse_args()
-    output = ROOT/'reports/request-pipelines-2026-10-20'
+    output = ROOT/'dist/audit/request-pipelines'
     output.mkdir(parents=True, exist_ok=True)
     origin = f'http://127.0.0.1:{args.port}'
     server = subprocess.Popen(['node','node_modules/vite/bin/vite.js','--host','127.0.0.1','--port',str(args.port),'--strictPort'], cwd=ROOT/'frontend', stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
@@ -35,6 +35,10 @@ def main():
           if(method==='GetSetting'&&args[0]==='pipeline-burst')return new CancellablePromise(resolve=>window.__releaseBurst=resolve);
           if(method==='SearchSourceRequest')return new CancellablePromise(resolve=>{(window.__searches ||= []).push({resolve,args})},()=>{window.__searchCancelled=(window.__searchCancelled||0)+1});
           if(method==='SearchVideos'&&window.__holdLocalSearch)return new CancellablePromise(resolve=>{(window.__localQueries ||= []).push({resolve,args})},()=>{window.__localCancelled=(window.__localCancelled||0)+1});
+          if(method==='GetVideoList')return CancellablePromise.resolve({videos:[],total:0,next_cursor:''});
+          if(method==='GetYearsAndAreas')return CancellablePromise.resolve({years:[],areas:[]});
+          if(method==='GetRecommend')return CancellablePromise.resolve(window.__homeCatalog?[{vod_id:'home-film',global_id:1,vod_name:'本地影片',type_name:'电影'}]:[]);
+          if(method==='DoubanChart')return new CancellablePromise(resolve=>{(window.__charts ||= []).push(resolve)},()=>{window.__chartCancelled=(window.__chartCancelled||0)+1});
           if(method==='GetSetting'||method==='GetAppVersion')return CancellablePromise.resolve('');
           return CancellablePromise.resolve([]);
         }
@@ -101,9 +105,43 @@ def main():
                 page.wait_for_function('window.__localQueries.length===2')
                 page.evaluate("window.__localQueries[1].resolve({total:0,videos:[],local_videos:[]})")
                 page.wait_for_function("window.pipelineTest.snapshot().find(row=>row.pipeline==='rpc.SearchVideos')?.active===0")
+                for viewport in [{'width':1280,'height':800},{'width':390,'height':844}]:
+                    page.set_viewport_size(viewport)
+                    page.evaluate("""() => {
+                      window.pipelineTest.state.active=false;window.__homeCatalog=false;
+                      window.pipelineTest.sources.sources=[];window.pipelineTest.sources.currentSourceKey='';
+                      window.pipelineTest.state.view='home';window.pipelineTest.state.active=true;
+                    }""")
+                    page.locator('.home').wait_for(state='visible')
+                    page.wait_for_load_state('networkidle')
+                    chart_count=page.evaluate('(window.__charts||[]).length')
+                    assert page.locator('.carousel').count()==0, 'source-free Home displayed a cached chart'
+                    page.evaluate("""() => {
+                      window.pipelineTest.sources.sources=[{source_key:'empty_home',name:'空目录源',api_url:'https://example.invalid',enabled:1}];
+                      window.pipelineTest.sources.currentSourceKey='empty_home';
+                    }""")
+                    page.wait_for_load_state('networkidle')
+                    assert page.evaluate('(window.__charts||[]).length')==chart_count, 'empty catalog fetched a chart'
+                    page.evaluate('window.pipelineTest.state.active=false')
+                    page.locator('.home').wait_for(state='hidden')
+                    page.evaluate('window.__homeCatalog=true;window.pipelineTest.state.active=true')
+                    page.wait_for_function('(count)=>(window.__charts||[]).length===count+1',arg=chart_count)
+                    page.evaluate("window.__charts.at(-1)([{subject_id:'100',title:'可播放榜单',rating:'8',status:'matched',source_key:'empty_home',vod_id:'home-film'}])")
+                    page.locator('.carousel').wait_for(state='visible')
+                    page.screenshot(path=str(output/f"home-chart-{viewport['width']}.png"),animations='disabled')
+                    page.evaluate('window.pipelineTest.state.active=false')
+                    page.locator('.home').wait_for(state='hidden')
+                    page.evaluate('window.pipelineTest.state.active=true')
+                    page.wait_for_function('(count)=>(window.__charts||[]).length===count+2',arg=chart_count)
+                    cancelled=page.evaluate('window.__chartCancelled||0')
+                    page.evaluate("window.pipelineTest.sources.sources=[];window.pipelineTest.sources.currentSourceKey=''")
+                    page.wait_for_function('(count)=>(window.__chartCancelled||0)>count',arg=cancelled)
+                    page.evaluate("window.__charts.at(-1)([{subject_id:'late',title:'迟到榜单',status:'matched'}])")
+                    page.wait_for_load_state('networkidle')
+                    assert page.locator('.carousel').count()==0, 'late chart repopulated Home after last source removal'
                 stats = page.evaluate('window.pipelineTest.snapshot()')
                 assert not errors, errors
-                result = {'passed':True, 'checks':['cached view cancellation','no late timeline read','reactivation','64 callers share one IPC','source search cancels superseded request','progress filters request identity','source search resumes after activation','video search cancellation and resumption'], 'pipelines':stats, 'pageErrors':errors}
+                result = {'passed':True, 'checks':['cached view cancellation','no late timeline read','reactivation','64 callers share one IPC','source search cancels superseded request','progress filters request identity','source search resumes after activation','video search cancellation and resumption','desktop/mobile Home skips empty sources and catalogs','Home fetches chart after catalog appears','last source removal cancels chart and discards late results'], 'pipelines':stats, 'pageErrors':errors}
                 (output/'browser-result.json').write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
                 page.screenshot(path=str(output/'sources-pipeline-browser.png'))
                 print('Pipeline browser checks passed: cancellation, reactivation, no late I/O, 64:1 deduplication.')

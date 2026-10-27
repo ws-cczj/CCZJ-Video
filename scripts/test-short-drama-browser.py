@@ -32,9 +32,10 @@ def main():
     media = 'data:video/webm;base64,' + base64.b64encode(clip.read_bytes()).decode()
     bindings = (ROOT / 'frontend/bindings/cczjVideo/app/service/app.js').read_text(encoding='utf-8')
     names = re.findall(r'export function (\w+)\(', bindings)
-    special = {'GetRecommend', 'GetVideoDetail', 'GetVideoList', 'GetSetting', 'SetSetting', 'SaveWatchHistory', 'GetHistoryPosition', 'IsFavorite', 'AddFavorite', 'RemoveFavorite'}
+    special = {'GetAllSources', 'GetRecommend', 'GetVideoDetail', 'GetVideoList', 'GetSetting', 'SetSetting', 'SaveWatchHistory', 'GetHistoryPosition', 'IsFavorite', 'AddFavorite', 'RemoveFavorite'}
     mock = '\n'.join(f'export async function {name}() {{return {json.dumps([] if name in ("ListPlugins", "RescanPlugins", "GetSourceStats", "GetAllSources") else False if name.startswith("WindowIs") else "")};}}' for name in names if name not in special)
     mock += '''
+      export async function GetAllSources() { return window.__sources ?? [{source_key:'fixture',name:'Fixture',api_url:'https://example.invalid/',enabled:1},{source_key:'alternate',name:'Alternate',api_url:'https://example.invalid/alternate',enabled:1}]; }
       export async function GetSetting(key) { return window.__settings?.[key] || ''; }
       export async function SetSetting(key, value) { (window.__settings ||= {})[key] = value; }
       export async function SaveWatchHistory(req) { (window.__history ||= []).push(req); }
@@ -61,6 +62,7 @@ def main():
       }
       export async function GetVideoDetail(req) {
         (window.__details ||= []).push(req);
+        if(window.__missingDetail) throw {code:'NOT_FOUND',message:'catalog lookup'};
         return {video:{vod_id:req.vod_id,global_id:Number(req.vod_id),vod_name:window.__titles[Number(req.vod_id)-1],vod_content:'一场意外，让她回到了故事的起点。面对熟悉又陌生的选择，她决定亲手改写结局。'.repeat(8)},episodes:Array.from({length:80},(_,i)=>({ep_num:i+1,ep_name:i===79?'第80集 · 所有未说出口的话终于有了答案':'第'+(i+1)+'集',ep_url:window.__media}))};
       }
     '''
@@ -486,10 +488,29 @@ def main():
                         page.get_by_role('button',name='剧场',exact=True).click()
                         inspect_theatre()
                         page.wait_for_function(ready)
+                    # A cached feed can outlive its catalog and source. Reentry
+                    # must refresh the catalog or show the true no-source state.
+                    page.evaluate('window.__missingDetail=true;window.__empty=true;window.dramaTest.router.push("/settings")')
+                    page.wait_for_function('window.dramaTest.router.currentRoute.value.path==="/settings"')
+                    page.evaluate('window.dramaTest.router.push('+json.dumps('/short-drama' if mobile else '/short-drama?view=feed')+')')
+                    expect(page.locator('.drama-placeholder').get_by_text('还没有可播放的短剧',exact=True)).to_be_visible()
+                    expect(page.get_by_text('catalog lookup',exact=True)).to_have_count(0)
+                    page.evaluate('window.__missingDetail=false;window.__empty=false')
+                    page.get_by_role('button',name='重试',exact=True).click();page.wait_for_function(ready)
+                    page.evaluate('window.__recommendError=true')
+                    page.get_by_role('button',name='换一批',exact=True).click()
+                    expect(page.get_by_text('fixture outage',exact=True)).to_be_visible()
+                    page.evaluate('window.__sources=[];window.dramaTest.router.push("/settings")')
+                    page.wait_for_function('window.dramaTest.router.currentRoute.value.path==="/settings"')
+                    page.evaluate('window.dramaTest.router.push('+json.dumps('/short-drama' if mobile else '/short-drama?view=feed')+')')
+                    expect(page.locator('.drama-placeholder').get_by_text('请先添加视频源并采集短剧内容。',exact=True)).to_be_visible()
+                    expect(page.get_by_text('fixture outage',exact=True)).to_have_count(0)
+                    expect(page.locator('video')).to_have_count(0)
                     assert not errors, errors
                     results.append({'profile':label,'checks':['portrait autoplay overrides preference','five short dramas','controls remain inside video frame','thin timeline','no landscape controls','long press and rate restoration','drag seek commits on release','80 episodes in ranges, reverse order and locate current','single drawer heading and readable wrapped episode titles','recommendation completion advances to another title','episode selection enters series and stops at its final episode','direct series uses explicit source without recommendations','series gesture and automatic playback advance episodes','title entry and return to recommendations','synopsis and keyboard dismissal','title switch disposal','route leave and reentry','refresh failure and retry','empty feed recovery']+(['320px Chinese and English layout','cancelled tab preview does not start media'] if mobile else ['900/1024/1280px video geometry','wheel burst switches once','keyboard navigation and play/pause'])})
                     if not mobile:
                         results[-1]['checks'].extend(['desktop theatre theme survives return with teleported controls','existing desktop bar provides play, time jump, episode picker, picture in picture and fullscreen','fullscreen contains the complete portrait scene','favorite folder saves the playing source identity'])
+                    results[-1]['checks'].extend(['stale catalog refresh on reentry','removed source clears old failure and media'])
                     context.close()
             finally:
                 browser.close()

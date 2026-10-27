@@ -62,7 +62,7 @@ const (
 	// 允许的最小间隔同量级，界面上连点不会变成对源站的压力。
 	//
 	// 它同时是界面点阵一个圆点覆盖的时间窗：一个点 = 一次探测机会。
-	sourceProbeMinInterval = 5 * time.Minute
+	sourceProbeMinInterval = netpolicy.ProbeInterval
 
 	// sourceProbeSlotCount 是探测点阵画多少个点。10 个点铺开最近 50 分钟，
 	// 够回答"这个源是刚坏还是这半小时一直不通"，也还塞得进卡片头部。
@@ -787,6 +787,7 @@ func sourceProbeURL(source *model.Source) string {
 }
 
 func probeSource(ctx context.Context, source *model.Source) SourceProbe {
+	ctx = netpolicy.WithProbeCooldown(netpolicy.WithScope(ctx, source.SourceKey))
 	ctx = operation.WithFields(ctx, applog.Fields{"source_key": source.SourceKey, "capability": "list", "source_config_sha256": applog.Fingerprint([]byte(source.ApiUrl + "\x00" + source.StrategyConfig + "\x00" + source.AdvConfigRaw))})
 	probe := SourceProbe{SourceKey: source.SourceKey, Name: source.Name,
 		Enabled: source.Enabled == 1, ProbeTimeUnix: time.Now().Unix()}

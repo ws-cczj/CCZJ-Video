@@ -12,7 +12,6 @@ import ConfirmModal from './components/ConfirmModal.vue'
 import { MotionTransition } from './components/ui'
 import { useErrorStore } from './stores/error'
 import { useThemeStore } from './stores/theme'
-import { GetSetting } from './api/app'
 import UpdateModal from './components/UpdateModal.vue'
 import LegacyDataPrompt from './components/LegacyDataPrompt.vue'
 import SchemaNewerPrompt from './components/SchemaNewerPrompt.vue'
@@ -67,34 +66,8 @@ theme.apply()
 let winErrorHandler: ((e: ErrorEvent) => void) | null = null
 let rejectHandler: ((e: PromiseRejectionEvent) => void) | null = null
 
-async function safeGetSetting(key: string, fallback: string): Promise<string> {
-  try { const v = await GetSetting(key); return v || fallback } catch { return fallback }
-}
-
 onMounted(async () => {
   if (!theme.loaded) await theme.load()
-
-  // 加载字体大小设置
-  try {
-    const fsk = await safeGetSetting('font_size_key', 'md')
-    const fontSizePresetMap: Record<string, number> = {
-      xs: 12, sm: 13, md: 14, lg: 16, xl: 18, xxl: 20,
-    }
-    const px = fontSizePresetMap[fsk] || 14
-    document.documentElement.style.fontSize = px + 'px'
-  } catch { /* ignore */ }
-  // 加载字体设置
-  try {
-    const ff = await safeGetSetting('font_family', '')
-    if (ff) {
-      document.documentElement.style.fontFamily = ff
-    } else {
-      // 默认字体（与之前 CSS 中硬编码的保持一致）
-      document.documentElement.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif'
-    }
-  } catch { /* ignore */ }
-
-
   // 把未捕获的 JS 错误 / Promise 拒绝都记录到日志与弹窗
   winErrorHandler = (event: ErrorEvent) => {
     if (event.error) {
@@ -247,11 +220,11 @@ onUnmounted(() => {
   --spacing-xl: 24px;
 
   /* 字体大小 */
-  --font-xs: 11px;
-  --font-sm: 12px;
-  --font: 13px;
-  --font-md: 14px;
-  --font-lg: 16px;
+  --font-xs: calc(11rem / 14);
+  --font-sm: calc(12rem / 14);
+  --font: calc(13rem / 14);
+  --font-md: calc(14rem / 14);
+  --font-lg: calc(16rem / 14);
 
   /* z-index 层级 */
   --z-sidebar: 100;
@@ -363,28 +336,6 @@ input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-
-/* ====== 采集进度条 ====== */
-.collect-overlay {
-  @apply cczj-fixed cczj-bottom-0 cczj-left-0 cczj-right-0 cczj-z-999;
-  background: var(--bg-card);
-  border-top: 1px solid var(--accent);
-  padding: 10px 24px;
-  transition: all 0.3s;
-}
-.collect-overlay.done { border-top-color: var(--success); }
-.collect-bar-inner { max-width: 1200px; margin: 0 auto; }
-.collect-header { @apply cczj-flex cczj-justify-between cczj-items-center cczj-mb-3; }
-.collect-source { @apply cczj-text-13 cczj-font-semibold cczj-text-primary; }
-.collect-status { @apply cczj-text-11 cczj-px-5-py-2; border-radius: 10px; @apply cczj-font-medium; }
-.collect-status.running { background: var(--accent-alpha-20); @apply cczj-text-accent; }
-.collect-status.success { background: var(--success-alpha-10); @apply cczj-text-success; }
-.collect-status.error { @apply cczj-bg-danger-alpha cczj-text-danger; }
-.progress-track { height: 4px; @apply cczj-bg-border cczj-rounded-xs cczj-overflow-hidden cczj-mb-3; }
-.progress-fill { @apply cczj-h-full; background: var(--accent); @apply cczj-rounded-xs; transition: width 0.3s; }
-.collect-overlay.done .progress-fill { background: var(--success); }
-.collect-meta { @apply cczj-flex cczj-justify-between cczj-text-sm cczj-text-muted; }
-.collect-last-log { @apply cczj-overflow-hidden; text-overflow: ellipsis; @apply cczj-whitespace-nowrap; max-width: 60%; }
 
 /* ====== 右下角下载悬浮球 ====== */
 .download-fab {

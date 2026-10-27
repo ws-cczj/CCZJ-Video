@@ -142,7 +142,7 @@
 .recommend-header h3 {
   @apply cczj-inline-flex cczj-items-center cczj-gap-4;
   margin: 0;
-  font-size: 15px;
+  font-size: calc(15rem / 14);
   @apply cczj-font-semibold cczj-text-primary;
 }
 .recommend-loading {

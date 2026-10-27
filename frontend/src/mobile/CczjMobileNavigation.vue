@@ -30,7 +30,7 @@ function active(path: string): boolean {
 </template>
 
 <style scoped>
-.cczj-mobile-navigation a { font-weight: 500; }
+.cczj-mobile-navigation a { font-weight: 500; @apply cczj-justify-end; min-height:68px; }
 .cczj-mobile-navigation { @apply cczj-relative; z-index:2; isolation:isolate; background:transparent; backdrop-filter:none; -webkit-backdrop-filter:none; }
 .cczj-mobile-navigation::before {
   content:''; @apply cczj-absolute; inset:0; z-index:-1;
@@ -40,10 +40,10 @@ function active(path: string): boolean {
 .cczj-mobile-navigation a .cczj-mobile-navigation-icon { @apply cczj-transition-none; }
 .cczj-mobile-navigation a:active .cczj-mobile-navigation-icon { transform: none; }
 .cczj-mobile-navigation-featured .cczj-mobile-navigation-icon {
-  width:48px; height:48px; margin-top:-20px; margin-bottom:0;
+  width:48px; height:48px; margin:0;
   border-radius:50%; background:var(--btn-solid); color:var(--btn-solid-text);
   box-shadow:0 3px 10px #0002;
 }
 .cczj-mobile-navigation a.cczj-mobile-navigation-featured { gap:4px; }
-.cczj-mobile-navigation-featured .cczj-mobile-navigation-icon :deep(svg) { color: inherit; }
+.cczj-mobile-navigation-featured .cczj-mobile-navigation-icon :deep(svg) { color:inherit; }
 </style>

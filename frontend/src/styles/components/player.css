@@ -634,7 +634,7 @@
   @apply cczj-rounded;
   background: rgba(0, 0, 0, 0.5);
   @apply cczj-text-white;
-  font-size: 15px;
+  font-size: calc(15rem / 14);
   line-height: 1.45;
   @apply cczj-text-center;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
@@ -643,7 +643,7 @@
 }
 
 .player-wrapper.fullscreen .vp-subtitle span {
-  font-size: 26px;
+  font-size: calc(26rem / 14);
 }
 
 .resume-bili {

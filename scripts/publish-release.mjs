@@ -78,7 +78,7 @@ export async function publishRelease(options, { run = execute, log = console.log
   // Verification happens before an automatic commit, so a failed check leaves
   // edits reviewable without manufacturing a release commit.
   log(`Verifying ${tag}...`)
-  command('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'scripts/verify.ps1'], { stream: true, timeout: 1800000 })
+  command('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'scripts/verify.ps1', '-StaticOnly'], { stream: true, timeout: 1800000 })
   if (dirty()) {
     command('git', ['add', '--all'])
     command('git', ['commit', '-m', `Release ${tag}`], { stream: true })

@@ -22,7 +22,7 @@
 
 .ai-warning-header {
   @apply cczj-flex cczj-items-center cczj-gap-5;
-  font-size: 17px;
+  font-size: calc(17rem / 14);
   @apply cczj-font-bold cczj-mb-8;
   color: #ffa940;
 }

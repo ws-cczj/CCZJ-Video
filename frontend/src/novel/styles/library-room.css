@@ -15,7 +15,7 @@
 }
 .cczj-novel-shell.library-room.reading-shell .reading-header { background: var(--novel-canvas); min-height: 76px; }
 .cczj-novel-shell.library-room.reading-shell .reading-brand-icon { border-radius: 50%; background: transparent; border: 1px solid var(--novel-line); }
-.cczj-novel-shell.library-room.reading-shell .reading-brand strong { font-family: var(--room-serif); letter-spacing: .04em; font-size: 19px; }
+.cczj-novel-shell.library-room.reading-shell .reading-brand strong { font-family: var(--room-serif); letter-spacing: .04em; font-size: calc(19rem / 14); }
 .cczj-novel-shell.library-room.reading-shell .reading-desktop-nav a { border-radius: 0; padding: 0 20px; }
 .cczj-novel-shell.library-room.reading-shell .reading-desktop-nav a[aria-current="page"] { background: transparent; box-shadow: inset 0 -2px var(--novel-red); }
 .cczj-novel-shell.library-room.reading-shell .reading-page-heading h1 { font-family: var(--room-serif); font-weight: 500; letter-spacing: .03em; }
@@ -23,21 +23,21 @@
 .library-room-page h1, .library-room-page h2, .library-room-page h3, .library-room-page p { margin: 0; }
 .library-room-page button { color: inherit; }
 .room-welcome { @apply cczj-flex cczj-justify-between cczj-items-center; gap: 32px; padding-bottom: 22px; }
-.room-welcome h1 { font-family: var(--room-serif); font-size: 30px; font-weight: 500; line-height: 1.4; letter-spacing: .12em; }
+.room-welcome h1 { font-family: var(--room-serif); font-size: calc(30rem / 14); font-weight: 500; line-height: 1.4; letter-spacing: .12em; }
 .room-search { @apply cczj-flex cczj-items-center; width: 300px; @apply cczj-flex-shrink-0; gap: 10px; padding-left: 14px; border-radius: 10px; background: var(--novel-surface); color: var(--novel-muted); }
 .room-search:focus-within { box-shadow: 0 0 0 1px var(--novel-red); }
 .cczj-novel-shell.library-room .room-search input:focus-visible { outline: none; }
-.room-search input { background: transparent; border: 0; @apply cczj-min-w-0; width: 100%; color: var(--novel-ink); font: inherit; font-size: 13px; min-height: 48px; }
+.room-search input { background: transparent; border: 0; @apply cczj-min-w-0; width: 100%; color: var(--novel-ink); font: inherit; font-size: calc(13rem / 14); min-height: 48px; }
 .room-search input::placeholder { color: var(--novel-muted); opacity: 1; }
 .room-search button { border: 0; @apply cczj-grid; place-items: center; width: 44px; height: 48px; background: transparent; @apply cczj-flex-shrink-0; }
 .room-wayfinding { @apply cczj-flex; position: relative; gap: 6px; @apply cczj-items-center; min-height: 48px; @apply cczj-overflow-x-auto; scrollbar-width: none; }
 .room-wayfinding::-webkit-scrollbar { @apply cczj-hidden; }
-.room-wayfinding button { position: relative; z-index: 1; @apply cczj-flex-shrink-0; min-height: 48px; border: 0; background: transparent; padding: 0 15px; font-size: 13px; color: var(--novel-muted); white-space: nowrap; }
+.room-wayfinding button { position: relative; z-index: 1; @apply cczj-flex-shrink-0; min-height: 48px; border: 0; background: transparent; padding: 0 15px; font-size: calc(13rem / 14); color: var(--novel-muted); white-space: nowrap; }
 .room-wayfinding button[aria-pressed="true"] { color: var(--novel-red); font-weight: 600; }
 .room-shelf-marker { position: absolute; left: 0; top: 6px; height: 36px; border-radius: 8px; background: var(--reading-soft); pointer-events: none; transition: transform var(--cczj-motion-slow, 360ms) cubic-bezier(.22,1,.36,1), width var(--cczj-motion-slow, 360ms) ease; }
 .room-discovery { margin-top: 16px; padding: 20px 30px 24px; border-radius: 14px; background: linear-gradient(115deg,var(--room-desk),var(--novel-canvas) 160%); color: var(--room-desk-ink); }
 .room-discovery-heading { @apply cczj-flex cczj-items-center cczj-justify-between; gap: 20px; margin-bottom: 16px; }
-.room-pick-label { @apply cczj-flex cczj-items-center; gap: 10px; font-size: 12px; letter-spacing: .12em; }
+.room-pick-label { @apply cczj-flex cczj-items-center; gap: 10px; font-size: calc(12rem / 14); letter-spacing: .12em; }
 .room-paper-mark { @apply cczj-block; position: relative; width: 15px; height: 18px; perspective: 100px; }
 .room-paper-mark i { position: absolute; inset: 0; @apply cczj-block; border: 1px solid currentColor; background: var(--room-desk); transform-origin: left center; transition: transform var(--cczj-motion-slow,360ms) ease; }
 .room-paper-mark i:nth-child(1) { transform: rotate(12deg); }
@@ -58,13 +58,13 @@
 .room-shelves { @apply cczj-min-w-0; }
 .room-discovery-info { @apply cczj-grid cczj-items-center cczj-min-w-0; min-height: 126px; }
 .room-desk-book { @apply cczj-block cczj-min-w-0; }
-.room-desk-book small { font-size: 10px; letter-spacing: .08em; }
-.room-desk-book h2 { font-family: var(--room-serif); font-size: 23px; font-weight: 600; line-height: 1.5; margin: 8px 0 5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; @apply cczj-overflow-hidden; text-wrap: balance; }
-.room-desk-book p { font-size: 12px; opacity: .8; }
-.room-open { @apply cczj-inline-flex cczj-items-center; gap: 8px; margin-top: 12px; font-size: 12px; }
+.room-desk-book small { font-size: calc(10rem / 14); letter-spacing: .08em; }
+.room-desk-book h2 { font-family: var(--room-serif); font-size: calc(23rem / 14); font-weight: 600; line-height: 1.5; margin: 8px 0 5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; @apply cczj-overflow-hidden; text-wrap: balance; }
+.room-desk-book p { font-size: calc(12rem / 14); opacity: .8; }
+.room-open { @apply cczj-inline-flex cczj-items-center; gap: 8px; margin-top: 12px; font-size: calc(12rem / 14); }
 .room-open svg { transition: transform var(--cczj-motion-normal,220ms) ease; }
 .room-desk-book:is(:hover,:focus-visible) .room-open svg { transform: translateX(5px); }
-.room-deck-position { font-family: Georgia,serif; font-size: 11px; font-variant-numeric: tabular-nums; opacity: .55; }
+.room-deck-position { font-family: Georgia,serif; font-size: calc(11rem / 14); font-variant-numeric: tabular-nums; opacity: .55; }
 .room-deck-position i { margin: 0 8px; font-style: normal; opacity: .5; }
 .room-pick-enter-active, .room-pick-leave-active { transition: opacity var(--cczj-motion-fast,140ms) ease, transform var(--cczj-motion-fast,140ms) ease; }
 .room-pick-enter-from { opacity: 0; transform: translateY(7px); }
@@ -75,9 +75,9 @@
 .room-shelf { padding-top: 30px; animation: room-shelf-unfold var(--cczj-motion-slow,360ms) ease both; }
 .room-shelf-heading { @apply cczj-flex cczj-items-center cczj-justify-between; gap: 16px; margin-bottom: 25px; }
 .room-shelf-heading > div { @apply cczj-flex cczj-items-baseline; gap: 13px; }
-.room-shelf-number { font-family: Georgia, serif; font-size: 15px; color: var(--novel-muted); opacity: .6; }
-.room-shelf-heading h2 { font-family: var(--room-serif); font-size: 23px; font-weight: 500; letter-spacing: .06em; line-height: 1.45; }
-.room-shelf-action { @apply cczj-inline-flex cczj-items-center; gap: 8px; border: 0; padding: 0; min-height: 44px; background: transparent; color: var(--novel-red) !important; font-size: 12px !important; white-space: nowrap; }
+.room-shelf-number { font-family: Georgia, serif; font-size: calc(15rem / 14); color: var(--novel-muted); opacity: .6; }
+.room-shelf-heading h2 { font-family: var(--room-serif); font-size: calc(23rem / 14); font-weight: 500; letter-spacing: .06em; line-height: 1.45; }
+.room-shelf-action { @apply cczj-inline-flex cczj-items-center; gap: 8px; border: 0; padding: 0; min-height: 44px; background: transparent; color: var(--novel-red) !important; font-size: calc(12rem / 14) !important; white-space: nowrap; }
 .room-book-grid { @apply cczj-grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 30px; }
 .room-book { @apply cczj-min-w-0 cczj-block; padding: 0 0 20px; animation: room-book-arrive var(--cczj-motion-emphasis,480ms) cubic-bezier(.22,1,.36,1) both; animation-delay: calc(var(--book-order,0) * var(--cczj-motion-stagger,35ms)); }
 .room-book-cover { padding: 0 9px 16px; position: relative; margin-bottom: 13px; }
@@ -87,15 +87,15 @@
 .room-book-cover .novel-cover { aspect-ratio: 2 / 3; transform-origin: left center; box-shadow: 3px 6px 10px #3225171a; transition: transform var(--cczj-motion-slow,360ms) cubic-bezier(.22,1,.36,1), box-shadow var(--cczj-motion-slow,360ms) ease; }
 .room-book:active .room-book-volume { transform: translateY(-2px) scale(.98); }
 .room-book:focus-visible .novel-cover { transform: rotateY(-20deg); }
-.room-book h3 { font-size: 14px; font-weight: 600; line-height: 1.65; height: 3.3em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; @apply cczj-overflow-hidden; }
-.room-book p { font-size: 12px; color: var(--novel-muted); white-space: nowrap; @apply cczj-overflow-hidden; text-overflow: ellipsis; margin-top: 6px; }
-.room-book small { font-size: 10px; color: var(--novel-muted); @apply cczj-block; margin-top: 6px; @apply cczj-overflow-hidden; text-overflow: ellipsis; white-space: nowrap; }
-.room-shelf-footer { @apply cczj-flex cczj-flex-wrap cczj-justify-between; gap: 8px 18px; color: var(--novel-muted); font-size: 10px; padding-bottom: 6px; line-height: 1.8; }
-.room-load-more { @apply cczj-flex cczj-items-center cczj-justify-center; gap: 12px; margin: 24px auto 0; padding: 0 30px; min-height: 46px; border: 1px solid var(--novel-line); background: transparent; font-size: 13px !important; }
-.room-notice { margin-bottom: 20px !important; padding: 16px 0; font-size: 13px; line-height: 1.8; color: var(--novel-red); @apply cczj-flex; gap: 12px; @apply cczj-items-center cczj-flex-wrap; }
+.room-book h3 { font-size: calc(14rem / 14); font-weight: 600; line-height: 1.65; height: 3.3em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; @apply cczj-overflow-hidden; }
+.room-book p { font-size: calc(12rem / 14); color: var(--novel-muted); white-space: nowrap; @apply cczj-overflow-hidden; text-overflow: ellipsis; margin-top: 6px; }
+.room-book small { font-size: calc(10rem / 14); color: var(--novel-muted); @apply cczj-block; margin-top: 6px; @apply cczj-overflow-hidden; text-overflow: ellipsis; white-space: nowrap; }
+.room-shelf-footer { @apply cczj-flex cczj-flex-wrap cczj-justify-between; gap: 8px 18px; color: var(--novel-muted); font-size: calc(10rem / 14); padding-bottom: 6px; line-height: 1.8; }
+.room-load-more { @apply cczj-flex cczj-items-center cczj-justify-center; gap: 12px; margin: 24px auto 0; padding: 0 30px; min-height: 46px; border: 1px solid var(--novel-line); background: transparent; font-size: calc(13rem / 14) !important; }
+.room-notice { margin-bottom: 20px !important; padding: 16px 0; font-size: calc(13rem / 14); line-height: 1.8; color: var(--novel-red); @apply cczj-flex; gap: 12px; @apply cczj-items-center cczj-flex-wrap; overflow-wrap: anywhere; }
 .room-notice button { border: 0; border-bottom: 1px solid currentColor; color: inherit; background: transparent; min-height: 44px; }
 .room-notice a { text-decoration: underline !important; }
-.room-empty { color: var(--novel-muted); padding: 30px 0 50px; font-size: 14px; }
+.room-empty { color: var(--novel-muted); padding: 30px 0 50px; font-size: calc(14rem / 14); }
 .room-skeleton span { @apply cczj-block; aspect-ratio: 2 / 3; margin: 0 9px 20px; background: var(--reading-soft); }
 .room-skeleton i { @apply cczj-block; height: 12px; background: var(--reading-soft); width: 80%; margin-bottom: 12px; }
 .room-skeleton i:last-child { width: 50%; margin-bottom: 30px; }
@@ -116,7 +116,7 @@
   .room-browse-overview .room-book-stack { height: 192px; }
   .room-browse-overview .room-stack-cover { width: 106px; top: 10px; }
   .room-browse-overview .room-discovery-info { text-align: center; min-height: 130px; }
-  .room-browse-overview .room-desk-book h2 { font-size: 20px; }
+  .room-browse-overview .room-desk-book h2 { font-size: calc(20rem / 14); }
   .room-browse-overview .room-book-grid { gap: 20px; }
   .room-browse-overview .room-discovery-loading { height: 332px; @apply cczj-flex-col cczj-justify-center; }
 }
@@ -127,37 +127,37 @@
   .cczj-novel-shell.library-room.reading-shell .reading-header { min-height: 58px; padding: 5px 20px; }
   .cczj-novel-shell.library-room.reading-shell .reading-bottom-nav { background: var(--novel-surface); }
   .cczj-novel-shell.library-room.reading-shell .novel-page.library-room-page { padding: 20px 22px 28px; }
-  .room-welcome { gap: 16px; padding-bottom: 14px; }
-  .room-welcome h1 { @apply cczj-flex-shrink-0; max-width: 38%; font-size: 24px; letter-spacing: .06em; }
-  .room-search { flex: 1; width: 0; gap: 7px; padding-left: 10px; }
-  .room-search input { font-size: 12px; }
+  .room-welcome { @apply cczj-flex-wrap; gap: 16px; padding-bottom: 14px; }
+  .room-welcome h1 { @apply cczj-flex-shrink-0; max-width: 100%; font-size: calc(24rem / 14); letter-spacing: .06em; }
+  .room-search { flex: 1 1 9rem; width: 0; @apply cczj-min-w-0; gap: 7px; padding-left: 10px; }
+  .room-search input { font-size: calc(12rem / 14); }
   .room-wayfinding { gap: 4px; margin: 0 -8px; }
-  .room-wayfinding button { font-size: 12px; padding: 0 12px; }
+  .room-wayfinding button { font-size: calc(12rem / 14); padding: 0 12px; }
   .room-discovery { margin-top: 12px; padding: 15px 18px 18px; border-radius: 12px; }
   .room-discovery-heading { margin-bottom: 12px; }
-  .room-pick-label { gap: 8px; font-size: 11px; }
+  .room-pick-label { gap: 8px; font-size: calc(11rem / 14); }
   .room-paper-mark { width: 12px; height: 15px; }
   .room-discovery-content { grid-template-columns: 122px minmax(0,1fr); gap: 12px; }
   .room-book-stack { --leaf-shift: 48px; height: 120px; }
   .room-stack-cover { width: 70px; top: 2px; left: 3px; }
   .room-stack-cover[data-position="2"] { transform: translateX(48px) translateY(1px) rotate(6deg) scale(.9); }
   .room-discovery-info { min-height: 114px; }
-  .room-desk-book h2 { font-size: 16px; margin-top: 5px; }
-  .room-desk-book p { font-size: 11px; }
+  .room-desk-book h2 { font-size: calc(16rem / 14); margin-top: 5px; }
+  .room-desk-book p { font-size: calc(11rem / 14); }
   .room-open { margin-top: 8px; }
   .room-discovery-loading { height: 114px; }
   .room-discovery-loading span { width: 70px; height: 105px; }
   .room-book-grid { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 14px; }
   .room-book-cover { padding: 0 4px 12px; margin-bottom: 10px; }
   .room-book-cover::after { left: 0; right: 0; }
-  .room-book h3 { font-size: 12px; line-height: 1.6; height: 3.2em; }
-  .room-book p { font-size: 11px; }
-  .room-book small { font-size: 9px; }
+  .room-book h3 { font-size: calc(12rem / 14); line-height: 1.6; height: 3.2em; }
+  .room-book p { font-size: calc(11rem / 14); }
+  .room-book small { font-size: calc(9rem / 14); }
   .room-shelf { padding-top: 28px; }
   .room-shelf-heading { margin-bottom: 19px; gap: 10px; }
-  .room-shelf-heading h2 { font-size: 21px; }
+  .room-shelf-heading h2 { font-size: calc(21rem / 14); }
   .room-shelf-heading > div { gap: 10px; }
-  .room-shelf-action { font-size: 11px !important; gap: 5px; }
+  .room-shelf-action { font-size: calc(11rem / 14) !important; gap: 5px; }
 }
 @keyframes room-sheet-turn {
   from { opacity: .7; transform: translateX(var(--leaf-shift)) rotate(13deg); }

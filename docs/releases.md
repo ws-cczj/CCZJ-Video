@@ -20,7 +20,7 @@ GitHub CLI 是仅在发布电脑使用的官方 MIT 工具，不进入 EXE／APK
 powershell -NoProfile -ExecutionPolicy Bypass -File build/release.ps1 -Publish -Commit -Version 2.4.2
 ```
 
-流程会同步 `version.json`、README、更新下载地址和历史说明，验证整个仓库，然后提交、构建并校验 Windows EXE／便携 ZIP／ARM64 APK。标签必须指向实际构建的干净提交；不允许把旧产物配上新 HEAD，也不移动既有版本标签。
+流程会同步 `version.json`、README、更新下载地址和历史说明，执行编译与静态检查，然后提交、构建并校验 Windows EXE／便携 ZIP／ARM64 APK。发布调用 `scripts/verify.ps1 -StaticOnly`，不运行自动化测试；界面与行为由用户验收。标签必须指向实际构建的干净提交；不允许把旧产物配上新 HEAD，也不移动既有版本标签。
 
 随后先推送标签和对应源码，创建 GitHub 草稿并上传八个发布文件，逐个检查附件名称、大小和 SHA256，再正式发布并设置为最新版本。全部文件齐全之后才推送当前分支，避免 `main/version.json` 提前向更新客户端公布尚不可下载的版本。GitHub 的草稿和发布行为见[官方 CLI 文档](https://cli.github.com/manual/gh_release_create)。
 
@@ -75,13 +75,19 @@ node scripts/check-release-artifacts.mjs dist/releases/v2.4.2
 
 Windows 保留下载、SHA256 校验、立即安装／退出时安装和替换回执。附件选择同时核对系统、架构和扩展名。
 
+下载保留 GitHub 直链与代理前缀并发探测、测速后选择可用候选的流程。代理前缀是远端下载入口，与用户电脑的 Clash 等本机代理分开；验收需要记录实际选中的地址及设备代理状态，不能把本机代理成功当作无代理网络通过。
+
+后台下载和下载完成使用右侧滑入的共享 Tips，提供关闭按钮，停留五秒自动消失；关闭提示不取消下载或删除安装包。提示的“详细信息”可打开更新窗口，消失后仍可从设置的检查更新入口查看状态和安装。采集状态同样使用五秒 Tips，点击“查看该源采集”进入并展开对应来源，详细进度留在采集源页面。
+
+更新说明和历史版本说明使用同一 `MarkdownContent` 渲染标题、列表、强调、链接、代码和表格。现有依赖没有 Markdown 解析器，因此引入维护中的 [markdown-it](https://github.com/markdown-it/markdown-it) 15.0.3（MIT，包含 TypeScript 类型）；未增加 UI 框架。解析器随更新内容组件按需加载，本地构建约增加 100 kB JavaScript／42 kB gzip；不依赖 Node 原生扩展或远端 CDN，Windows WebView2 与 Android WebView 使用相同构建。禁用原始 HTML，保留链接协议校验，外部链接带 `noopener noreferrer`。更新回归脚本同时检查窄屏排版及 HTML 不执行。
+
 Android 下载匹配架构的 APK 到应用私有更新目录，校验后交给系统安装器。原生宿主还会核对路径、校验凭据、包名、版本号和签名。未授权“安装未知应用”时打开系统设置，授权后返回并再次点击安装；系统安装界面由用户确认，取消不算安装成功。权限接口依据 [Android PackageManager 文档](https://developer.android.com/reference/android/content/pm/PackageManager#canRequestPackageInstalls())。
 
 2.4.0 之前的 Android 宿主缺少新安装桥接，首次需从 GitHub 下载 APK 后由系统覆盖安装，保留应用数据。安装 2.4.0 或更新宿主后，后续版本可使用应用内更新。ARM64 手机包不能安装到仅支持 x86_64 的模拟器。
 
 ## 验证范围
 
-发布流程测试覆盖版本同步、构建失败、源码与产物不匹配、漏传、远端校验不符、网络失败、草稿分页查询与重试、公开版本重试和首次源码上传的超时预算，纳入 `scripts/verify.ps1`。
+发布默认执行 `scripts/verify.ps1 -StaticOnly`：检查文档、版本元数据、前端约定与依赖边界、生成数据、样式复用，完成前端类型检查与构建、Go 静态检查与编译。后续产物校验核对版本、架构、签名、源码提交及远端附件摘要。已有发布流程测试仍保留在不带 `-StaticOnly` 的历史完整验证入口中，只有用户明确要求时运行。
 
 2.4.2 发布收尾的原始日志位于 `dist/audit/release-2.4.2`。完整仓库验证通过，前端为 74 文件／350 项测试；架构画布的 31 条功能链覆盖全部 216 个公开绑定。Android amd64 隔离验收的 16 项检查通过，覆盖正文／漫画图片、共享取消、分页、SQLite 旧值导入与重启恢复、写失败重试、备份身份还原，以及下载暂停、重启续传和 4 MiB 逐字节校验。拥塞检查实测六个下载名额占用、一条等待时，播放仍取得独立额度。
 

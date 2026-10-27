@@ -14,7 +14,7 @@ const secondary=shallowRef<RouteLocationNormalizedLoaded>({...route})
 const offset=ref(0),settling=ref(false),committing=ref(false),dragFrom=ref(''),previewPath=ref(''),previewEdge=ref(1)
 const dragging=computed(()=>!!dragFrom.value)
 const backdropElement=ref<HTMLElement>()
-useBackdropSystemBars(backdropElement,()=>routeScreenKey(route))
+useBackdropSystemBars(backdropElement,()=>routeScreenKey(route),()=>route.name==='player')
 const backdropStyle=computed(()=>{
  const origin=routeBackdropFocus(route.path,String(route.query.group||''))
  const target=previewPath.value?routeBackdropFocus(previewPath.value):origin

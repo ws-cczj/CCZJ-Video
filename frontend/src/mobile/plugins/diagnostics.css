@@ -1,6 +1,7 @@
 .cczj-mobile-plugin-diagnostics { height:auto; @apply cczj-min-h-0 cczj-overflow-visible; padding:0 0 20px; }
 .cczj-mobile-plugin-diagnostics .diag-page-header { @apply cczj-items-stretch; padding:0 0 14px; }
 .cczj-mobile-plugin-diagnostics .diag-page-title h1 { @apply cczj-text-2xl; }
+.cczj-mobile-plugin-diagnostics .reading-diag-heading h1 { @apply cczj-hidden; }
 .cczj-mobile-plugin-diagnostics .diag-page-actions { @apply cczj-flex cczj-flex-wrap cczj-gap-4; }
 .cczj-mobile-plugin-diagnostics .diag-page-actions button { flex:1 1 auto; min-height:44px; }
 .cczj-mobile-plugin-diagnostics .diag-recording-bar { @apply cczj-items-start cczj-flex-wrap cczj-p-6; }
@@ -15,7 +16,7 @@
 .cczj-mobile-plugin-diagnostics .diag-summary-links { grid-template-columns:1fr; }
 .cczj-mobile-plugin-diagnostics .resource-cards { grid-template-columns:repeat(2,minmax(0,1fr)); @apply cczj-gap-4; }
 .cczj-mobile-plugin-diagnostics .resource-card { @apply cczj-p-6; }
-.cczj-mobile-plugin-diagnostics .resource-card strong { font-size:21px; }
+.cczj-mobile-plugin-diagnostics .resource-card strong { font-size:calc(21rem / 14); }
 .cczj-mobile-plugin-diagnostics .resource-strip { gap:10px 16px; }
 .cczj-mobile-plugin-diagnostics :is(.resource-header,.resource-chart-header) { @apply cczj-flex-wrap cczj-gap-4; }
 .cczj-mobile-plugin-diagnostics :is(.diag-filter,.diag-search,button) { min-height:44px; }

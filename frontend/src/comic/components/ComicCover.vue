@@ -19,7 +19,7 @@ const tone = computed(() => [...props.title].reduce((sum, char) => sum + char.ch
 .comic-cover-art[data-tone="3"] { background: #e1ddea; color: #5b4b70; }
 .comic-cover-art > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .comic-cover-placeholder { position: absolute; inset: 0; @apply cczj-flex cczj-flex-col; padding: 13%; gap: 14px; }
-.comic-cover-placeholder span { font-size: 10px; letter-spacing: .16em; opacity: .65; }
+.comic-cover-placeholder span { font-size: calc(10rem / 14); letter-spacing: .16em; opacity: .65; }
 .comic-cover-placeholder strong { font-size: clamp(16px, 2vw, 24px); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; @apply cczj-overflow-hidden; overflow-wrap: anywhere; }
 .comic-cover-placeholder i { margin-top: auto; width: 52%; aspect-ratio: 1; border: 1px solid currentColor; border-radius: 50%; opacity: .18; align-self: flex-end; }
 </style>

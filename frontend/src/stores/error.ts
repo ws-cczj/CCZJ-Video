@@ -15,6 +15,8 @@ export interface ErrorItem {
   code?: string
   requestId?: string
   count?: number
+  actionLabel?: string
+  action?: () => void
   time: number // ms timestamp
   // 在 toast 状态里，用户可关闭
   closed?: boolean
@@ -55,6 +57,8 @@ export const useErrorStore = defineStore('error', () => {
       code: item.code,
       requestId: item.requestId,
       count: 1,
+      actionLabel: item.actionLabel,
+      action: item.action,
       time: Date.now(),
     }
     toasts.value.unshift(e)

@@ -15,7 +15,7 @@
 .cczj-mobile-shell .cczj-mobile-page .empty-desc { @apply cczj-text-sm; max-width: 280px; line-height: 1.7; }
 .cczj-mobile-shell .cczj-mobile-page :is(.video-grid,.recommend-row,.fav-grid,.recent-grid,.results-grid,.recommend-grid) { grid-template-columns: repeat(2, minmax(0,1fr)) !important; gap: 12px !important; }
 .cczj-mobile-shell .cczj-mobile-page :is(.section-header,.results-header,.source-search-header) { @apply cczj-flex-wrap cczj-gap-4; }
-.cczj-mobile-shell .cczj-mobile-page :is(.recommend-title,.section-title) { font-size: 15px; }
+.cczj-mobile-shell .cczj-mobile-page :is(.recommend-title,.section-title) { font-size: calc(15rem / 14); }
 .cczj-mobile-shell .cczj-mobile-page .filter-section { @apply cczj-p-6; margin-bottom: 18px; @apply cczj-rounded-xl; }
 .cczj-mobile-shell .cczj-mobile-page .filter-head h3 { @apply cczj-text-base; }
 .cczj-mobile-shell .cczj-mobile-page .filter-row { @apply cczj-flex-wrap cczj-gap-4; }
@@ -31,7 +31,7 @@
 .cczj-mobile-shell .cczj-mobile-page .slide-detail-content { @apply cczj-w-full cczj-min-w-0; }
 .cczj-mobile-shell .cczj-mobile-page .carousel { background: #0a101b; }
 .cczj-mobile-shell .cczj-mobile-page :is(.slide-detail-bg,.slide-meta,.carousel-arrow) { @apply cczj-hidden; }
-.cczj-mobile-shell .cczj-mobile-page .slide-title { font-size: 23px; line-height: 1.35; @apply cczj-max-w-full cczj-mb-5; }
+.cczj-mobile-shell .cczj-mobile-page .slide-title { font-size: calc(23rem / 14); line-height: 1.35; @apply cczj-max-w-full cczj-mb-5; }
 .cczj-mobile-shell .cczj-mobile-page .slide-badge { @apply cczj-text-xs cczj-mb-4; }
 .cczj-mobile-shell .cczj-mobile-page .slide-tags { @apply cczj-gap-3 cczj-mb-6 cczj-flex-wrap; }
 .cczj-mobile-shell .cczj-mobile-page .slide-tag { @apply cczj-text-xs; }
@@ -52,19 +52,23 @@
 .cczj-mobile-shell .cczj-mobile-page .scheduler-bar { @apply cczj-flex cczj-flex-wrap cczj-p-7 cczj-gap-4; }
 .cczj-mobile-shell .cczj-mobile-page :is(.scheduler-label,.scheduler-state) { @apply cczj-whitespace-nowrap; }
 .cczj-mobile-shell .cczj-mobile-page .scheduler-note { @apply cczj-w-full; flex-basis: 100%; white-space: normal; }
-.cczj-mobile-shell .cczj-mobile-page .scheduler-actions { @apply cczj-grid; grid-template-columns: repeat(3,minmax(0,1fr)); @apply cczj-w-full cczj-gap-3; }
-.cczj-mobile-shell .cczj-mobile-page .scheduler-actions button { @apply cczj-justify-center cczj-whitespace-nowrap; padding: 8px 4px; @apply cczj-min-w-0 cczj-text-11; }
+.cczj-mobile-shell .cczj-mobile-page .scheduler-actions { @apply cczj-grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,6rem),1fr)); @apply cczj-w-full cczj-gap-3; }
+.cczj-mobile-shell .cczj-mobile-page .scheduler-actions button { @apply cczj-justify-center; white-space: normal; padding: 8px 4px; @apply cczj-min-w-0 cczj-text-sm; }
 .cczj-mobile-shell .cczj-mobile-page .source-card { @apply cczj-min-w-0 cczj-rounded-xl; }
 .cczj-mobile-shell .cczj-mobile-page .source-card .card-header { @apply cczj-p-7; }
 .cczj-mobile-shell .cczj-mobile-page .source-card .card-header-left { @apply cczj-min-w-0 cczj-flex-wrap cczj-gap-4; }
-.cczj-mobile-shell .cczj-mobile-page .source-card .card-name { font-size: 15px; @apply cczj-min-w-0; overflow-wrap: anywhere; }
-.cczj-mobile-shell .cczj-mobile-page .source-card .card-actions { @apply cczj-grid; grid-template-columns: repeat(4,minmax(0,1fr)); @apply cczj-gap-4 cczj-p-6; }
+.cczj-mobile-shell .cczj-mobile-page .source-card .card-name { font-size: calc(15rem / 14); @apply cczj-min-w-0; overflow-wrap: anywhere; }
+.cczj-mobile-shell .cczj-mobile-page .source-card .card-actions { @apply cczj-grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,5.5rem),1fr)); @apply cczj-gap-4 cczj-p-6; }
 .cczj-mobile-shell .cczj-mobile-page .source-card .card-actions > .select-dropdown { grid-column: 1/-1; @apply cczj-w-full; }
 .cczj-mobile-shell .cczj-mobile-page .source-card .action-spacer { @apply cczj-hidden; }
 .cczj-mobile-shell .cczj-mobile-page .source-card .icon-btn { @apply cczj-flex cczj-flex-col; gap: 5px; @apply cczj-w-full; min-height: 54px; height: auto; padding: 8px 2px; }
-.cczj-mobile-shell .cczj-mobile-page .source-card .icon-btn::after { content: attr(title); @apply cczj-text-xs; line-height: 1.3; @apply cczj-w-full cczj-overflow-hidden; text-overflow: ellipsis; @apply cczj-whitespace-nowrap; }
+.cczj-mobile-shell .cczj-mobile-page .source-card .icon-btn::after { content: attr(title); @apply cczj-text-sm; line-height: 1.4; @apply cczj-w-full; white-space: normal; overflow-wrap: anywhere; }
 .cczj-mobile-shell .cczj-mobile-page :is(.types-header,.types-actions,.batch-actions,.block-hd) { @apply cczj-flex-wrap cczj-gap-5; }
 .cczj-mobile-shell .cczj-mobile-page :is(.status-card,.types-card,.recycle-page>.block) { @apply cczj-p-7; }
+.cczj-mobile-shell .cczj-mobile-page .recycle-page .block-hd h3 { @apply cczj-hidden; }
+.cczj-mobile-shell .cczj-mobile-page .recycle-page .row { @apply cczj-grid cczj-items-start; grid-template-columns: 44px minmax(0,1fr); }
+.cczj-mobile-shell .cczj-mobile-page .recycle-page .row > :last-child { grid-column: 1/-1; @apply cczj-grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+.cczj-mobile-shell .cczj-mobile-page .recycle-page .meta > span { @apply cczj-min-w-0 cczj-max-w-full; overflow-wrap: anywhere; }
 .cczj-mobile-shell .cczj-mobile-page .detail-header { @apply cczj-grid; grid-template-columns: minmax(0,1fr); @apply cczj-p-7; gap: 18px; }
 .cczj-mobile-shell .cczj-mobile-page .poster-column { @apply cczj-w-full cczj-max-w-full; }
 .cczj-mobile-shell .cczj-mobile-page .poster-frame { width: 140px; max-width: 50%; margin: 0 auto; }

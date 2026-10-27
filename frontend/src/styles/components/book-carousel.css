@@ -191,7 +191,7 @@
   border: 1px solid rgba(255, 255, 255, 0.28);
   background: rgba(10, 10, 15, 0.55);
   color: #ffffff;
-  font-size: 26px;
+  font-size: calc(26rem / 14);
   @apply cczj-leading-none cczj-cursor-pointer cczj-flex cczj-items-center cczj-justify-center cczj-opacity-0 cczj-pointer-events-none;
   transition: opacity var(--cczj-motion-fast) var(--cczj-motion-ease-standard),
               background-color var(--cczj-motion-fast) var(--cczj-motion-ease-standard),

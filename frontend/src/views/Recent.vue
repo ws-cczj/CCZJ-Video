@@ -3,8 +3,10 @@ defineOptions({ name: 'Recent' })
 import { computed, onActivated, onDeactivated, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { storeToRefs } from 'pinia'
 import { useSourceStore } from '../stores/source'
 import { useVideoStore } from '../stores/video'
+import { useLayoutStore } from '../stores/layout'
 import { useVideoList } from '../composables/useVideoList'
 import VideoCard from '../components/VideoCard.vue'
 import Icon from '../components/Icon.vue'
@@ -15,6 +17,8 @@ const { t } = useI18n()
 const router = useRouter()
 const sourceStore = useSourceStore()
 const videoStore = useVideoStore()
+const layout = useLayoutStore()
+const { gridStyle } = storeToRefs(layout)
 const list = useVideoList()
 const period = ref(7)
 const typeId = ref('')
@@ -38,6 +42,7 @@ function goDetail(video: any): void {
 // 回访时重新拉一遍列表，否则用户离开再回来看到的还是旧数据。
 // 重拉的成本已经很低——源列表和分类都做了会话缓存，只有 recent 列表本身走一次 IPC。
 async function bootstrap(): Promise<void> {
+  await layout.load()
   await sourceStore.loadSources()
   const key = sourceStore.currentSourceKey
   if (key) await videoStore.loadTypes(key)
@@ -67,7 +72,7 @@ onDeactivated(() => { wasDeactivated = true })
     </div>
     <LoadingSpinner v-if="list.loading" size="sm" :label="t('common.loading')" />
     <EmptyState v-else-if="list.videos.length === 0" :title="t('recent.empty')" />
-    <div v-else class="recent-grid"><VideoCard v-for="video in list.videos" :key="`${video.global_id}-${video.vod_id}`" :video="video" @click="goDetail(video)" /></div>
+    <div v-else class="recent-grid" :style="gridStyle"><VideoCard v-for="video in list.videos" :key="`${video.global_id}-${video.vod_id}`" :video="video" @click="goDetail(video)" /></div>
   </div>
 </template>
 
@@ -76,6 +81,5 @@ onDeactivated(() => { wasDeactivated = true })
 .recent-tabs { border-bottom: 1px solid var(--accent-alpha-20); }
 .period-tab { @apply cczj-px-8-py-4; border: 0; border-bottom: 2px solid transparent; background: transparent; @apply cczj-text-muted cczj-cursor-pointer; font: inherit; }
 .period-tab:hover, .period-tab.active { @apply cczj-text-accent; border-bottom-color: var(--accent); }
-.recent-grid { @apply cczj-grid; grid-template-columns: repeat(5, minmax(140px, 1fr)); @apply cczj-gap-8; }
-@media (max-width: 900px) { .recent-grid { grid-template-columns: repeat(3, minmax(120px, 1fr)); } }
+.recent-grid { @apply cczj-min-w-0; }
 </style>

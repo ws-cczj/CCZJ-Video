@@ -28,11 +28,15 @@ import FavFolderModal from '../components/FavFolderModal.vue'
 
 const { t } = useI18n(), router = useRouter()
 const mobile = presentationProfile().ui === 'mobile'
-const { currentSourceKey } = storeToRefs(useSourceStore())
+const sources = useSourceStore()
+const { currentSourceKey } = storeToRefs(sources)
 const errors = useErrorStore()
 // Mobile scenes inject their preview route before navigation is committed.
 // Only the router's actual route may start or retain media playback.
 const sceneActive = useViewActivity(() => router.currentRoute.value.path === '/short-drama')
+watch(sceneActive, active => {
+  if (active) void sources.loadSources(true).catch(error => errors.fromError(t('errors.loadSourcesFailed'), error, 'short-drama.sources'))
+}, { immediate: true })
 const player = ref<InstanceType<typeof VideoPlayer> | null>(null)
 const drawer = ref<'episodes' | 'intro' | ''>('')
 const stage = ref<HTMLElement>()
@@ -133,7 +137,7 @@ onBeforeUnmount(() => window.removeEventListener('cczj:android-overlay-back', ba
 </script>
 
 <template>
-  <section ref="stage" class="short-drama cczj-relative cczj-flex cczj-flex-col cczj-min-h-0 cczj-overflow-hidden" :class="{ 'cczj-short-drama-surface': hasPlayback, 'short-drama-mobile': mobile, 'drama-drawer-open': !mobile && !!drawer }" :data-cczj-no-tab-swipe="hasPlayback ? '' : undefined" @wheel="wheel" @keydown="keydown">
+  <section ref="stage" class="short-drama cczj-relative cczj-flex cczj-flex-col cczj-min-h-0 cczj-overflow-hidden" :class="{ 'cczj-short-drama-surface': hasPlayback, 'short-drama-mobile': mobile, 'drama-drawer-open': !mobile && !!drawer }" :data-cczj-media-active="hasPlayback ? 'true' : undefined" :data-cczj-no-tab-swipe="hasPlayback ? '' : undefined" @wheel="wheel" @keydown="keydown">
     <ShortDramaTheatre v-show="browsing" :active="sceneActive && browsing" :mobile="mobile" @play="openSeries" @random="randomPlay"/>
     <template v-if="!browsing">
     <canvas v-if="!mobile && hasPlayback" ref="backdrop" class="drama-ambience cczj-absolute cczj-pointer-events-none" width="72" height="128" aria-hidden="true" />
@@ -211,10 +215,10 @@ onBeforeUnmount(() => window.removeEventListener('cczj:android-overlay-back', ba
 .drama-header { @apply cczj-absolute cczj-flex-shrink-0; inset: 0 0 auto; z-index: 40; padding: 12px 24px 36px; pointer-events: none; }
 .cczj-short-drama-surface .drama-header { background: linear-gradient(#0007,transparent); }
 .drama-header > * { @apply cczj-pointer-events-auto; }
-.drama-heading h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: .02em; }
-.drama-heading > span { color: var(--text-muted); font-size: 12px; }
+.drama-heading h1 { margin: 0; font-size: calc(18rem / 14); font-weight: 600; letter-spacing: .02em; }
+.drama-heading > span { color: var(--text-muted); font-size: calc(12rem / 14); }
 .drama-return { min-width: 48px; min-height: 48px; border-radius: 50%; background: var(--bg-hover); color: var(--text-secondary); }
-.drama-mobile-tab { @apply cczj-relative; min-height: 44px; padding: 4px 0; font-size: 17px; font-weight: 400; color: var(--text-secondary); }
+.drama-mobile-tab { @apply cczj-relative; min-height: 44px; padding: 4px 0; font-size: calc(17rem / 14); font-weight: 400; color: var(--text-secondary); }
 .drama-mobile-tab-active { color: var(--text-primary); font-weight: 600; }
 .drama-mobile-tab-active::after { content: ''; @apply cczj-absolute cczj-bottom-0; left: calc(50% - 9px); width: 18px; height: 2px; background: currentColor; }
 .drama-refresh { min-width: 44px; min-height: 44px; color: var(--text-secondary); font-weight: 400; }
@@ -228,31 +232,31 @@ onBeforeUnmount(() => window.removeEventListener('cczj:android-overlay-back', ba
 .drama-placeholder { padding: 16px; text-align: center; }
 .drama-info { @apply cczj-min-w-0 cczj-w-full; text-shadow: 0 1px 5px #0009; transition: opacity .15s; }
 .short-drama:not(.short-drama-mobile) .drama-info { max-width: min(360px,calc(100% - 64px)); }
-.short-drama:not(.short-drama-mobile) .drama-title { font-size: 16px; }
+.short-drama:not(.short-drama-mobile) .drama-title { font-size: calc(16rem / 14); }
 .short-drama:not(.short-drama-mobile) .drama-info-row { @apply cczj-items-end; gap: 8px; }
 .short-drama:not(.short-drama-mobile) .drama-intro span { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-height: 1.65; }
 .short-drama:not(.short-drama-mobile) .drama-intro :deep(.ui-btn__content) { @apply cczj-items-end; }
 .short-drama:not(.short-drama-mobile) .drama-intro { color: #e4e4e7; }
-.drama-status-queue { color: #d4d4d8; font-size: 13px; }
-.drama-status-episodes { min-height: 36px; font-size: 13px; color: #e5e7eb; }
-.drama-title { margin: 0; font-size: 18px; font-weight: 600; line-height: 1.5; color: #fff; overflow-wrap: anywhere; }
+.drama-status-queue { color: #d4d4d8; font-size: calc(13rem / 14); }
+.drama-status-episodes { min-height: 36px; font-size: calc(13rem / 14); color: #e5e7eb; }
+.drama-title { margin: 0; font-size: calc(18rem / 14); font-weight: 600; line-height: 1.5; color: #fff; overflow-wrap: anywhere; }
 .drama-watch-series { @apply cczj-justify-start; min-height: 44px; padding: 0; font: inherit; text-align: left; white-space: normal; color: #fff; }
 .drama-watch-series :deep(.ui-btn__content) { @apply cczj-min-w-0; gap: 6px; }
 .drama-watch-series :deep(.icon-svg) { @apply cczj-flex-shrink-0; }
 .drama-info-row { @apply cczj-w-full; gap: 16px; }
-.drama-intro { min-height: 44px; padding: 4px 0; font-size: 13px; font-weight: 400; color: #ffffffb3; text-align: left; }
+.drama-intro { min-height: 44px; padding: 4px 0; font-size: calc(13rem / 14); font-weight: 400; color: #ffffffb3; text-align: left; }
 .drama-intro :deep(.ui-btn__content) { @apply cczj-min-w-0 cczj-w-full; gap: 4px; }
 .drama-intro :deep(.icon-svg) { @apply cczj-flex-shrink-0; }
-.drama-episodes { min-height: 44px; padding: 4px 0; font-size: 13px; font-weight: 500; color: #ffffffe6; }
+.drama-episodes { min-height: 44px; padding: 4px 0; font-size: calc(13rem / 14); font-weight: 500; color: #ffffffe6; }
 .drama-episodes :deep(.ui-btn__content) { @apply cczj-min-w-0; }
 .drama-switch { top: 25%; right: 24px; transform: translateY(-50%); z-index: 32; padding: 4px; border: 1px solid #ffffff12; border-radius: 28px; background: #0002; color: #fff; }
 .drama-switch .ui-btn { min-width: 44px; min-height: 44px; border-radius: 50%; color: #ffffffbf; }
 .drama-actions { top: 41%; right: 24px; z-index: 32; }
 .drama-action { min-width: 52px; min-height: 60px; padding: 6px; color: #ffffffe6; }
-.drama-action :deep(.ui-btn__content) { @apply cczj-flex-col cczj-gap-3; font-size: 12px; font-weight: 400; }
+.drama-action :deep(.ui-btn__content) { @apply cczj-flex-col cczj-gap-3; font-size: calc(12rem / 14); font-weight: 400; }
 .drama-action[aria-pressed=true] { color: #facc15; }
-.drama-position { font-size: 12px; color: #ffffffb3; }
-.drama-drawer-title { margin: 0; font-size: 17px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
+.drama-position { font-size: calc(12rem / 14); color: #ffffffb3; }
+.drama-drawer-title { margin: 0; font-size: calc(17rem / 14); font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
 .drama-cover { width: 44px; height: 60px; border-radius: 6px; object-fit: cover; }
 .drama-overview { line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
 .short-drama-mobile .drama-stage { padding: 0; }
@@ -260,8 +264,8 @@ onBeforeUnmount(() => window.removeEventListener('cczj:android-overlay-back', ba
 .short-drama-mobile .drama-screen { border-radius: 0; }
 .short-drama-mobile .drama-header { padding: 8px 16px 32px; }
 .short-drama-mobile.cczj-short-drama-surface .drama-header { background: linear-gradient(#000b,transparent); }
-.short-drama-mobile .drama-heading h1 { font-size: 18px; }
-.short-drama-mobile .drama-heading > span { font-size: 12px; }
-.short-drama-mobile .drama-title { font-size: 17px; }
+.short-drama-mobile .drama-heading h1 { font-size: calc(18rem / 14); }
+.short-drama-mobile .drama-heading > span { font-size: calc(12rem / 14); }
+.short-drama-mobile .drama-title { font-size: calc(17rem / 14); }
 .short-drama-mobile .drama-return { min-width: 44px; min-height: 44px; background: transparent; }
 </style>

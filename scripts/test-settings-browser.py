@@ -71,6 +71,9 @@ def main():
                     assert not overflow['page'] and not overflow['main'] and not overflow['controls'],overflow
                 # First-open geometry must not move either the host or document scroll.
                 menu=page.get_by_role('combobox',name='字体大小',exact=True)
+                # Separate Playwright's pre-click reveal from menu positioning;
+                # larger text can put the anchor one pixel below the host edge.
+                menu.scroll_into_view_if_needed()
                 before=page.evaluate("[document.scrollingElement.scrollTop,document.querySelector('.main-content').scrollTop]")
                 menu.click()
                 page.get_by_role('listbox').wait_for(state='visible')

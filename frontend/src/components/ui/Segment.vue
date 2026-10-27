@@ -10,6 +10,7 @@ const props = withDefaults(defineProps<{
   modelValue: string | number
   options: Option[]
   size?: 'sm' | 'md'
+  wrap?: boolean
 }>(), {
   size: 'md',
 })
@@ -22,9 +23,9 @@ const activeIdx = computed(() => props.options.findIndex(o => o.value === props.
 </script>
 
 <template>
-  <div class="ui-seg cczj-gap-1" :class="`ui-seg--${size}`">
+  <div class="ui-seg cczj-gap-1" :class="[`ui-seg--${size}`, { 'ui-seg--wrap': wrap }]">
     <div
-      v-if="activeIdx >= 0"
+      v-if="activeIdx >= 0 && !wrap"
       class="ui-seg__indicator"
       :style="{ transform: `translateX(calc(${activeIdx * 100}% + ${activeIdx * 2}px))`, width: `calc(${100 / options.length}% - ${2 + 4 / options.length}px)` }"
     ></div>
@@ -88,4 +89,7 @@ const activeIdx = computed(() => props.options.findIndex(o => o.value === props.
 }
 .ui-seg--sm { @apply cczj-rounded-md; }
 .ui-seg--sm .ui-seg__indicator { @apply cczj-rounded; }
+.ui-seg--wrap { @apply cczj-flex cczj-flex-wrap cczj-max-w-full; }
+.ui-seg--wrap .ui-seg__item { @apply cczj-flex-1; flex-basis: 7.5rem; white-space: normal; line-height: 1.4; }
+.ui-seg--wrap .ui-seg__item--active { background: var(--accent); }
 </style>

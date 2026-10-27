@@ -56,6 +56,9 @@ func request(ctx context.Context, url string) *http.Request {
 	req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
 	return req
 }
+func probeRequest(ctx context.Context, url string) *http.Request {
+	return request(WithProbeCooldown(ctx), url)
+}
 func reply(status int, data string, retry string) *http.Response {
 	header := make(http.Header)
 	if retry != "" {
@@ -90,7 +93,7 @@ func waitCondition(t *testing.T, condition func() bool) {
 	}
 }
 
-func TestHealthyQueriesReuseResponsesDuringCooldown(t *testing.T) {
+func TestExplicitProbesReuseResponsesDuringCooldown(t *testing.T) {
 	store := fixtureStore(t)
 	now := time.Unix(1792380000, 0)
 	manager := fixtureManager(t, store, &now)
@@ -98,7 +101,7 @@ func TestHealthyQueriesReuseResponsesDuringCooldown(t *testing.T) {
 	base := roundTripFunc(func(*http.Request) (*http.Response, error) { calls.Add(1); return reply(200, "fresh", ""), nil })
 	for _, category := range []string{"collect", "douban", "novel", "comic", "update"} {
 		for i := 0; i < 2; i++ {
-			response, err := manager.RoundTrip(category, base, request(context.Background(), "https://source.example/metadata"))
+			response, err := manager.RoundTrip(category, base, probeRequest(context.Background(), "https://source.example/metadata"))
 			if data := readResponse(t, response, err); data != "fresh" {
 				t.Fatal(data)
 			}
@@ -120,7 +123,7 @@ func TestMediaMetadataUsesPersistedFiveMinuteCooldownWithoutThrottlingPlayback(t
 	manager := fixtureManager(t, store, &now)
 	var calls atomic.Int32
 	base := roundTripFunc(func(*http.Request) (*http.Response, error) { calls.Add(1); return reply(200, "#EXTM3U\n", ""), nil })
-	metadata := request(WithQueryCooldown(context.Background()), "https://media.example/index.m3u8")
+	metadata := request(WithProbeCooldown(context.Background()), "https://media.example/index.m3u8")
 	response, err := manager.RoundTrip("lineprobe", base, metadata)
 	readResponse(t, response, err)
 	now = now.Add(299 * time.Second)
@@ -141,15 +144,15 @@ func TestMediaMetadataUsesPersistedFiveMinuteCooldownWithoutThrottlingPlayback(t
 	}
 }
 
-func TestFailedQueryRetainsCauseAndCooldown(t *testing.T) {
+func TestFailedProbeRetainsCauseAndCooldown(t *testing.T) {
 	now := time.Unix(1792380000, 0)
 	manager := fixtureManager(t, fixtureStore(t), &now)
 	failure := errors.New("connection reset")
 	var calls atomic.Int32
 	base := roundTripFunc(func(*http.Request) (*http.Response, error) { calls.Add(1); return nil, failure })
 	for i := 0; i < 2; i++ {
-		_, err := manager.RoundTrip("collect", base, request(context.Background(), "https://source.example/list"))
-		if !errors.Is(err, failure) || apperror.Public(err).RetryAfterSeconds != 330 {
+		_, err := manager.RoundTrip("collect", base, probeRequest(context.Background(), "https://source.example/list"))
+		if !errors.Is(err, failure) || apperror.Public(err).RetryAfterSeconds != 300 {
 			t.Fatal("failure lost cause or cooldown", err)
 		}
 	}
@@ -158,16 +161,16 @@ func TestFailedQueryRetainsCauseAndCooldown(t *testing.T) {
 	}
 }
 
-func TestDanmakuCooldownReusesResponseAndPersistsAcrossRestart(t *testing.T) {
+func TestProbeIdentityIgnoresRotatingSignaturesAcrossRestart(t *testing.T) {
 	store := fixtureStore(t)
 	now := time.Unix(1792380000, 0)
 	manager := fixtureManager(t, store, &now)
 	var calls atomic.Int32
 	base := roundTripFunc(func(*http.Request) (*http.Response, error) { calls.Add(1); return reply(200, "comments", ""), nil })
-	req := request(context.Background(), "https://api.bilibili.com/x/web-interface/wbi/search/type?keyword=sample&wts=1&w_rid=a")
+	req := probeRequest(context.Background(), "https://api.bilibili.com/x/web-interface/wbi/search/type?keyword=sample&wts=1&w_rid=a")
 	response, err := manager.RoundTrip("danmaku", base, req)
 	readResponse(t, response, err)
-	signed := request(context.Background(), "https://api.bilibili.com/x/web-interface/wbi/search/type?w_rid=b&wts=2&keyword=sample")
+	signed := probeRequest(context.Background(), "https://api.bilibili.com/x/web-interface/wbi/search/type?w_rid=b&wts=2&keyword=sample")
 	response, err = manager.RoundTrip("danmaku", base, signed)
 	if data := readResponse(t, response, err); data != "comments" {
 		t.Fatal(data)
@@ -177,10 +180,10 @@ func TestDanmakuCooldownReusesResponseAndPersistsAcrossRestart(t *testing.T) {
 	}
 	restarted := fixtureManager(t, store, &now)
 	_, err = restarted.RoundTrip("danmaku", base, signed)
-	if !apperror.Is(err, apperror.RateLimited) || apperror.Public(err).RetryAfterSeconds != 330 {
+	if !apperror.Is(err, apperror.RateLimited) || apperror.Public(err).RetryAfterSeconds != 300 {
 		t.Fatal(err)
 	}
-	now = now.Add(329 * time.Second)
+	now = now.Add(299 * time.Second)
 	_, err = manager.RoundTrip("danmaku", base, signed)
 	if err != nil {
 		t.Fatal(err)
@@ -193,21 +196,21 @@ func TestDanmakuCooldownReusesResponseAndPersistsAcrossRestart(t *testing.T) {
 	}
 }
 
-func TestDanmakuFailureUsesSelectedTierAndDoesNotResetOnRetry(t *testing.T) {
+func TestProbeFailureKeepsFiveMinuteDeadlineAcrossTierChanges(t *testing.T) {
 	now := time.Unix(1792380000, 0)
 	manager := fixtureManager(t, fixtureStore(t), &now)
 	manager.SetSettings(Settings{Frequency: "steady"})
 	var calls atomic.Int32
 	base := roundTripFunc(func(*http.Request) (*http.Response, error) { calls.Add(1); return nil, errors.New("offline") })
-	req := request(context.Background(), "https://dm.video.qq.com/barrage/base/sample")
+	req := probeRequest(context.Background(), "https://dm.video.qq.com/barrage/base/sample")
 	_, err := manager.RoundTrip("danmaku", base, req)
-	if apperror.Public(err).RetryAfterSeconds != 630 {
+	if apperror.Public(err).RetryAfterSeconds != 300 {
 		t.Fatal(err)
 	}
-	now = now.Add(5 * time.Minute)
+	now = now.Add(time.Minute)
 	manager.SetSettings(Settings{Frequency: "low"})
 	_, err = manager.RoundTrip("danmaku", base, req)
-	if apperror.Public(err).RetryAfterSeconds != 330 || calls.Load() != 1 {
+	if apperror.Public(err).RetryAfterSeconds != 240 || calls.Load() != 1 {
 		t.Fatal("click reset deadline", err, calls.Load())
 	}
 }
@@ -233,7 +236,7 @@ func TestDifferentSegmentsSourcesAndSessionsNeverShareResponses(t *testing.T) {
 	}
 }
 
-func TestConcurrentQueriesCoalesceAndReuseUntilCooldownExpires(t *testing.T) {
+func TestConcurrentProbesCoalesceAndReuseUntilCooldownExpires(t *testing.T) {
 	now := time.Unix(1792380000, 0)
 	manager := fixtureManager(t, fixtureStore(t), &now)
 	var calls atomic.Int32
@@ -249,7 +252,7 @@ func TestConcurrentQueriesCoalesceAndReuseUntilCooldownExpires(t *testing.T) {
 	done := make(chan error, readers)
 	for i := 0; i < readers; i++ {
 		go func() {
-			response, err := manager.RoundTrip("novel", base, request(context.Background(), "https://source.example/catalog"))
+			response, err := manager.RoundTrip("novel", base, probeRequest(context.Background(), "https://source.example/catalog"))
 			if err == nil {
 				_, err = io.ReadAll(response.Body)
 				response.Body.Close()
@@ -268,13 +271,13 @@ func TestConcurrentQueriesCoalesceAndReuseUntilCooldownExpires(t *testing.T) {
 	if calls.Load() != 1 {
 		t.Fatal("duplicate in-flight query")
 	}
-	response, err := manager.RoundTrip("novel", base, request(context.Background(), "https://source.example/catalog"))
+	response, err := manager.RoundTrip("novel", base, probeRequest(context.Background(), "https://source.example/catalog"))
 	readResponse(t, response, err)
 	if calls.Load() != 1 {
 		t.Fatal("cached catalog refetched during cooldown")
 	}
-	now = now.Add(330 * time.Second)
-	response, err = manager.RoundTrip("novel", base, request(context.Background(), "https://source.example/catalog"))
+	now = now.Add(300 * time.Second)
+	response, err = manager.RoundTrip("novel", base, probeRequest(context.Background(), "https://source.example/catalog"))
 	readResponse(t, response, err)
 	if calls.Load() != 2 {
 		t.Fatal("catalog did not refresh after cooldown")
@@ -303,7 +306,7 @@ func TestWaitingCallerCancellationLeavesOwnerRequestRunning(t *testing.T) {
 	}
 }
 
-func TestUnshareableQueryResponseKeepsCooldownForWaitingCaller(t *testing.T) {
+func TestUnshareableProbeResponseKeepsCooldownForWaitingCaller(t *testing.T) {
 	for _, scenario := range []string{"no-store", "large", "http-error"} {
 		t.Run(scenario, func(t *testing.T) {
 			now := time.Unix(1792380000, 0)
@@ -322,7 +325,7 @@ func TestUnshareableQueryResponseKeepsCooldownForWaitingCaller(t *testing.T) {
 				}
 				return response, nil
 			})
-			req := request(context.Background(), "https://source.example/catalog")
+			req := probeRequest(context.Background(), "https://source.example/catalog")
 			first, err := manager.RoundTrip("novel", base, req)
 			if err != nil {
 				t.Fatal(err)
@@ -345,13 +348,13 @@ func TestUnshareableQueryResponseKeepsCooldownForWaitingCaller(t *testing.T) {
 			if scenario == "http-error" {
 				want = apperror.NotFound
 			}
-			if err = <-done; !apperror.Is(err, want) || apperror.Public(err).RetryAfterSeconds != 330 {
+			if err = <-done; !apperror.Is(err, want) || apperror.Public(err).RetryAfterSeconds != 300 {
 				t.Fatal("waiting query lost cooldown or failure classification", err)
 			}
 			if calls.Load() != 1 {
 				t.Fatal("non-shareable query repeated during cooldown", calls.Load())
 			}
-			now = now.Add(330 * time.Second)
+			now = now.Add(300 * time.Second)
 			next, err := manager.RoundTrip("novel", base, req)
 			readResponse(t, next, err)
 			if calls.Load() != 2 {
@@ -434,7 +437,7 @@ func TestPartialOrOversizedResponseDoesNotBecomeCachedSuccess(t *testing.T) {
 			manager := fixtureManager(t, fixtureStore(t), &now)
 			data := strings.Repeat("x", maxCaptureBytes+1)
 			base := roundTripFunc(func(*http.Request) (*http.Response, error) { return reply(200, data, ""), nil })
-			req := request(context.Background(), "https://dm.video.qq.com/barrage/base/sample")
+			req := probeRequest(context.Background(), "https://dm.video.qq.com/barrage/base/sample")
 			response, err := manager.RoundTrip("danmaku", base, req)
 			if err != nil {
 				t.Fatal(err)
@@ -492,19 +495,19 @@ func TestPolicyShutdownClosesUnconsumedBodies(t *testing.T) {
 	}
 }
 
-func TestMissingDanmakuSegmentRemainsNotFoundDuringCooldown(t *testing.T) {
+func TestMissingProbeResourceRemainsNotFoundDuringCooldown(t *testing.T) {
 	now := time.Unix(1792380000, 0)
 	manager := fixtureManager(t, fixtureStore(t), &now)
 	var calls atomic.Int32
 	base := roundTripFunc(func(*http.Request) (*http.Response, error) { calls.Add(1); return reply(404, "missing", ""), nil })
-	req := request(context.Background(), "https://dm.video.qq.com/barrage/segment/sample/missing")
+	req := probeRequest(context.Background(), "https://dm.video.qq.com/barrage/segment/sample/missing")
 	response, err := manager.RoundTrip("danmaku", base, req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	response.Body.Close()
 	_, err = manager.RoundTrip("danmaku", base, req)
-	if !apperror.Is(err, apperror.NotFound) || apperror.Public(err).RetryAfterSeconds != 330 || calls.Load() != 1 {
+	if !apperror.Is(err, apperror.NotFound) || apperror.Public(err).RetryAfterSeconds != 300 || calls.Load() != 1 {
 		t.Fatal("missing segment changed meaning", err, calls.Load())
 	}
 }

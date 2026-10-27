@@ -75,6 +75,8 @@ Windows 的 SQLite 位于 `%APPDATA%/CCZJ Video`。浏览器资料目录由 `app
 
 浏览器替身验收运行 `python scripts/test-short-drama-browser.py --channel chrome`（需要 Python Playwright 和 FFmpeg），覆盖桌面／移动布局、真实竖屏媒体、长按、进度条、80 集长标题抽屉、320px 窄屏当前集完整可见及文字不溢出、页面离开与重入、空状态和请求失败重试。独立 acceptance APK 的原生验收运行 `python scripts/test-short-drama-android.py --device emulator-5554`，复用既有 Android CDP／绑定入口，验证真实 CMS 导入、Go 推荐、HLS 播放、触摸、SQLite 进度与返回键；测试创建的临时来源和设置会在结束后清理／恢复。截图与测试媒体输出到 `dist/audit/short-drama`。
 
+短剧页每次激活重新核对视频来源；来源移除后清空旧队列、错误和播放身份。保留的推荐条目在详情返回 `NOT_FOUND` 时重新查询目录一次；恢复仍失败则展示错误，重试重新取推荐，不循环请求已退役 ID。显式单剧入口保留其身份，不自动跳到别的作品。原生针对性回归可加 `--catalog-recovery`：实际播放后清空该测试源目录，检查空态，重新导入并重试播放，再删除来源检查无源状态；清理阶段同步刷新来源 store，避免留下测试源引用。
+
 ## CCZJ 工具类与组件
 
 先选公共组件，再组合工具类，最后补领域样式：

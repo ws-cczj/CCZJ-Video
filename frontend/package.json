@@ -16,6 +16,7 @@
   "dependencies": {
     "@wailsio/runtime": "3.0.0-beta.30",
     "hls.js": "^1.7.0-beta.1",
+    "markdown-it": "15.0.3",
     "pinia": "^3.0.4",
     "vue": "^3.5.42",
     "vue-i18n": "^9.14.5",

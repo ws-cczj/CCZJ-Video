@@ -62,3 +62,13 @@ npm --prefix frontend run check:css-reuse
 2026-10-22 已将 9 个文件中的 278 处基础布局改为公共组合，并逐个核对展开后的 CSS AST，选择器、条件、声明顺序和值一致。早期迁移记录见[项目样式整改报告](https://github.com/ws-cczj/CCZJ-Video/blob/v2.4.5/reports/css-reuse-2026-10-20.md)。
 
 移动按钮密度由 Button 的 sm／md／lg 档位选择 `--cczj-mobile-control-sm`、`--cczj-mobile-control-md`、`--cczj-mobile-control-lg`，全局移动样式读取 `--cczj-control-height`。这些值使用 clamp 随屏宽变化，并只限定最小高度，长文案或大字号仍可撑开控件；桌面尺寸保持现有规则。移动页面间距优先使用 `--cczj-mobile-section-padding`，不再用统一 44px 覆盖所有尺寸档位。
+
+## 字体与大字号布局
+
+界面字号由 `platform/typography.ts` 管理，启动挂载前恢复，基础设置使用同一组 12／13／14／16／18／20px 档位。根字号默认 14px；公共文字工具类、主题字号变量和页面文字使用相对单位，例如 `calc(12rem / 14)` 在默认档位仍为 12px，调大后按比例增长。表单控件继承界面字体，避免浏览器默认字体与正文混杂。图标、装饰画和阅读正文保留各自的几何或字号偏好，不用界面字号改写阅读配置。
+
+大字号不能靠截断按钮名称适配：采集源操作按字号与可用宽度换列，必要时换行；诊断分类使用 Segment 的 `wrap` 选项。视频网格复用 layout store，在空间足够时保持设置列数，窄容器按最小卡片宽度减少列数。共享 Empty 省略与标题完全相同的说明，保留不同的恢复提示。
+
+逐页检查脚本 `scripts/audit-page-layouts.py` 在 Chrome 中打开真实路由，通过独立 Android acceptance 包执行后端调用；仅替换传输和桌面窗口控制。它读取视频目录快照、创建本地阅读验收源，覆盖三种模式及设置子页的桌面／手机、默认／最大字号，输出截图和溢出、按钮裁切、重叠、重复标题清单；结束后删除自己的源并恢复设置。正常阅读内容和阅读字号需要单独确认，错误空态不能算正文通过。
+
+排查移动端时运行 `python scripts/audit-page-layouts.py --mobile-only`，只检查 390px 默认字号和 320px 最大字号，独立截图集输出至 `dist/audit/page-polish/mobile/`。

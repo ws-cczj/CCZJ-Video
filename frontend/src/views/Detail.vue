@@ -10,7 +10,6 @@ import { useDownloadStore } from '../stores/download'
 import { useConfirmStore } from '../stores/confirm'
 import { useErrorStore } from '../stores/error'
 import Icon from '../components/Icon.vue'
-import PlayLinePicker from '../components/PlayLinePicker.vue'
 import RemoteImage from '../components/RemoteImage.vue'
 import { Button, Modal, Tag, Spinner as LoadingSpinner } from '../components/ui'
 import FavFolderModal from '../components/FavFolderModal.vue'
@@ -909,9 +908,6 @@ onBeforeUnmount(() => {
             </Button>
           </div>
         </div>
-        <PlayLinePicker v-if="!mobile && video && videoStore.lines.length" class="cczj-mb-4" :lines="videoStore.lines"
-          :model-value="videoStore.activeLineIndex" :source-key="sourceKey" :vod-id="String(vodId)"
-          :global-id="Number(video.global_id || 0)" @update:model-value="videoStore.setActiveLine(Number($event))" />
         <div class="episodes-grid cczj-grid cczj-gap-2">
           <button v-for="(ep, i) in sortedEpisodes" :key="'ep-' + (ep.ep_num || i)" class="episode-btn cczj-relative cczj-rounded cczj-px-3 cczj-py-2 cczj-cursor-pointer cczj-flex cczj-items-center cczj-gap-1 cczj-text-sm cczj-transition" :class="{
             'download-mode': episodeMode === 'download',

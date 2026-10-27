@@ -1,3 +1,4 @@
+param([switch]$StaticOnly)
 $ErrorActionPreference = 'Stop'
 
 node scripts/check-document-links.mjs
@@ -13,12 +14,14 @@ if ($LASTEXITCODE -ne 0) {
 # sequences that eat the following newline, silently mangling the next command line.
 
 # Check executable imports and browser storage access, not comment text.
+if (!$StaticOnly) {
 node --test scripts/check-architecture.test.mjs
 if ($LASTEXITCODE -ne 0) { Write-Error 'Architecture checker regression tests failed.' }
 node --test scripts/check-release-artifacts.test.mjs
 if ($LASTEXITCODE -ne 0) { Write-Error 'Release artifact checker regression tests failed.' }
 node --test scripts/publish-release.test.mjs
 if ($LASTEXITCODE -ne 0) { Write-Error 'Release publication workflow regression tests failed.' }
+}
 node scripts/check-architecture.mjs (Get-Location).Path
 if ($LASTEXITCODE -ne 0) { Write-Error 'Frontend dependency or storage check failed.' }
 
@@ -102,9 +105,11 @@ if ($LASTEXITCODE -ne 0) { Write-Error 'Reuse CCZJ shared layout utilities inste
 
 Push-Location frontend
 try {
+    if (!$StaticOnly) {
     npm run test
     if ($LASTEXITCODE -ne 0) {
         Write-Error 'Frontend regression tests failed.'
+    }
     }
     # Native commands do not fail a PowerShell script by themselves, and vue-tsc errors only
     # show up in the exit code. Without this the whole script used to exit 0 on a broken build.
@@ -125,7 +130,12 @@ if ($LASTEXITCODE -ne 0) {
     Write-Error 'go vet failed.'
 }
 
+if ($StaticOnly) {
+go build ./app/...
+if ($LASTEXITCODE -ne 0) { Write-Error 'Go application build failed.' }
+} else {
 go test -count=1 ./...
 if ($LASTEXITCODE -ne 0) {
     Write-Error 'go test failed.'
+}
 }

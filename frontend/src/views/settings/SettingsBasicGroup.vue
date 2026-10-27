@@ -20,6 +20,7 @@ import Icon from '../../components/Icon.vue'
 import ApplicationModeSwitch from '../../modes/ApplicationModeSwitch.vue'
 import { setLocale as saveLocalePreference } from '../../locales'
 import { isMobileRuntime } from '../../api/runtime'
+import { FONT_SIZE_PRESETS, applyFontSize as applyAppFontSize, applyFontFamily as applyAppFontFamily } from '../../platform/typography'
 
 const { t } = useI18n()
 const mobile = isMobileRuntime()
@@ -45,14 +46,9 @@ const fontFamilyOptions = computed(() => [
 ])
 
 // 字号档位把像素写在标签上：只写「大」的话要点上去才知道到底多大。
-const fontSizePresets = computed(() => [
-  { key: 'xs', label: `${t('settings.fontSizePresets.xs')} · 12px`, px: 12 },
-  { key: 'sm', label: `${t('settings.fontSizePresets.sm')} · 13px`, px: 13 },
-  { key: 'md', label: `${t('settings.fontSizePresets.md')} · 14px`, px: 14 },
-  { key: 'lg', label: `${t('settings.fontSizePresets.lg')} · 16px`, px: 16 },
-  { key: 'xl', label: `${t('settings.fontSizePresets.xl')} · 18px`, px: 18 },
-  { key: 'xxl', label: `${t('settings.fontSizePresets.xxl')} · 20px`, px: 20 },
-])
+const fontSizePresets = computed(() => FONT_SIZE_PRESETS.map(preset => ({
+  ...preset, label:`${t(`settings.fontSizePresets.${preset.key}`)} · ${preset.px}px`,
+})))
 const fontSizeOptions = computed(() => fontSizePresets.value.map(p => ({ value: p.key, label: p.label })))
 const fontSizeKey = ref('md')
 
@@ -60,15 +56,13 @@ function applyFontSize(key: string, persist = true): void {
   const preset = fontSizePresets.value.find(p => p.key === key)
   if (!preset) return
   fontSizeKey.value = key
-  document.documentElement.style.fontSize = preset.px + 'px'
-  document.documentElement.style.setProperty('--font-size-base', preset.px + 'px')
+  applyAppFontSize(key)
   if (persist) void save('font_size_key', key)
 }
 
 function applyFontFamily(value: string, persist = true): void {
   fontFamily.value = value
-  if (value) document.documentElement.style.fontFamily = value
-  else document.documentElement.style.removeProperty('font-family')
+  applyAppFontFamily(value)
   if (persist) void save('font_family', value)
 }
 

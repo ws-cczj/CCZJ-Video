@@ -109,13 +109,13 @@ const networkNames:Record<string,string>={
 <style scoped>
 .cczj-diag-observability{padding:18px;@apply cczj-border cczj-rounded-lg;background:var(--bg-card);@apply cczj-text-primary;margin:14px 0}
 .cczj-diag-coverage{padding:0;margin:0}
-.cczj-diag-coverage-summary{@apply cczj-flex cczj-items-center cczj-gap-5 cczj-text-secondary cczj-cursor-pointer;min-height:60px;padding:16px 20px;font-size:14px;list-style:none}
+.cczj-diag-coverage-summary{@apply cczj-flex cczj-items-center cczj-gap-5 cczj-text-secondary cczj-cursor-pointer;min-height:60px;padding:16px 20px;font-size:calc(14rem / 14);list-style:none}
 .cczj-diag-coverage-summary::-webkit-details-marker{@apply cczj-hidden}
 .cczj-diag-coverage-summary span{@apply cczj-flex-1}
 .cczj-diag-coverage[open] .cczj-diag-coverage-summary>svg:last-child{transform:rotate(90deg)}
 .cczj-diag-coverage-summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .cczj-diag-coverage-content{padding:0 20px 20px}
-.cczj-diag-observability h3{font-size:15px;margin:10px 0}.cczj-diag-observability p,.cczj-diag-observability small{@apply cczj-text-sm;line-height:1.7;@apply cczj-text-muted}
+.cczj-diag-observability h3{font-size:calc(15rem / 14);margin:10px 0}.cczj-diag-observability p,.cczj-diag-observability small{@apply cczj-text-sm;line-height:1.7;@apply cczj-text-muted}
 .cczj-diag-observation-row{@apply cczj-flex cczj-flex-wrap cczj-justify-between cczj-gap-4;padding:12px 0;@apply cczj-border-bottom cczj-text-13}.cczj-diag-observation-row small{flex-basis:100%}
 .cczj-diag-observation-grid{@apply cczj-grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));@apply cczj-gap-5}.cczj-diag-observation-grid>div{@apply cczj-flex cczj-flex-col cczj-gap-5 cczj-p-7;background:var(--bg-secondary);@apply cczj-rounded-md}.cczj-diag-observation-grid span{@apply cczj-text-sm cczj-text-muted}
 .diag-table-wrap{@apply cczj-max-w-full;@apply cczj-overflow-x-auto;overscroll-behavior:contain}.diag-table{@apply cczj-w-full;border-collapse:collapse;@apply cczj-text-sm cczj-text-left}.diag-table th,.diag-table td{@apply cczj-whitespace-nowrap;padding:10px 8px;@apply cczj-border-bottom}.diag-table th{@apply cczj-text-secondary cczj-font-semibold}

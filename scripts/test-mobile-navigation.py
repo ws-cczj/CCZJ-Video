@@ -51,7 +51,10 @@ def main():
             assert max(labels)-min(labels)<1,layout
             center=layout[2]
             assert center['name'] and not center['text'],center
-            assert center['iw']==center['ih']==44,center
+            # The full link owns the touch target; its icon must stay inside it
+            # so the search button cannot intercept the player's seek bar.
+            assert center['w']>=44 and center['h']>=44,center
+            assert center['iy']>=center['y'] and center['iy']+center['ih']<=center['y']+center['h'],center
             assert d.js('getComputedStyle(document.querySelector('+json.dumps(icon)+')).backgroundColor')=='rgba(0, 0, 0, 0)'
             assert d.js('getComputedStyle(document.querySelector('+json.dumps(icon)+')).boxShadow')=='none'
             assert abs(center['ix']+center['iw']/2-before['centerX'])<1,center

@@ -46,10 +46,14 @@ func identity(req *http.Request, category string) (string, string, error) {
 		}
 	}
 	host := sha256.Sum256([]byte(u.Hostname()))
-	return "request:" + hex.EncodeToString(hash.Sum(nil)), "host:" + hex.EncodeToString(host[:]), nil
+	prefix := "request:"
+	if req.Context().Value(probeCooldownKey{}) == true {
+		prefix = "probe:"
+	}
+	return prefix + hex.EncodeToString(hash.Sum(nil)), "host:" + hex.EncodeToString(host[:]), nil
 }
 func queryRequest(category string, req *http.Request) bool {
-	if req.Context().Value(queryCooldownKey{}) == true && req.Header.Get("Range") == "" {
+	if req.Context().Value(probeCooldownKey{}) == true && req.Header.Get("Range") == "" {
 		return req.Method == http.MethodGet || req.Method == http.MethodHead
 	}
 	switch category {

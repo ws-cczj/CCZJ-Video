@@ -19,7 +19,7 @@ function dismiss(id: string): void {
 </script>
 
 <template>
-  <div v-if="visible.length > 0" class="toast-stack" aria-live="polite">
+  <div class="toast-stack" aria-live="polite">
     <MotionList preset="toast" tag="div" class="toast-stack__list">
       <Toast
         v-for="t in visible"
@@ -28,7 +28,9 @@ function dismiss(id: string): void {
         :title="t.title"
         :time="`${formatTime(t.time)}${(t.count || 1)>1?` ×${t.count}`:''}`"
         :detail="[t.requestId && `ID: ${t.requestId}`, t.detail].filter(Boolean).join('\n')"
+        :action-label="t.actionLabel"
         @close="dismiss(t.id)"
+        @action="dismiss(t.id); t.action?.()"
       >
         <div v-if="t.message" class="toast-message">{{ t.message }}</div>
       </Toast>
@@ -53,6 +55,10 @@ function dismiss(id: string): void {
   font-size: var(--font-sm);
   @apply cczj-text-secondary cczj-leading-normal;
   word-break: break-word;
+}
+
+@media (max-width: 640px) {
+  .toast-stack { top: calc(env(safe-area-inset-top, 0px) + 12px); right: 12px; left: 12px; }
 }
 
 </style>

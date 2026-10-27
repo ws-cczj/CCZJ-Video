@@ -49,7 +49,11 @@ func TestResponseReuseDoesNotDoubleCountNetworkTraffic(t *testing.T) {
 				return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader("abc"))}, nil
 			})))}
 			for i := 0; i < 2; i++ {
-				response, err := client.Get("https://dm.video.qq.com/barrage/base/sample")
+				req, err := http.NewRequestWithContext(netpolicy.WithProbeCooldown(context.Background()), http.MethodGet, "https://dm.video.qq.com/barrage/base/sample", nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				response, err := client.Do(req)
 				if err != nil {
 					t.Fatal(err)
 				}

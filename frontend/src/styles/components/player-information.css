@@ -53,7 +53,7 @@
   border: 1.5px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.03);
   color: rgba(255, 255, 255, 0.65);
-  font-size: 12.5px;
+  font-size: calc(12.5rem / 14);
   @apply cczj-font-medium cczj-transition-fast;
   font-family: inherit;
   @apply cczj-whitespace-nowrap cczj-flex-shrink-0 cczj-relative cczj-overflow-hidden;
@@ -119,7 +119,7 @@
   padding: 1px 6px;
   border-radius: 999px;
   border: 1px solid currentColor;
-  font-size: 10.5px;
+  font-size: calc(10.5rem / 14);
   @apply cczj-leading-normal cczj-whitespace-nowrap cczj-opacity-70;
 }
 
@@ -147,7 +147,7 @@
 }
 
 .side-blurb {
-  font-size: 12.5px;
+  font-size: calc(12.5rem / 14);
   line-height: 1.7;
   color: rgba(255, 255, 255, 0.6);
   max-height: 88px;
@@ -208,14 +208,14 @@
 }
 
 .side-count {
-  font-size: 11.5px;
+  font-size: calc(11.5rem / 14);
   color: rgba(255, 255, 255, 0.45);
 }
 
 .side-cache-chip {
   @apply cczj-inline-flex cczj-items-center cczj-gap-3;
   padding: 3px 8px;
-  font-size: 10.5px;
+  font-size: calc(10.5rem / 14);
   color: #7ee3b6;
   background: rgba(126, 227, 182, 0.1);
   border: 1px solid rgba(126, 227, 182, 0.25);
@@ -287,7 +287,7 @@
   border: 1px solid rgba(64, 169, 255, 0.55);
   background: linear-gradient(180deg, rgba(24, 144, 255, 0.16) 0%, rgba(64, 169, 255, 0.08) 100%);
   @apply cczj-text-white;
-  font-size: 12.5px;
+  font-size: calc(12.5rem / 14);
   @apply cczj-font-medium cczj-overflow-hidden cczj-whitespace-nowrap;
   text-overflow: ellipsis;
   @apply cczj-flex cczj-flex-col cczj-items-center cczj-justify-center cczj-gap-1;

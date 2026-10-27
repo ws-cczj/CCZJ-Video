@@ -62,7 +62,18 @@ func GetSourceByKeyContext(ctx context.Context, key string) (*model.Source, erro
 
 func AddSource(s *model.Source) error { return AddSourceContext(context.Background(), s) }
 func AddSourceContext(ctx context.Context, s *model.Source) error {
-	return insertSourceContext(ctx, instance, s)
+	tx, err := instance.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := ensureUniqueVideoEndpoint(ctx, tx, s, false); err != nil {
+		return err
+	}
+	if err := insertSourceContext(ctx, tx, s); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 func CreateSourceWithDefault(ctx context.Context, s *model.Source) error {
 	tx, err := instance.BeginTxx(ctx, nil)
@@ -70,6 +81,9 @@ func CreateSourceWithDefault(ctx context.Context, s *model.Source) error {
 		return err
 	}
 	defer tx.Rollback()
+	if err := ensureUniqueVideoEndpoint(ctx, tx, s, false); err != nil {
+		return err
+	}
 	if err := insertSourceContext(ctx, tx, s); err != nil {
 		return err
 	}
@@ -100,7 +114,18 @@ func insertSourceContext(ctx context.Context, executor sqlx.ExtContext, s *model
 
 func UpdateSource(s *model.Source) error { return UpdateSourceContext(context.Background(), s) }
 func UpdateSourceContext(ctx context.Context, s *model.Source) error {
-	return updateSourceContext(ctx, instance, s, false)
+	tx, err := instance.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := ensureUniqueVideoEndpoint(ctx, tx, s, true); err != nil {
+		return err
+	}
+	if err := updateSourceContext(ctx, tx, s, false); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 func UpdateSourceMetadataContext(ctx context.Context, s *model.Source) error {
 	tx, err := instance.BeginTxx(ctx, nil)
@@ -108,6 +133,9 @@ func UpdateSourceMetadataContext(ctx context.Context, s *model.Source) error {
 		return err
 	}
 	defer tx.Rollback()
+	if err := ensureUniqueVideoEndpoint(ctx, tx, s, true); err != nil {
+		return err
+	}
 	var enabled int
 	if err := tx.GetContext(ctx, &enabled, `SELECT enabled FROM sources WHERE source_key=?`, s.SourceKey); err != nil {
 		return err

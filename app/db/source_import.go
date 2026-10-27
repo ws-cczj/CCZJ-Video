@@ -34,6 +34,9 @@ func ImportSourceBundle(ctx context.Context, key string, prepare func(*model.Sou
 	if err != nil {
 		return err
 	}
+	if err := ensureUniqueVideoEndpoint(ctx, tx, desired, !missing); err != nil {
+		return err
+	}
 	if missing {
 		err = insertSourceContext(ctx, tx, desired)
 	} else {

@@ -77,12 +77,12 @@ watch([keyword,recent],()=>load())
 
 <style scoped>
 .drama-theatre { padding: 24px 30px; scrollbar-width: thin; }
-.theatre-toolbar h1 { margin: 0; font-size: 24px; font-weight: 600; }
-.theatre-count,.theatre-meta { color: var(--text-muted); font-size: 12px; }
+.theatre-toolbar h1 { margin: 0; font-size: calc(24rem / 14); font-weight: 600; }
+.theatre-count,.theatre-meta { color: var(--text-muted); font-size: calc(12rem / 14); }
 .theatre-search { padding-left: 12px; border: 1px solid var(--border-strong); border-radius: 10px; color: var(--text-secondary); background: var(--bg-card); }
 .theatre-search:focus-within { border-color: var(--accent); outline: 1px solid var(--accent); outline-offset: 0; }
 .theatre-search input:focus-visible { outline: 0; }
-.theatre-search input { @apply cczj-flex-1 cczj-min-w-0; width: 220px; border: 0; padding: 10px 0; background: transparent; color: var(--text-primary); font: inherit; font-size: 13px; }
+.theatre-search input { @apply cczj-flex-1 cczj-min-w-0; width: 220px; border: 0; padding: 10px 0; background: transparent; color: var(--text-primary); font: inherit; font-size: calc(13rem / 14); }
 .theatre-search .ui-btn,.theatre-random { min-height: 42px; }
 .theatre-search .ui-btn { font-weight: 400; }
 .theatre-random { border-radius: 10px; padding: 8px 14px; }
@@ -95,10 +95,10 @@ watch([keyword,recent],()=>load())
 .theatre-grid :deep(.video-card:hover) { transform: translateY(-3px); box-shadow: none; }
 .theatre-grid :deep(.poster-badge) { font-weight: 400; }
 .theatre-grid :deep(.info) { padding: 12px; }
-.theatre-grid :deep(.title) { font-weight: 500; font-size: 14px; }
+.theatre-grid :deep(.title) { font-weight: 500; font-size: calc(14rem / 14); }
 .theatre-empty { min-height: 280px; }
 .theatre-footer { padding: 32px 0 12px; }
-.theatre-footer p { margin: 0; font-size: 13px; color: var(--text-secondary); }
+.theatre-footer p { margin: 0; font-size: calc(13rem / 14); color: var(--text-secondary); }
 .drama-theatre-mobile { padding: 8px 16px 20px; }
 .drama-theatre-mobile .theatre-toolbar { gap: 12px; }
 .drama-theatre-mobile .theatre-toolbar,.drama-theatre-mobile .theatre-actions { @apply cczj-w-full; }
@@ -107,7 +107,7 @@ watch([keyword,recent],()=>load())
 .drama-theatre-mobile .theatre-search input { width: 80px; }
 .drama-theatre-mobile .theatre-random { min-width: 44px; padding: 8px 12px; }
 .drama-theatre-mobile .theatre-random span { @apply cczj-hidden; }
-.theatre-mobile-tabs .ui-btn { @apply cczj-relative; min-height: 44px; padding: 4px 0; font-size: 17px; font-weight: 400; }
+.theatre-mobile-tabs .ui-btn { @apply cczj-relative; min-height: 44px; padding: 4px 0; font-size: calc(17rem / 14); font-weight: 400; }
 .theatre-mobile-tabs .theatre-tab-active { color: var(--text-primary); font-weight: 600; }
 .theatre-mobile-tabs .theatre-tab-active::after { content: ''; @apply cczj-absolute cczj-bottom-0; width: 18px; height: 2px; left: calc(50% - 9px); background: currentColor; }
 .drama-theatre-mobile .theatre-filters { margin: 8px 0 16px; }
