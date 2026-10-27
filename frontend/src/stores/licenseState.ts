@@ -10,7 +10,7 @@ import { ref } from 'vue'
  * 本程序携带的许可条款版本。改动 `LICENSE` 的实质条款时必须把这里升一位，
  * 升位后所有机器会重新征求一次同意。
  */
-export const LICENSE_TERMS_VERSION = '1.0'
+export const LICENSE_TERMS_VERSION = '1.1'
 
 /** 弹窗是否打开 */
 export const licenseModalOpen = ref(false)

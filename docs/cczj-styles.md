@@ -35,6 +35,7 @@ Vite 的本地 PostCSS 插件 `frontend/build/cczjUtilities.ts` 从同一份公�
 
 ## 兼容边界
 
+- 移动端触摸反馈在 `styles/mobile/frame.css` 的平台根作用域统一处理，包含 Teleport 弹窗及各应用模式。参考 [web.dev 触摸样式](https://web.dev/articles/add-touch-to-your-site)：关闭 WebView 原生点击高亮，按钮、导航和选项禁止长按选中文字；输入框、可编辑内容及普通正文仍允许选择。触摸焦点仅取消 `:focus:not(:focus-visible)` 的默认轮廓，键盘焦点沿用控件的 `:focus-visible` 样式，参见 [MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Selectors/:focus-visible)。不要通过全局 `outline: none` 或按下即 blur 取消键盘和编辑操作。
 - 间距数字沿用 2px 单位，例如 `cczj-gap-4` 为 8px。历史尺寸类有两套命名，例如 `cczj-w-8` 为 32px、`cczj-w-16` 为 16px。保持旧值兼容，使用前查[生成手册](cczj-utilities-cheatsheet.md)，不要推算尺寸或引入另一套隐含单位。
 - 模板类与组合类遵循正常 CSS 层叠。带条件或特定选择器的样式保留在原规则内组合，避免把移动覆盖、交互状态或作用域样式随意移动到全局模板类后改变优先级。
 - 扩展包运行时注入的 CSS 不经过 Vite。扩展可以在 DOM 上使用公共类，自己的注入样式仍使用普通 CSS。

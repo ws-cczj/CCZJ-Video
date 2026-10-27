@@ -7,6 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/jmoiron/sqlx"
 	"modernc.org/sqlite"
 )
 
@@ -100,7 +101,32 @@ func normalizeTypeName(s string) string {
 
 var typeNameTraditional = strings.NewReplacer("倫", "伦", "類", "类", "劇", "剧", "紀", "纪", "錄", "录", "動", "动", "畫", "画", "電", "电", "視", "视", "綜", "综", "藝", "艺")
 
-var defaultBlockedTypeKeys = []string{"福利", "伦理"}
+var defaultBlockedTypeNames = []string{"福利", "伦理片", "倫理片"}
+
+var defaultBlockedTypeKeys = func() []string {
+	var keys []string
+	seen := map[string]bool{}
+	for _, name := range defaultBlockedTypeNames {
+		key := normalizeTypeName(name)
+		if !seen[key] {
+			seen[key] = true
+			keys = append(keys, key)
+		}
+	}
+	return keys
+}()
+
+// Keep all three built-in labels visible before any source has supplied types.
+// Missing aliases inherit a saved choice; a fresh group starts disabled.
+func seedDefaultBlockedTypes(tx *sqlx.Tx) error {
+	for _, name := range defaultBlockedTypeNames {
+		if _, err := tx.Exec(`INSERT OR IGNORE INTO global_types(type_name,collect_enabled)
+		 SELECT ?,COALESCE(MIN(collect_enabled),0) FROM global_types WHERE cczj_type_key(type_name)=?`, name, normalizeTypeName(name)); err != nil {
+			return fmt.Errorf("seed default video type %q: %w", name, err)
+		}
+	}
+	return nil
+}
 
 // Defaults apply to a new category; an explicit saved choice still takes precedence.
 func initialTypeCollectEnabled(name string) int {
@@ -265,14 +291,14 @@ func GetEnabledCollectTypes() ([]*GlobalTypeRow, error) {
 }
 
 // IsTypeCollectEnabled 检查某个类型是否启用了采集
-// Unknown categories use the same defaults as category creation.
+// Runtime decisions read saved switches only. Defaults belong to row creation.
 func IsTypeCollectEnabled(typeName string) bool {
 	typeName = strings.TrimSpace(typeName)
 	if typeName == "" {
 		return true
 	}
 	var enabled bool
-	if err := instance.Get(&enabled, `SELECT COALESCE(MIN(collect_enabled),?) FROM global_types WHERE cczj_type_key(type_name)=?`, initialTypeCollectEnabled(typeName), normalizeTypeName(typeName)); err != nil {
+	if err := instance.Get(&enabled, `SELECT COALESCE(MIN(collect_enabled),1) FROM global_types WHERE cczj_type_key(type_name)=?`, normalizeTypeName(typeName)); err != nil {
 		applog.Error("[GlobalTypes] cannot read type policy: %v", err)
 		return false
 	}

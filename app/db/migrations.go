@@ -53,6 +53,7 @@ var migrations = []migration{
 	{version: 22, note: "保存每集总时长以恢复真实观看进度", apply: func(tx *sqlx.Tx) error {
 		return addColumnIfMissing(tx, "watch_history", "duration", "REAL NOT NULL DEFAULT 0")
 	}},
+	{version: 23, note: "预建福利与简繁伦理片默认禁用条目，保留已保存的分类开关", apply: seedDefaultBlockedTypes},
 }
 
 func migrateDefaultTypePolicy(tx *sqlx.Tx) error {

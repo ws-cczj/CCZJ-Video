@@ -24,7 +24,7 @@ import {
 import { Button, Modal } from './ui'
 
 // 条款要点，正文在 locales 里。改动要同时动 zh 与 en 两份文案。
-const clauseKeys = ['license.c1', 'license.c2', 'license.c3', 'license.c4', 'license.c5']
+const clauseKeys = ['license.c1', 'license.c2', 'license.c3', 'license.c4', 'license.c5', 'license.c6']
 
 const errorStore = useErrorStore()
 

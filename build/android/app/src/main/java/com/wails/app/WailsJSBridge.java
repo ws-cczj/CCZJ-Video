@@ -9,6 +9,8 @@ import android.webkit.WebView;
 import com.wails.app.BuildConfig;
 
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
 import org.json.JSONObject;
 
 /**
@@ -75,6 +77,31 @@ public class WailsJSBridge {
     @JavascriptInterface public void playerMulticast(boolean enabled) { player.multicast(enabled); }
     @JavascriptInterface public String playerOpenCastSettings() { return player.openCastSettings(); }
     @JavascriptInterface public String diagnosticShare(String path) { return diagnosticFiles.share(path); }
+    @JavascriptInterface public String openExternalURL(String url) {
+        WebView view = webView;
+        if (view == null || closed.get() || !(view.getContext() instanceof android.app.Activity)) return "Android host unavailable";
+        if (url == null || url.length() > 8192) return "Invalid web address";
+        android.net.Uri target = android.net.Uri.parse(url);
+        if (!("https".equalsIgnoreCase(target.getScheme()) || "http".equalsIgnoreCase(target.getScheme()))
+                || target.getHost() == null || target.getHost().isEmpty()) return "Invalid web address";
+        android.app.Activity activity = (android.app.Activity) view.getContext();
+        FutureTask<String> launch = new FutureTask<>(() -> {
+            if (closed.get() || activity.isFinishing() || activity.isDestroyed()) return "Android host unavailable";
+            try {
+                activity.startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW, target)
+                    .addCategory(android.content.Intent.CATEGORY_BROWSABLE));
+                return "";
+            } catch (Exception error) {
+                Log.w(TAG, "Unable to open system browser", error);
+                return "Unable to open system browser";
+            }
+        });
+        activity.runOnUiThread(launch);
+        try { return launch.get(5, TimeUnit.SECONDS); }
+        catch (InterruptedException error) { Thread.currentThread().interrupt(); return "Browser launch interrupted"; }
+        catch (Exception error) { return "Unable to open system browser"; }
+        finally { if (!launch.isDone()) launch.cancel(false); }
+    }
     @JavascriptInterface public String installApk(String path) {
         WebView view = webView;
         if (view == null || closed.get() || !(view.getContext() instanceof android.app.Activity)) return "Android host unavailable";

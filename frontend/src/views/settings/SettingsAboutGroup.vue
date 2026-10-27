@@ -17,7 +17,7 @@ import { useErrorStore } from '../../stores/error'
 import { useConfirmStore } from '../../stores/confirm'
 import { useDownloadStore } from '../../stores/download'
 import { formatTime } from '../../utils'
-import { isMobileRuntime, isIOSRuntime } from '../../api/runtime'
+import { openExternalURL, isMobileRuntime, isIOSRuntime } from '../../api/runtime'
 import {
   GetSetting, RestartApp, GetSwapBackupInfo, RollbackUpdate,
 } from '../../api/app'
@@ -33,6 +33,16 @@ const downloadStore = useDownloadStore()
 // 已同意的条款版本读自设置表本身：界面要说的是"这台机器上记下的是什么"，
 // 拿常量冒充会掩盖未同意或写入失败的情况。
 const acceptedTerms = ref('')
+const projectURL = 'https://github.com/ws-cczj/CCZJ-Video'
+const authorEmail = 'yikeshuoguo@qq.com'
+
+async function openProjectURL(url: string): Promise<void> {
+  try {
+    await openExternalURL(url)
+  } catch (error) {
+    errorStore.fromError(t('settings.projectOpenFailed'), error, 'SettingsAboutGroup.openProjectURL')
+  }
+}
 
 // 「退回上一版」的原料是 exe 旁边那份 .old 副本，它可能根本不存在（没装过更新、
 // 或 copy 那一步失败）。没有副本就不出现这个按钮：给一个按不动的入口，
@@ -150,6 +160,21 @@ async function rollbackUpdate(): Promise<void> {
     </section>
 
     <section class="block">
+      <h3>{{ t('settings.projectContact') }}</h3>
+      <dl class="about-contact-list">
+        <div class="about-contact-row">
+          <dt>GitHub</dt>
+          <dd>{{ projectURL }}</dd>
+          <Button class="about-contact-open" variant="text" size="sm" :aria-label="t('settings.projectPage')" @click="openProjectURL(projectURL)"><Icon name="chevron-right" :size="18" /></Button>
+        </div>
+        <div class="about-contact-row">
+          <dt>{{ t('settings.contactEmail') }}</dt>
+          <dd>{{ authorEmail }}</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="block">
       <h3>{{ t('settings.disclaimer') }}</h3>
       <div class="disclaimer-card cczj-flex cczj-gap-7">
         <div class="disclaimer-icon cczj-inline-flex cczj-items-center cczj-justify-center"><Icon name="shield" :size="20" /></div>
@@ -205,6 +230,13 @@ async function rollbackUpdate(): Promise<void> {
 .about-actions {
   @apply cczj-mt-8 cczj-gap-5 cczj-flex-wrap;
 }
+/* Label/supporting-text rows: https://github.com/material-components/material-web/blob/main/docs/components/list.md */
+.about-contact-list { margin: 0; @apply cczj-border cczj-rounded-lg cczj-overflow-hidden; }
+.about-contact-row { @apply cczj-grid cczj-gap-2; grid-template-columns: minmax(0,1fr) auto; padding: 12px 14px; }
+.about-contact-row + .about-contact-row { @apply cczj-border-top; }
+.about-contact-row dt { grid-column: 1; @apply cczj-text-xs cczj-text-muted; }
+.about-contact-row dd { grid-column: 1; margin: 0; @apply cczj-min-w-0 cczj-text-sm cczj-text-primary cczj-select-text; line-height: 1.6; overflow-wrap: anywhere; }
+.about-contact-open { grid-column: 2; grid-row: 1 / 3; align-self: center; }
 
 /* ============ 声明卡片 ============ */
 .disclaimer-card {

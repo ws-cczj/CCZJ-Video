@@ -127,7 +127,7 @@ watch(
   () => currentSearchSource.value,
   async (key) => {
     if (suppressSourceWatch) return
-    cancelSourceSearch()
+    clearSourceResults()
     clearSearchResults()
     hasSearched.value = false
     if (key) {
@@ -177,6 +177,9 @@ function onDeleted(vodId: string, sourceKey: string): void {
   if (si >= 0) {
     sourceSearchResults.value.splice(si, 1)
     sourceSearchTotal.value = Math.max(0, sourceSearchTotal.value - 1)
+    const selected = new Set(selectedSourceVodIds.value)
+    selected.delete(vodId)
+    selectedSourceVodIds.value = selected
   }
   // 推荐分组
   for (const g of recommendGroups.value) {
@@ -730,7 +733,7 @@ function onSourceVideoClick(v: Video): void {
 </script>
 
 <template>
-  <div class="search-page">
+  <div class="search-page" :class="{ 'cczj-mobile-search-selecting': mobile && selectedSourceVodIds.size > 0 }">
     <!-- 搜索栏 -->
     <form v-if="mobile" class="cczj-mobile-search-form" @submit.prevent="doSearch">
       <div class="cczj-mobile-search-field">
@@ -1069,7 +1072,7 @@ function onSourceVideoClick(v: Video): void {
       </div>
 
       <!-- 操作工具栏：全选 / 入库按钮 / 已选计数 -->
-      <div class="source-toolbar cczj-flex cczj-items-center cczj-justify-between cczj-gap-2 cczj-mb-3 cczj-flex-wrap" :class="{ 'cczj-mobile-selection-bar': mobile }" :role="mobile ? 'toolbar' : undefined" :aria-label="t('search.sourceSearchResults')">
+      <div v-if="!mobile || selectedSourceVodIds.size > 0" class="source-toolbar cczj-flex cczj-items-center cczj-justify-between cczj-gap-2 cczj-mb-3 cczj-flex-wrap" :class="{ 'cczj-mobile-selection-bar': mobile }" :role="mobile ? 'toolbar' : undefined" :aria-label="t('search.sourceSearchResults')">
         <div class="cczj-flex cczj-items-center cczj-gap-2">
           <label class="select-all-check cczj-flex cczj-items-center cczj-gap-1 cczj-cursor-pointer cczj-text-sm">
             <input

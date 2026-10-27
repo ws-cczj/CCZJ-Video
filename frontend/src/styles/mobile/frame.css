@@ -1,11 +1,26 @@
 /* Android/iOS presentation only. Desktop pages never acquire this root. */
 html[data-cczj-platform="mobile"] {
+  /* Native tap feedback: https://web.dev/articles/add-touch-to-your-site */
+  -webkit-tap-highlight-color: transparent;
   --cczj-mobile-control-sm: clamp(36px, 10vw, 40px);
   --cczj-mobile-control-md: clamp(40px, 11vw, 44px);
   --cczj-mobile-control-lg: clamp(44px, 12vw, 48px);
   --cczj-mobile-section-padding: clamp(12px, 4vw, 16px);
   --cczj-mobile-canvas: #f4f6f9; --cczj-mobile-surface: #fff;
   --cczj-mobile-ink: #202837; --cczj-mobile-muted: #657184; --cczj-mobile-line: #e6eaf0;
+}
+/* Apply at the document boundary so teleported dialogs and all modes agree. */
+html[data-cczj-platform="mobile"] :is(button,a,summary,label,select,[role="button"],[role="tab"],[role="option"]):not([contenteditable]) {
+  @apply cczj-select-none;
+  -webkit-touch-callout: none;
+}
+html[data-cczj-platform="mobile"] :is(input,textarea,[contenteditable=""],[contenteditable="true"],[contenteditable="plaintext-only"]) {
+  @apply cczj-select-text;
+  -webkit-touch-callout: default;
+}
+/* Pointer focus needs no browser ring; retain each control's :focus-visible. */
+html[data-cczj-platform="mobile"] :is(button,a,summary,[role="button"],[role="tab"],[role="option"],[tabindex]):not(input,textarea,select,[contenteditable]):focus:not(:focus-visible) {
+  @apply cczj-outline-none;
 }
 html[data-cczj-platform="mobile"][data-theme-mode="dark"] {
   --cczj-mobile-canvas: #11151d; --cczj-mobile-surface: #1c222d;

@@ -125,8 +125,8 @@
 /* Top and bottom chrome enter along their own edges. */
 
 /* One primary row; auxiliary controls move into the More drawer. */
-/* Selection stays above the tab bar without changing the result grid. */
-.cczj-mobile-shell .source-search-results { padding-bottom: 80px; }
+/* Reserve space after pagination only while the selection toolbar is mounted. */
+.cczj-mobile-shell .search-page.cczj-mobile-search-selecting { padding-bottom: 96px; }
 .cczj-mobile-shell .source-toolbar.cczj-mobile-selection-bar { @apply cczj-fixed; z-index: 60; @apply cczj-left-2 cczj-right-2; bottom: calc(68px + env(safe-area-inset-bottom,0px)); margin: 0; @apply cczj-p-4 cczj-flex cczj-flex-nowrap cczj-gap-3 cczj-border; border-radius: 14px; background: var(--bg-card); box-shadow: 0 6px 24px #0002; }
 .cczj-mobile-selection-bar > div { @apply cczj-min-w-0 cczj-gap-3; }
 .cczj-mobile-selection-bar > div:last-child { @apply cczj-flex-1 cczj-grid; grid-template-columns: 1.15fr 1fr; }

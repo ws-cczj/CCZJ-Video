@@ -1,7 +1,7 @@
 /** Runtime adapter kept beside generated binding adapters. */
 import './androidTransport'
 export { Dialogs, Window } from '@wailsio/runtime'
-import { System } from '@wailsio/runtime'
+import { Browser, System } from '@wailsio/runtime'
 
 let runtimeOS: string | undefined
 
@@ -24,6 +24,21 @@ export function isMobileRuntime(): boolean {
 /** Platform-specific capabilities use the initialized host, never the user agent. */
 export function isIOSRuntime(): boolean {
   return runtimeOS === 'ios'
+}
+
+/** Wails' generic browser call uses xdg-open on Android; use the host Intent. */
+export async function openExternalURL(url: string): Promise<void> {
+  const target = new URL(url)
+  if (!['https:', 'http:'].includes(target.protocol)) throw new Error('Unsupported external URL')
+  if (isMobileRuntime() && !isIOSRuntime()) {
+    const bridge = (window as unknown as {wails?:{openExternalURL?:(url:string)=>string}}).wails
+    if (!bridge?.openExternalURL) throw new Error('Android browser host unavailable')
+    const error = bridge.openExternalURL(target.href)
+    if (error) throw new Error(error)
+    return
+  }
+  if (isDesktopRuntime() || isIOSRuntime()) await Browser.OpenURL(target.href)
+  else window.open(target.href, '_blank', 'noopener,noreferrer')
 }
 
 
