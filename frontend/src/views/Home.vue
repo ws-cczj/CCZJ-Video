@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import CczjMobileEditActions from '../mobile/CczjMobileEditActions.vue'
 defineOptions({ name: 'Home' })
-import { ref, computed, onMounted, onActivated, onDeactivated, onBeforeUnmount, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onDeactivated, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useModeViewState } from '../modes/useModeViewState'
 import { startupTask } from '../diagnostics/startup'
 import { useGeneration } from '../composables/useGeneration'
@@ -201,20 +201,26 @@ let chartLoadInFlight: Promise<any[]> | null = null
 let chartSignatureValue = ''
 const recommendationGeneration = useGeneration()
 const recommendationRequests = createRequestScope()
-const viewActive = useViewActivity()
+const viewActive = useViewActivity(() => router.currentRoute.value.path === '/')
+const homeRoot = ref<HTMLElement>()
 
-function clearRecommendations(): void {
+function cancelRecommendations(): void {
   recommendationGeneration.invalidate()
   recommendationRequests.cancel()
   chartLoadInFlight = null
-  chartSignatureValue = ''
-  carouselSlides.value = []
-  recommendGroups.value = []
   recommendLoading.value = false
 }
 
+function clearRecommendations(): void {
+  cancelRecommendations()
+  chartSignatureValue = ''
+  carouselSlides.value = []
+  recommendGroups.value = []
+}
+
 watch(viewActive, active => {
-  if (!active) clearRecommendations()
+  if (!active) { homePageWasDeactivated = true; cancelHomeRefresh(); cancelRecommendations() }
+  else if (homePageWasDeactivated) scheduleHomeRefresh()
   else if (!recommendLoading.value && !homePageWasDeactivated) void loadRecommendations()
 })
 
@@ -294,7 +300,9 @@ async function loadDoubanChartData(generation: number): Promise<any[]> {
 }
 
 async function loadRecommendations(): Promise<void> {
-  clearRecommendations()
+  // Keep the last complete presentation while revalidating the same source.
+  // Cancelling work on tab exit must not destroy the retained carousel/cards.
+  cancelRecommendations()
   const sourceKey = sourceStore.currentSourceKey
   if (!sourceKey || !viewActive.value) return
   const generation = recommendationGeneration.begin()
@@ -401,6 +409,8 @@ async function loadRecommendations(): Promise<void> {
       if (hasCatalog && recommendationGeneration.isCurrent(generation)) {
         const chart = await loadDoubanChartData(generation)
         if (recommendationGeneration.isCurrent(generation)) applyChart(chart)
+      } else if (recommendationGeneration.isCurrent(generation)) {
+        chartSignatureValue = ''; carouselSlides.value = []
       }
     } catch (e) {
       console.warn('加载豆瓣热榜失败:', e)
@@ -495,12 +505,36 @@ function goDetail(video: Video): void {
 }
 
 // ==================== 生命周期 ====================
-let homePageWasDeactivated = false
+let homePageWasDeactivated = !viewActive.value
 let suppressSourceWatch = false
+let resumeRevision = 0, resumeFrame: number | undefined
+function cancelHomeRefresh():void {
+  resumeRevision++
+  if(resumeFrame!==undefined)cancelAnimationFrame(resumeFrame)
+  resumeFrame=undefined
+}
+function scheduleHomeRefresh():void {
+  cancelHomeRefresh()
+  if(!isMobileRuntime()){homePageWasDeactivated=false;void refreshHomeFeed();return}
+  const token=resumeRevision
+  // Vue starts CSS transitions over two frames. Refresh retained content only
+  // after that transition, and never start reads for an uncommitted swipe preview.
+  void nextTick(()=>{
+    if(token!==resumeRevision)return
+    resumeFrame=requestAnimationFrame(()=>{resumeFrame=requestAnimationFrame(async()=>{
+      resumeFrame=undefined
+      const scene=homeRoot.value?.closest('.cczj-mobile-route-scene')
+      await Promise.allSettled((scene?.getAnimations?.()??[]).map(animation=>animation.finished))
+      if(token!==resumeRevision||!viewActive.value)return
+      homePageWasDeactivated=false
+      await refreshHomeFeed()
+    })})
+  })
+}
 
 async function refreshHomeFeed(): Promise<void> {
   const key = sourceStore.currentSourceKey
-  if (!key) return
+  if (!key || !viewActive.value) return
   // Recommendations are independent of the local first page. Start them under
   // the same fixed splash interval rather than after the list has completed.
   void loadRecommendations()
@@ -526,20 +560,14 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  cancelHomeRefresh()
   clearRecommendations()
   if (applyTimer) clearTimeout(applyTimer)
 })
 
-// KeepAlive activates right after mounting as well; gating on a real
-// deactivation keeps the first visit to a single round of requests.
-onActivated(async () => {
-  if (!homePageWasDeactivated) return
-  homePageWasDeactivated = false
-  await refreshHomeFeed()
-})
-
 onDeactivated(() => {
-  clearRecommendations()
+  cancelHomeRefresh()
+  cancelRecommendations()
   if (applyTimer) { clearTimeout(applyTimer); applyTimer = null }
   homePageWasDeactivated = true
   showContinueRemoval.value = false
@@ -567,7 +595,7 @@ const { editing: editingContinue, finish: finishContinueEditing, vHoldToEdit } =
 </script>
 
 <template>
-  <div class="home cczj-max-w-full cczj-text-primary">
+  <div ref="homeRoot" class="home cczj-max-w-full cczj-text-primary">
     <router-link v-if="isMobileRuntime()" to="/search" class="cczj-mobile-home-search"><Icon name="search" :size="19" /><span>{{ t('mobile.homeSearch') }}</span><Icon name="chevron-right" :size="16" /></router-link>
     <BookCarousel v-if="layoutStore.showCarousel && carouselSlides.length > 0" :slides="carouselSlides"
       :source-key="sourceStore.currentSourceKey" :on-slide-click="onChartSlideClick"

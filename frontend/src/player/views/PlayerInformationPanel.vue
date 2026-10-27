@@ -5,6 +5,8 @@ import { Window } from '../../api/runtime'
 import { presentationProfile } from '../../platform/presentation'
 import Icon from '../../components/Icon.vue'
 import PlaybackRouteList from './PlaybackRouteList.vue'
+import EpisodeLabel from './EpisodeLabel.vue'
+import { hasDetailedEpisodeLabels } from '../videoInfoFormat'
 import DoubanComments from '../../components/DoubanComments.vue'
 import { Button } from '../../components/ui'
 import type { PlayerPanelModel } from '../page/panelModel'
@@ -14,6 +16,7 @@ const emit = defineEmits<{source:[key:string,line?:number];episode:[index:number
 const { t } = useI18n()
 const mobile = presentationProfile().ui === 'mobile'
 const details = props.model.details, catalog = props.model.catalog, episodeList = props.model.episodes
+const detailedEpisodeLabels = computed(() => hasDetailedEpisodeLabels(episodeList.items))
 const mobilePlayerTab = ref<'overview'|'comments'>('overview')
 const mobileCommentsVisited = ref(false)
 const mobileCommentsId = computed(() => {
@@ -92,14 +95,14 @@ function onMinimizeApp():void { try { Window.Minimise() } catch { /* Host owns a
                 </div>
               </div>
 
-              <div class="ep-grid cczj-grid cczj-gap-2">
+              <div class="ep-grid cczj-grid cczj-gap-2" :class="{ 'cczj-episode-grid-detailed': detailedEpisodeLabels }">
                 <button v-for="(ep, i) in episodeList.items" :key="episodeList.originalIndex(i)" class="ep-item cczj-relative cczj-px-3 cczj-py-2 cczj-rounded cczj-transition cczj-cursor-pointer cczj-text-sm" :class="{
                   active: episodeList.originalIndex(i) === episodeList.current,
                   watched: episodeList.watched(episodeList.originalIndex(i)),
                   future: episodeList.originalIndex(i) > episodeList.current && !episodeList.watched(episodeList.originalIndex(i)),
                 }" :aria-current="episodeList.originalIndex(i) === episodeList.current ? 'step' : undefined" @click="emit('episode',episodeList.originalIndex(i))"
                   :title="episodeList.label(episodeList.originalIndex(i), ep) + (episodeList.percent(episodeList.originalIndex(i)) > 0 ? t('detail.watchedProgress', { pct: Math.round(episodeList.percent(episodeList.originalIndex(i))) }) : '')">
-                  <span class="ep-item-num cczj-truncate">{{ episodeList.label(episodeList.originalIndex(i), ep) }}</span>
+                  <EpisodeLabel class="ep-item-num" :label="episodeList.label(episodeList.originalIndex(i), ep)" />
                   <span v-show="episodeList.originalIndex(i) === episodeList.current" class="ep-playing-badge cczj-absolute cczj-top-1 cczj-right-1 cczj-flex">
                     <span class="bar b1 cczj-bg-accent cczj-rounded"></span>
                     <span class="bar b2 cczj-bg-accent cczj-rounded"></span>

@@ -8,6 +8,10 @@ import { useViewActivity, windowForeground } from '../composables/useViewActivit
 import { whenImageNearViewport } from '../utils/imageVisibility'
 import { deferImageRelease } from '../utils/imageRelease'
 
+// Keep an unloaded slot a decoded transparent image. Removing src creates
+// Chromium's broken-image/alt-text shadow layout for every offscreen poster.
+const emptyImage = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
+
 defineOptions({ inheritAttrs: false })
 
 interface Props {
@@ -209,7 +213,7 @@ onBeforeUnmount(() => { disposed = true; scheduleImage() })
   <img
     v-bind="$attrs"
     :ref="onImgEl"
-    :src="resolvedSrc || undefined"
+    :src="resolvedSrc || emptyImage"
     :loading="loading"
     :alt="alt"
     :class="imageClass"

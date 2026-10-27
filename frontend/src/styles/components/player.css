@@ -197,10 +197,12 @@
   @apply cczj-outline-none;
 }
 
-.player-wrapper.fullscreen .native-video {
-  /* 全屏时仍然保持比例，避免裁切画面 */
-  object-fit: contain;
-  @apply cczj-w-screen cczj-h-screen;
+.player-wrapper[data-video-fit] .native-video {
+  inset: auto;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  @apply cczj-w-full cczj-h-full;
 }
 
 /* ========= 加载动画 ========= */

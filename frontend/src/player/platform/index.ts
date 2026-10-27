@@ -1,5 +1,5 @@
 import { createFullscreenPlatform } from '../../platform/fullscreen'
-import { enterDevicePip, readPlayerDevice, restoreDeviceBrightness, setDeviceVolume, setCastMulticast, openSystemCastSettings } from '../../api/mobilePlayer'
+import { enterDevicePip, readPlayerDevice, restoreDeviceBrightness, setDeviceBrightness, setDeviceVolume, setCastMulticast, openSystemCastSettings } from '../../api/mobilePlayer'
 import { presentationProfile } from '../../platform/presentation'
 import { isIOSRuntime } from '../../api/runtime'
 
@@ -16,6 +16,7 @@ export function createPlayerPlatform() {
   const profile = presentationProfile()
   const nativeDevice = profile.host === 'native-mobile'
   const ios = isIOSRuntime()
+  const brightnessOwner = Symbol('player-brightness')
   return {
     profile,
     fullscreen: createFullscreenPlatform(),
@@ -57,9 +58,11 @@ export function createPlayerPlatform() {
     },
     device: {
       volumeSupported: !ios,
+      brightnessSupported: nativeDevice && !ios,
       read: () => nativeDevice ? readPlayerDevice() : undefined,
       setVolume: (value: number) => { if (nativeDevice) setDeviceVolume(Math.max(0, Math.min(1, value))) },
-      restoreBrightness: () => { if (nativeDevice) restoreDeviceBrightness() },
+      setBrightness: (value: number) => nativeDevice && !ios && setDeviceBrightness(value, brightnessOwner),
+      restoreBrightness: () => { if (nativeDevice) restoreDeviceBrightness(brightnessOwner) },
     },
     cast: { supported: profile.host !== 'browser' && !ios, multicast: (enabled: boolean) => { if (nativeDevice) setCastMulticast(enabled) },
       systemSupported:()=>nativeDevice && readPlayerDevice()?.castSettings===true,

@@ -54,7 +54,6 @@ html[data-cczj-platform=mobile][data-theme-mode=dark] { --cczj-player-episode-pr
 .cczj-mobile-control-spacer { @apply cczj-flex-1; }
 .cczj-mobile-video { touch-action: none; }
 .cczj-mobile-video .native-video { touch-action: none; }
-.cczj-mobile-video > .native-video,.cczj-mobile-video > canvas { filter:brightness(var(--cczj-mobile-image-brightness,1)); }
 .cczj-mobile-resume { @apply cczj-absolute; z-index: 28; left: 10px; bottom: 54px; max-width: calc(100% - 20px); @apply cczj-flex cczj-items-center; background: #17191de8; color: white; border: 1px solid #ffffff25; border-radius: 10px; }
 .cczj-mobile-resume button { @apply cczj-flex cczj-items-center cczj-justify-center; gap: 7px; min-height: 40px; min-width: 40px; padding: 0 10px; font: inherit; @apply cczj-text-sm; background: transparent; color: inherit; border: 0; }
 .cczj-mobile-resume b { font-variant-numeric: tabular-nums; }
@@ -88,7 +87,7 @@ html[data-motion-overlays=off] [class*=cczj-mobile-gesture-feedback-] { transiti
 .cczj-mobile-cast-help p { margin-top:8px; }
 body[data-player-pip] .cczj-mobile-video { position: fixed !important; inset: 0 !important; width: 100vw !important; height: 100vh !important; z-index: 2147483647 !important; border-radius: 0 !important; }
 body[data-player-pip] .cczj-mobile-video > :not(video):not(.vp-subtitle) { display: none !important; }
-body[data-player-pip] .cczj-mobile-video video { @apply cczj-w-full cczj-h-full; object-fit: contain; background: black; }
+body[data-player-pip] .cczj-mobile-video[data-video-fit] video { @apply cczj-w-full cczj-h-full; object-fit: contain; background: black; }
 
 .cczj-mobile-video.fullscreen .volume-popup.show { transform: translateY(0); }
 .cczj-mobile-video.fullscreen .cache-info { display: inline-flex !important; font-size: calc(9rem / 14); max-width: 210px; }
@@ -101,9 +100,11 @@ body[data-player-pip] .cczj-mobile-video .vp-subtitle { bottom: 4%; font-size: c
 .cczj-mobile-video:not(.fullscreen) .progress-bar-wrapper { bottom: 46px; }
 .cczj-mobile-video-loading { @apply cczj-absolute; inset: 0; z-index: 3; @apply cczj-flex cczj-flex-col cczj-items-center cczj-justify-center cczj-gap-5; color: white; background: #0004; @apply cczj-text-sm cczj-pointer-events-none; }
 .cczj-mobile-video-loading-initial { background: #000; }
-.cczj-mobile-video .pause-overlay { right:12px; bottom:62px; min-width:44px; min-height:44px; @apply cczj-grid; place-items:center; padding:0; border:0; background:transparent; }
-.cczj-mobile-video .pause-icon { width:56px; height:56px; }
-.cczj-mobile-video.fullscreen .pause-overlay { right:20px; bottom:76px; }
+/* Video.js centres its big play control with half-size negative margins:
+   https://github.com/videojs/video.js/blob/main/src/css/components/_big-play.scss
+   Keep centring separate from the inherited scale animation and hover state. */
+.cczj-mobile-video .pause-overlay { left:50%; top:50%; right:auto; bottom:auto; width:48px; height:48px; margin:-24px 0 0 -24px; min-width:44px; min-height:44px; @apply cczj-grid; place-items:center; padding:0; border:0; background:transparent; }
+.cczj-mobile-video .pause-icon { width:48px; height:48px; }
 
 .cczj-mobile-video:not(.fullscreen) .cczj-mobile-resume { bottom: 78px; }
 .cczj-mobile-video .cczj-mobile-player-chrome-enter-active { transition: opacity var(--cczj-motion-normal) var(--cczj-motion-ease-enter),transform var(--cczj-motion-normal) var(--cczj-motion-ease-enter); }
@@ -286,7 +287,6 @@ html[data-motion-overlays=off] .cczj-mobile-level-feedback,html[data-motion-over
 .cczj-mobile-drawer-episode-head button { @apply cczj-flex cczj-items-center cczj-gap-2; min-height:44px; padding:0 6px; @apply cczj-text-white; font:inherit; border:0; background:transparent; }
 .cczj-mobile-drawer-episode-grid { @apply cczj-grid; grid-template-columns:repeat(3,minmax(0,1fr)); @apply cczj-gap-4; }
 .cczj-mobile-drawer-episode-grid button { @apply cczj-relative cczj-min-w-0; min-height:56px; padding:10px 5px; border:0; border-radius:9px; color:#e9eaf0; background:#ffffff0d; font:inherit; @apply cczj-text-sm; }
-.cczj-mobile-drawer-episode-grid button > span { @apply cczj-block cczj-whitespace-nowrap cczj-overflow-hidden; text-overflow:ellipsis; }
 .cczj-mobile-drawer-episode-grid small { @apply cczj-block; margin-top:3px; font-size:calc(9rem / 14); opacity:.65; }
 .cczj-mobile-drawer-episode-grid button[aria-current=step] { background:#f1f2f4; color:#141518; @apply cczj-font-bold; }
 @keyframes cczj-mobile-preview-spin { to { transform:rotate(360deg); } }

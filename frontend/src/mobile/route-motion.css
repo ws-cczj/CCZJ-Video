@@ -52,6 +52,9 @@ html[data-motion-pages='off'] .cczj-mobile-tab-dragging .cczj-mobile-route-scene
 .cczj-mobile-edit-float-enter-from,.cczj-mobile-edit-float-leave-to { @apply cczj-opacity-0; transform:translateY(8px); }
 .cczj-mobile-shell .cczj-mobile-page .history-page .page-header-actions { order:-1; }
 .cczj-mobile-route-scene { contain:layout; }
+/* The route owns entrance motion. Empty states must not fade again when a
+   cached short-drama scene is reinserted or its source lookup completes. */
+.cczj-mobile-shared-backdrop .cczj-mobile-route-scene :is(.empty-state,.empty-icon) { animation:none; }
 .cczj-mobile-route-scene .cczj-mobile-selection-bar { bottom:8px!important; }
 .cczj-mobile-route-scene .cczj-mobile-edit-actions { bottom:16px; }
 .cczj-mobile-shell .cczj-mobile-page .home .rec-remove-btn { background:transparent; border:0; @apply cczj-shadow-none; }

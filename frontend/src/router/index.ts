@@ -6,6 +6,7 @@ import { modeSessions } from '../modes/sessionRuntime'
 import { restoreModeScroll } from '../modes/restoreScroll'
 import { createRouter, createWebHashHistory, type RouteLocationNormalized } from 'vue-router'
 import { WriteLog } from '../api/app'
+import { isMobileRuntime } from '../api/runtime'
 
 // ====== 滚动位置管理：记录每个路由路径在 .main-content 上的 scrollTop ======
 // 背景：App.vue 中滚动容器是 .main-content（overflow-y: auto），不是 window。
@@ -13,6 +14,7 @@ import { WriteLog } from '../api/app'
 // 可能被滚动到其它位置，因此返回时需要主动恢复之前的位置。
 const scrollPositions: Record<string, number> = {}
 let stopScrollRestore:(()=>void)|undefined
+let scrollRevision=0
 
 function getScrollContainer(): HTMLElement | null {
   return document.querySelector('[data-route-active="true"] .main-content') || document.querySelector('.main-content')
@@ -31,7 +33,7 @@ function restoreScrollFor(path: string): void {
   const y = scrollPositions[path] ?? modeSessions.scroll(routeMode(path),path)
   if (typeof y === 'number' && y >= 0) {
     stopScrollRestore?.()
-    stopScrollRestore = restoreModeScroll(el,y)
+    stopScrollRestore = restoreModeScroll(el,y,{smooth:path==='/'&&isMobileRuntime()&&el.dataset.cczjScrollRestore!=='instant'})
   }
 }
 
@@ -150,6 +152,7 @@ router.beforeEach(async to => {
 
 // 离开当前路由前先记录 .main-content 的 scrollTop
 router.beforeEach((to: RouteLocationNormalized, from: RouteLocationNormalized) => {
+  scrollRevision++
   stopScrollRestore?.();stopScrollRestore=undefined
   if (from.path) saveScrollFor(['/settings','/novel/settings','/comic/settings'].includes(from.path) ? routeScreenKey(from) : from.path)
   return true
@@ -159,12 +162,15 @@ router.beforeEach((to: RouteLocationNormalized, from: RouteLocationNormalized) =
 //   · 如果是从其它页“返回”到一个之前访问过的路径（该路径有记录），恢复滚动位置
 //   · 如果是“首次进入”该路径（没有 saved scrollTop），滚到顶部（与浏览器默认行为一致）
 //   · 用 nextTick + setTimeout 确保异步组件挂载 + 列表数据渲染完成后再恢复
-router.afterEach((to: RouteLocationNormalized, from: RouteLocationNormalized) => {
+router.afterEach((to, from, failure) => {
+  if(failure)return
+  const revision=++scrollRevision
   modeSessions.rememberRoute(routeMode(to.path),to.fullPath)
   const toPath = ['/settings','/novel/settings','/comic/settings'].includes(to.path) ? routeScreenKey(to) : to.path
   const hasSaved = (scrollPositions[toPath] ?? modeSessions.scroll(routeMode(toPath),toPath)) > 0
   nextTick(() => {
     window.setTimeout(() => {
+      if(revision!==scrollRevision||router.currentRoute.value.fullPath!==to.fullPath)return
       if (hasSaved) {
         restoreScrollFor(toPath)
       } else {

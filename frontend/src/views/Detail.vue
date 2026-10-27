@@ -23,6 +23,8 @@ import { bumpFavoritesRefresh } from '../stores/favoritesSync'
 import type { Video, HistoryItem, Episode } from '../types'
 import { readStorage, writeStorage } from '../platform/storage'
 import { isMobileRuntime } from '../api/runtime'
+import EpisodeLabel from '../player/views/EpisodeLabel.vue'
+import { hasDetailedEpisodeLabels } from '../player/videoInfoFormat'
 
 const { t } = useI18n()
 const mobile = isMobileRuntime()
@@ -32,6 +34,7 @@ const route = useRoute()
 const router = useRouter()
 const sourceStore = useSourceStore()
 const videoStore = useVideoStore()
+const detailedEpisodeLabels = computed(() => hasDetailedEpisodeLabels(videoStore.episodes))
 const downloadStore = useDownloadStore()
 const confirmStore = useConfirmStore()
 const errorStore = useErrorStore()
@@ -908,7 +911,7 @@ onBeforeUnmount(() => {
             </Button>
           </div>
         </div>
-        <div class="episodes-grid cczj-grid cczj-gap-2">
+        <div class="episodes-grid cczj-grid cczj-gap-2" :class="{ 'cczj-episode-grid-detailed': detailedEpisodeLabels }">
           <button v-for="(ep, i) in sortedEpisodes" :key="'ep-' + (ep.ep_num || i)" class="episode-btn cczj-relative cczj-rounded cczj-px-3 cczj-py-2 cczj-cursor-pointer cczj-flex cczj-items-center cczj-gap-1 cczj-text-sm cczj-transition" :class="{
             'download-mode': episodeMode === 'download',
             'in-download': downloadingEpKeys.has(epKey(ep)),
@@ -916,7 +919,7 @@ onBeforeUnmount(() => {
           }" @click="onEpisodeClick(i, ep)"
             :title="formatEpisodeName(ep, origIdx(i)) + (isWatched(ep, origIdx(i)) ? t('detail.watchedProgress', { pct: Math.round(getEpPct(ep, origIdx(i))) }) : '')">
             <Icon v-if="episodeMode === 'download'" name="download" :size="11" />
-            <span class="ep-num cczj-flex-1 cczj-truncate">{{ formatEpisodeName(ep, origIdx(i)) }}</span>
+            <EpisodeLabel class="ep-num cczj-flex-1" :label="formatEpisodeName(ep, origIdx(i))" />
             <div v-if="episodeMode !== 'download' && getEpPct(ep, origIdx(i)) > 0" class="ep-progress-fill cczj-absolute cczj-bottom-0 cczj-left-0 cczj-bg-accent"
               :style="{ width: getEpPct(ep, origIdx(i)) + '%' }"></div>
             <span v-if="episodeMode !== 'download' && getEpPct(ep, origIdx(i)) > 0" class="ep-progress-pct cczj-text-xs cczj-text-accent">{{

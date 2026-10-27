@@ -1,3 +1,4 @@
+import { layoutCanvasToVideo } from './videoLayout'
 /**
  * Anime4K 动画超分辨率增强器 — WebGL2 实时 CNN 超分（多档位版）
  *
@@ -293,6 +294,7 @@ export class Anime4kUpscaler {
     this.destroyed = false
     this.sourceVideo = video
     this.canvas = document.createElement('canvas')
+    this.canvas.dataset.cczjEnhancement = 'true'
     this.canvas.style.cssText =
       'position:absolute;pointer-events:none;z-index:1;image-rendering:auto;display:none'
     const container = parent ?? video.parentElement
@@ -562,7 +564,7 @@ export class Anime4kUpscaler {
     }
 
     const texelX = 1 / vw, texelY = 1 / vh
-    this.syncCanvasToVideo(video, canvas)
+    layoutCanvasToVideo(video, canvas)
 
     // 执行所有 pass
     for (let i = 0; i < this.passes.length; i++) {
@@ -746,25 +748,6 @@ export class Anime4kUpscaler {
       gl.bindTexture(gl.TEXTURE_2D, this.textures[i]!)
       gl.texImage2D(gl.TEXTURE_2D, 0, internal, this.texW, this.texH, 0, gl.RGBA, this.useFloatBuffer ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE, null)
     }
-  }
-
-  /** Match the canvas to the video's actual object-fit: contain box. */
-  private syncCanvasToVideo(video: HTMLVideoElement, canvas: HTMLCanvasElement): void {
-    const rect = video.getBoundingClientRect()
-    const parentRect = canvas.parentElement?.getBoundingClientRect()
-    if (rect.width <= 0 || rect.height <= 0 || !parentRect) return
-    const videoRatio = video.videoWidth / video.videoHeight
-    const containerRatio = rect.width / rect.height
-    let width: number, height: number, x: number, y: number
-    if (videoRatio > containerRatio) {
-      width = rect.width; height = width / videoRatio; x = 0; y = (rect.height - height) / 2
-    } else {
-      height = rect.height; width = height * videoRatio; x = (rect.width - width) / 2; y = 0
-    }
-    canvas.style.left = `${rect.left - parentRect.left + x}px`
-    canvas.style.top = `${rect.top - parentRect.top + y}px`
-    canvas.style.width = `${width}px`
-    canvas.style.height = `${height}px`
   }
 
   private sampleVideoCenter(gl: WebGL2RenderingContext): number[] {

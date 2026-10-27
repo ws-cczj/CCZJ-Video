@@ -7,13 +7,14 @@ let nativeOwner=0
 export function useReadingBrightness(preferences:Ref<{brightness:number;systemBrightness:boolean}>) {
   const native=isMobileRuntime() && !!readPlayerDevice()
   const owner=native?++nativeOwner:0
+  const brightnessOwner=Symbol('reader-brightness')
   watch(()=>[preferences.value.brightness,preferences.value.systemBrightness],()=>{
     if(!native || owner!==nativeOwner)return
     if(preferences.value.systemBrightness)restoreDeviceBrightness()
-    else setDeviceBrightness(preferences.value.brightness)
+    else setDeviceBrightness(preferences.value.brightness,brightnessOwner)
   },{immediate:true})
   // Page transitions overlap two chapters. The departing reader must never
   // restore system brightness after the incoming reader has claimed it.
-  onBeforeUnmount(()=>{if(native && owner===nativeOwner)restoreDeviceBrightness()})
+  onBeforeUnmount(()=>{if(native && owner===nativeOwner)restoreDeviceBrightness(brightnessOwner)})
   return computed(()=>!native && !preferences.value.systemBrightness ? 1-preferences.value.brightness : 0)
 }

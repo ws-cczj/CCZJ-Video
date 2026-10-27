@@ -6,6 +6,7 @@ import { formatPlaybackTime } from '../player/videoInfoFormat'
 export function useMobilePlayerGestures(options: {
   enabled: boolean; device: PlayerPlatform['device']; video: () => HTMLVideoElement | null; visible: () => void; onVolume: (value: number) => void
   onStart?: () => void
+  holdSpeed?: () => number
   interaction?: 'portrait'
   onSwipe?: (direction: 'previous' | 'next') => void
 }) {
@@ -17,9 +18,6 @@ export function useMobilePlayerGestures(options: {
   const level = ref(0)
   const compact = ref(false)
   const active = ref(false)
-  // Picture brightness also works in emulators, where window backlight changes
-  // are not reflected in the rendered display. The neutral midpoint is 1x.
-  const brightness = ref(.5)
   let hide: ReturnType<typeof setTimeout> | undefined
   let collapse: ReturnType<typeof setTimeout> | undefined
   let suppressClick = false
@@ -56,7 +54,7 @@ export function useMobilePlayerGestures(options: {
     kind.value = ''; hud.value = ''; seekTarget.value = -1; compact.value = false; active.value = false
     start = { id: e.pointerId, x: e.clientX, y: e.clientY, width: r.width, height: r.height,
       time: video.currentTime, duration: video.duration, target: video.currentTime,
-      brightness: brightness.value, volume: device?.volume ?? video.volume,
+      brightness: device?.brightness ?? .5, volume: device?.volume ?? video.volume,
       side: e.clientX - r.left < r.width / 2, native: !!device }
     hold = setTimeout(() => {
       hold = undefined
@@ -64,7 +62,8 @@ export function useMobilePlayerGestures(options: {
       boosted = { video, rate: video.playbackRate }
       boosting.value = true
       // Holding never slows down a user's already faster selected rate.
-      video.playbackRate = Math.max(2, video.playbackRate)
+      const configured = options.holdSpeed?.() ?? 2
+      video.playbackRate = Math.max(Number.isFinite(configured) ? Math.max(1, Math.min(4, configured)) : 2, video.playbackRate)
       kind.value = 'speed'; hud.value = String(video.playbackRate); active.value = true; suppressClick = true
       options.onStart?.()
       root.setPointerCapture(e.pointerId)
@@ -90,9 +89,10 @@ export function useMobilePlayerGestures(options: {
     if (!kind.value) {
       if (Math.hypot(dx, dy) < 10) return
       clearHold()
-      // iOS owns output volume through hardware/system controls. Do not show
-      // a changing percentage for a video.volume assignment WebKit ignores.
-      if (Math.abs(dx) < Math.abs(dy) && !s.side && !options.device.volumeSupported) {
+      // Only expose gestures backed by an actual device capability.
+      if (Math.abs(dx) < Math.abs(dy) && (s.side
+        ? !s.native || !options.device.brightnessSupported
+        : !options.device.volumeSupported)) {
         suppressClick = true
         return
       }
@@ -112,12 +112,14 @@ export function useMobilePlayerGestures(options: {
       const diff = Math.round(s.target - s.time)
       hud.value = `${formatPlaybackTime(s.target)}  ${diff >= 0 ? '+' : '−'}${Math.abs(diff)}s`
     } else {
-      const value = Math.max(0, Math.min(1, (kind.value === 'brightness' ? s.brightness : s.volume) - dy / s.height * 1.4))
+      const value = Math.max(kind.value === 'brightness' ? .02 : 0, Math.min(1, (kind.value === 'brightness' ? s.brightness : s.volume) - dy / s.height * 1.4))
+      if (kind.value === 'brightness' && !options.device.setBrightness(value)) { cancel(); return }
       level.value = value
       hud.value = `${Math.round(value * 100)}%`
-      if (kind.value === 'brightness') brightness.value = value
-      else if (s.native) options.onVolume(value)
-      else { const video = options.video(); if (video) { video.volume = value; video.muted = value === 0 } }
+      if (kind.value === 'volume') {
+        if (s.native) options.onVolume(value)
+        else { const video = options.video(); if (video) { video.volume = value; video.muted = value === 0 } }
+      }
     }
   }
   function end(e: PointerEvent): void {
@@ -156,7 +158,6 @@ export function useMobilePlayerGestures(options: {
   function visibility(): void { if (document.hidden) cancel() }
   onMounted(() => {
     if (!options.enabled) return
-    options.device.restoreBrightness()
     window.addEventListener('pointerup', end, true)
     window.addEventListener('pointercancel', end, true)
     window.addEventListener('blur', cancel)
@@ -173,5 +174,5 @@ export function useMobilePlayerGestures(options: {
     window.removeEventListener('pagehide', cancel)
     document.removeEventListener('visibilitychange', visibility)
   })
-  return { locked, hud, kind, boosting, seekTarget, level, compact, active, brightness, down, move, end, cancel, consumeClick, toggleLock }
+  return { locked, hud, kind, boosting, seekTarget, level, compact, active, down, move, end, cancel, consumeClick, toggleLock }
 }

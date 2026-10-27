@@ -5,7 +5,7 @@ import { Button } from '../../components/ui'
 import Icon from '../../components/Icon.vue'
 import { formatPlaybackTime } from '../videoInfoFormat'
 
-const props = defineProps<{ current: number; duration: number; playing: boolean; boosting: boolean; muted: boolean; ready: boolean; controlsHost?: HTMLElement }>()
+const props = defineProps<{ current: number; duration: number; playing: boolean; boosting: boolean; boostRate: number; muted: boolean; ready: boolean; controlsHost?: HTMLElement }>()
 const emit = defineEmits<{ play: []; seek: [seconds: number]; sound: [] }>()
 const { t } = useI18n()
 const target = ref<number | null>(null)
@@ -30,7 +30,7 @@ function end(event: PointerEvent): void {
 </script>
 
 <template>
-  <div v-if="boosting" class="portrait-boost cczj-absolute cczj-flex cczj-items-center cczj-gap-3" role="status"><Icon name="play" :size="18" />{{ t('shortDrama.boosting') }}</div>
+  <div v-if="boosting" class="portrait-boost cczj-absolute cczj-flex cczj-items-center cczj-gap-3" role="status"><Icon name="play" :size="18" />{{ t('shortDrama.boosting',{speed:boostRate}) }}</div>
   <Button v-if="ready && !playing && !boosting" class="portrait-play cczj-absolute" variant="text" icon :aria-label="t('player.play')" @pointerdown.stop @click.stop="emit('play')"><Icon name="play" :size="54" /></Button>
   <Teleport :to="controlsHost" :disabled="!controlsHost">
   <div class="portrait-controls cczj-absolute cczj-flex cczj-flex-col" :class="{'portrait-scrubbing':target !== null,'portrait-controls-wide':!!controlsHost}" @click.stop @dblclick.stop @pointerdown.stop @wheel.stop>
@@ -68,4 +68,6 @@ function end(event: PointerEvent): void {
 .portrait-sound { align-self: flex-start; margin-bottom: 12px; }
 .portrait-play { z-index: 24; left: 50%; top: 45%; transform: translate(-50%,-50%); min-width: 88px; min-height: 88px; color: #ffffffbe; background: transparent; }
 .portrait-play:hover { color: #fff; background: #0003; }
+:global(html[data-cczj-platform=mobile]) .portrait-play { top:50%; min-width:72px; min-height:72px; }
+:global(html[data-cczj-platform=mobile]) .portrait-play :deep(svg) { width:44px; height:44px; }
 </style>

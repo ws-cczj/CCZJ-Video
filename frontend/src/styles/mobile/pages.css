@@ -1,4 +1,6 @@
 /* Shared business views inside the isolated mobile presentation boundary. */
+/* MobileRouteStage already animates these page roots. */
+.cczj-mobile-shell .cczj-mobile-page :is(.home,.sources-page,.history-page,.recommendations-page) { animation:none; }
 .cczj-mobile-shell .cczj-mobile-page :is(.page-header,.page-head,.recent-head) :is(h1,h2) { @apply cczj-hidden; }
 .cczj-mobile-shell .cczj-mobile-page :is(.page-header,.recent-head) { @apply cczj-flex cczj-flex-col cczj-items-stretch cczj-gap-6; margin: 0 0 18px; padding: 0; border: 0; @apply cczj-min-w-0; }
 .cczj-mobile-shell .cczj-mobile-page :is(.page-header-left,.page-header-actions,.manage-actions) { @apply cczj-w-full cczj-min-w-0 cczj-flex-wrap; flex-shrink: 1; @apply cczj-gap-4; }

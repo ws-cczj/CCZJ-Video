@@ -1,13 +1,13 @@
 <script lang="ts">
-// 一个网格页能挂几百张卡片，逐张 new IntersectionObserver 就是几百个观察者，
-// 而「进没进视口」本来是一件全局的事：这里只留一个共享观察者，
-// 用 WeakMap 存每张卡片自己的回调，命中即摘除，保持原来的一次性语义。
+// Share observers by viewport margin, rather than allocating one per card.
+// Mobile prepares media before entry; desktop keeps its existing fade boundary.
 const visibleHandlers = new WeakMap<Element, () => void>()
-let sharedObserver: IntersectionObserver | undefined
+const sharedObservers: Array<IntersectionObserver | undefined> = [undefined, undefined]
 
-function getSharedObserver(): IntersectionObserver {
-  if (!sharedObserver) {
-    sharedObserver = new IntersectionObserver(
+function getSharedObserver(preload: boolean): IntersectionObserver {
+  const index = preload ? 1 : 0
+  if (!sharedObservers[index]) {
+    sharedObservers[index] = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           if (!entry.isIntersecting) return
@@ -16,20 +16,20 @@ function getSharedObserver(): IntersectionObserver {
           unobserveVisibility(entry.target)
         })
       },
-      { threshold: 0.08 }
+      { threshold: 0.08, rootMargin: preload ? '240px' : '0px' }
     )
   }
-  return sharedObserver
+  return sharedObservers[index]!
 }
 
-function observeVisibility(el: Element, onVisible: () => void) {
+function observeVisibility(el: Element, onVisible: () => void, preload: boolean) {
   visibleHandlers.set(el, onVisible)
-  getSharedObserver().observe(el)
+  getSharedObserver(preload).observe(el)
 }
 
 function unobserveVisibility(el: Element) {
   visibleHandlers.delete(el)
-  sharedObserver?.unobserve(el)
+  sharedObservers.forEach(observer=>observer?.unobserve(el))
 }
 </script>
 
@@ -37,6 +37,7 @@ function unobserveVisibility(el: Element) {
 import { ref, computed, onMounted, onBeforeUnmount, useAttrs } from 'vue'
 import { Tag } from './ui'
 import RemoteImage from './RemoteImage.vue'
+import { presentationProfile } from '../platform/presentation'
 
 defineProps<{
   video: { vod_pic?: string; vod_name?: string; vod_remarks?: string; type_name?: string }
@@ -65,13 +66,17 @@ function onCardKeydown(event: KeyboardEvent) {
 
 const cardEl = ref<HTMLDivElement>()
 const visible = ref(false)
+const mobile = presentationProfile().ui === 'mobile'
+// Preserve the poster's aspect-ratio and text layout while keeping offscreen
+// mobile cards free of image, badge and overlay subtrees until near the viewport.
+const mediaVisible = computed(() => !mobile || visible.value)
 
 onMounted(() => {
   if (!('IntersectionObserver' in window)) {
     visible.value = true
     return
   }
-  if (cardEl.value) observeVisibility(cardEl.value, () => { visible.value = true })
+  if (cardEl.value) observeVisibility(cardEl.value, () => { visible.value = true }, mobile)
 })
 
 onBeforeUnmount(() => {
@@ -83,27 +88,27 @@ onBeforeUnmount(() => {
   <div
     ref="cardEl"
     class="video-card cczj-bg-card cczj-rounded-lg cczj-overflow-hidden cczj-cursor-pointer cczj-border cczj-flex cczj-flex-col cczj-opacity-0"
-    :class="{ visible }"
+    :class="{ visible: mobile || visible }"
     :role="clickable ? 'button' : undefined"
     :tabindex="clickable ? 0 : undefined"
     @keydown="onCardKeydown"
   >
     <div class="poster-wrap cczj-relative cczj-bg-secondary cczj-overflow-hidden">
-      <RemoteImage v-if="video.vod_pic" :src="video.vod_pic" :alt="video.vod_name" loading="lazy" class="cczj-w-full cczj-h-full cczj-block" />
-      <div v-else class="poster-placeholder cczj-w-full cczj-h-full cczj-flex cczj-items-center cczj-justify-center cczj-text-muted cczj-opacity-40">
+      <RemoteImage v-if="video.vod_pic && mediaVisible" :src="video.vod_pic" :alt="video.vod_name" loading="lazy" class="cczj-w-full cczj-h-full cczj-block" />
+      <div v-else-if="!video.vod_pic" class="poster-placeholder cczj-w-full cczj-h-full cczj-flex cczj-items-center cczj-justify-center cczj-text-muted cczj-opacity-40">
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <rect x="3" y="4" width="18" height="16" rx="2" />
           <path d="M10 9l5 3-5 3V9z" fill="currentColor" />
         </svg>
       </div>
-      <Tag v-if="video.vod_remarks" size="sm" class="poster-badge cczj-absolute">{{ video.vod_remarks }}</Tag>
-      <div v-if="inCatalog" class="catalog-badge cczj-absolute">
+      <Tag v-if="mediaVisible && video.vod_remarks" size="sm" class="poster-badge cczj-absolute">{{ video.vod_remarks }}</Tag>
+      <div v-if="mediaVisible && inCatalog" class="catalog-badge cczj-absolute">
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
           <path d="M5 13l4 4L19 7" />
         </svg>
         <span>{{ catalogLabel }}</span>
       </div>
-      <div class="overlay cczj-absolute cczj-inset-0 cczj-flex cczj-items-center cczj-justify-center cczj-opacity-0 cczj-transition-fast">
+      <div v-if="mediaVisible" class="overlay cczj-absolute cczj-inset-0 cczj-flex cczj-items-center cczj-justify-center cczj-opacity-0 cczj-transition-fast">
         <div class="play-btn cczj-rounded-full cczj-bg-accent cczj-flex cczj-items-center cczj-justify-center">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
             <path d="M5 3l14 9-14 9V3z" />

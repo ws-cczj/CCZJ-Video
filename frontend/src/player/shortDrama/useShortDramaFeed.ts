@@ -24,6 +24,8 @@ export function useShortDramaFeed(source: Ref<string>, active: Ref<boolean>, bef
   const playbackSource = ref(source.value)
   const series = ref(false), completed = ref(false)
   const effectiveSource = computed(() => entry.value?.sourceKey || source.value)
+  const emptySource = ref('')
+  const knownEmpty = computed(() => !!emptySource.value && emptySource.value === effectiveSource.value && !entry.value)
   const requests = createRequestScope(), generation = useGeneration()
   const video = computed(() => detail.value?.video ?? items.value[selected.value] ?? null)
   const episodes = computed(() => detail.value?.episodes ?? [])
@@ -94,6 +96,7 @@ export function useShortDramaFeed(source: Ref<string>, active: Ref<boolean>, bef
       if (!batch.length && previous.length) batch = await requests.run(() => GetShortDramaRecommendations(sourceKey, []))
       if (!generation.isCurrent(token)) return
       items.value = batch; batchSource = sourceKey; selected.value = 0; episodeIndex.value = 0
+      emptySource.value = batch.length ? '' : sourceKey
       loading.value = false
       if (batch.length) await open(0, false, recoverMissing)
     } catch (cause) {
@@ -161,6 +164,6 @@ export function useShortDramaFeed(source: Ref<string>, active: Ref<boolean>, bef
     else void open(selected.value, true)
   }, { immediate: true, flush: 'post' })
   onBeforeUnmount(invalidate)
-  return { items, selected, episodeIndex, video, episodes, episode, url, detail, loading, error, playbackSource, effectiveSource, series, completed, canPrevious, canNext, refresh, open, selectEpisode, discover, step, ended,
+  return { items, selected, episodeIndex, video, episodes, episode, url, detail, loading, error, playbackSource, effectiveSource, knownEmpty, series, completed, canPrevious, canNext, refresh, open, selectEpisode, discover, step, ended,
     retry: () => retryBatch || !items.value.length ? refresh() : open(selected.value, true) }
 }

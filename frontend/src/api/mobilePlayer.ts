@@ -24,8 +24,20 @@ export function readPlayerDevice(): { volume: number; brightness: number; pip: b
   } catch { return undefined }
 }
 export function setDeviceVolume(value: number): void { bridge()?.playerVolume?.(value) }
-export function setDeviceBrightness(value: number): void { bridge()?.playerBrightness?.(value) }
-export function restoreDeviceBrightness(): void { bridge()?.playerRestoreBrightness?.() }
+let brightnessOwner: symbol | undefined
+export function setDeviceBrightness(value: number, owner?: symbol): boolean {
+  const host = bridge()
+  if (!host?.playerBrightness || !Number.isFinite(value)) return false
+  host.playerBrightness(Math.max(.02, Math.min(1, value)))
+  brightnessOwner = owner
+  return true
+}
+/** An outgoing player/reader must not restore over an incoming session. */
+export function restoreDeviceBrightness(owner?: symbol): void {
+  if (owner && brightnessOwner !== owner) return
+  brightnessOwner = undefined
+  bridge()?.playerRestoreBrightness?.()
+}
 export function enterDevicePip(width: number, height: number): boolean {
   const state = readPlayerDevice()
   if (!state?.pip) return false

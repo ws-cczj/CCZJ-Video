@@ -1,3 +1,4 @@
+import { layoutCanvasToVideo } from './videoLayout'
 /**
  * 扩展包着色器引擎 — 运行用户提供的 mpv hook 着色器（WebGL2 实时）
  *
@@ -13,7 +14,6 @@ import {
   linkProgram,
   createFBO,
   deleteFBO,
-  layoutCanvasToVideo,
   type FBOEntry,
   type PassDef,
 } from './filmUpscaler'
@@ -101,6 +101,7 @@ export class CustomShaderUpscaler {
       }
 
       this.canvas = document.createElement('canvas')
+      this.canvas.dataset.cczjEnhancement = 'true'
       this.canvas.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;z-index:2'
       const host = wrapper ?? video.parentElement
       if (!host) throw new ShaderCapabilityError('No container')

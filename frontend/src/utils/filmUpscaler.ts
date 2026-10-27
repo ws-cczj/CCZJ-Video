@@ -1,3 +1,4 @@
+import { layoutCanvasToVideo } from './videoLayout'
 /** Film enhancement: FSRCNNX 2x super-resolution followed by CAS sharpening. */
 import fsrcnnxSource from './FSRCNNX_x2_8-0-4-1.glsl?raw'
 import { loseGlContext } from './anime4kUpscaler'
@@ -199,31 +200,6 @@ export function deleteFBO(gl: WebGL2RenderingContext, f: FBOEntry | null): void 
   if (f) { gl.deleteTexture(f.tex); gl.deleteFramebuffer(f.fbo) }
 }
 
-/**
- * 把覆盖画布对齐到视频的真实成像区域（object-fit: contain 会留黑边）。
- * 画布相对播放器 wrapper 定位，而 video 的 rect 是视口坐标，两者混用会让增强画面
- * 偏移出原画面，所以两个引擎共用这一段换算。
- */
-export function layoutCanvasToVideo(video: HTMLVideoElement, canvas: HTMLCanvasElement): void {
-  if (!video.videoWidth || !video.videoHeight) return
-  const vr = video.getBoundingClientRect()
-  const parentRect = canvas.parentElement?.getBoundingClientRect()
-  const cw = vr.width, ch = vr.height
-  const vw = video.videoWidth, vh = video.videoHeight
-  const videoRatio = vw / vh
-  const containerRatio = cw / ch
-  let dw: number, dh: number, dx: number, dy: number
-  if (videoRatio > containerRatio) {
-    dw = cw; dh = cw / videoRatio; dx = 0; dy = (ch - dh) / 2
-  } else {
-    dh = ch; dw = ch * videoRatio; dx = (cw - dw) / 2; dy = 0
-  }
-  canvas.style.left = (vr.left - (parentRect?.left ?? 0) + dx) + 'px'
-  canvas.style.top = (vr.top - (parentRect?.top ?? 0) + dy) + 'px'
-  canvas.style.width = dw + 'px'
-  canvas.style.height = dh + 'px'
-}
-
 // ==================== FilmUpscaler ====================
 
 export class FilmUpscaler {
@@ -269,6 +245,7 @@ export class FilmUpscaler {
     try {
       this.video = video
       this.canvas = document.createElement('canvas')
+      this.canvas.dataset.cczjEnhancement = 'true'
       this.canvas.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;z-index:2'
       const c = wrapper ?? video.parentElement
       if (!c) throw new Error('No container')

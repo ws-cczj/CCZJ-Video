@@ -73,7 +73,7 @@ function wheel(event: WheelEvent): void {
 }
 function keydown(event: KeyboardEvent): void {
   if (!active.value || drawer.value || event.repeat || event.altKey || event.ctrlKey || event.metaKey) return
-  if ((event.target as Element).closest('button,input,textarea,select,a,[contenteditable="true"]')) return
+  if ((event.target as Element).closest('button,input,textarea,select,a,[contenteditable="true"],[role="dialog"],.ui-modal-overlay')) return
   if (['ArrowDown','PageDown','ArrowUp','PageUp'].includes(event.key)) {
     event.preventDefault()
     feed.step(event.key === 'ArrowDown' || event.key === 'PageDown' ? 'next' : 'previous')
@@ -149,7 +149,10 @@ onBeforeUnmount(() => window.removeEventListener('cczj:android-overlay-back', ba
         <Button v-if="mobile" class="drama-mobile-tab" variant="text" :aria-pressed="false" @click="showTheatre">{{t('shortDrama.theatre')}}</Button>
         <span v-if="!mobile || series">{{ t(series ? 'shortDrama.series' : 'shortDrama.forYou') }}</span>
       </div>
-      <Button class="drama-refresh" variant="text" :aria-label="t(series ? 'shortDrama.backToFeed' : 'shortDrama.refresh')" :title="t(series ? 'shortDrama.backToFeed' : 'shortDrama.refresh')" :loading="loading && !series" :disabled="!effectiveSource" @click="series ? discover() : feed.refresh()"><Icon :name="series ? 'back' : 'refresh'" :size="20" /><span v-if="!mobile || series">{{ t(series ? 'shortDrama.backToFeed' : 'shortDrama.refresh') }}</span></Button>
+      <div class="cczj-flex cczj-items-center cczj-gap-4">
+        <Button v-if="hasPlayback" variant="text" icon :aria-label="t('settings.playback')" :title="t('settings.playback')" @click="player?.openPlaybackSettings()"><Icon name="settings" :size="20" /></Button>
+        <Button class="drama-refresh" variant="text" :aria-label="t(series ? 'shortDrama.backToFeed' : 'shortDrama.refresh')" :title="t(series ? 'shortDrama.backToFeed' : 'shortDrama.refresh')" :loading="loading && !series" :disabled="!effectiveSource" @click="series ? discover() : feed.refresh()"><Icon :name="series ? 'back' : 'refresh'" :size="20" /><span v-if="!mobile || series">{{ t(series ? 'shortDrama.backToFeed' : 'shortDrama.refresh') }}</span></Button>
+      </div>
     </header>
     <div class="drama-stage cczj-flex cczj-flex-1 cczj-items-center cczj-justify-center cczj-min-h-0">
       <div class="drama-frame cczj-relative">
@@ -173,7 +176,7 @@ onBeforeUnmount(() => window.removeEventListener('cczj:android-overlay-back', ba
           </template>
         </VideoPlayer>
         <div v-else class="drama-placeholder cczj-h-full cczj-flex cczj-flex-col cczj-items-center cczj-justify-center cczj-gap-6" role="status" aria-live="polite">
-          <template v-if="loading"><Spinner /><p>{{ t('shortDrama.loading') }}</p></template>
+          <template v-if="loading && !feed.knownEmpty.value"><Spinner /><p>{{ t('shortDrama.loading') }}</p></template>
           <Empty v-else :title="error ? t('shortDrama.loadFailed') : t('shortDrama.empty')" :description="error || t(effectiveSource ? 'shortDrama.emptyHint' : 'shortDrama.noSource')">
             <Button v-if="effectiveSource" @click="feed.retry">{{ t('common.retry') }}</Button>
             <router-link v-if="!error" class="cczj-text-accent" to="/sources">{{ t('sidebar.sources') }}</router-link>

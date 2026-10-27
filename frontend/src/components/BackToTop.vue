@@ -42,7 +42,8 @@ function updateVineHeight() {
 }
 
 function getScrollContainer(): HTMLElement | null {
-  return document.querySelector(props.targetSelector)
+  return Array.from(document.querySelectorAll<HTMLElement>(props.targetSelector))
+    .find(element=>!element.closest('[data-route-active="false"],[inert]')) ?? null
 }
 
 function onScroll(): void {

@@ -7,6 +7,7 @@ import { routeBackdropFocus, routeBackdropFrame } from './routeBackdrop'
 import { useBackdropSystemBars } from '../platform/backdropSystemBars'
 const props=withDefaults(defineProps<{mobile:boolean;cache?:string[]}>(),{cache:()=>[]})
 const router=useRouter(),route=useRoute(),direction=ref<'forward'|'back'>('forward')
+const initialScreen=routeScreenKey(route)
 const primary=(path:string,query:RouteLocationNormalizedLoaded['query']={})=>props.mobile&&!(['/settings','/novel/settings','/comic/settings'].includes(path)&&query.group)&&primaryTabs.some(tabs=>tabs.includes(path))
 const entries=shallowReactive(new Map<string,RouteLocationNormalizedLoaded>())
 const primaryEntries=computed(()=>Array.from(entries.values()))
@@ -25,9 +26,11 @@ const backdropStyle=computed(()=>{
 const chapterChange=ref(false)
 let previous={...route} as RouteLocationNormalizedLoaded,position=Number(router.options.history.state.position)||0
 let revision=0,alive=true,timer:ReturnType<typeof setTimeout>|undefined,finishWait:(()=>void)|undefined
+let scrollFrame:number|undefined
 const snapshots=new Map<string,number>()
-function remember():void { snapshots.set(route.path,document.querySelector('.main-content')?.scrollTop||0) }
+function remember():void { snapshots.set(route.path,document.querySelector('[data-route-active="true"] .main-content')?.scrollTop||0) }
 function reset():void {revision++;dragFrom.value='';previewPath.value='';offset.value=0;settling.value=false}
+function reducedPages():boolean {return matchMedia('(prefers-reduced-motion: reduce)').matches||document.documentElement.dataset.motionPages==='off'||document.documentElement.dataset.cczjMotion==='off'}
 async function preview(path:string,edge:number):Promise<void> {
   previewEdge.value=edge
   if(path===previewPath.value&&dragFrom.value)return
@@ -43,7 +46,7 @@ async function settle(path?:string):Promise<void> {
   const token=revision
   settling.value=true
   const width=document.querySelector('.cczj-mobile-route-stage')?.clientWidth||innerWidth
-  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches||document.documentElement.dataset.motionPages==='off'||document.documentElement.dataset.cczjMotion==='off'
+  const reduce=reducedPages()
   offset.value=path?-previewEdge.value*width:0
   await new Promise<void>(resolve=>{finishWait=resolve;timer=setTimeout(resolve,reduce?0:230)})
   finishWait=undefined;timer=undefined
@@ -71,6 +74,9 @@ function tabStyle(path:string):Record<string,string>|undefined {
   if(path===previewPath.value)return{transform:`translate3d(calc(${previewEdge.value*100}% + ${offset.value}px),0,0)`}
 }
 const definitions=new Map<VNode['type'],Component>()
+// Pointer movement patches scene styles, but does not activate a page again.
+const sceneActivity=new WeakMap<Element,boolean>()
+const pendingScrollRestore=new WeakSet<Element>()
 function scene(view:VNode):Component {
   const existing=definitions.get(view.type);if(existing)return existing
   const source=view.type as {name?:string;__name?:string}
@@ -86,15 +92,25 @@ function scene(view:VNode):Component {
   })
   definitions.set(view.type,definition);return definition
 }
-function notifyScroll():void {window.dispatchEvent(new Event('cczj:route-scroll-container'))}
-function activate(element:Element):void {
-  element.removeAttribute('inert');element.removeAttribute('aria-hidden');element.setAttribute('data-route-active','true')
-  element.querySelectorAll<HTMLElement>('[data-cczj-scroll-host]').forEach(el=>el.classList.add('main-content'))
-  requestAnimationFrame(notifyScroll)
+function notifyScroll():void {
+  if(scrollFrame!==undefined||!alive)return
+  scrollFrame=requestAnimationFrame(()=>{scrollFrame=undefined;if(alive)window.dispatchEvent(new Event('cczj:route-scroll-container'))})
 }
-function deactivate(element:Element):void {
+function activate(element:Element):void {
+  if(sceneActivity.get(element)===true)return
+  sceneActivity.set(element,true)
+  pendingScrollRestore.add(element)
+  element.removeAttribute('inert');element.removeAttribute('aria-hidden');element.setAttribute('data-route-active','true')
+  notifyScroll()
+}
+function deactivate(element:Element):boolean {
+  if(sceneActivity.get(element)===false)return false
+  sceneActivity.set(element,false)
+  pendingScrollRestore.delete(element)
+  // Keep the scroll host's layout classes stable during the slide. Consumers
+  // choose the active scene instead of restyling every descendant on exit.
   element.setAttribute('inert','');element.setAttribute('aria-hidden','true');element.setAttribute('data-route-active','false')
-  element.querySelectorAll<HTMLElement>('.main-content').forEach(el=>{el.dataset.cczjScrollHost='true';el.classList.remove('main-content')})
+  return true
 }
 function leaveTab(element:Element):void {
   const scroll=element.querySelector<HTMLElement>('.main-content')
@@ -103,22 +119,35 @@ function leaveTab(element:Element):void {
 }
 function syncTab(node:VNode):void {
   const element=node.el as HTMLElement;if(!element)return
-  if(primary(route.path,route.query)&&element.dataset.path===route.path)activate(element)
-  else {
-    deactivate(element)
-    const scroll=element.querySelector<HTMLElement>('[data-cczj-scroll-host]')
-    if(scroll)scroll.scrollTop=snapshots.get(element.dataset.path||'')||0
+  if(primary(route.path,route.query)&&element.dataset.path===route.path){
+    activate(element)
+    // Home's destination belongs to the router. Establish its animation origin
+    // here, without depending on the stage's separate snapshot being populated.
+    if(pendingScrollRestore.has(element)&&element.isConnected){
+      const saved=snapshots.get(element.dataset.path||'')
+      const scroll=element.querySelector<HTMLElement>('.main-content')
+      if(scroll){
+        const home=props.mobile&&element.dataset.path==='/'
+        const instant=(dragging.value&&!committing.value)||matchMedia('(prefers-reduced-motion: reduce)').matches
+        if(home&&!instant){delete scroll.dataset.cczjScrollRestore;scroll.scrollTop=0}
+        else {scroll.dataset.cczjScrollRestore='instant';if(saved!==undefined)scroll.scrollTop=saved}
+      }
+      pendingScrollRestore.delete(element)
+    }
   }
+  // Inactive vnode updates can precede before-leave. Never reset their scroll
+  // host here, or leaveTab will capture zero instead of the user's position.
+  else deactivate(element)
 }
 function enterTab(element:Element):void {if(primary(route.path,route.query)&&element.getAttribute('data-path')===route.path)activate(element);else deactivate(element)}
-onMounted(()=>requestAnimationFrame(notifyScroll))
-onBeforeUnmount(()=>{alive=false;revision++;clearTimeout(timer);finishWait?.()})
+onMounted(notifyScroll)
+onBeforeUnmount(()=>{alive=false;revision++;clearTimeout(timer);finishWait?.();if(scrollFrame!==undefined)cancelAnimationFrame(scrollFrame)})
 </script>
 <template><div class="cczj-mobile-route-stage" :class="{'cczj-mobile-shared-backdrop':mobile,'cczj-mobile-tab-dragging':dragging,'cczj-mobile-tab-settling':settling}" @touchstart.passive="swipe.touchStart" @touchmove="swipe.touchMove" @touchend="swipe.touchEnd" @touchcancel="swipe.cancel" @click.capture="swipe.click">
  <div v-if="mobile" ref="backdropElement" class="cczj-mobile-route-backdrop" aria-hidden="true" :style="backdropStyle" />
  <div class="cczj-mobile-route-viewport">
-  <template v-for="entry in primaryEntries" :key="entry.path"><router-view :route="entry" v-slot="{Component}"><Transition :name="name" :css="!dragging&&!committing" @before-enter="enterTab" @before-leave="leaveTab" @after-enter="notifyScroll"><KeepAlive><component v-if="Component&&tabVisible(entry.path)" :is="scene(Component)" :key="entry.path" :view="Component" :location="entry" :frame="$slots.default" :class="{'cczj-mobile-route-current':primary(route.path,route.query)&&entry.path===route.path,'cczj-mobile-route-preview':dragging&&entry.path===previewPath&&entry.path!==route.path}" :style="tabStyle(entry.path)" @vue:mounted="syncTab" @vue:updated="syncTab" /></KeepAlive></Transition></router-view></template>
-  <router-view v-if="!mobile||!primary(secondary.path,secondary.query)" :route="secondary" v-slot="{Component}"><Transition :name="name" :css="!chapterChange" :mode="mobile?undefined:'out-in'" @before-enter="activate" @before-leave="deactivate" @after-enter="notifyScroll" @enter-cancelled="deactivate"><KeepAlive :include="cache"><component v-if="Component&&(!mobile||!primary(route.path,route.query))" :is="scene(Component)" :key="routeScreenKey(secondary)" :view="Component" :location="secondary" :frame="$slots.default" /></KeepAlive></Transition></router-view>
+  <template v-for="entry in primaryEntries" :key="entry.path"><router-view :route="entry" v-slot="{Component}"><Transition :name="name" :appear="routeScreenKey(entry)!==initialScreen" :css="!dragging&&!committing" @before-enter="enterTab" @before-leave="leaveTab" @after-enter="notifyScroll"><KeepAlive><component v-if="Component&&tabVisible(entry.path)" :is="scene(Component)" :key="entry.path" :view="Component" :location="entry" :frame="$slots.default" :class="{'cczj-mobile-route-current':primary(route.path,route.query)&&entry.path===route.path,'cczj-mobile-route-preview':dragging&&entry.path===previewPath&&entry.path!==route.path}" :style="tabStyle(entry.path)" @vue:mounted="syncTab" @vue:updated="syncTab" /></KeepAlive></Transition></router-view></template>
+  <router-view v-if="!mobile||!primary(secondary.path,secondary.query)" :route="secondary" v-slot="{Component}"><Transition :name="name" :appear="mobile && routeScreenKey(secondary)!==initialScreen" :css="!chapterChange" :mode="mobile?undefined:'out-in'" @before-enter="activate" @before-leave="deactivate" @after-enter="notifyScroll" @enter-cancelled="deactivate"><KeepAlive :include="cache"><component v-if="Component&&(!mobile||!primary(route.path,route.query))" :is="scene(Component)" :key="routeScreenKey(secondary)" :view="Component" :location="secondary" :frame="$slots.default" /></KeepAlive></Transition></router-view>
  </div>
  <slot name="navigation" :route="route" />
 </div></template>

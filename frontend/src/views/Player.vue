@@ -12,6 +12,8 @@ import { useErrorStore } from '../stores/error'
 import VideoPlayer from '../components/VideoPlayer.vue'
 import Icon from '../components/Icon.vue'
 import PlayerInformationPanel from '../player/views/PlayerInformationPanel.vue'
+import EpisodeLabel from '../player/views/EpisodeLabel.vue'
+import { hasDetailedEpisodeLabels } from '../player/videoInfoFormat'
 import PlaybackRouteList from '../player/views/PlaybackRouteList.vue'
 import PlayerPanelToggle from '../player/views/PlayerPanelToggle.vue'
 import type { PlayerPanelModel } from '../player/page/panelModel'
@@ -500,6 +502,7 @@ onBeforeUnmount(() => {
 })
 
 /* ==================== 小工具：生成集数显示 ==================== */
+const detailedEpisodeLabels = computed(() => hasDetailedEpisodeLabels(episodes.value))
 function epLabel(i: number, ep: { ep_num?: number; ep_name?: string }): string {
   if (ep.ep_name) return ep.ep_name
   const num = ep.ep_num ?? (i + 1)
@@ -551,7 +554,7 @@ const panelModel:PlayerPanelModel = reactive({
             </template>
             <template v-if="mobile && episodes.length" #episodes="{close}">
               <div class="cczj-mobile-drawer-episode-head"><span>{{t('detail.totalEpisodes',{count:episodes.length})}}</span><button @click="toggleEpisodeSort"><Icon :name="episodeSortAsc?'chevron-down':'chevron-up'" :size="14" />{{t(episodeSortAsc?'detail.ascOrder':'detail.descOrder')}}</button></div>
-              <div class="cczj-mobile-drawer-episode-grid"><button v-for="(ep,i) in sortedEpisodes" :key="origIdx(i)" :aria-current="origIdx(i)===currentEpIndex?'step':undefined" :title="epLabel(origIdx(i),ep)" @click="goToEpisode(origIdx(i));close()"><span>{{epLabel(origIdx(i),ep)}}</span><small v-if="getEpWatchPct(origIdx(i))>0">{{Math.round(getEpWatchPct(origIdx(i)))}}%</small></button></div>
+              <div class="cczj-mobile-drawer-episode-grid" :class="{ 'cczj-episode-grid-detailed': detailedEpisodeLabels }"><button v-for="(ep,i) in sortedEpisodes" :key="origIdx(i)" :aria-current="origIdx(i)===currentEpIndex?'step':undefined" :title="epLabel(origIdx(i),ep)" @click="goToEpisode(origIdx(i));close()"><EpisodeLabel :label="epLabel(origIdx(i),ep)" /><small v-if="getEpWatchPct(origIdx(i))>0">{{Math.round(getEpWatchPct(origIdx(i)))}}%</small></button></div>
             </template>
           </VideoPlayer>
 

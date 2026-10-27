@@ -4,6 +4,11 @@
 }
 
 .playback-settings-popup {
+  --bg-secondary: #ffffff0d;
+  --bg-hover: #ffffff18;
+  --text-primary: #fff;
+  --text-secondary: #b9bbc2;
+  --border: #ffffff18;
   @apply cczj-absolute;
   bottom: calc(100% + 10px);
   @apply cczj-right-0;
@@ -22,6 +27,7 @@
   @apply cczj-opacity-100 cczj-pointer-events-auto;
   transform: translateY(0);
 }
+.playback-settings-popup:not(.playback-settings-mobile) { width: min(320px,calc(100vw - 32px)); max-height: min(70dvh,560px); @apply cczj-overflow-y-auto; }
 
 .playback-settings-item {
   @apply cczj-flex cczj-items-center cczj-justify-between cczj-px-6-py-4;

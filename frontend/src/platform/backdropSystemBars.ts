@@ -37,6 +37,12 @@ export function useBackdropSystemBars(element:Ref<HTMLElement|undefined>, screen
   const bridge=(window as unknown as {wails?:{setSystemBarColor?:(color:string)=>void}}).wails
   if(!bridge?.setSystemBarColor)return
   let generation=0, disposed=false, request:AbortController|undefined
+  let scheduled:number|undefined,lastColor:string|undefined
+  function publishColor(color:string):void {
+    if(lastColor===color)return
+    bridge?.setSystemBarColor?.(color)
+    lastColor=color
+  }
   let cached:{src:string;image:ImagePixels}|undefined
   async function update():Promise<void>{
     const node=element.value
@@ -44,14 +50,14 @@ export function useBackdropSystemBars(element:Ref<HTMLElement|undefined>, screen
     const token=++generation
     request?.abort();request=new AbortController()
     const splash=document.documentElement.dataset.cczjSplashColor
-    if(splash){bridge?.setSystemBarColor?.(splash);return}
+    if(splash){publishColor(splash);return}
     const scene=node.parentElement?.querySelector('[data-route-active="true"]')
-    if(cinema()||scene?.querySelector('[data-cczj-media-active=true]')){bridge?.setSystemBarColor?.('#000000');return}
+    if(cinema()||scene?.querySelector('[data-cczj-media-active=true]')){publishColor('#000000');return}
     const style=getComputedStyle(node)
     const fallback=style.getPropertyValue('--route-backdrop-color').trim()
     const publish=(base:string)=>{
       const wash=scene&&/rgba?\(([^)]+)\)/.exec(getComputedStyle(scene,'::before').backgroundImage)
-      bridge?.setSystemBarColor?.(systemBarSurface(base,wash?wash[1].split(',').map(Number):[]))
+      publishColor(systemBarSurface(base,wash?wash[1].split(',').map(Number):[]))
     }
     const match=/url\((?:"([^"]*)"|'([^']*)'|([^)]*))\)/.exec(style.backgroundImage)
     const src=match?.[1]||match?.[2]||match?.[3]
@@ -65,7 +71,14 @@ export function useBackdropSystemBars(element:Ref<HTMLElement|undefined>, screen
     publish(backdropEdgeColor(image,{width:node.offsetWidth,height:node.offsetHeight,viewWidth:node.parentElement?.clientWidth||innerWidth,x:Number(translation?.[1]||0)/100*node.offsetWidth,y:Number(translation?.[2]||0)/100*node.offsetHeight,background:fallback},veil))
   }
   let observer:MutationObserver|undefined
-  const refresh=()=>{void update()}
+  // Route hooks and mutation records can describe the same commit. Read layout
+  // once after it, rather than forcing layout and native work from each record.
+  const refresh=()=>{
+    if(disposed)return
+    generation++;request?.abort()
+    if(scheduled!==undefined)return
+    scheduled=requestAnimationFrame(()=>{scheduled=undefined;void update()})
+  }
   watch([element,screen,cinema],refresh,{flush:'post'})
   onMounted(()=>{
     observer=new MutationObserver(refresh)
@@ -74,5 +87,5 @@ export function useBackdropSystemBars(element:Ref<HTMLElement|undefined>, screen
     window.addEventListener('resize',refresh)
     refresh()
   })
-  onBeforeUnmount(()=>{disposed=true;generation++;request?.abort();observer?.disconnect();window.removeEventListener('resize',refresh);cached=undefined;bridge?.setSystemBarColor?.('')})
+  onBeforeUnmount(()=>{disposed=true;generation++;if(scheduled!==undefined)cancelAnimationFrame(scheduled);request?.abort();observer?.disconnect();window.removeEventListener('resize',refresh);cached=undefined;bridge?.setSystemBarColor?.('')})
 }

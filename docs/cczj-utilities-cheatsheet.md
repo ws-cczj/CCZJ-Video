@@ -13,6 +13,7 @@
 | `cczj-flex` | `display: flex;` |
 | `cczj-inline-flex` | `display: inline-flex;` |
 | `cczj-grid` | `display: grid;` |
+| `cczj-grid-cols-2` | `grid-template-columns: repeat(2, minmax(0, 1fr));` |
 | `cczj-block` | `display: block;` |
 | `cczj-inline-block` | `display: inline-block;` |
 | `cczj-hidden` | `display: none;` |
