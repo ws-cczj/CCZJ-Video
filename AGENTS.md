@@ -74,7 +74,7 @@
 
 注释解释当前不变量、非显然原因和兼容代价。删除重复代码含义的说明、过时断言和情绪化禁令；不要声称某问题“不能测试”或某技术“无法支持”，除非有适用版本和证据。
 
-`AGENTS.md` 是统一开发规范，README 是用户与开发入口，[docs/README.md](docs/README.md) 是当前文档索引。`docs` 保留需要长期维护的接口、工作流和格式说明；`docs/adr`、`reports/history` 保留历史与理由，`CONTEXT.md` 保留术语，不另立开发规则。发现冲突时修正文档，不把旧文字当作不可修改的授权限制。
+`AGENTS.md` 是统一开发规范，README 是用户与开发入口，[docs/README.md](docs/README.md) 是当前文档索引。`docs` 保留需要长期维护的接口、工作流和格式说明，`docs/adr` 保留架构选择，`CONTEXT.md` 保留术语，不另立开发规则。历史报告与原始交接资料仅在本地 `reports/` 或既有版本归档保留，不再纳入日常源码；编辑器配置与生成的编辑器数据仅在本地 `.vscode/` 保留。发现冲突时修正文档，不把旧文字当作不可修改的授权限制。
 
 - 更新现有主题文档，避免为一次小改动新建日期命名的计划、交接、总结三份 MD。历史方案合并到对应主题归档，明确当时结论与当前实现的区别；归档不意味着所有待办已解决。
 - 可重复运行的验收脚本放 `scripts` 并复用既有 Android／浏览器辅助入口；原始截图、日志、profile、临时 JSON 和一次性分析放 `dist/audit` 或 `.cache`。确需长期保留的验收证据归入已有主题报告目录，仅在结果或维护流程有实质变化时补充说明。
@@ -104,4 +104,4 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1
 
 绑定签名变化后推荐运行 `scripts/generate-bindings.ps1`，它先检查 Go 服务能否编译，再执行 `wails3 generate bindings -clean=false`（不加 `-ts`），并把生成器警告视为失败；随后运行前端类型检查和 Go 验证。桌面、Android 和浏览器替身的验证结论分别报告；没有运行的环境不能宣称通过。
 
-依赖升级根据维护状态、实际需求及兼容验证安排，工具链作为兼容组合评估。调研依据见 `reports/go-backend-reference-study-2026-10-18.md`，其内容是设计参考，不是额外规范。
+依赖升级根据维护状态、实际需求及兼容验证安排，工具链作为兼容组合评估。调研依据见[后端调研归档](https://github.com/ws-cczj/CCZJ-Video/blob/v2.4.5/reports/go-backend-reference-study-2026-10-18.md)，其内容是设计参考，不是额外规范。

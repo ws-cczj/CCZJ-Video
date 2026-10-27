@@ -85,7 +85,7 @@ python scripts/test-update-installer-android.py --device emulator-5554 --output 
 
 长按临时倍速回归用 `scripts/test-player-hold.py`：默认连接本地 Vite 测试页，`--android --device emulator-5554` 连接预览包的原生 WebView，复用 Android 调试入口装入当前前端。它用本地循环视频检查真实触摸、持续倍速提示、松手／取消／全屏／换集恢复及选定倍速不被临时值覆盖，结束恢复原页面和播放器偏好。开发宿主通过不代替正式 APK 或华为真机验收。
 
-最新结果见 [移动设置验收](../reports/mobile-settings-2026-10-22/README.md)、[阅读性能验收](../reports/reading-performance-2026-10-22/README.md)；原始移动方案保存在[历史归档](../reports/history/mobile.md)。
+最新结果见 [移动设置验收](https://github.com/ws-cczj/CCZJ-Video/blob/v2.4.5/reports/mobile-settings-2026-10-22/README.md)、[阅读性能验收](https://github.com/ws-cczj/CCZJ-Video/blob/v2.4.5/reports/reading-performance-2026-10-22/README.md)；原始移动方案保存在[历史归档](https://github.com/ws-cczj/CCZJ-Video/blob/v2.4.5/reports/history/mobile.md)。
 
 弱网与源保存验收使用 `python scripts/test-playback-weak-network-android.py --device <adb设备号>`。先安装内嵌当前 `frontend/dist` 的 acceptance Debug 包；脚本复用 WebView 调试与 adb reverse，在原生手机表单保存临时源，检查立即显示、搜索拒绝后的同源网页建议回退和日志，再在原生播放器实际解码 HLS，经历 3 Mbps → 650 Kbps → 3 Mbps 的总带宽变化。`--scenario offline` 增加五秒断流。结束删除临时源并恢复设置、路由，不清空应用数据；证据位于 `dist/audit/weak-network/android-*.json`。MuMu 上的安装、源操作与弱网播放结论仅适用于该 Android 宿主，仍不等于实体手机的蜂窝切换、功耗和解码兼容性通过。
 

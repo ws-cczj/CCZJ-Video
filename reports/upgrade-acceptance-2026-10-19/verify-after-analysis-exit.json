@@ -1,6 +1,0 @@
-{
-  "scope": "Local unit, static checks and frontend compilation; no device or UI acceptance",
-  "finished_at": "2026-10-19T03:27:21.0434362Z",
-  "command": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1",
-  "exit_code": 0
-}

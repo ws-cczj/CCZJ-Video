@@ -28,6 +28,10 @@ build/ios/generated/
 
 # 本地开发工具（Agent skills、多模块 workspace 指针）
 .agents/
+.vscode/
+.idea/
+*.code-workspace
+/reports/
 skills-lock.json
 go.work
 go.work.sum

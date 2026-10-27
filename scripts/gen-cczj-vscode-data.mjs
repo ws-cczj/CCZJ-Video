@@ -37,9 +37,15 @@ const outputs = [
 if (process.argv.includes('--check')) {
   // Git may check out generated text with CRLF on Windows. Compare content
   // using the generator's LF convention without ignoring other differences.
-  const stale = outputs.filter(([path, text])=>!existsSync(join(root,path))||readFileSync(join(root,path),'utf8').replace(/\r\n/g,'\n')!==text)
+  // Editor integrations are optional local outputs. A clean clone must still
+  // check the maintained cheatsheet; existing editor data must remain current.
+  const stale = outputs.filter(([path, text])=>{
+    const present=existsSync(join(root,path))
+    if(path.startsWith('.vscode/')&&!present)return false
+    return !present||readFileSync(join(root,path),'utf8').replace(/\r\n/g,'\n')!==text
+  })
   if (stale.length) {console.error('CCZJ CSS data is stale: '+stale.map(([path])=>path).join(', ')+'. Run npm --prefix frontend run gen:css-data.');process.exitCode=1}
-  else console.log(`CCZJ CSS data: ${values.length} classes, documentation and editor data are current`)
+  else console.log(`CCZJ CSS data: ${values.length} classes; documentation is current; existing local editor data checked`)
 } else {
   mkdirSync(join(root,'.vscode'),{recursive:true})
   for (const [path,text] of outputs) writeFileSync(join(root,path),text)

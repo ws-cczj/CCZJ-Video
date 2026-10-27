@@ -1,5 +1,0 @@
-{
-  "command": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1",
-  "exit_code": 0,
-  "finished_at": "2026-10-19T02:13:16.0476603Z"
-}

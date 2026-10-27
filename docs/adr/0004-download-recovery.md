@@ -7,7 +7,7 @@
 Accepted.
 
 Amended 2026-10-18: SQLite migration v12 replaces the writable JSON snapshot.
-Implementation and validation: [phase 2 record](../../reports/upgrade-phase2-2026-10-18.md).
+Implementation and validation: [phase 2 record](https://github.com/ws-cczj/CCZJ-Video/blob/v2.4.5/reports/upgrade-phase2-2026-10-18.md).
 
 Amended 2026-10-01: both transports referenced below are now implemented, so the
 state contract is no longer forward-looking.

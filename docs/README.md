@@ -19,13 +19,15 @@
 | 全项目待核查范围 | [整改任务书](project-remediation.md)，其中待办需对照当前实现确认 |
 | 领域用语与架构选择 | [术语](../CONTEXT.md) · [ADR 目录](adr/) |
 
-## 验收与调研
+## 历史验收与调研
 
-- [移动设置检查](../reports/mobile-settings-2026-10-22/README.md)：实际文件选择、分享、更新入口与窄屏交互。
-- [2.4.0 发布验收](../reports/release-2.4.0/README.md)：产物身份、更新交接和验证限制。
-- [阅读性能验收](../reports/reading-performance-2026-10-22/README.md)：模拟器搜索、阅读与连续翻页。
-- [阅读源批量检查](../reports/reading-quality-bulk-run-2026-10-22.md)：数据与检测范围。
-- [全部报告](../reports/)：历史观测与原始交接资料，报告中的路径、数量和成功率适用于记录时的环境。
+以下链接指向 v2.4.5 的不可变归档。报告、截图、日志和原始交接包不再随当前源码检出；已有本地 `reports/` 保留并忽略，新运行结果放 `dist/audit/`。当前行为以以上主题文档和现行实现为准。
+
+- [移动设置检查](https://github.com/ws-cczj/CCZJ-Video/blob/v2.4.5/reports/mobile-settings-2026-10-22/README.md)：实际文件选择、分享、更新入口与窄屏交互。
+- [2.4.0 发布验收](https://github.com/ws-cczj/CCZJ-Video/blob/v2.4.5/reports/release-2.4.0/README.md)：产物身份、更新交接和验证限制。
+- [阅读性能验收](https://github.com/ws-cczj/CCZJ-Video/blob/v2.4.5/reports/reading-performance-2026-10-22/README.md)：模拟器搜索、阅读与连续翻页。
+- [阅读源批量检查](https://github.com/ws-cczj/CCZJ-Video/blob/v2.4.5/reports/reading-quality-bulk-run-2026-10-22.md)：数据与检测范围。
+- [全部报告](https://github.com/ws-cczj/CCZJ-Video/tree/v2.4.5/reports/)：历史观测与原始交接资料，报告中的路径、数量和成功率适用于记录时的环境。
 
 ## 合并归档
 
@@ -33,11 +35,11 @@
 
 | 主题 | 历史记录 |
 | --- | --- |
-| Android、移动布局与导航 | [移动历史](../reports/history/mobile.md) |
-| 播放、内存、资源与诊断 | [播放历史](../reports/history/playback.md) |
-| 设置与扩展包排查 | [设置与扩展历史](../reports/history/settings-plugins.md) |
-| 小说与漫画早期方案 | [阅读历史](../reports/history/reading.md) |
-| 旧实现说明、讨论与更新排查 | [实现与讨论历史](../reports/history/architecture.md) |
-| 早期移动、小说、漫画视觉参考 | [设计历史](../reports/history/design.md) |
+| Android、移动布局与导航 | [移动历史](https://github.com/ws-cczj/CCZJ-Video/blob/v2.4.5/reports/history/mobile.md) |
+| 播放、内存、资源与诊断 | [播放历史](https://github.com/ws-cczj/CCZJ-Video/blob/v2.4.5/reports/history/playback.md) |
+| 设置与扩展包排查 | [设置与扩展历史](https://github.com/ws-cczj/CCZJ-Video/blob/v2.4.5/reports/history/settings-plugins.md) |
+| 小说与漫画早期方案 | [阅读历史](https://github.com/ws-cczj/CCZJ-Video/blob/v2.4.5/reports/history/reading.md) |
+| 旧实现说明、讨论与更新排查 | [实现与讨论历史](https://github.com/ws-cczj/CCZJ-Video/blob/v2.4.5/reports/history/architecture.md) |
+| 早期移动、小说、漫画视觉参考 | [设计历史](https://github.com/ws-cczj/CCZJ-Video/blob/v2.4.5/reports/history/design.md) |
 
-后续优先更新上面的主题文档；一次性运行结果放 `dist/audit`，有长期价值的验收说明归入已有报告目录。
+后续优先更新当前主题文档；一次性运行结果放 `dist/audit`，不重新把本地报告或编辑器目录加入 Git。

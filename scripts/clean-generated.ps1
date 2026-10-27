@@ -25,6 +25,24 @@ function Add-GeneratedTarget([string]$relative, [string]$reason) {
     }
     $item = Get-Item -LiteralPath $path -Force
     if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Reparse point is not a cleanup target: $relative" }
+    if ($item.PSIsContainer) {
+        try { $entries = @(Get-ChildItem -LiteralPath $path -Recurse -Force -ErrorAction Stop) }
+        catch { Write-Warning "Kept directory that could not be fully inspected: $relative"; return }
+        if ($entries |
+            Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint } | Select-Object -First 1) {
+            Write-Warning "Kept directory containing a reparse point: $relative"
+            return
+        }
+        $protected = $entries | Where-Object { -not $_.PSIsContainer } |
+            Where-Object {
+                $_.Extension -in @('.db','.sqlite','.sqlite3','.keystore','.jks','.p12','.pfx','.pem','.key','.zip','.7z') -or
+                $_.Name -match '(?i)(backup|snapshot|handoff|before).*(\.json|\.xml|\.sql)$'
+            } | Select-Object -First 1
+        if ($protected) {
+            Write-Warning "Kept possible user data, archive or recovery material: $relative"
+            return
+        }
+    }
     $targets.Add([pscustomobject]@{ Path = $path; Relative = $relativeKey; Reason = $reason })
 }
 
@@ -34,11 +52,13 @@ foreach ($name in @('content-fixes-20261021','css-reuse-20261020','mobile-player
     'novel-20261021','novel-fix-20261019','reading-fix-20261020','request-pipelines-2026-10-20','repository-cleanup')) {
     Add-GeneratedTarget "dist/$name" 'obsolete build or temporary audit'
 }
-$keptAudit = @('novel-usability','fanqie-font','player-hold','reading-classics','cleanup')
+$releaseVersion = (Get-Content -LiteralPath (Join-Path $workspace 'version.json') -Raw -Encoding UTF8 | ConvertFrom-Json).version
+$keptAudit = @('novel-usability','fanqie-font','player-hold','reading-classics','cleanup',
+    'cast-pairing','playback-routes','playback-live')
 if (Test-Path -LiteralPath (Join-Path $workspace 'dist/audit')) {
     foreach ($item in Get-ChildItem -LiteralPath (Join-Path $workspace 'dist/audit') -Force) {
-        if ($item.PSIsContainer -and $item.Name -notin $keptAudit) { Add-GeneratedTarget "dist/audit/$($item.Name)" 'old temporary screenshots, logs and profiles' }
-        elseif (-not $item.PSIsContainer -and $item.Name -notlike 'novel-usability-*') { Add-GeneratedTarget "dist/audit/$($item.Name)" 'old temporary audit output' }
+        if ($item.PSIsContainer -and $item.Name -notin $keptAudit -and $item.Name -notlike 'cleanup-*') { Add-GeneratedTarget "dist/audit/$($item.Name)" 'old temporary screenshots, logs and profiles' }
+        elseif (-not $item.PSIsContainer -and $item.Name -notlike 'novel-usability-*' -and $item.Name -notlike "release-$releaseVersion-*") { Add-GeneratedTarget "dist/audit/$($item.Name)" 'old temporary audit output' }
     }
 }
 if (Test-Path -LiteralPath (Join-Path $workspace 'dist/test-builds')) {
@@ -74,6 +94,7 @@ Write-Host "Selected $($unique.Count) generated paths. Source code, dependencies
 if (-not $Apply) { Write-Host 'Preview only. To delete the listed outputs, run this script with -Apply.'; return }
 
 $removed = [Collections.Generic.List[string]]::new()
+$skipped = [Collections.Generic.List[object]]::new()
 $failures = [Collections.Generic.List[object]]::new()
 foreach ($target in $unique) {
     try {
@@ -84,10 +105,16 @@ foreach ($target in $unique) {
             Remove-Item -LiteralPath $resolved -Recurse -Force -ErrorAction Stop
             $removed.Add($target.Relative)
         }
-    } catch { $failures.Add([pscustomobject]@{ Path=$target.Relative; Error=$_.Exception.Message }) }
+    } catch {
+        $cause = $_.Exception
+        while ($cause.InnerException) { $cause = $cause.InnerException }
+        if (($cause.HResult -band 0xffff) -in @(32,33)) {
+            $skipped.Add([pscustomobject]@{ Path=$target.Relative; Reason='in use by another process' })
+        } else { $failures.Add([pscustomobject]@{ Path=$target.Relative; Error=$_.Exception.Message }) }
+    }
 }
 $resultPath = Join-Path $workspace 'dist/audit/cleanup'
 New-Item -ItemType Directory -Force -Path $resultPath | Out-Null
-@{ removed=$removed.ToArray(); failed=$failures.ToArray() } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $resultPath 'result.json') -Encoding utf8
-Write-Host "Removed $($removed.Count) generated paths; $($failures.Count) failures."
+@{ removed=$removed.ToArray(); skipped=$skipped.ToArray(); failed=$failures.ToArray() } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $resultPath 'result.json') -Encoding utf8
+Write-Host "Removed $($removed.Count) generated paths; $($skipped.Count) locked paths retained; $($failures.Count) failures."
 if ($failures.Count) { $failures | Format-Table -AutoSize; exit 1 }

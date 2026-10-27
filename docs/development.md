@@ -139,7 +139,7 @@ node scripts/check-document-links.mjs
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1
 ```
 
-修改公共工具定义后运行 `npm --prefix frontend run gen:css-data`，随后校验生成文件。绑定签名变化后运行 `scripts/generate-bindings.ps1`，维护请求策略，前端调用继续经 `api`。
+修改公共工具定义后运行 `npm --prefix frontend run gen:css-data`，随后校验生成文件。速查表纳入 Git；`.vscode` 下的编辑器数据和个人设置仅本地保留，检查允许全新检出时缺少编辑器数据，但会核对已有数据是否过期。绑定签名变化后运行 `scripts/generate-bindings.ps1`，维护请求策略，前端调用继续经 `api`。
 
 界面变更检查桌面和移动的实际控件、长文案、空状态、已有数据、重复进入以及操作后新增状态；涉及手机文件、权限、全屏、分享和安装器时运行原生验收。可先使用浏览器替身定位问题，但单独报告其验证范围。Android 命令见 [Android 开发](android.md)，打包见 [发布流程](releases.md)。
 
@@ -152,7 +152,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/clean-generated.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/clean-generated.ps1 -Apply
 ```
 
-发布复用 `dist/releases/v2.4.0/`，避免为每次小修复再建一份日期目录。清理结果写入 `dist/audit/cleanup/result.json`；不能把预览或脚本生成当作删除完成。
+发布使用 `dist/releases/v版本号/`，避免为每次小修复重复复制整套产物。清理保留当前发布的关键验收目录；目录中发现数据库、密钥、压缩包或恢复快照时整项跳过，需核实用途后单独处理。清理结果写入 `dist/audit/cleanup/result.json`；不能把预览或脚本生成当作删除完成。`reports/`、`.vscode/` 和 `.idea/` 仅本地保存，由 `.gitignore` 排除。
+
+反复构建后的 Go 编译缓存可用 `go env GOCACHE` 定位，确认没有构建任务后按需执行 `go clean -cache`；后续构建会重新编译。它与 Go 模块下载、Android SDK／NDK、签名密钥及应用数据库分开，不要把这些目录一并清空。
 
 收藏夹列表和影片归属由 `stores/favoriteFolders.ts` 共用 SQLite 设置与 `settingsQueue`，首次读取导入旧 WebView 值并保留原值供失败重试。详情、普通播放器和短剧共用 `usePlaybackFavorites` 与 `FavFolderModal`；确认按钮在保存期间显示忙碌状态，成功后关闭，失败时保留选择。
 

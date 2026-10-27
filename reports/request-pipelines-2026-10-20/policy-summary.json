@@ -1,9 +1,0 @@
-{
-  "bindings": 199,
-  "policies": {
-    "isolated": 17,
-    "write": 85,
-    "read": 90,
-    "refresh": 7
-  }
-}

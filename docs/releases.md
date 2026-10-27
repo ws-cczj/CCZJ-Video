@@ -93,4 +93,4 @@ Windows production 隔离实例已验证窗口关闭／主动退出、启动失�
 
 2026-10-23 已通过 GitHub CLI 实际发布 [v2.4.0](https://github.com/ws-cczj/CCZJ-Video/releases/tag/v2.4.0) 和 [v2.4.1](https://github.com/ws-cczj/CCZJ-Video/releases/tag/v2.4.1)：各上传八个文件，远端附件大小和 SHA256 与本地清单一致，2.4.1 设为最新版本。对应源码提交分别为 `e140d1888c87c72d5237aa3c9131654d99a85bd2` 与 `7e867886a80ac945030631e9a4514c178f5c26d4`，主分支包含两个提交；2.4.0 从独立历史检出重建，未用 2.4.1 产物替代。
 
-2.4.0 的安装与更新验收保留在[发布验收记录](../reports/release-2.4.0/README.md)，其中测试项和限制属于当时版本。移动设置检查见[模拟器记录](../reports/mobile-settings-2026-10-22/README.md)。鸿蒙 4 真机及真实旧 EXE 到新 EXE 的完整替换仍需单独验收。
+2.4.0 的安装与更新验收保留在[发布验收记录](https://github.com/ws-cczj/CCZJ-Video/blob/v2.4.5/reports/release-2.4.0/README.md)，其中测试项和限制属于当时版本。移动设置检查见[模拟器记录](https://github.com/ws-cczj/CCZJ-Video/blob/v2.4.5/reports/mobile-settings-2026-10-22/README.md)。鸿蒙 4 真机及真实旧 EXE 到新 EXE 的完整替换仍需单独验收。

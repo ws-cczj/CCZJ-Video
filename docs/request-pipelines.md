@@ -265,7 +265,7 @@ go test ./app/outbound -run '^TestLiveAutomaticPoolAndChart$' -count=1 -v -timeo
 Remove-Item Env:CCZJ_OUTBOUND_POOL_LIVE
 ```
 
-该验收使用临时 SQLite、全部默认启用源、最多二十四个候选与三个健康节点，真实查询一次豆瓣榜单，再确认重复请求没有增加代理尝试。联网通过只代表当次站点可用；完整来源调研与实测边界见[网络报告](../reports/network-request-policy-2026-10-19.md)。
+该验收使用临时 SQLite、全部默认启用源、最多二十四个候选与三个健康节点，真实查询一次豆瓣榜单，再确认重复请求没有增加代理尝试。联网通过只代表当次站点可用；完整来源调研与实测边界见[网络报告](https://github.com/ws-cczj/CCZJ-Video/blob/v2.4.5/reports/network-request-policy-2026-10-19.md)。
 
 弹幕公共池联网验收复用上述隔离 SQLite 与有限候选池，逐个平台验证搜索、单集元数据、实际弹幕窗口解码及重复窗口缓存：
 

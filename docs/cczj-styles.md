@@ -59,6 +59,6 @@ npm --prefix frontend run check:css-reuse
 
 `check:css-reuse` 是完整验证的一部分：当公共库存在精确等价类时，拒绝静态 CSS／Vue 样式块中重复声明显示、对齐、方向、换行、收缩、溢出、盒模型和零最小尺寸。模板使用工具类或原规则内 `@apply` 均可；`cczj-mobile-*` 业务类前缀不能替代实际复用。关键帧、业务宽高、模式配色和带优先级的声明不自动转换，避免破坏领域含义；有例外时说明实际原因，不以 `!important` 或内联写法绕过检查。
 
-2026-10-22 已将 9 个文件中的 278 处基础布局改为公共组合，并逐个核对展开后的 CSS AST，选择器、条件、声明顺序和值一致。早期迁移记录见[项目样式整改报告](../reports/css-reuse-2026-10-20.md)。
+2026-10-22 已将 9 个文件中的 278 处基础布局改为公共组合，并逐个核对展开后的 CSS AST，选择器、条件、声明顺序和值一致。早期迁移记录见[项目样式整改报告](https://github.com/ws-cczj/CCZJ-Video/blob/v2.4.5/reports/css-reuse-2026-10-20.md)。
 
 移动按钮密度由 Button 的 sm／md／lg 档位选择 `--cczj-mobile-control-sm`、`--cczj-mobile-control-md`、`--cczj-mobile-control-lg`，全局移动样式读取 `--cczj-control-height`。这些值使用 clamp 随屏宽变化，并只限定最小高度，长文案或大字号仍可撑开控件；桌面尺寸保持现有规则。移动页面间距优先使用 `--cczj-mobile-section-padding`，不再用统一 44px 覆盖所有尺寸档位。

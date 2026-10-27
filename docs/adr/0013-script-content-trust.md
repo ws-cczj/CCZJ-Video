@@ -49,4 +49,4 @@ removed with the runtime. State mutation and registry/file publication are
 serialized. Pending asynchronous initialization can be cancelled by disable,
 with a bounded wait for other stages; this cancels host waiting and managed
 resources, not arbitrary JavaScript execution. Permission decisions must be
-persisted before guarded actions proceed. See [the audit](../../reports/history/settings-plugins.md#origin-plugin-audit-2026-10-13).
+persisted before guarded actions proceed. See [the audit](https://github.com/ws-cczj/CCZJ-Video/blob/v2.4.5/reports/history/settings-plugins.md#origin-plugin-audit-2026-10-13).

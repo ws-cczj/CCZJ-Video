@@ -6,9 +6,9 @@
 
 ## 大集合调度
 
-已从实际网络响应冻结 6,832 部作品：5,201 部中文网文、1,600 部漫画和 31 部经典虚构文学补充样本，合计 433 个细分标签。来源、失败请求、语言和版式局限见[样本调查](../reports/reading-quality-bulk-corpus-research-2026-10-21.md)。这批大样本用于身份发现；没有独立目录证据的作品不填入猜测的总章节数。原来的 51 部小基准继续用于带目录锚点的专项回归。
+已从实际网络响应冻结 6,832 部作品：5,201 部中文网文、1,600 部漫画和 31 部经典虚构文学补充样本，合计 433 个细分标签。来源、失败请求、语言和版式局限见[样本调查](https://github.com/ws-cczj/CCZJ-Video/blob/v2.4.5/reports/reading-quality-bulk-corpus-research-2026-10-21.md)。这批大样本用于身份发现；没有独立目录证据的作品不填入猜测的总章节数。原来的 51 部小基准继续用于带目录锚点的专项回归。
 
-下载的 aoaostar、XIU2、Keiyoushi 集合经格式解析、规则身份去重并加入内置适配后，首轮实际调度 6,232 份小说／漫画配置。配置、主机、可搜索适配和完整阅读适配是不同维度，不能把六千份配置宣称为六千个可用网站。[集合调查](../reports/reading-quality-bulk-source-research-2026-10-21.md)保留原始文件 SHA256 和排除的重复镜像、迁移公告。
+下载的 aoaostar、XIU2、Keiyoushi 集合经格式解析、规则身份去重并加入内置适配后，首轮实际调度 6,232 份小说／漫画配置。配置、主机、可搜索适配和完整阅读适配是不同维度，不能把六千份配置宣称为六千个可用网站。[集合调查](https://github.com/ws-cczj/CCZJ-Video/blob/v2.4.5/reports/reading-quality-bulk-source-research-2026-10-21.md)保留原始文件 SHA256 和排除的重复镜像、迁移公告。
 
 调度和匹配规则：
 
@@ -41,11 +41,11 @@ go run ./cmd/source-batch-quality --readable-only --corpus app/library/quality/b
 
 `--probe-timeout` 是短探测期限，默认 1.5 秒；超时不能判定永久失效。`--operation-timeout` 约束发现阶段每次搜索；目录／正文／页图由 provider 与 `--source-timeout` 的整源期限共同约束。`--delay` 是操作间隔，不是每个底层 HTTP 的精确间隔。`--resume` 须带上与首次运行一致的参数，且同一目录仅允许一个写入进程。网络计数含重定向、策略／缓存传输层调用，与唯一站点数不同；`runNetwork` 为当前进程，`network` 为有摘要可恢复的累计值，进程硬崩溃后的未快照尾部请求不保证可追溯。
 
-本轮实跑结果与检测局限见[批量实测报告](../reports/reading-quality-bulk-run-2026-10-22.md)。
+本轮实跑结果与检测局限见[批量实测报告](https://github.com/ws-cczj/CCZJ-Video/blob/v2.4.5/reports/reading-quality-bulk-run-2026-10-22.md)。
 
 ## 基准作品
 
-`app/library/quality/benchmark.v1.json` 当前有 31 本小说、20 部漫画，按具体题材轮转选样。包含平台榜单/推荐、经典、类型代表和已知可读校准样本，并非所有作品都是当下热门。作品身份、选样原因、版本、作者与目录依据见[第一方调查](../reports/reading-quality-benchmark-research-2026-10-21.md)。
+`app/library/quality/benchmark.v1.json` 当前有 31 本小说、20 部漫画，按具体题材轮转选样。包含平台榜单/推荐、经典、类型代表和已知可读校准样本，并非所有作品都是当下热门。作品身份、选样原因、版本、作者与目录依据见[第一方调查](https://github.com/ws-cczj/CCZJ-Video/blob/v2.4.5/reports/reading-quality-benchmark-research-2026-10-21.md)。
 
 作品记录规范书名、显式别名、作者/创作团队、模式、语言、版本、题材与第一方链接。标题规范化只忽略排版和标点，不去掉续作数字、外传、重绘、改编等身份。繁简别名明确列出，不模糊猜测。同名异作者拒绝自动匹配，作者缺失则暂定匹配；多个同等候选保留歧义，不自动挑第一条。
 

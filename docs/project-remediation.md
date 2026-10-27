@@ -1,6 +1,6 @@
 # 全项目审查与整改任务书
 
-当前交付（2026-10-24）：按用户要求收尾架构整改并发布 2.4.2。已确认缺陷的修复、调用方迁移及适用验证见下文；覆盖矩阵保留未运行的设备和交互范围，不能把发布等同于所有设备的穷尽验收。旧 [问题交接清单（2026-10-21）](../reports/project-issue-handoff-2026-10-21.md) 仅作为回查线索。
+当前交付（2026-10-24）：按用户要求收尾架构整改并发布 2.4.2。已确认缺陷的修复、调用方迁移及适用验证见下文；覆盖矩阵保留未运行的设备和交互范围，不能把发布等同于所有设备的穷尽验收。旧 [问题交接清单（2026-10-21）](https://github.com/ws-cczj/CCZJ-Video/blob/v2.4.5/reports/project-issue-handoff-2026-10-21.md) 仅作为回查线索。
 
 ## 当前检查台账（2026-10-23）
 
@@ -156,9 +156,9 @@ Android 验收包使用相同 `applicationId` 和签名，以任意 APK 文件�
 
 2026-10-20。范围：CCZJ Video 全仓代码、桌面端及移动端。状态：任务定义与首轮基线完成，系统审查和整改尚未完成。
 
-2026-10-21 进展：已实际使用 MuMu 中的小说、漫画，复现两种阅读返回循环并完成首批前端修复；六条返回路径在原生宿主连接当前源码时通过。问题清单、截图、版本边界和剩余任务见 [实际使用报告](../reports/mumu-hands-on-2026-10-21.md)。以下初步结果保留原调查时点，不覆盖最新报告。
+2026-10-21 进展：已实际使用 MuMu 中的小说、漫画，复现两种阅读返回循环并完成首批前端修复；六条返回路径在原生宿主连接当前源码时通过。问题清单、截图、版本边界和剩余任务见 [实际使用报告](https://github.com/ws-cczj/CCZJ-Video/blob/v2.4.5/reports/mumu-hands-on-2026-10-21.md)。以下初步结果保留原调查时点，不覆盖最新报告。
 
-用户列举的阅读问题只是线索，不是任务边界。小说与漫画是重点整改区域；视频模式目前没有用户报告的大问题，需要审查和回归，不能因此豁免，也不应无证据重写。阅读专项目标见 [reading-redesign.md](../reports/history/reading.md#origin-reading-redesign)，该文件是本任务的子任务。
+用户列举的阅读问题只是线索，不是任务边界。小说与漫画是重点整改区域；视频模式目前没有用户报告的大问题，需要审查和回归，不能因此豁免，也不应无证据重写。阅读专项目标见 [reading-redesign.md](https://github.com/ws-cczj/CCZJ-Video/blob/v2.4.5/reports/history/reading.md#origin-reading-redesign)，该文件是本任务的子任务。
 
 ## 完成的含义
 
@@ -235,7 +235,7 @@ ID / 严重性 / 模块 / 平台：
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1
 ```
 
-退出码 0：58 个前端测试文件、259 项测试通过；类型检查、生产构建、Go vet、Go 测试及脚本内约定检查通过。[原始日志](../reports/project-audit-baseline-2026-10-20.log)。此次验证没有启动 Windows 原生应用，也没有构建或运行 Android Java/WebView 验收。
+退出码 0：58 个前端测试文件、259 项测试通过；类型检查、生产构建、Go vet、Go 测试及脚本内约定检查通过。[原始日志](https://github.com/ws-cczj/CCZJ-Video/blob/v2.4.5/reports/project-audit-baseline-2026-10-20.log)。此次验证没有启动 Windows 原生应用，也没有构建或运行 Android Java/WebView 验收。
 
 首轮检查结果：
 

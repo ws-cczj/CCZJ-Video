@@ -25,6 +25,10 @@ for (const file of files) {
     const path=decodeURIComponent(url.split('#')[0].split('?')[0])
     if (!path) continue
     const target=resolve(dirname(file),path)
+    if (/^(reports|\.vscode|\.idea)([/\\]|$)/.test(relative(root,target))) {
+      problems.push(`${relative(root,file).replaceAll('\\','/')}: local-only archive/editor link ${url}; use maintained docs or an immutable archive URL`)
+      continue
+    }
     // Build outputs are intentionally absent from a clean checkout.
     if (/^(dist|bin|\.cache)[/\\]/.test(relative(root,target))) continue
     if (!existsSync(target)) problems.push(`${relative(root,file).replaceAll('\\','/')}: missing ${url}`)
