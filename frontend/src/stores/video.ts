@@ -94,6 +94,12 @@ export const useVideoStore = defineStore('video', () => {
   }
 
   /** 切换播放线路（按 lines 下标，不是后端给的线路序号）。 */
+  function acceptDetail(sourceKey:string,vodId:string,detail:VideoDetailResponse):void {
+    detailGen.invalidate()
+    currentVideo.value=detail.video??null
+    applyDetail(detail,detailIdentity(sourceKey,vodId,detail.video?.global_id??0))
+    detailLoading.value=false
+  }
   function setActiveLine(index: number): void {
     if (index < 0 || index >= lines.value.length || index === activeLineIndex.value) return
     activeLineIndex.value = index
@@ -211,6 +217,7 @@ export const useVideoStore = defineStore('video', () => {
     lastDeletion,
     refreshTrigger,
     setActiveLine,
+    acceptDetail,
     loadDetail,
     refreshDetail,
     loadTypes,

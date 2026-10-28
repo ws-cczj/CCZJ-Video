@@ -24,10 +24,24 @@ final class CczjPlayerDevice {
     private final AudioManager audio;
     private WifiManager.MulticastLock multicast;
     private Float originalBrightness;
+    private boolean closed;
+    private final android.content.BroadcastReceiver noisyReceiver = new android.content.BroadcastReceiver() {
+        @Override public void onReceive(Context context, Intent intent) {
+            if (AudioManager.ACTION_AUDIO_BECOMING_NOISY.equals(intent.getAction())) interruption("noisy");
+        }
+    };
     CczjPlayerDevice(Activity activity, WebView webView) {
         this.activity = activity; this.webView = webView;
         audio = (AudioManager) activity.getSystemService(Context.AUDIO_SERVICE);
         activity.setVolumeControlStream(AudioManager.STREAM_MUSIC);
+        android.content.IntentFilter filter = new android.content.IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
+        if (Build.VERSION.SDK_INT >= 33) activity.registerReceiver(noisyReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        else activity.registerReceiver(noisyReceiver, filter);
+    }
+    void interruption(String reason) {
+        if (closed) return;
+        // Chromium owns audio focus; another native request would compete with it.
+        webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('cczj:player-interruption',{detail:" + JSONObject.quote(reason) + "}))", null);
     }
     String state() {
         JSONObject out = new JSONObject();
@@ -119,6 +133,9 @@ final class CczjPlayerDevice {
         catch (Exception error) { launch.cancel(false); return "UNAVAILABLE"; }
     }
     void close() {
+        if (closed) return;
+        closed = true;
+        activity.unregisterReceiver(noisyReceiver);
         multicast(false); restoreBrightness();
     }
 }

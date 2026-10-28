@@ -1,7 +1,8 @@
 .cczj-mobile-route-stage { @apply cczj-relative cczj-flex cczj-flex-1 cczj-min-h-0 cczj-min-w-0 cczj-h-full cczj-overflow-clip;isolation:isolate;@apply cczj-flex-col; }
 .cczj-mobile-route-scene { @apply cczj-absolute;inset:0;@apply cczj-flex cczj-flex-col cczj-min-h-0 cczj-min-w-0 cczj-overflow-hidden;isolation:isolate; }
 .cczj-mobile-shell .cczj-mobile-route-stage { --route-backdrop-color:var(--cczj-mobile-canvas);--route-backdrop-image:var(--bg-image,none);--route-backdrop-veil:var(--cczj-mobile-wallpaper-veil,transparent); }
-.cczj-mobile-route-backdrop { @apply cczj-absolute cczj-pointer-events-none cczj-top-0 cczj-left-0;z-index:-1;background-color:var(--route-backdrop-color,var(--bg-primary));background-image:linear-gradient(var(--route-backdrop-veil,transparent),var(--route-backdrop-veil,transparent)),var(--route-backdrop-image,none);background-position:center;background-size:cover;background-repeat:no-repeat;transition:transform var(--cczj-motion-slow) var(--cczj-motion-ease-standard); }
+.cczj-mobile-shared-backdrop { background-color:var(--route-backdrop-color,var(--bg-primary)); }
+.cczj-mobile-route-backdrop { @apply cczj-absolute cczj-pointer-events-none cczj-top-0 cczj-left-0;z-index:-1;background-image:linear-gradient(var(--route-backdrop-veil,transparent),var(--route-backdrop-veil,transparent)),var(--route-backdrop-image,none);background-position:center;background-size:cover;background-repeat:no-repeat;transition:transform var(--cczj-motion-slow) var(--cczj-motion-ease-standard); }
 .cczj-novel-shell .cczj-mobile-route-scene { background:var(--novel-canvas); }
 .cczj-comic-shell .cczj-mobile-route-scene { background:var(--comic-bg); }
 .cczj-novel-shell .cczj-mobile-shared-backdrop { --route-backdrop-color:var(--novel-canvas); }
@@ -20,7 +21,9 @@ html[data-motion-pages='off'] .cczj-mobile-route-backdrop,html[data-cczj-motion=
 .cczj-mobile-shared-backdrop .cczj-mobile-route-forward-leave-to,.cczj-mobile-shared-backdrop .cczj-mobile-route-back-enter-from { transform:translate3d(-100%,0,0); }
 html[data-motion-pages='off'] .cczj-mobile-route-stage:not(.cczj-mobile-tab-dragging) .cczj-mobile-route-scene { transition:none !important;transform:none !important; }
 html[data-motion-pages='off'] .cczj-mobile-tab-dragging .cczj-mobile-route-scene { transition:none !important; }
-.cczj-mobile-shell .cczj-mobile-route-scene:is([data-path="/"],[data-path="/short-drama"],[data-path="/search"],[data-path="/favorites"],[data-path="/settings"])::before { content:'';@apply cczj-absolute;z-index:-1;inset:0 0 auto;height:clamp(160px,32vh,240px);background:linear-gradient(180deg,var(--cczj-mobile-chrome) 0%,var(--cczj-mobile-chrome) 12%,transparent 100%);@apply cczj-pointer-events-none; }
+/* One wash belongs to the shared canvas. Per-scene washes move and overlap
+   during navigation, changing the apparent colour as either scene retires. */
+.cczj-mobile-shell .cczj-mobile-route-viewport::before { content:'';@apply cczj-absolute;z-index:-1;inset:0 0 auto;height:clamp(160px,32vh,240px);background:linear-gradient(180deg,var(--cczj-mobile-chrome) 0%,var(--cczj-mobile-chrome) 12%,transparent 100%);@apply cczj-pointer-events-none; }
 
 /* Shared touch actions use each mode's existing colour tokens. */
 [data-cczj-hold-enabled=true] { @apply cczj-relative; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
@@ -33,10 +36,11 @@ html[data-motion-pages='off'] .cczj-mobile-tab-dragging .cczj-mobile-route-scene
 .cczj-comic-shell .cczj-mobile-item-remove { color:var(--comic-ink); }
 .cczj-comic-shell .cczj-mobile-item-remove::before { background:var(--comic-surface); border-color:var(--comic-line); }
 /* One cached instance per tab moves directly with the finger. */
-.cczj-mobile-route-viewport { @apply cczj-relative cczj-flex cczj-flex-1 cczj-min-w-0 cczj-min-h-0 cczj-overflow-clip; }
+.cczj-mobile-route-viewport { @apply cczj-relative cczj-flex cczj-flex-1 cczj-min-w-0 cczj-min-h-0 cczj-overflow-clip;isolation:isolate; }
 .cczj-mobile-route-preview { @apply cczj-pointer-events-none;z-index:4; }
 .cczj-mobile-route-current { z-index:2; }
 .cczj-mobile-tab-dragging .cczj-mobile-route-scene { will-change:transform; }
+.cczj-mobile-tab-dragging:not(.cczj-mobile-tab-settling) .cczj-mobile-route-scene { @apply cczj-transition-none; }
 .cczj-mobile-tab-settling .cczj-mobile-route-scene { transition:transform 230ms var(--cczj-motion-ease-standard); }
 @media (prefers-reduced-motion:reduce) { .cczj-mobile-tab-settling .cczj-mobile-route-scene { @apply cczj-transition-none; } }
 .cczj-mobile-item-remove::before { @apply cczj-hidden; }

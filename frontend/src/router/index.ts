@@ -23,8 +23,9 @@ function getScrollContainer(): HTMLElement | null {
 function saveScrollFor(path: string): void {
   const el = getScrollContainer()
   if (!el) return
-  scrollPositions[path] = el.scrollTop
-  modeSessions.rememberScroll(routeMode(path),path,el.scrollTop)
+  const top = el.scrollTop
+  scrollPositions[path] = top
+  modeSessions.rememberScroll(routeMode(path),path,top)
 }
 
 function restoreScrollFor(path: string): void {

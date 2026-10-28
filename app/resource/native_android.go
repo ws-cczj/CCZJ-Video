@@ -11,9 +11,10 @@ import (
 )
 
 // Android isolates WebView renderers under other UIDs. These are app-process
-// measurements, never a claim to include the renderer/GPU process tree.
+// measurements, never a claim to include the isolated renderer. WebView's GPU
+// service runs in the host; driver allocations may be outside procfs counters.
 func nativeSample() ([]Process, uint64, uint64, []string) {
-	notes := []string{"Android app process only; isolated WebView renderer/GPU processes are excluded. PSS and private resident memory are not Windows private commit."}
+	notes := []string{"Android app process only; isolated WebView renderer is excluded. Procfs counters may omit graphics driver allocations. PSS and private resident memory are not Windows private commit."}
 	status, err := os.ReadFile("/proc/self/status")
 	if err != nil {
 		return nil, 0, 0, append(notes, "App resident memory unavailable: /proc/self/status cannot be read")

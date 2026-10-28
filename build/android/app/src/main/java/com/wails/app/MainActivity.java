@@ -60,6 +60,9 @@ public class MainActivity extends AppCompatActivity {
     private WailsJSBridge jsBridge;
     private long activityStartedAt;
     private Integer systemBarColor;
+    private Integer navigationBarColor;
+    private Integer backingSurfaceColor;
+    private CczjInsetSurface insetSurface;
     private volatile long goReadyAt, pageStartedAt, pageCommittedAt, pageFinishedAt;
 
     public String startupState() {
@@ -78,13 +81,20 @@ public class MainActivity extends AppCompatActivity {
         if (color == null || !color.matches("#[0-9a-fA-F]{6}")) return;
         getSharedPreferences("cczj-presentation", MODE_PRIVATE).edit()
                 .putInt("launch_background", android.graphics.Color.parseColor(color)).apply();
-        runOnUiThread(() -> { systemBarColor = null; applyLaunchBarContrast(); });
+        runOnUiThread(this::applyLaunchBarContrast);
     }
 
     public void setSystemBarColor(String color) {
-        if (color == null || (!color.isEmpty() && !color.matches("#[0-9a-fA-F]{6}"))) return;
+        setSystemBarColors(color, color);
+    }
+
+    public void setSystemBarColors(String status, String navigation) {
+        if (status == null || navigation == null
+                || (!status.isEmpty() && !status.matches("#[0-9a-fA-F]{6}"))
+                || (!navigation.isEmpty() && !navigation.matches("#[0-9a-fA-F]{6}"))) return;
         runOnUiThread(() -> {
-            systemBarColor = color.isEmpty() ? null : android.graphics.Color.parseColor(color);
+            systemBarColor = status.isEmpty() ? null : android.graphics.Color.parseColor(status);
+            navigationBarColor = navigation.isEmpty() ? null : android.graphics.Color.parseColor(navigation);
             applyLaunchBarContrast();
         });
     }
@@ -92,18 +102,29 @@ public class MainActivity extends AppCompatActivity {
     private void applyLaunchBarContrast() {
         int color = launchBackground();
         int barColor = systemBarColor == null ? color : systemBarColor;
+        int bottomColor = navigationBarColor == null ? color : navigationBarColor;
         boolean lightSurface = android.graphics.Color.luminance(barColor) > 0.5f;
         getWindow().setStatusBarColor(barColor);
-        getWindow().setNavigationBarColor(barColor);
+        getWindow().setNavigationBarColor(bottomColor);
         if (fullscreenView == null) {
-            getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(barColor));
             android.view.View container = findViewById(R.id.main_container);
-            if (container != null) container.setBackgroundColor(barColor);
+            if (container != null) {
+                if (insetSurface == null) insetSurface = new CczjInsetSurface(container);
+                if (container.getBackground() != insetSurface) container.setBackground(insetSurface);
+                insetSurface.update(color, barColor, bottomColor);
+            }
+        }
+        if (fullscreenView == null && (backingSurfaceColor == null || backingSurfaceColor != color)) {
+            // The sampled edge colour belongs to the bars. Repainting the
+            // entire backing surface with it exposes a different colour while
+            // Chromium composites translucent gradients and route layers.
+            getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(color));
+            backingSurfaceColor = color;
         }
         androidx.core.view.WindowInsetsControllerCompat controller =
                 androidx.core.view.WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
         controller.setAppearanceLightStatusBars(lightSurface);
-        controller.setAppearanceLightNavigationBars(lightSurface);
+        controller.setAppearanceLightNavigationBars(android.graphics.Color.luminance(bottomColor) > 0.5f);
     }
 
     private int launchBackground() {
@@ -117,6 +138,79 @@ public class MainActivity extends AppCompatActivity {
     private boolean fitsBeforeFullscreen;
     private final int[] paddingBeforeFullscreen = new int[4];
     private android.graphics.drawable.Drawable windowBeforeFullscreen, containerBeforeFullscreen;
+    private static final class FullscreenPolicy {
+        final String id, orientation;
+        FullscreenPolicy(String id, String orientation) { this.id = id; this.orientation = orientation; }
+    }
+    private volatile FullscreenPolicy pendingFullscreen;
+    private volatile FullscreenPolicy activeFullscreen;
+    private android.view.View.OnLayoutChangeListener fullscreenLayoutListener;
+    private Runnable fullscreenDeadline;
+    private boolean fullscreenReady;
+
+    // Called from the JS bridge thread before Chromium requests its custom view.
+    public synchronized String preparePlayerFullscreen(String id, String orientation) {
+        if (id == null || !id.matches("[a-zA-Z0-9-]{1,64}") ||
+                !("portrait".equals(orientation) || "landscape".equals(orientation) || "preserve".equals(orientation))) return "VALIDATION";
+        if (activeFullscreen != null || pendingFullscreen != null) return "CONFLICT";
+        pendingFullscreen = new FullscreenPolicy(id, orientation);
+        return "";
+    }
+    private synchronized FullscreenPolicy takeFullscreenPolicy() {
+        FullscreenPolicy policy = pendingFullscreen;
+        pendingFullscreen = null;
+        activeFullscreen = policy;
+        return policy;
+    }
+    public void finishPlayerFullscreen(String id) {
+        synchronized (this) {
+            if (pendingFullscreen != null && pendingFullscreen.id.equals(id)) pendingFullscreen = null;
+        }
+        runOnUiThread(() -> {
+            FullscreenPolicy policy = activeFullscreen;
+            if (policy != null && policy.id.equals(id)) hideFullscreenVideo();
+        });
+    }
+    public void updatePlayerFullscreenPolicy(String id, String orientation, boolean locked) {
+        if (!("portrait".equals(orientation) || "landscape".equals(orientation) || "preserve".equals(orientation))) return;
+        runOnUiThread(() -> {
+            FullscreenPolicy policy = activeFullscreen;
+            if (fullscreenView == null || policy == null || !policy.id.equals(id)) return;
+            policy = new FullscreenPolicy(id, orientation);
+            activeFullscreen = policy;
+            try {
+                setRequestedOrientation(locked ? android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LOCKED : fullscreenOrientation(policy));
+            } catch (RuntimeException error) {
+                Log.w(TAG, "Unable to apply fullscreen orientation", error);
+                hideFullscreenVideo("UNAVAILABLE");
+            }
+        });
+    }
+    private int fullscreenOrientation(FullscreenPolicy policy) {
+        if (policy != null && "landscape".equals(policy.orientation)) return android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE;
+        if (policy != null && "portrait".equals(policy.orientation)) return android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT;
+        return orientationBeforeFullscreen;
+    }
+    private void notifyPlayerFullscreen(FullscreenPolicy policy, String state, String code) {
+        if (policy == null || webView == null || isDestroyed()) return;
+        String detail = "{id:" + org.json.JSONObject.quote(policy.id) + ",state:" + org.json.JSONObject.quote(state) + ",code:" + org.json.JSONObject.quote(code) + "}";
+        webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('cczj:player-fullscreen',{detail:" + detail + "}))", null);
+    }
+    private void fullscreenLayoutReady() {
+        if (fullscreenView == null || fullscreenReady || fullscreenView.getWidth() <= 0 || fullscreenView.getHeight() <= 0) return;
+        FullscreenPolicy policy = activeFullscreen;
+        // Large-screen/window policies may override requested orientation. Use
+        // the actual viewport there instead of timing out a valid fullscreen.
+        if (policy != null && getResources().getConfiguration().smallestScreenWidthDp < 600) {
+            int orientation = getResources().getConfiguration().orientation;
+            if ("portrait".equals(policy.orientation) && orientation != Configuration.ORIENTATION_PORTRAIT) return;
+            if ("landscape".equals(policy.orientation) && orientation != Configuration.ORIENTATION_LANDSCAPE) return;
+        }
+        fullscreenReady = true;
+        if (fullscreenDeadline != null) fullscreenView.removeCallbacks(fullscreenDeadline);
+        fullscreenDeadline = null;
+        notifyPlayerFullscreen(policy, "entered", "");
+    }
     private WailsBridge bridge;
     private CczjPlayerDevice playerDevice;
     private android.window.OnBackInvokedCallback playerBackCallback;
@@ -274,9 +368,10 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onShowCustomView(android.view.View view, CustomViewCallback callback) {
                 if (fullscreenView != null) { callback.onCustomViewHidden(); return; }
+                FullscreenPolicy policy = takeFullscreenPolicy();
                 fullscreenView = view;
-                registerPlayerBack();
                 fullscreenCallback = callback;
+                fullscreenReady = false;
                 orientationBeforeFullscreen = getRequestedOrientation();
                 android.view.View container = findViewById(R.id.main_container);
                 fitsBeforeFullscreen = container.getFitsSystemWindows();
@@ -286,6 +381,9 @@ public class MainActivity extends AppCompatActivity {
                 paddingBeforeFullscreen[3] = container.getPaddingBottom();
                 containerBeforeFullscreen = container.getBackground();
                 windowBeforeFullscreen = getWindow().getDecorView().getBackground();
+                if (Build.VERSION.SDK_INT >= 28) cutoutBeforeFullscreen = getWindow().getAttributes().layoutInDisplayCutoutMode;
+                try {
+                registerPlayerBack();
                 // The normal browsing layout avoids system bars. Fullscreen
                 // must also fill a landscape cutout, rather than expose its
                 // light launch background to the left of Chromium's surface.
@@ -299,7 +397,7 @@ public class MainActivity extends AppCompatActivity {
                     attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
                     getWindow().setAttributes(attributes);
                 }
-                setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+                setRequestedOrientation(fullscreenOrientation(policy));
                 ((android.widget.FrameLayout) findViewById(R.id.main_container)).addView(view,
                         new android.widget.FrameLayout.LayoutParams(-1, -1));
                 androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(view, (target, insets) -> {
@@ -318,6 +416,17 @@ public class MainActivity extends AppCompatActivity {
                         androidx.core.view.WindowCompat.getInsetsController(getWindow(), view);
                 controller.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars());
                 controller.setSystemBarsBehavior(androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                fullscreenLayoutListener = (target, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> fullscreenLayoutReady();
+                view.addOnLayoutChangeListener(fullscreenLayoutListener);
+                fullscreenDeadline = () -> {
+                    if (fullscreenView == view && !fullscreenReady) hideFullscreenVideo("TIMEOUT");
+                };
+                view.postDelayed(fullscreenDeadline, 5000);
+                view.post(() -> { if (fullscreenView == view) fullscreenLayoutReady(); });
+                } catch (RuntimeException error) {
+                    Log.w(TAG, "Unable to enter fullscreen", error);
+                    hideFullscreenVideo("UNAVAILABLE");
+                }
             }
             @Override
             public void onHideCustomView() { hideFullscreenVideo(); }
@@ -496,8 +605,16 @@ public class MainActivity extends AppCompatActivity {
         return mediaEndpoint;
     }
 
-    private void hideFullscreenVideo() {
+    private void hideFullscreenVideo() { hideFullscreenVideo(""); }
+    private void hideFullscreenVideo(String errorCode) {
         if (fullscreenView == null) return;
+        FullscreenPolicy policy = activeFullscreen;
+        activeFullscreen = null;
+        fullscreenReady = false;
+        if (fullscreenLayoutListener != null) fullscreenView.removeOnLayoutChangeListener(fullscreenLayoutListener);
+        if (fullscreenDeadline != null) fullscreenView.removeCallbacks(fullscreenDeadline);
+        fullscreenLayoutListener = null;
+        fullscreenDeadline = null;
         androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(fullscreenView, null);
         ((android.widget.FrameLayout) findViewById(R.id.main_container)).removeView(fullscreenView);
         webView.evaluateJavascript("document.documentElement.style.removeProperty('--cczj-player-safe-left');document.documentElement.style.removeProperty('--cczj-player-safe-right')", null);
@@ -515,16 +632,18 @@ public class MainActivity extends AppCompatActivity {
             attributes.layoutInDisplayCutoutMode = cutoutBeforeFullscreen;
             getWindow().setAttributes(attributes);
         }
-        setRequestedOrientation(orientationBeforeFullscreen);
+        try { setRequestedOrientation(orientationBeforeFullscreen); }
+        catch (RuntimeException failure) { Log.w(TAG, "Unable to restore fullscreen orientation", failure); errorCode = "UNAVAILABLE"; }
         webView.setVisibility(android.view.View.VISIBLE);
         androidx.core.view.WindowCompat.getInsetsController(getWindow(), webView)
                 .show(androidx.core.view.WindowInsetsCompat.Type.systemBars());
         applyLaunchBarContrast();
         androidx.core.view.ViewCompat.requestApplyInsets(container);
-        if (fullscreenCallback != null) {
-            fullscreenCallback.onCustomViewHidden();
-            fullscreenCallback = null;
-        }
+        android.webkit.WebChromeClient.CustomViewCallback callback = fullscreenCallback;
+        fullscreenCallback = null;
+        try { if (callback != null) callback.onCustomViewHidden(); }
+        catch (RuntimeException failure) { Log.w(TAG, "Unable to finish Chromium fullscreen", failure); errorCode = "UNAVAILABLE"; }
+        notifyPlayerFullscreen(policy, errorCode.isEmpty() ? "exited" : "error", errorCode);
     }
 
     private void loadApplication() {
@@ -1076,6 +1195,11 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
+        if (fullscreenView != null) {
+            android.view.View view = fullscreenView;
+            androidx.core.view.ViewCompat.requestApplyInsets(view);
+            view.post(() -> { if (fullscreenView == view) fullscreenLayoutReady(); });
+        }
         // Fires for light/dark switches because the manifest lists uiMode in
         // android:configChanges (otherwise the activity would be recreated).
         emitTheme();
@@ -1097,6 +1221,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        if (playerDevice != null) playerDevice.interruption("foreground");
         if (bridge != null) {
             bridge.onResume();
         }
@@ -1113,6 +1238,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onStop() {
         super.onStop();
+        if (playerDevice != null && !(Build.VERSION.SDK_INT >= 26 && isInPictureInPictureMode())) playerDevice.interruption("background");
         if (systemReceiversRegistered) {
             unregisterSystemEventReceivers();
             systemReceiversRegistered = false;
@@ -1133,6 +1259,8 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         if (webFileChooser != null) webFileChooser.cancel();
+        pendingFullscreen = null;
+        hideFullscreenVideo();
         unregisterPlayerBack();
         unregisterSystemEventReceivers();
         if (jsBridge != null) {
@@ -1156,8 +1284,9 @@ public class MainActivity extends AppCompatActivity {
 
     private void handleAndroidBack() {
         if (fullscreenView != null) {
+            android.view.View target = fullscreenView;
             webView.evaluateJavascript("window.dispatchEvent(new Event('cczj:android-overlay-back', {cancelable:true}))", result -> {
-                if (!"false".equals(result)) hideFullscreenVideo();
+                if (fullscreenView == target && !"false".equals(result)) hideFullscreenVideo();
             });
         } else if (webView != null) {
             webView.evaluateJavascript("window.dispatchEvent(new Event('cczj:android-back', {cancelable:true}))", result -> {

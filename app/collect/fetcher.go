@@ -65,6 +65,7 @@ func (f *FlexInt) UnmarshalJSON(b []byte) error {
 func (f FlexInt) Int() int { return int(f) }
 
 type FetchResult struct {
+	Classes       []Category     `json:"class,omitempty"`
 	RawCount      int            `json:"-"`
 	SearchLimited bool           `json:"-"`
 	HTTPStatus    int            `json:"-"`
@@ -83,6 +84,13 @@ type FetchResult struct {
 	// OK records whether the envelope's code hit the shape's ok_codes. It is
 	// set for declared envelopes only; the MAC-CMS verdict stays Code == 1.
 	OK bool `json:"-"`
+}
+
+// Category IDs belong to the provider that returned the envelope.
+type Category struct {
+	ID     model.FlexibleString `json:"type_id"`
+	Name   string               `json:"type_name"`
+	Parent model.FlexibleString `json:"type_pid"`
 }
 
 // APIError preserves the remote protocol code for operation-specific decisions.
@@ -395,6 +403,7 @@ func decodeCMSEnvelope(body []byte, fieldMapping map[string]string) (*FetchResul
 	result := &FetchResult{}
 
 	var meta struct {
+		Classes   json.RawMessage `json:"class"`
 		Code      json.RawMessage `json:"code"`
 		List      json.RawMessage `json:"list"`
 		Page      FlexInt         `json:"page"`
@@ -413,6 +422,14 @@ func decodeCMSEnvelope(body []byte, fieldMapping map[string]string) (*FetchResul
 		}
 	}
 	result.Code = code.Int()
+	// Class metadata is optional for ordinary video reads. A malformed class
+	// must not invalidate an otherwise usable list/detail response.
+	if len(meta.Classes) > 0 {
+		var categories []Category
+		if json.Unmarshal(meta.Classes, &categories) == nil {
+			result.Classes = categories
+		}
+	}
 	result.Page = meta.Page
 	result.Pagecount = meta.Pagecount
 	result.Limit = meta.Limit

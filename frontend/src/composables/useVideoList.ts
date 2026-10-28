@@ -1,6 +1,6 @@
 import { computed, onActivated, onDeactivated, onScopeDispose, reactive, ref, watch } from 'vue'
 import { SearchVideos } from '../api/app'
-import { GetVideoPage } from '../api/video'
+import { GetVideoPage, GetShortDramaPage } from '../api/video'
 import { normalizeApiError } from '../api/errors'
 import type { Video } from '../types'
 import { useErrorStore } from '../stores/error'
@@ -20,6 +20,7 @@ export interface VideoFilter {
 }
 
 export interface VideoListOptions {
+  remoteShortDrama?: boolean
   /** A retained child scene can suspend reads without discarding its page. */
   enabled?: () => boolean
   /**
@@ -51,6 +52,7 @@ export function useVideoList(options: VideoListOptions = {}) {
   const interrupted = ref(false)
   let active = true
   const sourceKey = ref('')
+  const remoteSource = ref(''), remoteCategory = ref(''), remoteName = ref('')
 
   let seenDeletionSeq = 0
   const gen = useGeneration()
@@ -88,6 +90,7 @@ export function useVideoList(options: VideoListOptions = {}) {
     const my = gen.begin()
     loading.value = true
     error.value = ''
+    if (sourceKey.value !== key) clearRemote()
     sourceKey.value = key
     try {
       const req = {
@@ -103,7 +106,19 @@ export function useVideoList(options: VideoListOptions = {}) {
         page: p,
         page_size: pageSize,
       } as any
-      const resp = await requests.run(() => GetVideoPage(req))
+      const remoteEnabled = options.remoteShortDrama && filter.short_drama
+      let resp = remoteEnabled && remoteSource.value
+        ? { videos: [] as Video[], total: 0, next_cursor: '' }
+        : await requests.run(() => GetVideoPage(req))
+      if (!gen.isCurrent(my)) return
+      if (remoteEnabled && (remoteSource.value || !resp.videos.length)) {
+        const remote = await requests.run(() => GetShortDramaPage(key, p, filter.keyword, remoteSource.value, remoteCategory.value, filter.recent_days))
+        if (!gen.isCurrent(my)) return
+        remoteSource.value = remote.source_key
+        remoteCategory.value = remote.category_id
+        remoteName.value = remote.source_name
+        resp = { videos: remote.videos, total: remote.total, next_cursor: remote.has_more ? 'remote:' + String(p + 1) : '' }
+      }
       if (settle(my)) return
       const list: Video[] = Array.isArray(resp?.videos) ? resp.videos : []
       nextCursor.value = typeof resp?.next_cursor === 'string' ? resp.next_cursor : ''
@@ -154,8 +169,13 @@ export function useVideoList(options: VideoListOptions = {}) {
     if (li >= 0) localVideos.value.splice(li, 1)
   }
 
-  function reset(): void {
+  function clearRemote(): void {
+    remoteSource.value = ''; remoteCategory.value = ''; remoteName.value = ''
+  }
+
+  function reset(keepRemote = false): void {
     cancelRequests()
+    if (!keepRemote) clearRemote()
     interrupted.value = false
     videos.value = []
     localVideos.value = []
@@ -172,7 +192,7 @@ export function useVideoList(options: VideoListOptions = {}) {
     // 列表只在确实装着该源数据时摘除；派生结构可能来自没走过 load/search 的入口
     // （只用过「源站搜索」的搜索页里 sourceKey 仍是空），所以通知照常发出，
     // 由视图按自己当前的源判断。
-    if (notice.sourceKey === sourceKey.value) remove(notice.vodId)
+    if (notice.sourceKey === (remoteSource.value || sourceKey.value)) remove(notice.vodId)
     options.onDeleted?.(notice.vodId, notice.sourceKey)
   })
   onScopeDispose(stopWatchingDeletion)
@@ -187,6 +207,8 @@ export function useVideoList(options: VideoListOptions = {}) {
     error,
     interrupted,
     sourceKey,
+    remoteSource,
+    remoteName,
     hasNext: computed(() => videos.value.length < total.value),
     load,
     search,

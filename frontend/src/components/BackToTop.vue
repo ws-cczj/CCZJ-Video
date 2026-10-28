@@ -1,6 +1,7 @@
 <script setup lang="ts">
 defineOptions({ name: 'BackToTop' })
-import { ref, onMounted, onBeforeUnmount, onActivated, onDeactivated, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
+import { useViewActivity } from '../composables/useViewActivity'
 import { tr } from '../locales'
 import { isMobileRuntime } from '../api/runtime'
 import { useRoute } from 'vue-router'
@@ -8,6 +9,7 @@ const mobile = isMobileRuntime()
 const props=withDefaults(defineProps<{compact?:boolean;targetSelector?:string}>(),{compact:false,targetSelector:'.main-content'})
 const compact=computed(()=>mobile||props.compact)
 const route = useRoute()
+const active = useViewActivity(() => true, 'committed')
 const mobileBottom = computed(() => ['/','/search','/favorites','/history','/settings'].includes(route.path) && !route.query.group ? 'calc(72px + env(safe-area-inset-bottom,0px))' : 'calc(16px + env(safe-area-inset-bottom,0px))')
 
 const THRESHOLD = 400
@@ -47,9 +49,13 @@ function getScrollContainer(): HTMLElement | null {
 }
 
 function onScroll(): void {
-  const el = getScrollContainer()
+  const el = scroller
   if (!el) return
   const shouldShow = el.scrollTop > THRESHOLD
+  if (compact.value) {
+    visible.value = shouldShow
+    return
+  }
   if (shouldShow && !visible.value && !pulling.value) {
     // 进入视图：先取消任何正在进行的缩回动画
     cancelRetract()
@@ -107,6 +113,8 @@ function scrollToTop(): void {
 }
 
 let scroller: HTMLElement | null = null
+let bindFrame: number | null = null
+let bindTimer: ReturnType<typeof setTimeout> | null = null
 
 function bindScroll(): void {
   unbindScroll()
@@ -114,13 +122,22 @@ function bindScroll(): void {
   scroller = getScrollContainer()
   if (scroller) {
     scroller.addEventListener('scroll', onScroll, { passive: true })
-    onScroll()
+    // Initial binding runs while the route tree is changing. Read scrollTop
+    // after its first paint instead of forcing layout from the route commit.
+    bindFrame = requestAnimationFrame(() => {
+      bindFrame = null
+      bindTimer = setTimeout(() => { bindTimer = null; onScroll() }, 0)
+    })
   }
   updateVineHeight()
   window.addEventListener('resize', onResize)
 }
 
 function unbindScroll(): void {
+  if (bindFrame !== null) cancelAnimationFrame(bindFrame)
+  if (bindTimer !== null) clearTimeout(bindTimer)
+  bindFrame = null
+  bindTimer = null
   if (scroller) {
     scroller.removeEventListener('scroll', onScroll)
     scroller = null
@@ -128,9 +145,19 @@ function unbindScroll(): void {
   window.removeEventListener('resize', onResize)
 }
 
-onMounted(() => {bindScroll();window.addEventListener('cczj:route-scroll-container',bindScroll)})
-onActivated(() => bindScroll())
-onDeactivated(() => { unbindScroll(); stopScrollAnimation() })
+function syncActivity(): void {
+  window.removeEventListener('cczj:route-scroll-container',bindScroll)
+  if (active.value) {
+    bindScroll()
+    window.addEventListener('cczj:route-scroll-container',bindScroll)
+  } else {
+    unbindScroll(); stopScrollAnimation(); cancelRetract()
+    if (growTimer !== null) clearTimeout(growTimer)
+    growTimer = null
+  }
+}
+watch(active, syncActivity, { flush: 'post' })
+onMounted(syncActivity)
 onBeforeUnmount(() => {
   unbindScroll();stopScrollAnimation();window.removeEventListener('cczj:route-scroll-container',bindScroll)
   cancelRetract()

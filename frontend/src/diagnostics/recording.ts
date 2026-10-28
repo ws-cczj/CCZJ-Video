@@ -4,6 +4,7 @@ import { AddDiagnosticsRecordingMarker, GetDiagnosticsRecordingStatus } from '..
 import { recordingContext } from './architecture'
 import { activityDiagnostics } from './activity'
 import { startupSnapshot } from './startup'
+import { captureBrowserResources } from './browserResources'
 
 export interface RecordingStatus {
   active: boolean
@@ -44,7 +45,7 @@ function scheduleSnapshot(): void {
     busy = true
     try {
       if (diagnosticMode()==='video' && playbackSnapshot) await recordDiagnosticEvent('playback_snapshot', playbackSnapshot())
-      if(diagnosticMode()!=='video') await recordDiagnosticEvent('activity_snapshot',activityDiagnostics.snapshot(diagnosticMode()))
+      if(diagnosticMode()!=='video') await recordDiagnosticEvent('activity_snapshot',{...activityDiagnostics.snapshot(diagnosticMode()),browser_resources:captureBrowserResources()})
       // Check the backend's deadline/disk-error state even when no player is mounted.
       await refreshRecordingStatus()
     } finally {

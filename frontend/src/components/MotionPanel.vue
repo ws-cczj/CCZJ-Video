@@ -113,6 +113,6 @@ p { font-size:.82rem;@apply cczj-text-muted;line-height:1.65;margin:0; }
 .timing-details { @apply cczj-mt-4 cczj-border-top;padding-top:14px;font-size:.78rem;@apply cczj-text-muted; }.timing-details summary { @apply cczj-cursor-pointer; }.timing-details>div { @apply cczj-flex cczj-justify-between;gap:15px;padding:10px 0 0; }.timing-details strong { @apply cczj-text-secondary cczj-whitespace-nowrap; }
 @container (max-width:570px) { .style-options { grid-template-columns:1fr; }.style-option { @apply cczj-grid;grid-template-columns:70px minmax(0,1fr);column-gap:14px; }.style-illustration { grid-row:span 2;@apply cczj-self-center; }.style-option strong { @apply cczj-mt-0; }.motion-section { @apply cczj-p-8; }.range-control { width:180px; }.motion-control { @apply cczj-flex-wrap; } }
 @media (prefers-reduced-motion:reduce) { .sample-tile, .preview-sample { animation:none; } }
-:global(html[data-cczj-motion='off']) .sample-tile,
-:global(html[data-cczj-motion='off']) .preview-sample { animation:none; }
+html[data-cczj-motion='off'] .sample-tile,
+html[data-cczj-motion='off'] .preview-sample { animation:none; }
 </style>

@@ -1,4 +1,4 @@
-import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref } from 'vue'
+import { computed, inject, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, type InjectionKey, type Ref } from 'vue'
 import { nativeWindowEvents, onBackendEvent } from '../api/events'
 
 // One listener serves every image/panel. KeepAlive deactivation is independent
@@ -10,8 +10,14 @@ export const windowForeground = computed(() => foreground.value && !nativeHidden
 let detachWindowEvents: Array<() => void> = []
 let subscribers = 0
 function updateVisibility(): void { foreground.value = !document.hidden }
+export const routeWorkActivityKey: InjectionKey<Readonly<Ref<boolean>>> = Symbol('route-work-activity')
+export const routeVisualActivityKey: InjectionKey<Readonly<Ref<boolean>>> = Symbol('route-visual-activity')
 
-export function useViewActivity(enabled: () => boolean = () => true) {
+/** Visible previews may prepare images. Work requires a committed route, so a
+ * cancelled swipe never starts a carousel, polling or discovery request. */
+export function useViewActivity(enabled: () => boolean = () => true, scope: 'visible' | 'committed' = 'visible') {
+  const committed = inject(routeWorkActivityKey, undefined)
+  const visible = inject(routeVisualActivityKey, undefined)
   const activated = ref(true)
   onActivated(() => { activated.value = true })
   onDeactivated(() => { activated.value = false })
@@ -38,5 +44,7 @@ export function useViewActivity(enabled: () => boolean = () => true) {
       detachWindowEvents = []
     }
   })
-  return computed(() => activated.value && windowForeground.value && enabled())
+  return computed(() => windowForeground.value && enabled() && (scope === 'visible'
+    ? visible?.value ?? activated.value
+    : activated.value && committed?.value !== false))
 }

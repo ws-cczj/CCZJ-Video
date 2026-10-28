@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed,onActivated,onDeactivated,ref,watch } from 'vue'
+import { computed,ref,watch } from 'vue'
+import { useViewActivity } from '../../composables/useViewActivity'
 import { useI18n } from 'vue-i18n'
 import { comicTrending } from '../../api/comicBrowse'
 import { useAsyncResource } from '../../reading/asyncResource'
@@ -11,9 +12,11 @@ const resource=useAsyncResource({diagnosticLabel:'comic.trending',load:()=>comic
 const page=computed(()=>resource.data.value?.board===board.value?resource.data.value:null)
 const source=computed(()=>`https://manga.bilibili.com/ranking/${board.value==='japan'?0:1}`)
 let lastChecked=0
-watch(board,()=>{lastChecked=Date.now();void resource.run()},{immediate:true})
-onActivated(()=>{if(resource.status.value==='idle'||Date.now()-lastChecked>30*60*1000){lastChecked=Date.now();void resource.run()}})
-onDeactivated(()=>resource.cancel())
+const active=useViewActivity(()=>true,'committed')
+watch([board,active],([,show])=>{
+ if(!show){resource.cancel();return}
+ if(!page.value||Date.now()-lastChecked>30*60*1000){lastChecked=Date.now();void resource.run()}
+},{immediate:true})
 </script>
 <template>
  <section class="manga-trending manga-section" :aria-busy="resource.status.value==='loading'">

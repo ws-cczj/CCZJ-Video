@@ -698,6 +698,136 @@ export class RecycleResult {
     }
 }
 
+export class ShortDramaPage {
+    /**
+     * Creates a new ShortDramaPage instance.
+     * @param {Partial<ShortDramaPage>} [$$source = {}] - The source object to create the ShortDramaPage.
+     */
+    constructor($$source = {}) {
+        if (!("source_key" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["source_key"] = "";
+        }
+        if (!("source_name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["source_name"] = "";
+        }
+        if (!("category_id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["category_id"] = "";
+        }
+        if (!("videos" in $$source)) {
+            /**
+             * @member
+             * @type {(model$0.Video | null)[]}
+             */
+            this["videos"] = [];
+        }
+        if (!("total" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["total"] = 0;
+        }
+        if (!("has_more" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["has_more"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ShortDramaPage instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {ShortDramaPage}
+     */
+    static createFrom($$source = {}) {
+        const $$createField3_0 = $$createType10;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("videos" in $$parsedSource) {
+            $$parsedSource["videos"] = $$createField3_0($$parsedSource["videos"]);
+        }
+        return new ShortDramaPage(/** @type {Partial<ShortDramaPage>} */($$parsedSource));
+    }
+}
+
+export class ShortDramaPageReq {
+    /**
+     * Creates a new ShortDramaPageReq instance.
+     * @param {Partial<ShortDramaPageReq>} [$$source = {}] - The source object to create the ShortDramaPageReq.
+     */
+    constructor($$source = {}) {
+        if (!("source_key" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["source_key"] = "";
+        }
+        if (!("preferred_source" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["preferred_source"] = "";
+        }
+        if (!("category_id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["category_id"] = "";
+        }
+        if (!("keyword" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["keyword"] = "";
+        }
+        if (!("page" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["page"] = 0;
+        }
+        if (!("recent_days" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["recent_days"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ShortDramaPageReq instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {ShortDramaPageReq}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ShortDramaPageReq(/** @type {Partial<ShortDramaPageReq>} */($$parsedSource));
+    }
+}
+
 export class VideoDetailReq {
     /**
      * Creates a new VideoDetailReq instance.
@@ -793,9 +923,9 @@ export class VideoDetailResp {
      */
     static createFrom($$source = {}) {
         const $$createField0_0 = $$createType9;
-        const $$createField1_0 = $$createType12;
-        const $$createField2_0 = $$createType15;
-        const $$createField3_0 = $$createType17;
+        const $$createField1_0 = $$createType13;
+        const $$createField2_0 = $$createType16;
+        const $$createField3_0 = $$createType18;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("video" in $$parsedSource) {
             $$parsedSource["video"] = $$createField0_0($$parsedSource["video"]);
@@ -962,8 +1092,8 @@ export class VideoListResp {
      * @returns {VideoListResp}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType18;
-        const $$createField3_0 = $$createType18;
+        const $$createField0_0 = $$createType10;
+        const $$createField3_0 = $$createType10;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("videos" in $$parsedSource) {
             $$parsedSource["videos"] = $$createField0_0($$parsedSource["videos"]);
@@ -1081,13 +1211,13 @@ const $$createType6 = db$0.RecycleItem.createFrom;
 const $$createType7 = $Create.Array($$createType6);
 const $$createType8 = model$0.Video.createFrom;
 const $$createType9 = $Create.Nullable($$createType8);
-const $$createType10 = model$0.Episode.createFrom;
-const $$createType11 = $Create.Nullable($$createType10);
-const $$createType12 = $Create.Array($$createType11);
-const $$createType13 = model$0.PlayLine.createFrom;
-const $$createType14 = $Create.Nullable($$createType13);
-const $$createType15 = $Create.Array($$createType14);
-const $$createType16 = detail$0.Error.createFrom;
-const $$createType17 = $Create.Nullable($$createType16);
-const $$createType18 = $Create.Array($$createType9);
+const $$createType10 = $Create.Array($$createType9);
+const $$createType11 = model$0.Episode.createFrom;
+const $$createType12 = $Create.Nullable($$createType11);
+const $$createType13 = $Create.Array($$createType12);
+const $$createType14 = model$0.PlayLine.createFrom;
+const $$createType15 = $Create.Nullable($$createType14);
+const $$createType16 = $Create.Array($$createType15);
+const $$createType17 = detail$0.Error.createFrom;
+const $$createType18 = $Create.Nullable($$createType17);
 const $$createType19 = $Create.Array($Create.Any);

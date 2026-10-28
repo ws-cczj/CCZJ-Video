@@ -62,6 +62,15 @@ const networkNames:Record<string,string>={
         <div><span>{{t('diagnostics.attachedCanvases')}}</span><strong>{{browser.attached_dom?.canvas_count ?? '—'}}</strong></div>
         <div><span>{{t('diagnostics.browserHeapEstimate')}}</span><strong>{{browser.js_heap?`${(browser.js_heap.used_bytes/1048576).toFixed(1)} MiB`:'—'}}</strong></div>
       </div>
+      <template v-if="browser.android_memory">
+        <p>{{t('diagnostics.androidSystemMemoryNote')}}</p>
+        <div class="cczj-diag-observation-grid">
+          <div><span>{{t('diagnostics.androidSystemPss')}}</span><strong>{{browser.android_memory.available && browser.android_memory.pss_bytes != null ? `${(browser.android_memory.pss_bytes/1048576).toFixed(1)} MiB` : '—'}}</strong></div>
+          <div><span>{{t('diagnostics.androidGraphics')}}</span><strong>{{browser.android_memory.available && browser.android_memory.graphics_bytes != null ? `${(browser.android_memory.graphics_bytes/1048576).toFixed(1)} MiB` : '—'}}</strong></div>
+          <div><span>{{t('diagnostics.androidWholeMemory')}}</span><strong>{{browser.android_memory.attributed?.available && browser.android_memory.attributed.pss_bytes != null ? `${(browser.android_memory.attributed.pss_bytes/1048576).toFixed(1)} MiB` : '—'}}</strong></div>
+          <div><span>WebView</span><strong>{{browser.android_memory.webview_version}}</strong></div>
+        </div>
+      </template>
     </div>
     <template v-else-if="section==='startup'">
       <p>{{t('diagnostics.startupScope')}}</p>

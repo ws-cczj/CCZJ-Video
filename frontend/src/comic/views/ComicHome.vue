@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onActivated, onBeforeUnmount, onDeactivated, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { useViewActivity } from '../../composables/useViewActivity'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { comicBrowseChannels, comicBrowsePage, type ComicBrowseShelf, type ComicBrowseChannel } from '../../api/comicBrowse'
@@ -15,7 +16,8 @@ const query = ref(''), selected = ref(''), channels = ref<ComicBrowseChannel[]>(
 const shelves = reactive<Record<string, { page?: ComicBrowseShelf; loading: boolean; error: string; revision: number }>>({})
 const pending = new Map<string, ReturnType<typeof comicBrowsePage>>()
 const channelRequest = comicBrowseChannels()
-let active = true, disposed = false
+let disposed = false
+const active = useViewActivity(() => true, 'committed')
 const visible = computed(() => channels.value.filter(channel => !selected.value || channel.id === selected.value))
 const spotlights = computed(() => {
   const picks = channels.value.filter(channel=>!['honkai','terra'].includes(channel.id)).flatMap(channel=>shelves[channel.id]?.page?.items.slice(0,3)??[])
@@ -24,6 +26,7 @@ const spotlights = computed(() => {
 const recent = computed(() => state.recent[0])
 const spotlightVisible = computed(() => !selected.value && !startupError.value && (spotlights.value.length || !channels.value.length || channels.value.some(channel => shelves[channel.id]?.loading)))
 async function load(id: string, refresh = false): Promise<void> {
+  if (!active.value || disposed) return
   if (!shelves[id]) shelves[id] = { loading: false, error: '', revision: 0 }
   const shelf = shelves[id]!
   if (shelf.loading) return
@@ -43,19 +46,21 @@ async function load(id: string, refresh = false): Promise<void> {
   }
 }
 function ensure(): void {
-  if (!active || disposed) return
-  for (const channel of channels.value) if (!shelves[channel.id]?.page||Date.now()/1000-shelves[channel.id]!.page!.fetchedAt>30*60) void load(channel.id)
+  if (!active.value || disposed) return
+  const wanted = new Set(visible.value.map(channel => channel.id))
+  for (const [id, request] of pending) if (!wanted.has(id)) { shelves[id]!.revision++; shelves[id]!.loading = false; pending.delete(id); request.cancel() }
+  for (const channel of visible.value) if (!shelves[channel.id]?.page||Date.now()/1000-shelves[channel.id]!.page!.fetchedAt>30*60) void load(channel.id)
 }
 void channelRequest.then(value => { if (!disposed) { channels.value = value; ensure() } }, error => { if (!disposed) startupError.value = normalizeApiError(error).message })
 function choose(id: string): void { selected.value = id }
 function search(): void { void router.push({ path: '/comic/search', query: query.value.trim() ? { q: query.value.trim() } : {} }) }
 watch(() => route.query.channel, value => { selected.value = typeof value === 'string' ? value : '' }, { immediate: true })
-onActivated(() => { active = true; ensure() })
+watch(active, show => { if (show) void nextTick(ensure); else cancel() }, {flush:'sync'})
+watch(visible, ensure)
 function cancel(): void {
   for (const [id, request] of pending) { shelves[id]!.revision++; shelves[id]!.loading = false; request.cancel() }
   pending.clear()
 }
-onDeactivated(() => { active = false; cancel() })
 onBeforeUnmount(() => { disposed = true; cancel(); channelRequest.cancel() })
 </script>
 

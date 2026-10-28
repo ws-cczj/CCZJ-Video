@@ -121,12 +121,12 @@
   "LibraryItem": "read",
   "LibraryItems": "read",
   "LibraryNovelContext": "read",
-    "LibraryComicContext": "read",
+  "LibraryComicContext": "read",
   "LibraryPreviewSources": "write",
   "LibraryRefreshChapterPages": "refresh",
   "LibraryRefreshReadingToc": "refresh",
   "LibraryRefreshNovelContext": "refresh",
-    "LibraryRefreshComicContext": "refresh",
+  "LibraryRefreshComicContext": "refresh",
   "LibraryRefreshToc": "refresh",
   "LibraryResolveRef": "read",
   "LibraryResolveRefs": "read",
@@ -215,5 +215,6 @@
   "WindowSetResizable": "write",
   "WindowSetSize": "write",
   "WindowToggleMax": "write",
-  "WriteLog": "isolated"
+  "WriteLog": "isolated",
+  "GetShortDramaPage": "write"
 }

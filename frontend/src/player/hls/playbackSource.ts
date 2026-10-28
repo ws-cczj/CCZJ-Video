@@ -17,6 +17,8 @@ export function createPlaybackSource(deps: {
   error: (code: SourceError, detail?: string) => void
   fatal: (detail: string) => void
   recovering?: (detail: string) => void
+  recovered?: () => void
+  resume?: () => void
   unrecoverable: () => void
   bufferChanged: () => void
   networkPolicy?: (detail: Record<string, unknown>) => void
@@ -24,6 +26,8 @@ export function createPlaybackSource(deps: {
 }) {
   const engine = useHlsEngine()
   let networkTimer: ReturnType<typeof setTimeout> | null = null
+  let releaseRecovery: (() => void) | undefined
+  let resumeRecovery: (() => boolean) | undefined
 
   function cancelNetworkTimeout(): void {
     if (networkTimer !== null) clearTimeout(networkTimer)
@@ -31,6 +35,8 @@ export function createPlaybackSource(deps: {
   }
 
   function dispose(video?: HTMLVideoElement): void {
+    releaseRecovery?.(); releaseRecovery = undefined
+    resumeRecovery = undefined
     cancelNetworkTimeout()
     TsCache.setAbrSwitchCallback(null)
     engine.dispose(video)
@@ -86,6 +92,38 @@ export function createPlaybackSource(deps: {
     }, Hls)
 
     let policySignature = ''
+    let networkRecoveries = 0, mediaRecoveries = 0, recoveryPending = false, exhausted = false
+    const finishRecovery = () => {
+      cancelNetworkTimeout()
+      networkRecoveries = 0; mediaRecoveries = 0; recoveryPending = false; exhausted = false
+      deps.recovered?.()
+    }
+    const recoverNetwork = () => {
+      if (!lease.current() || !recoveryPending || exhausted || video.paused || video.ended) return
+      if (networkTimer !== null) return
+      if (++networkRecoveries > 2) { exhausted = true; hls.stopLoad(); deps.error('timeout'); return }
+      deps.recovering?.('network')
+      try { hls.startLoad(video.currentTime) } catch { exhausted = true; deps.error('load_failed'); return }
+      networkTimer = setTimeout(lease.guard(() => {
+        networkTimer = null
+        if (!recoveryPending || video.paused || video.ended) return
+        if (navigator.onLine === false) { exhausted = true; hls.stopLoad(); deps.error('timeout'); return }
+        recoverNetwork()
+      }), 8000)
+    }
+    const online = () => { if (recoveryPending && !exhausted) recoverNetwork() }
+    resumeRecovery = () => {if(!recoveryPending)return false;if(!exhausted)recoverNetwork();return true}
+    const pause = () => cancelNetworkTimeout()
+    const seek = () => {cancelNetworkTimeout();recoveryPending=false;exhausted=false;networkRecoveries=0;deps.recovered?.()}
+    window.addEventListener('online', online)
+    video.addEventListener('pause', pause)
+    video.addEventListener('seeking', seek)
+    releaseRecovery = () => {
+      window.removeEventListener('online', online)
+      video.removeEventListener('pause', pause)
+      video.removeEventListener('seeking', seek)
+    }
+    lease.signal.addEventListener('abort', () => { releaseRecovery?.(); releaseRecovery = undefined; cancelNetworkTimeout() }, {once:true})
     const applyNetworkPolicy = () => {
       if (!hls.config) return
       const stats = TsCache.stats()
@@ -103,7 +141,8 @@ export function createPlaybackSource(deps: {
     }
     // HLS's ABR controller owns level changes, including in-flight abandonment.
     // A second fixed-duration downswitch rule would conflict with its samples.
-    if (Hls.Events.FRAG_BUFFERED) hls.on(Hls.Events.FRAG_BUFFERED, lease.guard(() => { cancelNetworkTimeout(); deps.bufferChanged(); applyNetworkPolicy() }))
+    video.addEventListener('playing', finishRecovery, {signal:lease.signal})
+    if (Hls.Events.FRAG_BUFFERED) hls.on(Hls.Events.FRAG_BUFFERED, lease.guard(() => { deps.bufferChanged(); applyNetworkPolicy() }))
     if (Hls.Events.LEVEL_SWITCHED) hls.on(Hls.Events.LEVEL_SWITCHED, lease.guard(applyNetworkPolicy))
     hls.on(Hls.Events.LEVEL_LOADED, lease.guard((_event: unknown, data: any) => {
       const fragments = data?.details?.fragments ?? []
@@ -129,22 +168,24 @@ export function createPlaybackSource(deps: {
       if (!data?.fatal) return
       const detail = String(data.details || data.type || '')
       if (['manifestLoadError', 'manifestParsingError', 'manifestIncompatibleCodecsError', 'manifestLoadTimeOut'].includes(detail)) {
+        const position=video.currentTime, rate=video.playbackRate, paused=video.paused, muted=video.muted
         deps.recovering?.(detail)
         dispose(video)
+        video.addEventListener('loadedmetadata',lease.guard(()=>{
+          if(position>0&&Number.isFinite(video.duration))video.currentTime=Math.min(position,Math.max(0,video.duration-1))
+          video.playbackRate=rate;video.muted=muted
+          if(!paused)deps.resume?.()
+        }),{once:true,signal:lease.signal})
         video.src = playbackURL
         video.onerror = lease.guard(() => deps.error('load_failed'))
         return
       }
       if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-        deps.recovering?.(detail)
-        try { hls.startLoad() } catch (error) { console.warn('[Player] Network recovery failed:', error) }
-        if (!video.paused && !video.ended && networkTimer === null) {
-          networkTimer = setTimeout(lease.guard(() => {
-            networkTimer = null
-            if (!video.paused && !video.ended) deps.error('timeout')
-          }), 10000)
-        }
+        recoveryPending = true
+        if (video.paused) { exhausted = true; deps.error('load_failed'); return }
+        recoverNetwork()
       } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+        if (++mediaRecoveries > 2) { deps.error('fatal', detail); return }
         deps.recovering?.(detail)
         try { hls.recoverMediaError() } catch (error) { console.warn('[Player] Media recovery failed:', error) }
       } else {
@@ -158,7 +199,7 @@ export function createPlaybackSource(deps: {
     return true
   }
 
-  return { load, dispose, cancelNetworkTimeout, snapshot: engine.snapshot }
+  return { load, dispose, cancelNetworkTimeout, resume:()=>resumeRecovery?.()??false, snapshot: engine.snapshot }
 }
 
 function absolute(url: string, base: string): string {

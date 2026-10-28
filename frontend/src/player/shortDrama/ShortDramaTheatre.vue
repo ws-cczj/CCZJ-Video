@@ -13,14 +13,15 @@ const props = defineProps<{active:boolean;mobile:boolean}>()
 const emit = defineEmits<{play:[video:Video];random:[]}>()
 const {t}=useI18n()
 const {currentSourceKey}=storeToRefs(useSourceStore())
-const list=useVideoList({enabled:()=>props.active})
+const list=useVideoList({enabled:()=>props.active,remoteShortDrama:true})
 const draft=ref(''), keyword=ref(''), recent=ref(false)
 const filters=computed(()=>({short_drama:true,type_id:'',year:'',area:'',keyword:keyword.value,recent_days:recent.value?7:0}))
 let signature='', pendingPage=1
 function load(page=1):void {
   if(!props.active || !currentSourceKey.value)return
   const next=JSON.stringify([currentSourceKey.value,filters.value])
-  if(next!==signature){list.reset();signature=next}
+  if(next!==signature){list.reset(list.sourceKey===currentSourceKey.value);signature=next}
+  else if(page===1 && !keyword.value && list.error && !list.videos.length)list.reset()
   pendingPage=page
   void list.load(currentSourceKey.value,filters.value,page,24)
 }
@@ -54,6 +55,7 @@ watch([keyword,recent],()=>load())
       </div>
     </header>
     <nav class="theatre-filters cczj-flex cczj-items-center cczj-gap-8" :aria-label="t('shortDrama.catalogFilter')">
+      <span v-if="list.remoteName" class="theatre-count">{{list.remoteName}}</span>
       <Button variant="text" :aria-pressed="!recent" @click="recent=false">{{t('shortDrama.allDramas')}}</Button>
       <Button variant="text" :aria-pressed="recent" @click="recent=true">{{t('shortDrama.recentDramas')}}</Button>
     </nav>

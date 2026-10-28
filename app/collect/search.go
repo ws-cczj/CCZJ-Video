@@ -35,8 +35,7 @@ func FetchSearchPageContext(ctx context.Context, strategy SourceStrategy, keywor
 		return nil, ctx.Err()
 	}
 	if err != nil {
-		var apiErr *APIError
-		if !errors.Is(err, errSearchUnsupported) && !(errors.As(err, &apiErr) && apiErr.Code == 1002) {
+		if !IsSearchUnsupported(err) {
 			return nil, err
 		}
 		operation.Stage(ctx, "suggestion_fallback", applog.Fields{"reason": apperror.Diagnostic(err)})
@@ -57,6 +56,13 @@ func FetchSearchPageContext(ctx context.Context, strategy SourceStrategy, keywor
 		return remote, nil
 	}
 	return wrapped, nil
+}
+
+// IsSearchUnsupported recognises the protocol refusals shared by ordinary and
+// category searches. Transport failures remain retryable transport failures.
+func IsSearchUnsupported(err error) bool {
+	var apiErr *APIError
+	return errors.Is(err, errSearchUnsupported) || (errors.As(err, &apiErr) && apiErr.Code == 1002)
 }
 
 func fetchSearchPage(ctx context.Context, strategy SourceStrategy, keyword string, page int) (*FetchResult, error) {

@@ -1,4 +1,4 @@
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import type { PlayerPlatform } from '../player/platform'
 import { formatPlaybackTime } from '../player/videoInfoFormat'
 
@@ -6,9 +6,14 @@ import { formatPlaybackTime } from '../player/videoInfoFormat'
 export function useMobilePlayerGestures(options: {
   enabled: boolean; device: PlayerPlatform['device']; video: () => HTMLVideoElement | null; visible: () => void; onVolume: (value: number) => void
   onStart?: () => void
+  surface?: () => HTMLElement | undefined
+  onContact?: () => void
+  onTap?: (event: MouseEvent) => void
   holdSpeed?: () => number
   interaction?: 'portrait'
   onSwipe?: (direction: 'previous' | 'next') => void
+  onSwipeProgress?: (distance: number) => void
+  onSwipeCancel?: () => void
 }) {
   const locked = ref(false)
   const hud = ref('')
@@ -36,29 +41,38 @@ export function useMobilePlayerGestures(options: {
     }
     boosting.value = false
   }
-  let start: { id: number; x: number; y: number; width: number; height: number;
+  let start: { id: number; root: HTMLElement; x: number; y: number; width: number; height: number;
     time: number; duration: number; brightness: number; volume: number; target: number; side: boolean; native: boolean } | null = null
   function down(e: PointerEvent): void {
     if (options.enabled && !e.isPrimary) { cancel(); return }
     if (!options.enabled || !e.isPrimary || e.button !== 0) return
     cancel()
     suppressClick = false
-    if (locked.value || (e.target as Element).closest('button,input,select,a,[role="dialog"],.progress-bar-wrapper,.ctrl-bar,.vp-modal-overlay,.ui-modal-overlay,.ai-warning-overlay,.cczj-mobile-cast')) return
+    const target = e.target as Element
+    const portraitPlay = options.interaction === 'portrait' && target.closest('.portrait-play')
+    if (locked.value || (!portraitPlay && target.closest('button,input,select,a,[role="dialog"],.progress-bar-wrapper,.ctrl-bar,.vp-modal-overlay,.ui-modal-overlay,.ai-warning-overlay,.cczj-mobile-cast'))) return
     const video = options.video()
-    if (!video || video.readyState < 1) return
+    // A buffering portrait item must still allow a swipe to another item.
+    if (options.interaction !== 'portrait' && (!video || video.readyState < 1)) return
+    options.onContact?.()
     // DOM clears event.currentTarget after dispatch; the hold fires later.
     const root = e.currentTarget as HTMLElement
     const r = root.getBoundingClientRect(), device = options.device.read()
+    // Match the navigation gesture boundary. Android's edge Back must not
+    // acquire a seek/hold owner, including when the player fills the display.
+    if (e.pointerType !== 'mouse' && (e.clientX < 20 || e.clientX > window.innerWidth - 20)) return
     if (hide) clearTimeout(hide)
     if (collapse) clearTimeout(collapse)
     kind.value = ''; hud.value = ''; seekTarget.value = -1; compact.value = false; active.value = false
-    start = { id: e.pointerId, x: e.clientX, y: e.clientY, width: r.width, height: r.height,
-      time: video.currentTime, duration: video.duration, target: video.currentTime,
-      brightness: device?.brightness ?? .5, volume: device?.volume ?? video.volume,
+    start = { id: e.pointerId, root, x: e.clientX, y: e.clientY, width: r.width, height: r.height,
+      time: video?.currentTime ?? 0, duration: video?.duration ?? 0, target: video?.currentTime ?? 0,
+      brightness: device?.brightness ?? .5, volume: device?.volume ?? video?.volume ?? 1,
       side: e.clientX - r.left < r.width / 2, native: !!device }
+    if (options.interaction === 'portrait') root.setPointerCapture(e.pointerId)
+    if (!video) return
     hold = setTimeout(() => {
       hold = undefined
-      if (!start || kind.value || locked.value || options.video() !== video || video.paused || video.ended) return
+      if (!start || kind.value || locked.value || options.video() !== video || video.readyState < 2 || video.paused || video.ended) return
       boosted = { video, rate: video.playbackRate }
       boosting.value = true
       // Holding never slows down a user's already faster selected rate.
@@ -82,6 +96,7 @@ export function useMobilePlayerGestures(options: {
       clearHold()
       suppressClick = true
       swipe = Math.abs(dy) > Math.abs(dx) * 1.4 ? dy : 0
+      options.onSwipeProgress?.(swipe)
       ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
       e.preventDefault()
       return
@@ -127,6 +142,7 @@ export function useMobilePlayerGestures(options: {
     if (!s || e.pointerId !== s.id) return
     clearHold()
     start = null
+    if (s.root.hasPointerCapture(s.id)) s.root.releasePointerCapture(s.id)
     active.value = false
     const direction = swipe
     swipe = 0
@@ -134,6 +150,7 @@ export function useMobilePlayerGestures(options: {
       options.onSwipe?.(direction < 0 ? 'next' : 'previous')
       return
     }
+    if (options.interaction === 'portrait') options.onSwipeCancel?.()
     if (boosting.value) {
       restoreRate(); kind.value = ''; hud.value = ''; options.visible(); return
     }
@@ -148,23 +165,50 @@ export function useMobilePlayerGestures(options: {
     hide = setTimeout(() => { hud.value = ''; kind.value = ''; seekTarget.value = -1 }, 650)
   }
   function cancel(): void {
+    const saved = start
+    start = null
     clearHold(); restoreRate()
-    start = null; swipe = 0; active.value = false; hud.value = ''; kind.value = ''; seekTarget.value = -1; compact.value = false
+    if (saved?.root.hasPointerCapture(saved.id)) saved.root.releasePointerCapture(saved.id)
+    swipe = 0; active.value = false; hud.value = ''; kind.value = ''; seekTarget.value = -1; compact.value = false
     if (hide) clearTimeout(hide)
     if (collapse) clearTimeout(collapse)
+    if (options.interaction === 'portrait') options.onSwipeCancel?.()
   }
   function consumeClick(): boolean { return locked.value || suppressClick }
   function toggleLock(): void { cancel(); locked.value = !locked.value; options.visible() }
   function visibility(): void { if (document.hidden) cancel() }
+  function orientationChanged(): void { cancel() }
+  function lostCapture(event: PointerEvent): void { if (start?.id === event.pointerId && event.target === start.root) cancel() }
+  function tap(event: MouseEvent): void {
+    if ((event.target as Element).closest('button,input,select,a,[role="dialog"],.ctrl-bar,.vp-modal-overlay,.ui-modal-overlay')) return
+    options.onTap?.(event)
+  }
+  let surface: HTMLElement | undefined
+  function bindSurface(next?: HTMLElement): void {
+    cancel()
+    surface?.removeEventListener('pointerdown', down)
+    surface?.removeEventListener('pointermove', move)
+    surface?.removeEventListener('lostpointercapture', lostCapture)
+    surface?.removeEventListener('click', tap)
+    surface = next
+    surface?.addEventListener('pointerdown', down)
+    surface?.addEventListener('pointermove', move)
+    surface?.addEventListener('lostpointercapture', lostCapture)
+    surface?.addEventListener('click', tap)
+  }
   onMounted(() => {
     if (!options.enabled) return
+    if (options.surface) watch(options.surface, bindSurface, { immediate: true, flush: 'post' })
     window.addEventListener('pointerup', end, true)
     window.addEventListener('pointercancel', end, true)
     window.addEventListener('blur', cancel)
     window.addEventListener('pagehide', cancel)
+    window.addEventListener('orientationchange', orientationChanged)
+    screen.orientation?.addEventListener('change', orientationChanged)
     document.addEventListener('visibilitychange', visibility)
   })
   onBeforeUnmount(() => {
+    bindSurface()
     cancel()
     if (!options.enabled) return
     options.device.restoreBrightness()
@@ -172,6 +216,8 @@ export function useMobilePlayerGestures(options: {
     window.removeEventListener('pointercancel', end, true)
     window.removeEventListener('blur', cancel)
     window.removeEventListener('pagehide', cancel)
+    window.removeEventListener('orientationchange', orientationChanged)
+    screen.orientation?.removeEventListener('change', orientationChanged)
     document.removeEventListener('visibilitychange', visibility)
   })
   return { locked, hud, kind, boosting, seekTarget, level, compact, active, down, move, end, cancel, consumeClick, toggleLock }

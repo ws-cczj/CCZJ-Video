@@ -1,15 +1,22 @@
 import { useRoute } from 'vue-router'
+import { onScopeDispose } from 'vue'
 import { primaryTabs } from './routeMotion'
 
 export function useTabSwipe(enabled: () => boolean, presentation: { preview: (path: string, edge: number) => void; move: (distance: number) => void; settle: (path?: string) => Promise<void> }) {
   const route = useRoute()
   let lastDistance = 0
-  let start: { x: number; y: number; path: string; target: string; locked: boolean } | undefined
+  let start: { x: number; y: number; width: number; path: string; target: string; locked: boolean } | undefined
+  let gestureSurface: EventTarget | null = null
+  function releaseMove(): void {
+    gestureSurface?.removeEventListener('touchmove', touchMove as EventListener)
+    gestureSurface = null
+  }
   let suppressUntil = 0
   let settling = false
   function cancel(): void {
     const wasDragging = start?.locked
     start = undefined
+    releaseMove()
     if (wasDragging && !settling) { settling = true; void presentation.settle().finally(() => { settling = false }) }
   }
   function touchStart(event: TouchEvent): void {
@@ -29,9 +36,15 @@ export function useTabSwipe(enabled: () => boolean, presentation: { preview: (pa
       }
     }
     const touch = event.touches[0]
+    const width = innerWidth
     // Preserve Android's edge Back gesture.
-    if (touch.clientX < 20 || touch.clientX > innerWidth - 20) return
-    start = { x: touch.clientX, y: touch.clientY, path: route.fullPath, target: '', locked: false }
+    if (touch.clientX < 20 || touch.clientX > width - 20) return
+    start = { x: touch.clientX, y: touch.clientY, width, path: route.fullPath, target: '', locked: false }
+    // Only a possible tab gesture needs a cancellable listener. Release it as
+    // soon as vertical intent wins, so continued scrolling stays on Chromium's
+    // compositor instead of waiting for a main-thread touchmove every frame.
+    gestureSurface = event.currentTarget
+    gestureSurface?.addEventListener('touchmove', touchMove as EventListener, { passive: false })
   }
   function touchMove(event: TouchEvent): void {
     if (!start) return
@@ -45,17 +58,18 @@ export function useTabSwipe(enabled: () => boolean, presentation: { preview: (pa
     const group = primaryTabs.find(tabs => tabs.includes(route.path))!
     start.target = group[group.indexOf(route.path)+(dx < 0 ? 1 : -1)] || ''
     presentation.preview(start.target, dx < 0 ? 1 : -1)
-    presentation.move(start.target ? Math.max(-innerWidth, Math.min(innerWidth, dx)) : Math.max(-28, Math.min(28, dx*.18)))
+    presentation.move(start.target ? Math.max(-start.width, Math.min(start.width, dx)) : Math.max(-28, Math.min(28, dx*.18)))
   }
   function touchEnd(): void {
-    const gesture = start; start = undefined
+    const gesture = start; start = undefined; releaseMove()
     if (!gesture?.locked) return
     suppressUntil = performance.now()+500
     settling = true
-    void presentation.settle(gesture.target && gesture.path === route.fullPath && Math.abs(lastDistance) >= innerWidth*.3 ? gesture.target : undefined).finally(() => { settling = false })
+    void presentation.settle(gesture.target && gesture.path === route.fullPath && Math.abs(lastDistance) >= gesture.width*.3 ? gesture.target : undefined).finally(() => { settling = false })
   }
   function click(event: MouseEvent): void {
     if (performance.now() < suppressUntil) { event.preventDefault(); event.stopImmediatePropagation() }
   }
-  return { touchStart, touchMove, touchEnd, cancel, click }
+  onScopeDispose(() => { start = undefined; releaseMove() })
+  return { touchStart, touchEnd, cancel, click }
 }

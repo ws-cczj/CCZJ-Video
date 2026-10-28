@@ -1,6 +1,7 @@
 /* Only a populated viewing scene and its teleported drawers use this palette.
  * Application chrome, navigation and empty states keep the user's theme. */
-.cczj-short-drama-surface {
+.cczj-short-drama-surface,
+.cczj-mobile-route-stage[data-cczj-chrome=cinema] > .cczj-mobile-navigation {
   color-scheme: dark;
   --cczj-drama-chrome: #18191c;
   --cczj-drama-control: #24252a;
@@ -41,4 +42,12 @@
   --btn-hide: var(--bg-hover);
   --btn-hide-contrast: var(--text-primary);
   --cczj-player-drawer-surface: var(--cczj-drama-chrome);
+}
+
+/* The committed playback scene owns its bottom chrome; previews and the
+   theatre keep the application theme. Reuse the viewing palette above. */
+.cczj-mobile-route-stage[data-cczj-chrome=cinema] > .cczj-mobile-navigation {
+  --cczj-mobile-surface: var(--cczj-drama-chrome);
+  --cczj-mobile-muted: var(--cczj-drama-secondary);
+  background: var(--cczj-drama-chrome);
 }

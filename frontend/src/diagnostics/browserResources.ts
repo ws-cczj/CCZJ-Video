@@ -1,4 +1,5 @@
 import { architectureSnapshot } from './architecture'
+import { readAndroidMemoryState } from '../api/runtime'
 const playerSnapshots = new Map<symbol,{id:string;snapshot:()=>unknown}>()
 
 /** Registers the current player without retaining a closed component. */
@@ -22,6 +23,7 @@ export function captureBrowserResources() {
   const canvases = Array.from(document.querySelectorAll('canvas'))
   const images = Array.from(document.querySelectorAll('img'))
   return {
+    android_memory: readAndroidMemoryState(),
     js_heap: memory ? { source: 'performance.memory', used_bytes: memory.usedJSHeapSize, total_bytes: memory.totalJSHeapSize, limit_bytes: memory.jsHeapSizeLimit } : null,
     player, players, registered_player_count:playerSnapshots.size, architecture:architectureSnapshot(),
     attached_dom: {

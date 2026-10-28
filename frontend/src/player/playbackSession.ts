@@ -1,3 +1,11 @@
+/** In-memory handoff for a verified identical episode, independent of history. */
+export interface PlaybackCheckpoint {
+  position: number
+  rate: number
+  paused: boolean
+  muted: boolean
+  volume: number
+}
 /** One media load owns its callbacks, listeners and delayed work. Replacing it
  * invalidates pending promises before releasing resources. */
 export function createPlaybackSession() {

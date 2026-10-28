@@ -10,6 +10,7 @@ import { startupSnapshot } from '../diagnostics/startup'
 import { captureBrowserResources } from '../diagnostics/browserResources'
 import { recordingStatus, recordingObserverFailed, recordDiagnosticEvent, setRecordingStatus, recordingRevision } from '../diagnostics/recording'
 import { revealDiagnosticExport } from '../platform/diagnosticFiles'
+import { readAndroidMemoryState } from '../api/runtime'
 import DiagnosticObservability from './DiagnosticObservability.vue'
 import { Button, Segment } from './ui'
 import Icon from './Icon.vue'
@@ -18,7 +19,7 @@ const props=withDefaults(defineProps<{active?:boolean;exportActionLabel?:string}
 const {t}=useI18n()
 const mode=useApplicationMode()
 const errors=useErrorStore()
-const visible=useViewActivity(()=>props.active)
+const visible=useViewActivity(()=>props.active,'committed')
 const section=ref<string|number>('overview')
 const metrics=shallowRef<Record<string,any>|null>(null)
 const diagnostics=shallowRef<Record<string,any>|null>(null)
@@ -26,6 +27,7 @@ const busy=ref(false)
 const path=ref('')
 const failed=ref(false)
 const resource=computed(()=>metrics.value?.resources||{})
+const androidMemory=computed(()=>{void metrics.value;return readAndroidMemoryState()})
 const tabs=['overview','startup','activity','network','storage'] as const
 const tabKeys={overview:'diagnostics.overview',startup:'diagnostics.startupTitle',activity:'diagnostics.activityTitle',network:'diagnostics.networkAndCache',storage:'diagnostics.runtimeStorage'}
 const tabOptions=computed(()=>tabs.map(tab=>({value:tab,label:t(tabKeys[tab])})))
@@ -93,7 +95,7 @@ const bytes=(value:number|undefined|null)=>value==null?'—':`${(value/1048576).
     <template v-if="section==='overview'">
       <div class="reading-diag-section-heading"><h2>{{t('diagnostics.overview')}}</h2><small>{{t('diagnostics.sharedHost')}}</small></div>
       <div class="reading-diag-cards">
-        <div><span class="reading-diag-metric-label"><Icon name="monitor" :size="18"/>{{t('diagnostics.processMemory')}}</span><strong>{{bytes(resource.native_available?(resource.native_scope==='app_process'?resource.proportional_bytes:resource.tree_private_bytes):null)}}</strong></div>
+        <div><span class="reading-diag-metric-label"><Icon name="monitor" :size="18"/>{{t(androidMemory?.attributed?.available?'diagnostics.androidWholeMemory':resource.native_scope==='app_process'?'diagnostics.appPss':'diagnostics.processMemory')}}</span><strong>{{bytes(androidMemory?.attributed?.available?androidMemory.attributed.pss_bytes:resource.native_available?(resource.native_scope==='app_process'?resource.proportional_bytes:resource.tree_private_bytes):null)}}</strong></div>
         <div><span class="reading-diag-metric-label"><Icon name="layers" :size="18"/>{{t('diagnostics.goHeap')}}</span><strong>{{bytes(resource.heap_alloc_bytes)}}</strong></div>
         <div><span class="reading-diag-metric-label"><Icon name="code" :size="18"/>{{t('diagnostics.goroutines')}}</span><strong>{{metrics?.goroutines??'—'}}</strong></div>
       </div>

@@ -32,7 +32,7 @@ const router = useRouter()
 const { t } = useI18n()
 const motion = useMotionStore()
 const mobile = isMobileRuntime()
-const active = useViewActivity()
+const active = useViewActivity(() => true, 'committed')
 const dragX = ref(0)
 let drag: { id: number; x: number; y: number; width: number; horizontal: boolean } | null = null
 let suppressTouchClick = false

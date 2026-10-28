@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { useViewActivity } from '../../composables/useViewActivity'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { novelBrowseChannels, novelBrowsePage, type BrowseChannel, type BrowsePage } from '../../api/novelBrowse'
@@ -15,7 +16,8 @@ const channels = ref<BrowseChannel[]>([]), startupError = ref(''), query = ref('
 interface Shelf { page?: BrowsePage; loading: boolean; error: string; revision: number }
 const shelves = reactive<Record<string, Shelf>>({})
 const pending = new Map<string, ReturnType<typeof novelBrowsePage>>()
-let disposed = false, active = true
+let disposed = false
+const active = useViewActivity(() => true, 'committed')
 const selected = computed(() => channels.value.find(channel => channel.id === route.query.shelf))
 watch(() => selected.value?.id, value => { lastBookcityChannel.value = value ?? '' }, { immediate: true })
 const visible = computed(() => selected.value ? [selected.value] : channels.value.filter(channel => ['popular', 'publication', 'history'].includes(channel.id)))
@@ -30,7 +32,7 @@ function measureMarker(): void {
 }
 function observeNavigation(): void {
   navObserver?.disconnect()
-  if (!wayfinding.value || !active) return
+  if (!wayfinding.value || !active.value) return
   navObserver ??= new ResizeObserver(measureMarker)
   navObserver.observe(wayfinding.value)
   measureMarker()
@@ -44,6 +46,7 @@ function rows(channel: BrowseChannel) {
   return selected.value ? items : items.slice(start, start + 6)
 }
 async function load(id: string, more = false, refresh = false): Promise<void> {
+  if (!active.value || disposed) return
   if (!shelves[id]) shelves[id] = { loading: false, error: '', revision: 0 }
   const state = shelves[id]!
   if (state.loading || more && !state.page?.nextCursor) return
@@ -68,7 +71,7 @@ async function load(id: string, more = false, refresh = false): Promise<void> {
   }
 }
 function ensureVisible(): void {
-  if (!active || disposed) return
+  if (!active.value || disposed) return
   const wanted = new Set(visible.value.map(channel => channel.id))
   for (const [id, request] of pending) if (!wanted.has(id)) {
     shelves[id]!.revision++; shelves[id]!.loading = false; pending.delete(id); request.cancel()
@@ -81,7 +84,10 @@ async function initialize(): Promise<void> {
 }
 void initialize()
 watch(() => route.query.shelf, ensureVisible)
-onActivated(() => { active = true; ensureVisible(); observeNavigation() })
+watch(active, show => {
+  if (show) { void nextTick(() => { if (active.value && !disposed) { ensureVisible(); observeNavigation() } }) }
+  else { cancel(); navObserver?.disconnect() }
+}, {flush:'sync'})
 function choose(id = ''): void {
   void router.replace({ path: '/novel', query: id ? { shelf: id } : {} })
   document.querySelector('.cczj-novel-shell .main-content')?.scrollTo({ top: 0 })
@@ -95,7 +101,6 @@ function cancel(): void {
   }
   pending.clear()
 }
-onDeactivated(() => { active = false; cancel(); navObserver?.disconnect() })
 onBeforeUnmount(() => { disposed = true; cancel(); channelRequest.cancel(); navObserver?.disconnect() })
 </script>
 

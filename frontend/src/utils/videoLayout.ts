@@ -20,19 +20,26 @@ export function sizeVideoPicture(video:HTMLVideoElement,host:HTMLElement,fit:Vid
   return {width:video.clientWidth,height:video.clientHeight,sourceWidth:video.videoWidth,sourceHeight:video.videoHeight,viewportWidth:width,viewportHeight:height}
 }
 
-/** Match enhancement output to the decoded image, including contain/cover/fill. */
-export function layoutCanvasToVideo(video: HTMLVideoElement, canvas: HTMLCanvasElement): void {
+/** Decoded picture geometry shared by enhancement output and page snapshots. */
+export function videoPictureBounds(video: HTMLVideoElement, host: HTMLElement) {
   if (!video.videoWidth || !video.videoHeight) return
-  const rect = video.getBoundingClientRect(), parent = canvas.parentElement?.getBoundingClientRect()
-  if (!parent || rect.width <= 0 || rect.height <= 0) return
+  const rect = video.getBoundingClientRect(), parent = host.getBoundingClientRect()
+  if (rect.width <= 0 || rect.height <= 0) return
   const fit = getComputedStyle(video).objectFit
   let width = rect.width, height = rect.height
   if (fit !== 'fill') {
     const scale = (fit === 'cover' ? Math.max : Math.min)(rect.width / video.videoWidth, rect.height / video.videoHeight)
     width = video.videoWidth * scale; height = video.videoHeight * scale
   }
-  canvas.style.left = `${rect.left - parent.left + (rect.width - width) / 2}px`
-  canvas.style.top = `${rect.top - parent.top + (rect.height - height) / 2}px`
-  canvas.style.width = `${width}px`
-  canvas.style.height = `${height}px`
+  return { left: rect.left - parent.left + (rect.width - width) / 2, top: rect.top - parent.top + (rect.height - height) / 2, width, height }
+}
+
+/** Match enhancement output to the decoded image, including contain/cover/fill. */
+export function layoutCanvasToVideo(video: HTMLVideoElement, canvas: HTMLCanvasElement): void {
+  const bounds = canvas.parentElement && videoPictureBounds(video, canvas.parentElement)
+  if (!bounds) return
+  canvas.style.left = `${bounds.left}px`
+  canvas.style.top = `${bounds.top}px`
+  canvas.style.width = `${bounds.width}px`
+  canvas.style.height = `${bounds.height}px`
 }

@@ -23,6 +23,8 @@ import { useHoldToEdit } from '../mobile/useHoldToEdit'
 import CczjMobileEditActions from '../mobile/CczjMobileEditActions.vue'
 import { useModeViewState } from '../modes/useModeViewState'
 import { startupTask } from '../diagnostics/startup'
+import { createRequestScope } from '../api/requestScope'
+import { useGeneration } from '../composables/useGeneration'
 
 const { t } = useI18n()
 const mobile = isMobileRuntime()
@@ -85,6 +87,14 @@ interface RecommendGroup {
 
 const recommendGroups = ref<RecommendGroup[]>([])
 const loadingRecommend = ref<Set<string>>(new Set())
+const recommendationRequests = createRequestScope()
+const recommendationGeneration = useGeneration()
+let recommendationSource = ''
+function cancelRecommendations():void {
+  recommendationGeneration.invalidate()
+  recommendationRequests.cancel()
+  recommendLoading.value=false
+}
 
 // 列数与密度走 layout store：这一页在 KeepAlive 下不会重挂，跟着同一份状态
 // 才能在设置页改完立刻看见。
@@ -154,6 +164,7 @@ onActivated(async () => {
 
 onDeactivated(() => {
   searchPageWasDeactivated = true
+  cancelRecommendations()
   sourceSearchInterrupted = sourceSearching.value
   cancelSourceSearch()
   finishHistoryManagement()
@@ -189,22 +200,29 @@ function onDeleted(vodId: string, sourceKey: string): void {
 }
 
 async function loadRecommendations(): Promise<void> {
-  if (!currentSearchSource.value) return
+  const sourceKey=currentSearchSource.value
+  if (!sourceKey) return
+  cancelRecommendations()
+  const generation=recommendationGeneration.begin()
+  // Revalidate in place, like Home. Replacing the list with a spinner destroys
+  // its nodes and replays every card's entrance on each cached-route return.
+  if(recommendationSource!==sourceKey)recommendGroups.value=[]
+  recommendationSource=sourceKey
   recommendLoading.value = true
-  recommendGroups.value = []
 
   try {
-    const history = (await GetRecentHistory(30)) as HistoryItem[] | null | undefined
+    const history = (await recommendationRequests.run(()=>GetRecentHistory(30))) as HistoryItem[] | null | undefined
+    if(!recommendationGeneration.isCurrent(generation))return
     const sameSourceHistory = Array.isArray(history)
-      ? history.filter(h => h.source_key === currentSearchSource.value)
+      ? history.filter(h => h.source_key === sourceKey)
       : []
 
     // 尝试获取最新视频（用于"猜你喜欢"）
     let freshVideos: Video[] = []
     try {
-      const resp = (await GetVideoList({
+      const resp = (await recommendationRequests.run(()=>GetVideoList({
         short_drama: false,
-        source_key: currentSearchSource.value,
+        source_key: sourceKey,
         type_id: '0',
         year: '',
         area: '',
@@ -214,11 +232,12 @@ async function loadRecommendations(): Promise<void> {
         sort: '',
         recent_days: 0,
         cursor: '',
-      })) as { videos: Video[]; total: number }
+      }))) as { videos: Video[]; total: number }
       freshVideos = Array.isArray(resp?.videos) ? resp.videos : []
     } catch {
       // 忽略
     }
+    if(!recommendationGeneration.isCurrent(generation))return
 
     // 构建分组
     const groups: RecommendGroup[] = []
@@ -259,7 +278,7 @@ async function loadRecommendations(): Promise<void> {
             vod_id: String(v.vod_id || ''),
             vod_name: v.vod_name,
             vod_pic: v.vod_pic,
-            source_key: currentSearchSource.value!,
+            source_key: sourceKey,
             video: v,
           })),
         })
@@ -272,7 +291,7 @@ async function loadRecommendations(): Promise<void> {
           vod_id: String(v.vod_id || ''),
           vod_name: v.vod_name,
           vod_pic: v.vod_pic,
-          source_key: currentSearchSource.value!,
+          source_key: sourceKey,
           video: v,
         })),
       })
@@ -285,7 +304,7 @@ async function loadRecommendations(): Promise<void> {
   } catch {
     // 忽略
   } finally {
-    recommendLoading.value = false
+    if(recommendationGeneration.isCurrent(generation))recommendLoading.value = false
   }
 }
 
@@ -499,6 +518,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  cancelRecommendations()
   cancelSourceSearch()
   if (searchProgressListener) {
     searchProgressListener()
@@ -845,7 +865,7 @@ function onSourceVideoClick(v: Video): void {
         </h3>
       </div>
 
-      <div v-if="recommendLoading" class="recommend-loading cczj-text-center cczj-py-4">
+      <div v-if="recommendLoading && recommendGroups.length === 0" class="recommend-loading cczj-text-center cczj-py-4">
         <LoadingSpinner size="sm" :label="t('search.loadingRecommendations')" />
       </div>
 

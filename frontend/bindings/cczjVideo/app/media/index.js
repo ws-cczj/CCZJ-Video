@@ -17,6 +17,8 @@ export {
     RecycleListResp,
     RecycleReq,
     RecycleResult,
+    ShortDramaPage,
+    ShortDramaPageReq,
     VideoDetailReq,
     VideoDetailResp,
     VideoListReq,

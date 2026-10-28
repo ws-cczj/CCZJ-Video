@@ -32,9 +32,11 @@ import {
   prefetchState,
   session,
   telemetry,
+  onStateChange,
 } from './store'
-import type { FetchJob } from './store'
+import type { EpisodeLite, FetchJob } from './store'
 import { recordFetchDuration } from './telemetry'
+import { proxyHlsURL } from '../../player/hls/proxy'
 
 // ====== 会话与在途计数 ======
 
@@ -98,6 +100,7 @@ function drainQueue(): void {
     runOne(job).finally(() => {
       finishInflight(generation)
       if (generation === prefetchState.cacheSession) drainQueue()
+      fireListeners()
     })
   }
 }
@@ -119,14 +122,107 @@ export function beginForegroundFetch(): () => void {
     released = true
     prefetchState.foregroundActive = Math.max(0,prefetchState.foregroundActive - 1)
     if (canPrefetch()) scheduleDrain()
+    fireListeners()
   }
 }
 
 export function setPlaybackBufferAhead(seconds: number, playbackRate = 1): void {
+  const previous = canPrefetch()
   session.playbackRate = Number.isFinite(playbackRate) && playbackRate > 0 ? playbackRate : 1
   session.playbackBufferAhead = Number.isFinite(seconds) ? Math.max(0, seconds) : 0
   if (canPrefetch()) scheduleDrain()
   else for (const controller of prefetchState.prefetchControllers) controller.abort()
+  if (previous !== canPrefetch()) fireListeners()
+}
+
+/** Warm one upcoming HLS item in the existing LRU without changing the current
+ * episode/session or allocating a decoder. Foreground buffering always wins. */
+export async function prefetchMediaStart(episode: EpisodeLite, signal: AbortSignal, idle = false): Promise<number> {
+  if (!/\.m3u8(?:$|[?#])/i.test(episode.ep_url)) return 0
+  let reservation: number | undefined
+  const eligible = () => {
+    const occupied = activeInflight() - (reservation === prefetchState.cacheSession ? 1 : 0)
+    return !signal.aborted && (idle ? prefetchState.foregroundActive === 0 && occupied < 1 : canPrefetch() && occupied < adaptiveConcurrency())
+  }
+  const wait = () => new Promise<void>(resolve => {
+    let off = () => {}
+    const done = () => { off(); signal.removeEventListener('abort', done); resolve() }
+    off = onStateChange(() => { if (eligible()) done() })
+    signal.addEventListener('abort', done, { once: true })
+    if (eligible() || signal.aborted) done()
+  })
+  let warmed = 0
+  for (let attempt = 0; attempt < 3 && !signal.aborted; attempt++) {
+    await wait()
+    if (signal.aborted) return warmed
+    reservation = prefetchState.cacheSession
+    prefetchState.inflightBySession.set(reservation, activeInflight() + 1)
+    const controller = new AbortController(), cancel = () => controller.abort()
+    let expired = false
+    const timer = setTimeout(() => { expired = true; controller.abort() }, 12000)
+    signal.addEventListener('abort', cancel, { once: true })
+    prefetchState.prefetchControllers.add(controller)
+    try {
+      let url = new URL(proxyHlsURL(episode.ep_url), location.href).href, parsed = await fetchAndParseM3u8(url, controller.signal)
+      for (let depth = 0; parsed.isMaster && depth < 3; depth++) {
+        const variant = parsed.streamInfo.slice().sort((a, b) => a.bandwidth - b.bandwidth)[0]?.url || parsed.variantUrls[0]
+        if (!variant) return warmed
+        url = variant; parsed = await fetchAndParseM3u8(url, controller.signal)
+      }
+      // A ranged MP4 resource cannot be cached under a whole-segment key.
+      // The playback loader remains responsible for these streams.
+      if (parsed.isMaster || /#EXT-X-BYTERANGE|#EXT-X-MAP:[^\n]*BYTERANGE/.test(parsed.text)) return warmed
+      const map = parsed.text.match(/#EXT-X-MAP:[^\n]*URI="([^"]+)"/)
+      const urls = [...(map ? [new URL(map[1]!, url).href] : []), ...parsed.urls.slice(0, 2)]
+      let bytes = 0
+      for (const segment of urls) {
+        if (!eligible()) { controller.abort(); break }
+        if (cacheHas(segment)) { warmed++; continue }
+        const stored = await diskLoad(segment)
+        if (controller.signal.aborted) break
+        if (stored) {
+          if (bytes + stored.byteLength > 8 * 1024 * 1024) return warmed
+          bytes += stored.byteLength; cacheSet(segment, stored, epKeyFrom(episode)); warmed++; continue
+        }
+        const response = await fetch(segment, { signal: controller.signal, priority: 'low' } as RequestInit)
+        if (!response.ok) throw new Error(`media warm-up HTTP ${response.status}`)
+        if (/text\/html|application\/json/i.test(response.headers.get('Content-Type') || '')) {
+          await response.body?.cancel()
+          throw new Error('media warm-up returned an error document')
+        }
+        const reader = response.body?.getReader()
+        if (!reader) throw new Error('empty media warm-up response')
+        const chunks: Uint8Array[] = []
+        let size = 0
+        try {
+          if (Number(response.headers.get('Content-Length')) > 8 * 1024 * 1024 - bytes) throw new Error('media warm-up exceeds 8 MiB')
+          while (true) {
+            const chunk = await reader.read()
+            if (chunk.done) break
+            size += chunk.value.byteLength
+            if (bytes + size > 8 * 1024 * 1024) throw new Error('media warm-up exceeds 8 MiB')
+            chunks.push(chunk.value)
+          }
+        } finally { await reader.cancel().catch(() => {}); reader.releaseLock() }
+        if (signal.aborted || controller.signal.aborted) break
+        const buffer = new Uint8Array(size)
+        let offset = 0
+        for (const chunk of chunks) { buffer.set(chunk, offset); offset += chunk.byteLength }
+        bytes += size; cacheSet(segment, buffer.buffer, epKeyFrom(episode)); warmed++; fireListeners()
+      }
+      if (!controller.signal.aborted) return warmed
+      if (expired) throw new Error('media warm-up timed out')
+    } catch (cause) {
+      if (signal.aborted) return warmed
+      if (!controller.signal.aborted || expired) throw cause
+      // The ordinary playback loader preempted this speculative request.
+    } finally {
+      clearTimeout(timer); signal.removeEventListener('abort', cancel)
+      prefetchState.prefetchControllers.delete(controller)
+      finishInflight(reservation); reservation = undefined; fireListeners()
+    }
+  }
+  return warmed
 }
 
 async function runOne(job: FetchJob): Promise<void> {

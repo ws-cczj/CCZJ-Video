@@ -13,6 +13,9 @@ import (
 )
 
 // ======================== Video ========================
+func (a *App) GetShortDramaPage(ctx context.Context, req media.ShortDramaPageReq) (*media.ShortDramaPage, error) {
+	return runRequest(a, ctx, "video.GetShortDramaPage", func(ctx context.Context) (*media.ShortDramaPage, error) { return a.media.ShortDramaPage(ctx, req) })
+}
 
 func (a *App) GetVideoList(ctx context.Context, req media.VideoListReq) (*media.VideoListResp, error) {
 	return runRequest(a, ctx, "video.GetVideoList", func(ctx context.Context) (*media.VideoListResp, error) { return a.media.List(ctx, req) })

@@ -141,6 +141,13 @@ function onImageLoad(): void {
   settling.value = false
 }
 
+function onImageAnimationEnd(event: AnimationEvent): void {
+  // Final opacity already lives in imageStyle. Remove the completed animation
+  // so forwards fill does not retain an opacity-animation layer on every poster.
+  // Vue appends the scoped-style ID to keyframe names in production.
+  if ((event.animationName === 'cczj-image-fade-in' || event.animationName.startsWith('cczj-image-fade-in-')) && phase.value === 'shown' && !settling.value) animateImage.value = false
+}
+
 function onImageError(): void {
   if (!active.value || disposed || resolving || !resolvedSrc.value) return
   if (resolvedSrc.value !== props.fallback) {
@@ -198,10 +205,13 @@ function scheduleImage(): void {
     return
   }
   if (props.loading === 'lazy') {
+    // A tab preview is translated outside the window and clipped by the route
+    // viewport. Observe its own scroll host so its first screen can prepare
+    // before the finger reveals it. Hidden scenes still unsubscribe above.
     if (imageEl.value) stopObserving = whenImageNearViewport(imageEl.value, () => {
       stopObserving = null
       if (active.value && !disposed) void resolveImage(props.src)
-    })
+    }, imageEl.value.closest('.cczj-mobile-shared-backdrop .cczj-mobile-route-scene .main-content'))
   } else void resolveImage(props.src)
 }
 watch([active, () => props.src, () => props.loading], scheduleImage, { immediate: true })
@@ -215,11 +225,13 @@ onBeforeUnmount(() => { disposed = true; scheduleImage() })
     :ref="onImgEl"
     :src="resolvedSrc || emptyImage"
     :loading="loading"
+    decoding="async"
     :alt="alt"
     :class="imageClass"
     :style="imageStyle"
     @load="onImageLoad"
     @error="onImageError"
+    @animationend="onImageAnimationEnd"
   />
 </template>
 

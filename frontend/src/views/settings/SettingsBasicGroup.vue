@@ -540,7 +540,7 @@ const emit = defineEmits<{ (e: 'open-group', id: string): void }>()
 .section-icon { @apply cczj-grid; place-items: center; @apply cczj-w-32 cczj-h-32; border-radius: 9px; background: var(--accent-alpha-10); @apply cczj-text-accent; }
 .section-number { @apply cczj-ml-auto cczj-text-muted; font-size: .75rem; font-variant-numeric: tabular-nums; letter-spacing: .1em; }
 @media (prefers-reduced-motion: reduce) { .basic-section { animation: none; } }
-:global(html[data-cczj-motion='off']) .basic-section { animation: none; }
+html[data-cczj-motion='off'] .basic-section { animation: none; }
 @keyframes settings-reveal { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @container (min-width: 980px) { .basic-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @container (max-width: 570px) {

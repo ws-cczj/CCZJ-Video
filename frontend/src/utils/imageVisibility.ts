@@ -1,24 +1,32 @@
 // Lazy loading must cover the proxy request, not only the final img download.
-const waiting = new Map<Element, () => void>()
-let observer: IntersectionObserver | null = null
+type Observation = { observer: IntersectionObserver; waiting: Map<Element, () => void> }
+const observations = new Map<Element | null, Observation>()
 
-function stop(element: Element): void {
-  waiting.delete(element)
-  observer?.unobserve(element)
-  if (!waiting.size) { observer?.disconnect(); observer = null }
-}
-
-export function whenImageNearViewport(element: Element, ready: () => void): () => void {
+export function whenImageNearViewport(element: Element, ready: () => void, root: Element | null = null): () => void {
   if (typeof IntersectionObserver === 'undefined') { ready(); return () => {} }
-  if (!observer) {
-    observer = new IntersectionObserver(entries => {
+  let observation = observations.get(root)
+  if (!observation) {
+    const waiting = new Map<Element, () => void>()
+    const observer = new IntersectionObserver(entries => {
       for (const entry of entries) {
         if (!entry.isIntersecting) continue
         const callback = waiting.get(entry.target)
         stop(entry.target)
         callback?.()
       }
-    }, { rootMargin: '240px', threshold: 0 })
+    }, { root, rootMargin: '240px', threshold: 0 })
+    observation = { observer, waiting }
+    observations.set(root, observation)
+  }
+  const { observer, waiting } = observation
+  function stop(target: Element): void {
+    if (!waiting.has(target)) return
+    waiting.delete(target)
+    observer.unobserve(target)
+    if (!waiting.size) {
+      observer.disconnect()
+      if (observations.get(root) === observation) observations.delete(root)
+    }
   }
   waiting.set(element, ready)
   observer.observe(element)

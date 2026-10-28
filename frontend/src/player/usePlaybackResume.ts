@@ -125,5 +125,6 @@ export function usePlaybackResume(deps: {
   }
 
   return { savedTime, showResumePrompt, resumeRemainSec, load, track, save, reset,
-    ended, flushPendingSeek, jumpToSavedTime, dismissResumePrompt, canPersist }
+    ended, flushPendingSeek, jumpToSavedTime, dismissResumePrompt, canPersist,
+    ready: () => !resolving && pendingSeek === null }
 }

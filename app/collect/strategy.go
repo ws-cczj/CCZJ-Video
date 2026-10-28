@@ -162,6 +162,31 @@ func (s *configuredStrategy) BuildSearchUrl(keyword string, page int) string {
 	p := map[string]string{s.cfg.Search.PageParam: strconv.Itoa(page), s.cfg.Search.KeywordParam: strings.TrimSpace(keyword)}
 	return buildOperationURL(s.cfg.ApiUrl, s.cfg.Search, p)
 }
+
+// BuildCategorySearchURL preserves the provider's declared parameter names.
+func (s *configuredStrategy) BuildCategorySearchURL(keyword, category string, page, hours int) string {
+	op := s.cfg.Search
+	op.TypeParam = s.cfg.List.TypeParam
+	if op.TypeParam == "" || op.KeywordParam == "" {
+		return ""
+	}
+	params := map[string]string{op.PageParam: strconv.Itoa(page), op.KeywordParam: keyword, op.TypeParam: category}
+	if hours > 0 {
+		op.HoursParam = s.cfg.List.HoursParam
+		params[op.HoursParam] = strconv.Itoa(hours)
+	}
+	return buildOperationURL(s.cfg.ApiUrl, op, params)
+}
+
+// Standard CMS exposes class metadata on ac=list, not ac=detail. Custom
+// envelopes keep their declared list operation and persisted category mapping.
+func (s *configuredStrategy) BuildCategoriesURL() string {
+	op := s.cfg.List
+	if s.cfg.Strategy == "standard_cms" || s.cfg.Strategy == "cms_videolist" {
+		op.Action = "list"
+	}
+	return buildOperationURL(s.cfg.ApiUrl, op, map[string]string{op.PageParam: "1", op.LimitParam: "1"})
+}
 func (s *configuredStrategy) BuildDetailUrl(id string) string {
 	if strings.TrimSpace(id) == "" {
 		return ""

@@ -25,6 +25,7 @@ import { readStorage, writeStorage } from '../platform/storage'
 import type { Video } from '../types'
 import { useHoldToEdit } from '../mobile/useHoldToEdit'
 import { isMobileRuntime } from '../api/runtime'
+import { useShortDramaSession } from '../player/shortDrama/session'
 
 const { t } = useI18n()
 
@@ -32,6 +33,7 @@ const router = useRouter()
 const sourceStore = useSourceStore()
 const videoStore = useVideoStore()
 const errorStore = useErrorStore()
+useShortDramaSession()
 
 // 首页自己的列表状态：与搜索页各持一份，互不覆盖数组、互不串游标。
 // list 是 reactive 对象，必须整体持有（解构会丢解包），模板里也写 list.videos。

@@ -1,6 +1,6 @@
-import { GetVideoDetail as binding, GetRecommend, GetVideoList as listBinding } from './app'
+import { GetVideoDetail as binding, GetRecommend, GetShortDramaPage as shortDramaBinding, GetVideoList as listBinding } from './app'
 import { response } from './response'
-import { object,text,integer,each,list } from './decode'
+import { object,text,integer,each,list,boolean } from './decode'
 import type { Video, VideoDetailResponse, VideoListResponse } from '../types'
 
 function decodeCatalogVideo(item:unknown): Video {
@@ -35,4 +35,10 @@ export function GetVideoDetail(request:Parameters<typeof binding>[0]){return res
 
 export function GetShortDramaRecommendations(sourceKey: string, excludeIDs: string[]) {
  return response(() => GetRecommend({source_key: sourceKey, limit: 5, exclude_ids: excludeIDs, short_drama: true}), value => list(value, decodeCatalogVideo, 5))
+}
+export function GetShortDramaPage(preferredSource:string, page=1, keyword='', sourceKey='', categoryID='', recentDays=0) {
+ return response(()=>shortDramaBinding({preferred_source:preferredSource,source_key:sourceKey,category_id:categoryID,keyword,page,recent_days:recentDays}),value=>{
+  const row=object(value),source=text(row.source_key)
+  return {source_key:source,source_name:text(row.source_name),category_id:text(row.category_id),total:integer(row.total),has_more:boolean(row.has_more),videos:list(row.videos,decodeCatalogVideo,100).map(video=>({...video,source_key:source}))}
+ })
 }

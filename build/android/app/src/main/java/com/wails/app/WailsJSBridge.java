@@ -31,6 +31,7 @@ public class WailsJSBridge {
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final CczjRuntimeDispatcher dispatcher;
+    private final CczjMemoryDiagnostics memory;
 
     public WailsJSBridge(WailsBridge bridge, WebView webView, CczjPlayerDevice player, CczjDiagnosticFiles diagnosticFiles) {
         this.bridge = bridge;
@@ -38,6 +39,7 @@ public class WailsJSBridge {
         this.player = player;
         this.diagnosticFiles = diagnosticFiles;
         this.dispatcher = new CczjRuntimeDispatcher(bridge::handleRuntimeCall, this::sendCallback);
+        this.memory = new CczjMemoryDiagnostics(webView.getContext().getApplicationContext());
     }
 
     /**
@@ -50,9 +52,20 @@ public class WailsJSBridge {
         mainHandler.removeCallbacksAndMessages(this);
         webView = null;
         dispatcher.close();
+        memory.close();
     }
 
     @JavascriptInterface public String playerState() { return player.state(); }
+    @JavascriptInterface public String memoryState() { return memory.state(); }
+    @JavascriptInterface public String memoryAccessSettings() {
+        WebView view = webView;
+        if (view == null || closed.get()) return "HOST_UNAVAILABLE";
+        try {
+            view.getContext().startActivity(new android.content.Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS,
+                    android.net.Uri.parse("package:" + view.getContext().getPackageName())));
+            return "";
+        } catch (Exception failure) { return "SETTINGS_UNAVAILABLE"; }
+    }
     @JavascriptInterface public String startupState() {
         WebView view = webView;
         if (view == null) return "{}";
@@ -70,12 +83,32 @@ public class WailsJSBridge {
         if (view != null && view.getContext() instanceof MainActivity)
             ((MainActivity) view.getContext()).setSystemBarColor(color);
     }
+    @JavascriptInterface public void setSystemBarColors(String status, String navigation) {
+        WebView view = webView;
+        if (view != null && view.getContext() instanceof MainActivity)
+            ((MainActivity) view.getContext()).setSystemBarColors(status, navigation);
+    }
     @JavascriptInterface public void playerVolume(double value) { player.volume(value); }
     @JavascriptInterface public void playerBrightness(double value) { player.brightness(value); }
     @JavascriptInterface public void playerRestoreBrightness() { player.restoreBrightness(); }
     @JavascriptInterface public void playerEnterPip(int width, int height) { player.pip(width, height); }
     @JavascriptInterface public void playerMulticast(boolean enabled) { player.multicast(enabled); }
     @JavascriptInterface public String playerOpenCastSettings() { return player.openCastSettings(); }
+    @JavascriptInterface public String playerPrepareFullscreen(String id, String orientation) {
+        WebView view = webView;
+        if (view == null || closed.get() || !(view.getContext() instanceof MainActivity)) return "UNAVAILABLE";
+        return ((MainActivity) view.getContext()).preparePlayerFullscreen(id, orientation);
+    }
+    @JavascriptInterface public void playerFinishFullscreen(String id) {
+        WebView view = webView;
+        if (view != null && !closed.get() && view.getContext() instanceof MainActivity)
+            ((MainActivity) view.getContext()).finishPlayerFullscreen(id);
+    }
+    @JavascriptInterface public void playerFullscreenPolicy(String id, String orientation, boolean locked) {
+        WebView view = webView;
+        if (view != null && !closed.get() && view.getContext() instanceof MainActivity)
+            ((MainActivity) view.getContext()).updatePlayerFullscreenPolicy(id, orientation, locked);
+    }
     @JavascriptInterface public String diagnosticShare(String path) { return diagnosticFiles.share(path); }
     @JavascriptInterface public String openExternalURL(String url) {
         WebView view = webView;

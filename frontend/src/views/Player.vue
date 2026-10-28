@@ -10,6 +10,10 @@ import { useSourceStore } from '../stores/source'
 import { useVideoStore } from '../stores/video'
 import { useErrorStore } from '../stores/error'
 import VideoPlayer from '../components/VideoPlayer.vue'
+import { GetVideoDetail } from '../api/video'
+import { normalizePlayLines } from '../utils/playLines'
+import { createRequestScope } from '../api/requestScope'
+import type { PlaybackCheckpoint } from '../player/playbackSession'
 import Icon from '../components/Icon.vue'
 import PlayerInformationPanel from '../player/views/PlayerInformationPanel.vue'
 import EpisodeLabel from '../player/views/EpisodeLabel.vue'
@@ -40,6 +44,9 @@ const sourceStore = useSourceStore()
 const videoStore = useVideoStore()
 const errorStore = useErrorStore()
 const playerView=ref<InstanceType<typeof VideoPlayer>|null>(null)
+const sourceRequests=createRequestScope()
+const handoff=ref<PlaybackCheckpoint & {key:string}>()
+const mediaKey=(source:string,vod:string,episode:number)=>JSON.stringify(['video',source,vod,episode])
 
 // ==================== 路由参数解析 ====================
 const vodId = computed(() => {
@@ -84,7 +91,7 @@ const currentUrl = computed(() => {
 
 /** 给视频组件一个"播放历史 key"，让进度记忆按集分开 */
 const currentVideoKey = computed(() => {
-  return `player_${String(vodId.value)}_${String(currentEpIndex.value)}`
+  return mediaKey(activeSourceKey.value||sourceKey.value,String(video.value?.vod_id??vodId.value),episodes.value[currentEpIndex.value]?.ep_num??currentEpIndex.value+1)
 })
 
 // Source identity and real episode number isolate bindings from same-named items.
@@ -174,6 +181,7 @@ const overviewText = computed(() => stripHtmlTags(video.value?.vod_content || ''
 
 // ==================== 集数切换 & 路由更新 ====================
 function goToEpisode(idx: number): void {
+  handoff.value=undefined
   if (idx < 0 || idx >= episodes.value.length) return
   if (idx === currentEpIndex.value) return
   try {
@@ -194,17 +202,18 @@ function nextEpisode(): void { if (hasNext.value) goToEpisode(currentEpIndex.val
 /**
  * 切到另一条播放线路：同一部影片的另一份集表，不用重新请求详情。
  *
- * 先记住当前集的 ep_num，切过去后按它找回同一集（找不到才回到首集）。ep_url 变了
- * VideoPlayer 会自己重建播放器并保住全屏，进度仍按 ep_num 从历史里续。
+ * 校验唯一的 ep_num 对应后再提交，缺失／歧义不替换当前播放。
+ * 相同媒体身份由 VideoPlayer 接力现场状态，不依赖周期保存的历史。
  */
 function onLineChange(index: number): void {
   const prevEpNum = episodes.value[currentEpIndex.value]?.ep_num
+  const list=videoStore.lines[index]?.episodes??[]
+  const matches=list.map((ep,i)=>Number(ep.ep_num)===Number(prevEpNum)?i:-1).filter(i=>i>=0)
+  if(prevEpNum==null||matches.length!==1){errorStore.warn(t('playLine.switch'),t('player.episodeRouteMismatch'));return}
+  const targetIdx=matches[0]!
+  handoff.value=undefined
   videoStore.setActiveLine(index)
   if (videoStore.activeLineIndex !== index) return
-  const list = episodes.value
-  if (list.length === 0) return
-  const matched = prevEpNum == null ? -1 : list.findIndex((ep) => Number(ep.ep_num) === Number(prevEpNum))
-  const targetIdx = matched >= 0 ? matched : 0
   currentEpIndex.value = targetIdx
   _playToken.value++
   try {
@@ -355,12 +364,27 @@ async function switchToSource(sk: string,lineIndex?:number): Promise<void> {
 
 async function loadFromSource(sk: string, vid: string,lineIndex?:number): Promise<void> {
   if (pageDisposed) return
-  const prevEpNum = episodes.value[currentEpIndex.value]?.ep_num ?? undefined
-  loading.value = true
+  const previousEpisode=episodes.value[currentEpIndex.value]
+  const currentIdentity=currentVideoKey.value
+  const prevEpNum = previousEpisode?.ep_num
+  // Validate a candidate before publishing it; failure retains the old decoder.
   try {
-    await videoStore.loadDetail(sk, vid)
-    if (pageDisposed) return
-    if(lineIndex!==undefined){const index=videoStore.lines.findIndex(line=>line.index===lineIndex);if(index>=0)videoStore.setActiveLine(index)}
+    const candidate=await sourceRequests.run(()=>GetVideoDetail({source_key:sk,vod_id:vid,global_id:0,refresh:false}))
+    if(pageDisposed||currentVideoKey.value!==currentIdentity)return
+    const lines=normalizePlayLines(candidate)
+    const chosen=lines.find(line=>line.index===lineIndex)??lines[0]
+    const matches=(chosen?.episodes??[]).map((ep,i)=>Number(ep.ep_num)===Number(prevEpNum)?i:-1).filter(i=>i>=0)
+    const normalize=(name:string)=>name.normalize('NFKC').replace(/\s+/g,'').toLowerCase()
+    const namesMatch=!!video.value?.vod_name&&normalize(candidate.video?.vod_name??'')===normalize(video.value.vod_name)
+    const targetEpisode=chosen?.episodes[matches[0]??-1]
+    const episodeNamesMatch=!!previousEpisode?.ep_name&&normalize(previousEpisode.ep_name)===normalize(targetEpisode?.ep_name??'')
+    const singleFeature=episodes.value.length===1&&chosen?.episodes.length===1
+    if(candidate.error||!namesMatch||prevEpNum==null||matches.length!==1||(!episodeNamesMatch&&!singleFeature)){errorStore.warn(t('playLine.switch'),t('player.episodeRouteMismatch'));return}
+    const state=playerView.value?.checkpoint()
+    if(state)handoff.value={...state,key:mediaKey(sk,vid,prevEpNum)}
+    videoStore.acceptDetail(sk,vid,candidate)
+    // The line was checked above; commit the same choice atomically with data.
+    if(chosen)videoStore.setActiveLine(lines.indexOf(chosen))
     if (!video.value || !episodes.value.length) {
       loading.value = false
       errorStore.warn(t('player.sourceNoEpisodes'), t('player.sourceNoEpisodesDetail', { source: sk }), '', 'Player')
@@ -368,12 +392,7 @@ async function loadFromSource(sk: string, vid: string,lineIndex?:number): Promis
     }
     activeSourceKey.value = sk
 
-    // 尽量保持当前集数：按 ep_num 匹配，匹配不到则回退到第 0 集
-    let targetIdx = 0
-    if (prevEpNum != null) {
-      const idx = episodes.value.findIndex((e) => Number(e.ep_num) === Number(prevEpNum))
-      if (idx >= 0) targetIdx = idx
-    }
+    const targetIdx = matches[0]!
     currentEpIndex.value = targetIdx
     _playToken.value++
 
@@ -403,6 +422,7 @@ async function loadFromSource(sk: string, vid: string,lineIndex?:number): Promis
     refreshFav().catch(() => { })
   } catch (e) {
     if (pageDisposed) return
+    if(normalizeApiError(e).code==='CANCELLED')return
     console.error('[Player] loadFromSource 失败:', e)
     errorStore.error(t('player.sourceLoadFailed'), normalizeApiError(e).message, '', 'Player')
   } finally {
@@ -414,6 +434,7 @@ watch(currentEpIndex, (idx) => {
   // 播放中 → 把该集加入进度（即使没有具体位置，也标记为"开始看过"）
   try { TsCache.setCurrentEpisode(idx) } catch { }
 })
+watch(currentVideoKey,()=>sourceRequests.cancel())
 
 // 同一视频内直接修改播放地址（例如浏览器前进/后退）时，页面实例会被保留，
 // 因此需要将路由集数同步回播放器状态。通过播放器控制条切集时，当前集已先更新，
@@ -487,6 +508,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   pageDisposed = true
+  sourceRequests.cancel()
   // 让在飞的源站探测结果作废：离开页面之后再回写没有意义，也会拖住退出。
   flushEpProgress()
   try {
@@ -540,7 +562,7 @@ const panelModel:PlayerPanelModel = reactive({
         <!-- ============= 左侧视频区 ============= -->
         <div class="player-col-main cczj-flex-1 cczj-relative" @mouseenter="mouseInside = true" @pointermove="panelToggle?.approach($event)" @dblclick.stop>
           <VideoPlayer ref="playerView" :url="currentUrl" :autoplay="true" :has-prev="hasPrev" :has-next="hasNext"
-            :video-key="currentVideoKey" :danmaku-key="danmakuKey" :media-title="video?.vod_name||''" :media-year="video?.vod_year||''" :media-kind="video?.type_name||''" :episode-label="currentEpName" :show-title-bar="true" :title="mobile ? `${video?.vod_name || ''} · ${currentEpName}` : currentEpName" :is-fav="isFav"
+            :video-key="currentVideoKey" :continuation="handoff" :danmaku-key="danmakuKey" :media-title="video?.vod_name||''" :media-year="video?.vod_year||''" :media-kind="video?.type_name||''" :episode-label="currentEpName" :show-title-bar="true" :title="mobile ? `${video?.vod_name || ''} · ${currentEpName}` : currentEpName" :is-fav="isFav"
             :fav-busy="favBusy" :douban-id="video?.vod_douban_id || ''"
             :resolve-resume="resolveDbResumePosition" :resume-immediately="route.query.resume === '1'"
             @progress="updateCurrentEpProgress"

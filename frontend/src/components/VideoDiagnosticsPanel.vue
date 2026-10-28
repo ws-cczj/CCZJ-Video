@@ -45,7 +45,7 @@ const recordingStopReason = computed(() => {
   return t(reasons[recordingStatus.value.reason] || 'diagnostics.recordingOtherStop')
 })
 let disposed = false
-const viewActive = useViewActivity(() => props.active)
+const viewActive = useViewActivity(() => props.active, 'committed')
 // Heavy reads belong to this visible panel; IndexedDB also needs a stale-result
 // guard even though its transaction does not expose cancellation here.
 let readGeneration = 0

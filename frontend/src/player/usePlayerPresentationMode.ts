@@ -1,6 +1,6 @@
-import { nextTick, onMounted, onBeforeUnmount, ref, type Ref } from 'vue'
+import { computed, nextTick, onMounted, onBeforeUnmount, ref, type Ref } from 'vue'
 import type { PlayerPlatform } from './platform'
-import { ApiFailure } from '../api/errors'
+import { ApiFailure, normalizeApiError } from '../api/errors'
 
 let presentationOwner: symbol | undefined
 
@@ -9,6 +9,8 @@ let presentationOwner: symbol | undefined
 export function usePlayerPresentationMode(deps: {
   platform: PlayerPlatform; wrapperRef: Ref<HTMLDivElement | undefined>; video: () => HTMLVideoElement | null
   fullscreenRoot?: () => HTMLElement | undefined
+  fullscreenOrientation?: () => 'portrait' | 'landscape'
+  beforeFullscreen?: () => void
   visible: () => void; failure: (operation:string,error:unknown) => void; unavailable: (capability:'fullscreen'|'pip') => void
 }) {
   const { platform } = deps
@@ -17,6 +19,8 @@ export function usePlayerPresentationMode(deps: {
   let disposed = false, fullscreenGeneration = 0, pipGeneration = 0
   let stopElementPip: (() => void) | undefined
   const isFullscreen = ref(false), isPiP = ref(false)
+  const fullscreenPhase = ref<'inline' | 'entering' | 'fullscreen' | 'exiting'>('inline')
+  const fullscreenBusy = computed(()=>fullscreenPhase.value==='entering'||fullscreenPhase.value==='exiting')
   const owns = () => !disposed && presentationOwner === owner
   const fullscreenRoot = () => deps.fullscreenRoot?.() ?? deps.wrapperRef.value
   function reflectFullscreen(value: boolean): void {
@@ -25,17 +29,19 @@ export function usePlayerPresentationMode(deps: {
     else document.body.removeAttribute('data-player-fullscreen')
   }
   async function toggleFullscreen(): Promise<void> {
-    if (!owns()) return
+    if (!owns() || fullscreenBusy.value) return
     const token = ++fullscreenGeneration
     const current = () => owns() && token === fullscreenGeneration
     const root = fullscreenRoot()
+    fullscreenPhase.value=isFullscreen.value?'exiting':'entering'
     try {
+      deps.beforeFullscreen?.()
       if (isFullscreen.value) {
         await platform.fullscreen.exit(root, current)
         if (!current()) return
         reflectFullscreen(false)
       } else {
-        const entered = await platform.fullscreen.enter(root, current)
+        const entered = await platform.fullscreen.enter(root, current, deps.fullscreenOrientation?.())
         if (!current()) {
           await platform.fullscreen.release(root, () => presentationOwner === undefined)
           return
@@ -44,10 +50,34 @@ export function usePlayerPresentationMode(deps: {
         reflectFullscreen(true)
       }
       deps.visible()
-    } catch (error) { if (current()) deps.failure('fullscreen',error) }
+    } catch (error) {
+      if (current()) {
+        // A failed exit can leave fullscreen active; retain its retry control.
+        reflectFullscreen(platform.fullscreen.browserActive(root))
+        if(normalizeApiError(error).code!=='CANCELLED')deps.failure('fullscreen',error)
+        deps.visible()
+      }
+    } finally {
+      if(current()) {
+        fullscreenPhase.value=isFullscreen.value?'fullscreen':'inline'
+      }
+    }
   }
   function onFsChange(): void {
-    if (owns()) reflectFullscreen(platform.fullscreen.browserActive(fullscreenRoot()))
+    if (!owns()) return
+    reflectFullscreen(platform.fullscreen.browserActive(fullscreenRoot()))
+    if(!fullscreenBusy.value)fullscreenPhase.value=isFullscreen.value?'fullscreen':'inline'
+  }
+  const stopFullscreenErrors=platform.fullscreen.onError(error=>{
+    if(!owns())return
+    onFsChange()
+    deps.failure('fullscreen',error)
+    deps.visible()
+  })
+  function setFullscreenLocked(locked: boolean): void {
+    if(!owns()||!isFullscreen.value||fullscreenBusy.value)return
+    try {platform.fullscreen.setLocked(fullscreenRoot(),locked,owns,deps.fullscreenOrientation?.())}
+    catch(error){deps.failure('fullscreen',error);deps.visible()}
   }
   function onNativePip(event: Event): void {
     if (!owns()) return
@@ -62,7 +92,7 @@ export function usePlayerPresentationMode(deps: {
     deps.failure('pip',new ApiFailure({code,message:'Native picture-in-picture request was rejected'},undefined))
   }
   async function togglePiP(): Promise<void> {
-    if (!owns()) return
+    if (!owns() || fullscreenBusy.value) return
     const token = ++pipGeneration
     const current = () => owns() && token === pipGeneration
     const video = deps.video()
@@ -76,7 +106,7 @@ export function usePlayerPresentationMode(deps: {
       if (!platform.pip.supported(video)) { deps.unavailable('pip'); return }
       if (platform.pip.kind === 'device') {
         if (isFullscreen.value) await toggleFullscreen()
-        if (!current()) return
+        if (!current() || isFullscreen.value) return
         document.body.setAttribute('data-player-pip', '1')
         await nextTick()
         if (!current()) return
@@ -114,6 +144,7 @@ export function usePlayerPresentationMode(deps: {
   onBeforeUnmount(() => {
     disposed = true; fullscreenGeneration++; pipGeneration++
     stopElementPip?.()
+    stopFullscreenErrors()
     document.removeEventListener('fullscreenchange', onFsChange)
     document.removeEventListener('webkitfullscreenchange', onFsChange)
     window.removeEventListener('cczj:player-pip', onNativePip)
@@ -125,5 +156,5 @@ export function usePlayerPresentationMode(deps: {
     document.body.removeAttribute('data-player-fullscreen')
     document.body.removeAttribute('data-player-pip')
   })
-  return { isFullscreen, isPiP, toggleFullscreen, togglePiP }
+  return { isFullscreen, isPiP, fullscreenPhase, fullscreenBusy, toggleFullscreen, togglePiP, setFullscreenLocked }
 }

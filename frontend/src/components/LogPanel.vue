@@ -24,7 +24,7 @@ const { t } = useI18n()
 const props=withDefaults(defineProps<{active?:boolean;rowHeight?:number;localFileActions?:boolean;exportActionLabel?:string;detailMode?:'inline'|'sheet'}>(),{
   active:true,rowHeight:26,localFileActions:true,exportActionLabel:'logs.revealExport',detailMode:'inline',
 })
-const viewActive=useViewActivity(()=>props.active)
+const viewActive=useViewActivity(()=>props.active,'committed')
 let disposed=false
 let activation=0
 let initialized=false

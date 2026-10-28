@@ -25,6 +25,9 @@ type SourceVideoSelection struct {
 func SelectSourceCollectVideos(sourceKey string, videos []*model.Video) (SourceVideoSelection, error) {
 	return selectSourceCollectVideos(context.Background(), instance, sourceKey, videos)
 }
+func SelectSourceCollectVideosContext(ctx context.Context, sourceKey string, videos []*model.Video) (SourceVideoSelection, error) {
+	return selectSourceCollectVideos(ctx, instance, sourceKey, videos)
+}
 func selectSourceCollectVideos(ctx context.Context, executor sqlx.ExtContext, sourceKey string, videos []*model.Video) (SourceVideoSelection, error) {
 	selection := SourceVideoSelection{Videos: make([]*model.Video, 0, len(videos))}
 	if len(videos) == 0 {

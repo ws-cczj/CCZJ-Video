@@ -34,6 +34,7 @@ export interface VType {
 
 // 视频（列表项）
 export interface Video {
+  source_key?: string
   id?: number
   vod_id?: string
   vod_g_id?: string
