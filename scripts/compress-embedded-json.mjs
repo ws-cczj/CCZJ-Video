@@ -12,7 +12,8 @@ const inputs = [
 ]
 let rawBytes = 0, packedBytes = 0
 for (const [name, maximum] of inputs) {
-  const source = readFileSync(resolve(root, name))
+  // Git checkouts can use CRLF or LF; embedded JSON uses canonical LF bytes.
+  const source = Buffer.from(readFileSync(resolve(root, name), 'utf8').replace(/\r\n/g, '\n'))
   if (source.length > maximum) throw new Error(`${name} exceeds its decoded size limit`)
   JSON.parse(source.toString('utf8'))
   const output = resolve(root, `${name}.gz`)
