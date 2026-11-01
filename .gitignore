@@ -32,6 +32,8 @@ build/ios/generated/
 .idea/
 *.code-workspace
 /reports/
+/run.bat
+/CONTEXT.md
 skills-lock.json
 go.work
 go.work.sum
