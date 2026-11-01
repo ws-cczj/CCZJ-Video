@@ -3,7 +3,7 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const files = ['README.md','AGENTS.md','CONTEXT.md','CHANGELOG.md'].map(name=>join(root,name))
+const files = ['README.md','AGENTS.md','CHANGELOG.md'].map(name=>join(root,name))
 function collect(directory) {
   for (const entry of readdirSync(directory,{withFileTypes:true})) {
     const path=join(directory,entry.name)
@@ -25,7 +25,7 @@ for (const file of files) {
     const path=decodeURIComponent(url.split('#')[0].split('?')[0])
     if (!path) continue
     const target=resolve(dirname(file),path)
-    if (/^(reports|\.vscode|\.idea)([/\\]|$)/.test(relative(root,target))) {
+    if (/^(reports|\.vscode|\.idea)([/\\]|$)/.test(relative(root,target)) || /^(CONTEXT\.md|run\.bat)$/.test(relative(root,target))) {
       problems.push(`${relative(root,file).replaceAll('\\','/')}: local-only archive/editor link ${url}; use maintained docs or an immutable archive URL`)
       continue
     }
