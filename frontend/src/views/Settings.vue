@@ -12,13 +12,14 @@ import Icon from '../components/Icon.vue'
 import CczjMobileTools from '../mobile/CczjMobileTools.vue'
 import ExtensionsPanel from '../components/ExtensionsPanel.vue'
 import { pluginSettingsTabs } from '../plugins/registry'
-import { MotionList } from '../components/ui'
+import { MotionList, Empty } from '../components/ui'
 import { useI18n } from 'vue-i18n'
 import SettingsBasicGroup from './settings/SettingsBasicGroup.vue'
 import SettingsThemeGroup from './settings/SettingsThemeGroup.vue'
 import SettingsAdvancedGroup from './settings/SettingsAdvancedGroup.vue'
 import SettingsAboutGroup from './settings/SettingsAboutGroup.vue'
 import { useHorizontalDrag } from '../composables/useHorizontalDrag'
+import { useViewActivity } from '../composables/useViewActivity'
 const groupDrag = useHorizontalDrag()
 
 const { t } = useI18n()
@@ -54,6 +55,11 @@ const GROUPS = computed<GroupItem[]>(() => [
 ].sort((a, b) => a.order - b.order))
 
 const themeStore = useThemeStore()
+const search = ref('')
+const visibleGroups = computed(() => {
+  const query = search.value.trim().toLocaleLowerCase()
+  return GROUPS.value.filter(group => !query || `${group.label} ${groupDescription(group.id)}`.toLocaleLowerCase().includes(query))
+})
 const downloadStore = useDownloadStore()
 const route = useRoute()
 const router = useRouter()
@@ -64,17 +70,22 @@ const mobileCategories = computed(() => [
   { title: t('mobile.settingsPersonal'), ids: ['basic', 'theme', 'motion'] },
   { title: t('mobile.settingsTools'), ids: ['extensions', 'advanced', 'logs', 'diagnostics'] },
   { title: t('mobile.settingsApplication'), ids: ['about'] },
-].map(category => ({ title: category.title, groups: GROUPS.value.filter(g => category.ids.includes(g.id) || (category.ids.includes('extensions') && !['basic','theme','motion','extensions','advanced','logs','diagnostics','about'].includes(g.id))) })))
+].map(category => ({ title: category.title, groups: visibleGroups.value.filter(g => category.ids.includes(g.id) || (category.ids.includes('extensions') && !['basic','theme','motion','extensions','advanced','logs','diagnostics','about'].includes(g.id))) })).filter(category=>category.groups.length))
 function groupDescription(id: string): string {
+  if (id === 'theme') return themeStore.current.name
   const keys: Record<string,string> = { basic: 'mobile.settingsBasicHint', theme: 'mobile.settingsThemeHint', motion: 'mobile.settingsMotionHint', extensions: 'mobile.settingsExtensionsHint', advanced: 'mobile.settingsAdvancedHint', logs: 'mobile.settingsLogsHint', diagnostics: 'mobile.settingsDiagnosticsHint', about: 'mobile.settingsAboutHint' }
   return keys[id] ? t(keys[id]) : ''
 }
 
 const activeGroup = ref<string>('basic')
+const animatedGroup = ref('')
+const pageActive = useViewActivity(() => router.currentRoute.value.path === '/settings','committed')
+watch(pageActive, active => { if(!active)animatedGroup.value='' },{flush:'sync'})
 const settingsRoot = ref<HTMLElement | null>(null)
 const motion = useMotionStore()
 function openGroup(id: string): void {
   if (!GROUPS.value.some(group => group.id === id)) return
+  search.value = ''
   if (mobile) { void router.push({ path: '/settings', query: { group: id } });return }
   activeGroup.value = id
 }
@@ -93,7 +104,8 @@ async function navigateGroup(event: KeyboardEvent): Promise<void> {
   const keys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End']
   if (!keys.includes(event.key)) return
   event.preventDefault()
-  const groups = GROUPS.value
+  const groups = visibleGroups.value
+  if (!groups.length) return
   const current = groups.findIndex(g => g.id === activeGroup.value)
   const next = event.key === 'Home' ? 0 : event.key === 'End' ? groups.length - 1
     : (current + (['ArrowLeft', 'ArrowUp'].includes(event.key) ? -1 : 1) + groups.length) % groups.length
@@ -110,13 +122,25 @@ async function navigateGroup(event: KeyboardEvent): Promise<void> {
 // 和打开着的弹窗一起消失，各分组 onMounted 里的取数也会从「每次进页面一遍」变成
 // 「每次切 tab 一遍」。
 const mountedGroups = ref<Record<string, boolean>>({})
+const groupScroll = new Map<string, number>()
+const groupOffset = ref('12px')
+let groupRevision = 0
 watch([activeGroup, mobileGroup], ([id, visible], [previous]) => {
+  animatedGroup.value = !mobile && pageActive.value && previous && id!==previous ? id : ''
   if (id && (!mobile || visible)) mountedGroups.value[id] = true
-  if (previous) settingsRoot.value?.closest('.main-content')?.scrollTo({ top: 0, behavior: 'auto' })
+  if (mobile || !previous || id === previous) return
+  const host = settingsRoot.value?.closest<HTMLElement>('.main-content')
+  if (!host) return
+  if (GROUPS.value.some(group=>group.id===previous)) groupScroll.set(previous, host.scrollTop)
+  else groupScroll.delete(previous)
+  groupOffset.value = GROUPS.value.findIndex(group=>group.id===id) < GROUPS.value.findIndex(group=>group.id===previous) ? '-12px' : '12px'
+  const token = ++groupRevision
+  void nextTick(() => { if (token === groupRevision && host.isConnected) host.scrollTo({ top: groupScroll.get(id) || 0, behavior: 'auto' }) })
 }, { immediate: true })
 
 // 停在扩展包分组上时把它删掉并重扫，分组条会少一项、面板却还指着那个 id——于是整块内容空白。
 watch(GROUPS, (groups) => {
+  for (const id of Object.keys(mountedGroups.value)) if (!groups.some(group=>group.id===id)) { groupScroll.delete(id);delete mountedGroups.value[id] }
   if (!groups.some((g) => g.id === activeGroup.value)) activeGroup.value = 'basic'
 })
 
@@ -149,11 +173,11 @@ onMounted(async () => {
 
 <template>
   <div ref="settingsRoot" class="settings-page" :class="{ 'is-diagnostics': activeGroup === 'diagnostics', 'cczj-mobile-settings': mobile }">
-    <header v-if="!mobile" class="page-head">
-      <div class="page-kicker">CCZJ VIDEO</div>
-      <h1>{{ t('sidebar.settings') }}</h1>
-      <p class="page-desc">{{ t('settings.pageDescription') }}</p>
-    </header>
+    <label v-if="mobile && !mobileGroup" class="settings-search cczj-flex cczj-items-center cczj-gap-4">
+      <Icon name="search" :size="18" />
+      <input v-model="search" type="search" maxlength="100" :placeholder="t('settings.searchGroups')" :aria-label="t('settings.searchGroups')" @keydown.enter="visibleGroups[0] && openGroup(visibleGroups[0].id)" />
+    </label>
+    <Empty v-if="search && !visibleGroups.length" icon="🔎" :title="t('settings.noMatchingGroups')" />
     <!-- 顶部分组切换 tab。扩展包的分组会随启停增删，所以这一条用 list 过渡：
          新分组淡入落位，右边的分组平滑让位，而不是整条忽然横移一格。 -->
     <div v-if="mobile && !mobileGroup" class="cczj-mobile-settings-index">
@@ -172,7 +196,7 @@ onMounted(async () => {
       <button class="nav-scroll" :aria-label="t('settings.previousGroups')" @click="scrollGroups(-1)"><Icon name="chevron-left" :size="16" /></button>
     <MotionList preset="list" tag="nav" class="tabs" :aria-label="t('sidebar.settings')" role="tablist" @pointerdown="groupDrag.down" @pointermove="groupDrag.move" @pointerup="groupDrag.end" @pointercancel="groupDrag.end" @click.capture="groupDrag.click">
       <button
-        v-for="g in GROUPS"
+        v-for="g in visibleGroups"
         :key="g.id"
         class="tab cczj-inline-flex cczj-items-center cczj-gap-4 cczj-cursor-pointer"
         :class="{ active: activeGroup === g.id }"
@@ -180,7 +204,7 @@ onMounted(async () => {
         :aria-selected="activeGroup === g.id" aria-controls="settings-content"
         :tabindex="activeGroup === g.id ? 0 : -1"
         @keydown="navigateGroup"
-        @click="activeGroup = g.id"
+        @click="openGroup(g.id)"
       >
         <Icon :name="g.icon" :size="14" />
         <span>{{ g.label }}</span>
@@ -189,29 +213,29 @@ onMounted(async () => {
       <button class="nav-scroll" :aria-label="t('settings.nextGroups')" @click="scrollGroups(1)"><Icon name="chevron-right" :size="16" /></button>
     </div>
 
-    <div id="settings-content" v-show="!mobile || mobileGroup" class="content" role="tabpanel" :aria-labelledby="mobile ? undefined : `settings-tab-${activeGroup}`" :aria-label="mobile ? GROUPS.find(g => g.id === activeGroup)?.label : undefined">
+    <div id="settings-content" v-show="(!mobile || mobileGroup) && (!search || visibleGroups.some(group=>group.id===activeGroup))" class="content" :style="{ '--settings-group-offset': groupOffset }" role="tabpanel" :aria-labelledby="mobile ? undefined : `settings-tab-${activeGroup}`" :aria-label="mobile ? GROUPS.find(g => g.id === activeGroup)?.label : undefined">
       <!-- ========== 基本设置 ========== -->
-      <div v-if="mountedGroups.basic" v-show="activeGroup === 'basic'" :class="{ 'settings-group-active': activeGroup === 'basic' }" data-settings-group="basic"><SettingsBasicGroup @open-group="openGroup" /></div>
+      <div v-if="mountedGroups.basic" v-show="activeGroup === 'basic'" :class="{ 'settings-group-active': animatedGroup === 'basic' }" data-settings-group="basic"><SettingsBasicGroup @open-group="openGroup" /></div>
 
       <!-- ========== 主题外观 ========== -->
-      <div v-if="mountedGroups.theme" v-show="activeGroup === 'theme'" :class="{ 'settings-group-active': activeGroup === 'theme' }" data-settings-group="theme"><SettingsThemeGroup /></div>
+      <div v-if="mountedGroups.theme" v-show="activeGroup === 'theme'" :class="{ 'settings-group-active': animatedGroup === 'theme' }" data-settings-group="theme"><SettingsThemeGroup /></div>
 
       <!-- ========== 扩展包 ========== -->
-      <div v-if="mountedGroups.extensions" v-show="activeGroup === 'extensions'" class="panel cczj-flex cczj-flex-col cczj-gap-2" :class="{ 'settings-group-active': activeGroup === 'extensions' }">
+      <div v-if="mountedGroups.extensions" v-show="activeGroup === 'extensions'" class="panel cczj-flex cczj-flex-col cczj-gap-2" :class="{ 'settings-group-active': animatedGroup === 'extensions' }">
         <ExtensionsPanel />
       </div>
 
       <!-- ========== 高级 ========== -->
-      <div v-if="mountedGroups.advanced" v-show="activeGroup === 'advanced'" :class="{ 'settings-group-active': activeGroup === 'advanced' }" data-settings-group="advanced"><SettingsAdvancedGroup /></div>
+      <div v-if="mountedGroups.advanced" v-show="activeGroup === 'advanced'" :class="{ 'settings-group-active': animatedGroup === 'advanced' }" data-settings-group="advanced"><SettingsAdvancedGroup /></div>
 
       <!-- ========== 关于 ========== -->
-      <div v-if="mountedGroups.about" v-show="activeGroup === 'about'" :class="{ 'settings-group-active': activeGroup === 'about' }" data-settings-group="about"><SettingsAboutGroup :app-version="appVersion" /></div>
+      <div v-if="mountedGroups.about" v-show="activeGroup === 'about'" :class="{ 'settings-group-active': animatedGroup === 'about' }" data-settings-group="about"><SettingsAboutGroup :app-version="appVersion" /></div>
 
       <!-- ========== 扩展包加进来的分组（内置的日志、诊断走的就是这条路） ==========
            逐个分组各自挂一份，而不是只渲染「当前那个」：component :is 会跟着
            activeGroup 换，留下的实例就会显示成别的分组的内容。 -->
       <template v-for="tab in pluginSettingsTabs" :key="tab.id">
-        <div v-if="mountedGroups[tab.id]" v-show="activeGroup === tab.id" class="panel cczj-flex cczj-flex-col cczj-gap-2" :class="{ 'settings-group-active': activeGroup === tab.id }">
+        <div v-if="mountedGroups[tab.id]" v-show="activeGroup === tab.id" class="panel cczj-flex cczj-flex-col cczj-gap-2" :class="{ 'settings-group-active': animatedGroup === tab.id }">
           <component :is="tab.component" :active="activeGroup === tab.id && (!mobile || mobileGroup)" />
         </div>
       </template>

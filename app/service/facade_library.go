@@ -203,6 +203,12 @@ func (a *App) LibraryChapterText(ctx context.Context, chapterID int) (*library.C
 
 // LibraryChapterPages 取一话的图片列表。返回的 URL 已经是同源代理地址，
 // 前端直接当 <img src> 用，不要自己拼。
+func (a *App) LibraryRefreshChapterText(ctx context.Context, chapterID int) (*library.ChapterText, error) {
+	return runRequest(a, ctx, "reading.LibraryRefreshChapterText", func(ctx context.Context) (*library.ChapterText, error) {
+		return a.library.RefreshChapterText(ctx, chapterID)
+	})
+}
+
 func (a *App) LibraryChapterPages(ctx context.Context, chapterID int) (*library.ChapterPages, error) {
 	return runRequest(a, ctx, "reading.LibraryChapterPages", func(ctx context.Context) (*library.ChapterPages, error) {
 		return a.library.ChapterPages(ctx, chapterID)

@@ -1,5 +1,6 @@
+import { CCZJ } from '../constants/cczj'
 /** User motion preferences share one persisted owner and one CSS application point. */
-import { ref, watch, onScopeDispose } from 'vue'
+import { computed, ref, watch, onScopeDispose } from 'vue'
 import { defineStore } from 'pinia'
 import { GetSetting, SetSetting } from '../api/app'
 import { usePluginStore } from './plugins'
@@ -7,8 +8,8 @@ import { useErrorStore } from './error'
 import { tr } from '../locales'
 import { DEFAULT_MOTION, normalizeMotionOptions, motionVariables, type MotionOptions } from '../motion/preferences'
 
-export const MOTION_SETTING_KEY = 'ui_motion'
-export const MOTION_OPTIONS_KEY = 'ui_motion_options'
+export const MOTION_SETTING_KEY = CCZJ.Settings.motion
+export const MOTION_OPTIONS_KEY = CCZJ.Settings.motionOptions
 export const MOTION_PACK_ID = 'motion-effects'
 export const useMotionStore = defineStore('motion', () => {
   const pluginStore = usePluginStore()
@@ -17,7 +18,8 @@ export const useMotionStore = defineStore('motion', () => {
   const packReady = ref(false)
   const options = ref<MotionOptions>({ ...DEFAULT_MOTION })
   const media = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-reduced-motion: reduce)') : undefined
-  const reduced = ref(media?.matches || false)
+  const systemReduced = ref(media?.matches || false)
+  const reduced = computed(()=>systemReduced.value||options.value.reduceMotion)
   let savedOptions: MotionOptions = { ...DEFAULT_MOTION }
   let savedEnabled = true
   let loading: Promise<void> | undefined
@@ -26,25 +28,26 @@ export const useMotionStore = defineStore('motion', () => {
   function apply(): void {
     const root = document.documentElement
     const keys = ['pages', 'overlays', 'feedback'] as const
-    if (enabled.value || !packReady.value) root.removeAttribute('data-cczj-motion')
+    if (enabled.value && !reduced.value) root.removeAttribute('data-cczj-motion')
     else root.setAttribute('data-cczj-motion', 'off')
     for (const key of keys) {
-      if (packReady.value && !options.value[key]) root.setAttribute(`data-motion-${key}`, 'off')
+      if (!options.value[key]) root.setAttribute(`data-motion-${key}`, 'off')
       else root.removeAttribute(`data-motion-${key}`)
     }
     const variables = motionVariables(options.value)
-    const cut = reduced.value || (!enabled.value && packReady.value)
+    const cut = reduced.value || !enabled.value
     for (const [name, value] of Object.entries(variables)) {
       if (!packReady.value) { root.style.removeProperty(name); continue }
-      const next = cut && name === '--cczj-motion-distance' ? '0px' : cut && name === '--cczj-motion-enter-scale' ? '1' : cut && ['--cczj-motion-fast', '--cczj-motion-normal', '--cczj-motion-slow', '--cczj-motion-emphasis', '--cczj-motion-carousel'].includes(name) ? '1ms'
-        : cut && name === '--cczj-motion-stagger' ? '0ms' : value
+      const next = cut && name === '--cczj-motion-distance' ? '0px' : cut && name === '--cczj-motion-enter-scale' ? '1' : cut && name === '--cczj-motion-stagger' ? '0ms' : cut && value.endsWith('ms') ? '1ms' : value
       root.style.setProperty(name, next)
     }
   }
   watch(() => pluginStore.readyPacks.some(pack => pack.id === MOTION_PACK_ID), present => { packReady.value = present; apply() }, { immediate: true })
-  const onReduced = () => { reduced.value = media?.matches || false; apply() }
+  const onReduced = () => { systemReduced.value = media?.matches || false; apply() }
   media?.addEventListener('change', onReduced)
-  onScopeDispose(() => media?.removeEventListener('change', onReduced))
+  const stopReduced = () => media?.removeEventListener('change', onReduced)
+  onScopeDispose(stopReduced)
+  if (import.meta.hot) import.meta.hot.dispose(stopReduced)
   function load(): Promise<void> {
     if (loaded.value) return Promise.resolve()
     if (loading) return loading
@@ -88,5 +91,6 @@ export const useMotionStore = defineStore('motion', () => {
     return Number.isFinite(value) && value > 0 ? raw.endsWith('ms') ? value : value * 1000 : 0
   }
   function dipMs(): number { return !enabled.value || !packReady.value || reduced.value ? 0 : Math.min(tokenMs('--cczj-motion-fast'), 300) }
-  return { enabled, loaded, packReady, options, reduced, load, setEnabled, setOptions, reset, dipMs, tokenMs }
+  function allows(category: 'pages' | 'overlays' | 'feedback'): boolean { return enabled.value && !reduced.value && options.value[category] }
+  return { enabled, loaded, packReady, options, reduced, systemReduced, load, setEnabled, setOptions, reset, dipMs, tokenMs, allows }
 })

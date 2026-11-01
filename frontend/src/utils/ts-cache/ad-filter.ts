@@ -1,7 +1,8 @@
+import { CCZJ } from '../../constants/cczj'
 import { readStorage, writeStorage } from '../../platform/storage'
 
 /** 广告域名黑名单 localStorage 键 */
-const AD_BLACKLIST_STORAGE_KEY = 'cczj_ad_domain_blacklist'
+const AD_BLACKLIST_STORAGE_KEY = CCZJ.Storage.adBlacklist
 
 /** 内置广告域名黑名单（匹配 hostname 子串） */
 const _BUILTIN_AD_DOMAINS: string[] = [
@@ -14,9 +15,9 @@ const _BUILTIN_AD_DOMAINS: string[] = [
 /** 当前生效的广告域名黑名单（内置 + 用户上报） */
 let AD_DOMAIN_BLACKLIST: string[] = (() => {
   try {
-    const userDomains = readStorage<string[] | null>(AD_BLACKLIST_STORAGE_KEY, null)
-    if (userDomains) {
-      return [..._BUILTIN_AD_DOMAINS, ...userDomains]
+    const userDomains = readStorage<unknown>(AD_BLACKLIST_STORAGE_KEY, null)
+    if (Array.isArray(userDomains)) {
+      return [..._BUILTIN_AD_DOMAINS, ...userDomains.filter((value): value is string => typeof value === 'string' && !!value)]
     }
   } catch {}
   return [..._BUILTIN_AD_DOMAINS]

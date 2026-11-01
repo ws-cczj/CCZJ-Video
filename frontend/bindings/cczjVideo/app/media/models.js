@@ -698,6 +698,62 @@ export class RecycleResult {
     }
 }
 
+export class ShortDramaCategory {
+    /**
+     * Creates a new ShortDramaCategory instance.
+     * @param {Partial<ShortDramaCategory>} [$$source = {}] - The source object to create the ShortDramaCategory.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["id"] = "";
+        }
+        if (!("name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["name"] = "";
+        }
+        if (!("parent_id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["parent_id"] = "";
+        }
+        if (!("automatic" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["automatic"] = false;
+        }
+        if (!("manual" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["manual"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ShortDramaCategory instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {ShortDramaCategory}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ShortDramaCategory(/** @type {Partial<ShortDramaCategory>} */($$parsedSource));
+    }
+}
+
 export class ShortDramaPage {
     /**
      * Creates a new ShortDramaPage instance.

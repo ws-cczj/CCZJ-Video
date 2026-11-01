@@ -41,8 +41,9 @@ function onMouseLeave():void {
 function reset():void {clearHide();if(leaveTimer!==undefined)clearTimeout(leaveTimer);leaveTimer=undefined;if(deps.mobile){engaged.value=false;showControls.value=false}}
 function reveal():void {engaged.value=true;keepVisible()}
 onMounted(()=>{
-  watch(deps.playing,()=>{if(deps.mobile&&engaged.value)keepVisible()})
+  watch(deps.playing,()=>{if(!deps.mobile||engaged.value)keepVisible()})
   watch(deps.pinned,keepVisible)
+  if(!deps.mobile)keepVisible()
 })
 onBeforeUnmount(()=>{clearHide();if(leaveTimer!==undefined)clearTimeout(leaveTimer)})
 return {showControls,engaged,mouseInside,controlsVisible,keepVisible,toggleShow,onMouseLeave,reset,reveal}

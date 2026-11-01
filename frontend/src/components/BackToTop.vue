@@ -5,7 +5,9 @@ import { useViewActivity } from '../composables/useViewActivity'
 import { tr } from '../locales'
 import { isMobileRuntime } from '../api/runtime'
 import { useRoute } from 'vue-router'
+import { useMotionStore } from '../stores/motion'
 const mobile = isMobileRuntime()
+const motion = useMotionStore()
 const props=withDefaults(defineProps<{compact?:boolean;targetSelector?:string}>(),{compact:false,targetSelector:'.main-content'})
 const compact=computed(()=>mobile||props.compact)
 const route = useRoute()
@@ -23,7 +25,9 @@ let retractTimer: ReturnType<typeof setTimeout> | null = null
 let growTimer: ReturnType<typeof setTimeout> | null = null
 let scrollFrame: number | null = null
 let finishTimer: ReturnType<typeof setTimeout> | null = null
+let releaseScrollInput: (() => void) | undefined
 function stopScrollAnimation(): void {
+  releaseScrollInput?.(); releaseScrollInput = undefined
   if (scrollFrame !== null) cancelAnimationFrame(scrollFrame)
   if (finishTimer !== null) clearTimeout(finishTimer)
   scrollFrame = null
@@ -88,11 +92,30 @@ function onResize() {
 function scrollToTop(): void {
   const el = getScrollContainer()
   if (!el || pulling.value) return
+  cancelRetract()
+  if (growTimer !== null) clearTimeout(growTimer)
+  growTimer = null
+  if (motion.reduced || !motion.enabled || !motion.options.pages) {
+    el.scrollTop = 0
+    visible.value = false
+    growPhase.value = 0
+    return
+  }
   pulling.value = true
   growPhase.value = 0
   const originalTop = el.scrollTop
   const snapDuration = 320
   const startTime = performance.now()
+  const takeOver = () => { stopScrollAnimation(); onScroll() }
+  const onKey = (event: KeyboardEvent) => {
+    if (['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(event.key)) takeOver()
+  }
+  for (const type of ['pointerdown','touchstart','wheel']) el.addEventListener(type, takeOver, {passive:true})
+  window.addEventListener('keydown', onKey, true)
+  releaseScrollInput = () => {
+    for (const type of ['pointerdown','touchstart','wheel']) el.removeEventListener(type, takeOver)
+    window.removeEventListener('keydown', onKey, true)
+  }
   function tick(now: number) {
     scrollFrame = null
     const p = Math.min(1, (now - startTime) / snapDuration)
@@ -103,14 +126,16 @@ function scrollToTop(): void {
     } else {
       el!.scrollTop = 0
       finishTimer = setTimeout(() => {
-        finishTimer = null
-        pulling.value = false
+        stopScrollAnimation()
         visible.value = false
       }, 200)
     }
   }
   scrollFrame = requestAnimationFrame(tick)
 }
+watch(() => motion.reduced || !motion.enabled || !motion.options.pages, cut => {
+  if (cut && pulling.value) { stopScrollAnimation(); onScroll() }
+})
 
 let scroller: HTMLElement | null = null
 let bindFrame: number | null = null

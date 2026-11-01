@@ -1,5 +1,5 @@
 .cczj-mobile-route-stage { @apply cczj-relative cczj-flex cczj-flex-1 cczj-min-h-0 cczj-min-w-0 cczj-h-full cczj-overflow-clip;isolation:isolate;@apply cczj-flex-col; }
-.cczj-mobile-route-scene { @apply cczj-absolute;inset:0;@apply cczj-flex cczj-flex-col cczj-min-h-0 cczj-min-w-0 cczj-overflow-hidden;isolation:isolate; }
+.cczj-mobile-route-scene { @apply cczj-absolute;inset:0;@apply cczj-flex cczj-flex-col cczj-min-h-0 cczj-min-w-0 cczj-overflow-hidden;isolation:isolate;background:var(--route-backdrop-color,var(--bg-primary)); }
 .cczj-mobile-shell .cczj-mobile-route-stage { --route-backdrop-color:var(--cczj-mobile-canvas);--route-backdrop-image:var(--bg-image,none);--route-backdrop-veil:var(--cczj-mobile-wallpaper-veil,transparent); }
 .cczj-mobile-shared-backdrop { background-color:var(--route-backdrop-color,var(--bg-primary)); }
 .cczj-mobile-route-backdrop { @apply cczj-absolute cczj-pointer-events-none cczj-top-0 cczj-left-0;z-index:-1;background-image:linear-gradient(var(--route-backdrop-veil,transparent),var(--route-backdrop-veil,transparent)),var(--route-backdrop-image,none);background-position:center;background-size:cover;background-repeat:no-repeat;transition:transform var(--cczj-motion-slow) var(--cczj-motion-ease-standard); }
@@ -7,18 +7,26 @@
 .cczj-comic-shell .cczj-mobile-route-scene { background:var(--comic-bg); }
 .cczj-novel-shell .cczj-mobile-shared-backdrop { --route-backdrop-color:var(--novel-canvas); }
 .cczj-comic-shell .cczj-mobile-shared-backdrop { --route-backdrop-color:var(--comic-bg); }
-.cczj-mobile-shared-backdrop .cczj-mobile-route-scene { background:transparent; }
+.cczj-mobile-shared-backdrop .cczj-mobile-route-scene[data-route-surface=primary] { background:transparent; }
+.cczj-mobile-shared-backdrop .cczj-mobile-route-scene[data-route-surface=stack] {
+  background-color:var(--route-backdrop-color,var(--bg-primary));
+  background-image:linear-gradient(var(--route-backdrop-veil,transparent),var(--route-backdrop-veil,transparent)),var(--route-backdrop-image,none);
+  background-position:center;background-size:cover;
+}
 .cczj-mobile-tab-dragging:not(.cczj-mobile-tab-settling)>.cczj-mobile-route-backdrop { @apply cczj-transition-none; }
 .cczj-mobile-tab-settling>.cczj-mobile-route-backdrop { transition-duration:230ms; }
 html[data-motion-pages='off'] .cczj-mobile-route-backdrop,html[data-cczj-motion='off'] .cczj-mobile-route-backdrop { @apply cczj-transition-none; }
 @media(prefers-reduced-motion:reduce){.cczj-mobile-route-backdrop { @apply cczj-transition-none; }}
 .cczj-mobile-route-forward-enter-active,.cczj-mobile-route-forward-leave-active,
 .cczj-mobile-route-back-enter-active,.cczj-mobile-route-back-leave-active { transition:transform var(--cczj-motion-slow) var(--cczj-motion-ease-standard);will-change:transform; }
-.cczj-mobile-route-forward-enter-active,.cczj-mobile-route-back-leave-active { z-index:2; }
-.cczj-mobile-route-forward-leave-active,.cczj-mobile-route-back-enter-active { z-index:1; }
+.cczj-mobile-route-viewport > :is(.cczj-mobile-route-forward-enter-active,.cczj-mobile-route-back-leave-active) { z-index:4;box-shadow:-12px 0 32px #0002; }
+.cczj-mobile-route-viewport > :is(.cczj-mobile-route-forward-leave-active,.cczj-mobile-route-back-enter-active) { z-index:1; }
 .cczj-mobile-route-forward-enter-from,.cczj-mobile-route-back-leave-to { transform:translate3d(100%,0,0); }
 .cczj-mobile-route-forward-leave-to,.cczj-mobile-route-back-enter-from { transform:translate3d(-25%,0,0); }
-.cczj-mobile-shared-backdrop .cczj-mobile-route-forward-leave-to,.cczj-mobile-shared-backdrop .cczj-mobile-route-back-enter-from { transform:translate3d(-100%,0,0); }
+.cczj-route-tab-forward-enter-active,.cczj-route-tab-forward-leave-active,
+.cczj-route-tab-back-enter-active,.cczj-route-tab-back-leave-active { transition:transform var(--cczj-motion-slow) var(--cczj-motion-ease-standard); }
+.cczj-route-tab-forward-enter-from,.cczj-route-tab-back-leave-to { transform:translate3d(100%,0,0); }
+.cczj-route-tab-forward-leave-to,.cczj-route-tab-back-enter-from { transform:translate3d(-100%,0,0); }
 html[data-motion-pages='off'] .cczj-mobile-route-stage:not(.cczj-mobile-tab-dragging) .cczj-mobile-route-scene { transition:none !important;transform:none !important; }
 html[data-motion-pages='off'] .cczj-mobile-tab-dragging .cczj-mobile-route-scene { transition:none !important; }
 /* One wash belongs to the shared canvas. Per-scene washes move and overlap
@@ -56,6 +64,27 @@ html[data-motion-pages='off'] .cczj-mobile-tab-dragging .cczj-mobile-route-scene
 .cczj-mobile-edit-float-enter-from,.cczj-mobile-edit-float-leave-to { @apply cczj-opacity-0; transform:translateY(8px); }
 .cczj-mobile-shell .cczj-mobile-page .history-page .page-header-actions { order:-1; }
 .cczj-mobile-route-scene { contain:layout; }
+.cczj-mobile-route-scene > .main-content { @apply cczj-min-h-0; }
+/* Match the app canvas crop instead of replacing a wallpaper with an opaque
+   colour or independently covering each narrower desktop pane. */
+.cczj-route-wallpaper .cczj-mobile-route-scene::before {
+  content:'';@apply cczj-absolute cczj-pointer-events-none;z-index:-1;
+  left:var(--route-canvas-left,0px);top:var(--route-canvas-top,0px);
+  width:var(--route-canvas-width,100vw);height:var(--route-canvas-height,100vh);
+  background:var(--bg-primary);background-image:var(--bg-image,none);background-size:cover;background-position:center;
+}
+/* The route owns page entrance; reader-internal turns and nested loading
+   indicators retain their own lifecycle. */
+.cczj-mobile-route-scene > .main-content > :not(.novel-reader):not(.comic-reader) { animation:none; }
+/* The actual page keeps its layout/image preparation behind a static skeleton.
+   Information arrives once after navigation; no opacity/fade transition. */
+.cczj-mobile-route-scene[data-route-skeleton=true] > :not(.cczj-mobile-route-skeleton) { visibility:hidden; }
+.cczj-mobile-route-skeleton { @apply cczj-absolute cczj-inset-0 cczj-overflow-hidden cczj-p-8; z-index:5; }
+.cczj-mobile-route-content-arriving > .main-content { animation:cczj-route-content-arrive var(--cczj-motion-normal) var(--cczj-motion-ease-enter) both; }
+@keyframes cczj-route-content-arrive { from { transform:translateY(var(--cczj-motion-distance,8px)); } to { transform:translateY(0); } }
+html[data-motion-pages=off] .cczj-mobile-route-content-arriving > .main-content,
+html[data-cczj-motion=off] .cczj-mobile-route-content-arriving > .main-content { animation:none; }
+@media(prefers-reduced-motion:reduce){.cczj-mobile-route-content-arriving > .main-content { animation:none; }}
 /* The route owns entrance motion. Empty states must not fade again when a
    cached short-drama scene is reinserted or its source lookup completes. */
 .cczj-mobile-shared-backdrop .cczj-mobile-route-scene :is(.empty-state,.empty-icon) { animation:none; }
@@ -63,3 +92,19 @@ html[data-motion-pages='off'] .cczj-mobile-tab-dragging .cczj-mobile-route-scene
 .cczj-mobile-route-scene .cczj-mobile-edit-actions { bottom:16px; }
 .cczj-mobile-shell .cczj-mobile-page .home .rec-remove-btn { background:transparent; border:0; @apply cczj-shadow-none; }
 html[data-cczj-platform=mobile] .main-content:has([data-cczj-editing=true]) { scroll-padding-bottom:128px; padding-bottom:144px; }
+
+/* Desktop peer navigation follows its vertical sidebar; playback enters from the side. */
+.desktop-video-stage { isolation:auto; @apply cczj-overflow-visible; }
+.desktop-video-stage > .cczj-mobile-route-viewport { isolation:auto; @apply cczj-overflow-hidden; }
+/* A viewport-fixed player escapes the scroll clip without resizing retained
+   pages. The stage and viewport must not establish a stacking context. */
+.desktop-video-stage > .cczj-mobile-route-viewport > .cczj-mobile-route-scene[data-path^='/player/'] { @apply cczj-fixed; inset:0; z-index:9999; }
+.cczj-desktop-tab-forward-enter-active,.cczj-desktop-tab-forward-leave-active,
+.cczj-desktop-tab-back-enter-active,.cczj-desktop-tab-back-leave-active { transition:transform var(--cczj-motion-section) cubic-bezier(.4,0,.2,1); will-change:transform; }
+.cczj-desktop-tab-forward-enter-from,.cczj-desktop-tab-back-leave-to { transform:translate3d(0,100%,0); }
+.cczj-desktop-tab-forward-leave-to,.cczj-desktop-tab-back-enter-from { transform:translate3d(0,-100%,0); }
+.cczj-desktop-player-open-enter-active,.cczj-desktop-player-close-leave-active { z-index:5;transition:transform var(--cczj-motion-section) var(--cczj-motion-ease-standard);will-change:transform; }
+.cczj-desktop-player-close-leave-active { transition-duration:var(--cczj-motion-dismiss);transition-timing-function:var(--cczj-motion-ease-exit); }
+.cczj-desktop-player-open-enter-from,.cczj-desktop-player-close-leave-to { transform:translate3d(100%,0,0); }
+.cczj-desktop-player-open-enter-to,.cczj-desktop-player-close-leave-from { transform:translate3d(0,0,0); }
+.desktop-video-stage > .cczj-mobile-route-viewport > .cczj-mobile-route-scene:not([data-path^='/player/']) { contain:layout paint; }

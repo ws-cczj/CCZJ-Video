@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { CCZJ } from '../constants/cczj'
 defineOptions({ name: 'Downloads' })
 import { computed, onMounted, ref } from 'vue'
 import { tr } from '../locales'
@@ -58,7 +59,7 @@ onMounted(async () => {
 
   // 从后端载入设置
   try {
-    const saved = await GetSetting('download_dir')
+    const saved = await GetSetting(CCZJ.Settings.downloadDirectory)
     if (saved) downloadDirInput.value = saved
   } catch { /* 忽略 */ }
 
@@ -277,7 +278,7 @@ function isMatchFilter(t: { status: string }): boolean {
           <span v-if="task.error" class="err-msg cczj-truncate cczj-max-w-72" :title="task.error">{{ task.error }}</span>
         </div>
 
-        <!-- IDM 风格分块进度可视化 -->
+        <!-- 下载分块进度可视化 -->
         <div v-if="task.chunks && task.chunks.length > 0 && task.total > 0 && task.status === 'downloading'" class="chunk-progress-container cczj-relative cczj-h-2 cczj-rounded cczj-bg-border cczj-overflow-hidden cczj-mt-2">
           <div
             v-for="chunk in task.chunks"

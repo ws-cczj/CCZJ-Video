@@ -16,28 +16,38 @@ import (
 )
 
 type readingPriority struct {
-	mu         sync.Mutex
-	foreground int
-	cancel     context.CancelFunc
+	mu          sync.Mutex
+	foreground  int
+	backgrounds map[uint64]context.CancelFunc
+	next        uint64
 }
 
 func (p *readingPriority) begin() func() {
 	p.mu.Lock()
 	p.foreground++
-	if p.cancel != nil {
-		p.cancel()
+	for _, cancel := range p.backgrounds {
+		cancel()
 	}
 	p.mu.Unlock()
 	return func() { p.mu.Lock(); p.foreground--; p.mu.Unlock() }
 }
 func (p *readingPriority) background(ctx context.Context) (context.Context, context.CancelFunc, error) {
 	for {
+		if err := ctx.Err(); err != nil {
+			return nil, nil, err
+		}
 		p.mu.Lock()
 		if p.foreground == 0 {
 			call, cancel := context.WithCancel(ctx)
-			p.cancel = cancel
+			if p.backgrounds == nil {
+				p.backgrounds = map[uint64]context.CancelFunc{}
+			}
+			p.next++
+			id := p.next
+			p.backgrounds[id] = cancel
 			p.mu.Unlock()
-			return call, cancel, nil
+			var once sync.Once
+			return call, func() { once.Do(func() { cancel(); p.mu.Lock(); delete(p.backgrounds, id); p.mu.Unlock() }) }, nil
 		}
 		p.mu.Unlock()
 		timer := time.NewTimer(200 * time.Millisecond)
@@ -93,12 +103,39 @@ func (s *Service) registryFor(kind model.SourceKind) ([]*BatchSource, error) {
 		return nil, err
 	}
 	community := []*BatchSource{}
+	origin := "https://github.com/aoaostar/legado"
+	if kind == model.SourceKindComic {
+		origin = "https://github.com/keiyoushi/extensions-source"
+	}
 	for _, raw := range catalogs {
-		parsed, err := ParseBatchSources(raw, string(kind), "builtin-catalog")
+		parsed, err := ParseBatchSources(raw, string(kind), origin)
 		if err != nil {
 			return nil, err
 		}
 		community = append(community, parsed...)
+	}
+	if kind == model.SourceKindNovel {
+		raw, err := db.GetSetting(novelSubscriptionSnapshot)
+		if err != nil {
+			return nil, err
+		}
+		if raw != "" {
+			updates, err := ParseBatchSources([]byte(raw), "novel", novelSubscriptionURL)
+			if err != nil {
+				return nil, err
+			}
+			replaced := map[string]bool{}
+			for _, row := range updates {
+				replaced[row.URL] = true
+			}
+			kept := community[:0]
+			for _, row := range community {
+				if !replaced[row.URL] {
+					kept = append(kept, row)
+				}
+			}
+			community = append(updates, kept...)
+		}
 	}
 	seen := map[string]bool{}
 	rows := make([]*BatchSource, 0, len(base)+len(community))
@@ -132,17 +169,23 @@ func (s *Service) ensureBuiltinSources(ctx context.Context, kind model.SourceKin
 		return err
 	}
 	known := map[string]bool{}
+	knownURL := map[string]bool{}
 	for _, row := range rows {
 		known[sourceQualityID(string(kind), row.ApiUrl, row.StrategyConfig)] = true
+		knownURL[row.ApiUrl] = true
 	}
 	for _, candidate := range registry {
-		if !candidate.CanRead || known[candidate.ID] {
+		if !candidate.CanRead || known[candidate.ID] || kind == model.SourceKindNovel && knownURL[candidate.URL] {
 			continue
 		}
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if err := db.AddSource(&model.Source{SourceKey: candidate.ID, Name: candidate.Name, ApiUrl: candidate.URL, Kind: string(kind), StrategyConfig: candidate.document, Enabled: 1}); err != nil {
+		enabled := 1
+		if kind == model.SourceKindNovel && !maintainedNovel(candidate.URL) {
+			enabled = 0
+		}
+		if err := db.AddSource(&model.Source{SourceKey: candidate.ID, Name: candidate.Name, ApiUrl: candidate.URL, Kind: string(kind), StrategyConfig: candidate.document, Enabled: enabled}); err != nil {
 			return err
 		}
 		known[candidate.ID] = true
@@ -151,11 +194,7 @@ func (s *Service) ensureBuiltinSources(ctx context.Context, kind model.SourceKin
 }
 
 func (s *Service) orderSearchSources(ctx context.Context, kind model.SourceKind, keyword string, rows []*model.Source) error {
-	checks, err := db.ReadReadingSourceChecks(ctx, kind)
-	if err != nil {
-		return err
-	}
-	health, err := db.ReadReadingSearchHealth(ctx, kind)
+	evidence, err := s.sourceEvidence(ctx, kind)
 	if err != nil {
 		return err
 	}
@@ -175,9 +214,11 @@ func (s *Service) orderSearchSources(ctx context.Context, kind model.SourceKind,
 	for _, row := range rows {
 		id := sourceQualityID(string(kind), row.ApiUrl, row.StrategyConfig)
 		maintained[row.SourceKey] = bundledAdapter(string(kind), row.ApiUrl) != nil
-		check, exists := checks[id]
-		e := checkEvidence(check, string(kind), id)
-		e.Fresh = e.Fresh && exists
+		if kind == model.SourceKindNovel {
+			maintained[row.SourceKey] = maintainedNovel(row.ApiUrl)
+		}
+		check := evidence.checks[id]
+		e := evidence.routing(string(kind), id)
 		if check.RetryAfter > time.Now().Unix() {
 			e.Status = "failed"
 		}
@@ -190,7 +231,7 @@ func (s *Service) orderSearchSources(ctx context.Context, kind model.SourceKind,
 		}
 		scores[row.SourceKey] = e.Score
 		searchRank[row.SourceKey] = 3
-		last := health[id]
+		last := evidence.health[id]
 		switch {
 		case last.RetryAfter > now || check.RetryAfter > now:
 			searchRank[row.SourceKey] = 5
@@ -209,14 +250,14 @@ func (s *Service) orderSearchSources(ctx context.Context, kind model.SourceKind,
 		if searchRank[a] != searchRank[b] {
 			return searchRank[a] < searchRank[b]
 		}
+		if maintained[a] != maintained[b] {
+			return maintained[a]
+		}
 		if pool[a] != pool[b] {
 			return pool[a] < pool[b]
 		}
 		if scores[a] != scores[b] {
 			return scores[a] > scores[b]
-		}
-		if maintained[a] != maintained[b] {
-			return maintained[a]
 		}
 		return rows[i].Id < rows[j].Id
 	})

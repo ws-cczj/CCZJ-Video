@@ -49,8 +49,8 @@ function onError(event: Event): void {
     <div class="comic-panel-art" :style="artStyle">
       <RemoteImage v-if="mounted" :animate="false" :key="`${generation}-${nonce}`" :src="url" :alt="alt" class="cczj-w-full cczj-h-full cczj-block" @load="onLoad" @error="onError" />
       <span class="comic-panel-number">{{ number.toString().padStart(2, '0') }}</span>
-      <div v-show="status === 'loading'" class="comic-panel-status"><Icon name="image" :size="26" /><span>{{ t('common.loading') }}</span></div>
-      <div v-show="status === 'error'" class="comic-panel-status">
+      <div v-if="status === 'loading'" class="comic-panel-status"><Icon name="image" :size="26" /><span>{{ t('common.loading') }}</span></div>
+      <div v-else-if="status === 'error'" class="comic-panel-status">
         <Icon name="alert-triangle" :size="26" />
         <span>{{ t('comic.reader.pageFailed') }}</span>
         <button type="button" @click.stop="emit('retry')"><Icon name="refresh" :size="16" />{{ t('common.retry') }}</button>

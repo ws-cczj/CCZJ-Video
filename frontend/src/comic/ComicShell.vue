@@ -24,7 +24,7 @@ function back(): void {
   <div class="cczj-comic-shell reading-shell manga-room" :class="{ 'comic-native': isMobileRuntime() }">
     <MobileRouteStage :mobile="isMobileRuntime()" :cache="['ComicHome','ComicCatalog']">
       <template #default="{ Component, route: shownRoute }">
-        <header v-if="!shownRoute.path.startsWith('/comic/read/')" class="reading-header">
+        <header v-if="!shownRoute.path.startsWith('/comic/read/') && (!isMobileRuntime() || shownRoute.path !== '/comic')" class="reading-header">
           <router-link v-if="primary(shownRoute.path)" to="/comic" class="reading-brand"><span class="reading-brand-icon"><Icon name="panels" :size="22" /></span><strong>CCZJ<span>{{ t('readingUI.comics') }}</span></strong></router-link>
           <template v-else><button class="reading-icon-button" :aria-label="t('common.back')" @click="back"><Icon name="chevron-left" :size="22" /></button><span class="reading-header-title">{{ t(String(shownRoute.meta.title || 'comic.details')) }}</span></template>
           <nav class="reading-desktop-nav" :aria-label="t('comic.navigation')"><router-link v-for="item in navigation" :key="item.path" :to="item.path" :aria-current="selected(shownRoute.path, item) ? 'page' : undefined"><Icon :name="item.icon" :size="18" />{{ t(item.label) }}</router-link></nav>

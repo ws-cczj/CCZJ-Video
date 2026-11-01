@@ -17,6 +17,7 @@ export {
     DiagnosticScope,
     Diagnostics,
     DiagnosticsExport,
+    DiagnosticsReceipt,
     DoubanCommentsReq,
     DoubanDetailReq,
     DoubanDetailResp,

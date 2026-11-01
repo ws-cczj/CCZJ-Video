@@ -1,6 +1,7 @@
 package service
 
 import (
+	CCZJ "cczjVideo/app/cczj"
 	"context"
 
 	"cczjVideo/app/apperror"
@@ -9,7 +10,7 @@ import (
 	"cczjVideo/app/lifecycle"
 )
 
-const applicationModeKey = "application_mode"
+const applicationModeKey = CCZJ.SettingApplicationMode
 
 func normalizeMode(mode string) string {
 	if mode == "novel" || mode == "comic" {

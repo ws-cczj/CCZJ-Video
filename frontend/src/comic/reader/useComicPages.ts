@@ -30,14 +30,15 @@ export interface ComicPagesController {
  *   会把代理与源站同时打满，而用户九成时间只看当前这一页。
  * - **取消**：页滚出窗口时它的 <img> 被卸载（在途请求随之放弃），状态收回 queued
  *   而不是 error——取消是可重试的（ADR 0016 引 Mihon Page.kt:51-57）。
- * - **代号**：切话时整表换掉、代号加一。少了这一层，上一话的慢响应会把新话的页
- *   状态覆盖掉，而那种故障类型检查、构建与单元测试全都查不出来。
+ * - **代号**：切话时整表换掉、代号加一，拦截上一话迟到的图片回调。
  */
 export function useComicPages(windowSize = PREFETCH_WINDOW): ComicPagesController {
   const pages = ref<ComicPageState[]>([]) as Ref<ComicPageState[]>
   const current = ref(0)
   const generation = ref(0)
   const count = computed(() => pages.value.length)
+  const radius = Number.isFinite(windowSize) ? Math.max(0, Math.trunc(windowSize)) : PREFETCH_WINDOW
+  let windowStart = 0, windowEnd = -1
 
   function clamp(index: number): number {
     const last = pages.value.length - 1
@@ -46,15 +47,23 @@ export function useComicPages(windowSize = PREFETCH_WINDOW): ComicPagesControlle
   }
 
   function inWindow(index: number): boolean {
-    return Math.abs(index - current.value) <= windowSize
+    return Math.abs(index - current.value) <= radius
   }
 
   /** 窗口内的 queued 开始加载，窗口外的 loading 收回 queued。 */
   function sync(): void {
-    for (const [index, page] of pages.value.entries()) {
-      const wanted = inWindow(index)
-      if (wanted && page.status === 'queued') page.status = 'loading'
-      else if (!wanted && page.status === 'loading') page.status = 'queued'
+    const start = Math.max(0, current.value - radius)
+    const end = Math.min(pages.value.length - 1, current.value + radius)
+    // Only the old and new windows can change. A long strip must not walk the
+    // entire chapter again for every scroll event within the same image.
+    for (let index = windowStart; index <= windowEnd; index++) {
+      const page = pages.value[index]
+      if (page && (index < start || index > end) && page.status === 'loading') page.status = 'queued'
+    }
+    windowStart = start; windowEnd = end
+    for (let index = start; index <= end; index++) {
+      const page = pages.value[index]!
+      if (page.status === 'queued') page.status = 'loading'
     }
   }
 
@@ -62,12 +71,15 @@ export function useComicPages(windowSize = PREFETCH_WINDOW): ComicPagesControlle
     generation.value += 1
     const total = Math.max(0, Math.trunc(Number.isFinite(nextCount) ? nextCount : 0))
     pages.value = Array.from({ length: total }, (_,index) => ({ status: 'queued', ratio: Number.isFinite(ratios[index])&&ratios[index]!>0?ratios[index]!:0, nonce: 0 }))
+    windowStart = 0; windowEnd = -1
     current.value = clamp(at)
     sync()
   }
 
   function seek(index: number): void {
-    current.value = clamp(index)
+    const next = clamp(index)
+    if (next === current.value) return
+    current.value = next
     sync()
   }
 

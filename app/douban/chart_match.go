@@ -1,6 +1,7 @@
 package douban
 
 import (
+	CCZJ "cczjVideo/app/cczj"
 	"strings"
 	"sync"
 
@@ -42,7 +43,7 @@ func asyncMatchChartItems(items []DoubanChartItem) {
 	}
 
 	// 获取用户设置的默认源，将其排到最前面优先匹配
-	defaultKey, _ := db.GetSetting("default_source_key")
+	defaultKey, _ := db.GetSetting(CCZJ.SettingDefaultSource)
 	if defaultKey != "" {
 		reordered := make([]*model.Source, 0, len(sources))
 		for _, s := range sources {

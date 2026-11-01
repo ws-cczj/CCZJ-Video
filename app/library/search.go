@@ -97,6 +97,10 @@ func (s *Service) SearchPage(ctx context.Context, kind model.SourceKind, keyword
 }
 
 func (s *Service) SearchPageStream(ctx context.Context, kind model.SourceKind, keyword, cursor string, onResult func(*SourceResult)) (*SearchOutcome, error) {
+	return s.searchPageStream(ctx, kind, keyword, cursor, onResult, true)
+}
+
+func (s *Service) searchPageStream(ctx context.Context, kind model.SourceKind, keyword, cursor string, onResult func(*SourceResult), foreground bool) (*SearchOutcome, error) {
 	if err := validateSearch(kind, keyword); err != nil {
 		return nil, err
 	}
@@ -106,8 +110,10 @@ func (s *Service) SearchPageStream(ctx context.Context, kind model.SourceKind, k
 	if resolveErr != nil {
 		return nil, resolveErr
 	}
-	release := s.priority.begin()
-	defer release()
+	if foreground {
+		release := s.priority.begin()
+		defer release()
+	}
 	if err := s.ensureBuiltinSources(ctx, kind); err != nil {
 		return nil, err
 	}

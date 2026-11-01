@@ -1,6 +1,8 @@
 package library
 
 import (
+	CCZJ "cczjVideo/app/cczj"
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -21,7 +23,7 @@ type SourceQuality struct {
 	Evidence  string       `json:"evidence"`
 }
 
-const sourceQualitySetting = "reading.source-quality.v1"
+const sourceQualitySetting = CCZJ.SettingSourceQuality
 
 func (s *Service) loadSourceQualities() (map[string]*SourceQuality, error) {
 	s.qualityMu.Lock()
@@ -57,6 +59,10 @@ func readSourceQualities() (map[string]*SourceQuality, error) {
 }
 
 func (s *Service) saveSourceQuality(id string, outcome *TestOutcome) (*SourceQuality, error) {
+	return s.saveSourceQualityContext(context.Background(), id, outcome)
+}
+
+func (s *Service) saveSourceQualityContext(ctx context.Context, id string, outcome *TestOutcome) (*SourceQuality, error) {
 	s.qualityMu.Lock()
 	defer s.qualityMu.Unlock()
 	rows, err := readSourceQualities()
@@ -65,15 +71,20 @@ func (s *Service) saveSourceQuality(id string, outcome *TestOutcome) (*SourceQua
 	}
 	quality := &SourceQuality{Status: "failed", CheckedAt: time.Now().Unix(), Samples: 1, Stages: outcome.Stages, Evidence: "local"}
 	if prior := rows[id]; prior != nil {
-		if strings.HasPrefix(prior.Evidence, "benchmark:") {
-			// A successful quick check does not replace fresh multi-work evidence
-			// or extend its age. A failure can invalidate it, using quick-run units.
-			if outcome.OK && time.Since(time.Unix(prior.CheckedAt, 0)) <= 24*time.Hour {
-				return prior, nil
-			}
-		} else {
+		if !strings.HasPrefix(prior.Evidence, "benchmark:") {
 			quality.Samples = prior.Samples + 1
 			quality.Successes = prior.Successes
+		} else {
+			// Preserve the original benchmark and timestamp before replacing the
+			// compatibility slot with the new quick check. Deep maintenance data
+			// remains independently owned by reading_source_checks.
+			raw, err := json.Marshal(prior)
+			if err != nil {
+				return nil, err
+			}
+			if err := db.SaveReadingSourceObservation(ctx, id, prior.CheckedAt, string(raw)); err != nil {
+				return nil, apperror.Wrap(apperror.Storage, err, "保留原源检测记录失败")
+			}
 		}
 	}
 	completed, total := 0, 0
@@ -125,6 +136,13 @@ func (s *Service) saveSourceQuality(id string, outcome *TestOutcome) (*SourceQua
 		delete(rows, oldest)
 	}
 	rows[id] = quality
+	sample, err := json.Marshal(quality)
+	if err != nil {
+		return nil, err
+	}
+	if err := db.SaveReadingSourceObservation(ctx, id, quality.CheckedAt, string(sample)); err != nil {
+		return nil, apperror.Wrap(apperror.Storage, err, "保存源检测历史失败")
+	}
 	encoded, err := json.Marshal(rows)
 	if err != nil {
 		return nil, fmt.Errorf("encode source quality: %w", err)

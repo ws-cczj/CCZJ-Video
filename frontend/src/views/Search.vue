@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { CCZJ } from '../constants/cczj'
 defineOptions({ name: 'Search' })
 import { ref, onMounted, onUnmounted, onActivated, onDeactivated, computed, watch, nextTick } from 'vue'
 import { storeToRefs } from 'pinia'
@@ -12,6 +13,7 @@ import { useLayoutStore } from '../stores/layout'
 import { useVideoList } from '../composables/useVideoList'
 import { usePosterCacheStore } from '../stores/posterCache'
 import VideoCard from '../components/VideoCard.vue'
+import VirtualVideoGrid from '../components/VirtualVideoGrid.vue'
 import RemoteImage from '../components/RemoteImage.vue'
 import Icon from '../components/Icon.vue'
 import { Button, Tag, Modal, Select as SelectDropdown, Spinner as LoadingSpinner, Empty as EmptyState } from '../components/ui'
@@ -44,9 +46,9 @@ const sourceOptions = computed(() =>
 
 const currentSearchSource = ref('')
 const keyword = ref('')
-const searchHistory = ref<string[]>(readStorage<string[]>('search_history', []))
+const searchHistory = ref<string[]>(readStorage<string[]>(CCZJ.Settings.searchHistory, []))
 const { editing: managingHistory, finish: finishHistoryManagement, vHoldToEdit } = useHoldToEdit(mobile)
-const sourceSearchMode = ref(readStorageBoolean('source_search_mode'))
+const sourceSearchMode = ref(readStorageBoolean(CCZJ.Settings.sourceSearchMode))
 const hasKeyword = computed(() => keyword.value.trim().length > 0)
 let searchPageWasDeactivated = false
 // Mount assigns currentSearchSource from the stored/URL source; the watcher below
@@ -391,7 +393,7 @@ function goSearchPage(p: number): void {
 
 function toggleSourceSearchMode(): void {
   sourceSearchMode.value = !sourceSearchMode.value
-  writeStorage('source_search_mode', sourceSearchMode.value)
+  writeStorage(CCZJ.Settings.sourceSearchMode, sourceSearchMode.value)
   if (sourceSearchMode.value) {
     clearSearchResults()
   } else {
@@ -409,7 +411,7 @@ async function doSearch(): Promise<void> {
   if (!searchHistory.value.includes(kw)) {
     searchHistory.value.unshift(kw)
     if (searchHistory.value.length > 10) searchHistory.value.pop()
-    writeStorage('search_history', searchHistory.value)
+    writeStorage(CCZJ.Settings.searchHistory, searchHistory.value)
   }
   hasSearched.value = true
   lastSearchRefreshTrigger = videoStore.refreshTrigger
@@ -454,7 +456,7 @@ function loadMore(): void {
 
 function clearHistory(): void {
   searchHistory.value = []
-  removeStorage('search_history')
+  removeStorage(CCZJ.Settings.searchHistory)
 }
 
 function removeHistoryItem(kw: string): void {
@@ -462,9 +464,9 @@ function removeHistoryItem(kw: string): void {
   if (idx < 0) return
   searchHistory.value.splice(idx, 1)
   if (searchHistory.value.length > 0) {
-    writeStorage('search_history', searchHistory.value)
+    writeStorage(CCZJ.Settings.searchHistory, searchHistory.value)
   } else {
-    removeStorage('search_history')
+    removeStorage(CCZJ.Settings.searchHistory)
   }
 }
 
@@ -775,7 +777,7 @@ function onSourceVideoClick(v: Video): void {
           :disabled="sourceStore.sources.length === 0"
           :placeholder="t('search.selectSource')"
         />
-        <Icon name="source" :size="14" class="pick-icon" />
+        <Icon name="source-switch" :size="14" class="pick-icon" />
       </div>
 
       <!-- 激活态描边由 scoped `.source-search-toggle.cczj-bg-primary`（var(--accent)）提供。 -->
@@ -815,7 +817,7 @@ function onSourceVideoClick(v: Video): void {
         <span>{{ t('search.search') }}</span>
       </Button>
 
-      
+
     </div>
 
     <!-- 历史搜索 -->
@@ -929,16 +931,7 @@ function onSourceVideoClick(v: Video): void {
         </span>
         <span class="results-count cczj-text-sm cczj-text-muted">{{ t('search.totalItems', { count: list.total }) }}</span>
       </div>
-      <div class="video-grid cczj-grid" :style="gridStyle">
-        <VideoCard
-          v-for="v in list.videos"
-          :key="`${v.vod_g_id ?? v.vod_id ?? v.id}`"
-          :video="v"
-          :in-catalog="v.in_catalog"
-          :catalog-label="t('search.imported')"
-          @click="goDetailVideo(v)"
-        />
-      </div>
+      <VirtualVideoGrid class="video-grid cczj-grid" :style="gridStyle" :items="list.videos" :catalog-label="t('search.imported')" @select="goDetailVideo" />
     </div>
 
     <div
@@ -983,16 +976,7 @@ function onSourceVideoClick(v: Video): void {
         </span>
         <span class="results-count cczj-text-sm cczj-text-muted">{{ t('search.totalItems', { count: list.localVideos.length }) }}</span>
       </div>
-      <div class="video-grid cczj-grid" :style="gridStyle">
-        <VideoCard
-          v-for="v in list.localVideos"
-          :key="`local-${v.vod_g_id ?? v.vod_id ?? v.id}`"
-          :video="v"
-          :in-catalog="true"
-          :catalog-label="t('search.imported')"
-          @click="goDetailVideo(v)"
-        />
-      </div>
+      <VirtualVideoGrid class="video-grid cczj-grid" :style="gridStyle" :items="list.localVideos" in-catalog :catalog-label="t('search.imported')" @select="goDetailVideo" />
     </div>
 
     <!-- 源站搜索进度（仅在搜索中且尚未收到任何结果时独占展示） -->

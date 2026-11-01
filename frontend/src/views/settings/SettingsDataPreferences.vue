@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { CCZJ } from '../../constants/cczj'
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { GetSetting, SetSetting, GetAllowPrivateNetwork, SetAllowPrivateNetwork, GetDoubanIntervalMinutes, SetDoubanIntervalMinutes } from '../../api/app'
@@ -25,7 +26,7 @@ const intervalOptions = computed(() => [10,15,20,30,45,60,90,120].map(n => ({ va
 const diagnosticsAvailable = computed(() => pluginSettingsTabs.value.some(tab => tab.id === 'diagnostics'))
 async function load(): Promise<void> {
   loading.value = true
-  const values = await Promise.allSettled([GetSetting('detail_cache_freshness'), GetDoubanIntervalMinutes(), GetAllowPrivateNetwork()])
+  const values = await Promise.allSettled([GetSetting(CCZJ.Settings.detailFreshness), GetDoubanIntervalMinutes(), GetAllowPrivateNetwork()])
   if (disposed) return
   if (values[0].status === 'fulfilled') freshness.value = ['fast','saver'].includes(values[0].value) ? values[0].value : 'standard'
   if (values[1].status === 'fulfilled') interval.value = Number(values[1].value) || 30
@@ -38,7 +39,7 @@ onMounted(load)
 async function savePolicy(value: string): Promise<void> {
   if (!ready.value || saving.value) return
   saving.value = 'cache'
-  try { await SetSetting('detail_cache_freshness', value); freshness.value = value }
+  try { await SetSetting(CCZJ.Settings.detailFreshness, value); freshness.value = value }
   catch (error) { errors.fromError(t('settings.freshnessSaveFailed'), error, 'Settings.freshness') }
   finally { saving.value = '' }
 }

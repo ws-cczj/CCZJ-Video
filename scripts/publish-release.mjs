@@ -24,8 +24,9 @@ export async function publishRelease(options, { run = execute, log = console.log
   }
   const git = (...args) => command('git', args).stdout.trim()
   const repository = githubRepository(git('remote', 'get-url', 'origin'))
-  const version = options.version || readFileSync(join(root, 'CHANGELOG.md'), 'utf8').match(/^## \[(\d+\.\d+\.\d+)\]/m)?.[1]
+  const version = options.version || readFileSync(join(root, 'CHANGELOG.md'), 'utf8').match(/^## \[([^\]]+)\]/m)?.[1]
   if (!version) throw new Error('CHANGELOG.md needs a version section, or pass -Version explicitly.')
+  if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error('This publisher is stable-only. Use the isolated prerelease workflow in docs/releases.md.')
   prepareReleaseVersion(root, version, repository, { write: false })
   const branch = git('symbolic-ref', '--short', 'HEAD')
   command('git', ['check-ref-format', '--branch', branch])

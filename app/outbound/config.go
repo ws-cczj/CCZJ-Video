@@ -2,6 +2,7 @@
 package outbound
 
 import (
+	CCZJ "cczjVideo/app/cczj"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -14,8 +15,8 @@ import (
 )
 
 // SettingsKey stores pool configuration in the existing SQLite settings table.
-const SettingsKey = "outbound_proxy_pool_v1"
-const snapshotKey = "outbound_proxy_pool_snapshot_v1"
+const SettingsKey = CCZJ.SettingOutboundProxyPool
+const snapshotKey = CCZJ.CacheOutboundProxySnapshot
 
 // Config limits public pool use to Douban (including its images) and danmaku; other information
 // requests use LocalProxy. Media retains its caller-owned transport.

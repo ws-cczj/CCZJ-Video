@@ -2,7 +2,7 @@ import { ref, nextTick } from 'vue'
 import { formatPlaybackTime as fmt } from './videoInfoFormat'
 
 export function useTimeJump(deps:{video:()=>HTMLVideoElement|null;current:()=>number;duration:()=>number}) {
-// B站风格时间显示 - 可点击跳转
+// 点击当前时间后可输入目标位置并跳转。
 const showTimeInput = ref(false)
 
 const timeInputValue = ref('')

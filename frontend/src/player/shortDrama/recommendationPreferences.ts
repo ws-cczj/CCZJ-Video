@@ -1,4 +1,5 @@
 import { computed, ref, shallowRef } from 'vue'
+import { CCZJ } from '../../constants/cczj'
 import { defineStore } from 'pinia'
 import { GetSetting, SetSetting } from '../../api/app'
 import { createSettingsQueue } from '../../api/settingsQueue'
@@ -7,7 +8,7 @@ import { tr } from '../../locales'
 import type { Video } from '../../types'
 
 type Identity = {source:string; vod:string}
-const key = 'short_drama_recommendations_v1'
+const key = CCZJ.Settings.shortDramaRecommendations
 const identityKey = (value:Identity) => JSON.stringify([value.source,value.vod])
 
 /** Durable exclusions and a bounded session history share source identities.

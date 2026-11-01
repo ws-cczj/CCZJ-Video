@@ -1,4 +1,4 @@
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, onScopeDispose } from 'vue'
 import { defineStore } from 'pinia'
 import { recordDiagnosticEvent, registerPlaybackSnapshot } from '../diagnostics/recording'
 import { captureBrowserResources } from '../diagnostics/browserResources'
@@ -24,7 +24,7 @@ export const usePerfStore = defineStore('perf', () => {
   function snapshot() {
     return { loads: loads.value, first_frame: { ...firstFrame }, stalls: { ...stalls }, frames: { ...frames }, errors: { ...errors }, watched_seconds: Math.round(watchedSec.value), current: { ...current }, browser_resources: captureBrowserResources() }
   }
-  registerPlaybackSnapshot(snapshot)
+  onScopeDispose(registerPlaybackSnapshot(snapshot))
 
   function beginLoad(host: string): void {
     loads.value++

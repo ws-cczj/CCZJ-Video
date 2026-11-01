@@ -59,13 +59,24 @@ type Sampler struct {
 	mu       sync.Mutex
 	at       time.Time
 	previous map[int]uint64
+	cached   Snapshot
 }
 
 // Sample returns a bounded snapshot. It never forces GC or starts subprocesses.
 func (s *Sampler) Sample() Snapshot {
+	return s.sample(0)
+}
+
+// SampleCached shares a short-lived native scan between independent observers.
+func (s *Sampler) SampleCached(maxAge time.Duration) Snapshot { return s.sample(maxAge) }
+
+func (s *Sampler) sample(maxAge time.Duration) Snapshot {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := time.Now()
+	if maxAge > 0 && !s.at.IsZero() && now.Sub(s.at) < maxAge {
+		return copySnapshot(s.cached)
+	}
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
 	out := Snapshot{
@@ -121,5 +132,12 @@ func (s *Sampler) Sample() Snapshot {
 		processes = processes[:12]
 	}
 	out.Processes = append(out.Processes, processes...)
-	return out
+	s.cached = out
+	return copySnapshot(out)
+}
+
+func copySnapshot(value Snapshot) Snapshot {
+	value.Notes = append([]string{}, value.Notes...)
+	value.Processes = append([]Process{}, value.Processes...)
+	return value
 }

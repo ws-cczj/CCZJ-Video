@@ -1,3 +1,4 @@
+import { CCZJ } from '../../constants/cczj'
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { GetSetting, SetSetting, normalizeApiError } from '../../api/app'
 import { danmakuAPI, type DanmakuBindingValue, type DanmakuCandidate, type DanmakuEpisode, type DanmakuWindowValue, type DanmakuMatchAttempt } from '../../api/danmaku'
@@ -68,9 +69,9 @@ export function useDanmaku(deps: { key: () => string; current: () => number; tit
     if (!preferencesReady.value || !preferencesDirty) return
     preferencesDirty = false
     const serialized = JSON.stringify(preferences.value)
-    saveTail = saveTail.catch(() => { }).then(() => SetSetting('danmaku_preferences_v1', serialized)).catch(value => { preferencesDirty = true; if (!disposed) message(value) })
+    saveTail = saveTail.catch(() => { }).then(() => SetSetting(CCZJ.Settings.danmakuPreferences, serialized)).catch(value => { preferencesDirty = true; if (!disposed) message(value) })
   }
-  async function loadPreferences() { try { const value = await GetSetting('danmaku_preferences_v1'); if (!disposed) { preferences.value = decodeDanmakuPreferences(value); await nextTick(); preferencesReady.value = true } } catch (value) { if (!disposed) message(value) } }
+  async function loadPreferences() { try { const value = await GetSetting(CCZJ.Settings.danmakuPreferences); if (!disposed) { preferences.value = decodeDanmakuPreferences(value); await nextTick(); preferencesReady.value = true } } catch (value) { if (!disposed) message(value) } }
   async function loadSources() { try { const [value, policy] = await Promise.all([GetSetting(DANMAKU_SOURCE_SETTINGS_KEY),GetSetting(NETWORK_POLICY_KEY)]); if (!disposed) { sources.value = decodeSourceSettings(value); networkPolicy.value = decodeNetworkPolicy(policy); if (!binding.value || !sourceEnabled(sources.value, provider.value)) provider.value = sources.value.defaultProvider; sourcesReady.value = true } } catch (value) { if (!disposed) message(value) } }
   void loadPreferences()
   void loadSources()

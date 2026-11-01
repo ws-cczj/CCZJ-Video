@@ -12,10 +12,12 @@ const emit = defineEmits<{toolsHost:[element:HTMLElement|null]}>()
 const { t } = useI18n()
 const showVolumePanel = ref(false), showSpeedPanel = ref(false)
 const toolsHost = ref<HTMLElement|null>(null)
+const hovering=ref(false)
+const silent=computed(()=>props.playback.muted||props.playback.volume===0)
 const { showTimeInput, timeInputValue, timeInputRef, toggleTimeInput, jumpToTime, cancelTimeInput } = useTimeJump({
   video: () => props.commands.video(), current: () => props.playback.current, duration: () => props.playback.duration,
 })
-const engaged = computed(() => showVolumePanel.value || showSpeedPanel.value || showTimeInput.value)
+const engaged = computed(() => hovering.value || showVolumePanel.value || showSpeedPanel.value || showTimeInput.value)
 function close(): void { showVolumePanel.value=false;showSpeedPanel.value=false;cancelTimeInput() }
 function selectSpeed(value:number): void { props.commands.speed(value);showSpeedPanel.value=false }
 watch(toolsHost, element => emit('toolsHost', element), {flush:'post'})
@@ -24,7 +26,7 @@ defineExpose({ engaged, close })
 </script>
 <template>
     <div class="ctrl-bar" :class="{'ctrl-bar-minimal':minimal}" v-show="visible || engaged" @click.stop @mousedown.stop
-      @pointerdown.stop @dblclick.stop @wheel.stop>
+      @pointerdown.stop @dblclick.stop @wheel.stop @mouseenter="hovering=true" @mouseleave="hovering=false">
       <div class="ctrl-primary">
       <!-- 上一集 -->
       <button v-if="playback.hasPrev" class="ctrl-btn" data-player-action="prev" @click="commands.previous()" :aria-label="t('player.prev')" :title="t('player.prev')">
@@ -41,7 +43,7 @@ defineExpose({ engaged, close })
         <Icon name="next" :size="16" />
       </button>
 
-      <!-- B站风格时间显示 / 跳转 -->
+      <!-- 时间显示与跳转输入 -->
       <div class="time-display" @click.stop>
         <template v-if="showTimeInput">
           <input ref="timeInputRef" class="time-input" v-model="timeInputValue" @keydown.enter.prevent="jumpToTime"
@@ -61,6 +63,7 @@ defineExpose({ engaged, close })
       <div class="ctrl-center"><slot name="danmaku" /></div>
       <div class="ctrl-secondary">
       <slot name="quality" />
+      <button v-if="minimal" class="ctrl-btn" :aria-label="t(silent?'player.unmute':'player.muteWithHotkey')" :title="t(silent?'player.unmute':'player.muteWithHotkey')" :aria-pressed="silent" @click="commands.mute();commands.interaction()"><Icon :name="silent?'volume-off':'volume'" :size="16"/></button>
       <PlayerVolumeControls v-if="!minimal" v-model:open="showVolumePanel" :volume="playback.volume" :muted="playback.muted" @mute="commands.mute()" @input="commands.volume" @interaction="commands.interaction()" />
       <PlayerSpeedControls v-if="!minimal" v-model:open="showSpeedPanel" :speed="playback.speed" @change="selectSpeed" @interaction="showVolumePanel=false;commands.interaction()" />
       <slot name="actions" />

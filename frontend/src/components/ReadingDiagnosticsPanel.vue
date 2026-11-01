@@ -8,10 +8,11 @@ import { useErrorStore } from '../stores/error'
 import { activityDiagnostics } from '../diagnostics/activity'
 import { startupSnapshot } from '../diagnostics/startup'
 import { captureBrowserResources } from '../diagnostics/browserResources'
-import { recordingStatus, recordingObserverFailed, recordDiagnosticEvent, setRecordingStatus, recordingRevision } from '../diagnostics/recording'
+import { recordingStatus, recordingObserverFailed, recordDiagnosticEvent, setRecordingStatus, recordingRevision, flushDiagnostics, diagnosticHealth } from '../diagnostics/recording'
 import { revealDiagnosticExport } from '../platform/diagnosticFiles'
 import { readAndroidMemoryState } from '../api/runtime'
 import DiagnosticObservability from './DiagnosticObservability.vue'
+import DiagnosticSessionPanel from './DiagnosticSessionPanel.vue'
 import { Button, Segment } from './ui'
 import Icon from './Icon.vue'
 
@@ -45,7 +46,7 @@ async function poll(token:number){
     if(disposed||token!==generation||!visible.value)return
     metrics.value=value;failed.value=false;setRecordingStatus(value?.recording,revision)
   }catch{if(token===generation)failed.value=true}
-  finally{if(!disposed&&token===generation&&visible.value)timer=setTimeout(()=>void poll(token),2000)}
+  finally{if(!disposed&&token===generation&&visible.value)timer=setTimeout(()=>void poll(token),15000)}
 }
 async function refresh(){
   if(refreshing.value)return
@@ -57,11 +58,11 @@ async function refresh(){
 }
 watch(visible,value=>{cancel();if(value){void poll(generation);void refresh()}},{immediate:true})
 onBeforeUnmount(()=>{disposed=true;cancel()})
-function snapshot(){return {application_mode:mode.mode,startup:startupSnapshot(),activity:activityDiagnostics.snapshot(mode.mode),browser:captureBrowserResources(),recording_observer_failed:recordingObserverFailed.value}}
+function snapshot(){return {application_mode:mode.mode,startup:startupSnapshot(),activity:activityDiagnostics.snapshot(mode.mode),browser:captureBrowserResources(),recording_observer_failed:recordingObserverFailed.value,diagnostic_health:diagnosticHealth()}}
 async function exportReport(){
   if(busy.value)return
   busy.value=true
-  try{const report=await ExportDiagnosticsReport(JSON.stringify(snapshot()));if(report)path.value=report.bundle_path||report.path}
+  try{const flushComplete=await flushDiagnostics();const report=await ExportDiagnosticsReport(JSON.stringify({...snapshot(),diagnostic_flush_complete:flushComplete}));if(report)path.value=report.bundle_path||report.path}
   catch(error){errors.fromError(t('diagnostics.exportFailed'),error,'ReadingDiagnostics.export')}
   finally{busy.value=false}
 }
@@ -69,7 +70,7 @@ async function toggleRecording(){
   if(busy.value)return
   busy.value=true
   try{
-    if(recordingStatus.value.active){await recordDiagnosticEvent('recording_stop',snapshot());setRecordingStatus(await StopDiagnosticsRecording())}
+    if(recordingStatus.value.active){await recordDiagnosticEvent('recording_stop',snapshot());if(!await flushDiagnostics())recordingObserverFailed.value=true;setRecordingStatus(await StopDiagnosticsRecording())}
     else{setRecordingStatus(await StartDiagnosticsRecording());await recordDiagnosticEvent('recording_start',snapshot())}
   }catch(error){errors.fromError(t('diagnostics.recordingFailed'),error,'ReadingDiagnostics.recording')}
   finally{busy.value=false}
@@ -79,7 +80,7 @@ const bytes=(value:number|undefined|null)=>value==null?'—':`${(value/1048576).
 </script>
 
 <template>
-  <section class="cczj-reading-diagnostics">
+  <section class="cczj-reading-diagnostics" data-diagnostics-controls>
     <header class="reading-diag-heading">
       <div><span class="reading-diag-eyebrow">{{t(`modes.${mode.mode}`)}}</span><h1>{{t('diagnostics.pageTitle')}}</h1><p>{{t('diagnostics.overviewDescription')}}</p></div>
       <div class="reading-diag-actions">
@@ -88,6 +89,7 @@ const bytes=(value:number|undefined|null)=>value==null?'—':`${(value/1048576).
         <Button variant="primary" :disabled="busy" @click="exportReport"><Icon name="download" :size="16"/>{{t('diagnostics.exportReport')}}</Button>
       </div>
     </header>
+    <DiagnosticSessionPanel :active="visible" />
     <div v-if="path||recordingStatus.active" class="reading-diag-status" role="status"><span v-if="recordingStatus.active">{{t('diagnostics.recordingActive',{samples:recordingStatus.samples})}}</span><Button v-if="path" variant="text" @click="openReport">{{t(exportActionLabel)}}<Icon name="chevron-right" :size="16"/></Button></div>
     <p v-if="failed||recordingObserverFailed||recordingStatus.error" class="reading-diag-error" role="alert">{{recordingStatus.error||t('diagnostics.recordingObservationIncomplete')}}</p>
     <nav class="reading-diag-tabs" :aria-label="t('diagnostics.sectionNavigation')"><Segment v-model="section" :options="tabOptions" wrap /></nav>

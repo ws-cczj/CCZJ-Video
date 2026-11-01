@@ -21,7 +21,10 @@ methods=[
     "GetVideoList",
     "SearchVideos",
     "GetTypes",
-    "GetYearsAndAreas"
+    "GetYearsAndAreas",
+    "GetShortDramaPage",
+    "GetShortDramaCategories",
+    "SetShortDramaCategories"
   ],
   [
     "GetVideoDetail",
@@ -139,7 +142,8 @@ methods=[
   [
     "DiscoverCastDevices",
     "PlayCastVideo",
-    "ControlCastVideo"
+    "ControlCastVideo",
+    "GetCastStatus"
   ],
   [
     "NovelBrowseChannels",
@@ -160,10 +164,13 @@ methods=[
     "LibraryRefreshReadingToc",
     "NovelSourceDirectory",
     "NovelSourceAlternatives",
+    "NovelBookSources",
+    "NovelPrepareSourceSwitch",
     "NovelChapterMatch"
   ],
   [
     "LibraryChapterText",
+    "LibraryRefreshChapterText",
     "ReadingStateApply"
   ],
   [
@@ -275,6 +282,9 @@ methods=[
     "StartDiagnosticsRecording",
     "StopDiagnosticsRecording",
     "AddDiagnosticsRecordingMarker",
+    "SubmitDiagnosticsEvents",
+    "GetDiagnosticsSession",
+    "CaptureDiagnosticsProfile",
     "WriteLog",
     "GetLogList",
     "GetLogContent",

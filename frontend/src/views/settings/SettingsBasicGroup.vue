@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { CCZJ } from '../../constants/cczj'
 /** Application preferences live here; playback controls remain in the player. */
 defineOptions({ name: 'SettingsBasicGroup' })
 import { computed, onMounted, ref, onBeforeUnmount } from 'vue'
@@ -57,19 +58,19 @@ function applyFontSize(key: string, persist = true): void {
   if (!preset) return
   fontSizeKey.value = key
   applyAppFontSize(key)
-  if (persist) void save('font_size_key', key)
+  if (persist) void save(CCZJ.Settings.fontSize, key)
 }
 
 function applyFontFamily(value: string, persist = true): void {
   fontFamily.value = value
   applyAppFontFamily(value)
-  if (persist) void save('font_family', value)
+  if (persist) void save(CCZJ.Settings.fontFamily, value)
 }
 
 async function applyLanguage(value: string): Promise<void> {
   language.value = value
   saveLocalePreference(value)
-  await save('language', value)
+  await save(CCZJ.Settings.language, value)
 }
 
 // ---------- 窗口 ----------
@@ -201,7 +202,7 @@ let disposed = false
 onBeforeUnmount(() => { disposed = true })
 onMounted(async () => {
   const [fsk, family, lang, close, retention, ignored] = await Promise.all([
-    safeGet('font_size_key', 'md'), safeGet('font_family', ''), safeGet('language', 'zh-CN'),
+    safeGet(CCZJ.Settings.fontSize, 'md'), safeGet(CCZJ.Settings.fontFamily, ''), safeGet(CCZJ.Settings.language, 'zh-CN'),
     mobile ? Promise.resolve(false) : safeGetCloseBehavior(),
     GetLogKeepDays().catch(() => 30), GetIgnoredVersion().catch(() => ''),
     layoutStore.load(), ...(mobile ? [] : [loadWindowResizable(), loadWindowSize()]),
@@ -270,7 +271,7 @@ const emit = defineEmits<{ (e: 'open-group', id: string): void }>()
     <div class="basic-grid">
 
     <!-- ==================== 外观 ==================== -->
-    <section v-show="!mobile || mobileSection === 'appearance'" id="basic-appearance" class="block basic-section" tabindex="-1" style="--section-order: 0">
+    <section v-show="!mobile || mobileSection === 'appearance'" id="basic-appearance" class="block basic-section" tabindex="-1">
       <header class="section-heading">
         <span class="section-icon"><Icon name="palette" :size="18" /></span>
         <h3>{{ t('settings.secAppearance') }}</h3>
@@ -309,7 +310,7 @@ const emit = defineEmits<{ (e: 'open-group', id: string): void }>()
       </div>
 
       <!-- 动效由内置扩展包提供：包被停用或删掉时这个开关无处生效，整行就不出现。 -->
-      <div v-if="motion.packReady" class="item">
+      <div class="item">
         <div class="item-text">
           <span class="item-name">{{ t('settings.motionSwitch') }}</span>
           <span class="item-desc">{{ t(mobile ? 'mobile.settingsMotionHint' : 'settings.motionSwitchDesc') }}</span>
@@ -325,7 +326,7 @@ const emit = defineEmits<{ (e: 'open-group', id: string): void }>()
     </section>
 
     <!-- ==================== 窗口 ==================== -->
-    <section v-if="!mobile" id="basic-window" class="block basic-section" tabindex="-1" style="--section-order: 1">
+    <section v-if="!mobile" id="basic-window" class="block basic-section" tabindex="-1">
       <header class="section-heading">
         <span class="section-icon"><Icon name="monitor" :size="18" /></span>
         <h3>{{ t('settings.secWindow') }}</h3>
@@ -384,7 +385,7 @@ const emit = defineEmits<{ (e: 'open-group', id: string): void }>()
     </section>
 
     <!-- ==================== 首页 ==================== -->
-    <section v-show="!mobile || mobileSection === 'home'" id="basic-home" class="block basic-section" tabindex="-1" style="--section-order: 2">
+    <section v-show="!mobile || mobileSection === 'home'" id="basic-home" class="block basic-section" tabindex="-1">
       <header class="section-heading">
         <span class="section-icon"><Icon name="home" :size="18" /></span>
         <h3>{{ t('settings.secHome') }}</h3>
@@ -413,6 +414,15 @@ const emit = defineEmits<{ (e: 'open-group', id: string): void }>()
             @update:model-value="(v: any) => layoutStore.setDensity(v as LayoutDensity)" />
         </div>
       </div>
+      <figure v-if="!mobile" class="layout-preview">
+        <figcaption class="cczj-text-sm cczj-text-muted cczj-mb-4">{{ t('settings.layoutPreview') }}</figcaption>
+        <div class="layout-preview-grid cczj-overflow-auto" :style="layoutStore.gridStyle" aria-hidden="true">
+          <div v-for="n in layoutStore.columns" :key="n" class="layout-preview-card cczj-border cczj-rounded-md cczj-overflow-hidden">
+            <div class="layout-preview-poster cczj-grid cczj-text-accent"><Icon name="play" :size="24" /></div>
+            <span class="cczj-block cczj-p-4 cczj-text-primary">{{ n }}</span>
+          </div>
+        </div>
+      </figure>
 
       <div class="item">
         <div class="item-text">
@@ -467,7 +477,7 @@ const emit = defineEmits<{ (e: 'open-group', id: string): void }>()
     </section>
 
     <!-- ==================== 数据与网络 ==================== -->
-    <section v-show="!mobile || mobileSection === 'data'" id="basic-data" class="block basic-section" tabindex="-1" style="--section-order: 3">
+    <section v-show="!mobile || mobileSection === 'data'" id="basic-data" class="block basic-section" tabindex="-1">
       <header class="section-heading">
         <span class="section-icon"><Icon name="database" :size="18" /></span>
         <h3>{{ t('settings.secData') }}</h3>
@@ -478,7 +488,7 @@ const emit = defineEmits<{ (e: 'open-group', id: string): void }>()
     </section>
 
     <!-- ==================== 维护 ==================== -->
-    <section v-show="!mobile || mobileSection === 'maintenance'" id="basic-maintenance" class="block basic-section" tabindex="-1" style="--section-order: 4">
+    <section v-show="!mobile || mobileSection === 'maintenance'" id="basic-maintenance" class="block basic-section" tabindex="-1">
       <header class="section-heading">
         <span class="section-icon"><Icon name="settings" :size="18" /></span>
         <h3>{{ t('settings.secMaintenance') }}</h3>
@@ -515,6 +525,10 @@ const emit = defineEmits<{ (e: 'open-group', id: string): void }>()
 </template>
 
 <style scoped>
+.layout-preview { margin:0 0 16px; }
+.layout-preview-grid { max-height:220px; }
+.layout-preview-card { background:var(--bg-card); }
+.layout-preview-poster { height:64px;place-items:center;background:var(--accent-alpha-10); }
 .basic-settings { @apply cczj-min-w-0; container-type: inline-size; }
 .section-links { @apply cczj-flex cczj-flex-wrap; gap: 7px; margin-bottom: 18px; }
 .section-links button {
@@ -531,17 +545,12 @@ const emit = defineEmits<{ (e: 'open-group', id: string): void }>()
 .basic-section {
   @apply cczj-border; background: var(--bg-card); border-radius: 14px;
   padding: 20px 22px; @apply cczj-min-w-0; container-type: inline-size; scroll-margin-top: 90px;
-  animation: settings-reveal var(--cczj-motion-normal) var(--cczj-motion-ease-standard) backwards;
-  animation-delay: calc(var(--section-order) * var(--cczj-motion-stagger, 35ms));
 }
 .basic-section:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .section-heading { @apply cczj-flex cczj-items-center cczj-gap-5; padding-bottom: 15px; @apply cczj-mb-2 cczj-border-bottom; }
 .section-heading h3 { margin: 0; font-size: 1rem; @apply cczj-font-bold; }
 .section-icon { @apply cczj-grid; place-items: center; @apply cczj-w-32 cczj-h-32; border-radius: 9px; background: var(--accent-alpha-10); @apply cczj-text-accent; }
 .section-number { @apply cczj-ml-auto cczj-text-muted; font-size: .75rem; font-variant-numeric: tabular-nums; letter-spacing: .1em; }
-@media (prefers-reduced-motion: reduce) { .basic-section { animation: none; } }
-html[data-cczj-motion='off'] .basic-section { animation: none; }
-@keyframes settings-reveal { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @container (min-width: 980px) { .basic-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @container (max-width: 570px) {
   .basic-section { @apply cczj-p-8; }

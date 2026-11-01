@@ -9,6 +9,7 @@ import { useMotionStore } from '../stores/motion'
 import RemoteImage from './RemoteImage.vue'
 import { useViewActivity } from '../composables/useViewActivity'
 import { isMobileRuntime } from '../api/runtime'
+import { observeViewportVisibility } from '../utils/imageVisibility'
 
 const PAGE_HEIGHT = 360
 const PAGE_PADDING = 20
@@ -32,15 +33,48 @@ const router = useRouter()
 const { t } = useI18n()
 const motion = useMotionStore()
 const mobile = isMobileRuntime()
-const active = useViewActivity(() => true, 'committed')
+const pageActive = useViewActivity(() => true, 'committed')
+const carouselEl = ref<HTMLElement>()
+const inViewport = ref(false)
+const active = computed(() => pageActive.value && inViewport.value)
+let stopObserving: (() => void) | undefined
+let mousePaused = false
 const dragX = ref(0)
-let drag: { id: number; x: number; y: number; width: number; horizontal: boolean } | null = null
+let dragFrame: number | undefined, pendingDragX = 0
+let moveFrame: number | undefined, moveRevision = 0
+let cancelReady: (() => void) | undefined
+function applyDrag(): void {
+  if (dragFrame !== undefined) cancelAnimationFrame(dragFrame)
+  dragFrame = undefined
+  if (!drag?.horizontal) return
+  const spare = layers[1 - front.value]
+  spare.animate = false
+  spare.slide = wrap(layers[front.value].slide + (pendingDragX < 0 ? 1 : -1))
+  spare.offset = pendingDragX < 0 ? 100 : -100
+  dragX.value = pendingDragX
+}
+function cancelMovement(): void {
+  moveRevision++
+  cancelReady?.()
+  if (moveFrame !== undefined) cancelAnimationFrame(moveFrame)
+  if (dragFrame !== undefined) cancelAnimationFrame(dragFrame)
+  moveFrame = dragFrame = undefined
+  if (transitionTimer) clearTimeout(transitionTimer)
+  transitionTimer = null
+  const previous = drag
+  drag = null
+  if (previous?.handle.hasPointerCapture(previous.id)) previous.handle.releasePointerCapture(previous.id)
+  dragX.value = 0
+  animating.value = false
+  layers.forEach((layer, slot) => { layer.animate = false; layer.offset = slot === front.value ? 0 : 100 })
+}
+let drag: { id: number; x: number; y: number; width: number; horizontal: boolean; handle: HTMLElement } | null = null
 let suppressTouchClick = false
 function onPointerDown(event: PointerEvent): void {
   if (!mobile || !event.isPrimary || event.button !== 0 || animating.value || total.value < 2) return
   suppressTouchClick = false
   drag = { id: event.pointerId, x: event.clientX, y: event.clientY,
-    width: (event.currentTarget as HTMLElement).clientWidth, horizontal: false }
+    width: (event.currentTarget as HTMLElement).clientWidth, horizontal: false, handle: event.currentTarget as HTMLElement }
   stopAutoPlay()
 }
 function onPointerMove(event: PointerEvent): void {
@@ -55,19 +89,18 @@ function onPointerMove(event: PointerEvent): void {
     ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
   }
   event.preventDefault()
-  const spare = layers[1 - front.value]
-  spare.animate = false
-  spare.slide = wrap(layers[front.value].slide + (dx < 0 ? 1 : -1))
-  spare.offset = dx < 0 ? 100 : -100
-  dragX.value = Math.max(-start.width, Math.min(start.width, dx))
+  pendingDragX = Math.max(-start.width, Math.min(start.width, dx))
+  if (dragFrame === undefined) dragFrame = requestAnimationFrame(applyDrag)
 }
 function onPointerEnd(event: PointerEvent): void {
   const start = drag
   if (!start || event.pointerId !== start.id) return
+  applyDrag()
   drag = null
+  if (start.handle.hasPointerCapture(start.id)) start.handle.releasePointerCapture(start.id)
   if (!start.horizontal) { startAutoPlay(); return }
   suppressTouchClick = true
-  const committed = event.type !== 'pointercancel' && Math.abs(dragX.value) >= Math.max(35, start.width * .16)
+  const committed = event.type === 'pointerup' && Math.abs(dragX.value) >= Math.max(35, start.width * .16)
   const sign = dragX.value < 0 ? -1 : 1
   const leaving = layers[front.value], spare = layers[1 - front.value]
   layerEls[front.value]?.getBoundingClientRect()
@@ -150,12 +183,15 @@ function layerReady(slot: number): boolean {
 function waitLayerReady(slot: number): Promise<void> {
   return new Promise((resolve) => {
     const deadline = Date.now() + READY_WAIT_MS
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const done = () => { clearTimeout(timer); if (cancelReady === done) cancelReady = undefined; resolve() }
+    cancelReady = done
     const check = (): void => {
-      if (layerReady(slot) || Date.now() >= deadline) {
-        resolve()
+      if (!active.value || layerReady(slot) || Date.now() >= deadline) {
+        done()
         return
       }
-      window.setTimeout(check, READY_POLL_MS)
+      timer = setTimeout(check, READY_POLL_MS)
     }
     check()
   })
@@ -194,7 +230,8 @@ function directionTo(target: number): 'left' | 'right' {
 }
 
 function moveTo(target: number): void {
-  if (animating.value || total.value <= 1 || target === layers[front.value].slide) return
+  if (!active.value || animating.value || total.value <= 1 || target === layers[front.value].slide) return
+  const revision = ++moveRevision
 
   const dir = directionTo(target)
   const spareSlot = 1 - front.value
@@ -209,12 +246,14 @@ function moveTo(target: number): void {
   spare.offset = dir === 'left' ? 100 : -100
 
   nextTick(async () => {
+    if (revision !== moveRevision || !active.value) return
     const el = layerEls[spareSlot]
     if (!el) {
       settle()
       return
     }
     await waitLayerReady(spareSlot)
+    if (revision !== moveRevision || !active.value) return
     // 闸门可能被外部放下：watch 在等的时候换过 slides 就会把几何与 animating 一并复位，
     // 这时再补滑动会把已经落位的那张从中间推走。
     if (!animating.value) return
@@ -225,7 +264,9 @@ function moveTo(target: number): void {
     }
     // 缺这一行就没有动画：停位与过渡开关会被并进同一次样式计算，浏览器无从比较起止值。
     el.getBoundingClientRect()
-    requestAnimationFrame(() => {
+    moveFrame = requestAnimationFrame(() => {
+      moveFrame = undefined
+      if (revision !== moveRevision || !active.value) return
       const leaving = layers[front.value]
       leaving.animate = true
       spare.animate = true
@@ -288,23 +329,23 @@ function goTo(idx: number): void {
 
 function startAutoPlay(): void {
   stopAutoPlay()
-  if (drag || !active.value || !props.autoPlay || total.value <= 1) return
+  if (drag || mousePaused || !active.value || !props.autoPlay || total.value <= 1) return
   timer = setInterval(goNext, props.intervalMs)
 }
 
 // 设置页改了开关或间隔要立刻重排：Home 挂在 KeepAlive 下，组件不会因为设置变化而重挂。
 watch(() => [props.autoPlay, props.intervalMs] as const, () => startAutoPlay())
 
-// Home is kept alive while the player is open. Pause the carousel while it is
-// hidden so a failed Douban poster is not mounted again every six seconds.
+// A committed page can still scroll its carousel out of view.
+watch([pageActive, carouselEl], ([enabled, element]) => {
+  stopObserving?.(); stopObserving = undefined
+  inViewport.value = false
+  if (enabled && element) stopObserving = observeViewportVisibility(element, visible => { inViewport.value = visible })
+}, {flush:'post', immediate:true})
 watch(active, visible => {
   if (visible) { startAutoPlay(); return }
   stopAutoPlay()
-  // 中途切走只把闸门松开，不替这一页收场。原先在这儿调 settle()：闸门在等图时 animating
-  // 已经落下，settle 会把还没画完的来片直接钉到台前——等于把「图片瞬间替换」搬到从播放页
-  // 返回首页那一下。松闸就够：待命的续篇看到 animating 已清会自己放弃（不会永远挂着把
-  // 后续翻页全挡掉），几何仍停在侧幕，回来照常从下一次翻页滑进来。
-  animating.value = false
+  cancelMovement()
 })
 
 function stopAutoPlay(): void {
@@ -337,13 +378,7 @@ async function goDetail(video: Video): Promise<void> {
 watch(
   () => props.slides,
   () => {
-    if (transitionTimer) {
-      clearTimeout(transitionTimer)
-      transitionTimer = null
-    }
-    animating.value = false
-    drag = null
-    dragX.value = 0
+    cancelMovement()
     front.value = 0
     layers[0].slide = 0
     layers[0].offset = 0
@@ -371,21 +406,26 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  stopObserving?.()
   stopAutoPlay()
-  if (transitionTimer) clearTimeout(transitionTimer)
+  cancelMovement()
 })
 
 function onMouseEnter(): void {
+  if (mobile) return
+  mousePaused = true
   stopAutoPlay()
 }
 
 function onMouseLeave(): void {
+  if (mobile) return
+  mousePaused = false
   startAutoPlay()
 }
 </script>
 
 <template>
-  <div v-if="total > 0" class="carousel"
+  <div v-if="total > 0" ref="carouselEl" class="carousel"
     :style="{ height: PAGE_HEIGHT + PAGE_PADDING * 2 + 'px', padding: PAGE_PADDING + 'px' }"
     @mouseenter="onMouseEnter" @mouseleave="onMouseLeave" @pointerdown="onPointerDown" @pointermove="onPointerMove" @pointerup="onPointerEnd" @pointercancel="onPointerEnd" @dragstart.prevent>
     <div class="carousel-viewport" :style="{ height: PAGE_HEIGHT + 'px' }">

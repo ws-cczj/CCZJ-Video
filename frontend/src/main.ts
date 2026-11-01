@@ -18,10 +18,16 @@ import { useThemeStore } from './stores/theme'
 import { markStartup, startupTask } from './diagnostics/startup'
 import { APPLICATION_MODES } from './modes/definitions'
 import { useErrorStore } from './stores/error'
+import { initializeDiagnostics } from './diagnostics/recording'
+import { installDiagnosticListeners } from './diagnostics/session'
 
 markStartup('modules_ready')
 const runtimeReady = startupTask('runtime', () => initializeRuntimeEnvironment().then(loadPlatformPresentation))
+const disposeDiagnosticListeners = installDiagnosticListeners()
+void runtimeReady.then(initializeDiagnostics).catch(()=>{})
+if(import.meta.hot)import.meta.hot.dispose(disposeDiagnosticListeners)
 const app = createApp(App)
+app.onUnmount(disposeDiagnosticListeners)
 const pinia = createPinia()
 app.use(pinia)
 // Vue catches render/lifecycle failures before they reach window.error. Install

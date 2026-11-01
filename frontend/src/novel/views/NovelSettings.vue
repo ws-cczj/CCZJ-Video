@@ -48,16 +48,16 @@ function openDiagnostics(): void {
 <template>
   <div class="novel-page novel-settings">
     <template v-if="group === 'index'">
-      <header class="reading-page-heading"><div><h1>{{ t('sidebar.settings') }}</h1><p>{{ t('readingUI.settingsHint') }}</p></div></header>
+      <header class="reading-page-heading"><div><h1>{{ t('sidebar.settings') }}</h1></div></header>
       <nav class="novel-settings-menu cczj-grid cczj-gap-4" :aria-label="t('sidebar.settings')">
         <button class="novel-settings-entry cczj-flex cczj-items-center cczj-gap-6 cczj-w-full cczj-p-6 cczj-rounded-lg cczj-border cczj-bg-card" type="button" @click="openGroup('reading')">
           <span class="novel-settings-entry-icon cczj-grid"><Icon name="book-open" :size="22" /></span>
-          <span class="cczj-flex cczj-flex-col cczj-gap-1 cczj-text-left cczj-flex-1"><strong>{{ t('novel.readingSettings') }}</strong><small>{{ t('novel.preferencesHint') }}</small></span>
+          <span class="cczj-flex cczj-flex-col cczj-gap-1 cczj-text-left cczj-flex-1"><strong>{{ t('novel.readingSettings') }}</strong></span>
           <Icon name="chevron-right" :size="18" aria-hidden="true" />
         </button>
         <button class="novel-settings-entry cczj-flex cczj-items-center cczj-gap-6 cczj-w-full cczj-p-6 cczj-rounded-lg cczj-border cczj-bg-card" type="button" @click="openGroup('mode')">
           <span class="novel-settings-entry-icon cczj-grid"><Icon name="layers" :size="22" /></span>
-          <span class="cczj-flex cczj-flex-col cczj-gap-1 cczj-text-left cczj-flex-1"><strong>{{ t('modes.title') }}</strong><small>{{ t('modes.hint') }}</small></span>
+          <span class="cczj-flex cczj-flex-col cczj-gap-1 cczj-text-left cczj-flex-1"><strong>{{ t('modes.title') }}</strong></span>
           <Icon name="chevron-right" :size="18" aria-hidden="true" />
         </button>
         <button class="novel-settings-entry cczj-flex cczj-items-center cczj-gap-6 cczj-w-full cczj-p-6 cczj-rounded-lg cczj-border cczj-bg-card" type="button" @click="openSources">
@@ -67,7 +67,7 @@ function openDiagnostics(): void {
         </button>
         <button class="novel-settings-entry cczj-flex cczj-items-center cczj-gap-6 cczj-w-full cczj-p-6 cczj-rounded-lg cczj-border cczj-bg-card" type="button" @click="openDiagnostics">
           <span class="novel-settings-entry-icon cczj-grid"><Icon name="monitor" :size="22" /></span>
-          <span class="cczj-flex cczj-flex-col cczj-gap-1 cczj-text-left cczj-flex-1"><strong>{{ t('diagnostics.pageTitle') }}</strong><small>{{ t('diagnostics.activityDescription') }}</small></span>
+          <span class="cczj-flex cczj-flex-col cczj-gap-1 cczj-text-left cczj-flex-1"><strong>{{ t('diagnostics.pageTitle') }}</strong></span>
           <Icon name="chevron-right" :size="18" aria-hidden="true" />
         </button>
       </nav>
@@ -76,7 +76,7 @@ function openDiagnostics(): void {
     <template v-else>
       <div class="novel-settings-subhead cczj-flex cczj-items-center cczj-gap-4">
         <button class="novel-icon-button" type="button" :aria-label="t('common.back')" @click="openGroup('index')"><Icon name="chevron-left" :size="22" /></button>
-        <div><p class="cczj-text-sm cczj-text-secondary">{{ t('sidebar.settings') }}</p><h1>{{ groupTitle }}</h1></div>
+        <div><h1>{{ groupTitle }}</h1></div>
       </div>
       <section v-if="group === 'reading'" class="novel-settings-card cczj-p-8 cczj-rounded-lg cczj-border cczj-bg-card">
         <p class="novel-settings-card-hint cczj-text-secondary">{{ t('novel.preferencesHint') }}</p>

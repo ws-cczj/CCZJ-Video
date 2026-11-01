@@ -1,5 +1,6 @@
 import { CancelError, CancellablePromise } from '@wailsio/runtime'
 import { normalizeApiError } from './errors'
+import { captureDiagnosticContext, recordTimeline } from '../diagnostics/session'
 
 export type RequestPolicy = 'read' | 'write' | 'isolated' | 'refresh'
 export interface RequestIdentity { readonly requestId: string; readonly flightId: string; readonly pipeline: string }
@@ -40,6 +41,8 @@ export function createRequestPipelines(limit = 128) {
   const nextID = () => `${session}-${++sequence}`
   function run<T>(name: string, policy: RequestPolicy, args: readonly unknown[], start: () => Pending<T>): PipelineRequest<T> {
     const pipeline = `rpc.${name}`
+    const context = captureDiagnosticContext(), began = performance.now()
+    const observed = !/Diagnostics|RuntimeMetrics|WriteLog|GetSetting/.test(name)
     let stat = stats.get(pipeline)
     if (!stat) { stat = { pipeline, requested: 0, dispatched: 0, joined: 0, active: 0, cancelled: 0, failed: 0, rejected: 0 }; stats.set(pipeline, stat) }
     stat.requested++
@@ -55,17 +58,20 @@ export function createRequestPipelines(limit = 128) {
       flight = { id: nextID(), subscribers: new Set(), key, finished: false }
       if (shared && activeReads >= limit) {
         row.rejected++
+        if (observed) recordTimeline('request.finish',{name:pipeline,request_id:requestId,flight_id:flight.id,outcome:'failed',code:'UNAVAILABLE',duration_ms:0},context)
         return Object.assign(CancellablePromise.reject<T>(Object.assign(new Error('并发读取已达上限，请稍后重试'), { code: 'UNAVAILABLE' })), { request: Object.freeze({ requestId, flightId: flight.id, pipeline }) })
       }
       if (key !== undefined) { reads.set(key, flight); activeReads++ }
     } else row.joined++
     const current = flight
+    if (observed) recordTimeline('request.start',{name:pipeline,request_id:requestId,flight_id:current.id,outcome:'started',data:{joined}},context)
     let subscriber!: Subscriber
     const request = new CancellablePromise<T>((resolve, reject) => {
       subscriber = { resolve: value => resolve(value as T), reject }; current.subscribers.add(subscriber)
     }, cause => {
       if (!current.subscribers.delete(subscriber)) return
       row.cancelled++
+      if (observed) recordTimeline('request.finish',{name:pipeline,request_id:requestId,flight_id:current.id,outcome:'cancelled',code:'CANCELLED',duration_ms:performance.now()-began},context)
       if (!current.finished && current.subscribers.size === 0) {
         if (current.key && reads.get(current.key) === current) reads.delete(current.key)
         return Promise.resolve(current.pending?.cancel?.(cause)).then(() => {})
@@ -81,6 +87,8 @@ export function createRequestPipelines(limit = 128) {
         if (current.key && reads.get(current.key) === current) reads.delete(current.key)
         if (policy === 'write' || policy === 'refresh') revision++
         const cancelled = !succeeded && (error instanceof CancelError || normalizeApiError(error).code === 'CANCELLED')
+        const failure = succeeded ? undefined : normalizeApiError(error)
+        if (observed) recordTimeline('request.finish',{name:pipeline,flight_id:current.id,outcome:succeeded?'success':cancelled?'cancelled':'failed',code:failure?.code,backend_request_id:failure?.requestId,duration_ms:performance.now()-began},context)
         if (!succeeded && !cancelled) row.failed++
         const subscribers = [...current.subscribers]; current.subscribers.clear()
         if (cancelled) row.cancelled += subscribers.length

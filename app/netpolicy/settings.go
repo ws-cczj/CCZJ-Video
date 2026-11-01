@@ -2,6 +2,7 @@ package netpolicy
 
 import (
 	"cczjVideo/app/apperror"
+	CCZJ "cczjVideo/app/cczj"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -11,7 +12,7 @@ import (
 	"time"
 )
 
-const SettingsKey = "network_request_policy_v1"
+const SettingsKey = CCZJ.SettingNetworkPolicy
 
 type Settings struct {
 	Frequency string `json:"frequency"`

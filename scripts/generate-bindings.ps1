@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 Push-Location (Join-Path $PSScriptRoot '..')
 try {
-    # beta.30 can emit invalid bindings and exit zero when Go type checking warns.
+    # Reject type-checking warnings before accepting generated bindings.
     go test -run '^$' ./app/service
     if ($LASTEXITCODE -ne 0) { throw 'Go service does not compile; bindings were not regenerated.' }
     $bindingOutput = & wails3 generate bindings -clean=false 2>&1

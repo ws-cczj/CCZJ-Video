@@ -3,6 +3,7 @@
 package backup
 
 import (
+	CCZJ "cczjVideo/app/cczj"
 	"cczjVideo/app/files"
 	"cczjVideo/app/payload"
 	"context"
@@ -74,20 +75,20 @@ type Result struct {
 // 版本和升级复位记账。把旧机器的那份盖过来，最坏情况会让升级/复位流程判断失误，
 // 那是会丢数据的一类错误。
 var machineLocalSettings = map[string]bool{
-	"window_width":                        true,
-	"window_height":                       true,
-	"window_size_key":                     true,
-	"last_start_version":                  true,
-	"database_reset_version":              true,
-	"database_reset_generation":           true,
-	"collect.schedule.last_exit_unix_sec": true,
+	CCZJ.SettingWindowWidth:      true,
+	CCZJ.SettingWindowHeight:     true,
+	"window_size_key":            true,
+	CCZJ.SettingLastStartVersion: true,
+	"database_reset_version":     true,
+	"database_reset_generation":  true,
+	CCZJ.SettingScheduleLastExit: true,
 	// 旧数据目录的记账（已迁移/已合并、发生在哪天）说的是这台机器上的库搬到哪儿了。
 	// 跟着备份走到另一台机器，就会把那边还没找回来的旧库判成「已经处理过」。
-	"legacy_data_status": true,
-	"legacy_data_at":     true,
+	CCZJ.SettingLegacyStatus: true,
+	CCZJ.SettingLegacyAt:     true,
 	// 同意条款是对「这台机器上的这份安装」作出的意思表示。跟着备份导入走，
 	// 一份已同意的备份就能替别人跳过首启确认，闸门形同虚设。
-	"license_terms_version": true,
+	CCZJ.SettingLicenseTermsVersion: true,
 	// Trust and permissions are consent on this installation, never transferable.
 	"plugin_script_trust": true,
 	"plugin_permissions":  true,
@@ -343,7 +344,7 @@ func (s *Service) mergeSettings(writer *db.BackupWriter, settings []db.BackupSet
 			result.SettingsSkipped++
 			continue
 		}
-		if key == "default_source_key" && strings.TrimSpace(setting.Value) != "" {
+		if key == CCZJ.SettingDefaultSource && strings.TrimSpace(setting.Value) != "" {
 			if _, err := writer.Source(setting.Value); err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
 					result.SettingsSkipped++

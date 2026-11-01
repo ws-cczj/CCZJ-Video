@@ -57,7 +57,8 @@ final class CczjPlayerDevice {
                 int permission = Build.VERSION.SDK_INT >= 26 && operations != null
                     ? operations.checkOpNoThrow(AppOpsManager.OPSTR_PICTURE_IN_PICTURE, android.os.Process.myUid(), activity.getPackageName())
                     : AppOpsManager.MODE_DEFAULT;
-                out.put("pipAllowed", permission == AppOpsManager.MODE_ALLOWED);
+                if (permission == AppOpsManager.MODE_ERRORED || permission == AppOpsManager.MODE_IGNORED) out.put("pipAllowed", false);
+                else if (permission == AppOpsManager.MODE_ALLOWED) out.put("pipAllowed", true);
             } catch (RuntimeException unavailable) {
                 // Some OEMs do not expose this operation; an unknown permission
                 // probe must not become a permanent "device unsupported" result.
@@ -98,9 +99,10 @@ final class CczjPlayerDevice {
             try {
                 if (Build.VERSION.SDK_INT >= 26) {
                     double ratio = width / (double)Math.max(height, 1);
-                    ratio = Math.max(1 / 2.39, Math.min(2.39, ratio));
+                    // Stay inside Android's boundary after rational rounding.
+                    ratio = Math.max(1 / 2.38, Math.min(2.38, ratio));
                     entered = activity.enterPictureInPictureMode(new PictureInPictureParams.Builder()
-                        .setAspectRatio(new Rational((int)(ratio * 1000), 1000)).build());
+                        .setAspectRatio(new Rational((int)Math.round(ratio * 10000), 10000)).build());
                 }
             } catch (SecurityException denied) {
                 failure = "permission";
@@ -108,6 +110,8 @@ final class CczjPlayerDevice {
                 android.util.Log.w("CCZJPlayerDevice", "System rejected picture-in-picture", error);
             }
             if (!entered) {
+                android.util.Log.w("CCZJPlayerDevice", "PiP entry failed: " + failure + "; sdk=" + Build.VERSION.SDK_INT
+                    + "; feature=" + activity.getPackageManager().hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE));
                 notifyPip(false);
                 webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('cczj:player-pip-error',{detail:'" + failure + "'}))", null);
             }

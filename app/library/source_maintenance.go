@@ -17,7 +17,7 @@ import (
 
 // RunSourceMaintenance belongs to the active mode lifecycle. It yields to
 // foreground acquisition, resumes from persisted per-source clocks, and never
-// disables or deletes a low-scoring source. Only one maintenance loop is owned.
+// deletes user data. Only one maintenance loop is owned.
 func (s *Service) RunSourceMaintenance(ctx context.Context, mode string) {
 	if !s.routingEnabled.Load() || !s.auditRunning.CompareAndSwap(false, true) {
 		return
@@ -31,6 +31,17 @@ func (s *Service) RunSourceMaintenance(ctx context.Context, mode string) {
 		return
 	}
 	for ctx.Err() == nil {
+		if kind == model.SourceKindNovel {
+			call, release, err := s.priority.background(ctx)
+			if err != nil {
+				return
+			}
+			err = s.refreshNovelSubscription(call)
+			release()
+			if err != nil && ctx.Err() == nil {
+				applog.Warn("[novel] 更新订阅规则: %v", err)
+			}
+		}
 		if err := s.auditSources(ctx, kind); err != nil && ctx.Err() == nil {
 			applog.Warn("[%s] 内置源巡检: %v", kind, err)
 		}
@@ -59,7 +70,7 @@ func (s *Service) auditSources(ctx context.Context, kind model.SourceKind) error
 	if err != nil {
 		return err
 	}
-	corpus, err := quality.AuditCorpus(string(kind))
+	corpus, err := quality.AuditCorpusContext(ctx, string(kind))
 	if err != nil {
 		return err
 	}
@@ -97,6 +108,9 @@ func (s *Service) auditSources(ctx context.Context, kind model.SourceKind) error
 		return checks[ordered[i].ID].CheckedAt < checks[ordered[j].ID].CheckedAt
 	})
 	for _, source := range ordered {
+		if kind == model.SourceKindNovel && !source.CanRead {
+			continue
+		}
 		if disabled[source.ID] {
 			continue
 		}
@@ -128,6 +142,22 @@ func (s *Service) auditSources(ctx context.Context, kind model.SourceKind) error
 		check := db.ReadingSourceCheck{Kind: string(kind), SourceID: source.ID, CheckedAt: time.Now().Unix(), State: result.State, Score: -1, Confidence: "insufficient"}
 		if result.Discovery != nil && result.Discovery.Queries > 0 && len(result.Discovery.Failures) == result.Discovery.Queries && len(result.Discovery.MatchedIDs) == 0 {
 			check.State = "search_unavailable"
+			gone := kind == model.SourceKindNovel
+			for _, failure := range result.Discovery.Failures {
+				gone = gone && failure.Code == "SOURCE_GONE"
+			}
+			if gone {
+				if err := db.RecordReadingSearchHealth(ctx, kind, source.ID, "SOURCE_GONE"); err != nil {
+					return err
+				}
+				for _, row := range installed {
+					if sourceQualityID(string(kind), row.ApiUrl, row.StrategyConfig) == source.ID {
+						if err := db.PauseMissingReadingSource(ctx, row.SourceKey, row.StrategyConfig); err != nil {
+							return err
+						}
+					}
+				}
+			}
 		}
 		if result.Quality != nil {
 			raw, err := json.Marshal(result.Quality)

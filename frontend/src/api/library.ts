@@ -19,6 +19,7 @@ import {
   LibraryRefreshNovelContext,
   LibrarySearchStream,
   LibraryChapterText,
+  LibraryRefreshChapterText,
   LibraryDeleteSource,
   LibraryItem,
   LibraryItems,
@@ -248,6 +249,10 @@ export function refreshLibraryToc(itemId: number): CancellablePromise<ItemDetail
  */
 export function fetchChapterText(chapterId: number): CancellablePromise<ChapterTextDTO> {
   return unwrap(LibraryChapterText(chapterId), 'LibraryChapterText')
+}
+
+export function refreshChapterText(chapterId:number): CancellablePromise<ChapterTextDTO> {
+  return unwrap(LibraryRefreshChapterText(chapterId), 'LibraryRefreshChapterText')
 }
 
 export function fetchNovelContext(location: NovelReadingLocationDTO) {

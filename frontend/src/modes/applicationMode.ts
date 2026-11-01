@@ -1,3 +1,4 @@
+import { CCZJ } from '../constants/cczj'
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { GetSetting, SetSetting } from '../api/app'
@@ -6,7 +7,7 @@ import { normalizeApplicationMode, modeReloadURL, type ApplicationMode } from '.
 import { modeSessions } from './sessionRuntime'
 import { prepareModeBackground } from '../platform/bootAppearance'
 
-export const APPLICATION_MODE_KEY = 'application_mode'
+export const APPLICATION_MODE_KEY = CCZJ.Settings.applicationMode
 export const useApplicationMode = defineStore('applicationMode', () => {
   const mode = ref<ApplicationMode>('video')
   const loaded = ref(false)

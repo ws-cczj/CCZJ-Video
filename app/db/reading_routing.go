@@ -139,6 +139,9 @@ func RecordReadingWorks(ctx context.Context, kind model.SourceKind, sourceKey, r
 }
 
 func RecordReadingChapter(ctx context.Context, kind model.SourceKind, chapterID int, revision, evidence string) error {
+	if kind == model.SourceKindNovel && evidence == "text" {
+		return RecordNovelChapterResult(ctx, chapterID, revision, evidence)
+	}
 	if kind != model.SourceKindNovel && kind != model.SourceKindComic {
 		return fmt.Errorf("invalid reading mode")
 	}

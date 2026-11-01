@@ -11,12 +11,19 @@ export function useNovelPages(viewport:Ref<HTMLElement|null>,track:Ref<HTMLEleme
     const el=viewport.value,body=track.value
     if(!enabled() || !el || !body || el.clientWidth<1 || el.clientHeight<1)return
     width.value=el.clientWidth
+    el.scrollTop=0;el.scrollLeft=0
     body.style.columnWidth=width.value+'px';body.style.columnGap=gap+'px'
     count.value=measuredPageCount(body.scrollWidth,width.value,gap)
     page.value=pageFromRatio(position,count.value)
+    body.style.transform=transform.value
   }
   function refresh(position?:number):void { cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>{if(!disposed)measure(position??ratio.value)}) }
-  function select(next:number):void { page.value=Math.max(0,Math.min(count.value-1,next)) }
+  function select(next:number):void {
+    const body=track.value
+    page.value=Math.max(0,Math.min(count.value-1,next))
+    if(!body)return
+    body.style.transform=transform.value
+  }
   // The viewport is created only after asynchronous chapter loading, and is
   // replaced during chapter changes. onMounted alone sees a null element.
   watch(viewport,element=>{

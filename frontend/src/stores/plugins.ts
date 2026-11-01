@@ -1,3 +1,4 @@
+import { CCZJ } from '../constants/cczj'
 /**
  * 扩展包注册表的前端状态层。
  *
@@ -107,9 +108,9 @@ export interface ScriptPack {
   script: PluginScriptDecl
 }
 
-const BROKEN_KEY = 'plugin_shader_broken'
+const BROKEN_KEY = CCZJ.Settings.pluginShaderBroken
 /** 本机跑挂过的脚本包：packId -> 错误摘要。持久化，否则每次启动都要重跑一遍坏代码。 */
-const BROKEN_SCRIPT_KEY = 'plugin_script_broken'
+const BROKEN_SCRIPT_KEY = CCZJ.Settings.pluginScriptBroken
 
 function brokenMap(key: string): Record<string, string> {
   return readStorage<Record<string, string>>(key, {})

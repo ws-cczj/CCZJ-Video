@@ -8,17 +8,18 @@ import { GetDiagnostics, GetRuntimeMetrics, StartDiagnosticsRecording, StopDiagn
 import { revealDiagnosticExport } from '../platform/diagnosticFiles'
 import RuntimeResourcePanel from './RuntimeResourcePanel.vue'
 import DiagnosticObservability from './DiagnosticObservability.vue'
+import DiagnosticSessionPanel from './DiagnosticSessionPanel.vue'
 import { activityDiagnostics } from '../diagnostics/activity'
 import { startupSnapshot } from '../diagnostics/startup'
 import { createVisiblePolling } from '../diagnostics/polling'
-import { recordingStatus, recordingObserverFailed, recordingRevision, setRecordingStatus, recordDiagnosticEvent } from '../diagnostics/recording'
+import { recordingStatus, recordingObserverFailed, recordingRevision, setRecordingStatus, recordDiagnosticEvent, flushDiagnostics, diagnosticHealth } from '../diagnostics/recording'
 import { useViewActivity } from '../composables/useViewActivity'
 import { useErrorStore } from '../stores/error'
 import { useConfirmStore } from '../stores/confirm'
 import { useVideoStore } from '../stores/video'
 import { usePerfStore } from '../stores/perf'
 import { usePosterCacheStore } from '../stores/posterCache'
-import { imageProxyStats } from '../utils'
+import { imageProxyStats } from '../utils/imageProxy'
 import { TsCache } from '../utils/tsCache'
 import { useHorizontalDrag } from '../composables/useHorizontalDrag'
 const sectionDrag = useHorizontalDrag()
@@ -113,9 +114,9 @@ const backgroundTasks = computed(() => {
 })
 
 // ========== 实时指标 ==========
-// GetDiagnostics 要逐表 COUNT、遍历日志目录，只能手动点一次；这一路读的全是内存计数器，
-// 资源页可见时每次请求完成后等待 2 秒再采样，避免慢请求累积。
-const LIVE_INTERVAL_MS = 2000
+// GetDiagnostics 包含数据库与目录扫描；运行资源另以低频采样更新。
+// 资源页可见时每次请求完成后等待 15 秒再采样，避免慢请求累积。
+const LIVE_INTERVAL_MS = 15000
 const live = shallowRef<Record<string, any> | null>(null)
 const liveFailed = ref(false)
 const canPoll = computed(() => viewActive.value && !disposed)
@@ -130,7 +131,7 @@ const liveCategories = computed<Record<string, any>[]>(() =>
 // 所以界面也只摆真正有过请求的那几行。
 const liveEmpty = computed(() => liveCategories.value.length === 0)
 
-// 运行时长与协程数每两秒就在变，取实时快照的读数；快照还没回来时才退回手动那一份。
+// 优先显示最近一次采样，采样尚未返回时使用手动快照。
 const uptimeSeconds = computed(() => Number(live.value?.uptime_seconds ?? env.value.uptime_seconds) || 0)
 const goroutineCount = computed(() => Number(live.value?.goroutines ?? env.value.goroutines) || 0)
 
@@ -410,7 +411,8 @@ async function exportReport(): Promise<void> {
   if (exporting.value) return
   exporting.value = true
   try {
-    const result = await ExportDiagnosticsReport(JSON.stringify({ application_mode:'video',startup:startupSnapshot(), activity:activityDiagnostics.snapshot(), resources: resourcePanel.value?.snapshot(), cache: frontendCacheRows(), playback: perf.snapshot(), recording: recordingStatus.value, recording_observer_failed: recordingObserverFailed.value }))
+    const flushComplete = await flushDiagnostics()
+    const result = await ExportDiagnosticsReport(JSON.stringify({ application_mode:'video',diagnostic_flush_complete:flushComplete,diagnostic_health:diagnosticHealth(),startup:startupSnapshot(), activity:activityDiagnostics.snapshot(), resources: resourcePanel.value?.snapshot(), cache: frontendCacheRows(), playback: perf.snapshot(), recording: recordingStatus.value, recording_observer_failed: recordingObserverFailed.value }))
     reportPath.value = result?.bundle_path || result?.path || ''
     errorStore.info(t('diagnostics.exportDone'), reportPath.value)
   } catch (error) {
@@ -429,8 +431,8 @@ async function toggleRecording(): Promise<void> {
   try {
     if (recordingStatus.value.active) {
       await recordDiagnosticEvent('recording_stop', { playback: perf.snapshot(), cache: frontendCacheRows() })
+      if(!await flushDiagnostics())recordingObserverFailed.value=true
       setRecordingStatus(await StopDiagnosticsRecording())
-      await exportReport()
     } else {
       setRecordingStatus(await StartDiagnosticsRecording())
       await recordDiagnosticEvent('recording_start', { playback: perf.snapshot(), cache: frontendCacheRows() })
@@ -596,7 +598,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="diag">
+  <div class="diag" data-diagnostics-controls>
     <header class="diag-page-header">
       <div class="diag-page-title">
         <span class="diag-eyebrow">{{ t('diagnostics.pageEyebrow') }}</span>
@@ -625,6 +627,7 @@ onBeforeUnmount(() => {
         <div class="diag-section-heading"><h2>{{ currentSection.label }}</h2><p>{{ currentSection.description }}</p></div>
         <!-- Keep the sampler mounted across sections so its bounded trend survives. -->
         <div v-show="section === 'overview'" class="diag-overview">
+          <DiagnosticSessionPanel :active="canPoll && section === 'overview'" />
           <RuntimeResourcePanel ref="resourcePanel" :metrics="live" :paused="!canPoll" />
           <DiagnosticObservability section="coverage" :metrics="live" />
           <section class="diag-findings">

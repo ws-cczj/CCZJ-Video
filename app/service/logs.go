@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"cczjVideo/app/apperror"
 	"cczjVideo/app/applog"
+	CCZJ "cczjVideo/app/cczj"
 	"cczjVideo/app/db"
 	"context"
 	"encoding/csv"
@@ -144,7 +145,7 @@ func (a *App) SetLogLevel(level string) (string, error) {
 	if err != nil {
 		return applog.LevelName(), err
 	}
-	if err := db.SetSetting("log_level", parsed.String()); err != nil {
+	if err := db.SetSetting(CCZJ.SettingLogLevel, parsed.String()); err != nil {
 		return applog.LevelName(), apperror.Wrap(apperror.Storage, err, "日志级别保存失败")
 	}
 	applog.SetMinLevel(parsed)

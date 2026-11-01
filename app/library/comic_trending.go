@@ -3,6 +3,7 @@ package library
 import (
 	"cczjVideo/app/apperror"
 	"cczjVideo/app/applog"
+	CCZJ "cczjVideo/app/cczj"
 	"cczjVideo/app/db"
 	"cczjVideo/app/operation"
 	"cczjVideo/app/provider"
@@ -37,7 +38,7 @@ func (s *Service) TrendingComics(ctx context.Context, board string, refresh bool
 		ctx, _ = operation.OwnedContext(ctx, request, "reading.comic_trending", applog.Fields{"mode": "comic", "board": board})
 		release := s.priority.begin()
 		defer release()
-		key := "comic.trending.v1." + board
+		key := CCZJ.CacheComicTrendingPrefix + board
 		raw, err := db.GetSetting(key)
 		if err != nil {
 			return nil, apperror.Wrap(apperror.Storage, err, "读取漫画榜单缓存失败")

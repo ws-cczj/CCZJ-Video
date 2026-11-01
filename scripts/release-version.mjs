@@ -8,8 +8,8 @@ export function githubRepository(remote) {
 }
 
 export function releaseNotes(changelog, version) {
-  if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)) throw new Error('Use a stable major.minor.patch version.')
-  const escaped = version.replaceAll('.', '\\.')
+  if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-beta\.[1-9]\d*)?$/.test(version)) throw new Error('Use major.minor.patch or major.minor.patch-beta.N.')
+  const escaped = version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const matches = [...changelog.matchAll(new RegExp('^## \\[' + escaped + '\\][^\\n]*\\n([\\s\\S]*?)(?=^## |$(?![\\s\\S]))', 'gm'))]
   if (matches.length !== 1 || !matches[0][1].trim()) throw new Error(`Add exactly one nonempty CHANGELOG.md section for ${version}.`)
   return matches[0][1].trim()
@@ -21,7 +21,7 @@ export function prepareReleaseVersion(root, version, repository, { write = true 
   const original = readFileSync(path, 'utf8')
   const metadata = JSON.parse(original)
   const notes = releaseNotes(readFileSync(join(root, 'CHANGELOG.md'), 'utf8'), version)
-  const before = metadata.version.split('.').map(Number), after = version.split('.').map(Number)
+  const before = metadata.version.split('-')[0].split('.').map(Number), after = version.split('-')[0].split('.').map(Number)
   if (after.some(n => !Number.isSafeInteger(n) || n > 65535) || after[1] > 99 || after[2] > 99 || after[0] * 10000 + after[1] * 100 + after[2] > 2100000000) throw new Error('Version exceeds Windows or Android versionCode limits (minor/patch <= 99).')
   const different = after.findIndex((n, i) => n !== before[i])
   if (different >= 0 && after[different] < before[different]) throw new Error('Refusing to lower the current version.')

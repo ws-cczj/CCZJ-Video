@@ -1,6 +1,7 @@
 package collection
 
 import (
+	CCZJ "cczjVideo/app/cczj"
 	sourceservice "cczjVideo/app/source"
 	"context"
 
@@ -157,9 +158,9 @@ func defaultScheduleConfig() CollectScheduleConfig {
 	}
 }
 
-const scheduleConfigKey = "collect.schedule.config"
-const scheduleLastExitKey = "collect.schedule.last_exit_unix_sec"
-const scheduleLastRunKey = "collect.schedule.last_run_unix_sec"
+const scheduleConfigKey = CCZJ.SettingScheduleConfig
+const scheduleLastExitKey = CCZJ.SettingScheduleLastExit
+const scheduleLastRunKey = CCZJ.SettingScheduleLastRun
 
 func GetScheduleConfig() CollectScheduleConfig {
 	raw, err := db.GetSetting(scheduleConfigKey)

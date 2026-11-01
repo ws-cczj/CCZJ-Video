@@ -1,6 +1,7 @@
 package danmaku
 
 import (
+	CCZJ "cczjVideo/app/cczj"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -8,7 +9,7 @@ import (
 	"fmt"
 )
 
-const SourceSettingsKey = "danmaku_sources_v1"
+const SourceSettingsKey = CCZJ.SettingDanmakuSources
 
 type SourceSettings struct {
 	DefaultProvider string   `json:"defaultProvider"`

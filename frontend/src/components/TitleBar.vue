@@ -4,12 +4,17 @@ import { tr } from '../locales'
 import { Window } from '../api/runtime'
 import { WindowIsMax, WindowToggleMax } from '../api/app'
 import Icon from './Icon.vue'
+import appIcon from '../../../icon.png'
 
 const isMaximized = ref(false)
+let alive = true
 
 async function refreshMaxState(): Promise<void> {
   try {
-    isMaximized.value = await WindowIsMax()
+    const maximized = await WindowIsMax()
+    if (!alive) return
+    isMaximized.value = maximized
+    document.documentElement.dataset.cczjWindowMaximized = String(maximized)
   } catch {
     // 浏览器开发环境下忽略
   }
@@ -31,6 +36,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  alive = false
+  delete document.documentElement.dataset.cczjWindowMaximized
   window.removeEventListener('resize', onResize)
   if (resizeTimer !== undefined) {
     window.clearTimeout(resizeTimer)
@@ -64,7 +71,7 @@ function onQuit(): void {
 
 <template>
   <!--
-    Wails v2 无边框窗口下，使用 CSS 自定义属性 `--wails-draggable: drag`
+    Wails 无边框窗口使用 CSS 自定义属性 `--wails-draggable: drag`
     来标记可拖动区域。本组件：
       · <header> 整体设为 drag，允许拖动
       · 右侧按钮容器显式设为 no-drag，确保按钮点击不被拖拽吞噬
@@ -75,9 +82,7 @@ function onQuit(): void {
     @dblclick="onToggleMax"
   >
     <div class="titlebar-left" style="--wails-draggable: drag">
-      <div class="app-badge">
-        <Icon name="film" :size="14" />
-      </div>
+      <img class="app-badge" :src="appIcon" alt="" width="22" height="22" draggable="false" />
       <span class="app-title">CCZJ Video</span>
     </div>
     <div class="titlebar-controls" style="--wails-draggable: no-drag">
@@ -149,10 +154,7 @@ function onQuit(): void {
   @apply cczj-flex cczj-items-center cczj-justify-center;
   width: 22px;
   height: 22px;
-  background: var(--accent);
-  color: var(--accent-contrast);
-  @apply cczj-rounded;
-  box-shadow: 0 2px 8px var(--accent-alpha-35);
+  object-fit: contain;
   @apply cczj-flex-shrink-0;
 }
 

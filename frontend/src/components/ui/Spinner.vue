@@ -1,9 +1,9 @@
 <script setup lang="ts">
-defineProps<{ size?: 'sm' | 'md' | 'lg'; label?: string }>()
+defineProps<{ size?: 'sm' | 'md' | 'lg'; label?: string; inline?: boolean }>()
 </script>
 
 <template>
-  <div class="spinner-wrap cczj-flex cczj-flex-col cczj-items-center cczj-justify-center cczj-gap-6" :class="size || 'md'">
+  <div class="spinner-wrap cczj-flex cczj-flex-col cczj-items-center cczj-justify-center cczj-gap-6" :class="[size || 'md', { 'spinner-inline': inline }]">
     <div class="spinner-ring"></div>
     <span v-if="label" class="label">{{ label }}</span>
   </div>
@@ -13,6 +13,11 @@ defineProps<{ size?: 'sm' | 'md' | 'lg'; label?: string }>()
 .spinner-wrap {
   padding: 60px 20px;
   @apply cczj-text-muted cczj-text-center;
+}
+
+.spinner-wrap.spinner-inline {
+  padding: 0;
+  @apply cczj-flex-shrink-0;
 }
 
 .spinner-ring {

@@ -62,8 +62,35 @@ public class MainActivity extends AppCompatActivity {
     private Integer systemBarColor;
     private Integer navigationBarColor;
     private Integer backingSurfaceColor;
+    private String readerSystemBarOwner;
     private CczjInsetSurface insetSurface;
     private volatile long goReadyAt, pageStartedAt, pageCommittedAt, pageFinishedAt;
+
+    public void readerSystemBars(String owner, boolean reading) {
+        runOnUiThread(() -> {
+            if (isFinishing() || isDestroyed()) return;
+            if (reading) readerSystemBarOwner = owner;
+            else if (owner.equals(readerSystemBarOwner)) readerSystemBarOwner = null;
+            else return;
+            applyReaderSystemBars();
+        });
+    }
+
+    private void applyReaderSystemBars() {
+        if (fullscreenView != null) return;
+        androidx.core.view.WindowInsetsControllerCompat controller =
+                androidx.core.view.WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        if (readerSystemBarOwner != null) {
+            controller.setSystemBarsBehavior(androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            controller.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars());
+        } else controller.show(androidx.core.view.WindowInsetsCompat.Type.systemBars());
+        androidx.core.view.ViewCompat.requestApplyInsets(findViewById(R.id.main_container));
+    }
+
+    @Override public void onWindowFocusChanged(boolean focused) {
+        super.onWindowFocusChanged(focused);
+        if (focused && readerSystemBarOwner != null) applyReaderSystemBars();
+    }
 
     public String startupState() {
         org.json.JSONObject state = new org.json.JSONObject();

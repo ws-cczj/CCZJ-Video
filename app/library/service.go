@@ -35,8 +35,7 @@ import (
 
 const (
 	// textCacheTTL 是正文在磁盘上还直接端得出去的年龄上限，按最后被读到的时刻算。
-	// 正文不会自己变（变的只是源改版后解析方式），所以 TTL 的作用是淘汰
-	// "再也不会被读到的那些章"，不是保证新鲜。30 天与收藏/历史图片同一档。
+	// 此滑动期限只负责空间回收；正文验证时间独立写在缓存记录中。
 	textCacheTTL = 30 * 24 * time.Hour
 	// textCacheMaxBytes 是正文缓存目录的上限。一章几 KB 到几十 KB，
 	// 256MB 装得下上万章，而数据目录在系统盘上。
@@ -56,6 +55,7 @@ type Service struct {
 	continuations  searchContinuations
 	textReads      *workflight.Group[*ChapterText]
 	pageReads      *workflight.Group[*ChapterPages]
+	sourceReads    *workflight.Group[*NovelBookSourceCache]
 	trendReads     *workflight.Group[*ComicTrendPage]
 	pageMu         sync.Mutex
 	pageEpoch      uint64
@@ -95,6 +95,7 @@ func NewServiceWithRuntime(dataDir func() string, owner context.Context, budget 
 		readingGate: gate,
 		textReads:   workflight.New[*ChapterText](owner, 64),
 		pageReads:   workflight.New[*ChapterPages](owner, 64),
+		sourceReads: workflight.New[*NovelBookSourceCache](owner, 32),
 		trendReads:  workflight.New[*ComicTrendPage](owner, 4),
 		fetcher:     fetcher,
 		textCache:   proxy.NewBlobStore(dataDir, "textcache", textCacheTTL, textCacheMaxBytes),
@@ -109,8 +110,9 @@ func (s *Service) Close(ctx context.Context) error {
 	first := s.textReads.Close(ctx)
 	second := s.pageReads.Close(ctx)
 	third := s.trendReads.Close(ctx)
+	fourth := s.sourceReads.Close(ctx)
 	s.fetcher.Close()
-	return errors.Join(first, second, third)
+	return errors.Join(first, second, third, fourth)
 }
 
 func (s *Service) SetMaintenanceLauncher(launch func(string, func(context.Context)) bool) {
@@ -177,7 +179,8 @@ type ItemDetail struct {
 	Chapters []*Chapter `json:"chapters"`
 	// ChapterCount 与 Chapters 是同一批行，包含已下架的（每行用 Available 标注）。
 	// 界面上"共 N 章"直接数列表即可，这个字段是给调用方省一次遍历的。
-	ChapterCount int `json:"chapterCount"`
+	ChapterCount int              `json:"chapterCount"`
+	Reading      *ReadingEvidence `json:"reading,omitempty"`
 }
 
 // ChapterText 是一章正文。
@@ -185,7 +188,9 @@ type ChapterText struct {
 	ChapterID  int      `json:"chapterId"`
 	Paragraphs []string `json:"paragraphs"`
 	// FromCache 报告这一份是从磁盘缓存端出来的。
-	FromCache bool `json:"fromCache"`
+	FromCache bool  `json:"fromCache"`
+	CheckedAt int64 `json:"checkedAt"`
+	Stale     bool  `json:"stale"`
 	// Warnings 是"内容拿到了，但有件事该让用户知道"：正文可能被截断、
 	// 编码像是错了、疑似字体码位混淆。它们不是错误，所以不阻断显示。
 	Warnings []string `json:"warnings"`
@@ -295,7 +300,14 @@ func (s *Service) resolveContext(ctx context.Context, sourceKey string, kind mod
 }
 
 func sourceRevision(source *model.Source) string {
-	encoded, _ := json.Marshal([]string{source.ApiUrl, source.StrategyConfig, string(source.GetKind())})
+	parts := []string{source.ApiUrl, source.StrategyConfig, string(source.GetKind())}
+	var adapter struct {
+		Adapter string `json:"adapter"`
+	}
+	if json.Unmarshal([]byte(source.StrategyConfig), &adapter) == nil && adapter.Adapter == "fanqie-web" {
+		parts = append(parts, "fanqie-client-content-v2")
+	}
+	encoded, _ := json.Marshal(parts)
 	sum := sha256.Sum256(encoded)
 	return hex.EncodeToString(sum[:])
 }
@@ -429,6 +441,11 @@ func (s *Service) searchSourcePage(ctx context.Context, kind model.SourceKind, s
 		if err := db.RecordReadingSearchHealth(requestCtx, kind, sourceQualityID(string(kind), source.ApiUrl, source.StrategyConfig), result.ErrorCode); err != nil {
 			applog.Warn("[Library] 保存搜索实测失败: %v", err)
 		}
+		if result.ErrorCode == "SOURCE_GONE" {
+			if err := db.PauseMissingReadingSource(requestCtx, source.SourceKey, source.StrategyConfig); err != nil {
+				applog.Warn("[Library] 停用失效搜索源失败: %v", err)
+			}
+		}
 	}()
 	resolved, err := s.resolve(source.SourceKey, kind)
 	if err != nil {
@@ -442,6 +459,10 @@ func (s *Service) searchSourcePage(ctx context.Context, kind model.SourceKind, s
 	found, err := resolved.pipeline.Search(ctx, resolved.source.ApiUrl, keyword, state.Page, state.URL)
 	if err != nil {
 		result.ErrorCode, result.ErrorMessage = splitError(err)
+		var missing *provider.EndpointMissingError
+		if state.Page == 1 && state.URL == "" && errors.As(err, &missing) {
+			result.ErrorCode = "SOURCE_GONE"
+		}
 		return result
 	}
 	result.NextURL, result.HasNext = found.NextURL, found.HasNext

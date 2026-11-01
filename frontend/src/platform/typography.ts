@@ -1,3 +1,4 @@
+import { CCZJ } from '../constants/cczj'
 import { GetSetting } from '../api/app'
 
 export const FONT_SIZE_PRESETS = [
@@ -19,7 +20,7 @@ export function applyFontFamily(family: string): void {
 /** Apply before mounting, so late startup reads cannot undo an edit in settings. */
 export async function loadTypography(): Promise<void> {
   const [size, family] = await Promise.all([
-    GetSetting('font_size_key').catch(() => 'md'), GetSetting('font_family').catch(() => ''),
+    GetSetting(CCZJ.Settings.fontSize).catch(() => 'md'), GetSetting(CCZJ.Settings.fontFamily).catch(() => ''),
   ])
   applyFontSize(size)
   applyFontFamily(family)

@@ -12,6 +12,9 @@ let subscribers = 0
 function updateVisibility(): void { foreground.value = !document.hidden }
 export const routeWorkActivityKey: InjectionKey<Readonly<Ref<boolean>>> = Symbol('route-work-activity')
 export const routeVisualActivityKey: InjectionKey<Readonly<Ref<boolean>>> = Symbol('route-visual-activity')
+// Images revealed by a moving page belong to that page's motion. Their own
+// entrances must not restart when a gesture preview becomes the committed page.
+export const routeVisualMotionKey: InjectionKey<Readonly<Ref<boolean>>> = Symbol('route-visual-motion')
 
 /** Visible previews may prepare images. Work requires a committed route, so a
  * cancelled swipe never starts a carousel, polling or discovery request. */

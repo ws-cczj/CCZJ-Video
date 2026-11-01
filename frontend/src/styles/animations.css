@@ -16,12 +16,32 @@
   --cczj-motion-slow: 360ms;
   --cczj-motion-emphasis: 480ms;
   --cczj-motion-carousel: 420ms;
+  --cczj-motion-section: 800ms;
+  --cczj-motion-group: 320ms;
+  --cczj-motion-dismiss: 600ms;
+  --cczj-motion-reveal: 1200ms;
   --cczj-motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --cczj-motion-ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
   --cczj-motion-ease-exit: cubic-bezier(0.4, 0, 1, 1);
   --cczj-motion-ease-emphasis: cubic-bezier(0.22, 1, 0.36, 1);
   --cczj-motion-delay: 0ms;
 }
+
+[data-cczj-player-releasing],
+[data-cczj-player-releasing] *,
+[data-cczj-player-releasing]::before,
+[data-cczj-player-releasing]::after,
+[data-cczj-player-releasing] *::before,
+[data-cczj-player-releasing] *::after { animation:none!important; transition:none!important; }
+
+html[data-cczj-theme-reveal]::view-transition-old(root),
+html[data-cczj-theme-reveal]::view-transition-new(root),
+html[data-cczj-theme-reveal]::view-transition-old(motion-preview-surface),
+html[data-cczj-theme-reveal]::view-transition-new(motion-preview-surface) { animation:none;mix-blend-mode:normal; }
+html[data-cczj-theme-reveal]::view-transition-old(root) { z-index:1; }
+html[data-cczj-theme-reveal]::view-transition-new(root),
+html[data-cczj-theme-reveal]::view-transition-new(motion-preview-surface) { z-index:2; }
+html[data-cczj-theme-reveal] *,html[data-cczj-theme-reveal] *::before,html[data-cczj-theme-reveal] *::after { transition:none !important; }
 
 /* Reusable keyframes for one-way content entrance and lightweight feedback. */
 @keyframes cczj-fade-in {
@@ -114,13 +134,36 @@
 .cczj-motion-dialog-enter-from { @apply cczj-opacity-0; transform: translateY(var(--cczj-motion-distance, 10px)) scale(var(--cczj-motion-enter-scale, .98)); }
 .cczj-motion-dialog-leave-to { @apply cczj-opacity-0; transform: translateY(4px) scale(0.99); }
 
+/* The overlay root owns removal; its panel always finishes within that time. */
+.cczj-motion-modal-enter-active,.cczj-motion-sheet-enter-active {
+  transition:opacity var(--cczj-motion-normal) var(--cczj-motion-ease-enter);
+}
+.cczj-motion-modal-leave-active,.cczj-motion-sheet-leave-active {
+  transition:opacity var(--cczj-motion-fast) var(--cczj-motion-ease-exit);
+}
+.cczj-motion-modal-enter-from,.cczj-motion-modal-leave-to,
+.cczj-motion-sheet-enter-from,.cczj-motion-sheet-leave-to { @apply cczj-opacity-0; }
+:is(.cczj-motion-modal-enter-active,.cczj-motion-modal-leave-active,.cczj-motion-sheet-enter-active,.cczj-motion-sheet-leave-active) [data-motion-panel] {
+  transition:transform var(--cczj-motion-normal) var(--cczj-motion-ease-enter);
+}
+:is(.cczj-motion-modal-leave-active,.cczj-motion-sheet-leave-active) [data-motion-panel] {
+  transition-duration:var(--cczj-motion-fast);
+}
+.cczj-motion-modal-enter-from [data-motion-panel],.cczj-motion-modal-leave-to [data-motion-panel] {
+  transform:translateY(var(--cczj-motion-distance,10px)) scale(var(--cczj-motion-enter-scale,.98));
+}
+.cczj-motion-sheet-enter-from [data-motion-panel],.cczj-motion-sheet-leave-to [data-motion-panel] {
+  transform:translateY(100%);
+}
+
 .cczj-motion-dropdown-enter-active,
 .cczj-motion-dropdown-leave-active {
-  transform-origin: top;
+  transform-origin:var(--cczj-menu-origin,top);
   transition: opacity var(--cczj-motion-fast) var(--cczj-motion-ease-standard), transform var(--cczj-motion-fast) var(--cczj-motion-ease-standard);
 }
 .cczj-motion-dropdown-enter-from,
-.cczj-motion-dropdown-leave-to { @apply cczj-opacity-0; transform: translateY(calc(var(--cczj-motion-distance, 8px) * -.5)) scale(var(--cczj-motion-enter-scale, .98)); }
+.cczj-motion-dropdown-leave-to { @apply cczj-opacity-0; transform: translateY(calc(var(--cczj-motion-distance, 8px) * var(--cczj-menu-direction,-.5))) scale(var(--cczj-motion-enter-scale, .98)); }
+.select-panel.drop-up { --cczj-menu-origin:bottom; --cczj-menu-direction:.5; }
 
 .cczj-motion-slide-up-enter-active,
 .cczj-motion-slide-up-leave-active {
@@ -152,6 +195,9 @@
 .cczj-motion-list-enter-from,
 .cczj-motion-list-leave-to { @apply cczj-opacity-0; transform: translateY(var(--cczj-motion-distance,6px)); }
 .cczj-motion-list-move { transition: transform var(--cczj-motion-normal) var(--cczj-motion-ease-standard); }
+/* TransitionGroup's move detection also sees a child's own transition, even
+   when CSS enter/leave hooks are disabled. This class makes that check static. */
+.cczj-motion-move-off { transition:none !important; }
 
 /*
  * 退化合并策略：系统要求减少动效，或用户在「动画」分组里关掉动画，走同一条路。
@@ -174,6 +220,10 @@
     --cczj-motion-slow: 1ms;
     --cczj-motion-emphasis: 1ms;
     --cczj-motion-carousel: 1ms;
+    --cczj-motion-section: 1ms;
+    --cczj-motion-group: 1ms;
+    --cczj-motion-dismiss: 1ms;
+    --cczj-motion-reveal: 1ms;
     --cczj-motion-delay: 0ms;
   }
 
@@ -199,6 +249,10 @@ html[data-cczj-motion='off'] {
   --cczj-motion-slow: 1ms;
   --cczj-motion-emphasis: 1ms;
   --cczj-motion-carousel: 1ms;
+  --cczj-motion-section: 1ms;
+  --cczj-motion-group: 1ms;
+  --cczj-motion-dismiss: 1ms;
+  --cczj-motion-reveal: 1ms;
   --cczj-motion-delay: 0ms;
 }
 
@@ -218,15 +272,23 @@ html[data-cczj-motion='off'] .cczj-motion-ornament * {
 }
 
 /* Optional effects retain loading spinners and progress indications. */
-html[data-motion-pages='off'] .basic-section,
-html[data-motion-pages='off'] .settings-group-active,
-html[data-motion-pages='off'] .preview-page,
-html[data-motion-overlays='off'] .preview-dialog { animation: none !important; }
+html[data-motion-pages='off'] .settings-group-active { animation: none !important; }
 html[data-motion-pages='off'] [class*='cczj-motion-page-'],
 html[data-motion-overlays='off'] [class*='cczj-motion-dialog-'],
 html[data-motion-overlays='off'] [class*='cczj-motion-dropdown-'] { transition: none !important; opacity: 1 !important; transform: none !important; }
+html[data-motion-overlays='off'] :is([class*='cczj-motion-modal-'],[class*='cczj-motion-sheet-']),
+html[data-motion-overlays='off'] :is([class*='cczj-motion-modal-'],[class*='cczj-motion-sheet-']) [data-motion-panel] {
+  transition:none !important;opacity:1 !important;transform:none !important;
+}
+html[data-motion-feedback='off'] .cczj-motion-ornament,
+html[data-motion-feedback='off'] .cczj-motion-ornament * { animation:none !important; }
+/* User motion preferences override component-scoped hover transforms. */
+html[data-motion-feedback='off'] :is(.video-card:hover,.ui-btn:hover,.video-card:hover .poster-wrap > img),
+html[data-cczj-motion='off'] :is(.video-card:hover,.ui-btn:hover,.video-card:hover .poster-wrap > img) { transform:none !important; }
+@media (prefers-reduced-motion:reduce) {
+  :is(.video-card:hover,.ui-btn:hover,.video-card:hover .poster-wrap > img) { transform:none !important; }
+}
 html[data-motion-feedback='off'] .nav-item .icon-svg,
-html[data-motion-feedback='off'] .style-illustration span,
 html[data-motion-feedback='off'] .tab:active,
 html[data-motion-feedback='off'] .ui-seg__item:active { transform: none !important; }
 .cczj-motion-list-enter-active:nth-child(2) { transition-delay: var(--cczj-motion-stagger,35ms); }
@@ -235,8 +297,7 @@ html[data-motion-feedback='off'] .ui-seg__item:active { transform: none !importa
 .cczj-motion-list-enter-active:nth-child(5) { transition-delay: calc(var(--cczj-motion-stagger,35ms)*4); }
 .cczj-motion-list-enter-active:nth-child(n+6) { transition-delay: calc(var(--cczj-motion-stagger,35ms)*5); }
 
-html[data-cczj-motion='off'] .style-illustration span,
 html[data-cczj-motion='off'] .nav-item .icon-svg { transform: none !important; }
 @media (prefers-reduced-motion: reduce) {
-  .style-illustration span, .nav-item .icon-svg { transform: none !important; }
+  .nav-item .icon-svg { transform: none !important; }
 }

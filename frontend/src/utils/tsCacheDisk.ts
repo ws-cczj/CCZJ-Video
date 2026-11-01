@@ -1,3 +1,4 @@
+import { CCZJ } from '../constants/cczj'
 export interface DiskCacheInfo {
   dbName: string
   storeName: string
@@ -18,15 +19,24 @@ interface DiskSegmentMeta {
   size: number
 }
 
-const DB_NAME = 'tscache'
+const DB_NAME = CCZJ.Storage.segmentDatabase
 const DB_VERSION = 2
-const STORE_NAME = 'segments'
-const META_STORE_NAME = 'segment_meta'
+const STORE_NAME = CCZJ.Storage.segmentStore
+const META_STORE_NAME = CCZJ.Storage.segmentMetadataStore
 
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION)
+    let settled = false
+    const fail = () => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      reject((request.readyState === 'done' && request.error) || new Error('segment cache database is unavailable'))
+    }
+    const timer = setTimeout(fail, 1000)
     request.onupgradeneeded = () => {
+      if (settled) { request.transaction?.abort(); return }
       const db = request.result
       // The segment cache is disposable. A schema change discards it instead
       // of attempting to migrate opaque media blobs in the browser.
@@ -37,8 +47,14 @@ function openDatabase(): Promise<IDBDatabase> {
       metadata.createIndex('episodeKey', 'episodeKey', { unique: false })
       metadata.createIndex('ts', 'ts', { unique: false })
     }
-    request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(request.error)
+    request.onsuccess = () => {
+      if (settled) { request.result.close(); return }
+      settled = true
+      clearTimeout(timer)
+      resolve(request.result)
+    }
+    request.onerror = fail
+    request.onblocked = fail
   })
 }
 
@@ -64,6 +80,44 @@ function waitForRequest<T>(request: IDBRequest<T>): Promise<T> {
  */
 export class SegmentDiskCache {
   private pruneTimer: number | null = null
+  private connection: Promise<IDBDatabase> | undefined
+  private closeTimer: ReturnType<typeof setTimeout> | undefined
+  private users = 0
+
+  private async acquire(): Promise<IDBDatabase> {
+    clearTimeout(this.closeTimer)
+    this.closeTimer = undefined
+    if (!this.connection) {
+      const pending = openDatabase().then(db => {
+        const invalidate = () => { if (this.connection === pending) this.connection = undefined }
+        db.onversionchange = () => { invalidate(); db.close() }
+        db.onclose = invalidate
+        return db
+      }).catch(error => {
+        if (this.connection === pending) this.connection = undefined
+        throw error
+      })
+      this.connection = pending
+    }
+    const db = await this.connection
+    this.users++
+    return db
+  }
+
+  private release(): void {
+    if (--this.users > 0) return
+    // Reuse through a burst of fragments, release after playback becomes idle.
+    this.closeTimer = setTimeout(() => {
+      this.closeTimer = undefined
+      const pending = this.connection
+      void pending?.then(current => {
+        if (this.users === 0 && this.connection === pending) {
+          this.connection = undefined
+          current.close()
+        }
+      }).catch(() => {})
+    }, 5000)
+  }
 
   constructor(
     private readonly maxBytes: number,
@@ -72,7 +126,7 @@ export class SegmentDiskCache {
   ) {}
 
   async save(url: string, data: ArrayBuffer, episodeKey: string): Promise<void> {
-    const db = await openDatabase()
+    const db = await this.acquire()
     try {
       const transaction = db.transaction([STORE_NAME, META_STORE_NAME], 'readwrite')
       const now = Date.now()
@@ -86,13 +140,13 @@ export class SegmentDiskCache {
       await waitForTransaction(transaction)
       this.schedulePrune()
     } finally {
-      db.close()
+      this.release()
     }
   }
 
   async loadSegment(url: string): Promise<ArrayBuffer | null> {
     if (!url) return null
-    const db = await openDatabase()
+    const db = await this.acquire()
     try {
       const metadataTransaction = db.transaction(META_STORE_NAME, 'readonly')
       const metadataRequest = metadataTransaction.objectStore(META_STORE_NAME).get(url)
@@ -108,19 +162,19 @@ export class SegmentDiskCache {
       const data = record?.data
       return data instanceof ArrayBuffer && data.byteLength === metadata.size ? data : null
     } finally {
-      db.close()
+      this.release()
     }
   }
 
   async clear(): Promise<void> {
-    const db = await openDatabase()
+    const db = await this.acquire()
     try {
       const transaction = db.transaction([STORE_NAME, META_STORE_NAME], 'readwrite')
       transaction.objectStore(STORE_NAME).clear()
       transaction.objectStore(META_STORE_NAME).clear()
       await waitForTransaction(transaction)
     } finally {
-      db.close()
+      this.release()
     }
   }
 
@@ -134,7 +188,7 @@ export class SegmentDiskCache {
   async dropByEpisodePrefixes(prefixes: string[]): Promise<number> {
     const wanted = prefixes.filter(Boolean)
     if (wanted.length === 0) return 0
-    const db = await openDatabase()
+    const db = await this.acquire()
     try {
       const readTransaction = db.transaction(META_STORE_NAME, 'readonly')
       const request = readTransaction.objectStore(META_STORE_NAME).getAll()
@@ -156,13 +210,13 @@ export class SegmentDiskCache {
       await waitForTransaction(deleteTransaction)
       return urls.length
     } finally {
-      db.close()
+      this.release()
     }
   }
 
   async info(): Promise<DiskCacheInfo> {
     try {
-      const db = await openDatabase()
+      const db = await this.acquire()
       try {
         const transaction = db.transaction(META_STORE_NAME, 'readonly')
         const request = transaction.objectStore(META_STORE_NAME).getAll()
@@ -171,7 +225,7 @@ export class SegmentDiskCache {
         const bytes = entries.reduce((total, entry) => total + entry.size, 0)
         return this.infoResult(entries.length, bytes)
       } finally {
-        db.close()
+        this.release()
       }
     } catch {
       return this.infoResult(0, 0)
@@ -179,7 +233,7 @@ export class SegmentDiskCache {
   }
 
   async prune(maxBytes = this.maxBytes): Promise<number> {
-    const db = await openDatabase()
+    const db = await this.acquire()
     try {
       const readTransaction = db.transaction(META_STORE_NAME, 'readonly')
       const request = readTransaction.objectStore(META_STORE_NAME).getAll()
@@ -209,7 +263,7 @@ export class SegmentDiskCache {
       await waitForTransaction(deleteTransaction)
       return toDelete.length
     } finally {
-      db.close()
+      this.release()
     }
   }
 

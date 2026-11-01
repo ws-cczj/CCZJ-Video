@@ -38,6 +38,7 @@ tasks:
   build:
     summary: Build the application for Windows (release, stripped)
     deps:
+      - task: common:generate:embedded-json
       - task: common:go:mod:tidy
       - task: common:build:frontend
       - task: generate:syso
@@ -50,6 +51,7 @@ tasks:
   build:dev:
     summary: Build the application for Windows (development, with console + logs)
     deps:
+      - task: common:generate:embedded-json
       - task: common:go:mod:tidy
     cmds:
       - go build -ldflags="-X cczjVideo/app/updater.Version={{.VERSION}}" -o ./bin/cczjVideo.exe

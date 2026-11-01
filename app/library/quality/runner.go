@@ -103,6 +103,10 @@ func failure(stage string, err error) Failure {
 		return Failure{stage, string(apperror.Cancelled), "请求取消"}
 	}
 	e := apperror.Public(err)
+	var missing *provider.EndpointMissingError
+	if stage == "search" && errors.As(err, &missing) {
+		return Failure{stage, "SOURCE_GONE", e.Message}
+	}
 	return Failure{stage, string(e.Code), e.Message}
 }
 func restricted(f *Failure) bool {

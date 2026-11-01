@@ -2,6 +2,7 @@ package library
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"strings"
 	"time"
@@ -190,6 +191,15 @@ func (s *Service) SetSourceEnabled(sourceKey string, enabled bool) error {
 	if existing.GetKind() == model.SourceKindVideo {
 		return apperror.New(apperror.Validation, "视频源的开关在采集源管理里，不走这个入口")
 	}
+	if enabled {
+		health, err := db.ReadReadingSearchHealth(context.Background(), existing.GetKind())
+		if err != nil {
+			return err
+		}
+		if health[sourceQualityID(string(existing.GetKind()), existing.ApiUrl, existing.StrategyConfig)].ErrorCode == "SOURCE_GONE" {
+			return apperror.New(apperror.Unavailable, "搜索地址已失效，请先重新检测，恢复后再启用")
+		}
+	}
 	value := 0
 	if enabled {
 		value = 1
@@ -284,10 +294,40 @@ func (s *Service) TestSource(ctx context.Context, sourceKey string) (*TestOutcom
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-	if _, err = s.saveSourceQuality(sourceQualityID(string(kind), existing.ApiUrl, existing.StrategyConfig), outcome); err != nil {
+	if err := recordSampleSearch(ctx, kind, sourceQualityID(string(kind), existing.ApiUrl, existing.StrategyConfig), outcome); err != nil {
+		return nil, err
+	}
+	for _, stage := range outcome.Stages {
+		if stage.Name == StageSearch && stage.Code == "SOURCE_GONE" {
+			if err := db.PauseMissingReadingSource(ctx, sourceKey, existing.StrategyConfig); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if _, err = s.saveSourceQualityContext(ctx, sourceQualityID(string(kind), existing.ApiUrl, existing.StrategyConfig), outcome); err != nil {
 		return nil, err
 	}
 	return outcome, nil
+}
+
+func recordSampleSearch(ctx context.Context, kind model.SourceKind, id string, outcome *TestOutcome) error {
+	for _, stage := range outcome.Stages {
+		if stage.Name != StageSearch || stage.Status == "skipped" {
+			continue
+		}
+		code := stage.Code
+		if stage.Status == "ok" || code == string(apperror.NotFound) {
+			code = ""
+		}
+		if code == string(apperror.Cancelled) || code == string(apperror.Storage) || code == string(apperror.Internal) {
+			return nil
+		}
+		if err := db.RecordReadingSearchHealth(ctx, kind, id, code); err != nil {
+			return apperror.Wrap(apperror.Storage, err, "保存搜索观测失败")
+		}
+		return nil
+	}
+	return nil
 }
 
 func (s *Service) testResolvedSource(ctx context.Context, sourceKey string, resolved *resolvedSource) *TestOutcome {
@@ -384,6 +424,9 @@ func (s *Service) testResolvedSource(ctx context.Context, sourceKey string, reso
 			if err != nil {
 				return 0, err
 			}
+			if content == nil || len(content.Paragraphs) == 0 {
+				return 0, apperror.New(apperror.NotFound, "没有可读正文")
+			}
 			if content.Garbled || content.FontObfuscated || content.Truncated {
 				return len(content.Paragraphs), apperror.New(apperror.Corrupt, "正文存在乱码、字体混淆或截断，请人工核对")
 			}
@@ -437,6 +480,10 @@ func timedStage(ctx context.Context, outcome *TestOutcome, name string, run func
 		public := apperror.Public(err)
 		stage.Message = public.Message
 		stage.Code = string(public.Code)
+		var missing *provider.EndpointMissingError
+		if name == StageSearch && errors.As(err, &missing) {
+			stage.Code = "SOURCE_GONE"
+		}
 		return 0, err
 	}
 	stage.Status = "ok"

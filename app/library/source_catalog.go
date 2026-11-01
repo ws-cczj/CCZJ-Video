@@ -17,17 +17,20 @@ import (
 	"cczjVideo/app/apperror"
 	"cczjVideo/app/db"
 	"cczjVideo/app/model"
+	"cczjVideo/app/payload"
 	"cczjVideo/app/provider"
 )
 
 //go:embed source_catalog.json
 var bundledSourceCatalog []byte
 
-//go:embed source_library_novel.json
-var novelSourceLibrary []byte
+//go:generate node ../../scripts/compress-embedded-json.mjs
 
-//go:embed source_library_comic.json
-var comicSourceLibrary []byte
+//go:embed source_library_novel.json.gz
+var novelSourceLibraryGzip []byte
+
+//go:embed source_library_comic.json.gz
+var comicSourceLibraryGzip []byte
 
 //go:embed source_library_quality.json
 var sourceLibraryQuality []byte
@@ -81,11 +84,19 @@ func (s *Service) PreviewSources(ctx context.Context, kind model.SourceKind, inp
 	}
 	raw := []byte(input)
 	if community && !refreshCommunity {
-		raw = novelSourceLibrary
+		compressed := novelSourceLibraryGzip
 		origin = "https://github.com/aoaostar/legado"
 		if kind == model.SourceKindComic {
-			raw = comicSourceLibrary
+			compressed = comicSourceLibraryGzip
 			origin = "https://keiyoushi.github.io/docs/guides/getting-started"
+		}
+		var err error
+		raw, err = payload.UnpackBytes(ctx, "catalog.json.gz", compressed, payload.Limits{Input: maxCatalogBytes, Output: maxCatalogBytes})
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			return nil, apperror.Wrap(apperror.Corrupt, err, "内置社区源数据无效")
 		}
 	} else if strings.TrimSpace(input) == "" {
 		raw = bundledSourceCatalog
@@ -461,7 +472,10 @@ func (s *Service) CheckSourceCandidate(ctx context.Context, previewID, id, keywo
 	if owner.Err() != nil {
 		return nil, owner.Err()
 	}
-	quality, err := s.saveSourceQuality(candidate.ID, outcome)
+	if err := recordSampleSearch(owner, model.SourceKind(candidate.Kind), candidate.ID, outcome); err != nil {
+		return nil, err
+	}
+	quality, err := s.saveSourceQualityContext(owner, candidate.ID, outcome)
 	if err != nil {
 		return nil, err
 	}

@@ -3,6 +3,7 @@ package detail
 import (
 	"cczjVideo/app/apperror"
 	"cczjVideo/app/applog"
+	CCZJ "cczjVideo/app/cczj"
 	"cczjVideo/app/collect"
 	"cczjVideo/app/db"
 	"cczjVideo/app/lifecycle"
@@ -74,7 +75,7 @@ const backgroundFetchTimeout = 2 * time.Minute
 
 // SettingFreshness 决定「多旧的详情还值得直接用」，也就是后台静默刷新的频率。
 // 它不改变界面等待：过期条目一律先回旧数据，刷新在后台补缓存。
-const SettingFreshness = "detail_cache_freshness"
+const SettingFreshness = CCZJ.SettingDetailFreshness
 
 // FreshnessTTL 把设置值翻成时长。前端设置项用的就是这三个字面量，未知值归标准档。
 func FreshnessTTL(raw string) time.Duration {

@@ -75,8 +75,7 @@ func buildApp() (*application.App, error) {
 			},
 		},
 		Services: []application.Service{
-			// beta.30's service registration uses its own marshaler fallback;
-			// configure it explicitly so every binding carries the public envelope.
+			// Service bindings own the public error envelope on every host.
 			application.NewServiceWithOptions(myApp, application.ServiceOptions{MarshalError: apperror.Marshal}),
 		},
 		Assets: application.AssetOptions{
@@ -168,6 +167,7 @@ func buildApp() (*application.App, error) {
 		scaleResetMu.Unlock()
 	}
 	mainWindow.OnWindowEvent(events.Common.WindowRuntimeReady, resetWebviewScale)
+	appwindow.InstallRoundedCorners(mainWindow)
 	mainWindow.OnWindowEvent(events.Common.WindowUnMinimise, resetWebviewScale)
 	mainWindow.OnWindowEvent(events.Common.WindowMaximise, resetWebviewScale)
 	mainWindow.OnWindowEvent(events.Common.WindowUnMaximise, resetWebviewScale)

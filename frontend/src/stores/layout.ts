@@ -1,3 +1,4 @@
+import { CCZJ } from '../constants/cczj'
 /**
  * 首页的显示偏好：网格列数、卡片密度，以及轮播/推荐两块内容的显隐与翻页节奏。
  *
@@ -16,12 +17,12 @@ import { GetSetting, SetSetting } from '../api/app'
 
 export type LayoutDensity = 'comfortable' | 'compact' | 'spacious'
 
-const COLUMNS_KEY = 'grid_columns'
-const DENSITY_KEY = 'layout_density'
-const SHOW_CAROUSEL_KEY = 'home_show_carousel'
-const SHOW_RECOMMEND_KEY = 'home_show_recommend'
-const CAROUSEL_AUTOPLAY_KEY = 'home_carousel_autoplay'
-const CAROUSEL_SECONDS_KEY = 'home_carousel_seconds'
+const COLUMNS_KEY = CCZJ.Settings.gridColumns
+const DENSITY_KEY = CCZJ.Settings.layoutDensity
+const SHOW_CAROUSEL_KEY = CCZJ.Settings.showCarousel
+const SHOW_RECOMMEND_KEY = CCZJ.Settings.showRecommend
+const CAROUSEL_AUTOPLAY_KEY = CCZJ.Settings.carouselAutoplay
+const CAROUSEL_SECONDS_KEY = CCZJ.Settings.carouselSeconds
 const DEFAULT_COLUMNS = 5
 const DEFAULT_DENSITY: LayoutDensity = 'comfortable'
 const MIN_COLUMNS = 2

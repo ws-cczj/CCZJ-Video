@@ -1,11 +1,12 @@
+import { CCZJ } from '../constants/cczj'
 import { GetSetting, SetSetting } from '../api/app'
 import { useConfirmStore } from '../stores/confirm'
 import { tr } from '../locales'
 import { createScriptTrust } from './scriptTrust'
 
 export const scriptTrust = createScriptTrust({
-  load: () => GetSetting('plugin_script_trust'),
-  save: value => SetSetting('plugin_script_trust', value).then(() => {}),
+  load: () => GetSetting(CCZJ.Settings.pluginScriptTrust),
+  save: value => SetSetting(CCZJ.Settings.pluginScriptTrust, value).then(() => {}),
   ask: (_id, name) => useConfirmStore().confirm({
     title: tr('permissions.scriptTrustTitle'),
     message: tr('permissions.scriptTrustPrompt', { name }),

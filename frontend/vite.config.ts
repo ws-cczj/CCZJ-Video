@@ -15,6 +15,7 @@ export default defineConfig(({ command, mode }) => ({
     strictPort: true,
   },
   define: {
+    'import.meta.env.CCZJ_UI_BUILD': JSON.stringify(new Date().toISOString()),
     // Vue 3.3+ 的 esm-bundler 构建需要在编译期注入这些 flag，
     // 以获得更好的 tree-shaking，并消除控制台警告。
     __VUE_OPTIONS_API__: JSON.stringify(true),

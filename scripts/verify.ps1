@@ -1,6 +1,9 @@
 param([switch]$StaticOnly)
 $ErrorActionPreference = 'Stop'
 
+node scripts/compress-embedded-json.mjs --check
+if ($LASTEXITCODE -ne 0) { Write-Error 'Embedded JSON is stale. Regenerate it before building.' }
+
 node scripts/check-document-links.mjs
 if ($LASTEXITCODE -ne 0) { Write-Error 'Maintained documentation contains missing local links.' }
 

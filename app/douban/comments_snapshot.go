@@ -1,6 +1,7 @@
 package douban
 
 import (
+	CCZJ "cczjVideo/app/cczj"
 	"encoding/json"
 	"sort"
 	"sync"
@@ -10,7 +11,7 @@ import (
 	"cczjVideo/app/db"
 )
 
-const commentsSnapshotKey = "douban_comments_snapshot"
+const commentsSnapshotKey = CCZJ.CacheDoubanComments
 const maxCommentSnapshotPages = 80
 const maxCommentSnapshotBytes = 8 << 20
 

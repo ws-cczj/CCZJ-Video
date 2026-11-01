@@ -1,9 +1,10 @@
+import { CCZJ } from '../constants/cczj'
 import { defineStore } from 'pinia'
 import { ref, toRaw } from 'vue'
 import { GetVideoDetail } from '../api/video'
 import { tr } from '../locales'
 import type { Video } from '../types'
-import { readStorage, removeStorage } from '../platform/storage'
+import { readStorageRecord, removeStorage } from '../platform/storage'
 import { createDebouncedWriter } from '../platform/debouncedWrite'
 
 /**
@@ -18,7 +19,7 @@ export interface PosterCacheEntry {
   click_count: number    // 点击频次
 }
 
-const STORAGE_KEY = 'poster_cache_v1'
+const STORAGE_KEY = CCZJ.Storage.posterCache
 // 收藏和历史里的片名/海报由本机数据库给出，不会自己变；改片名或换海报时 Go 侧的统一
 // 失效层会推 cache:invalidate 过来（dropSource / clearAll）。所以这里可以按「月」而不
 // 是「周」来留——留久的代价只是 localStorage 里几条字符串，留短的代价是每次翻收藏
@@ -58,7 +59,14 @@ export const usePosterCacheStore = defineStore('posterCache', () => {
   // ------- 持久化读写 -------
   function loadFromStorage(): void {
     try {
-      cache.value = readStorage<Record<string, PosterCacheEntry>>(STORAGE_KEY, {})
+      cache.value = readStorageRecord(STORAGE_KEY, (value): value is PosterCacheEntry => {
+        if (!value || typeof value !== 'object') return false
+        const row = value as PosterCacheEntry
+        return Number.isFinite(row.cached_at) && Number.isFinite(row.last_accessed)
+          && Number.isFinite(row.click_count) && row.click_count >= 0
+          && (row.vod_name === undefined || typeof row.vod_name === 'string')
+          && (row.vod_pic === undefined || typeof row.vod_pic === 'string')
+      })
     } catch {
       cache.value = {}
     }

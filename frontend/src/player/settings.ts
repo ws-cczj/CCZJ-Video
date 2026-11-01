@@ -1,16 +1,17 @@
+import { CCZJ } from '../constants/cczj'
 import { readStorage, readStorageString, removeStorage, writeStorage } from '../platform/storage'
 
-const STORAGE_KEY = 'vp_settings'
+const STORAGE_KEY = CCZJ.Storage.playerSettings
 const STORAGE_VERSION = '1'
 const LEGACY_KEYS = [
-  'vp_quality_mode',
-  'vp_anime4k_tier',
-  'vp_ai_warning_accepted',
-  'vp_auto_resume_jump',
-  'vp_volume',
-  'vp_muted',
-  'vp_speed',
-  'vp_auto_next',
+  CCZJ.Legacy.playerQualityMode,
+  CCZJ.Legacy.playerAnime4KTier,
+  CCZJ.Legacy.playerAiWarningAccepted,
+  CCZJ.Legacy.playerAutoResumeJump,
+  CCZJ.Legacy.playerVolume,
+  CCZJ.Legacy.playerMuted,
+  CCZJ.Legacy.playerSpeed,
+  CCZJ.Legacy.playerAutoNext,
 ]
 
 /**

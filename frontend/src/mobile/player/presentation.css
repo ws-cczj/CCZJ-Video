@@ -1,6 +1,4 @@
 /* Mobile player chrome and detached overlays own these selectors. */
-/* Error placement follows Video.js ErrorDisplay's centred player overlay:
-   https://docs.videojs.com/error-display.js.html — actions reuse our Button. */
 .cczj-mobile-playback-error { @apply cczj-absolute cczj-flex cczj-items-center cczj-justify-center cczj-text-white; inset:0; z-index:40; background:rgba(8,9,11,.96); padding:12px; box-sizing:border-box; }
 .cczj-mobile-playback-error-body { @apply cczj-flex cczj-flex-col cczj-items-center cczj-gap-5 cczj-min-w-0 cczj-max-h-full cczj-overflow-y-auto; max-width:360px; --bg-secondary:#292b31; --bg-hover:#393c43; --text-primary:#fff; --text-secondary:#f0f1f4; --border:#ffffff38; }
 .cczj-mobile-playback-error-body > p { margin:0; @apply cczj-text-base cczj-text-center; line-height:1.5; overflow-wrap:anywhere; }
@@ -13,10 +11,11 @@ html[data-cczj-platform=mobile] {
   --cczj-player-theme-surface:var(--bg-primary);
   --cczj-player-theme-muted:var(--text-secondary);
   --cczj-player-theme-border:var(--border);
-  --cczj-player-episode-progress:#d3af72;
-  --cczj-player-episode-percent:#69c0ff;
+  --cczj-player-episode-progress:var(--btn-solid-text);
+  --cczj-player-episode-percent:var(--btn-solid-text);
+  --cczj-player-episode-bg:var(--btn-solid);
+  --cczj-player-episode-hover:var(--btn-solid-hover);
 }
-html[data-cczj-platform=mobile][data-theme-mode=dark] { --cczj-player-episode-progress:#8a642f; --cczj-player-episode-percent:#256da8; }
 
 .cczj-mobile-player .player-col-main > .cczj-mobile-video:fullscreen { @apply cczj-fixed cczj-w-screen; height: 100dvh; }
 .cczj-mobile-video :is(.player-drag-handle,.cache-info) { display: none !important; }
@@ -289,4 +288,7 @@ html[data-motion-overlays=off] .cczj-mobile-level-feedback,html[data-motion-over
 .cczj-mobile-drawer-episode-grid button { @apply cczj-relative cczj-min-w-0; min-height:56px; padding:10px 5px; border:0; border-radius:9px; color:#e9eaf0; background:#ffffff0d; font:inherit; @apply cczj-text-sm; }
 .cczj-mobile-drawer-episode-grid small { @apply cczj-block; margin-top:3px; font-size:calc(9rem / 14); opacity:.65; }
 .cczj-mobile-drawer-episode-grid button[aria-current=step] { background:#f1f2f4; color:#141518; @apply cczj-font-bold; }
+.cczj-mobile-playback-drawer .cczj-mobile-drawer-panel .cczj-mobile-drawer-episode-grid button { @apply cczj-overflow-hidden; background:color-mix(in srgb,var(--cczj-player-episode-bg) 8%,var(--cczj-player-theme-surface)); color:var(--cczj-player-action-bg); }
+.cczj-mobile-playback-drawer .cczj-mobile-drawer-panel .cczj-mobile-drawer-episode-grid button:is([data-watched=true],[aria-current=step]) { background:var(--cczj-player-episode-bg); color:var(--cczj-player-episode-percent); }
+.cczj-mobile-playback-drawer .cczj-mobile-drawer-episode-grid .ep-watched-progress { height:3px; background:var(--cczj-player-episode-progress); }
 @keyframes cczj-mobile-preview-spin { to { transform:rotate(360deg); } }

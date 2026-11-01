@@ -19,3 +19,17 @@ export function routeDirection(from:RouteShape,to:RouteShape,previousPosition:nu
   if(/\/(?:read)\//.test(to.path)&&to.path.split('/').slice(0,-1).join('/')===from.path.split('/').slice(0,-1).join('/'))return Number(to.path.split('/').at(-1))<Number(from.path.split('/').at(-1))?'back':'forward'
   return 'forward'
 }
+
+/** Peer sections move together; a deeper destination covers its parent.
+ * Chapter/episode identity is already collapsed by routeScreenKey. */
+export function routeTransition(from:RouteShape,to:RouteShape,previousPosition:number,nextPosition:number,mobile=true,sections:readonly string[]=[]):string {
+  if(!mobile && from.name!==to.name && (from.name==='player'||to.name==='player'))return to.name==='player'?'cczj-desktop-player-open':'cczj-desktop-player-close'
+  const fromIndex=sections.indexOf(from.path),toIndex=sections.indexOf(to.path)
+  const desktopSections = !mobile && fromIndex>=0 && toIndex>=0 && fromIndex!==toIndex
+  if(desktopSections)return toIndex>fromIndex?'cczj-desktop-tab-forward':'cczj-desktop-tab-back'
+  const direction = routeDirection(from,to,previousPosition,nextPosition)
+  const peer = primaryTabs.some(group => group.includes(from.path) && group.includes(to.path))
+    && !from.query.group && !to.query.group
+  if(peer)return mobile ? `cczj-route-tab-${direction}` : `cczj-desktop-tab-${direction}`
+  return `cczj-mobile-route-${direction}`
+}

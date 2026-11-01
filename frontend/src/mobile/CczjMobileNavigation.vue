@@ -30,8 +30,7 @@ function active(path: string): boolean {
 </template>
 
 <style scoped>
-/* Layout reference: the Bilibili bottom bar in the user's supplied screenshot.
-   Keep this app's icons, theme, accessible links and translucent surface. */
+/* A separate translucent surface preserves icon contrast and safe-area spacing. */
 .cczj-mobile-navigation a { min-height:44px; gap:2px; font-weight:500; }
 .cczj-mobile-navigation { @apply cczj-relative; z-index:2; isolation:isolate; padding:3px 8px calc(20px + env(safe-area-inset-bottom,0px)); background:transparent; backdrop-filter:none; -webkit-backdrop-filter:none; }
 .cczj-mobile-navigation::before {

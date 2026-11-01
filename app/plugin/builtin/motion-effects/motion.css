@@ -22,6 +22,10 @@
   --cczj-motion-emphasis: 480ms;
   /* 轮播翻页单独一档，比默认慢一点才看得清内容换没换。 */
   --cczj-motion-carousel: 420ms;
+  --cczj-motion-section: 800ms;
+  --cczj-motion-group: 320ms;
+  --cczj-motion-dismiss: 600ms;
+  --cczj-motion-reveal: 1200ms;
 
   /* 缓动曲线。standard 通用，enter 收尾柔和，exit 起手快，emphasis 冲得更狠。 */
   --cczj-motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);

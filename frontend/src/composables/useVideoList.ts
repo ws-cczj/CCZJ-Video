@@ -1,6 +1,6 @@
 import { computed, onActivated, onDeactivated, onScopeDispose, reactive, ref, watch } from 'vue'
 import { SearchVideos } from '../api/app'
-import { GetVideoPage, GetShortDramaPage } from '../api/video'
+import { GetVideoPage, GetShortDramaPage, SHORT_DRAMA_FRESH_MS } from '../api/video'
 import { normalizeApiError } from '../api/errors'
 import type { Video } from '../types'
 import { useErrorStore } from '../stores/error'
@@ -8,6 +8,7 @@ import { useVideoStore } from '../stores/video'
 import { tr } from '../locales'
 import { useGeneration } from './useGeneration'
 import { createRequestScope } from '../api/requestScope'
+import { recordDiagnosticEvent } from '../diagnostics/recording'
 
 export interface VideoFilter {
   type_id: string | number
@@ -49,20 +50,24 @@ export function useVideoList(options: VideoListOptions = {}) {
   const nextCursor = ref('')
   const loading = ref(false)
   const error = ref('')
+  const refreshing = ref(false), refreshFailed = ref(false)
+  let refreshedAt = 0
   const interrupted = ref(false)
   let active = true
   const sourceKey = ref('')
   const remoteSource = ref(''), remoteCategory = ref(''), remoteName = ref('')
+  const remoteEmpty = ref(false)
 
   let seenDeletionSeq = 0
   const gen = useGeneration()
   const requests = createRequestScope()
-  function cancelRequests(): void { gen.invalidate(); requests.cancel(); loading.value = false }
+  let loadDeadline: ReturnType<typeof setTimeout> | undefined
+  function cancelRequests(): void { clearTimeout(loadDeadline); gen.invalidate(); requests.cancel(); loading.value = false; refreshing.value = false }
   onActivated(() => { active = true })
-  onDeactivated(() => { active = false; interrupted.value = loading.value; cancelRequests() })
+  onDeactivated(() => { active = false; interrupted.value = loading.value || refreshing.value; cancelRequests() })
   onScopeDispose(cancelRequests)
   watch(() => options.enabled?.() ?? true, enabled => {
-    if (!enabled) { interrupted.value = loading.value; cancelRequests() }
+    if (!enabled) { interrupted.value = loading.value || refreshing.value; cancelRequests() }
   }, {flush:'sync'})
 
   const errorStore = useErrorStore()
@@ -70,7 +75,7 @@ export function useVideoList(options: VideoListOptions = {}) {
 
   function settle(my: number): boolean {
     const stale = !gen.isCurrent(my)
-    if (!stale) loading.value = false
+    if (!stale) {loading.value = false;refreshing.value=false}
     return stale
   }
 
@@ -84,12 +89,22 @@ export function useVideoList(options: VideoListOptions = {}) {
   async function load(key: string, filter: VideoFilter, p = 1, pageSize = 50): Promise<void> {
     if (!key || !active || options.enabled?.() === false) return
     if (p > 1 && (!nextCursor.value || key !== sourceKey.value)) return
-    if (p === 1) nextCursor.value = ''
+    const retainedPaging=!!options.remoteShortDrama&&p===1&&sourceKey.value===key&&videos.value.length>0&&page.value>1
+    if (p === 1&&!retainedPaging) nextCursor.value = ''
+    clearTimeout(loadDeadline)
     requests.cancel()
     interrupted.value = false
     const my = gen.begin()
     loading.value = true
     error.value = ''
+    // Remote discovery has a 25s backend budget; also bound IPC completion.
+    const deadline = options.remoteShortDrama ? setTimeout(() => {
+      if (!gen.isCurrent(my)) return
+      cancelRequests()
+      if(videos.value.length){refreshFailed.value=true;void recordDiagnosticEvent('short_drama_catalog_failed',{code:'TIMEOUT'})}
+      else error.value = tr('shortDrama.timeout')
+    }, 30000) : undefined
+    loadDeadline = deadline
     if (sourceKey.value !== key) clearRemote()
     sourceKey.value = key
     try {
@@ -106,28 +121,60 @@ export function useVideoList(options: VideoListOptions = {}) {
         page: p,
         page_size: pageSize,
       } as any
-      const remoteEnabled = options.remoteShortDrama && filter.short_drama
-      let resp = remoteEnabled && remoteSource.value
+      const remoteEnabled = options.remoteShortDrama && filter.short_drama && (p===1||nextCursor.value.startsWith('remote:'))
+      let resp = remoteEnabled
         ? { videos: [] as Video[], total: 0, next_cursor: '' }
         : await requests.run(() => GetVideoPage(req))
       if (!gen.isCurrent(my)) return
-      if (remoteEnabled && (remoteSource.value || !resp.videos.length)) {
-        const remote = await requests.run(() => GetShortDramaPage(key, p, filter.keyword, remoteSource.value, remoteCategory.value, filter.recent_days))
+      if (remoteEnabled) {
+        if(p===1)remoteEmpty.value=false
+        // Show the selected source's persisted catalog while refreshing its
+        // provider page. Remote pagination still owns the committed cursor.
+        if (p === 1) {
+          try {
+            const cached = await requests.run(() => GetVideoPage(req))
+            if (!gen.isCurrent(my)) return
+            if (cached.videos.length&&!videos.value.length){applyPage(cached.videos,cached.total,p);nextCursor.value=cached.next_cursor}
+          } catch (cause) {
+            if (!gen.isCurrent(my)) return
+            const failure = normalizeApiError(cause)
+            if (failure.code === 'CANCELLED') throw cause
+            void recordDiagnosticEvent('short_drama_catalog_failed', { code: failure.code })
+          }
+        }
+        if(videos.value.length){loading.value=false;refreshing.value=true}
+        const remote = await requests.run(() => GetShortDramaPage(key, p, filter.keyword, p===1?'':remoteSource.value, p===1?'':remoteCategory.value, filter.recent_days))
         if (!gen.isCurrent(my)) return
-        remoteSource.value = remote.source_key
-        remoteCategory.value = remote.category_id
+        if(!retainedPaging){remoteSource.value = remote.source_key;remoteCategory.value = remote.category_id}
+        refreshedAt=performance.now();refreshFailed.value=false
         remoteName.value = remote.source_name
-        resp = { videos: remote.videos, total: remote.total, next_cursor: remote.has_more ? 'remote:' + String(p + 1) : '' }
+        remoteEmpty.value = p===1 && !filter.keyword && !filter.recent_days && !!remote.category_id && !remote.has_more && remote.total===0 && !remote.videos.length
+        if(remoteEmpty.value)void recordDiagnosticEvent('short_drama_provider_empty',{count:0})
+        const merged=new Map(videos.value.map(item=>[String(item.vod_id),item]))
+        if(p===1){for(const item of remote.videos)merged.set(String(item.vod_id),item)}
+        const incoming=p===1?Array.from(merged.values()):remote.videos.filter(item=>!merged.has(String(item.vod_id)))
+        resp = { videos: incoming, total: Math.max(remote.total,incoming.length,videos.value.length), next_cursor: retainedPaging?nextCursor.value:remote.has_more ? 'remote:' + String(p + 1) : '' }
       }
       if (settle(my)) return
       const list: Video[] = Array.isArray(resp?.videos) ? resp.videos : []
       nextCursor.value = typeof resp?.next_cursor === 'string' ? resp.next_cursor : ''
-      applyPage(list, typeof resp?.total === 'number' ? resp.total : list.length, p)
+      if(retainedPaging&&remoteEnabled){videos.value=list;total.value=resp.total}
+      else applyPage(list, typeof resp?.total === 'number' ? resp.total : list.length, p)
     } catch (e: any) {
       if (settle(my)) return
+      if(options.remoteShortDrama&&p>1&&normalizeApiError(e).code==='VALIDATION'){
+        // A changed source/type boundary cannot reuse the previous page cursor.
+        reset();await load(key,filter,1,pageSize);return
+      }
+      if(options.remoteShortDrama&&p===1&&videos.value.length){
+        refreshFailed.value=true
+        void recordDiagnosticEvent('short_drama_catalog_failed',{code:normalizeApiError(e).code})
+        return
+      }
+      if (options.remoteShortDrama && p === 1) clearRemote()
       error.value = normalizeApiError(e).message
       errorStore.fromError(tr('errors.loadVideosFailed'), e, 'videoList.load')
-    }
+    } finally { clearTimeout(deadline) }
   }
 
   async function search(key: string, keyword: string, p = 1, pageSize = 50): Promise<void> {
@@ -171,6 +218,7 @@ export function useVideoList(options: VideoListOptions = {}) {
 
   function clearRemote(): void {
     remoteSource.value = ''; remoteCategory.value = ''; remoteName.value = ''
+    remoteEmpty.value = false;refreshedAt=0;refreshFailed.value=false
   }
 
   function reset(keepRemote = false): void {
@@ -204,11 +252,13 @@ export function useVideoList(options: VideoListOptions = {}) {
     page,
     nextCursor,
     loading,
+    refreshing,refreshFailed,needsRefresh:()=>!refreshedAt||performance.now()-refreshedAt>SHORT_DRAMA_FRESH_MS,
     error,
     interrupted,
     sourceKey,
     remoteSource,
     remoteName,
+    remoteEmpty,
     hasNext: computed(() => videos.value.length < total.value),
     load,
     search,

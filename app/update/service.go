@@ -2,6 +2,7 @@
 package update
 
 import (
+	CCZJ "cczjVideo/app/cczj"
 	"context"
 	"encoding/json"
 	"runtime"
@@ -26,7 +27,7 @@ type downloadRunner interface {
 
 // settingLicenseTermsVersion 由前端在用户同意条款时写入（值是当前条款版本）。
 // 空着就代表这台机器还没签过 —— 键名必须与前端 stores/licenseState.ts 保持一致。
-const settingLicenseTermsVersion = "license_terms_version"
+const settingLicenseTermsVersion = CCZJ.SettingLicenseTermsVersion
 
 // Service owns pending update state and update-related persisted settings.
 type Service struct {
@@ -133,24 +134,24 @@ func (s *Service) Install(filePath string) error {
 
 // IgnoreVersion persists a version that should not be presented again.
 func (s *Service) IgnoreVersion(version string) error {
-	return s.settings.Set("ignored_version", version)
+	return s.settings.Set(CCZJ.SettingIgnoredVersion, version)
 }
 
 // IgnoredVersion returns the version currently ignored by the user.
 func (s *Service) IgnoredVersion() string {
-	version, _ := s.settings.Get("ignored_version")
+	version, _ := s.settings.Get(CCZJ.SettingIgnoredVersion)
 	return version
 }
 
 // LastStartVersion returns the version stored during the previous startup.
 func (s *Service) LastStartVersion() string {
-	version, _ := s.settings.Get("last_start_version")
+	version, _ := s.settings.Get(CCZJ.SettingLastStartVersion)
 	return version
 }
 
 // SaveCurrentVersion records the current effective version for the next startup.
 func (s *Service) SaveCurrentVersion() {
-	_ = s.settings.Set("last_start_version", updater.EffectiveVersion())
+	_ = s.settings.Set(CCZJ.SettingLastStartVersion, updater.EffectiveVersion())
 }
 
 // Pending returns the update detected during startup, if any.
@@ -245,7 +246,7 @@ func (s *Service) Rollback() error {
 }
 
 // settingPendingInstall 存「退出时安装」这份还没兑现的安排，值是 pendingInstallRecord 的 JSON。
-const settingPendingInstall = "pending_install"
+const settingPendingInstall = CCZJ.SettingPendingInstall
 
 // pendingInstallVersionLabelMaxLen 是给界面看的那个版本号的长度上限。version 由前端递进来，
 // 只用来把安排说清楚（替换脚本从来不读它），认不出的长度就当没这个版本号。

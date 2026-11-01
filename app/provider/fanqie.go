@@ -223,8 +223,15 @@ func (p *Pipeline) fanqieContent(ctx context.Context, chapter *Chapter) (*TextCo
 	if err != nil {
 		return nil, err
 	}
+	content, clientErr := p.fanqieClientContent(ctx, id, chapter.Title)
+	if clientErr == nil {
+		return content, nil
+	}
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	if chapter.Access == model.ChapterAccessSubscription {
-		return nil, apperror.New(apperror.PermissionDenied, "此章节需要在番茄官方客户端获取访问权限")
+		return nil, clientErr
 	}
 	response, err := p.fanqieFetch(ctx, chapter.URL)
 	if err != nil {
@@ -253,7 +260,7 @@ func decodeFanqieContent(page, id string, maxBytes int) (*TextContent, error) {
 	}
 	row := reader.Chapter
 	if row.NeedPay != 0 || row.Locked || row.PaidPublication || row.PaidStory {
-		return nil, apperror.New(apperror.PermissionDenied, "此章节需要在番茄官方客户端获取访问权限")
+		return nil, apperror.New(apperror.PermissionDenied, "当前番茄网页未开放本章完整正文，请尝试其他来源")
 	}
 	if row.ID != id || strings.TrimSpace(row.Content) == "" {
 		return nil, apperror.New(apperror.Unavailable, "番茄未提供此章节的公开正文")

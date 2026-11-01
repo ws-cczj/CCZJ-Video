@@ -65,7 +65,7 @@
 .cczj-mobile-shell .cczj-mobile-player .source-item { @apply cczj-max-w-full; min-height: 44px; background: var(--bg-input); @apply cczj-text-primary cczj-border-gray-300; }
 .cczj-mobile-shell .cczj-mobile-player .ep-grid { grid-template-columns: repeat(3,minmax(0,1fr)); @apply cczj-gap-4 cczj-p-2 cczj-overflow-visible; }
 .cczj-mobile-shell .cczj-mobile-player .ep-item { @apply cczj-min-w-0 cczj-shadow-none; min-height:44px; height:48px; transform:none; }
-.cczj-mobile-shell .cczj-mobile-player .ep-item.active { border-color:#40a9ff; @apply cczj-font-semibold; outline:0; transform:none; }
+.cczj-mobile-shell .cczj-mobile-player .ep-item.active { border-color:var(--cczj-player-episode-progress); @apply cczj-font-semibold; outline:0; transform:none; }
 .cczj-mobile-shell .cczj-mobile-player .ep-item .ep-watched-progress { height:3px; }
 .cczj-mobile-shell .cczj-mobile-player .player-col-side .ep-item .ep-watched-pct,
 .cczj-mobile-shell .cczj-mobile-player .player-col-side .ep-item.active .ep-watched-pct { color:var(--cczj-player-episode-percent); background:transparent; padding:0; }
@@ -89,6 +89,8 @@
 }
 .cczj-mobile-shell .cczj-mobile-player .player-col-side .ep-item:not(.active):not(.watched) { background:color-mix(in srgb,var(--cczj-player-action-bg) 5%,var(--cczj-player-theme-surface)); color:var(--cczj-player-action-bg); border-color:color-mix(in srgb,var(--cczj-player-action-bg) 40%,transparent); }
 .cczj-mobile-shell .cczj-mobile-player .player-col-side .ep-item.watched:not(.active) { border-color:transparent; }
+.cczj-mobile-shell .cczj-mobile-player .player-col-side .ep-item:is(.watched,.active) { background:var(--cczj-player-episode-bg); color:var(--cczj-player-episode-percent); }
+.cczj-mobile-shell .cczj-mobile-player .player-col-side .ep-item:is(.watched,.active):hover { background:var(--cczj-player-episode-hover); }
 .cczj-mobile-shell .cczj-mobile-player .side-section-title-left .bullet { background: var(--accent); }
 .cczj-mobile-shell .cczj-mobile-player .source-item.active { @apply cczj-text-primary cczj-border-primary; background: var(--accent-alpha-10); @apply cczj-shadow-none; transform: none; animation: none; }
 .cczj-mobile-shell .cczj-mobile-player .source-item.active::before { background: var(--accent); }

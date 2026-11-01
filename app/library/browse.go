@@ -1,7 +1,9 @@
 package library
 
 import (
+	CCZJ "cczjVideo/app/cczj"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -104,6 +106,10 @@ func (s *Service) BrowseNovels(ctx context.Context, channel, cursor string, refr
 	if err != nil {
 		return nil, err
 	}
+	contentVersion := resolved.version
+	encoded, _ := json.Marshal([]string{resolved.source.ApiUrl, resolved.source.StrategyConfig, string(resolved.source.GetKind())})
+	digest := sha256.Sum256(encoded)
+	resolved.version = fmt.Sprintf("%x", digest)
 	offset := 0
 	if cursor != "" {
 		if len(cursor) > 1024 {
@@ -114,12 +120,12 @@ func (s *Service) BrowseNovels(ctx context.Context, channel, cursor string, refr
 		if decodeErr != nil || json.Unmarshal(raw, &position) != nil || position.Offset < 1 || position.Offset > 10000 {
 			return nil, apperror.New(apperror.Validation, "浏览分页标识无效")
 		}
-		if position.Channel != channel || position.SourceKey != resolved.source.SourceKey || position.Version != resolved.version {
+		if position.Channel != channel || position.SourceKey != resolved.source.SourceKey || position.Version != resolved.version && position.Version != contentVersion {
 			return nil, apperror.New(apperror.Conflict, "浏览来源或分类已变化，请重新打开书目")
 		}
 		offset = position.Offset
 	}
-	cacheKey := "novel.browse.v1." + channel
+	cacheKey := CCZJ.CacheNovelBrowsePrefix + channel
 	var cached *NovelBrowsePage
 	if offset == 0 {
 		raw, readErr := db.GetSetting(cacheKey)
@@ -127,6 +133,12 @@ func (s *Service) BrowseNovels(ctx context.Context, channel, cursor string, refr
 			return nil, apperror.Wrap(apperror.Storage, readErr, "读取书目缓存失败")
 		}
 		cached = decodeBrowseCache(raw, resolved.source.SourceKey, resolved.version, channel)
+		if cached == nil {
+			cached = decodeBrowseCache(raw, resolved.source.SourceKey, contentVersion, channel)
+			if cached != nil {
+				cached.Stale = true
+			}
+		}
 		if cached != nil {
 			refs := make([]db.LibraryRef, 0, len(cached.Items))
 			for _, item := range cached.Items {
@@ -151,8 +163,9 @@ func (s *Service) BrowseNovels(ctx context.Context, channel, cursor string, refr
 				cached.Items[index] = s.toDTO(model.SourceKindNovel, row, map[string]string{row.SourceKey: resolved.source.Name})
 			}
 		}
-		if cached != nil && !refresh && time.Since(time.Unix(cached.FetchedAt, 0)) < browseCacheTTL {
+		if cached != nil && !refresh {
 			cached.FromCache = true
+			cached.Stale = cached.Stale || time.Since(time.Unix(cached.FetchedAt, 0)) >= browseCacheTTL
 			return cached, nil
 		}
 	}

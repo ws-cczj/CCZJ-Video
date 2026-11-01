@@ -11,6 +11,11 @@ func (a *App) NovelSourceDirectory(ctx context.Context) (*library.SourceDirector
 		return a.library.SourceDirectory(ctx, model.SourceKindNovel)
 	})
 }
+func (a *App) NovelBookSources(ctx context.Context, itemID int, refresh bool) (*library.NovelBookSourceCache, error) {
+	return runRequest(a, ctx, "reading.NovelBookSources", func(ctx context.Context) (*library.NovelBookSourceCache, error) {
+		return a.library.NovelBookSources(ctx, itemID, refresh)
+	})
+}
 func (a *App) ComicSourceDirectory(ctx context.Context) (*library.SourceDirectory, error) {
 	return runRequest(a, ctx, "reading.ComicSourceDirectory", func(ctx context.Context) (*library.SourceDirectory, error) {
 		return a.library.SourceDirectory(ctx, model.SourceKindComic)
@@ -29,6 +34,11 @@ func (a *App) ComicSourceAlternatives(ctx context.Context, itemID int, cursor st
 func (a *App) NovelChapterMatch(ctx context.Context, itemID, chapterID, targetItemID int) (*library.ChapterMatch, error) {
 	return runRequest(a, ctx, "reading.NovelChapterMatch", func(ctx context.Context) (*library.ChapterMatch, error) {
 		return a.library.MatchChapter(ctx, model.SourceKindNovel, itemID, chapterID, targetItemID)
+	})
+}
+func (a *App) NovelPrepareSourceSwitch(ctx context.Context, itemID, chapterID, targetItemID, targetChapterID int) (*library.PreparedNovelSwitch, error) {
+	return runRequest(a, ctx, "reading.NovelPrepareSourceSwitch", func(ctx context.Context) (*library.PreparedNovelSwitch, error) {
+		return a.library.PrepareNovelSwitch(ctx, itemID, chapterID, targetItemID, targetChapterID)
 	})
 }
 func (a *App) ComicEpisodeMatch(ctx context.Context, itemID, chapterID, targetItemID int) (*library.ChapterMatch, error) {

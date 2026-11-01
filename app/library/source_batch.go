@@ -33,6 +33,9 @@ type BatchSource struct {
 	CanRead   bool   `json:"canRead"`
 	CanSearch bool   `json:"canSearch"`
 	Reason    string `json:"reason,omitempty"`
+	Origin    string `json:"origin"`
+	Project   string `json:"project"`
+	Format    string `json:"format"`
 	doc       *provider.Document
 	searchDoc *provider.Document
 	document  string
@@ -48,7 +51,7 @@ func ParseBatchSources(raw []byte, kind, origin string) ([]*BatchSource, error) 
 	}
 	out := make([]*BatchSource, 0, len(rows))
 	for _, row := range rows {
-		b := &BatchSource{ID: row.ID, Name: row.Name, Kind: row.Kind, URL: row.ApiURL, Language: row.language, CanRead: row.Compatible, Reason: row.Reason, searchDoc: row.searchProbe, document: row.document}
+		b := &BatchSource{ID: row.ID, Name: row.Name, Kind: row.Kind, URL: row.ApiURL, Language: row.language, CanRead: row.Compatible, Reason: row.Reason, Origin: row.Origin, Project: row.Project, Format: row.Format, searchDoc: row.searchProbe, document: row.document}
 		if b.Language == "" {
 			b.Language = "zh"
 		}

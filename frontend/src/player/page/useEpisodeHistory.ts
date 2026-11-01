@@ -41,25 +41,24 @@ function isWatchedEp(idx: number): boolean { return getEpWatchPct(idx) > 0 }
 let lastHistorySyncAt = 0
 const HISTORY_SYNC_INTERVAL_MS = 10000
 
-function syncHistoryToDb(position: number, force = false, duration?: number): void {
-  // 刚起播的 0~5 秒不写库：否则每次重看都会把上次记住的位置冲掉。
-  if (position <= 5) return
-  if (!force) {
-    const now = Date.now()
-    if (now - lastHistorySyncAt < HISTORY_SYNC_INTERVAL_MS) return
-    lastHistorySyncAt = now
-  }
-  if (!deps.identity().vodId || deps.currentIndex() < 0) return
-  const ep = deps.episodes()[deps.currentIndex()]
-  if (!ep) return
+function syncHistoryToDb(position: number, force = false, duration?: number, allowInitial = false): Promise<boolean> | undefined {
+  // Explicit source handoffs may record the opening seconds; ordinary reopens retain saved progress.
+  if (!Number.isFinite(position) || position < 0 || (!allowInitial && position <= 5)) return
+  const now = Date.now()
+  if (!force && now - lastHistorySyncAt < HISTORY_SYNC_INTERVAL_MS) return
+  const identity = deps.identity()
+  const index = deps.currentIndex()
+  const ep = deps.episodes()[index]
+  if (!identity.sourceKey || !identity.vodId || index < 0 || !ep) return
+  lastHistorySyncAt = now
   historyWrites++
-  SaveWatchHistory({
-    source_key: deps.identity().sourceKey,
-    vod_id: String(deps.identity().vodId),
-    vod_name: deps.identity().name || '',
-    ep_num: ep.ep_num ?? (deps.currentIndex() + 1),
-    position, duration,
-  } as any).catch(error => { deps.onPersistenceError?.(error) })
+  return SaveWatchHistory({
+    source_key: identity.sourceKey,
+    vod_id: String(identity.vodId),
+    vod_name: identity.name || '',
+    ep_num: ep.ep_num ?? (index + 1),
+    position, duration: Number.isFinite(duration) ? duration : undefined,
+  } as any).then(() => true).catch(error => { deps.onPersistenceError?.(error); return false })
 }
 
 /**
@@ -79,13 +78,13 @@ async function resolveDbResumePosition(): Promise<number> {
   } catch { return 0 }
 }
 
-// 写入当前集播放时持续写入独立存储（position/duration 会在用户播放过程中不断被写入
-function updateCurrentEpProgress(position: number, duration?: number, force=false): void {
-  if (deps.currentIndex() < 0) return
+// Persist precise progress while notifying views only when the visible percentage changes.
+function updateCurrentEpProgress(position: number, duration?: number, force=false, allowInitial=false): Promise<boolean> | undefined {
+  if (deps.currentIndex() < 0 || !Number.isFinite(position) || position < 0) return
   progressEvents++
   const k = epKeyOf(deps.currentIndex())
   saveEpProgress(k, position, duration)
-  syncHistoryToDb(position, force, Number.isFinite(duration)?duration:undefined)
+  const saved = syncHistoryToDb(position, force, duration, allowInitial)
   // 同时同步 UI
   const store = loadEpProgress()
   const index = deps.currentIndex()
@@ -93,13 +92,14 @@ function updateCurrentEpProgress(position: number, duration?: number, force=fals
   if (epProgressMap.value[index] !== percent) {
     epProgressMap.value[index] = percent
     progressUIUpdates++
-  } else return // Persistence above retains full precision; UI notifications need only changed percentages.
+  } else return saved
   // 派发自定义事件，供详情页等其他页面监听以实时同步已观看状态
   try {
     window.dispatchEvent(new CustomEvent('cczj-ep-progress-updated', {
       detail: { key: k, position, duration },
     }))
   } catch { /* ignore */ }
+  return saved
 }
 
 

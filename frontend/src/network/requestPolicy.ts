@@ -1,4 +1,5 @@
-export const NETWORK_POLICY_KEY = 'network_request_policy_v1'
+import { CCZJ } from '../constants/cczj'
+export const NETWORK_POLICY_KEY = CCZJ.Settings.networkPolicy
 export const networkFrequencies = ['standard', 'steady', 'low'] as const
 export type NetworkFrequency = typeof networkFrequencies[number]
 export function decodeNetworkPolicy(raw: unknown): { frequency: NetworkFrequency } {

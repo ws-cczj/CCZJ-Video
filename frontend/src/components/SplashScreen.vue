@@ -13,16 +13,16 @@ import { useApplicationMode } from '../modes/applicationMode'
 import { APPLICATION_MODES } from '../modes/definitions'
 import { markStartup } from '../diagnostics/startup'
 
-import splashGreen from '../assets/images/green.webp'
-import splashBitblue from '../assets/images/skyblue.webp'
-import splashBitpurple from '../assets/images/bitpurple.webp'
-import splashPink from '../assets/images/pink.webp'
-import splashRed from '../assets/images/red.webp'
-import splashGrey from '../assets/images/grey.webp'
-import splashYellow from '../assets/images/yellow.webp'
-import splashDeepblue from '../assets/images/deepblue.webp'
-import splashSkyblue from '../assets/images/skyblue.webp'
-import splashPurple from '../assets/images/purple.webp'
+import splashGreen from '../assets/images/green.png'
+import splashBitblue from '../assets/images/bitblue.png'
+import splashBitpurple from '../assets/images/bitpurple.png'
+import splashPink from '../assets/images/pink.png'
+import splashRed from '../assets/images/red.png'
+import splashGrey from '../assets/images/grey.png'
+import splashYellow from '../assets/images/yellow.png'
+import splashDeepblue from '../assets/images/deepblue.png'
+import splashSkyblue from '../assets/images/skyblue.png'
+import splashPurple from '../assets/images/purple.png'
 
 const theme = useThemeStore()
 const appMode = useApplicationMode()
@@ -31,13 +31,13 @@ const appMode = useApplicationMode()
 const SPLASH_MAP: Record<string, string> = {
   // 蓝色系
   blue: splashBitblue, sky: splashBitblue, indigo: splashBitblue,
-  'd-blue': splashBitblue, 'd-cyan': splashBitblue,
+  'd-blue': splashBitblue, 'd-cyan': splashSkyblue, cyan: splashSkyblue,
   deepblue: splashDeepblue, skyblue: splashSkyblue,
   bitblue: splashBitblue,
   // 木叶之村也是蓝色系
   naruto: splashBitblue,
   // 绿色系
-  green: splashGreen, 'd-green': splashGreen, lime: splashGreen, teal: splashGreen, cyan: splashGreen,
+  green: splashGreen, 'd-green': splashGreen, lime: splashGreen, teal: splashGreen,
   bitgreen: splashGreen,
   // 紫色系
   purple: splashPurple, 'd-violet': splashPurple, 'd-indigo': splashPurple,
@@ -90,11 +90,11 @@ async function reveal(event: Event): Promise<void> {
   const began = performance.now()
   try { await (event.target as HTMLImageElement).decode() } catch { /* onload image is still usable */ }
   if (disposed) return
-  markStartup('image_decode',performance.now()-began)
+  markStartup('image_decode', performance.now() - began)
   // Cached images may decode before their initial opacity has been painted.
   // Keep a full frame between insertion and revealing the image and caption.
-  revealFrame = requestAnimationFrame(()=>{
-    revealFrame = requestAnimationFrame(()=>{
+  revealFrame = requestAnimationFrame(() => {
+    revealFrame = requestAnimationFrame(() => {
       if (disposed) return
       ready.value = true
       markStartup('splash_reveal')
@@ -120,8 +120,8 @@ const bgStyle = computed(() => {
   return { backgroundColor: t.palette?.bgApp || (t.mode === 'dark' ? '#1a1a1e' : '#ffffff') }
 })
 // The visible splash owns system-bar colours until its exit transition ends.
-const stopSplashSurface=watch(()=>bgStyle.value.backgroundColor,color=>{document.documentElement.dataset.cczjSplashColor=color},{immediate:true})
-function releaseSplashSurface():void { stopSplashSurface(); delete document.documentElement.dataset.cczjSplashColor }
+const stopSplashSurface = watch(() => bgStyle.value.backgroundColor, color => { document.documentElement.dataset.cczjSplashColor = color }, { immediate: true })
+function releaseSplashSurface(): void { stopSplashSurface(); delete document.documentElement.dataset.cczjSplashColor }
 onBeforeUnmount(releaseSplashSurface)
 
 </script>
@@ -130,10 +130,12 @@ onBeforeUnmount(releaseSplashSurface)
   <MotionTransition preset="fade" @after-leave="releaseSplashSurface">
     <div v-if="show" class="splash-wrap cczj-fixed cczj-items-center cczj-justify-center cczj-flex cczj-z-max"
       :style="bgStyle">
-      <div class="splash-brand cczj-motion-ornament" :class="{ready}">
-        <span class="brand-mark">CCZJ</span><span class="brand-caption">{{ APPLICATION_MODES[appMode.mode].caption }}</span>
+      <div class="splash-brand cczj-motion-ornament" :class="{ ready }">
+        <span class="brand-mark">CCZJ</span><span class="brand-caption">{{ APPLICATION_MODES[appMode.mode].caption
+          }}</span>
       </div>
-      <Icon v-if="appMode.mode !== 'video'" :name="APPLICATION_MODES[appMode.mode].icon" :size="80" class="novel-splash-mark cczj-motion-reveal" />
+      <Icon v-if="appMode.mode !== 'video'" :name="APPLICATION_MODES[appMode.mode].icon" :size="80"
+        class="novel-splash-mark cczj-motion-reveal" />
       <img v-else-if="bgSrc" :src="bgSrc" alt="" decoding="async" fetchpriority="high"
         class="splash-img cczj-motion-ornament" :class="{ ready }" @load="reveal" @error="dismiss" />
     </div>
@@ -141,17 +143,64 @@ onBeforeUnmount(releaseSplashSurface)
 </template>
 
 <style scoped>
-.splash-wrap { inset: 0; @apply cczj-overflow-hidden cczj-flex-col cczj-gap-10; }
-.novel-splash-mark { order: -1; color: #ad302c; @apply cczj-mb-6; }
+.splash-wrap {
+  inset: 0;
+  @apply cczj-overflow-hidden cczj-flex-col cczj-gap-10;
+}
+
+.novel-splash-mark {
+  order: -1;
+  color: #ad302c;
+  @apply cczj-mb-6;
+}
+
 .splash-img {
-  order: -1; width: min(52vw, 440px); height: min(65vh, 580px); object-fit: contain;
-  @apply cczj-opacity-0; transform: translateY(8px) scale(.98);
+  order: -1;
+  width: min(52vw, 440px);
+  height: min(65vh, 580px);
+  object-fit: contain;
+  @apply cczj-opacity-0;
+  transform: translateY(8px) scale(.98);
   transition: opacity var(--cczj-motion-slow) ease-out, transform var(--cczj-motion-emphasis) ease-out;
 }
-.splash-img.ready { opacity: .9; transform: translateY(0) scale(1); }
-.splash-brand { @apply cczj-flex cczj-items-baseline cczj-gap-6 cczj-text-primary cczj-opacity-0; transform:translateY(5px); transition:opacity var(--cczj-motion-slow) ease-out,transform var(--cczj-motion-slow) ease-out; }
-.splash-brand.ready { @apply cczj-opacity-100; transform:translateY(0); }
-.brand-mark { font-size: 1.6rem; @apply cczj-font-bold; letter-spacing: .15em; }
-.brand-caption { font-size: .8rem; letter-spacing: .35em; @apply cczj-text-muted; }
-@keyframes brand-enter { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+.splash-img.ready {
+  opacity: .9;
+  transform: translateY(0) scale(1);
+}
+
+.splash-brand {
+  @apply cczj-flex cczj-items-baseline cczj-gap-6 cczj-text-primary cczj-opacity-0;
+  transform: translateY(5px);
+  transition: opacity var(--cczj-motion-slow) ease-out, transform var(--cczj-motion-slow) ease-out;
+}
+
+.splash-brand.ready {
+  @apply cczj-opacity-100;
+  transform: translateY(0);
+}
+
+.brand-mark {
+  font-size: 1.6rem;
+  @apply cczj-font-bold;
+  letter-spacing: .15em;
+}
+
+.brand-caption {
+  font-size: .8rem;
+  letter-spacing: .35em;
+  @apply cczj-text-muted;
+}
+
+@keyframes brand-enter {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 </style>

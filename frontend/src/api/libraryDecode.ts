@@ -2,8 +2,9 @@ import { object,text,integer,boolean,each,choice } from './decode'
 
 export function item(value:unknown){const v=object(value);integer(v.id,1);choice(v.kind,['novel','comic']);text(v.sourceKey);text(v.remoteId);text(v.title);boolean(v.available);return v}
 export function chapter(value:unknown){const v=object(value);integer(v.id,1);text(v.remoteId);text(v.title);integer(v.ord);boolean(v.available);return v}
-export function detail(value:unknown){const v=object(value);item(v.item);each(v.chapters,chapter);integer(v.chapterCount);return v}
-export function chapterText(value:unknown){const v=object(value);integer(v.chapterId,1);each(v.paragraphs,text);each(v.warnings,text);boolean(v.fromCache);return v}
+export function readingEvidence(value:unknown){const v=object(value);for(const key of ['readable','restricted','failed','warnings','stale','checkedAt'])integer(v[key]);return v}
+export function detail(value:unknown){const v=object(value);item(v.item);each(v.chapters,chapter);integer(v.chapterCount);if(v.reading!=null)readingEvidence(v.reading);return v}
+export function chapterText(value:unknown){const v=object(value);integer(v.chapterId,1);each(v.paragraphs,text);each(v.warnings,text);boolean(v.fromCache);if(v.checkedAt!==undefined)integer(v.checkedAt,0);if(v.stale!==undefined)boolean(v.stale);return v}
 export function novelContext(value:unknown){const v=object(value);item(v.item);for(const key of ['chapter','previous','next'])if(v[key]!==null)chapter(v[key]);integer(v.index,-1);integer(v.count);text(v.cacheIdentity);return v}
 export function chapterPages(value:unknown){const v=object(value);integer(v.chapterId,1);each(v.pages,value=>{const page=object(value);integer(page.index);text(page.url);return page});each(v.warnings,text);boolean(v.fromCache);return v}
 export function search(value:unknown){const v=object(value);text(v.keyword);integer(v.page,1);integer(v.total);integer(v.failedCount);text(v.nextCursor);if(v.searchedSources!==undefined)integer(v.searchedSources);if(v.pendingSources!==undefined)integer(v.pendingSources);each(v.results,value=>{const row=object(value);text(row.sourceKey);text(row.sourceName);each(row.items,item);text(row.nextUrl);boolean(row.hasNext);if(row.errorCode!==undefined)text(row.errorCode);if(row.errorMessage!==undefined)text(row.errorMessage);return row});return v}
@@ -14,6 +15,7 @@ export function catalog(value:unknown){const v=object(value);each(v.items,value=
 // Validate the received DTO in place. Avoid allocating a second large catalog
 // tree; generated bindings retain their existing shape and optional fields.
 const decoders:Record<string,(value:unknown)=>unknown>={LibraryCatalogPage:catalog,LibrarySearch:search,LibrarySearchPage:search,LibrarySearchStream:search,LibraryItem:detail,LibraryRefreshToc:detail,LibraryRefreshReadingToc:detail,LibraryChapterText:chapterText,LibraryChapterPages:chapterPages,LibraryRefreshChapterPages:chapterPages,LibraryResolveRef:item,LibraryAddSource:source,LibraryTestSource:outcome}
+decoders.LibraryRefreshChapterText=chapterText
 function comicContext(value:unknown){const v=novelContext(value);choice(object(v.item).kind,['comic']);return v}
 decoders.LibraryComicContext=comicContext
 decoders.LibraryRefreshComicContext=comicContext

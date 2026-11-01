@@ -68,6 +68,13 @@ func (s *Service) Detail(ctx context.Context, itemID int, refresh bool) (*ItemDe
 	}
 	detail.Chapters = chapters
 	detail.ChapterCount = len(chapters)
+	if row.Kind == "novel" {
+		observed, err := db.ReadNovelObservations(ctx, itemID)
+		if err != nil {
+			return nil, apperror.Wrap(apperror.Storage, err, "读取章节观测失败")
+		}
+		detail.Reading = readingEvidence(observed, resolved.version)
+	}
 	return detail, nil
 }
 
@@ -261,6 +268,14 @@ func (s *Service) RefreshToc(ctx context.Context, itemID int) (*ItemDetail, erro
 // **失败不缓存**：一次空正文或解析失败如果落了盘，用户下次进来还是空的，
 // 而真正的原因（规则失效、需要登录）被缓存盖住了。
 func (s *Service) ChapterText(ctx context.Context, chapterID int) (*ChapterText, error) {
+	return s.chapterText(ctx, chapterID, false)
+}
+
+func (s *Service) RefreshChapterText(ctx context.Context, chapterID int) (*ChapterText, error) {
+	return s.chapterText(ctx, chapterID, true)
+}
+
+func (s *Service) chapterText(ctx context.Context, chapterID int, refresh bool) (*ChapterText, error) {
 	release := s.priority.begin()
 	defer release()
 	row, err := s.chapterRow(ctx, chapterID)
@@ -275,8 +290,8 @@ func (s *Service) ChapterText(ctx context.Context, chapterID int) (*ChapterText,
 	request := ctx
 	result, err := s.textReads.Do(ctx, key, func(ctx context.Context) (*ChapterText, error) {
 		ctx, _ = operation.OwnedContext(ctx, request, "reading.chapter_text", applog.Fields{"mode": row.kind, "source_key": row.sourceKey, "item_id": row.itemID, "chapter_id": chapterID})
-		if cached, ok := s.readTextCache(key); ok {
-			return &ChapterText{ChapterID: chapterID, Paragraphs: cached.Paragraphs, FromCache: true, Warnings: contentWarnings(cached)}, nil
+		if cached, checkedAt, ok := s.readTextCacheWithTime(key); ok && !refresh {
+			return &ChapterText{ChapterID: chapterID, Paragraphs: cached.Paragraphs, FromCache: true, Warnings: contentWarnings(cached), CheckedAt: checkedAt, Stale: checkedAt <= 0 || time.Since(time.Unix(checkedAt, 0)) > 24*time.Hour}, nil
 		}
 
 		chapter := &provider.Chapter{
@@ -288,21 +303,59 @@ func (s *Service) ChapterText(ctx context.Context, chapterID int) (*ChapterText,
 			return nil, err
 		}
 		warnings := contentWarnings(content)
+		if refresh && len(warnings) > 0 {
+			if previous, ok := s.readTextCache(key); ok && len(contentWarnings(previous)) == 0 {
+				return nil, apperror.New(apperror.Corrupt, "新正文存在异常，已保留原缓存")
+			}
+		}
 		s.writeTextCache(key, content)
-		return &ChapterText{ChapterID: chapterID, Paragraphs: content.Paragraphs, Warnings: warnings}, nil
+		return &ChapterText{ChapterID: chapterID, Paragraphs: content.Paragraphs, Warnings: warnings, CheckedAt: time.Now().Unix()}, nil
 	})
 	if err != nil {
+		if row.kind == "novel" && ctx.Err() == nil {
+			if outcome := novelReadFailure(err); outcome != "" {
+				if saveErr := db.RecordNovelChapterResult(ctx, chapterID, resolved.version, outcome); saveErr != nil {
+					applog.Warn("[Library] 保存章节失败观测: %v", saveErr)
+				}
+			}
+		}
 		return nil, err
 	}
 	copy := *result
 	copy.Paragraphs = append([]string(nil), result.Paragraphs...)
 	copy.Warnings = append([]string(nil), result.Warnings...)
+	if copy.FromCache {
+		return &copy, nil
+	}
 	if len(copy.Paragraphs) > 0 && len(copy.Warnings) == 0 {
 		if err := db.RecordReadingChapter(ctx, model.SourceKind(row.kind), chapterID, resolved.version, "text"); err != nil {
 			return nil, apperror.Wrap(apperror.Storage, err, "保存章节可读证据失败")
 		}
+	} else if row.kind == "novel" {
+		if err := db.RecordNovelChapterResult(ctx, chapterID, resolved.version, "warning"); err != nil {
+			return nil, apperror.Wrap(apperror.Storage, err, "保存章节观测失败")
+		}
 	}
 	return &copy, nil
+}
+
+func novelReadFailure(err error) string {
+	switch apperror.CodeOf(err) {
+	case apperror.AuthenticationRequired, apperror.PermissionDenied:
+		return "restricted"
+	case apperror.NotFound:
+		return "missing"
+	case apperror.Timeout:
+		return "timeout"
+	case apperror.RateLimited:
+		return "rate_limited"
+	case apperror.Corrupt, apperror.Unsupported:
+		return "invalid"
+	case apperror.Unavailable:
+		return "unavailable"
+	default:
+		return ""
+	}
 }
 
 // contentWarnings 把"内容拿到了但有件事该说"的情况翻成给用户看的话。
@@ -329,6 +382,7 @@ func contentWarnings(content *provider.TextContent) []string {
 // textCacheEntry 是正文缓存的落盘形状。
 type textCacheEntry struct {
 	Version        int      `json:"version"`
+	CheckedAt      int64    `json:"checkedAt,omitempty"`
 	Paragraphs     []string `json:"paragraphs"`
 	Truncated      bool     `json:"truncated,omitempty"`
 	Garbled        bool     `json:"garbled,omitempty"`
@@ -343,30 +397,35 @@ func (s *Service) textCacheKey(resolved *resolvedSource, row *chapterRow) string
 }
 
 func (s *Service) readTextCache(key string) (*provider.TextContent, bool) {
+	content, _, ok := s.readTextCacheWithTime(key)
+	return content, ok
+}
+
+func (s *Service) readTextCacheWithTime(key string) (*provider.TextContent, int64, bool) {
 	if s.textCache == nil {
-		return nil, false
+		return nil, 0, false
 	}
 	raw, contentType, ok := s.textCache.Read(key)
 	if !ok || !strings.HasPrefix(contentType, "application/json") {
-		return nil, false
+		return nil, 0, false
 	}
 	var entry textCacheEntry
 	if err := json.Unmarshal(raw, &entry); err != nil {
-		return nil, false
+		return nil, 0, false
 	}
 	// 空正文不进缓存也不该从缓存里被端出来：那意味着上次写入时判错了，
 	// 而现在这一次本可以重新抓。
 	if entry.Version != 2 || len(entry.Paragraphs) == 0 {
-		return nil, false
+		return nil, 0, false
 	}
-	return &provider.TextContent{Paragraphs: entry.Paragraphs, Truncated: entry.Truncated, Garbled: entry.Garbled, FontObfuscated: entry.FontObfuscated}, true
+	return &provider.TextContent{Paragraphs: entry.Paragraphs, Truncated: entry.Truncated, Garbled: entry.Garbled, FontObfuscated: entry.FontObfuscated}, entry.CheckedAt, true
 }
 
 func (s *Service) writeTextCache(key string, content *provider.TextContent) {
 	if s.textCache == nil || content == nil || len(content.Paragraphs) == 0 {
 		return
 	}
-	raw, err := json.Marshal(textCacheEntry{Version: 2, Paragraphs: content.Paragraphs, Truncated: content.Truncated, Garbled: content.Garbled, FontObfuscated: content.FontObfuscated})
+	raw, err := json.Marshal(textCacheEntry{Version: 2, CheckedAt: time.Now().Unix(), Paragraphs: content.Paragraphs, Truncated: content.Truncated, Garbled: content.Garbled, FontObfuscated: content.FontObfuscated})
 	if err != nil {
 		return
 	}

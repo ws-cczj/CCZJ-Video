@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { computed } from 'vue'
 import Icon from './Icon.vue'
 import { MotionList } from './ui'
-import { pluginNavItems } from '../plugins/registry'
+import { videoNavigation } from '../modes/videoNavigation'
 
 const router = useRouter()
 const route = useRoute()
@@ -18,30 +18,11 @@ interface NavItem {
   icon: string
 }
 
-const navItems = computed<NavItem[]>(() => [
-  { path: '/', label: t('sidebar.home'), icon: 'home' },
-  { path: '/short-drama', label: t('shortDrama.title'), icon: 'clapperboard' },
-  { path: '/search', label: t('sidebar.search'), icon: 'search' },
-  { path: '/recent', label: t('sidebar.recent'), icon: 'clock' },
-  { path: '/favorites', label: t('sidebar.favorites'), icon: 'star' },
-  { path: '/history', label: t('sidebar.history'), icon: 'history' },
-])
-
-const toolItems = computed<NavItem[]>(() => [
-  { path: '/sources', label: t('sidebar.sources'), icon: 'source' },
-  { path: '/danmaku-sources', label: t('danmakuSources.title'), icon: 'danmaku' },
-  { path: '/video-types', label: t('sidebar.videoTypes'), icon: 'tag' },
-  { path: '/downloads', label: t('sidebar.downloads'), icon: 'download' },
-  { path: '/recycle', label: t('sidebar.recycle'), icon: 'trash' },
-  // 注入型扩展包加的页面排在「管理」区末尾：它们和这些条目是同一种东西——工具，
-  // 不是内容。label 是函数时在这里求值，所以包能用 cczj.i18n.t 跟着语言切换走。
-  ...pluginNavItems.value.map(item => ({
-    path: item.path,
-    label: typeof item.label === 'function' ? item.label() : item.label,
-    icon: item.icon,
-  })),
-  { path: '/settings', label: t('sidebar.settings'), icon: 'settings' },
-])
+function localize(items: typeof videoNavigation.value.browse): NavItem[] {
+  return items.map(item=>({path:item.path,icon:item.icon,label:item.labelKey?t(item.labelKey):typeof item.label==='function'?item.label():item.label||''}))
+}
+const navItems = computed(()=>localize(videoNavigation.value.browse))
+const toolItems = computed(()=>localize(videoNavigation.value.management))
 
 function isActive(path: string): boolean {
   if (path === '/') return route.path === '/'
@@ -51,6 +32,7 @@ function isActive(path: string): boolean {
 
 <template>
   <aside class="sidebar cczj-flex cczj-flex-col cczj-select-none cczj-text-primary cczj-transition">
+    <div class="sidebar-navigation cczj-flex-1 cczj-min-h-0 cczj-overflow-y-auto cczj-overflow-x-hidden">
     <nav class="nav-section">
       <div class="section-label cczj-flex cczj-items-center cczj-justify-center cczj-gap-5">
         <span class="line left cczj-flex-1"></span>
@@ -93,6 +75,7 @@ function isActive(path: string): boolean {
       </MotionList>
     </nav>
 
+    </div>
     <div class="sidebar-footer cczj-mt-auto">
       <div class="source-info cczj-flex cczj-items-center cczj-gap-5 cczj-text-13 cczj-text-primary">
         <span class="source-dot cczj-flex-shrink-0 cczj-rounded-50 cczj-transition" :class="{ online: sourceStore.currentSource }"></span>
@@ -104,15 +87,14 @@ function isActive(path: string): boolean {
 
 <style scoped>
 /* =================================================================
-   Linear/Notion 风格侧边栏
+   桌面导航与固定来源状态
    - 背景透明（与主背景融合）
    - 右侧 1px 主题色淡化分割线
    - 分区标签用左右短线条夹住
    - hover/active：主题色淡背景 + 左侧竖条指示
    ================================================================= */
 .sidebar {
-  @apply cczj-overflow-y-auto;
-  scrollbar-width: none;
+  @apply cczj-min-h-0 cczj-overflow-hidden;
   @apply cczj-overflow-x-hidden cczj-flex-shrink-0;
   width: 200px;
   min-width: 200px;
@@ -197,7 +179,8 @@ function isActive(path: string): boolean {
   background: var(--accent);
   box-shadow: 0 0 8px var(--accent-alpha-35);
 }
-.sidebar::-webkit-scrollbar { @apply cczj-hidden; }
+.sidebar-navigation { scrollbar-width: none; }
+.sidebar-navigation::-webkit-scrollbar { @apply cczj-hidden; }
 @media (max-height: 700px) {
   .nav-section { padding: 6px 10px 3px; }
   .section-label { padding: 4px 8px 7px; }

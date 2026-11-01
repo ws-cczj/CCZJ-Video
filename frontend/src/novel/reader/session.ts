@@ -15,6 +15,10 @@ export function novelReaderSession(
 ) {
   const cache=readingContentCache<ChapterTextDTO>(limits)
   const clear=cache.clear
+  function remember(key:string,text:ChapterTextDTO,started=cache.generation()):void {
+    const size=256+2*(key.length+text.paragraphs.reduce((sum,p)=>sum+p.length,0)+(text.warnings??[]).join('').length)
+    if(text.paragraphs.length)cache.put(key,text,size,started)
+  }
   function read(location:NovelReadingLocationDTO) {
     const started=cache.generation()
     return readingRequest<NovelReaderData>(async request => {
@@ -25,10 +29,9 @@ export function novelReaderSession(
         return {...view,text:{...saved,chapterId:chapter.id,paragraphs:[...saved.paragraphs],warnings:[...(saved.warnings??[])]}}
       }
       const text=await request(content(chapter.id))
-      const size=256+2*(key.length+text.paragraphs.reduce((sum,p)=>sum+p.length,0)+(text.warnings??[]).join('').length)
-      if(text.paragraphs.length)cache.put(key,text,size,started)
+      remember(key,text,started)
       return {...view,text}
     })
   }
-  return {read,clear}
+  return {read,clear,remember}
 }

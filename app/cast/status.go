@@ -58,10 +58,19 @@ func (s *Service) StatusContext(request context.Context, id string) (Status, err
 		traceFailure(ctx, "cast.status.invalid", err, applog.Fields{"code": "CAST_INVALID_STATUS"})
 		return Status{}, err
 	}
-	if err = soap(ctx, device, "GetPositionInfo", "", &response); err == nil {
+	// Position is optional: an unsupported or slow position endpoint must not
+	// hide a valid transport state or keep the sender playing alongside the TV.
+	positionCtx, cancelPosition := context.WithTimeout(ctx, 1500*time.Millisecond)
+	if err = soap(positionCtx, device, "GetPositionInfo", "", &response); err == nil {
 		result.Position, result.HasPosition = clockSeconds(response.Body.Position.Time)
 		result.Duration, _ = clockSeconds(response.Body.Position.Duration)
+		// Some receivers return a zero clock and zero duration after losing
+		// their media surface. This is not a usable progress checkpoint.
+		if result.Position == 0 && result.Duration == 0 {
+			result.HasPosition = false
+		}
 	}
+	cancelPosition()
 	if ctx.Err() != nil {
 		return Status{}, ctx.Err()
 	}

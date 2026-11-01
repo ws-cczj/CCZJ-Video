@@ -3,14 +3,18 @@ package service
 import (
 	"archive/zip"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"runtime/pprof"
+	"regexp"
+	"strings"
 	"time"
 
 	"cczjVideo/app/apperror"
 	"cczjVideo/app/applog"
+	"cczjVideo/app/diagnosticrecording"
 )
 
 // DiagnosticsExport names the report and profiles written by an explicit export.
@@ -19,16 +23,19 @@ type DiagnosticsExport struct {
 	Path                 string `json:"path"`
 	HeapProfilePath      string `json:"heap_profile_path"`
 	GoroutineProfilePath string `json:"goroutine_profile_path"`
+	SummaryPath          string `json:"summary_path"`
 }
 
-// ExportDiagnosticsReport writes a local report, allocation profile and goroutine
-// stacks. It does not force GC, change settings, or transmit diagnostic data.
+// ExportDiagnosticsReport packages bounded local evidence without enabling profiling.
 func (a *App) ExportDiagnosticsReport(frontendJSON string) (*DiagnosticsExport, error) {
 	if len(frontendJSON) > 2<<20 || !json.Valid([]byte(frontendJSON)) {
 		return nil, apperror.New(apperror.Validation, "前端诊断快照不是有效 JSON 或超过 2 MB")
 	}
 	a.modeSwitchMu.RLock()
 	defer a.modeSwitchMu.RUnlock()
+	if a.recording == nil {
+		return nil, apperror.New(apperror.Internal, "诊断记录器尚未初始化")
+	}
 	var envelope struct {
 		Mode string `json:"application_mode"`
 	}
@@ -53,29 +60,48 @@ func (a *App) ExportDiagnosticsReport(frontendJSON string) (*DiagnosticsExport, 
 	}
 	logs = logs[first:]
 	report := map[string]any{
-		"format_version": 1, "captured_at": time.Now().Format(time.RFC3339), "diagnostics": diagnostics,
+		"format_version": 2, "captured_at": time.Now().Format(time.RFC3339), "diagnostics": diagnostics,
 		"runtime": metrics, "frontend": json.RawMessage(frontendJSON),
 		"profile_scope":          "shared_host_process",
 		"logs_scope":             "shared_host_process_recent_ring",
-		"logs":                   logs,
+		"logs":                   diagnosticLogMetadata(logs),
 		"logs_truncated":         first > 0,
 		"logs_records_available": available,
 		"logs_health":            applog.Default().Health(),
 		"logs_capacity":          applog.Default().RingCap(),
 	}
-	result, err := writeDiagnosticsReport(filepath.Join(a.getDataDir(), "exports", "diagnostics"), report)
+	session := a.recording.Session(a.currentMode(), 0)
+	report["session"] = session
+	report["capabilities"] = map[string]any{
+		"timeline_memory_bytes": diagnosticrecording.MaxTimelineBytes, "timeline_max_events": diagnosticrecording.MaxTimelineEvents,
+		"event_max_bytes": diagnosticrecording.MaxEventBytes, "writer_queue_events": 128,
+		"correlation": session.CorrelationScope, "clock": "host_received_at_ms;frontend_client_at_ms_is_separate",
+		"omitted":                   []string{"free_text_logs", "urls", "request_arguments", "content", "settings_values"},
+		"recording_active_snapshot": session.Recording.Active, "upload": "manual_local_export_only",
+	}
+	result, err := writeDiagnosticsReport(filepath.Join(a.getDataDir(), "exports", "diagnostics"), diagnosticMetadata(report, ""))
 	if err != nil {
 		return nil, err
 	}
-	// Bundle only completed recordings: an active writer must not be copied as if final.
-	status := metrics.Recording
-	if status.Path != "" && !status.Active {
-		paths := []string{result.Path, result.HeapProfilePath, result.GoroutineProfilePath, status.Path, status.StartHeapPath, status.StartGoroutinesPath, status.EndHeapPath, status.EndGoroutinesPath}
-		result.BundlePath, err = writeDiagnosticsBundle(result.Path, paths)
-		if err != nil {
-			return nil, apperror.Wrap(apperror.Storage, err, "打包诊断记录失败，原始文件仍已保存")
-		}
+	result.SummaryPath = strings.TrimSuffix(result.Path, ".json") + "-summary.txt"
+	summary := fmt.Sprintf("Diagnostic evidence v2\nMode: %s\nWindow: %d events, %d serialized bytes\nRetention evictions: %d; rejected: %d; recording writer drops: %d\nRecording active at export: %t\nCorrelation: %s\nFrontend events use a separate document clock; host timestamps indicate arrival.\nFindings are observed event counts, not unique incidents or root causes.\nRoutine collection does not retain free text, content, URLs or request arguments.\nThe final frontend batch can be absent after abrupt process termination.\n", a.currentMode(), len(session.Events), session.Bytes, session.Evicted, session.Rejected, session.WriterDropped, session.Recording.Active, session.CorrelationScope)
+	for _, finding := range session.Findings {
+		summary += fmt.Sprintf("%s: %d; evidence: %s\n", finding.Code, finding.Count, strings.Join(finding.Evidence, ", "))
 	}
+	if err = os.WriteFile(result.SummaryPath, []byte(summary), 0600); err != nil {
+		return nil, apperror.Wrap(apperror.Storage, err, "写入诊断摘要失败")
+	}
+	paths := []string{result.Path, result.SummaryPath}
+	status := session.Recording
+	if status.Path != "" && !status.Active {
+		paths = append(paths, status.Path)
+	}
+	paths = append(paths, session.ProfileFiles...)
+	result.BundlePath, err = writeDiagnosticsBundle(result.Path, paths)
+	if err != nil {
+		return nil, apperror.Wrap(apperror.Storage, err, "打包诊断记录失败，原始文件仍已保存")
+	}
+
 	return result, nil
 }
 
@@ -85,21 +111,31 @@ func writeDiagnosticsBundle(reportPath string, paths []string) (string, error) {
 		return "", err
 	}
 	archive := zip.NewWriter(out)
+	var total int64
 	for _, path := range paths {
 		if path == "" {
 			continue
 		}
 		input, openErr := os.Open(path)
-		if os.IsNotExist(openErr) {
-			continue
-		} // A failed recording may have only its partial timeline.
 		if openErr != nil {
 			err = openErr
 			break
 		}
+		info, statErr := input.Stat()
+		if statErr != nil {
+			_ = input.Close()
+			err = statErr
+			break
+		}
+		total += info.Size()
+		if info.Size() > 40<<20 || total > 64<<20 {
+			_ = input.Close()
+			err = errors.New("诊断包超出容量限制")
+			break
+		}
 		entry, writeErr := archive.Create(filepath.Base(path))
 		if writeErr == nil {
-			_, writeErr = io.Copy(entry, input)
+			_, writeErr = io.Copy(entry, io.LimitReader(input, info.Size()))
 		}
 		closeErr := input.Close()
 		if writeErr == nil {
@@ -144,25 +180,63 @@ func writeDiagnosticsReport(root string, report any) (*DiagnosticsExport, error)
 		_ = os.Remove(path)
 		return nil, apperror.Wrap(apperror.Storage, err, "写入诊断报告失败")
 	}
-	base := path[:len(path)-len(".json")]
-	result := &DiagnosticsExport{Path: path, HeapProfilePath: base + "-heap.pprof", GoroutineProfilePath: base + "-goroutines.txt"}
-	for _, item := range []struct {
-		name, path string
-		debug      int
-	}{{"heap", result.HeapProfilePath, 0}, {"goroutine", result.GoroutineProfilePath, 2}} {
-		out, err := os.Create(item.path)
-		if err != nil {
-			return nil, apperror.Wrap(apperror.Storage, err, "创建性能剖析文件失败")
+	return &DiagnosticsExport{Path: path}, nil
+}
+
+var diagnosticLabel = regexp.MustCompile(`^[A-Za-z0-9_.:/; -]{0,180}$`)
+var diagnosticLogField = regexp.MustCompile(`(request_id|parent_request_id|operation|pipeline|code|outcome|duration_ms|mode)="([A-Za-z0-9_.:-]{0,120})"`)
+
+func diagnosticLogMetadata(logs []applog.Record) []map[string]any {
+	rows := make([]map[string]any, 0, len(logs))
+	for _, record := range logs {
+		row := map[string]any{"seq": record.Seq, "ts": record.TS, "level": record.Level, "persisted": record.Persisted}
+		for _, match := range diagnosticLogField.FindAllStringSubmatch(record.Message, 16) {
+			row[match[1]] = match[2]
 		}
-		err = pprof.Lookup(item.name).WriteTo(out, item.debug)
-		closeErr := out.Close()
-		if err == nil {
-			err = closeErr
-		}
-		if err != nil {
-			_ = os.Remove(item.path)
-			return nil, apperror.Wrap(apperror.Storage, err, "写入性能剖析文件失败")
-		}
+		rows = append(rows, row)
 	}
-	return result, nil
+	return rows
+}
+
+// Strings are exported only for documented metadata fields; arbitrary text is omitted.
+func diagnosticMetadata(value any, key string) any {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return nil
+	}
+	var decoded any
+	if json.Unmarshal(data, &decoded) != nil {
+		return nil
+	}
+	return filterDiagnosticMetadata(decoded, key)
+}
+func filterDiagnosticMetadata(value any, key string) any {
+	switch v := value.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(v))
+		for k, item := range v {
+			if cleaned := filterDiagnosticMetadata(item, k); cleaned != nil {
+				out[k] = cleaned
+			}
+		}
+		return out
+	case []any:
+		out := make([]any, 0, len(v))
+		for _, item := range v {
+			if cleaned := filterDiagnosticMetadata(item, key); cleaned != nil {
+				out = append(out, cleaned)
+			}
+		}
+		return out
+	case string:
+		switch key {
+		case "application_mode", "mode", "kind", "name", "code", "outcome", "route", "id", "resource_id", "session_id", "action_id", "request_id", "flight_id", "backend_request_id", "parent_id", "pipeline", "operation", "level", "source", "reason", "scope", "resource_scope", "native_scope", "profile_scope", "logs_scope", "captured_at", "go_version", "app_version", "version", "os", "arch", "phase", "certainty", "evidence", "correlation_scope", "correlation", "clock", "upload", "omitted":
+			if diagnosticLabel.MatchString(v) && !strings.Contains(v, "://") {
+				return v
+			}
+		}
+		return nil
+	default:
+		return value
+	}
 }

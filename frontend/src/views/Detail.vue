@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { CCZJ } from '../constants/cczj'
 defineOptions({ name: 'Detail' })
 import { ref, computed, onMounted, onBeforeUnmount, onActivated, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -129,7 +130,7 @@ function onEpProgressFlushed(): void {
 
 // localStorage 变化监听（跨标签页同步进度）
 function onStorageChange(e: StorageEvent): void {
-  if (e.key === 'cczj_ep_prog_v1') {
+  if (e.key === CCZJ.Storage.episodeProgress) {
     // 其他标签页修改了进度数据，重新加载
     refreshEpProgress()
   }
@@ -457,7 +458,7 @@ async function loadSimilar(): Promise<void> {
 
     // 1. 前端基于内容的推荐
     let results = computeRecommendations(list, currentId, currentName, year)
-    
+
     // 2. 如果前端推荐为空，调用后端兜底（按类型推荐）
     if (results.length === 0) {
       try {
@@ -467,7 +468,7 @@ async function loadSimilar(): Promise<void> {
           limit: 8,
           exclude_ids: [currentId]
         })
-        
+
         if (similar && similar.length > 0) {
           // 转换为 RecommendItem 格式
           results = similar.map((v: any) => ({
@@ -486,7 +487,7 @@ async function loadSimilar(): Promise<void> {
         errorStore.warn(t('detail.recommendFailed'), normalizeApiError(e).message, '', 'Detail')
       }
     }
-    
+
     similarVideos.value = results
   } catch (e) {
     similarVideos.value = []
@@ -503,12 +504,11 @@ function openSimilarVideo(item: RecommendItem): void {
 // ==================== 详情加载 ====================
 
 // 视频数据刷新限制：localStorage key 前缀，5 分钟内只允许刷新一次
-const REFRESH_KEY_PREFIX = 'cczj_video_refresh_'
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000 // 5 分钟
 
 function canRefresh(sourceKey: string, vodId: string): boolean {
   try {
-    const key = REFRESH_KEY_PREFIX + sourceKey + '_' + vodId
+    const key = CCZJ.Keys.videoRefresh(sourceKey, vodId)
     const last = readStorage<string | null>(key, null)
     if (!last) return true
     const elapsed = Date.now() - parseInt(last, 10)
@@ -520,7 +520,7 @@ function canRefresh(sourceKey: string, vodId: string): boolean {
 
 function markRefreshed(sourceKey: string, vodId: string): void {
   try {
-    const key = REFRESH_KEY_PREFIX + sourceKey + '_' + vodId
+    const key = CCZJ.Keys.videoRefresh(sourceKey, vodId)
     writeStorage(key, String(Date.now()))
   } catch { /* ignore */ }
 }

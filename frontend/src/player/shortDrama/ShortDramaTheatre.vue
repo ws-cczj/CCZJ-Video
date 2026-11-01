@@ -2,9 +2,9 @@
 import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
-import { Button, Empty, Spinner } from '../../components/ui'
+import { Button, Empty, Skeleton } from '../../components/ui'
 import Icon from '../../components/Icon.vue'
-import VideoCard from '../../components/VideoCard.vue'
+import VirtualVideoGrid from '../../components/VirtualVideoGrid.vue'
 import { useSourceStore } from '../../stores/source'
 import { useVideoList } from '../../composables/useVideoList'
 import type { Video } from '../../types'
@@ -32,7 +32,7 @@ function search():void {
 }
 watch([currentSourceKey,()=>props.active],([key,active])=>{
   if(!key){list.reset();signature='';return}
-  if(active && (list.interrupted || !list.videos.length || signature!==JSON.stringify([key,filters.value])))load()
+  if(active && (list.interrupted || list.needsRefresh() || !list.videos.length || signature!==JSON.stringify([key,filters.value])))load()
 },{immediate:true,flush:'post'})
 watch([keyword,recent],()=>load())
 </script>
@@ -59,26 +59,26 @@ watch([keyword,recent],()=>load())
       <Button variant="text" :aria-pressed="!recent" @click="recent=false">{{t('shortDrama.allDramas')}}</Button>
       <Button variant="text" :aria-pressed="recent" @click="recent=true">{{t('shortDrama.recentDramas')}}</Button>
     </nav>
-    <div v-if="list.loading && !list.videos.length" class="theatre-empty cczj-flex cczj-items-center cczj-justify-center" role="status"><Spinner :label="t('common.loading')"/></div>
-    <Empty v-else-if="!list.videos.length" class="theatre-empty" :title="list.error ? t('shortDrama.loadFailed') : t('shortDrama.empty')" :description="list.error || t(!currentSourceKey ? 'shortDrama.noSource' : keyword ? 'shortDrama.noMatches' : 'shortDrama.emptyHint')">
-      <Button v-if="currentSourceKey" @click="load()">{{t('common.retry')}}</Button>
+    <Skeleton class="theatre-skeleton" :loading="list.loading && !list.videos.length" variant="cards" :title="false" :rows="6" :label="t('common.loading')">
+    <Empty v-if="!list.videos.length" class="theatre-empty" :title="list.error ? t('shortDrama.loadFailed') : t('shortDrama.empty')" :description="list.error || (list.remoteEmpty ? t('shortDrama.providerEmpty',{source:list.remoteName}) : t(!currentSourceKey ? 'shortDrama.noSource' : keyword ? 'shortDrama.noMatches' : 'shortDrama.emptyHint'))">
+      <Button v-if="currentSourceKey" @click="load(list.nextCursor?list.page+1:1)">{{t(list.nextCursor?'shortDrama.loadMore':'common.retry')}}</Button>
       <router-link v-if="!list.error && !keyword" to="/sources">{{t('sidebar.sources')}}</router-link>
     </Empty>
-    <div v-else class="theatre-grid cczj-grid cczj-gap-8">
-      <VideoCard v-for="item in list.videos" :key="item.vod_id" :video="item" :data-vod-id="item.vod_id" @click="emit('play',item)">
-        <template #meta><span class="theatre-meta cczj-truncate">{{[item.type_name,item.vod_year].filter(Boolean).join(' · ')}}</span></template>
-      </VideoCard>
-    </div>
+    <VirtualVideoGrid v-else class="theatre-grid cczj-grid cczj-gap-8" :items="list.videos" @select="emit('play',$event)">
+      <template #meta="{item}"><span class="theatre-meta cczj-truncate">{{[item.type_name,item.vod_year].filter(Boolean).join(' · ')}}</span></template>
+    </VirtualVideoGrid>
+    </Skeleton>
     <footer v-if="list.videos.length" class="theatre-footer cczj-flex cczj-flex-col cczj-items-center cczj-gap-6">
+      <Button v-if="list.refreshFailed" :loading="list.refreshing" @click="load()">{{t('common.retry')}}</Button>
       <p v-if="list.error" role="alert">{{list.error}}</p>
-      <Button v-if="list.error || list.nextCursor" :loading="list.loading" @click="load(list.error ? pendingPage : list.page+1)">{{t(list.error?'common.retry':'shortDrama.loadMore')}}</Button>
+      <Button v-if="list.error || list.nextCursor" :loading="list.loading||list.refreshing" @click="load(list.error ? pendingPage : list.page+1)">{{t(list.error?'common.retry':'shortDrama.loadMore')}}</Button>
       <span v-else class="theatre-count">{{t('shortDrama.titleCount',{count:list.total})}}</span>
     </footer>
   </div>
 </template>
 
 <style scoped>
-.drama-theatre { padding: 24px 30px; scrollbar-width: thin; }
+.drama-theatre { --theatre-columns:repeat(auto-fill,minmax(160px,1fr)); --cczj-skeleton-columns:var(--theatre-columns); padding: 24px 30px; scrollbar-width: none; }
 .theatre-toolbar h1 { margin: 0; font-size: calc(24rem / 14); font-weight: 600; }
 .theatre-count,.theatre-meta { color: var(--text-muted); font-size: calc(12rem / 14); }
 .theatre-search { padding-left: 12px; border: 1px solid var(--border-strong); border-radius: 10px; color: var(--text-secondary); background: var(--bg-card); }
@@ -92,7 +92,10 @@ watch([keyword,recent],()=>load())
 .theatre-filters .ui-btn { @apply cczj-relative; padding: 12px 0; min-height: 44px; color: var(--text-secondary); font-weight: 400; border-radius: 0; }
 .theatre-filters .ui-btn[aria-pressed=true] { color: var(--text-primary); font-weight: 600; }
 .theatre-filters .ui-btn[aria-pressed=true]::after { content: ''; @apply cczj-absolute cczj-left-0 cczj-right-0 cczj-bottom-0; height: 2px; background: currentColor; }
-.theatre-grid { grid-template-columns: repeat(auto-fill,minmax(160px,1fr)); }
+.theatre-grid { grid-template-columns:var(--theatre-columns); }
+.theatre-skeleton :deep(.ui-skeleton__cards) { @apply cczj-gap-8; }
+.theatre-skeleton :deep(.ui-skeleton__card) { @apply cczj-gap-0 cczj-overflow-hidden; border-radius:12px; background:var(--bg-card); }
+.theatre-skeleton :deep(.ui-skeleton__caption) { padding:12px; min-height:46px; }
 .theatre-grid :deep(.video-card) { border-radius: 12px; }
 .theatre-grid :deep(.video-card:hover) { transform: translateY(-3px); box-shadow: none; }
 .theatre-grid :deep(.poster-badge) { font-weight: 400; }
@@ -113,5 +116,6 @@ watch([keyword,recent],()=>load())
 .theatre-mobile-tabs .theatre-tab-active { color: var(--text-primary); font-weight: 600; }
 .theatre-mobile-tabs .theatre-tab-active::after { content: ''; @apply cczj-absolute cczj-bottom-0; width: 18px; height: 2px; left: calc(50% - 9px); background: currentColor; }
 .drama-theatre-mobile .theatre-filters { margin: 8px 0 16px; }
-.drama-theatre-mobile .theatre-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.drama-theatre-mobile { --theatre-columns:repeat(2,minmax(0,1fr)); }
+.drama-theatre-mobile .theatre-grid,.drama-theatre-mobile .theatre-skeleton :deep(.ui-skeleton__cards) { @apply cczj-gap-6; }
 </style>

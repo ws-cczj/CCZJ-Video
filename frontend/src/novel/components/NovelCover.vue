@@ -11,7 +11,7 @@ const tone = computed(() => [...props.book.title].reduce((sum, char) => sum + ch
       <strong class="cover-title">{{ book.title }}</strong>
       <span v-if="book.author" class="cover-author">{{ book.author }}</span>
     </div>
-    <RemoteImage v-if="book.cover" class="cover-image" :src="book.cover" alt="" loading="lazy" fallback="" />
+    <RemoteImage v-if="book.cover" class="cover-image" :src="book.cover" alt="" loading="lazy" fallback="" :animate="false" />
   </div>
 </template>
 <style scoped>

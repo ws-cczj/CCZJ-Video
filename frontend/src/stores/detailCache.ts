@@ -1,6 +1,7 @@
+import { CCZJ } from '../constants/cczj'
 import * as AppMod from '../api/app'
 import { decodeDetail } from '../api/video'
-import { readStorage } from '../platform/storage'
+import { readStorageRecord } from '../platform/storage'
 import { createDebouncedWriter } from '../platform/debouncedWrite'
 import { normalizePlayLines } from '../utils/playLines'
 import type { Episode, PlayLine, Video, VideoDetailResponse } from '../types'
@@ -19,7 +20,7 @@ interface StoredDetailEntry {
 
 // v3: 详情新增了 $$$ 多线路拆分后的 lines，且 v2 条目里的集表是旧解析器把整条多线路
 // 串当一集存下来的脏地址，必须整体失效而不是继续复用。
-const STORAGE_KEY = 'cczj_detail_cache_v3'
+const STORAGE_KEY = CCZJ.Storage.detailCache
 // 一条多线路影片的条目现在装着每线路的完整集表，体积按线路数翻倍；条目数相应下调，
 // 否则超出浏览器配额时 writeStorage 只会静默丢缓存。
 const MAX_ENTRIES = 12
@@ -64,8 +65,14 @@ let memEntries: Record<string, StoredDetailEntry> | null = null
 
 function detailEntries(): Record<string, StoredDetailEntry> {
   if (!memEntries) {
-    const stored = readStorage<Record<string, StoredDetailEntry>>(STORAGE_KEY, {})
-    memEntries = stored && typeof stored === 'object' ? stored : {}
+    memEntries = readStorageRecord(STORAGE_KEY, (value): value is StoredDetailEntry => {
+      if (!value || typeof value !== 'object') return false
+      const row = value as StoredDetailEntry
+      return Number.isFinite(row.accessedAt) && Number.isFinite(row.cachedAt)
+        && (row.format === 'json' || row.format === 'br')
+        && Array.isArray(row.chunks) && row.chunks.every(chunk => typeof chunk === 'string')
+    })
+    trim(memEntries)
   }
   return memEntries
 }

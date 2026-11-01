@@ -47,5 +47,8 @@ export function useHlsEngine() {
       config: config ? { forward_seconds: config.maxBufferLength, max_forward_seconds: config.maxMaxBufferLength, back_seconds: config.backBufferLength, max_bytes: config.maxBufferSize } : null,
     }
   }
-  return { loadRuntime, create, dispose, snapshot }
+  // Casting leaves the local buffer available for an explicit return to phone.
+  function suspend(): void { active?.stopLoad() }
+  function resume(): void { active?.startLoad(-1) }
+  return { loadRuntime, create, dispose, snapshot, suspend, resume }
 }

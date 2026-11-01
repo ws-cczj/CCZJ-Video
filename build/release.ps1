@@ -1,6 +1,7 @@
 # Shared release build; -Publish runs the complete GitHub release workflow.
 param(
     [string]$Version = '',
+    [string]$ReleaseTag = '',
     [string]$OutDir = 'dist/releases',
     [ValidateSet('ExistingPreview','Environment')][string]$AndroidSigning = 'ExistingPreview',
     [switch]$SkipBuild,
@@ -14,6 +15,7 @@ $ErrorActionPreference = 'Stop'
 $workspace = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location -LiteralPath $workspace
 if ($Publish) {
+    if ($ReleaseTag) { throw 'Custom release tags require the manual prerelease workflow in docs/releases.md.' }
     if ($SkipVerify) { throw 'Publishing always runs repository verification.' }
     $publishArgs = @('scripts/publish-release.mjs','--out-dir',$OutDir,'--android-signing',$AndroidSigning)
     if ($Version) { $publishArgs += @('--version',$Version) }
@@ -26,8 +28,12 @@ if ($Publish) {
 if ($Commit -or $Plan) { throw '-Commit and -Plan require -Publish.' }
 $metadata = Get-Content -LiteralPath version.json -Raw -Encoding UTF8 | ConvertFrom-Json
 if (!$Version) { $Version=$metadata.version }
-if ($Version -ne $metadata.version -or $Version -notmatch '^\d+\.\d+\.\d+$') { throw 'Release version must exactly match version.json.' }
+if ($Version -ne $metadata.version -or $Version -notmatch '^\d+\.\d+\.\d+(?:-beta\.[1-9]\d*)?$') { throw 'Release version must exactly match version.json and use major.minor.patch[-beta.N].' }
 $tag = "v$Version"
+if ($ReleaseTag) {
+    if ($Version -notmatch '-beta\.' -or $ReleaseTag -ne ('v' + $Version.Replace('-beta.', '.beta'))) { throw 'Custom tag must be the matching vX.Y.Z.betaN prerelease alias.' }
+    $tag = $ReleaseTag
+}
 $base = if ([IO.Path]::IsPathRooted($OutDir)) { $OutDir } else { Join-Path $workspace $OutDir }
 $stage = [IO.Path]::GetFullPath((Join-Path $base $tag))
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
@@ -37,6 +43,7 @@ function Run-Step([string]$Label,[scriptblock]$Work) {
     if ($LASTEXITCODE -ne 0) { throw "$Label failed with exit $LASTEXITCODE" }
 }
 if (!$SkipBuild) {
+    Run-Step 'Generate embedded JSON assets' { & node scripts/compress-embedded-json.mjs }
     if (!$SkipVerify) { Run-Step 'Verify repository' { & powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1 -StaticOnly } }
     Run-Step 'Build frontend' { Push-Location frontend; try { & npm run build } finally { Pop-Location } }
     Run-Step 'Package Windows' { & powershell -NoProfile -ExecutionPolicy Bypass -File build/windows/package.ps1 -Version $Version -OutDir $stage -BinOut "bin/cczjVideo-$Version.exe" }

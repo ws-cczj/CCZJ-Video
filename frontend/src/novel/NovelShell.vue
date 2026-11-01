@@ -29,7 +29,7 @@ function back(): void {
   <div class="cczj-novel-shell reading-shell library-room" :class="{ 'novel-native': isMobileRuntime() }">
     <MobileRouteStage :mobile="isMobileRuntime()" :cache="['NovelHome', 'NovelSearch']">
       <template #default="{ Component, route: shownRoute }">
-        <header v-if="!shownRoute.path.startsWith('/novel/read/')" class="reading-header">
+        <header v-if="!shownRoute.path.startsWith('/novel/read/') && (!isMobileRuntime() || !primary(shownRoute.path))" class="reading-header">
           <router-link v-if="primary(shownRoute.path)" class="reading-brand" :to="bookcityLocation"><span class="reading-brand-icon"><Icon name="book-open" :size="22" /></span><strong>CCZJ<span>{{ t('readingUI.novels') }}</span></strong></router-link>
           <template v-else><button class="reading-icon-button" :aria-label="t('common.back')" @click="back"><Icon name="chevron-left" :size="22" /></button><span class="reading-header-title">{{ t(String(shownRoute.meta.title || 'novel.details')) }}</span></template>
           <nav class="reading-desktop-nav" :aria-label="t('novel.navigation')"><router-link v-for="item in navigation" :key="item.path" :to="destination(item.path)" :aria-current="selected(shownRoute.path, item) ? 'page' : undefined"><Icon :name="item.icon" :size="18" />{{ t(item.label) }}</router-link></nav>

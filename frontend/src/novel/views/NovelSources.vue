@@ -1,24 +1,81 @@
 <script setup lang="ts">
+import { isMobileRuntime } from '../../api/runtime'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useBuiltinSources } from '../../reading/useBuiltinSources'
+import { openExternalURL } from '../../api/runtime'
+import { normalizeApiError } from '../../api/app'
 import Icon from '../../components/Icon.vue'
-import { Spinner } from '../../components/ui'
+import { Button, Select, Spinner } from '../../components/ui'
+
 const { t }=useI18n()
-const { query,rows,status,error,data,changing,actionError,toggle,retry,run,inventory,stateLabel }=useBuiltinSources('novel')
+const { query,rows,status,error,data,changing,actionError,toggle,retry,run,stateLabel,inspection,inspecting,inspect,cancelInspection }=useBuiltinSources('novel')
+const section=ref<string|number>('active'),capability=ref<string|number>('all'),linkError=ref('')
+const sections=computed(()=>['all','active','reserve','attention'].map(value=>({value,label:t(`sourceSupply.sections.${value}`,{count:rows.value.filter(row=>value==='all'||row.section===value).length})})))
+const capabilities=computed(()=>['all','discover','content'].map(value=>({value,label:t(`sourceSupply.filters.${value}`)})))
+const filtered=computed(()=>rows.value.filter(row=>(section.value==='all'||row.section===section.value)&&(capability.value==='all'||row.capabilities.includes(String(capability.value)))))
+const page=ref(1)
+const pageCount=computed(()=>Math.max(1,Math.ceil(filtered.value.length/10)))
+const visible=computed(()=>filtered.value.slice((page.value-1)*10,page.value*10))
+watch([query,section,capability],()=>{page.value=1})
+watch(pageCount,count=>{page.value=Math.min(page.value,count)})
+function turnPage(next:number):void {page.value=Math.max(1,Math.min(pageCount.value,next));document.querySelector('.cczj-novel-shell .main-content')?.scrollTo({top:0})}
+const time=(stamp:number)=>new Date(stamp*1000).toLocaleString()
+async function open(url:string):Promise<void>{linkError.value='';try{await openExternalURL(url)}catch(error){linkError.value=normalizeApiError(error).message}}
 </script>
 <template>
   <section class="novel-page novel-source-directory">
-    <header class="book-source-heading"><div><span class="book-source-eyebrow">{{ t('sourceRouting.novelEyebrow') }}</span><h1>{{ t('sourceRouting.novelTitle') }}</h1><p>{{ t('sourceRouting.novelHint') }}</p></div><span class="book-source-stamp"><Icon name="book-open" :size="26" /><b>{{ data?.rows?.length ?? '—' }}</b><small>{{ t('sourceRouting.builtin') }}</small></span></header>
-    <p class="cczj-text-13 cczj-wrap-anywhere" role="status">{{ t('sourceRouting.statusOverview',{ready:inventory.ready,cooling:inventory.cooling,waiting:inventory.unmeasured}) }}</p>
-    <div class="book-source-tools"><label><Icon name="search" :size="18"/><input v-model="query" type="search" :aria-label="t('sourceRouting.findNovel')" :placeholder="t('sourceRouting.findNovel')" /></label><button class="novel-text-button" :disabled="status==='loading'" @click="run()">{{ t('common.refresh') }}</button></div>
-    <p v-if="actionError" class="novel-alert" role="alert">{{ actionError }}</p>
-    <Spinner v-if="status==='loading'&&!data" />
-    <div v-else-if="status==='error'" class="novel-alert"><span>{{ error?.message }}</span><button class="novel-text-button" @click="retry()">{{ t('common.retry') }}</button></div>
-    <ol v-else class="book-source-ledger"><li v-for="(row,index) in rows" :key="row.id" :class="{'is-paused':!row.enabled}"><span class="book-source-number">{{ String(index+1).padStart(2,'0') }}</span><div><h2>{{ row.name }} <small>{{ t(`sourceRouting.pool.${row.pool}`) }}</small></h2><p>{{ t(stateLabel(row)) }}<span v-if="row.checkedAt"> · {{ t('sourceRouting.checkedAt',{time:new Date(row.checkedAt*1000).toLocaleString()}) }}</span></p><p v-if="row.score>=0">{{ t('sourceRouting.novelScore',{score:row.score}) }} · {{ t(`sourceRouting.confidence.${row.confidence}`) }}</p></div><button class="book-source-toggle" :aria-label="t(row.enabled?'sourceRouting.pause':'sourceRouting.enable',{name:row.name})" :aria-pressed="row.enabled" :disabled="!!changing" @click="toggle(row)"><Icon :name="row.enabled?'check':'plus'" :size="16" /><span>{{ t(row.enabled?'sourceRouting.enabled':'sourceRouting.paused') }}</span></button></li></ol>
-    <p v-if="status!=='loading'&&!rows.length" class="novel-empty">{{ t('sourceRouting.noMatch') }}</p>
-    <footer v-if="data" class="book-source-foot"><Icon name="bookmark" :size="16"/><span>{{ t('sourceRouting.rankingHint') }}</span></footer>
+    <header v-if="!isMobileRuntime()"><h1>{{ t('sourceSupply.title') }}</h1></header>
+    <div class="room-search"><Icon name="search" :size="20"/><input v-model="query" type="search" :aria-label="t('sourceRouting.findNovel')" :placeholder="t('sourceSupply.find')"/><Button variant="text" :loading="status==='loading'" @click="run()">{{ t('sourceSupply.refreshRecords') }}</Button></div>
+    <nav class="source-tabs cczj-flex cczj-gap-6" :aria-label="t('sourceSupply.title')"><Button v-for="option in sections" :key="option.value" variant="text" :aria-pressed="section===option.value" @click="section=option.value">{{ option.label }}</Button></nav>
+    <div class="source-filters cczj-flex cczj-items-center cczj-justify-between cczj-gap-6"><span>{{ t('sourceSupply.ranking') }}</span><Select v-model="capability" :options="capabilities" :aria-label="t('sourceSupply.filterCapability')" size="sm" inline/></div>
+    <p v-if="actionError||linkError" class="novel-alert" role="alert">{{ actionError||linkError }}</p>
+    <div v-if="inspecting" class="source-inspection cczj-flex cczj-items-center cczj-flex-wrap cczj-gap-6" role="status"><Spinner inline size="sm"/>{{ t('sourceSupply.checking') }}<Button variant="text" @click="cancelInspection">{{ t('common.cancel') }}</Button></div>
+    <p v-if="inspection.error.value" class="novel-alert" role="alert">{{ inspection.error.value.message }}</p>
+    <details v-if="inspection.data.value&&!inspecting" class="source-inspection" open><summary>{{ t('sourceSupply.checkResult',{name:rows.find(row=>row.sourceKey===inspection.data.value?.sourceKey)?.name??''}) }}</summary><p>{{ t('sourceSupply.sampleScope') }}</p><ul><li v-for="stage in inspection.data.value.stages" :key="stage?.name">{{ t(`librarySources.stage.${stage?.name}`) }} · {{ t(`sourceSupply.operationStates.${stage?.status}`) }}<span v-if="stage?.message"> · {{ stage.message }}</span></li></ul></details>
+    <Spinner v-if="status==='loading'&&!data"/>
+    <div v-else-if="status==='error'" class="novel-alert" role="alert"><span>{{ error?.message }}</span><Button variant="text" @click="retry()">{{ t('common.retry') }}</Button></div>
+    <ol v-if="data" class="source-ledger">
+      <li v-for="row in visible" :key="row.sourceKey">
+        <div class="source-row-heading cczj-flex cczj-items-center cczj-justify-between cczj-gap-6"><div class="cczj-min-w-0"><h2>{{ row.name }}</h2><span class="source-score">{{ t(row.score>=0?'sourceRouting.novelScore':'sourceSupply.unscored',{score:row.score}) }}</span><small>{{ t(`sourceSupply.supply.${row.supply}`) }} · {{ row.family }}</small></div><Button variant="text" :aria-label="t(row.enabled?'sourceRouting.pause':'sourceRouting.enable',{name:row.name})" :aria-pressed="row.enabled" :disabled="!!changing || row.state==='source_unavailable'" @click="toggle(row)"><Icon :name="row.enabled?'check':'plus'" :size="16"/>{{ t(row.enabled?'sourceRouting.enabled':'sourceRouting.paused') }}</Button></div>
+        <p>{{ t(stateLabel(row)) }}<span v-if="!row.enabled"> · {{ t('sourceRouting.paused') }}</span></p>
+        <p v-if="row.reading?.checkedAt">{{ t('sourceSupply.chapterCounts',{readable:row.reading.readable,restricted:row.reading.restricted,failed:row.reading.failed+row.reading.warnings}) }} · {{ time(row.reading.checkedAt) }}</p>
+        <details class="source-details"><summary>{{ t('sourceSupply.details') }}</summary><div class="source-detail-body">
+          <p>{{ t('sourceSupply.capabilities') }}：{{ row.capabilities.map(value=>t(`sourceSupply.capabilitiesList.${value}`)).join(' · ')||t('sourceSupply.invalidConfig') }}</p>
+          <p>{{ t('sourceSupply.protocol') }}：{{ row.protocol||'—' }} · {{ t('sourceSupply.ruleVersion') }} {{ row.revision.slice(0,12) }}</p>
+          <p>{{ t('sourceSupply.familyHint',{family:row.family}) }}</p>
+          <p v-if="row.reading?.stale">{{ t('sourceSupply.staleChapters',{count:row.reading.stale}) }}</p>
+          <p v-if="row.protocol==='fanqie-web'">{{ t('sourceSupply.fanqieLimit') }}</p>
+          <div class="cczj-flex cczj-flex-wrap cczj-gap-4"><Button variant="text" @click="open(row.site)">{{ t('sourceSupply.site') }}</Button><Button v-if="row.origin" variant="text" @click="open(row.origin)">{{ t('sourceSupply.origin') }} · {{ row.project }}</Button><span v-else>{{ t('sourceSupply.originUnknown') }}</span></div>
+          <ul v-if="row.operations.length" class="source-operations"><li v-for="operation in row.operations" :key="operation?.operation"><span>{{ t(`librarySources.stage.${operation?.operation}`) }} · {{ t(`sourceSupply.operationStates.${operation?.status}`) }}<span v-if="operation?.code"> · {{ operation.code }}</span></span><small>{{ operation?.checkedAt?time(operation.checkedAt):'—' }}</small></li></ul>
+          <p v-if="row.deepAt">{{ t('sourceSupply.deepAt',{time:time(row.deepAt)}) }}</p>
+          <p>{{ t('sourceSupply.sampleScope') }}</p>
+          <Button :disabled="!!inspecting" @click="inspect(row)">{{ t('sourceSupply.inspect') }}</Button>
+        </div></details>
+      </li>
+    </ol>
+    <p v-if="status!=='loading'&&!visible.length" class="novel-empty">{{ t('sourceRouting.noMatch') }}</p>
+    <nav v-if="pageCount>1" class="source-pagination cczj-flex cczj-items-center cczj-justify-between cczj-gap-6" :aria-label="t('sourceSupply.pages')"><Button variant="text" :disabled="page===1" @click="turnPage(page-1)">{{ t('novelUpgrade.previousPage') }}</Button><span>{{ page }} / {{ pageCount }}</span><Button variant="text" :disabled="page===pageCount" @click="turnPage(page+1)">{{ t('novelUpgrade.nextPage') }}</Button></nav>
+    <footer v-if="data"><p>{{ t('sourceSupply.subscription') }}</p><p>{{ t('sourceSupply.inventory',{adapted:data.rows.length,pending:data.awaitingAdapter}) }}</p><p>{{ t('sourceSupply.foot') }}</p></footer>
   </section>
 </template>
 <style scoped>
-.novel-source-directory{max-width:900px;margin:auto}.book-source-heading{@apply cczj-flex cczj-justify-between;gap:24px;@apply cczj-items-center;padding:22px 0 32px}.book-source-eyebrow{letter-spacing:.22em;font-size:calc(11rem / 14);color:var(--novel-red,#986344)}.book-source-heading h1{font-family:var(--room-serif,serif);font-size:calc(34rem / 14);font-weight:500;margin:12px 0}.book-source-heading p,.book-source-foot{font-size:calc(13rem / 14);opacity:.65;line-height:1.8}.book-source-stamp{@apply cczj-grid;place-items:center;gap:4px;width:90px;min-width:90px;height:112px;border-radius:45px 45px 6px 6px;background:color-mix(in srgb,#bc8e56 13%,transparent);color:var(--novel-red,#986344)}.book-source-stamp b{font:calc(26rem / 14) Georgia,serif}.book-source-stamp small{font-size:calc(10rem / 14)}.book-source-tools{@apply cczj-flex;gap:14px;@apply cczj-items-center;margin-bottom:18px}.book-source-tools label{@apply cczj-flex;gap:10px;@apply cczj-items-center;flex:1;background:color-mix(in srgb,currentColor 4%,transparent);padding:12px 16px;border-radius:9px}.book-source-tools input{border:0;background:none;outline:none;color:inherit;@apply cczj-min-w-0;width:100%;font-size:calc(13rem / 14)}.book-source-ledger{list-style:none;margin:0;padding:0;@apply cczj-grid;gap:10px}.book-source-ledger li{@apply cczj-flex cczj-items-center;gap:16px;padding:20px 18px;border-radius:10px;background:var(--novel-surface,#fcfaf5);box-shadow:0 2px 16px #5b452005}.book-source-ledger li>div{flex:1;@apply cczj-min-w-0}.book-source-number{font:italic calc(18rem / 14) Georgia,serif;opacity:.38}.book-source-ledger h2{font-size:calc(15rem / 14);font-weight:500;margin:0;overflow-wrap:anywhere}.book-source-ledger h2 small{@apply cczj-inline-block;font-size:calc(10rem / 14);font-weight:400;margin-left:7px;padding:3px 7px;border-radius:4px;background:color-mix(in srgb,#a87945 10%,transparent);color:var(--novel-red,#986344)}.book-source-ledger p{font-size:calc(11rem / 14);opacity:.6;margin:8px 0 0}.book-source-toggle{@apply cczj-flex cczj-items-center;gap:6px;border:0;background:transparent;color:var(--novel-red,#986344);font-size:calc(12rem / 14);padding:10px;cursor:pointer;@apply cczj-flex-shrink-0}.is-paused{opacity:.55}.book-source-foot{@apply cczj-flex;gap:10px;margin-top:26px;@apply cczj-items-center}@media(max-width:600px){.book-source-heading{padding-top:8px;gap:14px}.book-source-heading h1{font-size:calc(28rem / 14)}.book-source-stamp{width:68px;min-width:68px;height:96px}.book-source-ledger li{padding:15px 10px;gap:10px}.book-source-number{font-size:calc(15rem / 14)}.book-source-toggle span{@apply cczj-hidden}.book-source-ledger h2 small{margin:5px 0 0;display:table}}
+.novel-source-directory{max-width:900px;margin:auto}
+.novel-source-directory header h1{font-family:var(--room-serif,serif);font-size:calc(28rem / 14);margin:8px 0 12px}
+.novel-source-directory p,.novel-source-directory small{color:var(--novel-muted);font-size:calc(12rem / 14);line-height:1.8;overflow-wrap:anywhere}
+.source-tabs{@apply cczj-overflow-x-auto;white-space:nowrap;border-bottom:1px solid var(--novel-line);padding:10px 0 0}
+.source-tabs>.ui-btn{@apply cczj-flex-shrink-0;border-radius:0}
+.source-tabs>[aria-pressed="true"]{color:var(--novel-red);box-shadow:inset 0 -2px var(--novel-red)}
+.source-filters{margin:12px 0;color:var(--novel-muted);font-size:calc(12rem / 14)}
+.source-score{@apply cczj-block;color:var(--novel-red);font-size:calc(12rem / 14)}
+.source-pagination{padding:16px 0;font-size:calc(12rem / 14)}
+.source-ledger{list-style:none;margin:0;padding:0}
+.source-ledger>li{padding:20px 0;border-bottom:1px solid var(--novel-line)}
+.source-ledger h2{font-size:calc(16rem / 14);margin:0 0 6px;overflow-wrap:anywhere}
+.source-details summary{color:var(--novel-red);font-size:calc(12rem / 14);padding:8px 0;@apply cczj-cursor-pointer}
+.source-details summary:focus-visible{outline:2px solid var(--novel-red);outline-offset:2px}
+.source-detail-body{padding:8px 12px;background:var(--novel-surface);border-radius:8px}
+.source-operations{list-style:none;padding:0}.source-operations li{@apply cczj-grid;gap:4px;margin:12px 0;font-size:calc(12rem / 14);overflow-wrap:anywhere}
+.source-inspection{padding:12px 0;font-size:calc(12rem / 14);line-height:1.8;overflow-wrap:anywhere}
+.novel-source-directory footer{margin-top:24px}
 </style>

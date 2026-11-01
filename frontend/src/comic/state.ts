@@ -1,3 +1,4 @@
+import { CCZJ } from '../constants/cczj'
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { parseRefKey, refKey, refOf } from '../api/library'
@@ -8,9 +9,9 @@ import { readingPersistence, readingRecord } from '../reading/persistence'
 
 // v2：键从作品 id 换成 {kind, sourceKey, remoteId} 复合键（ADR 0016）。
 // 旧的 v1 键不再读——里面只有已下线的演示作品。
-const FOLLOW_KEY = 'cczj.comic.follow.v2'
-const PROGRESS_KEY = 'cczj.comic.progress.v2'
-const PREFERENCES_KEY = 'cczj.comic.preferences.v2'
+const FOLLOW_KEY = CCZJ.Legacy.comicFollow
+const PROGRESS_KEY = CCZJ.Legacy.comicProgress
+const PREFERENCES_KEY = CCZJ.Legacy.comicPreferences
 
 function readFollowed(): ComicShelfEntry[] {
   const raw = readStorage<unknown>(FOLLOW_KEY, [])

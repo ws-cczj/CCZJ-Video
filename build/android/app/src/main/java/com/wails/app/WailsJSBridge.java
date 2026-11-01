@@ -83,6 +83,13 @@ public class WailsJSBridge {
         if (view != null && view.getContext() instanceof MainActivity)
             ((MainActivity) view.getContext()).setSystemBarColor(color);
     }
+    @JavascriptInterface public boolean readerSystemBars(String owner, boolean reading) {
+        WebView view = webView;
+        if (view == null || closed.get() || owner == null || owner.isEmpty() || owner.length() > 80) return false;
+        if (!(view.getContext() instanceof MainActivity)) return false;
+        ((MainActivity) view.getContext()).readerSystemBars(owner, reading);
+        return true;
+    }
     @JavascriptInterface public void setSystemBarColors(String status, String navigation) {
         WebView view = webView;
         if (view != null && view.getContext() instanceof MainActivity)

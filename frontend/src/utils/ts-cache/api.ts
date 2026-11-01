@@ -28,7 +28,7 @@ import {
   prefetchNextEpisode,
   setPlaybackBufferAhead,
 } from './prefetch'
-import { TsCacheLoader } from './loader'
+import { TsCacheLoader, TsCachePreviewLoader } from './loader'
 import { notifyFragmentRequested } from './telemetry'
 import {
   cache,
@@ -155,6 +155,7 @@ export function stats() {
     ...playbackCacheStatus(),
     hits: h, misses: m, entries: cachedForCurEp, totalEntries: cache.lruCache.size,
     bytes: cache.totalCacheBytes, totalSegments: segs.length,
+    networkBytes: telemetry.networkBytes,
     playedSegments: played,
     hitRate: total === 0 ? 0 : h / total,
     avgFetchMs: avgMs,
@@ -294,6 +295,7 @@ export const TsCache = {
   // ⭐ v1.7.0-beta.1 统一 loader：hls.js 新 API，一个 loader 处理所有请求类型
   //   用法: new Hls({ loader: TsCache.TsCacheLoader })
   TsCacheLoader,
+  TsCachePreviewLoader,
   fetchAndParseM3u8, getM3u8FromCache, setM3u8Cache,
   prefetchFromSegments: prefetchFromSegments,
   // ⭐ v3: 网络诊断 + ABR 集成

@@ -21,14 +21,14 @@ export interface ReadingProgress {
   updatedAt: number
 }
 
-export interface ReadingPreferences { wheelPaging:boolean; keyboardPaging:boolean; previousKey:string; nextKey:string; size: number; theme: ReadingTheme; serif: boolean; flow: 'paged' | 'scroll'; leading: number; margin: number; brightness: number; systemBrightness: boolean }
+export interface ReadingPreferences { dayTheme?: 'paper' | 'white'; wheelPaging:boolean; keyboardPaging:boolean; previousKey:string; nextKey:string; size: number; theme: ReadingTheme; serif: boolean; flow: 'paged' | 'scroll'; leading: number; margin: number; brightness: number; systemBrightness: boolean }
 export const DEFAULT_READING_PREFERENCES: ReadingPreferences = { wheelPaging:true,keyboardPaging:true,previousKey:'ArrowLeft',nextKey:'ArrowRight',size: 20, theme: 'paper', serif: true, flow: 'scroll', leading: 1.85, margin: 24, brightness: .8, systemBrightness: true }
 
 export function normalizeReadingPreferences(raw: unknown): ReadingPreferences {
   const value = raw && typeof raw === 'object' ? raw as Partial<ReadingPreferences> : {}
   const previousKey=normalizeReaderKey(value.previousKey,'ArrowLeft')
   const nextKey=normalizeReaderKey(value.nextKey,'ArrowRight')
-  return { wheelPaging:typeof value.wheelPaging==='boolean'?value.wheelPaging:true,keyboardPaging:typeof value.keyboardPaging==='boolean'?value.keyboardPaging:true,previousKey,nextKey:nextKey===previousKey?(previousKey==='ArrowRight'?'ArrowLeft':'ArrowRight'):nextKey,size: typeof value.size === 'number' && Number.isFinite(value.size) ? Math.max(16,Math.min(28,Math.round(value.size))) : 20,
+  return { dayTheme: value.theme === 'white' ? 'white' : value.dayTheme === 'white' ? 'white' : 'paper', wheelPaging:typeof value.wheelPaging==='boolean'?value.wheelPaging:true,keyboardPaging:typeof value.keyboardPaging==='boolean'?value.keyboardPaging:true,previousKey,nextKey:nextKey===previousKey?(previousKey==='ArrowRight'?'ArrowLeft':'ArrowRight'):nextKey,size: typeof value.size === 'number' && Number.isFinite(value.size) ? Math.max(16,Math.min(28,Math.round(value.size))) : 20,
     theme: ['paper','white','night'].includes(String(value.theme)) ? value.theme as ReadingTheme : 'paper', serif: typeof value.serif === 'boolean' ? value.serif : true,
     flow: value.flow === 'paged' ? 'paged' : 'scroll', leading: [1.6,1.85,2.1].includes(Number(value.leading)) ? Number(value.leading) : 1.85,
     margin: [16,24,32].includes(Number(value.margin)) ? Number(value.margin) : 24,

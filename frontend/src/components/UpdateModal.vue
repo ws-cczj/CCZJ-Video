@@ -18,7 +18,7 @@ import {
 } from '../stores/updateState'
 import { licensePending } from '../stores/licenseState'
 import Icon from './Icon.vue'
-import { Button, Modal } from './ui'
+import { Button, Modal, MotionTransition } from './ui'
 import { onBackendEvent } from '../api/events'
 import { isMobileRuntime, isIOSRuntime } from '../api/runtime'
 import { openAndroidUpdateInstaller } from '../platform/updateInstaller'
@@ -61,6 +61,7 @@ interface UpdateInfoData {
 const updateInfo = shallowRef<UpdateInfoData | null>(null)
 
 const backgroundTitle = computed(() => {
+	if (updateDownloadError.value) return tr('update.downloadFailed')
   if (updateDownloaded.value) return tr(onExitPlanned.value ? 'update.onExitTitle' : 'update.downloadedTitle')
   if (updateDownloadProgress.downloaded === 0) return tr('update.connecting')
   if (updateDownloadProgress.total > 0 && updateDownloadProgress.downloaded >= updateDownloadProgress.total) return tr('update.verifying')
@@ -68,6 +69,7 @@ const backgroundTitle = computed(() => {
 })
 
 const backgroundDetail = computed(() => {
+	if (updateDownloadError.value) return tr('update.backgroundRetry')
   if (updateDownloaded.value) return onExitPlanned.value
     ? tr('update.onExitTarget', { version: updateInfo.value?.latest_version || '' })
     : tr(isMobileRuntime() ? 'update.readyToInstallMobile' : 'update.readyToInstall')
@@ -77,21 +79,7 @@ const backgroundDetail = computed(() => {
   return updateDownloadProgress.downloaded > 0 ? fmtSize(updateDownloadProgress.downloaded) : '...'
 })
 
-let backgroundTipId = ''
-watch([updateDownloading, updateDownloaded, updateDownloadError, licensePending], () => {
-  if (backgroundTipId) errorStore.dismiss(backgroundTipId)
-  backgroundTipId = ''
-  if (licensePending.value || updateDownloadError.value || !(updateDownloading.value || updateDownloaded.value)) return
-  backgroundTipId = errorStore.push({
-    level: 'info',
-    title: backgroundTitle.value,
-    message: backgroundDetail.value,
-    source: 'update.status',
-    autoDismiss: 5000,
-    actionLabel: tr('common.details'),
-    action: () => { updateModalOpen.value = true },
-  }).id
-}, { immediate: true })
+const backgroundVisible = computed(() => !licensePending.value && !updateModalOpen.value && (updateDownloading.value || updateDownloaded.value || updateDownloadError.value))
 
 // ---------- 检查更新 ----------
 async function doCheckUpdate(): Promise<void> {
@@ -263,6 +251,8 @@ async function doIgnore(): Promise<void> {
   if (!updateInfo.value?.latest_version) return
   try {
     await IgnoreVersion(updateInfo.value.latest_version)
+    dismissedVersion = updateInfo.value.latest_version
+    presentationGeneration++
     await ClearPendingUpdateInfo()
     // 忽略这个版本就不该再在退出时偷偷换上它：安排是隐形的（只在关停那一刻兑现），
     // 界面既然已经接受了「这个版本不要了」，就顺手把它撤掉。
@@ -274,11 +264,12 @@ async function doIgnore(): Promise<void> {
     const state = loadDownloadState()
     if (state && state.version === updateInfo.value.latest_version) {
       clearDownloadState()
-      updateDownloaded.value = false
-      updateDownloadPath.value = ''
     }
+    updateDownloaded.value = false
+    updateDownloadPath.value = ''
+    updateDownloadError.value = false
     updateModalOpen.value = false
-  } catch { /* ignore */ }
+  } catch (error) { errorStore.fromError(tr('update.ignoreFailed'),error,'UpdateModal.ignore') }
 }
 
 // ---------- 关闭弹窗（支持后台下载） ----------
@@ -294,12 +285,7 @@ function onClose(): void {
   }
   updateModalOpen.value = false
   checkFailed.value = false
-  // 只有下载完成且未安装时才清除
-  if (updateDownloaded.value) {
-    // 保留状态，允许下次打开继续安装
-  } else {
-    ClearPendingUpdateInfo()
-  }
+  // Closing suppresses this document only. The next startup checks again.
 }
 
 // ---------- 事件监听 ----------
@@ -403,7 +389,6 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  if (backgroundTipId) errorStore.dismiss(backgroundTipId)
   disposed = true
   stopUpdateDownload()
   reads.cancel()
@@ -420,6 +405,18 @@ onUnmounted(() => {
 </script>
 
 <template>
+  <Teleport to="body">
+    <MotionTransition preset="toast">
+      <aside v-if="backgroundVisible" class="update-background cczj-border cczj-rounded-xl" :aria-label="tr('update.backgroundStatus')">
+        <Button variant="text" block :aria-label="tr('update.backgroundDetails')" @click="updateModalOpen=true">
+          <Icon :name="updateDownloadError?'alert-circle':updateDownloaded?'check':'download'" :size="20" />
+          <span class="update-background-copy cczj-min-w-0 cczj-text-left"><strong class="cczj-block">{{backgroundTitle}}</strong><small class="cczj-block cczj-text-secondary">{{backgroundDetail}}</small></span>
+          <Icon name="chevron-right" :size="18" />
+        </Button>
+        <progress v-if="updateDownloading" class="update-background-progress cczj-w-full" :aria-label="tr('update.downloading')" :value="updateDownloadProgress.total>0?updateDownloadProgress.percent:undefined" max="100" />
+      </aside>
+    </MotionTransition>
+  </Teleport>
   <Modal
     :model-value="updateModalOpen"
     :title="checkFailed ? tr('update.fetchFailed') : (updateDownloaded ? tr('update.downloadedTitle') : (updateDownloading ? tr('update.downloading') : tr('update.foundNew')))"
@@ -593,6 +590,13 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.update-background{@apply cczj-fixed cczj-overflow-hidden;right:max(16px,env(safe-area-inset-right,0px));bottom:24px;width:min(320px,calc(100vw - 32px));background:var(--bg-card);box-shadow:0 8px 28px #0003;z-index:var(--z-toast)}
+.update-background :deep(.ui-btn__content){@apply cczj-w-full cczj-justify-between cczj-gap-6}
+.update-background :deep(.ui-btn){white-space:normal;padding:14px}
+.update-background-copy{flex:1;overflow-wrap:anywhere}
+.update-background-copy small{margin-top:4px;line-height:1.5}
+.update-background-progress{@apply cczj-block;border:0;height:4px;accent-color:var(--accent)}
+@media(max-width:700px){.update-background{bottom:calc(88px + env(safe-area-inset-bottom,0px));right:max(12px,env(safe-area-inset-right,0px));width:min(320px,calc(100vw - 24px))}}
 /* 版本更新弹窗 */
 .update-header { @apply cczj-gap-8; padding: 8px 0 16px; border-bottom: 1px dashed var(--border); @apply cczj-mb-8; }
 .update-icon { width: 52px; height: 52px; border-radius: 14px; background: var(--accent); color: var(--accent-contrast); box-shadow: 0 6px 18px var(--accent-alpha-35); @apply cczj-flex-shrink-0; }

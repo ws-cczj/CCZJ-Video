@@ -190,12 +190,23 @@ export function CancelInstallOnExit() {
 }
 
 /**
+ * CaptureDiagnosticsProfile is separate from routine collection and report export.
+ * @param {string} kind
+ * @returns {$CancellablePromise<diagnosticrecording$0.ProfileStatus>}
+ */
+export function CaptureDiagnosticsProfile(kind) {
+    return $Call.ByID(1036448982, kind).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType3($result);
+    }));
+}
+
+/**
  * CheckUpdate 检查是否有新版本（每次调用都获取最新信息，无缓存）
  * @returns {$CancellablePromise<updater$0.UpdateInfo | null>}
  */
 export function CheckUpdate() {
     return $Call.ByID(4205003776).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType4($result);
+        return $$createType5($result);
     }));
 }
 
@@ -230,7 +241,7 @@ export function ClearPendingUpdateInfo() {
  */
 export function ClearRecycleBin(req) {
     return $Call.ByID(853364054, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType6($result);
+        return $$createType7($result);
     }));
 }
 
@@ -239,7 +250,7 @@ export function ClearRecycleBin(req) {
  */
 export function ComicBrowseChannels() {
     return $Call.ByID(3344514942).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType8($result);
+        return $$createType9($result);
     }));
 }
 
@@ -250,7 +261,7 @@ export function ComicBrowseChannels() {
  */
 export function ComicBrowsePage(channel, refresh) {
     return $Call.ByID(2493726229, channel, refresh).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType10($result);
+        return $$createType11($result);
     }));
 }
 
@@ -262,7 +273,7 @@ export function ComicBrowsePage(channel, refresh) {
  */
 export function ComicEpisodeMatch(itemID, chapterID, targetItemID) {
     return $Call.ByID(179700718, itemID, chapterID, targetItemID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType12($result);
+        return $$createType13($result);
     }));
 }
 
@@ -273,7 +284,7 @@ export function ComicEpisodeMatch(itemID, chapterID, targetItemID) {
  */
 export function ComicSourceAlternatives(itemID, cursor) {
     return $Call.ByID(3439691213, itemID, cursor).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType14($result);
+        return $$createType15($result);
     }));
 }
 
@@ -282,7 +293,7 @@ export function ComicSourceAlternatives(itemID, cursor) {
  */
 export function ComicSourceDirectory() {
     return $Call.ByID(3197455860).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType16($result);
+        return $$createType17($result);
     }));
 }
 
@@ -293,7 +304,7 @@ export function ComicSourceDirectory() {
  */
 export function ComicTrending(board, refresh) {
     return $Call.ByID(355161357, board, refresh).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType18($result);
+        return $$createType19($result);
     }));
 }
 
@@ -335,7 +346,7 @@ export function ControlCastVideo(id, action, seconds) {
  */
 export function CreateSource(s) {
     return $Call.ByID(2817784226, s).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType20($result);
+        return $$createType21($result);
     }));
 }
 
@@ -353,7 +364,7 @@ export function DanmakuBind(binding) {
  */
 export function DanmakuBinding(key) {
     return $Call.ByID(2758507841, key).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType22($result);
+        return $$createType23($result);
     }));
 }
 
@@ -364,7 +375,7 @@ export function DanmakuBinding(key) {
  */
 export function DanmakuEpisodes(provider, ref) {
     return $Call.ByID(2484184430, provider, ref).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType24($result);
+        return $$createType25($result);
     }));
 }
 
@@ -374,7 +385,7 @@ export function DanmakuEpisodes(provider, ref) {
  */
 export function DanmakuMatch(request) {
     return $Call.ByID(2376402113, request).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType25($result);
+        return $$createType26($result);
     }));
 }
 
@@ -385,7 +396,7 @@ export function DanmakuMatch(request) {
  */
 export function DanmakuSearch(provider, query) {
     return $Call.ByID(2106378748, provider, query).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType27($result);
+        return $$createType28($result);
     }));
 }
 
@@ -405,7 +416,7 @@ export function DanmakuUnbind(key) {
  */
 export function DanmakuWindow(key, positionMS, freshDays) {
     return $Call.ByID(1951360540, key, positionMS, freshDays).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType29($result);
+        return $$createType30($result);
     }));
 }
 
@@ -458,7 +469,7 @@ export function DeleteVideo(req) {
  */
 export function DiscoverCastDevices() {
     return $Call.ByID(338219454).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType31($result);
+        return $$createType32($result);
     }));
 }
 
@@ -468,7 +479,7 @@ export function DiscoverCastDevices() {
  */
 export function DoubanChart() {
     return $Call.ByID(3633955378).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType33($result);
+        return $$createType34($result);
     }));
 }
 
@@ -479,7 +490,7 @@ export function DoubanChart() {
  */
 export function DoubanChartResolve(subjectID) {
     return $Call.ByID(2696723730, subjectID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType34($result);
+        return $$createType35($result);
     }));
 }
 
@@ -490,7 +501,7 @@ export function DoubanChartResolve(subjectID) {
  */
 export function DoubanDetail(req) {
     return $Call.ByID(2818697375, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType36($result);
+        return $$createType37($result);
     }));
 }
 
@@ -501,7 +512,7 @@ export function DoubanDetail(req) {
  */
 export function DoubanGetAll(req) {
     return $Call.ByID(2619093073, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType38($result);
+        return $$createType39($result);
     }));
 }
 
@@ -512,7 +523,7 @@ export function DoubanGetAll(req) {
  */
 export function DoubanSearch(req) {
     return $Call.ByID(2673907054, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType40($result);
+        return $$createType41($result);
     }));
 }
 
@@ -522,7 +533,7 @@ export function DoubanSearch(req) {
  */
 export function DoubanStatus() {
     return $Call.ByID(3246315936).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType41($result);
+        return $$createType42($result);
     }));
 }
 
@@ -541,7 +552,7 @@ export function DoubanTriggerNow() {
  */
 export function DoubanUpdateVideo(req) {
     return $Call.ByID(409764154, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType43($result);
+        return $$createType44($result);
     }));
 }
 
@@ -555,14 +566,13 @@ export function DownloadUpdate(downloadURL) {
 }
 
 /**
- * ExportDiagnosticsReport writes a local report, allocation profile and goroutine
- * stacks. It does not force GC, change settings, or transmit diagnostic data.
+ * ExportDiagnosticsReport packages bounded local evidence without enabling profiling.
  * @param {string} frontendJSON
  * @returns {$CancellablePromise<$models.DiagnosticsExport | null>}
  */
 export function ExportDiagnosticsReport(frontendJSON) {
     return $Call.ByID(2304146369, frontendJSON).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType45($result);
+        return $$createType46($result);
     }));
 }
 
@@ -575,7 +585,7 @@ export function ExportDiagnosticsReport(frontendJSON) {
  */
 export function ExportLogs(req) {
     return $Call.ByID(2796678590, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType47($result);
+        return $$createType48($result);
     }));
 }
 
@@ -605,7 +615,7 @@ export function FileExists(path) {
  */
 export function FindSourcesByGlobalId(globalId) {
     return $Call.ByID(3720248185, globalId).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType49($result);
+        return $$createType50($result);
     }));
 }
 
@@ -614,7 +624,7 @@ export function FindSourcesByGlobalId(globalId) {
  */
 export function GetAllSources() {
     return $Call.ByID(825039058).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType50($result);
+        return $$createType51($result);
     }));
 }
 
@@ -639,7 +649,7 @@ export function GetAppVersion() {
  */
 export function GetCastStatus(id) {
     return $Call.ByID(433216660, id).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType51($result);
+        return $$createType52($result);
     }));
 }
 
@@ -657,7 +667,7 @@ export function GetCloseBehavior() {
  */
 export function GetCollectSchedule() {
     return $Call.ByID(1325905564).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType53($result);
+        return $$createType54($result);
     }));
 }
 
@@ -668,7 +678,7 @@ export function GetCollectSchedule() {
  */
 export function GetCollectStatus(sourceKey) {
     return $Call.ByID(3019320799, sourceKey).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType55($result);
+        return $$createType56($result);
     }));
 }
 
@@ -680,7 +690,7 @@ export function GetCollectStatus(sourceKey) {
  */
 export function GetCollectStatuses(keys) {
     return $Call.ByID(2191542919, keys).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType56($result);
+        return $$createType57($result);
     }));
 }
 
@@ -690,7 +700,7 @@ export function GetCollectStatuses(keys) {
  */
 export function GetDiagnostics() {
     return $Call.ByID(4240521739).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType58($result);
+        return $$createType59($result);
     }));
 }
 
@@ -700,7 +710,17 @@ export function GetDiagnostics() {
  */
 export function GetDiagnosticsRecordingStatus() {
     return $Call.ByID(1121581144).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType59($result);
+        return $$createType60($result);
+    }));
+}
+
+/**
+ * GetDiagnosticsSession returns the current mode's last 200 metadata events.
+ * @returns {$CancellablePromise<diagnosticrecording$0.Session>}
+ */
+export function GetDiagnosticsSession() {
+    return $Call.ByID(668333365).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType61($result);
     }));
 }
 
@@ -711,7 +731,7 @@ export function GetDiagnosticsRecordingStatus() {
  */
 export function GetDoubanComments(req) {
     return $Call.ByID(114590814, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType61($result);
+        return $$createType63($result);
     }));
 }
 
@@ -737,7 +757,7 @@ export function GetDownloadDir() {
  */
 export function GetDownloadProgress(taskID) {
     return $Call.ByID(3137031638, taskID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType63($result);
+        return $$createType65($result);
     }));
 }
 
@@ -748,7 +768,7 @@ export function GetDownloadProgress(taskID) {
  */
 export function GetFavorites(page, pageSize) {
     return $Call.ByID(338696190, page, pageSize).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType65($result);
+        return $$createType67($result);
     }));
 }
 
@@ -768,7 +788,7 @@ export function GetGlobalIdForVideo(sourceKey, vodId) {
  */
 export function GetGlobalTypes() {
     return $Call.ByID(3342542643).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType68($result);
+        return $$createType70($result);
     }));
 }
 
@@ -796,12 +816,12 @@ export function GetIgnoredVersion() {
  */
 export function GetLastInstallReport() {
     return $Call.ByID(1213851906).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType69($result);
+        return $$createType71($result);
     }));
 }
 
 /**
- * GetLastStartVersion 返回上次启动时的版本号（参考 lx-music-desktop 的 getLastStartInfo）
+ * GetLastStartVersion 返回上次启动时的版本号。
  * 用于检测版本升级，决定是否展示 changelog
  * @returns {$CancellablePromise<string>}
  */
@@ -832,7 +852,7 @@ export function GetLogDir() {
  */
 export function GetLogFiles() {
     return $Call.ByID(178353920).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType71($result);
+        return $$createType73($result);
     }));
 }
 
@@ -858,7 +878,7 @@ export function GetLogLevel() {
  */
 export function GetLogList() {
     return $Call.ByID(2452539313).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType72($result);
+        return $$createType74($result);
     }));
 }
 
@@ -870,7 +890,7 @@ export function GetLogList() {
  */
 export function GetLogRecords(sinceSeq, limit) {
     return $Call.ByID(289149917, sinceSeq, limit).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType74($result);
+        return $$createType76($result);
     }));
 }
 
@@ -880,7 +900,7 @@ export function GetLogRecords(sinceSeq, limit) {
  */
 export function GetLogStats() {
     return $Call.ByID(2486763388).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType75($result);
+        return $$createType77($result);
     }));
 }
 
@@ -890,7 +910,7 @@ export function GetLogStats() {
  */
 export function GetPendingInstall() {
     return $Call.ByID(2757112003).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType76($result);
+        return $$createType78($result);
     }));
 }
 
@@ -900,7 +920,7 @@ export function GetPendingInstall() {
  */
 export function GetPendingUpdateInfo() {
     return $Call.ByID(2351689049).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType4($result);
+        return $$createType5($result);
     }));
 }
 
@@ -919,7 +939,7 @@ export function GetPluginDirectory() {
  */
 export function GetRecentHistory(limit) {
     return $Call.ByID(1166984082, limit).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType79($result);
+        return $$createType81($result);
     }));
 }
 
@@ -929,7 +949,7 @@ export function GetRecentHistory(limit) {
  */
 export function GetRecommend(req) {
     return $Call.ByID(882431737, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType82($result);
+        return $$createType84($result);
     }));
 }
 
@@ -940,7 +960,7 @@ export function GetRecommend(req) {
  */
 export function GetRecycleBin(req) {
     return $Call.ByID(1748409807, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType84($result);
+        return $$createType86($result);
     }));
 }
 
@@ -949,7 +969,7 @@ export function GetRecycleBin(req) {
  */
 export function GetRuntimeMetrics() {
     return $Call.ByID(1570547360).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType86($result);
+        return $$createType88($result);
     }));
 }
 
@@ -963,12 +983,22 @@ export function GetSetting(key) {
 
 /**
  * ======================== Video ========================
+ * @param {string} sourceKey
+ * @returns {$CancellablePromise<media$0.ShortDramaCategory[]>}
+ */
+export function GetShortDramaCategories(sourceKey) {
+    return $Call.ByID(2732426200, sourceKey).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType90($result);
+    }));
+}
+
+/**
  * @param {media$0.ShortDramaPageReq} req
  * @returns {$CancellablePromise<media$0.ShortDramaPage | null>}
  */
 export function GetShortDramaPage(req) {
     return $Call.ByID(3946790799, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType88($result);
+        return $$createType92($result);
     }));
 }
 
@@ -978,7 +1008,7 @@ export function GetShortDramaPage(req) {
  */
 export function GetSimilarVideos(req) {
     return $Call.ByID(45236606, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType82($result);
+        return $$createType84($result);
     }));
 }
 
@@ -989,7 +1019,7 @@ export function GetSimilarVideos(req) {
  */
 export function GetSourceDetail(sourceKey) {
     return $Call.ByID(2597841381, sourceKey).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType90($result);
+        return $$createType94($result);
     }));
 }
 
@@ -1000,7 +1030,7 @@ export function GetSourceDetail(sourceKey) {
  */
 export function GetSourceParamsDoc(sourceKey) {
     return $Call.ByID(1529784668, sourceKey).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType92($result);
+        return $$createType96($result);
     }));
 }
 
@@ -1009,7 +1039,7 @@ export function GetSourceParamsDoc(sourceKey) {
  */
 export function GetSourceStats() {
     return $Call.ByID(3049570047).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType94($result);
+        return $$createType98($result);
     }));
 }
 
@@ -1021,7 +1051,7 @@ export function GetSourceStats() {
  */
 export function GetSwapBackupInfo() {
     return $Call.ByID(1754414832).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType95($result);
+        return $$createType99($result);
     }));
 }
 
@@ -1031,7 +1061,7 @@ export function GetSwapBackupInfo() {
  */
 export function GetTypes(req) {
     return $Call.ByID(757410166, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType98($result);
+        return $$createType102($result);
     }));
 }
 
@@ -1041,7 +1071,7 @@ export function GetTypes(req) {
  */
 export function GetVideoDetail(req) {
     return $Call.ByID(2872254585, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType100($result);
+        return $$createType104($result);
     }));
 }
 
@@ -1051,7 +1081,7 @@ export function GetVideoDetail(req) {
  */
 export function GetVideoList(req) {
     return $Call.ByID(2333127456, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType102($result);
+        return $$createType106($result);
     }));
 }
 
@@ -1062,7 +1092,7 @@ export function GetVideoList(req) {
  */
 export function GetWatchedEpisodes(req) {
     return $Call.ByID(1791408515, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType103($result);
+        return $$createType107($result);
     }));
 }
 
@@ -1073,7 +1103,7 @@ export function GetWatchedEpisodes(req) {
  */
 export function GetYearsAndAreas(sourceKey) {
     return $Call.ByID(3741290708, sourceKey).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType105($result);
+        return $$createType109($result);
     }));
 }
 
@@ -1135,7 +1165,7 @@ export function ImportSourceVideos(sourceKey, videos) {
  */
 export function InstallPlugin(path) {
     return $Call.ByID(3261460977, path).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType107($result);
+        return $$createType111($result);
     }));
 }
 
@@ -1182,7 +1212,7 @@ export function LegacyDataMerge() {
  */
 export function LegacyDataNotice() {
     return $Call.ByID(1227919308).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType108($result);
+        return $$createType112($result);
     }));
 }
 
@@ -1198,7 +1228,7 @@ export function LegacyDataNotice() {
  */
 export function LibraryAddSource(kind, name, apiURL, document) {
     return $Call.ByID(3952384756, kind, name, apiURL, document).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType110($result);
+        return $$createType114($result);
     }));
 }
 
@@ -1208,19 +1238,17 @@ export function LibraryAddSource(kind, name, apiURL, document) {
  */
 export function LibraryCatalogPage(query) {
     return $Call.ByID(2805597442, query).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType112($result);
+        return $$createType116($result);
     }));
 }
 
 /**
- * LibraryChapterPages 取一话的图片列表。返回的 URL 已经是同源代理地址，
- * 前端直接当 <img src> 用，不要自己拼。
  * @param {number} chapterID
  * @returns {$CancellablePromise<library$0.ChapterPages | null>}
  */
 export function LibraryChapterPages(chapterID) {
     return $Call.ByID(2534040201, chapterID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType114($result);
+        return $$createType118($result);
     }));
 }
 
@@ -1232,7 +1260,7 @@ export function LibraryChapterPages(chapterID) {
  */
 export function LibraryChapterText(chapterID) {
     return $Call.ByID(1872750780, chapterID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType116($result);
+        return $$createType120($result);
     }));
 }
 
@@ -1244,7 +1272,7 @@ export function LibraryChapterText(chapterID) {
  */
 export function LibraryCheckSourceCandidate(previewID, id, keyword) {
     return $Call.ByID(760707968, previewID, id, keyword).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType118($result);
+        return $$createType122($result);
     }));
 }
 
@@ -1255,7 +1283,7 @@ export function LibraryCheckSourceCandidate(previewID, id, keyword) {
  */
 export function LibraryComicContext(location) {
     return $Call.ByID(3924812262, location).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType120($result);
+        return $$createType124($result);
     }));
 }
 
@@ -1274,7 +1302,7 @@ export function LibraryDeleteSource(sourceKey) {
  */
 export function LibraryImportSources(previewID, ids) {
     return $Call.ByID(1538793243, previewID, ids).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType123($result);
+        return $$createType127($result);
     }));
 }
 
@@ -1286,7 +1314,7 @@ export function LibraryImportSources(previewID, ids) {
  */
 export function LibraryItem(itemID, refresh) {
     return $Call.ByID(788125673, itemID, refresh).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType125($result);
+        return $$createType129($result);
     }));
 }
 
@@ -1300,7 +1328,7 @@ export function LibraryItem(itemID, refresh) {
  */
 export function LibraryItems(kind, includeRetired) {
     return $Call.ByID(2370725742, kind, includeRetired).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType128($result);
+        return $$createType132($result);
     }));
 }
 
@@ -1311,7 +1339,7 @@ export function LibraryItems(kind, includeRetired) {
  */
 export function LibraryNovelContext(location) {
     return $Call.ByID(3778927223, location).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType130($result);
+        return $$createType134($result);
     }));
 }
 
@@ -1323,7 +1351,7 @@ export function LibraryNovelContext(location) {
  */
 export function LibraryPreviewSources(kind, input, origin) {
     return $Call.ByID(3448062992, kind, input, origin).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType132($result);
+        return $$createType136($result);
     }));
 }
 
@@ -1333,7 +1361,19 @@ export function LibraryPreviewSources(kind, input, origin) {
  */
 export function LibraryRefreshChapterPages(chapterID) {
     return $Call.ByID(1644980834, chapterID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType114($result);
+        return $$createType118($result);
+    }));
+}
+
+/**
+ * LibraryChapterPages 取一话的图片列表。返回的 URL 已经是同源代理地址，
+ * 前端直接当 <img src> 用，不要自己拼。
+ * @param {number} chapterID
+ * @returns {$CancellablePromise<library$0.ChapterText | null>}
+ */
+export function LibraryRefreshChapterText(chapterID) {
+    return $Call.ByID(4194743613, chapterID).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType120($result);
     }));
 }
 
@@ -1343,7 +1383,7 @@ export function LibraryRefreshChapterPages(chapterID) {
  */
 export function LibraryRefreshComicContext(location) {
     return $Call.ByID(1057846905, location).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType120($result);
+        return $$createType124($result);
     }));
 }
 
@@ -1353,7 +1393,7 @@ export function LibraryRefreshComicContext(location) {
  */
 export function LibraryRefreshNovelContext(location) {
     return $Call.ByID(341259896, location).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType130($result);
+        return $$createType134($result);
     }));
 }
 
@@ -1364,7 +1404,7 @@ export function LibraryRefreshNovelContext(location) {
  */
 export function LibraryRefreshReadingToc(itemID, chapterID) {
     return $Call.ByID(3040636275, itemID, chapterID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType125($result);
+        return $$createType129($result);
     }));
 }
 
@@ -1375,7 +1415,7 @@ export function LibraryRefreshReadingToc(itemID, chapterID) {
  */
 export function LibraryRefreshToc(itemID) {
     return $Call.ByID(620818849, itemID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType125($result);
+        return $$createType129($result);
     }));
 }
 
@@ -1392,7 +1432,7 @@ export function LibraryRefreshToc(itemID) {
  */
 export function LibraryResolveRef(kind, sourceKey, remoteID) {
     return $Call.ByID(13463611, kind, sourceKey, remoteID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType127($result);
+        return $$createType131($result);
     }));
 }
 
@@ -1402,7 +1442,7 @@ export function LibraryResolveRef(kind, sourceKey, remoteID) {
  */
 export function LibraryResolveRefs(refs) {
     return $Call.ByID(2338832728, refs).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType128($result);
+        return $$createType132($result);
     }));
 }
 
@@ -1416,7 +1456,7 @@ export function LibraryResolveRefs(refs) {
  */
 export function LibrarySearch(kind, keyword, page) {
     return $Call.ByID(1555703578, kind, keyword, page).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType14($result);
+        return $$createType15($result);
     }));
 }
 
@@ -1430,7 +1470,7 @@ export function LibrarySearch(kind, keyword, page) {
  */
 export function LibrarySearchPage(kind, keyword, cursor) {
     return $Call.ByID(2882346785, kind, keyword, cursor).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType14($result);
+        return $$createType15($result);
     }));
 }
 
@@ -1443,7 +1483,7 @@ export function LibrarySearchPage(kind, keyword, cursor) {
  */
 export function LibrarySearchStream(kind, keyword, cursor, requestID) {
     return $Call.ByID(2066228450, kind, keyword, cursor, requestID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType14($result);
+        return $$createType15($result);
     }));
 }
 
@@ -1463,7 +1503,7 @@ export function LibrarySetSourceEnabled(sourceKey, enabled) {
  */
 export function LibrarySources(kind) {
     return $Call.ByID(3405475444, kind).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType133($result);
+        return $$createType137($result);
     }));
 }
 
@@ -1477,7 +1517,7 @@ export function LibrarySources(kind) {
  */
 export function LibraryTestSource(sourceKey) {
     return $Call.ByID(1295220463, sourceKey).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType135($result);
+        return $$createType139($result);
     }));
 }
 
@@ -1497,7 +1537,7 @@ export function LibraryUpdateSource(sourceKey, name, apiURL, document) {
  */
 export function ListDownloads() {
     return $Call.ByID(1588133360).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType136($result);
+        return $$createType140($result);
     }));
 }
 
@@ -1510,7 +1550,7 @@ export function ListDownloads() {
  */
 export function ListIdentityMergeCandidates(limit) {
     return $Call.ByID(3979086165, limit).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType138($result);
+        return $$createType142($result);
     }));
 }
 
@@ -1520,7 +1560,7 @@ export function ListIdentityMergeCandidates(limit) {
  */
 export function ListPlugins() {
     return $Call.ByID(391646733).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType139($result);
+        return $$createType143($result);
     }));
 }
 
@@ -1531,7 +1571,18 @@ export function ListPlugins() {
  */
 export function MergeGlobalVideoIdentities(req) {
     return $Call.ByID(1126943779, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType141($result);
+        return $$createType145($result);
+    }));
+}
+
+/**
+ * @param {number} itemID
+ * @param {boolean} refresh
+ * @returns {$CancellablePromise<library$0.NovelBookSourceCache | null>}
+ */
+export function NovelBookSources(itemID, refresh) {
+    return $Call.ByID(1536682028, itemID, refresh).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType147($result);
     }));
 }
 
@@ -1541,7 +1592,7 @@ export function MergeGlobalVideoIdentities(req) {
  */
 export function NovelBrowseChannels() {
     return $Call.ByID(2381885973).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType8($result);
+        return $$createType9($result);
     }));
 }
 
@@ -1554,7 +1605,7 @@ export function NovelBrowseChannels() {
  */
 export function NovelBrowsePage(channel, cursor, refresh) {
     return $Call.ByID(3527857942, channel, cursor, refresh).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType143($result);
+        return $$createType149($result);
     }));
 }
 
@@ -1566,7 +1617,20 @@ export function NovelBrowsePage(channel, cursor, refresh) {
  */
 export function NovelChapterMatch(itemID, chapterID, targetItemID) {
     return $Call.ByID(3693029657, itemID, chapterID, targetItemID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType12($result);
+        return $$createType13($result);
+    }));
+}
+
+/**
+ * @param {number} itemID
+ * @param {number} chapterID
+ * @param {number} targetItemID
+ * @param {number} targetChapterID
+ * @returns {$CancellablePromise<library$0.PreparedNovelSwitch | null>}
+ */
+export function NovelPrepareSourceSwitch(itemID, chapterID, targetItemID, targetChapterID) {
+    return $Call.ByID(2853593431, itemID, chapterID, targetItemID, targetChapterID).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType151($result);
     }));
 }
 
@@ -1577,7 +1641,7 @@ export function NovelChapterMatch(itemID, chapterID, targetItemID) {
  */
 export function NovelSourceAlternatives(itemID, cursor) {
     return $Call.ByID(1813890874, itemID, cursor).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType14($result);
+        return $$createType15($result);
     }));
 }
 
@@ -1586,7 +1650,7 @@ export function NovelSourceAlternatives(itemID, cursor) {
  */
 export function NovelSourceDirectory() {
     return $Call.ByID(2913509737).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType16($result);
+        return $$createType17($result);
     }));
 }
 
@@ -1651,7 +1715,7 @@ export function PlayCastVideo(id, url, title) {
  */
 export function ProbePlayLines(req) {
     return $Call.ByID(1924265112, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType146($result);
+        return $$createType154($result);
     }));
 }
 
@@ -1663,7 +1727,7 @@ export function ProbePlayLines(req) {
  */
 export function ProbeSource(sourceKey) {
     return $Call.ByID(3656666958, sourceKey).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType148($result);
+        return $$createType156($result);
     }));
 }
 
@@ -1679,7 +1743,7 @@ export function ProbeSource(sourceKey) {
  */
 export function ProbeSources() {
     return $Call.ByID(1486404871).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType149($result);
+        return $$createType157($result);
     }));
 }
 
@@ -1699,7 +1763,7 @@ export function ProxyImage(urlStr) {
  */
 export function PurgeVideo(req) {
     return $Call.ByID(1064747585, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType6($result);
+        return $$createType7($result);
     }));
 }
 
@@ -1720,7 +1784,7 @@ export function QuitApp() {
  */
 export function ReadLogPage(req) {
     return $Call.ByID(951167816, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType151($result);
+        return $$createType159($result);
     }));
 }
 
@@ -1776,7 +1840,7 @@ export function ReadingStateApply(kind, changesJSON) {
  */
 export function ReadingStateLoad(kind, legacyJSON) {
     return $Call.ByID(2857846006, kind, legacyJSON).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType153($result);
+        return $$createType161($result);
     }));
 }
 
@@ -1802,7 +1866,7 @@ export function RemoveFavorite(req) {
  */
 export function RescanPlugins() {
     return $Call.ByID(1136531585).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType139($result);
+        return $$createType143($result);
     }));
 }
 
@@ -1900,7 +1964,7 @@ export function ScheduleInstallOnExit(filePath, version) {
  */
 export function SchemaNotice() {
     return $Call.ByID(1184465708).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType154($result);
+        return $$createType162($result);
     }));
 }
 
@@ -1916,7 +1980,7 @@ export function SchemaNotice() {
  */
 export function SearchSource(sourceKey, keyword, page, pageSize) {
     return $Call.ByID(3664031674, sourceKey, keyword, page, pageSize).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType156($result);
+        return $$createType164($result);
     }));
 }
 
@@ -1932,7 +1996,7 @@ export function SearchSource(sourceKey, keyword, page, pageSize) {
  */
 export function SearchSourceRequest(sourceKey, keyword, page, pageSize, requestID) {
     return $Call.ByID(600422519, sourceKey, keyword, page, pageSize, requestID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType156($result);
+        return $$createType164($result);
     }));
 }
 
@@ -1942,7 +2006,7 @@ export function SearchSourceRequest(sourceKey, keyword, page, pageSize, requestI
  */
 export function SearchVideos(req) {
     return $Call.ByID(4044799011, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType102($result);
+        return $$createType106($result);
     }));
 }
 
@@ -1972,7 +2036,7 @@ export function SetCloseBehavior(minimize) {
  */
 export function SetCollectSchedule(cfg) {
     return $Call.ByID(2657596784, cfg).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType157($result);
+        return $$createType165($result);
     }));
 }
 
@@ -2042,6 +2106,15 @@ export function SetSetting(key, value) {
 }
 
 /**
+ * @param {string} sourceKey
+ * @param {string[]} ids
+ * @returns {$CancellablePromise<boolean>}
+ */
+export function SetShortDramaCategories(sourceKey, ids) {
+    return $Call.ByID(2703275436, sourceKey, ids);
+}
+
+/**
  * SetSourceSchedule 设置单个源的调度配置
  * @param {collection$0.SourceScheduleReq} req
  * @returns {$CancellablePromise<void>}
@@ -2080,7 +2153,7 @@ export function SetTitleBarTheme(theme) {
  */
 export function SourceProbeTimeline() {
     return $Call.ByID(2708450711).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType159($result);
+        return $$createType167($result);
     }));
 }
 
@@ -2091,7 +2164,7 @@ export function SourceProbeTimeline() {
  */
 export function SpeedTestPlayLines(req) {
     return $Call.ByID(3808625327, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType161($result);
+        return $$createType169($result);
     }));
 }
 
@@ -2101,17 +2174,17 @@ export function SpeedTestPlayLines(req) {
  */
 export function StartCollect(req) {
     return $Call.ByID(3723794385, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType55($result);
+        return $$createType56($result);
     }));
 }
 
 /**
- * StartDiagnosticsRecording enables background sampling until stopped or the app exits.
+ * StartDiagnosticsRecording starts a bounded, low-frequency reproduction session.
  * @returns {$CancellablePromise<diagnosticrecording$0.Status>}
  */
 export function StartDiagnosticsRecording() {
     return $Call.ByID(1447452562).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType59($result);
+        return $$createType60($result);
     }));
 }
 
@@ -2131,7 +2204,7 @@ export function StartLogStream() {
  */
 export function StartVideoDownload(req) {
     return $Call.ByID(565771572, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType63($result);
+        return $$createType65($result);
     }));
 }
 
@@ -2153,12 +2226,12 @@ export function StopCollect(req) {
 }
 
 /**
- * StopDiagnosticsRecording closes the timeline and captures final Go profiles.
+ * StopDiagnosticsRecording drains accepted events and closes the timeline.
  * @returns {$CancellablePromise<diagnosticrecording$0.Status>}
  */
 export function StopDiagnosticsRecording() {
     return $Call.ByID(1199522980).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType59($result);
+        return $$createType60($result);
     }));
 }
 
@@ -2168,6 +2241,17 @@ export function StopDiagnosticsRecording() {
  */
 export function StopLogStream() {
     return $Call.ByID(87049575);
+}
+
+/**
+ * SubmitDiagnosticsEvents accepts metadata batches without waiting for disk writes.
+ * @param {string} payload
+ * @returns {$CancellablePromise<$models.DiagnosticsReceipt>}
+ */
+export function SubmitDiagnosticsEvents(payload) {
+    return $Call.ByID(572159628, payload).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType170($result);
+    }));
 }
 
 /**
@@ -2219,7 +2303,7 @@ export function WindowGetResizable() {
  */
 export function WindowGetSize() {
     return $Call.ByID(4147060312).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType163($result);
+        return $$createType172($result);
     }));
 }
 
@@ -2290,164 +2374,173 @@ export function WriteLog(entry) {
 const $$createType0 = backup$0.ArchiveInfo.createFrom;
 const $$createType1 = $Create.Array($$createType0);
 const $$createType2 = backup$0.Result.createFrom;
-const $$createType3 = updater$0.UpdateInfo.createFrom;
-const $$createType4 = $Create.Nullable($$createType3);
-const $$createType5 = media$0.RecycleResult.createFrom;
-const $$createType6 = $Create.Nullable($$createType5);
-const $$createType7 = provider$0.BrowseChannel.createFrom;
-const $$createType8 = $Create.Array($$createType7);
-const $$createType9 = library$0.ComicBrowsePage.createFrom;
-const $$createType10 = $Create.Nullable($$createType9);
-const $$createType11 = library$0.ChapterMatch.createFrom;
-const $$createType12 = $Create.Nullable($$createType11);
-const $$createType13 = library$0.SearchOutcome.createFrom;
-const $$createType14 = $Create.Nullable($$createType13);
-const $$createType15 = library$0.SourceDirectory.createFrom;
-const $$createType16 = $Create.Nullable($$createType15);
-const $$createType17 = library$0.ComicTrendPage.createFrom;
-const $$createType18 = $Create.Nullable($$createType17);
-const $$createType19 = model$0.Source.createFrom;
-const $$createType20 = $Create.Nullable($$createType19);
-const $$createType21 = danmaku$0.Binding.createFrom;
-const $$createType22 = $Create.Nullable($$createType21);
-const $$createType23 = danmaku$0.Episode.createFrom;
-const $$createType24 = $Create.Array($$createType23);
-const $$createType25 = danmaku$0.MatchResult.createFrom;
-const $$createType26 = danmaku$0.Candidate.createFrom;
-const $$createType27 = $Create.Array($$createType26);
-const $$createType28 = danmaku$0.Window.createFrom;
-const $$createType29 = $Create.Nullable($$createType28);
-const $$createType30 = cast$0.Device.createFrom;
-const $$createType31 = $Create.Array($$createType30);
-const $$createType32 = douban$0.ChartVideoItem.createFrom;
-const $$createType33 = $Create.Array($$createType32);
-const $$createType34 = $Create.Nullable($$createType32);
-const $$createType35 = $models.DoubanDetailResp.createFrom;
-const $$createType36 = $Create.Nullable($$createType35);
-const $$createType37 = $models.DoubanGetAllResp.createFrom;
-const $$createType38 = $Create.Nullable($$createType37);
-const $$createType39 = $models.DoubanSearchResp.createFrom;
-const $$createType40 = $Create.Nullable($$createType39);
-const $$createType41 = $Create.Map($Create.Any, $Create.Any);
-const $$createType42 = douban$0.DoubanInfo.createFrom;
-const $$createType43 = $Create.Nullable($$createType42);
-const $$createType44 = $models.DiagnosticsExport.createFrom;
-const $$createType45 = $Create.Nullable($$createType44);
-const $$createType46 = $models.ExportLogsResult.createFrom;
-const $$createType47 = $Create.Nullable($$createType46);
-const $$createType48 = db$0.SourceVideoRef.createFrom;
-const $$createType49 = $Create.Array($$createType48);
-const $$createType50 = $Create.Array($$createType20);
-const $$createType51 = cast$0.Status.createFrom;
-const $$createType52 = collection$0.SchedulerStatus.createFrom;
-const $$createType53 = $Create.Nullable($$createType52);
-const $$createType54 = collection$0.CollectStatus.createFrom;
-const $$createType55 = $Create.Nullable($$createType54);
-const $$createType56 = $Create.Array($$createType55);
-const $$createType57 = $models.Diagnostics.createFrom;
-const $$createType58 = $Create.Nullable($$createType57);
-const $$createType59 = diagnosticrecording$0.Status.createFrom;
-const $$createType60 = douban$0.DoubanCommentsResp.createFrom;
-const $$createType61 = $Create.Nullable($$createType60);
-const $$createType62 = engine$0.Status.createFrom;
+const $$createType3 = diagnosticrecording$0.ProfileStatus.createFrom;
+const $$createType4 = updater$0.UpdateInfo.createFrom;
+const $$createType5 = $Create.Nullable($$createType4);
+const $$createType6 = media$0.RecycleResult.createFrom;
+const $$createType7 = $Create.Nullable($$createType6);
+const $$createType8 = provider$0.BrowseChannel.createFrom;
+const $$createType9 = $Create.Array($$createType8);
+const $$createType10 = library$0.ComicBrowsePage.createFrom;
+const $$createType11 = $Create.Nullable($$createType10);
+const $$createType12 = library$0.ChapterMatch.createFrom;
+const $$createType13 = $Create.Nullable($$createType12);
+const $$createType14 = library$0.SearchOutcome.createFrom;
+const $$createType15 = $Create.Nullable($$createType14);
+const $$createType16 = library$0.SourceDirectory.createFrom;
+const $$createType17 = $Create.Nullable($$createType16);
+const $$createType18 = library$0.ComicTrendPage.createFrom;
+const $$createType19 = $Create.Nullable($$createType18);
+const $$createType20 = model$0.Source.createFrom;
+const $$createType21 = $Create.Nullable($$createType20);
+const $$createType22 = danmaku$0.Binding.createFrom;
+const $$createType23 = $Create.Nullable($$createType22);
+const $$createType24 = danmaku$0.Episode.createFrom;
+const $$createType25 = $Create.Array($$createType24);
+const $$createType26 = danmaku$0.MatchResult.createFrom;
+const $$createType27 = danmaku$0.Candidate.createFrom;
+const $$createType28 = $Create.Array($$createType27);
+const $$createType29 = danmaku$0.Window.createFrom;
+const $$createType30 = $Create.Nullable($$createType29);
+const $$createType31 = cast$0.Device.createFrom;
+const $$createType32 = $Create.Array($$createType31);
+const $$createType33 = douban$0.ChartVideoItem.createFrom;
+const $$createType34 = $Create.Array($$createType33);
+const $$createType35 = $Create.Nullable($$createType33);
+const $$createType36 = $models.DoubanDetailResp.createFrom;
+const $$createType37 = $Create.Nullable($$createType36);
+const $$createType38 = $models.DoubanGetAllResp.createFrom;
+const $$createType39 = $Create.Nullable($$createType38);
+const $$createType40 = $models.DoubanSearchResp.createFrom;
+const $$createType41 = $Create.Nullable($$createType40);
+const $$createType42 = $Create.Map($Create.Any, $Create.Any);
+const $$createType43 = douban$0.DoubanInfo.createFrom;
+const $$createType44 = $Create.Nullable($$createType43);
+const $$createType45 = $models.DiagnosticsExport.createFrom;
+const $$createType46 = $Create.Nullable($$createType45);
+const $$createType47 = $models.ExportLogsResult.createFrom;
+const $$createType48 = $Create.Nullable($$createType47);
+const $$createType49 = db$0.SourceVideoRef.createFrom;
+const $$createType50 = $Create.Array($$createType49);
+const $$createType51 = $Create.Array($$createType21);
+const $$createType52 = cast$0.Status.createFrom;
+const $$createType53 = collection$0.SchedulerStatus.createFrom;
+const $$createType54 = $Create.Nullable($$createType53);
+const $$createType55 = collection$0.CollectStatus.createFrom;
+const $$createType56 = $Create.Nullable($$createType55);
+const $$createType57 = $Create.Array($$createType56);
+const $$createType58 = $models.Diagnostics.createFrom;
+const $$createType59 = $Create.Nullable($$createType58);
+const $$createType60 = diagnosticrecording$0.Status.createFrom;
+const $$createType61 = diagnosticrecording$0.Session.createFrom;
+const $$createType62 = douban$0.DoubanCommentsResp.createFrom;
 const $$createType63 = $Create.Nullable($$createType62);
-const $$createType64 = db$0.FavWithVideo.createFrom;
-const $$createType65 = $Create.Array($$createType64);
-const $$createType66 = db$0.GlobalTypeRow.createFrom;
-const $$createType67 = $Create.Nullable($$createType66);
-const $$createType68 = $Create.Array($$createType67);
-const $$createType69 = update$0.InstallReport.createFrom;
-const $$createType70 = $models.LogFileInfo.createFrom;
-const $$createType71 = $Create.Array($$createType70);
-const $$createType72 = $Create.Array($Create.Any);
-const $$createType73 = applog$0.Record.createFrom;
-const $$createType74 = $Create.Array($$createType73);
-const $$createType75 = $models.LogStats.createFrom;
-const $$createType76 = update$0.PendingInstall.createFrom;
-const $$createType77 = media$0.HistoryItemWithVideo.createFrom;
-const $$createType78 = $Create.Nullable($$createType77);
-const $$createType79 = $Create.Array($$createType78);
-const $$createType80 = model$0.Video.createFrom;
-const $$createType81 = $Create.Nullable($$createType80);
-const $$createType82 = $Create.Array($$createType81);
-const $$createType83 = media$0.RecycleListResp.createFrom;
-const $$createType84 = $Create.Nullable($$createType83);
-const $$createType85 = $models.RuntimeMetrics.createFrom;
+const $$createType64 = engine$0.Status.createFrom;
+const $$createType65 = $Create.Nullable($$createType64);
+const $$createType66 = db$0.FavWithVideo.createFrom;
+const $$createType67 = $Create.Array($$createType66);
+const $$createType68 = db$0.GlobalTypeRow.createFrom;
+const $$createType69 = $Create.Nullable($$createType68);
+const $$createType70 = $Create.Array($$createType69);
+const $$createType71 = update$0.InstallReport.createFrom;
+const $$createType72 = $models.LogFileInfo.createFrom;
+const $$createType73 = $Create.Array($$createType72);
+const $$createType74 = $Create.Array($Create.Any);
+const $$createType75 = applog$0.Record.createFrom;
+const $$createType76 = $Create.Array($$createType75);
+const $$createType77 = $models.LogStats.createFrom;
+const $$createType78 = update$0.PendingInstall.createFrom;
+const $$createType79 = media$0.HistoryItemWithVideo.createFrom;
+const $$createType80 = $Create.Nullable($$createType79);
+const $$createType81 = $Create.Array($$createType80);
+const $$createType82 = model$0.Video.createFrom;
+const $$createType83 = $Create.Nullable($$createType82);
+const $$createType84 = $Create.Array($$createType83);
+const $$createType85 = media$0.RecycleListResp.createFrom;
 const $$createType86 = $Create.Nullable($$createType85);
-const $$createType87 = media$0.ShortDramaPage.createFrom;
+const $$createType87 = $models.RuntimeMetrics.createFrom;
 const $$createType88 = $Create.Nullable($$createType87);
-const $$createType89 = source$0.SourceDetail.createFrom;
-const $$createType90 = $Create.Nullable($$createType89);
-const $$createType91 = source$0.SourceParamsDoc.createFrom;
+const $$createType89 = media$0.ShortDramaCategory.createFrom;
+const $$createType90 = $Create.Array($$createType89);
+const $$createType91 = media$0.ShortDramaPage.createFrom;
 const $$createType92 = $Create.Nullable($$createType91);
-const $$createType93 = model$0.SourceStat.createFrom;
-const $$createType94 = $Create.Array($$createType93);
-const $$createType95 = update$0.RollbackInfo.createFrom;
-const $$createType96 = model$0.VType.createFrom;
-const $$createType97 = $Create.Nullable($$createType96);
+const $$createType93 = source$0.SourceDetail.createFrom;
+const $$createType94 = $Create.Nullable($$createType93);
+const $$createType95 = source$0.SourceParamsDoc.createFrom;
+const $$createType96 = $Create.Nullable($$createType95);
+const $$createType97 = model$0.SourceStat.createFrom;
 const $$createType98 = $Create.Array($$createType97);
-const $$createType99 = media$0.VideoDetailResp.createFrom;
-const $$createType100 = $Create.Nullable($$createType99);
-const $$createType101 = media$0.VideoListResp.createFrom;
-const $$createType102 = $Create.Nullable($$createType101);
-const $$createType103 = $Create.Array($Create.Any);
-const $$createType104 = media$0.YearsResp.createFrom;
-const $$createType105 = $Create.Nullable($$createType104);
-const $$createType106 = plugin$0.Info.createFrom;
-const $$createType107 = $Create.Nullable($$createType106);
-const $$createType108 = $models.LegacyNotice.createFrom;
-const $$createType109 = library$0.SourceInfo.createFrom;
-const $$createType110 = $Create.Nullable($$createType109);
-const $$createType111 = library$0.CatalogPage.createFrom;
-const $$createType112 = $Create.Nullable($$createType111);
-const $$createType113 = library$0.ChapterPages.createFrom;
+const $$createType99 = update$0.RollbackInfo.createFrom;
+const $$createType100 = model$0.VType.createFrom;
+const $$createType101 = $Create.Nullable($$createType100);
+const $$createType102 = $Create.Array($$createType101);
+const $$createType103 = media$0.VideoDetailResp.createFrom;
+const $$createType104 = $Create.Nullable($$createType103);
+const $$createType105 = media$0.VideoListResp.createFrom;
+const $$createType106 = $Create.Nullable($$createType105);
+const $$createType107 = $Create.Array($Create.Any);
+const $$createType108 = media$0.YearsResp.createFrom;
+const $$createType109 = $Create.Nullable($$createType108);
+const $$createType110 = plugin$0.Info.createFrom;
+const $$createType111 = $Create.Nullable($$createType110);
+const $$createType112 = $models.LegacyNotice.createFrom;
+const $$createType113 = library$0.SourceInfo.createFrom;
 const $$createType114 = $Create.Nullable($$createType113);
-const $$createType115 = library$0.ChapterText.createFrom;
+const $$createType115 = library$0.CatalogPage.createFrom;
 const $$createType116 = $Create.Nullable($$createType115);
-const $$createType117 = library$0.SourceCandidate.createFrom;
+const $$createType117 = library$0.ChapterPages.createFrom;
 const $$createType118 = $Create.Nullable($$createType117);
-const $$createType119 = library$0.ReadingContext.createFrom;
+const $$createType119 = library$0.ChapterText.createFrom;
 const $$createType120 = $Create.Nullable($$createType119);
-const $$createType121 = library$0.SourceImportResult.createFrom;
+const $$createType121 = library$0.SourceCandidate.createFrom;
 const $$createType122 = $Create.Nullable($$createType121);
-const $$createType123 = $Create.Array($$createType122);
-const $$createType124 = library$0.ItemDetail.createFrom;
-const $$createType125 = $Create.Nullable($$createType124);
-const $$createType126 = library$0.Item.createFrom;
-const $$createType127 = $Create.Nullable($$createType126);
-const $$createType128 = $Create.Array($$createType127);
-const $$createType129 = library$0.NovelReadingContext.createFrom;
-const $$createType130 = $Create.Nullable($$createType129);
-const $$createType131 = library$0.SourcePreview.createFrom;
-const $$createType132 = $Create.Nullable($$createType131);
-const $$createType133 = $Create.Array($$createType110);
-const $$createType134 = library$0.TestOutcome.createFrom;
-const $$createType135 = $Create.Nullable($$createType134);
-const $$createType136 = $Create.Array($$createType62);
-const $$createType137 = media$0.MergeCandidatesResp.createFrom;
-const $$createType138 = $Create.Nullable($$createType137);
-const $$createType139 = $Create.Array($$createType106);
-const $$createType140 = media$0.MergeIdentitiesResp.createFrom;
-const $$createType141 = $Create.Nullable($$createType140);
-const $$createType142 = library$0.NovelBrowsePage.createFrom;
-const $$createType143 = $Create.Nullable($$createType142);
-const $$createType144 = media$0.PlayLineQualityItem.createFrom;
+const $$createType123 = library$0.ReadingContext.createFrom;
+const $$createType124 = $Create.Nullable($$createType123);
+const $$createType125 = library$0.SourceImportResult.createFrom;
+const $$createType126 = $Create.Nullable($$createType125);
+const $$createType127 = $Create.Array($$createType126);
+const $$createType128 = library$0.ItemDetail.createFrom;
+const $$createType129 = $Create.Nullable($$createType128);
+const $$createType130 = library$0.Item.createFrom;
+const $$createType131 = $Create.Nullable($$createType130);
+const $$createType132 = $Create.Array($$createType131);
+const $$createType133 = library$0.NovelReadingContext.createFrom;
+const $$createType134 = $Create.Nullable($$createType133);
+const $$createType135 = library$0.SourcePreview.createFrom;
+const $$createType136 = $Create.Nullable($$createType135);
+const $$createType137 = $Create.Array($$createType114);
+const $$createType138 = library$0.TestOutcome.createFrom;
+const $$createType139 = $Create.Nullable($$createType138);
+const $$createType140 = $Create.Array($$createType64);
+const $$createType141 = media$0.MergeCandidatesResp.createFrom;
+const $$createType142 = $Create.Nullable($$createType141);
+const $$createType143 = $Create.Array($$createType110);
+const $$createType144 = media$0.MergeIdentitiesResp.createFrom;
 const $$createType145 = $Create.Nullable($$createType144);
-const $$createType146 = $Create.Array($$createType145);
-const $$createType147 = $models.SourceProbe.createFrom;
-const $$createType148 = $Create.Nullable($$createType147);
-const $$createType149 = $Create.Array($$createType147);
-const $$createType150 = $models.LogPageResp.createFrom;
+const $$createType146 = library$0.NovelBookSourceCache.createFrom;
+const $$createType147 = $Create.Nullable($$createType146);
+const $$createType148 = library$0.NovelBrowsePage.createFrom;
+const $$createType149 = $Create.Nullable($$createType148);
+const $$createType150 = library$0.PreparedNovelSwitch.createFrom;
 const $$createType151 = $Create.Nullable($$createType150);
-const $$createType152 = readingstate$0.Record.createFrom;
-const $$createType153 = $Create.Array($$createType152);
-const $$createType154 = $models.SchemaCompat.createFrom;
-const $$createType155 = source$0.SearchSourceResult.createFrom;
+const $$createType152 = media$0.PlayLineQualityItem.createFrom;
+const $$createType153 = $Create.Nullable($$createType152);
+const $$createType154 = $Create.Array($$createType153);
+const $$createType155 = $models.SourceProbe.createFrom;
 const $$createType156 = $Create.Nullable($$createType155);
-const $$createType157 = collection$0.CollectScheduleConfig.createFrom;
-const $$createType158 = $models.SourceProbeTimeline.createFrom;
-const $$createType159 = $Create.Array($$createType158);
-const $$createType160 = media$0.PlayLineSpeedResp.createFrom;
-const $$createType161 = $Create.Nullable($$createType160);
-const $$createType162 = $models.WindowSizeResp.createFrom;
-const $$createType163 = $Create.Nullable($$createType162);
+const $$createType157 = $Create.Array($$createType155);
+const $$createType158 = $models.LogPageResp.createFrom;
+const $$createType159 = $Create.Nullable($$createType158);
+const $$createType160 = readingstate$0.Record.createFrom;
+const $$createType161 = $Create.Array($$createType160);
+const $$createType162 = $models.SchemaCompat.createFrom;
+const $$createType163 = source$0.SearchSourceResult.createFrom;
+const $$createType164 = $Create.Nullable($$createType163);
+const $$createType165 = collection$0.CollectScheduleConfig.createFrom;
+const $$createType166 = $models.SourceProbeTimeline.createFrom;
+const $$createType167 = $Create.Array($$createType166);
+const $$createType168 = media$0.PlayLineSpeedResp.createFrom;
+const $$createType169 = $Create.Nullable($$createType168);
+const $$createType170 = $models.DiagnosticsReceipt.createFrom;
+const $$createType171 = $models.WindowSizeResp.createFrom;
+const $$createType172 = $Create.Nullable($$createType171);

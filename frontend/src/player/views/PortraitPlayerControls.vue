@@ -5,7 +5,7 @@ import { Button } from '../../components/ui'
 import Icon from '../../components/Icon.vue'
 import { formatPlaybackTime } from '../videoInfoFormat'
 
-const props = defineProps<{ current: number; duration: number; playing: boolean; boosting: boolean; boostRate: number; muted: boolean; ready: boolean; fullscreen: boolean; canFullscreen: boolean; controlsHost?: HTMLElement }>()
+const props = defineProps<{ current: number; duration: number; playing: boolean; boosting: boolean; boostRate: number; muted: boolean; ready: boolean; fullscreen: boolean; canFullscreen: boolean; visible:boolean; controlsHost?: HTMLElement }>()
 const emit = defineEmits<{ play: []; seek: [seconds: number]; scrub: [seconds: number | null]; sound: []; fullscreen: [] }>()
 const { t } = useI18n()
 const target = ref<number | null>(null)
@@ -49,15 +49,15 @@ onBeforeUnmount(cancel)
   <div v-if="boosting" class="portrait-boost cczj-absolute cczj-flex cczj-items-center cczj-gap-3" role="status"><Icon name="play" :size="18" />{{ t('shortDrama.boosting',{speed:boostRate}) }}</div>
   <Button v-if="ready && !playing && !boosting" class="portrait-play cczj-absolute" variant="text" icon :aria-label="t('player.play')" @click.stop="emit('play')"><Icon name="play" :size="54" /></Button>
   <Teleport :to="controlsHost" :disabled="!controlsHost">
-  <div class="portrait-controls cczj-absolute cczj-flex cczj-flex-col cczj-pointer-events-none" :class="{'portrait-scrubbing':target !== null,'portrait-controls-wide':!!controlsHost}">
-    <Button v-if="muted" class="portrait-sound" variant="overlay" @click="emit('sound')">{{ t('shortDrama.enableSound') }}</Button>
+  <div class="portrait-controls cczj-absolute cczj-flex cczj-flex-col cczj-pointer-events-none" :class="{'portrait-scrubbing':target !== null,'portrait-controls-wide':!!controlsHost,'portrait-toolbar-hidden':!!controlsHost&&!visible&&target===null&&playing}">
+    <Button v-if="muted && !controlsHost" class="portrait-sound" variant="overlay" @click="emit('sound')">{{ t('shortDrama.enableSound') }}</Button>
     <slot />
     <div class="portrait-footer cczj-flex cczj-items-center cczj-gap-4">
     <div class="portrait-timeline cczj-relative cczj-flex-1 cczj-min-w-0 cczj-pointer-events-auto" :style="{'--portrait-progress':`${progress}%`}" @click.stop @dblclick.stop @pointerdown.stop @wheel.stop>
       <div class="portrait-track cczj-absolute" aria-hidden="true"><span /></div>
       <span class="portrait-thumb cczj-absolute cczj-rounded-full cczj-pointer-events-none" aria-hidden="true" />
       <input class="portrait-progress cczj-absolute cczj-w-full" type="range" min="0" :max="finiteDuration" step="0.1" :value="time" :disabled="!finiteDuration" :aria-label="t('player.currentTimeLabel')" :aria-valuetext="`${formatPlaybackTime(time)} / ${formatPlaybackTime(finiteDuration)}`" @pointerdown.prevent="begin" @pointermove.prevent="move" @input="input" @pointerup="end" @pointercancel="end" @lostpointercapture="end" />
-      <span class="portrait-time cczj-absolute">{{ formatPlaybackTime(time) }} <span>/ {{ formatPlaybackTime(finiteDuration) }}</span></span>
+      <span v-if="!controlsHost" class="portrait-time cczj-absolute">{{ formatPlaybackTime(time) }} <span>/ {{ formatPlaybackTime(finiteDuration) }}</span></span>
     </div>
     <Button v-if="!controlsHost && canFullscreen" class="portrait-fullscreen cczj-pointer-events-auto" variant="text" icon :aria-label="t(fullscreen ? 'player.exitFullscreen' : 'player.fullscreen')" :title="t(fullscreen ? 'player.exitFullscreen' : 'player.fullscreen')" @pointerdown.stop @click.stop="emit('fullscreen')"><Icon :name="fullscreen ? 'exit-fullscreen' : 'fullscreen'" :size="16" /></Button>
     </div>
@@ -70,10 +70,15 @@ onBeforeUnmount(cancel)
 .portrait-controls { inset: auto 0 0; z-index: 25; padding: 60px 18px 8px; color: #fff; background: linear-gradient(transparent, #0009 45%, #000b); }
 .portrait-controls :deep(.drama-info) { @apply cczj-pointer-events-auto; }
 .portrait-controls :deep(.drama-info button),.portrait-sound { touch-action: manipulation; }
-.portrait-controls-wide { padding: 80px 24px 0; @apply cczj-pointer-events-auto; }
-.portrait-controls-wide .portrait-timeline { margin: 0 -24px; }
+.portrait-controls-wide { padding:64px 24px 0;background:linear-gradient(transparent,#0003 65%,#0007); }
+.portrait-controls-wide .portrait-footer { height:16px;margin:0 -24px; }
+.portrait-controls-wide .portrait-timeline { height:16px; }
+.portrait-controls-wide .portrait-track,.portrait-controls-wide .portrait-thumb { top:14px; }
+.portrait-controls-wide .portrait-progress { top:-6px;height:28px; }
+.portrait-controls-wide :deep(.drama-info) { margin-bottom:8px; }
+.portrait-toolbar-hidden .portrait-footer,.portrait-toolbar-hidden .portrait-status { visibility:hidden;pointer-events:none; }
 .portrait-controls-wide .portrait-time { right: 24px; }
-.portrait-status { height: 44px; margin: 0 -24px; background: var(--cczj-drama-chrome); }
+.portrait-status { @apply cczj-pointer-events-auto;font-family:system-ui,sans-serif; height: 44px; margin: 0 -24px; background: var(--cczj-drama-chrome); }
 .portrait-status :deep(.ctrl-bar) { padding: 4px 16px; background: transparent; }
 .portrait-timeline { height: 56px; }
 .portrait-track { left: 0; right: 0; top: 22px; transform: translateY(-50%); height: 3px; border-radius: 4px; background: #ffffff50; transition: height .15s; }

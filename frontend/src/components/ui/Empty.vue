@@ -5,7 +5,7 @@ const descriptionText = computed(() => props.description?.trim() === props.title
 </script>
 
 <template>
-  <div class="empty-state cczj-flex cczj-flex-col cczj-items-center cczj-justify-center cczj-gap-6">
+  <div class="empty-state cczj-motion-ornament cczj-flex cczj-flex-col cczj-items-center cczj-justify-center cczj-gap-6">
     <div class="empty-icon"><slot name="icon">{{ icon || '📭' }}</slot></div>
     <h3 class="empty-title">{{ title }}</h3>
     <p v-if="descriptionText" class="empty-desc">{{ descriptionText }}</p>
@@ -23,7 +23,6 @@ const descriptionText = computed(() => props.description?.trim() === props.title
 .empty-icon {
   font-size: 56px;
   @apply cczj-leading-none cczj-opacity-70;
-  animation: cczj-float 2s ease-in-out infinite;
 }
 
 .empty-title {

@@ -1,6 +1,7 @@
 <script lang="ts">
 // Share observers by viewport margin, rather than allocating one per card.
-// Mobile prepares media before entry; desktop keeps its existing fade boundary.
+// Desktop keeps its existing window-based fade boundary. Mobile preparation
+// below shares the image observer rooted in the preview's own scroll host.
 const visibleHandlers = new WeakMap<Element, () => void>()
 const sharedObservers: Array<IntersectionObserver | undefined> = [undefined, undefined]
 
@@ -34,10 +35,12 @@ function unobserveVisibility(el: Element) {
 </script>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, useAttrs } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, useAttrs, watch } from 'vue'
 import { Tag } from './ui'
 import RemoteImage from './RemoteImage.vue'
 import { presentationProfile } from '../platform/presentation'
+import { useViewActivity } from '../composables/useViewActivity'
+import { whenImageNearViewport } from '../utils/imageVisibility'
 
 defineProps<{
   video: { vod_pic?: string; vod_name?: string; vod_remarks?: string; type_name?: string }
@@ -67,19 +70,34 @@ function onCardKeydown(event: KeyboardEvent) {
 const cardEl = ref<HTMLDivElement>()
 const visible = ref(false)
 const mobile = presentationProfile().ui === 'mobile'
+const active = useViewActivity()
+let stopPreparing: (() => void) | undefined
 // Preserve the poster's aspect-ratio and text layout while keeping offscreen
 // mobile cards free of image, badge and overlay subtrees until near the viewport.
 const mediaVisible = computed(() => !mobile || visible.value)
 
-onMounted(() => {
+function prepareMedia(): void {
+  stopPreparing?.(); stopPreparing = undefined
+  if(!active.value){if(cardEl.value)unobserveVisibility(cardEl.value);return}
+  if(visible.value)return
+  if(mobile){
+    if(!active.value||!cardEl.value)return
+    // The preview's scroll host stays in its own geometry while the whole
+    // scene is translated offscreen. Prepare both badges and images there.
+    stopPreparing=whenImageNearViewport(cardEl.value,()=>{visible.value=true},cardEl.value.closest('.cczj-mobile-route-scene .main-content'))
+    return
+  }
   if (!('IntersectionObserver' in window)) {
     visible.value = true
     return
   }
   if (cardEl.value) observeVisibility(cardEl.value, () => { visible.value = true }, mobile)
-})
+}
+onMounted(prepareMedia)
+watch(active,prepareMedia,{flush:'post'})
 
 onBeforeUnmount(() => {
+  stopPreparing?.()
   if (cardEl.value) unobserveVisibility(cardEl.value)
 })
 </script>
@@ -87,7 +105,7 @@ onBeforeUnmount(() => {
 <template>
   <div
     ref="cardEl"
-    class="video-card cczj-bg-card cczj-rounded-lg cczj-overflow-hidden cczj-cursor-pointer cczj-border cczj-flex cczj-flex-col cczj-opacity-0"
+    class="video-card cczj-bg-card cczj-rounded-lg cczj-overflow-hidden cczj-cursor-pointer cczj-border cczj-flex cczj-flex-col"
     :class="{ visible: mobile || visible }"
     :role="clickable ? 'button' : undefined"
     :tabindex="clickable ? 0 : undefined"
@@ -130,20 +148,19 @@ onBeforeUnmount(() => {
 .video-card {
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
               box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-              border-color 0.25s ease,
-              opacity 0.4s ease;
-  transform: translateY(8px);
+              border-color var(--cczj-motion-fast);
   contain: layout style;
 }
 
 .video-card.visible {
   @apply cczj-opacity-100;
-  transform: translateY(0);
 }
 
+@media (hover:hover) and (pointer:fine) {
 .video-card:hover {
   transform: translateY(-6px) scale(1.02);
   @apply cczj-shadow cczj-border-primary;
+}
 }
 
 /* 键盘可达：卡片是点进去详情页的入口，聚焦必须看得见。
@@ -155,6 +172,8 @@ onBeforeUnmount(() => {
 
 .poster-wrap {
   aspect-ratio: 2/3;
+  /* The fixed poster geometry survives when offscreen media layout is skipped. */
+  content-visibility: auto;
 }
 
 .poster-wrap > img {
@@ -162,8 +181,10 @@ onBeforeUnmount(() => {
   transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+@media (hover:hover) and (pointer:fine) {
 .video-card:hover .poster-wrap > img {
   transform: scale(1.08);
+}
 }
 
 .poster-badge {
@@ -174,7 +195,6 @@ onBeforeUnmount(() => {
   border-color: var(--accent) !important;
   color: var(--accent-contrast) !important;
   box-shadow: 0 2px 10px var(--accent-alpha-35);
-  backdrop-filter: blur(4px);
 }
 
 .overlay {
@@ -196,8 +216,10 @@ onBeforeUnmount(() => {
   box-shadow: 0 2px 8px var(--success-alpha-10);
 }
 
+@media (hover:hover) and (pointer:fine) {
 .video-card:hover .overlay {
   @apply cczj-opacity-100;
+}
 }
 
 .play-btn {
@@ -209,8 +231,10 @@ onBeforeUnmount(() => {
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+@media (hover:hover) and (pointer:fine) {
 .video-card:hover .play-btn {
   transform: scale(1);
+}
 }
 
 .info {
@@ -224,8 +248,10 @@ onBeforeUnmount(() => {
   transition: color 0.15s ease;
 }
 
+@media (hover:hover) and (pointer:fine) {
 .video-card:hover .title {
   @apply cczj-text-accent;
+}
 }
 
 .sub {

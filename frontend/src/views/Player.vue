@@ -143,15 +143,12 @@ function origIdx(sortedI: number): number {
   return episodeSortAsc.value ? sortedI : episodes.value.length - 1 - sortedI
 }
 
-/* ==================== "已观看" 集数进度（从独立 localStorage 存储读取，1 个月自动淘汰） ====================
- * 键：`${sourceKey}-${vodId}-${epNum}`；值：{ position, duration?, updatedAt }
- * 每集独立一条记录，播放时持续写入，读取时自动淘汰过期记录。
- */
-// 缓存每一集的进度百分比（0-100）
+// Episode percentages share the durable work identity; media checkpoints retain source identity.
 const { epKeyOf, refreshEpProgressUI, getEpWatchPct, isWatchedEp, syncHistoryToDb,
   resolveDbResumePosition, updateCurrentEpProgress, snapshot:historySnapshot } = useEpisodeHistory({
-  identity: () => ({sourceKey:sourceKey.value,vodId:String(vodId.value),name:video.value?.vod_name || '',globalId:video.value?.global_id}),
+  identity: () => ({sourceKey:activeSourceKey.value||sourceKey.value,vodId:String(video.value?.vod_id??vodId.value),name:video.value?.vod_name || '',globalId:video.value?.global_id}),
   episodes: () => episodes.value, currentIndex: () => currentEpIndex.value,
+  onPersistenceError: error => errorStore.fromError(t('shortDrama.historyFailed'), error, 'Player'),
 })
 
 
@@ -159,12 +156,27 @@ const { epKeyOf, refreshEpProgressUI, getEpWatchPct, isWatchedEp, syncHistoryToD
 const mouseInside = ref(false)
 useDesktopPlaybackKeys({
   enabled: !mobile, video: () => playerView.value?.video() || null,
-  active: () => mouseInside.value, hasPrev: () => hasPrev.value, hasNext: () => hasNext.value,
-  previous: prevEpisode, next: nextEpisode,
+  active: () => mouseInside.value || !!playerView.value?.isFullscreen, hasPrev: () => hasPrev.value, hasNext: () => hasNext.value,
+  previous: prevEpisode, next: nextEpisode, play:()=>playerView.value?.togglePlay(),
   fullscreen:()=>{void playerView.value?.toggleFullscreen()},pip:()=>{void playerView.value?.togglePiP()},
 })
 
 let pageDisposed = false
+let pendingSourceHistory = ''
+let sourceHistoryWriting = false
+let sourceHistoryRetryAt = 0
+function onPlaybackProgress(position:number, duration?:number):void {
+  const key=currentVideoKey.value
+  const commit=pendingSourceHistory===key && !sourceHistoryWriting && Date.now()>=sourceHistoryRetryAt
+  const saved=updateCurrentEpProgress(position,duration,commit,commit)
+  if(!commit||!saved)return
+  sourceHistoryWriting=true
+  void saved.then(ok=>{
+    if(pendingSourceHistory!==key)return
+    if(ok)pendingSourceHistory=''
+    else sourceHistoryRetryAt=Date.now()+10000
+  }).finally(()=>{sourceHistoryWriting=false})
+}
 
 const {isFav,favBusy,showFavFolderModal,refreshFav,toggleFavorite,confirmAddToFolder}=usePlaybackFavorites(()=>({
   source_key:sourceKey.value,vod_id:String(vodId.value),global_id:video.value?.global_id||0,vod_name:video.value?.vod_name||'',
@@ -175,7 +187,6 @@ watch([showCommentsModal,showFavFolderModal],([comments,favorite])=>{
   if(mobile&&(comments||favorite))playerOverlayTarget.value=playerView.value?.overlayHost()||'body'
 })
 
-/* ==================== 记录观看历史（点击就记录，无需等 30 秒 ==================== */
 // ==================== 简介文本（去除 HTML 标签） ====================
 const overviewText = computed(() => stripHtmlTags(video.value?.vod_content || ''))
 
@@ -380,8 +391,15 @@ async function loadFromSource(sk: string, vid: string,lineIndex?:number): Promis
     const episodeNamesMatch=!!previousEpisode?.ep_name&&normalize(previousEpisode.ep_name)===normalize(targetEpisode?.ep_name??'')
     const singleFeature=episodes.value.length===1&&chosen?.episodes.length===1
     if(candidate.error||!namesMatch||prevEpNum==null||matches.length!==1||(!episodeNamesMatch&&!singleFeature)){errorStore.warn(t('playLine.switch'),t('player.episodeRouteMismatch'));return}
+    const previousState=playerView.value?.checkpoint()
+    const media=playerView.value?.video()
+    if(previousState && playerView.value?.canPersistProgress())await syncHistoryToDb(previousState.position,true,media?.duration)
+    if(pageDisposed||currentVideoKey.value!==currentIdentity)return
     const state=playerView.value?.checkpoint()
-    if(state)handoff.value={...state,key:mediaKey(sk,vid,prevEpNum)}
+    const targetKey=mediaKey(sk,vid,prevEpNum)
+    if(state)handoff.value={...state,key:targetKey}
+    pendingSourceHistory=targetKey
+    sourceHistoryRetryAt=0
     videoStore.acceptDetail(sk,vid,candidate)
     // The line was checked above; commit the same choice atomically with data.
     if(chosen)videoStore.setActiveLine(lines.indexOf(chosen))
@@ -417,6 +435,7 @@ async function loadFromSource(sk: string, vid: string,lineIndex?:number): Promis
       TsCache.setCurrentEpisode(targetIdx)
     } catch { }
 
+    if(state && state.position>5)errorStore.push({level:'info',title:t('playLine.switch'),message:t('player.sourceTimeAlignment'),source:'Player',autoDismiss:8000,logged:true})
     // 刷新进度和收藏状态
     refreshEpProgressUI()
     refreshFav().catch(() => { })
@@ -515,7 +534,6 @@ onBeforeUnmount(() => {
     const v = playerView.value?.video()
     if (v && playerView.value?.canPersistProgress() && !isNaN(v.currentTime)) {
       syncHistoryToDb(v.currentTime, true, v.duration)
-      console.log(`[Player] ✔ 强制同步历史记录到后端: position=${v.currentTime.toFixed(1)}s`)
     }
   } catch { /* ignore */ }
   try { window.dispatchEvent(new CustomEvent('cczj-ep-progress-flushed')) } catch { /* ignore */ }
@@ -565,7 +583,7 @@ const panelModel:PlayerPanelModel = reactive({
             :video-key="currentVideoKey" :continuation="handoff" :danmaku-key="danmakuKey" :media-title="video?.vod_name||''" :media-year="video?.vod_year||''" :media-kind="video?.type_name||''" :episode-label="currentEpName" :show-title-bar="true" :title="mobile ? `${video?.vod_name || ''} · ${currentEpName}` : currentEpName" :is-fav="isFav"
             :fav-busy="favBusy" :douban-id="video?.vod_douban_id || ''"
             :resolve-resume="resolveDbResumePosition" :resume-immediately="route.query.resume === '1'"
-            @progress="updateCurrentEpProgress"
+            @progress="onPlaybackProgress"
             @toggle-favorite="toggleFavorite" @back="goBack" @prev="prevEpisode" @next="nextEpisode"
             @show-comments="showCommentsModal = true"
             :force-play-token="_playToken">
@@ -576,17 +594,17 @@ const panelModel:PlayerPanelModel = reactive({
             </template>
             <template v-if="mobile && episodes.length" #episodes="{close}">
               <div class="cczj-mobile-drawer-episode-head"><span>{{t('detail.totalEpisodes',{count:episodes.length})}}</span><button @click="toggleEpisodeSort"><Icon :name="episodeSortAsc?'chevron-down':'chevron-up'" :size="14" />{{t(episodeSortAsc?'detail.ascOrder':'detail.descOrder')}}</button></div>
-              <div class="cczj-mobile-drawer-episode-grid" :class="{ 'cczj-episode-grid-detailed': detailedEpisodeLabels }"><button v-for="(ep,i) in sortedEpisodes" :key="origIdx(i)" :aria-current="origIdx(i)===currentEpIndex?'step':undefined" :title="epLabel(origIdx(i),ep)" @click="goToEpisode(origIdx(i));close()"><EpisodeLabel :label="epLabel(origIdx(i),ep)" /><small v-if="getEpWatchPct(origIdx(i))>0">{{Math.round(getEpWatchPct(origIdx(i)))}}%</small></button></div>
+              <div class="cczj-mobile-drawer-episode-grid" :class="{ 'cczj-episode-grid-detailed': detailedEpisodeLabels }"><button v-for="(ep,i) in sortedEpisodes" :key="origIdx(i)" :data-watched="getEpWatchPct(origIdx(i))>0" :aria-current="origIdx(i)===currentEpIndex?'step':undefined" :title="epLabel(origIdx(i),ep)" @click="goToEpisode(origIdx(i));close()"><EpisodeLabel :label="epLabel(origIdx(i),ep)" /><template v-if="getEpWatchPct(origIdx(i))>0"><small>{{Math.round(getEpWatchPct(origIdx(i)))}}%</small><span class="ep-watched-progress cczj-absolute cczj-left-0 cczj-bottom-0 cczj-pointer-events-none" :style="{width:getEpWatchPct(origIdx(i))+'%'}" aria-hidden="true" /></template></button></div>
             </template>
           </VideoPlayer>
 
 
           <!-- 侧面板折叠/展开按钮（视频区右侧中间） -->
-          <PlayerPanelToggle v-if="!mobile" ref="panelToggle" :collapsed="sidePanelCollapsed" @toggle="sidePanelCollapsed=!sidePanelCollapsed" />
+          <PlayerPanelToggle v-if="!mobile && !playerView?.isFullscreen" ref="panelToggle" :collapsed="sidePanelCollapsed" @toggle="sidePanelCollapsed=!sidePanelCollapsed" />
         </div>
 
         <!-- ============= 右侧选集面板 ============= -->
-        <PlayerInformationPanel :model="panelModel" :collapsed="sidePanelCollapsed" @source="switchToSource" @episode="goToEpisode" @sort="toggleEpisodeSort" @close="goBack" />
+        <PlayerInformationPanel :model="panelModel" :collapsed="sidePanelCollapsed" :playing="!!playerView?.isPlaying" @source="switchToSource" @episode="goToEpisode" @sort="toggleEpisodeSort" @close="goBack" />
       </div>
     </template>
 

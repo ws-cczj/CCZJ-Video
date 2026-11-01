@@ -232,7 +232,7 @@ func (t *routeTransport) attempt(p *Pool, base *http.Transport, endpoint *url.UR
 		WroteHeaders: func() { wrote.Store(true) },
 		WroteRequest: func(httptrace.WroteRequestInfo) { wrote.Store(true) },
 	}))
-	response, err := t.decorate(transport).RoundTrip(copy)
+	response, err := t.decorate(proxyReadRetry{transport}).RoundTrip(copy)
 	if err != nil {
 		release()
 		return response, err, wrote.Load(), reached.Load()
@@ -243,6 +243,20 @@ func (t *routeTransport) attempt(p *Pool, base *http.Transport, endpoint *url.UR
 		response.Body = &releasedBody{ReadCloser: response.Body, release: release}
 	}
 	return response, nil, wrote.Load(), reached.Load()
+}
+
+// A proxy may close a reused tunnel before returning response headers. Retry
+// a bodyless read once on the same configured route, inside the policy gate.
+// Failed writes, HTTP errors and response-body failures are never replayed here.
+type proxyReadRetry struct{ http.RoundTripper }
+
+func (t proxyReadRetry) RoundTrip(req *http.Request) (*http.Response, error) {
+	response, err := t.RoundTripper.RoundTrip(req)
+	if response == nil && req.Body == nil && (req.Method == http.MethodGet || req.Method == http.MethodHead) &&
+		req.Context().Err() == nil && (errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)) {
+		return t.RoundTripper.RoundTrip(req.Clone(req.Context()))
+	}
+	return response, err
 }
 
 type releasedBody struct {

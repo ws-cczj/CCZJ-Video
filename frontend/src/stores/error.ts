@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed, onScopeDispose } from 'vue'
 import { WriteLog, normalizeApiError } from '../api/app'
 import { tr } from '../locales'
+import { recordTimeline } from '../diagnostics/session'
 
 export type ErrorLevel = 'info' | 'warn' | 'error'
 
@@ -45,6 +46,7 @@ export const useErrorStore = defineStore('error', () => {
 
   // 暴露给前端的主要方法
   function push(item: Omit<ErrorItem, 'id' | 'time'> & { autoDismiss?: boolean | number; logged?: boolean }): ErrorItem {
+    if (item.level !== 'info') recordTimeline('ui.error',{name:item.source || 'error_store',code:item.code,backend_request_id:item.requestId,outcome:'failed'})
     const duplicate = toasts.value.find(e => e.level === item.level && e.source === item.source && e.code === item.code && e.title === item.title && e.message === item.message && Date.now() - e.time < 10000)
     if (duplicate) { duplicate.count = (duplicate.count || 1) + 1; return duplicate }
     const e: ErrorItem = {

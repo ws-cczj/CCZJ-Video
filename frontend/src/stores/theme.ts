@@ -1,5 +1,10 @@
+import { hexToRgb, rgbToHex, readRgb, toSolidHex, hexToRgba, lighten, darken, luminance, hslToHex, contrastRatio, contrastText, compositeColor, windowActionColors } from '../utils/colors'
+export { hexToRgba } from '../utils/colors'
+import { CCZJ } from '../constants/cczj'
 import { defineStore } from 'pinia'
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onScopeDispose } from 'vue'
+import { createThemeReveal, type RevealOrigin } from '../motion/themeReveal'
+import { useMotionStore } from './motion'
 import { GetSetting, SetSetting,normalizeApiError } from '../api/app'
 import { createSettingsQueue } from '../api/settingsQueue'
 import { useErrorStore } from './error'
@@ -140,80 +145,6 @@ export async function warmPackBackgrounds(): Promise<void> {
 // ============================================================================
 // 颜色工具
 // ============================================================================
-function clamp255(n: number): number {
-  if (n < 0) return 0
-  if (n > 255) return 255
-  return Math.round(n)
-}
-
-function hexToRgb(hex: string): [number, number, number] {
-  const h = (hex || '#000000').replace('#', '')
-  const full = h.length === 3 ? h.split('').map(c => c + c).join('') : h
-  return [
-    parseInt(full.substring(0, 2), 16),
-    parseInt(full.substring(2, 4), 16),
-    parseInt(full.substring(4, 6), 16),
-  ]
-}
-
-function rgbToHex(r: number, g: number, b: number): string {
-  const to = (n: number) => clamp255(n).toString(16).padStart(2, '0')
-  return `#${to(r)}${to(g)}${to(b)}`
-}
-
-/** 读取 `#rgb` / `#rrggbb` / `rgb()` / `rgba()` 三通道，方便对半透明表面算对比度。 */
-function readRgb(color: string): [number, number, number] {
-  const m = color.match(/rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)/)
-  if (m) return [Number(m[1]), Number(m[2]), Number(m[3])]
-  return hexToRgb(color)
-}
-
-/** 存进编辑器的表面色必须是纯色：rgba 串绑到 `<input type="color">` 会显示成黑色。 */
-function toSolidHex(color: string): string {
-  const [r, g, b] = readRgb(color)
-  return rgbToHex(r, g, b)
-}
-
-export function hexToRgba(hex: string, alpha: number): string {
-  const [r, g, b] = hexToRgb(hex)
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`
-}
-
-// 往白/亮方向混合 amount ∈ [0,1]
-function lighten(hex: string, amount: number): string {
-  const [r, g, b] = hexToRgb(hex)
-  return rgbToHex(r + (255 - r) * amount, g + (255 - g) * amount, b + (255 - b) * amount)
-}
-
-// 往黑/暗方向混合 amount ∈ [0,1]
-function darken(hex: string, amount: number): string {
-  const [r, g, b] = hexToRgb(hex)
-  return rgbToHex(r * (1 - amount), g * (1 - amount), b * (1 - amount))
-}
-
-// 计算颜色亮度（0-255），用于判断对比度
-function luminance(hex: string): number {
-  const [r, g, b] = hexToRgb(hex)
-  return 0.299 * r + 0.587 * g + 0.114 * b
-}
-
-function hslToHex(hue: number, saturation: number, lightness: number): string {
-  const h = ((hue % 360) + 360) % 360
-  const s = Math.max(0, Math.min(100, saturation)) / 100
-  const l = Math.max(0, Math.min(100, lightness)) / 100
-  const c = (1 - Math.abs(2 * l - 1)) * s
-  const x = c * (1 - Math.abs((h / 60) % 2 - 1))
-  const m = l - c / 2
-  let r = 0, g = 0, b = 0
-  if (h < 60) [r, g, b] = [c, x, 0]
-  else if (h < 120) [r, g, b] = [x, c, 0]
-  else if (h < 180) [r, g, b] = [0, c, x]
-  else if (h < 240) [r, g, b] = [0, x, c]
-  else if (h < 300) [r, g, b] = [x, 0, c]
-  else [r, g, b] = [c, 0, x]
-  return rgbToHex((r + m) * 255, (g + m) * 255, (b + m) * 255)
-}
-
 type SemanticRole = 'success' | 'warning' | 'danger' | 'info'
 
 /** 色相角（0-359）；无彩色（灰/黑/白）返回 -1。 */
@@ -276,19 +207,6 @@ function softText(hex: string, dark: boolean): string {
   return dark ? lighten(hex, 0.32) : darken(hex, 0.36)
 }
 
-function relativeLuminance(color: string): number {
-  const [r, g, b] = readRgb(color).map((value) => {
-    const channel = value / 255
-    return channel <= 0.04045 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4)
-  })
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b
-}
-
-function contrastRatio(a: string, b: string): number {
-  const [lighter, darker] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x)
-  return (lighter + 0.05) / (darker + 0.05)
-}
-
 /**
  * `textMuted` can never be one fixed grey: a mid grey that looks right on a
  * dark card fails WCAG AA on a white one (and vice versa).  The seed follows
@@ -305,17 +223,6 @@ function mutedOn(surface: string, dark: boolean): string {
     candidate = towardsDark ? darken(candidate, 0.05) : lighten(candidate, 0.05)
   }
   return candidate
-}
-
-/** Choose an accessible label colour for a user-selected accent colour. */
-function contrastText(background: string): string {
-  const white = contrastRatio(background, '#ffffff')
-  const nearBlack = contrastRatio(background, '#111827')
-  if (nearBlack >= 4.5 && nearBlack >= white) return '#111827'
-  if (white >= 4.5) return '#ffffff'
-  // The crossover between white and a softened black is the only narrow
-  // contrast gap. Pure black keeps arbitrary user-picked solid colours AA.
-  return '#000000'
 }
 
 // ============================================================================
@@ -447,6 +354,7 @@ function buildLightPalette(primary: string, overrides: Partial<ColorPalette> = {
   const warning = semanticColor('warning', false, primary)
   const danger = semanticColor('danger', false, primary)
   const info = semanticColor('info', false, primary)
+  const window = windowActionColors(primary, lighten(primary,.88))
   // 标签和剧集底色本来就同值（都是 lighten 0.9），合成一份，编辑器里也只剩一个框。
   const bgTag = lighten(primary, 0.9)
   // 轮播控件压在海报图上，要比主操作按钮再深一档，否则和主色完全同值、取色框形同虚设。
@@ -498,8 +406,8 @@ function buildLightPalette(primary: string, overrides: Partial<ColorPalette> = {
     shadow: '0 6px 22px rgba(31, 36, 48, 0.08)',
     shadowLg: `0 12px 48px ${hexToRgba(darken(primary, 0.6), 0.24)}`,
     overlay: 'rgba(31, 36, 48, 0.45)',
-    btnHide: info, btnHideContrast: contrastText(info),
-    btnMin: warning, btnMinContrast: contrastText(warning),
+    btnHide: window.fill, btnHideContrast: window.text,
+    btnMin: window.fill, btnMinContrast: window.text,
     btnClose: danger,
     btnCloseContrast: contrastText(danger),
   }
@@ -512,6 +420,7 @@ function buildDarkPalette(primary: string, overrides: Partial<ColorPalette> = {}
   const warning = semanticColor('warning', true, primary)
   const danger = semanticColor('danger', true, primary)
   const info = semanticColor('info', true, primary)
+  const window = windowActionColors(primary, '#101218')
   const border = darken(primary, 0.5)
   const bgTag = lighten(darken(primary, 0.72), 0.08)
   // 深色下轮播控件要比主操作按钮更亮一档，压在暗海报上才分得开。
@@ -564,8 +473,8 @@ function buildDarkPalette(primary: string, overrides: Partial<ColorPalette> = {}
     shadow: '0 8px 24px rgba(0, 0, 0, 0.45)',
     shadowLg: '0 12px 48px rgba(0, 0, 0, 0.72)',
     overlay: 'rgba(0, 0, 0, 0.7)',
-    btnHide: info, btnHideContrast: contrastText(info),
-    btnMin: warning, btnMinContrast: contrastText(warning),
+    btnHide: window.fill, btnHideContrast: window.text,
+    btnMin: window.fill, btnMinContrast: window.text,
     btnClose: danger,
     btnCloseContrast: contrastText(danger),
   }
@@ -577,8 +486,13 @@ function buildDarkPalette(primary: string, overrides: Partial<ColorPalette> = {}
  * 在 base 上算出来的灰在那种表面上并不达标。显式覆盖 muted 的主题优先。
  */
 function finalizePalette(palette: ColorPalette, overrides: Partial<ColorPalette>, dark: boolean): ColorPalette {
-  if (overrides.textMuted !== undefined) return palette
-  return { ...palette, textMuted: mutedOn(palette.bgCard, dark) }
+  const window=windowActionColors(palette.accent,palette.bgApp)
+  return { ...palette,
+    textMuted:overrides.textMuted ?? mutedOn(compositeColor(palette.bgCard,palette.bgApp), dark),
+    btnMin:overrides.btnMin ?? window.fill,btnMinContrast:overrides.btnMinContrast ?? contrastText(overrides.btnMin ?? window.fill),
+    btnHide:overrides.btnHide ?? window.fill,btnHideContrast:overrides.btnHideContrast ?? contrastText(overrides.btnHide ?? window.fill),
+  }
+
 }
 
 // 扩展包 manifest 里的 tint 只允许改写上表真实存在的通道：Go 侧的键名正则只管字符集
@@ -779,6 +693,7 @@ export const useThemeStore = defineStore('theme', () => {
     const warning = c.warningColor || base.warning
     const danger = c.dangerColor || base.danger
     const info = c.infoColor || base.info
+    const window = windowActionColors(c.primary,c.background || base.bgApp)
     return {
       ...base,
       bgApp: c.background || base.bgApp,
@@ -820,10 +735,10 @@ export const useThemeStore = defineStore('theme', () => {
       accentContrast: contrastText(c.primary),
       textPrimary: c.text || base.textPrimary,
       textSecondary: base.textSecondary,
-      textMuted: mutedOn(effectiveContent, c.dark),
-      // 窗口三颗按钮就是语义三色：以前各存一份，改语义色时标题栏不跟，会静默分叉。
-      btnHide: info, btnHideContrast: contrastText(info),
-      btnMin: warning, btnMinContrast: contrastText(warning),
+      textMuted: mutedOn(compositeColor(effectiveContent,c.background||base.bgApp), c.dark),
+      // Window geometry actions use a tonal surface; closing retains the danger role.
+      btnHide: tint?.btnHide ?? window.fill, btnHideContrast: tint?.btnHideContrast ?? contrastText(tint?.btnHide ?? window.fill),
+      btnMin: tint?.btnMin ?? window.fill, btnMinContrast: tint?.btnMinContrast ?? contrastText(tint?.btnMin ?? window.fill),
       btnClose: danger, btnCloseContrast: contrastText(danger),
       accentAlpha10: hexToRgba(c.primary, c.dark ? 0.15 : 0.1),
       accentAlpha20: hexToRgba(c.primary, c.dark ? 0.25 : 0.2),
@@ -874,8 +789,8 @@ export const useThemeStore = defineStore('theme', () => {
   // ---- 生命周期 ----
   async function load(): Promise<void> {
     try {
-      const id = await GetSetting('theme_id')
-      const customs = await GetSetting('theme_customs')
+      const id = await GetSetting(CCZJ.Settings.themeID)
+      const customs = await GetSetting(CCZJ.Settings.themeCustoms)
       if (typeof customs === 'string' && customs) {
         try {
           const parsed: CustomTheme[] = JSON.parse(customs)
@@ -889,7 +804,7 @@ export const useThemeStore = defineStore('theme', () => {
             : []
           // Persist the one-time migration so old themes never require users
           // to press the derive button merely to obtain the new UI tokens.
-          if (migrated) await settingWrites.set('theme_customs', JSON.stringify(customThemes.value))
+          if (migrated) await settingWrites.set(CCZJ.Settings.themeCustoms, JSON.stringify(customThemes.value))
         } catch { /* ignore */ }
       }
       // Custom themes are loaded above, so their stored id can now be resolved.
@@ -905,12 +820,21 @@ export const useThemeStore = defineStore('theme', () => {
     apply()
   }
 
-  async function setTheme(id: string): Promise<boolean> {
-    currentId.value = id
-    // 用户手动换过主题后，先前那个还没认出来的 pack id 就作废了。
-    deferredThemeId.value = ''
-    apply()
-    return settingWrites.set('theme_id',id)
+  const reveal = createThemeReveal()
+  const motion = useMotionStore()
+  watch(() => motion.enabled && !motion.reduced && motion.options.pages, allowed => { if (!allowed) reveal.cancel() })
+  onScopeDispose(reveal.dispose)
+  if (import.meta.hot) import.meta.hot.dispose(reveal.dispose)
+  async function setTheme(id: string, origin?: RevealOrigin): Promise<boolean> {
+    // Enqueue in input order; a superseded visual callback must not save an old
+    // selection after a later reveal has already completed.
+    const saved = settingWrites.set(CCZJ.Settings.themeID,id)
+    await reveal.run(() => {
+      currentId.value = id
+      deferredThemeId.value = ''
+      apply()
+    }, origin, motion.allows('pages') ? motion.tokenMs('--cczj-motion-reveal') : 0)
+    return saved
   }
 
   // ---- 把调色板写入 CSS 变量 ----
@@ -1034,7 +958,7 @@ export const useThemeStore = defineStore('theme', () => {
   }
 
   function persistCustoms(): Promise<boolean> {
-    return settingWrites.set('theme_customs',JSON.stringify(customThemes.value))
+    return settingWrites.set(CCZJ.Settings.themeCustoms,JSON.stringify(customThemes.value))
   }
 
   function makeEmptyCustom(): CustomTheme {

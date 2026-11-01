@@ -5,6 +5,8 @@ import { leaveReader } from '../../reading/navigation'
 import { useI18n } from 'vue-i18n'
 import type { ComponentPublicInstance } from 'vue'
 import { useAsyncResource } from '../../reading/asyncResource'
+import { chapterPrefetch } from '../../reading/chapterPrefetch'
+import { useViewActivity } from '../../composables/useViewActivity'
 import ReaderSheet from '../../reading/ReaderSheet.vue'
 import { useReadingBrightness } from '../../reading/useReadingBrightness'
 import Icon from '../../components/Icon.vue'
@@ -18,17 +20,19 @@ import { loadComicSeries, refreshComicToc } from '../data/repository'
 import type { ComicChapter } from '../domain'
 import ChapterTools from '../../reading/ChapterTools.vue'
 import BackToTop from '../../components/BackToTop.vue'
-import { Spinner } from '../../components/ui'
+import { Spinner, MotionTransition } from '../../components/ui'
 import { createFullscreenPlatform } from '../../platform/fullscreen'
 import { isMobileRuntime } from '../../api/runtime'
 import { progressChapter } from '../reader/progress'
-import { useComicPages } from '../reader/useComicPages'
+import { PREFETCH_WINDOW, useComicPages } from '../reader/useComicPages'
 import { refreshChapterPages, refreshComicContext } from '../../api/library'
 import { normalizeApiError } from '../../api/app'
 
 const route = useRoute(), router = useRouter(), { t } = useI18n(), state = useComicState()
 const itemId = computed(()=>Number(route.params.seriesId)), ord = computed(()=>Number(route.params.episode))
 const session=comicReaderSession()
+const active = useViewActivity(() => true, 'committed')
+const prefetch = chapterPrefetch(id => session.read({ itemId: itemId.value, chapterId: id, remoteId: '', ord: 0, first: false }))
 function location(){return {itemId:itemId.value,chapterId:0,remoteId:typeof route.query.episodeRemoteId==='string'?route.query.episodeRemoteId:'',ord:ord.value,first:false}}
 const readerRoot=ref<HTMLElement|null>(null),immersive=ref(false),immersionBusy=ref(false),fullscreen=createFullscreenPlatform()
 const directory=ref<ComicChapter[]>([]),directoryLoaded=ref(false),directoryLoading=ref(false),descending=ref(false),chapterQuery=ref(''),tocError=ref('')
@@ -42,14 +46,16 @@ const dim = useReadingBrightness(toRef(state, 'preferences'))
 
 const { status, data, error, retry, run } = useAsyncResource<ComicEpisode>({
   diagnosticLabel:'comic.reader',
-  load: () => session.read(location()),
+  load: (): Promise<ComicEpisode> => {
+    const target = location(), current = data.value
+    const neighbor = current?.item.id === target.itemId
+      ? [current.previous, current.next].find(row => row && (target.remoteId ? row.remoteId === target.remoteId : row.ord === target.ord))
+      : undefined
+    return (neighbor && prefetch.take(neighbor.id)) || session.read(target)
+  },
   isEmpty: episode => episode.pages.length === 0,
   onData: episode => {
     restore(episode)
-    if(episode.count-episode.index>3||directoryLoading.value)return
-    void tocRequest?.cancel()
-    const id=episode.chapter.id,pending=refreshComicContext(location());tocRequest=pending
-    void pending.then(view=>{if(tocRequest===pending&&!disposed&&data.value?.chapter.id===id)data.value={...data.value,previous:view.previous,next:view.next,count:view.count,index:view.index}},()=>{}).finally(()=>{if(tocRequest===pending)tocRequest=null})
   },
 })
 
@@ -62,13 +68,15 @@ const warnings = computed(() => data.value?.warnings ?? [])
 /** 翻页模式只挂窗口内那几页，当前页用 v-show 切换，其余留在 DOM 里预取。 */
 const visiblePages = computed(() => {
   const list: number[] = []
-  for (let index = 0; index < total.value; index++) if (pager.inWindow(index)) list.push(index)
+  const at = pager.current.value
+  for (let index = Math.max(0, at - PREFETCH_WINDOW); index <= Math.min(total.value - 1, at + PREFETCH_WINDOW); index++) list.push(index)
   return list
 })
 const activePages = computed(() => new Set(visiblePages.value))
 let pageRefresh:ReturnType<typeof refreshChapterPages>|null=null
 async function retryPage(index:number):Promise<void>{
   if(!data.value||pageRefresh)return
+  prefetch.clear()
   const chapterId=data.value.chapter.id,at=page.value,within=offset.value
   session.invalidate(data.value.cacheIdentity)
   const request=refreshChapterPages(chapterId);pageRefresh=request
@@ -76,6 +84,7 @@ async function retryPage(index:number):Promise<void>{
     const refreshed=await request
     if(disposed||data.value?.chapter.id!==chapterId)return
     data.value={...data.value,pages:refreshed.pages.filter((row):row is NonNullable<typeof row>=>!!row),fromCache:false,warnings:refreshed.warnings}
+    panels=[]
     pager.reset(data.value.pages.length,at);page.value=pager.current.value;offset.value=within
     await nextTick();if(!disposed)seek(page.value,within)
     pager.retry(index)
@@ -84,8 +93,51 @@ async function retryPage(index:number):Promise<void>{
 
 let pinEnd=false
 let ready = false, disposed = false, timer: ReturnType<typeof setTimeout> | undefined, hintTimer: ReturnType<typeof setTimeout> | undefined, resize: ResizeObserver | undefined, frame = 0, suppress = false, pointer: { id: number; x: number; y: number; horizontal: boolean } | null = null
+let scrollFrame = 0, backgroundFrame = 0, backgroundGeneration = 0
+let panels: HTMLElement[] = []
+let contextChecked = 0
+
+function cancelBackground(): void {
+  backgroundGeneration++
+  cancelAnimationFrame(backgroundFrame)
+}
+
+function queueBackground(): void {
+  cancelBackground()
+  const episode = data.value
+  if (!active.value || !ready || status.value !== 'ready' || !episode || pageTable.value[page.value]?.status !== 'ready') return
+  const token = backgroundGeneration
+  // Current artwork gets its first paint before adjacent IPC and TOC refresh.
+  backgroundFrame = requestAnimationFrame(() => { backgroundFrame = requestAnimationFrame(() => {
+    if (disposed || !active.value || token !== backgroundGeneration || data.value?.chapter.id !== episode.chapter.id) return
+    if (directoryLoading.value || tocRequest) return
+    if (episode.count - episode.index > 3 || contextChecked === episode.chapter.id) {
+      const neighbors = [page.value <= PREFETCH_WINDOW ? episode.previous : null, episode.chapter,
+        page.value >= episode.pages.length - 1 - PREFETCH_WINDOW ? episode.next : null]
+        .filter((row): row is ComicChapter => !!row)
+      prefetch.update(neighbors, neighbors.findIndex(row => row.id === episode.chapter.id))
+      return
+    }
+    contextChecked = episode.chapter.id
+    const pending = refreshComicContext(location()); tocRequest = pending
+    void pending.then(view => {
+      if (tocRequest === pending && !disposed && data.value?.chapter.id === episode.chapter.id) {
+        prefetch.clear()
+        data.value = { ...data.value, previous: view.previous, next: view.next, count: view.count, index: view.index }
+      }
+    }, () => {}).finally(() => {
+      if (tocRequest === pending) { tocRequest = null; queueBackground() }
+    })
+  }) })
+}
+
+function stripPanels(): HTMLElement[] {
+  if (panels.length !== total.value) panels = Array.from(viewport.value?.querySelectorAll<HTMLElement>('.comic-panel') ?? [])
+  return panels
+}
 
 function save(): void {
+  if (scrollFrame) { cancelAnimationFrame(scrollFrame); scrollFrame = 0; updateScrollPosition() }
   clearTimeout(timer)
   const loaded = data.value
   if (!ready || !loaded) return
@@ -98,6 +150,8 @@ function notify(text: string): void { hint.value = text; clearTimeout(hintTimer)
 
 /** 新话到了：先把上一话的页状态整表作废（代号加一），再按进度落位。 */
 function restore(loaded: ComicEpisode): void {
+  panels = []
+  cancelAnimationFrame(scrollFrame); scrollFrame = 0
   const count = loaded.pages.length
   const saved = state.progress[state.keyOf(loaded.item)]
   const resumed = route.query.sourceSwitch==='1' ? null : saved && progressChapter([loaded.chapter], saved) ? saved : null
@@ -118,6 +172,7 @@ function restore(loaded: ComicEpisode): void {
 function pageReady(index:number,gen:number,ratio:number):void {
  if(gen!==pageToken.value||!data.value)return
  pager.succeed(index,gen,ratio);data.value.ratios[index]=ratio;session.rememberRatio(data.value.cacheIdentity,index,ratio)
+ if(index===page.value)queueBackground()
  if(pinEnd&&strip.value)void nextTick().then(()=>{if(viewport.value&&pinEnd)viewport.value.scrollTop=viewport.value.scrollHeight})
 }
 
@@ -128,10 +183,11 @@ function seek(next: number, within = 0): void {
   offset.value = within
   pager.seek(at)
   if (strip.value && viewport.value) {
-    const el = viewport.value.querySelectorAll<HTMLElement>('.comic-panel')[at]
+    const el = stripPanels()[at]
     if (el) viewport.value.scrollTop = (pinEnd||within===1) && at===total.value-1 ? viewport.value.scrollHeight : el.offsetTop + within * el.offsetHeight
   }
   schedule()
+  queueBackground()
 }
 
 function selectPage(next:number):void{pinEnd=false;seek(next)}
@@ -169,14 +225,27 @@ function turn(direction: number): void {
 }
 
 function scroll(): void {
+  if (scrollFrame) return
+  scrollFrame = requestAnimationFrame(() => { scrollFrame = 0; updateScrollPosition() })
+}
+
+function updateScrollPosition(): void {
   if (!ready || !strip.value || !viewport.value || !total.value) return
-  const root = viewport.value, panels = Array.from(root.querySelectorAll<HTMLElement>('.comic-panel'))
-  let at = 0
-  for (let i = 0; i < panels.length; i++) { if (panels[i].offsetTop <= root.scrollTop + root.clientHeight * .25) at = i; else break }
+  const root = viewport.value, images = stripPanels()
+  if (!images.length) return
+  const top = root.scrollTop, position = top + root.clientHeight * .25
+  let low = 0, high = images.length - 1
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2)
+    if (images[middle]!.offsetTop <= position) low = middle
+    else high = middle - 1
+  }
+  const at = low, changed = at !== page.value, image = images[at]!
   page.value = at
-  offset.value = panels[at] ? Math.max(0, Math.min(1, (root.scrollTop - panels[at].offsetTop) / panels[at].offsetHeight)) : 0
+  offset.value = Math.max(0, Math.min(1, (top - image.offsetTop) / Math.max(1, image.offsetHeight)))
   pager.seek(at)
   schedule()
+  if (changed) queueBackground()
 }
 
 function down(e: PointerEvent): void { if (e.pointerType==='touch' || !e.isPrimary || e.button !== 0 || strip.value || sheet.value) return; pointer = { id: e.pointerId, x: e.clientX, y: e.clientY, horizontal: false }; suppress = false }
@@ -246,18 +315,31 @@ async function toggleImmersion():Promise<void>{
 function fullscreenChanged(){if(fullscreen.kind==='element'&&!fullscreen.browserActive(document.documentElement)){immersive.value=false;delete document.body.dataset.readingImmersive}}
 async function loadDirectory(refresh=false):Promise<void>{
  if(directoryLoading.value)return
+ if(refresh)prefetch.clear()
  directoryLoading.value=true;tocError.value=''
  void tocRequest?.cancel()
  const id=itemId.value,pending=refresh?refreshComicToc(id):loadComicSeries(id);tocRequest=pending
  try{const view=await pending;if(!disposed&&tocRequest===pending&&itemId.value===id){directory.value=view.chapters;directoryLoaded.value=true;tocError.value=view.tocError
   const current=data.value,rows=view.chapters.filter(row=>!row.isVolume).sort((a,b)=>a.ord-b.ord),at=rows.findIndex(row=>row.id===current?.chapter.id)
   if(current&&at>=0)data.value={...current,index:at,count:rows.length,previous:rows.slice(0,at).reverse().find(row=>row.available)??null,next:rows.slice(at+1).find(row=>row.available)??null}
- }}catch(raw){if(!disposed&&tocRequest===pending)tocError.value=normalizeApiError(raw).message}finally{if(tocRequest===pending)tocRequest=null;directoryLoading.value=false}
+  queueBackground()
+ }}catch(raw){if(!disposed&&tocRequest===pending)tocError.value=normalizeApiError(raw).message}finally{if(tocRequest===pending){tocRequest=null;directoryLoading.value=false}}
 }
 async function locateChapter(id:number){chapterQuery.value='';await nextTick();document.querySelector(`.comic-reader-episodes [data-chapter-id="${id}"]`)?.scrollIntoView({block:'center',behavior:'auto'})}
 function locateNumber(n:number){const chapter=chapters.value[n-1];if(chapter)void locateChapter(chapter.id)}
 watch(sheet,value=>{if(value==='chapters'&&!directoryLoaded.value)void loadDirectory()})
-watch(()=>[route.params.seriesId,route.params.episode,route.query.episodeRemoteId],()=>{save();ready=false;sheet.value='';void pageRefresh?.cancel();pageRefresh=null;void tocRequest?.cancel();tocRequest=null;void run()},{immediate:true})
+watch(()=>[route.params.seriesId,route.params.episode,route.query.episodeRemoteId],()=>{
+ save();cancelBackground();ready=false;sheet.value=''
+ void pageRefresh?.cancel();pageRefresh=null;void tocRequest?.cancel();tocRequest=null;directoryLoading.value=false
+ if(data.value?.item.id!==itemId.value){directory.value=[];directoryLoaded.value=false;contextChecked=0}
+ // run() synchronously takes a matching buffer before we cancel the unused one.
+ void run();prefetch.clear()
+},{immediate:true})
+watch(active, show => {
+ if(show){queueBackground();return}
+ cancelBackground();prefetch.clear()
+ if(!directoryLoading.value&&tocRequest){void tocRequest.cancel();tocRequest=null;contextChecked=0}
+},{flush:'sync'})
 
 function back(e: Event): void { if (chrome.value && !sheet.value) { e.preventDefault(); e.stopImmediatePropagation(); chrome.value = false } }
 
@@ -265,6 +347,7 @@ function onViewport(el: Element | ComponentPublicInstance | null): void {
   const node=el instanceof HTMLElement?el:null
   if(viewport.value===node)return
   viewport.value=node
+  panels=[]
   resize?.disconnect()
   resize = undefined
   if (!viewport.value) return
@@ -280,10 +363,13 @@ function onViewport(el: Element | ComponentPublicInstance | null): void {
 watch(strip, async () => {
   const at = page.value, pos = offset.value
   ready = false
+  panels=[]
+  cancelAnimationFrame(scrollFrame);scrollFrame=0
   await nextTick()
   if (disposed) return
   seek(at, pos)
   ready = true
+  queueBackground()
   save()
 })
 
@@ -296,8 +382,10 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  save();disposed=true
+  cancelBackground();prefetch.clear();cancelAnimationFrame(scrollFrame);scrollFrame=0;panels=[]
   void pageRefresh?.cancel();pageRefresh=null
-  save(); disposed = true;session.clear();void tocRequest?.cancel();tocRequest=null
+  session.clear();void tocRequest?.cancel();tocRequest=null
   if(immersive.value)void fullscreen.exit(document.documentElement,()=>true).catch(()=>{})
   delete document.body.dataset.readingImmersive;document.removeEventListener('fullscreenchange',fullscreenChanged); clearTimeout(timer); clearTimeout(hintTimer); cancelAnimationFrame(frame); resize?.disconnect()
   window.removeEventListener('keydown', key); window.removeEventListener('pagehide', save); window.removeEventListener('cczj:android-overlay-back', back)
@@ -343,7 +431,7 @@ onBeforeUnmount(() => {
         <button @click="sheet = 'sources'"><Icon name="database" :size="22"/><span>{{ t('sourceRouting.switchComic') }}</span></button><button @click="sheet = 'settings'"><Icon name="settings" :size="22" /><span>{{ t('comic.readerSettings') }}</span></button>
       </nav>
     </footer>
-    <ReaderSheet v-if="sheet" :title="t(sheet === 'sources' ? 'sourceRouting.switchComic' : sheet === 'chapters' ? 'comic.episodes' : 'comic.readerSettings')" @close="sheet = ''">
+    <MotionTransition preset="sheet" appear><ReaderSheet v-if="sheet" :title="t(sheet === 'sources' ? 'sourceRouting.switchComic' : sheet === 'chapters' ? 'comic.episodes' : 'comic.readerSettings')" @close="sheet = ''">
       <ComicSourceSwitch v-if="sheet === 'sources'" :item-id="itemId" :chapter-id="data.chapter.id" @leaving="save"/><ComicReaderPreferences v-else-if="sheet === 'settings'" />
       <template v-else>
        <ChapterTools mode="comic" v-model:query="chapterQuery" v-model:descending="descending" :count="chapters.length" :current="true" refreshable :refreshing="directoryLoading" @current="locateChapter(data.chapter.id)" @locate="locateNumber" @latest="chapters.length&&locateChapter(chapters[chapters.length-1].id)" @refresh="loadDirectory(true)"/>
@@ -351,7 +439,7 @@ onBeforeUnmount(() => {
        <ol class="comic-reader-episodes"><li v-for="chapter in visibleChapters" :key="chapter.id" :data-chapter-id="chapter.id"><button :aria-current="chapter.id===data.chapter.id?'page':undefined" :disabled="!chapter.available" @click="openChapter(chapter.ord)"><strong>{{chapter.title}}</strong><em v-if="!chapter.available">{{t('comic.chapterUnavailable')}}</em><Icon v-if="chapter.id===data.chapter.id" name="check" :size="18"/></button></li></ol>
        <BackToTop compact target-selector=".comic-reader .reader-sheet-content"/>
       </template>
-    </ReaderSheet>
+    </ReaderSheet></MotionTransition>
     <div v-if="hint" class="comic-reader-hint" role="status">{{ hint }}</div>
     <div class="comic-reader-dim" :style="{ opacity: dim }" />
   </div>
@@ -359,6 +447,6 @@ onBeforeUnmount(() => {
     <ComicLoadState :status="status" :error="error" icon="panels" :title="status === 'empty' ? t('comic.reader.noPages') : t('comic.seriesMissing')" :not-found-text="t('comic.chapterUnavailable')" @retry="retry">
       <template #actions><button class="comic-button" @click="leaveReader(router, 'comic', `/comic/series/${itemId}`)">{{ t('comic.backSeries') }}</button><button class="comic-button" @click="sheet='sources'">{{ t('sourceRouting.switchComic') }}</button></template>
     </ComicLoadState>
-    <ReaderSheet v-if="sheet==='sources' && !data" :title="t('sourceRouting.switchComic')" @close="sheet=''"><ComicSourceSwitch :item-id="itemId" :chapter-id="0" @leaving="save"/></ReaderSheet>
+    <MotionTransition preset="sheet" appear><ReaderSheet v-if="sheet==='sources' && !data" :title="t('sourceRouting.switchComic')" @close="sheet=''"><ComicSourceSwitch :item-id="itemId" :chapter-id="0" @leaving="save"/></ReaderSheet></MotionTransition>
   </div>
 </template>

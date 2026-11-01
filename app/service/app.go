@@ -5,6 +5,7 @@ import (
 	"cczjVideo/app/applog"
 	cacheservice "cczjVideo/app/cache"
 	"cczjVideo/app/cast"
+	CCZJ "cczjVideo/app/cczj"
 	collectionservice "cczjVideo/app/collection"
 	"cczjVideo/app/danmaku"
 	"cczjVideo/app/db"
@@ -268,7 +269,10 @@ func NewApp() *App {
 	}), danmaku.NewClient(a.danmakuHTTP), a.background.Context())
 
 	a.cast = cast.New(a.background.Context())
-	a.recording = diagnosticrecording.New(func() string { return filepath.Join(a.getDataDir(), "exports", "diagnostics") }, a.background)
+	a.recording = diagnosticrecording.New(func() string { return filepath.Join(a.getDataDir(), "exports", "diagnostics") }, a.background, &resourceSampler)
+	if enabled, err := a.settings.Get(CCZJ.SettingDiagnosticsCapture); err == nil && enabled == "0" {
+		a.recording.SetDailyEnabled(false)
+	}
 	a.collection = collectionservice.NewService(func(name string, data any) {
 		if a.app != nil {
 			a.app.Event.Emit(name, data)
@@ -442,11 +446,11 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 	// 应用日志级别：log_level 为权威来源，旧的 debug_mode 作为兼容回退。
 	// 设置页可随时改写，无需重启。
 	level := applog.LevelInfo
-	if saved, err := db.GetSetting("log_level"); err == nil && strings.TrimSpace(saved) != "" {
+	if saved, err := db.GetSetting(CCZJ.SettingLogLevel); err == nil && strings.TrimSpace(saved) != "" {
 		if parsed, parseErr := parseLogLevel(saved); parseErr == nil {
 			level = parsed
 		}
-	} else if debugMode, err := db.GetSetting("debug_mode"); err == nil && debugMode == "1" {
+	} else if debugMode, err := db.GetSetting(CCZJ.SettingDebugMode); err == nil && debugMode == "1" {
 		level = applog.LevelDebug
 	}
 	applog.SetMinLevel(level)
@@ -492,8 +496,8 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 		return err
 	}
 
-	// 启动时自动检查更新（每天一次）
-	if application.System.IsDesktop() {
+	// Desktop and Android check on every process startup; iOS uses its store flow.
+	if application.System.IsDesktop() || goruntime.GOOS == "android" {
 		a.background.Go("startupCheckUpdate", func(taskCtx context.Context) {
 			if taskCtx.Err() == nil {
 				a.startupCheckUpdate(taskCtx)
@@ -661,7 +665,7 @@ func (a *App) GetIgnoredVersion() string {
 	return a.update.IgnoredVersion()
 }
 
-// GetLastStartVersion 返回上次启动时的版本号（参考 lx-music-desktop 的 getLastStartInfo）
+// GetLastStartVersion 返回上次启动时的版本号。
 // 用于检测版本升级，决定是否展示 changelog
 func (a *App) GetLastStartVersion() string {
 	return a.update.LastStartVersion()

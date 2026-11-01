@@ -1,3 +1,4 @@
+import { CCZJ } from '../constants/cczj'
 import { ref } from 'vue'
 import { readStorage, writeStorage } from '../platform/storage'
 import { tr } from '../locales'
@@ -17,11 +18,11 @@ export function usePlayerShortcuts(actions: ShortcutDefinition[]) {
   }
 
   function load(): void {
-    shortcutMap.value = readStorage<Record<string, string[]>>('cczj_shortcuts', defaults())
+    shortcutMap.value = readStorage<Record<string, string[]>>(CCZJ.Storage.shortcuts, defaults())
   }
 
   function save(): void {
-    writeStorage('cczj_shortcuts', shortcutMap.value)
+    writeStorage(CCZJ.Storage.shortcuts, shortcutMap.value)
   }
 
   function startEditShortcut(id: string): void {

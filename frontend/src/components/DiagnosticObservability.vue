@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, shallowRef } from 'vue'
 import { useApplicationMode } from '../modes/applicationMode'
 import { useI18n } from 'vue-i18n'
 import { activityDiagnostics, activityRevision } from '../diagnostics/activity'
@@ -15,7 +15,8 @@ const startup=computed(()=>{startupRevision.value;props.metrics?.uptime_seconds;
 const activity=computed(()=>{activityRevision.value;props.metrics?.uptime_seconds;return activityDiagnostics.snapshot(mode.mode)})
 const executor=computed(()=>props.metrics?.download_executor)
 const danmaku=computed(()=>isVideo.value?props.metrics?.danmaku:null)
-const browser=computed(()=>{props.metrics?.uptime_seconds;return captureBrowserResources()})
+const browser=shallowRef(captureBrowserResources())
+function captureDetails(event: Event): void { if ((event.target as HTMLDetailsElement).open) browser.value=captureBrowserResources(true) }
 function navigationElapsed(end:number|undefined):number|null {
   const began=startup.value.native?.page_started_ms
   return began&&end&&end>=began?end-began:null
@@ -46,7 +47,7 @@ const networkNames:Record<string,string>={
 </script>
 
 <template>
-  <component :is="section==='coverage'?'details':'section'" class="cczj-diag-observability" :class="{'cczj-diag-coverage':section==='coverage'}">
+  <component :is="section==='coverage'?'details':'section'" class="cczj-diag-observability" :class="{'cczj-diag-coverage':section==='coverage'}" @toggle="captureDetails">
     <summary v-if="section==='coverage'" class="cczj-diag-coverage-summary"><Icon name="info" :size="18"/><span>{{t('diagnostics.measurementNotes')}}</span><Icon name="chevron-right" :size="16"/></summary>
     <div v-if="section==='coverage'" class="cczj-diag-coverage-content">
       <h3>{{t('diagnostics.coverageTitle')}}</h3>

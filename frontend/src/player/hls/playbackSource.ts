@@ -6,6 +6,7 @@ import { useHlsEngine } from './useHlsEngine'
 import { adaptiveForwardBuffer } from '../../utils/ts-cache/network'
 import { playbackTransportURL } from '../../platform/mediaTransport'
 import { isIOSRuntime } from '../../api/runtime'
+import { hlsWorkerConfig } from './worker'
 
 type Lease = ReturnType<ReturnType<typeof createPlaybackSession>['capture']>
 type SourceError = 'unsupported' | 'load_failed' | 'fatal' | 'timeout'
@@ -28,6 +29,7 @@ export function createPlaybackSource(deps: {
   let networkTimer: ReturnType<typeof setTimeout> | null = null
   let releaseRecovery: (() => void) | undefined
   let resumeRecovery: (() => boolean) | undefined
+  let suspended = false
 
   function cancelNetworkTimeout(): void {
     if (networkTimer !== null) clearTimeout(networkTimer)
@@ -35,6 +37,7 @@ export function createPlaybackSource(deps: {
   }
 
   function dispose(video?: HTMLVideoElement): void {
+    suspended = false
     releaseRecovery?.(); releaseRecovery = undefined
     resumeRecovery = undefined
     cancelNetworkTimeout()
@@ -80,7 +83,8 @@ export function createPlaybackSource(deps: {
 
     const fragPolicy = Hls.DefaultConfig?.fragLoadPolicy?.default
     const hls = engine.create(video, {
-      enableWorker: false, lowLatencyMode: false,
+      autoStartLoad: !suspended,
+      ...hlsWorkerConfig, lowLatencyMode: false,
       maxBufferLength: 30, maxMaxBufferLength: 60, backBufferLength: 30,
       maxBufferSize: 60 * 1000 * 1000,
       ...(fragPolicy ? { fragLoadPolicy: { default: { ...fragPolicy,
@@ -99,7 +103,7 @@ export function createPlaybackSource(deps: {
       deps.recovered?.()
     }
     const recoverNetwork = () => {
-      if (!lease.current() || !recoveryPending || exhausted || video.paused || video.ended) return
+      if (!lease.current() || suspended || !recoveryPending || exhausted || video.paused || video.ended) return
       if (networkTimer !== null) return
       if (++networkRecoveries > 2) { exhausted = true; hls.stopLoad(); deps.error('timeout'); return }
       deps.recovering?.('network')
@@ -157,6 +161,7 @@ export function createPlaybackSource(deps: {
       if (data?.frag?.url) TsCache.notifyCurrentTs(absolute(data.frag.url, playbackURL))
     }))
     hls.on(Hls.Events.ERROR, lease.guard((_event: unknown, data: any) => {
+      if(suspended)return
       if (data?.type === Hls.ErrorTypes.NETWORK_ERROR) {
         applyNetworkPolicy()
         deps.networkIssue?.({ reason: String(data.details || ''), fatal: !!data.fatal,
@@ -196,10 +201,21 @@ export function createPlaybackSource(deps: {
     }))
     hls.loadSource(playbackURL)
     hls.attachMedia(video)
+    if(suspended)engine.suspend()
     return true
   }
 
-  return { load, dispose, cancelNetworkTimeout, resume:()=>resumeRecovery?.()??false, snapshot: engine.snapshot }
+  function suspend(): void {
+    suspended = true
+    cancelNetworkTimeout()
+    engine.suspend()
+    TsCache.setPlaybackBufferAhead(0)
+  }
+  function resume(): boolean {
+    if (suspended) { suspended = false; engine.resume(); return true }
+    return resumeRecovery?.() ?? false
+  }
+  return { load, dispose, cancelNetworkTimeout, suspend, resume, snapshot: engine.snapshot }
 }
 
 function absolute(url: string, base: string): string {

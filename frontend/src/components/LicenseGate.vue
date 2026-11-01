@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { CCZJ } from '../constants/cczj'
 /**
  * 首启许可条款闸门。
  *
@@ -13,6 +14,7 @@
 defineOptions({ name: 'LicenseGate' })
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import licenseText from '../../../LICENSE?raw'
+import fanqieSignLicense from '../../../licenses/fanqie-sign-MIT.txt?raw'
 import { tr } from '../locales'
 import { GetSetting, QuitApp, SetSetting } from '../api/app'
 import { closeMobileApplication } from '../api/runtime'
@@ -60,7 +62,7 @@ function stopReadTimer(): void {
 async function refreshState(): Promise<void> {
   let accepted = ''
   try {
-    accepted = await GetSetting('license_terms_version')
+    accepted = await GetSetting(CCZJ.Settings.licenseTermsVersion)
   } catch {
     // 读失败一律按「没同意」处理：闸门不能因为一次 IPC 出错就默认放行。
     accepted = ''
@@ -76,7 +78,7 @@ async function accept(): Promise<void> {
   if (!canAccept.value || saving.value) return
   saving.value = true
   try {
-    await SetSetting('license_terms_version', LICENSE_TERMS_VERSION)
+    await SetSetting(CCZJ.Settings.licenseTermsVersion, LICENSE_TERMS_VERSION)
     licensePending.value = false
     licenseModalOpen.value = false
     stopReadTimer()
@@ -129,6 +131,8 @@ onUnmounted(stopReadTimer)
         {{ showFull ? tr('license.hideFull') : tr('license.showFull') }}
       </button>
       <pre v-if="showFull" class="license-full">{{ licenseText }}</pre>
+      <pre v-if="showFull" class="license-full">ssovit/x-gorogn-khronos-argus-ladon
+{{ fanqieSignLicense }}</pre>
     </div>
 
     <template #footer>

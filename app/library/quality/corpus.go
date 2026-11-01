@@ -5,6 +5,7 @@ package quality
 
 import (
 	"bytes"
+	"context"
 	_ "embed"
 	"encoding/json"
 	"fmt"
@@ -14,6 +15,8 @@ import (
 	"time"
 	"unicode"
 
+	"cczjVideo/app/payload"
+
 	"golang.org/x/text/unicode/norm"
 )
 
@@ -22,13 +25,24 @@ const Version = "reading-quality.v1"
 //go:embed benchmark.v1.json
 var bundled []byte
 
-//go:embed bulk.v1.json
-var bulk []byte
+//go:embed bulk.v1.json.gz
+var bulkGzip []byte
+
+const maxCorpusBytes = 64 << 20
 
 // AuditCorpus combines the frozen online metadata with curated catalog anchors,
 // scoped to exactly one mode. It is independent of CLI benchmark denominators.
 func AuditCorpus(kind string) (Corpus, error) {
-	c, err := ParseCorpus(bulk)
+	return AuditCorpusContext(context.Background(), kind)
+}
+
+// AuditCorpusContext decodes one bounded document without retaining its raw bytes.
+func AuditCorpusContext(ctx context.Context, kind string) (Corpus, error) {
+	raw, err := payload.UnpackBytes(ctx, "corpus.json.gz", bulkGzip, payload.Limits{Input: maxCorpusBytes, Output: maxCorpusBytes})
+	if err != nil {
+		return Corpus{}, fmt.Errorf("decode bundled corpus: %w", err)
+	}
+	c, err := ParseCorpus(raw)
 	if err != nil {
 		return c, err
 	}
@@ -40,6 +54,9 @@ func AuditCorpus(kind string) (Corpus, error) {
 	seen := map[string]bool{}
 	for _, list := range [][]Work{curated.Works, c.Works} {
 		for _, w := range list {
+			if err := ctx.Err(); err != nil {
+				return Corpus{}, err
+			}
 			if w.Kind != kind {
 				continue
 			}
@@ -97,7 +114,7 @@ type Anchor struct {
 func DefaultCorpus() (Corpus, error) { return ParseCorpus(bundled) }
 func ParseCorpus(raw []byte) (Corpus, error) {
 	var c Corpus
-	if len(raw) > 64<<20 {
+	if len(raw) > maxCorpusBytes {
 		return c, fmt.Errorf("benchmark exceeds 64 MiB")
 	}
 	d := json.NewDecoder(bytes.NewReader(raw))

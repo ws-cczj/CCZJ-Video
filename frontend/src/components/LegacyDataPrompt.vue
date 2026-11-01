@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { CCZJ } from '../constants/cczj'
 /**
  * 首启的「旧数据找回」提示。
  *
@@ -26,7 +27,7 @@ const errorStore = useErrorStore()
 
 // 「暂时不用」记在 localStorage：它表达的只是这台机器的界面别再自动提，
 // 而设置页那一栏不受它影响，随时还能找回（Go 侧的 legacy_data_status 只在真的处理过才写）。
-const DISMISS_KEY = 'cczj.legacy-data-dismissed'
+const DISMISS_KEY = CCZJ.Storage.legacyDataDismissed
 
 const notice = ref<any | null>(null)
 // 开关放在 store 里：SchemaNewerPrompt 要排在它后面，同 z-index 不能同时开。

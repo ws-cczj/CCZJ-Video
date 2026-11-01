@@ -8,6 +8,7 @@
 package plugin
 
 import (
+	CCZJ "cczjVideo/app/cczj"
 	"encoding/json"
 	"regexp"
 )
@@ -147,7 +148,7 @@ const (
 
 	manifestFileName = "plugin.json"
 	// settingsKey 是启用/禁用状态在 settings KV 表里的键（docs/adr/0007）。
-	settingsKey = "plugin_states"
+	settingsKey = CCZJ.SettingPluginStates
 )
 
 var (

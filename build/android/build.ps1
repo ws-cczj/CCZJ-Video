@@ -20,6 +20,8 @@ function Assert-NativeSuccess([string]$Step) {
 }
 try {
     Set-Location -LiteralPath $workspace
+    & node scripts/compress-embedded-json.mjs
+    Assert-NativeSuccess 'Embedded JSON generation'
     if (!$Sdk) { $Sdk = Join-Path $env:LOCALAPPDATA 'Android/Sdk' }
     $Sdk = (Resolve-Path -LiteralPath $Sdk).Path
     # Keep the machine's Java default unchanged. Older desktop projects may use Java 8.
@@ -71,7 +73,7 @@ try {
     $nativeDirectory = Join-Path $PSScriptRoot "app/src/main/jniLibs/$abi"
     New-Item -ItemType Directory -Force -Path $nativeDirectory | Out-Null
     $version = (Get-Content version.json -Raw -Encoding UTF8 | ConvertFrom-Json).version
-    if ($version -notmatch '^(\d+)\.(\d{1,2})\.(\d{1,2})$') { throw 'Android version must be numeric major.minor.patch with minor and patch below 100.' }
+    if ($version -notmatch '^(\d+)\.(\d{1,2})\.(\d{1,2})(?:-beta\.[1-9]\d*)?$') { throw 'Android version must use major.minor.patch[-beta.N] with minor and patch below 100.' }
     $versionCode = [int]$Matches[1] * 10000 + [int]$Matches[2] * 100 + [int]$Matches[3]
     if ($versionCode -lt 1 -or $versionCode -gt 2100000000) { throw 'Android versionCode is outside its valid range.' }
     $nativeTags = if ($BuildType -eq 'Release') { 'android,production' } else { 'android,debug' }

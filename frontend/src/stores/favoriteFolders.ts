@@ -1,3 +1,4 @@
+import { CCZJ } from '../constants/cczj'
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { GetSetting, SetSetting } from '../api/app'
@@ -7,7 +8,7 @@ import { useErrorStore } from './error'
 import { tr } from '../locales'
 
 export interface FavFolder { id: string; name: string; default: boolean }
-const FOLDERS_KEY='cczj_fav_folders', MAPPING_KEY='cczj_fav_mapping'
+const FOLDERS_KEY=CCZJ.Storage.favoriteFolders, MAPPING_KEY=CCZJ.Storage.favoriteMapping
 export function decodeFavoriteFolders(raw:unknown):FavFolder[] {
   const result:FavFolder[]=[{id:'default',name:'',default:true}]
   if(!Array.isArray(raw))return result

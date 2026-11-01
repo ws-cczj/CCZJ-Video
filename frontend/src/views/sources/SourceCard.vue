@@ -28,6 +28,7 @@ const props = defineProps<{
   probeBusy: boolean
   isDefault: boolean
   defaultBusy?: boolean
+  deleting?: boolean
   scheduleVisible: boolean
   scheduleForm: ScheduleForm | null
   doc: ParamsDoc | null
@@ -156,8 +157,8 @@ const {
       <button class="icon-btn edit-btn" @click="emit('edit')" :title="tr('common.edit')">
         <Icon name="edit" :size="14" />
       </button>
-      <button class="icon-btn del-btn" @click="emit('delete')" :title="tr('common.delete')">
-        <Icon name="trash" :size="14" />
+      <button class="icon-btn del-btn" :disabled="props.deleting" :aria-busy="props.deleting" @click="emit('delete')" :title="tr('common.delete')">
+        <Icon :name="props.deleting ? 'refresh' : 'trash'" :size="14" />
       </button>
     </div>
 

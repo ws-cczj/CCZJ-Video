@@ -1,5 +1,5 @@
 @import './player-option-button.css';
-/* B站风格时间显示 */
+/* 播放时间显示与跳转输入 */
 .time-display {
   @apply cczj-flex cczj-items-center;
   gap: 3px;

@@ -27,6 +27,13 @@ export interface DesktopPlaybackCommands {
 }
 
 export type MobilePanel = 'more' | 'speed' | 'episodes' | 'cast' | 'lines'
+export interface CastPlaybackState {
+  device: string
+  state: string
+  position: number
+  duration: number
+  hasPosition: boolean
+}
 export interface MobileChromeHandle {
   readonly pinned: boolean
   readonly menuOpen: boolean

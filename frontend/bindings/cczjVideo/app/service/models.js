@@ -917,6 +917,13 @@ export class DiagnosticsExport {
              */
             this["goroutine_profile_path"] = "";
         }
+        if (!("summary_path" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["summary_path"] = "";
+        }
 
         Object.assign(this, $$source);
     }
@@ -929,6 +936,59 @@ export class DiagnosticsExport {
     static createFrom($$source = {}) {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new DiagnosticsExport(/** @type {Partial<DiagnosticsExport>} */($$parsedSource));
+    }
+}
+
+export class DiagnosticsReceipt {
+    /**
+     * Creates a new DiagnosticsReceipt instance.
+     * @param {Partial<DiagnosticsReceipt>} [$$source = {}] - The source object to create the DiagnosticsReceipt.
+     */
+    constructor($$source = {}) {
+        if (!("accepted" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["accepted"] = 0;
+        }
+        if (!("rejected" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["rejected"] = 0;
+        }
+        if (!("daily_enabled" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["daily_enabled"] = false;
+        }
+        if (!("recording" in $$source)) {
+            /**
+             * @member
+             * @type {diagnosticrecording$0.Status}
+             */
+            this["recording"] = (new diagnosticrecording$0.Status());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DiagnosticsReceipt instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {DiagnosticsReceipt}
+     */
+    static createFrom($$source = {}) {
+        const $$createField3_0 = $$createType22;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("recording" in $$parsedSource) {
+            $$parsedSource["recording"] = $$createField3_0($$parsedSource["recording"]);
+        }
+        return new DiagnosticsReceipt(/** @type {Partial<DiagnosticsReceipt>} */($$parsedSource));
     }
 }
 
@@ -1253,7 +1313,7 @@ export class DoubanGetAllResp {
      * @returns {DoubanGetAllResp}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType24;
+        const $$createField0_0 = $$createType25;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("rows" in $$parsedSource) {
             $$parsedSource["rows"] = $$createField0_0($$parsedSource["rows"]);
@@ -1729,7 +1789,7 @@ export class LogEntry {
      * @returns {LogEntry}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType25;
+        const $$createField0_0 = $$createType26;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("fields" in $$parsedSource) {
             $$parsedSource["fields"] = $$createField0_0($$parsedSource["fields"]);
@@ -1936,7 +1996,7 @@ export class LogPageResp {
      * @returns {LogPageResp}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType27;
+        const $$createField0_0 = $$createType28;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("records" in $$parsedSource) {
             $$parsedSource["records"] = $$createField0_0($$parsedSource["records"]);
@@ -2262,14 +2322,14 @@ export class RuntimeMetrics {
      * @returns {RuntimeMetrics}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType29;
-        const $$createField1_0 = $$createType31;
-        const $$createField2_0 = $$createType33;
-        const $$createField3_0 = $$createType35;
+        const $$createField0_0 = $$createType30;
+        const $$createField1_0 = $$createType32;
+        const $$createField2_0 = $$createType34;
+        const $$createField3_0 = $$createType36;
         const $$createField4_0 = $$createType7;
-        const $$createField5_0 = $$createType37;
-        const $$createField6_0 = $$createType38;
-        const $$createField7_0 = $$createType39;
+        const $$createField5_0 = $$createType38;
+        const $$createField6_0 = $$createType39;
+        const $$createField7_0 = $$createType22;
         const $$createField10_0 = $$createType10;
         const $$createField11_0 = $$createType12;
         const $$createField12_0 = $$createType40;
@@ -2874,24 +2934,24 @@ const $$createType18 = $Create.Array($$createType17);
 const $$createType19 = db$0.TableStat.createFrom;
 const $$createType20 = $Create.Array($$createType19);
 const $$createType21 = $Create.Array($Create.Any);
-const $$createType22 = db$0.DoubanInfoRow.createFrom;
-const $$createType23 = $Create.Nullable($$createType22);
-const $$createType24 = $Create.Array($$createType23);
-const $$createType25 = $Create.Map($Create.Any, $Create.Any);
-const $$createType26 = applog$0.Record.createFrom;
-const $$createType27 = $Create.Array($$createType26);
-const $$createType28 = operation$0.Stat.createFrom;
-const $$createType29 = $Create.Array($$createType28);
-const $$createType30 = netpolicy$0.Stat.createFrom;
-const $$createType31 = $Create.Array($$createType30);
-const $$createType32 = outbound$0.Status.createFrom;
-const $$createType33 = $Create.Nullable($$createType32);
-const $$createType34 = danmaku$0.Stats.createFrom;
-const $$createType35 = $Create.Nullable($$createType34);
-const $$createType36 = download$0.ExecutorStats.createFrom;
-const $$createType37 = $Create.Nullable($$createType36);
-const $$createType38 = netbudget$0.Snapshot.createFrom;
-const $$createType39 = diagnosticrecording$0.Status.createFrom;
+const $$createType22 = diagnosticrecording$0.Status.createFrom;
+const $$createType23 = db$0.DoubanInfoRow.createFrom;
+const $$createType24 = $Create.Nullable($$createType23);
+const $$createType25 = $Create.Array($$createType24);
+const $$createType26 = $Create.Map($Create.Any, $Create.Any);
+const $$createType27 = applog$0.Record.createFrom;
+const $$createType28 = $Create.Array($$createType27);
+const $$createType29 = operation$0.Stat.createFrom;
+const $$createType30 = $Create.Array($$createType29);
+const $$createType31 = netpolicy$0.Stat.createFrom;
+const $$createType32 = $Create.Array($$createType31);
+const $$createType33 = outbound$0.Status.createFrom;
+const $$createType34 = $Create.Nullable($$createType33);
+const $$createType35 = danmaku$0.Stats.createFrom;
+const $$createType36 = $Create.Nullable($$createType35);
+const $$createType37 = download$0.ExecutorStats.createFrom;
+const $$createType38 = $Create.Nullable($$createType37);
+const $$createType39 = netbudget$0.Snapshot.createFrom;
 const $$createType40 = resource$0.Snapshot.createFrom;
 const $$createType41 = SourceProbeSlot.createFrom;
 const $$createType42 = $Create.Array($$createType41);

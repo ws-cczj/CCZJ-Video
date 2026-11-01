@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { CCZJ } from '../../constants/cczj'
 /**
  * 「关于」分组：版本卡片 + 检查更新 / 重启 / 退回上一版 + 免责声明。
  *
@@ -51,7 +52,7 @@ const swapBackup = ref<{ size_bytes?: number; modified_at?: number } | null>(nul
 
 onMounted(async () => {
   try {
-    acceptedTerms.value = await GetSetting('license_terms_version')
+    acceptedTerms.value = await GetSetting(CCZJ.Settings.licenseTermsVersion)
   } catch { /* 读不到就显示未同意 */ }
   if (isMobileRuntime()) return
   try {
@@ -230,7 +231,7 @@ async function rollbackUpdate(): Promise<void> {
 .about-actions {
   @apply cczj-mt-8 cczj-gap-5 cczj-flex-wrap;
 }
-/* Label/supporting-text rows: https://github.com/material-components/material-web/blob/main/docs/components/list.md */
+/* Two-line contact rows keep the action aligned beside the label and value. */
 .about-contact-list { margin: 0; @apply cczj-border cczj-rounded-lg cczj-overflow-hidden; }
 .about-contact-row { @apply cczj-grid cczj-gap-2; grid-template-columns: minmax(0,1fr) auto; padding: 12px 14px; }
 .about-contact-row + .about-contact-row { @apply cczj-border-top; }

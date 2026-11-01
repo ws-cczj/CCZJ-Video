@@ -53,6 +53,7 @@
 
 | 类名 | 生效样式 |
 | --- | --- |
+| `cczj-gap-0` | `gap: 0;` |
 | `cczj-gap-1` | `gap: 2px;` |
 | `cczj-gap-2` | `gap: 4px;` |
 | `cczj-gap-3` | `gap: 6px;` |

@@ -109,7 +109,8 @@ export function restoreDeviceBrightness(owner?: symbol): void {
 export function enterDevicePip(width: number, height: number): boolean {
   const state = readPlayerDevice()
   if (!state?.pip) return false
-  if (state.pipAllowed === false) throw new ApiFailure({code:'PERMISSION_DENIED',message:'Picture-in-picture permission is disabled'},undefined)
+  // AppOps probes vary across OEMs. Let the native entry report the actual
+  // rejection instead of treating a default/unknown probe as a denied request.
   bridge()?.playerEnterPip(width, height)
   return true
 }

@@ -30,6 +30,13 @@ export function readStorage<T>(key: string, fallback: T): T {
   return readRaw<T>(key) ?? fallback
 }
 
+/** Decode untrusted cache entries individually, retaining valid neighbours. */
+export function readStorageRecord<T>(key: string, valid: (value: unknown) => value is T): Record<string, T> {
+  const raw = readRaw<unknown>(key)
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  return Object.fromEntries(Object.entries(raw).filter((entry): entry is [string, T] => valid(entry[1])))
+}
+
 export function writeStorage<T>(key: string, value: T): boolean {
   try {
     localStorage.setItem(key, JSON.stringify({ version: STORAGE_VERSION, value }))
@@ -64,7 +71,7 @@ export function readStorageBoolean(key: string, fallback = false): boolean {
     if (raw === null) return fallback
     const parsed = JSON.parse(raw) as VersionedValue<boolean> | boolean | string
     if (typeof parsed === 'object' && parsed !== null && 'version' in parsed && 'value' in parsed) {
-      return parsed.version === STORAGE_VERSION ? Boolean(parsed.value) : fallback
+      return parsed.version === STORAGE_VERSION && typeof parsed.value === 'boolean' ? parsed.value : fallback
     }
     if (typeof parsed === 'boolean') return parsed
     return parsed === 'true' || parsed === '1'

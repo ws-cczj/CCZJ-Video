@@ -1,6 +1,11 @@
 version: '3'
 
 tasks:
+  generate:embedded-json:
+    summary: Generate bounded embedded JSON gzip resources
+    cmds:
+      - node scripts/compress-embedded-json.mjs
+
   install:frontend:deps:
     summary: Install frontend dependencies
     dir: frontend

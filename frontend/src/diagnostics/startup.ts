@@ -35,7 +35,7 @@ export function startupSnapshot(mode?:'video'|'novel'|'comic') {
     }
   } catch { /* An older host must remain usable; coverage reports this gap. */ }
   const first=events.find(event=>event.phase==='first_screen'),splash=events.find(event=>event.phase==='splash_closed')
-  return { scope:'current_document', mode_activation:modeSessions.diagnostics(mode), first_screen_within_splash:first&&splash?first.at_ms<=splash.at_ms:null, time_origin_ms:performance.timeOrigin, native, events:events.map(event=>({...event})),
+  return { scope:'current_document', ui_build:import.meta.env.CCZJ_UI_BUILD, mode_activation:modeSessions.diagnostics(mode), first_screen_within_splash:first&&splash?first.at_ms<=splash.at_ms:null, time_origin_ms:performance.timeOrigin, native, events:events.map(event=>({...event})),
     paint_entries:performance.getEntriesByType?.('paint').map(entry=>({name:entry.name,at_ms:Math.round(entry.startTime)})) ?? [] }
 }
 

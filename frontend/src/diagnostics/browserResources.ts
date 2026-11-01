@@ -9,7 +9,7 @@ export function registerPlayerResourceSnapshot(snapshot: () => unknown, id = 'le
   return () => { playerSnapshots.delete(key) }
 }
 
-export function captureBrowserResources() {
+export function captureBrowserResources(detailed = false) {
   const memory = (performance as Performance & { memory?: { usedJSHeapSize: number; totalJSHeapSize: number; jsHeapSizeLimit: number } }).memory
   let player: unknown = null
   const players = Array.from(playerSnapshots.values()).slice(-4).map(entry => {
@@ -19,21 +19,21 @@ export function captureBrowserResources() {
   })
   player = players[players.length-1]?.snapshot ?? null
   if (typeof document === 'undefined') return { player, js_heap: null, attached_dom: null }
-  const videos = Array.from(document.querySelectorAll('video'))
-  const canvases = Array.from(document.querySelectorAll('canvas'))
-  const images = Array.from(document.querySelectorAll('img'))
+  const videos = detailed ? document.querySelectorAll('video') : null
+  const canvases = detailed ? document.querySelectorAll('canvas') : null
+  const images = detailed ? document.querySelectorAll('img') : null
   return {
     android_memory: readAndroidMemoryState(),
     js_heap: memory ? { source: 'performance.memory', used_bytes: memory.usedJSHeapSize, total_bytes: memory.totalJSHeapSize, limit_bytes: memory.jsHeapSizeLimit } : null,
     player, players, registered_player_count:playerSnapshots.size, architecture:architectureSnapshot(),
-    attached_dom: {
+    attached_dom: videos && canvases && images ? {
       video_count: videos.length, canvas_count: canvases.length, image_count: images.length,
-      videos: videos.slice(0, 8).map(mediaResourceSnapshot),
+      videos: Array.from(videos).slice(0, 8).map(mediaResourceSnapshot),
       // Size estimates only: these do not measure GPU allocations or retained
       // off-document KeepAlive trees. Shared images can be counted more than once.
-      canvas_rgba_estimate_bytes: canvases.slice(0, 32).reduce((total, canvas) => total + canvas.width * canvas.height * 4, 0),
-      image_rgba_estimate_bytes: images.slice(0, 256).reduce((total, img) => total + img.naturalWidth * img.naturalHeight * 4, 0),
-    },
+      canvas_rgba_estimate_bytes: Array.from(canvases).slice(0, 32).reduce((total, canvas) => total + canvas.width * canvas.height * 4, 0),
+      image_rgba_estimate_bytes: Array.from(images).slice(0, 256).reduce((total, img) => total + img.naturalWidth * img.naturalHeight * 4, 0),
+    } : null,
   }
 }
 

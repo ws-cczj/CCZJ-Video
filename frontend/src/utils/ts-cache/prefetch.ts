@@ -56,6 +56,7 @@ function finishInflight(generation: number): void {
 
 export function beginCacheSession(): void {
   prefetchState.cacheSession++
+  for (const cancel of prefetchState.previewRequests) cancel()
   if (prefetchState.debounceTimer != null) {
     window.clearTimeout(prefetchState.debounceTimer)
     prefetchState.debounceTimer = null
@@ -115,6 +116,7 @@ function canPrefetch(): boolean {
  */
 export function beginForegroundFetch(): () => void {
   prefetchState.foregroundActive++
+  for (const cancel of prefetchState.previewRequests) cancel()
   for (const controller of prefetchState.prefetchControllers) controller.abort()
   let released = false
   return () => {
@@ -124,6 +126,13 @@ export function beginForegroundFetch(): () => void {
     if (canPrefetch()) scheduleDrain()
     fireListeners()
   }
+}
+
+/** Preview traffic yields immediately to playback without changing its samples. */
+export function beginPreviewFetch(cancel: () => void): (() => void) | null {
+  if (prefetchState.foregroundActive > 0) return null
+  prefetchState.previewRequests.add(cancel)
+  return () => { prefetchState.previewRequests.delete(cancel) }
 }
 
 export function setPlaybackBufferAhead(seconds: number, playbackRate = 1): void {
@@ -199,6 +208,7 @@ export async function prefetchMediaStart(episode: EpisodeLite, signal: AbortSign
           while (true) {
             const chunk = await reader.read()
             if (chunk.done) break
+            telemetry.networkBytes += chunk.value.byteLength
             size += chunk.value.byteLength
             if (bytes + size > 8 * 1024 * 1024) throw new Error('media warm-up exceeds 8 MiB')
             chunks.push(chunk.value)
@@ -251,6 +261,7 @@ async function runOne(job: FetchJob): Promise<void> {
     const resp = await fetch(job.url, init)
     if (resp.ok && generation === prefetchState.cacheSession) {
       const buf = await resp.arrayBuffer()
+      telemetry.networkBytes += buf.byteLength
       if (generation !== prefetchState.cacheSession || ctrl.signal.aborted) return
       const elapsed = performance.now() - t0
       cacheSet(job.url, buf, job.episodeKey, null, elapsed)

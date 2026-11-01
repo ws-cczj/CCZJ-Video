@@ -13,8 +13,17 @@ const placement = computed(() => props.placement ?? (props.fullscreen ? 'right' 
 const sheetHeight = ref(60)
 const sheetStyle = computed(() => placement.value === 'bottom' ? {'--cczj-player-sheet-height': `${sheetHeight.value}dvh`} : undefined)
 let drag: {id:number;y:number;height:number;viewport:number;handle:HTMLElement} | undefined
+let resizeFrame: number | undefined
+let pendingHeight: number | undefined
+function applyResize(): void {
+  if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame)
+  resizeFrame = undefined
+  if (pendingHeight !== undefined) sheetHeight.value = pendingHeight
+  pendingHeight = undefined
+}
 function stopResize(event?: PointerEvent): void {
   if (!drag || (event && event.pointerId !== drag.id)) return
+  applyResize()
   const previous = drag
   drag = undefined
   if (previous.handle.hasPointerCapture(previous.id)) previous.handle.releasePointerCapture(previous.id)
@@ -30,7 +39,8 @@ function startResize(event: PointerEvent): void {
 }
 function resize(event: PointerEvent): void {
   if (!drag || event.pointerId !== drag.id) return
-  sheetHeight.value = Math.min(90,Math.max(30,(drag.height + drag.y - event.clientY) / drag.viewport * 100))
+  pendingHeight = Math.min(90,Math.max(30,(drag.height + drag.y - event.clientY) / drag.viewport * 100))
+  if (resizeFrame === undefined) resizeFrame = requestAnimationFrame(applyResize)
 }
 function resizeWithKey(event: KeyboardEvent): void {
   const deltas:Record<string,number> = {ArrowUp:5,ArrowDown:-5,PageUp:10,PageDown:-10}

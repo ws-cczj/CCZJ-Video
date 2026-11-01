@@ -50,8 +50,9 @@ type Target struct {
 
 // Response 是一次请求的结果。
 type Response struct {
-	StatusCode  int
-	ContentType string
+	protocolHeaders map[string]string
+	StatusCode      int
+	ContentType     string
 	// FinalURL 是重定向之后的最终地址。解析相对地址要以它为基准，
 	// 不是以请求前的地址：规则里取出的相对链接是相对**它所在的那一页**的，
 	// 而那一页可能就是重定向后的地址（Legado 两个基准并存，
@@ -409,8 +410,8 @@ func (f *Fetcher) fetchLimited(ctx context.Context, doc *Document, op *Operation
 			return nil, apperror.New(apperror.AuthenticationRequired, "源站要求登录，请检查来源配置")
 		case http.StatusForbidden:
 			return nil, apperror.New(apperror.PermissionDenied, "源站拒绝访问，请检查来源配置或验证要求")
-		case http.StatusNotFound:
-			return nil, apperror.New(apperror.NotFound, "源站没有这个地址（HTTP 404）")
+		case http.StatusNotFound, http.StatusGone:
+			return nil, &EndpointMissingError{Status: response.StatusCode}
 		}
 		if response.StatusCode < 200 || response.StatusCode >= 300 {
 			return nil, apperror.Newf(apperror.Unavailable, "源站返回 HTTP %d", response.StatusCode)
@@ -430,11 +431,12 @@ func (f *Fetcher) fetchLimited(ctx context.Context, doc *Document, op *Operation
 			return nil, apperror.Wrap(apperror.Corrupt, err, "响应解码失败")
 		}
 		return &Response{
-			StatusCode:  response.StatusCode,
-			ContentType: response.Header.Get("Content-Type"),
-			FinalURL:    current,
-			Text:        text,
-			Garbled:     LooksGarbled(text),
+			protocolHeaders: map[string]string{"y": response.Header.Get("y"), "c": response.Header.Get("c")},
+			StatusCode:      response.StatusCode,
+			ContentType:     response.Header.Get("Content-Type"),
+			FinalURL:        current,
+			Text:            text,
+			Garbled:         LooksGarbled(text),
 		}, nil
 	}
 	return nil, apperror.Newf(apperror.Unavailable, "重定向超过 %d 跳", maxFetchRedirect)

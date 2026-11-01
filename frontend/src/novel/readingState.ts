@@ -1,3 +1,4 @@
+import { CCZJ } from '../constants/cczj'
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { readStorage } from '../platform/storage'
@@ -7,9 +8,9 @@ import { normalizeReadingPreferences, type NovelBook, type ReadingPreferences, t
 
 import { readingPersistence, readingRecord } from '../reading/persistence'
 
-const SHELF_KEY = 'cczj.novel.shelf.v2'
-const PROGRESS_KEY = 'cczj.novel.progress.v2'
-const PREFERENCES_KEY = 'cczj.novel.reader.v2'
+const SHELF_KEY = CCZJ.Legacy.novelShelf
+const PROGRESS_KEY = CCZJ.Legacy.novelProgress
+const PREFERENCES_KEY = CCZJ.Legacy.novelPreferences
 
 /**
  * 书架条目 = 自然键 + 本地主键 + 入库时的条目快照。
@@ -162,7 +163,7 @@ export const useNovelReading = defineStore('novelReading', () => {
   }
   async function setPreferences(value: Partial<ReadingPreferences>): Promise<boolean> {
     if (!await persistence.init()) return false
-    preferences.value = normalizeReadingPreferences({ ...preferences.value, ...value })
+    preferences.value = normalizeReadingPreferences({ ...preferences.value, ...value, ...(value.theme && value.theme !== 'night' ? { dayTheme: value.theme } : {}) })
     persistence.enqueue(readingRecord('preferences', 'default', preferences.value))
     return persistence.flush()
   }

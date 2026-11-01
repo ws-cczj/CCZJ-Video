@@ -1,6 +1,7 @@
 package db
 
 import (
+	CCZJ "cczjVideo/app/cczj"
 	"cczjVideo/app/model"
 	"context"
 	cryptorand "crypto/rand"
@@ -46,7 +47,7 @@ type CatalogItem struct {
 
 // SettingReviveDeletedCatalogItems gates whether automatic collection writes
 // restore entries the user removed from a source (lifecycle_state='deleted').
-const SettingReviveDeletedCatalogItems = "catalog_revive_deleted"
+const SettingReviveDeletedCatalogItems = CCZJ.SettingReviveDeletedCatalog
 
 // ReviveDeletedCatalogItems reports the current setting. Missing key, empty
 // value or a read failure all mean "revive", which is the shipped default.
@@ -70,10 +71,9 @@ func UpsertCatalogItemsContext(ctx context.Context, sourceKey string, videos []*
 	return upsertCatalogItems(ctx, nil, sourceKey, videos, ReviveDeletedCatalogItems())
 }
 
-// UpsertCatalogItemsWithRevival ignores the setting and always restores deleted
-// entries. Used by explicit import paths: the user asked for this data by hand,
-// so a previous deletion (usually produced by the same import earlier) must not
-// keep it hidden.
+// UpsertCatalogItemsWithRevival always restores deleted entries during explicit
+// imports, regardless of the revival setting. Previously deleted records must
+// become visible when explicitly imported again.
 func UpsertCatalogItemsWithRevival(sourceKey string, videos []*model.Video) error {
 	return UpsertCatalogItemsWithRevivalContext(context.Background(), sourceKey, videos)
 }
@@ -209,10 +209,12 @@ type catalogUpsertRow struct {
 }
 
 type sourceTypeUpsertRow struct {
-	SourceKey    string `db:"source_key"`
-	SourceTypeID string `db:"source_type_id"`
-	GlobalTypeID int64  `db:"global_type_id"`
-	TypeName     string `db:"type_name"`
+	SourceKey        string `db:"source_key"`
+	SourceTypeID     string `db:"source_type_id"`
+	ParentTypeID     string `db:"parent_type_id"`
+	ManualShortDrama *bool  `db:"manual_short_drama"`
+	GlobalTypeID     int64  `db:"global_type_id"`
+	TypeName         string `db:"type_name"`
 }
 
 type catalogTypeCandidate struct {
@@ -524,7 +526,12 @@ func GetCatalogVideoPageContext(ctx context.Context, sourceKey string, filter Fi
 	where := []string{"source_key=?", "lifecycle_state='active'", catalogTypeVisibilityClause("source_videos")}
 	args := []any{sourceKey}
 	if filter.ShortDrama {
-		where = append(where, catalogShortDramaClause)
+		clause, values, err := shortDramaCatalogFilter(ctx, sourceKey)
+		if err != nil {
+			return nil, err
+		}
+		where = append(where, clause)
+		args = append(args, values...)
 	}
 	if strings.TrimSpace(filter.TypeId) != "" && filter.TypeId != "all" {
 		where = append(where, "source_type_id=?")
@@ -712,7 +719,12 @@ func getCatalogRecommend(ctx context.Context, sourceKey string, limit int, exclu
 	args := []any{sourceKey}
 	where := "source_key=? AND lifecycle_state='active' AND " + catalogTypeVisibilityClause("source_videos")
 	if shortDrama {
-		where += " AND " + catalogShortDramaClause
+		clause, values, err := shortDramaCatalogFilter(ctx, sourceKey)
+		if err != nil {
+			return nil, err
+		}
+		where += " AND " + clause
+		args = append(args, values...)
 	}
 	if len(excludeIDs) > 0 {
 		marks := make([]string, len(excludeIDs))
@@ -794,9 +806,11 @@ func DeleteCatalogVideoContext(ctx context.Context, sourceKey, vodID string) err
 }
 
 type SourceTypeExport struct {
-	SourceTypeID string `db:"source_type_id"`
-	GlobalTypeID int64  `db:"global_type_id"`
-	TypeName     string `db:"type_name"`
+	SourceTypeID     string `db:"source_type_id"`
+	ParentTypeID     string `db:"parent_type_id"`
+	ManualShortDrama *bool  `db:"manual_short_drama"`
+	GlobalTypeID     int64  `db:"global_type_id"`
+	TypeName         string `db:"type_name"`
 }
 
 func ExportSourceTypes(sourceKey string) ([]SourceTypeExport, error) {
@@ -804,7 +818,7 @@ func ExportSourceTypes(sourceKey string) ([]SourceTypeExport, error) {
 }
 func ExportSourceTypesContext(ctx context.Context, sourceKey string) ([]SourceTypeExport, error) {
 	var out []SourceTypeExport
-	err := instance.SelectContext(ctx, &out, `SELECT source_type_id,COALESCE(global_type_id,0) global_type_id,type_name FROM source_types WHERE source_key=? ORDER BY source_type_id`, sourceKey)
+	err := instance.SelectContext(ctx, &out, `SELECT source_type_id,parent_type_id,manual_short_drama,COALESCE(global_type_id,0) global_type_id,type_name FROM source_types WHERE source_key=? ORDER BY source_type_id`, sourceKey)
 	return out, err
 }
 
@@ -831,10 +845,10 @@ func writeSourceTypes(ctx context.Context, tx *sqlx.Tx, sourceKey string, rows [
 
 	params := make([]sourceTypeUpsertRow, 0, len(rows))
 	for _, r := range rows {
-		params = append(params, sourceTypeUpsertRow{SourceKey: sourceKey, SourceTypeID: r.SourceTypeID, GlobalTypeID: r.GlobalTypeID, TypeName: r.TypeName})
+		params = append(params, sourceTypeUpsertRow{SourceKey: sourceKey, SourceTypeID: r.SourceTypeID, ParentTypeID: r.ParentTypeID, ManualShortDrama: r.ManualShortDrama, GlobalTypeID: r.GlobalTypeID, TypeName: r.TypeName})
 	}
-	if _, err := tx.NamedExecContext(ctx, `INSERT INTO source_types(source_key,source_type_id,global_type_id,type_name,updated_at) VALUES (:source_key,:source_type_id,:global_type_id,:type_name,CURRENT_TIMESTAMP)
-		ON CONFLICT(source_key,source_type_id) DO UPDATE SET global_type_id=excluded.global_type_id,type_name=excluded.type_name,updated_at=CURRENT_TIMESTAMP`, params); err != nil {
+	if _, err := tx.NamedExecContext(ctx, `INSERT INTO source_types(source_key,source_type_id,parent_type_id,manual_short_drama,global_type_id,type_name,updated_at) VALUES (:source_key,:source_type_id,:parent_type_id,COALESCE(:manual_short_drama,0),:global_type_id,:type_name,CURRENT_TIMESTAMP)
+		ON CONFLICT(source_key,source_type_id) DO UPDATE SET global_type_id=excluded.global_type_id,type_name=excluded.type_name,parent_type_id=CASE WHEN excluded.parent_type_id<>'' THEN excluded.parent_type_id ELSE source_types.parent_type_id END,manual_short_drama=COALESCE(:manual_short_drama,source_types.manual_short_drama),updated_at=CURRENT_TIMESTAMP`, params); err != nil {
 		return fmt.Errorf("import source types: %w", err)
 	}
 	return nil

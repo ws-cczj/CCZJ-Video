@@ -9,14 +9,11 @@ export function releasePlayerAnimations(root: HTMLElement | null | undefined): v
   // enumerating them as soon as the animation/transition properties change.
   const animations = new Set<Animation>()
   try { root.getAnimations({ subtree: true }).forEach(animation => animations.add(animation)) } catch { /* Older engines. */ }
-  for (const element of [root, ...Array.from(root.querySelectorAll<HTMLElement>('*'))]) {
-    element.style?.setProperty('animation', 'none', 'important')
-    element.style?.setProperty('transition', 'none', 'important')
-  }
+  root.setAttribute('data-cczj-player-releasing','')
   try {
     root.getAnimations({ subtree: true }).forEach(animation => animations.add(animation))
   }
-  catch { /* Inline styles still stop CSS motion in older engines. */ }
+  catch { /* The releasing marker still stops CSS motion in older engines. */ }
   for (const animation of animations) {
     try { animation.cancel() } catch { /* Release the remaining animations too. */ }
   }

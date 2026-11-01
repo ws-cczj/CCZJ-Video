@@ -80,6 +80,7 @@ func InstalledMarkerSeenThisRun() string { return lastInstalledMarker }
 
 // semverRegex 用于从 tag 名称中提取语义化版本号（如 release-v1.0.0 → 1.0.0）
 var semverRegex = regexp.MustCompile(`(\d+\.\d+\.\d+(?:-[\w.]+)?)`)
+var stableVersionRegex = regexp.MustCompile(`^v?\d+\.\d+\.\d+$`)
 
 // extractSemver 从任意字符串中提取语义化版本号
 func extractSemver(s string) string {
@@ -91,7 +92,7 @@ func extractSemver(s string) string {
 const (
 	repoOwner = "ws-cczj"
 	repoName  = "CCZJ-Video"
-	// DownloadTimeout 下载超时时间（参考 lx-music-desktop 的 60 分钟）
+	// DownloadTimeout 限制单次更新下载的总时长。
 	DownloadTimeout = 60 * time.Minute
 )
 
@@ -133,6 +134,8 @@ type VersionItem struct {
 
 // GitHubRelease 表示 GitHub Release API 返回的 JSON 结构
 type GitHubRelease struct {
+	Prerelease  bool          `json:"prerelease"`
+	Draft       bool          `json:"draft"`
 	TagName     string        `json:"tag_name"`
 	Name        string        `json:"name"`
 	Body        string        `json:"body"`
@@ -268,7 +271,7 @@ func fetchReleaseFromSourcesContext(ctx context.Context) (*GitHubRelease, error)
 	return firstUpdateSource(ctx, urls, fetchReleaseContext)
 }
 
-// fetchVersionInfoFromSources 多渠道获取 version.json（参考 lx-music-desktop）
+// fetchVersionInfoFromSources 多渠道获取 version.json。
 // 最多三路有限并发，每个来源的截止时间由 firstUpdateSource 管理。
 func fetchVersionInfoFromSources() (*VersionInfo, error) {
 	return fetchVersionInfoFromSourcesContext(context.Background())
@@ -314,6 +317,9 @@ func fetchVersionInfoContext(ctx context.Context, url string) (*VersionInfo, err
 	}
 	if info.Version == "" {
 		return nil, fmt.Errorf("version.json 中缺少 version 字段")
+	}
+	if !stableVersionRegex.MatchString(info.Version) {
+		return nil, fmt.Errorf("version.json 未提供正式版本")
 	}
 	return &info, nil
 }
@@ -382,6 +388,9 @@ func fetchReleaseContext(ctx context.Context, url string) (*GitHubRelease, error
 	var release GitHubRelease
 	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
 		return nil, err
+	}
+	if release.Prerelease || release.Draft || !stableVersionRegex.MatchString(release.TagName) {
+		return nil, fmt.Errorf("更新源未提供正式 Release")
 	}
 	return &release, nil
 }
@@ -456,8 +465,10 @@ func findBestAssetForPlatform(assets []GitHubAsset, goos, goarch string) (name, 
 // compareVersions 比较两个语义化版本号
 // 返回 -1: v1 < v2, 0: v1 == v2, 1: v1 > v2
 func compareVersions(v1, v2 string) int {
-	parts1 := strings.Split(v1, ".")
-	parts2 := strings.Split(v2, ".")
+	version1 := strings.SplitN(strings.TrimPrefix(v1, "v"), "-", 2)
+	version2 := strings.SplitN(strings.TrimPrefix(v2, "v"), "-", 2)
+	parts1 := strings.Split(version1[0], ".")
+	parts2 := strings.Split(version2[0], ".")
 
 	maxLen := len(parts1)
 	if len(parts2) > maxLen {
@@ -478,6 +489,42 @@ func compareVersions(v1, v2 string) int {
 		if n1 > n2 {
 			return 1
 		}
+	}
+	if len(version1) == 1 && len(version2) == 1 {
+		return 0
+	}
+	if len(version1) == 1 {
+		return 1
+	}
+	if len(version2) == 1 {
+		return -1
+	}
+	pre1, pre2 := strings.Split(version1[1], "."), strings.Split(version2[1], ".")
+	for i := 0; i < len(pre1) && i < len(pre2); i++ {
+		if pre1[i] == pre2[i] {
+			continue
+		}
+		n1, err1 := strconv.Atoi(pre1[i])
+		n2, err2 := strconv.Atoi(pre2[i])
+		if err1 == nil && err2 == nil {
+			if n1 < n2 {
+				return -1
+			}
+			return 1
+		}
+		if err1 == nil {
+			return -1
+		}
+		if err2 == nil {
+			return 1
+		}
+		return strings.Compare(pre1[i], pre2[i])
+	}
+	if len(pre1) < len(pre2) {
+		return -1
+	}
+	if len(pre1) > len(pre2) {
+		return 1
 	}
 	return 0
 }

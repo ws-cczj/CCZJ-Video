@@ -74,11 +74,12 @@ export interface NovelBookView {
   /** 全部目录行，含卷标记（isVolume）。可阅读的行由视图自己筛。 */
   chapters: NovelChapter[]
   tocError: string
+  reading?: ItemDetailDTO['reading']
 }
 
 function viewOf(detail: ItemDetailDTO): NovelBookView | null {
   if (!detail.item) return null
-  return { item: detail.item, chapters: detailChapters(detail), tocError: '' }
+  return { item: detail.item, chapters: detailChapters(detail), tocError: '', reading:detail.reading }
 }
 
 /**

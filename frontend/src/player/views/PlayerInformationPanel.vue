@@ -10,14 +10,16 @@ import { hasDetailedEpisodeLabels } from '../videoInfoFormat'
 import DoubanComments from '../../components/DoubanComments.vue'
 import { Button } from '../../components/ui'
 import type { PlayerPanelModel } from '../page/panelModel'
+import { useViewActivity } from '../../composables/useViewActivity'
 
-const props = defineProps<{model:PlayerPanelModel;collapsed:boolean}>()
+const props = defineProps<{model:PlayerPanelModel;collapsed:boolean;playing:boolean}>()
 const emit = defineEmits<{source:[key:string,line?:number];episode:[index:number];sort:[];close:[]}>()
 const { t } = useI18n()
 const mobile = presentationProfile().ui === 'mobile'
 const details = props.model.details, catalog = props.model.catalog, episodeList = props.model.episodes
 const detailedEpisodeLabels = computed(() => hasDetailedEpisodeLabels(episodeList.items))
 const mobilePlayerTab = ref<'overview'|'comments'>('overview')
+const animatePlayback = useViewActivity(() => props.playing && (mobile ? mobilePlayerTab.value === 'overview' : !props.collapsed), 'committed')
 const mobileCommentsVisited = ref(false)
 const mobileCommentsId = computed(() => {
   const id = String(details.video?.vod_douban_id || '').trim()
@@ -27,7 +29,7 @@ function showMobileComments():void { mobileCommentsVisited.value=true;mobilePlay
 function onMinimizeApp():void { try { Window.Minimise() } catch { /* Host owns availability. */ } }
 </script>
 <template>
-        <aside id="player-information-panel" class="player-col-side cczj-flex cczj-flex-col cczj-overflow-hidden" :class="{ collapsed: collapsed }" :inert="!mobile&&collapsed" :aria-hidden="!mobile&&collapsed?true:undefined">
+        <aside id="player-information-panel" class="player-col-side cczj-flex cczj-flex-col cczj-overflow-hidden" :class="{ collapsed: collapsed, 'desktop-information':!mobile }" :inert="!mobile&&collapsed" :aria-hidden="!mobile&&collapsed?true:undefined">
           <div v-if="mobile" class="cczj-mobile-player-tabs" role="tablist" :aria-label="t('mobile.playerContent')">
             <button id="player-overview-tab" role="tab" :aria-selected="mobilePlayerTab === 'overview'" aria-controls="player-overview-panel" @click="mobilePlayerTab = 'overview'">{{ t('mobile.playerOverview') }}</button>
             <button id="player-comments-tab" role="tab" :aria-selected="mobilePlayerTab === 'comments'" aria-controls="player-comments-panel" @click="showMobileComments">{{ t('mobile.playerComments') }}</button>
@@ -73,9 +75,10 @@ function onMinimizeApp():void { try { Window.Minimise() } catch { /* Host owns a
               </div>
             </div>
 
-              <PlaybackRouteList dark :sources="catalog.items" :active-key="catalog.activeKey" :active-line="details.lines[details.activeLineIndex]?.index??-1" :lines="details.lines" :busy="catalog.loading" :selectable="catalog.selectable" @choose="(key,line)=>emit('source',key,line)" />
-              <Button class="cczj-mt-4" variant="text" size="sm" :loading="catalog.refreshing" @click="catalog.retry">{{t('playLine.retryQuality')}}</Button>
-              <p class="cczj-text-xs cczj-text-muted cczj-mt-2">{{t('playLine.cooldownHint')}}</p>
+              <PlaybackRouteList dark expanded class="cczj-flex-shrink-0" :sources="catalog.items" :active-key="catalog.activeKey" :active-line="details.lines[details.activeLineIndex]?.index??-1" :lines="details.lines" :busy="catalog.loading" :selectable="catalog.selectable" @choose="(key,line)=>emit('source',key,line)" />
+              <div class="cczj-flex cczj-items-center cczj-justify-end cczj-gap-4">
+                <Button variant="text" size="sm" :loading="catalog.refreshing" :title="t('playLine.cooldownHint')" @click="catalog.retry">{{t('sources.probe')}}</Button>
+              </div>
             </template>
 
             <!-- 选集区（仅当有剧集时显示） -->
@@ -103,7 +106,7 @@ function onMinimizeApp():void { try { Window.Minimise() } catch { /* Host owns a
                 }" :aria-current="episodeList.originalIndex(i) === episodeList.current ? 'step' : undefined" @click="emit('episode',episodeList.originalIndex(i))"
                   :title="episodeList.label(episodeList.originalIndex(i), ep) + (episodeList.percent(episodeList.originalIndex(i)) > 0 ? t('detail.watchedProgress', { pct: Math.round(episodeList.percent(episodeList.originalIndex(i))) }) : '')">
                   <EpisodeLabel class="ep-item-num" :label="episodeList.label(episodeList.originalIndex(i), ep)" />
-                  <span v-show="episodeList.originalIndex(i) === episodeList.current" class="ep-playing-badge cczj-absolute cczj-top-1 cczj-right-1 cczj-flex">
+                  <span v-show="episodeList.originalIndex(i) === episodeList.current" class="ep-playing-badge cczj-motion-ornament cczj-absolute cczj-top-1 cczj-right-1 cczj-flex" :class="{ 'is-playing': animatePlayback }" aria-hidden="true">
                     <span class="bar b1 cczj-bg-accent cczj-rounded"></span>
                     <span class="bar b2 cczj-bg-accent cczj-rounded"></span>
                     <span class="bar b3 cczj-bg-accent cczj-rounded"></span>

@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, inject, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import type { ComponentPublicInstance } from 'vue'
-import { getProxiedImageUrl } from '../utils'
+import { getProxiedImageUrl } from '../utils/imageProxy'
 import imageNotFound from '../assets/images/image_notfound.png'
 import { useMotionStore } from '../stores/motion'
-import { useViewActivity, windowForeground } from '../composables/useViewActivity'
+import { useViewActivity, windowForeground, routeVisualMotionKey } from '../composables/useViewActivity'
 import { whenImageNearViewport } from '../utils/imageVisibility'
 import { deferImageRelease } from '../utils/imageRelease'
 
@@ -27,7 +27,7 @@ const props = withDefaults(defineProps<Props>(), {
   alt: '',
   fallback: imageNotFound,
   loading: 'eager',
-  animate: true,
+  animate: false,
 })
 
 const motion = useMotionStore()
@@ -35,13 +35,17 @@ const motion = useMotionStore()
 const resolvedSrc = ref('')
 const imageEl = shallowRef<HTMLImageElement | null>(null)
 const active = useViewActivity()
+const routeMoving = inject(routeVisualMotionKey, undefined)
 let stopObserving: (() => void) | null = null
 let disposed = false
 let resolving = false
 let cancelRelease: (() => void) | null = null
 let lastResolvedInput = ''
 let lastShownInput: string | null = null
-const animateImage = ref(props.animate)
+const animateImage = ref(props.animate && !routeMoving?.value)
+watch(() => routeMoving?.value, moving => {
+  if (moving) animateImage.value = false
+}, {flush:'sync'})
 /**
  * 这一格处在哪个阶段。'hidden' 是「还没有图亮着」，'dip' 是「旧图正在淡出」，
  * 'shown' 是「有图并且淡进过了」。用它而不是一个布尔，是因为第一张图不该淡出——
@@ -115,7 +119,7 @@ async function resolveImage(rawSrc: string | null | undefined): Promise<void> {
     if (token === requestToken.value && active.value && !disposed) {
       resolving = false
       lastResolvedInput = source
-      animateImage.value = props.animate && lastShownInput !== source
+      animateImage.value = props.animate && !routeMoving?.value && lastShownInput !== source
       show(props.fallback)
     }
     return
@@ -129,7 +133,7 @@ async function resolveImage(rawSrc: string | null | undefined): Promise<void> {
   if (token === requestToken.value && active.value && !disposed) {
     resolving = false
     lastResolvedInput = source
-    animateImage.value = props.animate && lastShownInput !== source
+    animateImage.value = props.animate && !routeMoving?.value && lastShownInput !== source
     show(nextSrc || props.fallback)
   }
 }

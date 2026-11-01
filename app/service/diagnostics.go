@@ -1,6 +1,7 @@
 package service
 
 import (
+	CCZJ "cczjVideo/app/cczj"
 	"cczjVideo/app/collect"
 	sourceservice "cczjVideo/app/source"
 	"context"
@@ -47,9 +48,9 @@ var appStartedAt = time.Now()
 
 const (
 	// settingDoubanIntervalMinutes 存豆瓣补全轮询间隔，缺省 30 分钟。
-	settingDoubanIntervalMinutes = "douban_interval_minutes"
+	settingDoubanIntervalMinutes = CCZJ.SettingDoubanIntervalMinutes
 	// settingLogKeepDays 存日志保留天数，缺省沿用 applog 内置的 30 天。
-	settingLogKeepDays = "log_keep_days"
+	settingLogKeepDays = CCZJ.SettingLogKeepDays
 
 	defaultDoubanIntervalMinutes = 30
 	minDoubanIntervalMinutes     = 1
@@ -272,7 +273,7 @@ func (a *App) runtimeMetrics() *RuntimeMetrics {
 		Goroutines:    runtime.NumGoroutine(),
 		Network:       a.runtimeNetwork(),
 		Cache:         a.modeCacheStats(),
-		Resources:     resourceSampler.Sample(),
+		Resources:     resourceSampler.SampleCached(10 * time.Second),
 		Recording:     a.GetDiagnosticsRecordingStatus(),
 	}
 	if a.networkBudget != nil {

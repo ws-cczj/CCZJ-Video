@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { CCZJ } from '../constants/cczj'
 /**
  * 「这份数据比当前版本新」的启动提示。
  *
@@ -29,7 +30,7 @@ const { t } = useI18n()
 const errorStore = useErrorStore()
 
 // 记下「哪一版数据已经提过了」而不是存一个布尔：下次库被更新的程序写得更高时还得再提一次。
-const DISMISS_KEY = 'cczj.schema-newer-dismissed'
+const DISMISS_KEY = CCZJ.Storage.schemaNewerDismissed
 
 const compat = ref<any | null>(null)
 const open = ref(false)

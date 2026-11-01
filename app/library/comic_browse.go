@@ -1,6 +1,7 @@
 package library
 
 import (
+	CCZJ "cczjVideo/app/cczj"
 	"context"
 	"encoding/json"
 	"strings"
@@ -95,7 +96,7 @@ func (s *Service) BrowseComics(ctx context.Context, channel string, refresh bool
 	if err != nil {
 		return nil, err
 	}
-	cacheKey := "comic.browse.v1." + channel
+	cacheKey := CCZJ.CacheComicBrowsePrefix + channel
 	raw, err := db.GetSetting(cacheKey)
 	if err != nil {
 		return nil, apperror.Wrap(apperror.Storage, err, "读取漫画书目缓存失败")

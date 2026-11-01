@@ -28,7 +28,9 @@ type CatalogVideo struct {
 	VodTime      string `json:"vod_time,omitempty"`
 }
 type TypePayload struct {
-	TypeID       string `json:"type_id"`
-	GlobalTypeID int64  `json:"global_type_id,omitempty"`
-	TypeName     string `json:"type_name"`
+	TypeID           string `json:"type_id"`
+	ParentTypeID     string `json:"parent_type_id,omitempty"`
+	ManualShortDrama *bool  `json:"manual_short_drama,omitempty"`
+	GlobalTypeID     int64  `json:"global_type_id,omitempty"`
+	TypeName         string `json:"type_name"`
 }

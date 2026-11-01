@@ -80,11 +80,13 @@ const accessibleLabel = computed(() => props.ariaLabel
   border-color: var(--btn-solid);
   box-shadow: 0 2px 8px var(--btn-solid-alpha-20);
 }
+@media (hover:hover) and (pointer:fine) {
 .ui-btn--primary:hover {
   background: var(--btn-solid-hover);
   border-color: var(--btn-solid-hover);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px var(--btn-solid-alpha-35);
+}
 }
 .ui-btn--primary:active {
   transform: translateY(0);
@@ -96,9 +98,11 @@ const accessibleLabel = computed(() => props.ariaLabel
   background: var(--bg-secondary);
   @apply cczj-text-secondary cczj-border-gray-300;
 }
+@media (hover:hover) and (pointer:fine) {
 .ui-btn--secondary:hover {
   background: var(--bg-hover);
   @apply cczj-text-primary cczj-border-primary;
+}
 }
 .ui-btn--secondary:active { @apply cczj-bg-border; }
 
@@ -116,19 +120,25 @@ const accessibleLabel = computed(() => props.ariaLabel
   --semantic-contrast: var(--success-contrast);
   --semantic-alpha: var(--success-alpha-10);
 }
+@media (hover:hover) and (pointer:fine) {
 .ui-btn--success:hover { --semantic-color: var(--success-hover); transform: translateY(-1px); }
+}
 .ui-btn--warning {
   --semantic-color: var(--warning);
   --semantic-contrast: var(--warning-contrast);
   --semantic-alpha: var(--warning-alpha-10);
 }
+@media (hover:hover) and (pointer:fine) {
 .ui-btn--warning:hover { --semantic-color: var(--warning-hover); transform: translateY(-1px); }
+}
 .ui-btn--info {
   --semantic-color: var(--info);
   --semantic-contrast: var(--info-contrast);
   --semantic-alpha: var(--info-alpha-10);
 }
+@media (hover:hover) and (pointer:fine) {
 .ui-btn--info:hover { --semantic-color: var(--info-hover); transform: translateY(-1px); }
+}
 .ui-btn--success:active,
 .ui-btn--warning:active,
 .ui-btn--info:active { transform: translateY(0); }
@@ -139,10 +149,12 @@ const accessibleLabel = computed(() => props.ariaLabel
   @apply cczj-text-danger;
   border-color: var(--danger);
 }
+@media (hover:hover) and (pointer:fine) {
 .ui-btn--danger:hover {
   background: var(--danger);
   color: var(--danger-contrast);
   transform: translateY(-1px);
+}
 }
 .ui-btn--danger:active { transform: translateY(0); opacity: 0.9; }
 
@@ -151,7 +163,9 @@ const accessibleLabel = computed(() => props.ariaLabel
   background: transparent;
   @apply cczj-text-accent cczj-border-primary;
 }
+@media (hover:hover) and (pointer:fine) {
 .ui-btn--ghost:hover { background: var(--accent-alpha-10); }
+}
 .ui-btn--ghost:active { background: var(--accent-alpha-20); }
 
 /* ========== Variant: Text ========== */
@@ -160,9 +174,11 @@ const accessibleLabel = computed(() => props.ariaLabel
   @apply cczj-text-secondary;
   border-color: transparent;
 }
+@media (hover:hover) and (pointer:fine) {
 .ui-btn--text:hover {
   background: var(--bg-hover);
   @apply cczj-text-primary;
+}
 }
 .ui-btn--text:active { @apply cczj-text-accent; }
 
@@ -177,9 +193,11 @@ const accessibleLabel = computed(() => props.ariaLabel
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
 }
+@media (hover:hover) and (pointer:fine) {
 .ui-btn--overlay:hover {
   background: var(--danger);
   color: var(--danger-contrast);
+}
 }
 .ui-btn--overlay:active {
   background: var(--danger-hover);

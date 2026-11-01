@@ -98,7 +98,7 @@ function startLoadingStats(): void {
   if(loadingStatsTimer!==null)return
   loadingStatsStartTime = Date.now()
   loadingStatsSampleAt=loadingStatsStartTime
-  loadingStatsLastBytes = TsCache.stats().bytes
+  loadingStatsLastBytes = TsCache.stats().networkBytes
   loadingElapsed.value = 0
   loadingSpeed.value = ''
 
@@ -110,8 +110,8 @@ function startLoadingStats(): void {
     loadingElapsed.value = Math.round((Date.now() - loadingStatsStartTime) / 1000)
 
     // 计算下载速度
-    const bytesDelta = s.bytes - loadingStatsLastBytes
-    loadingStatsLastBytes = s.bytes
+    const bytesDelta = Math.max(0, s.networkBytes - loadingStatsLastBytes)
+    loadingStatsLastBytes = s.networkBytes
     const now=Date.now()
     const intervalSec=Math.max(.001,(now-loadingStatsSampleAt)/1000)
     loadingStatsSampleAt=now
@@ -122,7 +122,7 @@ function startLoadingStats(): void {
       } else {
         loadingSpeed.value = Math.round(speedBps / 1024) + ' KB/s'
       }
-    } else if (loadingSpeed.value === '') {
+    } else {
       loadingSpeed.value = t('player.connecting')
     }
   }, 300)

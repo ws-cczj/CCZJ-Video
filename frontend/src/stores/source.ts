@@ -1,3 +1,4 @@
+import { CCZJ } from '../constants/cczj'
 import { defineStore } from 'pinia'
 import { tr } from '../locales'
 import { ref, computed } from 'vue'
@@ -7,7 +8,7 @@ import type { SourceStat } from '../types'
 import { useGeneration } from '../composables/useGeneration'
 import { list, object, text } from '../api/decode'
 
-const DEFAULT_SOURCE_KEY = 'default_source_key'
+const DEFAULT_SOURCE_KEY = CCZJ.Settings.defaultSource
 
 interface SourceRow {
   id?: number

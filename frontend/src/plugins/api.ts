@@ -1,3 +1,4 @@
+import { CCZJ } from '../constants/cczj'
 /**
  * 交给注入型扩展包的那一份 `cczj`。
  *
@@ -316,15 +317,15 @@ export function createPackRuntime(pack: PluginInfo): PackRuntime {
     },
     storage: {
       get<T>(key: string, fallback: T) {
-        return readStorage<T>(`plugin:${packId}:${key}`, fallback)
+        return readStorage<T>(CCZJ.Keys.pluginStorage(packId, key), fallback)
       },
       set<T>(key: string, value: T) {
         assertLive()
-        writeStorage(`plugin:${packId}:${key}`, value)
+        writeStorage(CCZJ.Keys.pluginStorage(packId, key), value)
       },
       remove(key: string) {
         assertLive()
-        removeStorage(`plugin:${packId}:${key}`)
+        removeStorage(CCZJ.Keys.pluginStorage(packId, key))
       },
     },
     log: {

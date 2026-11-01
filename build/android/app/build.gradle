@@ -15,7 +15,7 @@ android {
         minSdk 24
         targetSdk 35
         def releaseVersion = new groovy.json.JsonSlurper().parse(rootProject.file('../../version.json')).version
-        def parts = releaseVersion.tokenize('.').collect { it.toInteger() }
+        def parts = releaseVersion.tokenize('-')[0].tokenize('.').collect { it.toInteger() }
         versionCode providers.gradleProperty('cczjVersionCode').getOrElse("${parts[0] * 10000 + parts[1] * 100 + parts[2]}").toInteger()
         versionName providers.gradleProperty('cczjVersionName').getOrElse(releaseVersion)
 

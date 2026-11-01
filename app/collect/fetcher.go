@@ -93,6 +93,28 @@ type Category struct {
 	Parent model.FlexibleString `json:"type_pid"`
 }
 
+func (c *Category) UnmarshalJSON(raw []byte) error {
+	var row struct {
+		ID       model.FlexibleString `json:"type_id"`
+		Name     string               `json:"type_name"`
+		Parent   model.FlexibleString `json:"type_pid"`
+		PID      model.FlexibleString `json:"pid"`
+		ParentID model.FlexibleString `json:"parent_id"`
+	}
+	if err := json.Unmarshal(raw, &row); err != nil {
+		return err
+	}
+	parent := row.Parent
+	if parent == "" {
+		parent = row.PID
+	}
+	if parent == "" {
+		parent = row.ParentID
+	}
+	*c = Category{ID: row.ID, Name: row.Name, Parent: parent}
+	return nil
+}
+
 // APIError preserves the remote protocol code for operation-specific decisions.
 // A collection refusal must not change the meaning of a detail or list request.
 type APIError struct {

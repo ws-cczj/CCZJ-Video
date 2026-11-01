@@ -48,129 +48,105 @@ func (s *Service) ShortDramaPage(ctx context.Context, req ShortDramaPageReq) (*S
 	if req.RecentDays < 0 || req.RecentDays > 365 {
 		return nil, apperror.New(apperror.Validation, "更新日期范围无效")
 	}
-	sources, err := db.GetSourcesByKindContext(ctx, model.SourceKindVideo)
+	key := req.SourceKey
+	if key == "" {
+		key = req.PreferredSource
+	}
+	if key == "" {
+		return nil, apperror.New(apperror.Validation, "请先选择视频来源")
+	}
+	req.SourceKey = key
+	src, err := db.GetSourceByKeyContext(ctx, key)
 	if err != nil {
 		return nil, err
 	}
-	if req.SourceKey != "" {
-		src, err := db.GetSourceByKeyContext(ctx, req.SourceKey)
-		if err != nil {
-			return nil, err
-		}
-		if src.GetKind() != model.SourceKindVideo {
-			return nil, apperror.New(apperror.Unsupported, "短剧只支持视频源")
-		}
-		sources = []*model.Source{src}
-	} else {
-		for i, src := range sources {
-			if src.SourceKey == req.PreferredSource {
-				sources[0], sources[i] = sources[i], sources[0]
-				break
-			}
-		}
+	if src.GetKind() != model.SourceKindVideo {
+		return nil, apperror.New(apperror.Unsupported, "短剧只支持视频源")
 	}
-	empty := &ShortDramaPage{Videos: []*model.Video{}}
-	var failures []error
-	attempted := 0
-	for _, src := range sources {
-		if req.SourceKey == "" && src.Enabled == 0 {
-			continue
-		}
-		if attempted >= 5 {
-			break
-		}
-		attempted++
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		pageCtx, stop := context.WithTimeout(ctx, 6*time.Second)
-		page, err := s.shortDramaSourcePage(pageCtx, src, req)
-		stop()
-		if err != nil {
-			if req.SourceKey != "" {
-				return nil, err
-			}
-			failures = append(failures, err)
-			continue
-		}
-		if len(page.Videos) > 0 {
-			return page, nil
-		}
-		if page.SourceKey != "" {
-			empty = page
-		}
-	}
-	if len(failures) > 0 {
-		return nil, apperror.Wrap(apperror.Unavailable, errors.Join(failures...), "短剧来源暂不可用，请重试")
-	}
-	return empty, nil
+	return s.shortDramaSourcePage(ctx, src, req)
 }
 
 func (s *Service) shortDramaSourcePage(ctx context.Context, src *model.Source, req ShortDramaPageReq) (*ShortDramaPage, error) {
-	strategy := collect.CreateStrategyFromSource(src)
-	if strategy == nil {
-		return nil, apperror.New(apperror.Unsupported, "来源策略不可用")
-	}
 	types, err := db.ExportSourceTypesContext(ctx, src.SourceKey)
 	if err != nil {
 		return nil, err
 	}
-	categories := map[string]string{}
-	for _, row := range types {
-		categories[row.SourceTypeID] = row.TypeName
+	related, err := db.GetShortDramaSourceTypesContext(ctx, src.SourceKey, false)
+	if err != nil {
+		return nil, err
 	}
-	// Metadata is read through the same transport, decoder and network budget.
-	metadataURL := strategy.BuildListUrl(1, collect.FetchOptions{Limit: 1})
-	if categories, ok := strategy.(interface{ BuildCategoriesURL() string }); ok {
-		metadataURL = categories.BuildCategoriesURL()
+	reuse := req.CategoryID != "" && len(related) > 0
+	// A stale scope must be restarted explicitly; reusing the same cursor after
+	// refreshing its identity would mix two different provider result sets.
+
+	return s.shortDramaProviderPage(ctx, src, req, types, !reuse)
+}
+
+func (s *Service) shortDramaProviderPage(ctx context.Context, src *model.Source, req ShortDramaPageReq, types []db.SourceTypeExport, refreshMetadata bool) (*ShortDramaPage, error) {
+	strategy := collect.CreateStrategyFromSource(src)
+	if strategy == nil {
+		return nil, apperror.New(apperror.Unsupported, "来源策略不可用")
 	}
-	meta := &collect.FetchResult{}
-	// A locked next page/search can reuse the catalog's category identity.
-	// Page-one browsing still refreshes metadata, so changed IDs can recover.
-	if req.CategoryID == "" || !shortDramaCategory(categories[req.CategoryID]) || (req.Page == 1 && strings.TrimSpace(req.Keyword) == "") {
-		meta, err = collect.FetchWithStrategy(ctx, strategy, metadataURL)
-		if err != nil {
-			return nil, err
-		}
+	categories, related, err := sourceShortDramaTypes(ctx, src, strategy, types, refreshMetadata)
+	if err != nil {
+		return nil, err
 	}
-	for _, row := range meta.Classes {
-		categories[row.ID.String()] = row.Name
+	allowed := map[string]bool{}
+	for _, row := range related {
+		allowed[row.SourceTypeID] = true
 	}
 	result := &ShortDramaPage{SourceKey: src.SourceKey, SourceName: src.Name, Videos: []*model.Video{}}
 	ids := []string{}
-	for _, row := range meta.Classes {
-		if shortDramaCategory(row.Name) {
-			ids = append(ids, row.ID.String())
+	for _, row := range related {
+		if allowed[row.SourceTypeID] {
+			ids = append(ids, row.SourceTypeID)
 		}
 	}
-	if len(ids) == 0 {
-		for _, row := range types {
-			if shortDramaCategory(row.TypeName) {
-				ids = append(ids, row.SourceTypeID)
-			}
-		}
-	}
-	if req.CategoryID != "" {
-		if !shortDramaCategory(categories[req.CategoryID]) {
-			return nil, apperror.New(apperror.Validation, "来源短剧分类已变化，请刷新")
-		}
-		ids = []string{req.CategoryID}
-	}
-	tried := 0
+
+	var categoryFailures []error
+	candidates := make([]*model.Video, 0, len(ids))
 	for _, id := range ids {
-		if tried >= 3 {
-			break
+		candidates = append(candidates, &model.Video{TypeId: model.FlexibleString(id), TypeName: categories[id]})
+	}
+	policy, err := db.SelectSourceCollectVideosContext(ctx, src.SourceKey, candidates)
+	if err != nil {
+		return nil, err
+	}
+	eligible := map[string]bool{}
+	for _, row := range policy.Videos {
+		eligible[row.TypeId.String()] = true
+	}
+	eligibleIDs := []string{}
+	for _, id := range ids {
+		if eligible[id] {
+			eligibleIDs = append(eligibleIDs, id)
 		}
-		tried++
-		// Apply the same category bans before making the category request.
-		policy, err := db.SelectSourceCollectVideosContext(ctx, src.SourceKey, []*model.Video{{TypeId: model.FlexibleString(id), TypeName: categories[id]}})
-		if err != nil {
-			return nil, err
-		}
-		if len(policy.Videos) == 0 {
+	}
+	if len(eligibleIDs) == 0 {
+		return result, nil
+	}
+	cursor, err := readDramaCursor(req, src.ApiUrl, eligibleIDs)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	checked, attempts := 0, 0
+	for checked < len(cursor.Types) && attempts < 5 {
+		index := cursor.Offset
+		cursor.Offset = (cursor.Offset + 1) % len(cursor.Types)
+		checked++
+		state := &cursor.Types[index]
+		if state.Done {
 			continue
 		}
-		target := strategy.BuildListUrl(req.Page, collect.FetchOptions{TypeID: id, Limit: 24, Hours: req.RecentDays * 24})
+		if attempts >= 3 && len(result.Videos) > 0 {
+			cursor.Offset = index
+			break
+		}
+		id := state.ID
+		attempts++
+
+		target := strategy.BuildListUrl(state.Page, collect.FetchOptions{TypeID: id, Limit: 24, Hours: req.RecentDays * 24})
 		if keyword := strings.TrimSpace(req.Keyword); keyword != "" {
 			search, ok := strategy.(interface {
 				BuildCategorySearchURL(string, string, int, int) string
@@ -178,7 +154,7 @@ func (s *Service) shortDramaSourcePage(ctx context.Context, src *model.Source, r
 			if !ok {
 				return nil, apperror.New(apperror.Unsupported, "该源不支持分类搜索")
 			}
-			target = search.BuildCategorySearchURL(keyword, id, req.Page, req.RecentDays*24)
+			target = search.BuildCategorySearchURL(keyword, id, state.Page, req.RecentDays*24)
 			if target == "" {
 				return nil, apperror.New(apperror.Unsupported, "该源不支持分类搜索")
 			}
@@ -188,13 +164,21 @@ func (s *Service) shortDramaSourcePage(ctx context.Context, src *model.Source, r
 			if strings.TrimSpace(req.Keyword) != "" && collect.IsSearchUnsupported(err) {
 				return nil, &apperror.Error{Code: apperror.Unsupported, Message: "该源不支持关键词搜索，请清空关键词继续浏览", Cause: err}
 			}
-			return nil, err
+			if ctx.Err() != nil {
+				return nil, err
+			}
+			categoryFailures = append(categoryFailures, err)
+			continue
 		}
-		if fetched.Page.Int() > 0 && fetched.Page.Int() != req.Page {
+		if fetched.Page.Int() > 0 && fetched.Page.Int() != state.Page {
 			return nil, apperror.New(apperror.Unsupported, "来源未返回请求的页码")
 		}
 		if len(fetched.List) > 100 {
 			return nil, apperror.New(apperror.Corrupt, "来源单页结果超出范围")
+		}
+		if len(result.Videos) > 0 && len(result.Videos)+len(fetched.List) > 100 {
+			cursor.Offset = index
+			break
 		}
 		accepted := []*model.Video{}
 		for _, video := range fetched.List {
@@ -206,14 +190,15 @@ func (s *Service) shortDramaSourcePage(ctx context.Context, src *model.Source, r
 			if name == "" {
 				name = video.TypeName
 			}
-			if !shortDramaCategory(name) {
+			if !allowed[video.TypeId.String()] && !(categories[video.TypeId.String()] == "" && shortDramaCategory(video.TypeName)) {
 				continue
 			}
 			video.TypeName = name
 			accepted = append(accepted, video)
 		}
-		if len(accepted) != len(fetched.List) {
-			return nil, apperror.New(apperror.Unsupported, "来源未按短剧分类返回结果")
+		if len(accepted) == 0 && len(fetched.List) > 0 {
+			categoryFailures = append(categoryFailures, apperror.New(apperror.Unsupported, "来源未按短剧分类返回结果"))
+			continue
 		}
 		selected, err := db.SelectSourceCollectVideosContext(ctx, src.SourceKey, accepted)
 		if err != nil {
@@ -223,6 +208,10 @@ func (s *Service) shortDramaSourcePage(ctx context.Context, src *model.Source, r
 			return nil, err
 		}
 		for _, video := range selected.Videos {
+			if seen[video.VodId.String()] {
+				continue
+			}
+			seen[video.VodId.String()] = true
 			item, err := db.GetCatalogItemContext(ctx, src.SourceKey, video.VodId.String())
 			if errors.Is(err, sql.ErrNoRows) {
 				continue // Recycled or hidden catalog entries stay hidden.
@@ -239,12 +228,86 @@ func (s *Service) shortDramaSourcePage(ctx context.Context, src *model.Source, r
 			video.VodContent = ""
 			result.Videos = append(result.Videos, video)
 		}
-		result.CategoryID = id
-		result.Total = fetched.Total.Int()
-		result.HasMore = fetched.Pagecount.Int() > req.Page
-		if len(result.Videos) > 0 || req.CategoryID != "" || req.Keyword != "" {
-			return result, nil
+		state.Done = fetched.Pagecount.Int() <= state.Page || len(fetched.List) == 0 || state.Page >= 1000
+		state.Page++
+	}
+	if len(result.Videos) == 0 && len(categoryFailures) > 0 {
+		return nil, errors.Join(categoryFailures...)
+	}
+	result.CategoryID, result.HasMore, err = cursor.next()
+	if err != nil {
+		return nil, err
+	}
+	if len(result.Videos) > 100 {
+		return nil, apperror.New(apperror.Corrupt, "来源聚合结果超出范围")
+	}
+	cached, err := db.GetCatalogVideoPageContext(ctx, src.SourceKey, db.FilterParams{ShortDrama: true, Page: 1, PageSize: 1, Keyword: req.Keyword, RecentDays: req.RecentDays})
+	if err != nil {
+		return nil, err
+	}
+	result.Total = cached.Total
+
+	return result, nil
+}
+
+func sourceShortDramaTypes(ctx context.Context, src *model.Source, strategy collect.SourceStrategy, types []db.SourceTypeExport, refreshMetadata bool) (map[string]string, []db.SourceTypeExport, error) {
+	categories := map[string]string{}
+	for _, row := range types {
+		categories[row.SourceTypeID] = row.TypeName
+	}
+	// Metadata is read through the same transport, decoder and network budget.
+	metadataURL := strategy.BuildListUrl(1, collect.FetchOptions{Limit: 1})
+	if categories, ok := strategy.(interface{ BuildCategoriesURL() string }); ok {
+		metadataURL = categories.BuildCategoriesURL()
+	}
+	meta := &collect.FetchResult{}
+	if refreshMetadata {
+		fetched, err := collect.FetchWithStrategy(ctx, strategy, metadataURL)
+		if err != nil {
+			return nil, nil, err
+		}
+		if len(fetched.Classes) > db.MaxSourceCategories {
+			return nil, nil, apperror.New(apperror.Corrupt, "来源分类数量超出范围")
+		}
+		completed, completeErr := collect.CompleteCategoryParents(ctx, src.ApiUrl, fetched.Classes)
+		if completeErr != nil {
+			return nil, nil, completeErr
+		}
+		fetched.Classes = completed
+		meta = fetched
+		if len(meta.Classes) > 0 {
+			categories = map[string]string{}
 		}
 	}
-	return result, nil
+	available := map[string]bool{}
+	if len(meta.Classes) > db.MaxSourceCategories {
+		return nil, nil, apperror.New(apperror.Corrupt, "来源分类数量超出范围")
+	}
+	metadata := make([]db.SourceTypeExport, 0, len(meta.Classes))
+	for _, row := range meta.Classes {
+		id, name := strings.TrimSpace(row.ID.String()), strings.TrimSpace(row.Name)
+		if id == "" || name == "" {
+			continue
+		}
+		if len(id) > 120 || len(name) > 256 || len(row.Parent.String()) > 120 {
+			return nil, nil, apperror.New(apperror.Corrupt, "来源分类格式无效")
+		}
+		categories[id] = name
+		available[id] = true
+		metadata = append(metadata, db.SourceTypeExport{SourceTypeID: id, ParentTypeID: row.Parent.String(), TypeName: name})
+	}
+	if err := db.MergeSourceCategoriesContext(ctx, src.SourceKey, metadata); err != nil {
+		return nil, nil, err
+	}
+	related, err := db.GetShortDramaSourceTypesContext(ctx, src.SourceKey, false)
+	if err != nil {
+		return nil, nil, err
+	}
+	filtered := make([]db.SourceTypeExport, 0, len(related))
+	for _, row := range related {
+		if len(metadata) == 0 || available[row.SourceTypeID] {
+			filtered = append(filtered, row)
+		}
+	}
+	return categories, filtered, nil
 }

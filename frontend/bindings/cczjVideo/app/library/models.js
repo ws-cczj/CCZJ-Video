@@ -82,6 +82,90 @@ export class BuiltinSourceRow {
              */
             this["state"] = "";
         }
+        if (!("supply" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["supply"] = "";
+        }
+        if (!("section" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["section"] = "";
+        }
+        if (!("site" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["site"] = "";
+        }
+        if (!("origin" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["origin"] = "";
+        }
+        if (!("project" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["project"] = "";
+        }
+        if (!("protocol" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["protocol"] = "";
+        }
+        if (!("revision" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["revision"] = "";
+        }
+        if (!("family" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["family"] = "";
+        }
+        if (!("language" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["language"] = "";
+        }
+        if (!("capabilities" in $$source)) {
+            /**
+             * @member
+             * @type {string[]}
+             */
+            this["capabilities"] = [];
+        }
+        if (!("operations" in $$source)) {
+            /**
+             * @member
+             * @type {(SourceOperationEvidence | null)[]}
+             */
+            this["operations"] = [];
+        }
+        if (!("reading" in $$source)) {
+            /**
+             * @member
+             * @type {ReadingEvidence | null}
+             */
+            this["reading"] = null;
+        }
 
         Object.assign(this, $$source);
     }
@@ -92,7 +176,19 @@ export class BuiltinSourceRow {
      * @returns {BuiltinSourceRow}
      */
     static createFrom($$source = {}) {
+        const $$createField19_0 = $$createType0;
+        const $$createField20_0 = $$createType3;
+        const $$createField21_0 = $$createType5;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("capabilities" in $$parsedSource) {
+            $$parsedSource["capabilities"] = $$createField19_0($$parsedSource["capabilities"]);
+        }
+        if ("operations" in $$parsedSource) {
+            $$parsedSource["operations"] = $$createField20_0($$parsedSource["operations"]);
+        }
+        if ("reading" in $$parsedSource) {
+            $$parsedSource["reading"] = $$createField21_0($$parsedSource["reading"]);
+        }
         return new BuiltinSourceRow(/** @type {Partial<BuiltinSourceRow>} */($$parsedSource));
     }
 }
@@ -134,8 +230,8 @@ export class CatalogPage {
      * @returns {CatalogPage}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType2;
-        const $$createField1_0 = $$createType3;
+        const $$createField0_0 = $$createType8;
+        const $$createField1_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("items" in $$parsedSource) {
             $$parsedSource["items"] = $$createField0_0($$parsedSource["items"]);
@@ -329,7 +425,7 @@ export class ChapterMatch {
      * @returns {ChapterMatch}
      */
     static createFrom($$source = {}) {
-        const $$createField5_0 = $$createType6;
+        const $$createField5_0 = $$createType11;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("targets" in $$parsedSource) {
             $$parsedSource["targets"] = $$createField5_0($$parsedSource["targets"]);
@@ -385,8 +481,8 @@ export class ChapterPages {
      * @returns {ChapterPages}
      */
     static createFrom($$source = {}) {
-        const $$createField1_0 = $$createType9;
-        const $$createField3_0 = $$createType3;
+        const $$createField1_0 = $$createType14;
+        const $$createField3_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("pages" in $$parsedSource) {
             $$parsedSource["pages"] = $$createField1_0($$parsedSource["pages"]);
@@ -429,6 +525,20 @@ export class ChapterText {
              */
             this["fromCache"] = false;
         }
+        if (!("checkedAt" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["checkedAt"] = 0;
+        }
+        if (!("stale" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["stale"] = false;
+        }
         if (!("warnings" in $$source)) {
             /**
              * Warnings 是"内容拿到了，但有件事该让用户知道"：正文可能被截断、
@@ -448,14 +558,14 @@ export class ChapterText {
      * @returns {ChapterText}
      */
     static createFrom($$source = {}) {
-        const $$createField1_0 = $$createType3;
-        const $$createField3_0 = $$createType3;
+        const $$createField1_0 = $$createType0;
+        const $$createField5_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("paragraphs" in $$parsedSource) {
             $$parsedSource["paragraphs"] = $$createField1_0($$parsedSource["paragraphs"]);
         }
         if ("warnings" in $$parsedSource) {
-            $$parsedSource["warnings"] = $$createField3_0($$parsedSource["warnings"]);
+            $$parsedSource["warnings"] = $$createField5_0($$parsedSource["warnings"]);
         }
         return new ChapterText(/** @type {Partial<ChapterText>} */($$parsedSource));
     }
@@ -526,7 +636,7 @@ export class ComicBrowsePage {
      * @returns {ComicBrowsePage}
      */
     static createFrom($$source = {}) {
-        const $$createField2_0 = $$createType2;
+        const $$createField2_0 = $$createType8;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("items" in $$parsedSource) {
             $$parsedSource["items"] = $$createField2_0($$parsedSource["items"]);
@@ -649,7 +759,7 @@ export class ComicTrendPage {
      * @returns {ComicTrendPage}
      */
     static createFrom($$source = {}) {
-        const $$createField1_0 = $$createType12;
+        const $$createField1_0 = $$createType17;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("items" in $$parsedSource) {
             $$parsedSource["items"] = $$createField1_0($$parsedSource["items"]);
@@ -824,6 +934,13 @@ export class ItemDetail {
              */
             this["chapterCount"] = 0;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {ReadingEvidence | null | undefined}
+             */
+            this["reading"] = undefined;
+        }
 
         Object.assign(this, $$source);
     }
@@ -834,8 +951,9 @@ export class ItemDetail {
      * @returns {ItemDetail}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType1;
-        const $$createField1_0 = $$createType6;
+        const $$createField0_0 = $$createType7;
+        const $$createField1_0 = $$createType11;
+        const $$createField3_0 = $$createType5;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("item" in $$parsedSource) {
             $$parsedSource["item"] = $$createField0_0($$parsedSource["item"]);
@@ -843,7 +961,77 @@ export class ItemDetail {
         if ("chapters" in $$parsedSource) {
             $$parsedSource["chapters"] = $$createField1_0($$parsedSource["chapters"]);
         }
+        if ("reading" in $$parsedSource) {
+            $$parsedSource["reading"] = $$createField3_0($$parsedSource["reading"]);
+        }
         return new ItemDetail(/** @type {Partial<ItemDetail>} */($$parsedSource));
+    }
+}
+
+export class NovelBookSourceCache {
+    /**
+     * Creates a new NovelBookSourceCache instance.
+     * @param {Partial<NovelBookSourceCache>} [$$source = {}] - The source object to create the NovelBookSourceCache.
+     */
+    constructor($$source = {}) {
+        if (!("itemId" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["itemId"] = 0;
+        }
+        if (!("candidates" in $$source)) {
+            /**
+             * @member
+             * @type {(NovelCachedSource | null)[]}
+             */
+            this["candidates"] = [];
+        }
+        if (!("checkedAt" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["checkedAt"] = 0;
+        }
+        if (!("nextCheckAt" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["nextCheckAt"] = 0;
+        }
+        if (!("available" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["available"] = 0;
+        }
+        if (!("target" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["target"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new NovelBookSourceCache instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {NovelBookSourceCache}
+     */
+    static createFrom($$source = {}) {
+        const $$createField1_0 = $$createType20;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("candidates" in $$parsedSource) {
+            $$parsedSource["candidates"] = $$createField1_0($$parsedSource["candidates"]);
+        }
+        return new NovelBookSourceCache(/** @type {Partial<NovelBookSourceCache>} */($$parsedSource));
     }
 }
 
@@ -922,12 +1110,86 @@ export class NovelBrowsePage {
      * @returns {NovelBrowsePage}
      */
     static createFrom($$source = {}) {
-        const $$createField2_0 = $$createType2;
+        const $$createField2_0 = $$createType8;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("items" in $$parsedSource) {
             $$parsedSource["items"] = $$createField2_0($$parsedSource["items"]);
         }
         return new NovelBrowsePage(/** @type {Partial<NovelBrowsePage>} */($$parsedSource));
+    }
+}
+
+export class NovelCachedSource {
+    /**
+     * Creates a new NovelCachedSource instance.
+     * @param {Partial<NovelCachedSource>} [$$source = {}] - The source object to create the NovelCachedSource.
+     */
+    constructor($$source = {}) {
+        if (!("item" in $$source)) {
+            /**
+             * @member
+             * @type {Item | null}
+             */
+            this["item"] = null;
+        }
+        if (!("identity" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["identity"] = "";
+        }
+        if (!("state" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["state"] = "";
+        }
+        if (!("checkedAt" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["checkedAt"] = 0;
+        }
+        if (!("errorCode" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["errorCode"] = "";
+        }
+        if (!("revision" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["revision"] = "";
+        }
+        if (!("family" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["family"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new NovelCachedSource instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {NovelCachedSource}
+     */
+    static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType7;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("item" in $$parsedSource) {
+            $$parsedSource["item"] = $$createField0_0($$parsedSource["item"]);
+        }
+        return new NovelCachedSource(/** @type {Partial<NovelCachedSource>} */($$parsedSource));
     }
 }
 
@@ -996,10 +1258,10 @@ export class NovelReadingContext {
      * @returns {NovelReadingContext}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType1;
-        const $$createField1_0 = $$createType5;
-        const $$createField2_0 = $$createType5;
-        const $$createField3_0 = $$createType5;
+        const $$createField0_0 = $$createType7;
+        const $$createField1_0 = $$createType10;
+        const $$createField2_0 = $$createType10;
+        const $$createField3_0 = $$createType10;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("item" in $$parsedSource) {
             $$parsedSource["item"] = $$createField0_0($$parsedSource["item"]);
@@ -1114,6 +1376,74 @@ export class Page {
     }
 }
 
+export class PreparedNovelSwitch {
+    /**
+     * Creates a new PreparedNovelSwitch instance.
+     * @param {Partial<PreparedNovelSwitch>} [$$source = {}] - The source object to create the PreparedNovelSwitch.
+     */
+    constructor($$source = {}) {
+        if (!("item" in $$source)) {
+            /**
+             * @member
+             * @type {Item | null}
+             */
+            this["item"] = null;
+        }
+        if (!("chapter" in $$source)) {
+            /**
+             * @member
+             * @type {Chapter | null}
+             */
+            this["chapter"] = null;
+        }
+        if (!("text" in $$source)) {
+            /**
+             * @member
+             * @type {ChapterText | null}
+             */
+            this["text"] = null;
+        }
+        if (!("revision" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["revision"] = "";
+        }
+        if (!("checkedAt" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["checkedAt"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PreparedNovelSwitch instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {PreparedNovelSwitch}
+     */
+    static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType7;
+        const $$createField1_0 = $$createType10;
+        const $$createField2_0 = $$createType22;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("item" in $$parsedSource) {
+            $$parsedSource["item"] = $$createField0_0($$parsedSource["item"]);
+        }
+        if ("chapter" in $$parsedSource) {
+            $$parsedSource["chapter"] = $$createField1_0($$parsedSource["chapter"]);
+        }
+        if ("text" in $$parsedSource) {
+            $$parsedSource["text"] = $$createField2_0($$parsedSource["text"]);
+        }
+        return new PreparedNovelSwitch(/** @type {Partial<PreparedNovelSwitch>} */($$parsedSource));
+    }
+}
+
 /**
  * ReadingContext is a bounded chapter window, not an ItemDetail. The
  * complete directory is requested explicitly by the directory panel only.
@@ -1183,10 +1513,10 @@ export class ReadingContext {
      * @returns {ReadingContext}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType1;
-        const $$createField1_0 = $$createType5;
-        const $$createField2_0 = $$createType5;
-        const $$createField3_0 = $$createType5;
+        const $$createField0_0 = $$createType7;
+        const $$createField1_0 = $$createType10;
+        const $$createField2_0 = $$createType10;
+        const $$createField3_0 = $$createType10;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("item" in $$parsedSource) {
             $$parsedSource["item"] = $$createField0_0($$parsedSource["item"]);
@@ -1201,6 +1531,73 @@ export class ReadingContext {
             $$parsedSource["next"] = $$createField3_0($$parsedSource["next"]);
         }
         return new ReadingContext(/** @type {Partial<ReadingContext>} */($$parsedSource));
+    }
+}
+
+/**
+ * ReadingEvidence reports recent observations at the current rule revision.
+ * Counts describe chapters actually attempted, not the unread directory.
+ */
+export class ReadingEvidence {
+    /**
+     * Creates a new ReadingEvidence instance.
+     * @param {Partial<ReadingEvidence>} [$$source = {}] - The source object to create the ReadingEvidence.
+     */
+    constructor($$source = {}) {
+        if (!("readable" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["readable"] = 0;
+        }
+        if (!("restricted" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["restricted"] = 0;
+        }
+        if (!("failed" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["failed"] = 0;
+        }
+        if (!("warnings" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["warnings"] = 0;
+        }
+        if (!("stale" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["stale"] = 0;
+        }
+        if (!("checkedAt" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["checkedAt"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ReadingEvidence instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {ReadingEvidence}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ReadingEvidence(/** @type {Partial<ReadingEvidence>} */($$parsedSource));
     }
 }
 
@@ -1339,7 +1736,7 @@ export class SearchOutcome {
      * @returns {SearchOutcome}
      */
     static createFrom($$source = {}) {
-        const $$createField2_0 = $$createType15;
+        const $$createField2_0 = $$createType25;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("results" in $$parsedSource) {
             $$parsedSource["results"] = $$createField2_0($$parsedSource["results"]);
@@ -1448,7 +1845,7 @@ export class SourceCandidate {
      * @returns {SourceCandidate}
      */
     static createFrom($$source = {}) {
-        const $$createField11_0 = $$createType17;
+        const $$createField11_0 = $$createType27;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("quality" in $$parsedSource) {
             $$parsedSource["quality"] = $$createField11_0($$parsedSource["quality"]);
@@ -1508,7 +1905,7 @@ export class SourceDirectory {
      * @returns {SourceDirectory}
      */
     static createFrom($$source = {}) {
-        const $$createField3_0 = $$createType20;
+        const $$createField3_0 = $$createType30;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("rows" in $$parsedSource) {
             $$parsedSource["rows"] = $$createField3_0($$parsedSource["rows"]);
@@ -1677,12 +2074,75 @@ export class SourceInfo {
      * @returns {SourceInfo}
      */
     static createFrom($$source = {}) {
-        const $$createField10_0 = $$createType17;
+        const $$createField10_0 = $$createType27;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("quality" in $$parsedSource) {
             $$parsedSource["quality"] = $$createField10_0($$parsedSource["quality"]);
         }
         return new SourceInfo(/** @type {Partial<SourceInfo>} */($$parsedSource));
+    }
+}
+
+export class SourceOperationEvidence {
+    /**
+     * Creates a new SourceOperationEvidence instance.
+     * @param {Partial<SourceOperationEvidence>} [$$source = {}] - The source object to create the SourceOperationEvidence.
+     */
+    constructor($$source = {}) {
+        if (!("operation" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["operation"] = "";
+        }
+        if (!("status" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["status"] = "";
+        }
+        if (!("checkedAt" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["checkedAt"] = 0;
+        }
+        if (!("count" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["count"] = 0;
+        }
+        if (!("code" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["code"] = "";
+        }
+        if (!("millis" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["millis"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SourceOperationEvidence instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {SourceOperationEvidence}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new SourceOperationEvidence(/** @type {Partial<SourceOperationEvidence>} */($$parsedSource));
     }
 }
 
@@ -1730,7 +2190,7 @@ export class SourcePreview {
      * @returns {SourcePreview}
      */
     static createFrom($$source = {}) {
-        const $$createField2_0 = $$createType23;
+        const $$createField2_0 = $$createType33;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("candidates" in $$parsedSource) {
             $$parsedSource["candidates"] = $$createField2_0($$parsedSource["candidates"]);
@@ -1811,7 +2271,7 @@ export class SourceQuality {
      * @returns {SourceQuality}
      */
     static createFrom($$source = {}) {
-        const $$createField6_0 = $$createType26;
+        const $$createField6_0 = $$createType36;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("stages" in $$parsedSource) {
             $$parsedSource["stages"] = $$createField6_0($$parsedSource["stages"]);
@@ -1895,7 +2355,7 @@ export class SourceResult {
      * @returns {SourceResult}
      */
     static createFrom($$source = {}) {
-        const $$createField2_0 = $$createType2;
+        const $$createField2_0 = $$createType8;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("items" in $$parsedSource) {
             $$parsedSource["items"] = $$createField2_0($$parsedSource["items"]);
@@ -1946,7 +2406,7 @@ export class TestOutcome {
      * @returns {TestOutcome}
      */
     static createFrom($$source = {}) {
-        const $$createField1_0 = $$createType26;
+        const $$createField1_0 = $$createType36;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("stages" in $$parsedSource) {
             $$parsedSource["stages"] = $$createField1_0($$parsedSource["stages"]);
@@ -2025,30 +2485,40 @@ export class TestStage {
 }
 
 // Private type creation functions
-const $$createType0 = Item.createFrom;
-const $$createType1 = $Create.Nullable($$createType0);
-const $$createType2 = $Create.Array($$createType1);
-const $$createType3 = $Create.Array($Create.Any);
-const $$createType4 = Chapter.createFrom;
+const $$createType0 = $Create.Array($Create.Any);
+const $$createType1 = SourceOperationEvidence.createFrom;
+const $$createType2 = $Create.Nullable($$createType1);
+const $$createType3 = $Create.Array($$createType2);
+const $$createType4 = ReadingEvidence.createFrom;
 const $$createType5 = $Create.Nullable($$createType4);
-const $$createType6 = $Create.Array($$createType5);
-const $$createType7 = Page.createFrom;
-const $$createType8 = $Create.Nullable($$createType7);
-const $$createType9 = $Create.Array($$createType8);
-const $$createType10 = ComicTrend.createFrom;
-const $$createType11 = $Create.Nullable($$createType10);
-const $$createType12 = $Create.Array($$createType11);
-const $$createType13 = SourceResult.createFrom;
-const $$createType14 = $Create.Nullable($$createType13);
-const $$createType15 = $Create.Array($$createType14);
-const $$createType16 = SourceQuality.createFrom;
-const $$createType17 = $Create.Nullable($$createType16);
-const $$createType18 = BuiltinSourceRow.createFrom;
+const $$createType6 = Item.createFrom;
+const $$createType7 = $Create.Nullable($$createType6);
+const $$createType8 = $Create.Array($$createType7);
+const $$createType9 = Chapter.createFrom;
+const $$createType10 = $Create.Nullable($$createType9);
+const $$createType11 = $Create.Array($$createType10);
+const $$createType12 = Page.createFrom;
+const $$createType13 = $Create.Nullable($$createType12);
+const $$createType14 = $Create.Array($$createType13);
+const $$createType15 = ComicTrend.createFrom;
+const $$createType16 = $Create.Nullable($$createType15);
+const $$createType17 = $Create.Array($$createType16);
+const $$createType18 = NovelCachedSource.createFrom;
 const $$createType19 = $Create.Nullable($$createType18);
 const $$createType20 = $Create.Array($$createType19);
-const $$createType21 = SourceCandidate.createFrom;
+const $$createType21 = ChapterText.createFrom;
 const $$createType22 = $Create.Nullable($$createType21);
-const $$createType23 = $Create.Array($$createType22);
-const $$createType24 = TestStage.createFrom;
-const $$createType25 = $Create.Nullable($$createType24);
-const $$createType26 = $Create.Array($$createType25);
+const $$createType23 = SourceResult.createFrom;
+const $$createType24 = $Create.Nullable($$createType23);
+const $$createType25 = $Create.Array($$createType24);
+const $$createType26 = SourceQuality.createFrom;
+const $$createType27 = $Create.Nullable($$createType26);
+const $$createType28 = BuiltinSourceRow.createFrom;
+const $$createType29 = $Create.Nullable($$createType28);
+const $$createType30 = $Create.Array($$createType29);
+const $$createType31 = SourceCandidate.createFrom;
+const $$createType32 = $Create.Nullable($$createType31);
+const $$createType33 = $Create.Array($$createType32);
+const $$createType34 = TestStage.createFrom;
+const $$createType35 = $Create.Nullable($$createType34);
+const $$createType36 = $Create.Array($$createType35);

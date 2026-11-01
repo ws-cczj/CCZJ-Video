@@ -84,6 +84,7 @@ export const prefetchState = {
   inflightBySession: new Map<number, number>(),
   prefetchControllers: new Set<AbortController>(),
   foregroundActive: 0,
+  previewRequests: new Set<() => void>(),
   debounceTimer: null as number | null,
 }
 
@@ -91,6 +92,7 @@ export const prefetchState = {
 
 // ⭐ 优化：按集数级统计（避免跨集数污染），替代单一全局 hits/misses
 export const telemetry = {
+  networkBytes: 0,
   epStats: new Map<string, EpisodeCounter>(),
   recentFetchDurations: [] as number[],
   // 与 recentFetchDurations 一一对应的字节数：只有耗时算不出速率，也就无法判断命中该折算成多久

@@ -1,5 +1,6 @@
 import { CancelError, CancellablePromise } from '@wailsio/runtime'
 import { toApiFailure } from './errors'
+import { captureDiagnosticContext, recordTimeline } from '../diagnostics/session'
 
 type Pending<T> = Promise<T> & { cancel?: (cause?: unknown) => unknown }
 
@@ -7,6 +8,7 @@ type Pending<T> = Promise<T> & { cancel?: (cause?: unknown) => unknown }
  * started after an earlier await. Cancelling a page releases the actual I/O.
  */
 export function applicationRequest<T>(work: (request: <R>(pending: Pending<R>) => Promise<R>) => Promise<T>): CancellablePromise<T> {
+  const context = captureDiagnosticContext()
   let cancelled = false
   let cancellationCause: unknown
   const active = new Set<Pending<unknown>>()
@@ -18,6 +20,8 @@ export function applicationRequest<T>(work: (request: <R>(pending: Pending<R>) =
     return error instanceof CancelError ? error : toApiFailure(error)
   }
   async function request<R>(pending: Pending<R>): Promise<R> {
+    const identity = (pending as Pending<R> & {request?:{requestId:string;flightId:string;pipeline:string}}).request
+    if (identity) recordTimeline('request.link',{name:identity.pipeline,request_id:identity.requestId,flight_id:identity.flightId},context)
     if (cancelled) { cancel(pending); check() }
     active.add(pending)
     try { const value = await pending; check(); return value } catch(error){throw failure(error)} finally { active.delete(pending) }

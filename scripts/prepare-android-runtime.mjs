@@ -3,11 +3,12 @@ import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { resolve, dirname } from 'node:path'
 
-// beta.30's JNI envelope discards CallError.Cause. Keep this small, checked
-// native build copy in the project instead of modifying a shared module cache.
+// The JNI envelope discards CallError.Cause. Keep the checked native build
+// copy in the project instead of modifying a shared module cache.
 // Go 1.26 disallows source overlays underneath GOMODCACHE.
 const root=process.cwd()
-const module=execFileSync('go',['list','-m','-f','{{.Dir}}','github.com/wailsapp/wails/v3'],{encoding:'utf8'}).trim()
+const sdk=JSON.parse(execFileSync('go',['list','-m','-json','github.com/wailsapp/wails/v3'],{encoding:'utf8'}))
+const module=sdk.Dir
 const source=resolve(module,'pkg/application/application_android.go')
 let content=readFileSync(source,'utf8').replaceAll('\r\n','\n')
 const start=content.indexOf('func handleRuntimeCallForAndroid(')
@@ -26,7 +27,7 @@ body=body.replace(old,`if err != nil {
     }`)
 content=content.slice(0,start)+body+content.slice(end)
 if(!content.includes('\n\t"errors"\n'))content=content.replace('import (\n','import (\n\t"errors"\n')
-// beta.30-34's Android destroy is empty. Explicit application exit must run
+// Android destroy is empty. Explicit application exit must run
 // service cleanup, then ask the Java process owner to finish; Activity detach
 // never calls this path. Recreating the host keeps the existing Go runtime.
 const destroy='func (a *androidApp) destroy() {\n}'
@@ -59,7 +60,7 @@ calls=replaceOnce(calls,'m.runningCalls[*callID] = cancel',`m.runningCalls[*call
                     delete(m.earlyCancellations, *callID)
                     if time.Now().Before(until) { cancel() }
                 }`,'cancellation handoff')
-const hash=createHash('sha256').update(content).update(processor).update(calls).digest('hex').slice(0,12)
+const hash=createHash('sha256').update(sdk.Version).update(readFileSync(resolve(module,'go.mod'))).update(content).update(processor).update(calls).digest('hex').slice(0,12)
 const mirror=resolve(root,`build/android/gen/wails-${hash}`)
 // A prior interrupted copy or generated-file cleanup can leave a partial
 // directory. Reconcile missing files on every build instead of treating its

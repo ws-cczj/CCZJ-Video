@@ -2,9 +2,11 @@ package service
 
 import (
 	"cczjVideo/app/apperror"
+	"cczjVideo/app/diagnosticrecording"
 	"cczjVideo/app/lifecycle"
 	"cczjVideo/app/operation"
 	"context"
+	"errors"
 	"strings"
 )
 
@@ -31,6 +33,20 @@ func (a *App) observeOperation(result operation.Result) {
 	operation.Log(result)
 	if a.operations != nil {
 		a.operations.Record(result)
+	}
+	if a.recording != nil {
+		event := diagnosticrecording.Event{Mode: result.Mode, Kind: "backend.operation", Name: result.Pipeline, BackendRequestID: result.RequestID, DurationMS: float64(result.Duration.Microseconds()) / 1000, Outcome: "success"}
+		if result.Err != nil {
+			event.Outcome = "failed"
+			event.Code = string(apperror.CodeOf(result.Err))
+			if errors.Is(result.Err, context.Canceled) {
+				event.Outcome = "cancelled"
+			}
+		}
+		if parent, ok := result.Fields["parent_request_id"].(string); ok {
+			event.ParentID = parent
+		}
+		a.recording.Record(event)
 	}
 }
 

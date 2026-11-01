@@ -7,6 +7,431 @@
 import { Create as $Create } from "@wailsio/runtime";
 
 /**
+ * Event contains bounded operation metadata, never arbitrary request arguments.
+ */
+export class Event {
+    /**
+     * Creates a new Event instance.
+     * @param {Partial<Event>} [$$source = {}] - The source object to create the Event.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["id"] = "";
+        }
+        if (!("sequence" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["sequence"] = 0;
+        }
+        if (!("at_ms" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["at_ms"] = 0;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["client_at_ms"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["session_id"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["action_id"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["request_id"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["flight_id"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["backend_request_id"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["parent_id"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["resource_id"] = undefined;
+        }
+        if (!("application_mode" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["application_mode"] = "";
+        }
+        if (!("kind" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["kind"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["name"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["route"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["outcome"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["code"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["duration_ms"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {{ [_ in string]?: any } | undefined}
+             */
+            this["data"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Event instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {Event}
+     */
+    static createFrom($$source = {}) {
+        const $$createField18_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("data" in $$parsedSource) {
+            $$parsedSource["data"] = $$createField18_0($$parsedSource["data"]);
+        }
+        return new Event(/** @type {Partial<Event>} */($$parsedSource));
+    }
+}
+
+export class Finding {
+    /**
+     * Creates a new Finding instance.
+     * @param {Partial<Finding>} [$$source = {}] - The source object to create the Finding.
+     */
+    constructor($$source = {}) {
+        if (!("code" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["code"] = "";
+        }
+        if (!("count" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["count"] = 0;
+        }
+        if (!("evidence" in $$source)) {
+            /**
+             * @member
+             * @type {string[]}
+             */
+            this["evidence"] = [];
+        }
+        if (!("certainty" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["certainty"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Finding instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {Finding}
+     */
+    static createFrom($$source = {}) {
+        const $$createField2_0 = $$createType1;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("evidence" in $$parsedSource) {
+            $$parsedSource["evidence"] = $$createField2_0($$parsedSource["evidence"]);
+        }
+        return new Finding(/** @type {Partial<Finding>} */($$parsedSource));
+    }
+}
+
+/**
+ * ProfileStatus reports an explicitly requested host-process capture.
+ */
+export class ProfileStatus {
+    /**
+     * Creates a new ProfileStatus instance.
+     * @param {Partial<ProfileStatus>} [$$source = {}] - The source object to create the ProfileStatus.
+     */
+    constructor($$source = {}) {
+        if (!("mode" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["mode"] = "";
+        }
+        if (!("kind" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["kind"] = "";
+        }
+        if (!("active" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["active"] = false;
+        }
+        if (!("path" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["path"] = "";
+        }
+        if (!("error" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["error"] = "";
+        }
+        if (!("started_at_ms" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["started_at_ms"] = 0;
+        }
+        if (!("ended_at_ms" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["ended_at_ms"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ProfileStatus instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {ProfileStatus}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ProfileStatus(/** @type {Partial<ProfileStatus>} */($$parsedSource));
+    }
+}
+
+/**
+ * Session is a detached observation window; missing evidence is explicit.
+ */
+export class Session {
+    /**
+     * Creates a new Session instance.
+     * @param {Partial<Session>} [$$source = {}] - The source object to create the Session.
+     */
+    constructor($$source = {}) {
+        if (!("format_version" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["format_version"] = 0;
+        }
+        if (!("captured_at_ms" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["captured_at_ms"] = 0;
+        }
+        if (!("daily_enabled" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["daily_enabled"] = false;
+        }
+        if (!("events" in $$source)) {
+            /**
+             * @member
+             * @type {Event[]}
+             */
+            this["events"] = [];
+        }
+        if (!("findings" in $$source)) {
+            /**
+             * @member
+             * @type {Finding[]}
+             */
+            this["findings"] = [];
+        }
+        if (!("buffered" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["buffered"] = 0;
+        }
+        if (!("bytes" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["bytes"] = 0;
+        }
+        if (!("evicted" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["evicted"] = 0;
+        }
+        if (!("rejected" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["rejected"] = 0;
+        }
+        if (!("writer_dropped" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["writer_dropped"] = 0;
+        }
+        if (!("window_limited" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["window_limited"] = false;
+        }
+        if (!("correlation_scope" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["correlation_scope"] = "";
+        }
+        if (!("recording" in $$source)) {
+            /**
+             * @member
+             * @type {Status}
+             */
+            this["recording"] = (new Status());
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string[] | undefined}
+             */
+            this["profile_files"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Session instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {Session}
+     */
+    static createFrom($$source = {}) {
+        const $$createField3_0 = $$createType3;
+        const $$createField4_0 = $$createType5;
+        const $$createField12_0 = $$createType6;
+        const $$createField13_0 = $$createType1;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("events" in $$parsedSource) {
+            $$parsedSource["events"] = $$createField3_0($$parsedSource["events"]);
+        }
+        if ("findings" in $$parsedSource) {
+            $$parsedSource["findings"] = $$createField4_0($$parsedSource["findings"]);
+        }
+        if ("recording" in $$parsedSource) {
+            $$parsedSource["recording"] = $$createField12_0($$parsedSource["recording"]);
+        }
+        if ("profile_files" in $$parsedSource) {
+            $$parsedSource["profile_files"] = $$createField13_0($$parsedSource["profile_files"]);
+        }
+        return new Session(/** @type {Partial<Session>} */($$parsedSource));
+    }
+}
+
+/**
  * Status describes the current or most recently completed session. Files survive exit.
  */
 export class Status {
@@ -120,6 +545,20 @@ export class Status {
              */
             this["end_goroutines_path"] = "";
         }
+        if (!("writer_dropped" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["writer_dropped"] = 0;
+        }
+        if (!("profile" in $$source)) {
+            /**
+             * @member
+             * @type {ProfileStatus}
+             */
+            this["profile"] = (new ProfileStatus());
+        }
 
         Object.assign(this, $$source);
     }
@@ -130,7 +569,21 @@ export class Status {
      * @returns {Status}
      */
     static createFrom($$source = {}) {
+        const $$createField16_0 = $$createType7;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("profile" in $$parsedSource) {
+            $$parsedSource["profile"] = $$createField16_0($$parsedSource["profile"]);
+        }
         return new Status(/** @type {Partial<Status>} */($$parsedSource));
     }
 }
+
+// Private type creation functions
+const $$createType0 = $Create.Map($Create.Any, $Create.Any);
+const $$createType1 = $Create.Array($Create.Any);
+const $$createType2 = Event.createFrom;
+const $$createType3 = $Create.Array($$createType2);
+const $$createType4 = Finding.createFrom;
+const $$createType5 = $Create.Array($$createType4);
+const $$createType6 = Status.createFrom;
+const $$createType7 = ProfileStatus.createFrom;

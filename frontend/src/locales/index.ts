@@ -1,3 +1,4 @@
+import { CCZJ } from '../constants/cczj'
 import { watch } from 'vue'
 import { createI18n } from 'vue-i18n'
 import { GetSetting, SetSetting } from '../api/app'
@@ -33,7 +34,7 @@ export async function loadLocale(): Promise<void> {
   if (_loaded) return
   _loaded = true
   try {
-    const v = await GetSetting('language')
+    const v = await GetSetting(CCZJ.Settings.language)
     if (v && (v === 'zh-CN' || v === 'en')) {
       i18n.global.locale.value = v as Locale
     }
@@ -45,7 +46,7 @@ export async function setLocale(locale: string): Promise<void> {
   if (locale === 'zh-CN' || locale === 'en') {
     i18n.global.locale.value = locale as Locale
   }
-  try { await SetSetting('language', locale) } catch { /* ignore */ }
+  try { await SetSetting(CCZJ.Settings.language, locale) } catch { /* ignore */ }
 }
 
 export default i18n

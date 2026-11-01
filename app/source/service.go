@@ -139,7 +139,7 @@ func (s *Service) ExportContext(ctx context.Context, dataDir, sourceKey string) 
 	}
 	types := make([]TypePayload, 0, len(sourceTypes))
 	for _, t := range sourceTypes {
-		types = append(types, TypePayload{TypeID: t.SourceTypeID, GlobalTypeID: t.GlobalTypeID, TypeName: t.TypeName})
+		types = append(types, TypePayload{TypeID: t.SourceTypeID, ParentTypeID: t.ParentTypeID, ManualShortDrama: t.ManualShortDrama, GlobalTypeID: t.GlobalTypeID, TypeName: t.TypeName})
 	}
 
 	exportDir := filepath.Join(dataDir, "exports")
@@ -263,7 +263,7 @@ func (s *Service) ImportContext(ctx context.Context, payload Payload, origin str
 	}
 	types := make([]db.SourceTypeExport, 0, len(payload.Types))
 	for _, t := range payload.Types {
-		types = append(types, db.SourceTypeExport{SourceTypeID: t.TypeID, GlobalTypeID: t.GlobalTypeID, TypeName: t.TypeName})
+		types = append(types, db.SourceTypeExport{SourceTypeID: t.TypeID, ParentTypeID: t.ParentTypeID, ManualShortDrama: t.ManualShortDrama, GlobalTypeID: t.GlobalTypeID, TypeName: t.TypeName})
 	}
 	err = db.ImportSourceBundle(ctx, key, func(existing *model.Source) (*model.Source, error) {
 		copy := *payload.Source

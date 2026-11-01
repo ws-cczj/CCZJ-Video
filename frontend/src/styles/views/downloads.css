@@ -142,7 +142,7 @@
 .task-meta-row .eta { @apply cczj-text-secondary; font-variant-numeric: tabular-nums; }
 .task-meta-row .err-msg { color: #ef4444; max-width: 300px; @apply cczj-whitespace-nowrap cczj-overflow-hidden; text-overflow: ellipsis; }
 
-/* ========== IDM 风格分块进度条 ========== */
+/* ========== 下载分块进度条 ========== */
 .chunk-progress-container {
   @apply cczj-relative cczj-w-full cczj-h-2;
   background: var(--bg-secondary);

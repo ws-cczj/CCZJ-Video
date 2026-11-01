@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from 'vue'
-import { isMobileRuntime } from '../../api/runtime'
+import { computed, ref } from 'vue'
+import { useOverlayFocus } from '../../composables/useOverlayFocus'
+import { useViewActivity } from '../../composables/useViewActivity'
 import MotionTransition from './MotionTransition.vue'
 import Button from './Button.vue'
 import { tr } from '../../locales'
@@ -41,50 +42,31 @@ const emit = defineEmits<{
   (e: 'ok'): void
   (e: 'cancel'): void
 }>()
-const overlay = ref<HTMLElement | null>(null)
-function onAndroidBack(event: Event): void {
-  if (!props.modelValue || !overlay.value) return
-  const stack = document.querySelectorAll('.ui-modal-overlay')
-  if (stack[stack.length - 1] !== overlay.value) return
-  event.preventDefault()
-  event.stopImmediatePropagation()
-  if (props.closable) close()
-}
+const dialog = ref<HTMLElement | null>(null)
+const active = useViewActivity(() => true, 'committed')
+const visible = computed(() => props.modelValue && active.value)
+const focus = useOverlayFocus(dialog, () => visible.value, close, () => props.closable)
 
 function close(): void {
   emit('update:modelValue', false)
   emit('cancel')
 }
 
-function onKeydown(e: KeyboardEvent): void {
-  if (!props.modelValue) return
-  if (e.key === 'Escape') {
-    e.preventDefault()
-    // closable=false 的模态不该被 ESC 绕过：它是除关闭按钮和遮罩之外的第三条关闭路径，
-    // 首启条款闸门要拦的就是「所有」关闭路径。
-    if (!props.closable) return
-    close()
-  }
-}
-
-onMounted(() => window.addEventListener('keydown', onKeydown))
-onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
-onMounted(() => { if (isMobileRuntime()) window.addEventListener('cczj:android-overlay-back', onAndroidBack) })
-onBeforeUnmount(() => window.removeEventListener('cczj:android-overlay-back', onAndroidBack))
 </script>
 
 <template>
   <Teleport :to="teleportTo || 'body'">
-    <MotionTransition preset="fade">
-      <div v-if="modelValue" ref="overlay" class="ui-modal-overlay cczj-flex cczj-items-center cczj-justify-center" @click.self="maskClosable && close()">
-        <MotionTransition preset="dialog" appear>
+    <MotionTransition preset="modal" @after-leave="!visible && focus.release()">
+      <div v-if="visible" class="ui-modal-overlay cczj-flex cczj-items-center cczj-justify-center" @click.self="maskClosable && closable && close()">
           <div
-            v-if="modelValue"
+            ref="dialog"
+            data-motion-panel
             class="ui-modal cczj-min-h-0 cczj-flex cczj-flex-col"
             :style="width ? { width } : undefined"
             role="dialog"
             aria-modal="true"
             :aria-label="title"
+            tabindex="-1"
           >
             <!-- Header -->
             <div v-if="title || closable" class="ui-modal__header cczj-flex cczj-items-center cczj-justify-between">
@@ -119,7 +101,6 @@ onBeforeUnmount(() => window.removeEventListener('cczj:android-overlay-back', on
               </slot>
             </div>
           </div>
-        </MotionTransition>
       </div>
     </MotionTransition>
   </Teleport>

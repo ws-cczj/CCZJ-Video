@@ -27,3 +27,20 @@ User-facing source names may change independently.
   run; the archive-and-reset path is gone.
 - Source keys are immutable once data has been collected. Create a new source
   when an upstream identity changes.
+
+## Category hierarchy and classification
+
+Amended 2026-11-01: migration 26 adds source-local `parent_type_id` and
+`manual_short_drama` to `source_types`. Type metadata refresh preserves user
+mappings and manual classification; missing parent metadata preserves a known
+relationship, while parent `0` explicitly denotes a root. Browsing and random
+recommendations share the same automatic descendant classification; the legacy
+manual flag is retained for payload compatibility and no longer expands this scope. Parent bans apply to
+both incoming rows and existing catalog visibility; cycles terminate by identity.
+
+Source export/import retains optional `parent_type_id` and
+`manual_short_drama` fields. An omitted manual flag in an older payload preserves
+existing configuration; explicit true/false restores the exported choice.
+The metadata merge leaves manual classification and global mapping unchanged.
+The category dialog has been removed. Automatic list discovery and verified
+provider hierarchy supplementation retain catalog rows, favorites and progress.

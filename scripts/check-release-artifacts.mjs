@@ -8,7 +8,8 @@ export async function checkReleaseArtifacts(directory) {
   const manifest = JSON.parse(readFileSync(join(dir, 'artifact-manifest.json'), 'utf8'))
   const metadata = JSON.parse(readFileSync(join(dir, 'version.json'), 'utf8'))
   function requireValue(condition, message) { if (!condition) throw new Error(message) }
-  requireValue(/^\d+\.\d+\.\d+$/.test(manifest.version) && manifest.tag === `v${manifest.version}`, 'Invalid release version/tag')
+  const prerelease = /^\d+\.\d+\.\d+-beta\.[1-9]\d*$/.test(manifest.version)
+  requireValue((/^\d+\.\d+\.\d+$/.test(manifest.version) || prerelease) && (manifest.tag === `v${manifest.version}` || (prerelease && manifest.tag === `v${manifest.version.replace('-beta.', '.beta')}`)), 'Invalid release version/tag')
   requireValue(metadata.version === manifest.version, 'Update metadata version mismatch')
   const expected = [`cczjVideo-windows-amd64-${manifest.version}.exe`, `cczjVideo-windows-amd64-${manifest.version}-portable.zip`, `cczjVideo-android-arm64-${manifest.version}.apk`]
   const names = ['version.json','artifact-manifest.json','android-metadata.json','release-notes.md',...expected]
@@ -33,7 +34,7 @@ export async function checkReleaseArtifacts(directory) {
     const entry = metadata.assets?.find(a => a.name === artifact.name)
     requireValue(entry?.size === artifact.bytes && entry.browser_download_url === `https://github.com/${manifest.repository}/releases/download/${manifest.tag}/${artifact.name}`, `Update URL mismatch: ${artifact.name}`)
   }
-  const parts = manifest.version.split('.').map(Number)
+  const parts = manifest.version.split('-')[0].split('.').map(Number)
   requireValue(manifest.android.package === 'com.cczj.video.preview' && manifest.android.version === manifest.version && manifest.android.versionCode === parts[0]*10000+parts[1]*100+parts[2] && manifest.android.abi === 'arm64-v8a' && manifest.android.debuggable === false, 'APK identity/version mismatch')
   return { manifest, metadata, files: [...names, 'checksums.txt'] }
 }

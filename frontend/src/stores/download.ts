@@ -1,3 +1,4 @@
+import { CCZJ } from '../constants/cczj'
 import { defineStore } from 'pinia'
 import { tr } from '../locales'
 import { ref, computed } from 'vue'
@@ -94,7 +95,7 @@ export const useDownloadStore = defineStore('download', () => {
 
     // 1) 先从应用设置载入自定义目录（Go 后端的持久化设置）
     try {
-      const saved = await GetSetting('download_dir')
+      const saved = await GetSetting(CCZJ.Settings.downloadDirectory)
       if (saved && typeof saved === 'string') {
         try {
           const ret = await SetDownloadDir(saved)

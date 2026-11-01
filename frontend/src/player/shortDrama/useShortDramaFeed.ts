@@ -1,5 +1,5 @@
 import { computed, onScopeDispose, ref, shallowRef, watch, type Ref } from 'vue'
-import { GetVideoDetail, GetShortDramaRecommendations, GetShortDramaPage } from '../../api/video'
+import { GetVideoDetail, GetShortDramaRecommendations, GetShortDramaPage, SHORT_DRAMA_FRESH_MS } from '../../api/video'
 import { ApiFailure, normalizeApiError } from '../../api/errors'
 import { createRequestScope } from '../../api/requestScope'
 import { useGeneration } from '../../composables/useGeneration'
@@ -18,7 +18,7 @@ export interface ShortDramaEntry {
 
 /** One batch and one hydrated title belong to this view. Hidden tabs release
  * media and in-flight detail work; late replies cannot replace a newer choice. */
-export function useShortDramaFeed(source: Ref<string>, active: Ref<boolean>, beforeChange: () => void, entry: Ref<ShortDramaEntry | null> = shallowRef(null), options: { sources?: () => string[]; playing?: () => boolean; backgroundError?: (cause: unknown) => void; choose?: (batch:Video[],fallback:string,current?:{source:string;vod:string}) => Video[]; remember?: (source:string,vod:string) => void; preferenceVersion?: () => unknown } = {}) {
+export function useShortDramaFeed(source: Ref<string>, active: Ref<boolean>, beforeChange: () => void, entry: Ref<ShortDramaEntry | null> = shallowRef(null), options: { playing?: () => boolean; backgroundError?: (cause: unknown) => void; choose?: (batch:Video[],fallback:string,current?:{source:string;vod:string}) => Video[]; remember?: (source:string,vod:string) => void; preferenceVersion?: () => unknown } = {}) {
   const items = shallowRef<Video[]>([])
   const selected = ref(0), episodeIndex = ref(0)
   const detail = shallowRef<VideoDetailResponse | null>(null)
@@ -54,6 +54,26 @@ export function useShortDramaFeed(source: Ref<string>, active: Ref<boolean>, bef
     const next = nextItem.value, ep = next?.prepared.detail.episodes[next.prepared.nextEpisode]
     return next && ep ? { ...ep, ep_url: resolveEpisodeUrl(ep), source_key: next.prepared.sourceKey, vod_id: String(next.prepared.detail.video?.vod_id ?? next.batch[next.index]?.vod_id ?? '') } : null
   })
+  const updateRequests=createRequestScope(),updateGeneration=useGeneration()
+  let updateBusy=false,updatedSource='',updatedAt=0,updatePage=0,updateCursor=''
+  function cancelUpdate():void {updateGeneration.invalidate();updateRequests.cancel();updateBusy=false}
+  async function updateCatalog():Promise<void> {
+    const key=source.value
+    if(!active.value||entry.value||!key||updateBusy||(updatedSource===key&&performance.now()-updatedAt<SHORT_DRAMA_FRESH_MS))return
+    if(updatedSource!==key){updatePage=0;updateCursor=''}
+    const token=updateGeneration.begin();updateBusy=true
+    try {
+      const page=await updateRequests.run(()=>GetShortDramaPage(key,updatePage+1,'',key,updateCursor))
+      if(!updateGeneration.isCurrent(token)||key!==source.value)return
+      updatedSource=key;updatedAt=performance.now()
+      updatePage=page.has_more?updatePage+1:0;updateCursor=page.has_more?page.category_id:''
+    }catch(cause){
+      if(updateGeneration.isCurrent(token)&&normalizeApiError(cause).code!=='CANCELLED') {
+        updatePage=0;updateCursor=''
+        void recordDiagnosticEvent('short_drama_catalog_failed',{code:normalizeApiError(cause).code})
+      }
+    }finally{if(updateGeneration.isCurrent(token))updateBusy=false}
+  }
   function randomBatch(batch: Video[]): Video[] {
     const result = batch.slice()
     for (let i = result.length - 1; i > 0; i--) {
@@ -160,26 +180,22 @@ export function useShortDramaFeed(source: Ref<string>, active: Ref<boolean>, bef
     retryBatch = true
     try {
       let batch: Video[] = []
-      // Reuse the existing SQLite catalog across enabled video sources before
-      // paying for provider discovery again. Exclusions stay source-scoped.
-      const candidates = [...new Set([sourceKey, items.value.length ? playbackSource.value : '', remoteSource, ...(options.sources?.() ?? [])].filter(Boolean))].slice(0, 5)
+      // Recommendations and remote discovery share the selected source. Local
+      // catalogs from unrelated sources must not override that selection.
       let cachedFailure: unknown
-      for (const candidate of candidates) {
-        const exclude = items.value[0]?.source_key === candidate || (!items.value[0]?.source_key && candidate === sourceKey) ? previous : []
-        const cached = await requests.run(() => GetShortDramaRecommendations(candidate, exclude))
+      try {
+        const cached = await requests.run(() => GetShortDramaRecommendations(sourceKey, previous))
         if (!generation.isCurrent(token)) return
-        if (cached.length) {
-          const cachedBatch = randomBatch(cached.map(item => ({ ...item, source_key: candidate })))
-          try {
-            const next = await hydrate(cachedBatch[0]!, token, 0)
-            if (!generation.isCurrent(token)) return
-            if (next) { commit(cachedBatch, 0, next); batchSource = sourceKey; return }
-          } catch (cause) {
-            if (!generation.isCurrent(token)) return
-            if (!['UNAVAILABLE', 'NOT_FOUND', 'TIMEOUT'].includes(normalizeApiError(cause).code)) throw cause
-            cachedFailure = cause
-          }
+        const cachedBatch = randomBatch(cached.map(item => ({ ...item, source_key: sourceKey })))
+        if (cachedBatch.length) {
+          const next = await hydrate(cachedBatch[0]!, token, 0)
+          if (!generation.isCurrent(token)) return
+          if (next) { commit(cachedBatch, 0, next); batchSource = sourceKey; void updateCatalog(); return }
         }
+      } catch (cause) {
+        if (!generation.isCurrent(token)) return
+        if (normalizeApiError(cause).code === 'CANCELLED') throw cause
+        cachedFailure = cause
       }
       // A small library can run out of unseen titles; cycle through its actual
       // contents instead of filling the feed with unrelated videos.
@@ -191,19 +207,28 @@ export function useShortDramaFeed(source: Ref<string>, active: Ref<boolean>, bef
       if (!generation.isCurrent(token)) return
       if(!batch.length){
         if(batchSource!==sourceKey){remoteSource='';remoteCategory='';remotePage=0;remoteHasMore=true}
-        const page=await requests.run(()=>GetShortDramaPage(sourceKey,remoteHasMore?remotePage+1:1,'',remoteSource,remoteCategory))
+        const rediscover=(force&&items.value.length>0)||!remoteHasMore
+        const page=await requests.run(()=>GetShortDramaPage(sourceKey,rediscover?1:remotePage+1,'',rediscover?'':remoteSource,rediscover?'':remoteCategory))
         if(!generation.isCurrent(token))return
-        remoteSource=page.source_key;remoteCategory=page.category_id;remotePage=remoteHasMore?remotePage+1:1;remoteHasMore=page.has_more
-        batch=randomBatch(page.videos)
+        remoteSource=page.source_key;remoteCategory=page.category_id;remotePage=rediscover?1:remotePage+1;remoteHasMore=page.has_more
+        updatedSource=sourceKey;updatedAt=performance.now()
+        // The catalog sampler owns random selection even after a remote fill.
+        const recommended=await requests.run(()=>GetShortDramaRecommendations(sourceKey,previous))
+        if(!generation.isCurrent(token))return
+        batch=randomBatch(recommended.map(item=>({...item,source_key:sourceKey})))
+        if(!batch.length&&previous.length)batch=randomBatch((await requests.run(()=>GetShortDramaRecommendations(sourceKey,[]))).map(item=>({...item,source_key:sourceKey})))
       }
       if (!batch.length && cachedFailure) throw cachedFailure
       batchSource = sourceKey
-      emptySource.value = batch.length ? '' : sourceKey
+      emptySource.value = batch.length||remoteHasMore ? '' : sourceKey
       if (batch.length) {
         const next = await hydrate(batch[0]!, token, 0)
-        if (next) commit(batch, 0, next)
-      } else if(video.value)fail({code:'NOT_FOUND',message:tr('shortDrama.noOtherRecommendations')})
+        if (next) {commit(batch, 0, next);void updateCatalog()}
+      } else if(video.value||remoteHasMore)fail({code:'NOT_FOUND',message:tr('shortDrama.noOtherRecommendations')})
     } catch (cause) {
+      if(generation.isCurrent(token)&&normalizeApiError(cause).code==='VALIDATION'){
+        remoteSource='';remoteCategory='';remotePage=0;remoteHasMore=true
+      }
       if (generation.isCurrent(token)) fail(cause)
     } finally { finish(token) }
   }
@@ -263,14 +288,16 @@ export function useShortDramaFeed(source: Ref<string>, active: Ref<boolean>, bef
     }
     step('next')
   }
+
   watch([effectiveSource, active, entry], ([key, enabled, target]) => {
     if (!enabled) {
+      cancelUpdate()
       invalidate(false)
       // Keep presentation data for the still-visible leave transition. The
       // page pauses media now and unmounts it when visual activity ends.
       return
     }
-    if (identitySource && identitySource !== key) { invalidate(); items.value = []; batchSource = ''; entryKey = '' }
+    if (identitySource && identitySource !== key) { cancelUpdate();updatedSource='';updatedAt=0; invalidate(); items.value = []; batchSource = ''; entryKey = '' }
     identitySource = key
     if (!key) {
       invalidate(); items.value = []; error.value = ''; playbackSource.value = ''
@@ -291,7 +318,8 @@ export function useShortDramaFeed(source: Ref<string>, active: Ref<boolean>, bef
     }
     if (entryKey) { entryKey = ''; items.value = []; batchSource = '' }
     if (batchSource !== key || !items.value.length) void refresh()
-    else if (!detail.value || error.value) void open(selected.value, true)
+    else if (!detail.value || error.value) {void open(selected.value, true);void updateCatalog()}
+    else void updateCatalog()
   }, { immediate: true, flush: 'post' })
   watch([detail, episodeIndex, series, active, () => options.playing?.() ?? active.value, () => options.preferenceVersion?.()], async () => {
     nextGeneration.invalidate(); nextRequests.cancel(); nextItem.value = null
@@ -312,7 +340,9 @@ export function useShortDramaFeed(source: Ref<string>, active: Ref<boolean>, bef
           const pageNumber = remoteHasMore ? remotePage + 1 : 1
           const page = await nextRequests.run(() => GetShortDramaPage(source.value, pageNumber, '', remoteSource, remoteCategory))
           if (!nextGeneration.isCurrent(token)) return
-          extra = randomBatch(page.videos.filter(item => item.source_key !== playbackSource.value || item.vod_id !== video.value?.vod_id))
+          const recommended=await nextRequests.run(()=>GetShortDramaRecommendations(playbackSource.value,exclude))
+          if(!nextGeneration.isCurrent(token))return
+          extra=randomBatch(recommended.map(item=>({...item,source_key:playbackSource.value})))
           remote = { source: page.source_key, category: page.category_id, page: pageNumber, hasMore: page.has_more }
         }
         if (!extra.length) return
@@ -326,8 +356,8 @@ export function useShortDramaFeed(source: Ref<string>, active: Ref<boolean>, bef
     }
     finally { clearTimeout(timer) }
   }, { flush: 'post' })
-  onScopeDispose(() => { invalidate(); nextGeneration.invalidate(); nextRequests.cancel() })
+  onScopeDispose(() => { cancelUpdate();invalidate(); nextGeneration.invalidate(); nextRequests.cancel() })
   return { items, selected, episodeIndex, video, episodes, episode, url, detail, loading, selecting, error, playbackSource, effectiveSource, knownEmpty, series, completed, canPrevious, canNext, nextMedia, refresh, open, selectEpisode, follow, discover, step, ended,
     markWatched:()=>{if(!series.value&&video.value?.vod_id)options.remember?.(playbackSource.value,String(video.value.vod_id))},
-    retry: () => retryBatch || !items.value.length ? refresh() : open(selected.value, true) }
+    retry: () => retryBatch || !items.value.length ? refresh(true) : open(selected.value, true) }
 }

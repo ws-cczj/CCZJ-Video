@@ -37,6 +37,8 @@ if (-not $Version) {
 if (-not $Version) { throw "could not read a version from version.json" }
 Write-Host "release version: $Version (windows/$Arch)"
 
+Step "generate embedded JSON assets" { & node scripts/compress-embedded-json.mjs }
+
 # go build embeds frontend/dist. An out-of-date dist yields a binary that
 # silently ships the previous UI, so compare it against the sources.
 $distIndex = Join-Path $root "frontend/dist/index.html"

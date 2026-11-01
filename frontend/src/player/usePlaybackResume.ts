@@ -1,14 +1,15 @@
+import { CCZJ } from '../constants/cczj'
 import { ref } from 'vue'
 import { clearPlaybackTime, readPlaybackTime, savePlaybackTime } from './usePlaybackProgress'
 
 /** Persisted keys keep their existing spelling so upgrades retain local progress. */
 export function playbackResumeKey(videoKey: string, url: string): string {
-  if (videoKey) return 'vp_t_' + videoKey
+  if (videoKey) return CCZJ.Storage.playbackTimePrefix + videoKey
   try {
     const parsed = new URL(url)
-    return 'vp_t_url_' + parsed.origin + parsed.pathname
+    return CCZJ.Storage.playbackURLPrefix + parsed.origin + parsed.pathname
   } catch {
-    return 'vp_t_url_' + url.split('?')[0].split('#')[0].slice(0, 120)
+    return CCZJ.Storage.playbackURLPrefix + url.split('?')[0].split('#')[0].slice(0, 120)
   }
 }
 
@@ -17,6 +18,7 @@ export function usePlaybackResume(deps: {
   getKey: () => string
   resolveResume: () => Promise<number> | undefined
   shouldResume?: () => boolean
+  progress?: () => { position: number; duration: number } | undefined
   settings: { read: (key: string, fallback: string) => string; write: (key: string, value: string) => void }
 }) {
   const savedTime = ref<number | null>(null)
@@ -26,6 +28,7 @@ export function usePlaybackResume(deps: {
   let key = ''
   let resolving = false
   let pendingSeek: number | null = null
+  let attached = false
   let promptTimer: ReturnType<typeof setInterval> | null = null
   let saveTimer: ReturnType<typeof setInterval> | null = null
 
@@ -43,6 +46,7 @@ export function usePlaybackResume(deps: {
     key = ''
     resolving = false
     pendingSeek = null
+    attached = false
     savedTime.value = null
   }
 
@@ -50,12 +54,13 @@ export function usePlaybackResume(deps: {
     const video = deps.getVideo()
     if (!video || !Number.isFinite(seconds) || seconds < 0) return
     pendingSeek = seconds
-    if (video.readyState >= 1) flushPendingSeek()
+    // The old element may still have metadata while its replacement attaches.
+    // The owner flushes after attachment and on new metadata/canplay events.
   }
 
   function flushPendingSeek(): void {
     const video = deps.getVideo()
-    if (pendingSeek === null || !video || !Number.isFinite(video.duration) || video.duration <= 0) return
+    if (!attached || pendingSeek === null || !video || !Number.isFinite(video.duration) || video.duration <= 0) return
     const target = Math.min(pendingSeek, Math.max(0, video.duration - 1))
     try {
       video.currentTime = target
@@ -97,7 +102,7 @@ export function usePlaybackResume(deps: {
   }
 
   function jumpToSavedTime(remember: boolean): void {
-    if (savedTime.value !== null) seekWhenReady(Math.max(0, savedTime.value - 1))
+    if (savedTime.value !== null) { seekWhenReady(Math.max(0, savedTime.value - 1)); flushPendingSeek() }
     if (remember) deps.settings.write('auto_resume_jump', '1')
     dismissResumePrompt()
   }
@@ -110,7 +115,8 @@ export function usePlaybackResume(deps: {
   function save(): void {
     const video = deps.getVideo()
     if (!video || !key || video.ended || !canPersist()) return
-    savePlaybackTime(key, video.currentTime, video.duration)
+    const progress=deps.progress?.()
+    savePlaybackTime(key, progress?.position ?? video.currentTime, progress?.duration ?? video.duration)
     deps.settings.write('volume', String(video.volume))
     deps.settings.write('muted', video.muted ? '1' : '0')
   }
@@ -125,6 +131,7 @@ export function usePlaybackResume(deps: {
   }
 
   return { savedTime, showResumePrompt, resumeRemainSec, load, track, save, reset,
+    attached: () => { attached = true; flushPendingSeek() },
     ended, flushPendingSeek, jumpToSavedTime, dismissResumePrompt, canPersist,
     ready: () => !resolving && pendingSeek === null }
 }

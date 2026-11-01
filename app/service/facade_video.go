@@ -13,6 +13,21 @@ import (
 )
 
 // ======================== Video ========================
+func (a *App) GetShortDramaCategories(ctx context.Context, sourceKey string) ([]media.ShortDramaCategory, error) {
+	return runRequest(a, ctx, "video.GetShortDramaCategories", func(ctx context.Context) ([]media.ShortDramaCategory, error) {
+		return a.media.ShortDramaCategories(ctx, sourceKey)
+	})
+}
+
+func (a *App) SetShortDramaCategories(ctx context.Context, sourceKey string, ids []string) (bool, error) {
+	return runRequest(a, ctx, "video.SetShortDramaCategories", func(ctx context.Context) (bool, error) {
+		if err := a.media.SetShortDramaCategories(ctx, sourceKey, ids); err != nil {
+			return false, err
+		}
+		return true, nil
+	})
+}
+
 func (a *App) GetShortDramaPage(ctx context.Context, req media.ShortDramaPageReq) (*media.ShortDramaPage, error) {
 	return runRequest(a, ctx, "video.GetShortDramaPage", func(ctx context.Context) (*media.ShortDramaPage, error) { return a.media.ShortDramaPage(ctx, req) })
 }

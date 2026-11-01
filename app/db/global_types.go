@@ -26,9 +26,13 @@ func catalogTypeVisibilityClause(alias string) string {
 	if strings.TrimSpace(alias) == "" {
 		alias = "source_videos"
 	}
-	return globalTypeVisibilityClause(alias) + fmt.Sprintf(` AND NOT EXISTS (
-	 SELECT 1 FROM source_types policy_source_type WHERE policy_source_type.source_key=%[1]s.source_key
-	 AND policy_source_type.source_type_id=%[1]s.source_type_id AND NOT (%[2]s))`, alias, globalTypeVisibilityClause("policy_source_type"))
+	// The uncorrelated IN subquery materializes the denied identities once per
+	// read instead of walking category ancestors for every catalog video.
+	return globalTypeVisibilityClause(alias) + fmt.Sprintf(` AND (%[1]s.source_key,%[1]s.source_type_id) NOT IN (
+	 WITH RECURSIVE denied_categories(source_key,type_id) AS (
+	 SELECT policy_source_type.source_key,policy_source_type.source_type_id FROM source_types policy_source_type WHERE NOT (%[2]s)
+	 UNION SELECT child.source_key,child.source_type_id FROM source_types child JOIN denied_categories parent ON child.source_key=parent.source_key AND child.parent_type_id=parent.type_id WHERE child.parent_type_id<>'' AND child.parent_type_id<>'0'
+	 ) SELECT source_key,type_id FROM denied_categories)`, alias, globalTypeVisibilityClause("policy_source_type"))
 }
 
 func globalTypeVisibilityClause(alias string) string {

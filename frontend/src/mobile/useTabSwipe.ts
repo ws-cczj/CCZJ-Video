@@ -12,6 +12,7 @@ export function useTabSwipe(enabled: () => boolean, presentation: { preview: (pa
     gestureSurface = null
   }
   let suppressUntil = 0
+  let sampleX = 0, sampleAt = 0, velocity = 0
   let settling = false
   function cancel(): void {
     const wasDragging = start?.locked
@@ -27,12 +28,12 @@ export function useTabSwipe(enabled: () => boolean, presentation: { preview: (pa
     const element = event.target as HTMLElement
     const nav = element.closest('nav')?.querySelector('a[href]') && element.closest('nav')
     if (!nav) {
-      if (element.closest('input,textarea,select,button,[role="slider"],.select-dropdown,.carousel,[data-cczj-no-tab-swipe]')) return
+      if (element.closest('input,textarea,select,[role="slider"],.select-dropdown,.carousel,[data-cczj-no-tab-swipe]')) return
       const scene = element.closest('[data-route-active="true"]')
       if (!scene || scene.querySelector('[data-cczj-editing="true"]')) return
       // Horizontal lists own their drag, including filter and folder strips.
       for (let node: HTMLElement | null = element; node && node !== scene; node = node.parentElement) {
-        if (node.scrollWidth > node.clientWidth + 2 && /auto|scroll/.test(getComputedStyle(node).overflowX)) return
+        if (node.scrollWidth > node.clientWidth + 2 && /auto|scroll/.test(getComputedStyle(node).overflowX) && node.scrollHeight <= node.clientHeight + 2) return
       }
     }
     const touch = event.touches[0]
@@ -40,6 +41,7 @@ export function useTabSwipe(enabled: () => boolean, presentation: { preview: (pa
     // Preserve Android's edge Back gesture.
     if (touch.clientX < 20 || touch.clientX > width - 20) return
     start = { x: touch.clientX, y: touch.clientY, width, path: route.fullPath, target: '', locked: false }
+    sampleX = touch.clientX; sampleAt = performance.now(); velocity = 0
     // Only a possible tab gesture needs a cancellable listener. Release it as
     // soon as vertical intent wins, so continued scrolling stays on Chromium's
     // compositor instead of waiting for a main-thread touchmove every frame.
@@ -54,6 +56,9 @@ export function useTabSwipe(enabled: () => boolean, presentation: { preview: (pa
     if (!start.locked && Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy)*1.5) start.locked = true
     if (!start.locked) return
     lastDistance = dx
+    const now = performance.now(), elapsed = now - sampleAt
+    if (elapsed > 0) velocity = (event.touches[0].clientX - sampleX) / elapsed
+    sampleX = event.touches[0].clientX; sampleAt = now
     if (event.cancelable) event.preventDefault()
     const group = primaryTabs.find(tabs => tabs.includes(route.path))!
     start.target = group[group.indexOf(route.path)+(dx < 0 ? 1 : -1)] || ''
@@ -65,7 +70,8 @@ export function useTabSwipe(enabled: () => boolean, presentation: { preview: (pa
     if (!gesture?.locked) return
     suppressUntil = performance.now()+500
     settling = true
-    void presentation.settle(gesture.target && gesture.path === route.fullPath && Math.abs(lastDistance) >= gesture.width*.3 ? gesture.target : undefined).finally(() => { settling = false })
+    const flick = performance.now()-sampleAt < 100 && Math.abs(velocity) > .45 && Math.abs(lastDistance) > 32 && Math.sign(velocity) === Math.sign(lastDistance)
+    void presentation.settle(gesture.target && gesture.path === route.fullPath && (Math.abs(lastDistance) >= gesture.width*.22 || flick) ? gesture.target : undefined).finally(() => { settling = false })
   }
   function click(event: MouseEvent): void {
     if (performance.now() < suppressUntil) { event.preventDefault(); event.stopImmediatePropagation() }

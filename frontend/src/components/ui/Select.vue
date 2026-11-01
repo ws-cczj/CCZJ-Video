@@ -38,6 +38,7 @@ const open = ref(false)
 const rootRef = ref<HTMLElement | null>(null)
 const panelStyle = ref<Record<string, string>>({})
 const panelRef = ref<HTMLElement | null>(null)
+const dropUp = ref(false)
 let observer: ResizeObserver | undefined
 let followFrame = 0
 let generation = 0
@@ -99,7 +100,7 @@ function chooseHighlighted(): void {
 }
 
 function openPanel(): void {
-  if (props.disabled || open.value) return
+  if (props.disabled || open.value || !rootRef.value?.getClientRects().length) return
   updatePanelPosition()
   open.value = true
   activeIndex.value = props.options.findIndex(o => o.value === props.modelValue && !o.disabled)
@@ -121,11 +122,10 @@ function followEntrance(): void {
   // Follow a moving anchor only during finite ancestor entrance animations.
   const root = rootRef.value
   if (!root || !open.value) return
-  const moving = document.getAnimations().some(animation => {
-    const effect = animation.effect as KeyframeEffect | null
-    return animation.playState === 'running' && effect?.target instanceof Element
-      && effect.target.contains(root) && effect.getTiming().iterations !== Infinity
-  })
+  let moving = false
+  for (let ancestor: Element | null = root; ancestor && !moving; ancestor = ancestor.parentElement) {
+    moving = ancestor.getAnimations().some(animation => animation.playState === 'running' && animation.effect?.getTiming().iterations !== Infinity)
+  }
   updatePanelPosition()
   if (moving) followFrame = requestAnimationFrame(followEntrance)
   else followFrame = 0
@@ -197,6 +197,7 @@ function onTriggerKeydown(e: KeyboardEvent): void {
   }
   if (key === 'Escape' && open.value) {
     e.preventDefault()
+    e.stopPropagation()
     closePanel()
   }
 }
@@ -211,9 +212,11 @@ function onDocClick(e: MouseEvent): void {
 
 function updatePanelPosition(): void {
   if (!rootRef.value) return
+  if (!rootRef.value.getClientRects().length || rootRef.value.closest('[inert],[aria-hidden="true"]')) { closePanel(); return }
   // inline 模式：面板用 CSS 绝对定位（配合 .select-panel.is-inline 样式），
   // 不需要 JS 计算坐标，避免 Teleport 出去后 rect 归零的问题。
   if (props.inline) {
+    dropUp.value = props.inlineDrop === 'up'
     panelStyle.value = {}
     return
   }
@@ -224,6 +227,7 @@ function updatePanelPosition(): void {
   const spaceBelow = Math.max(0, window.innerHeight - rect.bottom - 8)
   const spaceAbove = Math.max(0, rect.top - 8)
   const showBelow = spaceBelow >= height || (spaceAbove < height && spaceBelow >= spaceAbove)
+  dropUp.value = !showBelow
   const width = Math.min(rect.width, window.innerWidth - 16)
   panelStyle.value = {
     position: 'fixed', left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)) + 'px',
@@ -274,7 +278,7 @@ watch(() => props.disabled, disabled => { if (disabled) closePanel() })
           v-if="open"
           ref="panelRef"
           class="select-panel"
-          :class="{ 'is-inline': inline, 'drop-up': inline && inlineDrop === 'up' }"
+          :class="{ 'is-inline': inline, 'drop-up': dropUp }"
           :style="panelStyle"
           @click.stop
         >

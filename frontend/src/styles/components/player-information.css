@@ -1,3 +1,6 @@
+.player-col-side.desktop-information { @apply cczj-min-h-0 cczj-overflow-y-auto; }
+.desktop-information .side-header,.desktop-information .side-section { @apply cczj-flex-shrink-0; }
+.desktop-information .side-section { flex:0 0 auto; @apply cczj-overflow-visible; }
 .side-top-actions {
   @apply cczj-gap-3 cczj-flex-shrink-0;
 }
@@ -251,30 +254,11 @@
 
 /* ============ 集数网格：美化核心 ============ */
 .ep-grid {
-  flex: 1 1 auto;
-  @apply cczj-overflow-y-auto;
+  flex: 0 0 auto;
+  @apply cczj-overflow-visible;
   grid-template-columns: repeat(4, 1fr);
   @apply cczj-gap-5 cczj-pr-2;
   align-content: start;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
-}
-
-.ep-grid::-webkit-scrollbar {
-  width: 6px;
-}
-
-.ep-grid::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.14);
-  border-radius: 3px;
-}
-
-.ep-grid::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.28);
-}
-
-.ep-grid::-webkit-scrollbar-track {
-  background: transparent;
 }
 
 /* 单个集数卡片：默认态（未观看 & 非当前集）——默认显示明显 */
@@ -319,18 +303,18 @@
   @apply cczj-opacity-100;
 }
 
-/* 文字沿用所在面板：桌面深色面板与手机主题面板分别继承各自前景色。 */
+/* Desktop playback keeps a muted cool palette against the dark media surface. */
 .ep-item.watched {
-  background: var(--accent-alpha-10);
-  border-color: var(--accent-alpha-35);
-  color: inherit;
+  background: linear-gradient(180deg, rgba(148, 174, 202, 0.22), rgba(112, 139, 171, 0.12));
+  border-color: rgba(166, 192, 220, 0.45);
+  color: #dce8f5;
   @apply cczj-cursor-pointer cczj-font-medium;
 }
 
 .ep-item.watched:hover {
-  background: var(--accent-alpha-15);
-  border-color: var(--accent-alpha-35);
-  color: inherit;
+  background: linear-gradient(180deg, rgba(148, 174, 202, 0.3), rgba(112, 139, 171, 0.18));
+  border-color: #afc6df;
+  color: #edf4fc;
   transform: none;
   @apply cczj-shadow-none;
 }
@@ -339,7 +323,7 @@
 .ep-watched-progress {
   @apply cczj-absolute cczj-left-0 cczj-bottom-0;
   height: 4px;
-  background: var(--cczj-player-episode-progress,#d3af72);
+  background: linear-gradient(90deg, #849fbc, #c2d5e9);
   z-index: 1;
   @apply cczj-pointer-events-none;
 }
@@ -366,9 +350,9 @@
   color: inherit;
 }
 
-/* History progress uses a warm accent; blue is reserved for live playback. */
+/* The live episode keeps the brighter playback accent. */
 .ep-item.active .ep-watched-progress {
-  background: var(--cczj-player-episode-progress,#d3af72);
+  background: #40a9ff;
 }
 
 /* 当前播放的集：发光边框 + 内部动画 + 彩色背景 */
@@ -381,25 +365,6 @@
     0 0 14px rgba(24, 144, 255, 0.55),
     0 4px 14px rgba(24, 144, 255, 0.35);
   transform: translateY(-1px);
-  animation: active-ep-pulse 1.6s ease-in-out infinite;
-}
-
-@keyframes active-ep-pulse {
-
-  0%,
-  100% {
-    box-shadow:
-      0 0 0 1px rgba(64, 169, 255, 0.35),
-      0 0 10px rgba(24, 144, 255, 0.45),
-      0 4px 12px rgba(24, 144, 255, 0.25);
-  }
-
-  50% {
-    box-shadow:
-      0 0 0 1px rgba(100, 181, 246, 0.6),
-      0 0 18px rgba(24, 144, 255, 0.7),
-      0 4px 18px rgba(24, 144, 255, 0.5);
-  }
 }
 
 /* 当前集卡片右上角："播放中"三条竖线律动 */
@@ -417,7 +382,10 @@
   background: #40a9ff;
   box-shadow: 0 0 4px #40a9ff;
   animation: bar-bounce 0.9s ease-in-out infinite;
+  animation-play-state:paused;
 }
+
+.ep-playing-badge.is-playing .bar { animation-play-state:running; }
 
 .ep-playing-badge .b1 {
   animation-delay: -0.2s;

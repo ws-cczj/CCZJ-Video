@@ -1,3 +1,4 @@
+import { CCZJ } from '../constants/cczj'
 /* 每集播放进度独立存储
  * 结构： cczj_ep_prog_v1 -> {
  *   [key: `${globalId || vodName}-${epNum}`]: {
@@ -16,7 +17,7 @@
 import { readStorage, removeStorage, writeStorage } from '../platform/storage'
 import { parseTimestamp } from './time'
 
-const PROG_KEY = 'cczj_ep_prog_v1'
+const PROG_KEY = CCZJ.Storage.episodeProgress
 const TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 天
 const FLUSH_DEBOUNCE_MS = 1000 // 写入 localStorage 的防抖间隔
 

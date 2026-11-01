@@ -1,6 +1,7 @@
 package service
 
 import (
+	CCZJ "cczjVideo/app/cczj"
 	"context"
 	"os"
 	"path/filepath"
@@ -29,8 +30,8 @@ const (
 
 // 记在当前库里的两个键：旧数据被搬走过一次，就不该再拿同一件事提示用户。
 const (
-	legacyStatusKey      = "legacy_data_status"
-	legacyAtKey          = "legacy_data_at"
+	legacyStatusKey      = CCZJ.SettingLegacyStatus
+	legacyAtKey          = CCZJ.SettingLegacyAt
 	legacyStatusMigrated = "migrated"
 	legacyStatusMerged   = "merged"
 )

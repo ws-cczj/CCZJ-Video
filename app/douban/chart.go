@@ -1,6 +1,7 @@
 package douban
 
 import (
+	CCZJ "cczjVideo/app/cczj"
 	"context"
 	"encoding/json"
 	"regexp"
@@ -270,7 +271,7 @@ func fetchAndStoreChart() ([]DoubanChartItem, error) {
 //
 // 热榜缓存原先只有内存一份，进程一重启就归零，于是"每次打开应用必然打豆瓣一次"——
 // 一小时 TTL 只对同一个进程内有效。豆瓣按 IP 计数，落库之后 TTL 才真的跨启动生效。
-const chartSnapshotKey = "douban_chart_snapshot"
+const chartSnapshotKey = CCZJ.CacheDoubanChart
 
 type chartSnapshot struct {
 	FetchedAt int64             `json:"fetched_at"`

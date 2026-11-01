@@ -46,13 +46,40 @@ func selectSourceCollectVideos(ctx context.Context, executor sqlx.ExtContext, so
 		}
 	}
 	sourceTypes := []SourceTypeExport{}
-	err := sqlx.SelectContext(ctx, executor, &sourceTypes, `SELECT source_type_id,COALESCE(global_type_id,0) global_type_id,type_name FROM source_types WHERE source_key=?`, sourceKey)
+	err := sqlx.SelectContext(ctx, executor, &sourceTypes, `SELECT source_type_id,parent_type_id,COALESCE(global_type_id,0) global_type_id,type_name FROM source_types WHERE source_key=?`, sourceKey)
 	if err != nil {
 		return selection, err
 	}
 	byID := map[string]SourceTypeExport{}
 	for _, row := range sourceTypes {
 		byID[row.SourceTypeID] = row
+	}
+	blockedByID := map[string]bool{}
+	for id := range byID {
+		if _, resolved := blockedByID[id]; resolved {
+			continue
+		}
+		path := []string{}
+		seen := map[string]bool{}
+		blocked := false
+		for current, exists := byID[id], true; exists && !seen[current.SourceTypeID]; current, exists = byID[current.ParentTypeID] {
+			if known, resolved := blockedByID[current.SourceTypeID]; resolved {
+				blocked = known
+				break
+			}
+			seen[current.SourceTypeID] = true
+			path = append(path, current.SourceTypeID)
+			if denied[normalizeTypeName(current.TypeName)] || denied[normalizeTypeName(globalNames[current.GlobalTypeID])] {
+				blocked = true
+				break
+			}
+			if current.ParentTypeID == "" || current.ParentTypeID == "0" {
+				break
+			}
+		}
+		for _, key := range path {
+			blockedByID[key] = blocked
+		}
 	}
 	for _, video := range videos {
 		if video == nil {
@@ -65,7 +92,7 @@ func selectSourceCollectVideos(ctx context.Context, executor sqlx.ExtContext, so
 		}
 		mapped, ok := byID[strings.TrimSpace(video.TypeId.String())]
 		if ok {
-			if denied[normalizeTypeName(mapped.TypeName)] || denied[normalizeTypeName(globalNames[mapped.GlobalTypeID])] {
+			if blockedByID[mapped.SourceTypeID] {
 				selection.Disabled++
 				continue
 			}

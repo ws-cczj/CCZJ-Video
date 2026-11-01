@@ -177,7 +177,11 @@ function openEdit(s: EditSource): void {
 }
 
 // === 删除 ===
+const deletingKey = ref('')
+const deleteRequests = createRequestScope()
+onBeforeUnmount(() => deleteRequests.cancel())
 async function deleteSourceConfirm(key: string): Promise<void> {
+  if (deletingKey.value) return
   const yes = await confirmStore.confirm({
     title: tr('sources.deleteTitle'),
     message: tr('sources.deleteConfirmMsg'),
@@ -185,14 +189,24 @@ async function deleteSourceConfirm(key: string): Promise<void> {
     level: 'danger',
   })
   if (!yes) return
+  deletingKey.value = key
+  const request = deleteRequests.run(() => DeleteSource(key))
+  const deadline = setTimeout(() => { void request.cancel() }, 15000)
+  let failure: unknown
+  try { await request } catch (error) { failure = error }
+  finally { clearTimeout(deadline) }
   try {
-    await DeleteSource(key)
-  } catch (e: any) {
-    // 裸 await 时 Go 侧报错就是「点了没反应」，删掉的源看着还留着。
-    errorStore.fromError(tr('sources.deleteFailed'), e, 'Sources.deleteSource')
-    return
-  }
-  await sourceStore.loadSources(true)
+    await sourceStore.loadSources(true)
+    if (sourceStore.sources.some(source => sk(source) === key)) {
+      if (failure) throw failure
+      throw new Error(tr('sources.deleteFailed'))
+    }
+    if (expandedKey.value === key) expandedKey.value = null
+    selectedModes.value.delete(key)
+    selectedHours.value.delete(key)
+  } catch (error) {
+    errorStore.fromError(tr('sources.deleteFailed'), error, 'Sources.deleteSource')
+  } finally { deletingKey.value = '' }
 }
 
 const defaultSourceSaving = ref(false)
@@ -481,6 +495,7 @@ onBeforeUnmount(stopProbeLoop)
         :probe-busy="probingKey === sk(s) || probingAll"
         :is-default="sk(s) === sourceStore.currentSourceKey"
         :default-busy="defaultSourceSaving"
+        :deleting="deletingKey === sk(s)"
         :schedule-visible="scheduleVisible.has(sk(s))"
         :schedule-form="scheduleForms.get(sk(s)) || null"
         :doc="paramsDoc"

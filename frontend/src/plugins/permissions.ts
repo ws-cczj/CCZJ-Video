@@ -1,3 +1,4 @@
+import { CCZJ } from '../constants/cczj'
 /**
  * 扩展包的授权闸门：管住两件事——「改应用的数据」和「自己往外发请求」。
  *
@@ -26,7 +27,7 @@ export type PermissionDecision = 'granted' | 'denied'
 /** packId -> 能力 -> 用户给过什么答复。没有条目就是「还没问过」。 */
 type Ledger = Record<string, Partial<Record<PackPermission, PermissionDecision>>>
 
-const LEDGER_KEY = 'plugin_permissions'
+const LEDGER_KEY = CCZJ.Settings.pluginPermissions
 
 const ledger = ref<Ledger>({})
 let ledgerLoad: Promise<void> | null = null

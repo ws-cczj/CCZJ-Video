@@ -56,3 +56,29 @@ func RecordReadingSearchHealth(ctx context.Context, kind model.SourceKind, sourc
 		kind, sourceID, now, code, code, code, now)
 	return err
 }
+
+func PauseMissingReadingSource(ctx context.Context, sourceKey, document string) error {
+	_, err := instance.ExecContext(ctx, `UPDATE sources SET enabled=0,auto_disabled_at=0 WHERE source_key=? AND kind='novel' AND strategy_config=?`, sourceKey, document)
+	return err
+}
+
+type ReadingRuleUpdate struct{ SourceKey, Previous, Document string }
+
+func ApplyReadingRuleUpdates(ctx context.Context, updates []ReadingRuleUpdate, settings map[string]string) error {
+	tx, err := instance.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, row := range updates {
+		if _, err := tx.ExecContext(ctx, `UPDATE sources SET strategy_config=? WHERE source_key=? AND kind='novel' AND strategy_config=?`, row.Document, row.SourceKey, row.Previous); err != nil {
+			return err
+		}
+	}
+	for key, value := range settings {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, key, value); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}

@@ -3,6 +3,7 @@ package service
 import (
 	"cczjVideo/app/apperror"
 	"cczjVideo/app/applog"
+	CCZJ "cczjVideo/app/cczj"
 	"cczjVideo/app/danmaku"
 	"cczjVideo/app/netpolicy"
 	"cczjVideo/app/operation"
@@ -21,7 +22,7 @@ func (a *App) GetSetting(key string) (string, error) {
 
 func (a *App) SetSetting(key, value string) error {
 	fields := applog.Fields{"setting_key": key, "value_sha256": applog.Fingerprint([]byte(value))}
-	if key == "default_source_key" || key == applicationModeKey {
+	if key == CCZJ.SettingDefaultSource || key == applicationModeKey {
 		fields["value"] = value
 	}
 	ctx := operation.WithFields(context.Background(), fields)
@@ -44,6 +45,18 @@ func (a *App) setSetting(key, value string) error {
 	}
 	a.settingsWriteMu.Lock()
 	defer a.settingsWriteMu.Unlock()
+	if key == CCZJ.SettingDiagnosticsCapture {
+		if value != "0" && value != "1" {
+			return apperror.New(apperror.Validation, "诊断记录设置无效")
+		}
+		if err := a.settings.Set(key, value); err != nil {
+			return err
+		}
+		if a.recording != nil {
+			a.recording.SetDailyEnabled(value == "1")
+		}
+		return nil
+	}
 	if key == outbound.SettingsKey {
 		config, err := outbound.DecodeConfig(value)
 		if err != nil {
@@ -88,7 +101,7 @@ func (a *App) setSetting(key, value string) error {
 
 // settingAllowPrivateNetwork 打开后，媒体与图片代理允许访问私网/回环地址
 // （NAS、局域网里的源、本机起的缓存代理）。缺省关闭，理由见 proxy.ValidateTarget。
-const settingAllowPrivateNetwork = "proxy_allow_private_network"
+const settingAllowPrivateNetwork = CCZJ.SettingAllowPrivateNetwork
 
 // SetAllowPrivateNetwork 落库并立刻生效。改完不用重启是刻意的：用户多半是在
 // 「某个源放不出来」时来翻这个开关，必须当场试播才知道是不是它的问题。

@@ -15,13 +15,13 @@ import { dropSourceCache, dropVideoCache } from '../utils/tsCache'
  * 由 Go 决定清到哪一层，前端不再自己判断。
  */
 
-let started = false
+let unsubscribe: (() => void) | undefined
 
 export function startCacheInvalidation(): void {
-  if (started) return
-  started = true
-  onBackendEvent('cache:invalidate', applyInvalidate)
+  if (unsubscribe) return
+  unsubscribe = onBackendEvent('cache:invalidate', applyInvalidate)
 }
+if (import.meta.hot) import.meta.hot.dispose(() => { unsubscribe?.();unsubscribe=undefined })
 
 function applyInvalidate(payload: { scope?: string; source_key?: string; vod_ids?: string[]; reason?: string }): void {
   const scope = String(payload?.scope || '')

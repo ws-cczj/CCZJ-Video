@@ -2,6 +2,7 @@ package collect
 
 import (
 	"bytes"
+	"cczjVideo/app/model"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -17,7 +18,13 @@ import (
 func normalizeCMSXML(body []byte) ([]byte, error) {
 	var envelope struct {
 		XMLName xml.Name `xml:"rss"`
-		List    *struct {
+		Classes []struct {
+			ID         string `xml:"id,attr"`
+			Parent     string `xml:"pid,attr"`
+			TypeParent string `xml:"type_pid,attr"`
+			Name       string `xml:",chardata"`
+		} `xml:"class>ty"`
+		List *struct {
 			Page   int `xml:"page,attr"`
 			Pages  int `xml:"pagecount,attr"`
 			Size   int `xml:"pagesize,attr"`
@@ -59,7 +66,18 @@ func normalizeCMSXML(body []byte) ([]byte, error) {
 			return nil, fmt.Errorf("unexpected document after CMS XML")
 		}
 	}
+	classes := make([]Category, 0, len(envelope.Classes))
+	for _, row := range envelope.Classes {
+		parent := row.Parent
+		if parent == "" {
+			parent = row.TypeParent
+		}
+		classes = append(classes, Category{ID: model.FlexibleString(strings.TrimSpace(row.ID)), Name: strings.TrimSpace(row.Name), Parent: model.FlexibleString(parent)})
+	}
 	if envelope.List == nil {
+		if len(classes) > 0 {
+			return json.Marshal(map[string]any{"code": 1, "page": 1, "pagecount": 0, "total": 0, "list": []any{}, "class": classes})
+		}
 		return nil, fmt.Errorf("CMS XML has no list")
 	}
 	aliases := map[string]string{"id": "vod_id", "tid": "type_id", "name": "vod_name", "type": "type_name", "pic": "vod_pic", "last": "vod_time", "note": "vod_remarks", "des": "vod_content", "actor": "vod_actor", "director": "vod_director", "year": "vod_year", "area": "vod_area", "lang": "vod_lang", "state": "vod_state", "dt": "vod_play_from"}
@@ -91,5 +109,6 @@ func normalizeCMSXML(body []byte) ([]byte, error) {
 		}
 		rows = append(rows, row)
 	}
-	return json.Marshal(map[string]any{"code": 1, "page": envelope.List.Page, "pagecount": envelope.List.Pages, "limit": envelope.List.Size, "total": envelope.List.Total, "list": rows})
+
+	return json.Marshal(map[string]any{"code": 1, "page": envelope.List.Page, "pagecount": envelope.List.Pages, "limit": envelope.List.Size, "total": envelope.List.Total, "list": rows, "class": classes})
 }

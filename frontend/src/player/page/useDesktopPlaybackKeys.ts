@@ -1,10 +1,11 @@
+import { CCZJ } from '../../constants/cczj'
 import { onMounted, onBeforeUnmount } from 'vue'
 import { readStorage } from '../../platform/storage'
 
 export function useDesktopPlaybackKeys(deps: {
   enabled:boolean; video:()=>HTMLVideoElement|null; active:()=>boolean
   hasPrev:()=>boolean; hasNext:()=>boolean; previous:()=>void; next:()=>void
-  fullscreen:()=>void; pip:()=>void
+  fullscreen:()=>void; pip:()=>void; play?:()=>void; verticalNavigation?:boolean
 }) {
 if (!deps.enabled) return
 interface ShortcutMap {
@@ -43,7 +44,7 @@ const DEFAULT_SHORTCUTS: ShortcutMap = {
 
 function loadShortcuts(): ShortcutMap {
   try {
-    const parsed = readStorage<Record<string, string[]>>('cczj_shortcuts', {})
+    const parsed = readStorage<Record<string, string[]>>(CCZJ.Storage.shortcuts, {})
     if (parsed) {
       if (parsed && typeof parsed === 'object') {
         // 合并默认值，确保所有键都存在
@@ -79,10 +80,16 @@ function matchShortcut(action: keyof ShortcutMap, key: string, shortcuts: Shortc
 
 /* ==================== 鼠标位置跟踪（用于键盘快捷键作用域） ==================== */
 function onPageKeyDown(e: KeyboardEvent): void {
+  if (e.altKey||e.ctrlKey||e.metaKey||e.repeat) return
   if (e.defaultPrevented || (e.target instanceof Element && e.target.closest('[role="dialog"], [contenteditable="true"]'))) return
   // 键盘焦点在输入框时不响应
   const activeTag = (document.activeElement?.tagName || '').toLowerCase()
-  if (activeTag === 'input' || activeTag === 'textarea') return
+  if (activeTag === 'input' || activeTag === 'textarea'||activeTag==='select') return
+  if((e.code==='Space'||e.key==='Enter')&&e.target instanceof Element&&e.target.closest('button,a'))return
+  if(!deps.active())return
+  if(deps.verticalNavigation&&['ArrowUp','ArrowDown','PageUp','PageDown'].includes(e.key)){
+    e.preventDefault();if(e.key==='ArrowUp'||e.key==='PageUp'){if(deps.hasPrev())deps.previous()}else if(deps.hasNext())deps.next();return
+  }
 
   // ESC 总是允许退出全屏（由 VideoPlayer 组件内部处理）
   // 其他键需要鼠标位于播放器区域内才响应
@@ -95,6 +102,7 @@ function onPageKeyDown(e: KeyboardEvent): void {
   if (matchShortcut('togglePlay', key, sc)) {
     if (!deps.active()) return
     e.preventDefault()
+    if(deps.play){deps.play();return}
     if (v.paused) void v.play().catch(error => {
       // Interrupted play requests are expected during source replacement. Real
       // media failures also reach the player's existing error handler.

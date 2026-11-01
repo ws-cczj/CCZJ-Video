@@ -7,12 +7,13 @@
 | 主题 | 文档 |
 | --- | --- |
 | 目录职责、复用入口与开发检查 | [开发与复用指南](development.md) |
-| 公共 UI、主题、工具类与 CSS 组合 | [CCZJ 样式复用](cczj-styles.md) · [生成速查表](cczj-utilities-cheatsheet.md) |
+| 功能入口、共享状态、跨端调用与修改联查 | [功能关联索引](feature-relations.md)，随实现增补、改写及删除失效关系 |
+| 公共 UI、主题、动效、工具类与 CSS 组合 | [界面动效与设置](development.md#界面动效与设置) · [CCZJ 样式复用](cczj-styles.md) · [生成速查表](cczj-utilities-cheatsheet.md) |
 | Android 构建、热更新与原生验收 | [Android 开发](android.md) |
 | iOS 本地应用、云端打包、自签与验收 | [iOS 开发](ios.md) |
 | 请求合并、写入策略、取消与事件身份 | [请求通道](request-pipelines.md) |
 | 扩展包格式、信任与能力 | [扩展包规范](plugins.md) · [采集策略 Schema](source-strategy-v2.schema.json) |
-| 阅读源排名与章节／话次匹配 | [策略设计](reading-source-routing-design.md) · [实现入口](reading-source-routing-implementation.md) |
+| 小说书源产品、供给与阅读恢复；章节／话次匹配 | [产品与路由设计](reading-source-routing-design.md) · [现有实现](reading-source-routing-implementation.md) |
 | 阅读源质量检查与新源复测 | [质量基准](reading-source-quality-benchmark.md) |
 | 构建与 GitHub 发布 | [发布与自动更新](releases.md) |
 | 功能与接口全景图 | [生成与操作](development.md#开发与检查)，输出同一可缩放画布，公开绑定全部归入功能链 |

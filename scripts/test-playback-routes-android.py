@@ -122,9 +122,9 @@ def main():
         checks.append('remembered automatic resume restores history and plays without a click')
         # A compact section header must not stretch the episode grid away.
         geometry=d.js('(()=>{const header=document.querySelector(".side-section-title").getBoundingClientRect(),grid=document.querySelector(".ep-grid").getBoundingClientRect(),button=document.querySelector(".sort-toggle-btn").getBoundingClientRect();return {gap:grid.top-header.bottom,sortHeight:button.height,episodes:document.querySelectorAll(".ep-item").length,animation:getComputedStyle(document.querySelector(".ep-item.active")).animationName}})()')
-        assert 0<=geometry['gap']<=10 and 36<=geometry['sortHeight']<=40 and geometry['episodes']==13 and 'active-ep-pulse' in geometry['animation'],geometry
+        assert 0<=geometry['gap']<=10 and 36<=geometry['sortHeight']<=40 and geometry['episodes']==13 and geometry['animation']=='none',geometry
         evidence['episodeLayout']=geometry;shot('android-episode-layout')
-        checks.append('13-episode grid has a compact sort action and restores the current episode breathing glow')
+        checks.append('13-episode grid has a compact sort action and keeps the current episode highlight static')
         evidence['themeButtons']={}
         for mode in ['light','dark']:
             theme(mode)

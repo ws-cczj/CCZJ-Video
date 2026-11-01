@@ -25,6 +25,75 @@ type ChapterMatch struct {
 	Ambiguous    int        `json:"ambiguous"`
 	Unmatched    int        `json:"unmatched"`
 	CheckedAt    int64      `json:"checkedAt"`
+	fromRevision string
+	toRevision   string
+}
+
+type PreparedNovelSwitch struct {
+	Item      *Item        `json:"item"`
+	Chapter   *Chapter     `json:"chapter"`
+	Text      *ChapterText `json:"text"`
+	Revision  string       `json:"revision"`
+	CheckedAt int64        `json:"checkedAt"`
+}
+
+// PrepareNovelSwitch revalidates identity and alignment, then acquires the
+// selected chapter. No progress/selection changes occur until the reader commits.
+func (s *Service) PrepareNovelSwitch(ctx context.Context, fromItem, chapterID, toItem, targetChapter int) (*PreparedNovelSwitch, error) {
+	release := s.priority.begin()
+	defer release()
+	match, err := s.MatchChapter(ctx, model.SourceKindNovel, fromItem, chapterID, toItem)
+	if err != nil {
+		return nil, err
+	}
+	var target *Chapter
+	for _, chapter := range match.Targets {
+		if chapter.ID == targetChapter && chapter.Available && !chapter.IsVolume {
+			target = chapter
+			break
+		}
+	}
+	if target == nil {
+		return nil, apperror.New(apperror.Conflict, "无法确认目标章节，请打开目录选择")
+	}
+	item, err := db.GetLibraryItemContext(ctx, toItem)
+	if err != nil {
+		return nil, err
+	}
+	source, err := db.GetSourceByKeyContext(ctx, item.SourceKey)
+	if err != nil {
+		return nil, err
+	}
+	revision := sourceRevision(source)
+	if revision != match.toRevision {
+		return nil, apperror.New(apperror.Conflict, "目标规则已变化，请重新核对")
+	}
+	text, err := s.ChapterText(ctx, targetChapter)
+	if err != nil {
+		return nil, err
+	}
+	if len(text.Paragraphs) == 0 || len(text.Warnings) > 0 {
+		return nil, apperror.New(apperror.Corrupt, "目标章节正文不完整或存在异常，请选择其他来源")
+	}
+	current, err := db.GetSourceByKeyContext(ctx, item.SourceKey)
+	if err != nil {
+		return nil, err
+	}
+	if current.Enabled != 1 || sourceRevision(current) != revision {
+		return nil, apperror.New(apperror.Conflict, "目标来源已变化，请重新核对")
+	}
+	from, err := db.GetLibraryItemContext(ctx, fromItem)
+	if err != nil {
+		return nil, err
+	}
+	fromSource, err := db.GetSourceByKeyContext(ctx, from.SourceKey)
+	if err != nil {
+		return nil, err
+	}
+	if sourceRevision(fromSource) != match.fromRevision {
+		return nil, apperror.New(apperror.Conflict, "原来源规则已变化，请重新核对")
+	}
+	return &PreparedNovelSwitch{Item: s.toDTO(model.SourceKindNovel, item, map[string]string{}), Chapter: target, Text: text, Revision: revision, CheckedAt: time.Now().Unix()}, nil
 }
 
 func (s *Service) SourceAlternatives(ctx context.Context, kind model.SourceKind, itemID int, cursor string) (*SearchOutcome, error) {
@@ -154,6 +223,7 @@ func (s *Service) MatchChapter(ctx context.Context, kind model.SourceKind, fromI
 	if sourceRevision(fromSource) != fromRevision || sourceRevision(toSource) != toRevision {
 		return nil, apperror.New(apperror.Conflict, "来源规则已变化，请重新核对章节")
 	}
+	out.fromRevision, out.toRevision = fromRevision, toRevision
 	raw, err := json.Marshal(result)
 	if err != nil {
 		return nil, err

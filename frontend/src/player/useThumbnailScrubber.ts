@@ -1,6 +1,7 @@
 import { getCurrentScope, onScopeDispose, ref, watch, type Ref } from 'vue'
 import { TsCache } from '../utils/tsCache'
 import { proxyHlsURL } from './hls/proxy'
+import { hlsWorkerConfig } from './hls/worker'
 
 export interface ThumbnailScrubberDeps {
   wrapperRef: Ref<HTMLDivElement | undefined>
@@ -107,14 +108,20 @@ export function useThumbnailScrubber(deps: ThumbnailScrubberDeps) {
           const { default: Hls } = await import('hls.js')
           if (preview !== owned || !armed) return
           if (Hls.isSupported()) {
-            owned.hls = new Hls({ enableWorker: false, lowLatencyMode: false,
+            owned.hls = new Hls({ ...hlsWorkerConfig, lowLatencyMode: false,
               maxBufferLength: 1, maxMaxBufferLength: 1, backBufferLength: 0,
               maxBufferSize: 1024 * 1024, fragLoadingTimeOut: 8000, fragLoadingMaxRetry: 3,
               manifestLoadingTimeOut: 6000, manifestLoadingMaxRetry: 2,
-              autoStartLoad: false, startLevel: 0, loader: TsCache.TsCacheLoader,
+              autoStartLoad: false, startLevel: 0, loader: TsCache.TsCachePreviewLoader,
             })
             owned.hls.on(Hls.Events.ERROR, (_event: unknown, data: { fatal?: boolean }) => {
-              if (preview === owned && data.fatal && target !== null) thumbPreviewState.value = 'unavailable'
+              if (preview !== owned || !data.fatal) return
+              const requested = target
+              // A preempted manifest cannot be resumed with startLoad alone.
+              // The next hover/drag may create a fresh preview after playback wins.
+              releasePreview()
+              target = requested
+              if (requested !== null) thumbPreviewState.value = 'unavailable'
             })
             owned.hls.loadSource(proxyHlsURL(url))
             owned.hls.attachMedia(video)

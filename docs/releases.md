@@ -40,6 +40,23 @@ powershell -NoProfile -ExecutionPolicy Bypass -File build/release.ps1 -Publish
 
 `-SkipBuild` 用于明确复用现成产物，仍要求清单记录的源码提交和当前干净 HEAD 一致；发布模式不能使用 `-SkipVerify`。
 
+## 预发布版
+
+预发布在独立分支提交源码和版本清单，不将该分支的 `version.json` 推入 `main`。现有已安装版本除 GitHub `releases/latest` 外还会读取 `main/version.json` 的 Raw、jsDelivr 和 Gitee 镜像；仅将 GitHub Release 标为 Pre-release 无法隔离错误写入主分支的 beta 元数据。
+
+`v2.5.0.beta1` 对应包内标准版本 `2.5.0-beta.1`。CHANGELOG、README 和分支内的 `version.json` 使用包内版本，Windows 数字文件版本为 2.5.0.0，ProductVersion 保留 beta 后缀；Android versionName 保留后缀，versionCode 为 20500，与同版本正式版兼容覆盖。版本比较按正式版高于同版本 beta 处理。
+
+源码提交后使用既有本地构建入口生成干净提交对应的包：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File build/release.ps1 -Version 2.5.0-beta.1 -ReleaseTag v2.5.0.beta1 -SkipVerify -NoOpen
+node scripts/check-release-artifacts.mjs dist/releases/v2.5.0.beta1
+```
+
+`-SkipVerify` 仅在提交前已完成 `scripts/verify.ps1 -StaticOnly` 后使用。当前一键发布器只允许正式版；预发布需先推送独立分支和精确标签，再通过 GitHub CLI 创建带 `--draft --prerelease --latest=false` 的 Release，上传全部八个附件并核对远端大小和 SHA256 后，用 `gh release edit v2.5.0.beta1 --draft=false --prerelease --latest=false` 公开。不推送该提交到 `main`，不移动既有标签。
+
+正式通道拒绝草稿、预发布标记和非 `v?major.minor.patch` 的远端版本。旧版客户端没有这些额外检查，因此保持稳定清单隔离仍是发布前提。公开后同时检查 GitHub Latest 和远端 `main/version.json` 仍指向原正式版；发布构建不代替用户的设备验收。
+
 ## 只在本地打包
 
 ```powershell

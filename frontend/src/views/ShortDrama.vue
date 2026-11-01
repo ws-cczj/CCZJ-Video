@@ -15,6 +15,7 @@ import { useErrorStore } from '../stores/error'
 import { useViewActivity } from '../composables/useViewActivity'
 import { useShortDramaSession } from '../player/shortDrama/session'
 import { useShortDramaPaging } from '../player/shortDrama/useShortDramaPaging'
+import { useDesktopPlaybackKeys } from '../player/page/useDesktopPlaybackKeys'
 import { useEpisodeHistory } from '../player/page/useEpisodeHistory'
 import { stripHtmlTags, resolveEpisodeUrl, getShortDramaPath, getDetailPath } from '../utils'
 import type { Video } from '../types'
@@ -43,7 +44,10 @@ watch(sceneActive, active => {
   if (active) void sources.loadSources(true).catch(error => errors.fromError(t('errors.loadSourcesFailed'), error, 'short-drama.sources'))
 }, { immediate: true })
 const player = ref<InstanceType<typeof VideoPlayer> | null>(null)
-const drawer = ref<'episodes' | ''>('')
+const drawer = ref<'episodes' | 'intro' | ''>('')
+const introExpanded=ref(false)
+const drawerContent=ref<'episodes'|'intro'>('episodes')
+watch(drawer,value=>{if(value)drawerContent.value=value},{flush:'sync'})
 const stage = ref<HTMLElement>()
 const backdrop = ref<HTMLCanvasElement>()
 const controlsHost = ref<HTMLElement>()
@@ -62,7 +66,7 @@ watch(browsing,show=>{if(show)flush()},{flush:'sync'})
 let wheelDistance = 0, wheelAt = 0, navigatedAt = -Infinity
 function wheel(event: WheelEvent): void {
   if (mobile || !active.value || drawer.value || loading.value || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return
-  if ((event.target as Element).closest('button,input,[role="dialog"]')) return
+  if ((event.target as Element).closest('button,input,[role="dialog"],[data-short-drama-info]')) return
   const now = performance.now()
   if (now - navigatedAt < 600) return
   if (now - wheelAt > 220) wheelDistance = 0
@@ -74,20 +78,17 @@ function wheel(event: WheelEvent): void {
   wheelDistance = 0; navigatedAt = now
   paging.step(direction)
 }
-function keydown(event: KeyboardEvent): void {
-  if (!active.value || drawer.value || event.repeat || event.altKey || event.ctrlKey || event.metaKey) return
-  if ((event.target as Element).closest('button,input,textarea,select,a,[contenteditable="true"],[role="dialog"],.ui-modal-overlay')) return
-  if (['ArrowDown','PageDown','ArrowUp','PageUp'].includes(event.key)) {
-    event.preventDefault()
-    paging.step(event.key === 'ArrowDown' || event.key === 'PageDown' ? 'next' : 'previous')
-  } else if (event.code === 'Space') { event.preventDefault(); player.value?.togglePlay() }
-}
+useDesktopPlaybackKeys({
+  enabled:!mobile,video:()=>player.value?.video()??null,active:()=>active.value&&!drawer.value,
+  hasPrev:()=>canPrevious.value,hasNext:()=>canNext.value,previous:()=>paging.step('previous'),next:()=>paging.step('next'),
+  play:()=>player.value?.togglePlay(),fullscreen:()=>{void player.value?.toggleFullscreen()},pip:()=>{void player.value?.togglePiP()},verticalNavigation:true,
+})
 function flush(): void {
   const media = player.value?.video()
   if (media && player.value?.canPersistProgress() && Number.isFinite(media.currentTime)) history.syncHistoryToDb(media.currentTime, true)
   if(media&&!sceneActive.value)media.pause()
   flushEpProgress()
-  drawer.value = ''
+  drawer.value = '';introExpanded.value=false
   // A switch captures the outgoing decoder frame immediately before commit.
   // Ordinary history flushes and route departures do not start page motion.
   if (active.value) paging?.capture()
@@ -149,7 +150,14 @@ const history = useEpisodeHistory({
   episodes: () => episodes.value, currentIndex: () => episodeIndex.value,
   onPersistenceError: error => errors.fromError(t('shortDrama.historyFailed'), error, 'short-drama.history'),
 })
-const overview = computed(() => stripHtmlTags(video.value?.vod_content ?? ''))
+const overview = computed(() => {
+  const value=stripHtmlTags(video.value?.vod_content??'').trim()
+  const normalized=(text:string)=>text.normalize('NFKC').replace(/[\s\p{P}]/gu,'').toLowerCase()
+  return normalized(value)===normalized(video.value?.vod_name??'')?'':value
+})
+const navigationLabel=computed(()=>t(series.value?'shortDrama.switchEpisode':'shortDrama.switchDrama'))
+const previousLabel=computed(()=>t(series.value?'shortDrama.previousEpisodeShort':'shortDrama.previousShort'))
+const nextLabel=computed(()=>t(series.value?'shortDrama.nextEpisodeShort':'shortDrama.nextShort'))
 function openDetails(): void { if (video.value) void router.push(getDetailPath(playbackSource.value, video.value)) }
 const videoKey = computed(() => JSON.stringify(['short-drama', playbackSource.value, video.value?.vod_id, episode.value?.ep_num]))
 const {isFav,favBusy,showFavFolderModal,refreshFav,toggleFavorite,confirmAddToFolder}=usePlaybackFavorites(()=>({
@@ -159,19 +167,25 @@ watch([active,video],([visible,item])=>{
   if(!mobile && visible && item)void refreshFav()
   if(!visible)showFavFolderModal.value=false
 },{flush:'post'})
-watch(videoKey, () => { paintedAt = 0; backdropFailed = false })
+watch(videoKey, () => { paintedAt = -Infinity;backdropFailed = false;introExpanded.value=false;const canvas=backdrop.value;if(canvas){canvas.width=1;canvas.height=1} })
 function progress(position: number, duration?: number): void {
   if (!active.value) return
   if(position>0)feed.markWatched()
   history.updateCurrentEpProgress(position, duration)
-  const media = player.value?.video(), canvas = backdrop.value, now = performance.now()
-  if (mobile || !active.value || backdropFailed || !canvas || !media || media.readyState < 2 || now - paintedAt < 400) return
-  paintedAt = now
-  // Reuse the player's progress cadence and a tiny canvas: no second decoder,
-  // frame loop, image export or network request belongs to this backdrop.
-  try { canvas.getContext('2d', {alpha:false})?.drawImage(media, Math.floor(media.videoWidth / 2), 0, 1, media.videoHeight, 0, 0, canvas.width, canvas.height) }
-  catch { backdropFailed = true } // The static theatre remains usable if a host cannot draw video.
+  paintBackdrop()
 }
+function paintBackdrop():void {
+  const media=player.value?.video(),canvas=backdrop.value,now=performance.now()
+  if(mobile||!active.value||!sceneVisible.value||document.hidden||backdropFailed||!canvas||!media||media.readyState<2||!media.videoWidth||!media.videoHeight||now-paintedAt<400)return
+  paintedAt=now
+  const scale=160/Math.max(media.videoWidth,media.videoHeight)
+  const width=Math.max(1,Math.round(media.videoWidth*scale)),height=Math.max(1,Math.round(media.videoHeight*scale))
+  if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height}
+  try {canvas.getContext('2d',{alpha:false})?.drawImage(media,0,0,width,height)}
+  catch {backdropFailed=true}
+}
+function onMediaReady():void {void paging.ready();paintBackdrop()}
+
 const episodeLabel = computed(() => episode.value?.ep_name || t('detail.episode', { num: episode.value?.ep_num ?? episodeIndex.value + 1 }))
 watch([detail, series], ([value]) => {
   history.refreshEpProgressUI()
@@ -185,25 +199,25 @@ watch(episodeIndex, index => { if (detail.value) TsCache.setCurrentEpisode(serie
 function selectEpisode(index: number): void { feed.selectEpisode(index); drawer.value = '' }
 watch(active, visible => { if (!visible) flush() }, { flush: 'sync' })
 function backOverlay(event: Event): void {
-  if (!active.value || !drawer.value) return
-  event.preventDefault(); event.stopImmediatePropagation(); drawer.value = ''
+  if (!active.value || (!drawer.value&&!introExpanded.value)) return
+  event.preventDefault(); event.stopImmediatePropagation(); drawer.value = '';introExpanded.value=false
 }
 window.addEventListener('cczj:android-overlay-back', backOverlay)
 onBeforeUnmount(() => window.removeEventListener('cczj:android-overlay-back', backOverlay))
 </script>
 
 <template>
-  <section ref="stage" class="short-drama cczj-relative cczj-flex cczj-flex-col cczj-min-h-0 cczj-overflow-hidden" :class="{ 'cczj-short-drama-surface': hasPlayback || selecting, 'short-drama-mobile': mobile, 'drama-drawer-open': !mobile && !!drawer }" :data-cczj-chrome="!browsing && (url || selecting) ? 'cinema' : undefined" :data-cczj-media-active="hasPlayback ? 'true' : undefined" :data-cczj-no-tab-swipe="hasPlayback ? '' : undefined" @wheel="wheel" @keydown="keydown">
+  <section ref="stage" class="short-drama cczj-relative cczj-flex cczj-flex-col cczj-min-h-0 cczj-overflow-hidden" :class="{ 'cczj-short-drama-surface': hasPlayback || selecting, 'short-drama-mobile': mobile, 'drama-drawer-open': !mobile && !!drawer, 'drama-watching':!mobile&&hasPlayback&&!!player?.isPlaying&&!drawer }" :data-cczj-chrome="!browsing && (url || selecting) ? 'cinema' : undefined" :data-cczj-media-active="hasPlayback ? 'true' : undefined" :data-cczj-no-tab-swipe="hasPlayback ? '' : undefined" @wheel="wheel">
     <ShortDramaTheatre v-show="browsing" :active="sceneActive && browsing" :mobile="mobile" @play="openSeries" @random="randomPlay"/>
     <template v-if="!browsing">
-    <canvas v-if="!mobile && hasPlayback" ref="backdrop" class="drama-ambience cczj-absolute cczj-pointer-events-none" width="72" height="128" aria-hidden="true" />
+    <canvas v-if="!mobile && hasPlayback" ref="backdrop" class="drama-ambience cczj-absolute cczj-pointer-events-none" width="1" height="1" aria-hidden="true" />
     <header class="drama-header cczj-flex cczj-items-center cczj-justify-between cczj-gap-4" @pointerdown.stop>
       <div class="drama-heading cczj-flex cczj-items-center cczj-gap-5">
         <Button v-if="!mobile || entry" class="drama-return" variant="text" icon :aria-label="t('shortDrama.returnTheatre')" @click="showTheatre"><Icon name="chevron-left" :size="22"/></Button>
-        <h1 v-if="!mobile">{{ t('shortDrama.title') }}</h1>
+        <h1 v-if="!mobile">{{ t(series ? 'shortDrama.series' : 'shortDrama.forYou') }}</h1>
         <Button v-if="mobile && !entry" class="drama-mobile-tab drama-mobile-tab-active" variant="text" :aria-pressed="true" @click="discover">{{t('shortDrama.recommendTab')}}</Button>
         <Button v-if="mobile" class="drama-mobile-tab" variant="text" :aria-pressed="false" @click="showTheatre">{{t('shortDrama.theatre')}}</Button>
-        <span v-if="!mobile || series">{{ t(series ? 'shortDrama.series' : 'shortDrama.forYou') }}</span>
+        <span v-if="mobile && series">{{ t(series ? 'shortDrama.series' : 'shortDrama.forYou') }}</span>
       </div>
       <div class="cczj-flex cczj-items-center cczj-gap-4">
         <Button v-if="hasPlayback" variant="text" icon :aria-label="t('settings.playback')" :title="t('settings.playback')" @click="player?.openPlaybackSettings()"><Icon name="settings" :size="20" /></Button>
@@ -214,16 +228,17 @@ onBeforeUnmount(() => window.removeEventListener('cczj:android-overlay-back', ba
       <div class="drama-frame cczj-relative">
       <div class="drama-screen cczj-h-full cczj-relative cczj-overflow-hidden">
         <div ref="playbackSurface" class="drama-playback-surface cczj-h-full cczj-w-full">
-        <VideoPlayer v-if="hasPlayback" ref="player" presentation="portrait" quiet-loading :portrait-controls-host="mobile ? undefined : controlsHost" :portrait-presentation-host="stage" :url="url" :video-key="videoKey" :autoplay="true" :show-title-bar="false" :resolve-resume="history.resolveDbResumePosition" @gesture-start="paging.contact" @swipe="paging.step" @swipe-progress="paging.drag" @swipe-cancel="paging.cancelDrag" @media-ready="paging.ready" @media-error="paging.reset" @progress="progress" @ended="ended">
+        <VideoPlayer v-if="hasPlayback" ref="player" presentation="portrait" quiet-loading :portrait-controls-host="mobile ? undefined : controlsHost" :portrait-presentation-host="stage" :portrait-controls-pinned="!!drawer || introExpanded" :url="url" :video-key="videoKey" :autoplay="true" :show-title-bar="false" :resolve-resume="history.resolveDbResumePosition" @gesture-start="paging.contact" @swipe="paging.step" @swipe-progress="paging.drag" @swipe-cancel="paging.cancelDrag" @media-ready="onMediaReady" @media-error="paging.reset" @progress="progress" @ended="ended">
           <template #portrait-summary>
-            <div class="drama-status-queue cczj-flex cczj-items-center cczj-gap-4 cczj-min-w-0"><Icon name="list" :size="16"/><span class="cczj-truncate">{{t(series ? 'shortDrama.series' : 'shortDrama.forYou')}} · {{t('shortDrama.currentEpisode',{num:episode?.ep_num??episodeIndex+1})}}</span></div>
+            <div class="drama-status-queue cczj-flex cczj-items-center cczj-gap-4 cczj-min-w-0"><span class="cczj-truncate">{{t(series ? 'shortDrama.series' : 'shortDrama.forYou')}} · {{t('shortDrama.currentEpisode',{num:episode?.ep_num??episodeIndex+1})}}</span></div>
           </template>
           <template #portrait-actions>
             <Button class="drama-status-episodes" variant="text" :aria-label="t('shortDrama.episodes')" @click="drawer='episodes'"><Icon name="list" :size="18"/><span>{{t('shortDrama.episodes')}}</span></Button>
           </template>
           <template #portrait-info>
-            <div class="drama-info cczj-flex cczj-flex-col cczj-gap-2" @click.stop @dblclick.stop @pointerdown.stop>
+            <div data-short-drama-info class="drama-info cczj-flex cczj-flex-col cczj-gap-2" @click.stop @dblclick.stop @pointerdown.stop>
               <h2 class="drama-title cczj-line-clamp-2">{{ video?.vod_name }}</h2>
+              <p v-if="!mobile" class="drama-meta">{{t('shortDrama.watchPosition',{episode:episodeLabel,count:episodes.length})}}</p>
               <div v-if="!series" class="cczj-flex cczj-flex-wrap cczj-items-center cczj-gap-4">
                 <Button variant="text" :size="mobile?'md':'sm'" :disabled="loading" @click="feed.follow()">{{t('shortDrama.followSeries')}}</Button>
                 <Button v-if="feed.preferences.undoItem" variant="text" :size="mobile?'md':'sm'" :loading="feed.preferences.busy" @click="feed.preferences.undo">{{t('shortDrama.undoDismiss')}}</Button>
@@ -232,8 +247,11 @@ onBeforeUnmount(() => window.removeEventListener('cczj:android-overlay-back', ba
               </div>
               <span v-if="completed" class="drama-position" role="status">{{ t('shortDrama.completed') }}</span>
               <div class="drama-info-row cczj-flex cczj-items-center cczj-gap-4">
-                <Button class="drama-intro cczj-min-w-0 cczj-flex-1" variant="text" :aria-label="t('shortDrama.intro')" @click="openDetails"><span class="cczj-line-clamp-2 cczj-min-w-0 cczj-w-full">{{ overview || t('shortDrama.noIntro') }}</span></Button>
-                <Button class="drama-episodes cczj-flex-shrink-0" variant="text" :aria-label="t('shortDrama.selectEpisode', { episode: episodeLabel })" :title="episodeLabel" @click="drawer = 'episodes'"><Icon name="list" :size="15" /><span>{{ t('shortDrama.currentEpisode', {num:episode?.ep_num ?? episodeIndex + 1}) }}</span><Icon name="chevron-up" :size="14" /></Button>
+                <div v-if="overview" class="drama-description cczj-min-w-0 cczj-flex-1">
+                  <p class="drama-overview" :tabindex="introExpanded?0:undefined" :aria-label="t('shortDrama.intro')" @keydown.stop @keydown.escape.prevent="introExpanded=false" :class="{'cczj-line-clamp-2':!introExpanded,'drama-overview-expanded':introExpanded}">{{overview}}</p>
+                  <Button class="drama-intro-toggle" variant="text" size="sm" :aria-expanded="introExpanded" @click="introExpanded=!introExpanded">{{t(introExpanded?'common.collapse':'common.expand')}}</Button>
+                </div>
+                <Button v-if="mobile" class="drama-episodes cczj-flex-shrink-0" variant="text" :aria-label="t('shortDrama.selectEpisode', { episode: episodeLabel })" :title="episodeLabel" @click="drawer = 'episodes'"><Icon name="list" :size="15" /><span>{{ t('shortDrama.currentEpisode', {num:episode?.ep_num ?? episodeIndex + 1}) }}</span><Icon name="chevron-up" :size="14" /></Button>
               </div>
             </div>
           </template>
@@ -251,23 +269,23 @@ onBeforeUnmount(() => window.removeEventListener('cczj:android-overlay-back', ba
         </div>
       </div>
       <div v-if="!mobile" ref="controlsHost" class="drama-controls-host cczj-absolute cczj-inset-0 cczj-pointer-events-none" />
-      <nav v-if="!mobile && items.length" class="drama-switch cczj-absolute cczj-flex cczj-flex-col cczj-items-center cczj-gap-2" :aria-label="t(series ? 'shortDrama.switchEpisode' : 'shortDrama.switchDrama')">
-        <Button variant="text" icon :disabled="!canPrevious" :aria-label="t(series ? 'shortDrama.previousEpisode' : 'shortDrama.previous')" :title="t(series ? 'shortDrama.previousEpisode' : 'shortDrama.previous')" @click="paging.step('previous')"><Icon name="chevron-up" :size="22" /></Button>
-        <Button variant="text" icon :disabled="!canNext" :aria-label="t(series ? 'shortDrama.nextEpisode' : 'shortDrama.next')" :title="t(series ? 'shortDrama.nextEpisode' : 'shortDrama.next')" @click="paging.step('next')"><Icon name="chevron-down" :size="22" /></Button>
-      </nav>
-      <nav v-if="!mobile && video" class="drama-actions cczj-absolute cczj-flex cczj-flex-col cczj-gap-6" :aria-label="t('shortDrama.title')">
-        <Button class="drama-action" variant="text" :disabled="favBusy" :aria-pressed="isFav" :aria-label="t(isFav?'detail.removeFav':'detail.addFav')" @click="toggleFavorite"><Icon name="star" :size="27"/><span>{{t('sidebar.favorites')}}</span></Button>
-        <Button class="drama-action" variant="text" :aria-label="t('shortDrama.episodes')" @click="drawer='episodes'"><Icon name="list" :size="27"/><span>{{t('shortDrama.episodes')}}</span></Button>
-        <Button class="drama-action" variant="text" :aria-label="t('shortDrama.intro')" @click="openDetails"><Icon name="info" :size="27"/><span>{{t('shortDrama.intro')}}</span></Button>
+      <nav v-if="!mobile && video" class="drama-rail cczj-absolute cczj-flex cczj-flex-col cczj-items-center cczj-gap-6" :aria-label="navigationLabel" @pointerdown.stop @wheel.stop>
+        <div v-if="items.length" class="drama-step-actions cczj-flex cczj-flex-col cczj-gap-3" :aria-label="navigationLabel">
+          <Button class="drama-action" variant="text" :disabled="!canPrevious" :aria-label="previousLabel" @click="paging.step('previous')"><Icon name="chevron-up" :size="24"/><span>{{previousLabel}}</span></Button>
+          <Button class="drama-action" variant="text" :disabled="!canNext" :aria-label="nextLabel" @click="paging.step('next')"><Icon name="chevron-down" :size="24"/><span>{{nextLabel}}</span></Button>
+        </div>
+        <Button class="drama-action" variant="text" :disabled="favBusy" :aria-pressed="isFav" :aria-label="t(isFav?'detail.removeFav':'detail.addFav')" @click="toggleFavorite"><Icon name="star" :size="25"/><span>{{t('sidebar.favorites')}}</span></Button>
+        <Button class="drama-action" variant="text" :aria-label="t('shortDrama.intro')" :aria-expanded="drawer==='intro'" @click="drawer='intro'"><Icon name="info" :size="25"/><span>{{t('shortDrama.intro')}}</span></Button>
       </nav>
     </div>
-    <CczjMobilePlayerDrawer v-if="active" class="cczj-short-drama-surface" :open="!!drawer" :title="t('shortDrama.episodes')" :fullscreen="false" :contained="!mobile" :host="stage" :placement="mobile ? 'bottom' : 'right'" :initial-height="72" solid lazy @close="drawer = ''">
+    <CczjMobilePlayerDrawer v-if="active" class="cczj-short-drama-surface" :open="!!drawer" :title="t(drawerContent==='intro'?'shortDrama.intro':'shortDrama.episodes')" :fullscreen="false" :contained="!mobile" :host="stage" :placement="mobile ? 'bottom' : 'right'" :initial-height="72" solid lazy @close="drawer = ''">
       <div class="drama-drawer-content cczj-flex cczj-flex-col cczj-gap-6 cczj-h-full cczj-min-h-0">
         <div class="drama-drawer-heading cczj-flex cczj-items-center cczj-gap-6 cczj-flex-shrink-0">
           <RemoteImage v-if="video?.vod_pic" class="drama-cover cczj-flex-shrink-0" :src="video.vod_pic" alt="" />
           <h2 class="drama-drawer-title cczj-line-clamp-2">{{ video?.vod_name }}</h2>
         </div>
-        <ShortDramaCatalog :episodes="episodes" :current="episodeIndex" :open="drawer === 'episodes'" :progress="history.getEpWatchPct" @select="selectEpisode" />
+        <template v-if="drawerContent==='intro'"><p class="drama-full-overview">{{overview||t('shortDrama.noIntro')}}</p><Button class="cczj-flex-shrink-0" @click="openDetails">{{t('shortDrama.fullDetails')}}</Button></template>
+        <ShortDramaCatalog v-else :episodes="episodes" :current="episodeIndex" :open="drawer === 'episodes'" :progress="history.getEpWatchPct" @select="selectEpisode" />
       </div>
     </CczjMobilePlayerDrawer>
     <FavFolderModal v-if="!mobile && active" v-model="showFavFolderModal" :busy="favBusy" :teleport-to="overlayHost" @confirm="confirmAddToFolder" />
@@ -279,9 +297,13 @@ onBeforeUnmount(() => window.removeEventListener('cczj:android-overlay-back', ba
 <style scoped>
 .short-drama { height: 100%; color: var(--text-primary); --cczj-player-contained-width: min(360px,45%); }
 .short-drama.cczj-short-drama-surface { background: var(--cczj-drama-chrome); }
-.drama-ambience { inset: -12%; width: 124%; height: 124%; filter: blur(64px); opacity: .24; }
+.drama-ambience { inset:-8%;width:116%;height:116%;object-fit:cover;filter:blur(48px) saturate(.8) brightness(.85);opacity:.7; }
 .drama-header { @apply cczj-absolute cczj-flex-shrink-0; inset: 0 0 auto; z-index: 40; padding: 12px 24px 36px; pointer-events: none; }
 .cczj-short-drama-surface .drama-header { background: linear-gradient(#0007,transparent); }
+.drama-header,.drama-rail { transition:opacity var(--cczj-motion-normal); }
+.drama-watching .drama-header { opacity:.35; }
+.drama-watching .drama-rail { opacity:.55; }
+.drama-watching .drama-header:hover,.drama-watching .drama-header:focus-within,.drama-watching .drama-rail:hover,.drama-watching .drama-rail:focus-within { opacity:1; }
 .drama-header > * { @apply cczj-pointer-events-auto; }
 .drama-heading h1 { margin: 0; font-size: calc(18rem / 14); font-weight: 600; letter-spacing: .02em; }
 .drama-heading > span { color: var(--text-muted); font-size: calc(12rem / 14); }
@@ -301,29 +323,30 @@ onBeforeUnmount(() => window.removeEventListener('cczj:android-overlay-back', ba
 .drama-drawer-open .drama-stage,.drama-drawer-open .drama-header { margin-right: var(--cczj-player-contained-width); }
 .drama-placeholder { padding: 16px; text-align: center; }
 .drama-info { @apply cczj-min-w-0 cczj-w-full; text-shadow: 0 1px 5px #0009; transition: opacity .15s; }
-.short-drama:not(.short-drama-mobile) .drama-info { max-width: min(360px,calc(100% - 64px)); }
+.short-drama:not(.short-drama-mobile) .drama-info { max-width: min(480px,calc(50% - 32px)); }
 .short-drama:not(.short-drama-mobile) .drama-title { font-size: calc(16rem / 14); }
 .short-drama:not(.short-drama-mobile) .drama-info-row { @apply cczj-items-end; gap: 8px; }
 .short-drama:not(.short-drama-mobile) .drama-intro :deep(.ui-btn__content) { @apply cczj-items-end; }
-.short-drama:not(.short-drama-mobile) .drama-intro { color: #e4e4e7; }
-.drama-status-queue { color: #d4d4d8; font-size: calc(13rem / 14); }
-.drama-status-episodes { min-height: 36px; font-size: calc(13rem / 14); color: #e5e7eb; }
-.drama-title { margin: 0; font-size: calc(18rem / 14); font-weight: 600; line-height: 1.5; color: #fff; overflow-wrap: anywhere; }
-.drama-info-row { @apply cczj-w-full; gap: 16px; }
-.drama-intro { min-height: 44px; padding: 4px 0; font-size: calc(13rem / 14); font-weight: 400; color: #ffffffb3; text-align: left; white-space: normal; line-height: 1.55; overflow-wrap: anywhere; }
-.drama-intro :deep(.ui-btn__content) { @apply cczj-min-w-0 cczj-w-full; gap: 4px; }
-.drama-intro :deep(.icon-svg) { @apply cczj-flex-shrink-0; }
+.short-drama:not(.short-drama-mobile) .drama-meta { margin:0;color:#d4d4d8;font-size:calc(13rem / 14);line-height:1.6; }
+.drama-overview { margin:0;color:#e4e4e7;font-size:calc(14rem / 14);line-height:1.65;overflow-wrap:anywhere; }
+.drama-overview:focus-visible { outline:2px solid currentColor;outline-offset:3px; }
+.drama-overview-expanded { max-height:min(24vh,180px);@apply cczj-overflow-y-auto;overscroll-behavior:contain; }
+.drama-intro-toggle { color:#fff; }
+.drama-full-overview { @apply cczj-flex-1 cczj-min-h-0 cczj-overflow-y-auto;margin:0;line-height:1.85;white-space:pre-wrap;overflow-wrap:anywhere; }
 .drama-episodes { min-height: 44px; padding: 4px 0; font-size: calc(13rem / 14); font-weight: 500; color: #ffffffe6; }
 .drama-episodes :deep(.ui-btn__content) { @apply cczj-min-w-0; }
-.drama-switch { top: 25%; right: 24px; transform: translateY(-50%); z-index: 32; padding: 4px; border: 1px solid #ffffff12; border-radius: 28px; background: #0002; color: #fff; }
-.drama-switch .ui-btn { min-width: 44px; min-height: 44px; border-radius: 50%; color: #ffffffbf; }
-.drama-actions { top: 41%; right: 24px; z-index: 32; }
+.drama-rail { top:50%;right:20px;transform:translateY(-50%);z-index:32; }
+.drama-step-actions { padding-bottom:12px;border-bottom:1px solid #ffffff26; }
 .drama-action { min-width: 52px; min-height: 60px; padding: 6px; color: #ffffffe6; }
 .drama-action :deep(.ui-btn__content) { @apply cczj-flex-col cczj-gap-3; font-size: calc(12rem / 14); font-weight: 400; }
+.drama-action:focus-visible { outline:2px solid currentColor;outline-offset:2px; }
 .drama-action[aria-pressed=true] { color: #facc15; }
 .drama-position { font-size: calc(12rem / 14); color: #ffffffb3; }
 .drama-drawer-title { margin: 0; font-size: calc(17rem / 14); font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
 .drama-cover { width: 44px; height: 60px; border-radius: 6px; object-fit: cover; }
+.short-drama:not(.short-drama-mobile) .drama-header,.drama-rail,.drama-meta,.drama-overview,.drama-full-overview,.drama-status-queue,.drama-status-episodes { font-family:system-ui,sans-serif; }
+@media(max-width:760px){.short-drama:not(.short-drama-mobile) .drama-info { max-width:calc(100% - 96px); }.drama-rail { right:8px; }}
+@media(max-height:620px){.drama-rail { gap:8px; }.drama-action { min-height:44px;padding:2px; }.drama-step-actions { gap:0;padding-bottom:4px; }}
 .short-drama-mobile .drama-stage { padding: 0; }
 .short-drama-mobile .drama-frame { width: 100%; height: 100%; aspect-ratio: auto; }
 .short-drama-mobile .drama-screen { border-radius: 0; }

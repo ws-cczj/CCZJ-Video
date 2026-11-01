@@ -39,7 +39,6 @@ function interpolateColor(from:string,to:string,progress:number):string {
 
 /** One visual transition owns navigation and native bars. Its progress comes
  * from the same scene transform as the page, including cancellation/settling.
- * Reference: Douyin MPFBottomTabComponent.changeThemeWhenPageScroll (REA report).
  * Transient colours never overwrite the persisted launch canvas. */
 export function useBackdropSystemBars(element:Ref<HTMLElement|undefined>, screen:()=>string,cinema:()=>boolean=()=>false) {
   const bridge=(window as unknown as {wails?:{setSystemBarColor?:(color:string)=>void;setSystemBarColors?:(status:string,navigation:string)=>void}}).wails
@@ -53,6 +52,7 @@ export function useBackdropSystemBars(element:Ref<HTMLElement|undefined>, screen
     lastColor=identity
   }
   let normal={status:'#000000',bottom:'#000000',fill:[0,0,0,0]}, motion:{from:string;to:string;progress:number}|undefined
+  let motionIdentity='', fromCinema=0, toCinema=0
   let motionFrame:number|undefined, motionRevision=0
   const stage=()=>element.value?.parentElement
   const navElement=()=>stage()?.querySelector<HTMLElement>('.cczj-mobile-navigation')
@@ -64,7 +64,7 @@ export function useBackdropSystemBars(element:Ref<HTMLElement|undefined>, screen
   function render():void {
     if(disposed)return
     const root=stage(), nav=navElement()
-    const amount=motion?Number(dark(motion.from))*(1-motion.progress)+Number(dark(motion.to))*motion.progress:Number(dark())
+    const amount=motion?fromCinema*(1-motion.progress)+toCinema*motion.progress:Number(dark())
     if(root)root.dataset.cczjChrome=amount>=.5?'cinema':'theme'
     if(nav){
       if(motion){
@@ -81,6 +81,8 @@ export function useBackdropSystemBars(element:Ref<HTMLElement|undefined>, screen
     publishColor(interpolateColor(normal.status,'#000000',amount),interpolateColor(normal.bottom,nav?'#18191c':'#000000',amount))
   }
   function applyProgress(from:string,to:string,progress:number):void {
+    const identity=from+'\n'+to
+    if(identity!==motionIdentity){motionIdentity=identity;fromCinema=Number(dark(from));toCinema=Number(dark(to))}
     motion={from,to,progress:Math.max(0,Math.min(1,progress))};render()
   }
   function move(from:string,to:string,progress:number):void {
@@ -92,7 +94,7 @@ export function useBackdropSystemBars(element:Ref<HTMLElement|undefined>, screen
   function finish():void {
     motionRevision++
     if(motionFrame!==undefined)cancelAnimationFrame(motionFrame)
-    motionFrame=undefined;motion=undefined;render();refresh()
+    motionFrame=undefined;motion=undefined;motionIdentity='';render();refresh()
   }
   function settle(from:string,to:string,scene:HTMLElement,entering=false,hold=false):void {
     const token=++motionRevision,started=performance.now()

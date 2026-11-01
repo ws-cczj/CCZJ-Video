@@ -1,10 +1,11 @@
+import { CCZJ } from '../constants/cczj'
 import { readStorage, removeStorage, writeStorage } from '../platform/storage'
 
 const RESUME_THRESHOLD_SEC = 5
-const storageKey=(key:string)=>key.startsWith('vp_t_')?key:`vp_t_${key}`
+const storageKey = CCZJ.Keys.playbackTime
 
 export function readPlaybackTime(videoKey: string): number {
-  const value = readStorage<number | null>(storageKey(videoKey), null) ?? readStorage<number | null>(`vp_t_${videoKey}`, null)
+  const value = readStorage<number | null>(storageKey(videoKey), null) ?? readStorage<number | null>(CCZJ.Keys.legacyPlaybackTime(videoKey), null)
   const seconds = value ? Number(value) : 0
   return Number.isFinite(seconds) ? seconds : 0
 }
@@ -22,5 +23,5 @@ export function savePlaybackTime(videoKey: string, seconds: number, duration: nu
 
 export function clearPlaybackTime(videoKey: string): void {
   removeStorage(storageKey(videoKey))
-  if(storageKey(videoKey)!==`vp_t_${videoKey}`)removeStorage(`vp_t_${videoKey}`)
+  if(storageKey(videoKey)!==CCZJ.Keys.legacyPlaybackTime(videoKey))removeStorage(CCZJ.Keys.legacyPlaybackTime(videoKey))
 }

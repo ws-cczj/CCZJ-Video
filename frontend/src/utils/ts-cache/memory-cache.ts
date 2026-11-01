@@ -27,6 +27,8 @@ export function cacheGet(url: string, range?: string | null): CacheEntry | null 
   const key = segmentCacheKey(url, range)
   const entry = cache.lruCache.get(key)
   if (!entry) return null
+  // A transferred or truncated buffer is a miss, never a reusable cache hit.
+  if (entry.size <= 0 || entry.buffer.byteLength !== entry.size) { evict(entry); return null }
   entry.ts = Date.now()
   // 命中移到尾部：Map 插入序即访问序，队首永远是全局最久未读的那条，全局淘汰才能 O(1)
   cache.lruCache.delete(key)
@@ -122,7 +124,17 @@ export function findLeastUsedEntry(onlyEpisodeKey?: string): CacheEntry | null {
   return cache.lruCache.get(oldestKey) ?? null
 }
 
-export function cacheHas(url: string, range?: string | null): boolean { return cache.lruCache.has(segmentCacheKey(url, range)) }
+/** Remove one unusable fragment without discarding other episodes or disk data. */
+export function cacheDelete(url: string, range?: string | null): void {
+  const entry = cache.lruCache.get(segmentCacheKey(url, range))
+  if (entry) evict(entry)
+}
+export function cacheHas(url: string, range?: string | null): boolean {
+  const entry = cache.lruCache.get(segmentCacheKey(url, range))
+  if (!entry) return false
+  if (entry.size <= 0 || entry.buffer.byteLength !== entry.size) { evict(entry); return false }
+  return true
+}
 export function cacheClear(): void { cache.lruCache.clear(); cache.totalCacheBytes = 0; cache.epCacheKeys.clear() }
 
 /** Shrink only the memory copy, keeping the newest LRU entries and disk data. */

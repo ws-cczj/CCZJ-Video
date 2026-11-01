@@ -12,6 +12,15 @@
   cursor: none;
 }
 
+/* Shares the existing solid player-drawer surface, independent of page theme. */
+.player-cast {
+  @apply cczj-absolute cczj-inset-0 cczj-z-10 cczj-flex cczj-flex-col cczj-items-center cczj-justify-center cczj-gap-3 cczj-text-center cczj-text-white;
+  box-sizing: border-box;
+  padding: 44px 16px 12px;
+  background: var(--cczj-player-drawer-surface, #18191e);
+}
+.player-cast p { margin: 0; }
+
 .player-wrapper.cursor-hidden .native-video {
   cursor: none;
 }
@@ -36,6 +45,9 @@
 :global(body[data-player-fullscreen='1'] #app),
 :global(body[data-player-fullscreen='1'] .app-shell),
 :global(body[data-player-fullscreen='1'] .app-body),
+:global(body[data-player-fullscreen='1'] .cczj-mobile-route-stage),
+:global(body[data-player-fullscreen='1'] .cczj-mobile-route-viewport),
+:global(body[data-player-fullscreen='1'] .cczj-mobile-route-scene[data-route-active='true']),
 :global(body[data-player-fullscreen='1'] .main-content),
 :global(body[data-player-fullscreen='1'] .player-page) {
   width: 100vw !important;
@@ -43,6 +55,10 @@
   margin: 0 !important;
   padding: 0 !important;
   overflow: hidden !important;
+}
+:global(body[data-player-fullscreen='1'] .cczj-mobile-route-scene[data-route-active='true']) {
+  contain:none !important;
+  transform:none !important;
 }
 
 :global(body[data-player-fullscreen='1'] .player-modal-mask),
@@ -380,16 +396,20 @@
 /* 缓冲层（灰色/淡色）—— 代表已经下载到的位置 */
 .progress-buffer {
   background: rgba(255, 255, 255, 0.42);
-  width: 0;
-  transition: width 0.35s ease;
+  @apply cczj-w-full;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.35s ease;
 }
 
 /* 已播放（蓝色渐变） */
 .progress-played {
   background: linear-gradient(90deg, #1890ff 0%, #40a9ff 60%, #69c0ff 100%);
-  width: 0;
+  @apply cczj-w-full;
+  transform: scaleX(0);
+  transform-origin: left center;
   box-shadow: 0 0 6px rgba(64, 169, 255, 0.6);
-  transition: width 0.12s linear;
+  transition: transform 0.12s linear;
 }
 
 /* 独特的当前播放位置滑块（白色核心 + 蓝色外圈 + 外部光晕） */
@@ -545,7 +565,7 @@
   @apply cczj-text-center;
 }
 
-/* 缩略图图片（B站风格） */
+/* 进度悬停预览的缩略图 */
 .progress-time-preview .preview-thumb-img {
   @apply cczj-block;
   width: 160px;

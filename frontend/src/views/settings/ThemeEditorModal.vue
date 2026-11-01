@@ -9,6 +9,7 @@ defineOptions({ name: 'ThemeEditorModal' })
 import { ref, reactive, watch, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '../../components/Icon.vue'
+import ThemeSample from './ThemeSample.vue'
 import { Button, Modal } from '../../components/ui'
 import { useThemeStore, readSurfaceAlpha, isPackAssetRef, type CustomTheme, type ColorPalette } from '../../stores/theme'
 import { useErrorStore } from '../../stores/error'
@@ -363,6 +364,7 @@ defineExpose({ openCreate, openEdit, openEditPreset, applyPreview })
     @update:model-value="(v: boolean) => !v && closeEditor()"
   >
     <div class="modal-body cczj-mobile-theme-editor">
+      <ThemeSample :name="editing.name || t('settings.previewTheme')" />
       <div class="edit-row cczj-flex cczj-flex-wrap">
         <div class="field cczj-flex cczj-flex-col cczj-gap-2">
           <label>{{ t('settings.themeName') }}</label>

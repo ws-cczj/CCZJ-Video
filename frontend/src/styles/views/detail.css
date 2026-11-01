@@ -295,16 +295,16 @@
 }
 
 .episode-btn.watched {
-  background: var(--accent-alpha-10);
-  @apply cczj-border-primary;
-  color: var(--text-primary);
+  background: var(--btn-solid);
+  border-color: var(--btn-solid);
+  color: var(--btn-solid-text);
   @apply cczj-font-medium;
 }
 
 .episode-btn.watched:hover {
-  background: var(--btn-soft);
-  @apply cczj-border-primary;
-  color: var(--btn-soft-text);
+  background: var(--btn-solid-hover);
+  border-color: var(--btn-solid-hover);
+  color: var(--btn-solid-text);
   box-shadow: 0 2px 8px var(--accent-alpha-35);
 }
 
@@ -320,6 +320,7 @@
 .episode-btn:hover .ep-progress-fill {
   background: var(--accent);
 }
+.episode-btn.watched .ep-progress-fill { background:var(--btn-solid-text); }
 
 .ep-progress-pct {
   @apply cczj-absolute;

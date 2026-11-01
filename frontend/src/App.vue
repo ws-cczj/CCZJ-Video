@@ -281,6 +281,22 @@ input, textarea, [contenteditable="true"], .allow-select, .video-description, .d
   transition: background 0.3s, color 0.3s;
 }
 
+html[data-cczj-platform=desktop] #app {
+  --cczj-window-radius: 8px;
+}
+html[data-cczj-platform=desktop] #app::after {
+  content: '';
+  @apply cczj-fixed cczj-inset-0 cczj-pointer-events-none;
+  z-index: 2147483646;
+  border-radius: var(--cczj-window-radius);
+  border: 1px solid color-mix(in srgb, var(--text-primary) 16%, transparent);
+  box-shadow: inset 0 1px 0 #ffffff73, inset 1px 0 0 #ffffff26, inset 0 -1px 0 #00000026;
+}
+html[data-cczj-platform=desktop][data-cczj-window-maximized=true] #app,
+html[data-cczj-platform=desktop] body[data-player-fullscreen='1'] #app { --cczj-window-radius: 0px; }
+html[data-cczj-window-maximized=true] #app::after,
+body[data-player-fullscreen='1'] #app::after { content: none; }
+
 /* ====== 主体布局 ====== */
 .app-shell {
   /* Keep native resize hit areas outside scrollbars and interactive content. */
@@ -303,23 +319,15 @@ input, textarea, [contenteditable="true"], .allow-select, .video-description, .d
 }
 .main-content {
   @apply cczj-min-w-0 cczj-flex-1 cczj-overflow-y-auto cczj-overflow-x-hidden;
-  /* 滚动条占 8px 且是经典式（挤版心）。启用一个扩展包常把内容顶过一屏，滚动条就在这时出现，
-     整页版心窄 8px、每一行重排——用户看到的正是那一下「抖」。留出常驻槽位，出现与否不再改宽度。 */
-  scrollbar-gutter: stable;
+  scrollbar-gutter: auto;
   padding: 20px 24px 24px;
   @apply cczj-text-primary;
   transition: background 0.3s;
 }
 
-/* 滚动条：跟随主题 */
-::-webkit-scrollbar { @apply cczj-w-2 cczj-h-2; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
-  @apply cczj-rounded-sm;
-  transition: background 0.2s;
-}
-::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+/* Preserve scrolling without a visible gutter. */
+* { scrollbar-width: none; }
+::-webkit-scrollbar { @apply cczj-hidden; }
 
 ::selection { background: var(--accent); color: var(--accent-contrast); }
 

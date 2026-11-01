@@ -1,3 +1,4 @@
+import { CCZJ } from '../constants/cczj'
 /**
  * 更新模块共享状态
  * UpdateModal.vue 和 Settings.vue 等外部组件通过此模块访问/控制更新弹窗
@@ -89,7 +90,7 @@ export const updateBgDownloading = computed(
 )
 
 // ========== 下载状态持久化（localStorage） ==========
-const STORAGE_KEY = 'cczj_update_download_state'
+const STORAGE_KEY = CCZJ.Storage.updateDownload
 
 interface DownloadState {
   path: string

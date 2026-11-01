@@ -2,6 +2,7 @@ package download
 
 import (
 	"cczjVideo/app/apperror"
+	CCZJ "cczjVideo/app/cczj"
 	"os"
 	"path/filepath"
 	"strings"
@@ -73,7 +74,7 @@ func (d *Directory) Set(directory string) (string, error) {
 	}
 
 	if d.save != nil {
-		if err := d.save("download_dir", directory); err != nil {
+		if err := d.save(CCZJ.SettingDownloadDirectory, directory); err != nil {
 			return d.Get(), apperror.Wrap(apperror.Storage, err, "persist download directory")
 		}
 	}

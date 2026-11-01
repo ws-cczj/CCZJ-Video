@@ -23,6 +23,8 @@
   "ComicEpisodeMatch": "isolated",
   "ComicSourceAlternatives": "isolated",
   "ComicSourceDirectory": "refresh",
+  "NovelPrepareSourceSwitch": "isolated",
+  "NovelBookSources": "isolated",
   "CompressDetailJSONBrotli": "isolated",
   "ConfirmShutdown": "isolated",
   "ControlCastVideo": "write",
@@ -115,6 +117,7 @@
   "LibraryCatalogPage": "read",
   "LibraryChapterPages": "read",
   "LibraryChapterText": "read",
+  "LibraryRefreshChapterText": "read",
   "LibraryCheckSourceCandidate": "write",
   "LibraryDeleteSource": "write",
   "LibraryImportSources": "write",
@@ -216,5 +219,10 @@
   "WindowSetSize": "write",
   "WindowToggleMax": "write",
   "WriteLog": "isolated",
-  "GetShortDramaPage": "write"
+  "GetShortDramaPage": "refresh",
+  "GetShortDramaCategories": "write",
+  "SetShortDramaCategories": "write",
+  "SubmitDiagnosticsEvents": "isolated",
+  "GetDiagnosticsSession": "isolated",
+  "CaptureDiagnosticsProfile": "isolated"
 }

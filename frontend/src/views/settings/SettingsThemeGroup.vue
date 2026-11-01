@@ -13,6 +13,7 @@ import Icon from '../../components/Icon.vue'
 import { useThemeStore, type ColorPalette } from '../../stores/theme'
 import { useConfirmStore } from '../../stores/confirm'
 import ThemeEditorModal from './ThemeEditorModal.vue'
+import ThemeSample from './ThemeSample.vue'
 import { Button } from '../../components/ui'
 import { presentationProfile } from '../../platform/presentation'
 
@@ -109,13 +110,17 @@ function isActive(id: string): boolean {
   return themeStore.currentId === id
 }
 
-function pickTheme(id: string): void {
-  themeStore.setTheme(id)
+function pickTheme(id: string, event: MouseEvent): void {
+  if (isActive(id)) return
+  const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  void themeStore.setTheme(id, event.detail ? { x: event.clientX, y: event.clientY } : { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 })
 }
 </script>
 
 <template>
+ <p v-if="themeStore.pendingSettings" role="status">{{ t('common.saving') }}</p>
  <div v-if="themeStore.saveError" role="alert" class="cczj-theme-save-error">{{themeStore.saveError}} <button type="button" @click="themeStore.retrySettings()">{{t('common.retry')}}</button></div>
+ <ThemeSample :name="themeStore.current.name" editable @edit="editCurrent" />
 
   <div class="panel group-card theme-group cczj-flex cczj-flex-col cczj-gap-2">
     <section class="block">
@@ -140,7 +145,7 @@ function pickTheme(id: string): void {
                 }
               : { background: resolvePreset(preset).isOverride ? resolvePreset(preset).sidebarBg : preset.palette.bgSidebar, color: resolvePreset(preset).textPrimary }
           ]"
-          @click="pickTheme(preset.id)"
+          @click="pickTheme(preset.id, $event)"
         >
           <span v-if="!mobile" class="card-actions-top cczj-absolute cczj-flex cczj-gap-2" @click.stop>
             <button class="mini-btn cczj-inline-flex cczj-items-center cczj-justify-center" @click="editor?.openEditPreset(preset)" :title="t('settings.editTheme')">
@@ -170,7 +175,7 @@ function pickTheme(id: string): void {
                 }
               : { background: c.sidebar, color: c.text }
           ]"
-          @click="pickTheme(c.id)"
+          @click="pickTheme(c.id, $event)"
         >
           <span v-if="!mobile" class="card-actions-top cczj-absolute cczj-flex cczj-gap-2" @click.stop>
             <button class="mini-btn cczj-inline-flex cczj-items-center cczj-justify-center" @click="editor?.openEdit(c.id)" :title="t('settings.editTheme')">
@@ -212,7 +217,7 @@ function pickTheme(id: string): void {
                 }
               : { background: resolvePreset(preset).isOverride ? resolvePreset(preset).sidebarBg : preset.palette.bgSidebar, color: resolvePreset(preset).textPrimary }
           ]"
-          @click="pickTheme(preset.id)"
+          @click="pickTheme(preset.id, $event)"
         >
           <span v-if="!mobile" class="card-actions-top cczj-absolute cczj-flex cczj-gap-2" @click.stop>
             <button class="mini-btn cczj-inline-flex cczj-items-center cczj-justify-center" @click="editor?.openEditPreset(preset)" :title="t('settings.editTheme')">
@@ -241,7 +246,7 @@ function pickTheme(id: string): void {
                 }
               : { background: c.sidebar, color: c.text }
           ]"
-          @click="pickTheme(c.id)"
+          @click="pickTheme(c.id, $event)"
         >
           <span v-if="!mobile" class="card-actions-top cczj-absolute cczj-flex cczj-gap-2" @click.stop>
             <button class="mini-btn cczj-inline-flex cczj-items-center cczj-justify-center" @click="editor?.openEdit(c.id)" :title="t('settings.editTheme')">

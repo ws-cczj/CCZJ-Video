@@ -1,3 +1,4 @@
+import { CCZJ } from '../constants/cczj'
 import { APPLICATION_MODE_KEYS, modeHome, routeMode, type ApplicationMode } from './definitions'
 
 export type ViewScalar = string | number | boolean
@@ -8,7 +9,7 @@ interface SessionStorage {
   remove(key: string): void
 }
 interface Snapshot { at: number; route: string; scroll: Record<string, number>; views: Record<string, ViewState> }
-const STATE_KEY = 'cczj.mode.sessions.v1', TICKET_KEY = 'cczj.mode.handoff.v1'
+const STATE_KEY = CCZJ.Storage.modeSessions, TICKET_KEY = CCZJ.Storage.modeHandoff
 const MAX_BYTES = 65536, LIFETIME = 12 * 60 * 60 * 1000
 const pages: Record<ApplicationMode, string[]> = {
   video: ['/', '/short-drama', '/search', '/recent', '/favorites', '/history', '/recommendations', '/downloads'],

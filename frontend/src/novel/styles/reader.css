@@ -1,19 +1,32 @@
 /* Reader-specific layout replaces the document-style first iteration. */
-.cczj-novel-shell .novel-reader { --reader-surface:var(--novel-surface);--reader-ink:var(--novel-ink);isolation:isolate;@apply cczj-overflow-hidden; }
-.cczj-novel-shell .novel-reader-exit { @apply cczj-absolute;top:2px;@apply cczj-left-2 cczj-z-10;width:44px;height:44px;background:var(--novel-canvas);color:var(--novel-ink); }
+.cczj-novel-shell .novel-reader { --reader-surface:var(--novel-surface);--reader-ink:var(--novel-ink);isolation:isolate;contain:layout paint;touch-action:manipulation;@apply cczj-overflow-hidden; }
+.cczj-novel-shell .novel-chapter-frame { @apply cczj-absolute;inset:0;contain:layout paint;visibility:hidden;background:var(--novel-canvas); }
+.cczj-novel-shell .novel-chapter-current { visibility:visible; }
+.cczj-novel-shell .novel-page-turn-host { @apply cczj-absolute cczj-overflow-hidden cczj-pointer-events-none;inset:0;z-index:3; }
+.cczj-novel-shell .novel-page-face { contain:layout; }
+.cczj-novel-shell .novel-page-cover { box-shadow:8px 0 18px #00000026;will-change:transform; }
+.cczj-novel-shell .novel-reader-paged { touch-action:pan-y; }
+.cczj-novel-shell .novel-reading-running-head,.cczj-novel-shell .novel-reading-status { z-index:2; }
 .cczj-novel-shell .novel-reading-running-head,.cczj-novel-shell .novel-reading-status { @apply cczj-absolute;left:var(--reading-margin);right:var(--reading-margin);@apply cczj-flex cczj-items-center cczj-justify-between cczj-gap-8 cczj-text-11;color:var(--novel-muted);@apply cczj-pointer-events-none cczj-leading-normal; }
-.cczj-novel-shell .novel-reading-running-head { top:14px; }.cczj-novel-shell .novel-reading-status { bottom:14px;font-variant-numeric:tabular-nums; }
-.cczj-novel-shell .novel-reading-running-head { left:max(60px,var(--reading-margin)); }
-.cczj-novel-shell .novel-reading-running-head > span:first-child { @apply cczj-overflow-hidden;text-overflow:ellipsis;@apply cczj-whitespace-nowrap; }
+.cczj-novel-shell .novel-reading-running-head { top:0;min-height:44px;@apply cczj-justify-start cczj-text-12;gap:0; }.cczj-novel-shell .novel-reading-status { bottom:14px;font-variant-numeric:tabular-nums; }
+/* Qidian 7.9.480 ReadHeadView: a 16dp arrow directly precedes the title;
+   its separate 48dp hot region does not consume title layout space. Keep our
+   44px touch height while the visible header stays compact. */
+.cczj-novel-shell .novel-reading-running-head .novel-reader-exit { @apply cczj-absolute cczj-pointer-events-auto cczj-justify-start;left:0;top:0;width:48px;height:44px;padding:0;border:0;color:inherit;font:inherit; }
+.cczj-novel-shell .novel-reader-exit .icon-svg { @apply cczj-flex-shrink-0; }
+.cczj-novel-shell .novel-reading-running-head .novel-running-title { padding-left:16px; }
+.cczj-novel-shell .novel-running-title { @apply cczj-min-w-0 cczj-overflow-hidden cczj-whitespace-nowrap;text-overflow:ellipsis; }
 .cczj-novel-shell .novel-page-viewport { @apply cczj-absolute;inset:48px max(var(--reading-margin),calc((100% - 720px)/2)) 44px;@apply cczj-min-h-0;overscroll-behavior:contain; }
 .cczj-novel-shell .novel-reading-paper { max-width:none;margin:0;padding:0; }
 .cczj-novel-shell .novel-reading-paper h1 { font-size:calc(var(--reading-size)*1.2);@apply cczj-font-semibold;line-height:1.6;margin:0 0 1.3em;letter-spacing:0; }
 .cczj-novel-shell .novel-reading-paragraph { font:var(--reading-size)/var(--reading-leading) var(--reading-font);margin:0 0 .75em;text-indent:2em;letter-spacing:.015em;orphans:2;widows:2; }
 .cczj-novel-shell .novel-reader-paged .novel-page-viewport { @apply cczj-overflow-hidden;touch-action:pan-y; }
-.cczj-novel-shell .novel-pagination-track { @apply cczj-h-full;column-fill:auto;column-gap:40px;@apply cczj-transition-none; }
-.cczj-novel-shell .novel-scroll-chapters { @apply cczj-flex cczj-items-center cczj-justify-between cczj-gap-8; padding:24px 0 8px; }
-.cczj-novel-shell .novel-reader-top { padding:5px 12px;background:var(--novel-surface);border:0;box-shadow:0 4px 16px #00000006; }
-.cczj-novel-shell .novel-reader-bottom { @apply cczj-block;padding:12px 20px calc(12px + env(safe-area-inset-bottom,0px));background:var(--novel-surface);box-shadow:0 -4px 20px #00000006;border:0; }
+.cczj-novel-shell .novel-pagination-track { @apply cczj-h-full;column-count:1;column-fill:auto;column-gap:40px;@apply cczj-transition-none; }
+.cczj-novel-shell .novel-reader-top { padding:5px 12px;background:var(--novel-surface);border:0;box-shadow:0 4px 16px #00000006;transition:opacity var(--cczj-motion-normal,220ms),transform var(--cczj-motion-normal,220ms) var(--cczj-motion-ease-standard,ease),visibility 0s; }
+.cczj-novel-shell .novel-reader-bottom { @apply cczj-block;padding:12px 20px calc(12px + env(safe-area-inset-bottom,0px));background:var(--novel-surface);box-shadow:0 -4px 20px #00000006;border:0;transition:opacity var(--cczj-motion-normal,220ms),transform var(--cczj-motion-normal,220ms) var(--cczj-motion-ease-standard,ease),visibility 0s; }
+.cczj-novel-shell .novel-chrome-hidden { transition-delay:0s,0s,var(--cczj-motion-normal,220ms); }
+.cczj-novel-shell .novel-reader-top.novel-chrome-hidden { transform:translateY(-100%); }
+.cczj-novel-shell .novel-reader-bottom.novel-chrome-hidden { transform:translateY(100%); }
 .cczj-novel-shell .novel-reader-seek { @apply cczj-flex cczj-items-center cczj-gap-5; }
 .cczj-novel-shell .novel-reader-seek button { @apply cczj-flex-shrink-0;min-width:52px;@apply cczj-text-sm; }
 .cczj-novel-shell .novel-reader-seek input { @apply cczj-min-w-0 cczj-flex-1;accent-color:var(--novel-red);min-height:44px; }
@@ -27,7 +40,8 @@
 .cczj-novel-shell .novel-brightness-row input { @apply cczj-flex-1;min-width:48px;width:70px;min-height:44px;accent-color:var(--novel-red); }
 .cczj-novel-shell .novel-directory-heading { @apply cczj-flex cczj-justify-between cczj-gap-6;margin:12px 0;@apply cczj-text-base; }.cczj-novel-shell .novel-directory-heading span { @apply cczj-text-sm;color:var(--novel-muted); }
 .cczj-novel-shell .novel-reading-hint { @apply cczj-absolute;left:50%;bottom:80px;transform:translateX(-50%);background:#252722e8;@apply cczj-text-white;padding:10px 16px;border-radius:10px;@apply cczj-text-13;z-index:30;max-width:90%; }
-@media(min-width:900px){.cczj-novel-shell .novel-page-viewport { top:64px;bottom:60px; }.cczj-novel-shell .novel-reader-bottom { left:50%;right:auto;width:min(100%,760px);transform:translateX(-50%);border-radius:16px 16px 0 0; }.cczj-novel-shell .novel-reader-bottom.novel-chrome-hidden { transform:translate(-50%,10px); }}
+@media(min-width:900px){.cczj-novel-shell .novel-page-viewport { top:64px;bottom:60px; }.cczj-novel-shell .novel-reader-bottom { left:50%;right:auto;width:min(100%,760px);transform:translateX(-50%);border-radius:16px 16px 0 0; }.cczj-novel-shell .novel-reader-bottom.novel-chrome-hidden { transform:translate(-50%,100%); }}
+@media(prefers-reduced-motion:reduce){.cczj-novel-shell :is(.novel-reader-top,.novel-reader-bottom) { @apply cczj-transition-none; }}
 /* 正文警告：提示不是错误，不阻断显示，用便签式的浅底压在正文流里。 */
 .cczj-novel-shell .novel-reading-warnings { break-inside:avoid;margin:0 0 1.6em;@apply cczj-px-7-py-5;border:1px solid var(--novel-line);@apply cczj-rounded-md;background:var(--novel-surface); }
 .cczj-novel-shell .novel-reading-warnings p { @apply cczj-flex cczj-items-start;gap:7px;margin:0;@apply cczj-text-sm;line-height:1.7;color:var(--novel-muted); }
@@ -35,8 +49,10 @@
 .cczj-novel-shell .novel-reading-warnings svg { @apply cczj-flex-shrink-0 cczj-mt-1; }
 
 .cczj-novel-shell .novel-reader-immersion{@apply cczj-absolute cczj-z-10;right:8px;top:2px;background:var(--novel-canvas);}
-.cczj-novel-shell .novel-reading-running-head{right:60px;}
-.cczj-novel-shell .novel-reader-immersive .novel-reading-running-head,.cczj-novel-shell .novel-reader-immersive .novel-reading-status{@apply cczj-hidden;}
+.cczj-novel-shell .novel-reading-running-head-desktop{right:60px;}
+.cczj-novel-shell .novel-reader-immersive .novel-running-title,.cczj-novel-shell .novel-reader-immersive .novel-reading-status{@apply cczj-hidden;}
 .cczj-novel-shell .novel-reader-immersive .novel-page-viewport{top:28px;bottom:28px;}
 body[data-reading-immersive='1'] .titlebar{@apply cczj-hidden;}
 body[data-reading-immersive='1'] .app-shell{padding:0;}
+.novel-reader .novel-reader-recovery-entry { @apply cczj-absolute; top: 60px; right: 20px; z-index: 22; }
+.novel-reading-recovery p { line-height: 1.8; overflow-wrap: anywhere; }

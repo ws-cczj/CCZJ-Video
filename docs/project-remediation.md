@@ -56,7 +56,7 @@ Windows production 原生验证包含托盘关闭、主动退出、启动失败�
 
 备份限额最终核对：真实 SQLite 写入 200001 条可导出设置后，旧实现生成了可下载但自身导入器拒绝的文件，复现日志为 `backup-export-limit-before.log`。导入与导出现在共用条目计数，并在创建导出文件前拒绝超限内容；`app/backup/export_limit_test.go` 验证不发布文件，回归日志 `backup-export-limit-after.log`。最终完整验证和最新产物日志统一为 `dist/audit/lifecycle/architecture-delivery-*`，包括 Windows 原生、Android amd64／arm64 构建、amd64 覆盖安装／重建／取消；未运行的物理设备项目仍保留待验状态。
 
-Wails beta.30→34 的源码／发布说明评估、事件契约生成方案和隔离依赖测试结果见 [开发指南](development.md#wails-beta34-兼容评估)。根目录 Go／JS／CLI 仍为 beta.30；升级需要单独同步验证，不删除 Android 生命周期或 JNI 错误补丁。
+Wails Go／JS／CLI 已同步至 3.0.0，hls.js 固定为 1.7.4；当前依赖、关联检查及验收边界见 [开发指南](development.md#依赖升级候选与兼容边界)。Android 生命周期、JNI 结构化错误与取消交接补丁经源码对比仍需保留；下文历史审计中的 beta.30 是当时证据版本，不代表当前依赖。
 
 起始源码 `f16edc644c7564ab1057eb35cd956708dfb16fff`，起始工作区干净。已生成含 SHA-256、文件大小、文本行数、初始状态的全量清单：`dist/audit/full-project/inventory.json`，覆盖 2590 个非忽略文件（含历史报告、资源和生成绑定）。清单的归类只用于发现漏项，跨领域调用方仍须跟踪；文件计数不代表已读覆盖率。
 

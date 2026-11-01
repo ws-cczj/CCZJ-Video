@@ -1,3 +1,4 @@
+import { CCZJ } from '../constants/cczj'
 import { ref, watch, onMounted } from 'vue'
 import { readStorageBoolean, writeStorage } from '../platform/storage'
 import { createPlayerSettings } from './settings'
@@ -18,7 +19,7 @@ const preferenceWrites = createSettingsQueue((key,value)=>SetSetting(key,value),
 function loadDisplayPreferences(): Promise<void> {
   if(loaded)return Promise.resolve()
   if(loading)return loading
-  loading=Promise.all([GetSetting('player_hold_speed'),GetSetting('player_picture_fit')]).then(([speed,fit])=>{
+  loading=Promise.all([GetSetting(CCZJ.Settings.playerHoldSpeed),GetSetting(CCZJ.Settings.playerPictureFit)]).then(([speed,fit])=>{
     const value=Number(speed)
     if(!holdEdited && HOLD_SPEEDS.some(option=>option===value))holdSpeed.value=value
     if(!fitEdited && PICTURE_FITS.some(option=>option===fit))pictureFit.value=fit as PictureFit
@@ -30,28 +31,28 @@ function loadDisplayPreferences(): Promise<void> {
 /** Persistence and effective values are shared by settings and media events. */
 export function usePlaybackPreferences(autoplay:()=>boolean, notify:()=>void) {
   const settings=createPlayerSettings()
-  const autoPlayEnabled=ref(readStorageBoolean('cczj_auto_play',autoplay()))
-  const autoNextEnabled=ref(readStorageBoolean('cczj_auto_next',true))
+  const autoPlayEnabled=ref(readStorageBoolean(CCZJ.Storage.autoPlay,autoplay()))
+  const autoNextEnabled=ref(readStorageBoolean(CCZJ.Storage.autoNext,true))
   const autoResume=ref(settings.read('auto_resume_jump','0')==='1')
   onMounted(()=>{void loadDisplayPreferences()})
   function setHoldSpeed(value:number):void {
     if(!HOLD_SPEEDS.some(option=>option===value))return
     holdEdited=true;holdSpeed.value=value
-    void preferenceWrites.set('player_hold_speed',String(value))
+    void preferenceWrites.set(CCZJ.Settings.playerHoldSpeed,String(value))
   }
   function setPictureFit(value:string):void {
     if(!PICTURE_FITS.some(option=>option===value))return
     fitEdited=true;pictureFit.value=value as PictureFit
-    void preferenceWrites.set('player_picture_fit',value)
+    void preferenceWrites.set(CCZJ.Settings.playerPictureFit,value)
   }
   watch(autoplay,value=>{autoPlayEnabled.value=value})
   function toggleAutoPlay():void {
     const value=!autoPlayEnabled.value
-    if(writeStorage('cczj_auto_play',value)){autoPlayEnabled.value=value;notify()}
+    if(writeStorage(CCZJ.Storage.autoPlay,value)){autoPlayEnabled.value=value;notify()}
   }
   function toggleAutoNext():void {
     const value=!autoNextEnabled.value
-    if(writeStorage('cczj_auto_next',value))autoNextEnabled.value=value
+    if(writeStorage(CCZJ.Storage.autoNext,value))autoNextEnabled.value=value
   }
   function toggleAutoResume():void {
     const value=!autoResume.value

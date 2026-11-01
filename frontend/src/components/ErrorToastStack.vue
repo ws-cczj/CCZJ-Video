@@ -48,8 +48,9 @@ function dismiss(id: string): void {
 }
 
 .toast-stack__list {
-  @apply cczj-flex cczj-flex-col cczj-items-end cczj-gap-6;
+  @apply cczj-relative cczj-flex cczj-flex-col cczj-items-end cczj-gap-6;
 }
+.toast-stack__list :deep(.cczj-motion-toast-leave-active) { @apply cczj-absolute cczj-right-0; }
 
 .toast-message {
   font-size: var(--font-sm);

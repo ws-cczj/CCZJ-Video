@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import { CCZJ } from '../constants/cczj'
 import CczjMobileEditActions from '../mobile/CczjMobileEditActions.vue'
 defineOptions({ name: 'Home' })
 import { ref, computed, onMounted, onDeactivated, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useModeViewState } from '../modes/useModeViewState'
+import { loadVideoDetail } from '../modes/videoViews'
 import { startupTask } from '../diagnostics/startup'
 import { useGeneration } from '../composables/useGeneration'
 import { useViewActivity } from '../composables/useViewActivity'
@@ -17,7 +19,8 @@ import { useLayoutStore } from '../stores/layout'
 import { useVideoList, type VideoFilter } from '../composables/useVideoList'
 import { useErrorStore } from '../stores/error'
 import VideoCard from '../components/VideoCard.vue'
-import { Button, Tag, Modal, Spinner as LoadingSpinner, Empty as EmptyState, Select as SelectDropdown } from '../components/ui'
+import VirtualVideoGrid from '../components/VirtualVideoGrid.vue'
+import { Button, Tag, Modal, Skeleton, Empty as EmptyState, Select as SelectDropdown } from '../components/ui'
 import BookCarousel from '../components/BookCarousel.vue'
 import Icon from '../components/Icon.vue'
 import { getDetailPath, getSearchPath } from '../utils'
@@ -196,7 +199,7 @@ const recommendLoading = ref(false)
 const recommendGroups = ref<RecommendGroup[]>([])
 
 const carouselSlides = ref<Video[]>([])
-const DOUBAN_CHART_CACHE_KEY = 'cczj_douban_chart_cache_v1'
+const DOUBAN_CHART_CACHE_KEY = CCZJ.Storage.doubanChart
 // 浏览器缓存只用于立即展示；七天抓取周期由 Go 快照的真实抓取时间决定。
 const DOUBAN_CHART_STALE_CEILING = 14 * 24 * 60 * 60 * 1000
 let chartLoadInFlight: Promise<any[]> | null = null
@@ -205,6 +208,25 @@ const recommendationGeneration = useGeneration()
 const recommendationRequests = createRequestScope()
 const viewActive = useViewActivity(() => router.currentRoute.value.path === '/')
 const homeRoot = ref<HTMLElement>()
+let detailPrepared = false
+let homePrepared = false
+let detailIdle: number | undefined, detailDelay: ReturnType<typeof setTimeout> | undefined
+function cancelDetailPreparation():void {
+  if(detailIdle!==undefined)window.cancelIdleCallback(detailIdle)
+  clearTimeout(detailDelay);detailIdle=undefined;detailDelay=undefined
+}
+function scheduleDetailPreparation():void {
+  if(isMobileRuntime()||!homePrepared||detailPrepared||!viewActive.value||detailIdle!==undefined||detailDelay!==undefined)return
+  const prepare=()=>{
+    detailIdle=undefined;detailDelay=undefined
+    if(!viewActive.value)return
+    detailPrepared=true
+    // Loading code does not mount a view, request metadata or prepare media.
+    void loadVideoDetail().catch(()=>{detailPrepared=false})
+  }
+  if(typeof window.requestIdleCallback==='function')detailIdle=window.requestIdleCallback(prepare,{timeout:2000})
+  else detailDelay=setTimeout(prepare,1200)
+}
 
 function cancelRecommendations(): void {
   recommendationGeneration.invalidate()
@@ -221,6 +243,7 @@ function clearRecommendations(): void {
 }
 
 watch(viewActive, active => {
+  if(active)scheduleDetailPreparation();else cancelDetailPreparation()
   if (!active) { homePageWasDeactivated = true; cancelHomeRefresh(); cancelRecommendations() }
   else if (homePageWasDeactivated) scheduleHomeRefresh()
   else if (!recommendLoading.value && !homePageWasDeactivated) void loadRecommendations()
@@ -517,7 +540,6 @@ function cancelHomeRefresh():void {
 }
 function scheduleHomeRefresh():void {
   cancelHomeRefresh()
-  if(!isMobileRuntime()){homePageWasDeactivated=false;void refreshHomeFeed();return}
   const token=resumeRevision
   // Vue starts CSS transitions over two frames. Refresh retained content only
   // after that transition, and never start reads for an uncommitted swipe preview.
@@ -526,8 +548,12 @@ function scheduleHomeRefresh():void {
     resumeFrame=requestAnimationFrame(()=>{resumeFrame=requestAnimationFrame(async()=>{
       resumeFrame=undefined
       const scene=homeRoot.value?.closest('.cczj-mobile-route-scene')
-      await Promise.allSettled((scene?.getAnimations?.()??[]).map(animation=>animation.finished))
-      if(token!==resumeRevision||!viewActive.value)return
+      // Playback can leave over a stationary Home scene. Wait for both scene
+      // roots, including its clip transition, before replacing retained cards.
+      const siblings=scene?.parentElement?.children
+      const animations=Array.from(siblings||[]).flatMap(element=>element.getAnimations()).filter(animation=>animation.effect?.getTiming().iterations!==Infinity)
+      await Promise.allSettled(animations.map(animation=>animation.finished))
+      if(token!==resumeRevision||!viewActive.value||router.currentRoute.value.path!=='/')return
       homePageWasDeactivated=false
       await refreshHomeFeed()
     })})
@@ -559,15 +585,18 @@ onMounted(async () => {
   await nextTick()
   suppressSourceWatch = false
  })
+ homePrepared=true;scheduleDetailPreparation()
 })
 
 onBeforeUnmount(() => {
+  cancelDetailPreparation()
   cancelHomeRefresh()
   clearRecommendations()
   if (applyTimer) clearTimeout(applyTimer)
 })
 
 onDeactivated(() => {
+  cancelDetailPreparation()
   cancelHomeRefresh()
   cancelRecommendations()
   if (applyTimer) { clearTimeout(applyTimer); applyTimer = null }
@@ -607,7 +636,7 @@ const { editing: editingContinue, finish: finishContinueEditing, vHoldToEdit } =
       class="recommend-section cczj-mb-10 cczj-rounded-md">
       <!-- 有内容可看时不再叠一层转圈：转圈一消失整块内容就要跳一次位。 -->
       <div v-if="recommendLoading && recommendGroups.length === 0" class="recommend-loading cczj-text-center">
-        <LoadingSpinner size="sm" :label="t('home.loadingRecommendations')" />
+        <Skeleton variant="cards" :rows="1" :label="t('home.loadingRecommendations')" />
       </div>
 
       <!-- 推荐分组（紧凑行） -->
@@ -713,21 +742,15 @@ const { editing: editingContinue, finish: finishContinueEditing, vHoldToEdit } =
     </section>
 
     <!-- ============ 视频网格 / 空状态 ============ -->
-    <div v-if="list.loading && list.videos.length === 0" class="center-pad">
-      <LoadingSpinner :label="t('home.loadingVideos')" />
-    </div>
-
-    <div v-else-if="list.videos.length === 0" class="center-pad">
+    <Skeleton :loading="list.loading && list.videos.length === 0" variant="cards" :rows="3" :label="t('home.loadingVideos')">
+    <div v-if="list.videos.length === 0" class="center-pad">
       <EmptyState icon="📺" :title="t('home.noData')" :description="t('home.noDataDesc')">
         <Button variant="primary" @click="router.push('/sources')">{{ t('home.goToSources') }}</Button>
       </EmptyState>
     </div>
 
-    <div v-else class="video-grid" :style="gridStyle">
-      <VideoCard v-for="(v, idx) in list.videos"
-        :key="`${sourceStore.currentSourceKey}-${String((v as any).vod_id ?? '')}-${idx}`" :video="v"
-        @click="goDetail(v)" />
-    </div>
+    <VirtualVideoGrid v-else class="video-grid" :style="gridStyle" :items="list.videos" @select="goDetail" />
+    </Skeleton>
   </div>
 <CczjMobileEditActions v-if="isMobileRuntime()" :open="editingContinue" @done="finishContinueEditing" @cancel="finishContinueEditing" />
 </template>

@@ -1,4 +1,5 @@
-export const DANMAKU_SOURCE_SETTINGS_KEY = 'danmaku_sources_v1'
+import { CCZJ } from '../../constants/cczj'
+export const DANMAKU_SOURCE_SETTINGS_KEY = CCZJ.Settings.danmakuSources
 export const builtinDanmakuSources = [
   { id: 'bilibili', name: 'B站', protocol: 'Protobuf' },
   { id: 'qq', name: '腾讯视频', protocol: 'JSON' },

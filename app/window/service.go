@@ -2,6 +2,7 @@
 package window
 
 import (
+	CCZJ "cczjVideo/app/cczj"
 	"context"
 	"strconv"
 	"sync"
@@ -59,7 +60,7 @@ func (s *Service) SetCloseBehavior(ctx context.Context, minimize bool) error {
 	if minimize {
 		value = "1"
 	}
-	if err := s.settings.SetMany(ctx, map[string]string{"close_to_tray": value}); err != nil {
+	if err := s.settings.SetMany(ctx, map[string]string{CCZJ.SettingCloseToTray: value}); err != nil {
 		return apperror.Wrap(apperror.Storage, err, "保存窗口关闭行为失败")
 	}
 	s.minimizeToTray.Store(minimize)
@@ -68,7 +69,7 @@ func (s *Service) SetCloseBehavior(ctx context.Context, minimize bool) error {
 
 // LoadCloseBehavior restores the persisted close behavior while preserving the default on first run.
 func (s *Service) LoadCloseBehavior() {
-	value, err := s.settings.Get("close_to_tray")
+	value, err := s.settings.Get(CCZJ.SettingCloseToTray)
 	if err != nil || value == "" {
 		// 缺键在库层返回的是 ("", nil)，只看 err 会把「没存过」当成「存了 false」，
 		// 于是每个新装用户第一次点关闭就直接退出程序，而默认值本来是缩到托盘。
@@ -132,7 +133,7 @@ func (s *Service) SetResizable(ctx context.Context, resizable bool) error {
 	if !resizable {
 		value = "0"
 	}
-	if err := s.settings.SetMany(ctx, map[string]string{"window_resizable": value}); err != nil {
+	if err := s.settings.SetMany(ctx, map[string]string{CCZJ.SettingWindowResizable: value}); err != nil {
 		return apperror.Wrap(apperror.Storage, err, "保存窗口调整设置失败")
 	}
 	if w := s.currentWindow(); w != nil {
@@ -157,7 +158,7 @@ func (s *Service) SetSize(ctx context.Context, width, height int) error {
 	if height < MinimumHeight {
 		height = MinimumHeight
 	}
-	if err := s.settings.SetMany(ctx, map[string]string{"window_width": strconv.Itoa(width), "window_height": strconv.Itoa(height)}); err != nil {
+	if err := s.settings.SetMany(ctx, map[string]string{CCZJ.SettingWindowWidth: strconv.Itoa(width), CCZJ.SettingWindowHeight: strconv.Itoa(height)}); err != nil {
 		return apperror.Wrap(apperror.Storage, err, "保存窗口尺寸失败")
 	}
 	if w := s.currentWindow(); w != nil {
@@ -183,8 +184,8 @@ func (s *Service) ApplySettings(ctx context.Context) error {
 		return nil
 	}
 
-	width, widthErr := s.settings.Get("window_width")
-	height, heightErr := s.settings.Get("window_height")
+	width, widthErr := s.settings.Get(CCZJ.SettingWindowWidth)
+	height, heightErr := s.settings.Get(CCZJ.SettingWindowHeight)
 	if widthErr == nil && heightErr == nil {
 		parsedWidth, widthParseErr := strconv.Atoi(width)
 		parsedHeight, heightParseErr := strconv.Atoi(height)
@@ -199,7 +200,7 @@ func (s *Service) ApplySettings(ctx context.Context) error {
 		}
 	}
 
-	if value, err := s.settings.Get("window_resizable"); err == nil {
+	if value, err := s.settings.Get(CCZJ.SettingWindowResizable); err == nil {
 		w.SetResizable(value != "0")
 	}
 	return nil

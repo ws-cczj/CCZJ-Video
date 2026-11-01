@@ -1,3 +1,4 @@
+import { normalizeApiError } from '../../api/errors'
 import { computed, onScopeDispose, watch } from 'vue'
 import { defineStore, storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
@@ -36,7 +37,6 @@ export const useShortDramaSession = defineStore('short-drama-session', () => {
     return () => { if (beforeChange === handler) beforeChange = undefined }
   }
   const feed = useShortDramaFeed(currentSourceKey, enabled, () => beforeChange?.(), entry, {
-    sources: () => sources.sources.filter(source => source.enabled !== 0 && source.enabled !== false).map(source => source.source_key || '').filter(Boolean),
     playing: () => playing.value,
     choose: (batch,fallback,current) => preferences.choose(batch,fallback,current),
     remember: (source,vod) => preferences.remember(source,vod),
@@ -56,7 +56,7 @@ export const useShortDramaSession = defineStore('short-drama-session', () => {
     const owned = new AbortController()
     warm = owned
     void prefetchMediaStart(media, owned.signal, idle).catch(cause => {
-      if (!owned.signal.aborted) void recordDiagnosticEvent('short_drama_prefetch_failed', { message: String(cause) })
+      if (!owned.signal.aborted) void recordDiagnosticEvent('short_drama_prefetch_failed', { code: normalizeApiError(cause).code })
     })
   }, { flush: 'post' })
   onScopeDispose(() => { warm?.abort(); beforeChange = undefined })

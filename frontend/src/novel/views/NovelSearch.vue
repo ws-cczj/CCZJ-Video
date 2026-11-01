@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isMobileRuntime } from '../../api/runtime'
 import {useSearchReturn} from '../../reading/useSearchReturn'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -6,16 +7,20 @@ import { useModeViewState } from '../../modes/useModeViewState'
 import { startupTask } from '../../diagnostics/startup'
 import { useI18n } from 'vue-i18n'
 import { useAsyncResource } from '../../reading/asyncResource'
-import { searchNovels, listNovelSources, type NovelSearchPage } from '../data/novelLibrary'
+import { searchNovels, type NovelSearchPage } from '../data/novelLibrary'
+import { listNovelBuiltinSources, type BuiltinSourceRow } from '../../api/readingSources'
+import { useNovelReading } from '../readingState'
+import { groupNovelSearch } from '../searchGroups'
 import NovelBookCard from '../components/NovelBookCard.vue'
 import Icon from '../../components/Icon.vue'
-import { Spinner } from '../../components/ui'
+import { Button } from '../../components/ui'
 import ReadingSearchStatus from '../../reading/ReadingSearchStatus.vue'
 import { rankSearchItems, searchRelevance } from '../../reading/searchRelevance'
 defineOptions({name:'NovelSearch'})
 const { t } = useI18n()
 const route = useRoute()
-const sources = useAsyncResource({ load: listNovelSources, isEmpty: rows => rows.length === 0 })
+const reading=useNovelReading()
+const sources = useAsyncResource({ load: listNovelBuiltinSources, isEmpty: data => !data.rows.some(row=>row?.enabled) })
 void sources.run()
 const keyword = ref('')
 const submitted=ref(false)
@@ -37,11 +42,11 @@ const search = useAsyncResource<NovelSearchPage>({
   load: () => {
     const id = searchId, current = page.value
     return searchNovels(submittedKeyword, current, current > 1 ? cursor : '',partial=>{
-      if(id===searchId){ searchedCount.value=searchedBefore+partial.searchedSources; search.data.value={...partial,items:current<=1?partial.items:mergeItems(accumulated,partial.items)} }
+      if(id===searchId){ searchedCount.value=searchedBefore+partial.searchedSources; search.data.value={...partial,items:mergeItems(accumulated,partial.items)} }
     }).then(result => {
     if (id !== searchId) return result
     searchedCount.value=searchedBefore+result.searchedSources
-    accumulated = mergeItems(current <= 1 ? [] : accumulated,result.items)
+    accumulated = mergeItems(accumulated,result.items)
     return { ...result, items: accumulated }
     })
   },
@@ -53,10 +58,12 @@ const searchRoot=ref<HTMLElement|null>(null)
 const searchReturn=useSearchReturn(searchRoot,{loading:()=>search.status.value==='loading',cancel:stopSearch,refresh:submit})
 const matchingBooks = computed(()=>(search.data.value?.items??[]).filter(item=>searchRelevance(item,matchedKeyword.value)>0))
 const relatedBooks = computed(()=>(search.data.value?.items??[]).filter(item=>searchRelevance(item,matchedKeyword.value)===0))
+const matchingGroups=computed(()=>groupNovelSearch(matchingBooks.value,(sources.data.value?.rows??[]).filter((row):row is BuiltinSourceRow=>!!row),reading.progress))
 const onlyPartialMatch = computed(()=>matchingBooks.value.length>0&&!matchingBooks.value.some(item=>searchRelevance(item,matchedKeyword.value)>=3))
 async function submit(): Promise<void> {
   const value = keyword.value.trim()
   if (!value || (search.status.value === 'loading' && value===submittedKeyword)) return
+  searchRoot.value?.querySelector<HTMLInputElement>('input')?.blur()
   submittedKeyword=value
   searchReturn.capture()
   submitted.value=true
@@ -66,6 +73,8 @@ async function submit(): Promise<void> {
   cursor = ''
   searchedBefore=0; searchedCount.value=0; stopped.value=false
   search.data.value=null
+  accumulated=reading.shelf.map(row=>row.item).filter(item=>searchRelevance(item,value)>0)
+  if(accumulated.length)search.data.value={keyword:value,items:accumulated,failures:[],total:accumulated.length,failedCount:0,page:1,hasNext:false,nextCursor:'',pendingSources:0,searchedSources:0}
   await search.run()
 }
 function more(): void {
@@ -106,24 +115,31 @@ onMounted(()=>{void startupTask('first_screen',async()=>{if(typeof route.query.q
 watch(()=>route.query.q,value=>{if(typeof value==='string'&&value.trim()&&value!==submittedKeyword){keyword.value=value;void submit()}})
 </script>
 <template>
-  <div ref="searchRoot" class="novel-page reading-search-page"><header class="reading-page-heading"><div><h1>{{ t('readingUI.findBooks') }}</h1><p>{{ t('readingUI.searchSubtitle') }}</p></div></header>
-    <form class="novel-search" role="search" @submit.prevent="submit"><Icon name="search" :size="20" /><input v-model="keyword" type="search" autocomplete="off" @keydown.enter="($event.isComposing || $event.keyCode===229) && $event.preventDefault()" enterkeyhint="search" :placeholder="t('readingUI.searchBooks')" :aria-label="t('novel.search')" /><button v-if="keyword" :aria-label="t('common.clearAll')" @click="clear" type="button"><Icon name="close" :size="18" /></button><button type="submit" :disabled="!keyword.trim()">{{ t('readingUI.searchAction') }}</button></form>
+  <div ref="searchRoot" class="novel-page reading-search-page novel-search-page"><header v-if="!isMobileRuntime()" class="reading-page-heading"><div><h1>{{ t('readingUI.findBooks') }}</h1></div></header>
+    <form class="room-search" role="search" @submit.prevent="submit"><Icon name="search" :size="20" /><input v-model="keyword" type="search" autocomplete="off" @keydown.enter="($event.isComposing || $event.keyCode===229) && $event.preventDefault()" enterkeyhint="search" :placeholder="t('readingUI.searchBooks')" :aria-label="t('novel.search')" /><Button variant="text" v-if="keyword" :aria-label="t('common.clearAll')" @click="clear" type="button"><Icon name="close" :size="18" /></Button><Button variant="text" type="submit" :disabled="!keyword.trim()">{{ t('readingUI.searchAction') }}</Button></form>
     <p v-if="search.data.value?.keyword && search.data.value.keyword!==submittedKeyword" class="novel-search-resolved" role="status">{{t('novel.searchResolved',{keyword:search.data.value.keyword})}}</p>
     <div class="reading-search-links"><router-link to="/novel/sources"><Icon name="database" :size="16" />{{ t('readingUI.sources') }}<Icon name="chevron-right" :size="14" /></router-link><router-link to="/novel/categories"><Icon name="book-open" :size="16" />{{ t('readingUI.localBooks') }}<Icon name="chevron-right" :size="14" /></router-link></div>
     <div v-if="sources.error.value" class="novel-alert" role="status"><span>{{ sources.error.value.message }}</span><button class="novel-text-button" @click="sources.retry()">{{ t('common.retry') }}</button></div>
     <ReadingSearchStatus v-if="search.status.value === 'loading' && !search.data.value" :searched="0" :pending="0" :loading="true" :failures="[]" @stop="stopSearch" />
     <div v-else-if="search.status.value === 'error'" class="novel-empty"><Icon name="warning" :size="36" /><h2>{{ search.error.value?.message || t('common.unknownError') }}</h2><button class="novel-button" @click="retrySearch">{{ t('common.retry') }}</button></div>
     <div v-else-if="search.status.value === 'idle' && sources.status.value === 'empty'" class="novel-empty reading-empty"><span class="reading-empty-icon"><Icon name="database" :size="32" /></span><h2>{{ t('librarySources.emptyTitle') }}</h2><p>{{ t('readingUI.sourceEmptyHint') }}</p><router-link class="novel-button novel-button-primary" to="/novel/sources">{{ t('readingUI.addSource') }}</router-link></div>
-    <div v-else-if="search.status.value === 'idle'" class="novel-empty reading-empty"><span class="reading-empty-icon"><Icon name="search" :size="32" /></span><h2>{{ t('readingUI.searchBooks') }}</h2><p>{{ t('novel.searchPrompt') }}</p></div>
+    <p v-else-if="search.status.value === 'idle'" class="novel-search-prompt">{{ t('novel.searchPrompt') }}</p>
     <template v-else>
-      <div class="novel-section-heading"><h2>{{ t('novel.searchResults') }}</h2><span>{{ t('novel.bookCount',{n:matchingBooks.length}) }}</span></div>
+      <div class="novel-section-heading"><h2>{{ t('novel.searchResults') }}</h2><span>{{ t('novel.bookCount',{n:matchingGroups.length}) }}</span></div>
       <ReadingSearchStatus :searched="searchedCount" :pending="search.data.value?.pendingSources??0" :loading="search.status.value==='loading'" :partial-match="onlyPartialMatch" :failures="search.data.value?.failures??[]" @stop="stopSearch" />
       <p v-if="stopped" role="status">{{ t('sourceRouting.searchStopped') }}</p>
-      <div v-if="matchingBooks.length" class="novel-row-grid"><NovelBookCard v-for="book in matchingBooks" :key="book.id" :book="book" compact /></div>
+      <div v-if="matchingGroups.length" class="novel-row-grid"><section v-for="group in matchingGroups" :key="group.key" class="novel-search-group"><NovelBookCard :book="group.book" compact/><p v-if="group.continuing" class="novel-search-source-note">{{ t('sourceSupply.continueSource',{name:group.book.sourceName}) }}</p><details v-if="group.sources.length>1" class="novel-search-versions"><summary>{{ t('sourceSupply.sourceCount',{count:group.sources.length}) }}</summary><ul><li v-for="book in group.sources" :key="book.id"><router-link :to="`/novel/book/${book.id}`">{{ book.sourceName }} · {{ book.author }}<Icon name="chevron-right" :size="16"/></router-link></li></ul><p>{{ t('sourceSupply.groupHint') }}</p></details></section></div>
       <div v-else-if="search.status.value!=='loading'" class="novel-empty"><Icon name="search" :size="36" /><h2>{{ t('sourceRouting.noTitleMatch') }}</h2><p>{{ t(search.data.value?.pendingSources?'sourceRouting.searchScope':search.data.value?.failures.length?'sourceRouting.incompleteSearch':'novel.tryKeyword') }}</p></div>
       <details v-if="relatedBooks.length" class="reading-search-related"><summary class="cczj-cursor-pointer">{{ t('sourceRouting.otherResults',{count:relatedBooks.length}) }}</summary><div class="novel-row-grid"><NovelBookCard v-for="book in relatedBooks" :key="book.id" :book="book" compact /></div></details>
-      <div v-if="search.status.value === 'loading'" class="novel-load-more"><Spinner size="sm" /></div>
-      <div v-else-if="search.data.value && search.data.value.hasNext" class="novel-load-more"><button class="novel-button" @click="more">{{ t(search.data.value.pendingSources?'sourceRouting.more':'novel.loadMore') }}</button></div>
+      <div v-if="search.status.value !== 'loading' && search.data.value && search.data.value.hasNext" class="novel-load-more"><button class="novel-button" @click="more">{{ t(search.data.value.pendingSources?'sourceRouting.more':'novel.loadMore') }}</button></div>
     </template>
   </div>
 </template>
+<style scoped>
+.novel-search-group{@apply cczj-min-w-0}
+.novel-search-source-note,.novel-search-versions{font-size:calc(12rem / 14);color:var(--novel-muted);line-height:1.7}
+.novel-search-versions summary{@apply cczj-cursor-pointer;padding:10px 0;color:var(--novel-red)}
+.novel-search-versions ul{list-style:none;padding:0;margin:0}
+.novel-search-versions a{@apply cczj-flex cczj-items-center cczj-justify-between cczj-gap-6;min-height:44px;color:inherit;text-decoration:none;overflow-wrap:anywhere;border-bottom:1px solid var(--novel-line)}
+.novel-search-versions summary:focus-visible,.novel-search-versions a:focus-visible{outline:2px solid var(--novel-red);outline-offset:2px}
+</style>

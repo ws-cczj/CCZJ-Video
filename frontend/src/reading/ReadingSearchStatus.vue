@@ -16,7 +16,7 @@ const { t } = useI18n()
   <aside class="reading-search-status" :aria-label="t('sourceRouting.searchStatus')">
     <div class="cczj-flex cczj-items-center cczj-justify-between cczj-flex-wrap cczj-gap-4">
       <p class="cczj-flex cczj-items-center cczj-flex-wrap cczj-gap-4" role="status">
-        <Spinner v-if="loading" size="sm" />
+        <Spinner v-if="loading" size="sm" inline />
         <span>{{ t(loading ? 'sourceRouting.searchingCount' : 'sourceRouting.searchedCount', { count: searched }) }}</span>
         <span v-if="!loading && pending">{{ t('sourceRouting.pendingCount', { count: pending }) }}</span>
       </p>

@@ -1,15 +1,14 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { tr } from '../locales'
 import Icon from '../components/Icon.vue'
 import { useDownloadStore } from '../stores/download'
 import Sidebar from '../components/Sidebar.vue'
-import { MotionTransition } from '../components/ui'
-import { createDesktopRouteScenes } from './desktopRouteScene'
+import MobileRouteStage from '../mobile/MobileRouteStage.vue'
 import { shortDramaScene } from '../player/shortDrama/scene'
-const scene = createDesktopRouteScenes()
-const cached = ['Home','Search','Sources','Favorites','History','Recent','Downloads','Settings']
+import { videoNavigationPaths } from './videoNavigation'
+const cached = ['Home','Search','ShortDrama','Sources','Favorites','History','Recent','Downloads','Settings']
 const dl = useDownloadStore(), router = useRouter()
 const route=useRoute()
 const shortDramaPlayback=computed(()=>shortDramaScene(route,false)==='playback')
@@ -37,24 +36,30 @@ function onFabLeave(): void {
   hoverFab.value = false
 }
 
-onMounted(() => { window.addEventListener('mousemove',handleFabMouseMove) })
-onBeforeUnmount(() => window.removeEventListener('mousemove',handleFabMouseMove))
+watch(() => dl.activeCount > 0, (active, _previous, cleanup) => {
+  if (!active) { fabVisible.value=false;hoverFab.value=false;return }
+  window.addEventListener('mousemove',handleFabMouseMove)
+  cleanup(() => window.removeEventListener('mousemove',handleFabMouseMove))
+}, { immediate:true })
 </script>
 <template>
   <div class="app-body">
     <Sidebar v-if="!shortDramaPlayback" />
-    <main class="main-content" :class="{'short-drama-host': $route.path === '/short-drama'}">
-      <router-view v-slot="{ Component }">
-        <MotionTransition preset="page" mode="out-in">
-          <KeepAlive :include="cached"><component v-if="Component" :is="scene(Component)" :view="Component" :class="{ 'cczj-h-full': $route.path === '/short-drama' }" :key="$route.name === 'player' ? `player:${String($route.params.sourceKey || '')}:${String($route.params.globalId || '')}` : $route.path" /></KeepAlive>
-        </MotionTransition>
-      </router-view>
-    </main>
+    <MobileRouteStage class="desktop-video-stage" :mobile="false" :cache="cached" :sections="videoNavigationPaths" wallpaper>
+      <template #default="{ Component, route: shownRoute }">
+        <main class="main-content" :class="{ 'short-drama-host': shownRoute.path === '/short-drama' }">
+          <component :is="Component" :class="{ 'cczj-h-full': shownRoute.path === '/short-drama' }" />
+        </main>
+      </template>
+    </MobileRouteStage>
   </div>
     <!-- 右下角下载悬浮球 -->
     <button
+      v-if="dl.activeCount > 0"
       class="download-fab"
       :class="{ 'fab-visible': fabVisible || hoverFab }"
+      @focus="fabVisible = true"
+      @blur="fabVisible = false"
       @click="router.push('/downloads')"
       @mouseenter="onFabEnter"
       @mouseleave="onFabLeave"

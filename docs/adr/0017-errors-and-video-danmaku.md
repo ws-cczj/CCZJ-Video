@@ -10,7 +10,7 @@
 
 SP-TJob 的参考价值是错误目录、传输出口、日志中间件和界面策略各自有明确职责。CCZJ 使用 Wails，无需套用 Gin 的统一数字成功/失败响应。
 
-Wails beta.30 的服务注册没有使用全局编码器作为实际回退，因此服务显式配置 `ServiceOptions.MarshalError`。Android JNI 又把 CallError 压成字符串：原生构建生成 SDK 的本地副本并只修补此分支，前端 `api/androidTransport.ts` 保留结构化 cause。共享模块缓存、根 go.mod 和桌面运行时不被修改。Go 1.26 禁止覆盖 GOMODCACHE 下的源码，所以 Android 使用生成的 modfile 与本地副本；上游分支变化时脚本中止构建，要求重新审阅。
+服务显式配置 `ServiceOptions.MarshalError`，确保各宿主绑定使用同一公开错误协议。当前 Wails 3.0.0 的 Android JNI 仍把 CallError 压成字符串：原生构建生成 SDK 本地副本，保留结构化错误、取消交接及退出清理补丁，前端 `api/androidTransport.ts` 保留结构化 cause。补丁不修改共享模块缓存、根 go.mod 或桌面运行时。Go 1.26 禁止覆盖 GOMODCACHE 下的源码，所以 Android 使用生成的 modfile 与本地副本；上游分支变化时脚本中止构建，要求重新审阅。
 
 前端 API 层一次解码为 `ApiFailure`，数字 `code/msg` 与旧文本前缀仅用于兼容。错误 store 合并短时间重复提示，取消保持安静，后端已记录的错误不再次写前端日志。诊断关联号保留在提示详情中。旧绑定的原始 Wails diagnostic message 仍可能包含内部原因；界面消费公开 cause，不能直接展示原始 Error.message。
 

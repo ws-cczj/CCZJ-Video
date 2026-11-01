@@ -4,9 +4,10 @@ import { modeHome, routeMode } from '../modes/definitions'
 import {routeScreenKey} from '../mobile/routeMotion'
 import { modeSessions } from '../modes/sessionRuntime'
 import { restoreModeScroll } from '../modes/restoreScroll'
+import { loadVideoDetail } from '../modes/videoViews'
 import { createRouter, createWebHashHistory, type RouteLocationNormalized } from 'vue-router'
 import { WriteLog } from '../api/app'
-import { isMobileRuntime } from '../api/runtime'
+import { captureDiagnosticContext, newDiagnosticAction, recordTimeline, setDiagnosticLocation, type DiagnosticContext } from '../diagnostics/session'
 
 // ====== 滚动位置管理：记录每个路由路径在 .main-content 上的 scrollTop ======
 // 背景：App.vue 中滚动容器是 .main-content（overflow-y: auto），不是 window。
@@ -34,7 +35,7 @@ function restoreScrollFor(path: string): void {
   const y = scrollPositions[path] ?? modeSessions.scroll(routeMode(path),path)
   if (typeof y === 'number' && y >= 0) {
     stopScrollRestore?.()
-    stopScrollRestore = restoreModeScroll(el,y,{smooth:path==='/'&&isMobileRuntime()&&el.dataset.cczjScrollRestore!=='instant'})
+    stopScrollRestore = restoreModeScroll(el,y)
   }
 }
 
@@ -82,7 +83,7 @@ const router = createRouter({
     },
     {
       path: '/detail/:sourceKey/:globalId',
-      component: () => import('../views/Detail.vue'),
+      component: loadVideoDetail,
       props: true,
     },
     {
@@ -128,6 +129,21 @@ const router = createRouter({
 })
 
 const playerNavigations=new WeakMap<object,number>()
+const diagnosticNavigations = new WeakMap<object,{began:number;context:DiagnosticContext}>()
+router.beforeEach(to=>{
+  const route=to.matched[to.matched.length-1]?.path || ''
+  const previous=captureDiagnosticContext()
+  setDiagnosticLocation(routeMode(to.path),route)
+  const context={...captureDiagnosticContext(),action_id:previous.action_id||newDiagnosticAction()}
+  diagnosticNavigations.set(to,{began:performance.now(),context})
+  recordTimeline('route',{name:'navigation',outcome:'started'},context)
+})
+router.afterEach((to,from,failure)=>{
+  const navigation=diagnosticNavigations.get(to)
+  if(navigation){diagnosticNavigations.delete(to);recordTimeline('route',{name:'navigation',outcome:failure?'cancelled':'success',duration_ms:performance.now()-navigation.began},navigation.context)}
+  const current=failure?from:to
+  setDiagnosticLocation(routeMode(current.path),current.matched[current.matched.length-1]?.path||'')
+})
 router.beforeEach(to=>{
   if(to.name==='player'){
     playerNavigations.set(to,performance.now())
@@ -142,11 +158,16 @@ router.afterEach((to,_from,failure)=>{
 })
 
 // Mode strategy is checked once at the router seam, including restored URLs.
-router.beforeEach(async to => {
+router.beforeEach(async (to, from) => {
   const appMode = useApplicationMode()
   await appMode.load()
   if (routeMode(to.path) !== appMode.mode) return modeHome(appMode.mode)
-  if (appMode.mode === 'novel') await (await import('../novel/readingState')).useNovelReading().init()
+  if (appMode.mode === 'novel') {
+    const startup = await import('../novel/startup')
+    if (to.path === '/novel' && !from.matched.length) startup.prepareNovelHome(typeof to.query.shelf === 'string' ? to.query.shelf : '')
+    else startup.cancelNovelHomePreparation()
+    await (await import('../novel/readingState')).useNovelReading().init()
+  }
   if (appMode.mode === 'comic') await (await import('../comic/state')).useComicState().init()
   return true
 })

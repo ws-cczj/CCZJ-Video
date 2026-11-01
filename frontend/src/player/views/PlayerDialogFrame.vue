@@ -108,7 +108,7 @@ onBeforeUnmount(restoreFocus)
   padding: 14px 18px;
   max-height: calc(85vh - 120px);
   @apply cczj-overflow-y-auto;
-  scrollbar-width: thin;
+  scrollbar-width: none;
   scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
 }
 

@@ -2,6 +2,8 @@ import { Events } from '@wailsio/runtime'
 import { eventDelivery,recordEvent } from './eventPipeline'
 import { diagnosticMode } from '../diagnostics/modeScope'
 
+const subscriptions = new Set<() => void>()
+if (import.meta.hot) import.meta.hot.dispose(() => { for (const dispose of [...subscriptions]) dispose() })
 const progressFlushers=new Set<()=>void>()
 function frame(work:()=>void):()=>void{
  if(typeof requestAnimationFrame==='function'){const id=requestAnimationFrame(work);return ()=>cancelAnimationFrame(id)}
@@ -46,9 +48,23 @@ export function onBackendEvent<T>(name: string, handler: (payload: T) => void,op
   const delivery=eventDelivery(name,handler,frame,value=>diagnosticMode()===owner&&(options?.accept?.(value)??true),value=>recordEvent(owner,value),options?.decode)
   const progress=name.endsWith(':progress')
   if(progress)progressFlushers.add(delivery.flush)
-  const unsubscribe = Events.On(name, (event: { data: unknown }) => {
+  let unsubscribe: unknown
+  let disposed = false
+  const dispose = () => {
+    if (disposed) return
+    disposed = true
+    subscriptions.delete(dispose)
+    progressFlushers.delete(delivery.flush)
+    delivery.dispose()
+    if (typeof unsubscribe === 'function') unsubscribe()
+  }
+  try { unsubscribe = Events.On(name, (event: { data: unknown }) => {
     if(name.endsWith(':done')||name.endsWith(':error'))for(const flush of progressFlushers)flush()
     delivery.receive(event.data)
-  }) as unknown
-  return ()=>{progressFlushers.delete(delivery.flush);delivery.dispose();if(typeof unsubscribe==='function')unsubscribe();else Events.Off(name)}
+  }) as unknown } catch (error) { dispose(); throw error }
+  // Current Wails returns a per-subscription disposer. Keep the legacy fallback
+  // only for a successfully registered runtime that returned no disposer.
+  if (typeof unsubscribe !== 'function') unsubscribe = () => Events.Off(name)
+  subscriptions.add(dispose)
+  return dispose
 }
