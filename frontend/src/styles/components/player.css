@@ -97,7 +97,9 @@
   margin: 0;
 }
 
-:global(body[data-player-fullscreen='1'] .player-col-side) {
+:global(body[data-player-fullscreen='1'] .player-col-side),
+:global(body[data-player-fullscreen='1'] .player-page .player-col-side.desktop-information),
+:global(body[data-player-fullscreen='1'] .player-page .panel-toggle-btn) {
   @apply cczj-hidden;
 }
 

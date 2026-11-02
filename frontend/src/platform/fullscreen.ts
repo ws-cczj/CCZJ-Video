@@ -26,6 +26,7 @@ export function createFullscreenPlatform(){
  let wasMaximized=false
  let nativeRequest: ReturnType<typeof prepareDeviceFullscreen>
  let reportError: ((error: unknown) => void) | undefined
+ let reportTransition: ((state:'exiting'|'exited')=>void) | undefined
  return {
       kind: nativeWindow ? 'window' as const : viewport ? 'viewport' as const : 'element' as const,
       supported: (root?:HTMLElement) => nativeWindow || (!!root && (viewport ||
@@ -34,6 +35,10 @@ export function createFullscreenPlatform(){
       onError(listener: (error: unknown) => void): () => void {
         reportError=listener
         return () => { if(reportError===listener)reportError=undefined }
+      },
+      onTransition(listener:(state:'exiting'|'exited')=>void):()=>void {
+        reportTransition=listener
+        return ()=>{if(reportTransition===listener)reportTransition=undefined}
       },
       setLocked(root: HTMLElement | undefined, locked: boolean, current: () => boolean, orientation: FullscreenOrientation = 'preserve'): void {
         if(current()&&browserFullscreen(root))nativeRequest?.lock(orientation,locked)
@@ -52,7 +57,7 @@ export function createFullscreenPlatform(){
         const element = root as FullscreenRoot
         const request = element.requestFullscreen || element.webkitRequestFullscreen
         if (!request) return false
-        const native = host==='native-mobile' ? prepareDeviceFullscreen(orientation,error=>reportError?.(error)) : undefined
+        const native = host==='native-mobile' ? prepareDeviceFullscreen(orientation,error=>reportError?.(error),state=>reportTransition?.(state)) : undefined
         nativeRequest=native
         try {
           const requested=request.call(element)
@@ -60,14 +65,14 @@ export function createFullscreenPlatform(){
           else await requested
           if(!current()||!browserFullscreen(root)) {
             await exitBrowserFullscreen(root)
-            native?.release()
+            await native?.release()
             if(nativeRequest===native)nativeRequest=undefined
             return false
           }
           return true
         } catch(error) {
           try { await exitBrowserFullscreen(root) }
-          finally { native?.release(); if(nativeRequest===native)nativeRequest=undefined }
+          finally { await native?.release(); if(nativeRequest===native)nativeRequest=undefined }
           throw error
         }
       },
@@ -79,15 +84,20 @@ export function createFullscreenPlatform(){
           if (current() && wasMaximized && !await WindowIsMax() && current()) await WindowToggleMax()
         }
         if (current()) {
-          await exitBrowserFullscreen(root)
-          nativeRequest?.release()
+          // Android restores orientation and acknowledges the inline layout
+          // before the browser's saved viewport can be committed again.
+          const native=nativeRequest
           nativeRequest=undefined
+          await native?.release()
+          if(!current())return
+          await exitBrowserFullscreen(root)
         }
       },
       async release(root: HTMLElement | undefined, unowned: () => boolean): Promise<void> {
         // Native release is scoped by request ID even if a new owner exists.
-        nativeRequest?.release()
+        const native=nativeRequest
         nativeRequest=undefined
+        await native?.release()
         if (!unowned()) return
         if (viewport) { viewportRoot=undefined; return }
         await exitBrowserFullscreen(root)

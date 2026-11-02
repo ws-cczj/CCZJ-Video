@@ -22,10 +22,11 @@ import { readStorage, readStorageBoolean, removeStorage, writeStorage } from '..
 import type { Video, HistoryItem } from '../types'
 import { isMobileRuntime } from '../api/runtime'
 import { useHoldToEdit } from '../mobile/useHoldToEdit'
-import CczjMobileEditActions from '../mobile/CczjMobileEditActions.vue'
 import { useModeViewState } from '../modes/useModeViewState'
 import { startupTask } from '../diagnostics/startup'
 import { createRequestScope } from '../api/requestScope'
+import { useViewActivity } from '../composables/useViewActivity'
+import { createSceneSettledTask } from '../motion/sceneTasks'
 import { useGeneration } from '../composables/useGeneration'
 
 const { t } = useI18n()
@@ -47,7 +48,8 @@ const sourceOptions = computed(() =>
 const currentSearchSource = ref('')
 const keyword = ref('')
 const searchHistory = ref<string[]>(readStorage<string[]>(CCZJ.Settings.searchHistory, []))
-const { editing: managingHistory, finish: finishHistoryManagement, vHoldToEdit } = useHoldToEdit(mobile)
+const editingHistoryTerm=ref('')
+const { editing: managingHistory, finish: finishHistoryManagement, vHoldToEdit } = useHoldToEdit(mobile,undefined,()=>{editingHistoryTerm.value=''}, {dismissOnOutside:true,onEnter:element=>{editingHistoryTerm.value=element.dataset.historyTerm||''}})
 const sourceSearchMode = ref(readStorageBoolean(CCZJ.Settings.sourceSearchMode))
 const hasKeyword = computed(() => keyword.value.trim().length > 0)
 let searchPageWasDeactivated = false
@@ -152,7 +154,10 @@ watch(
 // catalog's visibility rules actually changed (toggled in the type-management
 // view) or data was refreshed — otherwise keep the cached result list so
 // returning to this tab does not re-hit the remote API and drop scroll state.
-onActivated(async () => {
+const searchViewActive=useViewActivity(()=>router.currentRoute.value.path==='/search','committed')
+const returnRefresh=createSceneSettledTask(()=>searchViewActive.value)
+onActivated(() => {void returnRefresh.schedule(refreshOnReturn)})
+async function refreshOnReturn():Promise<void> {
   if (!searchPageWasDeactivated) return
   searchPageWasDeactivated = false
   if (sourceSearchInterrupted) { sourceSearchInterrupted = false; await doSourceSearch(sourceSearchPage.value); return }
@@ -162,10 +167,11 @@ onActivated(async () => {
   } else {
     await loadRecommendations()
   }
-})
+}
 
 onDeactivated(() => {
   searchPageWasDeactivated = true
+  returnRefresh.cancel()
   cancelRecommendations()
   sourceSearchInterrupted = sourceSearching.value
   cancelSourceSearch()
@@ -394,11 +400,11 @@ function goSearchPage(p: number): void {
 function toggleSourceSearchMode(): void {
   sourceSearchMode.value = !sourceSearchMode.value
   writeStorage(CCZJ.Settings.sourceSearchMode, sourceSearchMode.value)
-  if (sourceSearchMode.value) {
-    clearSearchResults()
-  } else {
-    clearSourceResults()
-  }
+  const repeat = hasSearched.value || hasSourceSearched.value
+  hasSearched.value = false
+  clearSearchResults()
+  clearSourceResults()
+  if (repeat && hasKeyword.value) void doSearch()
 }
 
 async function doSearch(): Promise<void> {
@@ -821,18 +827,17 @@ function onSourceVideoClick(v: Video): void {
     </div>
 
     <!-- 历史搜索 -->
-    <section v-if="mobile && searchHistory.length > 0 && !hasSearched" class="cczj-mobile-search-history" :data-cczj-editing="managingHistory || undefined">
+    <section v-if="mobile && searchHistory.length > 0 && !hasSearched" class="cczj-mobile-search-history" :data-cczj-history-editing="managingHistory || undefined">
       <div class="cczj-mobile-search-history-heading">
         <h2><Icon name="clock" :size="15" />{{ t('search.historySearch') }}</h2>
       </div>
       <div class="cczj-mobile-search-history-terms">
-        <div v-for="h in searchHistory" :key="h" v-hold-to-edit class="cczj-mobile-search-history-chip">
-          <button type="button" class="cczj-mobile-search-history-term" @click="!managingHistory && applyHistoryKeyword(h)">{{ h }}</button>
-          <button v-if="managingHistory" type="button" class="cczj-mobile-item-remove" data-cczj-remove :aria-label="`${t('search.deleteHistory')}: ${h}`" @click.stop="removeHistoryItem(h)"><Icon name="close" :size="14" /></button>
+        <div v-for="h in searchHistory" :key="h" v-hold-to-edit :data-history-term="h" class="cczj-mobile-search-history-chip">
+          <button type="button" class="cczj-mobile-search-history-term" @click="managingHistory ? finishHistoryManagement() : applyHistoryKeyword(h)">{{ h }}</button>
+          <button v-if="managingHistory && editingHistoryTerm === h" type="button" class="cczj-mobile-item-remove cczj-mobile-history-remove" data-cczj-remove :aria-label="`${t('search.deleteHistory')}: ${h}`" @click.stop="removeHistoryItem(h);finishHistoryManagement()"><Icon name="close" :size="10" /></button>
         </div>
       </div>
     </section>
-    <CczjMobileEditActions v-if="mobile" :open="managingHistory" @done="finishHistoryManagement" @cancel="finishHistoryManagement" />
     <div v-if="!mobile && searchHistory.length > 0 && !hasSearched" class="history-tags cczj-flex cczj-flex-wrap cczj-gap-2 cczj-mb-4">
       <span class="history-label cczj-flex cczj-items-center cczj-gap-1">
         <Icon name="clock" :size="12" />
@@ -1028,11 +1033,17 @@ function onSourceVideoClick(v: Video): void {
       <span class="sip-msg">{{ searchProgress.message || t('search.searchingFromSource') }}</span>
     </div>
 
+    <EmptyState v-if="hasKeyword && hasSearched && !sourceSearchMode && !hasSourceSearched && !list.loading && list.error" :title="t('errors.searchFailed')" :description="list.error">
+      <Button variant="primary" @click="doSearch">{{ t('common.retry') }}</Button>
+    </EmptyState>
+
     <div
       v-if="
         hasSearched &&
+        !sourceSearchMode &&
         hasKeyword &&
         !list.loading &&
+        !list.error &&
         list.videos.length === 0 &&
         list.localVideos.length === 0 &&
         sourceStore.currentSourceKey &&

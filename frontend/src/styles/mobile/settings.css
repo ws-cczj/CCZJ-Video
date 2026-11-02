@@ -25,7 +25,7 @@
   @apply cczj-fixed;
   z-index: 65;
   right: max(20px, env(safe-area-inset-right, 0px));
-  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(84px + env(safe-area-inset-bottom, 0px));
   width: 52px;
   height: 52px;
   padding: 0;

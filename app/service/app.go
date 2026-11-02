@@ -395,10 +395,12 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 		}
 	}
 
+	applog.InfoFields("startup stage", applog.Fields{"phase": "database_open_begin"})
 	if err := db.InitDB(dataDir); err != nil {
 		return apperror.Wrap(apperror.Storage, err, "应用数据库无法打开")
 	}
 	a.databaseOpen = true
+	applog.InfoFields("startup stage", applog.Fields{"phase": "database_open_ready"})
 	a.releaseDetails = cacheservice.SetDetailService(a.details)
 	rawPolicy, err := a.settings.Get(netpolicy.SettingsKey)
 	if err != nil {
@@ -414,6 +416,7 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 		}
 		return db.DB().DB
 	}), a.background.Context(), policySettings)
+	applog.InfoFields("startup stage", applog.Fields{"phase": "network_policy_restore"})
 	if err = requestPolicy.Initialize(ctx); err != nil {
 		_ = requestPolicy.Close(ctx)
 		return apperror.Wrap(apperror.Storage, err, "恢复网络请求冷却记录失败")
@@ -461,6 +464,7 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 	// 把内置扩展包落进 <dataDir>/plugins：设置页的「日志」「诊断」两个分组由它们提供，
 	// 用户删掉那个文件夹就是不想要这一项，下次启动不会复活它。必须排在任何扫描之前，
 	// 否则首次启动的扩展包面板看不到这两项。失败不影响启动——面板会照常列出磁盘上的包。
+	applog.InfoFields("startup stage", applog.Fields{"phase": "plugins_restore"})
 	if err := a.plugins.SeedBuiltin(); err != nil {
 		applog.Warn("内置扩展包落盘失败: %v", err)
 	}
@@ -470,6 +474,7 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 
 	// Reading modes do not start video collection, Douban polling or chart fetches.
 	mode, _ := a.settings.Get(applicationModeKey)
+	applog.InfoFields("startup stage", applog.Fields{"phase": "mode_start"})
 	a.startMode(normalizeMode(mode))
 
 	schemaVersion, schemaErr := db.SchemaVersion()
@@ -506,6 +511,7 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 	}
 
 	committed = true
+	applog.InfoFields("startup stage", applog.Fields{"phase": "startup_complete"})
 	return nil
 }
 

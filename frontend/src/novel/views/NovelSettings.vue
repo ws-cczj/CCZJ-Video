@@ -79,7 +79,6 @@ function openDiagnostics(): void {
         <div><h1>{{ groupTitle }}</h1></div>
       </div>
       <section v-if="group === 'reading'" class="novel-settings-card cczj-p-8 cczj-rounded-lg cczj-border cczj-bg-card">
-        <p class="novel-settings-card-hint cczj-text-secondary">{{ t('novel.preferencesHint') }}</p>
         <NovelReaderPreferences preview />
       </section>
       <section v-else class="novel-settings-card cczj-p-8 cczj-rounded-lg cczj-border cczj-bg-card">

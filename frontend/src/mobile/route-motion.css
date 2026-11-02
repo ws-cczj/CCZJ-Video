@@ -13,6 +13,12 @@
   background-image:linear-gradient(var(--route-backdrop-veil,transparent),var(--route-backdrop-veil,transparent)),var(--route-backdrop-image,none);
   background-position:center;background-size:cover;
 }
+/* Secondary headers and content share the same top wash as primary pages. */
+.cczj-mobile-shell .cczj-mobile-route-scene[data-route-surface=stack]:not([data-path^='/player/'])::after {
+  content:''; @apply cczj-absolute cczj-pointer-events-none; z-index:-1;
+  inset:0 0 auto; height:clamp(160px,32vh,240px);
+  background:linear-gradient(180deg,var(--cczj-mobile-chrome) 0%,var(--cczj-mobile-chrome) 12%,transparent 100%);
+}
 .cczj-mobile-tab-dragging:not(.cczj-mobile-tab-settling)>.cczj-mobile-route-backdrop { @apply cczj-transition-none; }
 .cczj-mobile-tab-settling>.cczj-mobile-route-backdrop { transition-duration:230ms; }
 html[data-motion-pages='off'] .cczj-mobile-route-backdrop,html[data-cczj-motion='off'] .cczj-mobile-route-backdrop { @apply cczj-transition-none; }
@@ -53,10 +59,9 @@ html[data-motion-pages='off'] .cczj-mobile-tab-dragging .cczj-mobile-route-scene
 @media (prefers-reduced-motion:reduce) { .cczj-mobile-tab-settling .cczj-mobile-route-scene { @apply cczj-transition-none; } }
 .cczj-mobile-item-remove::before { @apply cczj-hidden; }
 .cczj-mobile-item-remove { border-radius:0; @apply cczj-text-secondary; }
-.cczj-mobile-shell .cczj-mobile-search-history-term { padding:8px 44px 8px 12px; }
-.cczj-mobile-shell .cczj-mobile-search-history[data-cczj-editing=true] .cczj-mobile-search-history-term { padding:8px 44px 8px 12px; }
+.cczj-mobile-shell .cczj-mobile-search-history-term { padding:2px 12px; }
 .cczj-mobile-search-history-chip .cczj-mobile-item-remove { width:44px; height:44px; }
-.cczj-mobile-edit-actions { @apply cczj-fixed; z-index:65; right:16px; bottom:calc(76px + env(safe-area-inset-bottom,0px)); @apply cczj-flex cczj-flex-col cczj-gap-5; }
+.cczj-mobile-edit-actions { @apply cczj-fixed; z-index:65; left:max(16px,env(safe-area-inset-left,0px)); bottom:calc(76px + env(safe-area-inset-bottom,0px)); @apply cczj-flex cczj-flex-col cczj-gap-5; }
 .cczj-mobile-edit-actions button { @apply cczj-grid; place-items:center; width:46px; height:46px; border:1px solid var(--border,var(--novel-line,#ddd)); @apply cczj-rounded-50; box-shadow:0 3px 12px #0002; }
 .cczj-mobile-edit-cancel { background:var(--bg-card,var(--novel-surface,#fff)); color:var(--text-primary,var(--novel-ink,#222)); }
 .cczj-mobile-edit-confirm { background:var(--btn-solid,#252525); color:var(--btn-solid-text,#fff); }
@@ -64,6 +69,9 @@ html[data-motion-pages='off'] .cczj-mobile-tab-dragging .cczj-mobile-route-scene
 .cczj-mobile-edit-float-enter-from,.cczj-mobile-edit-float-leave-to { @apply cczj-opacity-0; transform:translateY(8px); }
 .cczj-mobile-shell .cczj-mobile-page .history-page .page-header-actions { order:-1; }
 .cczj-mobile-route-scene { contain:layout; }
+/* Primary scenes retain their scroll viewport while a full-height page covers
+   them. Navigation mount/unmount must not resize the outgoing page. */
+.cczj-mobile-shell .cczj-mobile-route-scene[data-route-surface=primary] { bottom:var(--cczj-route-navigation-height,calc(67px + env(safe-area-inset-bottom,0px))); }
 .cczj-mobile-route-scene > .main-content { @apply cczj-min-h-0; }
 /* Match the app canvas crop instead of replacing a wallpaper with an opaque
    colour or independently covering each narrower desktop pane. */
@@ -76,15 +84,6 @@ html[data-motion-pages='off'] .cczj-mobile-tab-dragging .cczj-mobile-route-scene
 /* The route owns page entrance; reader-internal turns and nested loading
    indicators retain their own lifecycle. */
 .cczj-mobile-route-scene > .main-content > :not(.novel-reader):not(.comic-reader) { animation:none; }
-/* The actual page keeps its layout/image preparation behind a static skeleton.
-   Information arrives once after navigation; no opacity/fade transition. */
-.cczj-mobile-route-scene[data-route-skeleton=true] > :not(.cczj-mobile-route-skeleton) { visibility:hidden; }
-.cczj-mobile-route-skeleton { @apply cczj-absolute cczj-inset-0 cczj-overflow-hidden cczj-p-8; z-index:5; }
-.cczj-mobile-route-content-arriving > .main-content { animation:cczj-route-content-arrive var(--cczj-motion-normal) var(--cczj-motion-ease-enter) both; }
-@keyframes cczj-route-content-arrive { from { transform:translateY(var(--cczj-motion-distance,8px)); } to { transform:translateY(0); } }
-html[data-motion-pages=off] .cczj-mobile-route-content-arriving > .main-content,
-html[data-cczj-motion=off] .cczj-mobile-route-content-arriving > .main-content { animation:none; }
-@media(prefers-reduced-motion:reduce){.cczj-mobile-route-content-arriving > .main-content { animation:none; }}
 /* The route owns entrance motion. Empty states must not fade again when a
    cached short-drama scene is reinserted or its source lookup completes. */
 .cczj-mobile-shared-backdrop .cczj-mobile-route-scene :is(.empty-state,.empty-icon) { animation:none; }

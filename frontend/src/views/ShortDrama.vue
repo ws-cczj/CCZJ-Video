@@ -288,7 +288,7 @@ onBeforeUnmount(() => window.removeEventListener('cczj:android-overlay-back', ba
         <ShortDramaCatalog v-else :episodes="episodes" :current="episodeIndex" :open="drawer === 'episodes'" :progress="history.getEpWatchPct" @select="selectEpisode" />
       </div>
     </CczjMobilePlayerDrawer>
-    <FavFolderModal v-if="!mobile && active" v-model="showFavFolderModal" :busy="favBusy" :teleport-to="overlayHost" @confirm="confirmAddToFolder" />
+    <FavFolderModal v-if="!mobile && active" appearance="player" v-model="showFavFolderModal" :busy="favBusy" :teleport-to="overlayHost" @confirm="confirmAddToFolder" />
     </template>
     <div ref="overlayHost" />
   </section>
@@ -315,7 +315,7 @@ onBeforeUnmount(() => window.removeEventListener('cczj:android-overlay-back', ba
 .drama-stage { @apply cczj-relative; container-type: size; padding: 0 76px 44px; }
 .drama-frame { @apply cczj-flex-shrink-0; width: min(calc(100cqh * 9 / 16),100cqw); aspect-ratio: 9 / 16; }
 .drama-screen { width: 100%; }
-.drama-playback-surface,.drama-paging-frame { background: var(--cczj-drama-chrome,#18191c); }
+.cczj-short-drama-surface .drama-playback-surface,.drama-paging-frame { background: var(--cczj-drama-chrome,#18191c); }
 .drama-paging-frame { z-index: 30; }
 .cczj-short-drama-surface .drama-screen { background: var(--cczj-drama-chrome); }
 .drama-screen :deep(.portrait-player) { background: var(--cczj-drama-chrome); }

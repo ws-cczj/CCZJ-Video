@@ -20,6 +20,7 @@ const props = withDefaults(
     modelValue: boolean
     initialFolderId?: string
     busy?: boolean
+    appearance?: 'default' | 'player'
   }>(),
   {
     initialFolderId: 'default'
@@ -71,7 +72,8 @@ function onConfirm(): void {
     :model-value="modelValue"
     :teleport-to="teleportTo"
     :title="t('detail.favToFolder')"
-    width="420px"
+    :width="appearance === 'player' ? '320px' : '420px'"
+    :panel-class="appearance === 'player' ? 'cczj-player-favorite-dialog' : undefined"
     :show-footer="true"
     :closable="!busy" :mask-closable="!busy"
     @update:model-value="(v: boolean) => emit('update:modelValue', v)"
@@ -136,4 +138,23 @@ function onConfirm(): void {
   background: var(--accent);
   @apply cczj-block;
 }
+</style>
+
+<style>
+.ui-modal.cczj-player-favorite-dialog[role="dialog"] {
+  --bg-secondary:#24262c; --bg-card:#1b1d22; --bg-elevated:#1b1d22; --bg-hover:#303239;
+  --text-primary:#f1f2f4; --text-secondary:#c0c3cc; --text-muted:#a3a7b1;
+  --border:#ffffff24; --border-hover:#ffffff52; --accent:#f1f2f4; --accent-alpha-10:#ffffff12;
+  --btn-solid:#f1f2f4; --btn-solid-text:#17181c; --btn-solid-hover:#ffffff; --btn-solid-alpha-20:transparent;
+  --btn-soft:#ffffff0d; --btn-soft-text:#f1f2f4; --border-light:#ffffff24; --border-strong:#ffffff52;
+  @apply cczj-min-w-0; max-width:calc(100vw - 32px); max-height:calc(100dvh - 32px);
+  background:var(--bg-card); color:var(--text-primary); border-color:var(--border);
+}
+.ui-modal.cczj-player-favorite-dialog[role="dialog"] .ui-modal__header { padding:8px 12px; }
+.ui-modal.cczj-player-favorite-dialog[role="dialog"] .ui-modal__title { @apply cczj-text-base; }
+.ui-modal.cczj-player-favorite-dialog[role="dialog"] .ui-modal__close { width:44px; height:44px; }
+.ui-modal.cczj-player-favorite-dialog[role="dialog"] .ui-modal__body { padding:12px; }
+.ui-modal.cczj-player-favorite-dialog[role="dialog"] .folder-select-item { padding:6px 10px; @apply cczj-text-sm; }
+.ui-modal.cczj-player-favorite-dialog[role="dialog"] .ui-modal__footer { padding:8px 12px; gap:8px; background:var(--bg-card); }
+.ui-modal.cczj-player-favorite-dialog[role="dialog"] .ui-btn { min-height:44px; padding:6px 12px; @apply cczj-text-sm; }
 </style>

@@ -57,11 +57,21 @@ public class MainActivity extends AppCompatActivity {
     private static final int FILE_PICKER_REQUEST = 7001;
 
     private WebView webView;
+    private CczjThemeReveal themeReveal;
+    private volatile CczjStartupTrace startupTrace;
+    public void recordStartupPhase(String phase){CczjStartupTrace trace=startupTrace;if(trace!=null)trace.mark(phase);}
+
+    public void prepareThemeReveal(String id,double x,double y,double radius,double left,double top,double width,double height) {
+        runOnUiThread(()->{if(themeReveal!=null)themeReveal.prepare(id,x,y,radius,left,top,width,height);});
+    }
+    public void playThemeReveal(String id,int duration) { runOnUiThread(()->{if(themeReveal!=null)themeReveal.play(id,duration);}); }
+    public void cancelThemeReveal(String id) { runOnUiThread(()->{if(themeReveal!=null)themeReveal.cancel(id);}); }
     private WailsJSBridge jsBridge;
     private long activityStartedAt;
     private Integer systemBarColor;
     private Integer navigationBarColor;
     private Integer backingSurfaceColor;
+    private android.animation.ValueAnimator systemBarAnimator;
     private String readerSystemBarOwner;
     private CczjInsetSurface insetSurface;
     private volatile long goReadyAt, pageStartedAt, pageCommittedAt, pageFinishedAt;
@@ -96,6 +106,8 @@ public class MainActivity extends AppCompatActivity {
         org.json.JSONObject state = new org.json.JSONObject();
         try {
             state.put("activity_started_ms", activityStartedAt);
+            CczjStartupTrace trace=startupTrace;
+            if(trace!=null)state.put("trace",trace.snapshot());
             state.put("go_ready_ms", goReadyAt);
             state.put("page_started_ms", pageStartedAt);
             state.put("page_committed_ms", pageCommittedAt);
@@ -120,9 +132,46 @@ public class MainActivity extends AppCompatActivity {
                 || (!status.isEmpty() && !status.matches("#[0-9a-fA-F]{6}"))
                 || (!navigation.isEmpty() && !navigation.matches("#[0-9a-fA-F]{6}"))) return;
         runOnUiThread(() -> {
+            if (systemBarAnimator != null) { systemBarAnimator.cancel(); systemBarAnimator = null; }
             systemBarColor = status.isEmpty() ? null : android.graphics.Color.parseColor(status);
             navigationBarColor = navigation.isEmpty() ? null : android.graphics.Color.parseColor(navigation);
             applyLaunchBarContrast();
+        });
+    }
+
+    public void animateSystemBarColors(String status, String navigation, int duration, String easing) {
+        if (status == null || navigation == null || !status.matches("#[0-9a-fA-F]{6}") || !navigation.matches("#[0-9a-fA-F]{6}")) return;
+        runOnUiThread(() -> {
+            if (isFinishing() || isDestroyed()) return;
+            if (systemBarAnimator != null) systemBarAnimator.cancel();
+            int fromStatus = systemBarColor == null ? launchBackground() : systemBarColor;
+            int fromNavigation = navigationBarColor == null ? launchBackground() : navigationBarColor;
+            int toStatus = android.graphics.Color.parseColor(status), toNavigation = android.graphics.Color.parseColor(navigation);
+            android.animation.ValueAnimator animator = android.animation.ValueAnimator.ofFloat(0f, 1f);
+            float durationScale = android.provider.Settings.Global.getFloat(getContentResolver(), android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f);
+            // CSS supplies wall-clock time; compensate the native scale so
+            // both surfaces finish together. A disabled system scale stays off.
+            animator.setDuration(Math.round(Math.max(1, Math.min(2000, duration)) / Math.max(.01f, durationScale)));
+            android.view.animation.Interpolator curve = new android.view.animation.LinearInterpolator();
+            if (easing != null && easing.startsWith("cubic-bezier(") && easing.endsWith(")")) {
+                try {
+                    String[] points = easing.substring(13, easing.length() - 1).split(",");
+                    if (points.length == 4) curve = new android.view.animation.PathInterpolator(Float.parseFloat(points[0].trim()), Float.parseFloat(points[1].trim()), Float.parseFloat(points[2].trim()), Float.parseFloat(points[3].trim()));
+                } catch (IllegalArgumentException ignored) { }
+            }
+            animator.setInterpolator(curve);
+            android.animation.ArgbEvaluator colors = new android.animation.ArgbEvaluator();
+            animator.addUpdateListener(value -> {
+                float progress = (Float) value.getAnimatedValue();
+                systemBarColor = (Integer) colors.evaluate(progress, fromStatus, toStatus);
+                navigationBarColor = (Integer) colors.evaluate(progress, fromNavigation, toNavigation);
+                applyLaunchBarContrast();
+            });
+            animator.addListener(new android.animation.AnimatorListenerAdapter() {
+                @Override public void onAnimationEnd(android.animation.Animator value) { if (systemBarAnimator == value) systemBarAnimator = null; }
+            });
+            systemBarAnimator = animator;
+            animator.start();
         });
     }
 
@@ -161,7 +210,9 @@ public class MainActivity extends AppCompatActivity {
     private android.view.View fullscreenView;
     private android.webkit.WebChromeClient.CustomViewCallback fullscreenCallback;
     private int orientationBeforeFullscreen;
+    private int configurationBeforeFullscreen;
     private int cutoutBeforeFullscreen;
+    private int rotationAnimationBeforeFullscreen;
     private boolean fitsBeforeFullscreen;
     private final int[] paddingBeforeFullscreen = new int[4];
     private android.graphics.drawable.Drawable windowBeforeFullscreen, containerBeforeFullscreen;
@@ -171,15 +222,19 @@ public class MainActivity extends AppCompatActivity {
     }
     private volatile FullscreenPolicy pendingFullscreen;
     private volatile FullscreenPolicy activeFullscreen;
+    private volatile FullscreenPolicy exitingFullscreen;
     private android.view.View.OnLayoutChangeListener fullscreenLayoutListener;
     private Runnable fullscreenDeadline;
+    private android.view.View.OnLayoutChangeListener fullscreenExitLayoutListener;
+    private Runnable fullscreenExitDeadline;
+    private String fullscreenExitError = "";
     private boolean fullscreenReady;
 
     // Called from the JS bridge thread before Chromium requests its custom view.
     public synchronized String preparePlayerFullscreen(String id, String orientation) {
         if (id == null || !id.matches("[a-zA-Z0-9-]{1,64}") ||
                 !("portrait".equals(orientation) || "landscape".equals(orientation) || "preserve".equals(orientation))) return "VALIDATION";
-        if (activeFullscreen != null || pendingFullscreen != null) return "CONFLICT";
+        if (activeFullscreen != null || pendingFullscreen != null || exitingFullscreen != null) return "CONFLICT";
         pendingFullscreen = new FullscreenPolicy(id, orientation);
         return "";
     }
@@ -190,12 +245,15 @@ public class MainActivity extends AppCompatActivity {
         return policy;
     }
     public void finishPlayerFullscreen(String id) {
+        final FullscreenPolicy cancelled;
         synchronized (this) {
-            if (pendingFullscreen != null && pendingFullscreen.id.equals(id)) pendingFullscreen = null;
+            cancelled = pendingFullscreen != null && pendingFullscreen.id.equals(id) ? pendingFullscreen : null;
+            if (cancelled != null) pendingFullscreen = null;
         }
         runOnUiThread(() -> {
             FullscreenPolicy policy = activeFullscreen;
             if (policy != null && policy.id.equals(id)) hideFullscreenVideo();
+            else if (cancelled != null) notifyPlayerFullscreen(cancelled, "exited", "");
         });
     }
     public void updatePlayerFullscreenPolicy(String id, String orientation, boolean locked) {
@@ -230,8 +288,8 @@ public class MainActivity extends AppCompatActivity {
         // the actual viewport there instead of timing out a valid fullscreen.
         if (policy != null && getResources().getConfiguration().smallestScreenWidthDp < 600) {
             int orientation = getResources().getConfiguration().orientation;
-            if ("portrait".equals(policy.orientation) && orientation != Configuration.ORIENTATION_PORTRAIT) return;
-            if ("landscape".equals(policy.orientation) && orientation != Configuration.ORIENTATION_LANDSCAPE) return;
+            if ("portrait".equals(policy.orientation) && (orientation != Configuration.ORIENTATION_PORTRAIT || fullscreenView.getWidth() > fullscreenView.getHeight())) return;
+            if ("landscape".equals(policy.orientation) && (orientation != Configuration.ORIENTATION_LANDSCAPE || fullscreenView.getWidth() < fullscreenView.getHeight())) return;
         }
         fullscreenReady = true;
         if (fullscreenDeadline != null) fullscreenView.removeCallbacks(fullscreenDeadline);
@@ -291,7 +349,8 @@ public class MainActivity extends AppCompatActivity {
         setIntent(intent);
         if (DEBUG && intent.hasExtra("cczjFrontendPort")) {
             configureFrontendDev(intent);
-            loadApplication();
+            recordStartupPhase("page_load");
+        loadApplication();
         }
     }
 
@@ -317,11 +376,13 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         activityStartedAt = android.os.SystemClock.elapsedRealtime();
         super.onCreate(savedInstanceState);
+        try { startupTrace=new CczjStartupTrace(this); } catch(RuntimeException | OutOfMemoryError error) { Log.w(TAG,"Startup trace unavailable"); }
+        recordStartupPhase("activity_create");
         if (Build.VERSION.SDK_INT >= 31) {
             getSplashScreen().setOnExitAnimationListener(android.window.SplashScreenView::remove);
         }
         configureFrontendDev(getIntent());
-        setContentView(R.layout.activity_main);
+        setContentView(R.layout.activity_main);recordStartupPhase("layout_ready");
         // One owner applies system insets. Consuming them here prevents older
         // WebViews from reserving a second status-bar strip inside the page.
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
@@ -355,14 +416,22 @@ public class MainActivity extends AppCompatActivity {
             throw new IllegalStateException("Cannot configure application temporary storage", error);
         }
         // Initialize the native Go library
+        recordStartupPhase("temporary_storage_ready");
+        recordStartupPhase("native_library_load");
         bridge = WailsBridge.attach(this);
+        recordStartupPhase("native_library_ready");
+        recordStartupPhase("go_initialize");
         bridge.initialize();
+        recordStartupPhase("go_init_returned");
         goReadyAt = android.os.SystemClock.elapsedRealtime() - activityStartedAt;
 
         // Set up WebView
+        recordStartupPhase("webview_create");
         setupWebView();
+        recordStartupPhase("webview_ready");
 
         // Load the application
+        recordStartupPhase("page_load");
         loadApplication();
         getOnBackPressedDispatcher().addCallback(this, new androidx.activity.OnBackPressedCallback(true) {
             @Override public void handleOnBackPressed() { handleAndroidBack(); }
@@ -372,6 +441,7 @@ public class MainActivity extends AppCompatActivity {
     @SuppressLint("SetJavaScriptEnabled")
     private void setupWebView() {
         webView = findViewById(R.id.webview);
+        themeReveal = new CczjThemeReveal(webView);
         webView.setBackgroundColor(launchBackground());
         webView.setVerticalScrollBarEnabled(false);
         webView.setHorizontalScrollBarEnabled(false);
@@ -400,6 +470,8 @@ public class MainActivity extends AppCompatActivity {
                 fullscreenCallback = callback;
                 fullscreenReady = false;
                 orientationBeforeFullscreen = getRequestedOrientation();
+                configurationBeforeFullscreen = getResources().getConfiguration().orientation;
+                rotationAnimationBeforeFullscreen = getWindow().getAttributes().rotationAnimation;
                 android.view.View container = findViewById(R.id.main_container);
                 fitsBeforeFullscreen = container.getFitsSystemWindows();
                 paddingBeforeFullscreen[0] = container.getPaddingLeft();
@@ -418,12 +490,12 @@ public class MainActivity extends AppCompatActivity {
                 container.setPadding(0, 0, 0, 0);
                 container.setBackgroundColor(android.graphics.Color.BLACK);
                 getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.BLACK));
+                WindowManager.LayoutParams attributes = getWindow().getAttributes();
+                attributes.rotationAnimation = WindowManager.LayoutParams.ROTATION_ANIMATION_JUMPCUT;
                 if (Build.VERSION.SDK_INT >= 28) {
-                    WindowManager.LayoutParams attributes = getWindow().getAttributes();
-                    cutoutBeforeFullscreen = attributes.layoutInDisplayCutoutMode;
                     attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
-                    getWindow().setAttributes(attributes);
                 }
+                getWindow().setAttributes(attributes);
                 setRequestedOrientation(fullscreenOrientation(policy));
                 ((android.widget.FrameLayout) findViewById(R.id.main_container)).addView(view,
                         new android.widget.FrameLayout.LayoutParams(-1, -1));
@@ -438,7 +510,9 @@ public class MainActivity extends AppCompatActivity {
                     return insets;
                 });
                 androidx.core.view.ViewCompat.requestApplyInsets(view);
-                webView.setVisibility(android.view.View.GONE);
+                // Keep the inline surface attached and visible beneath the
+                // opaque custom view so exit does not recreate its backing.
+                webView.setVisibility(android.view.View.VISIBLE);
                 androidx.core.view.WindowInsetsControllerCompat controller =
                         androidx.core.view.WindowCompat.getInsetsController(getWindow(), view);
                 controller.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars());
@@ -550,6 +624,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
+                recordStartupPhase("page_started");
                 pageStartedAt = android.os.SystemClock.elapsedRealtime() - activityStartedAt;
                 pageCommittedAt = pageFinishedAt = 0;
             }
@@ -557,12 +632,14 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onPageCommitVisible(WebView view, String url) {
                 super.onPageCommitVisible(view, url);
+                recordStartupPhase("page_committed");
                 pageCommittedAt = android.os.SystemClock.elapsedRealtime() - activityStartedAt;
             }
 
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
+                recordStartupPhase("page_finished");
                 pageFinishedAt = android.os.SystemClock.elapsedRealtime() - activityStartedAt;
                 if (DEBUG) Log.d(TAG, "Page loaded: " + url);
                 bridge.onPageFinished(url);
@@ -636,6 +713,7 @@ public class MainActivity extends AppCompatActivity {
     private void hideFullscreenVideo(String errorCode) {
         if (fullscreenView == null) return;
         FullscreenPolicy policy = activeFullscreen;
+        notifyPlayerFullscreen(policy, "exiting", "");
         activeFullscreen = null;
         fullscreenReady = false;
         if (fullscreenLayoutListener != null) fullscreenView.removeOnLayoutChangeListener(fullscreenLayoutListener);
@@ -670,7 +748,43 @@ public class MainActivity extends AppCompatActivity {
         fullscreenCallback = null;
         try { if (callback != null) callback.onCustomViewHidden(); }
         catch (RuntimeException failure) { Log.w(TAG, "Unable to finish Chromium fullscreen", failure); errorCode = "UNAVAILABLE"; }
-        notifyPlayerFullscreen(policy, errorCode.isEmpty() ? "exited" : "error", errorCode);
+        if (policy != null) {
+            exitingFullscreen = policy;
+            fullscreenExitError = errorCode;
+            fullscreenExitLayoutListener = (target, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> finishFullscreenExit(false);
+            container.addOnLayoutChangeListener(fullscreenExitLayoutListener);
+            fullscreenExitDeadline = () -> finishFullscreenExit(true);
+            container.postDelayed(fullscreenExitDeadline, 3000);
+            container.post(() -> finishFullscreenExit(false));
+        } else {
+            WindowManager.LayoutParams attributes = getWindow().getAttributes();
+            attributes.rotationAnimation = rotationAnimationBeforeFullscreen;
+            getWindow().setAttributes(attributes);
+        }
+    }
+
+    private void finishFullscreenExit(boolean timedOut) {
+        FullscreenPolicy policy = exitingFullscreen;
+        if (policy == null) return;
+        android.view.View container = findViewById(R.id.main_container);
+        if (!timedOut) {
+            if (getResources().getConfiguration().orientation != configurationBeforeFullscreen || container.getWidth() <= 0 || container.getHeight() <= 0) return;
+            if (configurationBeforeFullscreen == Configuration.ORIENTATION_PORTRAIT && container.getWidth() > container.getHeight()) return;
+            if (configurationBeforeFullscreen == Configuration.ORIENTATION_LANDSCAPE && container.getWidth() < container.getHeight()) return;
+            if (webView.getWidth() != container.getWidth() - container.getPaddingLeft() - container.getPaddingRight()
+                    || webView.getHeight() != container.getHeight() - container.getPaddingTop() - container.getPaddingBottom()) return;
+        }
+        container.removeOnLayoutChangeListener(fullscreenExitLayoutListener);
+        container.removeCallbacks(fullscreenExitDeadline);
+        fullscreenExitLayoutListener = null;
+        fullscreenExitDeadline = null;
+        exitingFullscreen = null;
+        WindowManager.LayoutParams attributes = getWindow().getAttributes();
+        attributes.rotationAnimation = rotationAnimationBeforeFullscreen;
+        getWindow().setAttributes(attributes);
+        String code = timedOut && fullscreenExitError.isEmpty() ? "TIMEOUT" : fullscreenExitError;
+        fullscreenExitError = "";
+        notifyPlayerFullscreen(policy, code.isEmpty() ? "exited" : "error", code);
     }
 
     private void loadApplication() {
@@ -1222,11 +1336,13 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
+        if(themeReveal!=null)themeReveal.cancel(null);
         if (fullscreenView != null) {
             android.view.View view = fullscreenView;
             androidx.core.view.ViewCompat.requestApplyInsets(view);
             view.post(() -> { if (fullscreenView == view) fullscreenLayoutReady(); });
         }
+        if (exitingFullscreen != null) findViewById(R.id.main_container).post(() -> finishFullscreenExit(false));
         // Fires for light/dark switches because the manifest lists uiMode in
         // android:configChanges (otherwise the activity would be recreated).
         emitTheme();
@@ -1247,7 +1363,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onResume() {
-        super.onResume();
+        super.onResume();recordStartupPhase("resume");
         if (playerDevice != null) playerDevice.interruption("foreground");
         if (bridge != null) {
             bridge.onResume();
@@ -1256,7 +1372,8 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onPause() {
-        super.onPause();
+        super.onPause();recordStartupPhase("pause");
+        if(themeReveal!=null)themeReveal.cancel(null);
         if (bridge != null) {
             bridge.onPause();
         }
@@ -1264,7 +1381,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onStop() {
-        super.onStop();
+        super.onStop();recordStartupPhase("stop");
         if (playerDevice != null && !(Build.VERSION.SDK_INT >= 26 && isInPictureInPictureMode())) playerDevice.interruption("background");
         if (systemReceiversRegistered) {
             unregisterSystemEventReceivers();
@@ -1278,6 +1395,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onLowMemory() {
         super.onLowMemory();
+        if(themeReveal!=null)themeReveal.cancel(null);
         if (bridge != null) {
             bridge.onLowMemory();
         }
@@ -1285,9 +1403,19 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        if(themeReveal!=null){themeReveal.cancel(null);themeReveal=null;}
+        if (systemBarAnimator != null) { systemBarAnimator.cancel(); systemBarAnimator = null; }
         if (webFileChooser != null) webFileChooser.cancel();
         pendingFullscreen = null;
         hideFullscreenVideo();
+        if (exitingFullscreen != null) {
+            android.view.View container = findViewById(R.id.main_container);
+            container.removeOnLayoutChangeListener(fullscreenExitLayoutListener);
+            container.removeCallbacks(fullscreenExitDeadline);
+            exitingFullscreen = null;
+            fullscreenExitLayoutListener = null;
+            fullscreenExitDeadline = null;
+        }
         unregisterPlayerBack();
         unregisterSystemEventReceivers();
         if (jsBridge != null) {
@@ -1306,6 +1434,7 @@ public class MainActivity extends AppCompatActivity {
             webView.destroy();
             webView = null;
         }
+        if(startupTrace!=null){startupTrace.close();startupTrace=null;}
         super.onDestroy();
     }
 

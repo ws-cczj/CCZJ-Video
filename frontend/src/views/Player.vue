@@ -1,5 +1,6 @@
 <script setup lang="ts">
 defineOptions({ name: 'Player' })
+import VirtualGrid from '../components/VirtualGrid.vue'
 import { ref, computed, reactive, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -593,8 +594,8 @@ const panelModel:PlayerPanelModel = reactive({
               <p class="cczj-mobile-drawer-hint cczj-mt-4">{{t('playLine.cooldownHint')}}</p>
             </template>
             <template v-if="mobile && episodes.length" #episodes="{close}">
-              <div class="cczj-mobile-drawer-episode-head"><span>{{t('detail.totalEpisodes',{count:episodes.length})}}</span><button @click="toggleEpisodeSort"><Icon :name="episodeSortAsc?'chevron-down':'chevron-up'" :size="14" />{{t(episodeSortAsc?'detail.ascOrder':'detail.descOrder')}}</button></div>
-              <div class="cczj-mobile-drawer-episode-grid" :class="{ 'cczj-episode-grid-detailed': detailedEpisodeLabels }"><button v-for="(ep,i) in sortedEpisodes" :key="origIdx(i)" :data-watched="getEpWatchPct(origIdx(i))>0" :aria-current="origIdx(i)===currentEpIndex?'step':undefined" :title="epLabel(origIdx(i),ep)" @click="goToEpisode(origIdx(i));close()"><EpisodeLabel :label="epLabel(origIdx(i),ep)" /><template v-if="getEpWatchPct(origIdx(i))>0"><small>{{Math.round(getEpWatchPct(origIdx(i)))}}%</small><span class="ep-watched-progress cczj-absolute cczj-left-0 cczj-bottom-0 cczj-pointer-events-none" :style="{width:getEpWatchPct(origIdx(i))+'%'}" aria-hidden="true" /></template></button></div>
+              <div class="cczj-mobile-drawer-episode-head"><span>{{t('detail.totalEpisodes',{count:episodes.length})}}</span><button @click="toggleEpisodeSort"><Icon :name="episodeSortAsc?'chevron-down':'chevron-up'" :size="12" />{{t(episodeSortAsc?'detail.ascOrder':'detail.descOrder')}}</button></div>
+              <VirtualGrid :items="sortedEpisodes" :item-key="(_,i)=>origIdx(i)" :locate-index="episodeSortAsc ? currentEpIndex : episodes.length - 1 - currentEpIndex" class="cczj-mobile-drawer-episode-grid" :class="{ 'cczj-episode-grid-detailed': detailedEpisodeLabels }"><template #default="{item:ep,index:i}"><button :data-virtual-index="i" :data-watched="getEpWatchPct(origIdx(i))>0" :aria-current="origIdx(i)===currentEpIndex?'step':undefined" :title="epLabel(origIdx(i),ep)" @click="goToEpisode(origIdx(i));close()"><EpisodeLabel :label="epLabel(origIdx(i),ep)" /><template v-if="getEpWatchPct(origIdx(i))>0"><small>{{Math.round(getEpWatchPct(origIdx(i)))}}%</small><span class="ep-watched-progress cczj-absolute cczj-left-0 cczj-bottom-0 cczj-pointer-events-none" :style="{width:getEpWatchPct(origIdx(i))+'%'}" aria-hidden="true" /></template></button></template></VirtualGrid>
             </template>
           </VideoPlayer>
 
@@ -621,6 +622,7 @@ const panelModel:PlayerPanelModel = reactive({
 
     <!-- 收藏夹选择弹窗 -->
     <FavFolderModal
+      appearance="player"
       v-model="showFavFolderModal" :busy="favBusy"
       :teleport-to="playerOverlayTarget"
       @confirm="confirmAddToFolder"

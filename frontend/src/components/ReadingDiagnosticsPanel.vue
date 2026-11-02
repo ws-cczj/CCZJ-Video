@@ -82,7 +82,7 @@ const bytes=(value:number|undefined|null)=>value==null?'—':`${(value/1048576).
 <template>
   <section class="cczj-reading-diagnostics" data-diagnostics-controls>
     <header class="reading-diag-heading">
-      <div><span class="reading-diag-eyebrow">{{t(`modes.${mode.mode}`)}}</span><h1>{{t('diagnostics.pageTitle')}}</h1><p>{{t('diagnostics.overviewDescription')}}</p></div>
+      <div><span class="reading-diag-eyebrow">{{t(`modes.${mode.mode}`)}}</span><h1>{{t('diagnostics.pageTitle')}}</h1></div>
       <div class="reading-diag-actions">
         <Button class="reading-diag-refresh" variant="text" :aria-label="t('common.refresh')" :loading="refreshing" @click="refresh"><Icon name="refresh" :size="16"/><span class="reading-diag-refresh-label">{{t('common.refresh')}}</span></Button>
         <Button variant="secondary" :disabled="busy" :aria-pressed="recordingStatus.active" @click="toggleRecording"><Icon :name="recordingStatus.active?'stop':'play'" :size="16"/>{{t(recordingStatus.active?'diagnostics.stopRecording':'diagnostics.startRecording')}}</Button>
@@ -102,7 +102,7 @@ const bytes=(value:number|undefined|null)=>value==null?'—':`${(value/1048576).
         <div><span class="reading-diag-metric-label"><Icon name="code" :size="18"/>{{t('diagnostics.goroutines')}}</span><strong>{{metrics?.goroutines??'—'}}</strong></div>
       </div>
       <details class="reading-diag-scope"><summary><Icon name="info" :size="16"/>{{t('diagnostics.modeScopeLabel')}}<Icon name="chevron-right" :size="16"/></summary><p>{{t('diagnostics.modeScopeNote')}}</p></details>
-      <div class="reading-diag-shortcuts"><Button v-for="tab in ['startup','activity','network'] as const" :key="tab" variant="secondary" block @click="section=tab"><span><strong>{{t(tabKeys[tab])}}</strong><small>{{t(tab==='startup'?'diagnostics.startupDescription':tab==='activity'?'diagnostics.activityDescription':'diagnostics.networkDescription')}}</small></span><Icon name="chevron-right" :size="18"/></Button></div>
+      <div class="reading-diag-shortcuts"><Button v-for="tab in ['startup','activity','network'] as const" :key="tab" variant="secondary" block @click="section=tab"><span><strong>{{t(tabKeys[tab])}}</strong></span><Icon name="chevron-right" :size="18"/></Button></div>
       <DiagnosticObservability section="coverage" :metrics="metrics" />
     </template>
     <DiagnosticObservability v-else-if="section==='startup'||section==='activity'" :section="section" :metrics="metrics" />

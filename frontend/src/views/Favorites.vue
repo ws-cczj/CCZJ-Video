@@ -3,6 +3,8 @@ import CczjMobileEditActions from '../mobile/CczjMobileEditActions.vue'
 defineOptions({ name: 'Favorites' })
 import { ref, onMounted, computed, watch, onActivated, onDeactivated } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useViewActivity } from '../composables/useViewActivity'
+import { createSceneSettledTask } from '../motion/sceneTasks'
 import { tr } from '../locales'
 import { favRefreshTick } from '../stores/favoritesSync'
 import { useRouter } from 'vue-router'
@@ -96,6 +98,9 @@ const hasSelection = computed(() => selectedKeys.value.size > 0)
 const layoutStore = useLayoutStore()
 const { gridStyle } = storeToRefs(layoutStore)
 
+const viewActive=useViewActivity(()=>router.currentRoute.value.path==='/favorites','committed')
+const refreshTask=createSceneSettledTask(()=>viewActive.value)
+function scheduleRefresh():void {void refreshTask.schedule(loadFavorites)}
 let wasDeactivated = false
 
 onMounted(async () => {
@@ -108,12 +113,12 @@ onMounted(async () => {
 onActivated(() => {
   if (!wasDeactivated) return
   wasDeactivated = false
-  loadFavorites()
+  scheduleRefresh()
 })
 
-onDeactivated(() => { wasDeactivated = true })
+onDeactivated(() => { wasDeactivated = true;refreshTask.cancel() })
 
-watch(favRefreshTick, () => { loadFavorites() })
+watch(favRefreshTick, () => { if(viewActive.value)scheduleRefresh() })
 
 async function fetchFavoritePage(page: number): Promise<void> {
   const raw = await GetFavorites(page, FAV_PAGE_SIZE)

@@ -22,65 +22,78 @@ let fullscreenSequence = 0
 
 /** The request identity also owns native rollback. A late outgoing session
  * cannot reset the orientation or bars of a newer fullscreen session. */
-export function prepareDeviceFullscreen(orientation: FullscreenOrientation, failure: (error: ApiFailure) => void) {
+export function prepareDeviceFullscreen(orientation: FullscreenOrientation, failure: (error: ApiFailure) => void, transition?: (state:'exiting'|'exited')=>void) {
   const host = bridge()
   if (!host?.playerPrepareFullscreen || !host.playerFinishFullscreen || !host.playerFullscreenPolicy) return undefined
   const id = `${Date.now()}-${++fullscreenSequence}`
-  let settled = false, closed = false
-  let resolve!: () => void, reject!: (error: ApiFailure) => void
-  const ready = new Promise<void>((yes, no) => { resolve = yes; reject = no })
-  // A browser rejection can precede awaiting the native acknowledgement.
-  void ready.catch(() => {})
-  function stop(): void {
-    closed = true
-    clearTimeout(timeout)
-    window.removeEventListener('cczj:player-fullscreen', changed)
+  let phase:'entering'|'fullscreen'|'exiting'|'closed'='entering'
+  let readySettled=false,entered=false
+  let close!:()=>void
+  const exited=new Promise<void>(resolve=>{close=resolve})
+  let resolve!:()=>void,reject!:(error:ApiFailure)=>void
+  const ready=new Promise<void>((yes,no)=>{resolve=yes;reject=no})
+  void ready.catch(()=>{})
+  let timeout:ReturnType<typeof setTimeout>|undefined
+  function rejectReady(code:string):void {
+    if(readySettled)return
+    readySettled=true
+    reject(new ApiFailure({code,message:'Native fullscreen operation failed'},undefined))
   }
-  function fail(code: string): void {
-    const error = new ApiFailure({code, message:'Native fullscreen operation failed'}, undefined)
-    const wasReady = settled
+  function stop():void {
+    phase='closed';clearTimeout(timeout)
+    window.removeEventListener('cczj:player-fullscreen',changed)
+    close()
+  }
+  function fail(code:string):void {
+    rejectReady(code)
+    const report=entered
     stop()
-    settled = true
-    if (wasReady) failure(error)
-    else reject(error)
-  }
-  function changed(event: Event): void {
-    const row: unknown = (event as CustomEvent).detail
-    if (!row || typeof row !== 'object' || Array.isArray(row)) return
-    const state = row as Record<string, unknown>
-    if (state.id !== id || closed) return
-    if (state.state === 'entered') {
-      clearTimeout(timeout)
-      settled = true
-      resolve()
-    } else if (state.state === 'exited') {
-      if (!settled) fail('CANCELLED')
-      else stop()
-    } else if (state.state === 'error') fail(typeof state.code === 'string' ? state.code : 'UNAVAILABLE')
-  }
-  const timeout = setTimeout(() => {
-    fail('TIMEOUT')
     host!.playerFinishFullscreen!(id)
-  }, 7000)
-  window.addEventListener('cczj:player-fullscreen', changed)
+    if(report)failure(new ApiFailure({code,message:'Native fullscreen operation failed'},undefined))
+  }
+  function beginExit():void {
+    if(phase==='closed'||phase==='exiting')return
+    phase='exiting';rejectReady('CANCELLED');clearTimeout(timeout)
+    timeout=setTimeout(()=>fail('TIMEOUT'),4000)
+    transition?.('exiting')
+  }
+  function changed(event:Event):void {
+    const row:unknown=(event as CustomEvent).detail
+    if(!row||typeof row!=='object'||Array.isArray(row))return
+    const state=row as Record<string,unknown>
+    if(state.id!==id||phase==='closed')return
+    if(state.state==='entered'){
+      if(phase!=='entering')return
+      phase='fullscreen';entered=true;clearTimeout(timeout)
+      readySettled=true;resolve()
+    }else if(state.state==='exiting')beginExit()
+    else if(state.state==='exited'){
+      rejectReady('CANCELLED')
+      transition?.('exited');stop()
+    }else if(state.state==='error')fail(typeof state.code==='string'?state.code:'UNAVAILABLE')
+  }
+  timeout=setTimeout(()=>fail('TIMEOUT'),7000)
+  window.addEventListener('cczj:player-fullscreen',changed)
   try {
-    const error = host.playerPrepareFullscreen(id, orientation)
-    if (error) throw new ApiFailure({code:error,message:'Native fullscreen preparation failed'},undefined)
-  } catch (error) {
-    stop()
-    reject(error instanceof ApiFailure ? error : new ApiFailure({code:'UNAVAILABLE',message:'Native fullscreen preparation failed'},undefined))
+    const error=host.playerPrepareFullscreen(id,orientation)
+    if(error)throw new ApiFailure({code:error,message:'Native fullscreen preparation failed'},undefined)
+  }catch(error){
+    rejectReady('UNAVAILABLE');stop();host.playerFinishFullscreen(id)
     throw error
   }
   return {
     ready,
-    lock: (orientation: FullscreenOrientation, locked: boolean) => { if (!closed) host.playerFullscreenPolicy!(id, orientation, locked) },
-    release: () => {
-      if (!settled) fail('CANCELLED')
-      else stop()
-      host.playerFinishFullscreen!(id)
+    lock:(orientation:FullscreenOrientation,locked:boolean)=>{if(phase==='fullscreen')host.playerFullscreenPolicy!(id,orientation,locked)},
+    release:()=>{
+      if(phase!=='closed'&&phase!=='exiting'){
+        beginExit()
+        host.playerFinishFullscreen!(id)
+      }
+      return exited
     },
   }
 }
+
 export function readPlayerDevice(): { volume: number; brightness: number; pip: boolean; pipAllowed?: boolean; castSettings?:boolean } | undefined {
   try {
     const b = bridge()

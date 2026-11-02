@@ -65,6 +65,7 @@ func (f *FlexInt) UnmarshalJSON(b []byte) error {
 func (f FlexInt) Int() int { return int(f) }
 
 type FetchResult struct {
+	cmsXML        bool
 	Classes       []Category     `json:"class,omitempty"`
 	RawCount      int            `json:"-"`
 	SearchLimited bool           `json:"-"`
@@ -275,6 +276,27 @@ func FetchVideoDetailWithStrategy(ctx context.Context, strategy SourceStrategy, 
 	if err != nil {
 		return nil, err
 	}
+	// Legacy XML CMS endpoints can accept ac=detail but ignore ids and return
+	// a metadata list. Retry their declared ID parameter with videolist once;
+	// custom actions and response envelopes retain their explicit contract.
+	if configured, ok := strategy.(*configuredStrategy); ok && result.cmsXML && configured.cfg.Strategy == "standard_cms" && configured.cfg.Detail.Action == "detail" && configured.cfg.Detail.actionParamName() == defaultActionParam {
+		playable := false
+		for _, video := range result.List {
+			if video != nil && video.VodId.String() == vodID && strings.TrimSpace(video.VodPlayUrl) != "" {
+				playable = true
+				break
+			}
+		}
+		if !playable {
+			op := configured.cfg.Detail
+			op.Action = "videolist"
+			operation.Stage(ctx, "xml_detail_fallback", applog.Fields{"action": op.Action})
+			result, err = FetchWithStrategy(ctx, strategy, buildOperationURL(configured.cfg.ApiUrl, op, map[string]string{op.IDParam: vodID}))
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
 	for _, video := range result.List {
 		if video != nil && video.VodId.String() == vodID {
 			return video, nil
@@ -359,7 +381,8 @@ func doFetchShape(ctx context.Context, target string, fieldMapping map[string]st
 	stage = "decode"
 	body = bytes.TrimPrefix(body, []byte{0xef, 0xbb, 0xbf})
 	trimmed := strings.TrimSpace(string(body))
-	if shape == nil && strings.HasPrefix(trimmed, "<") && (strings.HasPrefix(trimmed, "<?xml") || strings.HasPrefix(trimmed, "<rss")) {
+	cmsXML := shape == nil && strings.HasPrefix(trimmed, "<") && (strings.HasPrefix(trimmed, "<?xml") || strings.HasPrefix(trimmed, "<rss"))
+	if cmsXML {
 		body, err = normalizeCMSXML(body)
 		if err != nil {
 			return nil, apperror.Wrap(apperror.Corrupt, err, "源站 XML 响应无效")
@@ -397,6 +420,7 @@ func doFetchShape(ctx context.Context, target string, fieldMapping map[string]st
 		result.List = valid
 	}
 
+	result.cmsXML = cmsXML
 	result.HTTPStatus = resp.StatusCode
 	result.ResponseBytes = len(body)
 	fields["api_code"], fields["normalized_count"], fields["total"], fields["page"], fields["page_count"] = result.Code, len(result.List), result.Total.Int(), result.Page.Int(), result.Pagecount.Int()

@@ -6,12 +6,11 @@
  * `.toggle`（深色模式那枚复选框）留在这份样式里，不依赖父级。
  */
 defineOptions({ name: 'ThemeEditorModal' })
-import { ref, reactive, watch, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, watch, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '../../components/Icon.vue'
-import ThemeSample from './ThemeSample.vue'
 import { Button, Modal } from '../../components/ui'
-import { useThemeStore, readSurfaceAlpha, isPackAssetRef, type CustomTheme, type ColorPalette } from '../../stores/theme'
+import { useThemeStore, readSurfaceAlpha, isPackAssetRef, readThemeRoleColors, THEME_ROLE_KEYS, type ThemeColorRole, type CustomTheme, type ColorPalette } from '../../stores/theme'
 import { useErrorStore } from '../../stores/error'
 import { pickColorFromImage } from '../../utils/imagePalette'
 import { isMobileRuntime } from '../../api/runtime'
@@ -23,6 +22,16 @@ const { t } = useI18n()
 const mobile = isMobileRuntime()
 const themeStore = useThemeStore()
 const errorStore = useErrorStore()
+const replaceManual=ref(false)
+const manualFields=new Set<string>()
+const basicColors=['text','background','sidebar','content','primaryAction','successColor','warningColor','dangerColor','infoColor','tagColor','carouselColor','sidebarAlpha','contentAlpha'] as const
+const roleGroups: {label:string;roles:ThemeColorRole[]}[]=[
+  {label:'paletteSurfaces',roles:['bgInput','bgElevated','border','borderStrong']},
+  {label:'paletteText',roles:['textSecondary','textMuted','accentText']},
+  {label:'paletteControls',roles:['btnSolidText','btnSoft','btnSoftText','selectedBg','selectedText','selectedBorder']},
+  {label:'paletteEpisodes',roles:['episodeBg','episodeText','episodeWatchedBg','episodeWatchedText','episodeActiveBg','episodeActiveText','episodeProgress']},
+  {label:'semanticColors',roles:['successText','warningText','dangerText','infoText']},
+]
 
 // ---------- 主题编辑器 ----------
 const editorOpen = ref(false)
@@ -30,6 +39,21 @@ const editing = reactive<CustomTheme & { __mode: 'create' | 'edit' }>({
   ...themeStore.makeEmptyCustom(),
   __mode: 'create',
 })
+const rolePalette=computed(()=>themeStore.paletteFromCustom(editing))
+function roleValue(role:ThemeColorRole):string {return colorToHex(rolePalette.value[role])}
+function setRole(role:ThemeColorRole,event:Event):void {
+  editing.roleColors={...editing.roleColors,[role]:(event.target as HTMLInputElement).value}
+  applyPreview()
+}
+function resetRole(role:ThemeColorRole):void {
+  const colors={...editing.roleColors};delete colors[role];editing.roleColors=colors
+  applyPreview()
+}
+function editColor(key:string):void {manualFields.add(key);applyPreview()}
+function prepareManualFields(existing?:CustomTheme):void {
+  replaceManual.value=false;manualFields.clear()
+  if(existing)for(const key of basicColors)if(existing[key]!==undefined)manualFields.add(key)
+}
 
 const backgroundImageUrl = ref<string | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
@@ -78,6 +102,12 @@ function fillMissingComponentColors(p: ColorPalette): void {
   }
 }
 
+function separateLegacyEpisodes(p:ColorPalette):void {
+  if(editing.colorVersion===2)return
+  editing.roleColors={episodeBg:colorToHex(p.episodeBg),episodeText:colorToHex(p.episodeText),...readThemeRoleColors(editing.roleColors)}
+  editing.colorVersion=2
+}
+
 /**
  * 透明度滑块播种（只填空位，已保存的用户选择不会被覆盖）：读当前生效调色板里
  * 那层 rgba 的 A 通道。带背景图的预设手工写的是 0.92~0.95，硬编码 0.65/0.88
@@ -90,6 +120,7 @@ function seedSurfaceAlphas(p: ColorPalette): void {
 
 function openCreate(): void {
   releaseImages()
+  prepareManualFields()
   previousThemeId = themeStore.currentId
   const cur = themeStore.current
   // 与 openEdit/openEditPreset 一致：先清空 editing，否则上次编辑的语义色会残留到新建主题
@@ -105,6 +136,8 @@ function openCreate(): void {
     ...componentColorsFromPalette(cur.palette),
     backgroundImage: cur.bgImage,
     dark: cur.mode === 'dark',
+    roleColors:readThemeRoleColors(Object.fromEntries(THEME_ROLE_KEYS.map(key=>[key,colorToHex(cur.palette[key])]))),
+    colorVersion:2,
     __mode: 'create' as const,
   })
   seedSurfaceAlphas(cur.palette)
@@ -117,6 +150,7 @@ function openEditPreset(preset: { id: string; name: string; primary: string; pal
   releaseImages()
   previousThemeId = themeStore.currentId
   const existingOverride = themeStore.customThemes.find((c) => c.id === preset.id)
+  prepareManualFields(existingOverride)
   Object.keys(editing).forEach((k) => { delete (editing as any)[k] })
   if (existingOverride) {
     // 如果已有 override，但它的 backgroundImage 是旧构建的预设资源路径，
@@ -133,6 +167,7 @@ function openEditPreset(preset: { id: string; name: string; primary: string; pal
     }
     Object.assign(editing, fixed)
     fillMissingComponentColors(preset.palette)
+    separateLegacyEpisodes(themeStore.paletteFromCustom(existingOverride))
     seedSurfaceAlphas(preset.palette)
   } else {
     Object.assign(editing, {
@@ -146,6 +181,8 @@ function openEditPreset(preset: { id: string; name: string; primary: string; pal
       ...componentColorsFromPalette(preset.palette),
       backgroundImage: preset.bgImage || null,
       dark: preset.mode === 'dark',
+      roleColors:readThemeRoleColors(themeStore.themes.find(t=>t.id===preset.id)?.tint),
+      colorVersion:2,
       __mode: 'edit' as const,
     })
     seedSurfaceAlphas(preset.palette)
@@ -158,6 +195,7 @@ function openEditPreset(preset: { id: string; name: string; primary: string; pal
 function openEdit(id: string): void {
   const existing = themeStore.customThemes.find((c) => c.id === id)
   if (!existing) return
+  prepareManualFields(existing)
   releaseImages()
   previousThemeId = themeStore.currentId
   const copy: any = JSON.parse(JSON.stringify(existing))
@@ -174,6 +212,7 @@ function openEdit(id: string): void {
   Object.assign(editing, copy)
   // 老存档可能没有这些角色色：按当前主题算一遍补上，别让取色框变成纯黑
   fillMissingComponentColors(themeStore.paletteFromCustom(existing))
+  separateLegacyEpisodes(themeStore.paletteFromCustom(existing))
   backgroundImageUrl.value = bgSrc(editing.backgroundImage) || null
   editorOpen.value = true
   applyPreview()
@@ -198,6 +237,7 @@ function applyPreview(): void {
   if (disposed || !editorOpen.value) return
   const preview: CustomTheme = {
     id: '__preview__',
+    previewBaseId:editing.id,
     name: editing.name || t('settings.previewTheme'),
     primary: editing.primary,
     text: editing.text,
@@ -215,6 +255,8 @@ function applyPreview(): void {
     dark: editing.dark,
     sidebarAlpha: editing.sidebarAlpha ?? 0.65,
     contentAlpha: editing.contentAlpha ?? 0.88,
+    roleColors:readThemeRoleColors(editing.roleColors),
+    colorVersion:editing.colorVersion,
   }
   const others = themeStore.customThemes.filter(c => c.id !== '__preview__')
   themeStore.customThemes = [...others, preview]
@@ -249,6 +291,8 @@ async function saveEditing(): Promise<void> {
     dark: editing.dark,
     sidebarAlpha: editing.sidebarAlpha ?? 0.65,
     contentAlpha: editing.contentAlpha ?? 0.88,
+    roleColors:readThemeRoleColors(editing.roleColors),
+    colorVersion:editing.colorVersion,
   }
   if(await themeStore.saveCustom(themeToSave))editorOpen.value = false
 }
@@ -269,21 +313,12 @@ function deriveFromPrimary(): void {
   // 带背景图的预设要把作者那层 tint 一起交给派生函数，否则"派生"会把暖灰底换成通用灰。
   const tint = themeStore.themes.find((preset) => preset.id === editing.id)?.tint
   const derived = themeStore.deriveFromPrimary(editing.primary, editing.dark, tint)
-  editing.text = derived.text
-  editing.background = derived.background
-  editing.sidebar = derived.sidebar
-  editing.content = derived.content
-  editing.sidebarAlpha = derived.sidebarAlpha
-  editing.contentAlpha = derived.contentAlpha
-  // 按钮色只认 store 返回的 primaryAction：那个废弃别名字段读出来永远是
-  // undefined，绑到取色框会把色块变成纯黑并静默丢掉用户选的按钮色。
-  editing.primaryAction = derived.primaryAction
-  editing.successColor = derived.successColor
-  editing.warningColor = derived.warningColor
-  editing.dangerColor = derived.dangerColor
-  editing.infoColor = derived.infoColor
-  editing.tagColor = derived.tagColor
-  editing.carouselColor = derived.carouselColor
+  for(const key of basicColors){
+    if(replaceManual.value || !manualFields.has(key))Object.assign(editing,{[key]:derived[key]})
+  }
+  if(replaceManual.value){
+    editing.roleColors=derived.roleColors;editing.colorVersion=2;manualFields.clear()
+  }
   applyPreview()
 }
 
@@ -364,7 +399,6 @@ defineExpose({ openCreate, openEdit, openEditPreset, applyPreview })
     @update:model-value="(v: boolean) => !v && closeEditor()"
   >
     <div class="modal-body cczj-mobile-theme-editor">
-      <ThemeSample :name="editing.name || t('settings.previewTheme')" />
       <div class="edit-row cczj-flex cczj-flex-wrap">
         <div class="field cczj-flex cczj-flex-col cczj-gap-2">
           <label>{{ t('settings.themeName') }}</label>
@@ -372,8 +406,12 @@ defineExpose({ openCreate, openEdit, openEditPreset, applyPreview })
         </div>
         <div class="flags cczj-flex cczj-items-center cczj-flex-wrap">
           <label class="toggle cczj-inline-flex cczj-items-center cczj-gap-4 cczj-cursor-pointer">
-            <input type="checkbox" v-model="editing.dark" @change="applyPreview" />
+            <input type="checkbox" v-model="editing.dark" @change="deriveFromPrimary" />
             <span>{{ t('settings.darkMode') }}</span>
+          </label>
+          <label class="toggle cczj-inline-flex cczj-items-center cczj-gap-4 cczj-cursor-pointer">
+            <input type="checkbox" v-model="replaceManual" />
+            <span>{{ t('settings.replaceManualColors') }}</span>
           </label>
           <Button variant="primary" size="sm" @click="deriveFromPrimary">
             <Icon name="sparkle" :size="13" /> {{ t('settings.deriveColors') }}
@@ -385,23 +423,23 @@ defineExpose({ openCreate, openEdit, openEditPreset, applyPreview })
       <div class="picker-grid">
         <div class="picker-item">
           <label>{{ t('settings.accentColor') }}</label>
-          <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.accentColor')" v-model="editing.primary" @input="applyPreview" /><span>{{ editing.primary }}</span></div>
+          <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.accentColor')" v-model="editing.primary" @input="deriveFromPrimary" /><span>{{ editing.primary }}</span></div>
         </div>
         <div class="picker-item">
           <label>{{ t('settings.textColor') }}</label>
-          <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.textColor')" v-model="editing.text" @input="applyPreview" /><span>{{ editing.text }}</span></div>
+          <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.textColor')" v-model="editing.text" @input="editColor('text')" /><span>{{ editing.text }}</span></div>
         </div>
         <div class="picker-item">
           <label>{{ t('settings.bgApp') }}</label>
-          <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.bgApp')" v-model="editing.background" @input="applyPreview" /><span>{{ editing.background }}</span></div>
+          <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.bgApp')" v-model="editing.background" @input="editColor('background')" /><span>{{ editing.background }}</span></div>
         </div>
         <div class="picker-item">
           <label>{{ t(mobile ? 'mobile.secondaryBackground' : 'settings.bgSidebar') }}</label>
-          <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t(mobile ? 'mobile.secondaryBackground' : 'settings.bgSidebar')" v-model="editing.sidebar" @input="applyPreview" /><span>{{ editing.sidebar }}</span></div>
+          <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t(mobile ? 'mobile.secondaryBackground' : 'settings.bgSidebar')" v-model="editing.sidebar" @input="editColor('sidebar')" /><span>{{ editing.sidebar }}</span></div>
         </div>
         <div class="picker-item">
           <label>{{ t('settings.bgContent') }}</label>
-          <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.bgContent')" v-model="editing.content" @input="applyPreview" /><span>{{ editing.content }}</span></div>
+          <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.bgContent')" v-model="editing.content" @input="editColor('content')" /><span>{{ editing.content }}</span></div>
         </div>
       </div>
 
@@ -410,14 +448,14 @@ defineExpose({ openCreate, openEdit, openEditPreset, applyPreview })
         <div class="picker-item">
           <label>{{ t(mobile ? 'mobile.secondaryAlpha' : 'settings.sidebarAlpha') }}</label>
           <div class="picker-cell range-cell cczj-flex cczj-items-center cczj-gap-4">
-            <input type="range" :aria-label="t(mobile ? 'mobile.secondaryAlpha' : 'settings.sidebarAlpha')" v-model.number="editing.sidebarAlpha" min="0" max="1" step="0.05" @input="applyPreview" />
+            <input type="range" :aria-label="t(mobile ? 'mobile.secondaryAlpha' : 'settings.sidebarAlpha')" v-model.number="editing.sidebarAlpha" min="0" max="1" step="0.05" @input="editColor('sidebarAlpha')" />
             <span>{{ Math.round((editing.sidebarAlpha ?? 0.65) * 100) }}%</span>
           </div>
         </div>
         <div class="picker-item">
           <label>{{ t('settings.cardAlpha') }}</label>
           <div class="picker-cell range-cell cczj-flex cczj-items-center cczj-gap-4">
-            <input type="range" :aria-label="t('settings.cardAlpha')" v-model.number="editing.contentAlpha" min="0" max="1" step="0.05" @input="applyPreview" />
+            <input type="range" :aria-label="t('settings.cardAlpha')" v-model.number="editing.contentAlpha" min="0" max="1" step="0.05" @input="editColor('contentAlpha')" />
             <span>{{ Math.round((editing.contentAlpha ?? 0.88) * 100) }}%</span>
           </div>
         </div>
@@ -425,18 +463,35 @@ defineExpose({ openCreate, openEdit, openEditPreset, applyPreview })
 
       <h4 class="group-title">{{ t('settings.globalColors') }}</h4>
       <div class="picker-grid small">
-        <div class="picker-item"><label>{{ t('settings.btnAction') }}</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.btnAction')" v-model="editing.primaryAction" @input="applyPreview" /><span>{{ editing.primaryAction }}</span></div></div>
-        <div class="picker-item"><label>{{ t('settings.tagColor') }}</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.tagColor')" v-model="editing.tagColor" @input="applyPreview" /><span>{{ editing.tagColor }}</span></div></div>
-        <div class="picker-item"><label>{{ t('settings.carouselColor') }}</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.carouselColor')" v-model="editing.carouselColor" @input="applyPreview" /><span>{{ editing.carouselColor }}</span></div></div>
+        <div class="picker-item"><label>{{ t('settings.btnAction') }}</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.btnAction')" v-model="editing.primaryAction" @input="editColor('primaryAction')" /><span>{{ editing.primaryAction }}</span></div></div>
+        <div class="picker-item"><label>{{ t('settings.tagColor') }}</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.tagColor')" v-model="editing.tagColor" @input="editColor('tagColor')" /><span>{{ editing.tagColor }}</span></div></div>
+        <div class="picker-item"><label>{{ t('settings.carouselColor') }}</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.carouselColor')" v-model="editing.carouselColor" @input="editColor('carouselColor')" /><span>{{ editing.carouselColor }}</span></div></div>
       </div>
 
       <h4 class="group-title">{{ t('settings.semanticColors') }}</h4>
       <div class="picker-grid small">
-        <div class="picker-item"><label>{{ t('settings.paletteRoleSuccess') }}</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.paletteRoleSuccess')" v-model="editing.successColor" @input="applyPreview" /><span>{{ editing.successColor }}</span></div></div>
-        <div class="picker-item"><label>{{ t('settings.paletteRoleWarning') }}</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.paletteRoleWarning')" v-model="editing.warningColor" @input="applyPreview" /><span>{{ editing.warningColor }}</span></div></div>
-        <div class="picker-item"><label>{{ t('settings.paletteRoleDanger') }}</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.paletteRoleDanger')" v-model="editing.dangerColor" @input="applyPreview" /><span>{{ editing.dangerColor }}</span></div></div>
-        <div class="picker-item"><label>{{ t('settings.paletteRoleInfo') }}</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.paletteRoleInfo')" v-model="editing.infoColor" @input="applyPreview" /><span>{{ editing.infoColor }}</span></div></div>
+        <div class="picker-item"><label>{{ t('settings.paletteRoleSuccess') }}</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.paletteRoleSuccess')" v-model="editing.successColor" @input="editColor('successColor')" /><span>{{ editing.successColor }}</span></div></div>
+        <div class="picker-item"><label>{{ t('settings.paletteRoleWarning') }}</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.paletteRoleWarning')" v-model="editing.warningColor" @input="editColor('warningColor')" /><span>{{ editing.warningColor }}</span></div></div>
+        <div class="picker-item"><label>{{ t('settings.paletteRoleDanger') }}</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.paletteRoleDanger')" v-model="editing.dangerColor" @input="editColor('dangerColor')" /><span>{{ editing.dangerColor }}</span></div></div>
+        <div class="picker-item"><label>{{ t('settings.paletteRoleInfo') }}</label><div class="picker-cell cczj-flex cczj-items-center cczj-gap-4"><input type="color" :aria-label="t('settings.paletteRoleInfo')" v-model="editing.infoColor" @input="editColor('infoColor')" /><span>{{ editing.infoColor }}</span></div></div>
       </div>
+
+      <details class="palette-advanced">
+        <summary>{{ t('settings.advancedColors') }}</summary>
+        <section v-for="group in roleGroups" :key="group.label">
+          <h4 class="group-title">{{ t('settings.'+group.label) }}</h4>
+          <div class="picker-grid small">
+            <div v-for="role in group.roles" :key="role" class="picker-item">
+              <label>{{ t('settings.colorRoles.'+role) }}</label>
+              <div class="picker-cell cczj-flex cczj-items-center cczj-gap-4">
+                <input type="color" :aria-label="t('settings.colorRoles.'+role)" :value="roleValue(role)" @input="setRole(role,$event)" />
+                <span>{{ roleValue(role) }}</span>
+                <Button v-if="editing.roleColors?.[role]" variant="text" size="sm" icon :aria-label="t('settings.resetColorRole',{role:t('settings.colorRoles.'+role)})" @click="resetRole(role)"><Icon name="refresh" :size="14" /></Button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </details>
 
       <div
         class="bg-drop-zone cczj-relative cczj-flex cczj-items-center cczj-justify-center cczj-overflow-hidden cczj-cursor-pointer"
@@ -488,6 +543,10 @@ defineExpose({ openCreate, openEdit, openEditPreset, applyPreview })
 </template>
 
 <style scoped>
+.palette-advanced { margin:16px 0; padding:12px; @apply cczj-border cczj-rounded-md; }
+.palette-advanced > summary { @apply cczj-cursor-pointer cczj-font-semibold; min-height:44px; line-height:44px; }
+.palette-advanced .picker-cell > span { @apply cczj-flex-1; }
+
 .modal-body {
   padding: 18px 20px;
   @apply cczj-overflow-y-auto;

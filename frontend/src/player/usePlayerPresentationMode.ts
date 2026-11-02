@@ -64,15 +64,31 @@ export function usePlayerPresentationMode(deps: {
     }
   }
   function onFsChange(): void {
-    if (!owns()) return
+    if (!owns() || fullscreenBusy.value) return
     reflectFullscreen(platform.fullscreen.browserActive(fullscreenRoot()))
     if(!fullscreenBusy.value)fullscreenPhase.value=isFullscreen.value?'fullscreen':'inline'
   }
+  let nativeExitOwnsPhase=false
   const stopFullscreenErrors=platform.fullscreen.onError(error=>{
     if(!owns())return
+    if(nativeExitOwnsPhase){
+      nativeExitOwnsPhase=false
+      reflectFullscreen(platform.fullscreen.browserActive(fullscreenRoot()))
+      fullscreenPhase.value=isFullscreen.value?'fullscreen':'inline'
+    }
     onFsChange()
     deps.failure('fullscreen',error)
     deps.visible()
+  })
+  const stopFullscreenTransitions=platform.fullscreen.onTransition(state=>{
+    if(!owns())return
+    if(state==='exiting'&&!fullscreenBusy.value){nativeExitOwnsPhase=true;fullscreenPhase.value='exiting'}
+    if(state==='exited'&&nativeExitOwnsPhase){
+      nativeExitOwnsPhase=false
+      reflectFullscreen(platform.fullscreen.browserActive(fullscreenRoot()))
+      fullscreenPhase.value=isFullscreen.value?'fullscreen':'inline'
+      deps.visible()
+    }
   })
   function setFullscreenLocked(locked: boolean): void {
     if(!owns()||!isFullscreen.value||fullscreenBusy.value)return
@@ -145,6 +161,7 @@ export function usePlayerPresentationMode(deps: {
     disposed = true; fullscreenGeneration++; pipGeneration++
     stopElementPip?.()
     stopFullscreenErrors()
+    stopFullscreenTransitions()
     document.removeEventListener('fullscreenchange', onFsChange)
     document.removeEventListener('webkitfullscreenchange', onFsChange)
     window.removeEventListener('cczj:player-pip', onNativePip)

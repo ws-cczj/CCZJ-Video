@@ -322,6 +322,7 @@
 | `cczj-text-secondary` | `color: var(--text-secondary);` |
 | `cczj-text-muted` | `color: var(--text-muted);` |
 | `cczj-text-accent` | `color: var(--accent);` |
+| `cczj-text-accent-readable` | `color: var(--accent-text, var(--accent));` |
 | `cczj-text-danger` | `color: var(--danger);` |
 | `cczj-text-success` | `color: var(--success);` |
 | `cczj-text-warning` | `color: var(--warning);` |

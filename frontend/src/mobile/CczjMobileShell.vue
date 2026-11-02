@@ -7,6 +7,7 @@ import MobileRouteStage from './MobileRouteStage.vue'
 import CczjMobileNavigation from './CczjMobileNavigation.vue'
 import { pluginSettingsTabs, pluginNavItems } from '../plugins/registry'
 import { useThemeStore } from '../stores/theme'
+import { readRgb, rgbToHex, toSolidHex, hexToRgba } from '../utils/colors'
 import { mobileToolRoutes } from './settingsNavigation'
 
 const route = useRoute()
@@ -17,10 +18,12 @@ const themeStyle = computed(() => {
   const p = current.palette
   const dark = current.mode === 'dark'
   const picture = !!current.bgImage
-  // Keep the desktop theme's input, action and text semantics. A wallpaper
-  // needs a neutral reading surface, not the same tinted card at every layer.
+  const custom=theme.customThemes.find(item=>item.id===current.id)
+  const card=readRgb(p.bgCard),canvas=readRgb(p.bgApp)
+  const cardColor=custom?toSolidHex(p.bgCard):rgbToHex(...card.map((value,index)=>value*.8+canvas[index]*.2) as [number,number,number])
+  const cardSurface=picture?hexToRgba(cardColor,Math.max(.68,Math.min(.94,custom?.contentAlpha??.78))):cardColor
   return { '--cczj-mobile-canvas': p.bgApp,
-    '--cczj-mobile-surface': picture ? (dark ? 'rgba(24,27,32,.92)' : 'rgba(255,255,255,.91)') : p.bgCard,
+    '--cczj-mobile-surface': cardSurface,
     '--cczj-mobile-chrome': dark ? 'rgba(24,27,32,.8)' : 'rgba(255,255,255,.8)',
     '--cczj-mobile-control': p.bgInput,
     '--cczj-mobile-secondary': picture ? (dark ? '#242830' : '#f3f5f7') : p.bgSidebar,

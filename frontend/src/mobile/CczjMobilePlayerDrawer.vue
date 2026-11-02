@@ -84,10 +84,10 @@ onBeforeUnmount(() => { stopResize();if (props.open && returnFocus?.isConnected)
 <template>
   <Teleport :to="(fullscreen || contained) && host ? host : 'body'">
     <Transition :name="placement==='bottom'?'cczj-mobile-player-sheet':'cczj-mobile-player-drawer'" @after-leave="afterClose">
-      <div v-bind="$attrs" v-show="open" class="cczj-mobile-quick-mask" :class="{'cczj-mobile-quick-fullscreen':fullscreen || contained,'cczj-player-contained-drawer':contained,'cczj-player-solid-drawer':solid,'cczj-mobile-player-more-mask':kind==='more','cczj-mobile-player-more-fullscreen':kind==='more'&&fullscreen,'cczj-mobile-player-bottom-mask':placement==='bottom'}" @click.self="emit('close')" @pointerdown.stop @wheel.stop @keydown.stop="onKey">
+      <div v-bind="$attrs" v-show="open" class="cczj-mobile-quick-mask" :class="{'cczj-mobile-quick-fullscreen':fullscreen || contained,'cczj-player-contained-drawer':contained,'cczj-player-solid-drawer':solid,'cczj-mobile-player-more-mask':kind==='more','cczj-mobile-player-more-fullscreen':kind==='more'&&fullscreen,'cczj-mobile-player-bottom-mask':placement==='bottom'}" @click.self.stop="emit('close')" @dblclick.stop @pointerdown.stop @wheel.stop @keydown.stop="onKey">
         <section ref="panel" class="cczj-mobile-drawer-panel cczj-mobile-quick-panel" :class="{'cczj-mobile-player-more':kind==='more'}" :style="sheetStyle" role="dialog" :aria-label="title" aria-modal="true" @click.stop @dblclick.stop>
           <button v-if="placement==='bottom'" type="button" class="cczj-mobile-sheet-handle" role="slider" :aria-label="t('mobile.resizeDrawer')" aria-orientation="vertical" :aria-valuemin="30" :aria-valuemax="90" :aria-valuenow="Math.round(sheetHeight)" :aria-valuetext="t('mobile.drawerHeight',{percent:Math.round(sheetHeight)})" @pointerdown.stop="startResize" @pointermove.stop="resize" @pointerup.stop="stopResize" @pointercancel.stop="stopResize" @lostpointercapture.stop="stopResize" @keydown="resizeWithKey"><span aria-hidden="true" /></button>
-          <header><strong>{{title}}</strong><button :aria-label="t('common.close')" @click="emit('close')"><Icon name="close" :size="22" /></button></header>
+          <header><strong>{{title}}</strong><button :aria-label="t('common.close')" @click="emit('close')"><Icon name="close" :size="18" /></button></header>
           <slot name="navigation" />
           <div class="cczj-mobile-quick-body" :class="{'cczj-mobile-player-more-body':kind==='more'}"><slot v-if="!lazy || contentPresent" /></div>
         </section>

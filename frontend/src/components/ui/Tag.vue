@@ -50,7 +50,7 @@ const emit = defineEmits<{
 .ui-tag {
   @apply cczj-border;
   border-radius: 5px;
-  background: var(--bg-secondary);
+  background: var(--bg-tag,var(--bg-secondary));
   @apply cczj-text-secondary;
   font-family: inherit;
   @apply cczj-font-medium cczj-whitespace-nowrap;
@@ -73,31 +73,19 @@ const emit = defineEmits<{
   @apply cczj-cursor-pointer;
 }
 .ui-tag--clickable:hover {
-  @apply cczj-border-primary cczj-text-accent;
-}
-
-/* Active / Selected */
-.ui-tag--active {
-  background: var(--accent);
-  @apply cczj-border-primary;
-  color: var(--accent-contrast);
-  box-shadow: 0 2px 8px var(--accent-alpha-35);
-}
-.ui-tag--active:hover {
-  color: var(--accent-contrast);
-  @apply cczj-border-primary;
+  @apply cczj-border-primary cczj-text-accent-readable;
 }
 
 /* Variants */
 .ui-tag--primary {
   background: var(--accent-alpha-10);
   border-color: var(--accent-alpha-20);
-  @apply cczj-text-accent;
+  @apply cczj-text-accent-readable;
 }
 .ui-tag--success {
   background: var(--success-alpha-10);
   border-color: var(--success-alpha-10);
-  @apply cczj-text-success;
+  color: var(--success-text,var(--success));
 }
 .ui-tag--warning {
   background: var(--warning-alpha-10);
@@ -107,7 +95,14 @@ const emit = defineEmits<{
 .ui-tag--danger {
   @apply cczj-bg-danger-alpha;
   border-color: var(--danger-alpha-10);
-  @apply cczj-text-danger;
+  color: var(--danger-text,var(--danger));
+}
+
+.ui-tag.ui-tag--active {
+  background:var(--selected-bg,var(--accent));
+  color:var(--selected-text,var(--accent-contrast));
+  border-color:var(--selected-border,var(--accent));
+  box-shadow:none;
 }
 
 /* Close button */

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -69,6 +70,12 @@ func (c *Client) readHTTP(ctx context.Context, req *http.Request) ([]byte, error
 	defer cancel()
 	resp, err := c.http.Do(req.WithContext(ctx))
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, apperror.Wrap(apperror.Timeout, err, "弹幕平台请求超时")
+		}
+		if errors.Is(err, context.Canceled) {
+			return nil, err
+		}
 		return nil, apperror.Wrap(apperror.Unavailable, err, "弹幕平台暂时不可用")
 	}
 	defer resp.Body.Close()

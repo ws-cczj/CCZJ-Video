@@ -123,6 +123,18 @@ export function contrastText(background:string):string {
   }
   return dark?'#000000':'#ffffff'
 }
+/** Keep a role's hue while making its label readable on known soft surfaces. */
+export function readableForeground(seed:string,surfaces:readonly string[],minimum=4.5):string {
+  const score=(color:string)=>Math.min(...surfaces.map(surface=>contrastRatio(surface,color)))
+  if(!surfaces.length||score(seed)>=minimum)return seed
+  const towardsDark=score('#000000')>=score('#ffffff')
+  const lightness=oklch(seed)[0]
+  for(let step=1;step<=34;step++){
+    const color=perceptualTone(seed,lightness+(towardsDark?-1:1)*step*.03,.2)
+    if(score(color)>=minimum)return color
+  }
+  return towardsDark?'#000000':'#ffffff'
+}
 /** Composite a known translucent surface; wallpaper pixels are not sampled. */
 export function compositeColor(surface:string,base:string):string {
   const match=surface.match(/^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\s*\)$/)

@@ -78,6 +78,9 @@ export const useVideoStore = defineStore('video', () => {
   function detailIdentity(sourceKey: string, vodId: string, globalId: number): string {
     return `${sourceKey}:${vodId || `global:${globalId}`}`
   }
+  function hasCurrentDetail(sourceKey:string,vodId:string,globalId=0):boolean {
+    return !!currentVideo.value && detailKey===detailIdentity(sourceKey,vodId,globalId)
+  }
 
   /**
    * 载入详情并决定线路指针。
@@ -218,6 +221,7 @@ export const useVideoStore = defineStore('video', () => {
     refreshTrigger,
     setActiveLine,
     acceptDetail,
+    hasCurrentDetail,
     loadDetail,
     refreshDetail,
     loadTypes,

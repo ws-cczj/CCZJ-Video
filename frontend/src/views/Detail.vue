@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import VirtualGrid from '../components/VirtualGrid.vue'
 import { CCZJ } from '../constants/cczj'
 defineOptions({ name: 'Detail' })
-import { ref, computed, onMounted, onBeforeUnmount, onActivated, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, onActivated, watch, shallowRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { GetRecentHistory, DeleteVideo, GetVideoList, GetSimilarVideos, DoubanUpdateVideo, normalizeApiError, FindSourcesByGlobalId } from '../api/app'
@@ -19,16 +20,25 @@ import { getDetailPath, getSearchPath, getPlayerPath, humanizeBytes, buildEpisod
 import { TsCache } from '../utils/tsCache'
 import { proxyHlsURL } from '../player/hls/proxy'
 import { computeRecommendations, type RecommendItem, extractYear } from '../utils/recommend'
-import { epProgressKey, loadEpProgress, getEpProgressPct, flushEpProgress, mergeEpHistory } from '../utils/episodeProgress'
+import { epProgressKey, loadEpProgress, getEpProgressPct, mergeEpHistory } from '../utils/episodeProgress'
 import { bumpFavoritesRefresh } from '../stores/favoritesSync'
 import type { Video, HistoryItem, Episode } from '../types'
 import { readStorage, writeStorage } from '../platform/storage'
 import { isMobileRuntime } from '../api/runtime'
 import EpisodeLabel from '../player/views/EpisodeLabel.vue'
 import { hasDetailedEpisodeLabels } from '../player/videoInfoFormat'
+import { useViewActivity } from '../composables/useViewActivity'
+import { createRequestScope } from '../api/requestScope'
+import { useGeneration } from '../composables/useGeneration'
+import { createSceneSettledTask } from '../motion/sceneTasks'
 
 const { t } = useI18n()
 const mobile = isMobileRuntime()
+const detailActive = useViewActivity(() => true, 'committed')
+const resumeDetails = createSceneSettledTask(()=>detailActive.value)
+let detailMountedReady = false,detailDisposed=false
+const detailGeneration=useGeneration(),relatedRequests=createRequestScope()
+let detailToken=0,relatedRefreshNeeded=false,otherSourcesLoading=false
 const mobileMetadataExpanded = ref(false)
 
 const route = useRoute()
@@ -57,7 +67,8 @@ const sourceKey = computed(() => {
 })
 
 // ==================== 页面状态 ====================
-const loading = ref(false)
+// The shared store may still hold the last visited title before mount begins.
+const loading = ref(true)
 const refreshing = ref(false) // 后台刷新标记
 const error = ref<string | null>(null)
 const video = computed(() => videoStore.currentVideo)
@@ -67,78 +78,58 @@ const video = computed(() => videoStore.currentVideo)
  * - 每项：{ position, duration?, updatedAt }
  * - 同时也会读取后端最近历史作为补充（在本地进度不存在时写入一条）。
  */
-const epProgressMap = ref<Record<string, number>>({}) // key -> 0-100
+const epProgressMap = shallowRef<Record<string, number>>({}) // key -> 0-100
 const lastWatched = ref<{ epNum: number; epIdx: number; epName: string; position: number } | null>(null)
 
 function epKeyOf(ep: Episode | undefined | null, idx: number): string {
   return epProgressKey(video.value?.global_id, video.value?.vod_name, ep?.ep_num ?? idx)
 }
 
-function refreshEpProgress(): void {
-  try {
-    // 先强制写入确保内存缓存已同步到 localStorage
-    flushEpProgress()
-    const local = loadEpProgress()
-    const out: Record<string, number> = {}
-    for (const k of Object.keys(local)) {
-      out[k] = getEpProgressPct(local[k])
-    }
-    epProgressMap.value = out
-    // Debug: 检查当前视频的进度是否正确加载
-    const vName = video.value?.vod_name
-    const gid = video.value?.global_id
-    if (vName) {
-      const prefix = gid ? String(gid) : vName
-      const epKeys = Object.keys(out).filter(k => k.startsWith(prefix + '-'))
-      if (epKeys.length > 0) {
-        console.log(`[Detail] ✔ 进度已加载: global_id=${gid}, vodName="${vName}", 已观看 ${epKeys.length} 集`, epKeys.map(k => `${k}=${Math.round(out[k])}%`).join(', '))
-      } else {
-        console.log(`[Detail] ⚠ 未找到进度: global_id=${gid}, vodName="${vName}", localStorage 中共 ${Object.keys(out).length} 条记录`)
-      }
-    }
-  } catch (e) { console.warn('[Detail] refreshEpProgress 失败:', e) }
-}
-refreshEpProgress()
-
-// 当视频或剧集列表变化时自动刷新进度（处理异步加载的时序问题）
-watch(
-  () => [video.value?.vod_name, videoStore.episodes.length],
-  () => {
-    if (video.value?.vod_name && videoStore.episodes.length > 0) {
-      nextTick(() => refreshEpProgress())
-    }
-  },
-)
-
-// 页面可见性变化时刷新进度（从播放页返回时同步）
-function onVisibilityChange(): void {
-  if (document.visibilityState === 'visible') {
-    refreshEpProgress()
-    refreshLastWatched()
+const historyRequests=createRequestScope(),historyGeneration=useGeneration()
+let historyInFlight:Promise<void>|undefined,historyRefreshNeeded=false,favoriteRefreshNeeded=false
+function refreshEpProgress():void {
+  if(detailDisposed||!detailActive.value)return
+  const local=loadEpProgress(),next:Record<string,number>={}
+  for(let index=0;index<videoStore.episodes.length;index++){
+    const key=epKeyOf(videoStore.episodes[index],index),percent=getEpProgressPct(local[key])
+    if(percent>0)next[key]=percent
   }
+  const previous=epProgressMap.value,keys=Object.keys(next)
+  if(keys.length!==Object.keys(previous).length||keys.some(key=>previous[key]!==next[key]))epProgressMap.value=next
 }
-
-// 自定义事件监听：播放页实时同步进度到详情页
-function onEpProgressUpdated(): void {
-  flushEpProgress() // 确保内存缓存已写入 localStorage
-  refreshEpProgress()
-}
-function onEpProgressFlushed(): void {
-  refreshEpProgress()
-  refreshLastWatched()
-}
-
-// localStorage 变化监听（跨标签页同步进度）
-function onStorageChange(e: StorageEvent): void {
-  if (e.key === CCZJ.Storage.episodeProgress) {
-    // 其他标签页修改了进度数据，重新加载
+function scheduleDetailRefresh(history=false,favorite=false):void {
+  historyRefreshNeeded ||= history;favoriteRefreshNeeded ||= favorite
+  if(!detailActive.value)return
+  void resumeDetails.schedule(async()=>{
+    const withHistory=historyRefreshNeeded,withFavorite=favoriteRefreshNeeded
+    historyRefreshNeeded=false;favoriteRefreshNeeded=false
     refreshEpProgress()
-  }
+    if(relatedRefreshNeeded){relatedRefreshNeeded=false;void loadSimilar();void loadOtherSources()}
+    if(withHistory)await refreshLastWatched()
+    if(withFavorite&&detailActive.value)void refreshFav().catch(()=>{})
+  })
+}
+watch(()=>[video.value?.global_id,video.value?.vod_name,videoStore.episodes],()=>scheduleDetailRefresh(true))
+watch(detailActive,active=>{
+  if(!active){relatedRefreshNeeded ||= similarLoading.value||otherSourcesLoading;similarLoading.value=false;otherSourcesLoading=false;refreshing.value=false;detailGeneration.invalidate();relatedRequests.cancel();historyGeneration.invalidate();historyRequests.cancel();historyInFlight=undefined}
+})
+function onVisibilityChange():void { if(document.visibilityState==='visible')scheduleDetailRefresh(true,true) }
+function onEpProgressUpdated():void { scheduleDetailRefresh() }
+function onEpProgressFlushed():void { scheduleDetailRefresh(true) }
+function onStorageChange(event:StorageEvent):void { if(event.key===CCZJ.Storage.episodeProgress)scheduleDetailRefresh(true) }
+function refreshLastWatched():Promise<void> {
+  if(historyInFlight)return historyInFlight
+  const token=historyGeneration.begin()
+  const pending=loadLastWatched(token).finally(()=>{if(historyInFlight===pending)historyInFlight=undefined})
+  historyInFlight=pending
+  return pending
 }
 
-async function refreshLastWatched(): Promise<void> {
+async function loadLastWatched(token:number): Promise<void> {
+  if(!detailActive.value)return
   try {
-    const history = (await GetRecentHistory(50)) as HistoryItem[] | null | undefined
+    const history = (await historyRequests.run(()=>GetRecentHistory(50))) as HistoryItem[] | null | undefined
+    if(!detailActive.value||!historyGeneration.isCurrent(token))return
     const eps = videoStore.episodes
     const epNumToIdx = new Map<number, number>()
     for (let i = 0; i < eps.length; i++) {
@@ -180,12 +171,9 @@ async function refreshLastWatched(): Promise<void> {
     const localStore = loadEpProgress()
     let maxUpdatedAt = 0
     let bestKey: string | null = null
-    for (const k of Object.keys(localStore)) {
-      const prog = localStore[k]
-      if (prog.updatedAt && prog.updatedAt > maxUpdatedAt && prog.position && prog.position > 0) {
-        maxUpdatedAt = prog.updatedAt
-        bestKey = k
-      }
+    for(let index=0;index<eps.length;index++){
+      const key=epKeyOf(eps[index],index),progress=localStore[key]
+      if(progress?.updatedAt>maxUpdatedAt&&progress.position>0){maxUpdatedAt=progress.updatedAt;bestKey=key}
     }
 
     if (bestKey) {
@@ -433,13 +421,14 @@ function goToRecommendations(): void {
 }
 
 async function loadSimilar(): Promise<void> {
-  if (!sourceKey.value || !video.value) return
+  if (detailDisposed||!detailActive.value||!sourceKey.value || !video.value) return
+  const token=detailToken
   similarLoading.value = true
   try {
     // 候选池自己取同类型的一页：原先读的是别的列表页留下的 videoStore.videos，
     // 从哪个页面进来就推荐那个页面的内容，直接打开详情页则什么都没有。
     const typeId = video.value.type_id ? String(video.value.type_id) : ''
-    const pool = (await (GetVideoList as any)({
+    const pool = (await relatedRequests.run(()=>(GetVideoList as any)({
       source_key: sourceKey.value,
       type_id: typeId,
       year: '',
@@ -450,7 +439,8 @@ async function loadSimilar(): Promise<void> {
       cursor: '',
       page: 1,
       page_size: 100,
-    })) as any
+    }))) as any
+    if(!detailGeneration.isCurrent(token)||!detailActive.value)return
     const list: Video[] = Array.isArray(pool?.videos) ? pool.videos : []
     const currentId = String(video.value.vod_id || '')
     const currentName = video.value.vod_name || ''
@@ -462,12 +452,13 @@ async function loadSimilar(): Promise<void> {
     // 2. 如果前端推荐为空，调用后端兜底（按类型推荐）
     if (results.length === 0) {
       try {
-        const similar = await GetSimilarVideos({
+        const similar = await relatedRequests.run(()=>GetSimilarVideos({
           source_key: sourceKey.value,
           type_id: typeId,
           limit: 8,
           exclude_ids: [currentId]
-        })
+        }))
+        if(!detailGeneration.isCurrent(token)||!detailActive.value)return
 
         if (similar && similar.length > 0) {
           // 转换为 RecommendItem 格式
@@ -481,6 +472,7 @@ async function loadSimilar(): Promise<void> {
           }))
         }
       } catch (e) {
+        if(!detailGeneration.isCurrent(token)||!detailActive.value)return
         console.warn('后端相似推荐失败', e)
         // 前端算不出推荐、后端兜底又失败时，推荐区只是一片空白，
         // 用户分不清"没有可推荐"和"推荐没加载出来"。
@@ -490,10 +482,11 @@ async function loadSimilar(): Promise<void> {
 
     similarVideos.value = results
   } catch (e) {
+    if(!detailGeneration.isCurrent(token)||!detailActive.value)return
     similarVideos.value = []
     errorStore.warn(t('detail.recommendFailed'), normalizeApiError(e).message, '', 'Detail')
   } finally {
-    similarLoading.value = false
+    if(detailGeneration.isCurrent(token))similarLoading.value = false
   }
 }
 
@@ -568,11 +561,15 @@ const otherSources = ref<OtherSourceRef[]>([])
  * 取不到就留空 —— 这是补充入口，缺它不影响详情页本身，因此不打扰用户。
  */
 async function loadOtherSources(): Promise<void> {
+  if(detailDisposed||!detailActive.value)return
+  const token=detailToken
+  otherSourcesLoading=true
   otherSources.value = []
   const gid = currentGlobalId.value
-  if (!gid) return
+  if (!gid) {otherSourcesLoading=false;return}
   try {
-    const refs = (await FindSourcesByGlobalId(gid)) as any[]
+    const refs = (await relatedRequests.run(()=>FindSourcesByGlobalId(gid))) as any[]
+    if(!detailGeneration.isCurrent(token)||!detailActive.value)return
     otherSources.value = (Array.isArray(refs) ? refs : [])
       .filter((r: any) => r?.source_key && r.source_key !== sourceKey.value)
       .map((r: any) => ({
@@ -581,8 +578,9 @@ async function loadOtherSources(): Promise<void> {
         name: String(sourceStore.sources.find((s: any) => s.source_key === r.source_key)?.name || r.source_key),
       }))
   } catch {
+    if(!detailGeneration.isCurrent(token)||!detailActive.value)return
     otherSources.value = []
-  }
+  } finally {if(detailGeneration.isCurrent(token))otherSourcesLoading=false}
 }
 
 function openOnOtherSource(item: OtherSourceRef): void {
@@ -590,8 +588,12 @@ function openOnOtherSource(item: OtherSourceRef): void {
 }
 
 async function loadDetail(): Promise<void> {
+  if(detailDisposed)return
+  const token=detailGeneration.begin();detailToken=token
+  relatedRequests.cancel()
   if (!sourceKey.value || (!vodId.value && !globalId.value)) {
     error.value = t('detail.videoNotFound')
+    loading.value = false
     return
   }
   loading.value = true
@@ -606,6 +608,7 @@ async function loadDetail(): Promise<void> {
 
   // 阶段1: 先加载本地数据（refresh=false），立即展示
   const loadedFromCache = await videoStore.loadDetail(sourceKey.value, vodId.value, false, globalId.value)
+  if(detailDisposed||!detailGeneration.isCurrent(token)||!detailActive.value)return
   // 只有真拿到 localStorage 数据才需要再补一次后台刷新：未命中时上面那次调用内部
   // 已经走了一趟远程（stores/video.ts 未命中就落到 GetVideoDetail），再判它「没缓存所以
   // 该刷」会把同一部片连抓两遍——真机日志里同一条 ac=detail&ids= 相隔 362ms 出现两次就是这里。
@@ -614,6 +617,7 @@ async function loadDetail(): Promise<void> {
   if (!video.value) {
     // 本地无数据时，强制从源站获取
     await videoStore.loadDetail(sourceKey.value, vodId.value, true, globalId.value)
+    if(detailDisposed||!detailGeneration.isCurrent(token)||!detailActive.value)return
   }
 
   if (!video.value) {
@@ -624,8 +628,7 @@ async function loadDetail(): Promise<void> {
 
   loading.value = false // 本地数据已就绪，关闭 loading
 
-  loadSimilar()
-  loadOtherSources()
+  relatedRefreshNeeded=true
   // 仅注册剧集列表 + 预取第一集 m3u8 文本（轻量），
   // 真正的 TS 片段预取交给播放器页面处理（避免预取错误集数）
   const eps = videoStore.episodes
@@ -639,7 +642,7 @@ async function loadDetail(): Promise<void> {
     })))
     TsCache.setCurrentEpisode(0)
     TsCache.enable()
-    // 只预取 m3u8 文本（约 10KB，几乎无成本），用户点击播放时命中文本缓存即可
+    // 只预取播放清单文本，媒体片段仍由播放会话按实际集数准备。
     const firstUrl = resolveEpisodeUrl(eps[0])
     if (firstUrl) TsCache.fetchAndParseM3u8(proxyHlsURL(firstUrl)).catch(() => { })
   }
@@ -648,10 +651,12 @@ async function loadDetail(): Promise<void> {
   if (shouldRefresh) {
     refreshing.value = true
     videoStore.refreshDetail(sourceKey.value, vodId.value, globalId.value).then(() => {
+      if(!detailGeneration.isCurrent(token)||!detailActive.value)return
       refreshing.value = false
-      // 刷新后重新加载相似推荐（可能数据更丰富了）
-      loadSimilar()
+      relatedRefreshNeeded=true
+      scheduleDetailRefresh()
     }).catch(() => {
+      if(!detailGeneration.isCurrent(token)||!detailActive.value)return
       refreshing.value = false
     })
   }
@@ -666,25 +671,16 @@ async function loadDetail(): Promise<void> {
     }
   }
 
-  // 选集加载完成后刷新进度百分比 & 最近观看（不阻塞 UI）
-  // 先 flush 确保播放器写入的最新进度已落盘，再读取
-  flushEpProgress()
-  refreshEpProgress()
-  refreshLastWatched()
-  // 延迟再刷一次，确保从播放页返回时进度已同步
-  setTimeout(() => {
-    refreshEpProgress()
-    refreshLastWatched()
-  }, 200)
+  scheduleDetailRefresh(true,true)
 }
 
 onMounted(async () => {
   await sourceStore.loadSources()
   try { await downloadStore.init() } catch { }
   await loadDetail()
-  refreshEpProgress() // 视频加载完成后刷新进度
-  await refreshLastWatched() // 从播放页返回时刷新“继续观看”
-  refreshFav().catch(() => { })
+  if(detailDisposed)return
+  detailMountedReady = true
+  scheduleDetailRefresh(true,true)
   // 页面可见性变化时刷新进度（从播放页返回时同步）
   document.addEventListener('visibilitychange', onVisibilityChange)
   // 监听播放页实时进度更新事件
@@ -694,26 +690,24 @@ onMounted(async () => {
   window.addEventListener('storage', onStorageChange)
 })
 
-// KeepAlive 激活时刷新进度（若将来 Detail 被加入缓存）
-onActivated(() => {
-  nextTick(() => {
-    refreshEpProgress()
-    refreshLastWatched()
-  })
+onActivated(async () => {
+  if(!detailMountedReady)return
+  // Playback may have handed off to another source in the shared store.
+  if(loading.value||!videoStore.hasCurrentDetail(sourceKey.value,vodId.value,globalId.value))await loadDetail()
+  else detailToken=detailGeneration.begin()
+  scheduleDetailRefresh(true,true)
 })
 
 // 路由级别监听：同一组件复用时参数变化也刷新
 watch(() => route.fullPath, (newPath, oldPath) => {
   if (newPath !== oldPath && newPath.includes('/detail/')) {
-    nextTick(() => {
-      refreshEpProgress()
-      refreshLastWatched()
-    })
+    scheduleDetailRefresh(true,true)
   }
 })
 
 // 源也要进依赖：「换源看同一部」时两源的 vod_id 可能相同，只盯 vodId 就不重载。
 watch([sourceKey, vodId], async () => {
+  historyGeneration.invalidate();historyRequests.cancel();historyInFlight=undefined
   if (vodId.value || globalId.value) {
     await loadDetail()
     refreshFav().catch(() => { })
@@ -721,6 +715,8 @@ watch([sourceKey, vodId], async () => {
 })
 
 onBeforeUnmount(() => {
+  detailDisposed=true;detailGeneration.invalidate();relatedRequests.cancel()
+  historyGeneration.invalidate();historyRequests.cancel()
   document.removeEventListener('visibilitychange', onVisibilityChange)
   window.removeEventListener('cczj-ep-progress-updated', onEpProgressUpdated)
   window.removeEventListener('cczj-ep-progress-flushed', onEpProgressFlushed)
@@ -870,7 +866,7 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <div class="overview-block cczj-flex cczj-flex-col cczj-gap-2">
+          <div v-if="overviewText" class="overview-block cczj-flex cczj-flex-col cczj-gap-2">
             <div class="overview-label-row cczj-flex cczj-items-center cczj-justify-between">
               <span class="overview-label cczj-text-sm cczj-font-semibold">{{ t('detail.summary') }}</span>
               <Button v-if="overviewText && overviewText.length > 120" variant="text" size="sm" class="expand-btn cczj-text-xs cczj-text-accent cczj-cursor-pointer"
@@ -879,8 +875,7 @@ onBeforeUnmount(() => {
               </Button>
             </div>
             <div class="overview-text cczj-text-sm cczj-text-secondary" :class="{ expanded: expandOverview }">
-              <template v-if="overviewText">{{ overviewText }}</template>
-              <span v-else class="text-muted cczj-text-muted">{{ t('detail.noSummary') }}</span>
+              {{ overviewText }}
             </div>
           </div>
         </div>
@@ -896,7 +891,7 @@ onBeforeUnmount(() => {
           </div>
           <div class="section-head-right cczj-flex cczj-items-center cczj-gap-2">
             <Button variant="secondary" size="sm" @click="toggleEpisodeSort"
-              :title="episodeSortAsc ? t('detail.sortAscTip') : t('detail.sortDescTip')" class="cczj-flex cczj-items-center cczj-gap-1">
+              :title="episodeSortAsc ? t('detail.sortAscTip') : t('detail.sortDescTip')" class="episode-sort cczj-flex cczj-items-center cczj-gap-1">
               <Icon :name="episodeSortAsc ? 'chevron-down' : 'chevron-up'" :size="14" />
               <span>{{ episodeSortAsc ? t('detail.ascOrder') : t('detail.descOrder') }}</span>
             </Button>
@@ -911,8 +906,8 @@ onBeforeUnmount(() => {
             </Button>
           </div>
         </div>
-        <div class="episodes-grid cczj-grid cczj-gap-2" :class="{ 'cczj-episode-grid-detailed': detailedEpisodeLabels }">
-          <button v-for="(ep, i) in sortedEpisodes" :key="'ep-' + (ep.ep_num || i)" class="episode-btn cczj-relative cczj-rounded cczj-px-3 cczj-py-2 cczj-cursor-pointer cczj-flex cczj-items-center cczj-gap-1 cczj-text-sm cczj-transition" :class="{
+        <VirtualGrid :items="sortedEpisodes" :item-key="(ep,i)=>ep.ep_num || i" class="episodes-grid cczj-grid cczj-gap-2" :class="{ 'cczj-episode-grid-detailed': detailedEpisodeLabels }">
+          <template #default="{item:ep,index:i}"><button :data-virtual-index="i" class="episode-btn cczj-relative cczj-rounded cczj-px-3 cczj-py-2 cczj-cursor-pointer cczj-flex cczj-items-center cczj-gap-1 cczj-text-sm cczj-transition" :class="{
             'download-mode': episodeMode === 'download',
             'in-download': downloadingEpKeys.has(epKey(ep)),
             'watched': episodeMode !== 'download' && isWatched(ep, origIdx(i)),
@@ -925,7 +920,7 @@ onBeforeUnmount(() => {
             <span v-if="episodeMode !== 'download' && getEpPct(ep, origIdx(i)) > 0" class="ep-progress-pct cczj-text-xs cczj-text-accent">{{
               Math.round(getEpPct(ep, origIdx(i))) }}%</span>
           </button>
-        </div>
+        </template></VirtualGrid>
       </section>
 
       <!-- 同一部片在其它源：只列本地已采到的，点进去换一条源看 -->
@@ -944,7 +939,7 @@ onBeforeUnmount(() => {
       </section>
 
       <!-- 相似推荐 -->
-      <section class="similar-section cczj-mt-6 cczj-p-4 cczj-rounded cczj-bg-card cczj-border cczj-motion-reveal">
+      <section v-if="similarLoading || similarVideos.length" class="similar-section cczj-mt-6 cczj-p-4 cczj-rounded cczj-bg-card cczj-border cczj-motion-reveal">
         <div class="section-head cczj-flex cczj-items-center cczj-justify-between cczj-gap-2 cczj-mb-4">
           <h3 class="cczj-text-lg cczj-font-semibold">{{ t('detail.similar') }}</h3>
           <div class="section-head-right cczj-flex cczj-items-center cczj-gap-2">
@@ -958,10 +953,6 @@ onBeforeUnmount(() => {
 
         <div v-if="similarLoading" class="similar-loading cczj-text-center cczj-py-4">
           <LoadingSpinner size="sm" :label="t('common.loading')" />
-        </div>
-
-        <div v-else-if="similarVideos.length === 0" class="similar-empty cczj-text-center cczj-py-4 cczj-text-muted">
-          <span>{{ t('detail.noSimilar') }}</span>
         </div>
 
         <div v-else class="similar-grid cczj-grid cczj-gap-3">

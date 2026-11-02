@@ -5,7 +5,7 @@ export interface VideoPictureSize {
 
 /** Resize the media element itself so native video surfaces and enhancement
  * canvases follow the same geometry, without relying on an object-fit repaint. */
-export function sizeVideoPicture(video:HTMLVideoElement,host:HTMLElement,fit:VideoFit):VideoPictureSize|undefined {
+export function sizeVideoPicture(video:HTMLVideoElement,host:HTMLElement,fit:VideoFit,fluid=false):VideoPictureSize|undefined {
   const width=host.clientWidth,height=host.clientHeight
   if(!width||!height||!video.videoWidth||!video.videoHeight)return
   let scale=1,pictureWidth=width,pictureHeight=height
@@ -14,8 +14,17 @@ export function sizeVideoPicture(video:HTMLVideoElement,host:HTMLElement,fit:Vid
     scale=fit==='width'?horizontal:fit==='height'?vertical:fit==='cover'?Math.max(horizontal,vertical):Math.min(horizontal,vertical)
     pictureWidth=video.videoWidth*scale;pictureHeight=video.videoHeight*scale
   }
-  video.style.width=`${pictureWidth}px`
-  video.style.height=`${pictureHeight}px`
+  if(fluid && CSS.supports('width','1cqw')){
+    // Container lengths follow native viewport rotation in the same layout,
+    // before ResizeObserver refreshes enhancement canvases and diagnostics.
+    const ratio=video.videoWidth/video.videoHeight
+    const fittedWidth=`calc(100cqh * ${ratio})`,fittedHeight=`calc(100cqw / ${ratio})`
+    video.style.width=fit==='fill'||fit==='width'?'100cqw':fit==='height'?fittedWidth:`${fit==='cover'?'max':'min'}(100cqw,${fittedWidth})`
+    video.style.height=fit==='fill'||fit==='height'?'100cqh':fit==='width'?fittedHeight:`${fit==='cover'?'max':'min'}(100cqh,${fittedHeight})`
+  }else{
+    video.style.width=`${pictureWidth}px`
+    video.style.height=`${pictureHeight}px`
+  }
   video.style.objectFit='fill'
   return {width:video.clientWidth,height:video.clientHeight,sourceWidth:video.videoWidth,sourceHeight:video.videoHeight,viewportWidth:width,viewportHeight:height}
 }

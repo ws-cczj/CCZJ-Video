@@ -47,7 +47,7 @@ onBeforeUnmount(() => { disposed = true })
 
 <template>
   <div class="cczj-danmaku-sources" :class="{'cczj-mobile-danmaku-sources':mobile}">
-    <header class="cczj-danmaku-source-hero"><div><template v-if="!mobile"><span class="cczj-danmaku-source-eyebrow"><Icon name="danmaku" :size="18" />DANMAKU</span><h1>{{ t('danmakuSources.title') }}</h1><p>{{ t('danmakuSources.description') }}</p></template><span class="cczj-danmaku-source-total">{{t('danmakuSources.enabledCount',{count:enabledCount})}}</span></div><div v-if="!mobile" class="cczj-danmaku-source-preview" aria-hidden="true"><span><i></i>{{t('danmakuSources.preview1')}}</span><span>{{t('danmakuSources.preview2')}}<i></i></span><span><i></i>{{t('danmakuSources.preview3')}}</span></div></header>
+    <header class="cczj-danmaku-source-hero"><div><template v-if="!mobile"><h1>{{ t('danmakuSources.title') }}</h1></template><span class="cczj-danmaku-source-total">{{t('danmakuSources.enabledCount',{count:enabledCount})}}</span></div></header>
     <p v-if="error" role="alert">{{ error }} <Button v-if="!ready" variant="ghost" @click="load">{{ t('common.retry') }}</Button></p>
     <p v-if="!ready && !error" role="status">{{ t('common.loading') }}</p>
     <fieldset :disabled="!ready || saving" :aria-busy="saving">

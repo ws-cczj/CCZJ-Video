@@ -274,11 +274,6 @@
 /* Mobile keeps the flower within thumb reach; the desktop vine stays decorative. */
 .vine-wrap.cczj-mobile-back-to-top { top: auto; right: 10px; width: 48px; height: 48px; }
 .cczj-mobile-back-to-top .flower-click-target { inset: 0; width: 48px; height: 48px; @apply cczj-opacity-100; transform: none; animation: none; }
-.vine-wrap.cczj-mobile-back-to-top.phase-grow .flower-click-target { animation:cczj-mobile-flower-arrive var(--cczj-motion-normal,260ms) var(--cczj-motion-ease-enter,ease-out) both; }
-@keyframes cczj-mobile-flower-arrive {
-  from { opacity:0; transform:translateY(12px) scale(.84) rotate(-8deg); }
-  to { opacity:1; transform:translateY(0) scale(1) rotate(0); }
-}
 .cczj-mobile-back-to-top .petal-float { @apply cczj-hidden; }
 .cczj-mobile-back-to-top .flower-click-target:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; @apply cczj-rounded-50; }
 html[data-cczj-platform=mobile]:has(.cczj-mobile-selection-bar) .vine-wrap.cczj-mobile-back-to-top { bottom: calc(144px + env(safe-area-inset-bottom,0px)) !important; }

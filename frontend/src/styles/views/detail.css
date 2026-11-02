@@ -116,10 +116,9 @@
 }
 
 .tag.clickable:hover {
-  background: var(--accent);
-  color: var(--accent-contrast);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px var(--accent-alpha-35);
+  background: var(--selected-bg);
+  color: var(--selected-text);
+  border-color:var(--selected-border);
 }
 
 .meta-row {
@@ -248,7 +247,9 @@
 .episodes-grid {
   grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
   align-content: start;
-  max-height: 320px;
+  height: auto;
+  min-height:var(--cczj-virtual-row-height,44px);
+  max-height:calc(3 * var(--cczj-virtual-row-height,44px) + 2 * var(--cczj-virtual-row-gap,4px));
   @apply cczj-overflow-y-auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -261,7 +262,8 @@
 .episode-btn {
   @apply cczj-relative cczj-inline-flex cczj-items-center cczj-justify-center cczj-gap-2;
   padding: 0 8px;
-  height: 40px;
+  min-height: 40px;
+  height: auto;
   @apply cczj-rounded-md;
   border: 1px solid var(--border-light);
   background: var(--episode-bg);
@@ -273,8 +275,9 @@
 }
 
 .episode-btn:hover {
-  @apply cczj-border-primary cczj-text-accent;
-  background: var(--accent-alpha-15);
+  border-color:var(--selected-border);
+  color:var(--selected-text);
+  background: var(--selected-bg);
   transform: none;
 }
 
@@ -295,17 +298,16 @@
 }
 
 .episode-btn.watched {
-  background: var(--btn-solid);
-  border-color: var(--btn-solid);
-  color: var(--btn-solid-text);
+  background: var(--episode-watched-bg);
+  border-color: var(--border-light);
+  color: var(--episode-watched-text);
   @apply cczj-font-medium;
 }
 
 .episode-btn.watched:hover {
-  background: var(--btn-solid-hover);
-  border-color: var(--btn-solid-hover);
-  color: var(--btn-solid-text);
-  box-shadow: 0 2px 8px var(--accent-alpha-35);
+  background: var(--selected-bg);
+  border-color: var(--selected-border);
+  color: var(--selected-text);
 }
 
 .ep-progress-fill {
@@ -320,24 +322,24 @@
 .episode-btn:hover .ep-progress-fill {
   background: var(--accent);
 }
-.episode-btn.watched .ep-progress-fill { background:var(--btn-solid-text); }
+.episode-btn.watched .ep-progress-fill { background:var(--episode-progress); }
 
 .ep-progress-pct {
   @apply cczj-absolute;
   right: 6px;
   @apply cczj-top-1 cczj-text-xs cczj-font-semibold;
   color: var(--text-secondary);
-  background: var(--bg-card);
-  padding: 1px 5px;
-  border-radius: 10px;
+  background: transparent;
+  padding: 0;
   line-height: 1.4;
   @apply cczj-pointer-events-none;
 }
 
 .episode-btn:hover .ep-progress-pct {
-  color: var(--text-secondary);
-  background: var(--bg-card);
+  color: inherit;
+  background: transparent;
 }
+.episode-btn.watched .ep-progress-pct { color: inherit; }
 
 .ep-num {
   @apply cczj-pointer-events-none cczj-font-medium;

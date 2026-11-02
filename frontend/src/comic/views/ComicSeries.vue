@@ -88,7 +88,7 @@ function accessLabel(chapter: ComicChapter): string {
     <p v-if="!item.available" class="comic-notice">{{ t('comic.source.unavailableHint') }}</p>
     <p v-if="error" class="comic-notice">{{ error.message }}<button type="button" class="comic-text-button" @click="retry">{{ t('common.retry') }}</button></p>
     <p v-else-if="data?.tocError" class="comic-notice">{{ t('comic.tocRefreshFailed') }}<button type="button" class="comic-text-button" :disabled="busy" @click="refresh">{{ t('common.retry') }}</button></p>
-    <section class="comic-intro"><h2>{{ t('comic.aboutStory') }}</h2><p>{{ item.summary || t('comic.noSummary') }}</p></section>
+    <section v-if="item.summary" class="comic-intro"><h2>{{ t('comic.aboutStory') }}</h2><p>{{ item.summary }}</p></section>
     <div class="comic-section-heading"><h2>{{t('comic.episodes')}}<small>{{ordered.length}}</small></h2></div>
     <ChapterTools mode="comic" v-model:query="chapterQuery" v-model:descending="descending" :count="ordered.length" :current="!!savedChapter" refreshable :refreshing="busy" @current="revealCurrent" @locate="locateNumber" @latest="ordered.length&&locate(ordered[ordered.length-1].id)" @refresh="refresh"/>
     <ol v-if="chapters.length" class="comic-episode-grid">

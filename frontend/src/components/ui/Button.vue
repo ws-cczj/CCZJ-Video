@@ -95,8 +95,9 @@ const accessibleLabel = computed(() => props.ariaLabel
 
 /* ========== Variant: Secondary ========== */
 .ui-btn--secondary {
-  background: var(--bg-secondary);
-  @apply cczj-text-secondary cczj-border-gray-300;
+  background: var(--btn-soft,var(--bg-secondary));
+  color:var(--btn-soft-text,var(--text-secondary));
+  @apply cczj-border-gray-300;
 }
 @media (hover:hover) and (pointer:fine) {
 .ui-btn--secondary:hover {
@@ -146,7 +147,7 @@ const accessibleLabel = computed(() => props.ariaLabel
 /* ========== Variant: Danger ========== */
 .ui-btn--danger {
   background: transparent;
-  @apply cczj-text-danger;
+  color:var(--danger-text,var(--danger));
   border-color: var(--danger);
 }
 @media (hover:hover) and (pointer:fine) {
@@ -161,7 +162,7 @@ const accessibleLabel = computed(() => props.ariaLabel
 /* ========== Variant: Ghost ========== */
 .ui-btn--ghost {
   background: transparent;
-  @apply cczj-text-accent cczj-border-primary;
+  @apply cczj-text-accent-readable cczj-border-primary;
 }
 @media (hover:hover) and (pointer:fine) {
 .ui-btn--ghost:hover { background: var(--accent-alpha-10); }

@@ -21,7 +21,11 @@ const pinned=computed(()=>panel.value!==null)
 const toolsHost=ref<HTMLElement|null>(null)
 const speeds=[.5,.75,1,1.25,1.5,2,3]
 function close(which?:MobilePanel|'quick'):void {
-  if(which===undefined||which===panel.value||(which==='quick'&&panel.value!=='more'))panel.value=null
+  if(which===undefined||which===panel.value||(which==='quick'&&panel.value!=='more')){
+    const hadPanel=panel.value!==null
+    panel.value=null
+    if(hadPanel)props.commands.interaction()
+  }
 }
 function toggle(which:MobilePanel):void {panel.value=panel.value===which?null:which;props.commands.interaction()}
 function selectSpeed(value:number):void {props.commands.speed(value);close('speed');props.commands.interaction()}

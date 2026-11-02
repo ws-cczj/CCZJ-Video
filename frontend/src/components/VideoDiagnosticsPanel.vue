@@ -73,14 +73,14 @@ const section = ref<DiagnosticSection>('overview')
 const content = ref<HTMLElement | null>(null)
 const scrollPositions: Partial<Record<DiagnosticSection, number>> = {}
 const sections = computed(() => [
-  { id: 'overview' as const, label: t('diagnostics.overview'), icon: 'monitor', description: t('diagnostics.overviewDescription') },
+  { id: 'overview' as const, label: t('diagnostics.overview'), icon: 'monitor' },
   { id:'startup' as const,label:t('diagnostics.startupTitle'),icon:'clock',description:t('diagnostics.startupDescription') },
   { id:'activity' as const,label:t('diagnostics.activityTitle'),icon:'layers',description:t('diagnostics.activityDescription') },
-  { id: 'playback' as const, label: t('diagnostics.playback'), icon: 'play', description: t('diagnostics.playbackDescription') },
-  { id: 'network' as const, label: t('diagnostics.networkAndCache'), icon: 'globe', description: t('diagnostics.networkDescription') },
-  { id: 'collection' as const, label: t('diagnostics.sources'), icon: 'database', description: t('diagnostics.collectionDescription') },
-  { id: 'douban' as const, label: t('diagnostics.douban'), icon: 'layers', description: t('diagnostics.doubanDescription') },
-  { id: 'storage' as const, label: t('diagnostics.runtimeStorage'), icon: 'folder', description: t('diagnostics.storageDescription') },
+  { id: 'playback' as const, label: t('diagnostics.playback'), icon: 'play' },
+  { id: 'network' as const, label: t('diagnostics.networkAndCache'), icon: 'globe' },
+  { id: 'collection' as const, label: t('diagnostics.sources'), icon: 'database' },
+  { id: 'douban' as const, label: t('diagnostics.douban'), icon: 'layers' },
+  { id: 'storage' as const, label: t('diagnostics.runtimeStorage'), icon: 'folder' },
 ])
 const currentSection = computed(() => sections.value.find(item => item.id === section.value)!)
 async function selectSection(id: DiagnosticSection): Promise<void> {
@@ -624,7 +624,7 @@ onBeforeUnmount(() => {
         <p class="diag-nav-footnote">{{ t('diagnostics.snapshotNote') }}</p>
       </nav>
       <div ref="content" class="diag-content" tabindex="0" :aria-label="currentSection.label">
-        <div class="diag-section-heading"><h2>{{ currentSection.label }}</h2><p>{{ currentSection.description }}</p></div>
+        <div class="diag-section-heading"><h2>{{ currentSection.label }}</h2></div>
         <!-- Keep the sampler mounted across sections so its bounded trend survives. -->
         <div v-show="section === 'overview'" class="diag-overview">
           <DiagnosticSessionPanel :active="canPoll && section === 'overview'" />

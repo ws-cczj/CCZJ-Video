@@ -180,6 +180,7 @@ export function useShortDramaFeed(source: Ref<string>, active: Ref<boolean>, bef
     retryBatch = true
     try {
       let batch: Video[] = []
+      const failedTitles=new Set<string>()
       // Recommendations and remote discovery share the selected source. Local
       // catalogs from unrelated sources must not override that selection.
       let cachedFailure: unknown
@@ -188,6 +189,7 @@ export function useShortDramaFeed(source: Ref<string>, active: Ref<boolean>, bef
         if (!generation.isCurrent(token)) return
         const cachedBatch = randomBatch(cached.map(item => ({ ...item, source_key: sourceKey })))
         if (cachedBatch.length) {
+          failedTitles.add(String(cachedBatch[0]!.vod_id))
           const next = await hydrate(cachedBatch[0]!, token, 0)
           if (!generation.isCurrent(token)) return
           if (next) { commit(cachedBatch, 0, next); batchSource = sourceKey; void updateCatalog(); return }
@@ -202,7 +204,7 @@ export function useShortDramaFeed(source: Ref<string>, active: Ref<boolean>, bef
       if (!generation.isCurrent(token)) return
       if (!batch.length && previous.length) {
         const cachedSource = items.value[0]?.source_key || sourceKey
-        batch = randomBatch((await requests.run(() => GetShortDramaRecommendations(cachedSource, []))).map(item => ({ ...item, source_key: cachedSource })))
+        batch = randomBatch((await requests.run(() => GetShortDramaRecommendations(cachedSource, []))).filter(item=>!failedTitles.has(String(item.vod_id))).map(item => ({ ...item, source_key: cachedSource })))
       }
       if (!generation.isCurrent(token)) return
       if(!batch.length){
@@ -212,11 +214,9 @@ export function useShortDramaFeed(source: Ref<string>, active: Ref<boolean>, bef
         if(!generation.isCurrent(token))return
         remoteSource=page.source_key;remoteCategory=page.category_id;remotePage=rediscover?1:remotePage+1;remoteHasMore=page.has_more
         updatedSource=sourceKey;updatedAt=performance.now()
-        // The catalog sampler owns random selection even after a remote fill.
-        const recommended=await requests.run(()=>GetShortDramaRecommendations(sourceKey,previous))
-        if(!generation.isCurrent(token))return
-        batch=randomBatch(recommended.map(item=>({...item,source_key:sourceKey})))
-        if(!batch.length&&previous.length)batch=randomBatch((await requests.run(()=>GetShortDramaRecommendations(sourceKey,[]))).map(item=>({...item,source_key:sourceKey})))
+        // The remote page already belongs to the resolved short-drama category.
+        // Reuse it directly instead of waiting for another catalog query.
+        batch=randomBatch(page.videos.filter(item=>!failedTitles.has(String(item.vod_id))))
       }
       if (!batch.length && cachedFailure) throw cachedFailure
       batchSource = sourceKey

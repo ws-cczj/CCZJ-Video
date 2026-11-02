@@ -2,7 +2,7 @@ export type MotionStyle = 'calm' | 'balanced' | 'lively'
 export type MotionTiming = keyof typeof TIMINGS
 export interface MotionOptions { style: MotionStyle; speed: number; intensity: number; pages: boolean; overlays: boolean; feedback: boolean; stagger: boolean; reduceMotion:boolean; durations:Partial<Record<MotionTiming,number>> }
 export const DEFAULT_MOTION: Readonly<MotionOptions> = { style: 'balanced', speed: 100, intensity: 60, pages: true, overlays: true, feedback: true, stagger: true, reduceMotion:false, durations:Object.freeze({}) }
-export const TIMINGS = { fast: 140, normal: 220, slow: 360, emphasis: 480, carousel: 420, section: 800, group: 320, dismiss: 600, reveal: 1200 } as const
+export const TIMINGS = { fast: 140, normal: 220, slow: 360, emphasis: 480, carousel: 420, section: 800, group: 320, dismiss: 600, reveal: 1000 } as const
 export function normalizeMotionOptions(raw: unknown): MotionOptions {
   const value = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : {}
   const number = (key: 'speed' | 'intensity', min: number, max: number) => typeof value[key] === 'number' && Number.isFinite(value[key]) ? Math.round(Math.max(min, Math.min(max, value[key] as number))) : DEFAULT_MOTION[key]

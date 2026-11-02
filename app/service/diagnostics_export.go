@@ -97,6 +97,22 @@ func (a *App) ExportDiagnosticsReport(frontendJSON string) (*DiagnosticsExport, 
 		paths = append(paths, status.Path)
 	}
 	paths = append(paths, session.ProfileFiles...)
+	// Native startup metadata exists before Go logging and remains bounded by its owner.
+	if entries, readErr := os.ReadDir(filepath.Join(a.getDataDir(), "applog")); readErr == nil {
+		count := 0
+		pattern := regexp.MustCompile(`^startup-native-[0-9]+-[0-9]+\.jsonl$`)
+		for i := len(entries) - 1; i >= 0 && count < 4; i-- {
+			entry := entries[i]
+			if !pattern.MatchString(entry.Name()) {
+				continue
+			}
+			info, statErr := entry.Info()
+			if statErr == nil && info.Mode().IsRegular() && info.Size() <= 32<<10 {
+				paths = append(paths, filepath.Join(a.getDataDir(), "applog", entry.Name()))
+				count++
+			}
+		}
+	}
 	result.BundlePath, err = writeDiagnosticsBundle(result.Path, paths)
 	if err != nil {
 		return nil, apperror.Wrap(apperror.Storage, err, "打包诊断记录失败，原始文件仍已保存")

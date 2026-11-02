@@ -12,6 +12,7 @@
   --bg-primary: var(--cczj-drama-chrome);
   --bg-secondary: var(--cczj-drama-chrome);
   --bg-card: var(--cczj-drama-control);
+  --bg-elevated:var(--cczj-drama-control); --bg-tag:var(--cczj-drama-control); --btn-soft:var(--cczj-drama-control); --btn-soft-text:var(--cczj-drama-ink); --selected-bg:#34363b; --selected-text:var(--cczj-drama-ink); --selected-border:var(--cczj-drama-ink);
   --bg-input: var(--cczj-drama-control);
   --bg-hover: #ffffff0d;
   --bg-image: none;
@@ -21,6 +22,7 @@
   --text-secondary: var(--cczj-drama-secondary);
   --text-muted: var(--cczj-drama-muted);
   --accent: var(--cczj-drama-ink);
+  --accent-text:var(--cczj-drama-ink);
   --accent-dim: #fff;
   --accent-contrast: var(--cczj-drama-chrome);
   --accent-rgb: 244, 244, 245;
@@ -49,5 +51,6 @@
 .cczj-mobile-route-stage[data-cczj-chrome=cinema] > .cczj-mobile-navigation {
   --cczj-mobile-surface: var(--cczj-drama-chrome);
   --cczj-mobile-muted: var(--cczj-drama-secondary);
+  --cczj-navigation-veil-opacity: 1;
   background: var(--cczj-drama-chrome);
 }

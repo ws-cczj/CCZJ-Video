@@ -424,7 +424,6 @@ onBeforeUnmount(stopProbeLoop)
     <div class="page-header">
       <div class="page-title">
         <h1>{{ tr('sources.title') }}</h1>
-        <p class="page-desc">{{ tr('sources.pageDesc') }}</p>
       </div>
     </div>
 
@@ -547,10 +546,6 @@ onBeforeUnmount(stopProbeLoop)
   font-size: calc(28rem / 14);
   @apply cczj-font-bold;
   margin: 0 0 6px;
-}
-.page-desc {
-  @apply cczj-text-13 cczj-text-muted;
-  margin: 0;
 }
 .add-btn {
   @apply cczj-inline-flex cczj-items-center cczj-gap-3;

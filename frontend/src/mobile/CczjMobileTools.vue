@@ -11,7 +11,7 @@ import { mobileToolRoutes } from './settingsNavigation'
     <div class="cczj-mobile-tools">
       <router-link v-for="tool in mobileToolRoutes" :key="tool.path" :to="tool.path" class="cczj-mobile-tool">
         <span class="cczj-mobile-tool-icon"><Icon :name="tool.icon" :size="20" /></span>
-        <div class="cczj-mobile-tool-copy"><strong>{{ tr(tool.label) }}</strong><span>{{ tr(tool.description) }}</span></div>
+        <div class="cczj-mobile-tool-copy"><strong>{{ tr(tool.label) }}</strong></div>
         <Icon name="chevron-right" :size="16" />
       </router-link>
     </div>

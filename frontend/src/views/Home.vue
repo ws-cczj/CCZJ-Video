@@ -8,6 +8,7 @@ import { loadVideoDetail } from '../modes/videoViews'
 import { startupTask } from '../diagnostics/startup'
 import { useGeneration } from '../composables/useGeneration'
 import { useViewActivity } from '../composables/useViewActivity'
+import { createSceneSettledTask } from '../motion/sceneTasks'
 import { createRequestScope } from '../api/requestScope'
 import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
@@ -190,7 +191,6 @@ interface ContinueItem extends Video {
 interface RecommendGroup {
   key: string
   title: string
-  description: string
   items: Video[]
   continueItems?: ContinueItem[]
 }
@@ -207,7 +207,6 @@ let chartSignatureValue = ''
 const recommendationGeneration = useGeneration()
 const recommendationRequests = createRequestScope()
 const viewActive = useViewActivity(() => router.currentRoute.value.path === '/')
-const homeRoot = ref<HTMLElement>()
 let detailPrepared = false
 let homePrepared = false
 let detailIdle: number | undefined, detailDelay: ReturnType<typeof setTimeout> | undefined
@@ -366,7 +365,6 @@ async function loadRecommendations(): Promise<void> {
       if (continueItems.length > 0) groups.push({
         key: 'continue',
         title: t('home.continueWatching'),
-        description: t('home.continueWatchingDesc'),
         items: continueItems,
         continueItems,
       })
@@ -397,7 +395,6 @@ async function loadRecommendations(): Promise<void> {
           groups.push({
             key: 'liked',
             title: t('home.recommended'),
-            description: t('home.recommendedDesc'),
             items,
           })
           for (const id of seen) usedIds.add(id)
@@ -424,7 +421,6 @@ async function loadRecommendations(): Promise<void> {
       if (newest.length > 0) groups.push({
         key: 'newest',
         title: t('home.latest'),
-        description: t('home.latestDesc'),
         items: newest,
       })
     }
@@ -532,31 +528,12 @@ function goDetail(video: Video): void {
 // ==================== 生命周期 ====================
 let homePageWasDeactivated = !viewActive.value
 let suppressSourceWatch = false
-let resumeRevision = 0, resumeFrame: number | undefined
-function cancelHomeRefresh():void {
-  resumeRevision++
-  if(resumeFrame!==undefined)cancelAnimationFrame(resumeFrame)
-  resumeFrame=undefined
-}
+const resumeHome = createSceneSettledTask(()=>viewActive.value&&router.currentRoute.value.path==='/')
+function cancelHomeRefresh():void { resumeHome.cancel() }
 function scheduleHomeRefresh():void {
-  cancelHomeRefresh()
-  const token=resumeRevision
-  // Vue starts CSS transitions over two frames. Refresh retained content only
-  // after that transition, and never start reads for an uncommitted swipe preview.
-  void nextTick(()=>{
-    if(token!==resumeRevision)return
-    resumeFrame=requestAnimationFrame(()=>{resumeFrame=requestAnimationFrame(async()=>{
-      resumeFrame=undefined
-      const scene=homeRoot.value?.closest('.cczj-mobile-route-scene')
-      // Playback can leave over a stationary Home scene. Wait for both scene
-      // roots, including its clip transition, before replacing retained cards.
-      const siblings=scene?.parentElement?.children
-      const animations=Array.from(siblings||[]).flatMap(element=>element.getAnimations()).filter(animation=>animation.effect?.getTiming().iterations!==Infinity)
-      await Promise.allSettled(animations.map(animation=>animation.finished))
-      if(token!==resumeRevision||!viewActive.value||router.currentRoute.value.path!=='/')return
-      homePageWasDeactivated=false
-      await refreshHomeFeed()
-    })})
+  void resumeHome.schedule(async()=>{
+    homePageWasDeactivated=false
+    await refreshHomeFeed()
   })
 }
 
@@ -626,7 +603,7 @@ const { editing: editingContinue, finish: finishContinueEditing, vHoldToEdit } =
 </script>
 
 <template>
-  <div ref="homeRoot" class="home cczj-max-w-full cczj-text-primary">
+  <div class="home cczj-max-w-full cczj-text-primary">
     <router-link v-if="isMobileRuntime()" to="/search" class="cczj-mobile-home-search"><Icon name="search" :size="19" /><span>{{ t('mobile.homeSearch') }}</span><Icon name="chevron-right" :size="16" /></router-link>
     <BookCarousel v-if="layoutStore.showCarousel && carouselSlides.length > 0" :slides="carouselSlides"
       :source-key="sourceStore.currentSourceKey" :on-slide-click="onChartSlideClick"
@@ -644,7 +621,6 @@ const { editing: editingContinue, finish: finishContinueEditing, vHoldToEdit } =
         <div v-for="(group, groupIdx) in recommendGroups" :key="group.key" class="recommend-group cczj-flex cczj-flex-col cczj-gap-5" :class="{ 'cczj-mobile-continue-group': isMobileRuntime() && group.key === 'continue' }">
           <div class="group-head cczj-flex cczj-items-baseline cczj-gap-5 cczj-flex-wrap">
             <h4 class="group-title cczj-font-bold cczj-text-primary">{{ group.title }}</h4>
-            <span class="group-desc cczj-text-base cczj-text-muted">{{ group.description }}</span>
           </div>
           <div class="recommend-row cczj-grid cczj-gap-6" :data-cczj-editing="group.key === 'continue' && editingContinue || undefined">
             <template v-if="group.key === 'continue' && group.continueItems">

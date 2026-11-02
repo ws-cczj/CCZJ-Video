@@ -35,7 +35,7 @@
 .cczj-mobile-shell .cczj-mobile-page .cczj-mobile-continue-group .video-card { @apply cczj-grid; grid-template-columns: 56px minmax(0,1fr); min-height: 84px; border: 0; border-radius: 0; background: transparent; }
 .cczj-mobile-shell .cczj-mobile-page .cczj-mobile-continue-group .poster-wrap { width: 56px; height: 84px; @apply cczj-rounded-md; }
 .cczj-mobile-shell .cczj-mobile-page .cczj-mobile-continue-group .poster-badge { @apply cczj-hidden; }
-.cczj-mobile-shell .cczj-mobile-page .cczj-mobile-continue-group .video-card .info { @apply cczj-justify-center cczj-gap-3; padding: 8px 44px 8px 12px; }
+.cczj-mobile-shell .cczj-mobile-page .cczj-mobile-continue-group .video-card .info { @apply cczj-justify-center cczj-gap-3; padding: 2px 12px; }
 .cczj-mobile-shell .cczj-mobile-continue-meta { @apply cczj-text-secondary cczj-text-sm cczj-leading-normal; }
 .cczj-mobile-shell .cczj-mobile-page .home .cczj-mobile-continue-group .rec-remove-btn { top: 50%; bottom: auto; @apply cczj-right-0; transform: translateY(-50%); background: transparent; }
 .cczj-mobile-shell .cczj-mobile-page .cczj-mobile-history-recommend .recommend-row { grid-template-columns: minmax(0,1fr) !important; }
@@ -110,5 +110,8 @@
   .cczj-mobile-shell .cczj-mobile-page .carousel { height: 280px !important; }
 }
 .cczj-mobile-search-history-chip { @apply cczj-relative cczj-max-w-full; touch-action: pan-y; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
-.cczj-mobile-shell .cczj-mobile-search-history-term { padding: 8px 44px 8px 12px; }
+.cczj-mobile-shell .cczj-mobile-search-history-term { padding: 2px 12px; }
 .cczj-mobile-edit-done { min-height: 44px; min-width: 44px; border: 0; background: transparent; @apply cczj-text-primary; font: inherit; }
+
+.cczj-mobile-shell .cczj-mobile-search-history-chip .cczj-mobile-history-remove { top:-18px; right:-18px; color:var(--danger-contrast); }
+.cczj-mobile-shell .cczj-mobile-search-history-chip .cczj-mobile-history-remove::before { @apply cczj-block cczj-bg-danger; inset:13px; border-color:var(--danger); }

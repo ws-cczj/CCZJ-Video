@@ -186,7 +186,7 @@ onMounted(async () => {
         <nav class="cczj-mobile-menu" :aria-label="category.title">
           <button v-for="g in category.groups" :key="g.id" :data-group="g.id" class="cczj-mobile-menu-row" @click="openGroup(g.id)">
             <Icon :name="g.icon" :size="20" />
-            <span class="cczj-mobile-settings-copy"><strong>{{ g.label }}</strong><small>{{ groupDescription(g.id) }}</small></span>
+            <span class="cczj-mobile-settings-copy"><strong>{{ g.label }}</strong><small v-if="g.id === 'theme'">{{ themeStore.current.name }}</small></span>
             <Icon name="chevron-right" :size="17" />
           </button>
         </nav>

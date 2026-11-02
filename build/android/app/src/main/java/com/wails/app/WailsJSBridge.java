@@ -66,6 +66,11 @@ public class WailsJSBridge {
             return "";
         } catch (Exception failure) { return "SETTINGS_UNAVAILABLE"; }
     }
+    @JavascriptInterface public void startupPhase(String phase) {
+        WebView view=webView;
+        if(!closed.get()&&view!=null&&view.getContext() instanceof MainActivity)
+            ((MainActivity)view.getContext()).recordStartupPhase("frontend_"+phase);
+    }
     @JavascriptInterface public String startupState() {
         WebView view = webView;
         if (view == null) return "{}";
@@ -94,6 +99,26 @@ public class WailsJSBridge {
         WebView view = webView;
         if (view != null && view.getContext() instanceof MainActivity)
             ((MainActivity) view.getContext()).setSystemBarColors(status, navigation);
+    }
+    @JavascriptInterface public void animateSystemBarColors(String status, String navigation, int duration, String easing) {
+        WebView view = webView;
+        if (view != null && view.getContext() instanceof MainActivity)
+            ((MainActivity) view.getContext()).animateSystemBarColors(status, navigation, duration, easing);
+    }
+    @JavascriptInterface public boolean themeRevealPrepare(String id,double x,double y,double radius,double left,double top,double width,double height) {
+        WebView view=webView;
+        if(closed.get() || view==null || !(view.getContext() instanceof MainActivity) || id==null || !id.matches("[0-9-]{1,64}"))return false;
+        for(double value:new double[]{x,y,radius,left,top,width,height})if(Double.isNaN(value)||Double.isInfinite(value)||value<0||value>2)return false;
+        if(width<=0||height<=0||left+width>1.01||top+height>1.01)return false;
+        ((MainActivity)view.getContext()).prepareThemeReveal(id,x,y,radius,left,top,width,height);return true;
+    }
+    @JavascriptInterface public void themeRevealPlay(String id,int duration) {
+        WebView view=webView;
+        if(!closed.get()&&view!=null&&view.getContext() instanceof MainActivity)((MainActivity)view.getContext()).playThemeReveal(id,duration);
+    }
+    @JavascriptInterface public void themeRevealCancel(String id) {
+        WebView view=webView;
+        if(!closed.get()&&view!=null&&view.getContext() instanceof MainActivity)((MainActivity)view.getContext()).cancelThemeReveal(id);
     }
     @JavascriptInterface public void playerVolume(double value) { player.volume(value); }
     @JavascriptInterface public void playerBrightness(double value) { player.brightness(value); }

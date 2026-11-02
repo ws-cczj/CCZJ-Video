@@ -61,7 +61,7 @@ onDeactivated(() => { wasDeactivated = true })
 <template>
   <div class="recent-page cczj-max-w-full cczj-text-primary">
     <div class="recent-head cczj-flex cczj-items-center cczj-justify-between cczj-gap-4 cczj-mb-6 cczj-flex-wrap">
-      <div><h2 class="cczj-font-bold cczj-text-xl"><Icon name="clock" :size="18" /> {{ t('recent.title') }}</h2><p class="cczj-text-sm cczj-text-muted">{{ t('recent.description') }}</p></div>
+      <div><h2 class="cczj-font-bold cczj-text-xl"><Icon name="clock" :size="18" /> {{ t('recent.title') }}</h2></div>
     </div>
     <div class="recent-tabs cczj-flex cczj-gap-2 cczj-mb-6">
       <button v-for="item in periods" :key="item.value" class="period-tab" :class="{ active: period === item.value }" @click="period = item.value; load()">{{ item.label }}</button>

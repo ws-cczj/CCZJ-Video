@@ -15,6 +15,8 @@ const props = withDefaults(defineProps<{
   title?: string
   /** 宽度 */
   width?: string
+  /** Presentation class applied to the teleported dialog surface. */
+  panelClass?: string
   /** 是否显示关闭按钮 */
   closable?: boolean
   /** 点击遮罩层是否关闭 */
@@ -62,6 +64,7 @@ function close(): void {
             ref="dialog"
             data-motion-panel
             class="ui-modal cczj-min-h-0 cczj-flex cczj-flex-col"
+            :class="panelClass"
             :style="width ? { width } : undefined"
             role="dialog"
             aria-modal="true"
@@ -125,7 +128,7 @@ function close(): void {
   max-width: 92vw;
   max-height: 90vh;
   @apply cczj-rounded-md;
-  background: var(--bg-card);
+  background: var(--bg-elevated,var(--bg-card));
   @apply cczj-border cczj-overflow-hidden;
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.35);
   @apply cczj-text-primary;

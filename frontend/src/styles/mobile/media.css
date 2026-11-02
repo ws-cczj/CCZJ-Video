@@ -63,12 +63,17 @@
 .cczj-mobile-shell .cczj-mobile-player .side-section-title { @apply cczj-flex-nowrap cczj-gap-4; margin:0 0 8px; min-height:36px; }
 .cczj-mobile-shell .cczj-mobile-player .source-list { @apply cczj-flex-wrap cczj-overflow-visible; }
 .cczj-mobile-shell .cczj-mobile-player .source-item { @apply cczj-max-w-full; min-height: 44px; background: var(--bg-input); @apply cczj-text-primary cczj-border-gray-300; }
-.cczj-mobile-shell .cczj-mobile-player .ep-grid { grid-template-columns: repeat(3,minmax(0,1fr)); @apply cczj-gap-4 cczj-p-2 cczj-overflow-visible; }
-.cczj-mobile-shell .cczj-mobile-player .ep-item { @apply cczj-min-w-0 cczj-shadow-none; min-height:44px; height:48px; transform:none; }
+.cczj-mobile-shell .cczj-mobile-player .ep-grid { grid-template-columns: repeat(3,minmax(0,1fr)); @apply cczj-gap-3 cczj-overflow-visible; padding:2px; }
+.cczj-mobile-shell .cczj-mobile-player .ep-item { @apply cczj-min-w-0 cczj-shadow-none; min-height:44px; height:auto; padding:2px 4px; border-radius:6px; transform:none; }
+.cczj-mobile-shell .cczj-mobile-player .side-episode-scroll { height:clamp(180px,40dvh,320px); @apply cczj-overflow-y-auto; overscroll-behavior:contain; }
+.cczj-mobile-shell .cczj-mobile-detail .episode-btn { height:auto; padding:2px 4px; border-radius:6px; @apply cczj-text-sm; }
+.cczj-mobile-shell .cczj-mobile-detail .episodes-section { padding:12px; }
+.cczj-mobile-shell .cczj-mobile-player .sort-toggle-btn,
+.cczj-mobile-shell .cczj-mobile-detail .episode-sort.ui-btn { min-height:36px; padding:0 8px; border:0; border-radius:6px; background:transparent; @apply cczj-text-secondary cczj-shadow-none; }
 .cczj-mobile-shell .cczj-mobile-player .ep-item.active { border-color:var(--cczj-player-episode-progress); @apply cczj-font-semibold; outline:0; transform:none; }
 .cczj-mobile-shell .cczj-mobile-player .ep-item .ep-watched-progress { height:3px; }
 .cczj-mobile-shell .cczj-mobile-player .player-col-side .ep-item .ep-watched-pct,
-.cczj-mobile-shell .cczj-mobile-player .player-col-side .ep-item.active .ep-watched-pct { color:var(--cczj-player-episode-percent); background:transparent; padding:0; }
+.cczj-mobile-shell .cczj-mobile-player .player-col-side .ep-item.active .ep-watched-pct { color:inherit; background:transparent; padding:0; }
 .cczj-mobile-shell .cczj-mobile-player .player-col-side .ep-item .ep-watched-progress,
 .cczj-mobile-shell .cczj-mobile-player .player-col-side .ep-item.active .ep-watched-progress { background:var(--cczj-player-episode-progress); }
 @media (min-width: 600px) {
@@ -79,23 +84,21 @@
 
 .cczj-mobile-shell .cczj-mobile-detail .meta-label { width: 38px; min-width: 38px; @apply cczj-whitespace-nowrap cczj-text-sm; }
 .cczj-mobile-shell .cczj-mobile-detail-metadata { grid-column: 1 / -1; @apply cczj-flex cczj-items-center cczj-justify-between; min-height: 44px; padding: 0; border: 0; @apply cczj-border-top; background: transparent; @apply cczj-text-primary; font: inherit; @apply cczj-text-13; }
-.cczj-mobile-detail-metadata > span { @apply cczj-text-accent cczj-text-sm; }
+.cczj-mobile-detail-metadata > span { @apply cczj-text-accent-readable cczj-text-sm; }
 .cczj-mobile-shell .cczj-mobile-player .side-title { @apply cczj-text-primary; text-shadow: none; }
 .cczj-mobile-shell .cczj-mobile-player .side-section-title-left { @apply cczj-text-primary; }
 .cczj-mobile-shell .cczj-mobile-player :is(.side-count,.side-empty) { @apply cczj-text-muted; }
-.cczj-mobile-shell .cczj-mobile-player .sort-toggle-btn { min-width:58px; min-height:var(--cczj-mobile-control-sm); height:auto; padding:0 8px; border-color:transparent; border-radius:8px; }
-.cczj-mobile-shell .cczj-mobile-player .player-col-side :is(.ep-item,.sort-toggle-btn) {
-  background:var(--cczj-player-action-bg); color:var(--cczj-player-action-ink);
+.cczj-mobile-shell .cczj-mobile-player .sort-toggle-btn { min-width:58px; height:auto; }
+.cczj-mobile-shell .cczj-mobile-player .player-col-side .ep-item {
+  background:var(--cczj-player-episode-normal-bg); color:var(--cczj-player-episode-normal-text); border-color:var(--border);
 }
-.cczj-mobile-shell .cczj-mobile-player .player-col-side .ep-item:not(.active):not(.watched) { background:color-mix(in srgb,var(--cczj-player-action-bg) 5%,var(--cczj-player-theme-surface)); color:var(--cczj-player-action-bg); border-color:color-mix(in srgb,var(--cczj-player-action-bg) 40%,transparent); }
-.cczj-mobile-shell .cczj-mobile-player .player-col-side .ep-item.watched:not(.active) { border-color:transparent; }
-.cczj-mobile-shell .cczj-mobile-player .player-col-side .ep-item:is(.watched,.active) { background:var(--cczj-player-episode-bg); color:var(--cczj-player-episode-percent); }
-.cczj-mobile-shell .cczj-mobile-player .player-col-side .ep-item:is(.watched,.active):hover { background:var(--cczj-player-episode-hover); }
-.cczj-mobile-shell .cczj-mobile-player .side-section-title-left .bullet { background: var(--accent); }
-.cczj-mobile-shell .cczj-mobile-player .source-item.active { @apply cczj-text-primary cczj-border-primary; background: var(--accent-alpha-10); @apply cczj-shadow-none; transform: none; animation: none; }
-.cczj-mobile-shell .cczj-mobile-player .source-item.active::before { background: var(--accent); }
+.cczj-mobile-shell .cczj-mobile-player .player-col-side .ep-item.watched { background:var(--episode-watched-bg); color:var(--episode-watched-text); }
+.cczj-mobile-shell .cczj-mobile-player .player-col-side .ep-item.active { background:var(--cczj-player-episode-bg); color:var(--cczj-player-episode-percent); border-color:var(--selected-border); }
+.cczj-mobile-shell .cczj-mobile-player .side-section-title-left .bullet { background:var(--accent); }
+.cczj-mobile-shell .cczj-mobile-player .source-item.active { background:var(--selected-bg); color:var(--selected-text); border-color:var(--selected-border); @apply cczj-shadow-none; transform:none; animation:none; }
+.cczj-mobile-shell .cczj-mobile-player .source-item.active::before { background:var(--selected-border); }
 .cczj-mobile-shell .cczj-mobile-player .source-item .source-probe { @apply cczj-text-secondary cczj-opacity-100; }
-.cczj-mobile-shell .cczj-mobile-player .source-active-dot { background: var(--accent); @apply cczj-shadow-none; }
+.cczj-mobile-shell .cczj-mobile-player .source-active-dot { background:var(--selected-border); @apply cczj-shadow-none; }
 /* Mobile player gestures and native fullscreen; all desktop actions reuse their existing handlers. */
 .cczj-mobile-home-search { @apply cczj-flex cczj-items-center cczj-gap-5; min-height: 44px; margin: 0 0 12px; padding: 0 12px; @apply cczj-text-secondary; background: var(--cczj-mobile-surface); @apply cczj-border cczj-rounded-lg cczj-no-underline cczj-text-13; }
 .cczj-mobile-home-search > span { @apply cczj-flex-1; }
@@ -118,7 +121,6 @@
 .cczj-mobile-shell .cczj-mobile-player-comments .comment-meta { @apply cczj-flex-wrap; }
 .cczj-mobile-shell .cczj-mobile-player-comments .comment-content { @apply cczj-text-base; line-height: 1.75; overflow-wrap: anywhere; }
 .cczj-mobile-shell .cczj-mobile-player-comments .comments-pagination { @apply cczj-flex-wrap; }
-.cczj-mobile-comments-unavailable { padding: 28px 8px; margin: 0; @apply cczj-text-secondary cczj-text-base; line-height: 1.8; @apply cczj-text-center; }
 
 .cczj-mobile-shell .cczj-mobile-player-comments .comments-error { @apply cczj-flex-wrap cczj-gap-4 cczj-p-6; line-height: 1.7; }
 .cczj-mobile-shell .cczj-mobile-player-comments .comments-error > span:nth-child(2) { @apply cczj-flex-1; min-width: 120px; overflow-wrap: anywhere; }
@@ -152,7 +154,6 @@
 .cczj-mobile-shell .cczj-mobile-detail .episodes-section .section-head-right > button { padding: 5px 8px; min-height: 44px; @apply cczj-text-sm cczj-whitespace-nowrap; }
 .cczj-mobile-shell .cczj-mobile-detail .episodes-section .section-head-right > button { padding:0 6px; border:0; @apply cczj-shadow-none; background:transparent; @apply cczj-text-11; }
 .cczj-mobile-shell .cczj-mobile-detail .episodes-section .section-head-right > button.ui-btn--primary { background:var(--btn-solid); color:var(--btn-solid-text); }
-.cczj-mobile-shell .cczj-mobile-detail .episode-btn { height:46px; padding:6px 8px; border-radius:10px; @apply cczj-text-sm; }
 .cczj-mobile-shell .cczj-mobile-detail .episodes-section .cczj-mobile-batch-download { flex-basis: 100%; }
 .cczj-mobile-shell .cczj-mobile-player .side-section-title-left { @apply cczj-min-w-0 cczj-flex-wrap; gap: 5px; }
 .cczj-mobile-shell .cczj-mobile-player .side-section-right { @apply cczj-flex-shrink-0; }

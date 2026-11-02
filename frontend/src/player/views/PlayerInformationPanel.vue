@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import VirtualGrid from '../../components/VirtualGrid.vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Window } from '../../api/runtime'
 import { presentationProfile } from '../../platform/presentation'
@@ -25,21 +26,21 @@ const mobileCommentsId = computed(() => {
   const id = String(details.video?.vod_douban_id || '').trim()
   return /^\d+$/.test(id) && Number(id)>0 ? id : ''
 })
+watch(mobileCommentsId, id => { if (!id) mobilePlayerTab.value = 'overview' })
 function showMobileComments():void { mobileCommentsVisited.value=true;mobilePlayerTab.value='comments' }
 function onMinimizeApp():void { try { Window.Minimise() } catch { /* Host owns availability. */ } }
 </script>
 <template>
         <aside id="player-information-panel" class="player-col-side cczj-flex cczj-flex-col cczj-overflow-hidden" :class="{ collapsed: collapsed, 'desktop-information':!mobile }" :inert="!mobile&&collapsed" :aria-hidden="!mobile&&collapsed?true:undefined">
-          <div v-if="mobile" class="cczj-mobile-player-tabs" role="tablist" :aria-label="t('mobile.playerContent')">
+          <div v-if="mobile && mobileCommentsId" class="cczj-mobile-player-tabs" role="tablist" :aria-label="t('mobile.playerContent')">
             <button id="player-overview-tab" role="tab" :aria-selected="mobilePlayerTab === 'overview'" aria-controls="player-overview-panel" @click="mobilePlayerTab = 'overview'">{{ t('mobile.playerOverview') }}</button>
             <button id="player-comments-tab" role="tab" :aria-selected="mobilePlayerTab === 'comments'" aria-controls="player-comments-panel" @click="showMobileComments">{{ t('mobile.playerComments') }}</button>
           </div>
-          <section v-if="mobile" v-show="mobilePlayerTab === 'comments'" id="player-comments-panel" class="cczj-mobile-player-comments" role="tabpanel" aria-labelledby="player-comments-tab">
+          <section v-if="mobile && mobileCommentsId" v-show="mobilePlayerTab === 'comments'" id="player-comments-panel" class="cczj-mobile-player-comments" role="tabpanel" aria-labelledby="player-comments-tab">
             <DoubanComments v-if="mobileCommentsVisited && mobileCommentsId" :douban-id="mobileCommentsId" />
-            <p v-else-if="!mobileCommentsId" class="cczj-mobile-comments-unavailable">{{ t('mobile.commentsUnavailable') }}</p>
           </section>
           <!-- 顶部卡：标题 + 年份/地区/分类 + 简介 + 收藏按钮 -->
-          <div v-show="!mobile || mobilePlayerTab === 'overview'" :id="mobile ? 'player-overview-panel' : undefined" :role="mobile ? 'tabpanel' : undefined" :aria-labelledby="mobile ? 'player-overview-tab' : undefined" class="side-header cczj-flex cczj-flex-col cczj-gap-3 cczj-p-4 cczj-mt-0 cczj-mb-0">
+          <div v-show="!mobile || mobilePlayerTab === 'overview'" :id="mobile ? 'player-overview-panel' : undefined" :role="mobile && mobileCommentsId ? 'tabpanel' : undefined" :aria-labelledby="mobile && mobileCommentsId ? 'player-overview-tab' : undefined" class="side-header cczj-flex cczj-flex-col cczj-gap-3 cczj-p-4 cczj-mt-0 cczj-mb-0">
             <div class="side-top-bar cczj-flex cczj-items-center cczj-justify-between cczj-gap-3">
               <h1 class="side-title cczj-text-lg cczj-font-semibold cczj-truncate cczj-flex-1">{{ details.video?.vod_name || t('player.videoPlayback') }}</h1>
               <div v-if="!mobile" class="side-top-actions cczj-flex cczj-items-center cczj-gap-2 cczj-flex-shrink-0">
@@ -62,26 +63,8 @@ function onMinimizeApp():void { try { Window.Minimise() } catch { /* Host owns a
 
           <!-- 选源区 + 选集区 -->
           <section v-show="!mobile || mobilePlayerTab === 'overview'" class="side-section cczj-flex-1 cczj-overflow-y-auto cczj-p-4 cczj-flex cczj-flex-col">
-            <!-- 源列表 -->
-            <template v-if="!mobile">
-            <div class="side-section-title cczj-flex cczj-items-center cczj-justify-between cczj-gap-2 cczj-mb-3">
-              <div class="side-section-title-left cczj-flex cczj-items-center cczj-gap-2">
-                <span class="bullet cczj-w-2 cczj-h-2 cczj-rounded-full cczj-bg-accent"></span>
-                <span class="cczj-text-sm cczj-font-medium">{{ t('player.playSources') }}</span>
-              </div>
-              <div class="side-section-right cczj-flex cczj-items-center cczj-gap-2">
-                <span class="side-count cczj-text-xs cczj-text-muted">{{ t('player.availableSources', { count: catalog.readyCount }) }}</span>
-                <span v-if="catalog.probingCount > 0" class="side-count cczj-text-xs cczj-text-muted">{{ t('player.probePendingCount', { count: catalog.probingCount }) }}</span>
-              </div>
-            </div>
-
-              <PlaybackRouteList dark expanded class="cczj-flex-shrink-0" :sources="catalog.items" :active-key="catalog.activeKey" :active-line="details.lines[details.activeLineIndex]?.index??-1" :lines="details.lines" :busy="catalog.loading" :selectable="catalog.selectable" @choose="(key,line)=>emit('source',key,line)" />
-              <div class="cczj-flex cczj-items-center cczj-justify-end cczj-gap-4">
-                <Button variant="text" size="sm" :loading="catalog.refreshing" :title="t('playLine.cooldownHint')" @click="catalog.retry">{{t('sources.probe')}}</Button>
-              </div>
-            </template>
-
             <!-- 选集区（仅当有剧集时显示） -->
+            <div class="side-episodes">
             <template v-if="episodeList.items.length > 0">
               <div class="side-section-title cczj-flex cczj-items-center cczj-justify-between cczj-gap-2 cczj-mt-4 cczj-mb-3">
                 <div class="side-section-title-left cczj-flex cczj-items-center cczj-gap-2">
@@ -98,8 +81,9 @@ function onMinimizeApp():void { try { Window.Minimise() } catch { /* Host owns a
                 </div>
               </div>
 
-              <div class="ep-grid cczj-grid cczj-gap-2" :class="{ 'cczj-episode-grid-detailed': detailedEpisodeLabels }">
-                <button v-for="(ep, i) in episodeList.items" :key="episodeList.originalIndex(i)" class="ep-item cczj-relative cczj-px-3 cczj-py-2 cczj-rounded cczj-transition cczj-cursor-pointer cczj-text-sm" :class="{
+              <div class="side-episode-scroll" :tabindex="mobile ? undefined : 0" :aria-label="t('detail.episodes')">
+              <VirtualGrid :items="episodeList.items" :item-key="(_,i)=>episodeList.originalIndex(i)" :locate-index="episodeList.ascending ? episodeList.current : episodeList.items.length - 1 - episodeList.current" class="ep-grid cczj-grid cczj-gap-2" :class="{ 'cczj-episode-grid-detailed': detailedEpisodeLabels }">
+                <template #default="{item:ep,index:i}"><button :data-virtual-index="i" class="ep-item cczj-relative cczj-px-3 cczj-py-2 cczj-rounded cczj-transition cczj-cursor-pointer cczj-text-sm" :class="{
                   active: episodeList.originalIndex(i) === episodeList.current,
                   watched: episodeList.watched(episodeList.originalIndex(i)),
                   future: episodeList.originalIndex(i) > episodeList.current && !episodeList.watched(episodeList.originalIndex(i)),
@@ -116,9 +100,33 @@ function onMinimizeApp():void { try { Window.Minimise() } catch { /* Host owns a
                   <span v-show="episodeList.watched(episodeList.originalIndex(i)) && episodeList.percent(episodeList.originalIndex(i)) > 0" class="ep-watched-pct cczj-absolute cczj-right-1 cczj-text-xs cczj-text-muted">{{
                     Math.round(episodeList.percent(episodeList.originalIndex(i))) }}%</span>
                 </button>
+              </template></VirtualGrid>
               </div>
             </template>
             <div v-else-if="!catalog.loading" class="side-empty cczj-text-center cczj-py-8 cczj-text-muted cczj-text-sm">{{ t('player.noPlayableEpisodes') }}</div>
+            </div>
+
+            <!-- 源列表 -->
+            <div v-if="!mobile" class="side-sources">
+            <div class="side-section-title cczj-flex cczj-items-center cczj-justify-between cczj-gap-2 cczj-mb-3">
+              <div class="side-section-title-left cczj-flex cczj-items-center cczj-gap-2">
+                <span class="bullet cczj-w-2 cczj-h-2 cczj-rounded-full cczj-bg-accent"></span>
+                <span class="cczj-text-sm cczj-font-medium">{{ t('player.playSources') }}</span>
+              </div>
+              <div class="side-section-right cczj-flex cczj-items-center cczj-gap-2">
+                <span class="side-count cczj-text-xs cczj-text-muted">{{ t('player.availableSources', { count: catalog.readyCount }) }}</span>
+                <span v-if="catalog.probingCount > 0" class="side-count cczj-text-xs cczj-text-muted">{{ t('player.probePendingCount', { count: catalog.probingCount }) }}</span>
+              </div>
+            </div>
+
+              <div class="side-source-scroll" tabindex="0" :aria-label="t('player.playSources')">
+                <PlaybackRouteList dark expanded :sources="catalog.items" :active-key="catalog.activeKey" :active-line="details.lines[details.activeLineIndex]?.index??-1" :lines="details.lines" :busy="catalog.loading" :selectable="catalog.selectable" @choose="(key,line)=>emit('source',key,line)" />
+              </div>
+              <div class="side-source-actions cczj-flex cczj-items-center cczj-justify-end cczj-gap-4">
+                <Button variant="text" size="sm" :loading="catalog.refreshing" :title="t('playLine.cooldownHint')" @click="catalog.retry">{{t('sources.probe')}}</Button>
+              </div>
+            </div>
+
           </section>
         </aside>
 </template>

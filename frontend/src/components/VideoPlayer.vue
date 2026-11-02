@@ -128,6 +128,8 @@ function logStartup(kind:string,data:Record<string,unknown>={}):void {
 function mediaHost(url:string):string {try{return new URL(url).hostname}catch{return ''}}
 
 const wrapperRef = ref<HTMLDivElement>()
+const mobileControlStackRef = ref<HTMLDivElement>()
+const mobileControlHeight = ref(56)
 const videoElement = ref<HTMLVideoElement|null>(null)
 const pictureSize = ref<VideoPictureSize>()
 const errorMsg = ref('')
@@ -946,6 +948,13 @@ function onWrapperClick(event?: MouseEvent): void {
   if (mobile) {
     if (gestures.consumeClick()) return
     mobileControlsEngaged.value = true
+    if(mobileChrome.value?.pinned || showVideoInfo.value || showPlaybackSettings.value || showSubtitlePanel.value || showReportAd.value){
+      cancelMobileTap()
+      mobileChrome.value?.close()
+      showVideoInfo.value=showPlaybackSettings.value=showSubtitlePanel.value=showReportAd.value=false
+      keepVisible()
+      return
+    }
     const point = { x:event?.clientX ?? 0, y:event?.clientY ?? 0 }
     if (mobileTapTimer !== undefined && mobileTapPoint && Math.hypot(point.x - mobileTapPoint.x, point.y - mobileTapPoint.y) < 36) {
       cancelMobileTap()
@@ -989,10 +998,12 @@ let playerDisposed = false
 const releaseCache = TsCache.retainPlayback()
 let displayResizeObserver: ResizeObserver | undefined
 function syncVideoLayout():void {
+  const controlsHeight = mobileControlStackRef.value?.offsetHeight
+  if (mobile && controlsHeight && mobileControlHeight.value !== controlsHeight) mobileControlHeight.value = controlsHeight
   const video=getVideoEl(),host=wrapperRef.value
   if(!video||!host)return
   const pip=platform.pip.active(video)||document.body.dataset.playerPip==='1'
-  const size=sizeVideoPicture(video,host,pip?'contain':effectivePictureFit.value)
+  const size=sizeVideoPicture(video,host,pip?'contain':effectivePictureFit.value,mobile)
   const previous=pictureSize.value
   if(size&&(!previous||size.width!==previous.width||size.height!==previous.height||size.sourceWidth!==previous.sourceWidth||size.sourceHeight!==previous.sourceHeight||size.viewportWidth!==previous.viewportWidth||size.viewportHeight!==previous.viewportHeight))pictureSize.value=size
   wrapperRef.value?.querySelectorAll<HTMLCanvasElement>('canvas[data-cczj-enhancement]').forEach(canvas=>layoutCanvasToVideo(video,canvas))
@@ -1009,6 +1020,7 @@ onMounted(async () => {
   setupPlayer()
   displayResizeObserver=new ResizeObserver(syncVideoLayout)
   if(wrapperRef.value)displayResizeObserver.observe(wrapperRef.value)
+  if(mobileControlStackRef.value)displayResizeObserver.observe(mobileControlStackRef.value)
   const video=getVideoEl()
   if(video)displayResizeObserver.observe(video)
   document.addEventListener('keydown', onKeyDown)
@@ -1127,7 +1139,7 @@ defineExpose({ isPlaying:computed(()=>playing.value&&!loading.value&&!casting.va
 
 <template>
   <div class="player-wrapper" :class="{ fullscreen: isFullscreen && !portraitPresentationHost, 'cczj-mobile-video': mobile, 'portrait-player': portrait, 'portrait-content': portrait && portraitContent, 'cczj-mobile-player-locked': mobileLocked, 'cursor-hidden': !portrait && !mobile && playing && !showControls, 'show-controls': showControls }"
-    :data-video-fit="effectivePictureFit" ref="wrapperRef" tabindex="0" @mousemove="if (!mobile) { if(!portraitPresentationHost)toggleShow(true); mouseInside = true; updateEnhancementCompare($event) }" @mouseenter="mouseInside = true"
+    :data-video-fit="effectivePictureFit" :style="mobile ? { '--cczj-player-control-height': `${mobileControlHeight}px` } : undefined" ref="wrapperRef" tabindex="0" @mousemove="if (!mobile) { if(!portraitPresentationHost)toggleShow(true); mouseInside = true; updateEnhancementCompare($event) }" @mouseenter="mouseInside = true"
     @mouseleave="!portraitPresentationHost && onMouseLeave()" @click="!portraitPresentationHost && onWrapperClick($event)" @dblclick.stop="!mobile && !portrait && toggleFullscreen()" @wheel.prevent="!portrait && onWheel($event)"
     @pointerdown.capture="onControlPointerDown" @pointerdown="!portraitPresentationHost && gestures.down($event)" @pointermove="!portraitPresentationHost && gestures.move($event)" @pointerup="gestures.end" @pointercancel="gestures.end" @lostpointercapture.self="gestures.end" @contextmenu="(mobile || portrait) && $event.preventDefault()">
     <PortraitPlayerControls v-if="portrait" :visible="mobile || controlsVisible" :controls-host="portraitControlsHost" :ready="prepared && !loading" :fullscreen="isFullscreen" :can-fullscreen="!fullscreenBusy && platform.fullscreen.supported(portraitPresentationHost ?? wrapperRef)" :current="current" :duration="duration" :playing="playing" :boosting="gestures.boosting.value" :boost-rate="speed" :muted="muted" @scrub="portraitScrubTime = $event ?? -1" @fullscreen="toggleFullscreen" @play="togglePlay" @seek="portraitSeek" @sound="enablePortraitSound">
@@ -1263,23 +1275,24 @@ defineExpose({ isPlaying:computed(()=>playing.value&&!loading.value&&!casting.va
 
     <PlayerEnhancementWarning v-if="showAiWarning" :open="showAiWarning" @cancel="cancelAiMode" @confirm="confirmAiMode" />
 
-    <!-- 暂停图标：右下角大字，仅暂停时显示 -->
-    <button v-show="!casting && !errorMsg && !portrait && prepared && !autoplayStarting && !playing && !loading && (!mobile || !mobileLocked)" type="button" class="pause-overlay" :aria-label="t('player.play')" @pointerdown.stop @click.stop="togglePlay">
+    <!-- Visible transport height includes wrapped fullscreen controls. -->
+    <button v-show="!casting && !errorMsg && !portrait && prepared && !autoplayStarting && !playing && !loading && (!mobile || !mobileLocked)" type="button" class="pause-overlay" :class="{ 'pause-controls-visible': controlsVisible }" :aria-label="t('player.play')" @pointerdown.stop @click.stop="togglePlay">
       <img :src="pauseImg" class="pause-icon" alt="" />
     </button>
 
+    <div v-if="mobile && !portrait" v-show="!casting && playing && !controlsVisible && !mobileLocked" class="cczj-mobile-mini-progress" aria-hidden="true"><span :style="{ transform: `scaleX(${displayedProgress / 100})` }" /></div>
     <!-- 进度条（独立行，在控制条上方） -->
     <Transition name="cczj-mobile-player-chrome"><div v-if="mobile && !portrait" v-show="!casting && !mobileLocked && controlsVisible" class="cczj-mobile-control-shade" /></Transition>
     <!-- ⭐ @mousemove.stop 阻止冒泡到 player-wrapper，避免悬停进度条时触发控制栏和音量弹出 -->
     <Transition name="cczj-mobile-player-chrome" :css="mobile">
-    <div v-if="!portrait" :class="mobile ? 'cczj-mobile-control-stack' : 'cczj-player-desktop-control-stack'" v-show="!casting && (!mobile || (!mobileLocked && controlsVisible))">
+    <div v-if="!portrait" ref="mobileControlStackRef" :class="mobile ? 'cczj-mobile-control-stack' : 'cczj-player-desktop-control-stack'" v-show="!casting && (!mobile || (!mobileLocked && controlsVisible))">
     <div class="progress-bar-wrapper" v-show="mobile || (!mobileLocked && (controlsVisible || qualityOpen || showVideoInfo))" @click.stop
       @mousedown.stop @dblclick.stop @mousemove.stop>
       <div class="progress-container" ref="progressContainerRef" @mousedown.stop="onProgressMouseDown"
         @mousemove="!mobile && onProgressHover($event)" @mouseleave="!mobile && onProgressLeave()">
         <div class="progress-track-bg"></div>
-        <div class="progress-buffer" :style="{ transform: `scaleX(${bufferPct / 100})` }"></div>
-        <div class="progress-played" :style="{ transform: `scaleX(${displayedProgress / 100})` }"></div>
+        <div class="progress-buffer" :style="{ transform: `translateY(-50%) scaleX(${bufferPct / 100})` }"></div>
+        <div class="progress-played" :style="{ transform: `translateY(-50%) scaleX(${displayedProgress / 100})` }"></div>
         <!-- 悬停预览线 + 时间提示 + 缩略图 -->
         <div v-show="progressHoverPct >= 0" class="progress-hover-line" :style="{ left: progressHoverPct + '%' }"></div>
         <div v-show="!mobile && progressHoverPct >= 0 && progressHoverTime >= 0" class="progress-time-preview"

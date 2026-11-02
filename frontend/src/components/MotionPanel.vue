@@ -59,7 +59,7 @@ onBeforeUnmount(stop)
 <template>
   <div class="motion-page cczj-min-w-0">
     <header class="motion-header cczj-flex cczj-items-center cczj-justify-between cczj-gap-8">
-      <div><h2>{{t('motion.switchTitle')}}</h2><p>{{t('motion.subtitle')}}</p></div>
+      <div><h2>{{t('motion.switchTitle')}}</h2></div>
       <label class="motion-toggle"><input type="checkbox" :checked="motion.enabled" :aria-label="t('motion.switchTitle')" @change="motion.setEnabled(($event.target as HTMLInputElement).checked)"/><span/></label>
     </header>
     <p v-if="motion.systemReduced" class="motion-notice">{{t('motion.systemReduced')}}</p>
@@ -70,7 +70,7 @@ onBeforeUnmount(stop)
     </div>
     <div class="scenario-grid cczj-grid cczj-gap-8">
       <section class="motion-section cczj-min-w-0 cczj-border cczj-rounded-lg cczj-p-8">
-        <h3>{{t('motion.navigationScenario')}}</h3><p>{{t(mobile?'motion.navigationMobileHint':'motion.navigationDesktopHint')}}</p>
+        <h3>{{t('motion.navigationScenario')}}</h3>
         <div class="cczj-flex cczj-flex-wrap cczj-gap-4 cczj-mt-6 cczj-mb-6">
           <Button v-for="(label,index) in [t('sidebar.home'),t('sidebar.search')]" :key="index" size="sm" :variant="page===index?'primary':'secondary'" :aria-pressed="page===index" @click="selectPage(index)">{{label}}</Button>
         </div>
@@ -89,13 +89,13 @@ onBeforeUnmount(stop)
         </div>
       </section>
       <section class="motion-section cczj-min-w-0 cczj-border cczj-rounded-lg cczj-p-8">
-        <h3>{{t('motion.overlayScenario')}}</h3><p>{{t('motion.overlayScenarioHint')}}</p>
+        <h3>{{t('motion.overlayScenario')}}</h3>
         <div class="scenario-stage cczj-flex cczj-items-center cczj-justify-center cczj-flex-wrap cczj-gap-6 cczj-mt-6 cczj-rounded-md cczj-border cczj-p-8">
           <Button @click="dialogOpen=true">{{t('motion.openDialog')}}</Button><Button @click="drawerOpen=true">{{t('motion.openDrawer')}}</Button>
         </div>
       </section>
       <section class="motion-section cczj-min-w-0 cczj-border cczj-rounded-lg cczj-p-8">
-        <h3>{{t('motion.themeScenario')}}</h3><p>{{t('motion.themeScenarioHint')}}</p>
+        <h3>{{t('motion.themeScenario')}}</h3>
         <div ref="themeSurface" :style="sampleStyle" class="theme-scenario cczj-relative cczj-overflow-hidden cczj-rounded-md cczj-border cczj-p-8 cczj-mt-6">
           <strong>{{t('motion.previewContent')}}</strong><p class="cczj-mt-4 cczj-mb-6">{{t('motion.previewThemeLocal')}}</p>
           <Button variant="primary" @click="previewTheme">{{t('motion.changePreviewTheme')}}</Button>

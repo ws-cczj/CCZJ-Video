@@ -1,4 +1,4 @@
-import { hexToRgb, rgbToHex, readRgb, toSolidHex, hexToRgba, lighten, darken, luminance, hslToHex, contrastRatio, contrastText, compositeColor, windowActionColors } from '../utils/colors'
+import { hexToRgb, rgbToHex, readRgb, toSolidHex, hexToRgba, lighten, darken, luminance, hslToHex, contrastRatio, contrastText, compositeColor, windowActionColors, readableForeground, perceptualTone } from '../utils/colors'
 export { hexToRgba } from '../utils/colors'
 import { CCZJ } from '../constants/cczj'
 import { defineStore } from 'pinia'
@@ -228,7 +228,7 @@ function mutedOn(surface: string, dark: boolean): string {
 // ============================================================================
 // 类型
 // ============================================================================
-export interface ColorPalette {
+interface BasePalette {
   bgApp: string          // 应用背景 / 整体页面背景
   bgCard: string         // 内容卡片背景
   bgSidebar: string      // 侧边栏背景
@@ -295,6 +295,42 @@ export interface ColorPalette {
   btnCloseContrast: string
 }
 
+export interface ColorPalette extends BasePalette {
+  bgElevated: string
+  accentText: string
+  successText: string
+  dangerText: string
+  infoText: string
+  selectedBg: string
+  selectedText: string
+  selectedBorder: string
+  episodeWatchedBg: string
+  episodeWatchedText: string
+  episodeActiveBg: string
+  episodeActiveText: string
+  episodeProgress: string
+}
+
+/** Only explicit role overrides are persisted; derived defaults remain live. */
+export const THEME_ROLE_KEYS = [
+  'bgInput','bgElevated','border','borderStrong','textSecondary','textMuted','accentText',
+  'btnSolidText','btnSoft','btnSoftText','selectedBg','selectedText','selectedBorder',
+  'episodeBg','episodeText','episodeWatchedBg','episodeWatchedText','episodeActiveBg','episodeActiveText','episodeProgress',
+  'successText','warningText','dangerText','infoText',
+] as const satisfies readonly (keyof ColorPalette)[]
+export type ThemeColorRole = typeof THEME_ROLE_KEYS[number]
+export type ThemeRoleColors = Partial<Record<ThemeColorRole,string>>
+
+export function readThemeRoleColors(value: unknown): ThemeRoleColors {
+  if(!value || typeof value!=='object' || Array.isArray(value))return {}
+  const colors=value as Record<string,unknown>, result:ThemeRoleColors={}
+  for(const key of THEME_ROLE_KEYS){
+    const color=colors[key]
+    if(typeof color==='string' && /^#(?:[\da-f]{3}|[\da-f]{6})$/i.test(color))result[key]=toSolidHex(color)
+  }
+  return result
+}
+
 export interface CustomTheme {
   id: string
   name: string
@@ -317,6 +353,11 @@ export interface CustomTheme {
   dark: boolean
   sidebarAlpha: number   // 侧边栏/面板背景透明度 0~1（有背景图时生效）
   contentAlpha: number   // 内容卡片背景透明度 0~1（有背景图时生效）
+  roleColors?: ThemeRoleColors
+  /** Absent on legacy themes whose tag colour also controlled episode fills. */
+  colorVersion?: 2
+  /** Editor-only preset identity; the save payload does not include this field. */
+  previewBaseId?: string
 }
 
 export interface PresetTheme {
@@ -355,19 +396,19 @@ function buildLightPalette(primary: string, overrides: Partial<ColorPalette> = {
   const danger = semanticColor('danger', false, primary)
   const info = semanticColor('info', false, primary)
   const window = windowActionColors(primary, lighten(primary,.88))
-  // 标签和剧集底色本来就同值（都是 lighten 0.9），合成一份，编辑器里也只剩一个框。
-  const bgTag = lighten(primary, 0.9)
+  const bgTag = perceptualTone(primary,.955,.006)
   // 轮播控件压在海报图上，要比主操作按钮再深一档，否则和主色完全同值、取色框形同虚设。
   const carousel = darken(primary, 0.18)
-  const base: ColorPalette = {
-    bgApp: lighten(primary, 0.88),
+  const action=perceptualTone(primary,.49,.16)
+  const base: BasePalette = {
+    bgApp: perceptualTone(primary,.976,.004),
     bgCard: '#ffffff',
-    bgSidebar: lighten(primary, 0.93),
-    // bgHover 与 btnSoft 必须是两档：soft 按钮/色片 hover 到 bgHover 时要看得出变化。
-    bgHover: lighten(primary, 0.86),
-    bgInput: '#ffffff',
-    border: lighten(primary, 0.75),
-    borderStrong: lighten(primary, 0.55),
+    bgSidebar: perceptualTone(primary,.958,.006),
+    // Hover remains distinct from the secondary action surface.
+    bgHover: perceptualTone(primary,.94,.008),
+    bgInput: perceptualTone(primary,.965,.004),
+    border: perceptualTone(primary,.88,.006),
+    borderStrong: perceptualTone(primary,.73,.012),
     textPrimary: '#1f2430',
     textSecondary: '#4a5166',
     // textMuted 在下面的 finalize 里按真实卡片表面补足 AA 对比度。
@@ -385,17 +426,17 @@ function buildLightPalette(primary: string, overrides: Partial<ColorPalette> = {
     accentAlpha35: hexToRgba(primary, 0.35),
     accentAlpha40: hexToRgba(primary, 0.4),
     bgTag,
-    borderLight: lighten(primary, 0.8),
-    btnSolid: primary,
-    btnSolidText: contrastText(primary),
-    btnSolidHover: solidHover(primary, false),
-    btnSolidAlpha20: hexToRgba(primary, 0.2),
-    btnSolidAlpha35: hexToRgba(primary, 0.35),
-    btnSoft: lighten(primary, 0.7),
-    btnSoftText: softText(primary, false),
+    borderLight: perceptualTone(primary,.91,.005),
+    btnSolid: action,
+    btnSolidText: contrastText(action),
+    btnSolidHover: solidHover(action, false),
+    btnSolidAlpha20: hexToRgba(action, 0.12),
+    btnSolidAlpha35: hexToRgba(action, 0.2),
+    btnSoft: perceptualTone(primary,.955,.006),
+    btnSoftText: '#4a5166',
     tagHighlightBg: hexToRgba(primary, 0.18),
     tagHighlightText: darken(primary, 0.24),
-    episodeBg: bgTag, episodeText: darken(primary, 0.26),
+    episodeBg: perceptualTone(primary,.975,.004), episodeText: '#4a5166',
     carouselControl: carousel, carouselControlText: contrastText(carousel),
     danger, dangerHover: solidHover(danger, false), dangerContrast: contrastText(danger), dangerAlpha10: hexToRgba(danger, 0.1),
     success, successHover: solidHover(success, false), successContrast: contrastText(success), successAlpha10: hexToRgba(success, 0.1),
@@ -411,30 +452,32 @@ function buildLightPalette(primary: string, overrides: Partial<ColorPalette> = {
     btnClose: danger,
     btnCloseContrast: contrastText(danger),
   }
+  base.bgApp=lighten(primary,.88);base.bgSidebar=lighten(primary,.93)
   return finalizePalette({ ...base, ...overrides }, overrides, false)
 }
 
-// 深色模式：应用背景 = 主色的"很深很暗"的色调；卡片 = 深灰带一点主色
+// Dark surfaces use an independent neutral lightness hierarchy.
 function buildDarkPalette(primary: string, overrides: Partial<ColorPalette> = {}): ColorPalette {
   const success = semanticColor('success', true, primary)
   const warning = semanticColor('warning', true, primary)
   const danger = semanticColor('danger', true, primary)
   const info = semanticColor('info', true, primary)
   const window = windowActionColors(primary, '#101218')
-  const border = darken(primary, 0.5)
-  const bgTag = lighten(darken(primary, 0.72), 0.08)
+  const border = perceptualTone(primary,.37,.01)
+  const bgTag = perceptualTone(primary,.30,.012)
   // 深色下轮播控件要比主操作按钮更亮一档，压在暗海报上才分得开。
   const carousel = lighten(primary, 0.22)
-  const base: ColorPalette = {
-    bgApp: darken(primary, 0.82),
-    bgCard: darken(primary, 0.65),
-    bgSidebar: darken(primary, 0.72),
-    bgHover: darken(primary, 0.55),
-    bgInput: darken(primary, 0.7),
+  const action=perceptualTone(primary,.78,.13)
+  const base: BasePalette = {
+    bgApp: perceptualTone(primary,.185,.008),
+    bgCard: perceptualTone(primary,.24,.01),
+    bgSidebar: perceptualTone(primary,.215,.009),
+    bgHover: perceptualTone(primary,.31,.012),
+    bgInput: perceptualTone(primary,.275,.01),
     border,
     // borderStrong 必须比 border 更亮更醒目（滚动条、强调描边都吃这个值）。
     // 旧实现 lighten(darken(primary, .82), .1) 反而比 border 更暗，层级倒挂。
-    borderStrong: lighten(border, 0.22),
+    borderStrong: perceptualTone(primary,.49,.015),
     textPrimary: '#f0f2f5',
     textSecondary: '#c2c7d0',
     // textMuted 在下面的 finalize 里按真实卡片表面补足 AA 对比度。
@@ -452,17 +495,17 @@ function buildDarkPalette(primary: string, overrides: Partial<ColorPalette> = {}
     accentAlpha35: hexToRgba(primary, 0.45),
     accentAlpha40: hexToRgba(primary, 0.52),
     bgTag,
-    borderLight: lighten(darken(primary, 0.72), 0.16),
-    btnSolid: lighten(primary, 0.1),
-    btnSolidText: contrastText(lighten(primary, 0.1)),
-    btnSolidHover: solidHover(lighten(primary, 0.1), true),
-    btnSolidAlpha20: hexToRgba(lighten(primary, 0.1), 0.25),
-    btnSolidAlpha35: hexToRgba(lighten(primary, 0.1), 0.45),
-    btnSoft: hexToRgba(primary, 0.26),
-    btnSoftText: softText(primary, true),
+    borderLight: perceptualTone(primary,.325,.009),
+    btnSolid: action,
+    btnSolidText: contrastText(action),
+    btnSolidHover: solidHover(action, true),
+    btnSolidAlpha20: hexToRgba(action, 0.1),
+    btnSolidAlpha35: hexToRgba(action, 0.2),
+    btnSoft: perceptualTone(primary,.30,.012),
+    btnSoftText: '#c2c7d0',
     tagHighlightBg: hexToRgba(primary, 0.32),
     tagHighlightText: lighten(primary, 0.38),
-    episodeBg: bgTag, episodeText: lighten(primary, 0.42),
+    episodeBg: perceptualTone(primary,.275,.01), episodeText: '#c2c7d0',
     carouselControl: carousel, carouselControlText: contrastText(carousel),
     danger, dangerHover: solidHover(danger, true), dangerContrast: contrastText(danger), dangerAlpha10: hexToRgba(danger, 0.15),
     success, successHover: solidHover(success, true), successContrast: contrastText(success), successAlpha10: hexToRgba(success, 0.15),
@@ -478,6 +521,7 @@ function buildDarkPalette(primary: string, overrides: Partial<ColorPalette> = {}
     btnClose: danger,
     btnCloseContrast: contrastText(danger),
   }
+  base.bgApp=darken(primary,.82);base.bgSidebar=darken(primary,.72);base.bgCard=darken(primary,.65)
   return finalizePalette({ ...base, ...overrides }, overrides, true)
 }
 
@@ -485,10 +529,31 @@ function buildDarkPalette(primary: string, overrides: Partial<ColorPalette> = {}
  * 覆盖合并后再算 muted：预设常常把 bgCard 改成带色调的半透明表面，
  * 在 base 上算出来的灰在那种表面上并不达标。显式覆盖 muted 的主题优先。
  */
-function finalizePalette(palette: ColorPalette, overrides: Partial<ColorPalette>, dark: boolean): ColorPalette {
-  const window=windowActionColors(palette.accent,palette.bgApp)
-  return { ...palette,
-    textMuted:overrides.textMuted ?? mutedOn(compositeColor(palette.bgCard,palette.bgApp), dark),
+function finalizePalette(palette: BasePalette, overrides: Partial<ColorPalette>, dark: boolean): ColorPalette {
+  const p={...palette,...overrides}
+  const card=compositeColor(p.bgCard,p.bgApp)
+  const selectedBg=overrides.selectedBg ?? perceptualTone(p.accent,dark?.36:.935,.045)
+  const selectedText=overrides.selectedText ?? readableForeground(p.accent,[selectedBg])
+  const watchedBg=overrides.episodeWatchedBg ?? perceptualTone(p.accent,dark?.31:.955,.018)
+  const activeBg=overrides.episodeActiveBg ?? selectedBg
+  const window=windowActionColors(p.accent,p.bgApp)
+  return { ...p,
+    bgElevated:overrides.bgElevated ?? perceptualTone(p.accent,dark?.285:.995,.008),
+    accentText:overrides.accentText ?? readableForeground(p.accent,[card,compositeColor(p.accentAlpha10,card)]),
+    successText:overrides.successText ?? readableForeground(p.success,[card,compositeColor(p.successAlpha10,card)]),
+    dangerText:overrides.dangerText ?? readableForeground(p.danger,[card,compositeColor(p.dangerAlpha10,card)]),
+    infoText:overrides.infoText ?? readableForeground(p.info,[card,compositeColor(p.infoAlpha10,card)]),
+    warningText:overrides.warningText ?? readableForeground(p.warning,[card,compositeColor(p.warningAlpha10,card)]),
+    selectedBg,selectedText,
+    selectedBorder:overrides.selectedBorder ?? readableForeground(p.accent,[selectedBg,activeBg],3),
+    episodeWatchedBg:watchedBg,
+    episodeWatchedText:overrides.episodeWatchedText ?? readableForeground(p.textSecondary,[watchedBg]),
+    episodeActiveBg:activeBg,
+    episodeActiveText:overrides.episodeActiveText ?? readableForeground(p.accent,[activeBg]),
+    episodeProgress:overrides.episodeProgress ?? readableForeground(p.accent,[watchedBg,activeBg],3),
+    btnSoftText:overrides.btnSoftText ?? readableForeground(p.btnSoftText,[compositeColor(p.btnSoft,card)]),
+    episodeText:overrides.episodeText ?? readableForeground(p.episodeText,[compositeColor(p.episodeBg,card)]),
+    textMuted:overrides.textMuted ?? mutedOn(card, dark),
     btnMin:overrides.btnMin ?? window.fill,btnMinContrast:overrides.btnMinContrast ?? contrastText(overrides.btnMin ?? window.fill),
     btnHide:overrides.btnHide ?? window.fill,btnHideContrast:overrides.btnHideContrast ?? contrastText(overrides.btnHide ?? window.fill),
   }
@@ -520,6 +585,12 @@ const TINT_MOON_CAKE: Partial<ColorPalette> = {
   bgCard: 'rgba(189, 174, 182, 0.95)',
   bgSidebar: 'rgba(122, 100, 112, 0.92)',
   border: '#d9cfc0',
+}
+const TINT_MINIMAL:Partial<ColorPalette>={
+  bgApp:'#f7f7f8',bgSidebar:'#efeff1',bgCard:'#ffffff',
+  textPrimary:'#25262b',textSecondary:'#55565e',border:'#dddde2',borderStrong:'#a7a7b0',
+  btnSolid:'#2b2c32',btnSolidText:'#ffffff',btnSolidHover:'#16171c',
+  selectedBg:'#ebebef',selectedText:'#303139',selectedBorder:'#71727d',
 }
 const TINT_LEAF_VILLAGE: Partial<ColorPalette> = {
   bgApp: '#e8eef1',
@@ -564,6 +635,7 @@ export function readSurfaceAlpha(color: string | undefined): number | undefined 
 // 主题名会停留在首次求值时的语言。
 function buildPresetThemes(): PresetTheme[] { return [
   // ==================== 浅色 ====================
+  { id:'minimal',name:tr('theme.presetMinimal'),primary:'#52525b',palette:buildLightPalette('#52525b',TINT_MINIMAL),mode:'light',tint:TINT_MINIMAL },
   { id: 'green', name: tr('theme.presetGreen'), primary: '#16a34a', palette: buildLightPalette('#16a34a'), mode: 'light' },
   { id: 'blue', name: tr('theme.presetBlue'), primary: '#2e7dd7', palette: buildLightPalette('#2e7dd7'), mode: 'light' },
   { id: 'sky', name: tr('theme.presetSky'), primary: '#0284c7', palette: buildLightPalette('#0284c7'), mode: 'light' },
@@ -670,15 +742,14 @@ export const useThemeStore = defineStore('theme', () => {
   function paletteFromCustom(c: CustomTheme): ColorPalette {
     // 预设手工调的那层 tint 先垫回派生结果：border、textSecondary 这些没有取色框，
     // 只按 primary 重算一遍就会把暖灰手感抹成通用灰。
-    const tint = themes.value.find(t => t.id === c.id)?.tint
+    const tint = themes.value.find(t => t.id === (c.id==='__preview__' ? c.previewBaseId : c.id))?.tint
     const base: ColorPalette = {
       ...(c.dark ? buildDarkPalette(c.primary) : buildLightPalette(c.primary)),
       ...(tint || {}),
     }
     const hasBg = !!resolveThemeBg(c.backgroundImage)
-    // 用户挑过的颜色永远优先；没挑过才退回"按主色染一层底"（浅色向白 40~60%，深色向黑 40~55%）。
-    const sidebarBase = c.sidebar || (hasBg ? (c.dark ? darken(c.primary, 0.55) : lighten(c.primary, 0.4)) : base.bgSidebar)
-    const contentBase = c.content || (hasBg ? (c.dark ? darken(c.primary, 0.4) : lighten(c.primary, 0.6)) : base.bgCard)
+    const sidebarBase = c.sidebar || toSolidHex(base.bgSidebar)
+    const contentBase = c.content || toSolidHex(base.bgCard)
     // 有背景图时转成半透明 rgba；无背景图时直接用纯色
     const effectiveSidebar = hasBg
       ? hexToRgba(sidebarBase, Math.max(0, Math.min(1, c.sidebarAlpha ?? 0.65)))
@@ -694,7 +765,8 @@ export const useThemeStore = defineStore('theme', () => {
     const danger = c.dangerColor || base.danger
     const info = c.infoColor || base.info
     const window = windowActionColors(c.primary,c.background || base.bgApp)
-    return {
+    const roleColors=readThemeRoleColors(c.roleColors)
+    return finalizePalette({
       ...base,
       bgApp: c.background || base.bgApp,
       bgCard: effectiveContent,
@@ -706,13 +778,13 @@ export const useThemeStore = defineStore('theme', () => {
       btnSolidHover: solidHover(action, c.dark),
       btnSolidAlpha20: hexToRgba(action, c.dark ? 0.25 : 0.2),
       btnSolidAlpha35: hexToRgba(action, c.dark ? 0.45 : 0.35),
-      btnSoft: c.dark ? hexToRgba(action, 0.26) : lighten(action, 0.7),
-      btnSoftText: softText(action, c.dark),
+      btnSoft: base.btnSoft,
+      btnSoftText: base.btnSoftText,
       bgTag: tag,
       tagHighlightBg: tag,
       tagHighlightText: contrastText(tag),
-      episodeBg: tag,
-      episodeText: contrastText(tag),
+      episodeBg: c.colorVersion===2 ? base.episodeBg : tag,
+      episodeText: c.colorVersion===2 ? base.episodeText : contrastText(tag),
       carouselControl: carousel,
       carouselControlText: contrastText(carousel),
       danger,
@@ -743,7 +815,7 @@ export const useThemeStore = defineStore('theme', () => {
       accentAlpha10: hexToRgba(c.primary, c.dark ? 0.15 : 0.1),
       accentAlpha20: hexToRgba(c.primary, c.dark ? 0.25 : 0.2),
       accentAlpha35: hexToRgba(c.primary, c.dark ? 0.45 : 0.35),
-    }
+    },{...readThemeRoleColors(tint),...roleColors},c.dark)
   }
 
   // ---- 当前主题（computed）----
@@ -798,6 +870,7 @@ export const useThemeStore = defineStore('theme', () => {
           customThemes.value = Array.isArray(parsed)
             ? parsed.map((theme) => {
                 const fixed = repairCustomThemeAssets(theme)
+                fixed.roleColors=readThemeRoleColors(fixed.roleColors)
                 if (initializeComponentTokens(fixed)) migrated = true
                 return fixed
               })
@@ -860,6 +933,12 @@ export const useThemeStore = defineStore('theme', () => {
     set('--text-primary', palette.textPrimary)
     set('--text-secondary', palette.textSecondary)
     set('--text-muted', palette.textMuted)
+
+    for(const key of THEME_ROLE_KEYS)set('--'+key.replace(/[A-Z]/g,c=>'-'+c.toLowerCase()),palette[key])
+    const viewing=mode==='dark' ? palette : buildDarkPalette(palette.accent,readThemeRoleColors(customThemes.value.find(c=>c.id===currentId.value)?.roleColors))
+    for(const key of ['selectedBg','selectedText','selectedBorder','episodeBg','episodeText','episodeWatchedBg','episodeWatchedText','episodeActiveBg','episodeActiveText','episodeProgress'] as const){
+      set('--viewing-'+key.replace(/[A-Z]/g,c=>'-'+c.toLowerCase()),viewing[key])
+    }
 
     set('--accent', palette.accent)
     set('--accent-dim', palette.accentDim)
@@ -968,8 +1047,8 @@ export const useThemeStore = defineStore('theme', () => {
       name: tr('theme.myTheme'),
       primary: '#16a34a',
       text: '#1f2430',
-      background: lighten('#16a34a', 0.88),
-      sidebar: lighten('#16a34a', 0.93),
+      background: palette.bgApp,
+      sidebar: palette.bgSidebar,
       content: '#ffffff',
       primaryAction: palette.btnSolid,
       successColor: palette.success,
@@ -981,6 +1060,7 @@ export const useThemeStore = defineStore('theme', () => {
       dark: false,
       sidebarAlpha: 0.65,
       contentAlpha: 0.88,
+      colorVersion: 2,
     }
   }
 
@@ -991,7 +1071,7 @@ export const useThemeStore = defineStore('theme', () => {
    * 就会把暖灰底换成通用灰 `#f0f0f0 / #ffffff`，和预设本身的样子对不上。
    */
   function deriveFromPrimary(primary: string, dark: boolean, tint?: Partial<ColorPalette>): CustomTheme {
-    const palette = { ...(dark ? buildDarkPalette(primary) : buildLightPalette(primary)), ...(tint || {}) }
+    const palette = dark ? buildDarkPalette(primary,tint) : buildLightPalette(primary,tint)
     return {
       id: `custom_${Date.now()}`,
       name: dark ? tr('theme.darkDerived') : tr('theme.lightDerived'),
@@ -1010,6 +1090,8 @@ export const useThemeStore = defineStore('theme', () => {
       dark,
       sidebarAlpha: readSurfaceAlpha(tint?.bgSidebar) ?? 0.65,
       contentAlpha: readSurfaceAlpha(tint?.bgCard) ?? 0.88,
+      roleColors:readThemeRoleColors(tint),
+      colorVersion:2,
     }
   }
 

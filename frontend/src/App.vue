@@ -57,7 +57,7 @@ onMounted(() => {
 })
 onUnmounted(() => window.removeEventListener('cczj:android-back', onAndroidBack))
 const theme = useThemeStore()
-watch(()=>appMode.mode==='novel'?'#faf9f6':appMode.mode==='comic'?'#fffaf5':theme.current.palette.bgApp,color=>cacheLaunchBackground(color,appMode.mode),{immediate:true})
+watch(()=>!theme.loaded?'':appMode.mode==='novel'?'#faf9f6':appMode.mode==='comic'?'#fffaf5':theme.current.palette.bgApp,color=>{if(theme.loaded)cacheLaunchBackground(color,appMode.mode)},{immediate:true})
 const errorStore = useErrorStore()
 
 // 立即应用一次默认主题，防止页面初始闪烁

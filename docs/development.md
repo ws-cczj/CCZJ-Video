@@ -65,23 +65,42 @@ Windows 的 SQLite 位于 `%APPDATA%/CCZJ Video`。浏览器资料目录由 `app
 
 ## 界面动效与设置
 
-视频、小说、漫画的桌面与移动壳层共用 `mobile/MobileRouteStage.vue`，通过 `routeMotion.ts` 中的屏幕身份、主标签关系与历史位置选择过渡。移动主标签横向移动，桌面视频并列入口以整页高度纵向推移，设置分组以短距离纵向移动；整页推移使用 `--cczj-motion-section`（默认 800ms），分组使用 `--cczj-motion-group`（默认 320ms）；详情等层级页面覆盖／返回，旧层在退出期间不可交互。桌面视频播放场景自身固定覆盖整个应用客户区，从右侧进入（默认 800ms）并向右侧退出（`--cczj-motion-dismiss`，默认 600ms），仅改变 transform，不再为播放页计算点击原点或圆形裁切；舞台保持原尺寸，不自动进入系统显示器全屏。桌面侧栏及转场共同消费 `modes/videoNavigation.ts` 的真实条目顺序，含动态扩展入口；目标条目在上方时从上向下进入，在下方时从下向上进入，不以历史栈位置替代空间关系。桌面壁纸按应用画布裁切，场景包含规则与播放器全屏同步适配。阅读器内同一作品的章节／话次切换仍由阅读器负责，不再叠加一次全页转场。路由只查询已登记入场节点的动画；可见预览和已提交页面分别控制图片准备与业务工作，已呈现的缓存主标签不重新遮挡。
+视频、小说、漫画的桌面与移动壳层共用 `mobile/MobileRouteStage.vue`，通过 `routeMotion.ts` 中的屏幕身份、主标签关系与历史位置选择过渡。移动主标签横向移动，桌面视频并列入口以整页高度纵向推移，设置分组以短距离纵向移动；整页推移使用 `--cczj-motion-section`（默认 800ms），分组使用 `--cczj-motion-group`（默认 320ms）；详情等层级页面覆盖／返回，旧层在退出期间不可交互。桌面视频播放场景自身固定覆盖整个应用客户区，从右侧进入（默认 800ms）并向右侧退出（`--cczj-motion-dismiss`，默认 600ms），仅改变 transform，不再为播放页计算点击原点或圆形裁切；舞台保持原尺寸，不自动进入系统显示器全屏。桌面侧栏及转场共同消费 `modes/videoNavigation.ts` 的真实条目顺序，含动态扩展入口；目标条目在上方时从上向下进入，在下方时从下向上进入，不以历史栈位置替代空间关系。桌面壁纸按应用画布裁切，场景包含规则与播放器全屏同步适配。阅读器内同一作品的章节／话次切换仍由阅读器负责，不再叠加一次全页转场。路由在 animationstart 登记入场对象，停用时直接完成未结束对象，缓存返回不扫描动画树；自动栏色落位只读取一次时长与曲线，手势直接提供进度；可见预览和已提交页面分别控制图片准备与业务工作，已呈现的缓存主标签不重新遮挡。
+
+手机视频底栏与页面舞台分开定位，主标签按实测底栏高度保留滚动区域，次级页使用完整高度；进入／返回时离场场景不随底栏出现或消失重排。底栏高度由其 ResizeObserver 发布，卸载断开观察。
+
+`components/VirtualGrid.vue` 统一可见行与缓冲行、动态行高、焦点及滚动恢复，既用于 `VirtualVideoGrid` 的卡片，也用于详情、播放侧栏和选集抽屉；数量由视口和列数决定，不完整挂载全部选集。CSS 负责各场景列数、固定区域和紧凑按钮，网格不改变领域的排序／集号身份。短剧目录按20集分组已有界，保留原交互。列表虚拟化依据 [Vue 官方性能指南](https://vuejs.org/guide/best-practices/performance.html#virtualize-large-lists)。保留页面通过 `sceneMotionKey` 等待舞台完成过渡，业务刷新不扫描 DOM 动画，也不依靠固定延迟补刷。
+
 
 同级页面同时进入和退出，保持同一 800ms 位移与 `cubic-bezier(.4,0,.2,1)` 曲线，不能将两页串行播放而暴露空画布。时长按视觉范围分配，进入与退出可不同；参考 [Atlassian 动效调度](https://atlassian.design/foundations/motion/applying-motion)和 [Fluent 动效原则](https://fluent2.microsoft.design/motion)，保留本项目已选择的方向滑动。桌面首页完成首屏加载后，在可见空闲时预先加载共享 `modes/videoViews.ts` 的详情代码模块；不挂载页面或预取业务／媒体数据，离场和销毁取消待执行调度。该优化减小首次导航的模块加载工作，不能代替设备帧率验证。
 
 `stores/motion.ts` 是动效偏好的所有者，`allows()` 同时考虑总开关、分类开关、用户减少动态效果与系统偏好。减少动态效果也同步根 CSS 标记，覆盖只消费样式的页面、图标与反馈；加载指示保留。基础设置的总开关不依赖扩展包是否启用；内置 motion-effects 包继续提供设置分组及样式。修改时一起维护 MotionPanel 预览、两份语言文案、路由、公共覆盖层和装饰反馈。关闭效果保留加载指示及静态选中状态，不冻结业务工作。
 
-MotionPanel 以真实操作展示结果：导航预览经 `routeTransition` 选择当前宿主方向和共享路由 CSS，播放预览使用相同进入／退出名称；弹窗直接装配公共 Modal，抽屉装配 CczjMobilePlayerDrawer。主题卡片经 `createThemeReveal` 的具名局部快照复用点击原点、半径和曲线，不改写实际主题或存储；宿主不支持 ViewTransition 时直接更新配色。没有媒体请求或自动预览循环，离场关闭覆盖层、取消揭示并恢复临时快照名称。旧风格／速度／强度不再作为界面选项，旧存储值仍参与未覆盖时长和曲线，用户恢复默认时才重置。新的 reduceMotion 与 durations 字段沿用原 motionOptions Key、串行保存、失败回滚；duration 仅接受已知名称的有限数值，限制 100–2500ms。展开项显示实际配置毫秒数，桌面提供 section／dismiss，手机提供 slow，双方提供 group／normal／reveal；normal 同时被常规面板和阅读翻页消费，小说不再独自计算该时长。
+MotionPanel 以真实操作展示结果：导航预览经 `routeTransition` 选择当前宿主方向和共享路由 CSS，播放预览使用相同进入／退出名称；弹窗直接装配公共 Modal，抽屉装配 CczjMobilePlayerDrawer。主题卡片经 `createThemeReveal` 的具名局部快照复用点击原点、半径和曲线，不改写实际主题或存储；宿主不支持 ViewTransition 时使用按主题变量直接插值的颜色动画，隐藏／销毁／新选择时释放过渡状态。没有媒体请求或自动预览循环，离场关闭覆盖层、取消揭示并恢复临时快照名称。旧风格／速度／强度不再作为界面选项，旧存储值仍参与未覆盖时长和曲线，用户恢复默认时才重置。新的 reduceMotion 与 durations 字段沿用原 motionOptions Key、串行保存、失败回滚；duration 仅接受已知名称的有限数值，限制 100–2500ms。展开项显示实际配置毫秒数，桌面提供 section／dismiss，手机提供 slow，双方提供 group／normal／reveal；normal 同时被常规面板和阅读翻页消费，小说不再独自计算该时长。
 
-主题颜色计算集中在 `utils/colors.ts`，由 `stores/theme.ts` 分配功能角色。主操作与文字／图标配对，自动前景优先使用 OKLCH 同色相的深浅候选、降低色度适配 sRGB，再检查 4.5:1 对比度，不足才回退黑白；输出普通十六进制色，不要求宿主支持 CSS oklch。成功／警告／危险的色相语义保持稳定，最小化和最大化使用低饱和主题色阶，关闭悬停保留危险角色。btnMin／btnHide CSS 名称保留兼容，显式预设 tint 和用户自选色仍优先；ThemeSample 同步展示主操作及窗口动作色片。已知透明表面按声明底色合成后计算辅助文字，不读取壁纸像素，不能声称任意壁纸、任意透明度均符合对比度。黑底播放器继续使用本地深色控件板，小说／漫画阅读配色不改成视频样式。颜色空间依据见 [CSS Color 4](https://www.w3.org/TR/css-color-4/#color-conversion-code)，角色划分参考 [Material 色彩角色](https://developer.android.google.cn/design/ui/mobile/guides/styles/color?hl=en)；不引入新依赖。
+主题颜色计算集中在 `utils/colors.ts`，由 `stores/theme.ts` 分配表面、文字、操作、选择和业务状态。普通主题保留主色染色表面，独立“简约”预设使用黑白灰表面与中性强调色；浅色与深色分别定义 OKLCH 控件层级，主按钮有独立色阶；标签、普通选集、已观看与当前集不共用同一底色。自动文字按所在背景配对检查对比度，显式角色覆盖保持用户选择。桌面黑底播放侧栏消费独立 viewing 配色，手机页内侧栏消费应用主题选集角色，媒体功能抽屉使用固定深色及黑白选中色；画面上的播放控件保留观看配色。公共 Button、Tag、Modal 和导航分别消费次要操作、选择、浮层和强调文字角色，小说／漫画／短剧表面有显式适配。
 
-公共 Modal 由一个 `modal` 过渡同时持有遮罩和面板，退出完成后释放焦点所有权。ReaderSheet 的所有调用方在稳定父级持有 `sheet` 过渡，内容组件不再持有会先于退场销毁的内部过渡；未实现拖动关闭，因此不展示装饰把手。两者通过 `composables/useOverlayFocus.ts` 共用最上层 Escape／Android 返回、焦点约束和归还，监听在最后一层释放时移除。下拉展开方向与实际定位一致，跟踪动画只查询触发点的祖先；隐藏或离场时关闭并释放跟踪。
+主题高级配色按表面、文字、操作／选择、选集和语义文字分组，写入既有 `theme_customs` 的可选 `roleColors`；仅接受 `THEME_ROLE_KEYS` 中的六位十六进制值。新建主题使用 `colorVersion:2`，标签与选集独立。旧主题读取时继续保留标签／选集联动；打开编辑器时把其原选集颜色转为明确覆盖，保存后使用独立规则，取消不迁移。生成操作保留本次手动调整和旧存档已有颜色，只有明确勾选替换时才重新生成；单个高级角色可恢复自动配色。复制主题保留当前完整角色；预览携带临时预设身份以保留扩展包 tint，正式保存不写入该临时身份。预览、取消、保存失败与重试沿现有设置队列处理，未新增设置 Key。
 
-明确选择主题时，`stores/theme.ts` 使用 `motion/themeReveal.ts` 从点击点揭示真实新外观；键盘选择以卡片中心为起点。主题揭示使用 `--cczj-motion-reveal`（默认 1200ms），桌面播放入场使用 `--cczj-motion-section`（默认 800ms），退出使用 `--cczj-motion-dismiss`（默认 600ms），分场景时长可分别调整；未覆盖项保留旧版速度／风格的计算结果。关闭页面动效或启用减少动态效果时跳过。实现参考 [MDN ViewTransition 示例](https://developer.mozilla.org/en-US/docs/Web/API/ViewTransition#examples)与 [Telegram Android 主题交接](https://github.com/DrKLO/Telegram/blob/3de37c8cfb039452be7398909461da6288babf15/TMessagesProj/src/main/java/org/telegram/ui/LaunchActivity.java#L7480)，没有复制原生窗口动画或引入截图依赖。仅支持该 API 且允许页面动效时启用；连续选择以最新选择为准，后台、离开与销毁清理临时过渡。持久化按输入顺序进入原设置队列，失败继续显示重试。编辑器的颜色输入保持即时预览，不重复播放整页扩散；选择页和编辑器复用 ThemeSample，布局预览直接读取 layout store 的真实网格规则。
+颜色只在主题变化时计算，不轮询 DOM 或壁纸像素；透明表面按已知底色合成，任意壁纸／透明度不能保证对比度。颜色空间依据见 [CSS Color 4](https://www.w3.org/TR/css-color-4/#color-conversion-code)，角色与层级参考 [Material 色彩角色](https://developer.android.com/develop/ui/compose/designsystems/material3) 与 [Carbon 表面层级](https://www.carbondesignsystem.com/building-blocks/foundations/color/guidelines)，未引入新依赖。
+
+主题圆形揭示统一使用 cubic-bezier(.4,0,.2,1)，前段平稳展开、中段持续扩散、末段减速；原生按系统动画倍率校准实际时长，系统关闭动画仍直接完成；桌面快照与Android原生采用相同曲线。用户显式配置的时长继续优先，关闭／减少动效仍跳过。
+
+Android WebView 缺少 ViewTransition 时，`api/themeReveal.ts` 经 WailsJSBridge 的 themeRevealPrepare／Play／Cancel 与 `CczjThemeReveal` 握手：原生 UI 线程保存至多200万像素的旧画面，ready 后前端提交主题；postVisualStateCallback 确认新 DOM 已提交，再用 ValueAnimator 扩大旧快照的圆孔，露出真实新页面。局部 MotionPanel 传入边界，只覆盖预览区。会话身份隔离迟到回调，前后端均有4秒上限；新选择、取消、换页、后台、旋转、内存警告和销毁移除遮罩并释放位图。关闭／减少动效不请求截图。浏览器支持快照时继续 ViewTransition；旧宿主缺少原生桥接时保留有界颜色渐变，不能称作圆形扩散。参考 [WebView 视觉提交回调](https://developer.android.com/reference/android/webkit/WebView#postVisualStateCallback(long,%20android.webkit.WebView.VisualStateCallback)) 与 [Android 绘制性能](https://developer.android.com/topic/performance/issues/render)。
+
+移动视频表面由 CczjMobileShell 沿用既有画布、顶部渐变 wash、导航、控件和壁纸遮罩角色。卡片单独适配：普通预设混入20%画布色，壁纸预设默认不透明度78%，自定义contentAlpha沿用并约束在68%–94%可读范围。主题外观页单独去除整个分组外层的实色卡片背景和边框，主题样本卡自身保留示例色；从点击卡片外缘开始揭示周围画布，避免起始阶段在同色白框内不可辨认。不能为修复此扩散改写全部页面的渐变、控件或导航颜色。播放器固定深色、小说和漫画独立表面继续由各自模块拥有。
+
+紧凑 BackToTop 的显隐使用公共 MotionTransition slide-up及overlays偏好，进入与退出均有opacity/transform；其disabled选项仅为桌面藤蔓保留原有装饰动画。删除无消费者的手机phase-grow关键帧，点击滚动、手动打断、缓存路由重绑和阅读目录消费者沿既有生命周期。移动外观的简约主题以黑白灰背景／强调色区别于绿色主题，已有自定义覆盖不自动清除。
+
+公共 Modal 由一个 `modal` 过渡同时持有遮罩和面板，退出完成后释放焦点所有权；panelClass 显式作用于 Teleport 后的面板。FavFolderModal 的 player 外观由普通播放与桌面短剧传入，固定深色、320px宽并压缩分区留白，保留44px操作目标和列表内部滚动；详情入口继续使用应用主题与默认尺寸。ReaderSheet 的所有调用方在稳定父级持有 `sheet` 过渡，内容组件不再持有会先于退场销毁的内部过渡；未实现拖动关闭，因此不展示装饰把手。两者通过 `composables/useOverlayFocus.ts` 共用最上层 Escape／Android 返回、焦点约束和归还，监听在最后一层释放时移除。下拉展开方向与实际定位一致，跟踪动画只查询触发点的祖先；隐藏或离场时关闭并释放跟踪。
+
+明确选择主题时，`stores/theme.ts` 使用 `motion/themeReveal.ts` 从点击点揭示真实新外观；键盘选择以卡片中心为起点。主题揭示使用 `--cczj-motion-reveal`（默认 1000ms），桌面播放入场使用 `--cczj-motion-section`（默认 800ms），退出使用 `--cczj-motion-dismiss`（默认 600ms），分场景时长可分别调整；未覆盖项保留旧版速度／风格的计算结果。关闭页面动效或启用减少动态效果时跳过。实现参考 [MDN ViewTransition 示例](https://developer.mozilla.org/en-US/docs/Web/API/ViewTransition#examples)与 [Telegram Android 主题交接](https://github.com/DrKLO/Telegram/blob/3de37c8cfb039452be7398909461da6288babf15/TMessagesProj/src/main/java/org/telegram/ui/LaunchActivity.java#L7480)，没有复制原生窗口动画或引入截图依赖。圆形揭示在支持该 API 且允许页面动效时启用，Android旧WebView使用上述原生圆形揭示，旧宿主桥接缺失才使用颜色渐变；连续选择以最新选择为准，后台、离开与销毁清理临时过渡。持久化按输入顺序进入原设置队列，失败继续显示重试。编辑器的颜色输入保持即时预览，不重复播放整页扩散；手机从主题卡片外缘开始揭示周围界面；布局预览直接读取 layout store 的真实网格规则。
 
 桌面窗口轮廓由 `app/window/appearance_windows.go` 的 `InstallRoundedCorners` 所有，`app.go` 在创建主窗口时装配：Windows 11 优先使用 DWM 圆角偏好，旧版系统使用 8 DIP 半径的原生窗口区域，按尺寸、DPI、最大化与全屏状态变化更新；相同几何不重建区域。成功设置的区域交给 Windows 释放，失败时释放未转交句柄。前端 `App.vue` 只绘制静态边缘高光，不再叠加独立客户区圆角裁切；`TitleBar.vue` 使用根目录应用图标并同步最大化状态。最大化和系统全屏使用矩形边界，手机不装配此能力。系统限制及区域所有权参见 [Windows 桌面圆角](https://learn.microsoft.com/en-us/windows/apps/desktop/modernize/ui/apply-rounded-corners)与 [SetWindowRgn](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowrgn)。原生四角、调整尺寸、DPI、恢复和全屏仍需设备验收。 缺少 GetDpiForWindow 时改用短期设备上下文读取系统 DPI，获取后立即释放。此窗口 API 回退不代表整个安装包支持旧系统：当前 Wails 3.0.0 声明 Go 1.26.0，[Go 1.21 起最低 Windows 10](https://go.dev/wiki/MinimumRequirements)，[WebView2 109 是最后支持 Windows 8/8.1 的版本](https://blogs.windows.com/msedgedev/2022/12/09/microsoft-edge-and-webview2-ending-support-for-windows-7-and-windows-8-8-1/)。Windows 10/11 为本包目标；Win8 需要独立评估可用工具链与宿主，不能仅修改 manifest 或外观就宣称兼容。
 
 Settings 的桌面 Grid 显式分配标题、搜索、分组和内容区域，窄屏改为单列，原生移动设置由 block 宿主呈现。搜索范围为设置分组名称和说明，不是全字段检索；动态扩展包分组同样参与搜索。桌面分组保留草稿和各自滚动位置，仅实际切换分组时播放短距离位移，返回设置页不重播分组动画，基本设置区块不再独立错峰入场；手机子分组继续沿路由与模式快照恢复。选集律动消费播放器真实播放／缓冲状态，并受面板可见性与动效偏好控制；空状态不再持续漂浮，Toast 退出时保留几何后脱离布局，让其他消息同时移动。`api/events.ts` 的解绑可重复调用，初始化失败清理事件合并资源，开发热更新会移除旧订阅；共享订阅的业务所有者仍负责正常释放，不能绑到首个消费组件的销毁周期。
+
+浅色标签和链接使用独立可读文字角色，`utils/colors.ts` 的 `readableForeground` 对已知卡片／浅底进行有界色阶搜索，主题填充色保持原值。普通小字以 [WCAG 对比度说明](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html) 的4.5:1为参照，壁纸只按已知表面合成，不声称覆盖任意图片像素。公共 Tag 的 primary／success／danger 与详情展开入口共用规则；小说／漫画及媒体深色表面保留领域配色。
 
 上述行为已进入实现，Windows WebView2、Android WebView 和 iOS 的视觉交接、焦点、系统栏、全屏及连续操作仍需分别由用户验收；不以构建或静态检查声称设备流畅、无闪烁或没有内存泄漏。共享元素从封面展开到详情等更复杂的交接没有作为本次通用路由的承诺。
 
@@ -97,7 +116,7 @@ HLS worker 可同步转移进度回调和成功回调收到的 ArrayBuffer。loa
 
 `VirtualVideoGrid` 服务首页目录、普通搜索／本地补搜结果和短剧剧场，按所属滚动容器挂载可见行及前后三行；复用 VideoCard，按实际行高记录占位，响应列数／宽度变化，键盘焦点所在行单独保留。批量选择的源站搜索结果尚沿用原列表，避免丢失选择操作语义。普通视频及预览 HLS 使用随当前 hls.js 打包的独立 Worker 文件处理转封装，失败由 SDK 回退主线程；它不取代硬件视频解码，也不承担 Vue 布局。构建输出应包含 `hls.worker-*.js`。
 
-移动横滑允许从普通按钮／卡片开始，横向列表、输入框、播放器手势及系统边缘返回仍各自拥有操作；短距离快速甩动或超过屏宽 22% 可提交切页。路由手势交接保留无过渡状态至目的页绘制提交，系统栏过渡复用一次判定的页面颜色身份，避免每帧重复查询全部后代。2.4.9 已有路由直接 transform 和生命周期区分，但不代表所有真机闪烁均已验收。
+移动主标签点击导航由舞台的peer守卫等待当前滑动完成后提交，等待中的旧请求由新请求取消，最长等待取页面时长+150ms并限制2700ms；销毁释放守卫及等待，手势提交绕过自身等待。收藏与搜索激活后复用sceneTasks延迟刷新，缓存内容参与完整滑动。移动横滑允许从普通按钮／卡片开始，横向列表、输入框、播放器手势及系统边缘返回仍各自拥有操作；短距离快速甩动或超过屏宽 22% 可提交切页。路由手势交接保留无过渡状态至目的页绘制提交，系统栏过渡复用一次判定的页面颜色身份，避免每帧重复查询全部后代。2.4.9 已有路由直接 transform 和生命周期区分，但不代表所有真机闪烁均已验收。
 
 卡片的移动端准备观察使用预览页自己的 `.main-content`，与 RemoteImage 共用观察入口。`routeVisualMotionKey` 传递手势／交接状态；RemoteImage 默认关闭独立淡入淡出，VideoCard 不再以整卡透明度和入场位移隐藏已存在的内容，hover 限于精确指针。公共 `ui/Skeleton.vue` 提供静态文字、列表及卡片占位，结构参考 [Vant Skeleton](https://github.com/youzan/vant/blob/main/packages/vant/src/skeleton/README.zh-CN.md)。尚未呈现过的主标签可在入场／手势准备时使用占位，已呈现的缓存页直接恢复；首页和短剧剧场自己的首次读取、失败与重试仍由业务负责，骨架不代表数据成功。Skeleton 内容替换不附带第二次入场；短剧骨架与真实列表共用响应列定义、间距和 2:3 海报比例，不显示列表中不存在的额外标题。桌面保留 ShortDrama 剧场实例，离场仍按活动范围取消请求、释放媒体。页面动效关闭或系统减少动态效果时跳过视觉交接。实际闪烁与触摸手感由用户设备验收。
 
@@ -137,7 +156,7 @@ HLS worker 可同步转移进度回调和成功回调收到的 ArrayBuffer。loa
 
 播放恢复沿用当前媒体所有者：`PlaybackCheckpoint` 显式携带时间、正常倍速、暂停、静音和元素音量，同一集重试或切线路时应用到新媒体装载，不依赖周期落盘的历史。播放身份包含来源、作品ID和真实集号，避免不同源的同号作品共用浏览器检查点；旧本地键不删除，SQLite历史仍作为已有进度的恢复来源。同源线路先确认唯一集号；跨源先读取候选详情，核对规范化作品名、唯一集号和集名（同名单集影片允许单集对应），再发布新详情。对应不明确、候选失败、换集或离场取消时保留当前播放，不自动跳第一集。已验证换源的 router.replace 保留播放器页面实例和现场接力，普通 push／返回仍按路由身份处理。提交前等待旧源历史保存，新媒体完成定位后的有效进度立即保存到新源；开头五秒仅在显式换源时允许写入，失败反馈并限频重试。旧源历史保留，继续观看选择最新保存的来源。分片边界不同仍按媒体时间定位；片头、广告或剪辑差异不能据秒数保证同一场景，换源后提示使用已有时间输入校准。
 
-桌面普通播放的右栏由 `PlayerInformationPanel` 展示完整源列表和集表，移除展开状态，整栏纵向滚动；移动概览／评论分组保持独立。`PlayerPanelToggle` 在媒体全屏时卸载。顶部原生拖拽命中区保留稳定 DOM，点击和双击停止向媒体操作冒泡。应用 `Sidebar` 仅导航区域滚动，底部当前来源保持固定。启动图 `SplashScreen` 将 cyan 系映射到 skyblue 图，bitblue 使用自己的资源。
+桌面普通播放的右栏由 `PlayerInformationPanel` 展示完整源列表和集表，移除展开状态，整栏纵向滚动；移动概览／评论分组保持独立。`PlayerPanelToggle` 在媒体全屏时卸载。顶部原生拖拽命中区保留稳定 DOM，点击和双击停止向媒体操作冒泡。应用 `Sidebar` 仅导航区域滚动，底部当前来源保持固定。启动图 `SplashScreen` 将 cyan 系映射到 skyblue 图，bitblue 使用自己的资源；minimal 选择 grey 资源并仅对该启动图使用灰度滤镜。
 
 HLS内部重试结束后，`playbackSource` 对一次连续网络故障最多追加两次恢复，每次等待8秒；恢复从当前时间开始，同一时刻只有一份恢复等待。暂停取消倒计时，手动跳转丢弃旧恢复，媒体替换／退出取消监听和迟到回调；重新播放优先交给该恢复所有者，普通暂停后的缓冲恢复仍走既有 `resumeStreaming`。重新出现 playing 后重置恢复预算。持续失败保留媒体现场和重试／切线入口，不自动跨源。恢复提示延迟1.5秒，失败或恢复后清除；系统 online 只用于唤醒尚未耗尽的恢复，不能当作来源已可用的证明。
 
@@ -344,3 +363,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/clean-generated.ps1 
 收藏夹列表和影片归属由 `stores/favoriteFolders.ts` 共用 SQLite 设置与 `settingsQueue`，首次读取导入旧 WebView 值并保留原值供失败重试。详情、普通播放器和短剧共用 `usePlaybackFavorites` 与 `FavFolderModal`；确认按钮在保存期间显示忙碌状态，成功后关闭，失败时保留选择。
 
 观看位置与可选总时长保存在 `watch_history`；2.4.4 以迁移 22 追加 `duration`，旧记录的位置保持原值，未知时长为 0，不据此编造百分比。旧绑定省略时长的写入保留已知时长，备份读写同样兼容缺省字段。浏览器的 `cczj_ep_prog_v1` 和 `vp_t_` 键保持原格式，并兼容旧的双前缀读取。SQLite 历史和浏览器检查点按 UTC 时间比较；恢复位置、等待续播选择或媒体尚未就绪时不回写起始进度。无需更改缓存身份／格式的修复不清空缓存。
+
+搜索历史的移动长按沿用useHoldToEdit，按调用方显式选择点外侧收起和当前气泡回调；Search只对被长按项显示绝对定位右上角删除按钮，不改变气泡内边距，不装配确认/取消浮栏。点击外部只收起本次编辑，返回、Escape、停用和销毁释放等待与点击抑制。其他消费者不启用该选项，保持原编辑流程。
+
+Android启动诊断从MainActivity的CczjStartupTrace开始，先于WailsBridge原生库装载；阶段日志不受Debug构建开关限制，同时由单线程有界队列写入既有applog目录。每次最多64个512字节事件，保留最近4次，writer随Activity销毁停止接收并完成已接收任务；隐藏不关闭，避免丢失前后台交接。只接收白名单phase，携带PID、原生时钟、版本和host ABI，不记录参数、路径、作品或地址。startupState报告accepted/written/dropped/failed，startup.ts将当前统计纳入快照；入队不代表已保存，突发终止可能缺少最后记录。现有诊断ZIP附带最多4个32KiB合规JSONL；Go ServiceStartup继续通过applog记录数据库打开、网络策略恢复、插件、模式和完成阶段。Java的native init返回不等于Go服务初始化完成，分别按PID对照application ready。

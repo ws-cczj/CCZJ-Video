@@ -6,6 +6,7 @@ import { tr } from '../locales'
 import { isMobileRuntime } from '../api/runtime'
 import { useRoute } from 'vue-router'
 import { useMotionStore } from '../stores/motion'
+import MotionTransition from './ui/MotionTransition.vue'
 const mobile = isMobileRuntime()
 const motion = useMotionStore()
 const props=withDefaults(defineProps<{compact?:boolean;targetSelector?:string}>(),{compact:false,targetSelector:'.main-content'})
@@ -44,6 +45,7 @@ function cancelRetract(): void {
 }
 
 function updateVineHeight() {
+  if (compact.value) return
   vineHeight.value = Math.max(280, Math.floor(window.innerHeight * 0.45))
 }
 
@@ -155,7 +157,7 @@ function bindScroll(): void {
     })
   }
   updateVineHeight()
-  window.addEventListener('resize', onResize)
+  if (!compact.value) window.addEventListener('resize', onResize)
 }
 
 function unbindScroll(): void {
@@ -181,7 +183,7 @@ function syncActivity(): void {
     growTimer = null
   }
 }
-watch(active, syncActivity, { flush: 'post' })
+watch([active,compact], syncActivity, { flush: 'post' })
 onMounted(syncActivity)
 onBeforeUnmount(() => {
   unbindScroll();stopScrollAnimation();window.removeEventListener('cczj:route-scroll-container',bindScroll)
@@ -203,10 +205,11 @@ const tendril3Y = computed(() => Math.floor(vineHeight.value * 0.75))
 </script>
 
 <template>
+  <MotionTransition preset="slide-up" :appear="compact" :disabled="!compact">
   <div
     v-show="visible"
     class="vine-wrap cczj-motion-ornament"
-    :class="{ 'phase-grow': growPhase === 1, pulling: pulling, retracting: retracting, 'cczj-mobile-back-to-top': compact }"
+    :class="{ 'phase-grow': growPhase === 1, pulling: pulling && !compact, retracting: retracting && !compact, 'cczj-mobile-back-to-top': compact }"
     :style="compact ? { bottom: mobileBottom } : { height: svgHeight }"
   >
     <!-- ===== 顶部水平藤蔓 + 下垂曲线（固定在右上角）===== -->
@@ -422,6 +425,7 @@ const tendril3Y = computed(() => Math.floor(vineHeight.value * 0.75))
     <div class="petal-float p-float-2">❀</div>
     <div class="petal-float p-float-3">✿</div>
   </div>
+  </MotionTransition>
 </template>
 
 <style scoped src="../styles/components/back-to-top.css"></style>

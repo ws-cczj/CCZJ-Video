@@ -1,6 +1,31 @@
-.player-col-side.desktop-information { @apply cczj-min-h-0 cczj-overflow-y-auto; }
-.desktop-information .side-header,.desktop-information .side-section { @apply cczj-flex-shrink-0; }
-.desktop-information .side-section { flex:0 0 auto; @apply cczj-overflow-visible; }
+/* Track sizes depend only on the panel height, including while source probes
+   and episode metadata are still arriving. Content cannot resize a track. */
+.player-col-side.desktop-information {
+  --selected-bg:var(--viewing-selected-bg); --selected-text:var(--viewing-selected-text); --selected-border:var(--viewing-selected-border);
+  --episode-bg:var(--viewing-episode-bg); --episode-text:var(--viewing-episode-text); --episode-watched-bg:var(--viewing-episode-watched-bg); --episode-watched-text:var(--viewing-episode-watched-text); --episode-active-bg:var(--viewing-episode-active-bg); --episode-active-text:var(--viewing-episode-active-text); --episode-progress:var(--viewing-episode-progress);
+  @apply cczj-grid cczj-min-h-0 cczj-overflow-hidden;
+  grid-template-rows: minmax(0,27fr) minmax(0,73fr);
+}
+.desktop-information .side-header { @apply cczj-min-h-0 cczj-overflow-y-auto; }
+.desktop-information .side-header > * { @apply cczj-flex-shrink-0; }
+.desktop-information .side-section {
+  @apply cczj-grid cczj-overflow-hidden;
+  grid-template-rows: minmax(0,45fr) minmax(0,28fr);
+  padding: 0;
+}
+.desktop-information :is(.side-sources,.side-episodes) {
+  @apply cczj-flex cczj-flex-col cczj-min-h-0 cczj-overflow-hidden;
+  padding: 14px 22px;
+}
+.desktop-information .side-episodes { border-bottom: 1px solid rgba(255,255,255,.05); }
+.desktop-information .side-sources { padding-bottom: 22px; }
+.desktop-information .side-section-title,.desktop-information .side-source-actions { @apply cczj-flex-shrink-0; }
+.desktop-information .side-episodes > .side-section-title { margin-top: 0; }
+.desktop-information :is(.side-source-scroll,.side-episode-scroll) {
+  @apply cczj-flex-1 cczj-min-h-0 cczj-overflow-y-auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
 .side-top-actions {
   @apply cczj-gap-3 cczj-flex-shrink-0;
 }
@@ -69,33 +94,13 @@
 }
 
 .source-item.active {
-  background: linear-gradient(135deg, rgba(24, 144, 255, 0.15) 0%, rgba(64, 169, 255, 0.08) 100%);
-  border-color: rgba(64, 169, 255, 0.5);
-  color: #69c0ff;
-  @apply cczj-font-semibold;
-  box-shadow: 0 0 0 1px rgba(64, 169, 255, 0.3), 0 0 12px rgba(24, 144, 255, 0.25);
-  transform: scale(1.03);
-  animation: source-active-glow 1.6s ease-in-out infinite;
+  background:var(--selected-bg); border-color:var(--selected-border); color:var(--selected-text);
+  @apply cczj-font-semibold cczj-shadow-none;
 }
-
-/* 激活源左侧 3px 蓝色竖条 */
 .source-item.active::before {
-  content: '';
-  @apply cczj-absolute cczj-left-0;
-  top: 15%;
-  bottom: 15%;
-  width: 3px;
-  background: linear-gradient(180deg, #40a9ff, #1890ff);
-  border-radius: 0 2px 2px 0;
-}
-
-@keyframes source-active-glow {
-  0%, 100% {
-    box-shadow: 0 0 0 1px rgba(64, 169, 255, 0.3), 0 0 8px rgba(24, 144, 255, 0.2);
-  }
-  50% {
-    box-shadow: 0 0 0 1px rgba(100, 181, 246, 0.5), 0 0 18px rgba(24, 144, 255, 0.4);
-  }
+  content:''; @apply cczj-absolute cczj-left-0;
+  top:15%; bottom:15%; width:3px;
+  background:var(--selected-border); border-radius:0 2px 2px 0;
 }
 
 .source-item:disabled {
@@ -265,12 +270,12 @@
 .ep-item {
   font-family: inherit;
   min-height: 48px;
-  height: 48px;
+  height: auto;
   padding: 0 8px;
   border-radius: 10px;
-  border: 1px solid rgba(64, 169, 255, 0.55);
-  background: linear-gradient(180deg, rgba(24, 144, 255, 0.16) 0%, rgba(64, 169, 255, 0.08) 100%);
-  @apply cczj-text-white;
+  border: 1px solid var(--border);
+  background: var(--episode-bg);
+  color:var(--episode-text);
   font-size: calc(12.5rem / 14);
   @apply cczj-font-medium cczj-overflow-hidden cczj-whitespace-nowrap;
   text-overflow: ellipsis;
@@ -287,11 +292,8 @@
 
 /* hover：收住（次要态） */
 .ep-item:hover {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0.015) 100%);
-  border-color: rgba(255, 255, 255, 0.12);
-  color: #d9dde3;
-  transform: none;
-  @apply cczj-shadow-none;
+  background:var(--selected-bg); border-color:var(--selected-border); color:var(--selected-text);
+  transform:none; @apply cczj-shadow-none;
 }
 
 .ep-item:active {
@@ -305,25 +307,18 @@
 
 /* Desktop playback keeps a muted cool palette against the dark media surface. */
 .ep-item.watched {
-  background: linear-gradient(180deg, rgba(148, 174, 202, 0.22), rgba(112, 139, 171, 0.12));
-  border-color: rgba(166, 192, 220, 0.45);
-  color: #dce8f5;
-  @apply cczj-cursor-pointer cczj-font-medium;
+  background:var(--episode-watched-bg); color:var(--episode-watched-text);
+  border-color:var(--border); @apply cczj-cursor-pointer cczj-font-medium;
 }
-
 .ep-item.watched:hover {
-  background: linear-gradient(180deg, rgba(148, 174, 202, 0.3), rgba(112, 139, 171, 0.18));
-  border-color: #afc6df;
-  color: #edf4fc;
-  transform: none;
-  @apply cczj-shadow-none;
+  background:var(--selected-bg); border-color:var(--selected-border); color:var(--selected-text);
 }
 
 /* 已观看：底部进度条 + 右上角百分比 */
 .ep-watched-progress {
   @apply cczj-absolute cczj-left-0 cczj-bottom-0;
   height: 4px;
-  background: linear-gradient(90deg, #849fbc, #c2d5e9);
+  background:var(--episode-progress);
   z-index: 1;
   @apply cczj-pointer-events-none;
 }
@@ -352,19 +347,13 @@
 
 /* The live episode keeps the brighter playback accent. */
 .ep-item.active .ep-watched-progress {
-  background: #40a9ff;
+  background:var(--episode-progress);
 }
 
-/* 当前播放的集：发光边框 + 内部动画 + 彩色背景 */
 .ep-item.active {
-  background: linear-gradient(135deg, rgba(24, 144, 255, 0.22) 0%, rgba(64, 169, 255, 0.14) 60%, rgba(100, 181, 246, 0.1) 100%);
-  border-color: rgba(64, 169, 255, 0.8);
-  @apply cczj-text-white cczj-font-bold;
-  box-shadow:
-    0 0 0 1px rgba(64, 169, 255, 0.4),
-    0 0 14px rgba(24, 144, 255, 0.55),
-    0 4px 14px rgba(24, 144, 255, 0.35);
-  transform: translateY(-1px);
+  background:var(--episode-active-bg); border-color:var(--selected-border); color:var(--episode-active-text);
+  @apply cczj-font-bold cczj-shadow-none;
+  transform:none;
 }
 
 /* 当前集卡片右上角："播放中"三条竖线律动 */
@@ -379,8 +368,7 @@
   @apply cczj-inline-block;
   width: 2px;
   @apply cczj-h-1.5 cczj-rounded-xs;
-  background: #40a9ff;
-  box-shadow: 0 0 4px #40a9ff;
+  background:var(--episode-active-text);
   animation: bar-bounce 0.9s ease-in-out infinite;
   animation-play-state:paused;
 }

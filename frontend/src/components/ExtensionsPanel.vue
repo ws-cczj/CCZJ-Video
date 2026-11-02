@@ -392,7 +392,7 @@ function kindGlyph(pack: PluginInfo): string {
       </div>
     </div>
 
-    <p class="ext-desc">{{ t(mobile ? 'mobile.extensionsManageHint' : 'settings.extensionsDesc') }}</p>
+    <p v-if="!mobile" class="ext-desc">{{ t('settings.extensionsDesc') }}</p>
     <div v-if="!mobile" class="ext-dir" :title="dirText" @click="copyDir">{{ dirText }}</div>
     <div v-if="pluginStore.registryError" class="ext-error">{{ pluginStore.registryError }}</div>
 

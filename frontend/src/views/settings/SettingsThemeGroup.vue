@@ -13,7 +13,6 @@ import Icon from '../../components/Icon.vue'
 import { useThemeStore, type ColorPalette } from '../../stores/theme'
 import { useConfirmStore } from '../../stores/confirm'
 import ThemeEditorModal from './ThemeEditorModal.vue'
-import ThemeSample from './ThemeSample.vue'
 import { Button } from '../../components/ui'
 import { presentationProfile } from '../../platform/presentation'
 
@@ -113,14 +112,15 @@ function isActive(id: string): boolean {
 function pickTheme(id: string, event: MouseEvent): void {
   if (isActive(id)) return
   const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  void themeStore.setTheme(id, event.detail ? { x: event.clientX, y: event.clientY } : { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 })
+  const x = event.detail ? event.clientX : bounds.left + bounds.width / 2
+  const y = event.detail ? event.clientY : bounds.top + bounds.height / 2
+  const radius = mobile ? Math.hypot(Math.max(x - bounds.left, bounds.right - x), Math.max(y - bounds.top, bounds.bottom - y)) + 12 : 0
+  void themeStore.setTheme(id, { x, y, radius })
 }
 </script>
 
 <template>
- <p v-if="themeStore.pendingSettings" role="status">{{ t('common.saving') }}</p>
  <div v-if="themeStore.saveError" role="alert" class="cczj-theme-save-error">{{themeStore.saveError}} <button type="button" @click="themeStore.retrySettings()">{{t('common.retry')}}</button></div>
- <ThemeSample :name="themeStore.current.name" editable @edit="editCurrent" />
 
   <div class="panel group-card theme-group cczj-flex cczj-flex-col cczj-gap-2">
     <section class="block">

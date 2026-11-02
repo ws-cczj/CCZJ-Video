@@ -3,8 +3,8 @@
   --novel-canvas: #faf9f6; --novel-surface: #fff; --novel-ink: #272722;
   --novel-muted: #716f68; --novel-line: #e9e6df; --novel-red: #ad302c;
   --bg-primary: var(--novel-canvas); --bg-secondary: #f2f0eb; --bg-input: #fff;
-  --bg-card: var(--novel-surface); --text-primary: var(--novel-ink); --text-secondary: #646158;
-  --text-muted: var(--novel-muted); --border: var(--novel-line); --accent: var(--novel-red); --accent-alpha-10: #ad302c0d; --accent-contrast:var(--novel-surface);
+  --bg-card: var(--novel-surface); --bg-elevated:var(--novel-surface); --bg-tag:#f2f0eb; --btn-soft:#f2f0eb; --btn-soft-text:#646158; --selected-bg:#f8e8e5; --selected-text:var(--novel-red); --selected-border:var(--novel-red); --text-primary: var(--novel-ink); --text-secondary: #646158;
+  --text-muted: var(--novel-muted); --border: var(--novel-line); --accent: var(--novel-red); --accent-text:var(--novel-red); --accent-alpha-10: #ad302c0d; --accent-contrast:var(--novel-surface);
   @apply cczj-flex cczj-flex-1 cczj-flex-col cczj-min-w-0 cczj-min-h-0 cczj-h-full cczj-overflow-hidden; isolation: isolate;
   color: var(--novel-ink); background: var(--novel-canvas); font-family: system-ui,'PingFang SC','Microsoft YaHei',sans-serif; color-scheme: light;
 }
@@ -84,10 +84,6 @@
 .cczj-novel-shell .novel-chapter-list strong { @apply cczj-text-base cczj-font-medium cczj-flex-1;}
 .cczj-novel-shell .novel-chapter-list [aria-current] { color: var(--novel-red);}
 .cczj-novel-shell .novel-detail-actions { @apply cczj-sticky; bottom: -1px; @apply cczj-grid; grid-template-columns: 1fr 1.5fr; @apply cczj-gap-6; padding: 12px 0; background: var(--novel-canvas); border-top: 1px solid var(--novel-line);}
-.cczj-novel-shell .novel-reader-profile { @apply cczj-flex cczj-items-center; gap: 18px; padding: 12px 0 28px;}
-.cczj-novel-shell .novel-profile-icon { @apply cczj-grid; place-items: center; width: 64px; height: 64px; border-radius: 20px; background: #eee6d9; color: #8e5539;}
-.cczj-novel-shell .novel-reader-profile h1 { font-size: calc(24rem / 14); margin: 0 0 8px;}
-.cczj-novel-shell .novel-reader-profile p { margin: 0; color: var(--novel-muted); @apply cczj-text-base;}
 .cczj-novel-shell .novel-reading-stats { @apply cczj-grid; grid-template-columns: 1fr 1fr; padding: 24px 0; border-block: 1px solid var(--novel-line);}
 .cczj-novel-shell .novel-reading-stats > :is(a,div) { @apply cczj-flex cczj-flex-col cczj-items-center cczj-gap-4;}
 .cczj-novel-shell .novel-reading-stats strong { font-size: calc(25rem / 14); @apply cczj-font-semibold; font-variant-numeric: tabular-nums;}
@@ -142,7 +138,7 @@
   .cczj-novel-shell .novel-filter-options { @apply cczj-flex-wrap cczj-gap-2; padding-bottom: 14px; }.cczj-novel-shell .novel-filter-options button { padding: 4px 7px; min-width: 44px; }.cczj-novel-shell .novel-shelf-item { @apply cczj-text-base; }.cczj-novel-shell .novel-shelf-item h2 { @apply cczj-text-base;}
   .cczj-novel-shell .novel-book-hero { @apply cczj-gap-10; margin: 10px 0 24px; }.cczj-novel-shell .novel-detail-cover { width: 110px; flex-basis: 110px; font-size: calc(15rem / 14); }.cczj-novel-shell .novel-book-hero h1 { font-size: calc(22rem / 14); }.cczj-novel-shell .novel-book-hero p { @apply cczj-text-13;}
   .cczj-novel-shell .novel-detail-actions { @apply cczj-bottom-0; padding: 10px 0 calc(10px + env(safe-area-inset-bottom,0px)); }.cczj-novel-shell .novel-description > h2 { font-size: calc(17rem / 14);}
-  .cczj-novel-shell .novel-settings-section { @apply cczj-p-8; }.cczj-novel-shell .novel-reader-profile { padding: 14px 0 24px; }.cczj-novel-shell .novel-reader-profile h1 { font-size: calc(22rem / 14);}
+  .cczj-novel-shell .novel-settings-section { @apply cczj-p-8; }
   .cczj-novel-shell .novel-reading-paper { padding: 84px 24px 88px; }.cczj-novel-shell .novel-reader-bottom button { @apply cczj-flex-wrap; column-gap: 4px; row-gap: 2px; @apply cczj-text-11;}
   .cczj-novel-shell .novel-preference-row { @apply cczj-text-13; }.cczj-novel-shell .novel-reader-colors { @apply cczj-gap-3; }.cczj-novel-shell .novel-preference-row button { padding-inline: 10px;}
 }

@@ -29,7 +29,9 @@
 
 桌面侧栏与切页共同读取 [videoNavigation.ts](../frontend/src/modes/videoNavigation.ts) 的实际顺序，动态扩展入口一起参与方向计算；并列路由、设置分组和播放侧向覆盖共用 `--cczj-motion-section`。主题揭示单独消费 `--cczj-motion-reveal`；修改时联查基础 CSS、内置包、motionVariables、durations、旧偏好恢复、重置及用户／系统减少动态效果。播放页从右侧进入／退出，不计算圆形展开原点。
 
-桌面并列路由按整页高度推移，播放场景独自 fixed 覆盖窗口；舞台／viewport 不建立阻挡该场景的堆叠上下文，不随播放进入退出扩张尺寸。整页使用 section 800ms，同步进入退出；设置分组使用 group 320ms，播放退出使用 dismiss 600ms，主题 reveal 1200ms 独立保留。联查底层虚拟网格、壁纸、侧栏、标题栏及全屏祖先规则。Settings 的 `animatedGroup` 只对实际分组变更设置，Skeleton 不额外播放内容入场，避免叠加与返回重播。
+移动路由由 MobileRouteStage 直接移动实际页面，加载状态由页面自身拥有；不在切页期间隐藏整页换成通用骨架，也不在落位后再播放一轮内容入场。次级页面的页头和正文共用顶部渐变（播放页保留媒体表面）。`useBackdropSystemBars` 在路由提交、旧媒体清理之前保存颜色交接起点；过渡期间不反复重采样主题；拖动直接消费手势进度，自动落位不逐帧读取布局或动画树；同深浅表面跳过颜色动画。底栏用 WAAPI 运行，原生栏色向 MainActivity 的 `animateSystemBarColors` 交付目标、过渡时长和曲线，ValueAnimator 在 UI 线程运行。联查取消／新目标／销毁的直接设置栏色、旧宿主回退和系统栏对比度。底栏文字和搜索按钮颜色随动效令牌过渡；手机主标签的下一次点击导航等待当前滑动结束，等待中的旧目标被较新请求替换，手势提交不等待自身；离场释放守卫和有界等待。收藏与搜索返回刷新复用sceneTasks，在路由落位后执行，取消隐藏页面待执行任务；入场动画仅在 animationstart 登记对象，离场完成已登记对象，缓存返回不扫描子树。视频底栏绝对定位并由 CczjMobileNavigation 的 ResizeObserver 发布实际高度；主标签场景始终预留该高度，次级页占满舞台，底栏挂载／卸载不再拉伸离场页。观察器随底栏卸载释放，保留舞台高度供缓存场景恢复。联查首次进入、缓存返回、短剧离场、拖动取消、关闭动效和页面加载失败；模拟器录屏只证明对应操作，不代替真机性能验收。
+
+桌面并列路由按整页高度推移，播放场景独自 fixed 覆盖窗口；舞台／viewport 不建立阻挡该场景的堆叠上下文，不随播放进入退出扩张尺寸。整页使用 section 800ms，同步进入退出；设置分组使用 group 320ms，播放退出使用 dismiss 600ms，主题 reveal 1000ms 独立保留。联查底层虚拟网格、壁纸、侧栏、标题栏及全屏祖先规则。Settings 的 `animatedGroup` 只对实际分组变更设置，Skeleton 不额外播放内容入场，避免叠加与返回重播。
 
 联查重点：设置入口可见性、包启停、参数与文案、关闭／减少动态效果、旧页面与目标页面并存、父级 `v-if` 是否提前销毁退出动画、预览是否错误启动业务工作、手势取消和重复操作后的收尾。改变路由动画时同时检查设置页与阅读／播放覆盖层的适用性；同一偏好不等于同一种动画。
 
@@ -43,12 +45,16 @@ Modal 退出由自身稳定过渡持有；ReaderSheet 则由 NovelBook、NovelRe
 
 | 关系 | 当前入口与所有者 |
 | --- | --- |
-| 主题选择、编辑与保存 | [SettingsThemeGroup.vue](../frontend/src/views/settings/SettingsThemeGroup.vue) → [ThemeEditorModal.vue](../frontend/src/views/settings/ThemeEditorModal.vue)／[stores/theme.ts](../frontend/src/stores/theme.ts) → [settingsQueue.ts](../frontend/src/api/settingsQueue.ts)；点击揭示由 [themeReveal.ts](../frontend/src/motion/themeReveal.ts) 持有临时过渡，选择与编辑复用 [ThemeSample.vue](../frontend/src/views/settings/ThemeSample.vue)。编辑器即时预览、取消恢复、正式保存及失败重试需一起追踪。 |
+| 主题选择、编辑与保存 | [SettingsThemeGroup.vue](../frontend/src/views/settings/SettingsThemeGroup.vue) → [ThemeEditorModal.vue](../frontend/src/views/settings/ThemeEditorModal.vue)／[stores/theme.ts](../frontend/src/stores/theme.ts) → [settingsQueue.ts](../frontend/src/api/settingsQueue.ts)；点击揭示由 [themeReveal.ts](../frontend/src/motion/themeReveal.ts) 持有临时过渡，选择卡片直接展示主题，编辑器实时作用于当前界面。编辑器即时预览、取消恢复、正式保存及失败重试需一起追踪；选择主题不插入瞬时保存文字，失败和重试保留。Android无ViewTransition时由themeReveal经api/themeReveal、WailsJSBridge与CczjThemeReveal完成原生快照圆形揭示与释放；扩散支持和减少动态效果独立于配色风格。 |
 | 启动与宿主背景 | [main.ts](../frontend/src/main.ts)、[index.html](../frontend/index.html)、[bootAppearance.ts](../frontend/src/platform/bootAppearance.ts)、[backdropSystemBars.ts](../frontend/src/platform/backdropSystemBars.ts)、[readingSystemBars.ts](../frontend/src/platform/readingSystemBars.ts)；模式切换会准备下一模式的启动底色。 |
 | 字号、字体、密度与内容布局 | [SettingsBasicGroup.vue](../frontend/src/views/settings/SettingsBasicGroup.vue)、[typography.ts](../frontend/src/platform/typography.ts)、[stores/layout.ts](../frontend/src/stores/layout.ts)；联查 [VideoCard.vue](../frontend/src/components/VideoCard.vue)、[VirtualVideoGrid.vue](../frontend/src/components/VirtualVideoGrid.vue)、[Home.vue](../frontend/src/views/Home.vue)、[Search.vue](../frontend/src/views/Search.vue)、[Favorites.vue](../frontend/src/views/Favorites.vue) 及短剧剧场。 |
 | 公共视觉与语言 | [cczj-utilities.css](../frontend/src/styles/cczj-utilities.css)、[App.vue](../frontend/src/App.vue)、[公共 UI](../frontend/src/components/ui/)、[locales/index.ts](../frontend/src/locales/index.ts)、[zh-CN.ts](../frontend/src/locales/zh-CN.ts)、[en.ts](../frontend/src/locales/en.ts)；样式边界见 [CCZJ 样式复用](cczj-styles.md)。 |
 
-颜色计算由 [colors.ts](../frontend/src/utils/colors.ts) 提供有界 OKLCH 色阶、sRGB 输出和对比检查，角色归属仍在 theme store；btnMin／btnHide 对应窗口动作，不再引用 warning／info。显式 preset tint、自定义颜色、编辑器预览／取消／保存、ThemeSample、TitleBar 和 CSS 变量需一起核对。全局自动对比文字允许带主题色相，不能据此将进度、状态、表面和图标合并为一个“反色”；桌面黑底播放控件板与独立阅读配色仍按所在场景处理。透明表面只按已知底色合成，不扫描壁纸。
+`minimal` 预设使用独立黑白灰TINT_MINIMAL，应用背景、按钮与强调色均区别于绿色；仍保留旧自定义覆盖。紧凑回顶部复用MotionTransition slide-up，overlays关闭／减少动效时不播放，桌面禁用该额外过渡保留藤蔓；视频、小说／漫画页和目录共用。Android缺少ViewTransition时通过原生快照圆孔揭示，前后端身份握手、视觉提交确认、4秒超时与取消清理统一；MotionPanel只覆盖局部预览，无桥接才颜色渐变。移动壳层继续沿用既有画布、顶部渐变、控件、导航和壁纸遮罩，仅卡片适度混入画布色，壁纸默认78%不透明，自定义沿contentAlpha保留68%–94%边界。主题外观分组外层单独透明化，样本卡保留示例色，点击从卡片外缘揭示画布；不为此改变其他页面渐变。播放器及阅读表面保留独立归属。简约启动图明确映射grey并灰度呈现。
+
+颜色计算由 [colors.ts](../frontend/src/utils/colors.ts) 提供有界 OKLCH 色阶、sRGB 输出和对比检查，规则与角色归属在 theme store。普通主题染色表面与独立简约预设、主要／次要操作、选择和选集状态分别定义；公共 Button／Tag／Modal、导航、Detail、PlayerInformationPanel 与播放选集抽屉消费相应角色。桌面黑底侧栏使用 viewing 角色，移动页内侧栏使用应用主题、媒体功能抽屉使用固定观看配色；画面控件、小说／漫画与短剧保持显式场景配色。`readableForeground` 为强调及状态文字按实际已知底色配对，透明表面不扫描壁纸。
+
+编辑器的基础与高级配色共用 theme store，`roleColors` 和 `colorVersion:2` 沿既有 `theme_customs` JSON 保存／备份／恢复，没有新增 Key；加载只接受已知角色的有效色值。旧标签与选集底色仍可读，编辑时固定原选集颜色再分离，取消不回写；复制保持完整角色。预览保留原预设 tint 身份，临时身份不进入正式保存。生成默认保留手动颜色，显式替换与逐角色恢复有真实行为；联查预设／自定义／扩展包、图片取色、暗色切换、取消、保存失败及重试。btnMin／btnHide 保留窗口动作兼容角色。
 
 联查重点：主题揭示的能力检测与中断、预览与保存失败、取消编辑、冷启动与切模式底色、系统栏、壁纸对比度、长文本与字号重排、列表高度与滚动恢复。小说／漫画有独立阅读偏好，不把应用主题与阅读背景、应用字号与正文排版混为一套设置。
 
@@ -60,7 +66,9 @@ Modal 退出由自身稳定过渡持有；ReaderSheet 则由 NovelBook、NovelRe
 - 动态设置来自 [pluginSettingsTabs 与 RESERVED_SETTINGS_IDS](../frontend/src/plugins/registry.ts)；内置日志、诊断和动效分组还要查 [app/plugin/builtin](../app/plugin/builtin/)。日志／诊断面板宿主由 [builtinPanels.ts](../frontend/src/plugins/builtinPanels.ts) 选择，不只检查桌面组件。
 - 设置写入沿实际所有者追踪：主题使用 [settingsQueue.ts](../frontend/src/api/settingsQueue.ts)，动效有自己的串行保存和回退，阅读使用 [reading/persistence.ts](../frontend/src/reading/persistence.ts)。公共设置出口是 [facade_settings.go](../app/service/facade_settings.go) → [settings.Service](../app/settings/service.go)；部分 Key 还会触发模式切换或网络策略生效，不能把所有设置当作无副作用字符串写入。
 
-手机设置索引保留分组搜索，桌面从分组导航直接开始；搜索、桌面分组滚动位置和切换方向由 Settings.vue 管理；组名／说明来自现有元数据，动态分组被移除时清理其位置记录。它不检索所有字段，扩展搜索范围时应继续使用实际设置定义。
+手机设置索引保留分组搜索，桌面从分组导航直接开始；搜索、桌面分组滚动位置和切换方向由 Settings.vue 管理；组名／说明来自现有元数据，动态分组被移除时清理其位置记录。它不检索所有字段，扩展搜索范围时应继续使用实际设置定义。`styles/views/settings.css` 的桌面网格排除 `cczj-mobile-settings`，手机根节点独立使用全宽块布局，避免懒加载样式顺序将索引压入隐式网格列。
+
+手机主题编辑入口在右侧并与 BackToTop 垂直错位；[CczjMobileEditActions.vue](../frontend/src/mobile/CczjMobileEditActions.vue) 的取消／完成也在左侧，共用于首页续播、视频历史／收藏、小说书架和漫画书库。搜索历史单独消费useHoldToEdit的dismissOnOutside/onEnter选项：长按仅当前气泡显示右上角绝对定位红底圆形删除按钮（18px圆底、10px图标、44px触摸区），点击直接删除，点外侧或Escape／返回收起；不装配确认／取消浮栏，不为角标预留文字或页面空间。其他编辑入口继续原行为。位置规则在 `styles/mobile/settings.css` 与 `mobile/route-motion.css`，联查页面场景的固定定位包含块、安全区及底栏占位。
 
 联查重点：分组 ID、保留 ID、排序、入口文案、移动 query、保留挂载的面板、滚动位置、加载与保存状态、重试和重置。新增控件需追到实际生效处；调整偏好结构需反向寻找所有快捷入口。
 
@@ -88,13 +96,19 @@ Modal 退出由自身稳定过渡持有；ReaderSheet 则由 NovelBook、NovelRe
 
 联查重点：创建、激活、停用、后台、销毁和 HMR；共享请求最后订阅者退出后的取消；停止定时器、帧、Observer 和事件订阅；清空后迟到写回。沿创建者和释放函数追踪，不能仅凭存在 `onUnmounted` 判定整个能力已释放。
 
+回顶部的 compact 呈现不读取桌面藤蔓高度，也不注册只用于藤蔓的 resize 监听；桌面非 compact 保留测量、用户打断滚动及动画释放。相关消费者为 VideoModeShell、NovelShell、ComicSeries 及阅读目录面板中的 BackToTop。
+
 检索词：`useViewActivity`、`committed`、`createRequestScope`、`onBackendEvent`、`onActivated`、`onDeactivated`、`onScopeDispose`、具体事件名、`runHostRequest`、`runRequest`。详细语义见[请求通道](request-pipelines.md)。
 
 ## 视频目录详情与搜索
 
 - 列表入口在 [Home.vue](../frontend/src/views/Home.vue)、[Search.vue](../frontend/src/views/Search.vue)、[Recent.vue](../frontend/src/views/Recent.vue)，共享 [useVideoList.ts](../frontend/src/composables/useVideoList.ts)、[stores/video.ts](../frontend/src/stores/video.ts)、[VideoCard.vue](../frontend/src/components/VideoCard.vue) 与虚拟网格；[ShortDramaTheatre.vue](../frontend/src/player/shortDrama/ShortDramaTheatre.vue) 也是列表消费者。
+- [VirtualGrid.vue](../frontend/src/components/VirtualGrid.vue) 拥有可见行、缓冲行、行高测量、焦点保留、跨虚拟边界 Tab、当前项定位和滚动恢复；[VirtualVideoGrid.vue](../frontend/src/components/VirtualVideoGrid.vue) 保留视频卡片适配，详情、播放侧栏与播放抽屉直接消费同一网格。滚动和 ResizeObserver 合并到单帧测量，隐藏／销毁解绑；长标题和字号变化按实测行高更新。网格通过 CSS 变量发布当前实测行高与行间距；详情选集按内容自然收缩、至少一行高度、最多三行后独立滚动，不为少量集数保留固定大空白。短剧选集已有每组20集的边界，保持分组语义。
 - 详情由 [Detail.vue](../frontend/src/views/Detail.vue)、[api/video.ts](../frontend/src/api/video.ts) → [facade_video.go](../app/service/facade_video.go) → [media](../app/media/)／[detail.Service](../app/detail/service.go) 获取；播放器和短剧也消费详情与线路，不能只检查详情页。
+- Search 的 `toggleSourceSearchMode` 同时取消旧请求、清空两种结果及完成标记；已有搜索词和已执行记录时立即通过 `doSearch` 执行目标模式。空提示分别受模式、完成、加载及错误状态约束，请求失败提供原模式重试。切源、改词、离场及返回仍由既有请求身份和页面活动管理。
 - 来源与分类筛选联查 [stores/source.ts](../frontend/src/stores/source.ts)、[Sources.vue](../frontend/src/views/Sources.vue)、[VideoTypes.vue](../frontend/src/views/VideoTypes.vue)；榜单、相似推荐、评论和补全继续查 [facade_douban.go](../app/service/facade_douban.go)、[douban](../app/douban/)。删除／回收还涉及 [RecycleBin.vue](../frontend/src/views/RecycleBin.vue)；身份人工合并入口在 [VideoDiagnosticsPanel.vue](../frontend/src/components/VideoDiagnosticsPanel.vue)，需沿 `MergeGlobalVideoIdentities` 检查目录、收藏、历史引用及失效通知。
+
+XML 详情兼容由 [FetchVideoDetailWithStrategy](../app/collect/fetcher.go) 拥有：标准 CMS 的 `ac=detail` 返回 XML 元数据且没有目标播放地址时，使用原 ID 参数和额外参数补一次 `ac=videolist`，仍严格核对返回身份；JSON、声明式响应和自定义动作保持原契约。普通详情、短剧、播放及线路探测经同一入口。
 
 联查重点：来源身份、分类映射、分页游标、刷新与旧结果回写、详情到播放／下载、删除后的已打开列表、收藏／历史里的引用。榜单原始正文和基于本地目录的派生匹配缓存不是同一份数据。
 
@@ -102,17 +116,23 @@ Modal 退出由自身稳定过渡持有；ReaderSheet 则由 NovelBook、NovelRe
 
 ## 播放器与播放偏好
 
-- HLS 进度回调的数据可被 worker 同步转移；[loader.ts](../frontend/src/utils/ts-cache/loader.ts) 必须先拥有缓存副本再转发，联查内存缓存、磁盘写入、非流式与字节区间响应和缩略预览。命中验证还涉及 [memory-cache.ts](../frontend/src/utils/ts-cache/memory-cache.ts) 的读取／预取判定；缓存有意跨页面保留，坏条目必须逐项失效并回退拉取，不能仅修新写入而让重新进入继续挂起。详情集数的已看色／底部进度由 [detail.css](../frontend/src/styles/views/detail.css) 维护，不依赖 hover 才可见。桌面播放场景独自覆盖整窗、保留底层侧栏与缓存页面原尺寸的装配由 [DesktopVideoShell.vue](../frontend/src/modes/DesktopVideoShell.vue) 拥有，页面展开与收拢见 [routeMotion.ts](../frontend/src/mobile/routeMotion.ts)／[MobileRouteStage.vue](../frontend/src/mobile/MobileRouteStage.vue)；移动端保留自己的路由策略。
+移动媒体功能面板由 `CczjMobilePlayerChrome → CczjMobilePlayerDrawer → mobile/player/presentation.css` 共用固定深色配色；倍速、线路、选集、投屏与更多设置不继承应用主题。面板的背景／文字／次要按钮／选中／进度角色在局部作用域定义，底部和全屏侧向布局共用，页内简介与侧栏仍属于应用主题。选集百分比绝对定位右上角，按钮对称内边距、内容居中，不为百分比预留排版空间；保留底部进度条和至少44px触摸目标，排序与关闭使用紧凑文字／图标。抽屉遮罩点击停止冒泡，close恢复控制栏；直接点击视频时优先关闭已打开面板并取消待处理单击，之后新的点击才切换控制栏。取消、系统返回、倍速选择和换集共用close；原焦点归还与控件自动隐藏计时保留。
 
-- 播放退出还联查 [releaseAnimations.ts](../frontend/src/player/releaseAnimations.ts) 与公共 animations.css 的根释放标记，覆盖子树和伪元素，防止重置进度时重新启动动效。Home 的 `scheduleHomeRefresh` 等待同级场景有限过渡后才刷新缓存页面，检查取消、返回、当前路由与迟到结果。
+
+- HLS 进度回调的数据可被 worker 同步转移；[loader.ts](../frontend/src/utils/ts-cache/loader.ts) 必须先拥有缓存副本再转发，联查内存缓存、磁盘写入、非流式与字节区间响应和缩略预览。命中验证还涉及 [memory-cache.ts](../frontend/src/utils/ts-cache/memory-cache.ts) 的读取／预取判定；缓存有意跨页面保留，坏条目必须逐项失效并回退拉取，不能仅修新写入而让重新进入继续挂起。详情集数的已看色／底部进度由 [detail.css](../frontend/src/styles/views/detail.css) 维护，不依赖 hover 才可见。桌面播放场景独自覆盖整窗、保留底层侧栏与缓存页面原尺寸的装配由 [DesktopVideoShell.vue](../frontend/src/modes/DesktopVideoShell.vue) 拥有，系统栏进度的行程由实际进入动画决定，次级返回只有四分之一屏；页面展开与收拢见 [routeMotion.ts](../frontend/src/mobile/routeMotion.ts)／[MobileRouteStage.vue](../frontend/src/mobile/MobileRouteStage.vue)；移动端保留自己的路由策略。
+
+- 播放退出还联查 [releaseAnimations.ts](../frontend/src/player/releaseAnimations.ts) 与公共 animations.css 的根释放标记，覆盖子树和伪元素，防止重置进度时重新启动动效。Home 的 `scheduleHomeRefresh` 与 Detail 的返回进度刷新共用 [sceneTasks.ts](../frontend/src/motion/sceneTasks.ts)：消费舞台通过 `sceneMotionKey` 发布的进入／离开／取消及手势状态，结束后合并刷新，兜底等待最多2秒，不查询同级 DOM 动画；停用、再次调度与销毁取消计时器、帧及等待，检查当前路由与迟到结果。
+- Detail 的进度、可见性和返回事件合并到 `scheduleDetailRefresh`；只读取当前作品的进度，百分比未变化时保留引用，不在读取路径强制写存储。历史读取共享在途请求，推荐及关联来源在过渡结束后再读取；停用／换作品／销毁取消视图请求，代次拦截迟到结果，取消不报请求失败；移除定时补刷。全屏期间内嵌 WebView 保持可见并位于不透明 custom view 后面，不在退出时重建其显示面；MainActivity 保存窗口旋转策略，进出时使用 jumpcut 避免系统额外缩放／黑帧动画，原生恢复确认后还原原策略。全屏原生请求在 `api/mobilePlayer.ts` 持有进入／全屏／退出／关闭状态，重复 release 返回同一个完成承诺，退出期间忽略迟到 entered；平台回滚等待同一身份的原生方向／布局确认后再退出浏览器，不能释放新请求。
 - 换源接力同时检查 `Player.loadFromSource` → `VideoPlayer.continuation` → `usePlaybackResume`：已验证的来源替换由 MobileRouteStage 的 `secondaryInstanceKey` 保留页面现场；身份仍按真实来源／作品／集号更新。旧源保存完成后提交新详情，新媒体定位后的有效进度由 `pendingSourceHistory` 强制写入目标来源，失败反馈且限频重试；历史最新来源影响首页继续观看、详情与历史页，不删除旧源记录。片头或剪辑偏移通过现有时间输入人工校准。
-- 桌面右栏 [PlayerInformationPanel.vue](../frontend/src/player/views/PlayerInformationPanel.vue) 完整列表纵向滚动，移除源／集数展开状态；移动分组不受影响。媒体全屏状态由 VideoPlayer 暴露给 PlayerPanelToggle；顶部拖拽区拦截 click／dblclick 冒泡。应用 [Sidebar.vue](../frontend/src/components/Sidebar.vue) 的导航滚动容器与固定来源底栏分开。
+- 桌面右栏 [PlayerInformationPanel.vue](../frontend/src/player/views/PlayerInformationPanel.vue) 的简介、选集、播放源依次占可用高度的 27%／45%／28%，分区不随异步来源、线路和集数增减改变。`player-information.css` 用零最小尺寸 Grid 分配高度；`side-source-scroll` 和 `side-episode-scroll` 独立纵向滚动，分区标题、排序与探测操作保留在滚动区外。简介超出固定区域时内部滚动；窗口缩放按同一比例重算，折叠仍由原面板控制。完整列表不设置展开状态，移动分组和抽屉不采用此桌面分区。媒体全屏状态由 VideoPlayer 暴露给 PlayerPanelToggle；全屏隐藏右栏的选择器覆盖其 scoped Grid 布局，同时隐藏面板开关，退出后沿用原折叠状态；顶部拖拽区拦截 click／dblclick 冒泡。应用 [Sidebar.vue](../frontend/src/components/Sidebar.vue) 的导航滚动容器与固定来源底栏分开。
 - 普通播放和短剧共享 [useDesktopPlaybackKeys.ts](../frontend/src/player/page/useDesktopPlaybackKeys.ts) 的文档监听与输入作用域；[usePlayerChrome.ts](../frontend/src/player/usePlayerChrome.ts) 拥有自动隐藏计时器。短剧外层全屏宿主的 pointermove 在接近底部时恢复底栏，宿主变更／卸载解绑；暂停、底栏悬停和时间输入保持可见，桌面选集只在底栏提供一处，移动保留简介旁入口。联查 PortraitPlayerControls 的 Teleport 宿主、指针穿透和 PlayerDesktopControls 的 engaged。
 - 页面编排在 [Player.vue](../frontend/src/views/Player.vue)，媒体组件在 [VideoPlayer.vue](../frontend/src/components/VideoPlayer.vue)；会话与控制联查 [playbackSession.ts](../frontend/src/player/playbackSession.ts)、[playbackControl.ts](../frontend/src/player/playbackControl.ts)、[preparation.ts](../frontend/src/player/preparation.ts)、[hls](../frontend/src/player/hls/)。[ShortDrama.vue](../frontend/src/views/ShortDrama.vue) 是共享播放器的另一业务入口。
+- 详情 `Detail.loading` 从挂载前即成立，防止共享 video store 的旧条目先露出再被加载替换。手机次级 KeepAlive 上限为一个页面并包含 Detail，返回复用大集表和滚动位置；Detail 消费 committed 活动状态，隐藏时不刷新进度，激活时经 video store 的 `hasCurrentDetail` 校验来源／作品身份，必要时恢复原路由数据，并刷新历史／收藏。详情 `.episodes-grid` 与手机播放 `.side-episode-scroll` 持有有界滚动视口；标题、排序保留在外。日期集的紧凑布局由 EpisodeLabel 统一，联查详情、播放侧栏和手机抽屉。手机 PlayerInformationPanel 仅在有效豆瓣 ID 存在时装配评论页签，并处理 ID 消失回到简介。
+- 普通手机 VideoPlayer 的暂停续播入口在右下角，小屏／全屏图标为 40px／64px；共享 ResizeObserver 读取控制栈实际高度，经 `--cczj-player-control-height` 避让，宿主卸载时一并释放。图标位移消费覆盖动效的进入／退出曲线和关闭规则。独立 mini-progress 只在播放、控制栏隐藏且未锁定时出现，不截获拖动。联查 CczjMobilePlayerControls、fullscreen 控件换行、暂停／恢复、投屏及短剧独立控件。
 - 集数状态同时关联详情 [detail.css](../frontend/src/styles/views/detail.css)、桌面黑底面板 [player-information.css](../frontend/src/styles/components/player-information.css)、移动侧面板 [media.css](../frontend/src/styles/mobile/media.css) 与 Player 的选集抽屉；手机颜色在 [presentation.css](../frontend/src/mobile/player/presentation.css) 的主题根解析，避免抽屉局部调色板覆盖。详情及移动已播填充使用主题实色／反色进度，桌面黑底单独适配；进度数据仍共用历史及 `getEpWatchPct`，不能按样式另存一套已播状态。
 - HLS 版本在 [package.json](../frontend/package.json) 与锁文件精确固定；主播放 [playbackSource.ts](../frontend/src/player/hls/playbackSource.ts)、预览 [useThumbnailScrubber.ts](../frontend/src/player/useThumbnailScrubber.ts) 共用 [worker.ts](../frontend/src/player/hls/worker.ts) 和 [ts-cache/loader.ts](../frontend/src/utils/ts-cache/loader.ts)。升级需同步 loader 配置／回调、缓存与字节区间、主播放优先、取消和 worker 构建产物，不使用独立 CDN worker 或另一版本的 loader。
 - 偏好由 [usePlaybackPreferences.ts](../frontend/src/player/usePlaybackPreferences.ts)、[settings.ts](../frontend/src/player/settings.ts) 管理；桌面控件在 [player/views](../frontend/src/player/views/)，手机控件在 [CczjMobilePlayerChrome.vue](../frontend/src/mobile/CczjMobilePlayerChrome.vue)、[CczjMobilePlayerControls.vue](../frontend/src/mobile/CczjMobilePlayerControls.vue)、[CczjMobilePlayerDrawer.vue](../frontend/src/mobile/CczjMobilePlayerDrawer.vue)。改变设置项还需检查两端显示值和快捷键／手势入口。
-- 全屏、画中画、音量、亮度和投屏在 [player/platform](../frontend/src/player/platform/)、[platform/fullscreen.ts](../frontend/src/platform/fullscreen.ts)、[api/mobilePlayer.ts](../frontend/src/api/mobilePlayer.ts)；增强处理在 [enhancementPipeline.ts](../frontend/src/player/enhancementPipeline.ts)，字幕在 [useSubtitles.ts](../frontend/src/player/useSubtitles.ts)。弹幕涉及 [player/danmaku](../frontend/src/player/danmaku/)、[DanmakuSources.vue](../frontend/src/views/DanmakuSources.vue)、[api/danmaku.ts](../frontend/src/api/danmaku.ts) 与 [app/danmaku](../app/danmaku/)。
+- 全屏、画中画、音量、亮度和投屏在 [player/platform](../frontend/src/player/platform/)、[platform/fullscreen.ts](../frontend/src/platform/fullscreen.ts)、[api/mobilePlayer.ts](../frontend/src/api/mobilePlayer.ts)；移动视频尺寸由 [videoLayout.ts](../frontend/src/utils/videoLayout.ts) 用容器单位随宿主布局同步变化，旧 WebView 保留像素回退；增强画布继续跟随同一视频几何。原生退出确认联查 `prepareDeviceFullscreen.release`、`MainActivity.finishFullscreenExit` 和 `fullscreenPhase`，包含按钮、系统返回、超时、销毁和新所有者。增强处理在 [enhancementPipeline.ts](../frontend/src/player/enhancementPipeline.ts)，字幕在 [useSubtitles.ts](../frontend/src/player/useSubtitles.ts)。弹幕涉及 [player/danmaku](../frontend/src/player/danmaku/)、[DanmakuSources.vue](../frontend/src/views/DanmakuSources.vue)、[api/danmaku.ts](../frontend/src/api/danmaku.ts) 与 [app/danmaku](../app/danmaku/)。
 
 联查重点：新旧媒体会话交接、缓冲与暂停、换源同集确认、续播与进度落盘、设备亮度恢复、全屏返回、字幕对象 URL、Canvas／GPU／弹幕资源释放。修改倍速、画面适配、自动连播或快捷键时，联查普通播放与短剧，不能只改一份控制条。
 
@@ -153,7 +173,7 @@ Modal 退出由自身稳定过渡持有；ReaderSheet 则由 NovelBook、NovelRe
 
 ## 历史进度与收藏
 
-- 视频收藏：详情／普通播放／短剧 → [usePlaybackFavorites.ts](../frontend/src/player/page/usePlaybackFavorites.ts)／[FavFolderModal.vue](../frontend/src/components/FavFolderModal.vue) → [facade_favorite.go](../app/service/facade_favorite.go) → media／数据库。[Favorites.vue](../frontend/src/views/Favorites.vue) 还消费 [favoriteFolders.ts](../frontend/src/stores/favoriteFolders.ts) 与 [favoritesSync.ts](../frontend/src/stores/favoritesSync.ts)，收藏归属和收藏本身需一起检查。
+- 视频收藏：详情／普通播放／短剧 → [usePlaybackFavorites.ts](../frontend/src/player/page/usePlaybackFavorites.ts)／[FavFolderModal.vue](../frontend/src/components/FavFolderModal.vue) → [facade_favorite.go](../app/service/facade_favorite.go) → media／数据库。[Favorites.vue](../frontend/src/views/Favorites.vue) 还消费 [favoriteFolders.ts](../frontend/src/stores/favoriteFolders.ts) 与 [favoritesSync.ts](../frontend/src/stores/favoritesSync.ts)，收藏归属和收藏本身需一起检查。FavFolderModal 的 player 外观由普通播放和桌面短剧显式传入，经公共 Modal.panelClass 作用于实际浮层；固定深色、320px宽及紧凑留白，详情入口保留默认应用主题与尺寸，数据、确认和取消共用原控制器。
 - 视频进度：媒体状态 → [useEpisodeHistory.ts](../frontend/src/player/page/useEpisodeHistory.ts)、[usePlaybackProgress.ts](../frontend/src/player/usePlaybackProgress.ts)、[usePlaybackResume.ts](../frontend/src/player/usePlaybackResume.ts)、[episodeProgress.ts](../frontend/src/utils/episodeProgress.ts) → [facade_history.go](../app/service/facade_history.go)。[History.vue](../frontend/src/views/History.vue)、详情集表、普通播放与短剧共同显示或消费进度；浏览器现场进度与 SQLite 观看历史并存，删除时逐项核对含义。
 - 小说／漫画书架、追漫、最近阅读和偏好使用上一节的模式 store → readingPersistence → SQLite 链；旧浏览器值仅作为迁移来源。不要将视频收藏刷新信号或同名作品当作阅读身份。
 
@@ -239,7 +259,7 @@ Modal 退出由自身稳定过渡持有；ReaderSheet 则由 NovelBook、NovelRe
 路由确认时长与视觉呈现分开：桌面 MobileRouteStage 向同一 session 记录 `visual_transition` 的挂载、单次帧回调等待及完成／取消时长，不连续轮询帧率。全局异常类型由 `session.ts` 的白名单确定，不导出错误文本；短剧空列表／本地读取失败等事件需要同步 `timeline.go.validKind`。核对正常、返回、快速取消及销毁后剩余回调，不能把路由导航成功当成动画流畅。
 
 - 用户反馈经 [api/errors.ts](../frontend/src/api/errors.ts)、[response.ts](../frontend/src/api/response.ts)、[stores/error.ts](../frontend/src/stores/error.ts)、[ErrorToastStack.vue](../frontend/src/components/ErrorToastStack.vue)；后端错误映射在 [app/apperror](../app/apperror/)，操作身份与日志在 [app/operation](../app/operation/)／[app/applog](../app/applog/)。
-- 诊断入口 [RuntimeDiagnostics.vue](../frontend/src/views/RuntimeDiagnostics.vue)、[DiagnosticsPanel.vue](../frontend/src/components/DiagnosticsPanel.vue)、[VideoDiagnosticsPanel.vue](../frontend/src/components/VideoDiagnosticsPanel.vue)、[ReadingDiagnosticsPanel.vue](../frontend/src/components/ReadingDiagnosticsPanel.vue)，以及 [mobile/plugins](../frontend/src/mobile/plugins/)；录制在 [diagnostics/recording.ts](../frontend/src/diagnostics/recording.ts) → [service/diagnostics_recording.go](../app/service/diagnostics_recording.go)／[diagnosticrecording](../app/diagnosticrecording/)。导出另查 [diagnostics_export.go](../app/service/diagnostics_export.go) 与平台文件入口。
+- 诊断入口 [RuntimeDiagnostics.vue](../frontend/src/views/RuntimeDiagnostics.vue)、[DiagnosticsPanel.vue](../frontend/src/components/DiagnosticsPanel.vue)、[VideoDiagnosticsPanel.vue](../frontend/src/components/VideoDiagnosticsPanel.vue)、[ReadingDiagnosticsPanel.vue](../frontend/src/components/ReadingDiagnosticsPanel.vue)，以及 [mobile/plugins](../frontend/src/mobile/plugins/)；录制在 [diagnostics/recording.ts](../frontend/src/diagnostics/recording.ts) → [service/diagnostics_recording.go](../app/service/diagnostics_recording.go)／[diagnosticrecording](../app/diagnosticrecording/)。Android早期阶段由CczjStartupTrace在原生库加载前开始记录，异步有界写入applog目录的固定元数据JSONL，最多64事件／32KiB每次、保留最近4次；phase、pid、时间和写入/丢弃/失败统计不含地址和内容。startupPhase桥接承接前端startup.ts白名单阶段，ServiceStartup沿applog记录数据库／网络策略／插件／模式及完成阶段，按PID联查，不能以最后日志推断具体崩溃调用。记录可在崩溃尾部缺失，不把入队等同落盘；诊断包复用现有导出最多附带4个合规原生启动文件。导出另查 [diagnostics_export.go](../app/service/diagnostics_export.go) 与平台文件入口。
 
 - 元数据队列与控件／窗口错误监听在 [diagnostics/session.ts](../frontend/src/diagnostics/session.ts)，主装配在 [main.ts](../frontend/src/main.ts)，导航模板在 [router/index.ts](../frontend/src/router/index.ts)，请求／组合链在 [requestPipelines.ts](../frontend/src/api/requestPipelines.ts) 与 [requestChain.ts](../frontend/src/api/requestChain.ts)，错误提示在 [stores/error.ts](../frontend/src/stores/error.ts)。共同依赖不得反向引入 API 或 Pinia 造成启动循环。
 - [DiagnosticSessionPanel.vue](../frontend/src/components/DiagnosticSessionPanel.vue) 供三种模式、桌面与移动宿主复用；日常开关需联查前后端 CCZJ Key、[facade_settings.go](../app/service/facade_settings.go)、启动恢复、录制状态、清空与迟到批次。
@@ -258,3 +278,7 @@ Modal 退出由自身稳定过渡持有；ReaderSheet 则由 NovelBook、NovelRe
 联查重点：检查版本、下载、取消／恢复、校验、安装权限、重启、安装结果和回滚；关于页、弹窗和后台下载展示同一状态。安装包路径、WebView 资料身份与用户数据目录分别管理，不能因更新改名使用户数据看似丢失。流程见[发布与自动更新](releases.md)。
 
 检索词：`DownloadUpdate`、`updateDownload`、`runHostRequest`、`pendingInstall`、`Install`、`handoff`，并从实际导出函数继续搜索调用方。
+
+移动反馈相关链：App在theme.loaded后更新bootAppearance，SplashScreen恢复前使用启动缓存，避免默认主题覆盖缓存。主题编辑浮钮右侧与回顶部垂直错位；搜索历史仅编辑态保留删除热区。VideoPlayer进度填充／缓冲缩放保留translateY居中，迷你进度独立。短剧远端页已按来源分类筛选，useShortDramaFeed直接复用返回视频，减少重复推荐查询；本轮失败候选不立即重复详情请求。
+
+弹幕与共享拨号：danmaku.Client保留超时／取消错误链，SafeDialContext在DNS校验全部地址后按剩余期限分配单地址尝试预算（最多3秒），防止一个不可达地址耗尽请求；TLS仍保留原主机名，SSRF规则不变。共享消费者包括HLS、图片、线路探测及阅读资源，原请求取消继续控制全链。该改动不证明平台网络或鉴权一定可达。

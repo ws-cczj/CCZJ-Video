@@ -90,8 +90,22 @@ func SafeDialContext(ctx context.Context, network, address string) (net.Conn, er
 	}
 	dialer := &net.Dialer{Timeout: 20 * time.Second, KeepAlive: 30 * time.Second}
 	var lastErr error
-	for _, address := range addresses {
-		conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(address.String(), port))
+	for index, address := range addresses {
+		// Reserve time for other validated addresses when a route is unreachable.
+		// The original hostname remains on the HTTP request for TLS and Host.
+		attemptLimit := 20 * time.Second
+		if len(addresses) > 1 {
+			attemptLimit = 3 * time.Second
+		}
+		if deadline, ok := ctx.Deadline(); ok {
+			attemptLimit = min(attemptLimit, time.Until(deadline)/time.Duration(len(addresses)-index))
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		attempt, cancel := context.WithTimeout(ctx, attemptLimit)
+		conn, err := dialer.DialContext(attempt, network, net.JoinHostPort(address.String(), port))
+		cancel()
 		if err == nil {
 			return conn, nil
 		}

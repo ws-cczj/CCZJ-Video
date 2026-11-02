@@ -7,13 +7,14 @@ const props = withDefaults(defineProps<{
   preset?: MotionPreset
   appear?: boolean
   mode?: 'in-out' | 'out-in' | 'default'
+  disabled?: boolean
 }>(), {
   preset: 'fade',
   appear: false,
   mode: 'default',
 })
 const motion = useMotionStore()
-const enabled = computed(() => motion.allows(['dialog','modal','sheet','dropdown','slide-up'].includes(props.preset) ? 'overlays' : props.preset.startsWith('toast') ? 'feedback' : 'pages'))
+const enabled = computed(() => !props.disabled && motion.allows(['dialog','modal','sheet','dropdown','slide-up'].includes(props.preset) ? 'overlays' : props.preset.startsWith('toast') ? 'feedback' : 'pages'))
 const leaving = new WeakMap<Element, { inert: boolean; hidden: string | null }>()
 function beforeLeave(element: Element): void {
   leaving.set(element, { inert: element.hasAttribute('inert'), hidden: element.getAttribute('aria-hidden') })

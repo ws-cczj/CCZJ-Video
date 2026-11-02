@@ -48,7 +48,7 @@ const SPLASH_MAP: Record<string, string> = {
   red: splashRed, orange: splashRed,
   happy_new_year: splashRed,
   // 灰色系
-  gray: splashGrey, grey: splashGrey,
+  minimal: splashGrey, gray: splashGrey, grey: splashGrey,
   china_ink: splashGrey, black: splashGrey,
   // 黄色系
   yellow: splashYellow,
@@ -116,6 +116,7 @@ onBeforeUnmount(dispose)
 const bgStyle = computed(() => {
   if (appMode.mode === 'novel') return { backgroundColor: '#faf9f6', '--text-primary': '#272722', '--text-muted': '#716f68', '--accent': '#ad302c' }
   if (appMode.mode === 'comic') return { backgroundColor: '#fffaf5', '--text-primary': '#22212a', '--text-muted': '#806753', '--accent': '#b84929' }
+  if(!theme.loaded)return {backgroundColor:getComputedStyle(document.documentElement).getPropertyValue('--cczj-boot-bg').trim() || '#ffffff'}
   const t = theme.current
   return { backgroundColor: t.palette?.bgApp || (t.mode === 'dark' ? '#1a1a1e' : '#ffffff') }
 })
@@ -137,7 +138,7 @@ onBeforeUnmount(releaseSplashSurface)
       <Icon v-if="appMode.mode !== 'video'" :name="APPLICATION_MODES[appMode.mode].icon" :size="80"
         class="novel-splash-mark cczj-motion-reveal" />
       <img v-else-if="bgSrc" :src="bgSrc" alt="" decoding="async" fetchpriority="high"
-        class="splash-img cczj-motion-ornament" :class="{ ready }" @load="reveal" @error="dismiss" />
+        class="splash-img cczj-motion-ornament" :class="{ ready, monochrome: theme.currentId === 'minimal' }" @load="reveal" @error="dismiss" />
     </div>
   </MotionTransition>
 </template>
@@ -168,6 +169,7 @@ onBeforeUnmount(releaseSplashSurface)
   opacity: .9;
   transform: translateY(0) scale(1);
 }
+.splash-img.monochrome { filter:grayscale(1); }
 
 .splash-brand {
   @apply cczj-flex cczj-items-baseline cczj-gap-6 cczj-text-primary cczj-opacity-0;

@@ -146,7 +146,6 @@ async function save(): Promise<void> {
     :mask-closable="!saving"
     @update:model-value="(v: boolean) => !v && emit('update:modelValue', false)"
   >
-    <p class="modal-desc">{{ tr('sources.formDesc') }}</p>
     <div class="form-group">
       <label>{{ tr('sources.url') }} <span class="required">*</span></label>
       <input v-model="form.api_url" :placeholder="tr('sources.apiUrlPlaceholder')" />
@@ -195,7 +194,6 @@ async function save(): Promise<void> {
 
 /* Modal.vue 把内容 Teleport 到 body 下，页面的 scoped 选择器选不到这里，
    所以弹窗自己的文案/表单样式都留在本组件。 */
-.modal-desc { @apply cczj-text-13 cczj-text-muted; margin: 0 0 18px; }
 .form-group { @apply cczj-mb-7; }
 .form-group label { @apply cczj-block cczj-text-sm cczj-text-secondary cczj-mb-3 cczj-font-medium; }
 .form-group input {
