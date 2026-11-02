@@ -37,7 +37,7 @@ export function prepareReleaseVersion(root, version, repository, { write = true 
   const updatedReadme = readme.replace(/^Current release: \*\*v[^*]+\*\*/m, `Current release: **v${version}**`)
   if (write) {
     const serialized = JSON.stringify(metadata, null, 2) + '\n'
-    if (serialized !== original) writeFileSync(path, serialized, 'utf8')
+    if (serialized !== original.replaceAll('\r\n', '\n')) writeFileSync(path, serialized, 'utf8')
     if (updatedReadme !== readme) writeFileSync(readmePath, updatedReadme, 'utf8')
   }
   return { metadata, notes }
