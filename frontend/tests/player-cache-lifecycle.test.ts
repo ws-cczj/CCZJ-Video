@@ -34,7 +34,7 @@ afterEach(async () => {
 })
 
 describe('playback cache ownership and idle release', () => {
-  it('preserves playing and quick-reopen bytes, then retains only the newest 8 MiB while idle', async () => {
+  it('preserves playing and quick-reopen bytes, then retains only the newest 16 MiB while idle', async () => {
     const release = retain()
     seed()
     await vi.advanceTimersByTimeAsync(120_000)
@@ -46,15 +46,15 @@ describe('playback cache ownership and idle release', () => {
     await vi.advanceTimersByTimeAsync(29_999)
     expect(cache.totalCacheBytes).toBe(70 * 1024 ** 2)
     await vi.advanceTimersByTimeAsync(1)
-    expect(cache.totalCacheBytes).toBeLessThanOrEqual(8 * 1024 ** 2)
+    expect(cache.totalCacheBytes).toBeLessThanOrEqual(16 * 1024 ** 2)
     expect(cacheHas('https://fixture/69.ts')).toBe(true)
     expect(cacheHas('https://fixture/0.ts')).toBe(false)
     expect([...cache.epCacheKeys.values()].reduce((sum, keys) => sum + keys.size, 0)).toBe(cache.lruCache.size)
     // A late opportunistic preload must also obey the idle budget.
-    cacheSet('https://fixture/oversized-idle.ts', new ArrayBuffer(10 * 1024 ** 2), 'idle')
+    cacheSet('https://fixture/oversized-idle.ts', new ArrayBuffer(20 * 1024 ** 2), 'idle')
     expect(cacheHas('https://fixture/69.ts')).toBe(true)
     for (let index = 0; index < 30; index++) cacheSet(`https://fixture/idle-${index}.ts`, new ArrayBuffer(1024 * 1024), 'idle')
-    expect(cache.totalCacheBytes).toBeLessThanOrEqual(8 * 1024 ** 2)
+    expect(cache.totalCacheBytes).toBeLessThanOrEqual(16 * 1024 ** 2)
   })
 
   it('cancels a prior close deadline when another player opens and releases idempotently', async () => {
@@ -69,7 +69,7 @@ describe('playback cache ownership and idle release', () => {
     expect(TsCache.stats().activePlayers).toBe(1)
     second()
     await vi.advanceTimersByTimeAsync(30_000)
-    expect(cache.totalCacheBytes).toBeLessThanOrEqual(8 * 1024 ** 2)
+    expect(cache.totalCacheBytes).toBeLessThanOrEqual(16 * 1024 ** 2)
   })
 
   it('does not clear the shared session while another playback owner is still mounted', async () => {
@@ -84,7 +84,7 @@ describe('playback cache ownership and idle release', () => {
     second()
     expect(prefetchState.cacheSession).toBeGreaterThan(generation)
     await vi.advanceTimersByTimeAsync(30_000)
-    expect(cache.totalCacheBytes).toBeLessThanOrEqual(8 * 1024 ** 2)
+    expect(cache.totalCacheBytes).toBeLessThanOrEqual(16 * 1024 ** 2)
   })
 
   it('aborts pending prefetch on last close and rejects a late response body', async () => {

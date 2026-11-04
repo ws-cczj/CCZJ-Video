@@ -1,9 +1,8 @@
 /**
  * 片段缓存子系统的共享可变状态 + 事件广播。
  *
- * 拆分文件时唯一必须集中放置的东西：内存 LRU、会话定位、统计样本、网络诊断状态
- * 都被多个模块读写（缓存层要查片段清单、预取层要写缓存、统计要读缓存字节数）。
- * 各处各自持有一份就是正确性 bug，所以这里定义一次、其余模块只引用同一个对象。
+ * 内存 LRU、播放身份、片段索引与网络样本在此共享；传输与补货任务
+ * 的内部状态由各自模块持有，避免调用方维护第二份所有权或库存规则。
  * 本模块不 import 子系统内的任何其他模块 —— 依赖图因此不可能成环。
  */
 
@@ -22,6 +21,15 @@ export interface FetchJob {
   episodeKey: string      // 之前是 episodeIdx (number)，改字符串可跨视频区分
   priority: number
   generation?: number
+}
+
+export interface SegmentInfo {
+  url: string
+  range?: string | null
+  start: number
+  duration: number
+  /** CBC byte ranges require the SDK's IV adjustment and remain demand-only. */
+  demandOnly?: boolean
 }
 
 export interface CacheEntry {
@@ -64,12 +72,19 @@ export const session = {
   // sufficient media ahead, so they cannot compete with first play or recovery.
   playbackBufferAhead: 0,
   playbackRate: 1,
+  playbackPosition: 0,
+  playbackPaused: true,
+  playbackSeeking: false,
+  transportActive: false,
+  transportOwner: null as symbol | null,
   // 当前这批剧集所属的采集源：epKeyFrom 在没有 ep.source_key 时兜底用它
   currentSourceKey: '',
 }
 
 // ⭐ segmentsByEpisode 改以稳定 episodeKey 做 key，跨视频也不冲突
 export const episodeIndex = {
+  timeline: [] as SegmentInfo[],
+  segmentKeysByEpisode: new Map<string, Set<string>>(),
   segmentsByEpisode: new Map<string, string[]>(),
   // 已播放片段追踪：key = episodeKey，value = 已播放 segment 索引集合
   playedSegmentsByEpisode: new Map<string, Set<number>>(),
@@ -98,6 +113,8 @@ export const telemetry = {
   // 与 recentFetchDurations 一一对应的字节数：只有耗时算不出速率，也就无法判断命中该折算成多久
   recentFetchBytes: [] as number[],
   recentMediaSeconds: [] as number[],
+  recentFetchStarts: [] as number[],
+  recentFetchEnds: [] as number[],
   // 为当前集使用一个可变引用，减少每次查找
   curEpStats: { hits: 0, misses: 0 } as EpisodeCounter,
 }
@@ -146,3 +163,5 @@ export function fireListeners(): void {
   if (fireTimer != null) return
   fireTimer = window.setTimeout(() => { fireTimer = null; for (const cb of listeners) { try { cb() } catch { /* ignore */ } } }, 250)
 }
+
+if (import.meta.hot) import.meta.hot.dispose(() => { if (fireTimer !== null) window.clearTimeout(fireTimer); fireTimer = null; listeners.clear() })

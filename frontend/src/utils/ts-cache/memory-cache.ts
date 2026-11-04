@@ -104,8 +104,7 @@ export function evict(entry: CacheEntry): void {
  *
  * 全局淘汰直接取队首 —— cacheGet 命中会把条目挪到尾部，所以队首就是最久未读的那条，O(1)。
  * 单集淘汰走 epCacheKeys 索引，只遍历该集名下的 ≤MAX_PER_EPISODE 条，不再扫整张 lruCache。
- * 之前两种情况都要 for-of 遍历全部 1024 条，而它挂在 cacheSet 这条热路径上：一集缓存填满后
- * 每插一片就全表扫一次。
+ * 避免在 cacheSet 的热路径上为每次淘汰遍历全局缓存。
  */
 export function findLeastUsedEntry(onlyEpisodeKey?: string): CacheEntry | null {
   if (onlyEpisodeKey !== undefined) {

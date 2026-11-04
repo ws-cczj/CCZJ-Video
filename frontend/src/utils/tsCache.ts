@@ -2,15 +2,16 @@
  * m3u8 TS 分片预取 + 内存缓存 + IndexedDB 持久化
  *
  * 核心机制：
- *   1. fetch 拦截：透明拦截 hls.js 的 .ts 请求，命中 LRU 直接返回 ArrayBuffer
- *   2. 自适应预取：根据网速动态调整预取窗口大小和起始偏移
- *   3. 详情页预取：自行 fetch + 解析 m3u8，不等播放器
- *   4. IndexedDB 持久化：磁盘 LRU + 2 天 TTL
+ *   1. HLS loader 通过共享传输读取内存、磁盘与在途分片。
+ *   2. 连续未播放库存按上下限补货，三路预取与播放器协助独占领取。
+ *   3. 详情与短剧预热复用同一传输及缓存，不创建额外解码器。
+ *   4. IndexedDB 持久化：256 MiB / 7 天 TTL，播放释放后提交附近分片及 LRU 维护
  *
  * 实现按职责拆在 ./ts-cache/ 下：内存 LRU（memory-cache）、预取与取回
- * （prefetch）、网络诊断与自适应策略（network）、统计（telemetry）、
+ * （prefetch）、共享传输与重试账本（transfer）、网络策略（network）、统计（telemetry）、
  * m3u8 解析与去广告（m3u8 / ad-filter）、落盘（disk-cache）、播放器 loader
- * （loader）、对外门面（api）。共享可变状态只有 store.ts 一份。
+ * （loader）、对外门面（api）。store.ts 保留共享缓存与播放身份，
+ * 传输和补货的内部状态分别由所属模块持有。
  *
  * 本文件只做转发：导入路径 `../utils/tsCache` 保持不变，导出名单与拆分前逐一对应。
  */

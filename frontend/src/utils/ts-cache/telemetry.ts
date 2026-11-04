@@ -1,23 +1,27 @@
 import { SPEED_SAMPLE_COUNT } from './constants'
 import { cacheHas } from './memory-cache'
-import { fireListeners, session, telemetry } from './store'
+import { fireListeners, session, telemetry, netDiag } from './store'
 
 /**
  * 命中率计数 + 最近若干次真实下载的速率样本。
  *
- * 计数按集分开（store.telemetry.epStats），速率样本是全局滑窗；两者都只在这里改，
- * 别处只读，避免「谁都能记一笔」导致统计口径漂移。
+ * 读取计数按集分开，当前 loader 在明确读取结果后记账；真实传输样本
+ * 来自共享传输所有者，预览不进入主播放样本。
  */
 
-export function recordFetchDuration(ms: number, bytes: number, mediaSeconds = session.targetDuration): void {
+export function recordFetchDuration(ms: number, bytes: number, mediaSeconds = session.targetDuration, started = performance.now() - ms): void {
   if (!(ms > 0) || !(bytes > 0)) return
   telemetry.recentFetchDurations.push(ms)
   telemetry.recentFetchBytes.push(bytes)
   telemetry.recentMediaSeconds.push(mediaSeconds > 0 ? mediaSeconds : session.targetDuration)
+  telemetry.recentFetchStarts.push(started)
+  telemetry.recentFetchEnds.push(started + ms)
   if (telemetry.recentFetchDurations.length > SPEED_SAMPLE_COUNT) {
     telemetry.recentFetchDurations.shift()
     telemetry.recentFetchBytes.shift()
     telemetry.recentMediaSeconds.shift()
+    telemetry.recentFetchStarts.shift()
+    telemetry.recentFetchEnds.shift()
   }
 }
 
@@ -30,6 +34,7 @@ export function recordFetchDuration(ms: number, bytes: number, mediaSeconds = se
  * 而实际网络根本没那么快 —— 表现为换个集就开始卡。
  */
 function measuredNetworkBps(): number {
+  if (netDiag.throughputBps > 0) return netDiag.throughputBps * .8
   const n = telemetry.recentFetchDurations.length
   if (n === 0) return 0
   let bytes = 0

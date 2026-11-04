@@ -1,76 +1,56 @@
 import type { HlsConfig, Loader, LoaderCallbacks, LoaderConfiguration, LoaderContext } from 'hls.js'
 import { stripAdFromM3u8Text } from './ad-filter'
-import { diskLoad, diskSave } from './disk-cache'
+import { MAX_PLAYLIST_BYTES } from './constants'
 import { getM3u8FromCache, setM3u8Cache } from './m3u8'
-import { cacheGet, cacheSet, cacheDelete } from './memory-cache'
-import { updateNetworkDiagnosis, recordNetworkFailure } from './network'
+import { cacheDelete } from './memory-cache'
 import { beginForegroundFetch, beginPreviewFetch } from './prefetch'
-import { byteRangeOf, rangeLength } from './segment-key'
-import { fireListeners, telemetry, prefetchState } from './store'
-import { cacheHitShapingMs, recordFetchDuration } from './telemetry'
+import { byteRangeOf } from './segment-key'
+import { fireListeners, telemetry } from './store'
+import { cacheHitShapingMs } from './telemetry'
+import { acquireSegment, newLoaderStats, SegmentFailure } from './transfer'
 
-const MAX_PLAYLIST_BYTES = 8 << 20
-const MAX_FRAGMENT_CAPTURE_BYTES = 32 << 20
-
-/** Cache/playlist adaptation surrounds HLS's streaming FetchLoader. The SDK
- * owns deadlines, progress, retries and transport cancellation. Completed stats
- * survive destroy(): ABR samples them after buffering, rather than at download.
- */
+/** HLS transport adapter. Fragments share the scheduler's transfer owner;
+ * manifests and keys keep the SDK's deadline and response handling. */
 export class TsCacheLoader implements Loader<LoaderContext> {
   public context: LoaderContext | null = null
-  public stats = {
-    aborted: false, loaded: 0, retry: 0, total: 0, chunkCount: 0, bwEstimate: 0,
-    loading: { start: 0, first: 0, end: 0 },
-    parsing: { start: 0, end: 0 }, buffering: { start: 0, first: 0, end: 0 },
-  }
+  public stats = newLoaderStats()
   private network: Loader<LoaderContext> | null = null
   private generation = 0
   private destroyed = false
   private pending = false
   private onAbort: (() => void) | null = null
   private release: (() => void) | null = null
+  private releaseSegment: (() => void) | null = null
 
   constructor(private readonly hlsConfig: Partial<HlsConfig>, private readonly purpose: 'playback' | 'preview' = 'playback') {}
 
   load(context: LoaderContext & { frag?: { url: string; duration: number } }, config: LoaderConfiguration, callbacks: LoaderCallbacks<LoaderContext>): void {
     if (this.destroyed) return
     this.abort()
-    this.network?.destroy()
-    this.network = null
+    this.network?.destroy(); this.network = null
     const generation = ++this.generation
-    const cacheGeneration = prefetchState.cacheSession
     const current = () => !this.destroyed && this.pending && generation === this.generation
-    this.context = context
-    this.pending = true
+    this.context = context; this.pending = true
+    Object.assign(this.stats, newLoaderStats())
+    this.stats.loading.start = performance.now()
     this.onAbort = () => callbacks.onAbort?.(this.stats, context, null)
-    Object.assign(this.stats, { aborted: false, loaded: 0, total: 0, chunkCount: 0, bwEstimate: 0 })
-    this.stats.loading = { start: performance.now(), first: 0, end: 0 }
     const url = context.url || context.frag?.url || ''
     const fragment = context.type === 'media-fragment' || /\.(ts|m4s|aac)(\?|$)/i.test(url)
     const playlist = ['manifest', 'level', 'audioTrack', 'subtitleTrack'].includes(context.type) || /\.m3u8?(\?|$)/i.test(url)
     const range = fragment ? byteRangeOf(context) : null
     const playback = this.purpose === 'playback'
-    let observedBytes = 0, observedRetry = 0
-    const countNetworkBytes = (stats: { loaded: number; retry: number }) => {
-      if (!playback || !fragment || cacheGeneration !== prefetchState.cacheSession) return
-      if (observedRetry !== stats.retry) { observedRetry = stats.retry; observedBytes = 0 }
-      telemetry.networkBytes += Math.max(0, stats.loaded - observedBytes)
-      observedBytes = stats.loaded
-    }
     const finish = () => {
-      this.pending = false
-      this.onAbort = null
+      this.pending = false; this.onAbort = null
       this.release?.(); this.release = null
+      this.releaseSegment?.(); this.releaseSegment = null
     }
     const fail = (error: { code: number; text: string }, details: Parameters<LoaderCallbacks<LoaderContext>['onError']>[2] = null) => {
       if (!current()) return
-      finish()
-      this.network?.destroy()
-      if (playback && fragment && cacheGeneration === prefetchState.cacheSession) recordNetworkFailure()
+      finish(); this.network?.destroy()
       callbacks.onError?.(error, context, details, this.stats)
     }
     const cached = (buffer: ArrayBuffer | string) => {
-      Promise.resolve().then(() => {
+      queueMicrotask(() => {
         if (!current()) return
         let data: ArrayBuffer | string
         try {
@@ -78,12 +58,11 @@ export class TsCacheLoader implements Loader<LoaderContext> {
           data = typeof buffer === 'string' ? buffer : buffer.slice(0)
         } catch {
           cacheDelete(url, range)
-          void fetchNetwork()
+          fail({ code: 0, text: 'media cache could not be read' })
           return
         }
         const size = typeof data === 'string' ? new TextEncoder().encode(data).length : data.byteLength
         const now = performance.now()
-        // Hits describe cache speed, not physical network capacity.
         const ms = fragment ? cacheHitShapingMs(size) || size * 8000 / (this.hlsConfig.abrEwmaDefaultEstimate || 500_000) : 1
         this.stats.loading = { start: now - ms, first: now - ms, end: now }
         this.stats.loaded = this.stats.total = size
@@ -93,106 +72,88 @@ export class TsCacheLoader implements Loader<LoaderContext> {
     }
     const fetchNetwork = async () => {
       try {
+        const runtime = await import('hls.js')
+        if (!current()) return
         if (!playback) {
           this.release = beginPreviewFetch(() => fail({ code: 0, text: 'preview yielded to playback' }))
           if (!this.release) { fail({ code: 0, text: 'playback has priority' }); return }
-        } else if (fragment) { telemetry.curEpStats.misses++; this.release = beginForegroundFetch(); fireListeners() }
-        const runtime = await import('hls.js')
-        if (!current()) return
+        }
         const native = new runtime.FetchLoader({ ...runtime.default.DefaultConfig, ...this.hlsConfig })
-        this.network = native
-        native.stats = this.stats
+        this.network = native; native.stats = this.stats
         this.stats.loading.start = 0
         const chunks: Uint8Array[] = []
-        let captured = 0, capture = true
-        let captureRetry = this.stats.retry
-        const forward = fragment && !range && !!callbacks.onProgress
-        const streaming = playlist || forward || !!range
+        let captured = 0
         const nativeContext = playlist ? { ...context, responseType: 'arraybuffer' } : context
-        const policy = config.loadPolicy || runtime.default.DefaultConfig[fragment ? 'fragLoadPolicy' : playlist ? 'manifestLoadPolicy' : 'keyLoadPolicy'].default
-        const nativeConfig = { ...config, loadPolicy: policy, highWaterMark: streaming ? Math.min(config.highWaterMark || (64 << 10), 64 << 10) : Infinity }
-        native.load(nativeContext, nativeConfig, {
-          onProgress: (stats, _context, data, details) => {
-            if (!current() || !(data instanceof ArrayBuffer)) return
-            countNetworkBytes(stats)
-            if (stats.retry !== captureRetry) { chunks.length = 0; captured = 0; capture = true; captureRetry = stats.retry }
-            if (capture) {
-              captured += data.byteLength
-              if (captured > (playlist ? MAX_PLAYLIST_BYTES : MAX_FRAGMENT_CAPTURE_BYTES)) {
-                chunks.length = 0; capture = false
-                if (playlist || range) { fail({ code: 0, text: 'response exceeds bounded playlist/range size' }, details); return }
-              // HLS may transfer the original buffer to its worker synchronously.
-              // Cache assembly must own bytes before forwarding that buffer.
-              } else chunks.push(new Uint8Array(data.slice(0)))
-            }
-            if (playlist && chunks.length === 1) {
+        const policy = config.loadPolicy || runtime.default.DefaultConfig[playlist ? 'manifestLoadPolicy' : 'keyLoadPolicy'].default
+        native.load(nativeContext, { ...config, loadPolicy: policy, highWaterMark: playlist ? 64 << 10 : Infinity }, {
+          onProgress: (_stats, _context, data, details) => {
+            if (!current() || !playlist || !(data instanceof ArrayBuffer)) return
+            captured += data.byteLength
+            if (captured > MAX_PLAYLIST_BYTES) { fail({ code: 0, text: 'playlist exceeds 16 MiB' }, details); return }
+            chunks.push(new Uint8Array(data))
+            if (chunks.length === 1) {
               const prefix = new TextDecoder().decode(chunks[0]).replace(/^\uFEFF/, '').trimStart()
-              if (prefix && !prefix.startsWith('#EXTM3U') && !'#EXTM3U'.startsWith(prefix)) {
-                fail({ code: 0, text: 'not an HLS playlist' }, details); return
-              }
+              if (prefix && !prefix.startsWith('#EXTM3U') && !'#EXTM3U'.startsWith(prefix)) fail({ code: 0, text: 'not an HLS playlist' }, details)
             }
-            if (forward) callbacks.onProgress?.(stats, context, data, details)
           },
           onSuccess: (response, stats, _context, details) => {
             if (!current()) return
-            countNetworkBytes(stats)
-            let buffer = response.data instanceof ArrayBuffer ? response.data : null
-            if (chunks.length) {
-              buffer = new ArrayBuffer(captured)
-              const view = new Uint8Array(buffer)
-              let offset = 0
-              for (const chunk of chunks) { view.set(chunk, offset); offset += chunk.byteLength }
-              chunks.length = 0
-            }
             if (playlist) {
-              const raw = buffer ? new TextDecoder().decode(buffer) : ''
+              let buffer = response.data instanceof ArrayBuffer ? response.data : new ArrayBuffer(0)
+              if (chunks.length) {
+                buffer = new ArrayBuffer(captured)
+                const view = new Uint8Array(buffer)
+                let offset = 0
+                for (const chunk of chunks) { view.set(chunk, offset); offset += chunk.byteLength }
+              }
+              chunks.length = 0
+              if (buffer.byteLength > MAX_PLAYLIST_BYTES) { fail({ code: 0, text: 'playlist exceeds 16 MiB' }, details); return }
+              const raw = new TextDecoder().decode(buffer)
               if (!raw.replace(/^\uFEFF/, '').trimStart().startsWith('#EXTM3U')) { fail({ code: 0, text: 'not an HLS playlist' }, details); return }
-              setM3u8Cache(url, raw)
-              finish()
+              setM3u8Cache(url, raw, details instanceof Response ? details.headers : undefined); finish()
               callbacks.onSuccess?.({ ...response, data: stripAdFromM3u8Text(raw, url) }, stats, context, details)
-              return
-            }
-            if (range && buffer) {
-              const want = rangeLength(range), start = Number(range.split('-')[0])
-              if (response.code === 200 && buffer.byteLength >= start + want) buffer = buffer.slice(start, start + want)
-              if (buffer.byteLength !== want) { fail({ code: response.code || 0, text: 'incomplete byte-range response' }, details); return }
-            }
-            if (fragment && cacheGeneration === prefetchState.cacheSession) {
-              const ms = Math.max(1, stats.loading.end - stats.loading.start)
-              if (playback) {
-                recordFetchDuration(ms, stats.loaded, context.frag?.duration)
-                updateNetworkDiagnosis()
-              }
-              if (buffer && buffer.byteLength && capture) {
-                // Non-progressive success also hands its response to HLS.
-                const retained = forward ? buffer : buffer.slice(0)
-                cacheSet(url, retained, undefined, range, ms)
-                void diskSave(url, retained, undefined, range)
-              }
-              fireListeners()
-            }
-            finish()
-            // Already streamed bytes must not be appended a second time.
-            callbacks.onSuccess?.({ ...response, data: forward ? new ArrayBuffer(0) : buffer || response.data }, stats, context, details)
+            } else { finish(); callbacks.onSuccess?.(response, stats, context, details) }
           },
           onError: (error, _context, details) => fail(error, details),
-          onTimeout: (stats, _context, details) => {
-            if (!current()) return
-            finish()
-            if (playback && fragment && cacheGeneration === prefetchState.cacheSession) recordNetworkFailure()
-            callbacks.onTimeout?.(stats, context, details)
-          },
+          onTimeout: (stats, _context, details) => { if (!current()) return; finish(); callbacks.onTimeout?.(stats, context, details) },
         })
-      } catch (error) { fail({ code: 0, text: error instanceof Error ? error.message : 'media request failed' }) }
+      } catch { fail({ code: 0, text: 'media request failed' }) }
     }
     if (!url) { queueMicrotask(() => fail({ code: 0, text: 'empty url' })); return }
     if (fragment) {
-      const hit = cacheGet(url, range)
-      if (hit) { if (playback) telemetry.curEpStats.hits++; cached(hit.buffer); fireListeners(); return }
-      void diskLoad(url, range).then(buffer => {
+      if (!playback) {
+        this.release = beginPreviewFetch(() => fail({ code: 0, text: 'preview yielded to playback' }))
+        if (!this.release) { queueMicrotask(() => fail({ code: 0, text: 'playback has priority' })); return }
+      } else this.release = beginForegroundFetch()
+      const request = acquireSegment({ url, range, purpose: playback ? 'playback' : 'preview', duration: context.frag?.duration,
+        headers: context.headers, timeoutMs: config.loadPolicy?.maxLoadTimeMs,
+        progress: !range && callbacks.onProgress ? (stats, data) => {
+          if (!current()) return
+          this.stats.loading = { ...stats.loading }; this.stats.loaded = stats.loaded; this.stats.total = stats.total; this.stats.chunkCount = stats.chunkCount; this.stats.retry = stats.retry
+          callbacks.onProgress?.(this.stats, context, data, null)
+        } : undefined })
+      if (!current()) { request.release(); return }
+      this.releaseSegment = request.release
+      void request.promise.then(result => {
         if (!current()) return
-        if (buffer) { if (playback) telemetry.curEpStats.hits++; cacheSet(url, buffer, undefined, range); cached(buffer); fireListeners() }
-        else void fetchNetwork()
+        if (result.cached) {
+          if (playback) telemetry.curEpStats.hits++
+          cached(result.buffer)
+        } else {
+          if (playback) telemetry.curEpStats.misses++
+          this.stats.loading = { ...result.stats.loading }; this.stats.loaded = result.stats.loaded; this.stats.total = result.stats.total
+          this.stats.chunkCount = result.stats.chunkCount; this.stats.retry = result.stats.retry
+          const data = result.streamed ? new ArrayBuffer(0) : result.buffer.slice(0)
+          finish()
+          callbacks.onSuccess?.({ url, data, code: 200 }, this.stats, context, null)
+        }
+        fireListeners()
+      }).catch(error => {
+        if (!current()) return
+        if (error?.name === 'AbortError') { this.abort(); return }
+        if (playback) telemetry.curEpStats.misses++
+        fail({ code: error instanceof SegmentFailure ? error.code : 0, text: 'media segment request failed' })
+        fireListeners()
       })
     } else if (playlist) {
       const text = getM3u8FromCache(url)
@@ -205,23 +166,18 @@ export class TsCacheLoader implements Loader<LoaderContext> {
   getResponseHeader(name: string): string | null { return this.network?.getResponseHeader?.(name) ?? null }
   abort(): void {
     const notify = this.onAbort
-    this.onAbort = null
-    this.generation++
+    this.onAbort = null; this.generation++
     if (this.pending) this.stats.aborted = true
-    this.pending = false
-    this.network?.abort()
+    this.pending = false; this.network?.abort()
     this.release?.(); this.release = null
+    this.releaseSegment?.(); this.releaseSegment = null
     notify?.()
   }
   destroy(): void {
-    this.onAbort = null
-    this.abort()
-    this.destroyed = true
-    this.network?.destroy(); this.network = null
-    this.context = null
+    this.onAbort = null; this.abort(); this.destroyed = true
+    this.network?.destroy(); this.network = null; this.context = null
   }
 }
-
 export class TsCachePreviewLoader extends TsCacheLoader {
   constructor(config: Partial<HlsConfig>) { super(config, 'preview') }
 }

@@ -1,35 +1,45 @@
 import { stripAdFromM3u8Text } from './ad-filter'
+import { MAX_PLAYLIST_BYTES } from './constants'
 
 // ====== m3u8 文本级缓存（避免重复请求同一个 m3u8）
 // 最多保留 16 条，字符串占用估算总量不超过 8 MiB。
 // 用 Map 的插入有序特性做简易 LRU：命中时 delete+set 重新插入到末尾，超限时删头部最旧。
 const M3U8_CACHE_MAX = 16
 const M3U8_CACHE_BYTES = 8 * 1024 * 1024
-const MAX_PLAYLIST_BYTES = 8 * 1024 * 1024
-const m3u8TextCache = new Map<string, string>()
+const M3U8_TTL_MS = 60_000
+const m3u8TextCache = new Map<string, { text: string; expiresAt: number }>()
 let cacheBytes = 0
 export function getM3u8FromCache(url: string): string | null {
   const v = m3u8TextCache.get(url)
   if (v == null) return null
+  if (Date.now() >= v.expiresAt) { cacheBytes -= v.text.length * 2; m3u8TextCache.delete(url); return null }
   // LRU：命中则移到末尾（最近使用）
   m3u8TextCache.delete(url)
   m3u8TextCache.set(url, v)
-  return v
+  return v.text
 }
-export function setM3u8Cache(url: string, text: string): void {
+export function setM3u8Cache(url: string, text: string, headers?: Headers): void {
   const previous = m3u8TextCache.get(url)
-  if (previous !== undefined) { cacheBytes -= previous.length * 2; m3u8TextCache.delete(url) }
+  if (previous !== undefined) { cacheBytes -= previous.text.length * 2; m3u8TextCache.delete(url) }
+  const control = headers?.get('Cache-Control') ?? ''
+  if (/\b(?:no-store|no-cache)\b/i.test(control)) return
+  const maxAge = control.match(/(?:^|,)\s*max-age\s*=\s*"?(\d+)/i)
+  const age = Math.max(0, Number(headers?.get('Age')) || 0)
+  let ttl = maxAge ? Math.min(M3U8_TTL_MS, (Number(maxAge[1]) - age) * 1000) : M3U8_TTL_MS
+  const expires = Date.parse(headers?.get('Expires') ?? '')
+  if (!maxAge && Number.isFinite(expires)) ttl = Math.min(ttl, expires - Date.now())
+  if (ttl <= 0) return
   if (!text.replace(/^\uFEFF/, '').trimStart().startsWith('#EXTM3U') || text.length * 2 > M3U8_CACHE_BYTES) return
   // Live media playlists change at the same URL; replaying a cached version
   // prevents HLS from discovering the next segment after the first window.
   if (/#EXT(?:INF:|-X-(?:TARGETDURATION|MEDIA-SEQUENCE|PART):)/.test(text) && !/#EXT-X-ENDLIST\s*(?:$|\n)/.test(text)) return
-  m3u8TextCache.set(url, text)
+  m3u8TextCache.set(url, { text, expiresAt: Date.now() + ttl })
   cacheBytes += text.length * 2
   // 超限淘汰最旧（Map 迭代顺序 = 插入顺序，第一个即最久未用）
   while (m3u8TextCache.size > M3U8_CACHE_MAX || cacheBytes > M3U8_CACHE_BYTES) {
     const oldest = m3u8TextCache.keys().next().value
     if (oldest === undefined) break
-    cacheBytes -= m3u8TextCache.get(oldest)!.length * 2
+    cacheBytes -= m3u8TextCache.get(oldest)!.text.length * 2
     m3u8TextCache.delete(oldest)
   }
 }
@@ -56,7 +66,7 @@ export async function readPlaylistResponse(response: Response): Promise<string> 
       const { done, value } = await reader.read()
       if (done) break
       bytes += value.byteLength
-      if (bytes > MAX_PLAYLIST_BYTES) throw new Error('HLS playlist exceeds 8 MiB')
+      if (bytes > MAX_PLAYLIST_BYTES) throw new Error('HLS playlist exceeds 16 MiB')
       text += decoder.decode(value, { stream: true })
       if (!valid) {
         const prefix = text.replace(/^\uFEFF/, '').trimStart()
@@ -156,7 +166,7 @@ export async function fetchAndParseM3u8(url: string, signal?: AbortSignal): Prom
   if (!resp.ok) throw new Error('m3u8 fetch failed: ' + resp.status)
   const rawText = await readPlaylistResponse(resp)
   if (signal?.aborted) throw new Error('playlist load cancelled')
-  setM3u8Cache(url, rawText) // 缓存原始文本
+  setM3u8Cache(url, rawText, resp.headers) // 缓存原始文本
   const clean = stripAdFromM3u8Text(rawText, url)
   return _parseM3u8Text(clean, url)
 }

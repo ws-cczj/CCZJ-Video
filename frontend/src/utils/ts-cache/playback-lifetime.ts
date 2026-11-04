@@ -2,11 +2,12 @@ import { MAX_CACHED_BYTES, MAX_CACHED_SEGMENTS } from './constants'
 import { setMemoryCacheBudget } from './memory-cache'
 import { clearM3u8TextCache } from './m3u8'
 import { beginCacheSession } from './prefetch'
+import { queueRecentSegments, setDiskPlaybackActive } from './disk-cache'
 import { episodeIndex, fireListeners, netDiag, session, telemetry } from './store'
 
 const IDLE_GRACE_MS = 30_000
-const IDLE_MAX_BYTES = 8 * 1024 * 1024
-const IDLE_MAX_ENTRIES = 16
+const IDLE_MAX_BYTES = 16 * 1024 * 1024
+const IDLE_MAX_ENTRIES = 32
 const owners = new Set<symbol>()
 let idleTimer: ReturnType<typeof setTimeout> | null = null
 let idle = false
@@ -15,6 +16,7 @@ let idle = false
 export function retainPlayback(): () => void {
   const owner = Symbol('playback-cache')
   owners.add(owner)
+  setDiskPlaybackActive(true)
   idle = false
   session.enabled = true
   setMemoryCacheBudget(MAX_CACHED_BYTES, MAX_CACHED_SEGMENTS)
@@ -22,15 +24,20 @@ export function retainPlayback(): () => void {
   idleTimer = null
   return () => {
     if (!owners.delete(owner) || owners.size > 0) return
+    queueRecentSegments()
+    setDiskPlaybackActive(false)
     // Cancel jobs immediately, but give a quick reopen the full warm cache.
     beginCacheSession()
     session.enabled = false
+    session.transportActive = false
+    session.transportOwner = null
     session.playbackBufferAhead = 0
     session.episodes = []
     session.currentEpIdx = -1
     session.currentEpKey = ''
     session.currentVodId = session.currentSourceKey = ''
     episodeIndex.segmentsByEpisode.clear()
+    episodeIndex.segmentKeysByEpisode.clear()
     episodeIndex.playedSegmentsByEpisode.clear()
     telemetry.epStats.clear()
     telemetry.curEpStats = { hits: 0, misses: 0 }

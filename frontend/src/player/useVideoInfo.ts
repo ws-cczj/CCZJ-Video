@@ -32,7 +32,7 @@ export function useVideoInfo(deps: {
   getUrl: () => string
   duration: Ref<number>; current: Ref<number>; muted: Ref<boolean>; volume: Ref<number>; speed: Ref<number>
   streams: Ref<StreamVariantInfo[]>
-  cacheStats: Ref<{ entries: number; totalSegments: number; bytes: number; hitRate: number }>
+  cacheStats: Ref<{ entries: number; totalSegments: number; bytes: number; hitRate: number; transportActive?: boolean }>
   qualityLabel: () => string
   t: (key: string, values?: Record<string, unknown>) => string
 }) {
@@ -165,8 +165,8 @@ export function useVideoInfo(deps: {
 
     // 缓存统计
     const cs = cacheStats.value
-    const cacheInfo = t('player.cacheInfoLine', { cached: cs.entries, total: cs.totalSegments, bytes: formatBytes(cs.bytes), rate: (cs.hitRate * 100).toFixed(0) })
-    const cacheMode = cs.totalSegments > 0 ? t('player.tscacheActive') : t('player.notActive')
+    const cacheInfo = cs.transportActive === false ? t('player.notActive') : t('player.cacheInfoLine', { cached: cs.entries, total: cs.totalSegments, bytes: formatBytes(cs.bytes), rate: (cs.hitRate * 100).toFixed(0) })
+    const cacheMode = cs.transportActive !== false && cs.totalSegments > 0 ? t('player.tscacheActive') : t('player.notActive')
 
     // 网络模式
     let networkMode = ''

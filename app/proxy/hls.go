@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-const maxPlaylistBytes = 8 << 20
+const maxPlaylistBytes = 16 << 20
 
 // maxRefBytes 限制调用方塞进来的引用页长度。超长直接忽略，退回按上游 URL 自己推导。
 const maxRefBytes = 1024

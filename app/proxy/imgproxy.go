@@ -21,7 +21,7 @@ import (
 
 const (
 	// Defaults for reading images; age is measured since last access.
-	readingCacheTTL = 3 * 24 * time.Hour
+	readingCacheTTL = 7 * 24 * time.Hour
 	// readingCacheMaxBytes 比海报那份（80MB）大：单页体积差一到两个数量级，
 	// 80MB 只装得下几十话，翻两下就全被挤出去了。
 	readingCacheMaxBytes = 256 << 20

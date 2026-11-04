@@ -16,6 +16,7 @@ interface DiskSegmentMeta {
   url: string
   episodeKey: string
   ts: number
+  accessedAt?: number
   size: number
 }
 
@@ -62,7 +63,7 @@ function waitForTransaction(transaction: IDBTransaction): Promise<void> {
   return new Promise((resolve, reject) => {
     transaction.oncomplete = () => resolve()
     transaction.onabort = () => reject(transaction.error)
-    transaction.onerror = () => reject(transaction.error)
+    transaction.onerror = event => reject((event.target as IDBRequest | null)?.error ?? transaction.error)
   })
 }
 
@@ -79,7 +80,15 @@ function waitForRequest<T>(request: IDBRequest<T>): Promise<T> {
  * and invalidation, never to restore a whole episode into the playback heap.
  */
 export class SegmentDiskCache {
-  private pruneTimer: number | null = null
+  private maintenancePaused = false
+  private maintenanceTransaction: IDBTransaction | undefined
+
+  setMaintenancePaused(paused: boolean): void {
+    this.maintenancePaused = paused
+    if (paused) {
+      try { this.maintenanceTransaction?.abort() } catch { /* Already committed. */ }
+    }
+  }
   private connection: Promise<IDBDatabase> | undefined
   private closeTimer: ReturnType<typeof setTimeout> | undefined
   private users = 0
@@ -122,24 +131,27 @@ export class SegmentDiskCache {
   constructor(
     private readonly maxBytes: number,
     private readonly ttlMs: number,
-    private readonly pruneDebounceMs: number,
   ) {}
 
-  async save(url: string, data: ArrayBuffer, episodeKey: string): Promise<void> {
+  async save(url: string, data: ArrayBuffer, episodeKey: string): Promise<boolean> {
     const db = await this.acquire()
     try {
+      if (this.maintenancePaused) return false
       const transaction = db.transaction([STORE_NAME, META_STORE_NAME], 'readwrite')
+      this.maintenanceTransaction = transaction
       const now = Date.now()
       transaction.objectStore(STORE_NAME).put({ url, data } satisfies DiskSegmentRecord)
       transaction.objectStore(META_STORE_NAME).put({
         url,
         episodeKey,
         ts: now,
+        accessedAt: now,
         size: data.byteLength,
       } satisfies DiskSegmentMeta)
       await waitForTransaction(transaction)
-      this.schedulePrune()
+      return true
     } finally {
+      this.maintenanceTransaction = undefined
       this.release()
     }
   }
@@ -153,7 +165,7 @@ export class SegmentDiskCache {
       const metadata = await waitForRequest(metadataRequest) as DiskSegmentMeta | undefined
       await waitForTransaction(metadataTransaction)
       // Check expiry before cloning a potentially large binary from IndexedDB.
-      if (!metadata || Date.now() - metadata.ts > this.ttlMs || metadata.size <= 0) return null
+      if (!metadata || !Number.isFinite(metadata.ts) || !Number.isFinite(metadata.size) || Date.now() - metadata.ts > this.ttlMs || metadata.size <= 0 || metadata.size > this.maxBytes) return null
 
       const dataTransaction = db.transaction(STORE_NAME, 'readonly')
       const recordRequest = dataTransaction.objectStore(STORE_NAME).get(url)
@@ -164,6 +176,16 @@ export class SegmentDiskCache {
     } finally {
       this.release()
     }
+  }
+
+  async dropSegment(url: string): Promise<void> {
+    const db = await this.acquire()
+    try {
+      const transaction = db.transaction([STORE_NAME, META_STORE_NAME], 'readwrite')
+      transaction.objectStore(STORE_NAME).delete(url)
+      transaction.objectStore(META_STORE_NAME).delete(url)
+      await waitForTransaction(transaction)
+    } finally { this.release() }
   }
 
   async clear(): Promise<void> {
@@ -232,9 +254,28 @@ export class SegmentDiskCache {
     }
   }
 
-  async prune(maxBytes = this.maxBytes): Promise<number> {
+  async touch(touches: ReadonlyMap<string, number>): Promise<void> {
     const db = await this.acquire()
     try {
+      if (this.maintenancePaused || touches.size === 0) return
+      const transaction = db.transaction(META_STORE_NAME, 'readwrite')
+      this.maintenanceTransaction = transaction
+      const store = transaction.objectStore(META_STORE_NAME)
+      for (const [url, accessedAt] of touches) {
+        const request = store.get(url)
+        request.onsuccess = () => {
+          const entry = request.result as DiskSegmentMeta | undefined
+          if (entry) store.put({ ...entry, accessedAt: Math.max(entry.accessedAt ?? entry.ts, accessedAt) })
+        }
+      }
+      await waitForTransaction(transaction)
+    } finally { this.maintenanceTransaction = undefined; this.release() }
+  }
+
+  async prune(maxBytes = this.maxBytes, replacements: ReadonlySet<string> = new Set()): Promise<number> {
+    const db = await this.acquire()
+    try {
+      if (this.maintenancePaused) return 0
       const readTransaction = db.transaction(META_STORE_NAME, 'readonly')
       const request = readTransaction.objectStore(META_STORE_NAME).getAll()
       const entries = await waitForRequest(request) as DiskSegmentMeta[]
@@ -242,18 +283,23 @@ export class SegmentDiskCache {
 
       const now = Date.now()
       let keptBytes = 0
+      let keptCount = replacements.size
       const toDelete: string[] = []
-      entries.sort((left, right) => right.ts - left.ts)
+      entries.sort((left, right) => (right.accessedAt ?? right.ts) - (left.accessedAt ?? left.ts))
       for (const entry of entries) {
-        if (now - entry.ts > this.ttlMs || keptBytes + entry.size > maxBytes) {
+        if (replacements.has(entry.url)) continue
+        if (!Number.isFinite(entry.size) || entry.size <= 0 || !Number.isFinite(entry.ts) || now - entry.ts > this.ttlMs || keptBytes + entry.size > maxBytes || keptCount >= 2048) {
           toDelete.push(entry.url)
         } else {
           keptBytes += entry.size
+          keptCount++
         }
       }
       if (toDelete.length === 0) return 0
+      if (this.maintenancePaused) return 0
 
       const deleteTransaction = db.transaction([STORE_NAME, META_STORE_NAME], 'readwrite')
+      this.maintenanceTransaction = deleteTransaction
       const segmentStore = deleteTransaction.objectStore(STORE_NAME)
       const metadataStore = deleteTransaction.objectStore(META_STORE_NAME)
       for (const url of toDelete) {
@@ -263,16 +309,9 @@ export class SegmentDiskCache {
       await waitForTransaction(deleteTransaction)
       return toDelete.length
     } finally {
+      this.maintenanceTransaction = undefined
       this.release()
     }
-  }
-
-  private schedulePrune(): void {
-    if (this.pruneTimer != null) return
-    this.pruneTimer = window.setTimeout(() => {
-      this.pruneTimer = null
-      void this.prune().catch(() => {})
-    }, this.pruneDebounceMs)
   }
 
   private infoResult(count: number, bytes: number): DiskCacheInfo {

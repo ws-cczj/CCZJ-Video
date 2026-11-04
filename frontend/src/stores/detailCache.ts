@@ -24,6 +24,8 @@ const STORAGE_KEY = CCZJ.Storage.detailCache
 // 一条多线路影片的条目现在装着每线路的完整集表，体积按线路数翻倍；条目数相应下调，
 // 否则超出浏览器配额时 writeStorage 只会静默丢缓存。
 const MAX_ENTRIES = 12
+const MAX_ENTRY_BYTES = 1024 * 1024
+const MAX_TOTAL_BYTES = 2 * 1024 * 1024
 const CHUNK_SIZE = 16 * 1024
 const LARGE_JSON_SIZE = 64 * 1024
 const LARGE_M3U8_URL = 2048
@@ -60,8 +62,9 @@ async function joinChunks(chunks: string[]): Promise<string> {
 // map 常驻内存，只在第一次用到时解析一次；落盘合并成防抖一次。见 createDebouncedWriter：
 // 这张 map 装的是最多 12 条多线路详情 payload，以前每次命中都要整张 parse + stringify，
 // 而那正好落在详情页/播放页挂载的主线程上。代价是这些 payload 会占着内存到关窗为止，
-// 上限由 MAX_ENTRIES 和 localStorage 配额一起兜住。
+// 条数与序列化字节预算同时限制驻留和持久副本。
 let memEntries: Record<string, StoredDetailEntry> | null = null
+let generation = 0
 
 function detailEntries(): Record<string, StoredDetailEntry> {
   if (!memEntries) {
@@ -70,9 +73,12 @@ function detailEntries(): Record<string, StoredDetailEntry> {
       const row = value as StoredDetailEntry
       return Number.isFinite(row.accessedAt) && Number.isFinite(row.cachedAt)
         && (row.format === 'json' || row.format === 'br')
-        && Array.isArray(row.chunks) && row.chunks.every(chunk => typeof chunk === 'string')
+        && Array.isArray(row.chunks) && row.chunks.length <= MAX_ENTRY_BYTES / CHUNK_SIZE
+        && row.chunks.every(chunk => typeof chunk === 'string')
+        && row.chunks.reduce((bytes, chunk) => bytes + chunk.length * 2, 0) <= MAX_ENTRY_BYTES
     })
     trim(memEntries)
+    persistDetails.schedule()
   }
   return memEntries
 }
@@ -140,12 +146,13 @@ async function decode(entry: StoredDetailEntry): Promise<VideoDetailResponse | n
 }
 
 function trim(entries: Record<string, StoredDetailEntry>): void {
-  const keys = Object.keys(entries)
-  if (keys.length <= MAX_ENTRIES) return
-  keys
-    .sort((a, b) => (entries[a].accessedAt || 0) - (entries[b].accessedAt || 0))
-    .slice(0, keys.length - MAX_ENTRIES)
-    .forEach((key) => delete entries[key])
+  let bytes = 4, count = 0
+  const keys = Object.keys(entries).sort((a, b) => entries[b].accessedAt - entries[a].accessedAt)
+  for (const key of keys) {
+    const size = (JSON.stringify(key).length + JSON.stringify(entries[key]).length + 2) * 2
+    if (size > MAX_ENTRY_BYTES || bytes + size > MAX_TOTAL_BYTES || count >= MAX_ENTRIES) delete entries[key]
+    else { bytes += size; count++ }
+  }
 }
 
 export async function readDetailCache(
@@ -159,7 +166,9 @@ export async function readDetailCache(
   const entry = entries[key]
   if (!entry) return null
 
+  const epoch = generation
   const detail = await decode(entry)
+  if (epoch !== generation || entries[key] !== entry) return null
   if (!detail?.video || (vodId && String(detail.video.vod_id) !== vodId) ||
     (!vodId && globalId > 0 && Number(detail.video.global_id) !== globalId)) {
     delete entries[key]
@@ -183,7 +192,10 @@ export async function writeDetailCache(
   if ((vodId && String(response.video.vod_id) !== vodId) ||
     (!vodId && globalId > 0 && Number(response.video.global_id) !== globalId)) return
   const entries = detailEntries()
-  entries[makeKey(sourceKey, vodId, globalId)] = await encode(response)
+  const epoch = generation
+  const entry = await encode(response)
+  if (epoch !== generation) return
+  entries[makeKey(sourceKey, vodId, globalId)] = entry
   trim(entries)
   persistDetails.schedule()
 }
@@ -196,6 +208,7 @@ export async function writeDetailCache(
  */
 export function dropDetailCache(sourceKey: string, vodIds?: string[]): number {
   if (!sourceKey) return 0
+  generation++
   const entries = detailEntries()
   const keys = vodIds?.length
     ? vodIds.map((vodId) => makeKey(sourceKey, vodId))

@@ -27,7 +27,7 @@ describe('playlist input memory bounds', () => {
     expect(cancel).toHaveBeenCalledOnce()
   })
   it('rejects a declared oversized playlist before decoding it', async () => {
-    const response = new Response('#EXTM3U', { headers: { 'Content-Type': 'application/vnd.apple.mpegurl', 'Content-Length': String(9 * 1024 * 1024) } })
+    const response = new Response('#EXTM3U', { headers: { 'Content-Type': 'application/vnd.apple.mpegurl', 'Content-Length': String(17 * 1024 * 1024) } })
     const text = vi.spyOn(response, 'text')
     vi.stubGlobal('fetch', vi.fn(async () => response))
     await expect(fetchAndParseM3u8('https://media/huge.m3u8')).rejects.toThrow()

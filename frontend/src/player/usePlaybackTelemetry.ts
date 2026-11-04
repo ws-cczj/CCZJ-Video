@@ -105,8 +105,8 @@ function startLoadingStats(): void {
   if (loadingStatsTimer) clearInterval(loadingStatsTimer)
   loadingStatsTimer = window.setInterval(() => {
     const s = TsCache.stats()
-    loadingCached.value = s.entries
-    loadingTotal.value = s.totalSegments
+    loadingCached.value = s.inventory
+    loadingTotal.value = s.prefetchTarget
     loadingElapsed.value = Math.round((Date.now() - loadingStatsStartTime) / 1000)
 
     // 计算下载速度
@@ -139,9 +139,11 @@ function stopLoadingStats(): void {
 const cacheStats = shallowRef<{
   hits: number; misses: number; entries: number; bytes: number; hitRate: number;
   totalSegments: number; prefetched: number; prefetchTarget: number; queued: number; inflight: number;
+  inventory: number; redundancy: number; replenishing: boolean; transportActive: boolean;
 }>({
   hits: 0, misses: 0, entries: 0, bytes: 0, hitRate: 0, totalSegments: 0, prefetched: 0,
   prefetchTarget: 0, queued: 0, inflight: 0,
+  inventory: 0, redundancy: 0, replenishing: false, transportActive: false,
 })
 let cacheStatsTimer: number | null = null
 function formatBytes(n: number): string {
@@ -155,8 +157,10 @@ function updateCacheStats(): void {
   const changed = cacheStats.value.hits !== s.hits || cacheStats.value.misses !== s.misses
   cacheStats.value = {
     hits: s.hits, misses: s.misses, entries: s.entries, bytes: s.bytes,
-    hitRate: s.hitRate, totalSegments: s.totalSegments, prefetched: s.entries,
+    hitRate: s.hitRate, totalSegments: s.totalSegments, prefetched: s.available,
     prefetchTarget: s.prefetchTarget, queued: s.queued, inflight: s.inflight,
+    inventory: s.inventory, redundancy: s.redundancy, replenishing: s.replenishing,
+    transportActive: s.transportActive,
   }
   if (changed && (s.hits + s.misses) > 0) {
     console.log(
@@ -184,7 +188,7 @@ function stop():void {
 }
 function reset():void {
   stop()
-  cacheStats.value={hits:0,misses:0,entries:0,bytes:0,hitRate:0,totalSegments:0,prefetched:0,prefetchTarget:0,queued:0,inflight:0}
+  cacheStats.value={hits:0,misses:0,entries:0,bytes:0,hitRate:0,totalSegments:0,prefetched:0,prefetchTarget:0,queued:0,inflight:0,inventory:0,redundancy:0,replenishing:false,transportActive:false}
 }
 onBeforeUnmount(stop)
 return {cacheStats,loadingCached,loadingTotal,loadingSpeed,loadingElapsed,startLoadingStats,stopLoadingStats,

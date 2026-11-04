@@ -1,4 +1,4 @@
-import { DEFAULT_PREFETCH_SECONDS, MAX_PREFETCH_COUNT, MIN_PREFETCH_COUNT } from './constants'
+import { MAX_PREFETCH_COUNT, MIN_PREFETCH_COUNT, PREFETCH_CONCURRENCY, STANDARD_INVENTORY } from './constants'
 import { netDiag, session, telemetry } from './store'
 import type { NetworkMode } from './store'
 
@@ -13,10 +13,14 @@ export function updateNetworkDiagnosis(): void {
   const bytes = telemetry.recentFetchBytes.reduce((a,b) => a+b,0)
   const seconds = telemetry.recentMediaSeconds.reduce((a,b) => a+b,0)
   netDiag.downloadAvgMs = ms / durations.length
-  netDiag.throughputBps = bytes * 8000 / ms
-  netDiag.downloadRatio = ms / Math.max(1,seconds * 1000)
-  const last = durations.length - 1
-  const ratio = durations[last] / Math.max(1,telemetry.recentMediaSeconds[last] * 1000) * session.playbackRate
+  const intervals = telemetry.recentFetchStarts.map((start, i) => [start, telemetry.recentFetchEnds[i]!]).sort((a, b) => a[0]! - b[0]!)
+  let activeMs = 0, end = -Infinity
+  for (const interval of intervals) { activeMs += Math.max(0, interval[1]! - Math.max(end, interval[0]!)); end = Math.max(end, interval[1]!) }
+  // Concurrent requests share a wall-clock interval; summing their individual
+  // durations would treat each connection as if it owned the full link.
+  netDiag.throughputBps = bytes * 8000 / Math.max(1, activeMs || ms)
+  netDiag.downloadRatio = bytes * 8 / Math.max(1, seconds * netDiag.throughputBps)
+  const ratio = netDiag.downloadRatio * session.playbackRate
   netDiag.failureCount = 0
   if (ratio >= .8) {
     netDiag.recoveryStreak = 0
@@ -47,8 +51,20 @@ export function resetNetworkDiagnosis(): void {
 }
 
 export function adaptivePrefetchCount(): number {
-  const seconds = netDiag.mode === 'normal' ? DEFAULT_PREFETCH_SECONDS : 20
-  return Math.max(MIN_PREFETCH_COUNT, Math.min(MAX_PREFETCH_COUNT, Math.ceil(seconds / Math.max(1,session.targetDuration))))
+  return Math.min(MAX_PREFETCH_COUNT, STANDARD_INVENTORY + adaptiveRedundancy() + 1)
+}
+
+export function adaptiveRedundancy(): number {
+  const durations = telemetry.recentFetchDurations
+  if (!durations.length) return MIN_PREFETCH_COUNT
+  const sorted = durations.slice().sort((a, b) => a - b)
+  const p90 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * .9))]!
+  const meanBytes = telemetry.recentFetchBytes.reduce((sum, bytes) => sum + bytes, 0) / durations.length
+  const predictedMs = netDiag.throughputBps > 0 ? meanBytes * 8000 * PREFETCH_CONCURRENCY / (netDiag.throughputBps * .8) : p90
+  const typical = Math.max(1, session.targetDuration)
+  // Cover a conservative refill plus jitter in wall time, converted to media
+  // consumption. The bounded window remains attainable on a constrained link.
+  return Math.max(2, Math.min(8, Math.ceil((Math.max(p90, predictedMs) / 1000 * 1.5 + 1) * session.playbackRate / typical)))
 }
 
 // Speculation starts past the contiguous HLS buffer, never at far-away sparse
@@ -56,15 +72,12 @@ export function adaptivePrefetchCount(): number {
 export function adaptiveBufferOffset(): number { return Math.max(1,Math.floor(session.playbackBufferAhead / Math.max(1,session.targetDuration))) }
 export function adaptiveSpreadStep(): number { return 1 }
 
-/** One spare connection only when observed capacity has comfortable headroom. */
 export function adaptiveConcurrency(): number {
-  if (netDiag.mode !== 'normal') return 0
-  if (telemetry.recentFetchDurations.length >= 2 && netDiag.downloadRatio * session.playbackRate >= .55) return 0
-  return 1
+  return PREFETCH_CONCURRENCY
 }
 
 export function adaptiveFragmentTimeout(): number {
   return Math.min(60_000, Math.max(15_000, session.targetDuration * 1000 * Math.max(3,netDiag.downloadRatio * 3)))
 }
 
-export function adaptiveForwardBuffer(): number { return netDiag.mode === 'normal' ? 30 : 60 }
+export function adaptiveForwardBuffer(): number { return Math.max(6, Math.min(30, session.targetDuration * 2)) }

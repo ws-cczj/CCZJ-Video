@@ -9,6 +9,7 @@ import PortraitPlayerControls from '../player/views/PortraitPlayerControls.vue'
 import Icon from './Icon.vue'
 import { Button, Modal, MotionTransition } from './ui'
 import { TsCache } from '../utils/tsCache'
+import type { BlockedSegment } from '../utils/ts-cache/prefetch'
 import { usePerfStore } from '../stores/perf'
 import { usePluginStore } from '../stores/plugins'
 import { preparePlayback } from '../player/preparation'
@@ -298,6 +299,13 @@ const bufferPct = ref(0)
 function updateBuffer(): void {
   if(casting.value){TsCache.setPlaybackBufferAhead(0);return}
   const v = getVideoEl()
+  if (v) {
+    const ranges: [number, number][] = []
+    for (let i = 0; i < v.buffered.length; i++) ranges.push([v.buffered.start(i), v.buffered.end(i)])
+    const initial = v.readyState < 2 && !prepared.value
+    TsCache.updatePlaybackState({ position: v.currentTime, rate: v.playbackRate, paused: v.paused && !initial,
+      seeking: v.seeking, waiting: (!v.paused || initial) && v.readyState < 3, buffered: ranges })
+  }
   if (!v || !v.duration || v.duration <= 0) {
     TsCache.setPlaybackBufferAhead(0)
     return
@@ -455,7 +463,9 @@ async function prepareAccessories(video:HTMLVideoElement):Promise<void> {
   }
 }
 
+const segmentIssue = ref<BlockedSegment | null>(null)
 const source = createPlaybackSource({
+  segmentIssue: issue => { segmentIssue.value = issue },
   streams: streams => { m3u8StreamInfo.value = streams },
   error: (code, detail) => {
     clearRecovery()
@@ -562,6 +572,7 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
   if (!mobile) bindOsdListeners(video, signal)
 
   on('play', () => {
+    updateBuffer()
     // Android may restore a background video's previous play state on return.
     // A confirmed cast owns playback until the receiver session is stopped.
     if(casting.value||!interruptions.allowed()){video.pause();playing.value=false;return}
@@ -578,6 +589,7 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
     if(!source.resume())resumeStreaming(video)
   })
   on('pause', () => {
+    updateBuffer()
     if(!video.error&&!errorMsg.value&&(prepared.value||video.currentTime>0))lastCheckpoint=checkpoint()
     clearRecovery()
     endStall('paused')
@@ -675,6 +687,7 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
     if (!mobile && !portrait) showVolumeToastRef()
   })
   on('ratechange', () => {
+    updateBuffer()
     speed.value = video.playbackRate
     if(continuationState&&prepared.value&&video.readyState>=1&&!gestures.boosting.value)continuationState.rate=video.playbackRate
     if (portrait) return
@@ -1159,10 +1172,10 @@ defineExpose({ isPlaying:computed(()=>playing.value&&!loading.value&&!casting.va
     <div v-if="!portrait" v-show="showTitleBar && !mobileLocked && controlsVisible" class="player-title-bar" @click.stop @dblclick.stop>
       <button v-if="mobile" class="cczj-mobile-player-back" :aria-label="t('common.back')" @click="isFullscreen ? toggleFullscreen() : emit('back')"><Icon name="chevron-left" :size="22" /></button>
       <span v-show="!mobile || isFullscreen" class="player-title">{{ title || url }}</span>
-      <span v-if="!mobile && isHls(url) && cacheStats.totalSegments > 0" class="cache-info"
+      <span v-if="!mobile && isHls(url) && cacheStats.transportActive && cacheStats.totalSegments > 0" class="cache-info"
         :class="{ working: cacheStats.queued + cacheStats.inflight > 0 }"
-        :title="t('player.cacheStatsTip', { hits: cacheStats.hits, misses: cacheStats.misses, entries: cacheStats.entries, target: cacheStats.prefetchTarget })">
-        {{ t('player.cachedCountShort', { count: cacheStats.entries }) }}<span v-if="cacheStats.queued + cacheStats.inflight > 0"> · {{ t('player.prefetching') }}</span><span v-else> · {{ t('player.ready') }}</span> ·
+        :title="t('player.cacheStatsTip', { hits: cacheStats.hits, misses: cacheStats.misses, entries: cacheStats.entries, target: cacheStats.prefetchTarget, inventory: cacheStats.inventory, redundancy: cacheStats.redundancy })">
+        {{ t('player.inventoryCountShort', { count: cacheStats.inventory }) }}<span v-if="cacheStats.replenishing"> · {{ t('player.prefetching') }}</span><span v-else> · {{ t('player.ready') }}</span> ·
         {{ t('player.hitRateShort') }} {{ (cacheStats.hitRate * 100).toFixed(0) }}%
       </span>
       <button v-if="mobile" class="cczj-mobile-player-favorite" :aria-label="t(isFav?'detail.removeFav':'detail.addFav')" :aria-pressed="isFav" :disabled="favBusy" @click.stop="emit('toggleFavorite')"><Icon name="star" :size="21" /></button>
@@ -1247,6 +1260,12 @@ defineExpose({ isPlaying:computed(()=>playing.value&&!loading.value&&!casting.va
       <div v-if="showNetworkError || portrait" class="error-actions">
         <button class="error-btn error-btn-primary" @click.stop="retryPlayback()">{{ t('player.retryPlayback') }}</button>
       </div>
+    </div>
+
+    <div v-if="segmentIssue && !casting" class="resume-bili cczj-flex-wrap" role="status" aria-live="polite" @pointerdown.stop @click.stop @dblclick.stop>
+      <span class="resume-bili-text">{{ t('player.segmentUnavailable', { seconds: Math.ceil(segmentIssue.seconds) }) }}</span>
+      <Button variant="overlay" size="sm" @click.stop="source.retrySegment()">{{ t('player.segmentRetry') }}</Button>
+      <Button variant="overlay" size="sm" @click.stop="source.skipSegment()">{{ t('player.segmentSkip') }}</Button>
     </div>
 
     <!-- 底部左侧的续播提示仅在有可恢复进度时出现。 -->
