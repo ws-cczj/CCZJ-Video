@@ -7,8 +7,6 @@ export const LOG_PREFIX = '[TsCache]'
 //   - 全局最多 2048 片 / 256 MiB（超出就淘汰全局最久没被读到的片段）
 //   - 这样切换到已看过的集，缓存仍能命中；而长期不用的片段会自然被淘汰
 export const DEFAULT_PREFETCH_SECONDS = 60
-export const MIN_PREFETCH_COUNT = 4
-export const MAX_PREFETCH_COUNT = 20
 export const PREFETCH_TRIGGER_WHEN_LESS_THAN = 12
 export const PREFETCH_AHEAD_NEXT_EPISODE = 5
 export const PREFETCH_DEBOUNCE_MS = 300
@@ -19,8 +17,14 @@ export const MAX_PER_EPISODE = 128
 export const MAX_PLAYLIST_BYTES = 16 * 1024 * 1024
 export const MAX_FRAGMENT_CAPTURE_BYTES = 64 * 1024 * 1024
 export const PREFETCH_CONCURRENCY = 3
-export const MIN_INVENTORY = 4
-export const STANDARD_INVENTORY = 10
+export const STANDARD_INVENTORY = 30
+export const MIN_INVENTORY = Math.ceil(STANDARD_INVENTORY * .4)
+export const MIN_REDUNDANCY = Math.ceil(STANDARD_INVENTORY * .2)
+export const MAX_REDUNDANCY = Math.ceil(STANDARD_INVENTORY * .8)
+export const DEFAULT_REDUNDANCY = Math.ceil(STANDARD_INVENTORY * .4)
+export const MIN_PREFETCH_COUNT = DEFAULT_REDUNDANCY
+// Include the first segment strictly above the standard plus redundancy.
+export const MAX_PREFETCH_COUNT = Math.min(MAX_QUEUE_PER_EPISODE, STANDARD_INVENTORY + MAX_REDUNDANCY + 1)
 export const SPEED_SAMPLE_COUNT = 8
 
 // ====== 网络诊断阈值 ======

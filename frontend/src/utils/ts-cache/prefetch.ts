@@ -1,4 +1,4 @@
-import { MAX_QUEUE_PER_EPISODE, MAX_PREFETCH_COUNT, MIN_INVENTORY, STANDARD_INVENTORY } from './constants'
+import { MAX_QUEUE_PER_EPISODE, MIN_INVENTORY, STANDARD_INVENTORY, DEFAULT_REDUNDANCY } from './constants'
 import { cacheHas } from './memory-cache'
 import { queueRecentSegments, setDiskPlaybackActive } from './disk-cache'
 import { adaptiveConcurrency, adaptivePrefetchCount, adaptiveRedundancy } from './network'
@@ -20,13 +20,13 @@ let refillSince = 0
 let buffered: [number, number][] = []
 let currentIndex = 0
 let warmups = 0
-let lastRedundancy = 4
+let lastRedundancy = DEFAULT_REDUNDANCY
 let redundancyAt = 0
 let stallAt = 0
 let skipped = new Set<string>()
 let suppressed: { key: string; failures: number } | undefined
 let nextWarmup = ''
-let lastSnapshot = { inventory: 0, available: 0, seconds: 0, redundancy: 4, minimum: MIN_INVENTORY, target: STANDARD_INVENTORY + 5, replenishing: false, assisting: false, pending: 0 }
+let lastSnapshot = { inventory: 0, available: 0, seconds: 0, redundancy: DEFAULT_REDUNDANCY, minimum: MIN_INVENTORY, target: STANDARD_INVENTORY + DEFAULT_REDUNDANCY + 1, replenishing: false, assisting: false, pending: 0 }
 
 function keyOf(segment: SegmentInfo): string { return transferKey(segment.url, segment.range) }
 function abortError(): DOMException { return new DOMException('Cancelled', 'AbortError') }
@@ -68,10 +68,10 @@ export function beginCacheSession(): void {
   currentIndex = 0; replenishing = false; refillSince = 0; buffered = []; stallAt = 0
   episodeIndex.timeline = []
   session.playbackPosition = 0
-  skipped = new Set(); lastRedundancy = 4; redundancyAt = 0
+  skipped = new Set(); lastRedundancy = DEFAULT_REDUNDANCY; redundancyAt = 0
   suppressed = undefined
   nextWarmup = ''
-  lastSnapshot = { inventory: 0, available: 0, seconds: 0, redundancy: 4, minimum: MIN_INVENTORY, target: STANDARD_INVENTORY + 5, replenishing: false, assisting: false, pending: 0 }
+  lastSnapshot = { inventory: 0, available: 0, seconds: 0, redundancy: DEFAULT_REDUNDANCY, minimum: MIN_INVENTORY, target: STANDARD_INVENTORY + DEFAULT_REDUNDANCY + 1, replenishing: false, assisting: false, pending: 0 }
 }
 
 export function setPlaybackTimeline(segments: SegmentInfo[]): void {
@@ -166,7 +166,7 @@ function pump(): void {
   const now = performance.now(), desiredRedundancy = adaptiveRedundancy()
   if (desiredRedundancy >= lastRedundancy || now - redundancyAt > 10_000) { lastRedundancy = desiredRedundancy; redundancyAt = now }
   const timeline = episodeIndex.timeline
-  const target = Math.min(MAX_PREFETCH_COUNT, STANDARD_INVENTORY + lastRedundancy + 1, timeline.length - currentIndex)
+  const target = Math.min(adaptivePrefetchCount(lastRedundancy), Math.max(0, timeline.length - currentIndex))
   const window = timeline.slice(currentIndex, currentIndex + Math.min(MAX_QUEUE_PER_EPISODE, Math.max(0, target)))
   const keep = new Set(window.map(keyOf))
   pruneTransferFailures(keep)
@@ -251,7 +251,7 @@ export function notifyCurrentTs(url: string): void {
     void prefetchNextEpisode(2).catch(() => { if (nextWarmup === nextKey) nextWarmup = '' })
   }
 }
-export function prefetchFromSegments(urls: string[], epIdx: number, startFrom = 0, _count = 20): number {
+export function prefetchFromSegments(urls: string[], epIdx: number, startFrom = 0, _count = STANDARD_INVENTORY): number {
   const ep = session.episodes[epIdx], key = epKeyFrom(ep, epIdx)
   if (!key) return 0
   episodeIndex.segmentsByEpisode.set(key, urls)

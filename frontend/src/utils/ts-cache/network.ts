@@ -1,4 +1,4 @@
-import { MAX_PREFETCH_COUNT, MIN_PREFETCH_COUNT, PREFETCH_CONCURRENCY, STANDARD_INVENTORY } from './constants'
+import { MAX_PREFETCH_COUNT, DEFAULT_REDUNDANCY, MIN_REDUNDANCY, MAX_REDUNDANCY, MAX_CACHED_BYTES, PREFETCH_CONCURRENCY, STANDARD_INVENTORY } from './constants'
 import { netDiag, session, telemetry } from './store'
 import type { NetworkMode } from './store'
 
@@ -50,13 +50,17 @@ export function resetNetworkDiagnosis(): void {
   netDiag.throughputBps = netDiag.downloadRatio = netDiag.recoveryStreak = netDiag.failureCount = 0
 }
 
-export function adaptivePrefetchCount(): number {
-  return Math.min(MAX_PREFETCH_COUNT, STANDARD_INVENTORY + adaptiveRedundancy() + 1)
+export function adaptivePrefetchCount(redundancy = adaptiveRedundancy()): number {
+  const sizes = telemetry.recentFetchBytes.filter(bytes => Number.isFinite(bytes) && bytes > 0)
+  // Reserve a quarter of retained RAM for rewind/other entries. Conservatively
+  // bound future fragments by the largest recent actual network sample.
+  const byteLimit = sizes.length ? Math.max(1, Math.floor(MAX_CACHED_BYTES * .75 / Math.max(...sizes))) : MAX_PREFETCH_COUNT
+  return Math.min(MAX_PREFETCH_COUNT, STANDARD_INVENTORY + redundancy + 1, byteLimit)
 }
 
 export function adaptiveRedundancy(): number {
   const durations = telemetry.recentFetchDurations
-  if (!durations.length) return MIN_PREFETCH_COUNT
+  if (!durations.length) return DEFAULT_REDUNDANCY
   const sorted = durations.slice().sort((a, b) => a - b)
   const p90 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * .9))]!
   const meanBytes = telemetry.recentFetchBytes.reduce((sum, bytes) => sum + bytes, 0) / durations.length
@@ -64,7 +68,7 @@ export function adaptiveRedundancy(): number {
   const typical = Math.max(1, session.targetDuration)
   // Cover a conservative refill plus jitter in wall time, converted to media
   // consumption. The bounded window remains attainable on a constrained link.
-  return Math.max(2, Math.min(8, Math.ceil((Math.max(p90, predictedMs) / 1000 * 1.5 + 1) * session.playbackRate / typical)))
+  return Math.max(MIN_REDUNDANCY, Math.min(MAX_REDUNDANCY, Math.ceil((Math.max(p90, predictedMs) / 1000 * 1.5 + 1) * session.playbackRate / typical)))
 }
 
 // Speculation starts past the contiguous HLS buffer, never at far-away sparse
