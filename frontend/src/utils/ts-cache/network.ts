@@ -1,5 +1,5 @@
 import { MAX_PREFETCH_COUNT, DEFAULT_REDUNDANCY, MIN_REDUNDANCY, MAX_REDUNDANCY, MAX_CACHED_BYTES, PREFETCH_CONCURRENCY, STANDARD_INVENTORY } from './constants'
-import { netDiag, session, telemetry } from './store'
+import { cache, netDiag, session, telemetry } from './store'
 import type { NetworkMode } from './store'
 
 /** Transfer time is compared with playable duration. A large 10-second segment
@@ -52,9 +52,13 @@ export function resetNetworkDiagnosis(): void {
 
 export function adaptivePrefetchCount(redundancy = adaptiveRedundancy()): number {
   const sizes = telemetry.recentFetchBytes.filter(bytes => Number.isFinite(bytes) && bytes > 0)
+  let largest = Math.max(0, ...sizes)
+  const recentKeys = [...(cache.epCacheKeys.get(session.currentEpKey) ?? [])].slice(-8)
+  for (const key of recentKeys) largest = Math.max(largest, cache.lruCache.get(key)?.size ?? 0)
   // Reserve a quarter of retained RAM for rewind/other entries. Conservatively
-  // bound future fragments by the largest recent actual network sample.
-  const byteLimit = sizes.length ? Math.max(1, Math.floor(MAX_CACHED_BYTES * .75 / Math.max(...sizes))) : MAX_PREFETCH_COUNT
+  // bound future fragments by recent network and retained binary sizes. Disk
+  // hits must also constrain a restored session with no fresh network sample.
+  const byteLimit = largest > 0 ? Math.max(1, Math.floor(MAX_CACHED_BYTES * .75 / largest)) : MAX_PREFETCH_COUNT
   return Math.min(MAX_PREFETCH_COUNT, STANDARD_INVENTORY + redundancy + 1, byteLimit)
 }
 
