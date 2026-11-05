@@ -87,6 +87,27 @@ html[data-motion-overlays=off] [class*=cczj-mobile-gesture-feedback-] { transiti
 .cczj-mobile-cast-help { color:var(--text-secondary);@apply cczj-text-xs; }
 .cczj-mobile-cast-help summary { @apply cczj-cursor-pointer;min-height:32px;line-height:32px; }
 .cczj-mobile-cast-help p { margin-top:8px; }
+.cczj-cast-remote { @apply cczj-grid cczj-min-w-0 cczj-text-white; grid-template-rows:auto minmax(0,1fr) auto; gap:12px; width:100%; max-width:640px; margin:0 auto; color:var(--text-primary,#f1f2f5); }
+.cczj-cast-remote-device { @apply cczj-flex cczj-items-center cczj-gap-4 cczj-min-w-0; }
+.cczj-cast-remote-device strong { @apply cczj-flex-1 cczj-min-w-0; }
+.cczj-cast-remote-device > .ui-btn { min-height:44px; }
+.cczj-cast-remote .ui-btn--icon { min-width:44px; min-height:44px; }
+.cczj-cast-remote-main { @apply cczj-flex cczj-flex-col cczj-items-center cczj-justify-center cczj-gap-6 cczj-min-h-0; }
+.cczj-cast-remote p { margin:0; line-height:1.4; @apply cczj-text-center; color:var(--text-secondary,#b9bbc2); }
+.cczj-cast-remote-status { @apply cczj-text-sm; overflow-wrap:anywhere; }
+.cczj-cast-remote-transport { @apply cczj-flex cczj-items-center cczj-justify-center; gap:clamp(12px,8vw,56px); }
+.cczj-cast-remote .cczj-cast-remote-play { width:80px; height:80px; min-width:80px; min-height:80px; border-radius:50%; background:#ffffff0c; }
+.cczj-cast-remote-skip { min-height:48px; min-width:48px; padding:4px; font-variant-numeric:tabular-nums; }
+.cczj-cast-remote-range { @apply cczj-flex-1 cczj-min-w-0 cczj-w-full; height:32px; padding:0; margin:0; accent-color:#f1f2f5; touch-action:pan-x; }
+.cczj-cast-remote-time { @apply cczj-text-xs; font-variant-numeric:tabular-nums; }
+.cczj-cast-remote-hint { @apply cczj-text-xs; }
+.cczj-cast-remote-compact { @apply cczj-absolute cczj-inset-0 cczj-z-10; max-width:none; box-sizing:border-box; padding:4px 12px; gap:0; background:var(--cczj-player-drawer-surface,#18191e); --text-primary:#f1f2f5; --text-secondary:#b9bbc2; }
+.cczj-cast-remote-compact .cczj-cast-remote-device { padding-left:40px; @apply cczj-text-xs cczj-gap-2; }
+.cczj-cast-remote-compact .cczj-cast-remote-main { gap:0; }
+.cczj-cast-remote-compact .cczj-cast-remote-status { @apply cczj-text-11; }
+.cczj-cast-remote-compact .cczj-cast-remote-play { width:44px; height:44px; min-width:44px; min-height:44px; background:transparent; }
+.cczj-cast-remote-compact .cczj-cast-remote-skip { min-height:44px; }
+.cczj-cast-remote-compact .cczj-cast-remote-timeline > div { min-height:44px; }
 body[data-player-pip] .cczj-mobile-video { position: fixed !important; inset: 0 !important; width: 100vw !important; height: 100vh !important; z-index: 2147483647 !important; border-radius: 0 !important; }
 body[data-player-pip] .cczj-mobile-video > :not(video):not(.vp-subtitle) { display: none !important; }
 body[data-player-pip] .cczj-mobile-video[data-video-fit] video { @apply cczj-w-full cczj-h-full; object-fit: contain; background: black; }
@@ -302,3 +323,8 @@ html[data-motion-overlays=off] .cczj-mobile-level-feedback,html[data-motion-over
 .cczj-mobile-playback-drawer .cczj-mobile-drawer-panel .cczj-mobile-drawer-episode-grid button[aria-current=step] { background:var(--cczj-player-episode-bg); color:var(--cczj-player-episode-percent); }
 .cczj-mobile-playback-drawer .cczj-mobile-drawer-episode-grid .ep-watched-progress { height:3px; background:var(--cczj-player-episode-progress); }
 @keyframes cczj-mobile-preview-spin { to { transform:rotate(360deg); } }
+
+.cczj-mobile-quick-mask.cczj-mobile-player-expanded-mask { padding:max(8px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right),var(--cczj-player-safe-right,0px)) max(8px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left),var(--cczj-player-safe-left,0px)); background:var(--cczj-player-drawer-surface,#18191e); }
+.cczj-mobile-player-expanded-mask .cczj-mobile-drawer-panel { @apply cczj-w-full cczj-h-full cczj-max-h-full; border-radius:0; padding:0; box-shadow:none; }
+.cczj-mobile-player-expanded-mask .cczj-mobile-cast { @apply cczj-h-full; grid-template-rows:minmax(0,1fr) auto; }
+.cczj-mobile-player-expanded-mask .cczj-mobile-cast-actions { @apply cczj-justify-center; }

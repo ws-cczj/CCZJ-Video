@@ -141,6 +141,7 @@ methods=[
   ],
   [
     "DiscoverCastDevices",
+    "DiscoverCastDevicesOnInterfaces",
     "PlayCastVideo",
     "ControlCastVideo",
     "GetCastStatus"

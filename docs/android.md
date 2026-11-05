@@ -100,17 +100,31 @@ wails3 task android:dev DEVICE=emulator-5554
 
 应用内设备列表使用 DLNA／UPnP AVTransport，电视或盒子需要开启相应接收服务。同一 Wi-Fi 不是协议兼容的保证；海康部分交互屏提供 [WonderCast、Miracast 或 Chromecast](https://pro-av.hikvision.com/en/products/interactive-flat-panel-display/interactive-flat-panels/ultra-series/)，不能据此认定未知型号支持 DLNA。Android 投屏面板提供“打开系统无线投屏”入口，通过 `ACTION_CAST_SETTINGS` 进入系统连接；WonderCast 专用接收仍需配套助手。
 
-投屏面板以附近设备和刷新为主要入口，网络排查说明收进“连接帮助”，不提供没有配套接收端的扫码连接。接收端确认 PLAYING 且没有媒体错误后暂停手机播放；位置为零或不支持位置查询不阻止交接。手机暂停本地 HLS 拉流、恢复重试和分片预取，电视继续使用原始 HTTP／HTTPS 视频地址独立取流，不依赖手机画面或前端轮询。发送指令成功、电视尚未播放或状态请求失败时不提前中断本地播放。确认投屏后，播放器显示可息屏提示和电视控制入口；普通播放按钮打开控制面板，不能解除投屏保护。停止投屏、电视报告 STOPPED／NO_MEDIA_PRESENT 或换片后解除保护，本地播放由用户主动恢复。
+2026-11-05 用户新版日志在 14:53、14:55、14:56 多次记录发现操作以 0ms 失败，原因为 `netlinkrib: permission denied`：Android 在读取网络接口时拒绝 Go 的 netlink 枚举，搜索尚未进入 SSDP／SOAP 阶段。这是本次发现链路的明确失败点，不能归为电视没有响应或解码不兼容。此前提供的旧 2.4.0 日志没有投屏阶段记录，不能用其缺少错误记录否定新版故障。
+
+Android 发现入口现为 `CczjMobileCast → platform.cast.interfaces() → mobilePlayer.readCastInterfaces → WailsJSBridge.playerCastInterfaces → CczjPlayerDevice.castInterfaces`。原生通过 ConnectivityManager 获取非 VPN 的 Wi-Fi／以太网，使用 [getLinkProperties](https://developer.android.com/reference/android/net/ConnectivityManager#getLinkProperties(android.net.Network)) 读取接口名和私网 IPv4；API26+ 用 [Os.if_nametoindex](https://developer.android.com/reference/android/system/Os#if_nametoindex(java.lang.String)) 读取索引，API24／25 仅对该已知接口名使用 `NetworkInterface.getByName().getIndex()`，不枚举接口列表。不申请位置权限，不读取 SSID，沿用已有 ACCESS_NETWORK_STATE 权限。
+
+桥接返回最多 16 条 `{index,address}`，前端运行时校验后调用 `DiscoverCastDevicesOnInterfaces(ctx, []cast.NetworkInterface)`。Go 再次检查私网 IPv4、正索引和数量限制，通过 `net.ListenUDP` 绑定验证地址属于本机，再由 x/net/ipv4 设置多播接口；Android／Linux 路径使用 IP_MULTICAST_IF 的索引，不再调用 `net.Interfaces`、`InterfaceByIndex` 或 `Addrs`。原生读取失败明确返回 UNAVAILABLE，不作为“未找到电视”；旧宿主缺少桥接及桌面仍保留 `DiscoverCastDevices` 兼容入口。这个修复消除接口枚举权限失败，不代表任意手机和电视必有共同协议或可播放任意视频。
+
+投屏面板以附近设备和刷新为主要入口，网络排查说明收进“连接帮助”，不提供没有配套接收端的扫码连接。`app/cast/status.go` 返回 `media_state`：`matched` 表示 `GetPositionInfo.TrackURI` 与本次发送地址匹配，或 TrackURI 缺失时 `GetMediaInfo.CurrentURI` 匹配；两个非空媒体地址冲突时保留未知状态，`other` 表示接收端报告其他媒体，`unknown` 表示未能确认媒体归属。仅在本次媒体匹配、状态为 PLAYING／PAUSED_PLAYBACK 且没有媒体错误时自动交接；不能把上一个视频的 PLAYING 和进度当成本次成功。无法取得媒体身份的设备可由用户确认电视已经播放后转为遥控；`other` 不采纳进度。位置为零或不支持位置查询本身不否定已匹配媒体的播放状态。电视未提供有效进度时显示明确状态并禁用拖动和快进退，不用手机暂停的时间或 00:00/00:00 冒充电视进度；拖动只预览，提交时才发送 Seek。
+
+CCZJ 当前 DLNA 路径仍向电视发送原始 HTTP／HTTPS 视频地址；确认交接后暂停手机本地 HLS 拉流、恢复重试和分片预取，电视独立取流，不依赖手机画面或前端轮询。发送指令成功、电视尚未播放或状态请求失败时不提前中断本地播放。确认投屏后，原播放区由紧凑遥控接管，保留设备、更换设备、停止、播放／暂停、前后 10 秒、电视进度和展开入口，简介／评论继续可用；展开后复用现有播放器抽屉的全页布局，收起及系统返回只关闭遥控页。两种密度复用 CczjMobileCastRemote，设备、状态、命令及生命周期仍由 CczjMobileCast 持有，紧凑视图 Teleport 到播放器宿主以避开已隐藏的本地控制栈。本地加载、错误和字幕提示让出显示，停止投屏后沿原流程恢复；普通播放按钮打开控制面板，不能解除投屏保护。停止投屏、电视报告 STOPPED／NO_MEDIA_PRESENT 或换片后解除保护，本地播放由用户主动恢复。面板提供重新发送、更换设备和可用时的系统投屏入口，停止请求失败时保留真实错误并提供明确的“断开连接”选择，提醒电视可能仍在播放；用户主动断开后才解除手机播放保护，失败不应把用户困在遥控状态。
+
+`app/cast/service.go` 只对明确的兼容错误作有限处理：SetAVTransportURI 返回 UPnP 402／714 时，用空元数据重发一次；Play 返回 701 时最多尝试三次，间隔 300ms，发送操作总超时为 12 秒。超时、取消和其他错误不盲目重发。该处理未新增转码、手机中转或私有投屏 SDK，不能解决电视缺少协议、无法访问源站或不支持编码的全部问题。
 
 关闭面板不取消正在交接的投屏请求，也不结束接收端会话；应用可见时继续查询状态，息屏／进入后台停止前端查询，返回前台重新读取电视状态。临时查询失败不恢复手机视频。系统入口明确标为“屏幕镜像”，并说明它同步手机画面、需要亮屏，与可息屏的 DLNA 视频投屏不同；电视只支持镜像时不能通过发送端代码把它变成独立视频接收端。实体电视息屏持续播放、返回前台、暂停／继续及失败恢复仍需用户验收。
 
-投屏交接先记录手机位置，接收端起播后执行一次 Seek；失败保留真实错误并允许继续遥控。快进／快退以电视返回的当前时间为基准，每次 30 秒，不读取已暂停的手机时间。暂停状态同样持有本地播放保护。接收端进度用于播放页展示、检查点和既有历史保存节流；停止投屏前再读取一次电视时间，手机定位到最后有效位置并保持暂停，由用户主动播放。位置与时长同时为零时视为没有可用时间，但不据此否定 PLAYING 状态；临时缺失时保留最后有效检查点。投屏界面复用播放器抽屉深色表面，默认高度 60%，避免短屏状态文案增加后把控制按钮裁到可触摸区外。
+投屏交接先记录手机位置，接收端起播后执行一次 Seek；失败保留真实错误并允许继续遥控。快进／快退以电视返回的当前时间为基准，每次 10 秒，不读取已暂停的手机时间。暂停状态同样持有本地播放保护。接收端进度用于播放页展示、检查点和既有历史保存节流；停止投屏前再读取一次电视时间，手机定位到最后有效位置并保持暂停，由用户主动播放。位置与时长同时为零时视为没有可用时间，但不据此否定 PLAYING 状态；临时缺失时保留最后有效检查点。投屏界面复用播放器抽屉深色表面，默认高度 60%，避免短屏状态文案增加后把控制按钮裁到可触摸区外。
 
 上述会话与控制分离参考 2026-10-29 对 MuMu 已安装 B站 9.17.0、抖音 40.9.0 的 REA 方法级分析：抖音 `PlayerController.play(PlayerInfo)` 将 URL、接收设备交给选定引擎，暂停／继续是独立的接收端命令；B站 `ProjectionClient` 独立提供状态、进度与事件流，业务层按来源身份维护播放约束。证据位于 `dist/audit/cast-rea/`。分析使用原始 DEX 切片，未确认完整私有协议、底层渲染器的所有分支或任意电视兼容性。
 
-同日最终验收包在 MuMu + Kodi 验证了真实发现／取流、手机 12 秒交接、手机暂停、暂停／继续、电视时间 15→45→15 秒遥控、关闭面板和本地误播保护。接收端保持前台 Surface 时停止成功，手机交还到 31 秒并可手动继续。原始状态与截图在 `dist/audit/cast-rea/final-native/`。同模拟器后台 Kodi 的暂停中 Seek 返回 501、Stop 超时及息屏后媒体时钟归零均保留为未通过项；测试临时仅解除 Kodi 进程冻结，结束恢复，不算实体电视息屏持续播放通过。旧 UI 脚本的隐藏轮询假设与本轮行为不同，后续通过 ADB／CDP 复用现有辅助入口完成检查，未新增或扩写验收脚本。
+夸克 10.20.0.1175 的官方 Android 包来自[夸克官网](https://www.quark.cn/)提供的下载入口，静态 REA 证据保留在 `dist/audit/cast-current/browser-rea/`。`LeboProjectionService.startProjectionImpl$lambda$17` 将 URL、LelinkServiceInfo、时长和起始位置交给乐播 SDK；`ProjFlutterPlugin.H`／`I` 分别发布 `cast_player_state`／`cast_position_update`，通过 transaction recordId 关联会话。`ProjManager.l0` 在 Connecting／Projecting 状态持有 CPU 唤醒锁，其他状态释放；`VideoCastDaemonService.b` 提供“视频正在增强投屏中，请保持应用开启”的前台通知。其 `enhance.fallback.d.o`／`p` 和 `fallback.b.b` 还具有本地文件、HLS、TS 的 HTTP／Range 服务，因此不能把 CCZJ 当前的电视直连模型推广为浏览器的全部投屏路径。尚未追完整个私有 SDK、远程请求头、增强与回退策略，不将这些静态方法作为任意设备可连接或息屏播放通过的证明。补充运行观察已通过真实设备列表连接 Kodi，接收端实际解码 90 秒 MP4，约 12 秒处返回有效时钟；手机出现独立遥控页，返回网页后视频区显示投屏占位及悬浮控制入口。此轮仅借鉴会话／状态与资源所有权的代码分工，手机界面采用前述两层遥控，未采用夸克的圆盘页面。当前电视直连路径不需要为手机转发视频持有 CPU 唤醒锁或引入私有 SDK。
 
-`app/cast/discovery.go` 在每个有效私网 IPv4 组播接口上发送 MediaRenderer、AVTransport、根设备和全部设备查询，间隔 1.1 秒重发一次，接收窗口 4.5 秒，总任务最多 8 秒。描述获取使用三路有界队列，按地址去重；只接受与回复发送端同 IP 的私网 HTTP 描述和控制地址，不跟随跳转。请求取消或宿主退出会关闭套接字、停止描述请求并等待工作结束。Android Wi-Fi 组播锁仅在搜索期间持有；准备阶段失败和关闭面板也必须释放搜索状态。
+本轮 MuMu 的 B站 9.17.0 对照已实际连接 Kodi，接收端播放出视频，Kodi 返回约 10 秒／12 分 30 秒的有效媒体时间。手机采用两层遥控呈现：播放页原视频区域变为设备、换设备、播放／暂停和进度控件，下方简介、评论保留；展开后提供独立深色遥控页，集中设备、前后 10 秒、播放／暂停及媒体选项，返回播放页仍保留遥控区。布局和控制入口可借鉴；本次手机进度持续显示 00:00/00:00，Kodi 在同模拟器退后台后暂停，因此不把进度同步、暂停命令效果或实体电视息屏播放算作通过。原始截图及状态在 `dist/audit/cast-current/competitors/`。官方 TV 接收端原包因 ARM32 ABI 与当前 MuMu 不匹配而未能安装，未修改 APK。抖音 40.9.0 未登录时，搜索明确提示“请登录后重试”，当前短视频长按、分享、侧栏及有限视频切换未取得投屏入口；静态 REA 定位到横屏播放器标题栏及媒体资格检查，但本轮未取得其连接后的手机界面。第三方设备要求和媒体服务不同，不能用静态分析替代运行结果。
+
+当前两层遥控已在最终 MuMu 验收包与 Kodi 上实测：新原生接口发现设备、真实取流、匹配媒体后本地暂停；紧凑／展开界面、系统返回、至少 44px 触摸目标和展开主按钮 80px 均已核对。实际按钮／进度控件核对到接收端 Pause speed=0、Play speed=1、Seek 到 40 秒且手机同步；接收端前台保持 Surface 时 Stop 成功，手机交还至 14 秒并能手动继续。强制关闭接收端后，停止失败显示明确断开提示，主动断开后手机恢复播放。证据在 `dist/audit/cast-current/remote-ui-retry/` 和 `remote-final/`。同一模拟器中的 Kodi 切后台会暂停，早期后台／播完场景仍发生过 Seek 501 和 Stop 超时；不能把前台接收端结果写成实体电视息屏验收通过。手机真实 Wi-Fi／路由器、实体电视编码兼容和息屏持续播放仍需用户验收。复用既有脚本的 setup／finally 并通过 ADB／CDP 调试操作，未修改脚本；旧脚本完整断言及其“全通过”结论不适用于此轮界面和后台规则。
+
+`app/cast/discovery.go` 在每个经原生快照或兼容入口确认的有效私网 IPv4 组播接口上发送 MediaRenderer、AVTransport、根设备和全部设备查询，间隔 1.1 秒重发一次，接收窗口 4.5 秒，总任务最多 8 秒。描述获取使用三路有界队列，按地址去重；只接受与回复发送端同 IP 的私网 HTTP 描述和控制地址，不跟随跳转。请求取消或宿主退出会关闭套接字、停止描述请求并等待工作结束。Android Wi-Fi 组播锁仅在搜索期间持有；原生读取或准备阶段失败和关闭面板也必须释放搜索状态。
 
 回归检查：
 
@@ -131,7 +145,7 @@ MuMu 的接收测试还需要完成 Kodi 首次启动权限流程，开启 UPnP 
 
 2.4.4 使用 Kodi 21.3，在 MuMu 中验证真实 SSDP、描述请求、SOAP 操作、接收端拉取视频，以及 `GetTransportInfo` 返回 PLAYING、`GetPositionInfo` 的播放时间实际前进。暂停／继续／跳转／停止及系统设置返回后再次搜索通过，证据在 `dist/audit/cast-244/`。同模拟器接收端需要保持前台视频 Surface；脚本在发起播放前切到 Kodi。Go 投屏测试和本机 race 检查通过。海康实体电视、鸿蒙 4 手机、Windows 原生投屏及路由器 Wi-Fi 组播尚未连接验收，不把同模拟器接收端测试算作这些环境通过。
 
-投屏诊断按 `cast_device_id` 和 `cast_session_id` 串联各次控制请求，RPC 的 request／operation 身份保留。`cast.discovery.*` 记录接口、查询次数、收到／拒绝的回复与耗时；`cast.description.*` 区分发现后设备描述失败；`cast.soap.*` 记录操作、HTTP 状态、UPnP 错误码、响应大小／摘要和耗时；`cast.status` 记录接收端播放状态及位置。空设备列表不等于视频错误，SOAP 成功不等于解码成功；持续 STOPPED／ERROR_OCCURRED 与无法取得状态分别显示。日志不保存原始视频响应和完整带签名查询地址。
+投屏诊断按 `cast_device_id` 和 `cast_session_id` 串联各次控制请求，RPC 的 request／operation 身份保留。`cast.discovery.*` 记录接口、查询次数、收到／拒绝的回复与耗时；`cast.description.*` 区分发现后设备描述失败；`cast.soap.*` 记录操作、HTTP 状态、UPnP 错误码、响应大小／摘要和耗时；`cast.status` 记录接收端播放状态、媒体归属及位置。重新发现同一设备保留已有会话和目标媒体身份。空设备列表不等于视频错误，SOAP 成功或媒体匹配不等于解码成功；持续 STOPPED／ERROR_OCCURRED、其他媒体与无法取得状态分别显示。日志不保存原始视频响应和完整带签名查询地址。
 
 ## 卡顿与内存指标
 

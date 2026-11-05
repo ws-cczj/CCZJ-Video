@@ -29,6 +29,32 @@ type discoveryLink struct {
 	ip      net.IP
 }
 
+// NetworkInterface carries an Android LinkProperties snapshot. Binding the
+// socket verifies the address is local; it never changes the SSDP destination.
+type NetworkInterface struct {
+	Index   int    `json:"index"`
+	Address string `json:"address"`
+}
+
+func (s *Service) DiscoverOnInterfacesContext(ctx context.Context, interfaces []NetworkInterface) ([]Device, error) {
+	if len(interfaces) > 16 {
+		return nil, errors.New("局域网接口过多")
+	}
+	links := make([]discoveryLink, 0, len(interfaces))
+	seen := map[string]bool{}
+	for _, entry := range interfaces {
+		ip := net.ParseIP(entry.Address)
+		if entry.Index <= 0 || entry.Index > 2147483647 || ip == nil || ip.To4() == nil || !ip.IsPrivate() || ip.IsLoopback() {
+			return nil, errors.New("无效的局域网接口")
+		}
+		if !seen[ip.String()] {
+			links = append(links, discoveryLink{network: net.Interface{Index: entry.Index}, ip: ip.To4()})
+			seen[ip.String()] = true
+		}
+	}
+	return s.discoverOnLinks(ctx, &net.UDPAddr{IP: net.IPv4(239, 255, 255, 250), Port: 1900}, links)
+}
+
 func discoveryLinks(interfaces []net.Interface, addresses func(net.Interface) ([]net.Addr, error)) []discoveryLink {
 	links := make([]discoveryLink, 0, 4)
 	seen := map[string]bool{}
@@ -58,6 +84,9 @@ func discoveryLinks(interfaces []net.Interface, addresses func(net.Interface) ([
 // Bind each LAN IPv4 explicitly: a default route may point to mobile data,
 // a VPN or an inactive virtual adapter instead of the Wi-Fi used by the TV.
 func discoverySockets(group *net.UDPAddr) ([]*net.UDPConn, error) {
+	return discoverySocketsOnLinks(group, nil)
+}
+func discoverySocketsOnLinks(group *net.UDPAddr, links []discoveryLink) ([]*net.UDPConn, error) {
 	if !group.IP.IsMulticast() {
 		socket, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero})
 		if err != nil {
@@ -65,11 +94,13 @@ func discoverySockets(group *net.UDPAddr) ([]*net.UDPConn, error) {
 		}
 		return []*net.UDPConn{socket}, nil
 	}
-	interfaces, err := net.Interfaces()
-	if err != nil {
-		return nil, fmt.Errorf("读取局域网接口失败: %w", err)
+	if links == nil {
+		interfaces, err := net.Interfaces()
+		if err != nil {
+			return nil, fmt.Errorf("读取局域网接口失败: %w", err)
+		}
+		links = discoveryLinks(interfaces, func(network net.Interface) ([]net.Addr, error) { return network.Addrs() })
 	}
-	links := discoveryLinks(interfaces, func(network net.Interface) ([]net.Addr, error) { return network.Addrs() })
 	sockets := make([]*net.UDPConn, 0, len(links))
 	var lastErr error
 	for _, link := range links {
@@ -113,6 +144,9 @@ func (s *Service) discoverAt(group *net.UDPAddr) ([]Device, error) {
 	return s.discoverAtContext(context.Background(), group)
 }
 func (s *Service) discoverAtContext(request context.Context, group *net.UDPAddr) (result []Device, failure error) {
+	return s.discoverOnLinks(request, group, nil)
+}
+func (s *Service) discoverOnLinks(request context.Context, group *net.UDPAddr, links []discoveryLink) (result []Device, failure error) {
 	started := time.Now()
 	operation.Stage(request, "cast.discovery.start", nil)
 	defer func() {
@@ -136,7 +170,7 @@ func (s *Service) discoverAtContext(request context.Context, group *net.UDPAddr)
 	defer cancel()
 	stopOwner := context.AfterFunc(s.ctx, cancel)
 	defer stopOwner()
-	sockets, err := discoverySockets(group)
+	sockets, err := discoverySocketsOnLinks(group, links)
 	if err != nil {
 		return nil, err
 	}
@@ -195,6 +229,8 @@ func (s *Service) discoverAtContext(request context.Context, group *net.UDPAddr)
 				}
 				if err == nil {
 					s.mu.Lock()
+					previous := s.devices[device.ID]
+					device.session, device.media = previous.session, previous.media
 					s.devices[device.ID] = device
 					s.mu.Unlock()
 				}

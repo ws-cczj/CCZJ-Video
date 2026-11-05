@@ -7,13 +7,24 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.media.AudioManager;
+import android.net.ConnectivityManager;
+import android.net.LinkAddress;
+import android.net.LinkProperties;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.provider.Settings;
+import android.system.Os;
 import android.util.Rational;
 import android.view.WindowManager;
 import android.webkit.WebView;
 import org.json.JSONObject;
+import org.json.JSONArray;
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.util.HashSet;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 
@@ -125,6 +136,49 @@ final class CczjPlayerDevice {
         if (enabled) {
             WifiManager wifi = (WifiManager)activity.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
             if (wifi != null) { multicast = wifi.createMulticastLock("cczj-dlna"); multicast.setReferenceCounted(false); multicast.acquire(); }
+        }
+    }
+    String castInterfaces() {
+        try {
+            if (closed) throw new IllegalStateException("Player device is closed");
+            ConnectivityManager connectivity = (ConnectivityManager) activity.getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (connectivity == null) throw new IllegalStateException("Connectivity service unavailable");
+            JSONArray interfaces = new JSONArray();
+            HashSet<String> seen = new HashSet<>();
+            boolean missingIndex = false;
+            for (Network network : connectivity.getAllNetworks()) {
+                NetworkCapabilities capabilities = connectivity.getNetworkCapabilities(network);
+                if (capabilities == null || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+                    || (!capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                        && !capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET))) continue;
+                LinkProperties properties = connectivity.getLinkProperties(network);
+                if (properties == null || properties.getInterfaceName() == null) continue;
+                String name = properties.getInterfaceName();
+                int index;
+                if (Build.VERSION.SDK_INT >= 26) index = Os.if_nametoindex(name);
+                else {
+                    // API 24/25 lack Os.if_nametoindex. Query only the interface
+                    // supplied by ConnectivityManager; never enumerate interfaces.
+                    NetworkInterface known = NetworkInterface.getByName(name);
+                    index = known == null ? 0 : known.getIndex();
+                }
+                if (index <= 0) { missingIndex = true; continue; }
+                for (LinkAddress link : properties.getLinkAddresses()) {
+                    InetAddress address = link.getAddress();
+                    if (!(address instanceof Inet4Address) || !address.isSiteLocalAddress()
+                        || address.isLoopbackAddress() || address.isLinkLocalAddress()) continue;
+                    String ip = address.getHostAddress();
+                    if (!seen.add(index + ":" + ip)) continue;
+                    interfaces.put(new JSONObject().put("index", index).put("address", ip));
+                    if (interfaces.length() == 16) break;
+                }
+                if (interfaces.length() == 16) break;
+            }
+            if (interfaces.length() == 0 && missingIndex) throw new IllegalStateException("LAN interface index unavailable");
+            return new JSONObject().put("interfaces", interfaces).toString();
+        } catch (Exception unavailable) {
+            android.util.Log.w("CCZJPlayerDevice", "Unable to read casting LAN interfaces", unavailable);
+            return "{\"interfaces\":[],\"error\":\"UNAVAILABLE\"}";
         }
     }
     String openCastSettings() {

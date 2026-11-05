@@ -8,6 +8,7 @@ interface PlayerBridge {
   playerRestoreBrightness(): void
   playerEnterPip(width: number, height: number): void
   playerMulticast(enabled: boolean): void
+  playerCastInterfaces?(): string
   playerOpenCastSettings(): string
   playerPrepareFullscreen?(id: string, orientation: string): string
   playerFinishFullscreen?(id: string): void
@@ -128,6 +129,34 @@ export function enterDevicePip(width: number, height: number): boolean {
   return true
 }
 export function setCastMulticast(enabled: boolean): void { bridge()?.playerMulticast?.(enabled) }
+export interface CastNetworkInterface { index: number; address: string }
+export interface CastNetworkSnapshot { interfaces: CastNetworkInterface[] }
+
+/** Android's network service supplies LAN identity without Go's netlink probe. */
+export function readCastInterfaces(): CastNetworkSnapshot | undefined {
+  const host = bridge()
+  if (typeof host?.playerCastInterfaces !== 'function') return undefined
+  try {
+    const value: unknown = JSON.parse(host.playerCastInterfaces())
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid LAN snapshot')
+    const snapshot = value as Record<string, unknown>
+    if (snapshot.error !== undefined || !Array.isArray(snapshot.interfaces) || snapshot.interfaces.length > 16) throw new Error('LAN snapshot unavailable')
+    const interfaces: CastNetworkInterface[] = []
+    for (const entry of snapshot.interfaces) {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw new Error('Invalid LAN interface')
+      const row = entry as Record<string, unknown>
+      if (typeof row.index !== 'number' || !Number.isInteger(row.index) || row.index <= 0 || row.index > 2147483647 || typeof row.address !== 'string') throw new Error('Invalid LAN interface identity')
+      const parts = row.address.split('.')
+      if (parts.length !== 4 || parts.some(part => !/^(0|[1-9]\d{0,2})$/.test(part) || Number(part) > 255)) throw new Error('Invalid LAN IPv4')
+      const a = Number(parts[0]), b = Number(parts[1])
+      if (!(a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168))) throw new Error('Non-private LAN IPv4')
+      interfaces.push({ index: row.index, address: row.address })
+    }
+    return { interfaces }
+  } catch (cause) {
+    throw new ApiFailure({ code: 'UNAVAILABLE', message: 'Casting LAN interfaces unavailable' }, cause)
+  }
+}
 export function openSystemCastSettings(): boolean {
   const host=bridge()
   return !!host?.playerOpenCastSettings && host.playerOpenCastSettings()===''

@@ -1169,19 +1169,19 @@ defineExpose({ isPlaying:computed(()=>playing.value&&!loading.value&&!casting.va
     </PortraitPlayerControls>
     <!-- 顶部栏：标题 + 缓存统计 + 收藏按钮 -->
     <Transition name="cczj-mobile-player-chrome" :css="mobile">
-    <div v-if="!portrait" v-show="showTitleBar && !mobileLocked && controlsVisible" class="player-title-bar" @click.stop @dblclick.stop>
+    <div v-if="!portrait" v-show="showTitleBar && !mobileLocked && (casting || controlsVisible)" class="player-title-bar" @click.stop @dblclick.stop>
       <button v-if="mobile" class="cczj-mobile-player-back" :aria-label="t('common.back')" @click="isFullscreen ? toggleFullscreen() : emit('back')"><Icon name="chevron-left" :size="22" /></button>
-      <span v-show="!mobile || isFullscreen" class="player-title">{{ title || url }}</span>
+      <span v-show="!casting && (!mobile || isFullscreen)" class="player-title">{{ title || url }}</span>
       <span v-if="!mobile && isHls(url) && cacheStats.transportActive && cacheStats.totalSegments > 0" class="cache-info"
         :class="{ working: cacheStats.queued + cacheStats.inflight > 0 }"
         :title="t('player.cacheStatsTip', { hits: cacheStats.hits, misses: cacheStats.misses, entries: cacheStats.entries, target: cacheStats.prefetchTarget, inventory: cacheStats.inventory, redundancy: cacheStats.redundancy })">
         {{ t('player.inventoryCountShort', { count: cacheStats.inventory }) }}<span v-if="cacheStats.replenishing"> · {{ t('player.prefetching') }}</span><span v-else> · {{ t('player.ready') }}</span> ·
         {{ t('player.hitRateShort') }} {{ (cacheStats.hitRate * 100).toFixed(0) }}%
       </span>
-      <button v-if="mobile" class="cczj-mobile-player-favorite" :aria-label="t(isFav?'detail.removeFav':'detail.addFav')" :aria-pressed="isFav" :disabled="favBusy" @click.stop="emit('toggleFavorite')"><Icon name="star" :size="21" /></button>
-      <button v-if="mobile && isFullscreen && controlState.canCast" class="cczj-mobile-player-cast" :aria-label="t('mobile.cast')" @click.stop="mobileChrome?.toggle('cast')"><Icon name="cast" :size="22" /></button>
-      <button v-if="mobile && $slots.lines" class="cczj-mobile-player-lines" :aria-label="t('playLine.switch')" :aria-expanded="!!mobileChrome?.linesOpen" @click.stop="mobileChrome?.toggle('lines');keepVisible()">{{t('playLine.switch')}}</button>
-      <button v-if="mobile" class="cczj-mobile-player-more-button" :aria-label="t('mobile.playerMore')" :aria-expanded="!!mobileChrome?.menuOpen" @click.stop="mobileChrome?.toggle('more'); keepVisible()"><Icon name="more" :size="22" /></button>
+      <button v-if="mobile && !casting" class="cczj-mobile-player-favorite" :aria-label="t(isFav?'detail.removeFav':'detail.addFav')" :aria-pressed="isFav" :disabled="favBusy" @click.stop="emit('toggleFavorite')"><Icon name="star" :size="21" /></button>
+      <button v-if="mobile && !casting && isFullscreen && controlState.canCast" class="cczj-mobile-player-cast" :aria-label="t('mobile.cast')" @click.stop="mobileChrome?.toggle('cast')"><Icon name="cast" :size="22" /></button>
+      <button v-if="mobile && !casting && $slots.lines" class="cczj-mobile-player-lines" :aria-label="t('playLine.switch')" :aria-expanded="!!mobileChrome?.linesOpen" @click.stop="mobileChrome?.toggle('lines');keepVisible()">{{t('playLine.switch')}}</button>
+      <button v-if="mobile && !casting" class="cczj-mobile-player-more-button" :aria-label="t('mobile.playerMore')" :aria-expanded="!!mobileChrome?.menuOpen" @click.stop="mobileChrome?.toggle('more'); keepVisible()"><Icon name="more" :size="22" /></button>
       <button v-show="!mobile" class="fav-btn-in-player" :class="{ 'is-fav': isFav }" :disabled="favBusy"
         :aria-label="isFav ? t('detail.removeFav') : t('player.addFavorite')"
         :title="isFav ? t('detail.removeFav') : t('player.addFavorite')" @click.stop="emit('toggleFavorite')">
@@ -1195,14 +1195,8 @@ defineExpose({ isPlaying:computed(()=>playing.value&&!loading.value&&!casting.va
     <div v-if="!portrait" v-show="mouseInside" @click.stop @dblclick.stop class="player-drag-handle" :title="t('player.dragMoveWindow')" />
 
     <video ref="videoElement" class="native-video" :poster="mobile ? mobileVideoPoster : undefined" playsinline preload="auto" @click="onVideoClick"></video>
-    <div v-if="casting" class="player-cast" role="status" @click.stop @pointerdown.stop>
-      <div class="cczj-flex cczj-items-center cczj-gap-4 cczj-min-w-0"><Icon name="cast" :size="24" /><strong class="cczj-truncate">{{castState?.device||t('mobile.castPlaying')}}</strong></div>
-      <p>{{t('mobile.castScreenOff')}}</p>
-      <p v-if="castState?.hasPosition">{{fmt(castState.position)}} / {{fmt(castState.duration)}}</p>
-      <Button @click="mobileChrome?.toggle('cast')">{{t('mobile.castControls')}}</Button>
-    </div>
     <PlayerDanmaku v-if="danmakuKey&&accessoriesReady" ref="danmakuRef" :media-key="danmakuKey" :media-title="mediaTitle" :media-year="mediaYear" :media-kind="mediaKind" :episode-label="episodeLabel" :current="current" :duration="duration" :playing="playing&&!loading" :fullscreen="isFullscreen" :mobile="mobile" :host="wrapperRef" :video="getVideoEl" @prepared="onDanmakuPrepared" />
-    <div v-show="activeSubtitle" class="vp-subtitle" :class="{ 'with-controls': showControls }">
+    <div v-show="!casting && activeSubtitle" class="vp-subtitle" :class="{ 'with-controls': showControls }">
       <span>{{ activeSubtitle }}</span>
     </div>
     <div v-if="compareEnabled" class="enhance-compare-line" :style="{ left: compareSplit + '%' }" aria-hidden="true">
@@ -1217,11 +1211,11 @@ defineExpose({ isPlaying:computed(()=>playing.value&&!loading.value&&!casting.va
       </div>
     </transition>
 
-    <div v-if="mobile && loading && !quietLoading" class="cczj-mobile-video-loading" :class="{ 'cczj-mobile-video-loading-initial': !videoReady }" role="status" aria-live="polite">
+    <div v-if="!casting && mobile && loading && !quietLoading" class="cczj-mobile-video-loading" :class="{ 'cczj-mobile-video-loading-initial': !videoReady }" role="status" aria-live="polite">
       <img :src="loadingGif" class="loading-spinner" alt="" aria-hidden="true" />
       <span>{{ preparationStage !== 'complete' ? preparationMessage : t('mobile.videoLoading') }}<span v-if="loadingElapsed > 0"> · {{ loadingElapsed }}s</span></span>
     </div>
-    <div v-if="!mobile && loading && !quietLoading" class="loading">
+    <div v-if="!casting && !mobile && loading && !quietLoading" class="loading">
       <div class="loading-overlay">
         <!-- 加载动画 -->
         <img :src="loadingGif" class="loading-spinner" :alt="t('common.loading')" />
@@ -1243,7 +1237,7 @@ defineExpose({ isPlaying:computed(()=>playing.value&&!loading.value&&!casting.va
       </div>
     </div>
 
-    <div v-if="errorMsg && mobile" class="cczj-mobile-playback-error" role="alert" @click.stop @pointerdown="!portrait && $event.stopPropagation()">
+    <div v-if="!casting && errorMsg && mobile" class="cczj-mobile-playback-error" role="alert" @click.stop @pointerdown="!portrait && $event.stopPropagation()">
       <div class="cczj-mobile-playback-error-body">
         <p>{{ errorMsg }}</p>
         <div class="cczj-mobile-playback-error-actions">
@@ -1254,7 +1248,7 @@ defineExpose({ isPlaying:computed(()=>playing.value&&!loading.value&&!casting.va
         </div>
       </div>
     </div>
-    <div v-else-if="errorMsg" class="player-error">
+    <div v-else-if="!casting && errorMsg" class="player-error">
       <span>⚠</span>
       <span>{{ errorMsg }}</span>
       <div v-if="showNetworkError || portrait" class="error-actions">

@@ -44,6 +44,45 @@ export class Device {
     }
 }
 
+/**
+ * NetworkInterface carries an Android LinkProperties snapshot. Binding the
+ * socket verifies the address is local; it never changes the SSDP destination.
+ */
+export class NetworkInterface {
+    /**
+     * Creates a new NetworkInterface instance.
+     * @param {Partial<NetworkInterface>} [$$source = {}] - The source object to create the NetworkInterface.
+     */
+    constructor($$source = {}) {
+        if (!("index" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["index"] = 0;
+        }
+        if (!("address" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["address"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new NetworkInterface instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {NetworkInterface}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new NetworkInterface(/** @type {Partial<NetworkInterface>} */($$parsedSource));
+    }
+}
+
 export class Status {
     /**
      * Creates a new Status instance.
@@ -84,6 +123,13 @@ export class Status {
              * @type {boolean}
              */
             this["has_position"] = false;
+        }
+        if (!("media_state" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["media_state"] = "";
         }
 
         Object.assign(this, $$source);

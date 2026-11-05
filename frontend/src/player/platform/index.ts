@@ -1,5 +1,5 @@
 import { createFullscreenPlatform } from '../../platform/fullscreen'
-import { enterDevicePip, readPlayerDevice, restoreDeviceBrightness, setDeviceBrightness, setDeviceVolume, setCastMulticast, openSystemCastSettings } from '../../api/mobilePlayer'
+import { enterDevicePip, readPlayerDevice, restoreDeviceBrightness, setDeviceBrightness, setDeviceVolume, setCastMulticast, openSystemCastSettings, readCastInterfaces } from '../../api/mobilePlayer'
 import { presentationProfile } from '../../platform/presentation'
 import { isIOSRuntime } from '../../api/runtime'
 
@@ -65,6 +65,7 @@ export function createPlayerPlatform() {
       restoreBrightness: () => { if (nativeDevice) restoreDeviceBrightness(brightnessOwner) },
     },
     cast: { supported: profile.host !== 'browser' && !ios, multicast: (enabled: boolean) => { if (nativeDevice) setCastMulticast(enabled) },
+      interfaces:()=>nativeDevice && !ios ? readCastInterfaces() : undefined,
       systemSupported:()=>nativeDevice && readPlayerDevice()?.castSettings===true,
       openSystem:()=>nativeDevice && openSystemCastSettings(),
     },

@@ -42,6 +42,7 @@
   "DeleteSource": "write",
   "DeleteVideo": "write",
   "DiscoverCastDevices": "refresh",
+  "DiscoverCastDevicesOnInterfaces": "refresh",
   "DoubanChart": "read",
   "DoubanChartResolve": "read",
   "DoubanDetail": "read",

@@ -474,6 +474,16 @@ export function DiscoverCastDevices() {
 }
 
 /**
+ * @param {cast$0.NetworkInterface[]} interfaces
+ * @returns {$CancellablePromise<cast$0.Device[]>}
+ */
+export function DiscoverCastDevicesOnInterfaces(interfaces) {
+    return $Call.ByID(3882924207, interfaces).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType32($result);
+    }));
+}
+
+/**
  * DoubanChart 获取豆瓣热榜视频（立即返回，带匹配状态）
  * @returns {$CancellablePromise<douban$0.ChartVideoItem[]>}
  */

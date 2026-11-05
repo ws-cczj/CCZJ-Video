@@ -4,5 +4,6 @@
 
 export {
     Device,
+    NetworkInterface,
     Status
 } from "./models.js";

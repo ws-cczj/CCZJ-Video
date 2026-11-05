@@ -53,6 +53,7 @@ export const DeleteHistoryItem = bind('DeleteHistoryItem', bindings.DeleteHistor
 export const DeleteSource = bind('DeleteSource', bindings.DeleteSource)
 export const DeleteVideo = bind('DeleteVideo', bindings.DeleteVideo)
 export const DiscoverCastDevices = bind('DiscoverCastDevices', bindings.DiscoverCastDevices)
+export const DiscoverCastDevicesOnInterfaces = bind('DiscoverCastDevicesOnInterfaces', bindings.DiscoverCastDevicesOnInterfaces)
 export const DoubanChart = bind('DoubanChart', bindings.DoubanChart)
 export const DoubanChartResolve = bind('DoubanChartResolve', bindings.DoubanChartResolve)
 export const DoubanDetail = bind('DoubanDetail', bindings.DoubanDetail)

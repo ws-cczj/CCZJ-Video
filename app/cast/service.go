@@ -34,6 +34,7 @@ type renderer struct {
 	service  string
 	seen     time.Time
 	session  string
+	media    string
 }
 type Service struct {
 	ctx     context.Context
@@ -192,8 +193,31 @@ type soapEnvelope struct {
 		Position struct {
 			Time     string `xml:"RelTime"`
 			Duration string `xml:"TrackDuration"`
+			URI      string `xml:"TrackURI"`
 		} `xml:"GetPositionInfoResponse"`
+		Media struct {
+			URI string `xml:"CurrentURI"`
+		} `xml:"GetMediaInfoResponse"`
 	} `xml:"Body"`
+}
+
+type soapFault struct{ code, description string }
+
+func (e *soapFault) Error() string {
+	return fmt.Sprintf("DLNA %s: %s", e.code, applog.DiagnosticText(e.description, 256))
+}
+
+func faultCode(err error, codes ...string) bool {
+	var fault *soapFault
+	if !errors.As(err, &fault) {
+		return false
+	}
+	for _, code := range codes {
+		if fault.code == code {
+			return true
+		}
+	}
+	return false
 }
 
 func soap(ctx context.Context, d renderer, action, args string, output ...*soapEnvelope) (failure error) {
@@ -236,7 +260,7 @@ func soap(ctx context.Context, d renderer, action, args string, output ...*soapE
 	if fault := envelope.Body.Fault; fault != nil {
 		fields["code"] = "CAST_SOAP_FAULT"
 		fields["upnp_code"] = fault.Code
-		return fmt.Errorf("DLNA %s: %s", fault.Code, applog.DiagnosticText(fault.Description, 256))
+		return &soapFault{code: fault.Code, description: fault.Description}
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		fields["code"] = "CAST_HTTP_ERROR"
@@ -277,7 +301,7 @@ func (s *Service) Play(id, media, title string) error {
 func (s *Service) PlayContext(request context.Context, id, media, title string) error {
 	ctx, release := lifecycle.WithShutdown(request, s.ctx)
 	defer release()
-	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
 	defer cancel()
 	if err := ctx.Err(); err != nil {
 		return err
@@ -292,6 +316,7 @@ func (s *Service) PlayContext(request context.Context, id, media, title string) 
 		return e
 	}
 	d.session = apperror.NewRequestID()
+	d.media = media
 	s.mu.Lock()
 	s.devices[d.ID] = d
 	s.mu.Unlock()
@@ -303,10 +328,33 @@ func (s *Service) PlayContext(request context.Context, id, media, title string) 
 		mime = "application/vnd.apple.mpegurl"
 	}
 	metadata := `<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/"><item id="0" parentID="-1" restricted="1"><dc:title>` + escaped(title) + `</dc:title><upnp:class>object.item.videoItem</upnp:class><res protocolInfo="http-get:*:` + mime + `:*">` + escaped(media) + `</res></item></DIDL-Lite>`
-	if e = soap(ctx, d, "SetAVTransportURI", "<CurrentURI>"+escaped(media)+"</CurrentURI><CurrentURIMetaData>"+escaped(metadata)+"</CurrentURIMetaData>"); e != nil {
+	setURI := func(metadata string) error {
+		return soap(ctx, d, "SetAVTransportURI", "<CurrentURI>"+escaped(media)+"</CurrentURI><CurrentURIMetaData>"+escaped(metadata)+"</CurrentURIMetaData>")
+	}
+	e = setURI(metadata)
+	// Some renderers reject DIDL metadata even though they can inspect the URI.
+	// Retry only explicit argument/MIME rejection, never an ambiguous timeout.
+	if faultCode(e, "402", "714") {
+		operation.Stage(ctx, "cast.media.metadata_fallback", nil)
+		e = setURI("")
+	}
+	if e != nil {
 		return e
 	}
-	return soap(ctx, d, "Play", "<Speed>1</Speed>")
+	for attempt := 0; ; attempt++ {
+		e = soap(ctx, d, "Play", "<Speed>1</Speed>")
+		if !faultCode(e, "701") || attempt == 2 {
+			return e
+		}
+		// SetURI may complete before the renderer leaves its transition state.
+		timer := time.NewTimer(300 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
 }
 func (s *Service) Control(id, action string, seconds float64) error {
 	return s.ControlContext(context.Background(), id, action, seconds)

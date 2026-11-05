@@ -12,15 +12,6 @@
   cursor: none;
 }
 
-/* Shares the existing solid player-drawer surface, independent of page theme. */
-.player-cast {
-  @apply cczj-absolute cczj-inset-0 cczj-z-10 cczj-flex cczj-flex-col cczj-items-center cczj-justify-center cczj-gap-3 cczj-text-center cczj-text-white;
-  box-sizing: border-box;
-  padding: 44px 16px 12px;
-  background: var(--cczj-player-drawer-surface, #18191e);
-}
-.player-cast p { margin: 0; }
-
 .player-wrapper.cursor-hidden .native-video {
   cursor: none;
 }
