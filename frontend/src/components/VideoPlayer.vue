@@ -1169,7 +1169,7 @@ defineExpose({ isPlaying:computed(()=>playing.value&&!loading.value&&!casting.va
     </PortraitPlayerControls>
     <!-- 顶部栏：标题 + 缓存统计 + 收藏按钮 -->
     <Transition name="cczj-mobile-player-chrome" :css="mobile">
-    <div v-if="!portrait" v-show="showTitleBar && !mobileLocked && (casting || controlsVisible)" class="player-title-bar" @click.stop @dblclick.stop>
+    <div v-if="!portrait" v-show="showTitleBar && !mobileLocked && (casting || controlsVisible)" class="player-title-bar" :class="{'player-title-bar-casting':casting}" @click.stop @dblclick.stop>
       <button v-if="mobile" class="cczj-mobile-player-back" :aria-label="t('common.back')" @click="isFullscreen ? toggleFullscreen() : emit('back')"><Icon name="chevron-left" :size="22" /></button>
       <span v-show="!casting && (!mobile || isFullscreen)" class="player-title">{{ title || url }}</span>
       <span v-if="!mobile && isHls(url) && cacheStats.transportActive && cacheStats.totalSegments > 0" class="cache-info"
@@ -1199,7 +1199,7 @@ defineExpose({ isPlaying:computed(()=>playing.value&&!loading.value&&!casting.va
     <div v-show="!casting && activeSubtitle" class="vp-subtitle" :class="{ 'with-controls': showControls }">
       <span>{{ activeSubtitle }}</span>
     </div>
-    <div v-if="compareEnabled" class="enhance-compare-line" :style="{ left: compareSplit + '%' }" aria-hidden="true">
+    <div v-if="!casting && compareEnabled" class="enhance-compare-line" :style="{ left: compareSplit + '%' }" aria-hidden="true">
       <span>{{ t('player.compareOriginal') }}</span><i></i><span>{{ t('player.compareEnhanced') }}</span>
     </div>
 
@@ -1272,7 +1272,7 @@ defineExpose({ isPlaying:computed(()=>playing.value&&!loading.value&&!casting.va
       </button>
     </div>
 
-    <div v-if="mobile && !portrait && showResumePrompt && !mobileLocked" class="cczj-mobile-resume" :class="{'cczj-mobile-resume-lowered':!controlsVisible}" @click.stop @pointerdown.stop>
+    <div v-if="!casting && mobile && !portrait && showResumePrompt && !mobileLocked" class="cczj-mobile-resume" :class="{'cczj-mobile-resume-lowered':!controlsVisible}" @click.stop @pointerdown.stop>
       <button @click="continueWatching"><Icon name="play" :size="14" />{{ t('mobile.resume') }} <b>{{ savedTime != null ? fmt(savedTime) : '00:00' }}</b></button>
       <button :aria-label="t('common.close')" @click="dismissResumePrompt"><Icon name="close" :size="16" /></button>
     </div>
@@ -1280,7 +1280,7 @@ defineExpose({ isPlaying:computed(()=>playing.value&&!loading.value&&!casting.va
     <CczjMobileGestureOverlay v-if="mobile && !portrait" :kind="mobileScrubTime >= 0 ? 'seek' : gestureKind" :hud="mobileScrubTime >= 0 ? t('mobile.gestureSeek') : gestureHud"
       :level="gestureLevel" :compact="gestureCompact" :target="mobileScrubTime >= 0 ? mobileScrubTime : gestureSeekTarget" :duration="duration"
       :image="thumbPreviewImg" :image-visible="thumbPreviewVisible" :preview-state="thumbPreviewState" :image-time="thumbPreviewTime" />
-    <button v-if="mobile && isFullscreen && (controlsVisible || mobileLocked)" class="cczj-mobile-player-lock" :aria-label="t(mobileLocked ? 'mobile.unlock' : 'mobile.lock')" :aria-pressed="mobileLocked" @click.stop="gestures.toggleLock()" @pointerdown.stop><Icon :name="mobileLocked ? 'lock' : 'unlock'" :size="21" /></button>
+    <button v-if="!casting && mobile && isFullscreen && (controlsVisible || mobileLocked)" class="cczj-mobile-player-lock" :aria-label="t(mobileLocked ? 'mobile.unlock' : 'mobile.lock')" :aria-pressed="mobileLocked" @click.stop="gestures.toggleLock()" @pointerdown.stop><Icon :name="mobileLocked ? 'lock' : 'unlock'" :size="21" /></button>
     <!-- 画质切换 toast（左下角，1.5 秒自动消失） -->
     <div v-show="qualityToastText" class="quality-toast">
       <span>{{ qualityToastText }}</span>

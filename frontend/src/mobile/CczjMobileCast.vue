@@ -13,7 +13,7 @@ import { formatPlaybackTime } from '../player/videoInfoFormat'
 import type { CastPlaybackState } from '../player/views/controlState'
 const platform=createPlayerPlatform()
 const props = defineProps<{ open: boolean; url: string; title: string; position: number; host?:HTMLElement; fullscreen?:boolean }>()
-const emit = defineEmits<{ open: []; close: []; connected: []; stopped: [position?: number]; status: [value: CastPlaybackState] }>()
+const emit = defineEmits<{ open: []; close: []; exitFullscreen: []; connected: []; stopped: [position?: number]; status: [value: CastPlaybackState] }>()
 const { t } = useI18n()
 const devices = ref<{ id: string; name: string }[]>([])
 const scanning = ref(false), busy = ref(false), error = ref('')
@@ -21,6 +21,8 @@ const announced=ref(false)
 const stopFailed=ref(false)
 let initialPosition: number | undefined
 let lastPosition: number | undefined
+const pendingSeek=ref<number>()
+let seekStarted=0
 const selected = ref<{ id: string; name: string } | null>(null)
 const paused = ref(false)
 const remote=ref<{state:string;transport_status:string;position:number;duration:number;has_position:boolean;media_state?:string}|null>(null)
@@ -35,7 +37,7 @@ const remoteLabel=computed(()=>{
  return t(remote.value?.state==='PLAYING'?'mobile.castPlaying':remote.value?.state==='PAUSED_PLAYBACK'?'mobile.castPaused':remote.value?.state==='STOPPED'||remote.value?.state==='NO_MEDIA_PRESENT'?'mobile.castNotPlaying':'mobile.castChecking')
 })
 const receiverActive=computed(()=>remote.value?.transport_status!=='ERROR_OCCURRED'&&(remote.value?.state==='PLAYING'||remote.value?.state==='PAUSED_PLAYBACK'))
-const remoteView=computed(()=>({device:selected.value?.name||'',status:error.value||statusError.value||(busy.value?t('mobile.castConnecting'):remoteLabel.value),paused:paused.value,busy:busy.value,active:receiverActive.value,position:remote.value?.position||0,duration:remote.value?.duration||0,hasPosition:!!remote.value?.has_position}))
+const remoteView=computed(()=>({title:props.title,device:selected.value?.name||'',status:error.value||statusError.value||(pendingSeek.value!==undefined?t('mobile.castSeeking'):busy.value?t('mobile.castConnecting'):remoteLabel.value),attention:!!error.value||!!statusError.value||!receiverActive.value||pendingSeek.value!==undefined,paused:paused.value,busy:busy.value,active:receiverActive.value,position:pendingSeek.value??remote.value?.position??0,duration:remote.value?.duration||0,hasPosition:!!remote.value?.has_position}))
 function confirmPlayback():void {
  if(!receiverActive.value||remote.value?.media_state==='other'||announced.value)return
  announced.value=true;emit('connected')
@@ -50,6 +52,10 @@ async function refreshStatus():Promise<void>{
   if(token!==statusRevision||disposed||selected.value?.id!==id)return
   if(value.media_state!=='matched')value.has_position=false
   remote.value=value;statusError.value=''
+  if(pendingSeek.value!==undefined){
+    if(value.has_position&&Math.abs(value.position-pendingSeek.value)<=2)pendingSeek.value=undefined
+    else if(performance.now()-seekStarted>=8000){pendingSeek.value=undefined;statusError.value=t('mobile.castSeekUnconfirmed')}
+  }
   confirmationExpired.value=performance.now()-attemptStarted>=30000
   if(value.has_position)lastPosition=value.position
   paused.value=value.state==='PAUSED_PLAYBACK'||value.state==='STOPPED'||value.state==='NO_MEDIA_PRESENT'
@@ -96,7 +102,7 @@ async function connect(device: { id: string; name: string }): Promise<void> {
   const token=sessionRevision
   stopDiscovery()
   stopStatus()
-  busy.value = true; error.value = '';remote.value=null;statusError.value='';stopFailed.value=false
+  busy.value = true; error.value = '';pendingSeek.value=undefined;remote.value=null;statusError.value='';stopFailed.value=false
   confirmationExpired.value=false;attemptStarted=performance.now()
   const resumePosition=announced.value ? lastPosition ?? props.position : props.position
   initialPosition=Number.isFinite(resumePosition)?Math.max(0,resumePosition):undefined
@@ -134,15 +140,16 @@ async function control(action: string, target = 0): Promise<void> {
       if(disposed||token!==sessionRevision)return
     }
     const seconds=action==='Seek'?Math.max(0,Math.min(target,remote.value?.duration||7*24*3600)):0
+    if(action==='Seek'){pendingSeek.value=seconds;seekStarted=performance.now()}
     await controlScope.run(()=>ControlCastVideo(id, action, seconds))
     if(disposed||token!==sessionRevision)return
     if (action === 'Stop') finishSession(position)
     else {if (action !== 'Seek')paused.value = action === 'Pause';void refreshStatus()}
-  } catch (e) { if (!disposed&&token===sessionRevision&&normalizeApiError(e).code!=='CANCELLED') {error.value = normalizeApiError(e).message;if(action==='Stop')stopFailed.value=true;void refreshStatus()} }
+  } catch (e) { if (!disposed&&token===sessionRevision&&normalizeApiError(e).code!=='CANCELLED') {if(action==='Seek')pendingSeek.value=undefined;error.value = action==='Seek' ? t('mobile.castSeekFailed') : normalizeApiError(e).message;if(action==='Stop')stopFailed.value=true;void refreshStatus()} }
   finally { if(token===sessionRevision)busy.value = false }
 }
 function finishSession(position?:number):void {
- stopStatus();selected.value=null;remote.value=null;announced.value=false;initialPosition=undefined;lastPosition=undefined;stopFailed.value=false;statusError.value='';error.value='';emit('stopped',position)
+ stopStatus();selected.value=null;remote.value=null;announced.value=false;pendingSeek.value=undefined;initialPosition=undefined;lastPosition=undefined;stopFailed.value=false;statusError.value='';error.value='';emit('stopped',position)
 }
 function disconnect():void {cancelControls();finishSession(lastPosition)}
 function cancelControls():void{sessionRevision++;controlScope.cancel();busy.value=false}
@@ -156,13 +163,18 @@ onBeforeUnmount(() => { disposed = true;cancelControls();stopStatus(); stopDisco
 </script>
 <template>
  <Teleport v-if="announced && host && !open" :to="host">
-  <CczjMobileCastRemote compact v-bind="remoteView" @play="control(paused ? 'Play' : 'Pause')" @seek="control('Seek',$event)" @stop="control('Stop')" @change="emit('open');chooseDevice()" @expand="emit('open')" />
+  <CczjMobileCastRemote :layout="fullscreen ? 'fullscreen' : 'compact'" v-bind="remoteView" @exit-fullscreen="emit('exitFullscreen')" @play="control(paused ? 'Play' : 'Pause')" @seek="control('Seek',$event)" @stop="control('Stop')" @change="emit('open');chooseDevice()" @expand="emit('open')" />
  </Teleport>
- <CczjMobilePlayerDrawer class="cczj-mobile-playback-drawer" :solid="true" :expanded="announced" :close-label="announced ? t('mobile.castCollapse') : undefined" :initial-height="60" :host="host" :open="open" :fullscreen="!!fullscreen" :title="announced ? title : t('mobile.cast')" @close="emit('close')">
-  <div v-if="open" class="cczj-mobile-cast">
+ <CczjMobilePlayerDrawer class="cczj-mobile-playback-drawer" :class="{'cczj-mobile-cast-remote-mask':announced}" :solid="true" :expanded="announced" :close-label="announced ? t('mobile.castCollapse') : undefined" :initial-height="60" :host="host" :open="open" :fullscreen="!!fullscreen" :title="announced ? title : t('mobile.cast')" @close="emit('close')">
+  <template v-if="announced" #header>
+    <Button variant="text" icon :aria-label="t('mobile.castCollapse')" @click="emit('close')"><Icon name="chevron-left" :size="24" /></Button>
+    <strong class="cczj-flex-1 cczj-min-w-0 cczj-truncate cczj-font-normal">{{ title }}</strong>
+    <Button variant="text" icon :disabled="busy" :aria-label="t('mobile.castStop')" @click="control('Stop')"><Icon name="power" :size="24" /></Button>
+  </template>
+  <div v-if="open" class="cczj-mobile-cast" :class="{'cczj-mobile-cast-connected':announced}">
     <template v-if="selected && announced">
-      <CczjMobileCastRemote v-bind="remoteView" @play="control(paused ? 'Play' : 'Pause')" @seek="control('Seek',$event)" @stop="control('Stop')" @change="chooseDevice" />
-      <div class="cczj-mobile-cast-actions"><Button variant="text" :disabled="busy" @click="connect(selected)">{{t('mobile.castRetry')}}</Button><Button v-if="stopFailed" variant="text" :disabled="busy" @click="disconnect">{{t('mobile.castDisconnect')}}</Button><p v-if="stopFailed">{{t('mobile.castDisconnectHint')}}</p></div>
+      <CczjMobileCastRemote layout="page" v-bind="remoteView" @play="control(paused ? 'Play' : 'Pause')" @seek="control('Seek',$event)" @stop="control('Stop')" @change="chooseDevice" />
+      <div v-if="error || statusError || !receiverActive || stopFailed" class="cczj-mobile-cast-actions"><Button variant="text" :disabled="busy" @click="connect(selected)">{{t('mobile.castRetry')}}</Button><Button v-if="stopFailed" variant="text" :disabled="busy" @click="disconnect">{{t('mobile.castDisconnect')}}</Button><p v-if="stopFailed">{{t('mobile.castDisconnectHint')}}</p></div>
     </template>
     <template v-else-if="selected">
       <p v-if="error" class="cczj-mobile-cast-error" role="alert">{{ error }}</p>

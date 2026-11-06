@@ -364,7 +364,11 @@ func (s *Service) Control(id, action string, seconds float64) error {
 func (s *Service) ControlContext(request context.Context, id, action string, seconds float64) error {
 	ctx, release := lifecycle.WithShutdown(request, s.ctx)
 	defer release()
-	ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
+	budget := 4 * time.Second
+	if action == "Seek" {
+		budget = 8 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 	if err := ctx.Err(); err != nil {
 		return err
@@ -393,5 +397,59 @@ func (s *Service) ControlContext(request context.Context, id, action string, sec
 		traceFailure(ctx, "cast.control.rejected", err, applog.Fields{"action": action, "code": "CAST_UNSUPPORTED_ACTION"})
 		return err
 	}
-	return soap(ctx, d, action, args)
+	err := soap(ctx, d, action, args)
+	if action != "Seek" || !faultCode(err, "501", "701") {
+		return err
+	}
+	// Some renderers accept time seeking only while playing. Recover only
+	// after confirming that the paused resource still belongs to this session.
+	status, statusErr := s.StatusContext(ctx, id)
+	if statusErr != nil || status.State != "PAUSED_PLAYBACK" || status.MediaState != "matched" || status.TransportStatus == "ERROR_OCCURRED" {
+		return err
+	}
+	operation.Stage(ctx, "cast.seek.paused_fallback", applog.Fields{"target_seconds": int(seconds)})
+	return s.seekPaused(ctx, d, args)
+}
+
+func (s *Service) seekPaused(ctx context.Context, d renderer, args string) (failure error) {
+	// Restore the user's paused state even if the caller cancels after Play.
+	// Application shutdown still cancels the bounded cleanup request.
+	defer func() {
+		restore, release := lifecycle.WithShutdown(context.WithoutCancel(ctx), s.ctx)
+		defer release()
+		restore, cancel := context.WithTimeout(restore, 2*time.Second)
+		defer cancel()
+		if err := soap(restore, d, "Pause", ""); err != nil {
+			failure = errors.Join(failure, fmt.Errorf("恢复电视暂停状态失败: %w", err))
+		} else if err := waitTransport(restore, d, "PAUSED_PLAYBACK"); err != nil {
+			failure = errors.Join(failure, fmt.Errorf("未能确认电视恢复暂停: %w", err))
+		}
+	}()
+	if err := soap(ctx, d, "Play", "<Speed>1</Speed>"); err != nil {
+		return err
+	}
+	if err := waitTransport(ctx, d, "PLAYING"); err != nil {
+		return err
+	}
+	return soap(ctx, d, "Seek", args)
+}
+
+func waitTransport(ctx context.Context, d renderer, state string) error {
+	for attempt := 0; attempt < 20; attempt++ {
+		var response soapEnvelope
+		if err := soap(ctx, d, "GetTransportInfo", "", &response); err != nil {
+			return err
+		}
+		if strings.TrimSpace(response.Body.Transport.State) == state {
+			return nil
+		}
+		timer := time.NewTimer(100 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return errors.New("电视尚未确认播放状态")
 }

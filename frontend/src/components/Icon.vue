@@ -24,6 +24,11 @@ defineProps<{ name: string; size?: number }>()
     <g v-else-if="name === 'user'"><circle cx="12" cy="7" r="4"/><path d="M4 22v-3a8 8 0 0 1 16 0v3"/></g>
     <g v-else-if="name === 'trending'"><path d="m3 17 6-6 4 4 8-10m-7 0h7v7"/></g>
     <g v-else-if="name === 'cast'"><path d="M3 3h18v14h-7M3 13a8 8 0 0 1 8 8M3 17a4 4 0 0 1 4 4"/><circle cx="3" cy="21" r="1"/></g>
+    <g v-else-if="name === 'power'"><path d="M12 2v10M6.3 5.3a9 9 0 1 0 11.4 0" /></g>
+    <g v-else-if="name === 'rewind-10' || name === 'forward-10'">
+      <g :transform="name === 'forward-10' ? 'translate(24 0) scale(-1 1)' : undefined"><path d="M8 3 4 7l4 4M4 7h8a8 8 0 1 1-7.5 10.8" /></g>
+      <text x="12" y="16" text-anchor="middle" font-size="8" font-weight="600" fill="currentColor" stroke="none">10</text>
+    </g>
     <g v-else-if="name === 'lock' || name === 'unlock'"><rect x="5" y="10" width="14" height="11" rx="2"/><path :d="name === 'lock' ? 'M8 10V6a4 4 0 0 1 8 0v4' : 'M8 10V6a4 4 0 0 1 8 0'"/><path d="M12 14v3"/></g>
     <g v-else-if="name === 'home'">
       <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
