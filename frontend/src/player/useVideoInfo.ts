@@ -1,6 +1,7 @@
 import { computed, type Ref } from 'vue'
 import { TsCache } from '../utils/tsCache'
 import { formatPlaybackTime as fmt } from './videoInfoFormat'
+import { contiguousMediaEnd, mergeMediaRanges, readMediaRanges } from './mediaRanges'
 export interface StreamVariantInfo { bandwidth: number; resolution: string; codecs: string; url: string }
 
 // 从 TS URL 推断码率（优先匹配 "数字+k" 模式，如 2100k, 3000K）
@@ -146,9 +147,10 @@ export function useVideoInfo(deps: {
     let bufferedSec = 0
     try {
       if (v.buffered.length > 0) {
-        const bufEnd = v.buffered.end(v.buffered.length - 1)
-        bufferedSec = bufEnd - cur
-        const bufPct = dur > 0 ? ((bufEnd / dur) * 100).toFixed(0) : '0'
+        const ranges = mergeMediaRanges(readMediaRanges(v.buffered), dur > 0 ? dur : Infinity)
+        bufferedSec = Math.max(0, contiguousMediaEnd(ranges, cur) - cur)
+        const seconds = ranges.reduce((total, [start, end]) => total + end - start, 0)
+        const bufPct = dur > 0 ? (seconds / dur * 100).toFixed(0) : '0'
         buffered = bufPct + '%'
         if (bufferedSec > 0) buffered += ` (${t('player.bufferedAvailable', { time: fmt(bufferedSec) })})`
       }

@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import { CCZJ } from '../constants/cczj'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { GetSetting, SetSetting, normalizeApiError } from '../api/app'
 import Icon from '../components/Icon.vue'
 import { Button } from '../components/ui'
 import { builtinDanmakuSources, DANMAKU_SOURCE_SETTINGS_KEY, decodeSourceSettings, normalizeSourceSettings, sourceEnabled, type DanmakuProvider } from '../player/danmaku/sources'
-import { decodeDanmakuPreferences } from '../player/danmaku/preferences'
+import { useDanmakuPreferencesStore } from '../player/danmaku/preferenceStore'
 import { presentationProfile } from '../platform/presentation'
 
 const { t } = useI18n()
+const preferenceStore = useDanmakuPreferencesStore()
 const mobile = presentationProfile().ui === 'mobile'
 const settings = ref(decodeSourceSettings(''))
 const freshDays = ref(1)
@@ -18,7 +18,7 @@ const enabledCount = computed(() => builtinDanmakuSources.filter(source => sourc
 let disposed = false
 async function load() {
   ready.value = false; error.value = ''
-  try { const [value, preferences] = await Promise.all([GetSetting(DANMAKU_SOURCE_SETTINGS_KEY),GetSetting(CCZJ.Settings.danmakuPreferences)]); if (!disposed) { settings.value = decodeSourceSettings(value); freshDays.value=decodeDanmakuPreferences(preferences).freshDays; ready.value = true } }
+  try { const [value, loaded] = await Promise.all([GetSetting(DANMAKU_SOURCE_SETTINGS_KEY),preferenceStore.load()]); if (!loaded) throw preferenceStore.error; if (!disposed) { settings.value = decodeSourceSettings(value); freshDays.value=preferenceStore.preferences.freshDays; ready.value = true } }
   catch (value) { if (!disposed) error.value = normalizeApiError(value).message }
 }
 function toggle(provider: DanmakuProvider, enabled: boolean) {
@@ -30,11 +30,9 @@ async function save() {
   if (!ready.value || saving.value) return
   saving.value = true; saved.value = false; error.value = ''
   try {
-    // Merge only cache policy into the latest preferences so a display change
-    // made since this page loaded cannot be overwritten by an old snapshot.
-    const preferences=decodeDanmakuPreferences(await GetSetting(CCZJ.Settings.danmakuPreferences))
-    if(disposed)return
-    await SetSetting(CCZJ.Settings.danmakuPreferences,JSON.stringify({...preferences,freshDays:freshDays.value}))
+    if (disposed) return
+    // Only this page's cache-policy draft enters the shared current snapshot.
+    if (!await preferenceStore.update({ freshDays: freshDays.value })) throw preferenceStore.error
     await SetSetting(DANMAKU_SOURCE_SETTINGS_KEY, JSON.stringify(settings.value))
     if (!disposed) saved.value = true
   }

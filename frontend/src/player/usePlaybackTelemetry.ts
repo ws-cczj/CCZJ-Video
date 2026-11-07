@@ -2,9 +2,11 @@ import { onBeforeUnmount, ref, shallowRef } from 'vue'
 import { usePerfStore } from '../stores/perf'
 import { TsCache } from '../utils/tsCache'
 import { extractBitrateFromUrl } from './useVideoInfo'
+import { mergeMediaRanges, type MediaRange } from './mediaRanges'
 
 export function usePlaybackTelemetry(deps:{video:()=>HTMLVideoElement|null;url:()=>string;cachedBitrate:()=>number;t:(key:string)=>string;stall?:(phase:string,detail:Record<string,unknown>)=>void}) {
 const perf=usePerfStore()
+const cachedRanges = shallowRef<MediaRange[]>([])
 const t=deps.t
 // ------ 播放质量取样 ------
 // Decoder counters belong to the media element; align the baseline on every load,
@@ -154,6 +156,7 @@ function formatBytes(n: number): string {
 
 function updateCacheStats(): void {
   const s = TsCache.stats()
+  cachedRanges.value = mergeMediaRanges(TsCache.cachedPlaybackRanges())
   const changed = cacheStats.value.hits !== s.hits || cacheStats.value.misses !== s.misses
   cacheStats.value = {
     hits: s.hits, misses: s.misses, entries: s.entries, bytes: s.bytes,
@@ -188,9 +191,10 @@ function stop():void {
 }
 function reset():void {
   stop()
+  cachedRanges.value=[]
   cacheStats.value={hits:0,misses:0,entries:0,bytes:0,hitRate:0,totalSegments:0,prefetched:0,prefetchTarget:0,queued:0,inflight:0,inventory:0,redundancy:0,replenishing:false,transportActive:false}
 }
 onBeforeUnmount(stop)
-return {cacheStats,loadingCached,loadingTotal,loadingSpeed,loadingElapsed,startLoadingStats,stopLoadingStats,
+return {cacheStats,cachedRanges,loadingCached,loadingTotal,loadingSpeed,loadingElapsed,startLoadingStats,stopLoadingStats,
   resetPerfBaseline,alignPlaybackClock,endStall,beginStall,start,stop,reset}
 }

@@ -3,7 +3,7 @@ import { cacheHas } from './memory-cache'
 import { queueRecentSegments, setDiskPlaybackActive } from './disk-cache'
 import { adaptiveConcurrency, adaptivePrefetchCount, adaptiveRedundancy } from './network'
 import { fetchAndParseM3u8 } from './m3u8'
-import { episodeIndex, epKeyFrom, fireListeners, onStateChange, prefetchState, session } from './store'
+import { cache, episodeIndex, epKeyFrom, fireListeners, onStateChange, prefetchState, session } from './store'
 import type { EpisodeLite, SegmentInfo } from './store'
 import { acquireSegment, cancelSpeculation, cancelTransfers, clearTransferFailures, onTransfersChanged,
   pruneTransferFailures, resetSegmentFailure, transferBusy, transferCounts, transferFailure, transferKey, transferSucceededSince } from './transfer'
@@ -18,6 +18,7 @@ let scheduled = false
 let replenishing = false
 let refillSince = 0
 let buffered: [number, number][] = []
+const timelineByKey = new Map<string, SegmentInfo[]>()
 let currentIndex = 0
 let warmups = 0
 let lastRedundancy = DEFAULT_REDUNDANCY
@@ -67,6 +68,7 @@ export function beginCacheSession(): void {
   prefetchState.queue.length = 0; prefetchState.pendingUrls.clear(); prefetchState.epQueueCount.clear()
   currentIndex = 0; replenishing = false; refillSince = 0; buffered = []; stallAt = 0
   episodeIndex.timeline = []
+  timelineByKey.clear()
   session.playbackPosition = 0
   skipped = new Set(); lastRedundancy = DEFAULT_REDUNDANCY; redundancyAt = 0
   suppressed = undefined
@@ -84,8 +86,27 @@ export function setPlaybackTimeline(segments: SegmentInfo[]): void {
     for (const [key, worker] of workers) if (!keep.has(key)) { worker.lease.release(); workers.delete(key) }
   }
   episodeIndex.timeline = segments.filter(s => s.url && Number.isFinite(s.start) && s.duration > 0)
+  timelineByKey.clear()
+  for (const segment of episodeIndex.timeline) {
+    const key = keyOf(segment), sameResource = timelineByKey.get(key)
+    if (sameResource) sameResource.push(segment)
+    else timelineByKey.set(key, [segment])
+  }
   if (session.currentEpKey) episodeIndex.segmentKeysByEpisode.set(session.currentEpKey, new Set(episodeIndex.timeline.map(keyOf)))
   locate(); wake()
+}
+
+/** Snapshot complete in-memory media, excluding pending, skipped and disk-only data. */
+export function cachedPlaybackRanges(): [number, number][] {
+  if (!session.transportActive || !session.currentEpKey) return []
+  const ranges: [number, number][] = []
+  // The shared LRU bounds this scan; no playlist scan is needed on each UI sample.
+  for (const [key, entry] of cache.lruCache) {
+    const segments = timelineByKey.get(key)
+    if (!segments || entry.size <= 0 || entry.buffer.byteLength !== entry.size) continue
+    for (const segment of segments) ranges.push([segment.start, segment.start + segment.duration])
+  }
+  return ranges
 }
 function locate(): void {
   const timeline = episodeIndex.timeline

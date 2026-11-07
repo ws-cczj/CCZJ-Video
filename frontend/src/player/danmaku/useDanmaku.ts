@@ -1,8 +1,8 @@
-import { CCZJ } from '../../constants/cczj'
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
-import { GetSetting, SetSetting, normalizeApiError } from '../../api/app'
+import { GetSetting, normalizeApiError } from '../../api/app'
 import { danmakuAPI, type DanmakuBindingValue, type DanmakuCandidate, type DanmakuEpisode, type DanmakuWindowValue, type DanmakuMatchAttempt } from '../../api/danmaku'
-import { decodeDanmakuPreferences } from './preferences'
+import { storeToRefs } from 'pinia'
+import { useDanmakuPreferencesStore } from './preferenceStore'
 import { DANMAKU_SOURCE_SETTINGS_KEY, decodeSourceSettings, sourceEnabled } from './sources'
 
 import { NETWORK_POLICY_KEY, decodeNetworkPolicy, networkRetryDelay } from '../../network/requestPolicy'
@@ -10,7 +10,8 @@ import { matchEpisode, normalizeWorkTitle } from './matching'
 
 type Pending = { cancel?: () => unknown }
 export function useDanmaku(deps: { key: () => string; current: () => number; title?: () => string; episode?: () => string; duration?: () => number; year?:()=>string; kind?:()=>string }) {
-  const preferences = ref(decodeDanmakuPreferences(null))
+  const preferenceStore = useDanmakuPreferencesStore()
+  const { preferences, ready: preferencesReady } = storeToRefs(preferenceStore)
   const sources = ref(decodeSourceSettings('')), sourcesReady = ref(false)
   const networkPolicy = ref(decodeNetworkPolicy(''))
   const binding = shallowRef<DanmakuBindingValue | null>(null)
@@ -33,11 +34,7 @@ export function useDanmaku(deps: { key: () => string; current: () => number; tit
   let windowRequest: Pending | null = null, lastRequested = -Infinity
   const pending = new Set<Pending>()
   const discoveries = new Set<Pending>()
-  let saveTimer: ReturnType<typeof setTimeout> | undefined
-  let saveTail: Promise<unknown> = Promise.resolve()
   const busy = computed(() => discoveryBusy.value || bindingBusy.value || matching.value)
-  const preferencesReady = ref(false)
-  let preferencesDirty = false
   const boundSourceEnabled = computed(() => !!binding.value && sourceEnabled(sources.value, binding.value.episode.provider))
   const status = computed(() => !preferences.value.enabled ? 'disabled' : matching.value ? 'matching' : windowError.value || matchState.value === 'error' ? 'error' : !preferencesReady.value || !sourcesReady.value || !bindingReady.value ? 'loading' : !binding.value ? !sources.value.defaultProvider ? 'sourceDisabled' : matchState.value === 'noMatch' ? 'noMatch' : 'unbound' : !boundSourceEnabled.value ? 'sourceDisabled' : loading.value ? 'loading' : !window.value ? 'waiting' : window.value.stale ? 'stale' : window.value.warnings.includes('segment_not_found') && !window.value.items.length ? 'missingSegment' : window.value.items.length ? 'ready' : 'empty')
   function cancel(request: Pending | null) { try { void Promise.resolve(request?.cancel?.()).catch(() => { }) } catch { } }
@@ -65,17 +62,10 @@ export function useDanmaku(deps: { key: () => string; current: () => number; tit
     } catch (value) { if (!disposed && token === windowGeneration) { const e = normalizeApiError(value); if (e.code !== 'CANCELLED') { windowError.value = e.message; message(value); retryAt = Date.now() + networkRetryDelay(networkPolicy.value.frequency,e.retryAfterSeconds); cooldownUntil.value = retryAt; if(deps.title)void autoMatch(true) } } }
     finally { if (token === windowGeneration) { windowRequest = null; loading.value = false } }
   }
-  function savePreferences() {
-    if (!preferencesReady.value || !preferencesDirty) return
-    preferencesDirty = false
-    const serialized = JSON.stringify(preferences.value)
-    saveTail = saveTail.catch(() => { }).then(() => SetSetting(CCZJ.Settings.danmakuPreferences, serialized)).catch(value => { preferencesDirty = true; if (!disposed) message(value) })
-  }
-  async function loadPreferences() { try { const value = await GetSetting(CCZJ.Settings.danmakuPreferences); if (!disposed) { preferences.value = decodeDanmakuPreferences(value); await nextTick(); preferencesReady.value = true } } catch (value) { if (!disposed) message(value) } }
   async function loadSources() { try { const [value, policy] = await Promise.all([GetSetting(DANMAKU_SOURCE_SETTINGS_KEY),GetSetting(NETWORK_POLICY_KEY)]); if (!disposed) { sources.value = decodeSourceSettings(value); networkPolicy.value = decodeNetworkPolicy(policy); if (!binding.value || !sourceEnabled(sources.value, provider.value)) provider.value = sources.value.defaultProvider; sourcesReady.value = true } } catch (value) { if (!disposed) message(value) } }
-  void loadPreferences()
+  void preferenceStore.load()
   void loadSources()
-  watch(preferences, () => { if (!preferencesReady.value) return; preferencesDirty = true; clearTimeout(saveTimer); saveTimer = setTimeout(savePreferences, 350) }, { deep: true })
+  watch(() => preferenceStore.error, (failure, previous) => { if (disposed) return; if (failure) message(failure); else if (previous && error.value === normalizeApiError(previous).message) error.value = '' }, { immediate: true })
   async function loadBinding(key: string) {
     const token = ++generation; cancelDiscovery(); for (const request of pending) cancel(request)
     autoAttempted = ''; matchState.value = 'idle'
@@ -167,7 +157,7 @@ export function useDanmaku(deps: { key: () => string; current: () => number; tit
     try { await own(danmakuAPI.unbind(key)); if (!disposed && token === generation) { binding.value = null; resetWindow() } }
     catch (value) { if (!disposed && token === generation) message(value) } finally { if (token === generation) bindingBusy.value = false }
   }
-  function retry() { if(Date.now()<retryAt)return; error.value = ''; windowError.value = ''; if (!preferencesReady.value) void loadPreferences(); if (!sourcesReady.value) void loadSources(); if (!bindingReady.value) void loadBinding(deps.key()); if (preferencesDirty) savePreferences(); if (!binding.value) { autoAttempted = ''; void autoMatch() } else void fetchWindow(true) }
-  onBeforeUnmount(() => { disposed = true; generation++; cancelDiscovery(); resetWindow(); for (const request of pending) cancel(request); pending.clear(); clearTimeout(saveTimer); savePreferences(); window.value = null })
+  function retry() { if (!preferencesReady.value || preferenceStore.unsaved) void preferenceStore.retry(); if(Date.now()<retryAt)return; error.value = ''; windowError.value = ''; if (!sourcesReady.value) void loadSources(); if (!bindingReady.value) void loadBinding(deps.key()); if (!binding.value) { autoAttempted = ''; void autoMatch() } else void fetchWindow(true) }
+  onBeforeUnmount(() => { disposed = true; generation++; cancelDiscovery(); resetWindow(); for (const request of pending) cancel(request); pending.clear(); window.value = null })
   return { preferences, preferencesReady, sources, sourcesReady, boundSourceEnabled, binding, window, candidates, episodes, provider, error, busy, loading, status, cooldownUntil, attempts, traceId, discoveryResult, bind, unbind, cancelDiscovery, search: (query: string) => discover('search', query), resolve: (ref: string) => discover('episodes', ref), retry }
 }

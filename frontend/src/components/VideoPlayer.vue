@@ -34,6 +34,7 @@ import { usePlaybackInterruptions } from '../player/usePlaybackInterruptions'
 import { createPlaybackSession, type PlaybackCheckpoint } from '../player/playbackSession'
 import { usePlayerPresentationMode } from '../player/usePlayerPresentationMode'
 import { useVideoInfo, type StreamVariantInfo } from '../player/useVideoInfo'
+import { contiguousMediaEnd, mergeMediaRanges, readMediaRanges, type MediaRange } from '../player/mediaRanges'
 import { formatPlaybackTime as fmt } from '../player/videoInfoFormat'
 import { createPlaybackSource } from '../player/hls/playbackSource'
 import { resumeStreaming } from '../player/hls/resumeStreaming'
@@ -295,41 +296,34 @@ const progressPct = computed(() => {
   return Math.max(0, Math.min(100, pct))
 })
 
-// 缓冲进度百分比（通过 video.buffered 计算）
-const bufferPct = ref(0)
+const mediaRanges = ref<MediaRange[]>([])
+const bufferRanges = computed(() => {
+  const total = duration.value
+  if (casting.value || !Number.isFinite(total) || total <= 0) return []
+  return mergeMediaRanges([...mediaRanges.value, ...cachedRanges.value], total)
+    .map(([start, end]) => ({ left: start / total * 100, width: (end - start) / total * 100 }))
+})
 function updateBuffer(): void {
-  if(casting.value){TsCache.setPlaybackBufferAhead(0);return}
+  if(casting.value){mediaRanges.value=[];TsCache.setPlaybackBufferAhead(0);return}
   const v = getVideoEl()
+  mediaRanges.value = v ? readMediaRanges(v.buffered) : []
   if (v) {
-    const ranges: [number, number][] = []
-    for (let i = 0; i < v.buffered.length; i++) ranges.push([v.buffered.start(i), v.buffered.end(i)])
     const initial = v.readyState < 2 && !prepared.value
     TsCache.updatePlaybackState({ position: v.currentTime, rate: v.playbackRate, paused: v.paused && !initial,
-      seeking: v.seeking, waiting: (!v.paused || initial) && v.readyState < 3, buffered: ranges })
+      seeking: v.seeking, waiting: (!v.paused || initial) && v.readyState < 3, buffered: mediaRanges.value })
   }
   if (!v || !v.duration || v.duration <= 0) {
     TsCache.setPlaybackBufferAhead(0)
     return
   }
-  const buf = v.buffered
-  if (!buf || buf.length === 0) {
-    bufferPct.value = 0
-    TsCache.setPlaybackBufferAhead(0)
-    return
-  }
-  // A distant range left after seeking cannot feed the current playback point.
-  let end = v.currentTime
-  for (let i = 0; i < buf.length; i++) {
-    if (buf.start(i) <= end + .05 && buf.end(i) > end) end = buf.end(i)
-  }
-  bufferPct.value = Math.max(0, Math.min(100, (end / v.duration) * 100))
+  const end = contiguousMediaEnd(mediaRanges.value, v.currentTime)
   TsCache.setPlaybackBufferAhead(Math.max(0, end - v.currentTime), v.playbackRate)
 }
 
 // 缓存监控
 const telemetry=usePlaybackTelemetry({video:getVideoEl,url:()=>props.url,cachedBitrate:()=>extractBitrateFromCachedTs(),t,
   stall:(phase,detail)=>logStartup(`player_buffering_${phase}`,detail)})
-const {cacheStats,loadingCached,loadingTotal,loadingSpeed,loadingElapsed,startLoadingStats,stopLoadingStats,
+const {cacheStats,cachedRanges,loadingCached,loadingTotal,loadingSpeed,loadingElapsed,startLoadingStats,stopLoadingStats,
   resetPerfBaseline,alignPlaybackClock,endStall}=telemetry
 const { videoInfo, extractBitrateFromCachedTs } = useVideoInfo({
   getVideoEl, getUrl: () => props.url, duration, current, muted, volume, speed,
@@ -730,7 +724,8 @@ function destroyPlayerInternal(video: HTMLVideoElement): void {
   m3u8StreamInfo.value = []
   current.value = 0
   duration.value = 0
-  bufferPct.value = 0
+  mediaRanges.value = []
+  cachedRanges.value = []
   TsCache.setPlaybackBufferAhead(0)
   source.dispose(video)
   try {
@@ -1155,7 +1150,7 @@ defineExpose({ isPlaying:computed(()=>playing.value&&!loading.value&&!casting.va
     :data-video-fit="effectivePictureFit" :style="mobile ? { '--cczj-player-control-height': `${mobileControlHeight}px` } : undefined" ref="wrapperRef" tabindex="0" @mousemove="if (!mobile) { if(!portraitPresentationHost)toggleShow(true); mouseInside = true; updateEnhancementCompare($event) }" @mouseenter="mouseInside = true"
     @mouseleave="!portraitPresentationHost && onMouseLeave()" @click="!portraitPresentationHost && onWrapperClick($event)" @dblclick.stop="!mobile && !portrait && toggleFullscreen()" @wheel.prevent="!portrait && onWheel($event)"
     @pointerdown.capture="onControlPointerDown" @pointerdown="!portraitPresentationHost && gestures.down($event)" @pointermove="!portraitPresentationHost && gestures.move($event)" @pointerup="gestures.end" @pointercancel="gestures.end" @lostpointercapture.self="gestures.end" @contextmenu="(mobile || portrait) && $event.preventDefault()">
-    <PortraitPlayerControls v-if="portrait" :visible="mobile || controlsVisible" :controls-host="portraitControlsHost" :ready="prepared && !loading" :fullscreen="isFullscreen" :can-fullscreen="!fullscreenBusy && platform.fullscreen.supported(portraitPresentationHost ?? wrapperRef)" :current="current" :duration="duration" :playing="playing" :boosting="gestures.boosting.value" :boost-rate="speed" :muted="muted" @scrub="portraitScrubTime = $event ?? -1" @fullscreen="toggleFullscreen" @play="togglePlay" @seek="portraitSeek" @sound="enablePortraitSound">
+    <PortraitPlayerControls v-if="portrait" :buffer-ranges="bufferRanges" :visible="mobile || controlsVisible" :controls-host="portraitControlsHost" :ready="prepared && !loading" :fullscreen="isFullscreen" :can-fullscreen="!fullscreenBusy && platform.fullscreen.supported(portraitPresentationHost ?? wrapperRef)" :current="current" :duration="duration" :playing="playing" :boosting="gestures.boosting.value" :boost-rate="speed" :muted="muted" @scrub="portraitScrubTime = $event ?? -1" @fullscreen="toggleFullscreen" @play="togglePlay" @seek="portraitSeek" @sound="enablePortraitSound">
       <slot name="portrait-info" />
       <template #status>
         <PlayerDesktopControls v-if="!mobile" ref="desktopControls" :playback="controlState" :commands="desktopCommands" :visible="controlsVisible" minimal>
@@ -1304,7 +1299,7 @@ defineExpose({ isPlaying:computed(()=>playing.value&&!loading.value&&!casting.va
       <div class="progress-container" ref="progressContainerRef" @mousedown.stop="onProgressMouseDown"
         @mousemove="!mobile && onProgressHover($event)" @mouseleave="!mobile && onProgressLeave()">
         <div class="progress-track-bg"></div>
-        <div class="progress-buffer" :style="{ transform: `translateY(-50%) scaleX(${bufferPct / 100})` }"></div>
+        <div v-for="(range,index) in bufferRanges" :key="index" class="progress-buffer" :style="{ left: range.left + '%', width: range.width + '%' }" aria-hidden="true"></div>
         <div class="progress-played" :style="{ transform: `translateY(-50%) scaleX(${displayedProgress / 100})` }"></div>
         <!-- 悬停预览线 + 时间提示 + 缩略图 -->
         <div v-show="progressHoverPct >= 0" class="progress-hover-line" :style="{ left: progressHoverPct + '%' }"></div>

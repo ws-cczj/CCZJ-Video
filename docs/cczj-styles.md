@@ -78,3 +78,16 @@ npm --prefix frontend run check:css-reuse
 图片主题裁剪沿用 [Cropper.js 的矩形选区模型](https://fengyuanchen.github.io/cropperjs/api/cropper-selection.html)，使用本项目 Button、NumberField 和主题变量表达选区、遮罩与数值调整，不新增 UI 或裁剪依赖。图片校验与无损裁剪使用 [createImageBitmap](https://developer.mozilla.org/en-US/docs/Web/API/Window/createImageBitmap) 和 worker 内 OffscreenCanvas，未裁剪原图不重编码；SQLite 的 GZIP 封装只改变存储表示，不改变图像像素或文件字节。启动壁纸通过 [HTMLImageElement.decode](https://developer.mozilla.org/en-US/docs/Web/API/HTMLImageElement/decode) 并行准备，选定开屏图后保持资源不变。
 
 主题背景使用短 Blob URL 作为 CSS 变量值，原文件保留在主题数据中。[Chromium 的 CSSVariableData](https://chromium.googlesource.com/chromium/src/+/ab30ca95a699b434a885dd6b573a9fe4158caa76/third_party/blink/renderer/core/css/css_variable_data.h) 对单变量设有字节上限，不能将大图完整 base64 直接写入变量。裁剪交互采用独立 Modal、可移动选区、四边及角点缩放与像素字段；移动／缩放语义参考 [CropperSelection](https://fengyuanchen.github.io/cropperjs/api/cropper-selection.html)，使用项目原有控件与图标系统。界面保留动作、加载、错误和必要限制，技术依据集中在本文。
+
+
+## 弹幕排版与设置
+
+弹幕显示由 `player/danmaku/textStyle.ts` 统一构造字体和绘制文字，Canvas 测量、实际弹幕和 `DanmakuPreview.vue` 使用同一规则。默认常规字重、1.5px 描边；提供思源黑体、系统衬线／等宽回退，400／500／600／700 字重，以及描边／阴影／无效果。字号以24px名义字号为100%，界面支持50%–200%比例及1%数值步进；画面宽度480–640px连续缩放，不再跨500px突变，画面更窄保持75%下限。透明度10%–100%、显示区域25%–100%、密度25%–100%、行数2–24、描边0–4px（0.25px步进）独立设置。旧字号、透明度、速度及行数等已保存值保持，不因新增设置自动重置；“重置外观”保留弹幕总开关和缓存天数。
+
+思源黑体来自 [Adobe 官方 Source Han Sans](https://github.com/adobe-fonts/source-han-sans)，使用官方CN可变WOFF2，原文件7995716字节（约7.63MiB），SHA256 `7087698d52240614659957608d8c4ad446759aee3208409dc9f566412e7af8f4`。原始下载路径为 `release/Variable/WOFF2/OTF/Subset/SourceHanSansCN-VF.otf.woff2`；文件未经裁剪或重新编码，字重由字体自身可变轴处理。字体只在弹幕启用或样式预览时按需从本地资源加载，不改变界面、阅读器或启动字体，不新增远程字体请求或运行依赖。遵循 [SIL OFL 1.1](../frontend/public/licenses/source-han-sans-OFL.txt)，完整版权与授权文本随前端public资源打包。字体由文档持有，HMR撤销注册；失败时使用系统字体并提供重试，加载完成清理测量基线重绘。字体资产会增加安装包约7.6MiB，低版本WebView不支持可变字体时采用明确的系统回退。
+
+`timeline.ts` 保持播放时钟驱动，速度按画面宽度归一为8秒跨越视口的基准，再乘用户速度比例；同一视口的滚动弹幕保持等速，避免长文字追尾。区域限制同时作用于顶部、滚动与底部弹幕，候选轨道按实际纵坐标避让；密度调节同屏上限与间隔，同屏预算始终不超过120条。Canvas backing store最多约800万像素、最高3倍DPR；这只是分配上限，不代表已经完成设备内存或性能验收。
+
+设置面板复用 Button／Select／NumberField，滑杆配合数字输入微调，预览不依赖当前是否匹配到弹幕。普通手机、桌面和原生全屏共用一套设置；短横屏保持固定标题及可滚动内容，移动全屏也使用44px高触控入口。范围与控件几何保留像素单位，界面文字继续消费界面字号。弹幕偏好由 `preferenceStore.ts` 共享状态及 settingsQueue 管理，播放器和弹幕源页只更新各自字段，失败保留脏值并允许重试；继续使用 `danmaku_preferences_v1`，SQLite及备份契约不变。
+
+设计核对使用本机 B站9.17.0 APK静态REA，SHA256 `2b5aec7ea82223edd7bb0a1c7ccfae4aedc331b03cf2a090e032556156ce8a6f`，未启动APK或操作设备。`DanmakuSettingsDialog.j` 回退smali仍可确认字号比例读取上限2.0及独立透明度字段；`DMDisplayDensity.<clinit>` 明确NORMAL／PLENTY／STACKING三档；`DanmakuParams` 独立公开字号比例、文字样式和加粗参数；`DanmakuFontSwitchPreference.setChecked/b` 获取独立字体模块并查找 `SourceHanSansCN-Regular.otf`。这不证明本机已下载该模块，也不确定B站实际渲染器的全部描边像素、默认值或字形版本；本项目采用官方同字体家族的可变字体与自己的绘制规则，没有复制B站代码或动态字体资产。REA完整Evidence、DEX切片来源与未知项保存在本地 `dist/audit/danmaku-rea`，代表性ID见该目录 findings.md。最终字形、窄屏触控、字体回退、保存恢复和性能由用户设备验收。

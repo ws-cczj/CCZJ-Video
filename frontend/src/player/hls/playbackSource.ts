@@ -59,6 +59,9 @@ export function createPlaybackSource(deps: {
     TsCache.setTransportActive(false, transportOwner)
     const playbackURL = await playbackTransportURL(proxyHlsURL(url), lease.signal)
     if (!lease.current()) return false
+    // The new source must publish its own timing before cached bytes can be
+    // presented on the timeline or scheduled as this source's inventory.
+    TsCache.setSegments([], undefined, [])
     // Native HLS keeps iPhone playback and PiP in AVPlayer. MSE/Hls.js is still
     // available for hosts without native HLS support.
     if (isIOSRuntime() && video.canPlayType('application/vnd.apple.mpegurl')) {

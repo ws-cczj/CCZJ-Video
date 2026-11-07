@@ -5,7 +5,7 @@ import { Button } from '../../components/ui'
 import Icon from '../../components/Icon.vue'
 import { formatPlaybackTime } from '../videoInfoFormat'
 
-const props = defineProps<{ current: number; duration: number; playing: boolean; boosting: boolean; boostRate: number; muted: boolean; ready: boolean; fullscreen: boolean; canFullscreen: boolean; visible:boolean; controlsHost?: HTMLElement }>()
+const props = defineProps<{ current: number; duration: number; bufferRanges: {left:number;width:number}[]; playing: boolean; boosting: boolean; boostRate: number; muted: boolean; ready: boolean; fullscreen: boolean; canFullscreen: boolean; visible:boolean; controlsHost?: HTMLElement }>()
 const emit = defineEmits<{ play: []; seek: [seconds: number]; scrub: [seconds: number | null]; sound: []; fullscreen: [] }>()
 const { t } = useI18n()
 const target = ref<number | null>(null)
@@ -54,7 +54,7 @@ onBeforeUnmount(cancel)
     <slot />
     <div class="portrait-footer cczj-flex cczj-items-center cczj-gap-4">
     <div class="portrait-timeline cczj-relative cczj-flex-1 cczj-min-w-0 cczj-pointer-events-auto" :style="{'--portrait-progress':`${progress}%`}" @click.stop @dblclick.stop @pointerdown.stop @wheel.stop>
-      <div class="portrait-track cczj-absolute" aria-hidden="true"><span /></div>
+      <div class="portrait-track cczj-absolute" aria-hidden="true"><span v-for="(range,index) in bufferRanges" :key="index" class="portrait-buffer cczj-absolute cczj-h-full" :style="{left:range.left+'%',width:range.width+'%'}" /><span class="portrait-played cczj-relative" /></div>
       <span class="portrait-thumb cczj-absolute cczj-rounded-full cczj-pointer-events-none" aria-hidden="true" />
       <input class="portrait-progress cczj-absolute cczj-w-full" type="range" min="0" :max="finiteDuration" step="0.1" :value="time" :disabled="!finiteDuration" :aria-label="t('player.currentTimeLabel')" :aria-valuetext="`${formatPlaybackTime(time)} / ${formatPlaybackTime(finiteDuration)}`" @pointerdown.prevent="begin" @pointermove.prevent="move" @input="input" @pointerup="end" @pointercancel="end" @lostpointercapture="end" />
       <span v-if="!controlsHost" class="portrait-time cczj-absolute">{{ formatPlaybackTime(time) }} <span>/ {{ formatPlaybackTime(finiteDuration) }}</span></span>
@@ -82,7 +82,8 @@ onBeforeUnmount(cancel)
 .portrait-status :deep(.ctrl-bar) { padding: 4px 16px; background: transparent; }
 .portrait-timeline { height: 56px; }
 .portrait-track { left: 0; right: 0; top: 22px; transform: translateY(-50%); height: 3px; border-radius: 4px; background: #ffffff50; transition: height .15s; }
-.portrait-track span { @apply cczj-block cczj-h-full; width: var(--portrait-progress); background: #fff; border-radius: inherit; }
+.portrait-track .portrait-played { @apply cczj-block cczj-h-full; width: var(--portrait-progress); background: #fff; border-radius: inherit; }
+.portrait-buffer { background: #ffffff6b; border-radius: inherit; }
 .portrait-progress { inset: 0; height: 44px; margin: 0; padding: 0; opacity: 0; @apply cczj-cursor-pointer; touch-action: none; }
 .portrait-thumb { left: var(--portrait-progress); top: 22px; width: 8px; height: 8px; background: white; transform: translate(-50%,-50%); transition: width .15s,height .15s; }
 .portrait-time { left: 0; bottom: 0; @apply cczj-whitespace-nowrap cczj-pointer-events-none; font-size: calc(11rem / 14); line-height: 16px; font-variant-numeric: tabular-nums; }

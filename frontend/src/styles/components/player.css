@@ -386,13 +386,9 @@
   background: rgba(255, 255, 255, 0.18);
 }
 
-/* 缓冲层（灰色/淡色）—— 代表已经下载到的位置 */
+/* Complete cached media and media-element buffers retain their timeline gaps. */
 .progress-buffer {
   background: rgba(255, 255, 255, 0.42);
-  @apply cczj-w-full;
-  transform: scaleX(0);
-  transform-origin: left center;
-  transition: transform 0.35s ease;
 }
 
 /* 已播放（蓝色渐变） */
