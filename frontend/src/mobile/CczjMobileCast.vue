@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import './player/presentation.css'
 import { recordTimeline } from '../diagnostics/session'
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, useSlots, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '../components/Icon.vue'
 import { Button, Select } from '../components/ui'
@@ -10,19 +10,33 @@ import CczjMobileCastRemote from './CczjMobileCastRemote.vue'
 import { DiscoverCastDevices, DiscoverCastDevicesOnInterfaces, PlayCastVideoWithOptions, ControlCastVideo, ReleaseCastSession, GetCastStatus, normalizeApiError } from '../api/app'
 import { createPlayerPlatform } from '../player/platform'
 import { createRequestScope } from '../api/requestScope'
-import { formatPlaybackTime } from '../player/videoInfoFormat'
 import type { CastPlaybackState } from '../player/views/controlState'
+import type { PlaybackCheckpoint } from '../player/playbackSession'
 const platform=createPlayerPlatform()
-const props = defineProps<{ open: boolean; url: string; title: string; position: number; host?:HTMLElement; fullscreen?:boolean }>()
+const props = defineProps<{ open: boolean; url: string; mediaKey: string; continuation?:PlaybackCheckpoint&{key:string}; title: string; position: number; host?:HTMLElement; fullscreen?:boolean }>()
 const emit = defineEmits<{ open: []; close: []; exitFullscreen: []; connected: []; stopped: [position?: number]; status: [value: CastPlaybackState] }>()
 const { t } = useI18n()
+const slots=useSlots(),routesOpen=ref(false)
+const panelRoot=ref<HTMLElement>(),routesBody=ref<HTMLElement>()
+let sourceReplacement=false,restorePaused=false,sourceResume:number|undefined,consumedContinuation:typeof props.continuation
+async function openRoutes():Promise<void> {
+ if(busy.value||!slots.lines)return
+ trace('routes_opened');routesOpen.value=true;emit('open')
+ await nextTick()
+ if(!disposed&&routesOpen.value)routesBody.value?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus({preventScroll:true})
+}
+function closeRoutes():void {
+ const hadRoutes=routesOpen.value;routesOpen.value=false
+ if(hadRoutes)void nextTick(()=>{if(!disposed&&props.open)panelRoot.value?.querySelector<HTMLButtonElement>('[data-cast-action="lines"]')?.focus({preventScroll:true})})
+}
+function back():boolean {if(!routesOpen.value)return false;closeRoutes();return true}
 const devices = ref<{ id: string; name: string }[]>([])
 const scanning = ref(false), busy = ref(false), error = ref('')
 const announced=ref(false),clockVerified=ref(false),userConfirmed=ref(false)
 const transportChoice=ref('relay'),fromStart=ref(true)
 const transportOptions=computed(()=>[{value:'relay',label:t('mobile.castViaPhone')},{value:'direct',label:t('mobile.castDirect')}])
-let castSession='',acceptRequest=''
-function trace(name:string,data:Record<string,number|boolean>={}):void {recordTimeline('ui.lifecycle',{name:`cast.${name}`,cast_session_id:castSession,backend_request_id:acceptRequest,data})}
+let castSession='',acceptRequest='',parentRequest=''
+function trace(name:string,data:Record<string,number|boolean>={}):void {recordTimeline('ui.lifecycle',{name:`cast.${name}`,cast_session_id:castSession,backend_request_id:acceptRequest,parent_id:parentRequest,data})}
 function resetConfirmation():void {clockVerified.value=false;userConfirmed.value=false}
 function observePlayback(value:NonNullable<typeof remote.value>):void {
  clockVerified.value=value.seek_ready===true
@@ -83,11 +97,15 @@ async function refreshStatus():Promise<void>{
   if(clockVerified.value&&value.has_position)confirmPlayback()
   if(announced.value){
     if(clockVerified.value&&value.has_position)lastPosition=value.position
-    emit('status',{device:selected.value!.name,state:value.state,position:value.position,duration:value.duration,hasPosition:clockVerified.value&&value.has_position})
+    emit('status',{device:selected.value!.name,state:value.state,position:value.position,duration:value.duration,hasPosition:clockVerified.value&&value.has_position&&initialPosition===undefined&&pendingSeek.value===undefined&&!restorePaused})
     if(value.state==='STOPPED'||value.state==='NO_MEDIA_PRESENT'){announced.value=false;emit('stopped',lastPosition)}
     else if(initialPosition!==undefined&&value.state==='PLAYING'&&value.has_position&&clockVerified.value){
       const target=initialPosition;initialPosition=undefined
       if(target>0){trace('seek_resume',{target_seconds:target});void control('Seek',target)}
+    }
+    else if(restorePaused&&playbackVerified.value&&pendingSeek.value===undefined&&initialPosition===undefined){
+      restorePaused=false
+      if(value.state==='PLAYING'){trace('pause_restored');void control('Pause')}
     }
   }
  }catch(error){if(token===statusRevision&&!disposed&&normalizeApiError(error).code!=='CANCELLED'){remote.value=null;clockVerified.value=false;if(!statusError.value)trace('status_failed');statusError.value=t('mobile.castUnconfirmed')}}
@@ -119,16 +137,19 @@ async function scan(): Promise<void> {
 }
 async function connect(device: { id: string; name: string }): Promise<void> {
   if (busy.value) return
-  const token=sessionRevision,previousPosition=lastPosition
+  const token=sessionRevision
+  parentRequest=acceptRequest
+  if(!sourceReplacement)restorePaused=false
+  if(sourceReplacement)trace('source_replaced',{resume_available:sourceResume!==undefined})
   stopDiscovery()
   stopStatus()
   busy.value = true; error.value = '';pendingSeek.value=undefined;remote.value=null;statusError.value='';stopFailed.value=false
   resetConfirmation();if(announced.value)emit('status',{device:device.name,state:'TRANSITIONING',position:0,duration:0,hasPosition:false});trace(selected.value?'resend':'send');confirmationExpired.value=false;attemptStarted=performance.now()
   const resumePosition=announced.value ? lastPosition ?? props.position : props.position
-  initialPosition=!fromStart.value&&Number.isFinite(resumePosition)?Math.max(0,resumePosition):undefined
+  initialPosition=sourceReplacement?sourceResume:!fromStart.value&&Number.isFinite(resumePosition)?Math.max(0,resumePosition):undefined
   lastPosition=undefined
-  try { const receipt=await controlScope.run(()=>PlayCastVideoWithOptions(device.id, props.url, props.title,{transport:transportChoice.value})); if(disposed||token!==sessionRevision){void ReleaseCastSession(device.id,receipt.cast_session_id).catch(()=>{});return} if (!disposed&&token===sessionRevision) { castSession=receipt.cast_session_id;acceptRequest=receipt.request_id;trace('command_accepted');selected.value = device; paused.value = false;void refreshStatus() } }
-  catch (e) { if (!disposed&&token===sessionRevision&&normalizeApiError(e).code!=='CANCELLED') {lastPosition=previousPosition;initialPosition=undefined;error.value = normalizeApiError(e).message;if(selected.value)void refreshStatus()} }
+  try { const receipt=await controlScope.run(()=>PlayCastVideoWithOptions(device.id, props.url, props.title,{transport:transportChoice.value})); if(disposed||token!==sessionRevision){void ReleaseCastSession(device.id,receipt.cast_session_id).catch(()=>{});return} if (!disposed&&token===sessionRevision) { castSession=receipt.cast_session_id;acceptRequest=receipt.request_id;trace('command_accepted');selected.value = device; paused.value = false;sourceReplacement=false;sourceResume=undefined;routesOpen.value=false;trace('remote_opened');emit('open');void refreshStatus() } }
+  catch (e) { if (!disposed&&token===sessionRevision&&normalizeApiError(e).code!=='CANCELLED') {initialPosition=undefined;error.value = normalizeApiError(e).message;trace('send_failed')} }
   finally { if(token===sessionRevision)busy.value = false }
 }
 async function changeTransport(value:string|number):Promise<void>{
@@ -176,7 +197,8 @@ async function control(action: string, target = 0): Promise<void> {
   finally { if(token===sessionRevision)busy.value = false }
 }
 function finishSession(position?:number):void {
- trace('session_ended');castSession='';acceptRequest='';resetConfirmation();stopStatus();selected.value=null;remote.value=null;announced.value=false;pendingSeek.value=undefined;initialPosition=undefined;lastPosition=undefined;stopFailed.value=false;statusError.value='';error.value='';emit('stopped',position)
+ sourceReplacement=false;restorePaused=false;sourceResume=undefined;routesOpen.value=false
+ trace('session_ended');castSession='';acceptRequest='';parentRequest='';resetConfirmation();stopStatus();selected.value=null;remote.value=null;announced.value=false;pendingSeek.value=undefined;initialPosition=undefined;lastPosition=undefined;stopFailed.value=false;statusError.value='';error.value='';emit('stopped',position)
 }
 async function disconnect():Promise<void> {
  const id=selected.value?.id,session=castSession
@@ -187,37 +209,48 @@ async function disconnect():Promise<void> {
 function cancelControls():void{sessionRevision++;controlScope.cancel();busy.value=false}
 // The drawer owns discovery, not the receiver session. Closing it must not
 // cancel an accepted handoff or prevent its confirmation.
-watch(() => props.open, value => { if (!value) stopDiscovery();else if (!selected.value&&!busy.value) void scan();else if(!busy.value) void refreshStatus() },{immediate:true})
-watch(() => props.url, () => {const id=selected.value?.id;cancelControls();if(id)void ReleaseCastSession(id,castSession).catch(()=>{});finishSession();paused.value=false})
-function visibility():void{trace(document.hidden?'background':'foreground');if(document.hidden){stopStatus();stopDiscovery()}else if(selected.value&&!busy.value)void refreshStatus()}
+watch(() => props.open, value => { if (!value){stopDiscovery();closeRoutes()}else if (!selected.value&&!busy.value) void scan();else if(!busy.value&&!error.value) void refreshStatus() },{immediate:true})
+watch(() => [props.url,props.mediaKey] as const, ([url,key],[oldURL,oldKey]) => {
+ const device=selected.value
+ const handoff=props.continuation!==consumedContinuation&&props.continuation?.key===key
+ const sameEpisode=!!key&&(key===oldKey||handoff)
+ if(handoff)consumedContinuation=props.continuation
+ const position=pendingSeek.value??initialPosition??sourceResume??(clockVerified.value&&remote.value?.has_position?remote.value.position:undefined)
+ const wasPaused=restorePaused||remote.value?.state==='PAUSED_PLAYBACK'
+ cancelControls();stopStatus()
+ if(device&&url&&oldURL&&sameEpisode){
+   sourceReplacement=true;sourceResume=position;restorePaused=wasPaused
+   void connect(device)
+   return
+ }
+ if(device)void ReleaseCastSession(device.id,castSession).catch(()=>{})
+ finishSession();paused.value=false
+})
+function visibility():void{trace(document.hidden?'background':'foreground');if(document.hidden){stopStatus();stopDiscovery()}else if(selected.value&&!busy.value&&!error.value)void refreshStatus()}
 onMounted(()=>document.addEventListener('visibilitychange',visibility))
 onBeforeUnmount(() => { const id=selected.value?.id;trace('unmount');disposed = true;cancelControls();if(id)void ReleaseCastSession(id,castSession).catch(()=>{});stopStatus(); stopDiscovery();document.removeEventListener('visibilitychange',visibility) })
+defineExpose({back})
 </script>
 <template>
- <Teleport v-if="announced && host && !open" :to="host">
-  <CczjMobileCastRemote :layout="fullscreen ? 'fullscreen' : 'compact'" v-bind="remoteView" @exit-fullscreen="emit('exitFullscreen')" @play="control(paused ? 'Play' : 'Pause')" @seek="control('Seek',$event)" @stop="control('Stop')" @change="emit('open');chooseDevice()" @expand="emit('open')" />
+ <Teleport v-if="selected && host && !open" :to="host">
+  <CczjMobileCastRemote :layout="fullscreen ? 'fullscreen' : 'compact'" :has-lines="!!$slots.lines" v-bind="remoteView" @lines="openRoutes" @exit-fullscreen="emit('exitFullscreen')" @play="control(paused ? 'Play' : 'Pause')" @seek="control('Seek',$event)" @stop="control('Stop')" @change="emit('open');chooseDevice()" @expand="emit('open')" />
  </Teleport>
- <CczjMobilePlayerDrawer class="cczj-mobile-playback-drawer" :class="{'cczj-mobile-cast-remote-mask':announced}" :solid="true" :expanded="announced" :close-label="announced ? t('mobile.castCollapse') : undefined" :initial-height="60" :host="host" :open="open" :fullscreen="!!fullscreen" :title="announced ? title : t('mobile.cast')" @close="emit('close')">
-  <template v-if="announced" #header>
-    <Button variant="text" icon :aria-label="t('mobile.castCollapse')" @click="emit('close')"><Icon name="chevron-left" :size="24" /></Button>
-    <strong class="cczj-flex-1 cczj-min-w-0 cczj-truncate cczj-font-normal">{{ title }}</strong>
+ <CczjMobilePlayerDrawer class="cczj-mobile-playback-drawer" :class="{'cczj-mobile-cast-remote-mask':!!selected}" :solid="true" :expanded="!!selected" :close-label="selected ? t('mobile.castCollapse') : undefined" :initial-height="60" :host="host" :open="open" :fullscreen="!!fullscreen" :title="selected ? title : t('mobile.cast')" @close="routesOpen ? closeRoutes() : emit('close')">
+  <template v-if="selected" #header>
+    <Button variant="text" icon :aria-label="t(routesOpen?'common.back':'mobile.castCollapse')" @click="routesOpen ? closeRoutes() : emit('close')"><Icon name="chevron-left" :size="24" /></Button>
+    <strong class="cczj-flex-1 cczj-min-w-0 cczj-truncate cczj-font-normal">{{ routesOpen ? t('mobile.castLines') : title }}</strong>
     <Button variant="text" icon :disabled="busy" :aria-label="t('mobile.castStop')" @click="control('Stop')"><Icon name="power" :size="24" /></Button>
   </template>
-  <div v-if="open" class="cczj-mobile-cast" :class="{'cczj-mobile-cast-connected':announced}">
-    <div class="cczj-mobile-cast-actions">
-      <Select :model-value="transportChoice" :options="transportOptions" :aria-label="t('mobile.castTransport')" :disabled="busy" inline @update:model-value="changeTransport" />
+  <div v-if="open" ref="panelRoot" class="cczj-mobile-cast" :class="{'cczj-mobile-cast-connected':!!selected}">
+    <div v-if="!routesOpen" class="cczj-mobile-cast-actions">
+      <Select :model-value="transportChoice" :options="transportOptions" :ariaLabel="t('mobile.castTransport')" :disabled="busy" inline @update:model-value="changeTransport" />
       <Button variant="text" :disabled="busy" :aria-pressed="fromStart" @click="fromStart=!fromStart">{{t(fromStart?'mobile.castFromStart':'mobile.castResumeNext')}}</Button>
     </div>
-    <template v-if="selected && announced">
-      <CczjMobileCastRemote layout="page" v-bind="remoteView" @play="control(paused ? 'Play' : 'Pause')" @seek="control('Seek',$event)" @stop="control('Stop')" @change="chooseDevice" />
-      <div v-if="error || statusError || !receiverActive || stopFailed || canConfirmPlayback" class="cczj-mobile-cast-actions"><Button v-if="canConfirmPlayback" :disabled="busy" @click="confirmPlayback(true)">{{t('mobile.castConfirmPlayback')}}</Button><Button variant="text" :disabled="busy" @click="connect(selected)">{{t('mobile.castRetry')}}</Button><Button v-if="stopFailed" variant="text" :disabled="busy" @click="disconnect">{{t('mobile.castDisconnect')}}</Button><p v-if="stopFailed">{{t('mobile.castDisconnectHint')}}</p></div>
-    </template>
+    <div v-if="routesOpen" ref="routesBody" class="cczj-mobile-cast-routes cczj-flex-1 cczj-min-h-0 cczj-overflow-y-auto"><slot name="lines" :close="closeRoutes" /></div>
     <template v-else-if="selected">
-      <p v-if="error" class="cczj-mobile-cast-error" role="alert">{{ error }}</p>
-      <div class="cczj-mobile-cast-session"><Icon name="cast" :size="28"/><strong>{{ selected.name }}</strong><p role="status">{{ statusError || remoteLabel }}</p><p v-if="remote?.has_position">{{formatPlaybackTime(remote.position)}} / {{formatPlaybackTime(remote.duration)}}</p></div>
-      <p v-if="confirmationExpired">{{t('mobile.castRetryHint')}}</p>
-      <div class="cczj-mobile-cast-actions"><Button :disabled="busy" variant="text" @click="control('Stop')">{{ t('mobile.castStop') }}</Button><Button v-if="stopFailed" variant="text" :disabled="busy" @click="disconnect">{{t('mobile.castDisconnect')}}</Button><p v-if="stopFailed">{{t('mobile.castDisconnectHint')}}</p></div>
-      <div class="cczj-mobile-cast-actions"><Button v-if="canConfirmPlayback" :disabled="busy" @click="confirmPlayback(true)">{{t('mobile.castConfirmPlayback')}}</Button><Button :disabled="busy" @click="connect(selected)">{{t('mobile.castRetry')}}</Button><Button variant="text" :disabled="busy" @click="chooseDevice">{{t('mobile.castChangeDevice')}}</Button><Button v-if="platform.cast.systemSupported()" variant="text" :disabled="busy" @click="systemCast">{{t('mobile.castSystem')}}</Button></div>
+      <CczjMobileCastRemote layout="page" :has-lines="!!$slots.lines" v-bind="remoteView" @lines="openRoutes" @play="control(paused ? 'Play' : 'Pause')" @seek="control('Seek',$event)" @stop="control('Stop')" @change="chooseDevice" />
+      <p v-if="confirmationExpired && needsConfirmation" class="cczj-mobile-drawer-hint">{{t('mobile.castRetryHint')}}</p>
+      <div v-if="error || statusError || !receiverActive || stopFailed || canConfirmPlayback" class="cczj-mobile-cast-actions"><Button v-if="canConfirmPlayback" :disabled="busy" @click="confirmPlayback(true)">{{t('mobile.castConfirmPlayback')}}</Button><Button variant="text" :disabled="busy" @click="connect(selected)">{{t('mobile.castRetry')}}</Button><Button v-if="platform.cast.systemSupported()" variant="text" :disabled="busy" @click="systemCast">{{t('mobile.castSystem')}}</Button><Button v-if="stopFailed" variant="text" :disabled="busy" @click="disconnect">{{t('mobile.castDisconnect')}}</Button><p v-if="stopFailed">{{t('mobile.castDisconnectHint')}}</p></div>
     </template>
     <template v-else>
       <p v-if="error" class="cczj-mobile-cast-error" role="alert">{{ error }}</p>

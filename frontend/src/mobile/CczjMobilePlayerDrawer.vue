@@ -1,6 +1,7 @@
 <script setup lang="ts">
 defineOptions({ inheritAttrs: false })
 import './player/presentation.css'
+import '../player/controlPalette.css'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '../components/Icon.vue'
@@ -85,7 +86,7 @@ onBeforeUnmount(() => { stopResize();if (props.open && returnFocus?.isConnected)
   <Teleport :to="(fullscreen || contained) && host ? host : 'body'">
     <Transition :name="placement==='bottom'?'cczj-mobile-player-sheet':'cczj-mobile-player-drawer'" @after-leave="afterClose">
       <div v-bind="$attrs" v-show="open" class="cczj-mobile-quick-mask" :class="{'cczj-mobile-quick-fullscreen':fullscreen || contained,'cczj-player-contained-drawer':contained,'cczj-player-solid-drawer':solid,'cczj-mobile-player-more-mask':kind==='more','cczj-mobile-player-more-fullscreen':kind==='more'&&fullscreen,'cczj-mobile-player-bottom-mask':placement==='bottom','cczj-mobile-player-expanded-mask':expanded}" @click.self.stop="emit('close')" @dblclick.stop @pointerdown.stop @wheel.stop @keydown.stop="onKey">
-        <section ref="panel" class="cczj-mobile-drawer-panel cczj-mobile-quick-panel" :class="{'cczj-mobile-player-more':kind==='more'}" :style="sheetStyle" role="dialog" :aria-label="title" aria-modal="true" @click.stop @dblclick.stop>
+        <section ref="panel" class="cczj-mobile-drawer-panel cczj-mobile-quick-panel cczj-player-dark-controls" :class="{'cczj-mobile-player-more':kind==='more'}" :style="sheetStyle" role="dialog" :aria-label="title" aria-modal="true" @click.stop @dblclick.stop>
           <button v-if="placement==='bottom' && !expanded" type="button" class="cczj-mobile-sheet-handle" role="slider" :aria-label="t('mobile.resizeDrawer')" aria-orientation="vertical" :aria-valuemin="30" :aria-valuemax="90" :aria-valuenow="Math.round(sheetHeight)" :aria-valuetext="t('mobile.drawerHeight',{percent:Math.round(sheetHeight)})" @pointerdown.stop="startResize" @pointermove.stop="resize" @pointerup.stop="stopResize" @pointercancel.stop="stopResize" @lostpointercapture.stop="stopResize" @keydown="resizeWithKey"><span aria-hidden="true" /></button>
           <header><slot name="header"><strong class="cczj-truncate">{{title}}</strong><button :aria-label="closeLabel || t('common.close')" @click="emit('close')"><Icon :name="expanded ? 'chevron-down' : 'close'" :size="18" /></button></slot></header>
           <slot name="navigation" />

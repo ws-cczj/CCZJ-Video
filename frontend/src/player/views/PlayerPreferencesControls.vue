@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import '../controlPalette.css'
 import Icon from '../../components/Icon.vue'
 import PlayerDisplayPreferences from './PlayerDisplayPreferences.vue'
 import type { PictureFit } from '../usePlaybackPreferences'
@@ -14,7 +15,7 @@ const {t}=useI18n()
         <button v-if="!mobile" class="ctrl-btn" @click="open = !open; emit('interaction')" :aria-label="t('settings.playback')" :title="t('settings.playback')">
           <Icon name="settings" :size="16" />
         </button>
-        <div class="playback-settings-popup" :class="{ show: mobile || open, 'playback-settings-mobile':mobile }" @click.stop>
+        <div class="playback-settings-popup cczj-player-dark-controls" :class="{ show: mobile || open, 'playback-settings-mobile':mobile }" @click.stop>
           <div class="playback-settings-item">
             <span>{{ t('player.autoPlay') }}</span>
             <label class="ps-toggle">

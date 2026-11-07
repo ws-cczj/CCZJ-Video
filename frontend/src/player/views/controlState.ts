@@ -41,4 +41,5 @@ export interface MobileChromeHandle {
   readonly category: 'quality' | 'playback' | 'tools'
   toggle(panel: MobilePanel): void
   close(panel?: MobilePanel | 'quick'): void
+  back(): void
 }

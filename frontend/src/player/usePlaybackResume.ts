@@ -19,6 +19,7 @@ export function usePlaybackResume(deps: {
   resolveResume: () => Promise<number> | undefined
   shouldResume?: () => boolean
   progress?: () => { position: number; duration: number } | undefined
+  canSave?: () => boolean
   settings: { read: (key: string, fallback: string) => string; write: (key: string, value: string) => void }
 }) {
   const savedTime = ref<number | null>(null)
@@ -109,7 +110,7 @@ export function usePlaybackResume(deps: {
 
   function canPersist(): boolean {
     const video = deps.getVideo()
-    return !!key && !!video && !resolving && pendingSeek === null && !showResumePrompt.value && !video.seeking && video.readyState >= 1
+    return deps.canSave?.() !== false && !!key && !!video && !resolving && pendingSeek === null && !showResumePrompt.value && !video.seeking && video.readyState >= 1
   }
 
   function save(): void {

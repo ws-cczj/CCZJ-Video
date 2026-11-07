@@ -80,6 +80,8 @@ npm --prefix frontend run check:css-reuse
 主题背景使用短 Blob URL 作为 CSS 变量值，原文件保留在主题数据中。[Chromium 的 CSSVariableData](https://chromium.googlesource.com/chromium/src/+/ab30ca95a699b434a885dd6b573a9fe4158caa76/third_party/blink/renderer/core/css/css_variable_data.h) 对单变量设有字节上限，不能将大图完整 base64 直接写入变量。裁剪交互采用独立 Modal、可移动选区、四边及角点缩放与像素字段；移动／缩放语义参考 [CropperSelection](https://fengyuanchen.github.io/cropperjs/api/cropper-selection.html)，使用项目原有控件与图标系统。界面保留动作、加载、错误和必要限制，技术依据集中在本文。
 
 
+播放器控件配色由 `player/controlPalette.css` 的 `cczj-player-dark-controls` 拥有，移动抽屉、独立遥控、弹幕、桌面画质及播放偏好面板显式消费。它同时覆盖背景、文字、选中、按钮及强调色透明层，避免只覆盖 `--accent` 而让 Select 的 `--accent-alpha-15` 选中底色和焦点圈仍继承应用主题。弹幕通过 `--cczj-control-accent-rgb` 保留自身蓝色强调；inline Select 留在面板内继承变量，其他页面的公共控件不变。实际浅色／深色／彩色应用主题、竖屏及短横屏下的颜色和触摸仍由设备验收。
+
 ## 弹幕排版与设置
 
 弹幕显示由 `player/danmaku/textStyle.ts` 统一构造字体和绘制文字，Canvas 测量、实际弹幕和 `DanmakuPreview.vue` 使用同一规则。默认常规字重、1.5px 描边；提供思源黑体、系统衬线／等宽回退，400／500／600／700 字重，以及描边／阴影／无效果。字号以24px名义字号为100%，界面支持50%–200%比例及1%数值步进；画面宽度480–640px连续缩放，不再跨500px突变，画面更窄保持75%下限。透明度10%–100%、显示区域25%–100%、密度25%–100%、行数2–24、描边0–4px（0.25px步进）独立设置。旧字号、透明度、速度及行数等已保存值保持，不因新增设置自动重置；“重置外观”保留弹幕总开关和缓存天数。

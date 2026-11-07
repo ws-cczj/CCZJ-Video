@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import '../controlPalette.css'
 import { useI18n } from 'vue-i18n'
 import Icon from '../../components/Icon.vue'
 import { Button, Select, NumberField } from '../../components/ui'
@@ -76,7 +77,7 @@ defineExpose({open,close,scheduleClose,toggle,ready:preferencesReady,engaged:ope
  <Teleport :to="host||'body'">
   <Transition name="cczj-danmaku-panel">
    <div v-if="opened" class="cczj-danmaku-mask" :style="{'--dm-panel-left':panelLeft}" :class="{'cczj-danmaku-portrait':mobile&&!fullscreen,'cczj-danmaku-touch':mobile}" @click.self="close()" @pointerdown.stop @wheel.stop @click.stop @dblclick.stop @keydown.stop="onKey">
-    <section ref="panel" class="cczj-danmaku-panel" role="dialog" :aria-modal="mobile&&!fullscreen?true:undefined" :aria-label="t('danmaku.settings')" @pointerenter="keepOpen" @pointerleave="leavePanel" @focusin="keepOpen">
+    <section ref="panel" class="cczj-danmaku-panel cczj-player-dark-controls" role="dialog" :aria-modal="mobile&&!fullscreen?true:undefined" :aria-label="t('danmaku.settings')" @pointerenter="keepOpen" @pointerleave="leavePanel" @focusin="keepOpen">
      <header><strong><Icon name="danmaku-settings" :size="20" />{{t('danmaku.settings')}}</strong><div class="cczj-flex cczj-items-center cczj-gap-3"><Button variant="text" size="sm" :disabled="!preferencesReady" @click="resetAppearance">{{t('danmaku.resetAppearance')}}</Button><Button variant="text" icon :aria-label="t('common.close')" @click="close()"><Icon name="close" :size="19" /></Button></div></header>
      <div v-if="status!=='ready'" class="cczj-danmaku-status" role="status">{{t(`danmaku.states.${status}`)}}</div>
      <div class="cczj-danmaku-body">

@@ -1,0 +1,32 @@
+/* Player overlays retain their palette independently of the application theme. */
+.cczj-player-dark-controls {
+  color-scheme: dark;
+  --text-primary: #f1f2f4;
+  --text-secondary: #b9bbc2;
+  --text-muted: #aeb1b9;
+  --border: #ffffff26;
+  --border-strong: #ffffff55;
+  --bg-card: #24262b;
+  --bg-elevated: #24262b;
+  --bg-input: #ffffff0d;
+  --bg-secondary: #24262b;
+  --bg-hover: #34363b;
+  --cczj-control-accent-rgb: 241,242,244;
+  --accent: rgb(var(--cczj-control-accent-rgb));
+  --accent-text: var(--accent);
+  --accent-contrast: #141518;
+  --primary: var(--accent);
+  --accent-alpha-10: rgba(var(--cczj-control-accent-rgb),.1);
+  --accent-alpha-15: rgba(var(--cczj-control-accent-rgb),.15);
+  --accent-alpha-20: rgba(var(--cczj-control-accent-rgb),.2);
+  --btn-solid: #f1f2f4;
+  --btn-solid-text: #141518;
+  --btn-solid-hover: #fff;
+  --btn-solid-alpha-20: rgba(241,242,244,.2);
+  --btn-solid-alpha-35: rgba(241,242,244,.35);
+  --btn-soft: #ffffff0e;
+  --btn-soft-text: #f1f2f4;
+  --selected-bg: #f1f2f4;
+  --selected-text: #141518;
+  --selected-border: #ffffff80;
+}

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {computed} from 'vue'
+import '../controlPalette.css'
 import {useI18n} from 'vue-i18n'
 import {Select as SelectDropdown} from '../../components/ui'
 const props=defineProps<{mobile:boolean;value:string;options:Array<{value:string;label:string}>}>()
@@ -16,7 +17,7 @@ const groups=computed(()=>[
   <p class="cczj-mobile-drawer-hint">{{t('mobile.imageProcessingHint')}}</p>
   <section v-for="group in groups" :key="group.title" class="cczj-mobile-drawer-group"><h3>{{group.title}}</h3><div class="cczj-mobile-quality-options" role="group" :aria-label="group.title"><button v-for="option in group.options" :key="option.value" :aria-pressed="value===option.value" @click="emit('change',option.value)">{{option.label}}</button></div></section>
  </div>
- <div v-else class="quality-group" role="group" :aria-label="t('mobile.quality')" @click.stop style="margin-left:auto">
+ <div v-else class="quality-group cczj-player-dark-controls" role="group" :aria-label="t('mobile.quality')" @click.stop style="margin-left:auto">
   <SelectDropdown :model-value="value" :options="options" size="sm" inline inline-drop="up" @change="emit('change',$event)" @open-change="emit('open',$event)" />
  </div>
 </template>

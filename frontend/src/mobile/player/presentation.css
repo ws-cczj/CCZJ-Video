@@ -81,8 +81,7 @@ html[data-motion-overlays=off] [class*=cczj-mobile-gesture-feedback-] { transiti
 .cczj-mobile-cast-list { @apply cczj-grid cczj-gap-4; }
 .cczj-mobile-cast-list > .ui-btn { @apply cczj-gap-5 cczj-text-left;min-height:52px;padding:8px 12px; }
 .cczj-mobile-cast-list > .ui-btn > span { @apply cczj-flex-1 cczj-min-w-0;overflow-wrap:anywhere; }
-.cczj-mobile-cast-empty,.cczj-mobile-cast-session { @apply cczj-grid cczj-gap-4 cczj-text-center;justify-items:center;padding:16px 8px;color:var(--text-secondary); }
-.cczj-mobile-cast-session strong { color:var(--text-primary); }
+.cczj-mobile-cast-empty { @apply cczj-grid cczj-gap-4 cczj-text-center;justify-items:center;padding:16px 8px;color:var(--text-secondary); }
 .cczj-mobile-cast-actions { @apply cczj-flex cczj-flex-wrap cczj-gap-4; }
 .cczj-mobile-cast-help { color:var(--text-secondary);@apply cczj-text-xs; }
 .cczj-mobile-cast-help summary { @apply cczj-cursor-pointer;min-height:32px;line-height:32px; }
@@ -322,11 +321,6 @@ html[data-motion-overlays=off] .cczj-mobile-level-feedback,html[data-motion-over
   @apply cczj-relative cczj-text-white;
   --cczj-mobile-drawer-background:linear-gradient(90deg,rgba(18,19,22,.8),rgba(18,19,22,.94) 32%,rgba(18,19,22,.97));
   --cczj-player-drawer-surface:#18191e;
-  --text-primary:#f1f2f4; --text-secondary:#b9bbc2; --text-muted:#aeb1b9;
-  --border:#ffffff26; --border-strong:#ffffff55; --bg-card:#24262b; --bg-elevated:#24262b; --bg-input:#ffffff0d; --bg-secondary:#24262b; --bg-hover:#34363b;
-  --accent:#f1f2f4; --accent-text:#f1f2f4; --accent-contrast:#141518;
-  --btn-solid:#f1f2f4; --btn-solid-text:#141518; --btn-solid-hover:#fff;
-  --btn-soft:#ffffff0e; --btn-soft-text:#f1f2f4; --selected-bg:#f1f2f4; --selected-text:#141518; --selected-border:#ffffff80;
   --cczj-player-action-bg:#ffffff0e; --cczj-player-action-ink:#f1f2f4;
   --cczj-player-episode-normal-bg:#ffffff0d; --cczj-player-episode-normal-text:#e9eaf0;
   --cczj-player-episode-watched-bg:#ffffff18; --cczj-player-episode-watched-text:#e9eaf0;

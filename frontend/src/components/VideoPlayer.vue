@@ -278,6 +278,7 @@ function selectMobileQuality(value: string | number): void {
 }
 
 const resume = usePlaybackResume({
+  canSave:()=>!casting.value||castState.value?.hasPosition===true,
   progress:()=>casting.value&&castState.value?.hasPosition?{position:castState.value.position,duration:castState.value.duration||duration.value}:undefined,
   getVideo: getVideoEl,
   getKey: () => playbackResumeKey(props.videoKey, props.url),
@@ -994,7 +995,7 @@ function onMobileOverlayBack(event: Event): void {
   if (!(mobileChrome.value?.pinned || showVideoInfo.value || mobileLocked.value || showPlaybackSettings.value || showSubtitlePanel.value || showReportAd.value)) return
   event.preventDefault()
   event.stopImmediatePropagation()
-  mobileChrome.value?.close()
+  mobileChrome.value?.back()
   showVideoInfo.value = mobileLocked.value = showPlaybackSettings.value = showSubtitlePanel.value = showReportAd.value = false
   keepVisible()
 }
@@ -1123,7 +1124,7 @@ const controlState = {
   get fullscreen(){return isFullscreen.value}, get speed(){return speed.value}, get volume(){return volume.value},
   get muted(){return muted.value}, get hasPrev(){return props.hasPrev}, get hasNext(){return props.hasNext},
 }
-const controlSource={get url(){return props.url},get title(){return props.title}}
+const controlSource={get url(){return props.url},get title(){return props.title},get mediaKey(){return props.videoKey},get continuation(){return props.continuation}}
 const mobileCommands={video:getVideoEl,play:togglePlay,previous:()=>{if(props.hasPrev)emit('prev')},next:()=>{if(props.hasNext)emit('next')},
   fullscreen:toggleFullscreen,pip:togglePiP,speed:changeSpeed,cast:setCasting,castStatus:updateCastStatus,interaction:keepVisible}
 const desktopCommands = {video:getVideoEl,play:togglePlay,previous:()=>emit('prev'),next:()=>emit('next'),
