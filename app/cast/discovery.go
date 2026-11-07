@@ -236,6 +236,7 @@ func (s *Service) discoverOnLinks(request context.Context, group *net.UDPAddr, l
 					device.session, device.media = previous.session, previous.media
 					device.command, device.playback = previous.command, previous.playback
 					device.streamRelease = previous.streamRelease
+					device.transport = previous.transport
 					device.statusKey, device.statusAt = previous.statusKey, previous.statusAt
 					s.devices[device.ID] = device
 					s.mu.Unlock()

@@ -204,6 +204,13 @@ func (s *HLSService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "playlist response too large", http.StatusBadGateway)
 			return
 		}
+		if observe, ok := r.Context().Value(hlsPlaylistObserveKey{}).(func(string)); ok {
+			if !bytes.HasPrefix(bytes.TrimSpace(body), []byte("#EXTM3U")) {
+				http.Error(w, "invalid playlist", http.StatusBadGateway)
+				return
+			}
+			observe(string(body))
+		}
 		if bytes.HasPrefix(bytes.TrimSpace(body), []byte("#EXTM3U")) {
 			route, _ := r.Context().Value(hlsProxyRouteKey{}).(string)
 			if resourceURL, ok := r.Context().Value(hlsResourceURLKey{}).(func(string, string, string) (string, error)); ok {
@@ -233,6 +240,18 @@ func (s *HLSService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
+	}
+	if _, castRequest := r.Context().Value(hlsResourceURLKey{}).(func(string, string, string) (string, error)); castRequest && resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		reader := bufio.NewReader(resp.Body)
+		prefix, _ := reader.Peek(32)
+		if invalidCastContent(resp.Header.Get("Content-Type"), prefix) {
+			http.Error(w, "unexpected upstream content", http.StatusBadGateway)
+			return
+		}
+		resp.Body = struct {
+			io.Reader
+			io.Closer
+		}{reader, resp.Body}
 	}
 	copyStreamHeaders(w.Header(), resp.Header)
 	w.WriteHeader(resp.StatusCode)
@@ -312,6 +331,7 @@ type hlsResourceURLKey struct{}
 type hlsStreamKey struct{}
 type hlsFetchObserveKey struct{}
 type hlsSniffPlaylistKey struct{}
+type hlsPlaylistObserveKey struct{}
 
 // Extensionless CDN playlists sometimes carry application/octet-stream. LAN
 // child URLs must still be rewritten, with the inspected bytes preserved.

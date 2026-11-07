@@ -143,6 +143,7 @@ methods=[
     "DiscoverCastDevices",
     "DiscoverCastDevicesOnInterfaces",
     "PlayCastVideo",
+    "PlayCastVideoWithOptions",
     "ControlCastVideo",
     "ReleaseCastSession",
     "GetCastStatus"

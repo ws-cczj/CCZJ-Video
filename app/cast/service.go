@@ -28,7 +28,12 @@ type Device struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }
+type PlayOptions struct {
+	Transport string `json:"transport"`
+}
+
 type renderer struct {
+	transport string
 	Device
 	endpoint      string
 	service       string
@@ -324,6 +329,17 @@ func (s *Service) Play(id, media, title string) error {
 
 // PlayContext ties both SOAP steps to the caller and application lifetime.
 func (s *Service) PlayContext(request context.Context, id, media, title string) error {
+	return s.PlayWithOptionsContext(request, id, media, title, PlayOptions{Transport: "relay"})
+}
+
+// PlayWithOptionsContext keeps transport choice local to this session.
+func (s *Service) PlayWithOptionsContext(request context.Context, id, media, title string, options PlayOptions) error {
+	if options.Transport == "" {
+		options.Transport = "relay"
+	}
+	if options.Transport != "relay" && options.Transport != "direct" {
+		return apperror.New(apperror.Validation, "无效的投屏传输方式")
+	}
 	ctx, release := lifecycle.WithShutdown(request, s.ctx)
 	defer release()
 	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
@@ -342,18 +358,23 @@ func (s *Service) PlayContext(request context.Context, id, media, title string) 
 	}
 	defer releaseCommand()
 	previousRelease := d.streamRelease
+	d.streamRelease = nil
 	d.session = apperror.NewRequestID()
 	d.playback = playbackEvidence{}
+	d.transport = options.Transport
+	if s.source == nil {
+		d.transport = "direct"
+	}
 	d.statusKey = ""
 	d.statusAt = time.Time{}
 	ctx = traceDevice(ctx, d)
-	operation.Stage(ctx, "cast.media.prepare", applog.Fields{"transport": map[bool]string{true: "relay", false: "direct"}[s.source != nil]})
+	operation.Stage(ctx, "cast.media.prepare", applog.Fields{"transport": d.transport})
 	mime := "video/mp4"
 	u, _ := url.Parse(media)
 	if strings.HasSuffix(strings.ToLower(u.Path), ".m3u8") {
 		mime = "application/vnd.apple.mpegurl"
 	}
-	if s.source != nil {
+	if s.source != nil && d.transport == "relay" {
 		var err error
 		media, mime, d.streamRelease, err = s.source.Prepare(ctx, d.endpoint, d.localAddress, media)
 		if err != nil {
@@ -362,6 +383,7 @@ func (s *Service) PlayContext(request context.Context, id, media, title string) 
 		}
 	}
 	d.media = media
+	operation.Stage(ctx, "cast.media.config", applog.Fields{"transport": d.transport, "resource_kind": map[bool]string{true: "playlist", false: "unknown"}[strings.Contains(mime, "mpegurl")], "observation_scope": map[bool]string{true: "receiver_and_phone", false: "control_only"}[d.transport == "relay"]})
 	s.mu.Lock()
 	s.devices[d.ID] = d
 	s.mu.Unlock()
@@ -371,7 +393,7 @@ func (s *Service) PlayContext(request context.Context, id, media, title string) 
 	started := false
 	defer func() {
 		if !started {
-			s.releaseStream(d)
+			s.releaseStream(d, "send_failed")
 		}
 	}()
 	metadata := `<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/"><item id="0" parentID="-1" restricted="1"><dc:title>` + escaped(title) + `</dc:title><upnp:class>object.item.videoItem</upnp:class><res protocolInfo="http-get:*:` + mime + `:*">` + escaped(media) + `</res></item></DIDL-Lite>`
@@ -470,7 +492,7 @@ func (s *Service) ControlContext(request context.Context, id, action string, sec
 	if err == nil && (action == "Seek" || action == "Stop") {
 		s.resetSeekSample(d, action == "Stop")
 		if action == "Stop" {
-			s.releaseStream(d)
+			s.releaseStream(d, "stopped")
 		}
 	}
 	if action != "Seek" || !faultCode(err, "501", "701") {
@@ -490,7 +512,7 @@ func (s *Service) ControlContext(request context.Context, id, action string, sec
 	return err
 }
 
-func (s *Service) releaseStream(d renderer) {
+func (s *Service) releaseStream(d renderer, reason string) {
 	s.mu.Lock()
 	current, ok := s.devices[d.ID]
 	var release func()
@@ -500,6 +522,9 @@ func (s *Service) releaseStream(d renderer) {
 		s.devices[d.ID] = current
 	}
 	s.mu.Unlock()
+	if ok && current.session == d.session {
+		operation.Stage(traceDevice(s.ctx, d), "cast.session.ended", applog.Fields{"reason": reason})
+	}
 	if release != nil {
 		release()
 	}
@@ -583,7 +608,7 @@ func (s *Service) ReleaseSession(ctx context.Context, id, session string) error 
 		return nil
 	}
 	s.resetSeekSample(d, true)
-	s.releaseStream(d)
+	s.releaseStream(d, "disconnected")
 	operation.Stage(traceDevice(ctx, d), "cast.session.disconnected", nil)
 	return nil
 }

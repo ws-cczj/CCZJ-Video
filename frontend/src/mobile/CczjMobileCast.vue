@@ -4,10 +4,10 @@ import { recordTimeline } from '../diagnostics/session'
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '../components/Icon.vue'
-import { Button } from '../components/ui'
+import { Button, Select } from '../components/ui'
 import CczjMobilePlayerDrawer from './CczjMobilePlayerDrawer.vue'
 import CczjMobileCastRemote from './CczjMobileCastRemote.vue'
-import { DiscoverCastDevices, DiscoverCastDevicesOnInterfaces, PlayCastVideo, ControlCastVideo, ReleaseCastSession, GetCastStatus, normalizeApiError } from '../api/app'
+import { DiscoverCastDevices, DiscoverCastDevicesOnInterfaces, PlayCastVideoWithOptions, ControlCastVideo, ReleaseCastSession, GetCastStatus, normalizeApiError } from '../api/app'
 import { createPlayerPlatform } from '../player/platform'
 import { createRequestScope } from '../api/requestScope'
 import { formatPlaybackTime } from '../player/videoInfoFormat'
@@ -19,6 +19,8 @@ const { t } = useI18n()
 const devices = ref<{ id: string; name: string }[]>([])
 const scanning = ref(false), busy = ref(false), error = ref('')
 const announced=ref(false),clockVerified=ref(false),userConfirmed=ref(false)
+const transportChoice=ref('relay'),fromStart=ref(true)
+const transportOptions=computed(()=>[{value:'relay',label:t('mobile.castViaPhone')},{value:'direct',label:t('mobile.castDirect')}])
 let castSession='',acceptRequest=''
 function trace(name:string,data:Record<string,number|boolean>={}):void {recordTimeline('ui.lifecycle',{name:`cast.${name}`,cast_session_id:castSession,backend_request_id:acceptRequest,data})}
 function resetConfirmation():void {clockVerified.value=false;userConfirmed.value=false}
@@ -65,7 +67,7 @@ async function refreshStatus():Promise<void>{
  try{
   const value=await statusScope.run(()=>GetCastStatus(id))
   if(token!==statusRevision||disposed||selected.value?.id!==id)return
-  if(value.cast_session_id!==castSession)return
+  if(value.cast_session_id!==castSession){const session=castSession;void ReleaseCastSession(id,session).catch(()=>{});finishSession(lastPosition);error.value=t('mobile.castUnconfirmed');return}
   if(value.media_state!=='matched')value.has_position=false
   remote.value=value;statusError.value=''
   if(pendingSeek.value!==undefined){
@@ -117,17 +119,21 @@ async function scan(): Promise<void> {
 }
 async function connect(device: { id: string; name: string }): Promise<void> {
   if (busy.value) return
-  const token=sessionRevision
+  const token=sessionRevision,previousPosition=lastPosition
   stopDiscovery()
   stopStatus()
   busy.value = true; error.value = '';pendingSeek.value=undefined;remote.value=null;statusError.value='';stopFailed.value=false
   resetConfirmation();if(announced.value)emit('status',{device:device.name,state:'TRANSITIONING',position:0,duration:0,hasPosition:false});trace(selected.value?'resend':'send');confirmationExpired.value=false;attemptStarted=performance.now()
   const resumePosition=announced.value ? lastPosition ?? props.position : props.position
-  initialPosition=Number.isFinite(resumePosition)?Math.max(0,resumePosition):undefined
+  initialPosition=!fromStart.value&&Number.isFinite(resumePosition)?Math.max(0,resumePosition):undefined
   lastPosition=undefined
-  try { const receipt=await controlScope.run(()=>PlayCastVideo(device.id, props.url, props.title)); if(disposed||token!==sessionRevision){void ReleaseCastSession(device.id,receipt.cast_session_id).catch(()=>{});return} if (!disposed&&token===sessionRevision) { castSession=receipt.cast_session_id;acceptRequest=receipt.request_id;trace('command_accepted');selected.value = device; paused.value = false;void refreshStatus() } }
-  catch (e) { if (!disposed&&token===sessionRevision&&normalizeApiError(e).code!=='CANCELLED') error.value = normalizeApiError(e).message }
+  try { const receipt=await controlScope.run(()=>PlayCastVideoWithOptions(device.id, props.url, props.title,{transport:transportChoice.value})); if(disposed||token!==sessionRevision){void ReleaseCastSession(device.id,receipt.cast_session_id).catch(()=>{});return} if (!disposed&&token===sessionRevision) { castSession=receipt.cast_session_id;acceptRequest=receipt.request_id;trace('command_accepted');selected.value = device; paused.value = false;void refreshStatus() } }
+  catch (e) { if (!disposed&&token===sessionRevision&&normalizeApiError(e).code!=='CANCELLED') {lastPosition=previousPosition;initialPosition=undefined;error.value = normalizeApiError(e).message;if(selected.value)void refreshStatus()} }
   finally { if(token===sessionRevision)busy.value = false }
+}
+async function changeTransport(value:string|number):Promise<void>{
+ transportChoice.value=value==='direct'?'direct':'relay'
+ if(selected.value&&!busy.value)await connect(selected.value)
 }
 async function chooseDevice():Promise<void> {
  if(busy.value)return
@@ -198,6 +204,10 @@ onBeforeUnmount(() => { const id=selected.value?.id;trace('unmount');disposed = 
     <Button variant="text" icon :disabled="busy" :aria-label="t('mobile.castStop')" @click="control('Stop')"><Icon name="power" :size="24" /></Button>
   </template>
   <div v-if="open" class="cczj-mobile-cast" :class="{'cczj-mobile-cast-connected':announced}">
+    <div class="cczj-mobile-cast-actions">
+      <Select :model-value="transportChoice" :options="transportOptions" :aria-label="t('mobile.castTransport')" :disabled="busy" inline @update:model-value="changeTransport" />
+      <Button variant="text" :disabled="busy" :aria-pressed="fromStart" @click="fromStart=!fromStart">{{t(fromStart?'mobile.castFromStart':'mobile.castResumeNext')}}</Button>
+    </div>
     <template v-if="selected && announced">
       <CczjMobileCastRemote layout="page" v-bind="remoteView" @play="control(paused ? 'Play' : 'Pause')" @seek="control('Seek',$event)" @stop="control('Stop')" @change="chooseDevice" />
       <div v-if="error || statusError || !receiverActive || stopFailed || canConfirmPlayback" class="cczj-mobile-cast-actions"><Button v-if="canConfirmPlayback" :disabled="busy" @click="confirmPlayback(true)">{{t('mobile.castConfirmPlayback')}}</Button><Button variant="text" :disabled="busy" @click="connect(selected)">{{t('mobile.castRetry')}}</Button><Button v-if="stopFailed" variant="text" :disabled="busy" @click="disconnect">{{t('mobile.castDisconnect')}}</Button><p v-if="stopFailed">{{t('mobile.castDisconnectHint')}}</p></div>

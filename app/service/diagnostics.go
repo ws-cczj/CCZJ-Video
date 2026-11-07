@@ -923,17 +923,26 @@ func wailsVersionFromBuildInfo() string {
 	return ""
 }
 
+// Android overlays disable automatic VCS stamping; packaging supplies these values.
+var buildRevision, buildModified string
+
 func buildIdentity() map[string]any {
-	fields := map[string]any{"build_revision": "unknown", "build_modified": true}
+	fields := map[string]any{"build_revision": "unknown", "build_modified": true, "build_identity_source": "unknown"}
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, setting := range info.Settings {
 			switch setting.Key {
 			case "vcs.revision":
 				fields["build_revision"] = setting.Value
+				fields["build_identity_source"] = "go_build_info"
 			case "vcs.modified":
 				fields["build_modified"] = setting.Value == "true"
 			}
 		}
+	}
+	if len(buildRevision) == 40 {
+		fields["build_revision"] = buildRevision
+		fields["build_modified"] = buildModified != "false"
+		fields["build_identity_source"] = "linker"
 	}
 	return fields
 }

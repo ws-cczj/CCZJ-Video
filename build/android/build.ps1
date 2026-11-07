@@ -76,9 +76,15 @@ try {
     if ($version -notmatch '^(\d+)\.(\d{1,2})\.(\d{1,2})(?:-beta\.[1-9]\d*)?$') { throw 'Android version must use major.minor.patch[-beta.N] with minor and patch below 100.' }
     $versionCode = [int]$Matches[1] * 10000 + [int]$Matches[2] * 100 + [int]$Matches[3]
     if ($versionCode -lt 1 -or $versionCode -gt 2100000000) { throw 'Android versionCode is outside its valid range.' }
+    $sourceRevision = (& git rev-parse HEAD).Trim()
+    Assert-NativeSuccess 'Source revision'
+    if ($sourceRevision -notmatch '^[0-9a-f]{40}$') { throw 'Source revision is not a full Git commit.' }
+    $sourceChanges = @(& git status --porcelain --untracked-files=normal)
+    Assert-NativeSuccess 'Source worktree identity'
+    $sourceModified = if ($sourceChanges.Count -gt 0) { 'true' } else { 'false' }
     $nativeTags = if ($BuildType -eq 'Release') { 'android,production' } else { 'android,debug' }
     go build -buildmode=c-shared -modfile build/android/gen/go.android.mod -overlay build/android/overlay.json -tags $nativeTags -buildvcs=false `
-        -ldflags "-w -s -X cczjVideo/app/updater.Version=$version" -o "$nativeDirectory/libwails.so" .
+        -ldflags "-w -s -X cczjVideo/app/updater.Version=$version -X cczjVideo/app/service.buildRevision=$sourceRevision -X cczjVideo/app/service.buildModified=$sourceModified" -o "$nativeDirectory/libwails.so" .
     Assert-NativeSuccess 'Android shared library build'
     Push-Location -LiteralPath $PSScriptRoot
     $signingOpt = if ($UseExistingPreviewKey) { 'true' } else { 'false' }

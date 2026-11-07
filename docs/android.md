@@ -120,11 +120,17 @@ CCZJ 的 DLNA 媒体传输由 [CastRelay](../app/proxy/cast_relay.go) 复用 [HL
 
 Android 的 [cast_host_android.go](../app/service/cast_host_android.go) 只在存在转发会话时启动现有 WailsForegroundService，传入 connectedDevice 类型；Manifest 同步声明权限，沿 [Android 连接设备前台服务规则](https://developer.android.com/develop/background-work/services/fgs/service-types#connected-device) 使用网络交互类型。服务持有有界 CPU 唤醒锁及 Wi-Fi 锁，最后一个会话释放后停止并释放锁；进程重建不重启失效能力地址。桌面宿主不启动 Android 服务。
 
+手机投屏面板提供“手机转发／电视直连”，已选择设备时切换方式会重新发送，并重新建立确认；默认从头播放，按钮可选择下次发送时续播当前位置。`PlayCastVideo` 保留原默认转发契约，新绑定 `PlayCastVideoWithOptions` 只接受 relay／direct，会话保存实际方式，发现刷新保持；直连不创建局域网监听或前台服务，状态标为 unobservable，不把无取流日志解释为无请求。失败重发后重新查询实际会话，身份变化时交还本地保护，保留最后可信进度。
+
+[cast_probe.go](../app/proxy/cast_probe.go) 在转发会话45秒仍未收到媒体且未暂停时执行一次手机源检查，避免正常起播时额外访问：沿首个变体最多三级列表，再抽取首个密钥、初始化段和媒体数据，最多六次请求、总计八秒、每列表256KiB、其他资源513字节，最多约770KiB响应体；超限或失败只记录抽样结果，不阻断电视播放。与实际取流共用客户端、Cookie、源站Referer与网络预算；停止／重发撤销请求，退出等待检查完成。它不遍历全部变体／分片，不验证解码，也不保证手机与电视访问条件相同；额外请求可能影响带一次性鉴权的源，应结合直连对照分析。
+
+日志中 `cast.source.*` 的 observation_scope=phone_sample 与 `cast.stream.*` 的 receiver_response 区分手机抽样和电视实际请求；HLS只记录版本、主列表／加密／初始化段／音轨分离标志及CODECS声明的固定布尔提示，不保留列表正文或地址，也不把CODECS声明当作实际分片检测。每类实际资源的首次请求、首字节和完成有独立记录，DNS／TLS证书／超时／鉴权／限流／HTTP／I/O失败使用固定分类。来自源站的HTML／JSON在局域网返回前拒绝，合法text/plain媒体不再仅凭MIME被误标未知；空GET响应明确记失败。源检查、阶段、布尔与数值均纳入诊断导出白名单。
+
 传输诊断复用原操作身份：`PlayCastVideo` 返回接受请求的 `request_id` 和 `cast_session_id`，前端确认、Seek 来源／结果、后台切换及结束记录显式关联该会话；转发使用独立请求身份和 `parent_request_id`。`cast.stream.probe`／`probe_failed` 记录源站检查，`receiver_request` 记录首次电视请求；`first_bytes` 与 `response` 分别管理首次字节和首次完成，按 playlist／key／init／media／unknown 分类，保留方法、Range 存在、状态、耗时及字节。未知响应不作为媒体数据证明。失败记录最多八条；接收端身份、已撤销资源、并发超限保留有界分类汇总。媒体进展清除跳过分片的历史故障，已取流后的暂时错误标为 degraded，客户端中止不作为源站故障。
 
 起播超时由 Go 定时器持有，四十五秒仍无媒体字节时区分无请求、仅探测、仅列表或密钥／初始化段等阶段；再给七十五秒恢复，仍未收到媒体则释放连接。HEAD／列表不能绕过此期限；显式暂停挂起起播期限，恢复播放重新计时，已收到媒体不根据静默推断暂停故障，空闲及绝对期限仍生效。电视原始 `transport_status` 与本地 `relay_health`、`confirmation_state` 分开；`position_state` 区分零、缺字段、解析失败、不支持及超时。后端拥有时钟推进与回退规则，前端直接消费 `seek_ready`；手动确认不开放无时钟 Seek，也不写入未验证进度。`ReleaseCastSession` 按设备和会话撤销，迟到清理不释放新会话；切模式由后端释放全部旧会话。
 
-诊断导出白名单保留上述固定字段和阶段，原生 `cast-native-*.jsonl` 沿既有有界 writer 与导出入口保留启动、权限／系统拒绝、CPU／Wi-Fi 锁结果、停止与释放。StartForegroundService 请求被接受不作为服务实际启动证明；原生日志采用独立时钟并携带会话身份。构建记录 `build_revision`／`build_modified`，缺失时明确 unknown。前端与后端时钟分开，不靠时间接近拼接因果。直连模式 `relay_health=unobservable`，不把缺少取流日志当作电视未请求；不记录能力 URL、完整媒体地址、凭据或响应正文，首批字节和 HTTP 成功仍不等于电视解码或显示成功。
+诊断导出白名单保留上述固定字段和阶段，原生 `cast-native-*.jsonl` 沿既有有界 writer 与导出入口保留启动、权限／系统拒绝、CPU／Wi-Fi 锁结果、停止与释放。StartForegroundService 请求被接受不作为服务实际启动证明；原生日志采用独立时钟并携带会话身份。构建记录 `build_revision`／`build_modified` 和 build_identity_source；Android overlay 构建关闭自动VCS戳，因此 build.ps1 显式注入实际Git提交与工作区状态，缺失时明确 unknown。前端与后端时钟分开，不靠时间接近拼接因果。直连模式 `relay_health=unobservable`，不把缺少取流日志当作电视未请求；不记录能力 URL、完整媒体地址、凭据或响应正文，首批字节和 HTTP 成功仍不等于电视解码或显示成功。
 
 `app/cast/service.go` 只对明确的兼容错误作有限处理：SetAVTransportURI 返回 UPnP 402／714 时，用空元数据重发一次；Play 返回 701 时最多尝试三次，间隔 300ms，发送操作总超时为 12 秒。Seek 返回 501／701 且再次查询确认仍为本次媒体的 PAUSED_PLAYBACK 时，执行一次 Play → 等待 PLAYING → Seek → Pause，确认电视恢复用户原先的暂停状态；主请求限时 8 秒，取消后的暂停恢复也受应用生命周期和 2 秒上限约束，恢复失败继续报告。其他媒体、停止、未知身份与网络错误不触发此兼容路径。超时、取消和其他错误不盲目重发。这些 SOAP 回退复用同一局域网媒体会话；不通过无界重试或提前 Seek 掩盖取流失败。
 

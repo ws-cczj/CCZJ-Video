@@ -1721,6 +1721,21 @@ export function PlayCastVideo(id, url, title) {
 }
 
 /**
+ * PlayCastVideoWithOptions preserves the default binding while allowing an
+ * explicit direct/relay comparison for receivers with different access paths.
+ * @param {string} id
+ * @param {string} url
+ * @param {string} title
+ * @param {cast$0.PlayOptions} options
+ * @returns {$CancellablePromise<$models.CastReceipt>}
+ */
+export function PlayCastVideoWithOptions(id, url, title, options) {
+    return $Call.ByID(999545345, id, url, title, options).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType152($result);
+    }));
+}
+
+/**
  * ProbePlayLines reads declared playlist quality without downloading segments.
  * @param {media$0.PlayLineSpeedReq} req
  * @returns {$CancellablePromise<(media$0.PlayLineQualityItem | null)[]>}

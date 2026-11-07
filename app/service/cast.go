@@ -39,3 +39,13 @@ func (a *App) GetCastStatus(ctx context.Context, id string) (cast.Status, error)
 func (a *App) ReleaseCastSession(ctx context.Context, id, session string) error {
 	return runRequestError(a, ctx, "cast.ReleaseCastSession", func(ctx context.Context) error { return a.cast.ReleaseSession(ctx, id, session) })
 }
+
+// PlayCastVideoWithOptions preserves the default binding while allowing an
+// explicit direct/relay comparison for receivers with different access paths.
+func (a *App) PlayCastVideoWithOptions(ctx context.Context, id, url, title string, options cast.PlayOptions) (CastReceipt, error) {
+	return runRequest(a, ctx, "cast.PlayCastVideoWithOptions", func(ctx context.Context) (CastReceipt, error) {
+		err := a.cast.PlayWithOptionsContext(ctx, id, url, title, options)
+		identity, _ := operation.IdentityFromContext(ctx)
+		return CastReceipt{SessionID: a.cast.SessionID(id), RequestID: identity.RequestID}, err
+	})
+}

@@ -5,5 +5,6 @@
 export {
     Device,
     NetworkInterface,
+    PlayOptions,
     Status
 } from "./models.js";

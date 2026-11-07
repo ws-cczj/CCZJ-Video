@@ -35,10 +35,12 @@ type CastRelay struct {
 	streams map[*castStream]struct{}
 	closed  bool
 	pending int
+	work    sync.WaitGroup
 }
 
 type castResource struct{ url, referer, kind string }
 type castStream struct {
+	probeDone                       chan struct{}
 	paused                          bool
 	owner                           *CastRelay
 	ctx                             context.Context
@@ -171,7 +173,7 @@ func (b *CastRelay) Prepare(request context.Context, receiver, localAddress, raw
 	}
 	owned, _ := operation.OwnedContext(b.ctx, request, "cast.stream", selectedCastFields(request))
 	ctx, cancel := context.WithTimeout(owned, 12*time.Hour)
-	s := &castStream{owner: b, ctx: ctx, cancel: cancel, done: make(chan struct{}), peer: peer.String(), resources: make(map[string]castResource), health: "waiting_request", firstLogged: make(map[string]bool), completeLogged: make(map[string]bool), rejected: make(map[string]int64)}
+	s := &castStream{owner: b, ctx: ctx, cancel: cancel, done: make(chan struct{}), probeDone: make(chan struct{}), peer: peer.String(), resources: make(map[string]castResource), health: "waiting_request", firstLogged: make(map[string]bool), completeLogged: make(map[string]bool), rejected: make(map[string]int64)}
 	s.prefix = "/" + hex.EncodeToString(secret[:]) + "/"
 	s.base = "http://" + listener.Addr().String() + s.prefix
 
@@ -198,6 +200,7 @@ func (b *CastRelay) Prepare(request context.Context, receiver, localAddress, raw
 		_ = listener.Close()
 		return "", "", nil, apperror.New(apperror.Unavailable, "投屏连接暂不可用，请停止旧连接后重试")
 	}
+	b.work.Add(2)
 	b.streams[s] = struct{}{}
 	b.mu.Unlock()
 	s.mu.Lock()
@@ -206,6 +209,7 @@ func (b *CastRelay) Prepare(request context.Context, receiver, localAddress, raw
 	s.stopOwner = context.AfterFunc(ctx, s.close)
 	s.mu.Unlock()
 	go func() {
+		defer b.work.Done()
 		defer close(s.done)
 		err := s.server.Serve(netutil.LimitListener(listener, 12))
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -213,6 +217,28 @@ func (b *CastRelay) Prepare(request context.Context, receiver, localAddress, raw
 		}
 		s.close()
 	}()
+	if playlist {
+		go func() {
+			defer b.work.Done()
+			defer close(s.probeDone)
+			timer := time.NewTimer(45 * time.Second)
+			defer timer.Stop()
+			select {
+			case <-s.ctx.Done():
+				return
+			case <-timer.C:
+			}
+			s.mu.Lock()
+			needed := !s.closed && !s.dataSeen && !s.paused
+			s.mu.Unlock()
+			if needed {
+				s.inspectHLS(raw, referer)
+			}
+		}()
+	} else {
+		close(s.probeDone)
+		b.work.Done()
+	}
 	operation.Stage(ctx, "cast.stream.ready", applog.Fields{"transport": "lan_http", "playlist": playlist})
 	return s.root, contentType, s.close, nil
 }
@@ -301,7 +327,9 @@ func (s *castStream) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		s.getSeen = true
 	}
 	s.idle.Reset(30 * time.Minute)
-	first := s.requests == 1
+	requestKey := r.Method + "." + resource.kind
+	first := !s.firstLogged["request."+requestKey]
+	s.firstLogged["request."+requestKey] = true
 	s.mu.Unlock()
 	if first {
 		operation.Stage(s.ctx, "cast.stream.receiver_request", applog.Fields{"method": r.Method, "resource_kind": resource.kind, "has_range": r.Header.Get("Range") != ""})
@@ -314,7 +342,8 @@ func (s *castStream) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		s.mu.Unlock()
 	}()
-	forward := r.Clone(context.WithValue(r.Context(), hlsResourceURLKey{}, s.resourceURL))
+	requestCtx, _ := operation.OwnedContext(r.Context(), s.ctx, "cast.stream.request", selectedCastFields(s.ctx))
+	forward := r.Clone(context.WithValue(requestCtx, hlsResourceURLKey{}, s.resourceURL))
 	if !s.continuous && s.base+id == s.root {
 		forward.Header.Del("Range")
 	}
@@ -327,12 +356,27 @@ func (s *castStream) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	result := &castResponse{ResponseWriter: w, status: http.StatusOK, features: r.Header.Get("getcontentFeatures.dlna.org") == "1"}
 	result.onBytes = func(n int) { s.mu.Lock(); s.transferred += int64(n); s.mu.Unlock() }
 	began := time.Now()
+	forward = forward.WithContext(context.WithValue(forward.Context(), hlsPlaylistObserveKey{}, func(body string) {
+		fields := castPlaylistFields(body)
+		manifestKey := "manifest.media"
+		if fields["hls_master"] == true {
+			manifestKey = "manifest.master"
+		}
+		s.mu.Lock()
+		first := !s.firstLogged[manifestKey]
+		s.firstLogged[manifestKey] = true
+		s.mu.Unlock()
+		if first {
+			fields["observation_scope"] = "receiver_response"
+			operation.Stage(requestCtx, "cast.stream.playlist", fields)
+		}
+	}))
 	kind := func() string {
 		if strings.Contains(strings.ToLower(result.Header().Get("Content-Type")), "mpegurl") {
 			return "playlist"
 		}
 		content := strings.ToLower(result.Header().Get("Content-Type"))
-		if strings.Contains(content, "html") || strings.Contains(content, "json") || strings.HasPrefix(content, "text/") {
+		if strings.Contains(content, "html") || strings.Contains(content, "json") {
 			return "unknown"
 		}
 		return resource.kind
@@ -363,16 +407,22 @@ func (s *castStream) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			operation.Stage(s.ctx, "cast.stream.recovered", applog.Fields{"resource_kind": category})
 		}
 		if first {
-			operation.Stage(s.ctx, "cast.stream.first_bytes", applog.Fields{"bytes": firstBytes, "resource_kind": category, "http_status": result.status, "elapsed_ms": time.Since(began).Milliseconds()})
+			operation.Stage(requestCtx, "cast.stream.first_bytes", applog.Fields{"bytes": firstBytes, "resource_kind": category, "http_status": result.status, "elapsed_ms": time.Since(began).Milliseconds()})
 		}
 	}
 	upstreamStatus := 0
 	upstreamFailed := false
-	forward = forward.WithContext(context.WithValue(forward.Context(), hlsFetchObserveKey{}, func(status int, err error) { upstreamStatus = status; upstreamFailed = err != nil }))
+	upstreamCode := "OK"
+	forward = forward.WithContext(context.WithValue(forward.Context(), hlsFetchObserveKey{}, func(status int, err error) {
+		upstreamStatus = status
+		upstreamFailed = err != nil
+		upstreamCode = castFetchCode(err, status)
+	}))
 	s.owner.hls.ServeHTTP(result, forward)
 	category := kind()
 	cancelled := r.Context().Err() != nil || result.failed
-	failed := !cancelled && (result.status >= 400 || upstreamFailed)
+	empty := r.Method == http.MethodGet && result.bytes == 0 && result.status >= 200 && result.status < 300
+	failed := !cancelled && (result.status >= 400 || upstreamFailed || empty)
 	s.mu.Lock()
 
 	recovered := false
@@ -406,12 +456,17 @@ func (s *castStream) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		code := "OK"
 		if cancelled {
 			code = "CLIENT_CANCELLED"
+		} else if empty {
+			code = "EMPTY_CONTENT"
 		} else if upstreamFailed {
-			code = "UPSTREAM_IO"
+			code = upstreamCode
 		} else if failed {
-			code = "HTTP_ERROR"
+			code = castFetchCode(nil, upstreamStatus)
+			if code == "OK" {
+				code = "INVALID_CONTENT"
+			}
 		}
-		operation.Stage(s.ctx, "cast.stream.response", applog.Fields{"method": r.Method, "has_range": r.Header.Get("Range") != "", "http_status": result.status, "upstream_status": upstreamStatus, "bytes": result.bytes, "resource_kind": category, "failed": failed, "code": code, "elapsed_ms": time.Since(began).Milliseconds()})
+		operation.Stage(requestCtx, "cast.stream.response", applog.Fields{"method": r.Method, "has_range": r.Header.Get("Range") != "", "http_status": result.status, "upstream_status": upstreamStatus, "bytes": result.bytes, "resource_kind": category, "failed": failed, "code": code, "elapsed_ms": time.Since(began).Milliseconds()})
 	}
 }
 
@@ -594,7 +649,6 @@ func (s *castStream) close() {
 
 // Close revokes every capability and waits for the listeners to stop.
 func (b *CastRelay) Close(ctx context.Context) error {
-	b.cancel()
 	b.mu.Lock()
 	b.closed = true
 	streams := make([]*castStream, 0, len(b.streams))
@@ -602,6 +656,7 @@ func (b *CastRelay) Close(ctx context.Context) error {
 		streams = append(streams, s)
 	}
 	b.mu.Unlock()
+	b.cancel()
 	for _, s := range streams {
 		s.close()
 	}
@@ -612,7 +667,21 @@ func (b *CastRelay) Close(ctx context.Context) error {
 			return ctx.Err()
 		}
 	}
-	return nil
+	for _, s := range streams {
+		select {
+		case <-s.probeDone:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	drained := make(chan struct{})
+	go func() { b.work.Wait(); close(drained) }()
+	select {
+	case <-drained:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // SetPaused suspends startup deadlines for an explicitly paused transport.

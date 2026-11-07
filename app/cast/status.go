@@ -62,6 +62,7 @@ func (s *Service) StatusContext(request context.Context, id string) (Status, err
 	}
 	result := Status{SessionID: device.session, RelayHealth: "unobservable", PositionState: "missing", State: strings.TrimSpace(response.Body.Transport.State), TransportStatus: strings.TrimSpace(response.Body.Transport.Status), MediaState: "unknown"}
 	if result.State == "" {
+		s.resetSeekSample(device, false)
 		err = fmt.Errorf("电视未返回播放状态")
 		traceFailure(ctx, "cast.status.invalid", err, applog.Fields{"code": "CAST_INVALID_STATUS"})
 		return Status{}, err
@@ -127,7 +128,7 @@ func (s *Service) StatusContext(request context.Context, id string) (Status, err
 	if ctx.Err() != nil {
 		return Status{}, ctx.Err()
 	}
-	if s.source != nil {
+	if s.source != nil && device.transport != "direct" {
 		if source, ok := s.source.(interface{ SetPaused(string, bool) }); ok && (result.State == "PLAYING" || result.State == "PAUSED_PLAYBACK") {
 			source.SetPaused(device.media, result.State == "PAUSED_PLAYBACK")
 		}
@@ -151,7 +152,7 @@ func (s *Service) StatusContext(request context.Context, id string) (Status, err
 	}
 
 	if device.playback.started && (result.State == "STOPPED" || result.State == "NO_MEDIA_PRESENT" || result.MediaState == "other") {
-		s.releaseStream(device)
+		s.releaseStream(device, "receiver_ended")
 	}
 	if s.shouldLogStatus(device, result) {
 		operation.Stage(ctx, "cast.status", applog.Fields{"seek_ready": result.SeekReady, "confirmation_state": result.Confirmation, "relay_health": result.RelayHealth, "position_state": result.PositionState, "transport_state": result.State, "transport_status": result.TransportStatus, "position_seconds": result.Position, "duration_seconds": result.Duration, "has_position": result.HasPosition, "media_state": result.MediaState})

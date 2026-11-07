@@ -83,6 +83,34 @@ export class NetworkInterface {
     }
 }
 
+export class PlayOptions {
+    /**
+     * Creates a new PlayOptions instance.
+     * @param {Partial<PlayOptions>} [$$source = {}] - The source object to create the PlayOptions.
+     */
+    constructor($$source = {}) {
+        if (!("transport" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["transport"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PlayOptions instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {PlayOptions}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new PlayOptions(/** @type {Partial<PlayOptions>} */($$parsedSource));
+    }
+}
+
 export class Status {
     /**
      * Creates a new Status instance.

@@ -32,7 +32,7 @@ func traceFailure(ctx context.Context, stage string, err error, fields applog.Fi
 }
 
 func traceDevice(ctx context.Context, d renderer) context.Context {
-	return operation.WithFields(ctx, applog.Fields{"cast_device_id": d.ID, "cast_session_id": d.session, "device_endpoint": applog.SafeURL(d.endpoint)})
+	return operation.WithFields(ctx, applog.Fields{"transport": d.transport, "cast_device_id": d.ID, "cast_session_id": d.session, "device_endpoint": applog.SafeURL(d.endpoint)})
 }
 
 func elapsed(start time.Time) int64 { return time.Since(start).Milliseconds() }

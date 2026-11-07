@@ -201,7 +201,7 @@ func writeDiagnosticsReport(root string, report any) (*DiagnosticsExport, error)
 }
 
 var diagnosticLabel = regexp.MustCompile(`^[A-Za-z0-9_.:/; -]{0,180}$`)
-var diagnosticLogField = regexp.MustCompile(`(request_id|parent_request_id|operation|pipeline|code|outcome|duration_ms|mode|stage|cast_session_id|cast_device_id|transport_state|transport_status|relay_health|confirmation_state|position_state|resource_kind|method|phase|reason|seek_ready|has_position|position_seconds|duration_seconds|target_seconds|http_status|upstream_status|bytes|elapsed_ms|failed|has_range|requests|failed_requests|recovered_requests|attempt|transport|build_revision|build_modified|receiver_mismatch|resource_revoked|concurrency_limit)="([A-Za-z0-9_.:-]{0,120})"`)
+var diagnosticLogField = regexp.MustCompile(`(request_id|parent_request_id|operation|pipeline|code|outcome|duration_ms|mode|stage|cast_session_id|cast_device_id|transport_state|transport_status|relay_health|confirmation_state|position_state|resource_kind|method|phase|reason|seek_ready|has_position|position_seconds|duration_seconds|target_seconds|http_status|upstream_status|bytes|elapsed_ms|failed|has_range|requests|failed_requests|recovered_requests|attempt|transport|build_revision|build_modified|build_identity_source|receiver_mismatch|resource_revoked|concurrency_limit|observation_scope|sampled|hls_master|hls_encrypted|hls_init_map|hls_separate_audio|hls_endlist|hls_version|codec_avc|codec_hevc|codec_av1|codec_aac|codec_ac3)="([A-Za-z0-9_.:-]{0,120})"`)
 
 func diagnosticLogMetadata(logs []applog.Record) []map[string]any {
 	rows := make([]map[string]any, 0, len(logs))
@@ -210,11 +210,11 @@ func diagnosticLogMetadata(logs []applog.Record) []map[string]any {
 		for _, match := range diagnosticLogField.FindAllStringSubmatch(record.Message, 64) {
 			key, value := match[1], match[2]
 			switch key {
-			case "seek_ready", "has_position", "failed", "has_range", "build_modified":
+			case "sampled", "hls_master", "hls_encrypted", "hls_init_map", "hls_separate_audio", "hls_endlist", "codec_avc", "codec_hevc", "codec_av1", "codec_aac", "codec_ac3", "seek_ready", "has_position", "failed", "has_range", "build_modified":
 				if flag, err := strconv.ParseBool(value); err == nil {
 					row[key] = flag
 				}
-			case "duration_ms", "position_seconds", "duration_seconds", "target_seconds", "http_status", "upstream_status", "bytes", "elapsed_ms", "requests", "failed_requests", "recovered_requests", "attempt", "receiver_mismatch", "resource_revoked", "concurrency_limit":
+			case "hls_version", "duration_ms", "position_seconds", "duration_seconds", "target_seconds", "http_status", "upstream_status", "bytes", "elapsed_ms", "requests", "failed_requests", "recovered_requests", "attempt", "receiver_mismatch", "resource_revoked", "concurrency_limit":
 				if number, err := strconv.ParseFloat(value, 64); err == nil {
 					row[key] = number
 				}
@@ -259,7 +259,7 @@ func filterDiagnosticMetadata(value any, key string) any {
 		return out
 	case string:
 		switch key {
-		case "application_mode", "mode", "kind", "name", "code", "outcome", "route", "id", "resource_id", "session_id", "action_id", "request_id", "cast_session_id", "cast_device_id", "parent_request_id", "stage", "transport_state", "transport_status", "relay_health", "confirmation_state", "position_state", "resource_kind", "method", "transport", "build_revision", "flight_id", "backend_request_id", "parent_id", "pipeline", "operation", "level", "source", "reason", "scope", "resource_scope", "native_scope", "profile_scope", "logs_scope", "captured_at", "ts", "go_version", "app_version", "version", "os", "arch", "phase", "certainty", "evidence", "correlation_scope", "correlation", "clock", "upload", "omitted":
+		case "application_mode", "mode", "kind", "name", "code", "outcome", "route", "id", "resource_id", "session_id", "action_id", "request_id", "cast_session_id", "cast_device_id", "parent_request_id", "stage", "transport_state", "transport_status", "relay_health", "confirmation_state", "position_state", "resource_kind", "observation_scope", "method", "transport", "build_revision", "build_identity_source", "flight_id", "backend_request_id", "parent_id", "pipeline", "operation", "level", "source", "reason", "scope", "resource_scope", "native_scope", "profile_scope", "logs_scope", "captured_at", "ts", "go_version", "app_version", "version", "os", "arch", "phase", "certainty", "evidence", "correlation_scope", "correlation", "clock", "upload", "omitted":
 			if diagnosticLabel.MatchString(v) && !strings.Contains(v, "://") {
 				return v
 			}

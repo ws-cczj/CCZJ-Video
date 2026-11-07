@@ -173,6 +173,7 @@ export const OpenPluginDirectory = bind('OpenPluginDirectory', bindings.OpenPlug
 export const PauseCollect = bind('PauseCollect', bindings.PauseCollect)
 export const PauseDownload = bind('PauseDownload', bindings.PauseDownload)
 export const PlayCastVideo = bind('PlayCastVideo', bindings.PlayCastVideo)
+export const PlayCastVideoWithOptions = bind('PlayCastVideoWithOptions', bindings.PlayCastVideoWithOptions)
 export const ProbePlayLines = bind('ProbePlayLines', bindings.ProbePlayLines)
 export const ProbeSource = bind('ProbeSource', bindings.ProbeSource)
 export const ProbeSources = bind('ProbeSources', bindings.ProbeSources)
