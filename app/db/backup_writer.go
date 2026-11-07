@@ -53,10 +53,17 @@ func (w *BackupWriter) Setting(key string) (string, error) {
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil
 	}
-	return value, err
+	if err != nil {
+		return "", err
+	}
+	return decodeSettingValue(key, value)
 }
 func (w *BackupWriter) SetSetting(key, value string) error {
-	_, err := w.tx.ExecContext(w.ctx, `INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, key, value)
+	encoded, err := encodeSettingValue(w.ctx, key, value)
+	if err != nil {
+		return err
+	}
+	_, err = w.tx.ExecContext(w.ctx, `INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, key, encoded)
 	return err
 }
 func (w *BackupWriter) ResolveIdentities(items []BackupIdentity) ([]int64, error) {

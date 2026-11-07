@@ -90,6 +90,13 @@ export class Event {
              * @member
              * @type {string | undefined}
              */
+            this["cast_session_id"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
             this["resource_id"] = undefined;
         }
         if (!("application_mode" in $$source)) {
@@ -158,10 +165,10 @@ export class Event {
      * @returns {Event}
      */
     static createFrom($$source = {}) {
-        const $$createField18_0 = $$createType0;
+        const $$createField19_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("data" in $$parsedSource) {
-            $$parsedSource["data"] = $$createField18_0($$parsedSource["data"]);
+            $$parsedSource["data"] = $$createField19_0($$parsedSource["data"]);
         }
         return new Event(/** @type {Partial<Event>} */($$parsedSource));
     }

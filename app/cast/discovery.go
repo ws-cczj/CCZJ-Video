@@ -130,12 +130,14 @@ func discoverySocketsOnLinks(group *net.UDPAddr, links []discoveryLink) ([]*net.
 }
 
 type discoveryPacket struct {
-	data string
-	peer net.IP
+	data         string
+	peer         net.IP
+	localAddress string
 }
 type discoveryJob struct {
-	location string
-	peer     net.IP
+	location     string
+	peer         net.IP
+	localAddress string
 }
 
 // The destination is an integration-test seam. Production always uses SSDP's
@@ -201,7 +203,7 @@ func (s *Service) discoverOnLinks(request context.Context, group *net.UDPAddr, l
 				if err != nil {
 					return
 				}
-				packet := discoveryPacket{string(buf[:n]), append(net.IP(nil), peer.IP...)}
+				packet := discoveryPacket{string(buf[:n]), append(net.IP(nil), peer.IP...), socket.LocalAddr().(*net.UDPAddr).IP.String()}
 				select {
 				case packets <- packet:
 				case <-receive.Done():
@@ -228,9 +230,13 @@ func (s *Service) discoverOnLinks(request context.Context, group *net.UDPAddr, l
 					operation.Stage(ctx, "cast.device.discovered", applog.Fields{"cast_device_id": device.ID, "device_name": device.Name, "location": applog.SafeURL(job.location)})
 				}
 				if err == nil {
+					device.localAddress = job.localAddress
 					s.mu.Lock()
 					previous := s.devices[device.ID]
 					device.session, device.media = previous.session, previous.media
+					device.command, device.playback = previous.command, previous.playback
+					device.streamRelease = previous.streamRelease
+					device.statusKey, device.statusAt = previous.statusKey, previous.statusAt
 					s.devices[device.ID] = device
 					s.mu.Unlock()
 				}
@@ -291,7 +297,7 @@ collect:
 			}
 			// Mark only admitted jobs; queue pressure must not discard later replies.
 			select {
-			case jobs <- discoveryJob{location, packet.peer}:
+			case jobs <- discoveryJob{location, packet.peer, packet.localAddress}:
 				seen[location] = true
 			default:
 			}

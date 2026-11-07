@@ -2,6 +2,7 @@ package cast
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -14,6 +15,11 @@ import (
 )
 
 type Status struct {
+	SessionID       string  `json:"cast_session_id"`
+	SeekReady       bool    `json:"seek_ready"`
+	Confirmation    string  `json:"confirmation_state"`
+	RelayHealth     string  `json:"relay_health"`
+	PositionState   string  `json:"position_state"`
 	State           string  `json:"state"`
 	TransportStatus string  `json:"transport_status"`
 	Position        float64 `json:"position"`
@@ -51,30 +57,53 @@ func (s *Service) StatusContext(request context.Context, id string) (Status, err
 	ctx = traceDevice(ctx, device)
 	var response soapEnvelope
 	if err = soap(ctx, device, "GetTransportInfo", "", &response); err != nil {
+		s.resetSeekSample(device, false)
 		return Status{}, err
 	}
-	result := Status{State: strings.TrimSpace(response.Body.Transport.State), TransportStatus: strings.TrimSpace(response.Body.Transport.Status), MediaState: "unknown"}
+	result := Status{SessionID: device.session, RelayHealth: "unobservable", PositionState: "missing", State: strings.TrimSpace(response.Body.Transport.State), TransportStatus: strings.TrimSpace(response.Body.Transport.Status), MediaState: "unknown"}
 	if result.State == "" {
 		err = fmt.Errorf("电视未返回播放状态")
 		traceFailure(ctx, "cast.status.invalid", err, applog.Fields{"code": "CAST_INVALID_STATUS"})
 		return Status{}, err
 	}
-	// Position is optional: an unsupported or slow position endpoint must not
-	// hide a valid transport state or keep the sender playing alongside the TV.
+	// Missing position does not hide the reported transport state. Seek readiness
+	// still requires advancing media time; a URI echo cannot establish it.
 	positionCtx, cancelPosition := context.WithTimeout(ctx, 1500*time.Millisecond)
 	trackURI := ""
 	if err = soap(positionCtx, device, "GetPositionInfo", "", &response); err == nil {
 		trackURI = strings.TrimSpace(response.Body.Position.URI)
 		result.Position, result.HasPosition = clockSeconds(response.Body.Position.Time)
 		result.Duration, _ = clockSeconds(response.Body.Position.Duration)
+		result.PositionState = "valid"
+		if !result.HasPosition {
+			result.PositionState = "parse_failed"
+		}
+		if strings.TrimSpace(response.Body.Position.Time) == "" {
+			result.PositionState = "missing"
+		}
+		if response.Body.Position.Time == "NOT_IMPLEMENTED" {
+			result.PositionState = "unsupported"
+		}
 		// Some receivers return a zero clock and zero duration after losing
 		// their media surface. This is not a usable progress checkpoint.
-		if result.Position == 0 && result.Duration == 0 {
+		if result.HasPosition && result.Position == 0 && result.Duration == 0 {
 			result.HasPosition = false
+			result.PositionState = "zero"
+		}
+	} else {
+		result.PositionState = "query_failed"
+		if faultCode(err, "401", "501") {
+			result.PositionState = "unsupported"
+		}
+		if errors.Is(err, context.DeadlineExceeded) || positionCtx.Err() != nil {
+			result.PositionState = "timeout"
 		}
 	}
 	cancelPosition()
-	if device.media != "" && trackURI == device.media {
+	ownsURI := func(uri string) bool {
+		return uri != "" && (uri == device.media || (s.source != nil && s.source.Owns(device.media, uri)))
+	}
+	if device.media != "" && ownsURI(trackURI) {
 		result.MediaState = "matched"
 	} else if device.media != "" {
 		// TrackURI can refer to a child of a playlist. GetMediaInfo identifies
@@ -83,9 +112,9 @@ func (s *Service) StatusContext(request context.Context, id string) (Status, err
 		var media soapEnvelope
 		if soap(mediaCtx, device, "GetMediaInfo", "", &media) == nil {
 			uri := strings.TrimSpace(media.Body.Media.URI)
-			if uri == device.media && trackURI == "" {
+			if ownsURI(uri) && trackURI == "" {
 				result.MediaState = "matched"
-			} else if uri != "" && uri != device.media {
+			} else if uri != "" && !ownsURI(uri) {
 				result.MediaState = "other"
 			}
 		}
@@ -98,6 +127,51 @@ func (s *Service) StatusContext(request context.Context, id string) (Status, err
 	if ctx.Err() != nil {
 		return Status{}, ctx.Err()
 	}
-	operation.Stage(ctx, "cast.status", applog.Fields{"transport_state": result.State, "transport_status": result.TransportStatus, "position_seconds": result.Position, "duration_seconds": result.Duration, "has_position": result.HasPosition, "media_state": result.MediaState})
+	if s.source != nil {
+		if source, ok := s.source.(interface{ SetPaused(string, bool) }); ok && (result.State == "PLAYING" || result.State == "PAUSED_PLAYBACK") {
+			source.SetPaused(device.media, result.State == "PAUSED_PLAYBACK")
+		}
+		result.RelayHealth = "healthy"
+		if health, ok := s.source.(interface{ Health(string) string }); ok {
+			result.RelayHealth = health.Health(device.media)
+		} else if s.source.Failed(device.media) {
+			result.RelayHealth = "failed"
+		}
+	}
+	if result.RelayHealth == "failed" || result.RelayHealth == "revoked" {
+		result.HasPosition = false
+	}
+	result.SeekReady = s.observeStatus(device, result)
+	result.Confirmation = "waiting_start"
+	if result.SeekReady {
+		result.Confirmation = "clock_advanced"
+	}
+	if result.RelayHealth == "failed" || result.RelayHealth == "revoked" {
+		result.Confirmation = "stream_failed"
+	}
+
+	if device.playback.started && (result.State == "STOPPED" || result.State == "NO_MEDIA_PRESENT" || result.MediaState == "other") {
+		s.releaseStream(device)
+	}
+	if s.shouldLogStatus(device, result) {
+		operation.Stage(ctx, "cast.status", applog.Fields{"seek_ready": result.SeekReady, "confirmation_state": result.Confirmation, "relay_health": result.RelayHealth, "position_state": result.PositionState, "transport_state": result.State, "transport_status": result.TransportStatus, "position_seconds": result.Position, "duration_seconds": result.Duration, "has_position": result.HasPosition, "media_state": result.MediaState})
+	}
 	return result, nil
+}
+
+func (s *Service) shouldLogStatus(d renderer, status Status) bool {
+	key := fmt.Sprintf("%s/%s/%s/%s/%s/%s/%t", status.State, status.TransportStatus, status.MediaState, status.RelayHealth, status.Confirmation, status.PositionState, status.SeekReady)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	current, ok := s.devices[d.ID]
+	if !ok || current.session != d.session {
+		return false
+	}
+	if current.statusKey == key && time.Since(current.statusAt) < 30*time.Second {
+		return false
+	}
+	current.statusKey = key
+	current.statusAt = time.Now()
+	s.devices[d.ID] = current
+	return true
 }

@@ -65,7 +65,7 @@ export function useOverlayFocus(element: Ref<HTMLElement | null>, open: () => bo
     owner = undefined
     if (!stack.length) listen(false)
     if (top) {
-      const target = previous?.isConnected && !previous.closest('[inert],[aria-hidden="true"]') ? previous : stack.at(-1)?.element
+      const target = previous?.isConnected && !previous.matches(':disabled') && !previous.closest('[inert],[aria-hidden="true"]') ? previous : stack.at(-1)?.element
       target?.focus({ preventScroll: true })
     }
   }

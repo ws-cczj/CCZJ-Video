@@ -92,14 +92,25 @@ func GetSetting(key string) (string, error) {
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil
 	}
-	return value, err
+	if err != nil {
+		return "", err
+	}
+	return decodeSettingValue(key, value)
 }
 
 func SetSetting(key, value string) error {
+	return SetSettingContext(context.Background(), key, value)
+}
+
+func SetSettingContext(ctx context.Context, key, value string) error {
 	if instance == nil {
 		return ErrDBNotOpen
 	}
-	_, err := instance.Exec(`INSERT OR REPLACE INTO settings(key,value) VALUES (?,?)`, key, value)
+	encoded, err := encodeSettingValue(ctx, key, value)
+	if err != nil {
+		return err
+	}
+	_, err = instance.ExecContext(ctx, `INSERT OR REPLACE INTO settings(key,value) VALUES (?,?)`, key, encoded)
 	return err
 }
 
@@ -115,7 +126,11 @@ func SetSettings(ctx context.Context, values map[string]string) error {
 	}
 	defer tx.Rollback() // Commit makes the deferred rollback a no-op.
 	for key, value := range values {
-		if _, err := tx.ExecContext(ctx, `INSERT OR REPLACE INTO settings(key,value) VALUES (?,?)`, key, value); err != nil {
+		encoded, err := encodeSettingValue(ctx, key, value)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT OR REPLACE INTO settings(key,value) VALUES (?,?)`, key, encoded); err != nil {
 			return err
 		}
 	}

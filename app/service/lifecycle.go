@@ -44,6 +44,9 @@ func (a *App) closeOwnedResources(ctx context.Context) error {
 	if a.mobileMedia != nil {
 		closeResource("mobile media", func(context.Context) error { return a.mobileMedia.Close() })
 	}
+	if a.castRelay != nil {
+		closeResource("cast media", a.castRelay.Close)
+	}
 	if a.downloads != nil {
 		closeResource("downloads", a.downloads.Close)
 	}

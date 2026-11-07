@@ -922,3 +922,18 @@ func wailsVersionFromBuildInfo() string {
 	}
 	return ""
 }
+
+func buildIdentity() map[string]any {
+	fields := map[string]any{"build_revision": "unknown", "build_modified": true}
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, setting := range info.Settings {
+			switch setting.Key {
+			case "vcs.revision":
+				fields["build_revision"] = setting.Value
+			case "vcs.modified":
+				fields["build_modified"] = setting.Value == "true"
+			}
+		}
+	}
+	return fields
+}

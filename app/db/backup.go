@@ -97,7 +97,16 @@ func ReadAllSettings(database *sqlx.DB) ([]BackupSetting, error) {
 func ReadAllSettingsContext(ctx context.Context, database sqlx.QueryerContext) ([]BackupSetting, error) {
 	var rows []BackupSetting
 	err := sqlx.SelectContext(ctx, database, &rows, `SELECT key, value FROM settings ORDER BY key`)
-	return rows, err
+	if err != nil {
+		return nil, err
+	}
+	for i := range rows {
+		rows[i].Value, err = decodeSettingValue(rows[i].Key, rows[i].Value)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return rows, nil
 }
 
 // ReadFavorites 取出全部收藏，带上解析身份所需的标题与年份。

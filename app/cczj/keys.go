@@ -3,6 +3,7 @@
 package cczj
 
 const (
+	SettingThemeCustoms     = "theme_customs"
 	SettingCloseToTray      = "close_to_tray"
 	SettingWindowWidth      = "window_width"
 	SettingWindowHeight     = "window_height"

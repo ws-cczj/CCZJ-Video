@@ -89,6 +89,41 @@ export class Status {
      * @param {Partial<Status>} [$$source = {}] - The source object to create the Status.
      */
     constructor($$source = {}) {
+        if (!("cast_session_id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["cast_session_id"] = "";
+        }
+        if (!("seek_ready" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["seek_ready"] = false;
+        }
+        if (!("confirmation_state" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["confirmation_state"] = "";
+        }
+        if (!("relay_health" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["relay_health"] = "";
+        }
+        if (!("position_state" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["position_state"] = "";
+        }
         if (!("state" in $$source)) {
             /**
              * @member

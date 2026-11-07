@@ -1712,10 +1712,12 @@ export function PauseDownload(taskID) {
  * @param {string} id
  * @param {string} url
  * @param {string} title
- * @returns {$CancellablePromise<void>}
+ * @returns {$CancellablePromise<$models.CastReceipt>}
  */
 export function PlayCastVideo(id, url, title) {
-    return $Call.ByID(1927773973, id, url, title);
+    return $Call.ByID(1927773973, id, url, title).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType152($result);
+    }));
 }
 
 /**
@@ -1725,7 +1727,7 @@ export function PlayCastVideo(id, url, title) {
  */
 export function ProbePlayLines(req) {
     return $Call.ByID(1924265112, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType154($result);
+        return $$createType155($result);
     }));
 }
 
@@ -1737,7 +1739,7 @@ export function ProbePlayLines(req) {
  */
 export function ProbeSource(sourceKey) {
     return $Call.ByID(3656666958, sourceKey).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType156($result);
+        return $$createType157($result);
     }));
 }
 
@@ -1753,7 +1755,7 @@ export function ProbeSource(sourceKey) {
  */
 export function ProbeSources() {
     return $Call.ByID(1486404871).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType157($result);
+        return $$createType158($result);
     }));
 }
 
@@ -1794,7 +1796,7 @@ export function QuitApp() {
  */
 export function ReadLogPage(req) {
     return $Call.ByID(951167816, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType159($result);
+        return $$createType160($result);
     }));
 }
 
@@ -1850,8 +1852,17 @@ export function ReadingStateApply(kind, changesJSON) {
  */
 export function ReadingStateLoad(kind, legacyJSON) {
     return $Call.ByID(2857846006, kind, legacyJSON).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType161($result);
+        return $$createType162($result);
     }));
+}
+
+/**
+ * @param {string} id
+ * @param {string} session
+ * @returns {$CancellablePromise<void>}
+ */
+export function ReleaseCastSession(id, session) {
+    return $Call.ByID(553592069, id, session);
 }
 
 /**
@@ -1974,7 +1985,7 @@ export function ScheduleInstallOnExit(filePath, version) {
  */
 export function SchemaNotice() {
     return $Call.ByID(1184465708).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType162($result);
+        return $$createType163($result);
     }));
 }
 
@@ -1990,7 +2001,7 @@ export function SchemaNotice() {
  */
 export function SearchSource(sourceKey, keyword, page, pageSize) {
     return $Call.ByID(3664031674, sourceKey, keyword, page, pageSize).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType164($result);
+        return $$createType165($result);
     }));
 }
 
@@ -2006,7 +2017,7 @@ export function SearchSource(sourceKey, keyword, page, pageSize) {
  */
 export function SearchSourceRequest(sourceKey, keyword, page, pageSize, requestID) {
     return $Call.ByID(600422519, sourceKey, keyword, page, pageSize, requestID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType164($result);
+        return $$createType165($result);
     }));
 }
 
@@ -2046,7 +2057,7 @@ export function SetCloseBehavior(minimize) {
  */
 export function SetCollectSchedule(cfg) {
     return $Call.ByID(2657596784, cfg).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType165($result);
+        return $$createType166($result);
     }));
 }
 
@@ -2163,7 +2174,7 @@ export function SetTitleBarTheme(theme) {
  */
 export function SourceProbeTimeline() {
     return $Call.ByID(2708450711).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType167($result);
+        return $$createType168($result);
     }));
 }
 
@@ -2174,7 +2185,7 @@ export function SourceProbeTimeline() {
  */
 export function SpeedTestPlayLines(req) {
     return $Call.ByID(3808625327, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType169($result);
+        return $$createType170($result);
     }));
 }
 
@@ -2260,7 +2271,7 @@ export function StopLogStream() {
  */
 export function SubmitDiagnosticsEvents(payload) {
     return $Call.ByID(572159628, payload).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType170($result);
+        return $$createType171($result);
     }));
 }
 
@@ -2313,7 +2324,7 @@ export function WindowGetResizable() {
  */
 export function WindowGetSize() {
     return $Call.ByID(4147060312).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType172($result);
+        return $$createType173($result);
     }));
 }
 
@@ -2533,24 +2544,25 @@ const $$createType148 = library$0.NovelBrowsePage.createFrom;
 const $$createType149 = $Create.Nullable($$createType148);
 const $$createType150 = library$0.PreparedNovelSwitch.createFrom;
 const $$createType151 = $Create.Nullable($$createType150);
-const $$createType152 = media$0.PlayLineQualityItem.createFrom;
-const $$createType153 = $Create.Nullable($$createType152);
-const $$createType154 = $Create.Array($$createType153);
-const $$createType155 = $models.SourceProbe.createFrom;
-const $$createType156 = $Create.Nullable($$createType155);
-const $$createType157 = $Create.Array($$createType155);
-const $$createType158 = $models.LogPageResp.createFrom;
-const $$createType159 = $Create.Nullable($$createType158);
-const $$createType160 = readingstate$0.Record.createFrom;
-const $$createType161 = $Create.Array($$createType160);
-const $$createType162 = $models.SchemaCompat.createFrom;
-const $$createType163 = source$0.SearchSourceResult.createFrom;
-const $$createType164 = $Create.Nullable($$createType163);
-const $$createType165 = collection$0.CollectScheduleConfig.createFrom;
-const $$createType166 = $models.SourceProbeTimeline.createFrom;
-const $$createType167 = $Create.Array($$createType166);
-const $$createType168 = media$0.PlayLineSpeedResp.createFrom;
-const $$createType169 = $Create.Nullable($$createType168);
-const $$createType170 = $models.DiagnosticsReceipt.createFrom;
-const $$createType171 = $models.WindowSizeResp.createFrom;
-const $$createType172 = $Create.Nullable($$createType171);
+const $$createType152 = $models.CastReceipt.createFrom;
+const $$createType153 = media$0.PlayLineQualityItem.createFrom;
+const $$createType154 = $Create.Nullable($$createType153);
+const $$createType155 = $Create.Array($$createType154);
+const $$createType156 = $models.SourceProbe.createFrom;
+const $$createType157 = $Create.Nullable($$createType156);
+const $$createType158 = $Create.Array($$createType156);
+const $$createType159 = $models.LogPageResp.createFrom;
+const $$createType160 = $Create.Nullable($$createType159);
+const $$createType161 = readingstate$0.Record.createFrom;
+const $$createType162 = $Create.Array($$createType161);
+const $$createType163 = $models.SchemaCompat.createFrom;
+const $$createType164 = source$0.SearchSourceResult.createFrom;
+const $$createType165 = $Create.Nullable($$createType164);
+const $$createType166 = collection$0.CollectScheduleConfig.createFrom;
+const $$createType167 = $models.SourceProbeTimeline.createFrom;
+const $$createType168 = $Create.Array($$createType167);
+const $$createType169 = media$0.PlayLineSpeedResp.createFrom;
+const $$createType170 = $Create.Nullable($$createType169);
+const $$createType171 = $models.DiagnosticsReceipt.createFrom;
+const $$createType172 = $models.WindowSizeResp.createFrom;
+const $$createType173 = $Create.Nullable($$createType172);

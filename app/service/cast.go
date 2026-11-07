@@ -2,6 +2,7 @@ package service
 
 import (
 	"cczjVideo/app/cast"
+	"cczjVideo/app/operation"
 	"context"
 )
 
@@ -13,8 +14,19 @@ func (a *App) DiscoverCastDevicesOnInterfaces(ctx context.Context, interfaces []
 		return a.cast.DiscoverOnInterfacesContext(ctx, interfaces)
 	})
 }
-func (a *App) PlayCastVideo(ctx context.Context, id, url, title string) error {
-	return runRequestError(a, ctx, "cast.PlayCastVideo", func(ctx context.Context) error { return a.cast.PlayContext(ctx, id, url, title) })
+
+// CastReceipt explicitly links frontend handoff evidence to the accepting RPC.
+type CastReceipt struct {
+	SessionID string `json:"cast_session_id"`
+	RequestID string `json:"request_id"`
+}
+
+func (a *App) PlayCastVideo(ctx context.Context, id, url, title string) (CastReceipt, error) {
+	return runRequest(a, ctx, "cast.PlayCastVideo", func(ctx context.Context) (CastReceipt, error) {
+		err := a.cast.PlayContext(ctx, id, url, title)
+		identity, _ := operation.IdentityFromContext(ctx)
+		return CastReceipt{SessionID: a.cast.SessionID(id), RequestID: identity.RequestID}, err
+	})
 }
 func (a *App) ControlCastVideo(ctx context.Context, id, action string, seconds float64) error {
 	return runRequestError(a, ctx, "cast.ControlCastVideo", func(ctx context.Context) error { return a.cast.ControlContext(ctx, id, action, seconds) })
@@ -22,4 +34,8 @@ func (a *App) ControlCastVideo(ctx context.Context, id, action string, seconds f
 
 func (a *App) GetCastStatus(ctx context.Context, id string) (cast.Status, error) {
 	return runRequest(a, ctx, "cast.GetCastStatus", func(ctx context.Context) (cast.Status, error) { return a.cast.StatusContext(ctx, id) })
+}
+
+func (a *App) ReleaseCastSession(ctx context.Context, id, session string) error {
+	return runRequestError(a, ctx, "cast.ReleaseCastSession", func(ctx context.Context) error { return a.cast.ReleaseSession(ctx, id, session) })
 }

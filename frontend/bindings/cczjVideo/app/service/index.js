@@ -8,6 +8,7 @@ export {
 };
 
 export {
+    CastReceipt,
     DiagCollect,
     DiagDouban,
     DiagEnv,

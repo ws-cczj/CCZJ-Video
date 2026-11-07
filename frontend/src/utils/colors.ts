@@ -148,3 +148,17 @@ export function windowActionColors(primary:string,surface:string):{fill:string;t
   const fill=perceptualTone(primary,dark?.32:.9,.035)
   return {fill,text:contrastText(fill)}
 }
+
+/** 色相角（0-359）；无彩色（灰/黑/白）返回 -1。 */
+export function hueOf(color: string): number {
+  const [r, g, b] = hexToRgb(color).map((v) => v / 255)
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const delta = max - min
+  if (delta === 0) return -1
+  let hue: number
+  if (max === r) hue = 60 * (((g - b) / delta) % 6)
+  else if (max === g) hue = 60 * ((b - r) / delta + 2)
+  else hue = 60 * ((r - g) / delta + 4)
+  return ((hue % 360) + 360) % 360
+}

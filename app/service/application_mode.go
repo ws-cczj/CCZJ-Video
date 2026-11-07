@@ -92,6 +92,9 @@ func (a *App) switchApplicationMode(next string) error {
 			return apperror.New(apperror.Timeout, "当前模式仍在收尾，请稍后重试切换")
 		}
 	}
+	if previous == "video" && a.cast != nil {
+		a.cast.ReleaseSessions()
+	}
 	if err := a.settings.Set(applicationModeKey, next); err != nil {
 		a.startMode(previous)
 		return err

@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"bufio"
 	"bytes"
 	"cczjVideo/app/netbudget"
 	"cczjVideo/app/netpolicy"
@@ -47,11 +48,12 @@ func NewHLSServiceWithBudget(budget *netbudget.Budget) *HLSService {
 		// 计数层贴在真正干活的 Transport 外面：播放流量（m3u8 + 分片）是诊断页
 		// 「网络吞吐」里最该被看见的一类，而分片是流式转发，只有在读路径上才数得准。
 		Transport: netpolicy.WrapTransport(string(netstats.CategoryPlayback), netstats.WrapTransport(netstats.CategoryPlayback, &http.Transport{
-			MaxIdleConns:        64,
-			MaxIdleConnsPerHost: 12,
-			IdleConnTimeout:     90 * time.Second,
-			TLSHandshakeTimeout: 15 * time.Second,
-			DialContext:         SafeDialContext,
+			MaxIdleConns:          64,
+			MaxIdleConnsPerHost:   12,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   15 * time.Second,
+			ResponseHeaderTimeout: 20 * time.Second,
+			DialContext:           SafeDialContext,
 		})),
 		CheckRedirect: func(req *http.Request, _ []*http.Request) error {
 			return http.ErrUseLastResponse
@@ -179,7 +181,8 @@ func (s *HLSService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	rewrites := isPlaylist(finalURL, resp.Header.Get("Content-Type")) && r.Method == http.MethodGet &&
+	sniff, _ := r.Context().Value(hlsSniffPlaylistKey{}).(bool)
+	rewrites := responseIsPlaylist(resp, finalURL, sniff) &&
 		resp.StatusCode >= 200 && resp.StatusCode < 300
 	if rewrites && resp.StatusCode != http.StatusOK {
 		// 上游按 Range 回了半张播放列表。重写必须基于完整列表，否则会发布一张
@@ -193,7 +196,7 @@ func (s *HLSService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		defer resp.Body.Close()
 		rewrites = resp.StatusCode == http.StatusOK &&
-			isPlaylist(finalURL, resp.Header.Get("Content-Type"))
+			responseIsPlaylist(resp, finalURL, sniff)
 	}
 	if rewrites {
 		body, err := io.ReadAll(io.LimitReader(resp.Body, maxPlaylistBytes+1))
@@ -203,21 +206,42 @@ func (s *HLSService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		if bytes.HasPrefix(bytes.TrimSpace(body), []byte("#EXTM3U")) {
 			route, _ := r.Context().Value(hlsProxyRouteKey{}).(string)
-			body = []byte(s.rewritePlaylist(string(body), finalURL, referer, route))
+			if resourceURL, ok := r.Context().Value(hlsResourceURLKey{}).(func(string, string, string) (string, error)); ok {
+				var rewriteErr error
+				body = []byte(rewriteTypedPlaylistURIs(string(body), finalURL, func(target, kind string) string {
+					out, err := resourceURL(target, referer, kind)
+					if err != nil {
+						rewriteErr = err
+					}
+					return out
+				}))
+				if rewriteErr != nil {
+					http.Error(w, "playlist resource limit exceeded", http.StatusBadGateway)
+					return
+				}
+			} else {
+				body = []byte(s.rewritePlaylist(string(body), finalURL, referer, route))
+			}
 			w.Header().Set("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8")
 			w.Header().Set("Cache-Control", "no-store")
 			w.Header().Set("Content-Length", fmt.Sprint(len(body)))
 			// 重写过就一定是完整体，状态必须回到 200：留着 206 而不带
 			// Content-Range，是一份自相矛盾的响应。
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write(body)
+			if r.Method != http.MethodHead {
+				_, _ = w.Write(body)
+			}
 			return
 		}
 	}
 	copyStreamHeaders(w.Header(), resp.Header)
 	w.WriteHeader(resp.StatusCode)
 	if r.Method != http.MethodHead {
-		_, _ = io.Copy(w, resp.Body)
+		if _, err := io.Copy(w, resp.Body); err != nil {
+			if observe, ok := r.Context().Value(hlsFetchObserveKey{}).(func(int, error)); ok {
+				observe(resp.StatusCode, err)
+			}
+		}
 	}
 }
 
@@ -246,11 +270,25 @@ func (s *HLSService) fetch(ctx context.Context, initial *url.URL, rangeHeader, r
 		if rangeHeader != "" {
 			req.Header.Set("Range", rangeHeader)
 		}
-		resp, err := s.client.Do(req)
+		client := s.client
+		if streaming, _ := ctx.Value(hlsStreamKey{}).(bool); streaming {
+			// A continuous MP4 response can outlive the normal segment timeout.
+			// The LAN session and receiver connection own its cancellation.
+			copy := *client
+			copy.Timeout = 0
+			client = &copy
+		}
+		resp, err := client.Do(req)
 		if err != nil {
+			if observe, ok := ctx.Value(hlsFetchObserveKey{}).(func(int, error)); ok {
+				observe(0, err)
+			}
 			return nil, nil, err
 		}
 		if resp.StatusCode < 300 || resp.StatusCode > 399 {
+			if observe, ok := ctx.Value(hlsFetchObserveKey{}).(func(int, error)); ok {
+				observe(resp.StatusCode, nil)
+			}
 			return resp, current, nil
 		}
 		location, err := resp.Location()
@@ -270,19 +308,53 @@ func (s *HLSService) fetch(ctx context.Context, initial *url.URL, rangeHeader, r
 // A mobile streaming bridge supplies a capability-bearing route for native
 // AVPlayer. Every child playlist, key and segment must retain that route.
 type hlsProxyRouteKey struct{}
+type hlsResourceURLKey struct{}
+type hlsStreamKey struct{}
+type hlsFetchObserveKey struct{}
+type hlsSniffPlaylistKey struct{}
+
+// Extensionless CDN playlists sometimes carry application/octet-stream. LAN
+// child URLs must still be rewritten, with the inspected bytes preserved.
+func responseIsPlaylist(response *http.Response, upstream *url.URL, sniff bool) bool {
+	if isPlaylist(upstream, response.Header.Get("Content-Type")) {
+		return true
+	}
+	if !sniff || response.StatusCode < 200 || response.StatusCode >= 300 {
+		return false
+	}
+	reader := bufio.NewReader(response.Body)
+	prefix, _ := reader.Peek(7)
+	response.Body = struct {
+		io.Reader
+		io.Closer
+	}{reader, response.Body}
+	return bytes.Equal(prefix, []byte("#EXTM3U"))
+}
 
 func (s *HLSService) rewritePlaylist(playlist string, base *url.URL, referer, route string) string {
 	proxyURI := func(raw string) string {
-		u, err := base.Parse(strings.TrimSpace(raw))
-		if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
-			return raw
-		}
-		out := s.urlFor(u.String(), referer)
+		out := s.urlFor(raw, referer)
 		if route != "" {
 			out = route + strings.TrimPrefix(out, "/__cczj/hls")
 		}
 		return out
 	}
+	return rewritePlaylistURIs(playlist, base, proxyURI)
+}
+
+func rewritePlaylistURIs(playlist string, base *url.URL, resourceURL func(string) string) string {
+	return rewriteTypedPlaylistURIs(playlist, base, func(raw, _ string) string { return resourceURL(raw) })
+}
+
+func rewriteTypedPlaylistURIs(playlist string, base *url.URL, resourceURL func(string, string) string) string {
+	proxyURI := func(raw, kind string) string {
+		u, err := base.Parse(strings.TrimSpace(raw))
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+			return raw
+		}
+		return resourceURL(u.String(), kind)
+	}
+	nextKind := "unknown"
 	lines := strings.Split(playlist, "\n")
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
@@ -290,13 +362,31 @@ func (s *HLSService) rewritePlaylist(playlist string, base *url.URL, referer, ro
 			continue
 		}
 		if strings.HasPrefix(trimmed, "#") {
+			kind := "unknown"
+			switch {
+			case strings.HasPrefix(trimmed, "#EXT-X-KEY:"), strings.HasPrefix(trimmed, "#EXT-X-SESSION-KEY:"):
+				kind = "key"
+			case strings.HasPrefix(trimmed, "#EXT-X-MAP:"):
+				kind = "init"
+			case strings.HasPrefix(trimmed, "#EXT-X-MEDIA:"), strings.HasPrefix(trimmed, "#EXT-X-I-FRAME-STREAM-INF:"):
+				kind = "playlist"
+			case strings.HasPrefix(trimmed, "#EXT-X-PART:"):
+				kind = "media"
+			}
+			if strings.HasPrefix(trimmed, "#EXTINF:") {
+				nextKind = "media"
+			}
+			if strings.HasPrefix(trimmed, "#EXT-X-STREAM-INF:") {
+				nextKind = "playlist"
+			}
 			lines[i] = playlistURIAttribute.ReplaceAllStringFunc(line, func(match string) string {
 				parts := playlistURIAttribute.FindStringSubmatch(match)
-				return `URI="` + proxyURI(parts[1]) + `"`
+				return `URI="` + proxyURI(parts[1], kind) + `"`
 			})
 			continue
 		}
-		lines[i] = proxyURI(trimmed)
+		lines[i] = proxyURI(trimmed, nextKind)
+		nextKind = "unknown"
 	}
 	return strings.Join(lines, "\n")
 }

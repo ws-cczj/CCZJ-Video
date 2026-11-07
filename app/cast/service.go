@@ -30,20 +30,42 @@ type Device struct {
 }
 type renderer struct {
 	Device
-	endpoint string
-	service  string
-	seen     time.Time
-	session  string
-	media    string
+	endpoint      string
+	service       string
+	seen          time.Time
+	session       string
+	media         string
+	localAddress  string
+	streamRelease func()
+	command       chan struct{}
+	playback      playbackEvidence
+	statusKey     string
+	statusAt      time.Time
 }
 type Service struct {
 	ctx     context.Context
 	mu      sync.Mutex
 	scanMu  sync.Mutex
 	devices map[string]renderer
+	source  MediaSource
+}
+
+// MediaSource prepares a receiver-accessible resource and owns its transport.
+// The release function must be idempotent; Failed reports media I/O failures.
+type MediaSource interface {
+	Prepare(context.Context, string, string, string) (string, string, func(), error)
+	Failed(string) bool
+	Owns(string, string) bool
 }
 
 func New(ctx context.Context) *Service { return &Service{ctx: ctx, devices: make(map[string]renderer)} }
+
+// NewWithMedia connects receiver control to the application's media transport.
+func NewWithMedia(ctx context.Context, source MediaSource) *Service {
+	s := New(ctx)
+	s.source = source
+	return s
+}
 
 // LAN-only, IPv4-literal endpoints are pinned to the SSDP datagram's sender.
 // This excludes redirects, DNS rebinding, public servers and loopback services.
@@ -224,12 +246,15 @@ func soap(ctx context.Context, d renderer, action, args string, output ...*soapE
 	ctx = traceDevice(ctx, d)
 	start := time.Now()
 	fields := applog.Fields{"action": action}
-	operation.Stage(ctx, "cast.soap.start", fields)
+	query := strings.HasPrefix(action, "Get")
+	if !query {
+		operation.Stage(ctx, "cast.soap.start", fields)
+	}
 	defer func() {
 		fields["elapsed_ms"] = elapsed(start)
 		if failure != nil {
 			traceFailure(ctx, "cast.soap.failed", failure, fields)
-		} else {
+		} else if !query {
 			operation.Stage(ctx, "cast.soap.complete", fields)
 		}
 	}()
@@ -310,23 +335,45 @@ func (s *Service) PlayContext(request context.Context, id, media, title string) 
 		traceFailure(ctx, "cast.media.rejected", e, applog.Fields{"code": "CAST_INVALID_MEDIA"})
 		return e
 	}
-	d, e := s.device(id)
+	d, releaseCommand, e := s.ownCommand(ctx, id)
 	if e != nil {
 		traceFailure(ctx, "cast.device.unavailable", e, applog.Fields{"cast_device_id": id})
 		return e
 	}
+	defer releaseCommand()
+	previousRelease := d.streamRelease
 	d.session = apperror.NewRequestID()
-	d.media = media
-	s.mu.Lock()
-	s.devices[d.ID] = d
-	s.mu.Unlock()
+	d.playback = playbackEvidence{}
+	d.statusKey = ""
+	d.statusAt = time.Time{}
 	ctx = traceDevice(ctx, d)
-	operation.Stage(ctx, "cast.media.prepare", applog.Fields{"media_url": applog.SafeURL(media), "media_sha256": applog.Fingerprint([]byte(media))})
+	operation.Stage(ctx, "cast.media.prepare", applog.Fields{"transport": map[bool]string{true: "relay", false: "direct"}[s.source != nil]})
 	mime := "video/mp4"
 	u, _ := url.Parse(media)
 	if strings.HasSuffix(strings.ToLower(u.Path), ".m3u8") {
 		mime = "application/vnd.apple.mpegurl"
 	}
+	if s.source != nil {
+		var err error
+		media, mime, d.streamRelease, err = s.source.Prepare(ctx, d.endpoint, d.localAddress, media)
+		if err != nil {
+			traceFailure(ctx, "cast.media.prepare_failed", err, applog.Fields{"code": "CAST_STREAM_PREPARE_FAILED"})
+			return err
+		}
+	}
+	d.media = media
+	s.mu.Lock()
+	s.devices[d.ID] = d
+	s.mu.Unlock()
+	if previousRelease != nil {
+		previousRelease()
+	}
+	started := false
+	defer func() {
+		if !started {
+			s.releaseStream(d)
+		}
+	}()
 	metadata := `<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/"><item id="0" parentID="-1" restricted="1"><dc:title>` + escaped(title) + `</dc:title><upnp:class>object.item.videoItem</upnp:class><res protocolInfo="http-get:*:` + mime + `:*">` + escaped(media) + `</res></item></DIDL-Lite>`
 	setURI := func(metadata string) error {
 		return soap(ctx, d, "SetAVTransportURI", "<CurrentURI>"+escaped(media)+"</CurrentURI><CurrentURIMetaData>"+escaped(metadata)+"</CurrentURIMetaData>")
@@ -335,15 +382,23 @@ func (s *Service) PlayContext(request context.Context, id, media, title string) 
 	// Some renderers reject DIDL metadata even though they can inspect the URI.
 	// Retry only explicit argument/MIME rejection, never an ambiguous timeout.
 	if faultCode(e, "402", "714") {
-		operation.Stage(ctx, "cast.media.metadata_fallback", nil)
+		operation.Stage(ctx, "cast.media.metadata_fallback", applog.Fields{"attempt": 1})
 		e = setURI("")
 	}
 	if e != nil {
 		return e
 	}
 	for attempt := 0; ; attempt++ {
+		operation.Stage(ctx, "cast.play.attempt", applog.Fields{"attempt": attempt})
 		e = soap(ctx, d, "Play", "<Speed>1</Speed>")
 		if !faultCode(e, "701") || attempt == 2 {
+			if e == nil {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				s.accepted(ctx, d)
+				started = true
+			}
 			return e
 		}
 		// SetURI may complete before the renderer leaves its transition state.
@@ -373,11 +428,12 @@ func (s *Service) ControlContext(request context.Context, id, action string, sec
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	d, e := s.device(id)
+	d, releaseCommand, e := s.ownCommand(ctx, id)
 	if e != nil {
 		traceFailure(ctx, "cast.device.unavailable", e, applog.Fields{"cast_device_id": id, "action": action})
 		return e
 	}
+	defer releaseCommand()
 	ctx = traceDevice(ctx, d)
 	args := ""
 	switch action {
@@ -390,6 +446,9 @@ func (s *Service) ControlContext(request context.Context, id, action string, sec
 			traceFailure(ctx, "cast.control.rejected", err, applog.Fields{"action": action, "code": "CAST_INVALID_POSITION"})
 			return err
 		}
+		if err := s.requireSeekReady(ctx, d); err != nil {
+			return err
+		}
 		n := int(seconds)
 		args = fmt.Sprintf("<Unit>REL_TIME</Unit><Target>%02d:%02d:%02d</Target>", n/3600, n/60%60, n%60)
 	default:
@@ -397,18 +456,53 @@ func (s *Service) ControlContext(request context.Context, id, action string, sec
 		traceFailure(ctx, "cast.control.rejected", err, applog.Fields{"action": action, "code": "CAST_UNSUPPORTED_ACTION"})
 		return err
 	}
+	fields := applog.Fields{"action": action}
+	if action == "Seek" {
+		fields["target_seconds"] = int(seconds)
+	}
+	operation.Stage(ctx, "cast.control.dispatch", fields)
 	err := soap(ctx, d, action, args)
+	if err == nil && (action == "Pause" || action == "Play") {
+		if source, ok := s.source.(interface{ SetPaused(string, bool) }); ok {
+			source.SetPaused(d.media, action == "Pause")
+		}
+	}
+	if err == nil && (action == "Seek" || action == "Stop") {
+		s.resetSeekSample(d, action == "Stop")
+		if action == "Stop" {
+			s.releaseStream(d)
+		}
+	}
 	if action != "Seek" || !faultCode(err, "501", "701") {
 		return err
 	}
 	// Some renderers accept time seeking only while playing. Recover only
 	// after confirming that the paused resource still belongs to this session.
 	status, statusErr := s.StatusContext(ctx, id)
-	if statusErr != nil || status.State != "PAUSED_PLAYBACK" || status.MediaState != "matched" || status.TransportStatus == "ERROR_OCCURRED" {
+	if statusErr != nil || status.State != "PAUSED_PLAYBACK" || !s.seekReady(d, status) {
 		return err
 	}
 	operation.Stage(ctx, "cast.seek.paused_fallback", applog.Fields{"target_seconds": int(seconds)})
-	return s.seekPaused(ctx, d, args)
+	err = s.seekPaused(ctx, d, args)
+	if err == nil {
+		s.resetSeekSample(d, false)
+	}
+	return err
+}
+
+func (s *Service) releaseStream(d renderer) {
+	s.mu.Lock()
+	current, ok := s.devices[d.ID]
+	var release func()
+	if ok && current.session == d.session {
+		release = current.streamRelease
+		current.streamRelease = nil
+		s.devices[d.ID] = current
+	}
+	s.mu.Unlock()
+	if release != nil {
+		release()
+	}
 }
 
 func (s *Service) seekPaused(ctx context.Context, d renderer, args string) (failure error) {
@@ -429,6 +523,9 @@ func (s *Service) seekPaused(ctx context.Context, d renderer, args string) (fail
 		return err
 	}
 	if err := waitTransport(ctx, d, "PLAYING"); err != nil {
+		return err
+	}
+	if err := s.requireSeekReady(ctx, d); err != nil {
 		return err
 	}
 	return soap(ctx, d, "Seek", args)
@@ -452,4 +549,41 @@ func waitTransport(ctx context.Context, d renderer, state string) error {
 		}
 	}
 	return errors.New("电视尚未确认播放状态")
+}
+
+// ReleaseSessions revokes local resources at the owning mode boundary. It does
+// not claim that an unreachable receiver has accepted Stop.
+func (s *Service) ReleaseSessions() {
+	s.mu.Lock()
+	var releases []func()
+	for id, d := range s.devices {
+		if d.streamRelease != nil {
+			releases = append(releases, d.streamRelease)
+		}
+		d.streamRelease = nil
+		d.playback = playbackEvidence{}
+		d.session = ""
+		d.media = ""
+		s.devices[id] = d
+	}
+	s.mu.Unlock()
+	for _, release := range releases {
+		release()
+	}
+}
+
+// ReleaseSession ignores stale owners so a late UI cleanup cannot revoke a resend.
+func (s *Service) ReleaseSession(ctx context.Context, id, session string) error {
+	d, release, err := s.ownCommand(ctx, id)
+	if err != nil {
+		return err
+	}
+	defer release()
+	if session == "" || d.session != session {
+		return nil
+	}
+	s.resetSeekSample(d, true)
+	s.releaseStream(d)
+	operation.Stage(traceDevice(ctx, d), "cast.session.disconnected", nil)
+	return nil
 }

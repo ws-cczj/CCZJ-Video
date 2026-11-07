@@ -57,7 +57,7 @@ onMounted(() => {
 })
 onUnmounted(() => window.removeEventListener('cczj:android-back', onAndroidBack))
 const theme = useThemeStore()
-watch(()=>!theme.loaded?'':appMode.mode==='novel'?'#faf9f6':appMode.mode==='comic'?'#fffaf5':theme.current.palette.bgApp,color=>{if(theme.loaded)cacheLaunchBackground(color,appMode.mode)},{immediate:true})
+watch(()=>!theme.loaded||(appMode.mode==='video'&&(theme.currentId==='__preview__'||theme.pendingSettings>0))?'':appMode.mode==='novel'?'#faf9f6':appMode.mode==='comic'?'#fffaf5':theme.current.palette.bgApp,color=>{if(theme.loaded)cacheLaunchBackground(color,appMode.mode)},{immediate:true})
 const errorStore = useErrorStore()
 
 // 立即应用一次默认主题，防止页面初始闪烁
@@ -97,7 +97,7 @@ onUnmounted(() => {
   <SplashScreen />
 
   <!-- 投放标记刻意不在这一层：带着它整窗都是投放区，拖到播放器上也会静默装一个扩展包。
-       现在只有「设置 → 扩展包」那张卡片带 data-file-drop-target。 -->
+       扩展包投放区与主题编辑器图片区分别标记 data-file-drop-target。 -->
   <div class="app-shell" :data-application-mode="appMode.mode">
     <!-- 自定义标题栏：最顶部一条，背景色与页面主背景一致 -->
     <TitleBar v-if="!isMobileRuntime()" />

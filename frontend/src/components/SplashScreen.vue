@@ -27,51 +27,29 @@ import splashPurple from '../assets/images/purple.png'
 const theme = useThemeStore()
 const appMode = useApplicationMode()
 
-// 主题 ID → 启动图片 映射（按色系归类）
-const SPLASH_MAP: Record<string, string> = {
-  // 蓝色系
-  blue: splashBitblue, sky: splashBitblue, indigo: splashBitblue,
-  'd-blue': splashBitblue, 'd-cyan': splashSkyblue, cyan: splashSkyblue,
-  deepblue: splashDeepblue, skyblue: splashSkyblue,
-  bitblue: splashBitblue,
-  // 木叶之村也是蓝色系
-  naruto: splashBitblue,
-  // 绿色系
-  green: splashGreen, 'd-green': splashGreen, lime: splashGreen, teal: splashGreen,
-  bitgreen: splashGreen,
-  // 紫色系
-  purple: splashPurple, 'd-violet': splashPurple, 'd-indigo': splashPurple,
-  bitpurple: splashBitpurple,
-  // 粉色系
-  pink: splashPink, 'd-rose': splashPink,
-  // 红色系
-  red: splashRed, orange: splashRed,
-  happy_new_year: splashRed,
-  // 灰色系
-  minimal: splashGrey, gray: splashGrey, grey: splashGrey,
-  china_ink: splashGrey, black: splashGrey,
-  // 黄色系
-  yellow: splashYellow,
-  // 中秋（暗紫）
-  mid_autumn: splashBitpurple,
-}
+// Stable keys are prepared when a theme is saved or selected.
+const SPLASH_MAP={green:splashGreen,blue:splashBitblue,deepblue:splashDeepblue,skyblue:splashSkyblue,
+  purple:splashPurple,bitpurple:splashBitpurple,pink:splashPink,red:splashRed,grey:splashGrey,yellow:splashYellow}
 
-// Select once after theme restoration, with a short fallback deadline.
+// Select once after theme restoration; the global startup deadline remains bounded.
 // Never replace an image that has already begun decoding during startup.
 const bgSrc = ref('')
+const monochrome=ref(false)
 const ready = ref(false)
 const show = ref(true)
 let disposed = false
-let selectionTimer: ReturnType<typeof setTimeout> | undefined
+let wallpaperImage:HTMLImageElement|undefined
+let wallpaperReady:Promise<void>=Promise.resolve()
+let stopWallpaper:(()=>void)|undefined
 let finishTimer: ReturnType<typeof setTimeout> | undefined
 let deadlineTimer: ReturnType<typeof setTimeout> | undefined
 let stopTheme: (() => void) | undefined
 let revealFrame = 0
 function selectImage(): void {
   if (disposed || bgSrc.value) return
-  clearTimeout(selectionTimer)
   stopTheme?.()
-  bgSrc.value = SPLASH_MAP[theme.currentId] || (theme.current.mode === 'dark' ? splashDeepblue : splashGreen)
+  bgSrc.value = SPLASH_MAP[theme.launchSplash]
+  monochrome.value=theme.launchSplash==='grey'
 }
 function dismiss(): void {
   markStartup('splash_closed')
@@ -80,11 +58,32 @@ function dismiss(): void {
 }
 function dispose(): void {
   disposed = true
-  clearTimeout(selectionTimer)
   clearTimeout(finishTimer)
   clearTimeout(deadlineTimer)
   stopTheme?.()
+  stopWallpaper?.()
+  if(wallpaperImage){wallpaperImage.src='';wallpaperImage=undefined}
   cancelAnimationFrame(revealFrame)
+}
+function warmWallpaper(src:string|undefined):void {
+  if(wallpaperImage){wallpaperImage.src='';wallpaperImage=undefined}
+  wallpaperReady=Promise.resolve()
+  if(!src||disposed)return
+  const image=new Image();wallpaperImage=image
+  image.decoding='async';image.src=src
+  const began=performance.now()
+  wallpaperReady=image.decode().then(()=>{
+    if(!disposed&&wallpaperImage===image)markStartup('wallpaper_decode',performance.now()-began)
+  },()=>{
+    if(!disposed&&wallpaperImage===image)markStartup('wallpaper_decode',performance.now()-began,true)
+  })
+}
+async function finishStartup():Promise<void> {
+  await theme.waitForBackground()
+  if(disposed)return
+  let pending:Promise<void>
+  do{pending=wallpaperReady;await pending}while(!disposed&&pending!==wallpaperReady)
+  if(!disposed)dismiss()
 }
 async function reveal(event: Event): Promise<void> {
   const began = performance.now()
@@ -98,7 +97,7 @@ async function reveal(event: Event): Promise<void> {
       if (disposed) return
       ready.value = true
       markStartup('splash_reveal')
-      finishTimer = setTimeout(dismiss, 850)
+      finishTimer = setTimeout(()=>{void finishStartup()}, 850)
     })
   })
 }
@@ -106,7 +105,7 @@ onMounted(() => {
   if (appMode.mode !== 'video') { ready.value = true; finishTimer = setTimeout(dismiss, 850); return }
   // Bound the splash even when theme IPC or image loading fails.
   deadlineTimer = setTimeout(dismiss, 2200)
-  selectionTimer = setTimeout(selectImage, 250)
+  stopWallpaper=watch(()=>theme.backgroundURL,warmWallpaper,{immediate:true})
   stopTheme = watch(() => theme.loaded, loaded => { if (loaded) selectImage() })
   if (theme.loaded) selectImage()
 })
@@ -138,7 +137,7 @@ onBeforeUnmount(releaseSplashSurface)
       <Icon v-if="appMode.mode !== 'video'" :name="APPLICATION_MODES[appMode.mode].icon" :size="80"
         class="novel-splash-mark cczj-motion-reveal" />
       <img v-else-if="bgSrc" :src="bgSrc" alt="" decoding="async" fetchpriority="high"
-        class="splash-img cczj-motion-ornament" :class="{ ready, monochrome: theme.currentId === 'minimal' }" @load="reveal" @error="dismiss" />
+        class="splash-img cczj-motion-ornament" :class="{ ready, monochrome }" @load="reveal" @error="dismiss" />
     </div>
   </MotionTransition>
 </template>

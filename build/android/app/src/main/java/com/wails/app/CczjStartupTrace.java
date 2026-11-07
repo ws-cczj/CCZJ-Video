@@ -18,11 +18,11 @@ import org.json.JSONObject;
 /** Early native evidence survives independently of Go, SQLite and the WebView. */
 final class CczjStartupTrace {
     private static final Set<String> PHASES=new HashSet<>(Arrays.asList(
-        "activity_create","layout_ready","temporary_storage_ready","native_library_load","native_library_ready",
+        "cast_permission_denied","cast_release_failed","cast_start_requested","cast_start_failed","cast_service_started","cast_service_failed","cast_locks_acquired","cast_locks_failed","cast_locks_released","cast_service_stopped","activity_create","layout_ready","temporary_storage_ready","native_library_load","native_library_ready",
         "go_initialize","go_init_returned","webview_create","webview_ready","page_load","page_started","page_committed","page_finished",
         "resume","pause","stop","destroy","frontend_modules_ready","frontend_runtime","frontend_typography","frontend_locale","frontend_motion",
         "frontend_mode","frontend_mode_shell","frontend_theme","frontend_vue_mount","frontend_first_screen","frontend_first_render_opportunity",
-        "frontend_image_decode","frontend_splash_reveal","frontend_splash_closed"));
+        "frontend_wallpaper_decode","frontend_image_decode","frontend_splash_reveal","frontend_splash_closed"));
     private final long began=SystemClock.elapsedRealtime();
     private final int pid=android.os.Process.myPid();
     private final AtomicInteger accepted=new AtomicInteger(),written=new AtomicInteger(),dropped=new AtomicInteger(),failed=new AtomicInteger();
@@ -30,23 +30,25 @@ final class CczjStartupTrace {
     private volatile String lastPhase="";
     private volatile boolean closed;
     private final ThreadPoolExecutor writer=new ThreadPoolExecutor(1,1,0,TimeUnit.MILLISECONDS,new ArrayBlockingQueue<>(64),task->{Thread thread=new Thread(task,"cczj-startup-trace");thread.setDaemon(true);return thread;},(task,pool)->dropped.incrementAndGet());
-    CczjStartupTrace(Context context) {
+    CczjStartupTrace(Context context) { this(context,"startup-native"); }
+    CczjStartupTrace(Context context,String prefix) {
         directory=new File(context.getFilesDir(),"CCZJ Video/applog");
-        file=new File(directory,"startup-native-"+System.currentTimeMillis()+"-"+pid+".jsonl");
+        file=new File(directory,prefix+"-"+System.currentTimeMillis()+"-"+pid+".jsonl");
         writer.execute(()->{
             try {
                 if(!directory.isDirectory()&&!directory.mkdirs())throw new java.io.IOException();
-                File[] files=directory.listFiles((dir,name)->name.matches("startup-native-[0-9]+-[0-9]+\\.jsonl"));
+                File[] files=directory.listFiles((dir,name)->name.matches(prefix+"-[0-9]+-[0-9]+\\.jsonl"));
                 if(files!=null){Arrays.sort(files,(a,b)->b.getName().compareTo(a.getName()));for(int i=3;i<files.length;i++)if(!files[i].delete())failed.incrementAndGet();}
             } catch(Exception error){failed.incrementAndGet();}
         });
     }
-    synchronized void mark(String phase) {
+    synchronized void mark(String phase) { mark(phase,""); }
+    synchronized void mark(String phase,String session) {
         if(closed||!PHASES.contains(phase))return;
         if(accepted.get()>=64){dropped.incrementAndGet();return;}
         try {
             int sequence=accepted.incrementAndGet();lastPhase=phase;
-            JSONObject row=new JSONObject();row.put("phase",phase);row.put("sequence",sequence);row.put("pid",pid);
+            JSONObject row=new JSONObject();row.put("phase",phase);if(session!=null&&session.matches("[A-Za-z0-9_.:-]{1,120}"))row.put("cast_session_id",session);row.put("sequence",sequence);row.put("pid",pid);
             row.put("at_ms",System.currentTimeMillis());row.put("elapsed_ms",SystemClock.elapsedRealtime()-began);
             row.put("version",BuildConfig.VERSION_NAME);row.put("host_abi",android.os.Build.SUPPORTED_ABIS[0]);
             byte[] line=(row.toString()+"\n").getBytes(StandardCharsets.UTF_8);

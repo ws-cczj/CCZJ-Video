@@ -26,8 +26,8 @@ func (a *App) SetSetting(key, value string) error {
 		fields["value"] = value
 	}
 	ctx := operation.WithFields(context.Background(), fields)
-	work := func(context.Context) (bool, error) {
-		return true, a.setSetting(key, value)
+	work := func(ctx context.Context) (bool, error) {
+		return true, a.setSettingContext(ctx, key, value)
 	}
 	if key == applicationModeKey {
 		// Switching stops the previous mode owner; registering this request in
@@ -40,6 +40,10 @@ func (a *App) SetSetting(key, value string) error {
 }
 
 func (a *App) setSetting(key, value string) error {
+	return a.setSettingContext(context.Background(), key, value)
+}
+
+func (a *App) setSettingContext(ctx context.Context, key, value string) error {
 	if key == applicationModeKey {
 		return a.switchApplicationMode(value)
 	}
@@ -49,7 +53,7 @@ func (a *App) setSetting(key, value string) error {
 		if value != "0" && value != "1" {
 			return apperror.New(apperror.Validation, "诊断记录设置无效")
 		}
-		if err := a.settings.Set(key, value); err != nil {
+		if err := a.settings.SetContext(ctx, key, value); err != nil {
 			return err
 		}
 		if a.recording != nil {
@@ -66,7 +70,7 @@ func (a *App) setSetting(key, value string) error {
 		if err != nil {
 			return err
 		}
-		return a.settings.Set(key, string(raw)) // Configuration is applied on restart.
+		return a.settings.SetContext(ctx, key, string(raw)) // Configuration is applied on restart.
 	}
 	if key == netpolicy.SettingsKey {
 		settings, err := netpolicy.DecodeSettings(value)
@@ -77,7 +81,7 @@ func (a *App) setSetting(key, value string) error {
 		if err != nil {
 			return err
 		}
-		if err = a.settings.Set(key, string(raw)); err != nil {
+		if err = a.settings.SetContext(ctx, key, string(raw)); err != nil {
 			return err
 		}
 		if a.requestPolicy != nil {
@@ -96,7 +100,7 @@ func (a *App) setSetting(key, value string) error {
 		}
 		value = string(raw)
 	}
-	return a.settings.Set(key, value)
+	return a.settings.SetContext(ctx, key, value)
 }
 
 // settingAllowPrivateNetwork 打开后，媒体与图片代理允许访问私网/回环地址

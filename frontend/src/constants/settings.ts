@@ -1,5 +1,6 @@
 /** Persisted spellings are compatibility contracts; changing a key requires migration. */
 export const Settings = Object.freeze({
+  themeSplash: 'theme_splash_v1',
   applicationMode: 'application_mode',
   diagnosticsCapture: 'diagnostics_capture_v1',
   networkPolicy: 'network_request_policy_v1',

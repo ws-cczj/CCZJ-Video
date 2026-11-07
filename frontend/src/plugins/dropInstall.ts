@@ -36,7 +36,7 @@ export const installing = ref(false)
 let detach: (() => void) | null = null
 
 /**
- * 挂上原生拖放。投放区只有「设置 → 扩展包」那张卡片（唯一的 data-file-drop-target），
+ * 挂上原生拖放。扩展包投放区限定为「设置 → 扩展包」卡片，主题图片区自行处理文件，
  * 分组切走时它是 display:none，所以拖到别处不该装包。
  *
  * 订阅仍挂在应用生命周期上而不是面板里：Go 的 WindowFilesDropped 是窗口级事件，
@@ -56,7 +56,7 @@ export function startDropWatch(): void {
  * 看不见——正在放视频的人不会明白窗口为什么突然多出一个侧栏条目。
  */
 function dropZoneVisible(): boolean {
-  const zone = document.querySelector('[data-file-drop-target]')
+  const zone = document.querySelector('.ext-card[data-file-drop-target]')
   return zone instanceof HTMLElement && zone.offsetParent !== null
 }
 

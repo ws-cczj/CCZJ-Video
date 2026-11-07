@@ -1,4 +1,4 @@
-import { hexToRgb, rgbToHex, readRgb, toSolidHex, hexToRgba, lighten, darken, luminance, hslToHex, contrastRatio, contrastText, compositeColor, windowActionColors, readableForeground, perceptualTone } from '../utils/colors'
+import { hueOf, hexToRgb, rgbToHex, readRgb, toSolidHex, hexToRgba, lighten, darken, luminance, hslToHex, contrastRatio, contrastText, compositeColor, windowActionColors, readableForeground, perceptualTone } from '../utils/colors'
 export { hexToRgba } from '../utils/colors'
 import { CCZJ } from '../constants/cczj'
 import { defineStore } from 'pinia'
@@ -9,6 +9,8 @@ import { GetSetting, SetSetting,normalizeApiError } from '../api/app'
 import { createSettingsQueue } from '../api/settingsQueue'
 import { useErrorStore } from './error'
 import { tr } from '../locales'
+import { selectSplashKey, readSplashKey, type SplashImageKey } from '../platform/splashAppearance'
+import { createThemeWallpaper } from '../platform/themeWallpaper'
 import { usePluginStore } from './plugins'
 import landingMoon from '../assets/theme_images/landingMoon.png'
 import jqbg from '../assets/theme_images/jqbg.jpg'
@@ -146,20 +148,6 @@ export async function warmPackBackgrounds(): Promise<void> {
 // 颜色工具
 // ============================================================================
 type SemanticRole = 'success' | 'warning' | 'danger' | 'info'
-
-/** 色相角（0-359）；无彩色（灰/黑/白）返回 -1。 */
-function hueOf(color: string): number {
-  const [r, g, b] = hexToRgb(color).map((v) => v / 255)
-  const max = Math.max(r, g, b)
-  const min = Math.min(r, g, b)
-  const delta = max - min
-  if (delta === 0) return -1
-  let hue: number
-  if (max === r) hue = 60 * (((g - b) / delta) % 6)
-  else if (max === g) hue = 60 * ((b - r) / delta + 2)
-  else hue = 60 * ((r - g) / delta + 4)
-  return ((hue % 360) + 360) % 360
-}
 
 /** 角色色相与主色相在色环上的最短夹角（0-180）；任一色为无彩色时视为 180（不会撞色）。 */
 function hueGap(hue: number, primary: string): number {
@@ -350,6 +338,9 @@ export interface CustomTheme {
   tagColor?: string
   carouselColor?: string
   backgroundImage?: string
+  /** Exact original data URL retained when a lossless crop is saved. */
+  backgroundOriginal?: string
+  splashKey?: SplashImageKey
   dark: boolean
   sidebarAlpha: number   // 侧边栏/面板背景透明度 0~1（有背景图时生效）
   contentAlpha: number   // 内容卡片背景透明度 0~1（有背景图时生效）
@@ -709,7 +700,14 @@ export const useThemeStore = defineStore('theme', () => {
   const currentId = ref<string>('green')
   const customThemes = ref<CustomTheme[]>([])
   const loaded = ref(false)
+  const launchSplash=ref<SplashImageKey>('green')
   const pluginStore = usePluginStore()
+  const wallpaper=createThemeWallpaper(value=>{
+    if(value)document.documentElement.style.setProperty('--bg-image',`url("${value}")`)
+    else document.documentElement.style.removeProperty('--bg-image')
+  },()=>useErrorStore().warn(tr('settings.backgroundPreview'),tr('settings.imageLoadFailed'),'','Theme.wallpaper'))
+  onScopeDispose(wallpaper.dispose)
+  if(import.meta.hot)import.meta.hot.dispose(wallpaper.dispose)
   /** 启动时扩展包还没扫到、当前查不到的 pack 主题 id，注册表到货后认回来。 */
   const deferredThemeId = ref('')
 
@@ -859,10 +857,17 @@ export const useThemeStore = defineStore('theme', () => {
   })
 
   // ---- 生命周期 ----
-  async function load(): Promise<void> {
+  let loading:Promise<void>|undefined
+  function load():Promise<void> {
+    if(loaded.value)return Promise.resolve()
+    if(!loading)loading=loadTheme().finally(()=>{loading=undefined})
+    return loading
+  }
+  async function loadTheme(): Promise<void> {
     try {
       const id = await GetSetting(CCZJ.Settings.themeID)
       const customs = await GetSetting(CCZJ.Settings.themeCustoms)
+      const splash = await GetSetting(CCZJ.Settings.themeSplash)
       if (typeof customs === 'string' && customs) {
         try {
           const parsed: CustomTheme[] = JSON.parse(customs)
@@ -871,14 +876,15 @@ export const useThemeStore = defineStore('theme', () => {
             ? parsed.map((theme) => {
                 const fixed = repairCustomThemeAssets(theme)
                 fixed.roleColors=readThemeRoleColors(fixed.roleColors)
+                const splashKey=selectSplashKey(fixed.id,fixed.primary,true)
+                fixed.splashKey=splashKey
                 if (initializeComponentTokens(fixed)) migrated = true
                 return fixed
               })
             : []
-          // Persist the one-time migration so old themes never require users
-          // to press the derive button merely to obtain the new UI tokens.
+          // Legacy themes gain missing roles and stable launch metadata together.
           if (migrated) await settingWrites.set(CCZJ.Settings.themeCustoms, JSON.stringify(customThemes.value))
-        } catch { /* ignore */ }
+        } catch(error) {useErrorStore().fromError(tr('errors.fallbackTitle'),error,'Theme.decode')}
       }
       // Custom themes are loaded above, so their stored id can now be resolved.
       if (typeof id === 'string' && id && (themes.value.some(t => t.id === id) || customThemes.value.some(c => c.id === id))) {
@@ -887,7 +893,15 @@ export const useThemeStore = defineStore('theme', () => {
         // 扩展包主题：注册表可能还没扫完，先记下 id，等 packs 到货再认回来。
         deferredThemeId.value = id
       }
-    } catch { /* ignore */ }
+      const launchId=deferredThemeId.value||currentId.value
+      launchSplash.value=splashForId(launchId)
+      if(typeof splash==='string'&&splash)try {
+        const saved:unknown=JSON.parse(splash)
+        if(saved&&typeof saved==='object'&&'themeId' in saved&&saved.themeId===launchId&&'key' in saved){
+          launchSplash.value=readSplashKey(saved.key)??launchSplash.value
+        }
+      }catch{/* Older or damaged launch metadata falls back before mounting. */}
+    } catch(error) {useErrorStore().fromError(tr('errors.fallbackTitle'),error,'Theme.load')}
     loaded.value = true
     void pluginStore.ensureLoaded()
     apply()
@@ -898,10 +912,19 @@ export const useThemeStore = defineStore('theme', () => {
   watch(() => motion.enabled && !motion.reduced && motion.options.pages, allowed => { if (!allowed) reveal.cancel() })
   onScopeDispose(reveal.dispose)
   if (import.meta.hot) import.meta.hot.dispose(reveal.dispose)
+  function splashForId(id:string):SplashImageKey {
+    const custom=customThemes.value.find(c=>c.id===id)
+    if(custom)return readSplashKey(custom.splashKey)??selectSplashKey(id,custom.primary,true)
+    const preset=themes.value.find(t=>t.id===id)
+    return selectSplashKey(id,preset?.primary??'#16a34a')
+  }
   async function setTheme(id: string, origin?: RevealOrigin): Promise<boolean> {
     // Enqueue in input order; a superseded visual callback must not save an old
     // selection after a later reveal has already completed.
+    const splashKey=splashForId(id)
+    void settingWrites.set(CCZJ.Settings.themeSplash,JSON.stringify({themeId:id,key:splashKey}))
     const saved = settingWrites.set(CCZJ.Settings.themeID,id)
+    launchSplash.value=splashKey
     await reveal.run(() => {
       currentId.value = id
       deferredThemeId.value = ''
@@ -998,11 +1021,7 @@ export const useThemeStore = defineStore('theme', () => {
     set('--btn-close', palette.btnClose)
     set('--btn-close-contrast', palette.btnCloseContrast)
 
-    if (bgImage) {
-      set('--bg-image', `url("${bgImage}")`)
-    } else {
-      root.style.removeProperty('--bg-image')
-    }
+    void wallpaper.prepare(bgImage)
 
     root.style.backgroundColor = palette.bgApp
     root.style.color = palette.textPrimary
@@ -1014,12 +1033,19 @@ export const useThemeStore = defineStore('theme', () => {
   // ---- 自定义主题 CRUD ----
   async function saveCustom(theme: CustomTheme): Promise<boolean> {
     // 保存前把可能是旧构建的预设资源 URL 替换为当前构建的正确 URL
-    const fixed = repairCustomThemeAssets(theme)
-    const i = customThemes.value.findIndex(c => c.id === fixed.id)
-    if (i >= 0) customThemes.value[i] = fixed
-    else customThemes.value.push(fixed)
-    if(!await persistCustoms())return false
-    return setTheme(fixed.id)
+    const fixed = {...repairCustomThemeAssets(theme),splashKey:selectSplashKey(theme.id,theme.primary,true)}
+    if(!await wallpaper.prepare(resolveThemeBg(fixed.backgroundImage),true))return false
+    const next=customThemes.value.filter(c=>c.id!=='__preview__')
+    const index=next.findIndex(c=>c.id===fixed.id)
+    if(index>=0)next[index]=fixed
+    else next.push(fixed)
+    const payload=serializeCustoms(next)
+    if(payload===undefined||!await settingWrites.set(CCZJ.Settings.themeCustoms,payload))return false
+    const preview=customThemes.value.find(c=>c.id==='__preview__')
+    customThemes.value=preview?[...next,preview]:next
+    const saved=await setTheme(fixed.id)
+    if(saved)customThemes.value=customThemes.value.filter(c=>c.id!=='__preview__')
+    return saved
   }
 
   async function deleteCustom(id: string): Promise<void> {
@@ -1036,8 +1062,17 @@ export const useThemeStore = defineStore('theme', () => {
     apply()
   }
 
+  function serializeCustoms(items:CustomTheme[]):string|undefined {
+    const payload=JSON.stringify(items.filter(c=>c.id!=='__preview__'))
+    if(new Blob([payload]).size>60*1024*1024){
+      useErrorStore().warn(tr('settings.saveTheme'),tr('common.fileTooLarge',{max:60}),'','Theme.save')
+      return undefined
+    }
+    return payload
+  }
   function persistCustoms(): Promise<boolean> {
-    return settingWrites.set(CCZJ.Settings.themeCustoms,JSON.stringify(customThemes.value))
+    const payload=serializeCustoms(customThemes.value)
+    return payload===undefined?Promise.resolve(false):settingWrites.set(CCZJ.Settings.themeCustoms,payload)
   }
 
   function makeEmptyCustom(): CustomTheme {
@@ -1147,6 +1182,12 @@ export const useThemeStore = defineStore('theme', () => {
     current,
     customThemes,
     loaded,
+    backgroundURL:wallpaper.url,
+    backgroundLoading:wallpaper.loading,
+    backgroundFailed:wallpaper.error,
+    retryBackground:()=>wallpaper.prepare(resolveThemeBg(current.value.bgImage),true),
+    waitForBackground:()=>wallpaper.prepare(resolveThemeBg(current.value.bgImage)),
+    launchSplash,
     load,
     setTheme,
     apply,

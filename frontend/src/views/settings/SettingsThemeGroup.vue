@@ -13,7 +13,7 @@ import Icon from '../../components/Icon.vue'
 import { useThemeStore, type ColorPalette } from '../../stores/theme'
 import { useConfirmStore } from '../../stores/confirm'
 import ThemeEditorModal from './ThemeEditorModal.vue'
-import { Button } from '../../components/ui'
+import { Button, Spinner } from '../../components/ui'
 import { presentationProfile } from '../../platform/presentation'
 
 const { t } = useI18n()
@@ -97,7 +97,7 @@ const darkPresets  = computed(() => themeStore.themes.filter(t => t.mode === 'da
 // 自定义主题中，id 与预设重合的视为“对该预设的覆盖/修改”，不再作为独立卡片显示
 const presetIdsSet = computed(() => new Set(themeStore.themes.map((t) => t.id)))
 const pureCustomThemes = computed(() =>
-  themeStore.customThemes.filter((c) => !presetIdsSet.value.has(c.id))
+  themeStore.customThemes.filter((c) => c.id!=='__preview__'&&!presetIdsSet.value.has(c.id))
 )
 
 // 卡片只负责显示，所以这里把 pack:// 引用换成实际图；持久化仍走 customThemes 里的原始引用。
@@ -110,7 +110,7 @@ function isActive(id: string): boolean {
 }
 
 function pickTheme(id: string, event: MouseEvent): void {
-  if (isActive(id)) return
+  if (isActive(id)) {if(themeStore.backgroundFailed)void themeStore.retryBackground();return}
   const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect()
   const x = event.detail ? event.clientX : bounds.left + bounds.width / 2
   const y = event.detail ? event.clientY : bounds.top + bounds.height / 2
@@ -155,7 +155,7 @@ function pickTheme(id: string, event: MouseEvent): void {
           <span v-if="!resolvePreset(preset).bg" class="swatch" :style="{ background: resolvePreset(preset).data.primary }"></span>
           <span v-if="resolvePreset(preset).bg" class="swatch small" :style="{ background: resolvePreset(preset).data.primary }"></span>
           <span class="label cczj-truncate" :style="{ color: resolvePreset(preset).textPrimary }">{{ resolvePreset(preset).data.name }}</span>
-          <span v-if="isActive(preset.id)" class="check cczj-inline-flex cczj-items-center cczj-justify-center"><Icon name="check" :size="12" /></span>
+          <span v-if="isActive(preset.id)" class="check cczj-inline-flex cczj-items-center cczj-justify-center"><Spinner v-if="themeStore.backgroundLoading" size="sm" inline role="status" :aria-label="t('common.loading')" /><Icon v-else :name="themeStore.backgroundFailed?'alert-triangle':'check'" :size="12" /></span>
         </button>
 
         <!-- 自定义（排除与预设同名的覆盖项，那些已通过上方预设卡显示） -->
@@ -185,6 +185,9 @@ function pickTheme(id: string, event: MouseEvent): void {
           <span v-if="!c.backgroundImage" class="swatch" :style="{ background: c.primary }"></span>
           <span v-if="c.backgroundImage" class="swatch small" :style="{ background: c.primary }"></span>
           <span class="label cczj-truncate" :style="{ color: c.text }">{{ c.name }}</span>
+          <span v-if="isActive(c.id) && (themeStore.backgroundLoading || themeStore.backgroundFailed)" class="cczj-absolute cczj-top-2 cczj-left-2 cczj-p-2 cczj-rounded-50 cczj-bg-card" role="status" :aria-label="t(themeStore.backgroundFailed?'settings.imageLoadFailed':'common.loading')">
+            <Spinner v-if="themeStore.backgroundLoading" size="sm" inline /><Icon v-else name="alert-triangle" :size="16" />
+          </span>
           <span v-if="!mobile" class="card-actions cczj-absolute cczj-flex cczj-gap-2" @click.stop>
             <button class="mini-btn danger" @click="onDeleteTheme(c.id, c.name)" :title="t('common.delete')">
               <Icon name="x" :size="12" />
@@ -227,7 +230,7 @@ function pickTheme(id: string, event: MouseEvent): void {
           <span v-if="!resolvePreset(preset).bg" class="swatch" :style="{ background: resolvePreset(preset).data.primary }"></span>
           <span v-if="resolvePreset(preset).bg" class="swatch small" :style="{ background: resolvePreset(preset).data.primary }"></span>
           <span class="label cczj-truncate" :style="{ color: resolvePreset(preset).textPrimary }">{{ resolvePreset(preset).data.name }}</span>
-          <span v-if="isActive(preset.id)" class="check cczj-inline-flex cczj-items-center cczj-justify-center"><Icon name="check" :size="12" /></span>
+          <span v-if="isActive(preset.id)" class="check cczj-inline-flex cczj-items-center cczj-justify-center"><Spinner v-if="themeStore.backgroundLoading" size="sm" inline role="status" :aria-label="t('common.loading')" /><Icon v-else :name="themeStore.backgroundFailed?'alert-triangle':'check'" :size="12" /></span>
         </button>
 
         <button
@@ -256,6 +259,9 @@ function pickTheme(id: string, event: MouseEvent): void {
           <span v-if="!c.backgroundImage" class="swatch" :style="{ background: c.primary }"></span>
           <span v-if="c.backgroundImage" class="swatch small" :style="{ background: c.primary }"></span>
           <span class="label cczj-truncate" :style="{ color: c.text }">{{ c.name }}</span>
+          <span v-if="isActive(c.id) && (themeStore.backgroundLoading || themeStore.backgroundFailed)" class="cczj-absolute cczj-top-2 cczj-left-2 cczj-p-2 cczj-rounded-50 cczj-bg-card" role="status" :aria-label="t(themeStore.backgroundFailed?'settings.imageLoadFailed':'common.loading')">
+            <Spinner v-if="themeStore.backgroundLoading" size="sm" inline /><Icon v-else name="alert-triangle" :size="16" />
+          </span>
           <span v-if="!mobile" class="card-actions cczj-absolute cczj-flex cczj-gap-2" @click.stop>
             <button class="mini-btn danger" @click="onDeleteTheme(c.id, c.name)" :title="t('common.delete')">
               <Icon name="x" :size="12" />

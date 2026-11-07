@@ -33,6 +33,7 @@ type Event struct {
 	FlightID         string         `json:"flight_id,omitempty"`
 	BackendRequestID string         `json:"backend_request_id,omitempty"`
 	ParentID         string         `json:"parent_id,omitempty"`
+	CastSessionID    string         `json:"cast_session_id,omitempty"`
 	ResourceID       string         `json:"resource_id,omitempty"`
 	Mode             string         `json:"application_mode"`
 	Kind             string         `json:"kind"`
@@ -109,6 +110,7 @@ func cleanEvent(event Event) (Event, bool) {
 	event.ActionID, event.RequestID, event.FlightID = cleanLabel(event.ActionID), cleanLabel(event.RequestID), cleanLabel(event.FlightID)
 	event.BackendRequestID, event.ParentID = cleanLabel(event.BackendRequestID), cleanLabel(event.ParentID)
 	event.ResourceID = cleanLabel(event.ResourceID)
+	event.CastSessionID = cleanLabel(event.CastSessionID)
 	event.Name, event.Code = cleanLabel(event.Name), cleanLabel(event.Code)
 	if len(event.Route) > 120 || !routePattern.MatchString(event.Route) {
 		event.Route = ""

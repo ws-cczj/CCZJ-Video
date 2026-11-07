@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { recordTimeline } from '../diagnostics/session'
 import { defineAsyncComponent, ref, nextTick, onMounted, onBeforeUnmount, watch, computed } from 'vue'
 import PlayerSubtitleControls from '../player/views/PlayerSubtitleControls.vue'
 import PlayerPreferencesControls from '../player/views/PlayerPreferencesControls.vue'
@@ -361,15 +362,14 @@ const casting=ref(false)
 const castState=ref<CastPlaybackState|null>(null)
 let autoplayAttempt=0, autoplayRetries=0, resumePlaybackRequested=false
 function updateCastStatus(value:CastPlaybackState):void {
-  const previous=castState.value
-  // Keep the last usable checkpoint when the receiver temporarily omits its clock.
-  castState.value=!value.hasPosition&&previous?.hasPosition?{...value,position:previous.position,duration:previous.duration,hasPosition:true}:value
+  castState.value=value
   if(casting.value&&value.hasPosition){
     resume.save()
     if(resume.canPersist())emit('progress',value.position,value.duration||duration.value)
   }
 }
 function setCasting(active:boolean,position?:number):void {
+  recordTimeline('ui.lifecycle',{name:active?'cast.local_suspend':'cast.local_released'})
   casting.value=active
   if(!active){
     const video=getVideoEl()

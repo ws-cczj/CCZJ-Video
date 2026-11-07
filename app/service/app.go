@@ -108,6 +108,7 @@ type App struct {
 	downloadDir  *downloadservice.Directory
 	proxy        *proxyservice.Service
 	hlsProxy     *proxyservice.HLSService
+	castRelay    *proxyservice.CastRelay
 	mobileMedia  *proxyservice.MediaBridge
 	// readingImages 服务小说/漫画的图片（漫画页、插图）。与 proxy 那个海报代理
 	// 分开的原因写在 NewApp 里：节流策略、缓存目录与容量上限都不一样。
@@ -268,7 +269,6 @@ func NewApp() *App {
 		return db.DB().DB
 	}), danmaku.NewClient(a.danmakuHTTP), a.background.Context())
 
-	a.cast = cast.New(a.background.Context())
 	a.recording = diagnosticrecording.New(func() string { return filepath.Join(a.getDataDir(), "exports", "diagnostics") }, a.background, &resourceSampler)
 	if enabled, err := a.settings.Get(CCZJ.SettingDiagnosticsCapture); err == nil && enabled == "0" {
 		a.recording.SetDailyEnabled(false)
@@ -306,6 +306,8 @@ func NewApp() *App {
 	})
 	a.proxy = proxyservice.NewService(a.getDataDir)
 	a.hlsProxy = proxyservice.NewHLSServiceWithBudget(a.networkBudget)
+	a.castRelay = proxyservice.NewCastRelay(a.background.Context(), a.hlsProxy, castRelayActive)
+	a.cast = cast.NewWithMedia(a.background.Context(), a.castRelay)
 	// 阅读模式的图片代理与海报代理分开：海报那条有 300ms 全局节流（防豆瓣限流），
 	// 一话几十页漫画会被它拖成十几秒。缓存目录、TTL 与容量上限也各自一份，
 	// 因为淘汰是按 mtime 全局排序的，混在一个目录里几十张大图会把开屏要用的
@@ -370,6 +372,7 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 	} else {
 		a.logOpen = true
 	}
+	applog.InfoFields("application build", applog.Fields(buildIdentity()))
 	applog.InfoFields("application starting", applog.Fields{"app_version": updater.EffectiveVersion(), "go_version": goruntime.Version(), "wails_version": wailsVersionFromBuildInfo(), "goos": goruntime.GOOS, "goarch": goruntime.GOARCH, "pid": os.Getpid()})
 
 	// 把 db 层的日志桥接到 applog（避免 db 直接依赖 applog 产生循环）。

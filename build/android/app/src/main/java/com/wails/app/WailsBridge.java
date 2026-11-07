@@ -1301,16 +1301,22 @@ public class WailsBridge {
 
     /**
      * Start a foreground service that keeps the process alive for long-running
-     * background work (with an ongoing notification). json: {"title","text"}.
+     * background work. json: {"title","text","type"}; connectedDevice owns
+     * the LAN media stream, while dataSync retains the runtime default.
      */
     public void startForegroundService(final String json) {
         postToActivity(() -> {
             try {
-                String title = "Wails", text = "Running in the background";
+                String title = "Wails", text = "Running in the background", type = "dataSync";
                 try {
                     JSONObject o = new JSONObject(json);
                     title = o.optString("title", title);
                     text = o.optString("text", text);
+                    type = o.optString("type", type);
+                    if ("connectedDevice".equals(type)) {
+                        title = activity.getString(R.string.app_name);
+                        text = "";
+                    }
                 } catch (Exception ignored) {
                 }
                 if (Build.VERSION.SDK_INT >= 33 && activity.checkSelfPermission(
@@ -1321,10 +1327,15 @@ public class WailsBridge {
                 i.setAction(WailsForegroundService.ACTION_START);
                 i.putExtra("title", title);
                 i.putExtra("text", text);
+                i.putExtra("type", type);
+                try { i.putExtra("cast_session_id",new JSONObject(json).optString("cast_session_id","")); } catch(Exception ignored) {}
                 ContextCompat.startForegroundService(activity, i);
-                emitEvent("android:foregroundService", "{\"running\":true}");
+                emitEvent("android:foregroundService", "{\"accepted\":true}");
             } catch (Exception e) {
                 Log.e(TAG, "startForegroundService failed", e);
+                CczjStartupTrace trace=new CczjStartupTrace(activity,"cast-native");
+                String session="";try{session=new JSONObject(json).optString("cast_session_id","");}catch(Exception ignored){}
+                trace.mark(e instanceof SecurityException?"cast_permission_denied":"cast_start_failed",session);trace.close();
                 emitEvent("android:foregroundService", "{\"running\":false,\"error\":\"failed to start\"}");
             }
         });

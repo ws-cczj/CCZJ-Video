@@ -269,6 +269,10 @@ defineProps<{ name: string; size?: number }>()
 
 
 
+    <g v-else-if="name === 'crop'">
+      <path d="M6 3v12a3 3 0 0 0 3 3h12M18 21V9a3 3 0 0 0-3-3H3" />
+    </g>
+
     <g v-else-if="name === 'pencil'">
       <path d="M12 20h9" />
       <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />

@@ -4,7 +4,7 @@ export interface DiagnosticContext { application_mode: string; route: string; ac
 export interface DiagnosticEvent extends DiagnosticContext {
   id: string; session_id: string; client_at_ms: number; kind: string
   name?: string; request_id?: string; flight_id?: string; backend_request_id?: string
-  parent_id?: string; resource_id?: string; outcome?: string; code?: string; duration_ms?: number
+  parent_id?: string; cast_session_id?: string; resource_id?: string; outcome?: string; code?: string; duration_ms?: number
   data?: Record<string, number | boolean | string>
 }
 export interface BatchReceipt { accepted: number; rejected: number; daily_enabled: boolean }
@@ -57,7 +57,7 @@ export function numericDiagnosticData(value: unknown): Record<string, number | b
 export function recordTimeline(kind: string, fields: Partial<DiagnosticEvent> = {}, context = captureDiagnosticContext()): void {
   if (disposed || (!enabled && !recording)) return
   const event: DiagnosticEvent = { ...context, id: `${sessionID}-${++sequence}`, session_id: sessionID, client_at_ms: Date.now(), kind }
-  for (const key of ['name','request_id','flight_id','backend_request_id','parent_id','resource_id','outcome','code'] as const) {
+  for (const key of ['name','request_id','flight_id','backend_request_id','parent_id','resource_id','cast_session_id','outcome','code'] as const) {
     const value = fields[key]; if (typeof value === 'string' && label.test(value)) event[key] = value
   }
   if (typeof fields.duration_ms === 'number' && Number.isFinite(fields.duration_ms)) event.duration_ms = Math.max(0,fields.duration_ms)

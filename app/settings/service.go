@@ -28,3 +28,8 @@ func (s *Service) Set(key, value string) error {
 func (s *Service) SetMany(ctx context.Context, values map[string]string) error {
 	return db.SetSettings(ctx, values)
 }
+
+// SetContext keeps compression and the durable write owned by the request.
+func (s *Service) SetContext(ctx context.Context, key, value string) error {
+	return db.SetSettingContext(ctx, key, value)
+}

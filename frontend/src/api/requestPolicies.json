@@ -156,6 +156,7 @@
   "PauseCollect": "write",
   "PauseDownload": "write",
   "PlayCastVideo": "write",
+  "ReleaseCastSession": "write",
   "ProbeSource": "refresh",
   "ProbeSources": "refresh",
   "ProxyImage": "read",

@@ -53,7 +53,10 @@ startCacheInvalidation()
 // 动画开关和语言一起等：先挂载再把 data-cczj-motion 补上，启动那几段动效照样会跑一遍，
 // 那正是把动画关掉的人最不想看见的一下。
 const motion = useMotionStore()
-Promise.all([runtimeReady, startupTask('typography',loadTypography), startupTask('locale',loadLocale), startupTask('motion',()=>motion.load()), startupTask('mode',()=>useApplicationMode().load()), startupTask('theme',()=>useThemeStore().load())]).finally(() => {
+// Restore and decode theme storage while the mounted splash covers the shell.
+// SplashScreen waits for loaded before selecting its single prepared image.
+void startupTask('theme',()=>useThemeStore().load()).catch(()=>{})
+Promise.all([runtimeReady, startupTask('typography',loadTypography), startupTask('locale',loadLocale), startupTask('motion',()=>motion.load()), startupTask('mode',()=>useApplicationMode().load())]).finally(() => {
   app.mount('#app')
   markStartup('vue_mount')
   requestAnimationFrame(()=>requestAnimationFrame(()=>markStartup('first_render_opportunity')))

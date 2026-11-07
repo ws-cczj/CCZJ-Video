@@ -74,3 +74,7 @@ npm --prefix frontend run check:css-reuse
 逐页检查脚本 `scripts/audit-page-layouts.py` 在 Chrome 中打开真实路由，通过独立 Android acceptance 包执行后端调用；仅替换传输和桌面窗口控制。它读取视频目录快照、创建本地阅读验收源，覆盖三种模式及设置子页的桌面／手机、默认／最大字号，输出截图和溢出、按钮裁切、重叠、重复标题清单；结束后删除自己的源并恢复设置。正常阅读内容和阅读字号需要单独确认，错误空态不能算正文通过。
 
 排查移动端时运行 `python scripts/audit-page-layouts.py --mobile-only`，只检查 390px 默认字号和 320px 最大字号，独立截图集输出至 `dist/audit/page-polish/mobile/`。
+
+图片主题裁剪沿用 [Cropper.js 的矩形选区模型](https://fengyuanchen.github.io/cropperjs/api/cropper-selection.html)，使用本项目 Button、NumberField 和主题变量表达选区、遮罩与数值调整，不新增 UI 或裁剪依赖。图片校验与无损裁剪使用 [createImageBitmap](https://developer.mozilla.org/en-US/docs/Web/API/Window/createImageBitmap) 和 worker 内 OffscreenCanvas，未裁剪原图不重编码；SQLite 的 GZIP 封装只改变存储表示，不改变图像像素或文件字节。启动壁纸通过 [HTMLImageElement.decode](https://developer.mozilla.org/en-US/docs/Web/API/HTMLImageElement/decode) 并行准备，选定开屏图后保持资源不变。
+
+主题背景使用短 Blob URL 作为 CSS 变量值，原文件保留在主题数据中。[Chromium 的 CSSVariableData](https://chromium.googlesource.com/chromium/src/+/ab30ca95a699b434a885dd6b573a9fe4158caa76/third_party/blink/renderer/core/css/css_variable_data.h) 对单变量设有字节上限，不能将大图完整 base64 直接写入变量。裁剪交互采用独立 Modal、可移动选区、四边及角点缩放与像素字段；移动／缩放语义参考 [CropperSelection](https://fengyuanchen.github.io/cropperjs/api/cropper-selection.html)，使用项目原有控件与图标系统。界面保留动作、加载、错误和必要限制，技术依据集中在本文。

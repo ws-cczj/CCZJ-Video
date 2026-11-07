@@ -47,6 +47,44 @@ import * as outbound$0 from "../outbound/models.js";
 import * as resource$0 from "../resource/models.js";
 
 /**
+ * CastReceipt explicitly links frontend handoff evidence to the accepting RPC.
+ */
+export class CastReceipt {
+    /**
+     * Creates a new CastReceipt instance.
+     * @param {Partial<CastReceipt>} [$$source = {}] - The source object to create the CastReceipt.
+     */
+    constructor($$source = {}) {
+        if (!("cast_session_id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["cast_session_id"] = "";
+        }
+        if (!("request_id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["request_id"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new CastReceipt instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {CastReceipt}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new CastReceipt(/** @type {Partial<CastReceipt>} */($$parsedSource));
+    }
+}
+
+/**
  * DiagCollect 是采集调度器快照。
  */
 export class DiagCollect {
