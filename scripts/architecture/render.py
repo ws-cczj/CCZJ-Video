@@ -310,9 +310,10 @@ methods=[
     "GetAllowPrivateNetwork"
   ],
   [],
-  []
+  [],
+  ["InstalledResources","InstallResource","RemoveResource"]
 ]
-domains=[['service','handoff','storagepaths'],['service','settings','lifecycle'],['media','db','collect'],['media','detail','proxy'],['proxy','media','window'],['danmaku'],['media','db'],['source','db'],['collection','source','collect'],['douban'],['download/engine','download','db'],['media','db','cache'],['cast'],['library','provider'],['library','library/novel','library/matching'],['library','provider','readingstate'],['readingstate','db'],['library','provider'],['library','library/comic','library/matching'],['library','provider','proxy'],['readingstate','db'],['library','library/quality','provider'],['settings','window'],['plugin'],['backup','db'],['update','updater','handoff'],['operation','applog','diagnosticrecording','resource','netstats'],['service','lifecycle','apperror','workflight'],['netbudget','netpolicy','netstats','outbound','netaddress','proxy'],['service','proxy','window'],['service','provider']]
+domains=[['service','handoff','storagepaths'],['service','settings','lifecycle'],['media','db','collect'],['media','detail','proxy'],['proxy','media','window'],['danmaku'],['media','db'],['source','db'],['collection','source','collect'],['douban'],['download/engine','download','db'],['media','db','cache'],['cast'],['library','provider'],['library','library/novel','library/matching'],['library','provider','readingstate'],['readingstate','db'],['library','provider'],['library','library/comic','library/matching'],['library','provider','proxy'],['readingstate','db'],['library','library/quality','provider'],['settings','window'],['plugin'],['backup','db'],['update','updater','handoff'],['operation','applog','diagnosticrecording','resource','netstats'],['service','lifecycle','apperror','workflight'],['netbudget','netpolicy','netstats','outbound','netaddress','proxy'],['service','proxy','window'],['service','provider'],['installedresources','service','files']]
 resources=[
 'WebView2 / Android WebView|应用窗口 · 静态资源 · 日志 · SQLite',
 'modeTasks / background|停止旧工作 → 保存模式 → 文档导航',
@@ -344,7 +345,8 @@ resources=[
 '生成 .js bindings / 请求身份|结构化错误 · 事件订阅 · I/O 取消',
 '远程源站 / CDN / 公网代理|预算 / 冷却 / 地址判据 · 缓存',
 'Activity / WebView / JNI|播放设备 · 文件 · 分享 · 安装器',
-'Windows / APK / bindings / 质量报告|Go tests · 前端 tests · build · 发布']
+'Windows / APK / bindings / 质量报告|Go tests · 前端 tests · build · 发布',
+'固定HTTPS / SHA256 / 原子发布|应用数据resources · 宿主取消 · 离线字体回退']
 special={0:['handoff.Await','service.NewApp','App.ServiceStartup'],27:['requestPipelines.run','runRequest','lifecycle.WithShutdown'],28:['Budget.Wrap','netpolicy.WrapTransport','outbound.Install','proxy.SafeDialContext'],29:['WailsJSBridge.invokeAsync','WailsBridge.handleRuntimeCall','RegisterAndroidMain'],30:['generate-bindings.ps1','verify.ps1','wails3 generate bindings']}
 by_name={b['name']:b for b in d['bindings']}
 assert set(by_name) == {name for chain in methods for name in chain}, 'public bindings missing from feature map'

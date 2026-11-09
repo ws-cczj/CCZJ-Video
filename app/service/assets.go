@@ -1,7 +1,9 @@
 package service
 
 import (
+	"cczjVideo/app/lifecycle"
 	"cczjVideo/app/operation"
+	"context"
 	"net/http"
 	"strings"
 )
@@ -22,15 +24,35 @@ func AssetMiddleware(a *App, mobile bool) func(http.Handler) http.Handler {
 				case "/__cczj/android-media", "/__cczj/mobile-media":
 					pipeline = "http.androidMedia"
 				}
+				if strings.HasPrefix(r.URL.Path, "/__cczj/resource/") {
+					pipeline = "http.resource"
+				}
 				ctx, identity := operation.WithIdentity(r.Context(), pipeline)
 				r = r.WithContext(ctx)
 				w.Header().Set("X-CCZJ-Request-ID", identity.RequestID)
 				w.Header().Set("X-CCZJ-Pipeline", pipeline)
 			}
 			if a.background != nil && strings.HasPrefix(r.URL.Path, "/__cczj/") {
-				ctx, release := a.requestContext(r.Context())
+				var ctx context.Context
+				var release context.CancelFunc
+				if strings.HasPrefix(r.URL.Path, "/__cczj/resource/") {
+					tracked, _ := a.background.Track("resources.http")
+					var cancel context.CancelFunc
+					ctx, cancel = lifecycle.WithShutdown(r.Context(), a.background.Context())
+					release = func() { cancel(); tracked() }
+				} else {
+					ctx, release = a.requestContext(r.Context())
+				}
 				defer release()
 				r = r.WithContext(ctx)
+			}
+			if strings.HasPrefix(r.URL.Path, "/__cczj/resource/") {
+				if a.installedResources == nil {
+					http.Error(w, "Resources unavailable", http.StatusServiceUnavailable)
+					return
+				}
+				a.installedResources.ServeHTTP(w, r)
+				return
 			}
 			switch r.URL.Path {
 			case "/__cczj/android-media", "/__cczj/mobile-media":

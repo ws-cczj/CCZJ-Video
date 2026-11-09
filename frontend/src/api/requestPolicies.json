@@ -227,5 +227,8 @@
   "SetShortDramaCategories": "write",
   "SubmitDiagnosticsEvents": "isolated",
   "GetDiagnosticsSession": "isolated",
-  "CaptureDiagnosticsProfile": "isolated"
+  "CaptureDiagnosticsProfile": "isolated",
+  "InstalledResources": "isolated",
+  "InstallResource": "isolated",
+  "RemoveResource": "isolated"
 }

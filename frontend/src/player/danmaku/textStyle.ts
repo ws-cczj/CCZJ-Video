@@ -1,5 +1,6 @@
 import type { DanmakuPreferences } from './preferences'
 const families = {
+  system: 'system-ui, "Noto Sans CJK SC", "Microsoft YaHei", "PingFang SC", sans-serif',
   sans: '"CCZJ Danmaku Sans", "Source Han Sans CN", "Noto Sans CJK SC", "Microsoft YaHei", "PingFang SC", sans-serif',
   serif: '"Noto Serif CJK SC", "Songti SC", SimSun, serif',
   mono: '"Noto Sans Mono CJK SC", Consolas, monospace',

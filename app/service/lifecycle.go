@@ -62,6 +62,9 @@ func (a *App) closeOwnedResources(ctx context.Context) error {
 	if a.danmakuHTTP != nil {
 		a.danmakuHTTP.CloseIdleConnections()
 	}
+	if a.installedResources != nil {
+		a.installedResources.Close()
+	}
 	if a.library != nil {
 		closeResource("library", a.library.Close)
 	}

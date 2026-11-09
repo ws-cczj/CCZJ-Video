@@ -206,6 +206,7 @@ export default {
     availabilityHint: '播放器显示匹配结果与当前片段条数。没有可靠匹配时继续播放视频；片段为空不代表整集没有弹幕。',
     providers: { bilibili: '支持视频分P、番剧单集及普通弹幕。', qq: '支持作品搜索、正片选集和索引分段读取。', iqiyi: '支持作品搜索、已适配目录及具体单集读取。' },
   },
+  resources: {title:'安装资源', hint:'可选资源按需安装，安装后可离线使用；删除后使用系统回退。', directory:'资源目录', sourceHan:'思源黑体（弹幕）', installed:'已安装', notInstalled:'未安装，使用系统字体', corrupt:'文件损坏，请重新安装', install:'安装', remove:'删除资源', installing:'正在安装或校验资源…', systemFont:'系统黑体'},
   danmaku: {
     advancedSettings: '高级设置', blockTypes: '按类型屏蔽', blockType: '屏蔽{type}', speedSlowest: '很慢', speedSlow: '较慢', speedNormal: '适中', speedFast: '较快', speedFastest: '很快',
     fontFallback: '字体加载失败，暂用系统黑体。',

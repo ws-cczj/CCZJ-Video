@@ -206,6 +206,7 @@ export default {
     availabilityHint: 'The player shows matching status and the current segment count. Video continues without a reliable match; an empty segment does not mean the entire episode is empty.',
     providers: { bilibili: 'Video parts, series episodes and ordinary comments.', qq: 'Title search, episodes and indexed comment segments.', iqiyi: 'Title search, supported episode catalogs and direct episodes.' },
   },
+  resources: {title:'Installed resources', hint:'Install optional resources for offline use. Removing them restores the system fallback.', directory:'Resource directory', sourceHan:'Source Han Sans (danmaku)', installed:'Installed', notInstalled:'Not installed; using system font', corrupt:'Damaged; install again', install:'Install', remove:'Remove resource', installing:'Installing or verifying resource…', systemFont:'System sans serif'},
   danmaku: {
     advancedSettings: 'Advanced settings', blockTypes: 'Block by type', blockType: 'Block {type}', speedSlowest: 'Slowest', speedSlow: 'Slow', speedNormal: 'Normal', speedFast: 'Fast', speedFastest: 'Fastest',
     fontFallback: 'Font unavailable; using the system sans serif font.',

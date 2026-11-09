@@ -86,7 +86,9 @@ npm --prefix frontend run check:css-reuse
 
 弹幕显示由 `player/danmaku/textStyle.ts` 统一构造字体和绘制文字，Canvas 测量、实际弹幕和 `DanmakuPreview.vue` 使用同一规则。默认常规字重、1.5px 描边；提供思源黑体、系统衬线／等宽回退，400／500／600／700 字重，以及描边／阴影／无效果。字号以24px名义字号为100%，界面支持50%–200%比例及1%数值步进；画面宽度480–640px连续缩放，不再跨500px突变，画面更窄保持75%下限。透明度10%–100%、显示区域25%–100%、密度25%–100%、行数2–24、描边0–4px（0.25px步进）独立设置。旧字号、透明度、速度及行数等已保存值保持，不因新增设置自动重置；“重置外观”保留弹幕总开关和缓存天数。
 
-思源黑体来自 [Adobe 官方 Source Han Sans](https://github.com/adobe-fonts/source-han-sans)，使用官方CN可变WOFF2，原文件7995716字节（约7.63MiB），SHA256 `7087698d52240614659957608d8c4ad446759aee3208409dc9f566412e7af8f4`。原始下载路径为 `release/Variable/WOFF2/OTF/Subset/SourceHanSansCN-VF.otf.woff2`；文件未经裁剪或重新编码，字重由字体自身可变轴处理。字体只在弹幕启用或样式预览时按需从本地资源加载，不改变界面、阅读器或启动字体，不新增远程字体请求或运行依赖。遵循 [SIL OFL 1.1](../frontend/public/licenses/source-han-sans-OFL.txt)，完整版权与授权文本随前端public资源打包。字体由文档持有，HMR撤销注册；失败时使用系统字体并提供重试，加载完成清理测量基线重绘。字体资产会增加安装包约7.6MiB，低版本WebView不支持可变字体时采用明确的系统回退。
+默认弹幕字体为系统黑体。思源黑体改为可选安装资源，原 `sans` 偏好保留但不触发自动下载；未安装、校验损坏、加载失败或删除时使用系统回退，选择安装需用户主动触发。弹幕高级设置与设置“数据与网络”复用 `resources/InstalledResources.vue`／共享store，可安装、取消、重试、删除，并显示真实资源目录。字体仍来自 [Adobe 官方 Source Han Sans](https://github.com/adobe-fonts/source-han-sans)，固定到提交 `a4f7cf94edfb9d7ffbdfc4841de276358bd7e0f2` 的 `Variable/WOFF2/OTF/Subset/SourceHanSansCN-VF.otf.woff2`；下载长度7995716字节（约7.63MiB）、SHA256 `7087698d52240614659957608d8c4ad446759aee3208409dc9f566412e7af8f4` 必须同时通过。文件未经裁剪或重新编码，字重由自身可变轴处理；遵循 [SIL OFL 1.1](../frontend/public/licenses/source-han-sans-OFL.txt)，完整版权许可继续随应用public资源分发。字体字节不再进入APK或前端dist。
+
+已安装字体经受目录白名单约束的同源 `/__cczj/resource/<id>/<version>/font.woff2` 读取，每次使用核对长度和摘要；使用无查询参数路径以兼容Android WailsPathHandler和iOS资产桥。`typeface.ts` 持有文档级FontFace，按实际选用时注册，删除／修复资源引发版本更新后撤销旧Face、清测量基线重绘，代次防止迟到加载回写；HMR撤销监听及注册。资源安装与普通应用缓存独立，取消或退出不发布半文件；实现、目录与预算见[安装资源](development.md#安装资源)。低版本WebView不支持可变字体时仍提供系统回退。
 
 `timeline.ts` 保持播放时钟驱动，速度按画面宽度归一为8秒跨越视口的基准，再乘用户速度比例；同一视口的滚动弹幕保持等速，避免长文字追尾。区域限制同时作用于顶部、滚动与底部弹幕，候选轨道按实际纵坐标避让；密度调节同屏上限与间隔，同屏预算始终不超过120条。Canvas backing store最多约800万像素、最高3倍DPR；这只是分配上限，不代表已经完成设备内存或性能验收。
 

@@ -7,6 +7,8 @@ import { Button, Select, NumberField } from '../../components/ui'
 import { danmakuTypefaceStatus, ensureDanmakuTypeface } from './typeface'
 import DanmakuPreview from './DanmakuPreview.vue'
 import DanmakuRange from './DanmakuRange.vue'
+import InstalledResources from '../../resources/InstalledResources.vue'
+import {installedResourcesRevision} from '../../resources/store'
 import { defaultDanmakuPreferences, type DanmakuPreferences } from './preferences'
 import { useDanmaku } from './useDanmaku'
 import DanmakuCanvas from './DanmakuCanvas.vue'
@@ -17,7 +19,7 @@ const {t,te}=useI18n()
 const {preferences,preferencesReady,sourcesReady,boundSourceEnabled,binding,window:comments,error,busy,status,cooldownUntil,attempts,traceId,retry}=useDanmaku({key:()=>props.mediaKey,current:()=>props.current,title:()=>props.mediaTitle,year:()=>props.mediaYear||'',kind:()=>props.mediaKind||'',episode:()=>props.episodeLabel,duration:()=>props.duration})
 const advanced=ref(false)
 const opened=ref(false),panel=ref<HTMLElement>(),panelLeft=ref('16px'),viewportWidth=ref(640)
-watch(()=>[opened.value,preferences.value.enabled,preferences.value.fontFamily],([open,enabled,family])=>{if((open||enabled)&&family==='sans')void ensureDanmakuTypeface()},{immediate:true})
+watch(()=>[opened.value,preferences.value.enabled,preferences.value.fontFamily,installedResourcesRevision.value],([open,enabled,family])=>{if((open||enabled)&&family==='sans')void ensureDanmakuTypeface()},{immediate:true})
 const items=computed(()=>comments.value?.items??[]),enabled=computed(()=>preferences.value.enabled)
 const sourceName=computed(()=>builtinDanmakuSources.find(source=>source.id===binding.value?.episode.provider)?.name||'')
 function reason(code:string):string {
@@ -45,10 +47,10 @@ async function changePage(value:boolean):Promise<void>{
  if(opened.value){panel.value?.querySelector<HTMLElement>('.cczj-danmaku-body')?.scrollTo(0,0);panel.value?.querySelector<HTMLButtonElement>('header button')?.focus({preventScroll:true})}
 }
 function adjustRange(key:RangeKey,value:number,factor:number):void{if(preferencesReady.value)preferences.value[key]=value/factor}
-const fontOptions=computed(()=>[{value:'sans',label:t('danmaku.fontSans')},{value:'serif',label:t('danmaku.fontSerif')},{value:'mono',label:t('danmaku.fontMono')}])
+const fontOptions=computed(()=>[{value:'system',label:t('resources.systemFont')},{value:'sans',label:t('danmaku.fontSans')},{value:'serif',label:t('danmaku.fontSerif')},{value:'mono',label:t('danmaku.fontMono')}])
 const weightOptions=computed(()=>[400,500,600,700].map(value=>({value,label:t(`danmaku.weight${value}`)})))
 const styleOptions=computed(()=>[{value:'stroke',label:t('danmaku.styleStroke')},{value:'shadow',label:t('danmaku.styleShadow')},{value:'none',label:t('danmaku.styleNone')}])
-function setFont(value:string|number):void{preferences.value.fontFamily=value==='serif'?'serif':value==='mono'?'mono':'sans'}
+function setFont(value:string|number):void{preferences.value.fontFamily=value==='serif'?'serif':value==='mono'?'mono':value==='sans'?'sans':'system'}
 function setWeight(value:string|number):void{preferences.value.fontWeight=[400,500,600,700].includes(Number(value))?Number(value) as DanmakuPreferences['fontWeight']:500}
 function setStyle(value:string|number):void{preferences.value.textStyle=value==='shadow'?'shadow':value==='none'?'none':'stroke'}
 function resetAppearance():void{
@@ -115,6 +117,7 @@ defineExpose({open,close,back,scheduleClose,toggle,ready:preferencesReady,engage
          <span>{{range.label}}</span><div class="cczj-flex cczj-items-center cczj-gap-2"><NumberField :model-value="range.value" :ariaLabel="range.label" :min="range.min" :max="range.max" :step="1" @update:model-value="adjustRange(range.key,$event,range.factor)" /><span>{{range.unit}}</span></div>
         </div>
         <div class="cczj-danmaku-select"><span>{{t('danmaku.fontFamily')}}</span><Select :model-value="preferences.fontFamily" :options="fontOptions" :ariaLabel="t('danmaku.fontFamily')" inline inline-drop="up" @update:model-value="setFont" /></div>
+        <InstalledResources v-if="preferences.fontFamily==='sans'" compact />
         <div class="cczj-danmaku-select"><span>{{t('danmaku.fontWeight')}}</span><Select :model-value="preferences.fontWeight" :options="weightOptions" :ariaLabel="t('danmaku.fontWeight')" inline inline-drop="up" @update:model-value="setWeight" /></div>
         <div class="cczj-danmaku-select"><span>{{t('danmaku.textStyle')}}</span><Select :model-value="preferences.textStyle" :options="styleOptions" :ariaLabel="t('danmaku.textStyle')" inline inline-drop="up" @update:model-value="setStyle" /></div>
         <DanmakuRange v-if="preferences.textStyle==='stroke'" :label="t('danmaku.strokeWidth')" :value="preferences.strokeWidth" :min="0" :max="4" :step="0.25" :display="Number(preferences.strokeWidth.toFixed(2))+' px'" @change="preferences.strokeWidth=$event" />

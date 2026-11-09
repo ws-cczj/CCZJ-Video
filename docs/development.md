@@ -390,3 +390,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/clean-generated.ps1 
 搜索历史的移动长按沿用useHoldToEdit，按调用方显式选择点外侧收起和当前气泡回调；Search只对被长按项显示绝对定位右上角删除按钮，不改变气泡内边距，不装配确认/取消浮栏。点击外部只收起本次编辑，返回、Escape、停用和销毁释放等待与点击抑制。其他消费者不启用该选项，保持原编辑流程。
 
 Android启动诊断从MainActivity的CczjStartupTrace开始，先于WailsBridge原生库装载；阶段日志不受Debug构建开关限制，同时由单线程有界队列写入既有applog目录。每次最多64个512字节事件，保留最近4次，writer随Activity销毁停止接收并完成已接收任务；隐藏不关闭，避免丢失前后台交接。只接收白名单phase，携带PID、原生时钟、版本和host ABI，不记录参数、路径、作品或地址。startupState报告accepted/written/dropped/failed，startup.ts将当前统计纳入快照；入队不代表已保存，突发终止可能缺少最后记录。现有诊断ZIP附带最多4个32KiB合规JSONL；Go ServiceStartup继续通过applog记录数据库打开、网络策略恢复、插件、模式和完成阶段。Java的native init返回不等于Go服务初始化完成，分别按PID对照application ready。
+
+
+## 安装资源
+
+可重新下载的可选二进制资源由 `app/installedresources.Service` 持有固定目录，入口是设置“数据与网络”的 `resources/InstalledResources.vue`，弹幕高级设置复用同一组件与Pinia store。Windows位于 `%APPDATA%/CCZJ Video/resources/<id>/<version>/`；Android／iOS位于现有 `application.Mobile.StoragePath()/CCZJ Video/resources/<id>/<version>/`，设置页展示运行设备上的完整实际目录。目录属于应用数据而非临时缓存，不混入用户视频下载、插件代码或备份JSON；升级同包保留，删除应用会随应用数据处理，用户可独立删除资源。
+
+`InstalledResources`／`InstallResource`／`RemoveResource` 使用既有runHostRequest、请求诊断及Wails取消；切业务模式不停止宿主安装，应用退出取消并等待。Go使用固定清单中的版本、官方HTTPS地址、长度、SHA256、文件名和MIME，不接收任意URL或磁盘路径。当前仅登记思源黑体7995716字节，一个资源最多一个活动文件，后续可选资源须在同一清单登记兼容信息和预算。安装／读取／删除共用可取消单路门禁，HTTP90秒和整个安装两分钟期限；网络复用download额度及netpolicy/netstats。流式读取最多预期长度加一字节，长度和摘要全部匹配才由files.WriteAtomic发布；下载失败清除本次临时文件，下一安装以32项批次清除同一目标文件遗留的part，不触及其他文件。已损坏旧文件只有新文件校验通过后才删除；工作正常的已安装文件不重复下载。读取与删除也校验身份，删除只作用于固定文件。
+
+可选资源不执行代码，声明式／脚本扩展仍由app/plugin的安装和信任流程管理。下载来源不可达时明确反馈，使用系统字体继续播放，不自动联网安装、不依赖下载完成才起播；安装后即使离线也可使用。前端操作全局串行，取消后重新读取磁盘状态以处理完成／取消边界；安装／删除触发字体注册与测量失效，不修改全局界面字体。诊断复用resources.install.started／finished和resources.removed固定事件，只记录资源ID、耗时、预期与实际字节、固定错误码，不记录资源目录、响应正文或凭据；默认诊断导出已有resource_id／stage／code及数值白名单，无需额外队列。
+
+当前体积审查：完整字体约8MB已移出包；启动／占位图单张最高约206KB且首次离线使用，保留内置。`quality/bulk.v1.json`、小说和漫画原始目录合计约8MB，但实际已嵌入gzip合计1079604字节，保留离线来源与核查能力。`library/audit_catalogs` 中约3MB的压缩目录被registryFor用于真实阅读来源路由，直接改成缺失时跳过会减少来源能力，因此本轮保留；它不是可直接删除的开发附件。后续可选字体、贴图或模型优先登记安装清单；新增项仍须核对真实消费者、首次离线回退、文件许可和版本，不把Go运行库或基础播放器脚本改成可有可无的下载。实机首次安装、失败／取消、离线重启、删除回退和升级保留由用户验收，构建不能替代。

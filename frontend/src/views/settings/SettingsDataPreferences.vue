@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import InstalledResources from '../../resources/InstalledResources.vue'
 import { CCZJ } from '../../constants/cczj'
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -61,6 +62,7 @@ async function saveAccess(event: Event): Promise<void> {
 
 <template>
   <div class="data-preferences">
+    <InstalledResources />
     <p v-if="!loading && !ready">{{ t('settings.dataLoadFailed') }} <button class="diagnostic-link" @click="load">{{ t('common.refresh') }}</button></p>
     <section class="data-block">
       <h4>{{ t('settings.cacheSection') }}</h4>
