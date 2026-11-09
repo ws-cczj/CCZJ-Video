@@ -51,7 +51,7 @@ import { usePlayerVolume } from '../player/usePlayerVolume'
 import { WriteLog } from '../api/app'
 import PlayerDanmakuButtons from '../player/danmaku/PlayerDanmakuButtons.vue'
 const PlayerDanmaku=defineAsyncComponent(()=>import('../player/danmaku/PlayerDanmaku.vue'))
-const danmakuRef=ref<{open:(anchor?:HTMLElement,hover?:boolean)=>void;close:()=>void;scheduleClose:()=>void;toggle:()=>void;ready:boolean;engaged:boolean;enabled:boolean}|null>(null)
+const danmakuRef=ref<{open:(anchor?:HTMLElement,hover?:boolean)=>void;close:()=>void;back:()=>void;scheduleClose:()=>void;toggle:()=>void;ready:boolean;engaged:boolean;enabled:boolean}|null>(null)
 const PlayerDesktopControls = defineAsyncComponent(()=>import('../player/views/PlayerDesktopControls.vue'))
 const desktopControls=ref<{engaged:boolean;close:()=>void}|null>(null)
 const CczjMobilePlayerChrome=defineAsyncComponent(()=>import('../mobile/CczjMobilePlayerChrome.vue'))
@@ -992,6 +992,7 @@ function onVideoClick(event: MouseEvent): void {
 
 function onMobileOverlayBack(event: Event): void {
   if (!mobile) return
+  if(danmakuRef.value?.engaged){event.preventDefault();event.stopImmediatePropagation();danmakuRef.value.back();keepVisible();return}
   if (!(mobileChrome.value?.pinned || showVideoInfo.value || mobileLocked.value || showPlaybackSettings.value || showSubtitlePanel.value || showReportAd.value)) return
   event.preventDefault()
   event.stopImmediatePropagation()

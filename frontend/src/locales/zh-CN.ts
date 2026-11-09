@@ -207,8 +207,8 @@ export default {
     providers: { bilibili: '支持视频分P、番剧单集及普通弹幕。', qq: '支持作品搜索、正片选集和索引分段读取。', iqiyi: '支持作品搜索、已适配目录及具体单集读取。' },
   },
   danmaku: {
+    advancedSettings: '高级设置', blockTypes: '按类型屏蔽', blockType: '屏蔽{type}', speedSlowest: '很慢', speedSlow: '较慢', speedNormal: '适中', speedFast: '较快', speedFastest: '很快',
     fontFallback: '字体加载失败，暂用系统黑体。',
-    fontScale: '字号比例',
     rowLimit: '行数上限',
     fontFamily: '字体',
     fontSans: '思源黑体',

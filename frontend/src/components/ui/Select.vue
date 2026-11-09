@@ -37,6 +37,7 @@ const emit = defineEmits(['update:modelValue', 'change', 'open-change'])
 const open = ref(false)
 const rootRef = ref<HTMLElement | null>(null)
 const panelStyle = ref<Record<string, string>>({})
+let inheritedPalette: Record<string,string> = {}
 const panelRef = ref<HTMLElement | null>(null)
 const dropUp = ref(false)
 let observer: ResizeObserver | undefined
@@ -101,6 +102,17 @@ function chooseHighlighted(): void {
 
 function openPanel(): void {
   if (props.disabled || open.value || !rootRef.value?.getClientRects().length) return
+  // A detached listbox must retain the trigger's local theme, including player
+  // and reader palettes, rather than inheriting the document's theme.
+  const computedStyle=getComputedStyle(rootRef.value)
+  inheritedPalette={}
+  for(const key of ['--bg-card','--bg-input','--bg-hover','--border','--text-primary','--text-secondary','--text-muted',
+    '--accent','--accent-text','--accent-alpha-15','--accent-alpha-20','--cczj-motion-fast','--transition-fast']) {
+    const value=computedStyle.getPropertyValue(key)
+    if(value)inheritedPalette[key]=value
+  }
+  inheritedPalette.color=computedStyle.color
+  inheritedPalette.colorScheme=computedStyle.colorScheme
   updatePanelPosition()
   open.value = true
   activeIndex.value = props.options.findIndex(o => o.value === props.modelValue && !o.disabled)
@@ -230,6 +242,7 @@ function updatePanelPosition(): void {
   dropUp.value = !showBelow
   const width = Math.min(rect.width, window.innerWidth - 16)
   panelStyle.value = {
+    ...inheritedPalette,
     position: 'fixed', left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)) + 'px',
     width: width + 'px', zIndex: '10000',
     maxHeight: Math.max(32, Math.min(height, showBelow ? spaceBelow : spaceAbove)) + 'px',

@@ -87,4 +87,4 @@ html[data-cczj-platform="mobile"] .ui-modal .ui-btn { min-height: 44px; border-r
 html[data-cczj-platform="mobile"] .bg-download-indicator { left: 16px; right: 16px; bottom: 76px; border-radius: 12px; box-shadow: 0 4px 16px #0002; }
 html[data-cczj-platform="mobile"] .bg-download-icon { border-radius: 8px; }
 html[data-cczj-platform="mobile"] :is(.update-icon,.update-done-icon,.update-fail-icon,.update-loading-icon) { width: 48px; height: 48px; border-radius: 12px; box-shadow: none; }
-html[data-cczj-platform="mobile"] .select-panel { background: var(--cczj-mobile-surface); max-width: calc(100vw - 24px); }
+html[data-cczj-platform="mobile"] .select-panel { background: var(--bg-card, var(--cczj-mobile-surface)); max-width: calc(100vw - 24px); }

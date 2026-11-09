@@ -207,8 +207,8 @@ export default {
     providers: { bilibili: 'Video parts, series episodes and ordinary comments.', qq: 'Title search, episodes and indexed comment segments.', iqiyi: 'Title search, supported episode catalogs and direct episodes.' },
   },
   danmaku: {
+    advancedSettings: 'Advanced settings', blockTypes: 'Block by type', blockType: 'Block {type}', speedSlowest: 'Slowest', speedSlow: 'Slow', speedNormal: 'Normal', speedFast: 'Fast', speedFastest: 'Fastest',
     fontFallback: 'Font unavailable; using the system sans serif font.',
-    fontScale: 'Text scale',
     rowLimit: 'Row limit',
     fontFamily: 'Font',
     fontSans: 'Source Han Sans',

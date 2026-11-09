@@ -80,7 +80,7 @@ npm --prefix frontend run check:css-reuse
 主题背景使用短 Blob URL 作为 CSS 变量值，原文件保留在主题数据中。[Chromium 的 CSSVariableData](https://chromium.googlesource.com/chromium/src/+/ab30ca95a699b434a885dd6b573a9fe4158caa76/third_party/blink/renderer/core/css/css_variable_data.h) 对单变量设有字节上限，不能将大图完整 base64 直接写入变量。裁剪交互采用独立 Modal、可移动选区、四边及角点缩放与像素字段；移动／缩放语义参考 [CropperSelection](https://fengyuanchen.github.io/cropperjs/api/cropper-selection.html)，使用项目原有控件与图标系统。界面保留动作、加载、错误和必要限制，技术依据集中在本文。
 
 
-播放器控件配色由 `player/controlPalette.css` 的 `cczj-player-dark-controls` 拥有，移动抽屉、独立遥控、弹幕、桌面画质及播放偏好面板显式消费。它同时覆盖背景、文字、选中、按钮及强调色透明层，避免只覆盖 `--accent` 而让 Select 的 `--accent-alpha-15` 选中底色和焦点圈仍继承应用主题。弹幕通过 `--cczj-control-accent-rgb` 保留自身蓝色强调；inline Select 留在面板内继承变量，其他页面的公共控件不变。实际浅色／深色／彩色应用主题、竖屏及短横屏下的颜色和触摸仍由设备验收。
+播放器控件配色由 `player/controlPalette.css` 的 `cczj-player-dark-controls` 拥有，移动抽屉、独立遥控、弹幕、桌面画质及播放偏好面板显式消费。它同时覆盖背景、文字、选中、按钮及强调色透明层，避免只覆盖 `--accent` 而让 Select 的 `--accent-alpha-15` 选中底色和焦点圈仍继承应用主题。弹幕通过 `--cczj-control-accent-rgb` 保留自身蓝色强调；inline Select 留在面板内继承变量；非inline Select 打开时只捕获触发控件实际使用的颜色／过渡变量白名单及文字颜色和color-scheme，带到Teleport列表，不复制背景图片或其他自由变量。移动端frame.css不再强制用应用surface覆盖所有select-panel，优先消费控件的bg-card；普通设置页和阅读器继续使用各自触发控件的主题；弹幕蓝色强调的透明层在局部重新声明，避免父级已解析的灰色透明层被继承。实际浅色／深色／彩色应用主题、竖屏及短横屏下的颜色和触摸仍由设备验收。
 
 ## 弹幕排版与设置
 
@@ -90,6 +90,6 @@ npm --prefix frontend run check:css-reuse
 
 `timeline.ts` 保持播放时钟驱动，速度按画面宽度归一为8秒跨越视口的基准，再乘用户速度比例；同一视口的滚动弹幕保持等速，避免长文字追尾。区域限制同时作用于顶部、滚动与底部弹幕，候选轨道按实际纵坐标避让；密度调节同屏上限与间隔，同屏预算始终不超过120条。Canvas backing store最多约800万像素、最高3倍DPR；这只是分配上限，不代表已经完成设备内存或性能验收。
 
-设置面板复用 Button／Select／NumberField，滑杆配合数字输入微调，预览不依赖当前是否匹配到弹幕。普通手机、桌面和原生全屏共用一套设置；短横屏保持固定标题及可滚动内容，移动全屏也使用44px高触控入口。范围与控件几何保留像素单位，界面文字继续消费界面字号。弹幕偏好由 `preferenceStore.ts` 共享状态及 settingsQueue 管理，播放器和弹幕源页只更新各自字段，失败保留脏值并允许重试；继续使用 `danmaku_preferences_v1`，SQLite及备份契约不变。
+设置面板常用层只放“按类型屏蔽”的滚动／固定／彩色按钮和显示区域、不透明度、字号、速度四项；按钮按下代表该类被屏蔽，存储仍使用原显示布尔值，顶部／底部固定弹幕继续共用fixed。四项滑杆使用DanmakuRange的真实原生range输入和独立填充轨道，百分比与圆点位置均按当前min/max计算，白色滑块与蓝色轨道不随WebView或应用主题变化；速度以很慢／较慢／适中／较快／很快显示，实际50%–180%仍保留。高级设置是面板内部第二层，集中原有精确数值、密度、行数、字体／字重／描边、预览、重置与匹配诊断；复用 Button／Select／NumberField，预览不依赖当前是否匹配到弹幕。未实现智能防挡、弹幕列表及高级弹幕格式，不创建无效入口。Escape或Android返回先退出高级层再关闭面板，切层回到顶部并恢复可用焦点；再次打开回到常用层。普通手机、桌面和原生全屏共用一套设置；短横屏保持固定标题及可滚动内容，移动全屏也使用44px高触控入口。范围与控件几何保留像素单位，界面文字继续消费界面字号。弹幕偏好由 `preferenceStore.ts` 共享状态及 settingsQueue 管理，播放器和弹幕源页只更新各自字段，失败保留脏值并允许重试；继续使用 `danmaku_preferences_v1`，SQLite及备份契约不变。
 
 设计核对使用本机 B站9.17.0 APK静态REA，SHA256 `2b5aec7ea82223edd7bb0a1c7ccfae4aedc331b03cf2a090e032556156ce8a6f`，未启动APK或操作设备。`DanmakuSettingsDialog.j` 回退smali仍可确认字号比例读取上限2.0及独立透明度字段；`DMDisplayDensity.<clinit>` 明确NORMAL／PLENTY／STACKING三档；`DanmakuParams` 独立公开字号比例、文字样式和加粗参数；`DanmakuFontSwitchPreference.setChecked/b` 获取独立字体模块并查找 `SourceHanSansCN-Regular.otf`。这不证明本机已下载该模块，也不确定B站实际渲染器的全部描边像素、默认值或字形版本；本项目采用官方同字体家族的可变字体与自己的绘制规则，没有复制B站代码或动态字体资产。REA完整Evidence、DEX切片来源与未知项保存在本地 `dist/audit/danmaku-rea`，代表性ID见该目录 findings.md。最终字形、窄屏触控、字体回退、保存恢复和性能由用户设备验收。
