@@ -1,6 +1,6 @@
 # CCZJ Video
 
-Current release: **v2.5.1**
+Current release: **v2.5.2**
 
 视频、小说与漫画多源聚合应用，使用 Wails v3、Vue 3、TypeScript 和 Go。Windows 10/11 版需要 WebView2 运行时，Android 版目前为预览版。
 
@@ -39,7 +39,9 @@ Windows 可在“设置 → 扩展包”拖入扩展包文件夹；Android 在�
 
 开发规范见 [AGENTS.md](AGENTS.md)，代码和公共能力入口见 [开发与复用指南](docs/development.md)。完整文档与历史资料从 [文档索引](docs/README.md) 查找。
 
-工具链版本以 `go.mod`、`frontend/package.json` 和锁文件为准：当前 Go 1.26、推荐 Node 24，Wails Go／JS／CLI 使用 beta.30。
+工具链版本以 `go.mod`、`frontend/package.json` 和锁文件为准。当前最低 Go 1.26.0，本机核对为 Go 1.26.2、Node 24.18.0，Wails Go／JS／CLI 均为 3.0.0。Android 构建会核对这三者及前端锁文件、已安装 runtime 的版本，并严格校验构建副本的源码补丁。
+
+桌面编译、Android APK 构建和设备验收分别报告。iOS 仍处适配阶段，本机 Windows 环境尚未完成 iOS 编译、模拟器或 iPhone 验收。平台构建与当前验证边界见下方开发文档。
 
 ```powershell
 npm --prefix frontend ci

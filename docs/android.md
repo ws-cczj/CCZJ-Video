@@ -40,6 +40,24 @@ powershell -NoProfile -ExecutionPolicy Bypass -File build/android/build.ps1 `
 
 预览包名是 `com.cczj.video.preview`，验收包名是 `com.cczj.video.acceptance`。桌面显示名为 `CCZJ Video`，由 [strings.xml](../build/android/app/src/main/res/values/strings.xml) 的 `app_name` 提供，Manifest 引用该资源；显示名称调整保持既有包名与签名，以便覆盖安装保留数据。`-SkipFrontend` 只用于前端已构建且之后没有改动的情况。Release 签名选择、不可调试 APK 检查与 GitHub 文件准备见 [发布流程](releases.md)。
 
+## Wails 3.0.0 桥接补丁
+
+2026-11-16 核对本机实际解析的 Go 模块、CLI、前端声明、锁文件和已安装 `@wailsio/runtime` 均为 3.0.0。Go 为 1.26.2、Node 为 24.18.0；构建入口在独立进程内选择 JDK 17+ 和已安装 NDK。`GOWORK=off` 用于模块解析、overlay 生成及原生编译，避免工作区替换与构建副本使用不同模块图。补丁只写入 `build/android/gen`，模块缓存保持原样；版本不一致或被补丁锚点对应的上游实现变化时明确失败。
+
+本次完成 Go 应用编译／vet、前端类型／生产构建、绑定生成（233 个方法，无生成器警告）、CSS 复用／生成数据、文档链接、前端架构边界和架构清单重建。Android 使用 JDK 21、NDK 28.2.13676358，经现有入口完成 ARM64 acceptance Debug 包构建；未安装或启动设备。此次核对发现的两个投屏类名没有对应样式或代码消费者，后续发布前已移除。桌面原生运行、模式切换超时与恢复、播放／投屏、取消交接、Activity 重建及退出仍待用户验收；iOS 编译与运行尚未验证。
+
+| 链路 | 3.0.0 源码证据与实际风险 | 当前适配及移除条件 |
+| --- | --- | --- |
+| 绑定结构化错误 | `messageprocessor_call.go` 保留包装后的 CallError，但 `handleRuntimeCallForAndroid` 仍使用 `fail(err.Error())`，JNI 响应丢失 cause 内的 code／requestId | 严格替换错误分支，序列化 CallError 并显式处理序列化失败；api/androidTransport 解码 cause。上游 JNI 直接提供等价结构化错误且现有前端能解码后移除 |
+| 显式应用退出 | `androidApp.destroy()` 为空，`Quit` 调用该方法；预期调用服务关闭钩子并结束 Activity／进程，源码路径缺少这一步 | 构建副本调用 cleanup，随后由现有 WailsBridge.finishApplication 结束宿主。Activity detach／重建继续使用原来的桥接生命周期。上游提供同等退出与清理语义后移除 |
+| 提前取消交接 | `processCallCancelMethod` 仅查询 runningCalls；Java 工作已进入 JNI、Go 尚未登记 cancel 时，信号可以先到达并丢失 | Java 的控制取消绕过业务队列；Go 副本在同一锁内保留最多 128 个、一分钟过期的早到取消，登记时消费。上游实现等价交接且与 Java 队列及 WebView 释放契约匹配后移除 |
+
+这些是当前版本的框架源码证据与并发风险，本轮没有设备复现。Go／JS 的 Call=0、CancelCall=10 与项目 WailsJSBridge 的分流一致；前端通过 setTransport 接入，保留已取消调用的正常取消回执及真实迟到错误。Java 的 dispatcher、callback closed 检查和 Activity 引用交接属于项目侧适配，需与框架的取消登记分别检查。源码依据为 [Android 入口](https://github.com/wailsapp/wails/blob/v3.0.0/v3/pkg/application/application_android.go)、[调用处理](https://github.com/wailsapp/wails/blob/v3.0.0/v3/pkg/application/messageprocessor_call.go)及[应用退出](https://github.com/wailsapp/wails/blob/v3.0.0/v3/pkg/application/application.go)。
+
+供后续设备复现的最小操作分别为：调用一个返回 MarshalError 的绑定并检查 cause 的 code／requestId；服务有在途工作时从应用退出入口检查关闭钩子及进程结束；发起可取消长请求后立即取消，并在多个长请求占用 Java 工作线程时重复，检查原生取消到达和后台工作释放。当前缺少这三条在本轮构建上的设备日志与时间对照，无法据此认定 Android 功能已验证。
+
+上游 #5859 报告的是 Activity 销毁期间在途调用回调访问已销毁 WebView，维护者留言仍要求复现核对。该报告可用于检查 Java 回调释放，尚不足以证明上述 JNI 错误、显式退出和早到取消已修复。当前保留严格局部补丁，代价是升级时逐处审查内部源码。项目侧适配能够解决调度、回调与 Activity 引用，JNI 错误信息丢失和 Go 登记前的取消交接需要框架层配合。适合向上游分别提出通用的 CallError 信封、显式退出清理及有界取消交接修复；补齐最小设备证据后再准备 issue／PR，发布需另行授权。[上游 #5859](https://github.com/wailsapp/wails/issues/5859)
+
 ## 覆盖升级与数据排查
 
 相同包名、相同签名的覆盖安装应保留应用数据；构建脚本使用 `adb install -r`（见 [Android 官方安装参数](https://developer.android.com/tools/adb#move)）。2.4.3 与当前版本都使用宿主 `getFilesDir()/CCZJ Video/cczj_video.db`；SQLite 在迁移前保存 `schema-backups`，不通过删库升级。预览与验收包使用不同私有目录，不能用验收包的空库判断预览包数据丢失。
@@ -254,7 +272,7 @@ python scripts/test-typography-android.py --device emulator-5554
 
 手机播放器按钮位置回归使用 `python scripts/test-mobile-player-layout.py --device emulator-5554`，只操作 acceptance 包。复用原生绑定与媒体服务，验证普通播放／全屏的右上角线路入口、底部弹幕开关、线路抽屉和 320／360px 控件边界；结束恢复来源、设置与页面。界面截图使用无时间码的本地验收片，弱网测试片自带的时间码不属于播放器界面。截图与结果位于 `dist/audit/mobile-player-layout`。
 
-系统栏安全区统一由 `MainActivity` 的根视图消费，WebView 不重复预留顶部高度；栏色和图标明暗跟随当前应用模式的主题画布，短剧剧场与空态保持主题，已提交的实际播放场景让应用底栏与系统底部区域跟随播放器深色板，退出全屏后重新应用当前场景。手机次级页面标题栏保持透明，沿用共享主题背景，不再铺设固定白色／黑色横条；返回键与标题保留。主题页通过左侧悬浮按钮编辑当前主题，不在卡片列表上方占用操作区。日志导出生成在应用私有 `exports/logs` 下，随后直接打开系统分享界面；只有在分享目标中保存后才会出现在用户选定的文件夹中，取消分享不代表已写入下载目录。
+系统栏安全区统一由 `MainActivity` 的根视图消费，WebView 不重复预留顶部高度；栏色和图标明暗跟随当前应用模式的主题画布，短剧剧场与空态保持主题，已提交的实际播放场景让应用底栏与系统底部区域跟随播放器深色板，退出全屏后重新应用当前场景。手机次级页面标题栏保持透明，沿用共享主题背景，不再铺设固定白色／黑色横条；返回键与标题保留。主题页通过左侧悬浮按钮编辑当前主题，不在卡片列表上方占用操作区。日志和诊断导出先生成在内部应用数据目录 `files/CCZJ Video/exports/logs` 或 `files/CCZJ Video/exports/diagnostics`。Android 10 及以上通过「保存到下载」写入系统 `MediaStore.Downloads`；写完发布条目，失败时清理本次未完成的条目。Android 7–9 使用系统文档选择器；所有版本均可分享。只有目标写入完成才显示成功，使用系统能力无需新增存储权限。文件管理器中的 `Android/data/<包名>/files` 是外部应用专用目录，内部导出经保存后可在文件管理器的「下载」中查看。参见 [Android 共享存储](https://developer.android.com/training/data-storage/shared/media?hl=en) 和 [文档选择器](https://developer.android.com/training/data-storage/shared/documents-files?hl=en)。
 
 自动切页的栏色过渡只读取一次页面时长和曲线；底栏由浏览器动画运行，系统栏由现有 ValueAnimator 运行，旧宿主仅按时间插值颜色，不逐帧读取布局。同表面颜色不启动栏色动画；手势直接传入进度，取消／新目标清理原动画。全屏会话以请求身份拥有四阶段状态，重复释放共享退出承诺，迟到进入确认不能重开正在退出的会话；进入失败的回滚也等待原生布局恢复。详情和播放选集通过共享 VirtualGrid 有界挂载，固定高度及独立滚动保留。上述实现的真机栏色、全屏及连续操作仍须用户验收，MuMu 的短时采样不代表所有设备。
 
@@ -262,7 +280,7 @@ python scripts/test-typography-android.py --device emulator-5554
 
 
 
-对应隔离回归运行 `python scripts/test-mobile-feedback-android.py`，先安装当前前端对应的 acceptance Debug 包。它验证 XML 源搜索、浅色／深色主题与编辑入口、短剧推荐及剧场不覆盖外壳与原生栏色，以及导出后打开系统选择器并在取消后保留分享入口；测试来源、网络许可和主题恢复到进入前状态。截图位于 `dist/audit/mobile-feedback`，模拟器结论不代替华为真机验收。
+对应隔离回归运行 `python scripts/test-mobile-feedback-android.py`，先安装当前前端对应的 acceptance Debug 包。它验证 XML 源搜索、浅色／深色主题与编辑入口、短剧推荐及剧场不覆盖外壳与原生栏色，以及旧宿主导出时打开分享选择器并在取消后保留分享入口；当前带 `diagnosticSave` 的宿主需要分别验收直接写入下载、旧系统的选择与取消，以及失败后重试；测试来源、网络许可和主题恢复到进入前状态。截图位于 `dist/audit/mobile-feedback`，模拟器结论不代替华为真机验收。
 
 `MobileRouteStage` 在路由场景之外保留一个背景层，页面本身透明。视频模式沿用用户主题图片和遮罩，路由通过有限、稳定的取景坐标移动同一背景；背景使用五列、两行的固定画布：五个视频主路由等宽分区，子页使用稳定的第二行取景；小说／漫画按各自三个主路由划分。只动画 transform，预览页不加边缘阴影，避免同一张图上出现竖向色带。手势预览插值坐标，取消恢复原取景；设置子页、返回和连续导航不重建图片层。背景与内容同向但位移更小，页面内容改为完整滑出，避免透明页面相互叠字。桌面维持原绘制方式，小说／漫画保留各自画布色，阅读器及播放器继续拥有不透明的内容底色。系统减少动态效果、页面动画关闭都禁用背景过渡。
 

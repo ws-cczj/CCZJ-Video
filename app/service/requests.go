@@ -11,11 +11,17 @@ import (
 )
 
 // Wails injects a per-call context; application shutdown is a separate owner.
-func (a *App) requestContext(ctx context.Context) (context.Context, context.CancelFunc) {
+func (a *App) requestContext(ctx context.Context) (context.Context, context.CancelFunc, error) {
 	group := a.modeWork()
-	release, _ := group.Track("requests")
+	release, accepted := group.Track("requests")
+	if !accepted {
+		if err := a.background.Context().Err(); err != nil {
+			return ctx, release, err
+		}
+		return ctx, release, modeFinishing()
+	}
 	ctx, cancel := lifecycle.WithShutdown(ctx, group.Context())
-	return ctx, func() { cancel(); release() }
+	return ctx, func() { cancel(); release() }, nil
 }
 
 // runRequest gives mode-owned RPC work one cancellation, recovery and diagnostic
@@ -23,9 +29,15 @@ func (a *App) requestContext(ctx context.Context) (context.Context, context.Canc
 func runRequest[T any](a *App, ctx context.Context, name string, work func(context.Context) (T, error)) (T, error) {
 	a.modeSwitchMu.RLock()
 	mode := a.currentMode()
-	ctx, release := a.requestContext(ctx)
+	ctx, release, admissionErr := a.requestContext(ctx)
 	a.modeSwitchMu.RUnlock()
 	defer release()
+	if admissionErr != nil {
+		work = func(context.Context) (T, error) {
+			var zero T
+			return zero, admissionErr
+		}
+	}
 	return operation.Run(ctx, operation.Meta{Name: name, Mode: mode, Pipeline: requestPipeline(name)}, a.observeOperation, work)
 }
 
@@ -91,7 +103,10 @@ func videoAdmission[T any](a *App, ctx context.Context, name string, work func(c
 	if a.currentMode() != "video" {
 		return value, apperror.New(apperror.Conflict, "请切换到视频模式后开始此任务")
 	}
-	ctx, release := a.requestContext(ctx)
+	ctx, release, err := a.requestContext(ctx)
 	defer release()
+	if err != nil {
+		return value, err
+	}
 	return operation.Run(ctx, operation.Meta{Name: name, Mode: "video", Pipeline: requestPipeline(name)}, a.observeOperation, work)
 }

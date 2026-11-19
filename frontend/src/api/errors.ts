@@ -1,6 +1,7 @@
 export type ApiErrorCode =
   | 'VALIDATION'
   | 'CONFLICT'
+  | 'MODE_FINISHING'
   | 'NOT_FOUND'
   | 'CANCELLED'
   | 'TIMEOUT'

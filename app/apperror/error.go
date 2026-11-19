@@ -20,6 +20,8 @@ const (
 	Validation Code = "VALIDATION"
 	// Conflict：重名、已存在或操作中的状态冲突。
 	Conflict Code = "CONFLICT"
+	// ModeFinishing is temporary while a mode switch or its recovery drains work.
+	ModeFinishing Code = "MODE_FINISHING"
 	// NotFound：要的东西不在库里、不在磁盘上或已被删除。
 	NotFound Code = "NOT_FOUND"
 	// Cancelled：调用方或应用主动收手，不是故障。

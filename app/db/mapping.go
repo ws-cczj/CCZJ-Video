@@ -122,7 +122,7 @@ func (s *MediaStore) GetFavorites(ctx context.Context, page, pageSize int) ([]Fa
 	var results []FavWithVideo
 	q := `SELECT f.id, f.global_id, f.source_key, f.vod_id,
 		CASE WHEN g.vod_name <> '' THEN g.vod_name ELSE COALESCE(sv.vod_name, '') END as vod_name,
-		CASE WHEN g.pic <> '' THEN g.pic ELSE COALESCE(sv.vod_pic, '') END as vod_pic,
+		COALESCE(NULLIF(sv.vod_pic, ''), NULLIF(g.pic, ''), '') as vod_pic,
 		COALESCE(sv.type_name, '') as type_name,
 		COALESCE(sv.vod_remarks, '') as vod_remarks,
 		COALESCE(sv.vod_year, '') as vod_year,
@@ -210,7 +210,7 @@ func (s *MediaStore) GetRecentHistory(ctx context.Context, limit int) ([]HistEnt
 	}
 
 	var entries []HistEntry
-	q := `SELECT h.global_id, h.source_key, h.vod_id, CASE WHEN g.vod_name<>'' THEN g.vod_name ELSE COALESCE(sv.vod_name,'') END AS vod_name, CASE WHEN g.pic<>'' THEN g.pic ELSE COALESCE(sv.vod_pic,'') END AS vod_pic, COALESCE(sv.vod_remarks,'') AS vod_remarks, h.ep_num, h.position, h.duration, h.updated_at
+	q := `SELECT h.global_id, h.source_key, h.vod_id, CASE WHEN g.vod_name<>'' THEN g.vod_name ELSE COALESCE(sv.vod_name,'') END AS vod_name, COALESCE(NULLIF(sv.vod_pic,''), NULLIF(g.pic,''), '') AS vod_pic, COALESCE(sv.vod_remarks,'') AS vod_remarks, h.ep_num, h.position, h.duration, h.updated_at
 		FROM watch_history h
 		JOIN global_video g ON h.global_id = g.id
 		LEFT JOIN source_videos sv ON sv.source_key = h.source_key AND sv.source_vod_id = h.vod_id

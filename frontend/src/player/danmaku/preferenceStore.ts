@@ -5,7 +5,7 @@ import { GetSetting, SetSetting } from '../../api/app'
 import { createSettingsQueue } from '../../api/settingsQueue'
 import { decodeDanmakuPreferences, type DanmakuPreferences } from './preferences'
 
-/** Display and cache-policy editors share the same current value and writer. */
+/** The player uses one current display snapshot and settings writer. */
 export const useDanmakuPreferencesStore = defineStore('danmaku-preferences', () => {
   const preferences = ref(decodeDanmakuPreferences(null)), ready = ref(false)
   const loadError = shallowRef<unknown>(null), saveError = shallowRef<unknown>(null)

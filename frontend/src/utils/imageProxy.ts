@@ -139,7 +139,8 @@ function rememberProxiedImage(url: string, value: string): void {
   }
 }
 
-export async function getProxiedImageUrl(originalUrl: string): Promise<string> {
+/** Cache hits are synchronous so an in-view image can set its source in the current render. */
+export function resolveProxiedImageUrl(originalUrl: string): string | Promise<string> {
   if (!originalUrl) return ''
   const cached = imageProxyCache.get(originalUrl)
   if (cached !== undefined) {
@@ -178,12 +179,12 @@ export async function getProxiedImageUrl(originalUrl: string): Promise<string> {
       imageProxyFallbackCache.delete(imageProxyFallbackCache.keys().next().value!)
     }
     return ''
-  })()
+  })().finally(() => { imageProxyPending.delete(originalUrl) })
   imageProxyPending.set(originalUrl, request)
-  try {
-    return await request
-  } finally {
-    imageProxyPending.delete(originalUrl)
-  }
+  return request
+}
+
+export async function getProxiedImageUrl(originalUrl: string): Promise<string> {
+  return resolveProxiedImageUrl(originalUrl)
 }
 

@@ -92,7 +92,7 @@
   margin-bottom: 18px;
   @apply cczj-px-7-py-5;
   background: var(--bg-card);
-  @apply cczj-border cczj-rounded-lg cczj-flex-wrap;
+  @apply cczj-border cczj-rounded-lg;
 }
 .history-label {
   @apply cczj-inline-flex cczj-items-center cczj-gap-3 cczj-text-muted cczj-text-sm cczj-font-medium;
@@ -106,6 +106,12 @@
   @apply cczj-border-primary;
   background: var(--accent-alpha-10);
 }
+.history-measure-only {
+  @apply cczj-absolute cczj-top-0 cczj-left-0;
+  width: max-content;
+  visibility: hidden;
+}
+.history-terms .tag-btn :deep(.ui-tag__label) { @apply cczj-min-w-0 cczj-truncate; }
 .tag-btn {
   border: none !important;
   background: transparent !important;

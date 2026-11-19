@@ -37,6 +37,11 @@ func (g *Group) Context() context.Context {
 	return g.ctx
 }
 
+// Done closes after Cancel and after every accepted task has released its work.
+func (g *Group) Done() <-chan struct{} {
+	return g.done
+}
+
 // ActiveTasks returns a point-in-time diagnostic snapshot. The returned map is
 // detached from the group so callers can safely include it in startup and
 // shutdown telemetry without holding the lifecycle lock while logging.

@@ -161,6 +161,7 @@ router.afterEach((to,_from,failure)=>{
 router.beforeEach(async (to, from) => {
   const appMode = useApplicationMode()
   await appMode.load()
+  if (!appMode.loaded) return false
   if (routeMode(to.path) !== appMode.mode) return modeHome(appMode.mode)
   if (appMode.mode === 'novel') {
     const startup = await import('../novel/startup')

@@ -119,7 +119,7 @@ def main():
 
     try:
         device.rpc('SetAllowPrivateNetwork', True)
-        device.rpc('SetSetting', 'danmaku_sources_v1', json.dumps({'defaultProvider': '', 'disabled': ['qq', 'bilibili', 'iqiyi']}))
+        device.rpc('SetSetting', 'danmaku_sources_v1', json.dumps({'defaultProvider': '', 'disabled': ['qq', 'bilibili', 'iqiyi', 'mgtv', 'migu', 'youku', 'sohu', 'leshi', 'xigua', 'bahamut']}))
         source = device.rpc('CreateSource', {'name': 'Mobile player layout', 'api_url': f'http://127.0.0.1:{port}/video-api', 'enabled': 1, 'kind': 'video'})
         source_key = source['source_key']
         device.rpc('SetSetting', 'default_source_key', source_key)

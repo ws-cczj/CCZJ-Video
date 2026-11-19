@@ -20,4 +20,8 @@ watch(danmakuTypefaceStatus,draw)
 onMounted(()=>{observer=new ResizeObserver(draw);if(canvas.value)observer.observe(canvas.value);draw()})
 onBeforeUnmount(()=>{disposed=true;observer?.disconnect();if(canvas.value){canvas.value.width=0;canvas.value.height=0}})
 </script>
-<template><canvas ref="canvas" class="cczj-danmaku-preview" role="img" :aria-label="text" /></template>
+<template>
+  <div class="cczj-danmaku-preview">
+    <canvas ref="canvas" class="cczj-block cczj-w-full cczj-h-full" :style="{ opacity: preferences.opacity }" role="img" :aria-label="text" />
+  </div>
+</template>

@@ -4,10 +4,9 @@ import { TsCache } from '../utils/tsCache'
 import { extractBitrateFromUrl } from './useVideoInfo'
 import { mergeMediaRanges, type MediaRange } from './mediaRanges'
 
-export function usePlaybackTelemetry(deps:{video:()=>HTMLVideoElement|null;url:()=>string;cachedBitrate:()=>number;t:(key:string)=>string;stall?:(phase:string,detail:Record<string,unknown>)=>void}) {
+export function usePlaybackTelemetry(deps:{video:()=>HTMLVideoElement|null;url:()=>string;cachedBitrate:()=>number;stall?:(phase:string,detail:Record<string,unknown>)=>void}) {
 const perf=usePerfStore()
 const cachedRanges = shallowRef<MediaRange[]>([])
-const t=deps.t
 // ------ 播放质量取样 ------
 // Decoder counters belong to the media element; align the baseline on every load,
 // including source replacements that reuse that element.
@@ -94,44 +93,48 @@ let loadingStatsTimer: number | null = null
 let loadingStatsStartTime = 0
 let loadingStatsLastBytes = 0
 let loadingStatsSampleAt = 0
+let loadingStatsLastTransferAt = 0
 
 /** 启动加载统计轮询（用于显示缓冲进度和速度） */
 function startLoadingStats(): void {
   if(loadingStatsTimer!==null)return
-  loadingStatsStartTime = Date.now()
+  loadingStatsStartTime = performance.now()
   loadingStatsSampleAt=loadingStatsStartTime
+  loadingStatsLastTransferAt = 0
   loadingStatsLastBytes = TsCache.stats().networkBytes
   loadingElapsed.value = 0
   loadingSpeed.value = ''
 
-  if (loadingStatsTimer) clearInterval(loadingStatsTimer)
   loadingStatsTimer = window.setInterval(() => {
     const s = TsCache.stats()
     loadingCached.value = s.inventory
     loadingTotal.value = s.prefetchTarget
-    loadingElapsed.value = Math.round((Date.now() - loadingStatsStartTime) / 1000)
+    const now = performance.now()
+    loadingElapsed.value = Math.floor((now - loadingStatsStartTime) / 1000)
 
     // 计算下载速度
     const bytesDelta = Math.max(0, s.networkBytes - loadingStatsLastBytes)
     loadingStatsLastBytes = s.networkBytes
-    const now=Date.now()
     const intervalSec=Math.max(.001,(now-loadingStatsSampleAt)/1000)
     loadingStatsSampleAt=now
     if (bytesDelta > 0) {
+      loadingStatsLastTransferAt = now
       const speedBps = bytesDelta / intervalSec
-      if (speedBps > 1024 * 1024) {
+      if (speedBps >= 1024 * 1024) {
         loadingSpeed.value = (speedBps / 1024 / 1024).toFixed(1) + ' MB/s'
-      } else {
+      } else if (speedBps >= 1024) {
         loadingSpeed.value = Math.round(speedBps / 1024) + ' KB/s'
+      } else {
+        loadingSpeed.value = Math.round(speedBps) + ' B/s'
       }
-    } else {
-      loadingSpeed.value = t('player.connecting')
+    } else if (now - loadingStatsLastTransferAt >= 1000) {
+      loadingSpeed.value = ''
     }
-  }, 300)
+  }, 400)
 }
 
 function stopLoadingStats(): void {
-  if (loadingStatsTimer) {
+  if (loadingStatsTimer !== null) {
     clearInterval(loadingStatsTimer)
     loadingStatsTimer = null
   }

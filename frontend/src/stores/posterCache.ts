@@ -6,6 +6,7 @@ import { tr } from '../locales'
 import type { Video } from '../types'
 import { readStorageRecord, removeStorage } from '../platform/storage'
 import { createDebouncedWriter } from '../platform/debouncedWrite'
+import { readDetailCache } from './detailCache'
 
 /**
  * 单个海报缓存项
@@ -235,7 +236,9 @@ export const usePosterCacheStore = defineStore('posterCache', () => {
 
     const promise = (async () => {
       try {
-        const resp = (await GetVideoDetail({
+        const detail = await readDetailCache(sourceKey, vodId)
+        if (generation !== dropGeneration) return
+        const resp = detail ?? (await GetVideoDetail({
           source_key: sourceKey,
           vod_id: vodId,
           global_id: 0,

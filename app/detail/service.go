@@ -383,6 +383,9 @@ func (s *Service) fetchContext(ctx context.Context, catalog *db.CatalogItem) (*R
 				video.VodId = model.FlexibleString(catalog.SourceVodID)
 			}
 			video.GlobalId = catalog.GlobalID
+			if strings.TrimSpace(video.VodPic) == "" {
+				video.VodPic = catalog.VodPic
+			}
 			// 源站详情不带豆瓣字段，从 global_video 回填（评论入口依赖 vod_douban_id）。
 			db.EnrichVideoWithDoubanByGlobalID(video, catalog.GlobalID)
 			lines := collect.ParsePlayLines(video.VodPlayUrl, video.VodPlayFrom, video.VodId)

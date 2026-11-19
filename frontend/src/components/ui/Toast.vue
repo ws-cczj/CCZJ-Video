@@ -27,7 +27,7 @@ const levelIcon = (lvl: string) => iconMap[lvl] || 'i'
 </script>
 
 <template>
-  <div class="ui-toast cczj-relative cczj-flex cczj-items-start cczj-gap-5" :class="`ui-toast--${level || 'info'}`" role="alert">
+  <div class="ui-toast cczj-relative cczj-flex cczj-items-start cczj-gap-5" :class="[`ui-toast--${level || 'info'}`, { 'cczj-cursor-pointer': actionLabel }]" role="alert" @click="actionLabel && emit('action')">
     <!-- 左侧图标 -->
     <div class="ui-toast__icon cczj-flex cczj-items-center cczj-justify-center cczj-flex-shrink-0" :class="`ui-toast__icon--${level || 'info'}`">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -57,7 +57,7 @@ const levelIcon = (lvl: string) => iconMap[lvl] || 'i'
           </details>
         </div>
       </slot>
-      <Button v-if="actionLabel" variant="secondary" size="sm" class="cczj-mt-4" @click="emit('action')">{{ actionLabel }}</Button>
+      <Button v-if="actionLabel" variant="secondary" size="sm" class="cczj-mt-4" @click.stop="emit('action')">{{ actionLabel }}</Button>
     </div>
 
     <!-- 关闭按钮 -->

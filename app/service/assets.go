@@ -41,7 +41,12 @@ func AssetMiddleware(a *App, mobile bool) func(http.Handler) http.Handler {
 					ctx, cancel = lifecycle.WithShutdown(r.Context(), a.background.Context())
 					release = func() { cancel(); tracked() }
 				} else {
-					ctx, release = a.requestContext(r.Context())
+					var err error
+					ctx, release, err = a.requestContext(r.Context())
+					if err != nil {
+						http.Error(w, "Mode temporarily unavailable", http.StatusServiceUnavailable)
+						return
+					}
 				}
 				defer release()
 				r = r.WithContext(ctx)

@@ -21,6 +21,19 @@ func identity(req *http.Request, category string) (string, string, error) {
 		q.Del("timestamp")
 		q.Del("sign")
 	}
+	if category == "danmaku" && u.Hostname() == "mobileso.bz.mgtv.com" && u.Path == "/aphone/search/rebirth/v2" {
+		// Anonymous device and sequence fields do not identify the search.
+		q.Del("did")
+		q.Del("mac")
+		q.Del("seqId")
+	}
+	if category == "danmaku" && u.Hostname() == "m.so.tv.sohu.com" && u.Path == "/search/pc/keyword" {
+		// These fields vary with anonymous request signing while the query stays the same.
+		q.Del("uid")
+		q.Del("fpc")
+		q.Del("timeStamp")
+		q.Del("code")
+	}
 	u.RawQuery = q.Encode()
 	u.Fragment = ""
 	hash := sha256.New()

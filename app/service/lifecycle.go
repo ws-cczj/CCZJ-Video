@@ -11,17 +11,13 @@ import (
 	"cczjVideo/app/db"
 )
 
-// stopOwnedWork signals every owner before waiting. The mode watcher itself is
-// application-owned, so waiting for one owner before cancelling the other would
-// unnecessarily serialize shutdown and can strand work on a partial failure.
+// Cancel the parent before looking up its current mode so a concurrent switch
+// cannot publish a new owner that accepts work after the shutdown snapshot.
 func (a *App) stopOwnedWork(ctx context.Context) error {
-	mode := a.modeWork()
-	if mode != nil {
-		mode.Cancel()
-	}
 	if a.background != nil {
 		a.background.Cancel()
 	}
+	mode := a.modeWork()
 	var failures []error
 	if mode != nil && !mode.StopContext(ctx) {
 		failures = append(failures, apperror.New(apperror.Timeout, "当前模式后台任务尚未停止"))
@@ -61,9 +57,6 @@ func (a *App) closeOwnedResources(ctx context.Context) error {
 	}
 	if a.danmakuHTTP != nil {
 		a.danmakuHTTP.CloseIdleConnections()
-	}
-	if a.installedResources != nil {
-		a.installedResources.Close()
 	}
 	if a.library != nil {
 		closeResource("library", a.library.Close)

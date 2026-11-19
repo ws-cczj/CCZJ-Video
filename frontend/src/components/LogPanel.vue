@@ -5,7 +5,9 @@ import Icon from './Icon.vue'
 import { Button, Modal, Segment as ChoiceSegment } from './ui'
 import LogRecordDetails from './LogRecordDetails.vue'
 import { GetLogContent, OpenFileInExplorer } from '../api/app'
-import { revealDiagnosticExport, revealLogDirectory } from '../platform/diagnosticFiles'
+import { revealDiagnosticExport, revealLogDirectory, supportsDiagnosticSave } from '../platform/diagnosticFiles'
+import { notifyExportReady } from '../diagnostics/exportFeedback'
+import DiagnosticSaveButton from './DiagnosticSaveButton.vue'
 import { presentationProfile } from '../platform/presentation'
 import { useViewActivity } from '../composables/useViewActivity'
 import { useConfirmStore } from '../stores/confirm'
@@ -219,8 +221,11 @@ async function doExport(): Promise<void> {
       format: exportFormat.value,
     })
     lastExportPath.value = result.path
-    if (mobileExport && !disposed && viewActive.value) await revealDiagnosticExport(result.path)
-    errorStore.info(t('logs.exportOkTitle'), t(mobileExport ? 'logs.mobileExportReady' : 'logs.exportOk', { lines: result.lines, path: result.path }))
+    const canSave = mobileExport && supportsDiagnosticSave()
+    if (mobileExport && !canSave && !disposed && viewActive.value) await revealDiagnosticExport(result.path)
+    notifyExportReady(t('logs.exportOkTitle'),
+      t(canSave ? 'logs.saveReady' : mobileExport ? 'logs.mobileExportReady' : 'logs.exportOk', { lines: result.lines, path: result.path }),
+      mobileExport ? undefined : () => revealDiagnosticExport(result.path), 'logs.revealExport')
   } catch (e: any) {
     errorStore.fromError(t('logs.exportFailed'), e, 'LogPanel')
   } finally {
@@ -230,7 +235,8 @@ async function doExport(): Promise<void> {
 
 async function revealExport(): Promise<void> {
   if (!lastExportPath.value) return
-  try { await revealDiagnosticExport(lastExportPath.value) } catch (e: any) { errorStore.fromError(t('logs.openDirFailed'), e, 'LogPanel') }
+  try { await revealDiagnosticExport(lastExportPath.value) }
+  catch (error) { errorStore.fromError(t(mobileExport ? 'mobile.shareFailed' : 'logs.openDirFailed'), error, 'LogPanel') }
 }
 
 async function doClear(): Promise<void> {
@@ -460,8 +466,9 @@ onBeforeUnmount(() => {
           <Button variant="primary" size="sm" :loading="exporting" @click="doExport">
             <Icon name="download" :size="12" /> {{ t('logs.export') }}
           </Button>
+          <DiagnosticSaveButton v-if="lastExportPath" :path="lastExportPath" />
           <Button v-if="lastExportPath" variant="secondary" size="sm" @click="revealExport">
-            <Icon name="folder" :size="12" /> {{ t(mobileExport ? 'logs.shareExport' : exportActionLabel) }}
+            <Icon name="folder" :size="12" /> {{ t(supportsDiagnosticSave() ? 'diagnostics.shareExport' : mobileExport ? 'logs.shareExport' : exportActionLabel) }}
           </Button>
         </div>
         <details v-if="mobileExport && filtersOpen" class="log-export-scope log-hint">

@@ -1,12 +1,14 @@
 package danmaku
 
 import (
-	CCZJ "cczjVideo/app/cczj"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
+
+	CCZJ "cczjVideo/app/cczj"
 )
 
 const SourceSettingsKey = CCZJ.SettingDanmakuSources
@@ -16,20 +18,21 @@ type SourceSettings struct {
 	Disabled        []string `json:"disabled"`
 }
 
-func builtinProvider(name string) bool {
-	return name == "bilibili" || name == "qq" || name == "iqiyi"
+func (s SourceSettings) Enabled(name string) bool {
+	return findProvider(name) != nil && !slices.Contains(s.Disabled, name)
 }
 
-func (s SourceSettings) Enabled(name string) bool {
-	if !builtinProvider(name) {
-		return false
+func (s SourceSettings) orderedProviders() []string {
+	order := make([]string, 0, len(builtinProviders))
+	if s.Enabled(s.DefaultProvider) {
+		order = append(order, s.DefaultProvider)
 	}
-	for _, disabled := range s.Disabled {
-		if disabled == name {
-			return false
+	for _, source := range builtinProviders {
+		if source.id != s.DefaultProvider && s.Enabled(source.id) {
+			order = append(order, source.id)
 		}
 	}
-	return true
+	return order
 }
 
 // Defaults preserve existing bindings. Disabling a source never removes them.
@@ -52,15 +55,24 @@ func DecodeSourceSettings(raw string) (SourceSettings, error) {
 				return SourceSettings{}, fmt.Errorf("invalid disabled danmaku providers")
 			}
 		}
+		if value, ok := fields["mgtvEnabled"]; ok {
+			var enabled *bool
+			if json.Unmarshal(value, &enabled) != nil || enabled == nil {
+				return SourceSettings{}, fmt.Errorf("invalid Mango danmaku source setting")
+			}
+			if !*enabled {
+				s.Disabled = append(s.Disabled, mangoProviderID)
+			}
+		}
 	}
 
-	if s.DefaultProvider != "" && !builtinProvider(s.DefaultProvider) {
+	if s.DefaultProvider != "" && findProvider(s.DefaultProvider) == nil {
 		return SourceSettings{}, fmt.Errorf("unknown default danmaku provider")
 	}
 	seen := map[string]bool{}
 	disabled := []string{}
 	for _, name := range s.Disabled {
-		if !builtinProvider(name) {
+		if findProvider(name) == nil {
 			return SourceSettings{}, fmt.Errorf("unknown disabled danmaku provider")
 		}
 		if !seen[name] {
@@ -71,9 +83,9 @@ func DecodeSourceSettings(raw string) (SourceSettings, error) {
 	s.Disabled = disabled
 	if !s.Enabled(s.DefaultProvider) {
 		s.DefaultProvider = ""
-		for _, name := range []string{"bilibili", "qq", "iqiyi"} {
-			if s.Enabled(name) {
-				s.DefaultProvider = name
+		for _, source := range builtinProviders {
+			if s.Enabled(source.id) {
+				s.DefaultProvider = source.id
 				break
 			}
 		}

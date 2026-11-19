@@ -51,7 +51,15 @@ func (s *Service) Stats() Stats {
 	return Stats{CacheHits: s.hits.Load(), Fetches: s.fetches.Load(), StaleFallbacks: s.stale.Load(), CacheFailures: s.cacheFailures.Load(), MatchRuns: s.matchRuns.Load(), Fallbacks: s.fallbacks.Load(), CooldownHits: s.cooldownHits.Load()}
 }
 func NewService(store *Store, client *Client, owner context.Context) *Service {
-	return &Service{store: store, providers: map[string]Provider{"bilibili": &bilibiliProvider{client: client}, "qq": &qqProvider{client: client}, "iqiyi": &iqiyiProvider{client: client}}, reads: workflight.New[cachedPayload](owner, 64), matches: workflight.New[MatchResult](owner, 16), matchSlots: make(chan struct{}, 3), now: time.Now}
+	providers := make(map[string]Provider, len(builtinProviders))
+	for _, source := range builtinProviders {
+		providers[source.id] = source.newProvider(client)
+	}
+	return &Service{
+		store: store, providers: providers,
+		reads: workflight.New[cachedPayload](owner, 64), matches: workflight.New[MatchResult](owner, 16),
+		matchSlots: make(chan struct{}, matchParallelism), now: time.Now,
+	}
 }
 func (s *Service) Close(ctx context.Context) error {
 	return errors.Join(s.matches.Close(ctx), s.reads.Close(ctx))
@@ -108,7 +116,7 @@ func (s *Service) Bind(ctx context.Context, b Binding) error {
 	if err != nil {
 		return err
 	}
-	if _, err = s.loadIndex(ctx, p, b.Episode, 1); err != nil {
+	if _, err = s.loadIndex(ctx, p, b.Episode); err != nil {
 		return err
 	}
 	if err = s.store.SaveBinding(ctx, b); err != nil {
@@ -127,20 +135,23 @@ func (s *Service) Unbind(ctx context.Context, key string) error {
 }
 
 func cacheKey(e Episode, part string) string {
-	raw, _ := json.Marshal([]string{DecoderVersion, e.Provider, e.EpisodeID, e.AID, part})
+	identity := []string{DecoderVersion, e.Provider, e.EpisodeID, e.AID, part}
+	if seriesScopedProvider(e.Provider) {
+		identity = append(identity, e.SeriesID)
+	}
+	raw, _ := json.Marshal(identity)
 	sum := sha256.Sum256(raw)
 	return e.Provider + ":" + hex.EncodeToString(sum[:])
 }
-func (s *Service) load(ctx context.Context, key string, days int, validate func([]byte) error, fetch func(context.Context) ([]byte, error)) (cachedPayload, error) {
-	days = max(1, min(30, days))
-	return s.reads.Do(ctx, fmt.Sprintf("%s:fresh-%d", key, days), func(ctx context.Context) (cachedPayload, error) {
+func (s *Service) load(ctx context.Context, key string, validate func([]byte) error, fetch func(context.Context) ([]byte, error)) (cachedPayload, error) {
+	return s.reads.Do(ctx, key, func(ctx context.Context) (cachedPayload, error) {
 		now := s.now()
 		raw, at, err := s.store.Cached(ctx, key, now)
 		cacheErr := err
 		if len(raw) > 0 && validate(raw) != nil {
 			raw = nil
 		}
-		if len(raw) > 0 && err == nil && now.Before(at.Add(time.Duration(days)*24*time.Hour)) {
+		if len(raw) > 0 && err == nil && now.Before(at.Add(cacheFreshness)) {
 			s.hits.Add(1)
 			return cachedPayload{raw: raw, cached: true}, nil
 		}
@@ -150,7 +161,7 @@ func (s *Service) load(ctx context.Context, key string, days int, validate func(
 			if ctx.Err() != nil {
 				return cachedPayload{}, ctx.Err()
 			}
-			if len(raw) > 0 && now.Before(at.AddDate(0, 0, 30)) {
+			if len(raw) > 0 && s.now().Before(at.Add(cacheRetention)) {
 				s.stale.Add(1)
 				return cachedPayload{raw: raw, cached: true, stale: true, warning: "cached_source_unavailable"}, nil
 			}
@@ -160,7 +171,7 @@ func (s *Service) load(ctx context.Context, key string, days int, validate func(
 			return cachedPayload{}, schemaError(err)
 		}
 		result := cachedPayload{raw: fresh}
-		if err = s.store.Put(ctx, key, fresh, now); err != nil || cacheErr != nil {
+		if err = s.store.Put(ctx, key, fresh, s.now()); err != nil || cacheErr != nil {
 			result.warning = "cache_write_failed"
 			s.cacheFailures.Add(1)
 			applog.WarnFields("danmaku cache unavailable", applog.Fields{"mode": "video", "code": apperror.Storage, "error": errors.Join(err, cacheErr)})
@@ -201,8 +212,8 @@ func decodeSegment(raw []byte) (segmentPayload, error) {
 	return result, nil
 }
 
-func (s *Service) loadIndex(ctx context.Context, p Provider, e Episode, days int) (cachedPayload, error) {
-	return s.load(ctx, cacheKey(e, "index"), days, func(raw []byte) error { _, err := decodeIndex(raw); return err }, func(ctx context.Context) ([]byte, error) {
+func (s *Service) loadIndex(ctx context.Context, p Provider, e Episode) (cachedPayload, error) {
+	return s.load(ctx, cacheKey(e, "index"), func(raw []byte) error { _, err := decodeIndex(raw); return err }, func(ctx context.Context) ([]byte, error) {
 		index, err := p.Index(ctx, e)
 		if err != nil {
 			return nil, err
@@ -211,10 +222,12 @@ func (s *Service) loadIndex(ctx context.Context, p Provider, e Episode, days int
 	})
 }
 
-// ReadWindow fetches only the current timeline window, never an entire episode.
+// ReadWindow returns only the current timeline window. Upstream request size
+// follows the provider's segment index.
 // Positive offset delays source comments in the local video. Cached timestamps
 // remain in source time and are never permanently shifted.
-func (s *Service) ReadWindow(ctx context.Context, key string, positionMS int64, freshDays int) (*Window, error) {
+// The final argument preserves the existing binding signature for older callers.
+func (s *Service) ReadWindow(ctx context.Context, key string, positionMS int64, _ int) (*Window, error) {
 	binding, err := s.Binding(ctx, key)
 	if err != nil {
 		return nil, err
@@ -222,10 +235,10 @@ func (s *Service) ReadWindow(ctx context.Context, key string, positionMS int64, 
 	if binding == nil {
 		return nil, apperror.New(apperror.NotFound, "当前单集尚未匹配弹幕")
 	}
-	return s.readBoundWindow(ctx, binding, positionMS, freshDays)
+	return s.readBoundWindow(ctx, binding, positionMS)
 }
 
-func (s *Service) readBoundWindow(ctx context.Context, binding *Binding, positionMS int64, freshDays int) (*Window, error) {
+func (s *Service) readBoundWindow(ctx context.Context, binding *Binding, positionMS int64) (*Window, error) {
 	if positionMS < 0 || positionMS > 24*60*60*1000 {
 		return nil, apperror.New(apperror.Validation, "播放位置无效")
 	}
@@ -241,13 +254,13 @@ func (s *Service) readBoundWindow(ctx context.Context, binding *Binding, positio
 	if sourcePosition < -75000 {
 		return result, nil
 	}
-	loaded, err := s.loadIndex(ctx, p, e, freshDays)
+	loaded, err := s.loadIndex(ctx, p, e)
 	if err != nil {
 		return nil, err
 	}
 	index, _ := decodeIndex(loaded.raw)
 	if len(index.Segments) == 0 {
-		result.Warnings = append(result.Warnings, "pool_empty")
+		result.Warnings = append(result.Warnings, warningPoolEmpty)
 	}
 	result.Cached = loaded.cached
 	result.Stale = loaded.stale
@@ -264,7 +277,7 @@ func (s *Service) readBoundWindow(ctx context.Context, binding *Binding, positio
 		if loadedCount > 16 {
 			return nil, schemaError(fmt.Errorf("too many segments in time window"))
 		}
-		value, err := s.load(ctx, cacheKey(e, segment.Key), freshDays, func(raw []byte) error { _, err := decodeSegment(raw); return err }, func(ctx context.Context) ([]byte, error) {
+		value, err := s.load(ctx, cacheKey(e, segment.Key), func(raw []byte) error { _, err := decodeSegment(raw); return err }, func(ctx context.Context) ([]byte, error) {
 			items, skipped, err := p.Segment(ctx, e, segment)
 			if err != nil {
 				return nil, err
@@ -276,7 +289,7 @@ func (s *Service) readBoundWindow(ctx context.Context, binding *Binding, positio
 				return nil, ctx.Err()
 			}
 			if apperror.Is(err, apperror.NotFound) {
-				result.Warnings = append(result.Warnings, "segment_not_found")
+				result.Warnings = append(result.Warnings, warningSegmentNotFound)
 				continue
 			}
 			return nil, err

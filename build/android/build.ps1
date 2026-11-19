@@ -57,11 +57,11 @@ try {
         Push-Location frontend
         try { npm run build; Assert-NativeSuccess 'Frontend build' } finally { Pop-Location }
     }
-    wails3 android overlay:gen -out build/android/overlay.json -config build/config.yml
-    Assert-NativeSuccess 'Android entry point overlay'
+    $env:GOWORK = 'off'
     node scripts/prepare-android-runtime.mjs
     Assert-NativeSuccess 'Android structured error overlay'
-    $env:GOWORK = 'off'
+    wails3 android overlay:gen -out build/android/overlay.json -config build/config.yml
+    Assert-NativeSuccess 'Android entry point overlay'
     $env:GOOS = 'android'
     $env:GOARCH = $Arch
     $env:CGO_ENABLED = '1'

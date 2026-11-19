@@ -1,5 +1,5 @@
 import type { Video, Episode, PlayLine } from '../../types'
-import type { SourceOption, SourceProbe } from './useSourceCatalog'
+import type { SourceOption } from './useSourceCatalog'
 
 /** A stable read model: progress mutations are observed by the panel, rather
  * than rebuilding the page and the media host on every timeupdate. */
@@ -17,10 +17,8 @@ export interface PlayerPanelModel {
     readonly items: SourceOption[]
     readonly activeKey: string
     readonly readyCount: number
-    readonly probingCount: number
     readonly loading: boolean
-    readonly refreshing?: boolean
-    readonly label: (probe: SourceProbe) => string
+    readonly refreshing: boolean
     readonly selectable: (source: SourceOption) => boolean
     readonly retry:()=>void
   }

@@ -3,7 +3,7 @@ import { createPlaybackSource } from '../src/player/hls/playbackSource'
 import { createPlaybackSession } from '../src/player/playbackSession'
 
 const fakes = vi.hoisted(() => ({ instances: [] as any[], cache: {
-  enable: vi.fn(), fetchAndParseM3u8: vi.fn(), setSegments: vi.fn(), setTargetDuration: vi.fn(),
+  enable: vi.fn(), setTransportActive: vi.fn(), setSegments: vi.fn(), setTargetDuration: vi.fn(),
   setAbrSwitchCallback: vi.fn(), notifyCurrentTs: vi.fn(), TsCacheLoader: class {},
 } }))
 vi.mock('../src/utils/tsCache', () => ({ TsCache: fakes.cache }))
@@ -28,7 +28,6 @@ vi.mock('hls.js', () => ({ default: class {
 beforeEach(() => {
   vi.useFakeTimers()
   fakes.instances.length = 0
-  fakes.cache.fetchAndParseM3u8.mockResolvedValue({ urls: ['https://media/1.ts'], targetduration: 6, isMaster: false })
 })
 afterEach(() => vi.useRealTimers())
 
@@ -41,16 +40,10 @@ function setup() {
 }
 
 describe('stream loading and recovery', () => {
-  it('does not attach media or mutate the segment table after a stale playlist read', async () => {
+  it('does not attach media or mutate the segment table after the load is replaced', async () => {
     const { video, lease, source, events } = setup()
-    let resolve!: (value: unknown) => void
-    const reading = new Promise(yes => { resolve = yes })
-    fakes.cache.fetchAndParseM3u8.mockReturnValueOnce(reading)
     const load = source.load(video, 'https://media/1.m3u8', lease.capture())
-    // Wait for the dynamic HLS import to reach the pending playlist read.
-    await vi.waitFor(() => expect(fakes.cache.fetchAndParseM3u8).toHaveBeenCalled())
     lease.reset()
-    resolve({ urls: ['https://media/old.ts'], targetduration: 6, isMaster: false })
     expect(await load).toBe(false)
     expect(fakes.instances).toHaveLength(0)
     expect(events.streams).not.toHaveBeenCalled()

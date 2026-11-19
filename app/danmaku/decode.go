@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -213,8 +214,8 @@ func DecodeIQiyi(compressed []byte) ([]Item, int, error) {
 }
 func secondsMS(value string) (int64, error) {
 	v, err := strconv.ParseFloat(value, 64)
-	if err != nil || v < 0 || v > 86400 {
-		return 0, fmt.Errorf("invalid showTime")
+	if err != nil || math.IsNaN(v) || v < 0 || v > 86400 {
+		return 0, fmt.Errorf("invalid time in seconds")
 	}
 	return int64(v*1000 + .5), nil
 }
@@ -334,4 +335,47 @@ func decodeItems(raw []byte) ([]Item, error) {
 		}
 	}
 	return items, nil
+}
+
+func clockDurationMS(value string) int64 {
+	parts := strings.Split(value, ":")
+	if len(parts) != 2 && len(parts) != 3 {
+		return 0
+	}
+	ms := int64(0)
+	for i, part := range parts {
+		n, err := strconv.ParseInt(part, 10, 32)
+		if err != nil || n < 0 || (i > 0 && n >= 60) {
+			return 0
+		}
+		ms = ms*60 + n*1000
+	}
+	if ms > 24*60*60*1000 {
+		return 0
+	}
+	return ms
+}
+
+func regularIndex(duration, step int64) Index {
+	index := Index{Segments: make([]Segment, 0, (duration+step-1)/step)}
+	for start := int64(0); start < duration; start += step {
+		index.Segments = append(index.Segments, Segment{Key: strconv.FormatInt(start, 10), StartMS: start, EndMS: min(start+step, duration)})
+	}
+	return index
+}
+
+func regularSegment(segment Segment, step int64) bool {
+	return segment.StartMS >= 0 && segment.StartMS < 86_400_000 && segment.StartMS%step == 0 &&
+		segment.EndMS > segment.StartMS && segment.EndMS <= segment.StartMS+step && segment.Key == strconv.FormatInt(segment.StartMS, 10)
+}
+
+func rgbColor(value string, base int) uint32 {
+	if strings.HasPrefix(value, "#") {
+		value, base = value[1:], 16
+	}
+	color, err := strconv.ParseUint(value, base, 24)
+	if err != nil {
+		return 0xffffff
+	}
+	return uint32(color)
 }

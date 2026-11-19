@@ -19,7 +19,7 @@
 }
 .desktop-information .side-episodes { border-bottom: 1px solid rgba(255,255,255,.05); }
 .desktop-information .side-sources { padding-bottom: 22px; }
-.desktop-information .side-section-title,.desktop-information .side-source-actions { @apply cczj-flex-shrink-0; }
+.desktop-information .side-section-title { @apply cczj-flex-shrink-0; }
 .desktop-information .side-episodes > .side-section-title { margin-top: 0; }
 .desktop-information :is(.side-source-scroll,.side-episode-scroll) {
   @apply cczj-flex-1 cczj-min-h-0 cczj-overflow-y-auto;

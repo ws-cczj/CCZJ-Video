@@ -36,7 +36,19 @@ export function useDanmaku(deps: { key: () => string; current: () => number; tit
   const discoveries = new Set<Pending>()
   const busy = computed(() => discoveryBusy.value || bindingBusy.value || matching.value)
   const boundSourceEnabled = computed(() => !!binding.value && sourceEnabled(sources.value, binding.value.episode.provider))
-  const status = computed(() => !preferences.value.enabled ? 'disabled' : matching.value ? 'matching' : windowError.value || matchState.value === 'error' ? 'error' : !preferencesReady.value || !sourcesReady.value || !bindingReady.value ? 'loading' : !binding.value ? !sources.value.defaultProvider ? 'sourceDisabled' : matchState.value === 'noMatch' ? 'noMatch' : 'unbound' : !boundSourceEnabled.value ? 'sourceDisabled' : loading.value ? 'loading' : !window.value ? 'waiting' : window.value.stale ? 'stale' : window.value.warnings.includes('segment_not_found') && !window.value.items.length ? 'missingSegment' : window.value.items.length ? 'ready' : 'empty')
+  const status = computed(() => {
+    if (!preferences.value.enabled) return 'disabled'
+    if (matching.value) return 'matching'
+    if (windowError.value || matchState.value === 'error') return 'error'
+    if (!preferencesReady.value || !sourcesReady.value || !bindingReady.value) return 'loading'
+    if (!binding.value) return !sources.value.defaultProvider ? 'sourceDisabled' : matchState.value === 'noMatch' ? 'noMatch' : 'unbound'
+    if (!boundSourceEnabled.value) return 'sourceDisabled'
+    if (loading.value) return 'loading'
+    if (!window.value) return 'waiting'
+    if (window.value.warnings.includes('segment_not_found')) return window.value.items.length ? 'partialWindow' : 'missingSegment'
+    if (window.value.stale) return 'stale'
+    return window.value.items.length ? 'ready' : 'empty'
+  })
   function cancel(request: Pending | null) { try { void Promise.resolve(request?.cancel?.()).catch(() => { }) } catch { } }
   async function own<T>(request: Promise<T> & Pending): Promise<T> { pending.add(request); try { return await request } finally { pending.delete(request) } }
   function message(value: unknown) { const normalized = normalizeApiError(value); if (normalized.code !== 'CANCELLED') error.value = normalized.message }
@@ -49,12 +61,13 @@ export function useDanmaku(deps: { key: () => string; current: () => number; tit
     if (!force && current && sourceTime >= current.startMs && sourceTime < current.endMs - 15000) return
     if (windowRequest && Math.abs(deps.current() * 1000 - lastRequested) < 15000) return
     cancel(windowRequest); const token = ++windowGeneration, key = deps.key()
-    const request = danmakuAPI.window(key, deps.current() * 1000, preferences.value.freshDays); windowRequest = request; lastRequested = deps.current() * 1000; loading.value = true
+    const request = danmakuAPI.window(key, deps.current() * 1000); windowRequest = request; lastRequested = deps.current() * 1000; loading.value = true
     try {
       const value = await own(request)
       if (disposed || token !== windowGeneration || key !== deps.key()) return
       if (value.provider !== binding.value?.episode.provider || value.episodeId !== binding.value?.episode.episodeId) return
-      if (deps.title && value.warnings.some(warning => warning === 'pool_empty' || warning === 'segment_not_found')) {
+      if (deps.title && (value.warnings.includes('pool_empty') ||
+          (!value.items.length && value.warnings.includes('segment_not_found')))) {
         void autoMatch(true)
         return
       }
@@ -88,7 +101,6 @@ export function useDanmaku(deps: { key: () => string; current: () => number; tit
   watch(sourcesReady, ready => { if (ready) void fetchWindow() })
   watch(discoveryBusy, async active => { if (!active) { await nextTick(); void fetchWindow() } })
   watch(() => preferences.value.enabled, enabled => { resetWindow(); if (enabled) { autoAttempted = ''; if (!deps.title) void fetchWindow() } else cancelDiscovery() })
-  watch(() => preferences.value.freshDays, () => { resetWindow(); void fetchWindow() })
   function cancelDiscovery() { discoveryGeneration++; for (const request of discoveries) cancel(request); discoveries.clear(); discoveryBusy.value = false; matching.value = false }
   function resetDiscovery() { cancelDiscovery(); candidates.value = []; episodes.value = []; discoveryResult.value = 'idle' }
   watch(provider, () => { if (!deps.title) resetDiscovery() })
@@ -128,7 +140,7 @@ export function useDanmaku(deps: { key: () => string; current: () => number; tit
     const current = () => !disposed && key === deps.key() && token === discoveryGeneration && identity === matchIdentity.value
     try {
       windowGeneration++;cancel(windowRequest);windowRequest=null;loading.value=false
-      const request=danmakuAPI.match({localKey:key,title,year:deps.year?.()||'',kind:deps.kind?.()||'',episodeLabel:label,durationMs:Math.round((deps.duration?.()||0)*1000),positionMs:Math.round(deps.current()*1000),freshDays:preferences.value.freshDays})
+      const request=danmakuAPI.match({localKey:key,title,year:deps.year?.()||'',kind:deps.kind?.()||'',episodeLabel:label,durationMs:Math.round((deps.duration?.()||0)*1000),positionMs:Math.round(deps.current()*1000)})
       discoveries.add(request)
       let result
       try{result=await own(request)}finally{discoveries.delete(request)}

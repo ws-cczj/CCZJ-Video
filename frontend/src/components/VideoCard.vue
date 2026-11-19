@@ -112,7 +112,7 @@ onBeforeUnmount(() => {
     @keydown="onCardKeydown"
   >
     <div class="poster-wrap cczj-relative cczj-bg-secondary cczj-overflow-hidden">
-      <RemoteImage v-if="video.vod_pic && mediaVisible" :src="video.vod_pic" :alt="video.vod_name" loading="lazy" class="cczj-w-full cczj-h-full cczj-block" />
+      <RemoteImage v-if="video.vod_pic && mediaVisible" :src="video.vod_pic" :alt="video.vod_name" :loading="mobile ? 'eager' : 'lazy'" class="cczj-w-full cczj-h-full cczj-block" />
       <div v-else-if="!video.vod_pic" class="poster-placeholder cczj-w-full cczj-h-full cczj-flex cczj-items-center cczj-justify-center cczj-text-muted cczj-opacity-40">
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <rect x="3" y="4" width="18" height="16" rx="2" />

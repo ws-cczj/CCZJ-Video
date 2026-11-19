@@ -73,6 +73,8 @@ type App struct {
 	danmakuHTTP     *http.Client
 	modeMu          sync.RWMutex
 	modeSwitchMu    sync.RWMutex
+	modeChangeMu    sync.Mutex
+	modeChanging    bool // guarded by modeMu
 	mode            string
 	modeTasks       *lifecycle.Group
 	app             *application.App
@@ -253,15 +255,7 @@ func NewApp() *App {
 	a.media = mediaservice.NewService(db.GetVideoByIdContext, db.NewMediaStore(db.DB), a.details)
 	a.operations = &operation.Metrics{}
 	a.networkBudget = netbudget.New(a.background.Context(), netbudget.DefaultPolicy())
-	a.installedResources = installedresources.New(a.getDataDir, &http.Client{Timeout: 90 * time.Second,
-		Transport: a.networkBudget.Wrap("download", netpolicy.WrapTransport("download", netstats.WrapTransport(netstats.CategoryDownload, &http.Transport{DialContext: proxyservice.SafeDialContext, MaxIdleConns: 2, MaxIdleConnsPerHost: 2, IdleConnTimeout: 30 * time.Second, TLSHandshakeTimeout: 10 * time.Second}))),
-		CheckRedirect: func(request *http.Request, via []*http.Request) error {
-			if len(via) > 3 || request.URL.Scheme != "https" || request.URL.Host != "raw.githubusercontent.com" {
-				return apperror.New(apperror.PermissionDenied, "资源重定向不受支持")
-			}
-			return nil
-		},
-	})
+	a.installedResources = installedresources.New(a.getDataDir)
 	a.update = updateservice.NewService(a.settings, func(name string, data any) {
 		if a.app != nil {
 			a.app.Event.Emit(name, data)

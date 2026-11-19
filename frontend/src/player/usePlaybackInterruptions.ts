@@ -7,12 +7,17 @@ let mediaControlsOwner: symbol | undefined
 export function usePlaybackInterruptions(deps: {
   video: () => HTMLVideoElement | null; current: () => () => boolean
   pip: () => boolean; play: () => void; cancel: () => void; save: () => void
+  retryAutoplay: () => void
 }) {
   let wanted = true, blocked = false, foreground = true
   let suspended: {video: HTMLVideoElement; current: () => boolean} | undefined
   function cancelResume(): void { suspended = undefined }
   function intent(play: boolean): void { wanted = play; blocked = !play; cancelResume() }
-  function reset(play = true): void { wanted = play; blocked = !play; cancelResume() }
+  function reset(play = true): void {
+    wanted = play
+    blocked = !play || (!deps.pip() && (!foreground || document.hidden))
+    cancelResume()
+  }
   function pause(permanent: boolean): void {
     const video = deps.video()
     if (permanent) { wanted = false; cancelResume() }
@@ -25,8 +30,10 @@ export function usePlaybackInterruptions(deps: {
     const saved = suspended
     suspended = undefined
     if (!wanted) return
+    const wasBlocked = blocked
     blocked = false
     if (saved && saved.current() && deps.video() === saved.video && saved.video.paused && !saved.video.ended) deps.play()
+    else if (wasBlocked && !saved) deps.retryAutoplay()
   }
   function visibility(): void {
     if (document.hidden && !deps.pip()) pause(false)

@@ -47,6 +47,44 @@ import * as outbound$0 from "../outbound/models.js";
 import * as resource$0 from "../resource/models.js";
 
 /**
+ * ApplicationModeStatus describes the active owner independently of persistence.
+ */
+export class ApplicationModeStatus {
+    /**
+     * Creates a new ApplicationModeStatus instance.
+     * @param {Partial<ApplicationModeStatus>} [$$source = {}] - The source object to create the ApplicationModeStatus.
+     */
+    constructor($$source = {}) {
+        if (!("mode" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["mode"] = "";
+        }
+        if (!("phase" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["phase"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ApplicationModeStatus instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {ApplicationModeStatus}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ApplicationModeStatus(/** @type {Partial<ApplicationModeStatus>} */($$parsedSource));
+    }
+}
+
+/**
  * CastReceipt explicitly links frontend handoff evidence to the accepting RPC.
  */
 export class CastReceipt {

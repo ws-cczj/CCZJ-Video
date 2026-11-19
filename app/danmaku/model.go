@@ -5,6 +5,7 @@ package danmaku
 import (
 	"context"
 	"regexp"
+	"slices"
 	"strings"
 
 	"cczjVideo/app/apperror"
@@ -71,6 +72,21 @@ type Window struct {
 	Skipped   int      `json:"skipped"`
 }
 
+const (
+	warningPoolEmpty       = "pool_empty"
+	warningSegmentNotFound = "segment_not_found"
+)
+
+func (w *Window) matchFailure() string {
+	if slices.Contains(w.Warnings, warningPoolEmpty) {
+		return "EMPTY_POOL"
+	}
+	if len(w.Items) == 0 && slices.Contains(w.Warnings, warningSegmentNotFound) {
+		return "SEGMENT_NOT_FOUND"
+	}
+	return ""
+}
+
 // Provider varies at the actual protocol seam, rather than leaking upstream
 // JSON/protobuf fields into the player or persistence.
 type Provider interface {
@@ -85,16 +101,8 @@ var qqID = regexp.MustCompile(`^[A-Za-z0-9]{5,32}$`)
 
 func ValidateBinding(binding Binding) error {
 	e := binding.Episode
-	valid := false
-	switch e.Provider {
-	case "bilibili":
-		valid = decimalID.MatchString(e.EpisodeID) && (e.AID == "" || decimalID.MatchString(e.AID))
-	case "qq":
-		valid = qqID.MatchString(e.EpisodeID)
-	case "iqiyi":
-		valid = decimalID.MatchString(e.EpisodeID)
-	}
-	if !valid || !binding.Confirmed || strings.TrimSpace(binding.LocalKey) == "" || len(binding.LocalKey) > 512 || len(e.Title) > 1024 || binding.OffsetMS < -3600000 || binding.OffsetMS > 3600000 || e.DurationMS < 0 || e.DurationMS > 24*60*60*1000 {
+	source := findProvider(e.Provider)
+	if source == nil || !source.validEpisode(e) || !binding.Confirmed || strings.TrimSpace(binding.LocalKey) == "" || len(binding.LocalKey) > 512 || len(e.Title) > 1024 || binding.OffsetMS < -3600000 || binding.OffsetMS > 3600000 || e.DurationMS < 0 || e.DurationMS > 24*60*60*1000 {
 		return apperror.New(apperror.Validation, "请确认具体单集和有效的弹幕来源")
 	}
 	return nil

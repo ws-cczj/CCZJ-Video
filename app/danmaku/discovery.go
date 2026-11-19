@@ -14,9 +14,7 @@ func discoveryCacheKey(provider, kind, identity string) string {
 	return cacheKey(Episode{Provider: provider, EpisodeID: identity}, "discovery-v2:"+kind)
 }
 
-// Discovery is reused across local episodes and player sessions. It shares the
-// segment cache's one-day freshness, thirty-day eviction, capacity and owned
-// single-flight cancellation; a cache hit never consumes an upstream slot.
+// Discovery shares the short-lived cache and in-flight reads across episodes.
 func cachedDiscovery[T Candidate | Episode](ctx context.Context, s *Service, provider, kind, identity string, limit int, fetch func(context.Context) ([]T, error)) ([]T, error) {
 	key := discoveryCacheKey(provider, kind, identity)
 	decode := func(raw []byte) ([]T, error) {
@@ -44,7 +42,7 @@ func cachedDiscovery[T Candidate | Episode](ctx context.Context, s *Service, pro
 		}
 		return rows, nil
 	}
-	payload, err := s.load(ctx, key, 1, func(raw []byte) error { _, err := decode(raw); return err }, func(ctx context.Context) ([]byte, error) {
+	payload, err := s.load(ctx, key, func(raw []byte) error { _, err := decode(raw); return err }, func(ctx context.Context) ([]byte, error) {
 		rows, err := fetch(ctx)
 		if err != nil {
 			return nil, err

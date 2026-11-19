@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, inject, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import type { ComponentPublicInstance } from 'vue'
-import { getProxiedImageUrl } from '../utils/imageProxy'
+import { resolveProxiedImageUrl } from '../utils/imageProxy'
 import imageNotFound from '../assets/images/image_notfound.png'
 import { useMotionStore } from '../stores/motion'
 import { useViewActivity, windowForeground, routeVisualMotionKey } from '../composables/useViewActivity'
@@ -91,14 +91,19 @@ function clearDip(): void {
  */
 function show(next: string): void {
   clearDip()
-  if (next === resolvedSrc.value) {
-    lastShownInput = lastResolvedInput
-    phase.value = 'shown'
+  if (!next) {
+    releaseSource()
     settling.value = false
+    return
+  }
+  if (next === resolvedSrc.value) {
+    if (phase.value === 'dip') phase.value = 'hidden'
+    onImageLoad()
     return
   }
   const dip = animateImage.value ? motion.dipMs() : 0
   if (dip <= 0 || phase.value !== 'shown') {
+    phase.value = 'hidden'
     resolvedSrc.value = next
     return
   }
@@ -110,36 +115,29 @@ function show(next: string): void {
   }, dip)
 }
 
-async function resolveImage(rawSrc: string | null | undefined): Promise<void> {
+function resolveImage(rawSrc: string | null | undefined): void {
   const token = ++requestToken.value
   const source = String(rawSrc || '').trim()
   settling.value = true
   resolving = true
-  if (!source) {
-    if (token === requestToken.value && active.value && !disposed) {
-      resolving = false
-      lastResolvedInput = source
-      animateImage.value = props.animate && !routeMoving?.value && lastShownInput !== source
-      show(props.fallback)
-    }
-    return
-  }
-
-  let nextSrc = source
-  if (/^https?:\/\//i.test(source)) {
-    nextSrc = await getProxiedImageUrl(source)
-  }
-
-  if (token === requestToken.value && active.value && !disposed) {
+  function commit(nextSrc: string): void {
+    if (token !== requestToken.value || !active.value || disposed) return
     resolving = false
     lastResolvedInput = source
     animateImage.value = props.animate && !routeMoving?.value && lastShownInput !== source
     show(nextSrc || props.fallback)
   }
+
+  const next = /^https?:\/\//i.test(source) ? resolveProxiedImageUrl(source) : source
+  if (typeof next === 'string') commit(next)
+  else void next.then(commit)
 }
 
 function onImageLoad(): void {
   if (!active.value || disposed || resolving || !resolvedSrc.value || phase.value === 'dip' || lastResolvedInput !== String(props.src || '').trim()) return
+  const el = imageEl.value
+  const expected = resolvedSrc.value.startsWith('data:') ? resolvedSrc.value : new URL(resolvedSrc.value, document.baseURI).href
+  if (!el || el.currentSrc !== expected || !el.complete || el.naturalWidth === 0) return
   lastShownInput = lastResolvedInput
   phase.value = 'shown'
   settling.value = false
@@ -169,12 +167,7 @@ function onImageError(): void {
  */
 function onImgEl(el: Element | ComponentPublicInstance | null): void {
   imageEl.value = el instanceof HTMLImageElement ? el : null
-  const expected = resolvedSrc.value.startsWith('data:') ? resolvedSrc.value : resolvedSrc.value ? new URL(resolvedSrc.value, document.baseURI).href : ''
-  if (active.value && !resolving && phase.value !== 'dip' && lastResolvedInput === String(props.src || '').trim() && expected && el instanceof HTMLImageElement && el.currentSrc === expected && el.complete && el.naturalWidth > 0) {
-    lastShownInput = lastResolvedInput
-    phase.value = 'shown'
-    settling.value = false
-  }
+  onImageLoad()
 }
 
 function releaseSource(): void {
@@ -214,9 +207,9 @@ function scheduleImage(): void {
     // before the finger reveals it. Hidden scenes still unsubscribe above.
     if (imageEl.value) stopObserving = whenImageNearViewport(imageEl.value, () => {
       stopObserving = null
-      if (active.value && !disposed) void resolveImage(props.src)
+      if (active.value && !disposed) resolveImage(props.src)
     }, imageEl.value.closest('.cczj-mobile-shared-backdrop .cczj-mobile-route-scene .main-content'))
-  } else void resolveImage(props.src)
+  } else resolveImage(props.src)
 }
 watch([active, () => props.src, () => props.loading], scheduleImage, { immediate: true })
 onMounted(() => { if (props.loading === 'lazy') scheduleImage() })
@@ -228,7 +221,6 @@ onBeforeUnmount(() => { disposed = true; scheduleImage() })
     v-bind="$attrs"
     :ref="onImgEl"
     :src="resolvedSrc || emptyImage"
-    :loading="loading"
     decoding="async"
     :alt="alt"
     :class="imageClass"

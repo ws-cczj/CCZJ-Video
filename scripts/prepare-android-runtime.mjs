@@ -1,13 +1,27 @@
 import { readFileSync, writeFileSync, mkdirSync, cpSync, chmodSync } from 'node:fs'
 import { createHash } from 'node:crypto'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { resolve, dirname } from 'node:path'
 
 // The JNI envelope discards CallError.Cause. Keep the checked native build
 // copy in the project instead of modifying a shared module cache.
 // Go 1.26 disallows source overlays underneath GOMODCACHE.
 const root=process.cwd()
-const sdk=JSON.parse(execFileSync('go',['list','-m','-json','github.com/wailsapp/wails/v3'],{encoding:'utf8'}))
+// Resolve the same module graph as the Android compiler's -modfile build.
+const sdk=JSON.parse(execFileSync('go',['list','-m','-json','github.com/wailsapp/wails/v3'],{encoding:'utf8',env:{...process.env,GOWORK:'off'}}))
+const version=sdk.Version?.replace(/^v/,'')
+// The CLI writes its version to stderr on 3.0.0. Check both captured streams
+// while retaining its exit status and an exact version comparison.
+const cliResult=spawnSync('wails3',['version'],{encoding:'utf8'})
+if(cliResult.error)throw cliResult.error
+if(cliResult.status!==0)throw new Error(`Wails CLI version failed: ${cliResult.stderr}`)
+const cli=(cliResult.stdout+cliResult.stderr).trim()
+const declared=JSON.parse(readFileSync(resolve(root,'frontend/package.json'),'utf8')).dependencies['@wailsio/runtime']
+const lock=JSON.parse(readFileSync(resolve(root,'frontend/package-lock.json'),'utf8')).packages['node_modules/@wailsio/runtime'].version
+const installed=JSON.parse(readFileSync(resolve(root,'frontend/node_modules/@wailsio/runtime/package.json'),'utf8')).version
+if(!version||cli!==`v${version}`||declared!==version||lock!==version||installed!==version){
+  throw new Error(`Wails Android version mismatch: Go=${sdk.Version}, CLI=${cli}, JS declared/locked/installed=${declared}/${lock}/${installed}`)
+}
 const module=sdk.Dir
 const source=resolve(module,'pkg/application/application_android.go')
 let content=readFileSync(source,'utf8').replaceAll('\r\n','\n')
@@ -20,7 +34,8 @@ if(body.split(old).length!==2)throw new Error('Wails Android error branch change
 body=body.replace(old,`if err != nil {
         var callError *CallError
         if errors.As(err, &callError) {
-            encoded, _ := json.Marshal(map[string]any{"ok":false, "error":callError})
+            encoded, encodeErr := json.Marshal(map[string]any{"ok":false, "error":callError})
+            if encodeErr != nil { return fail("unable to marshal binding error: " + encodeErr.Error()) }
             return string(encoded)
         }
         return fail(err.Error())

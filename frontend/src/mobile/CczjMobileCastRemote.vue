@@ -36,7 +36,7 @@ watch(canSeek, value => { if (!value) preview.value = null })
     <div class="cczj-cast-remote-surface">
       <div class="cczj-cast-remote-device">
         <div class="cczj-cast-remote-device-name"><strong class="cczj-truncate cczj-font-normal" :title="device">{{ device }}</strong></div>
-        <div class="cczj-cast-remote-device-actions cczj-flex cczj-flex-wrap cczj-items-center cczj-justify-center cczj-gap-3">
+        <div class="cczj-flex cczj-flex-wrap cczj-items-center cczj-justify-center cczj-gap-3">
           <Button class="cczj-cast-remote-change" :variant="compact ? 'text' : 'secondary'" size="sm" :disabled="busy" @click="emit('change')">{{ t('mobile.castChangeDevice') }}</Button>
           <Button v-if="hasLines" data-cast-action="lines" :variant="compact ? 'text' : 'secondary'" :icon="compact" size="sm" :disabled="busy" :aria-label="t('mobile.castLines')" @click="emit('lines')"><Icon v-if="compact" name="source-switch" :size="20"/><span v-else>{{t('mobile.castLines')}}</span></Button>
         </div>

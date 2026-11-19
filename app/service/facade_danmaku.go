@@ -8,19 +8,22 @@ import (
 	"cczjVideo/app/danmaku"
 )
 
-func (a *App) danmakuContext(ctx context.Context) (context.Context, context.CancelFunc, error) {
-	a.modeSwitchMu.RLock()
-	defer a.modeSwitchMu.RUnlock()
+func (a *App) danmakuContext(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc, error) {
+	// runRequest holds the mode owner until this call finishes.
 	if a.currentMode() != "video" || a.danmaku == nil {
 		return nil, nil, apperror.New(apperror.Unsupported, "弹幕仅在视频模式可用")
 	}
-	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	return ctx, cancel, nil
 }
 func runDanmaku[T any](a *App, ctx context.Context, name string, work func(context.Context) (T, error)) (T, error) {
 	return runRequest(a, ctx, "danmaku."+name, func(ctx context.Context) (T, error) {
 		var zero T
-		ctx, release, err := a.danmakuContext(ctx)
+		timeout := 45 * time.Second
+		if name == "match" {
+			timeout = danmaku.MatchRequestTimeout
+		}
+		ctx, release, err := a.danmakuContext(ctx, timeout)
 		if err != nil {
 			return zero, err
 		}

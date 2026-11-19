@@ -35,6 +35,7 @@ import { useSourceCatalog, type SourceOption } from '../player/page/useSourceCat
 import { findBestMatch, probeNameOf } from '../player/page/sourceMatching'
 import { useEpisodeHistory } from '../player/page/useEpisodeHistory'
 import { useDesktopPlaybackKeys } from '../player/page/useDesktopPlaybackKeys'
+import { useViewActivity } from '../composables/useViewActivity'
 import type { HistoryItem } from '../types'
 import { recordDiagnosticEvent } from '../diagnostics/recording'
 
@@ -119,13 +120,21 @@ const panelToggle = ref<InstanceType<typeof PlayerPanelToggle>|null>(null)
  * - remote：本库没有，去源站搜到了
  * - missing / failed：源站回答"没有" / 源站根本没答上来（失败的那只允许再点一次重试）
  */
-const { sourceOptions, activeSourceKey, readySourceCount, probingCount,
-  buildSourceOptions, probeLabel, sourceSelectable, searchCatalogSource, refreshing:qualityRefreshing, snapshot:sourceCatalogSnapshot } = useSourceCatalog({
-  sources: () => sourceStore.sources,
-  identity: () => ({sourceKey:sourceKey.value,vodId:String(vodId.value),name:video.value?.vod_name || ''}),
-  episode:()=>Number(episodes.value[currentEpIndex.value]?.ep_num||0),
-})
 const sourceSearchLoading = ref(false)
+const probeIdentity = computed(() => {
+  const item = video.value
+  if (!item || !videoStore.hasCurrentDetail(sourceKey.value, vodId.value, globalId.value)) return
+  return { sourceKey:sourceKey.value, vodId:String(item.vod_id || vodId.value), name:item.vod_name || '', globalId:item.global_id || globalId.value }
+})
+const probeActive = useViewActivity(() => !loading.value && !sourceSearchLoading.value && !!probeIdentity.value, 'committed')
+const { sourceOptions, activeSourceKey, readySourceCount,
+  buildSourceOptions, sourceSelectable, searchCatalogSource, refreshing:qualityRefreshing, snapshot:sourceCatalogSnapshot } = useSourceCatalog({
+  sources: () => sourceStore.sources,
+  identity: () => probeIdentity.value,
+  episode:()=>Number(episodes.value[currentEpIndex.value]?.ep_num||0),
+  active:()=>probeActive.value,
+})
+function probeSources():void { void buildSourceOptions() }
 /* ==================== 选集正序/倒序 ==================== */
 const episodeSortAsc = ref(true)
 
@@ -253,8 +262,7 @@ async function loadData(): Promise<void> {
   if (pageDisposed || !sourceKey.value || (!vodId.value && !globalId.value)) return
   loading.value = true
   try {
-    const currentVodId = video.value?.vod_id
-    if (String(currentVodId || '') !== String(vodId.value)) {
+    if (!videoStore.hasCurrentDetail(sourceKey.value, vodId.value, globalId.value)) {
       await videoStore.loadDetail(sourceKey.value, vodId.value, false, globalId.value)
     }
     if (pageDisposed) return
@@ -328,21 +336,23 @@ async function ensureCatalogEntry(opt: SourceOption): Promise<void> {
 async function switchToSource(sk: string,lineIndex?:number): Promise<void> {
   if (pageDisposed || sourceSearchLoading.value || !sk) return
   if(sk===activeSourceKey.value){if(lineIndex!==undefined){const index=videoStore.lines.findIndex(line=>line.index===lineIndex);if(index>=0)onLineChange(index)};return}
+  const identity = currentVideoKey.value
+  const current = () => !pageDisposed && currentVideoKey.value === identity
   sourceSearchLoading.value = true
   try {
     // 探测已经拿到 vod_id 的源，直接切（来自本库命中或源站搜索）
     const existing = sourceOptions.value.find((s) => s.source_key === sk)
     if (existing?.vod_id) {
       await ensureCatalogEntry(existing)
-      if (pageDisposed) return
+      if (!current()) return
       await loadFromSource(sk, existing.vod_id,lineIndex)
       return
     }
     // 回退：远端搜索该源中的同名视频
     const vodName = probeNameOf(video.value?.vod_name || '')
     if (!vodName) return
-    const list = await searchCatalogSource(sk, vodName)
-    if (pageDisposed) return
+    const list = await searchCatalogSource(sk, vodName, current)
+    if (!current()) return
     const match = findBestMatch(list, vodName)
     if (!match?.vod_id) {
       console.log(`[Player] ❗ 源 "${sk}" 中未找到 "${vodName}"`)
@@ -359,10 +369,10 @@ async function switchToSource(sk: string,lineIndex?:number): Promise<void> {
       sourceOptions.value[idx].hit = match
       await ensureCatalogEntry(sourceOptions.value[idx])
     }
-    if (pageDisposed) return
+    if (!current()) return
     await loadFromSource(sk, String(match.vod_id),lineIndex)
   } catch (e) {
-    if (pageDisposed) return
+    if (!current()) return
     console.error('[Player] 切换源失败:', e)
     errorStore.error(t('player.switchSourceFailed'), normalizeApiError(e).message, '', 'Player')
     const idx = sourceOptions.value.findIndex((s) => s.source_key === sk)
@@ -488,8 +498,6 @@ onMounted(async () => {
   await loadData()
   if (pageDisposed) return
   logPageStartup('detail_ready')
-  // 探测要打源站，慢的时候几秒才回一条，不能挡住播放器起播：结果自己逐条回填。
-  void buildSourceOptions()
   // 从后端加载已观看集数（含 position）作为补充
   try {
     const history = await GetRecentHistory(50) as any[]
@@ -558,8 +566,8 @@ const panelModel:PlayerPanelModel = reactive({
   },
   catalog: {
     get items(){return sourceOptions.value},get activeKey(){return activeSourceKey.value},
-    get readyCount(){return readySourceCount.value},get probingCount(){return probingCount.value},
-    get loading(){return sourceSearchLoading.value},get refreshing(){return qualityRefreshing.value},label:probeLabel,selectable:sourceSelectable,retry:()=>{void buildSourceOptions()},
+    get readyCount(){return readySourceCount.value},
+    get loading(){return sourceSearchLoading.value},get refreshing(){return qualityRefreshing.value},selectable:sourceSelectable,retry:probeSources,
   },
   episodes: {
     get items(){return sortedEpisodes.value},get current(){return currentEpIndex.value},get ascending(){return episodeSortAsc.value},
@@ -590,7 +598,7 @@ const panelModel:PlayerPanelModel = reactive({
             :force-play-token="_playToken">
             <template v-if="mobile" #lines="{close}">
               <PlaybackRouteList mobile :sources="sourceOptions" :active-key="activeSourceKey" :active-line="videoStore.lines[videoStore.activeLineIndex]?.index??-1" :lines="videoStore.lines" :busy="sourceSearchLoading" :selectable="sourceSelectable" @choose="(key,line)=>{void switchToSource(key,line);close()}" />
-              <Button class="player-route-retry cczj-mt-4" variant="ghost" :loading="qualityRefreshing" @click="buildSourceOptions">{{t('playLine.retryQuality')}}</Button>
+              <Button class="player-route-retry cczj-mt-4" variant="ghost" :loading="qualityRefreshing" :disabled="sourceSearchLoading" @click="probeSources">{{t('playLine.retryQuality')}}</Button>
               <p class="cczj-mobile-drawer-hint cczj-mt-4">{{t('playLine.cooldownHint')}}</p>
             </template>
             <template v-if="mobile && episodes.length" #episodes="{close}">

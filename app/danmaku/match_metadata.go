@@ -7,12 +7,15 @@ import (
 	"time"
 	"unicode"
 
+	"cczjVideo/app/textvariant"
 	"golang.org/x/text/unicode/norm"
 )
 
 var matchHTML = regexp.MustCompile(`<[^>]*>`)
 var matchQuality = regexp.MustCompile(`[【\[(（](国语|粤语|普通话|中字|高清|超清|[0-9]{3,4}[pP]|[0-9]{4})[】\])）]`)
 var matchSeason = regexp.MustCompile(`第([零〇一二两三四五六七八九十百0-9]+)季`)
+var matchXiguaPart = regexp.MustCompile(`第([零〇一二两三四五六七八九十百0-9]+)部$`)
+var matchLatinSeason = regexp.MustCompile(`(?i)\b(?:season\s*|s)0*([0-9]{1,3})\b`)
 var matchOrdinal = regexp.MustCompile(`^(第\s*)?([零〇一二两三四五六七八九十百0-9]+)(\s*[集话話期回]|\s*$|\s*[:：.、 -])`)
 var matchEP = regexp.MustCompile(`(?i)^ep(isode)?\.?\s*([0-9]{1,4})(\b|\s)`)
 var matchFraction = regexp.MustCompile(`^(第\s*)?[0-9]+[.\-~至][0-9]`)
@@ -48,6 +51,7 @@ func ordinalNumber(raw string) (int, bool) {
 }
 func normalizedTitle(value string) string {
 	value = strings.ToLower(matchQuality.ReplaceAllString(matchHTML.ReplaceAllString(norm.NFKC.String(value), ""), ""))
+	value = matchLatinSeason.ReplaceAllString(value, "第${1}季")
 	value = matchSeason.ReplaceAllStringFunc(value, func(v string) string {
 		m := matchSeason.FindStringSubmatch(v)
 		if n, ok := ordinalNumber(m[1]); ok {
@@ -111,24 +115,70 @@ func mediaKind(raw string) string {
 func matchingWork(rows []Candidate, request MatchRequest) *Candidate {
 	bestScore := -1
 	var best *Candidate
-	for _, row := range rows {
-		score := workMatchScore(row, request)
+	ambiguous := false
+	for i := range rows {
+		row := &rows[i]
+		score := workMatchScore(*row, request)
 		if score < 0 {
 			continue
 		}
-		if score > bestScore || (score == bestScore && best != nil && row.Provider+":"+row.Ref < best.Provider+":"+best.Ref) {
-			copy := row
-			best = &copy
+		if score > bestScore {
+			best = row
 			bestScore = score
+			ambiguous = false
+		} else if row.Ref != best.Ref || row.Provider != best.Provider {
+			ambiguous = true
 		}
 	}
+	if ambiguous {
+		return nil
+	}
 	return best
+}
+
+// A second directory probe is limited to compatible metadata and a distinct work.
+func fallbackWork(rows []Candidate, request MatchRequest, first *Candidate) *Candidate {
+	candidates := make([]Candidate, 0, len(rows))
+	localSeason := matchSeason.FindString(normalizedTitle(request.Title))
+	localYear, localKind := metadataYear(request.Year), mediaKind(request.Kind)
+	referenceEdition := edition(request.Title)
+	if referenceEdition == "" {
+		referenceEdition = edition(first.Title)
+	}
+	for _, row := range rows {
+		if row.Ref == first.Ref || matchSeason.FindString(normalizedTitle(row.Title)) != localSeason {
+			continue
+		}
+		if value := edition(row.Title); referenceEdition != "" && value != referenceEdition {
+			continue
+		}
+		year, kind := metadataYear(row.Year), mediaKind(row.Kind)
+		if (localYear != "" && year != "" && year != localYear) || (localKind != "" && kind != "" && kind != localKind) {
+			continue
+		}
+		if candidateTitleSimilarity(row, request.Title) < 1000 && (localYear == "" || localYear != year || localKind == "" || localKind != kind) {
+			continue
+		}
+		candidates = append(candidates, row)
+	}
+	return matchingWork(candidates, request)
+}
+
+func edition(title string) string {
+	value := strings.TrimSuffix(matchEdition.FindString(normalizedTitle(title)), "版")
+	if value == "修復" {
+		return "修复"
+	}
+	return value
 }
 
 // Similarity discovers the work; metadata only orders usable candidates. Short
 // names remain exact, and explicit conflicting seasons are different works.
 func workTitleSimilarity(local, remote string) int {
 	a, b := normalizedTitle(local), normalizedTitle(remote)
+	if localEdition, remoteEdition := edition(a), edition(b); localEdition != "" && remoteEdition != "" && localEdition != remoteEdition {
+		return 0
+	}
 	a, b = matchEdition.ReplaceAllString(a, ""), matchEdition.ReplaceAllString(b, "")
 	if a == "" || b == "" {
 		return 0
@@ -137,7 +187,14 @@ func workTitleSimilarity(local, remote string) int {
 		return 1000
 	}
 	seasonA, seasonB := matchSeason.FindString(a), matchSeason.FindString(b)
-	if seasonA != "" && seasonB != "" && seasonA != seasonB {
+	// An unqualified title cannot identify an explicitly later season.
+	if seasonA == "" {
+		seasonA = "第1季"
+	}
+	if seasonB == "" {
+		seasonB = "第1季"
+	}
+	if seasonA != seasonB {
 		return 0
 	}
 	x, y := []rune(a), []rune(b)
@@ -164,12 +221,26 @@ func workTitleSimilarity(local, remote string) int {
 	return (max(len(x), len(y)) - previous[len(y)]) * 1000 / max(len(x), len(y))
 }
 
+func candidateTitleSimilarity(row Candidate, title string) int {
+	local, remote := title, row.Title
+	switch row.Provider {
+	case bahamutProviderID:
+		local, remote = textvariant.Simplified(local), textvariant.Simplified(remote)
+	case xiguaProviderID:
+		local, remote = xiguaPartTitle(local), xiguaPartTitle(remote)
+	}
+	return workTitleSimilarity(local, remote)
+}
+
 func workMatchScore(row Candidate, request MatchRequest) int {
-	similarity := workTitleSimilarity(request.Title, row.Title)
+	similarity := candidateTitleSimilarity(row, request.Title)
 	if row.Kind == "video" || matchExtra.MatchString(row.Title) || similarity < 800 {
 		return -1
 	}
 	score := similarity
+	if localEdition := edition(request.Title); localEdition != "" && localEdition == edition(row.Title) {
+		score += 30
+	}
 	if year := metadataYear(request.Year); year != "" && year == metadataYear(row.Year) {
 		score += 20
 	}
@@ -179,43 +250,91 @@ func workMatchScore(row Candidate, request MatchRequest) int {
 	return score
 }
 
+func xiguaPartTitle(title string) string {
+	title = strings.TrimSpace(norm.NFKC.String(title))
+	match := matchXiguaPart.FindStringSubmatchIndex(title)
+	if match == nil {
+		return title
+	}
+	part, ok := ordinalNumber(title[match[2]:match[3]])
+	if !ok {
+		return title
+	}
+	if part == 1 {
+		return title[:match[0]]
+	}
+	return title[:match[0]] + "第" + strconv.Itoa(part) + "季"
+}
+
 func matchingEpisode(rows []Episode, request MatchRequest) *Episode {
 	n, numbered := episodeOrdinal(request.EpisodeLabel)
 	movie := !numbered && matchMovie.MatchString(request.EpisodeLabel)
-	if !numbered && !movie {
+	if (!numbered && !movie) || (movie && len(rows) != 1) {
 		return nil
 	}
 	var best *Episode
 	bestScore := int64(-1)
-	for _, row := range rows {
-		if matchExtra.MatchString(row.Title) {
+	ambiguous := false
+	for i := range rows {
+		row := &rows[i]
+		score, reason := episodeScore(*row, request, n, movie)
+		if reason != "" {
 			continue
 		}
-		label := row.Number
+		if score > bestScore {
+			best = row
+			bestScore = score
+			ambiguous = false
+		} else if score == bestScore && (row.EpisodeID != best.EpisodeID || row.AID != best.AID || row.Provider != best.Provider) {
+			ambiguous = true
+		}
+	}
+	if ambiguous {
+		return nil
+	}
+	return best
+}
+
+func episodeScore(row Episode, request MatchRequest, number int, movie bool) (int64, string) {
+	if !movie {
+		label := strings.TrimSpace(row.Number)
 		if label == "" {
 			label = row.Title
 		}
 		remote, ok := episodeOrdinal(label)
-		if movie {
-			if len(rows) != 1 {
-				continue
-			}
-		} else if !ok || n != remote {
-			continue
+		if !ok {
+			return 0, "EPISODE_NUMBER_UNKNOWN"
 		}
-		score := int64(0)
-		if request.DurationMS > 0 && row.DurationMS > 0 {
-			difference := row.DurationMS - request.DurationMS
-			if difference < 0 {
-				difference = -difference
+		title := strings.TrimSpace(norm.NFKC.String(row.Title))
+		if strings.HasPrefix(title, "第") || matchEP.MatchString(title) {
+			if declared, ok := episodeOrdinal(title); ok && declared != remote && (declared == number || remote == number) {
+				return 0, "AMBIGUOUS_EPISODE"
 			}
-			score = 1000 - difference*1000/max(row.DurationMS, request.DurationMS)
 		}
-		if score > bestScore || (score == bestScore && best != nil && row.Provider+":"+row.EpisodeID < best.Provider+":"+best.EpisodeID) {
-			copy := row
-			best = &copy
-			bestScore = score
+		if remote != number {
+			return 0, "EPISODE_NUMBER_MISMATCH"
 		}
 	}
-	return best
+	if matchExtra.MatchString(row.Title) {
+		return 0, "EPISODE_SPECIAL_REJECTED"
+	}
+	localEdition, remoteEdition := edition(request.Title), edition(row.Title)
+	if localEdition != "" && remoteEdition != "" && localEdition != remoteEdition {
+		return 0, "EPISODE_VERSION_MISMATCH"
+	}
+	score := int64(0)
+	if request.DurationMS > 0 && row.DurationMS > 0 {
+		longer, shorter := max(row.DurationMS, request.DurationMS), min(row.DurationMS, request.DurationMS)
+		difference := longer - shorter
+		if difference > int64((2*time.Minute)/time.Millisecond) && difference*5 > longer {
+			return 0, "EPISODE_DURATION_MISMATCH"
+		}
+		// Round duration evidence to whole percentage points so tiny differences
+		// cannot decide between different pools with the same episode number.
+		score = 100 - (difference*100+longer/2)/longer
+	}
+	if localEdition != "" && localEdition == remoteEdition {
+		score += 10
+	}
+	return score, ""
 }

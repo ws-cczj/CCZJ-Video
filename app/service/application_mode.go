@@ -12,6 +12,27 @@ import (
 
 const applicationModeKey = CCZJ.SettingApplicationMode
 
+// ApplicationModeStatus describes the active owner independently of persistence.
+type ApplicationModeStatus struct {
+	Mode  string `json:"mode"`
+	Phase string `json:"phase"`
+}
+
+// GetApplicationModeStatus remains available while the previous owner drains.
+func (a *App) GetApplicationModeStatus() ApplicationModeStatus {
+	a.modeMu.RLock()
+	defer a.modeMu.RUnlock()
+	status := ApplicationModeStatus{Mode: normalizeMode(a.mode), Phase: "ready"}
+	if a.background.Context().Err() != nil {
+		status.Phase = "stopping"
+	} else if a.modeChanging {
+		status.Phase = "switching"
+	} else if a.modeTasks != nil && a.modeTasks.Context().Err() != nil {
+		status.Phase = "draining"
+	}
+	return status
+}
+
 func normalizeMode(mode string) string {
 	if mode == "novel" || mode == "comic" {
 		return mode
@@ -35,18 +56,10 @@ func (a *App) modeWork() *lifecycle.Group {
 }
 
 func (a *App) startMode(mode string) {
-	group := lifecycle.NewGroup()
+	group := lifecycle.NewGroupWithContext(a.background.Context())
 	a.modeMu.Lock()
 	a.mode, a.modeTasks = mode, group
 	a.modeMu.Unlock()
-	// The host owns shutdown; the mode owns work started while it is active.
-	a.background.Go("mode:"+mode, func(ctx context.Context) {
-		select {
-		case <-ctx.Done():
-			group.Stop(shutdownDrainTimeout)
-		case <-group.Context().Done():
-		}
-	})
 	if mode == "video" {
 		group.Go("schedulers", a.schedulers.Start)
 		group.Go("syncGlobalTypes", func(ctx context.Context) {
@@ -63,19 +76,102 @@ func (a *App) startMode(mode string) {
 	}
 }
 
+func modeFinishing() error {
+	return apperror.New(apperror.ModeFinishing, "当前模式仍在收尾，请稍后重试")
+}
+
+// Keep the cancelled group published until it drains. A successful switch or
+// explicit recovery replaces it, making this fallback a no-op.
+func (a *App) recoverMode(previous string, group *lifecycle.Group) {
+	a.background.Go("mode-recovery", func(ctx context.Context) {
+		select {
+		case <-ctx.Done():
+			return
+		case <-group.Done():
+		}
+		a.modeChangeMu.Lock()
+		defer a.modeChangeMu.Unlock()
+		a.modeSwitchMu.Lock()
+		defer a.modeSwitchMu.Unlock()
+		if ctx.Err() == nil && a.modeWork() == group {
+			a.startMode(previous)
+			applog.InfoFields("application mode recovered", applog.Fields{"mode": previous})
+		}
+	})
+}
+
 // A switch drains the old owner before persisting the next mode. Download
 // checkpoints remain paused until an explicit ResumeDownload, including restart.
 func (a *App) switchApplicationMode(next string) error {
 	if next != "video" && next != "novel" && next != "comic" {
 		return apperror.New(apperror.Validation, "未知应用模式")
 	}
+	release, accepted := a.background.Track("mode-switch")
+	if !accepted {
+		return context.Canceled
+	}
+	defer release()
+	if !a.modeChangeMu.TryLock() {
+		return modeFinishing()
+	}
+	defer a.modeChangeMu.Unlock()
+	a.modeMu.Lock()
+	a.modeChanging = true
+	a.modeMu.Unlock()
+	defer func() {
+		a.modeMu.Lock()
+		a.modeChanging = false
+		a.modeMu.Unlock()
+	}()
+
+	host := a.background.Context()
+	previous := a.currentMode()
+	group := a.modeWork()
+	draining := group != a.background && group.Context().Err() != nil
+	if next == previous && !draining {
+		return a.settings.SetContext(host, applicationModeKey, next)
+	}
+	if !draining {
+		if err := a.beginModeDrain(host, previous, group); err != nil {
+			return err
+		}
+	}
+	ctx, cancel := context.WithTimeout(host, shutdownDrainTimeout)
+	defer cancel()
+	if group != a.background && !group.StopContext(ctx) {
+		if err := host.Err(); err != nil {
+			return err
+		}
+		return modeFinishing()
+	}
+
 	a.modeSwitchMu.Lock()
 	defer a.modeSwitchMu.Unlock()
-	previous := a.currentMode()
-	if next == previous {
-		return a.settings.Set(applicationModeKey, next)
+	if err := host.Err(); err != nil {
+		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), shutdownDrainTimeout)
+	if next == previous {
+		a.startMode(previous)
+		return nil
+	}
+	if previous == "video" && a.cast != nil {
+		a.cast.ReleaseSessions()
+	}
+	if err := a.settings.SetContext(host, applicationModeKey, next); err != nil {
+		if host.Err() == nil {
+			a.startMode(previous)
+		}
+		return err
+	}
+	a.startMode(next)
+	applog.InfoFields("application mode switched", applog.Fields{"from": previous, "mode": next, "downloads": "paused_manual_resume"})
+	return nil
+}
+
+func (a *App) beginModeDrain(host context.Context, previous string, group *lifecycle.Group) error {
+	a.modeSwitchMu.Lock()
+	defer a.modeSwitchMu.Unlock()
+	ctx, cancel := context.WithTimeout(host, shutdownDrainTimeout)
 	defer cancel()
 	if previous == "video" && a.downloads != nil {
 		if err := a.downloads.PauseAll(ctx); err != nil {
@@ -87,19 +183,9 @@ func (a *App) switchApplicationMode(next string) error {
 			return err
 		}
 	}
-	if group := a.modeWork(); group != nil && group != a.background {
-		if !group.Stop(shutdownDrainTimeout) {
-			return apperror.New(apperror.Timeout, "当前模式仍在收尾，请稍后重试切换")
-		}
+	if group != a.background {
+		group.Cancel()
+		a.recoverMode(previous, group)
 	}
-	if previous == "video" && a.cast != nil {
-		a.cast.ReleaseSessions()
-	}
-	if err := a.settings.Set(applicationModeKey, next); err != nil {
-		a.startMode(previous)
-		return err
-	}
-	a.startMode(next)
-	applog.InfoFields("application mode switched", applog.Fields{"from": previous, "mode": next, "downloads": "paused_manual_resume"})
 	return nil
 }

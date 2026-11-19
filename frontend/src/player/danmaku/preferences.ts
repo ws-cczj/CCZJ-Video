@@ -3,13 +3,13 @@ export type DanmakuFontWeight = 400 | 500 | 600 | 700
 export type DanmakuTextStyle = 'stroke' | 'shadow' | 'none'
 export interface DanmakuPreferences {
   enabled: boolean; opacity: number; fontSize: number; speed: number; area: number; rows: number
-  fixed: boolean; scrolling: boolean; colored: boolean; freshDays: number
+  fixed: boolean; scrolling: boolean; colored: boolean
   fontFamily: DanmakuFontFamily; fontWeight: DanmakuFontWeight; textStyle: DanmakuTextStyle
   strokeWidth: number; density: number
 }
 export const defaultDanmakuPreferences: DanmakuPreferences = {
   enabled: true, opacity: .85, fontSize: 24, speed: 100, area: .5, rows: 12,
-  fixed: true, scrolling: true, colored: true, freshDays: 1,
+  fixed: true, scrolling: true, colored: true,
   fontFamily: 'system', fontWeight: 400, textStyle: 'stroke', strokeWidth: 1.5, density: 1,
 }
 export function decodeDanmakuPreferences(raw: unknown): DanmakuPreferences {
@@ -25,7 +25,6 @@ export function decodeDanmakuPreferences(raw: unknown): DanmakuPreferences {
     fixed: typeof v.fixed === 'boolean' ? v.fixed : true,
     scrolling: typeof v.scrolling === 'boolean' ? v.scrolling : true,
     colored: typeof v.colored === 'boolean' ? v.colored : true,
-    freshDays: Math.round(range('freshDays', 1, 30)),
     fontFamily: v.fontFamily === 'sans' || v.fontFamily === 'serif' || v.fontFamily === 'mono' ? v.fontFamily : 'system',
     fontWeight: v.fontWeight === 500 || v.fontWeight === 600 || v.fontWeight === 700 ? v.fontWeight : 400,
     textStyle: v.textStyle === 'shadow' || v.textStyle === 'none' ? v.textStyle : 'stroke',

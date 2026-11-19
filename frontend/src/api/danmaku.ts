@@ -1,13 +1,14 @@
 import { DanmakuBinding, DanmakuBind, DanmakuEpisodes, DanmakuSearch, DanmakuUnbind, DanmakuWindow, DanmakuMatch } from './app'
 import { response } from './response'
 import { object as record,text as string,integer as checkedInteger } from './decode'
+import { builtinDanmakuSources, isDanmakuProvider } from '../constants/danmakuSources'
 
 export interface DanmakuItem { id: string; timeMs: number; text: string; mode: number; color: number; fontSize: number }
 export interface DanmakuEpisode { provider: string; seriesId: string; episodeId: string; aid: string; title: string; number: string; durationMs: number; pageUrl: string }
 export interface DanmakuCandidate { provider: string; ref: string; title: string; year: string; kind: string }
 export interface DanmakuBindingValue { localKey: string; episode: DanmakuEpisode; offsetMs: number; confirmed: boolean }
 export interface DanmakuWindowValue { items: DanmakuItem[]; startMs: number; endMs: number; provider: string; episodeId: string; cached: boolean; stale: boolean; warnings: string[]; skipped: number }
-export interface DanmakuMatchRequest {localKey:string;title:string;year:string;kind:string;episodeLabel:string;durationMs:number;positionMs:number;freshDays:number}
+export interface DanmakuMatchRequest {localKey:string;title:string;year:string;kind:string;episodeLabel:string;durationMs:number;positionMs:number}
 export interface DanmakuMatchAttempt {provider:string;status:string;code:string;retryAt:number;stage?:string;detail?:string;elapsedMs?:number}
 export interface DanmakuMatchResult {binding:DanmakuBindingValue|null;window:DanmakuWindowValue|null;attempts:DanmakuMatchAttempt[];traceId?:string}
 function integer(value: unknown,min=0,max=86400000):number{return checkedInteger(value,min,max)}
@@ -21,11 +22,11 @@ export function decodeWindow(value: unknown): DanmakuWindowValue {
 }
 export function decodeMatch(value:unknown):DanmakuMatchResult {
  const v=record(value)
- if(!Array.isArray(v.attempts)||v.attempts.length>3)throw new Error('Invalid match attempts')
+ if(!Array.isArray(v.attempts)||v.attempts.length>builtinDanmakuSources.length)throw new Error('Invalid match attempts')
  const binding=decodeBinding(v.binding),window=v.window==null?null:decodeWindow(v.window)
  if(!!binding!==!!window||(binding&&window&&(binding.episode.provider!==window.provider||binding.episode.episodeId!==window.episodeId)))throw new Error('Mismatched comment pool')
  const attempts=v.attempts.map(value=>{const row=record(value);const provider=string(row.provider),status=string(row.status)
-  if(!['bilibili','qq','iqiyi'].includes(provider)||!['not_used','available','cancelled','no_match','cooling_down','error'].includes(status))throw new Error('Invalid match outcome')
+  if(!isDanmakuProvider(provider)||!['not_used','available','cancelled','no_match','cooling_down','error'].includes(status))throw new Error('Invalid match outcome')
   const stage=row.stage===undefined?'':string(row.stage),detail=row.detail===undefined?'':string(row.detail)
   if(stage.length>32||detail.length>2000)throw new Error('Oversized match diagnostic')
   return {provider,status,code:string(row.code),retryAt:integer(row.retryAt,0,4102444800),...(row.stage===undefined?{}:{stage}),...(row.detail===undefined?{}:{detail}),...(row.elapsedMs===undefined?{}:{elapsedMs:integer(row.elapsedMs,0,3600000)})}
@@ -37,11 +38,12 @@ export function decodeMatch(value:unknown):DanmakuMatchResult {
  return {binding,window,attempts,...(v.traceId===undefined?{}:{traceId})}
 }
 export const danmakuAPI = {
-  match:(request:DanmakuMatchRequest)=>response(()=>DanmakuMatch(request),decodeMatch),
+  // Preserve the legacy cache arguments at the Wails boundary.
+  match:(request:DanmakuMatchRequest)=>response(()=>DanmakuMatch({...request,freshDays:0}),decodeMatch),
   binding: (key: string) => response(()=>DanmakuBinding(key),decodeBinding),
   search: (provider: string, query: string) => response(()=>DanmakuSearch(provider,query), values=> { if (!Array.isArray(values)) throw new Error('Invalid candidates'); return values.map(value => { const v = record(value); return { provider: string(v.provider), ref: string(v.ref), title: string(v.title), year: string(v.year), kind: string(v.kind) } }) }),
   episodes: (provider: string, ref: string) => response(()=>DanmakuEpisodes(provider,ref), values=> { if (!Array.isArray(values) || values.length > 5000) throw new Error('Invalid episodes'); return values.map(episode) }),
   bind: (value: DanmakuBindingValue) => response(()=>DanmakuBind(value),value=>value),
   unbind: (key: string) => response(()=>DanmakuUnbind(key),value=>value),
-  window: (key: string, positionMs: number, freshDays: number) => response(()=>DanmakuWindow(key,Math.round(positionMs),freshDays),decodeWindow),
+  window: (key: string, positionMs: number) => response(()=>DanmakuWindow(key,Math.round(positionMs),0),decodeWindow),
 }

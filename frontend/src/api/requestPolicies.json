@@ -60,6 +60,7 @@
   "GetAllSources": "read",
   "GetAllowPrivateNetwork": "read",
   "GetAppVersion": "read",
+  "GetApplicationModeStatus": "isolated",
   "GetCloseBehavior": "read",
   "GetCollectSchedule": "read",
   "GetCollectStatus": "read",

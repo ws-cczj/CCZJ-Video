@@ -30,7 +30,7 @@
 .cczj-danmaku-number-row,.cczj-danmaku-select { @apply cczj-flex cczj-items-center cczj-justify-between cczj-gap-4; min-height:44px; }
 .cczj-danmaku-select :deep(.select-dropdown) { @apply cczj-min-w-0; width:180px; max-width:65%; }
 .cczj-danmaku-number-row :deep(.number-field) { width:112px; }
-.cczj-danmaku-preview { @apply cczj-block cczj-w-full cczj-mb-5 cczj-rounded-md; height:64px; background:#101216; border:1px solid var(--dm-border); }
+.cczj-danmaku-preview { @apply cczj-block cczj-w-full cczj-mb-5 cczj-rounded-md cczj-overflow-hidden; height:64px; background:#101216; border:1px solid var(--dm-border); }
 .cczj-danmaku-reset { @apply cczj-w-full cczj-mt-5; }
 .cczj-danmaku-status { margin:6px 0 0; color:var(--text-secondary); }
 .cczj-danmaku-availability,.cczj-danmaku-cache { border-top:1px solid var(--dm-border); margin-top:12px; padding-top:8px; color:var(--text-secondary); }

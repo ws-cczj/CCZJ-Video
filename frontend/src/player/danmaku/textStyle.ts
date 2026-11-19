@@ -1,7 +1,8 @@
 import type { DanmakuPreferences } from './preferences'
+export const danmakuTypefaceFamily = 'CCZJ Danmaku Sans'
 const families = {
   system: 'system-ui, "Noto Sans CJK SC", "Microsoft YaHei", "PingFang SC", sans-serif',
-  sans: '"CCZJ Danmaku Sans", "Source Han Sans CN", "Noto Sans CJK SC", "Microsoft YaHei", "PingFang SC", sans-serif',
+  sans: `"${danmakuTypefaceFamily}", "Source Han Sans CN", "Noto Sans CJK SC", "Microsoft YaHei", "PingFang SC", sans-serif`,
   serif: '"Noto Serif CJK SC", "Songti SC", SimSun, serif',
   mono: '"Noto Sans Mono CJK SC", Consolas, monospace',
 } as const
@@ -14,7 +15,6 @@ export function paintDanmaku(context: CanvasRenderingContext2D, text: string, x:
   const scale = size / preferences.fontSize
   const luminance = ((color >> 16 & 255) * .2126 + (color >> 8 & 255) * .7152 + (color & 255) * .0722) / 255
   context.font = danmakuFont(preferences, size)
-  context.globalAlpha = preferences.opacity
   context.textBaseline = 'alphabetic'
   context.lineJoin = 'round'
   context.fillStyle = `#${color.toString(16).padStart(6, '0')}`

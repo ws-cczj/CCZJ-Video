@@ -42,7 +42,7 @@ app.use(router)
 app.use(i18n)
 // Warm only the selected shell while settings are loading. The async view still
 // owns errors and mounting, and the splash never waits on this preload.
-void useApplicationMode().load().then(()=>startupTask('mode_shell',()=>APPLICATION_MODES[useApplicationMode().mode].loadShell())).catch(()=>{})
+void useApplicationMode().load().then(()=>{if(useApplicationMode().loaded)return startupTask('mode_shell',()=>APPLICATION_MODES[useApplicationMode().mode].loadShell())}).catch(()=>{})
 
 // 缓存失效订阅要在 pinia 装好之后、挂载之前起：Go 侧一删片/一采完集就会发事件，
 // 晚起一步等于让那一次失效永久漏掉。

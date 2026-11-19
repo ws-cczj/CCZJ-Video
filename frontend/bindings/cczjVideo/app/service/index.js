@@ -8,6 +8,7 @@ export {
 };
 
 export {
+    ApplicationModeStatus,
     CastReceipt,
     DiagCollect,
     DiagDouban,

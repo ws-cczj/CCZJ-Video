@@ -151,7 +151,6 @@ async function run(flight: Flight, options: Parameters<typeof acquireSegment>[0]
   const current = () => !signal.aborted && flight.generation === prefetchState.cacheSession
   const check = () => { if (!current()) throw new DOMException('Cancelled', 'AbortError') }
   const purposes = () => [...flight.consumers].map(c => c.purpose)
-  const observed = () => purposes().some(p => p !== 'preview')
   const playbackObservation = () => purposes().some(p => p === 'playback' || p === 'prefetch' || p === 'helper')
   const rejected = failures.get(flight.key)?.error.kind === 'content'
   const hit = rejected ? null : cacheGet(flight.url, flight.range)
@@ -209,7 +208,7 @@ async function run(flight: Flight, options: Parameters<typeof acquireSegment>[0]
       if (chunk.done) break
       const data = chunk.value
       stats.loaded += data.byteLength; stats.chunkCount++
-      if (observed()) telemetry.networkBytes += data.byteLength
+      if (session.transportActive && playbackObservation()) telemetry.networkBytes += data.byteLength
       const canStream = !flight.range && [...flight.consumers].some(c => !!c.progress)
       if (flight.capture && (stats.loaded > limit || retainedBytes + data.byteLength > MAX_CACHED_BYTES)) {
         if (!canStream) throw new SegmentFailure(0, 'media capture exceeds budget', 'capacity')

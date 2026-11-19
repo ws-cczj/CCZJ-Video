@@ -1,213 +1,238 @@
-import { computed, onBeforeUnmount, ref } from 'vue'
-import { useI18n } from 'vue-i18n'
-import * as AppMod from '../../api/app'
+import { computed, onScopeDispose, ref, watch } from 'vue'
+import { FindSourcesByGlobalId, GetGlobalIdForVideo } from '../../api/app'
 import { ProbePlayLines, type PlayLineQuality } from '../../api/playback'
 import { normalizeApiError } from '../../api/errors'
 import { findBestMatch, probeNameOf, searchSourceWithFallback } from './sourceMatching'
+import { cacheResult, discovery, discoveryKey, FAILURE_MS, FRESH_MS, invalidation, quality, read, retain, shouldProbe, sourceIdentity,
+  type Cached, type LineOutcome, type MediaIdentity, type ProbeOutcome } from './sourceProbeCache'
 
 export type SourceProbe = 'probing' | 'local' | 'remote' | 'missing' | 'failed'
 export interface SourceOption {
   source_key: string
   name: string
-  vod_id?: string  // 该源中对应视频的 vod_id
+  vod_id?: string
   probe: SourceProbe
-  hit?: any        // probe 为 remote 时的源站搜索原始条目，切换前要先入库
-  lines?:PlayLineQuality[]
-  qualityState?:'pending'|'ready'|'failed'|'limited'
-  qualityRetryAt?:number
+  hit?: any
+  lines?: PlayLineQuality[]
+  qualityState?: 'pending' | 'ready' | 'failed' | 'limited'
 }
 
-/** Discovery state belongs to one page, never to a retained global store. */
-export function useSourceCatalog(deps: {
-  sources: () => ReadonlyArray<{source_key?:string;name?:string;enabled?:number|boolean}>
-  identity: () => {sourceKey:string;vodId:string;name:string}
-  episode?:()=>number
-}) {
-const { t } = useI18n()
-const sourceOptions = ref<SourceOption[]>([])
-const activeSourceKey = ref('')
-const readySourceCount = computed(() => sourceOptions.value.filter((s) => s.probe === 'local' || s.probe === 'remote').length)
-const probingCount = computed(() => sourceOptions.value.filter((s) => s.probe === 'probing').length)
-const refreshing = ref(false)
-
+type SourceRow = { source_key?: string; name?: string; enabled?: number | boolean }
 const PROBE_CONCURRENCY = 2
-const REMOTE_PROBE_TTL = 10 * 60 * 1000
-type ProbeOutcome = { probe: SourceProbe; vodId: string | null; hit?: any }
-// The cache belongs to this page: repeated probes during its lifetime can reuse outcomes.
-const remoteProbeCache = new Map<string, { outcome: ProbeOutcome; at: number }>()
-let probeGeneration = 0
-let disposed = false
-let catalogueIdentity = ''
-type PendingRequest = Promise<any> & {cancel?:()=>void|Promise<void>}
-const requests = new Set<PendingRequest>()
-const cancellationRequested = new WeakSet<PendingRequest>()
-let requestsStarted = 0, requestsSettled = 0, requestsFailed = 0, cancellationsRequested = 0
-async function owned(request: PendingRequest): Promise<any> {
-  requestsStarted++
-  requests.add(request)
-  try { return await request }
-  catch (error) { requestsFailed++; throw error }
-  finally { requestsSettled++; requests.delete(request) }
-}
-function cancelRequests(): void {
-  for (const request of requests) {
-    if (!request.cancel || cancellationRequested.has(request)) continue
-    cancellationRequested.add(request)
-    cancellationsRequested++
-    try { void Promise.resolve(request.cancel?.()).catch(()=>{}) } catch { /* Already completed. */ }
-  }
-}
-function searchCatalogSource(source:string,name:string):Promise<any[]> {
-  const generation = probeGeneration
-  return searchSourceWithFallback(source,name,{current:()=>!disposed&&generation===probeGeneration,request:owned})
-}
 
-async function buildSourceOptions(): Promise<void> {
-  if (disposed || !deps.sources().length) return
-  const identity = deps.identity()
-  const currentIdentity = `${identity.sourceKey}:${identity.vodId}:${deps.episode?.()||0}`
-  if(refreshing.value && catalogueIdentity === currentIdentity)return
-  cancelRequests()
-  const generation = ++probeGeneration
-  const previous = catalogueIdentity === currentIdentity ? sourceOptions.value : []
-  catalogueIdentity = currentIdentity
-  refreshing.value = true
-  const vodName = probeNameOf(deps.identity().name)
-  sourceOptions.value = deps.sources().filter(s=>s.source_key===identity.sourceKey || (s.enabled!==0 && s.enabled!==false)).map((s) => {
-    const isCurrent = s.source_key === deps.identity().sourceKey
-    const known = previous.find(row=>row.source_key===s.source_key)
-    return {
-      source_key: s.source_key || '',
-      name: s.name || s.source_key || '',
-      // 能进到这个页面就说明这一条在本库里，当前源直接算 local。
-      vod_id: isCurrent ? String(deps.identity().vodId) : known?.vod_id,
-      probe: isCurrent ? 'local' as SourceProbe : known?.vod_id ? known.probe : 'probing' as SourceProbe,
-      hit:known?.hit,
-      lines:known?.lines,
-      qualityRetryAt:known?.qualityRetryAt,
-      qualityState:known?.qualityRetryAt && known.qualityRetryAt>Date.now() ? 'limited' as const : known?.lines?.some(line=>line.ok) ? 'ready' as const : 'pending' as const,
+type Pending<T = unknown> = Promise<T> & { cancel?: () => unknown }
+
+export function useSourceCatalog(deps: {
+  sources: () => ReadonlyArray<SourceRow>
+  identity: () => MediaIdentity | undefined
+  episode?: () => number
+  active?: () => boolean
+}) {
+  const sourceOptions = ref<SourceOption[]>([])
+  const activeSourceKey = ref('')
+  const readySourceCount = computed(() => sourceOptions.value.filter(s => s.probe === 'local' || s.probe === 'remote').length)
+  const refreshing = ref(false)
+
+  let generation = 0
+  let disposed = false
+  let running = false
+  const probeRequests = new Set<Pending>()
+  const switchRequests = new Set<Pending>()
+  let requestsStarted = 0, requestsSettled = 0, requestsFailed = 0, cancellationsRequested = 0
+
+  async function owned<T>(request: Pending<T>, requests = probeRequests): Promise<T> {
+    requestsStarted++
+    requests.add(request)
+    try { return await request }
+    catch (error) { requestsFailed++; throw error }
+    finally { requestsSettled++; requests.delete(request) }
+  }
+
+  function cancelRequests(requests: Set<Pending>): void {
+    for (const request of requests) {
+      if (!request.cancel) continue
+      cancellationsRequested++
+      try { void Promise.resolve(request.cancel()).catch(() => {}) } catch { /* Already settled. */ }
     }
-  })
-  activeSourceKey.value = deps.identity().sourceKey
-
-  try {
-    await probeLocalLibrary(generation)
-    await probeRemoteSources(vodName, generation)
-  } finally {
-    if(generation===probeGeneration)refreshing.value=false
+    requests.clear()
   }
-}
 
-/** 本库探测：把已经有同一 global_id 副本的源标成 local。 */
-async function probeLocalLibrary(generation: number): Promise<void> {
-  let globalId = 0
-  try {
-    globalId = await owned((AppMod as any).GetGlobalIdForVideo(deps.identity().sourceKey, String(deps.identity().vodId))) as number
-  } catch (e) {
-    console.log('[Player] global_id 查找失败，改由源站探测补全:', e)
+  function stopProbe(): void {
+    generation++
+    running = refreshing.value = false
+    cancelRequests(probeRequests)
   }
-  if (generation !== probeGeneration || globalId <= 0) return
-  try {
-    const refs = await owned((AppMod as any).FindSourcesByGlobalId(globalId)) as any[]
-    if (generation !== probeGeneration) return
-    if (!Array.isArray(refs) || refs.length === 0) return
-    console.log(`[Player] ✔ global_id=${globalId} 本库命中 ${refs.length} 个源`)
-    for (const opt of sourceOptions.value) {
-      if (opt.probe !== 'probing') continue
-      const ref = refs.find((r: any) => r.source_key === opt.source_key)
-      if (ref?.vod_id) {
-        opt.probe = 'local'
-        opt.vod_id = String(ref.vod_id)
-      }
+
+  function searchCatalogSource(source: string, name: string, current = () => !disposed): Promise<any[]> {
+    return searchSourceWithFallback(source, name, { current, request: request => owned(request, switchRequests) })
+  }
+
+  function restore(item: MediaIdentity, sources: ReadonlyArray<SourceRow>): void {
+    activeSourceKey.value = item.sourceKey
+    const enabled = sources.filter(s => !!s.source_key && (s.source_key === item.sourceKey || (s.enabled !== 0 && s.enabled !== false)))
+    if (!enabled.some(s => s.source_key === item.sourceKey)) enabled.unshift({ source_key: item.sourceKey })
+    sourceOptions.value = enabled.map(s => {
+      const sourceKey = s.source_key!
+      const result = sourceKey === item.sourceKey
+        ? { probe: 'local' as const, vod_id: item.vodId }
+        : read(discovery, discoveryKey(item, sourceKey))?.value ?? { probe: 'probing' as const }
+      const measurement = result.vod_id ? read(quality, sourceIdentity(sourceKey, result.vod_id))?.value : undefined
+      return { source_key: sourceKey, name: s.name || sourceKey, ...result, ...measurement }
+    })
+  }
+
+  async function findLocalCopies(item: MediaIdentity, current: () => boolean): Promise<Map<string, string>> {
+    try {
+      const id = item.globalId || await owned(GetGlobalIdForVideo(item.sourceKey, item.vodId))
+      if (id <= 0 || !current()) return new Map()
+      const rows = await owned(FindSourcesByGlobalId(id))
+      const copies = new Map<string, string>()
+      for (const row of rows ?? []) if (row?.source_key && row.vod_id) copies.set(row.source_key, String(row.vod_id))
+      return copies
+    } catch {
+      return new Map()
     }
-  } catch (e) {
-    console.log('[Player] 按 global_id 查源失败:', e)
   }
-}
 
-/** 源站探测：本库没命中的源逐个去搜，结果一条一条显示出来。 */
-async function probeRemoteSources(vodName: string, generation: number): Promise<void> {
-  const pending = [...sourceOptions.value].sort((a,b)=>Number(b.source_key===activeSourceKey.value)-Number(a.source_key===activeSourceKey.value))
-  if (pending.length === 0) return
-  let cursor = 0
-  const worker = async (): Promise<void> => {
-    for (; ;) {
-      if (generation !== probeGeneration) return
-      const opt = pending[cursor++]
-      if (!opt) return
-      if(opt.probe==='probing') {
-        if(!vodName){opt.probe='failed';opt.qualityState='failed';continue}
-        const outcome = await probeSourceRemote(opt.source_key, vodName)
-        if (generation !== probeGeneration) return
-        if (opt.source_key !== activeSourceKey.value) {
-          opt.probe = outcome.probe
-          opt.vod_id = outcome.vodId ?? undefined
-          opt.hit = outcome.hit
+  async function updateDiscovery(option: SourceOption, item: MediaIdentity, localId: string | undefined, current: () => boolean): Promise<void> {
+    const key = discoveryKey(item, option.source_key)
+    const previous = read(discovery, key)
+    let entry: Cached<ProbeOutcome>
+    if (localId) {
+      entry = cacheResult({ probe: 'local', vod_id: localId })
+    } else {
+      try {
+        const title = probeNameOf(item.name)
+        if (!title) throw new Error('Missing title')
+        const matches = await searchSourceWithFallback(option.source_key, title, { current, request: owned })
+        const match = findBestMatch(matches, title)
+        if (match?.vod_id && match.in_catalog) {
+          entry = cacheResult({ probe: 'local', vod_id: String(match.vod_id) })
+        } else if (match?.vod_id) {
+          entry = cacheResult({ probe: 'remote', vod_id: String(match.vod_id), hit: match })
+        } else {
+          entry = cacheResult({ probe: 'missing' }, FRESH_MS, FRESH_MS)
+        }
+      } catch (error) {
+        entry = previous
+          ? { ...previous, refreshAt: Date.now() + FAILURE_MS }
+          : cacheResult({ probe: 'failed' }, FAILURE_MS, FAILURE_MS)
+        const failure = normalizeApiError(error)
+        const retry = failure.retryAfterSeconds ?? (failure.code === 'RATE_LIMITED' ? 300 : 0)
+        if (retry) {
+          entry.retryAt = Date.now() + retry * 1000
+          entry.expiresAt = Math.max(entry.expiresAt, entry.retryAt)
         }
       }
-      if(!opt.vod_id){opt.qualityState='failed';continue}
-      if(opt.qualityRetryAt && opt.qualityRetryAt>Date.now())continue
-      try {
-        const lines:PlayLineQuality[]=await owned(ProbePlayLines({source_key:opt.source_key,vod_id:opt.vod_id,global_id:0,ep_num:deps.episode?.()||0}))
-        if(generation!==probeGeneration)return
-        opt.lines=lines.map(line=>{
-          const previous=opt.lines?.find(item=>item.index===line.index&&item.ok)
-          return line.code==='RATE_LIMITED'&&previous?{...previous,code:line.code,retry_after_seconds:line.retry_after_seconds}:line
-        })
-        opt.qualityState=lines.length&&lines.every(line=>line.code==='RATE_LIMITED')?'limited':'ready'
-        const retry=Math.max(0,...lines.map(line=>line.retry_after_seconds||0))
-        opt.qualityRetryAt=retry?Date.now()+retry*1000:undefined
-      } catch (error) {
-        if(generation!==probeGeneration)return
-        const failure=normalizeApiError(error)
-        if(failure.code==='CANCELLED')continue
-        opt.qualityState=failure.code==='RATE_LIMITED'?'limited':'failed'
-        if(failure.retryAfterSeconds||failure.code==='RATE_LIMITED')opt.qualityRetryAt=Date.now()+(failure.retryAfterSeconds||300)*1000
+    }
+    if (!current()) return
+    Object.assign(option, { vod_id: undefined, hit: undefined }, entry.value)
+    retain(discovery, key, { ...entry, origin: item, sourceKey: option.source_key })
+  }
+
+  async function updateQuality(option: SourceOption, episode: number, manual: boolean, current: () => boolean): Promise<void> {
+    const vodId = option.vod_id
+    if (!vodId) return
+    const key = sourceIdentity(option.source_key, vodId)
+    const previous = read(quality, key)
+    const needsProbe = shouldProbe(previous, manual)
+    Object.assign(option, { lines: undefined, qualityState: needsProbe ? 'pending' : undefined }, previous?.value)
+    if (!needsProbe) return
+    let entry: Cached<LineOutcome>
+    try {
+      const lines = await owned(ProbePlayLines({ source_key: option.source_key, vod_id: vodId, global_id: 0, ep_num: episode }))
+      const remembered = lines.map(line => {
+        const good = previous?.value.lines?.find(row => row.index === line.index && row.name === line.name && row.ok)
+        return !line.ok && line.code && good ? { ...good, code: line.code, retry_after_seconds: line.retry_after_seconds } : line
+      })
+      const limited = lines.length > 0 && lines.every(line => line.code === 'RATE_LIMITED')
+      const retry = Math.max(0, ...lines.map(line => line.retry_after_seconds || 0)) || (limited ? 300 : 0)
+      const unmeasured = lines.length > 0 && lines.every(line => !line.ok)
+      const value: LineOutcome = { lines: remembered, qualityState: limited ? 'limited' : 'ready' }
+      entry = unmeasured && previous
+        ? { ...previous, value, refreshAt: Date.now() + FAILURE_MS, retryAt: undefined }
+        : cacheResult(value, unmeasured ? FAILURE_MS : FRESH_MS)
+      if (retry) entry.retryAt = Date.now() + retry * 1000
+    } catch (error) {
+      const failure = normalizeApiError(error)
+      if (!current() || failure.code === 'CANCELLED') return
+      const limited = failure.code === 'RATE_LIMITED'
+      const retry = failure.retryAfterSeconds ?? (limited ? 300 : 0)
+      const value: LineOutcome = { lines: previous?.value.lines, qualityState: limited ? 'limited' : previous?.value.lines?.some(line => line.ok) ? 'ready' : 'failed' }
+      entry = previous ? { ...previous, value, refreshAt: Date.now() + FAILURE_MS } : cacheResult(value, FAILURE_MS, FAILURE_MS)
+      if (retry) entry.retryAt = Date.now() + retry * 1000
+    }
+    if (!current()) return
+    if (entry.retryAt) entry.expiresAt = Math.max(entry.expiresAt, entry.retryAt)
+    Object.assign(option, entry.value)
+    retain(quality, key, { ...entry, sourceKey: option.source_key, vodId })
+  }
+
+  async function buildSourceOptions(manual = true): Promise<void> {
+    const item = deps.identity()
+    if (disposed || !item?.sourceKey || !item.vodId || deps.active?.() === false) return
+    if (running) {
+      if (manual) refreshing.value = true
+      return
+    }
+    const episode = deps.episode?.() || 0
+    restore(item, deps.sources())
+    const rows = sourceOptions.value
+    const needsDiscovery = new Set(rows.filter(row => row.source_key !== item.sourceKey
+      && shouldProbe(read(discovery, discoveryKey(item, row.source_key)), manual)))
+    const pending = rows.filter(row => needsDiscovery.has(row) || !!row.vod_id
+      && shouldProbe(read(quality, sourceIdentity(row.source_key, row.vod_id)), manual))
+    if (!pending.length) return
+
+    const token = ++generation
+    const current = () => !disposed && token === generation
+    running = true
+    refreshing.value = manual
+    try {
+      const copies = needsDiscovery.size ? await findLocalCopies(item, current) : new Map<string, string>()
+      let index = 0
+      const worker = async () => {
+        while (current()) {
+          const option = pending[index++]
+          if (!option) return
+          if (needsDiscovery.has(option)) await updateDiscovery(option, item, copies.get(option.source_key), current)
+          if (!current()) return
+          await updateQuality(option, episode, manual, current)
+        }
       }
+      await Promise.all(Array.from({ length: Math.min(PROBE_CONCURRENCY, pending.length) }, worker))
+    } finally {
+      if (current()) running = refreshing.value = false
     }
   }
-  await Promise.all(Array.from({ length: Math.min(PROBE_CONCURRENCY, pending.length) }, worker))
-}
 
-async function probeSourceRemote(sourceKeyOf: string, vodName: string): Promise<ProbeOutcome> {
-  const generation = probeGeneration
-  const cacheKey = `${sourceKeyOf}|${vodName}`
-  const cached = remoteProbeCache.get(cacheKey)
-  if (cached && Date.now() - cached.at < REMOTE_PROBE_TTL) return cached.outcome
-  let outcome: ProbeOutcome = { probe: 'failed', vodId: null }
-  try {
-    const list = await searchCatalogSource(sourceKeyOf, vodName)
-    const match = findBestMatch(list, vodName)
-    outcome = match?.vod_id
-      ? { probe: 'remote', vodId: String(match.vod_id), hit: match }
-      : { probe: 'missing', vodId: null }
-  } catch {
-    outcome = { probe: 'failed', vodId: null }
+  if (deps.active) watch(() => [deps.active?.(), deps.identity(), deps.sources()] as const, ([active]) => {
+    stopProbe()
+    if (active) void buildSourceOptions(false)
+  }, { immediate: true })
+
+  watch(invalidation, change => {
+    const item = deps.identity()
+    if (!change || !item) return
+    const { sourceKey, vodIds } = change
+    const option = sourceOptions.value.find(row => row.source_key === sourceKey)
+    if (!option || (vodIds && option.vod_id && !vodIds.includes(option.vod_id))) return
+    stopProbe()
+    restore(item, deps.sources())
+  }, { flush: 'sync' })
+
+  onScopeDispose(() => {
+    disposed = true
+    stopProbe()
+    cancelRequests(switchRequests)
+  })
+
+  return {
+    sourceOptions, activeSourceKey, readySourceCount, refreshing, buildSourceOptions, searchCatalogSource,
+    sourceSelectable: (source: SourceOption) => source.source_key !== activeSourceKey.value && !!source.vod_id,
+    snapshot: () => ({
+      pending_requests: probeRequests.size + switchRequests.size, requests_started: requestsStarted, requests_settled: requestsSettled,
+      requests_failed: requestsFailed, cancellations_requested: cancellationsRequested, source_count: sourceOptions.value.length, disposed,
+    }),
   }
-  if (!disposed && generation === probeGeneration && outcome.probe !== 'failed') remoteProbeCache.set(cacheKey, { outcome, at: Date.now() })
-  return outcome
-}
-
-function probeLabel(probe: SourceProbe): string {
-  switch (probe) {
-    case 'local': return t('player.probeLocal')
-    case 'remote': return t('player.probeRemote')
-    case 'missing': return t('player.probeMissing')
-    case 'failed': return t('player.probeFailed')
-    default: return t('player.probeProbing')
-  }
-}
-
-/** 探测出结果的源可以直接切；没结果的（missing/probing）不给点，failed 留给点击重试。 */
-function sourceSelectable(src: SourceOption): boolean {
-  if (src.source_key === activeSourceKey.value) return false
-  if (src.vod_id) return true
-  return src.probe === 'failed'
-}
-
-
-onBeforeUnmount(() => { disposed = true; probeGeneration++; cancelRequests(); remoteProbeCache.clear() })
-return { sourceOptions, activeSourceKey, readySourceCount, probingCount, refreshing, buildSourceOptions, probeLabel, sourceSelectable, searchCatalogSource,
-  snapshot:()=>({pending_requests:requests.size,requests_started:requestsStarted,requests_settled:requestsSettled,
-    requests_failed:requestsFailed,cancellations_requested:cancellationsRequested,source_count:sourceOptions.value.length,disposed}) }
 }

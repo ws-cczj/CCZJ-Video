@@ -16,6 +16,16 @@ defineProps<{ name: string; size?: number }>()
   >
     <g v-if="name === 'danmaku'"><path d="M4 4h16a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H9l-5 3v-3a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/><path d="M6 8h6m3 0h3M6 12h3m3 0h6M6 16h8"/></g>
     <g v-else-if="name === 'danmaku-settings'"><path d="M12 19H9l-5 3v-3a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4M6 8h6m3 0h3M6 12h3M6 16h4"/><path d="M14 13v9m6-9v9"/><path d="M12 16h4m2 3h4"/></g>
+    <g v-else-if="name === 'source-bilibili'"><rect x="3" y="7" width="18" height="13" rx="3"/><path d="m7 3 3 4m7-4-3 4M8 13l2-1m4 0 2 1m-6 3h4"/></g>
+    <g v-else-if="name === 'source-qq'"><path d="M7 4.5 20 11a1.1 1.1 0 0 1 0 2L7 19.5A2 2 0 0 1 4 18V6a2 2 0 0 1 3-1.5Z"/><path d="m10 9 6 3-6 3Z" fill="currentColor" stroke="none"/></g>
+    <g v-else-if="name === 'source-iqiyi'"><rect x="2.5" y="5" width="19" height="14" rx="4"/><path d="M7 10v5m0-7h.01"/><circle cx="14" cy="12" r="3"/><path d="m15 13 2 2"/></g>
+    <g v-else-if="name === 'source-mgtv'"><path d="M19.5 10c2 4-3 10.5-8.5 11-5.6.5-8.7-2.8-7.3-7C5.3 9.7 16.8 5 19.5 10Z"/><path d="M12 8c.7-3 3-4.8 6.5-5m-11 13 2-4 2.2 2.5 3.5-3.7-.7 4.8"/></g>
+    <g v-else-if="name === 'source-migu'"><path d="M4 16v-5a3 3 0 0 1 6 0v5-5a3 3 0 0 1 6 0v5m4-8v8m0-11h.01"/></g>
+    <g v-else-if="name === 'source-youku'"><path d="M8 5a1.3 1.3 0 0 1 2-.9l9 7a1.2 1.2 0 0 1 0 1.8l-9 7A1.3 1.3 0 0 1 8 19V5Z"/><path d="M4 9v6"/></g>
+    <g v-else-if="name === 'source-sohu'"><path d="m4 5 6 5h4l6-5-2 11-6 4-6-4L4 5Z"/><path d="m8.5 13 1 1m6-1-1 1M11 17h2"/></g>
+    <g v-else-if="name === 'source-leshi'"><path d="M5 5v14h14M9 5v10h10M14 5h5m-5 5h4"/></g>
+    <g v-else-if="name === 'source-xigua'"><path d="M3 6h18v2a9 9 0 0 1-18 0V6Z"/><path d="M5 13a14 14 0 0 0 14 0M8 9l.7 1m6.6 0 .7-1m-4 1v1"/></g>
+    <g v-else-if="name === 'source-bahamut'"><path d="m12 3 2.7 5.7 6.3.8-4.6 4.4 1.2 6.3-5.6-3.1-5.6 3.1 1.2-6.3L3 9.5l6.3-.8L12 3Z"/><path d="m11 10 3 2-3 2Z" fill="currentColor" stroke="none"/></g>
     <g v-else-if="name === 'book-open'"><path d="M12 5c-3-2-7-2-10-1v16c3-1 7-1 10 1 3-2 7-2 10-1V4c-3-1-7-1-10 1Zm0 0v16"/></g>
     <g v-else-if="name === 'panels'"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 10h18M10 10v11M15 3v7"/></g>
     <g v-else-if="name === 'bookmark'"><path d="M6 3h12v19l-6-4-6 4V3Z"/></g>

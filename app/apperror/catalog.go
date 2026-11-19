@@ -19,6 +19,7 @@ type Definition struct {
 var definitions = map[Code]Definition{
 	Validation:             {"请求参数不正确", http.StatusBadRequest, "warn"},
 	Conflict:               {"当前操作存在冲突", http.StatusConflict, "warn"},
+	ModeFinishing:          {"当前模式仍在收尾，请稍后重试", http.StatusServiceUnavailable, "warn"},
 	NotFound:               {"请求的内容不存在", http.StatusNotFound, "warn"},
 	Cancelled:              {"操作已取消", 499, "info"},
 	Timeout:                {"操作超时", http.StatusGatewayTimeout, "warn"},

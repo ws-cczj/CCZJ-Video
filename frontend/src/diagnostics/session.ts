@@ -129,7 +129,7 @@ export function installDiagnosticListeners(): () => void {
   }
   const errorCode = (cause: unknown): string => {
     const code=normalizeApiError(cause).code
-    if(['CANCELLED','TIMEOUT','UNAVAILABLE','NOT_FOUND','VALIDATION','CONFLICT','PERMISSION_DENIED','UNSUPPORTED','STORAGE','CORRUPT','AUTHENTICATION_REQUIRED','RATE_LIMITED'].includes(code))return code
+    if(['CANCELLED','TIMEOUT','UNAVAILABLE','NOT_FOUND','VALIDATION','CONFLICT','MODE_FINISHING','PERMISSION_DENIED','UNSUPPORTED','STORAGE','CORRUPT','AUTHENTICATION_REQUIRED','RATE_LIMITED'].includes(code))return code
     const name = cause instanceof Error || cause instanceof DOMException ? cause.name : ''
     return ['Error','TypeError','RangeError','ReferenceError','SyntaxError','URIError','EvalError','AbortError','CancelError','CancellationError','InvalidStateError','NotSupportedError','NetworkError','TimeoutError','QuotaExceededError','OperationError','NotAllowedError'].includes(name) ? name : 'UNHANDLED'
   }

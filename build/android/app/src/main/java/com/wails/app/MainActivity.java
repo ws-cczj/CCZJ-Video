@@ -357,6 +357,7 @@ public class MainActivity extends AppCompatActivity {
     // The Go-side dialog ID of the in-flight file picker (-1 when idle)
     private int pendingFilePickerCallbackID = -1;
     private CczjWebFileChooser webFileChooser;
+    private CczjDiagnosticFiles diagnosticFiles;
     private static final int PHOTO_CAPTURE_REQUEST = 7002;
     private static final int VIDEO_CAPTURE_REQUEST = 7003;
     private static final int CAMERA_PERMISSION_REQUEST = 7010;
@@ -651,7 +652,8 @@ public class MainActivity extends AppCompatActivity {
 
         // Add JavaScript interface for Go communication
         playerDevice = new CczjPlayerDevice(this, webView);
-        jsBridge = new WailsJSBridge(bridge, webView, playerDevice, new CczjDiagnosticFiles(this));
+        diagnosticFiles = new CczjDiagnosticFiles(this, webView);
+        jsBridge = new WailsJSBridge(bridge, webView, playerDevice, diagnosticFiles);
         webView.addJavascriptInterface(jsBridge, "wails");
     }
 
@@ -1035,6 +1037,10 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == CczjDiagnosticFiles.SAVE_REQUEST) {
+            if (diagnosticFiles != null) diagnosticFiles.saveResult(resultCode, data);
+            return;
+        }
         if (requestCode == CczjWebFileChooser.REQUEST) {
             if (webFileChooser != null) webFileChooser.result(resultCode, data);
             return;
@@ -1406,6 +1412,7 @@ public class MainActivity extends AppCompatActivity {
         if(themeReveal!=null){themeReveal.cancel(null);themeReveal=null;}
         if (systemBarAnimator != null) { systemBarAnimator.cancel(); systemBarAnimator = null; }
         if (webFileChooser != null) webFileChooser.cancel();
+        if (diagnosticFiles != null) diagnosticFiles.close();
         pendingFullscreen = null;
         hideFullscreenVideo();
         if (exitingFullscreen != null) {

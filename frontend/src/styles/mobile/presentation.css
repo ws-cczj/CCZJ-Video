@@ -1,17 +1,9 @@
 /* Mobile polish shares desktop theme semantics; it never styles desktop roots. */
 .cczj-mobile-shell .cczj-mobile-page .cczj-mobile-danmaku-sources { padding-top: 0; }
-.cczj-mobile-shell .cczj-mobile-page .cczj-mobile-danmaku-sources .cczj-danmaku-source-hero { padding: 0 0 8px; border: 0; }
-.cczj-mobile-shell .cczj-mobile-page .cczj-mobile-danmaku-sources .cczj-danmaku-source-total { margin-top: 0; }
-.cczj-mobile-shell .cczj-mobile-page .cczj-mobile-danmaku-sources fieldset { margin: 4px 0 12px; gap: 12px; }
-.cczj-mobile-shell .cczj-mobile-page .cczj-mobile-danmaku-sources .cczj-danmaku-source-card { padding: var(--cczj-mobile-section-padding); }
-.cczj-mobile-shell .cczj-mobile-page .cczj-mobile-danmaku-sources .cczj-danmaku-source-features { margin: 10px 0; }
-.cczj-mobile-shell .cczj-mobile-page .cczj-mobile-danmaku-sources .cczj-danmaku-source-actions { margin-top: 10px; }
-.cczj-mobile-shell .cczj-mobile-page .cczj-mobile-danmaku-sources .cczj-danmaku-source-actions label { min-height: var(--cczj-mobile-control-md); }
-.cczj-mobile-shell .cczj-mobile-page .cczj-mobile-danmaku-sources .cczj-danmaku-source-notes { margin-top: 16px; padding-top: 12px; }
 .cczj-mobile-shell .cczj-mobile-search-history { margin: 20px 0; }
 .cczj-mobile-shell .cczj-mobile-search-history-heading { @apply cczj-flex cczj-items-center cczj-gap-6 cczj-mb-4; }
 .cczj-mobile-shell .cczj-mobile-search-history-heading h2 { @apply cczj-flex-1 cczj-min-w-0 cczj-flex cczj-items-center cczj-gap-3; margin: 0; @apply cczj-text-base cczj-leading-normal; }
-.cczj-mobile-shell .cczj-mobile-search-history-terms { @apply cczj-flex cczj-flex-wrap cczj-gap-4; }
+.cczj-mobile-shell .cczj-mobile-search-history-terms { @apply cczj-gap-4; }
 .cczj-mobile-shell .cczj-mobile-search-history-term { @apply cczj-inline-flex cczj-items-center cczj-gap-3; min-height: 44px; @apply cczj-max-w-full; padding: 8px 14px; @apply cczj-border cczj-rounded-lg; background: var(--bg-card); @apply cczj-text-primary; font: inherit; @apply cczj-text-13 cczj-leading-normal; overflow-wrap: anywhere; }
 .cczj-mobile-shell .cczj-mobile-page .slide-detail-wrap { @apply cczj-pb-10; }
 .cczj-mobile-shell .cczj-mobile-page .slide-tags { @apply cczj-mb-0; }

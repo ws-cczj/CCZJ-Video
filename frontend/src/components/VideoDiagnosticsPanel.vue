@@ -5,7 +5,9 @@ import { useI18n } from 'vue-i18n'
 import Icon from './Icon.vue'
 import { Button } from './ui'
 import { GetDiagnostics, GetRuntimeMetrics, StartDiagnosticsRecording, StopDiagnosticsRecording, ListIdentityMergeCandidates, MergeGlobalVideoIdentities, ExportDiagnosticsReport } from '../api/app'
-import { revealDiagnosticExport } from '../platform/diagnosticFiles'
+import { diagnosticExportName, revealDiagnosticExport, supportsDiagnosticSave } from '../platform/diagnosticFiles'
+import { notifyDiagnosticReport } from '../diagnostics/exportFeedback'
+import DiagnosticSaveButton from './DiagnosticSaveButton.vue'
 import RuntimeResourcePanel from './RuntimeResourcePanel.vue'
 import DiagnosticObservability from './DiagnosticObservability.vue'
 import DiagnosticSessionPanel from './DiagnosticSessionPanel.vue'
@@ -39,7 +41,7 @@ const resourcePanel = ref<InstanceType<typeof RuntimeResourcePanel> | null>(null
 const exporting = ref(false)
 const reportPath = ref('')
 const recordingChanging = ref(false)
-const recordingFolderPath = computed(() => reportPath.value)
+const reportLabel = computed(() => supportsDiagnosticSave() ? diagnosticExportName(reportPath.value) : reportPath.value)
 const recordingSummary = computed(() => t(recordingStatus.value.active ? 'diagnostics.recordingActive' : 'diagnostics.recordingComplete', { samples: recordingStatus.value.samples }))
 const recordingStopReason = computed(() => {
   const reasons: Record<string, string> = { duration_limit: 'diagnostics.recordingDurationLimit', size_limit: 'diagnostics.recordingSizeLimit', marker_limit: 'diagnostics.recordingEventLimit', shutdown: 'diagnostics.recordingShutdown' }
@@ -414,14 +416,14 @@ async function exportReport(): Promise<void> {
     const flushComplete = await flushDiagnostics()
     const result = await ExportDiagnosticsReport(JSON.stringify({ application_mode:'video',diagnostic_flush_complete:flushComplete,diagnostic_health:diagnosticHealth(),startup:startupSnapshot(), activity:activityDiagnostics.snapshot(), resources: resourcePanel.value?.snapshot(), cache: frontendCacheRows(), playback: perf.snapshot(), recording: recordingStatus.value, recording_observer_failed: recordingObserverFailed.value }))
     reportPath.value = result?.bundle_path || result?.path || ''
-    errorStore.info(t('diagnostics.exportDone'), reportPath.value)
+    notifyDiagnosticReport(reportPath.value)
   } catch (error) {
     errorStore.fromError(t('diagnostics.exportFailed'), error, 'DiagnosticsPanel.export')
   } finally { exporting.value = false }
 }
 async function openReportFolder(): Promise<void> {
-  if (!recordingFolderPath.value) return
-  try { await revealDiagnosticExport(recordingFolderPath.value) }
+  if (!reportPath.value) return
+  try { await revealDiagnosticExport(reportPath.value) }
   catch (error) { errorStore.fromError(t('diagnostics.exportFailed'), error, 'DiagnosticsPanel.openExport') }
 }
 
@@ -614,9 +616,12 @@ onBeforeUnmount(() => {
     <p class="desc">{{t('diagnostics.modeScopeNote')}}</p>
     <div class="diag-recording-bar" :class="{ active: recordingStatus.active }" role="status">
       <div><strong>{{ recordingStatus.path ? recordingSummary : t('diagnostics.recordingReady') }}</strong><p>{{ t('diagnostics.recordingHint') }}</p><p v-if="recordingStatus.error" class="diag-recording-error">{{ recordingStatus.error }}</p><p v-else-if="recordingObserverFailed" class="diag-recording-error">{{ t('diagnostics.recordingObservationIncomplete') }}</p><p v-else-if="recordingStatus.path && !recordingStatus.active && recordingStatus.reason !== 'manual'" class="diag-recording-error">{{ t('diagnostics.recordingStoppedEarly', { reason: recordingStopReason }) }}</p></div>
-      <Button v-if="reportPath" variant="ghost" size="sm" @click="openReportFolder">{{ t(exportActionLabel) }}</Button>
     </div>
-    <div v-if="reportPath" class="diag-export-bar"><span class="cczj-truncate" :title="reportPath">{{ reportPath }}</span><Button variant="ghost" size="sm" @click="openReportFolder">{{ t(exportActionLabel) }}</Button></div>
+    <div v-if="reportPath" class="diag-export-bar">
+      <span class="cczj-truncate" :title="reportLabel">{{ reportLabel }}</span>
+      <DiagnosticSaveButton :path="reportPath" />
+      <Button variant="ghost" size="sm" @click="openReportFolder">{{ t(exportActionLabel) }}</Button>
+    </div>
     <div class="diag-workspace">
       <nav class="diag-nav" :aria-label="t('diagnostics.sectionNavigation')" @pointerdown="sectionDrag.down" @pointermove="sectionDrag.move" @pointerup="sectionDrag.end" @pointercancel="sectionDrag.end" @click.capture="sectionDrag.click">
         <span class="diag-nav-caption">{{ t('diagnostics.sectionNavigation') }}</span>

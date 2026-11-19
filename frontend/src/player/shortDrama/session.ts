@@ -43,6 +43,7 @@ export const useShortDramaSession = defineStore('short-drama-session', () => {
     preferenceVersion: () => preferences.blocked,
     backgroundError: cause => { if (playing.value) errors.fromError(tr('shortDrama.loadFailed'), cause, 'short-drama.refresh') },
   })
+  watch(playing, value => { if (!value) feed.cancelRefresh() }, { flush: 'sync' })
   const warmMedia = computed(() => {
     if (!enabled.value) return null
     if (!home.value) return feed.nextMedia.value

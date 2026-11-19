@@ -202,26 +202,44 @@ function pump(): void {
   const recentFailures = window.map(segment => transferFailure(segment.url, segment.range)).filter(row => row && row.error.kind !== 'capacity' && now - row.at < 30_000)
   const oldestFailure = Math.min(...recentFailures.map(row => row!.at))
   const broadFailure = recentFailures.length >= 3 && !window.some(segment => transferSucceededSince(segment.url, segment.range, oldestFailure))
-  const assisting = !broadFailure && replenishing && !session.playbackPaused && (now - refillSince > Math.max(4000, session.targetDuration * 1000 / session.playbackRate) || (stallAt > 0 && now - stallAt > 1500))
+  const assistEligible = !broadFailure && replenishing && !session.playbackPaused
+    && (stallAt > 0 || session.playbackBufferAhead < Math.max(session.targetDuration, 4 * session.playbackRate))
+  const assistAt = assistEligible ? Math.min(
+    refillSince + Math.max(4000, session.targetDuration * 1000 / session.playbackRate),
+    stallAt > 0 ? stallAt + 1500 : Infinity,
+  ) : Infinity
+  const assisting = now >= assistAt
   lastSnapshot = { inventory, available, seconds: Math.max(0, seconds), redundancy: lastRedundancy, minimum: MIN_INVENTORY, target, replenishing, assisting, pending }
   if (!replenishing) return
   for (const controller of prefetchState.prefetchControllers) controller.abort()
   let retryAt = Infinity
-  const candidates = broadFailure ? window.filter(segment => !ready(segment)).slice(0, 1) : window
-  for (const segment of candidates) {
+  const concurrency = adaptiveConcurrency()
+  // Keep the helper near the first gap, including when the nearest requests
+  // already belong to the prefetchers or playback.
+  const assistEnd = inventory + concurrency + 1
+  if (assistEligible && counts.helper === 0 && counts.foreground === 0) {
+    const retry = window.slice(inventory, assistEnd).find(segment => {
+      if (segment.start > session.playbackPosition + session.targetDuration * 2 || segment.demandOnly
+        || ready(segment) || transferBusy(segment.url, segment.range)) return false
+      const failure = transferFailure(segment.url, segment.range)
+      return failure && failure.error.kind !== 'capacity' && failure.nextRetry <= now
+    })
+    if (retry) claim(retry, 'helper')
+  }
+  const candidates = broadFailure ? window.slice(inventory, inventory + 1) : window
+  for (const [index, segment] of candidates.entries()) {
     if (ready(segment) || transferBusy(segment.url, segment.range) || segment.demandOnly) continue
     const failure = transferFailure(segment.url, segment.range)
     if (failure && session.playbackPaused) continue
     if (failure?.error.kind === 'capacity') continue
     if (failure && failure.nextRetry > now) { retryAt = Math.min(retryAt, failure.nextRetry); continue }
     const active = transferCounts()
-    if (!broadFailure && failure && segment.start <= session.playbackPosition + session.targetDuration * 2 && !session.playbackPaused && active.helper === 0 && active.foreground === 0) claim(segment, 'helper')
-    else if (active.prefetch < (broadFailure ? 1 : adaptiveConcurrency())) claim(segment, 'prefetch')
-    else if (assisting && active.helper === 0 && active.foreground === 0) claim(segment, 'helper')
+    if (active.prefetch < (broadFailure ? 1 : concurrency)) claim(segment, 'prefetch')
+    else if (assisting && active.helper === 0 && active.foreground === 0 && index < assistEnd) claim(segment, 'helper')
     else break
   }
   if (retryAt < Infinity) wake(Math.max(50, retryAt - now))
-  if (!session.playbackPaused && !assisting) wake(Math.max(100, Math.max(4000, session.targetDuration * 1000 / session.playbackRate) - (now - refillSince)))
+  if (assistAt > now && assistAt < Infinity) wake(Math.max(1, assistAt - now))
   if (counts.prefetch !== transferCounts().prefetch || counts.helper !== transferCounts().helper) fireListeners()
 }
 

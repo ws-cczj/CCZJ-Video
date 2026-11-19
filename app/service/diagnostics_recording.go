@@ -32,6 +32,12 @@ func (a *App) StartDiagnosticsRecording() (diagnosticrecording.Status, error) {
 	}
 	a.modeSwitchMu.Lock()
 	defer a.modeSwitchMu.Unlock()
+	if err := a.background.Context().Err(); err != nil {
+		return diagnosticrecording.Status{}, err
+	}
+	if a.modeWork().Context().Err() != nil {
+		return diagnosticrecording.Status{}, modeFinishing()
+	}
 	status, err := a.recording.StartMode(a.currentMode())
 	if err != nil {
 		return status, apperror.Wrap(apperror.Storage, err, "开始诊断记录失败")

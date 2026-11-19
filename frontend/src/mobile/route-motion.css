@@ -24,7 +24,8 @@
 html[data-motion-pages='off'] .cczj-mobile-route-backdrop,html[data-cczj-motion='off'] .cczj-mobile-route-backdrop { @apply cczj-transition-none; }
 @media(prefers-reduced-motion:reduce){.cczj-mobile-route-backdrop { @apply cczj-transition-none; }}
 .cczj-mobile-route-forward-enter-active,.cczj-mobile-route-forward-leave-active,
-.cczj-mobile-route-back-enter-active,.cczj-mobile-route-back-leave-active { transition:transform var(--cczj-motion-slow) var(--cczj-motion-ease-standard);will-change:transform; }
+.cczj-mobile-route-back-enter-active,.cczj-mobile-route-back-leave-active,
+.cczj-desktop-player-open-enter-active,.cczj-desktop-player-close-leave-active { transition:transform var(--cczj-motion-slow) var(--cczj-motion-ease-standard);will-change:transform; }
 .cczj-mobile-route-viewport > :is(.cczj-mobile-route-forward-enter-active,.cczj-mobile-route-back-leave-active) { z-index:4;box-shadow:-12px 0 32px #0002; }
 .cczj-mobile-route-viewport > :is(.cczj-mobile-route-forward-leave-active,.cczj-mobile-route-back-enter-active) { z-index:1; }
 .cczj-mobile-route-forward-enter-from,.cczj-mobile-route-back-leave-to { transform:translate3d(100%,0,0); }
@@ -102,8 +103,7 @@ html[data-cczj-platform=mobile] .main-content:has([data-cczj-editing=true]) { sc
 .cczj-desktop-tab-back-enter-active,.cczj-desktop-tab-back-leave-active { transition:transform var(--cczj-motion-section) cubic-bezier(.4,0,.2,1); will-change:transform; }
 .cczj-desktop-tab-forward-enter-from,.cczj-desktop-tab-back-leave-to { transform:translate3d(0,100%,0); }
 .cczj-desktop-tab-forward-leave-to,.cczj-desktop-tab-back-enter-from { transform:translate3d(0,-100%,0); }
-.cczj-desktop-player-open-enter-active,.cczj-desktop-player-close-leave-active { z-index:5;transition:transform var(--cczj-motion-section) var(--cczj-motion-ease-standard);will-change:transform; }
-.cczj-desktop-player-close-leave-active { transition-duration:var(--cczj-motion-dismiss);transition-timing-function:var(--cczj-motion-ease-exit); }
+.cczj-desktop-player-open-enter-active,.cczj-desktop-player-close-leave-active { z-index:5; }
 .cczj-desktop-player-open-enter-from,.cczj-desktop-player-close-leave-to { transform:translate3d(100%,0,0); }
 .cczj-desktop-player-open-enter-to,.cczj-desktop-player-close-leave-from { transform:translate3d(0,0,0); }
 .desktop-video-stage > .cczj-mobile-route-viewport > .cczj-mobile-route-scene:not([data-path^='/player/']) { contain:layout paint; }

@@ -1,18 +1,20 @@
-import { nextTick, onBeforeUnmount, ref, watch, type Ref } from 'vue'
+import { nextTick, onBeforeUnmount, ref, shallowRef, watch, type Ref } from 'vue'
 import { useMotionStore } from '../../stores/motion'
 import { videoPictureBounds } from '../../utils/videoLayout'
 import { recordDiagnosticEvent } from '../../diagnostics/recording'
+import type { ShortDramaNeighbor } from './useShortDramaFeed'
 
 type Direction = 'previous' | 'next'
+const pullThreshold = 96
+const easing = 'cubic-bezier(.2,.8,.2,1)'
+const translate = (y: number) => `translate3d(0,${y}px,0)`
 
-/** One live decoder and one temporary frame own a vertical handoff. Swipes
- * settle independently of buffering; only silent refresh waits for a frame.
- * No second player or exported image/cache is needed. */
 export function useShortDramaPaging(options: {
   surface: Ref<HTMLElement | undefined>
   canvas: Ref<HTMLCanvasElement | undefined>
   cover: Ref<HTMLElement | undefined>
   chrome: Ref<HTMLElement | undefined>
+  mobile?: { layer: Ref<HTMLElement | undefined>; neighbor: (direction: Direction) => ShortDramaNeighbor | null }
   video: () => HTMLVideoElement | null
   active: () => boolean
   visible: () => boolean
@@ -23,19 +25,25 @@ export function useShortDramaPaging(options: {
   timeout?: () => void
 }) {
   const motion = useMotionStore(), frozen = ref(false)
+  const preview = shallowRef<ShortDramaNeighbor | null>(null)
+  const pullProgress = ref(0)
   let direction = 0, pending = false, animating = false, distance = 0, waitForMedia = false
+  let previewWaiting = false, returning = false, previewSide = 0
   let frame: number | undefined, timeout: ReturnType<typeof setTimeout> | undefined
   let animations: Animation[] = [], revision = 0
   let outgoingOffset = 0, incomingOffset = 0, height = 0
   let pulled = 0
-  const duration = () => motion.reduced || document.documentElement.dataset.motionPages === 'off' || document.documentElement.dataset.cczjMotion === 'off' ? 0 : motion.tokenMs('--cczj-motion-slow')
+  const duration = () => motion.allows('pages') ? motion.tokenMs('--cczj-motion-slow') : 0
 
   function reset(): void {
     revision++; pending = false; animating = false; direction = 0; distance = 0; waitForMedia = false
     outgoingOffset = 0; incomingOffset = 0; height = 0; pulled = 0
+    previewWaiting = false; returning = false; previewSide = 0
+    preview.value = null; pullProgress.value = 0
     if (frame !== undefined) cancelAnimationFrame(frame)
     frame = undefined; clearTimeout(timeout); timeout = undefined
     animations.forEach(animation => animation.cancel()); animations = []
+    options.mobile?.layer.value?.style.removeProperty('transform')
     options.surface.value?.style.removeProperty('transform')
     const canvas = options.canvas.value
     if (canvas) { canvas.style.removeProperty('transform'); canvas.width = 0; canvas.height = 0 }
@@ -44,41 +52,102 @@ export function useShortDramaPaging(options: {
     frozen.value = false
   }
   function drag(value: number): void {
-    if (!options.active() || frozen.value) return
+    if (!options.active() || pending || frozen.value || previewWaiting) return
     pulled = value
-    if (pending || !duration()) return
-    const allowed = options.canMove(value < 0 ? 'next' : 'previous')
-    distance = Math.max(-innerHeight * .8, Math.min(innerHeight * .8, value * (allowed ? 1 : .15)))
+    const target = value < 0 ? 'next' : 'previous'
+    const pulling = value > 0 && !options.canMove('previous') && options.canRefresh?.()
+    pullProgress.value = pulling ? Math.min(value / pullThreshold, 1) : 0
+    if (!motion.allows('pages')) return
+    height ||= options.surface.value?.clientHeight || 0
+    const neighbor = value ? options.mobile?.neighbor(target) ?? null : null
+    const allowed = options.mobile ? !!neighbor : options.canMove(target)
+    preview.value = neighbor
+    previewSide = value < 0 ? 1 : -1
+    const offset = value * (allowed ? 1 : pulling ? .42 : .15)
+    distance = Math.max(-height * .9, Math.min(height * .9, offset))
     if (frame !== undefined) return
     frame = requestAnimationFrame(() => {
       frame = undefined
-      if (!pending && options.surface.value) options.surface.value.style.transform = `translate3d(0,${distance}px,0)`
+      if (pending) return
+      const surface = options.surface.value, layer = options.mobile?.layer.value
+      if (surface) surface.style.transform = translate(distance)
+      if (layer) layer.style.transform = translate(distance + previewSide * height)
     })
   }
   function contact(): void {
     // Refresh keeps an outgoing still while buffering, but must never hide the
     // only interactive player from the next gesture. Input belongs to the
     // stable scene, not the translated video subtree.
-    if (frozen.value && !animating) reset()
+    if (previewWaiting || returning || (frozen.value && !animating)) reset()
   }
   function cancelDrag(): void {
-    if (pending || frozen.value) return
+    if (pending || frozen.value || previewWaiting || returning) return
     const surface = options.surface.value, offset = distance
+    const layer = preview.value ? options.mobile?.layer.value : undefined
+    const edge = previewSide * height
+    const ms = offset ? duration() : 0
+    if (surface && layer && ms) {
+      if (frame !== undefined) cancelAnimationFrame(frame)
+      frame = undefined; pulled = 0; pullProgress.value = 0; returning = true
+      const token = revision
+      animations = [
+        surface.animate([{ transform: translate(offset) }, { transform: translate(0) }], { duration: ms, easing, fill: 'both' }),
+        layer.animate([{ transform: translate(edge + offset) }, { transform: translate(edge) }], { duration: ms, easing, fill: 'both' }),
+      ]
+      void Promise.allSettled(animations.map(animation => animation.finished)).then(() => { if (token === revision) reset() })
+      return
+    }
     reset()
-    if (surface && offset && duration()) {
-      const animation = surface.animate([{ transform: `translate3d(0,${offset}px,0)` }, { transform: 'translate3d(0,0,0)' }], { duration: duration(), easing: 'cubic-bezier(.2,.8,.2,1)' })
+    if (surface && ms) {
+      const animation = surface.animate([{ transform: translate(offset) }, { transform: translate(0) }], { duration: ms, easing })
       animations = [animation]
     }
   }
+  async function slideMobile(target: Direction): Promise<void> {
+    const surface = options.surface.value, layer = options.mobile?.layer.value
+    const neighbor = options.mobile?.neighbor(target)
+    const ms = duration()
+    if (!surface || !layer || !neighbor || !ms) { reset(); options.step(target); return }
+
+    if (frame !== undefined) cancelAnimationFrame(frame)
+    frame = undefined
+    pending = true; pulled = 0; pullProgress.value = 0
+    preview.value = neighbor
+    const edge = (target === 'next' ? 1 : -1) * (height || surface.clientHeight)
+    const offset = distance * edge < 0 ? distance : 0
+    const token = revision
+    surface.style.transform = translate(offset)
+    layer.style.transform = translate(edge + offset)
+    await nextTick()
+    if (token !== revision) return
+
+    const timing = { duration: ms * (1 - Math.min(.7, Math.abs(offset / (edge || 1)))), easing, fill: 'both' as const }
+    animations = [
+      surface.animate([{ transform: translate(offset) }, { transform: translate(-edge) }], timing),
+      layer.animate([{ transform: translate(edge + offset) }, { transform: translate(0) }], timing),
+    ]
+    await Promise.allSettled(animations.map(animation => animation.finished))
+    if (token !== revision || !options.active()) return
+    if (options.mobile?.neighbor(target)?.key !== neighbor.key) { reset(); return }
+
+    layer.style.transform = translate(0)
+    surface.style.removeProperty('transform')
+    animations.forEach(animation => animation.cancel()); animations = []
+    pending = false; previewWaiting = true
+    // Keep the landed cover over the same decoder until its new media is usable.
+    timeout = setTimeout(reset, 15000)
+    options.step(target)
+  }
   function step(value: Direction): void {
-    if (options.active() && !animating && value === 'previous' && pulled >= Math.max(100, innerHeight * .18) && options.canRefresh?.()) {
-      reset(); options.refresh?.(); return
+    if (pending || frozen.value || returning || previewWaiting || !options.active()) return
+    if (value === 'previous' && pullProgress.value === 1 && pulled >= pullThreshold && !options.canMove(value) && options.canRefresh?.()) {
+      cancelDrag(); options.refresh?.(); return
     }
-    if (pending || frozen.value || !options.active()) return
     if (!options.canMove(value)) {
       cancelDrag()
       return
     }
+    if (options.mobile) { void slideMobile(value); return }
     cancelDrag()
     direction = value === 'next' ? 1 : -1; pending = true
     options.step(value)
@@ -88,6 +157,7 @@ export function useShortDramaPaging(options: {
     cancelDrag(); direction = 1; pending = true; waitForMedia = true; work()
   }
   function capture(): void {
+    if (options.mobile) return
     const started = performance.now()
     const video = options.video(), canvas = options.canvas.value, surface = options.surface.value
     if (!options.active() || !pending || !direction || !duration() || !video || video.readyState < 2 || !canvas || !surface) { reset(); return }
@@ -130,11 +200,12 @@ export function useShortDramaPaging(options: {
     }
   }
   async function ready(): Promise<void> {
+    if (previewWaiting) { reset(); return }
     if (!options.active() || !frozen.value || animating) return
     const surface = options.surface.value, cover = options.cover.value
     if (!surface || !cover) { reset(); return }
     clearTimeout(timeout); timeout = undefined; animating = true
-    const token = revision, timing = { duration: duration(), easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'both' as const }
+    const token = revision, timing = { duration: duration(), easing, fill: 'both' as const }
     animations = [
       surface.animate([{ transform: `translate3d(0,${incomingOffset}px,0)` }, { transform: 'translate3d(0,0,0)' }], timing),
       cover.animate([{ transform: `translate3d(0,${outgoingOffset}px,0)` }, { transform: `translate3d(0,${-direction * height}px,0)` }], timing),
@@ -158,5 +229,5 @@ export function useShortDramaPaging(options: {
     else if (frozen.value) timeout = setTimeout(() => { reset(); options.timeout?.() }, 15000)
   })
   onBeforeUnmount(reset)
-  return { frozen, drag, cancelDrag, step, replace, capture, ready, reset, contact }
+  return { frozen, preview, pullProgress, drag, cancelDrag, step, replace, capture, ready, reset, contact }
 }

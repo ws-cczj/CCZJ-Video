@@ -12,9 +12,12 @@ export function createPlaybackSession() {
   let generation = 0
   let controller = new AbortController()
   const timers = new Set<ReturnType<typeof setTimeout>>()
+  let frame: { video: HTMLVideoElement; id: number } | undefined
 
   function reset(): number {
     generation++
+    if (frame) frame.video.cancelVideoFrameCallback?.(frame.id)
+    frame = undefined
     controller.abort()
     controller = new AbortController()
     for (const timer of timers) clearTimeout(timer)
@@ -42,5 +45,15 @@ export function createPlaybackSession() {
     timers.add(timer)
   }
 
-  return { reset, capture, later }
+  function presentFrame(video: HTMLVideoElement, callback: (metadata: VideoFrameCallbackMetadata) => void): void {
+    if (frame || typeof video.requestVideoFrameCallback !== 'function') return
+    const session = capture()
+    frame = { video, id: video.requestVideoFrameCallback((_now, metadata) => {
+      if (!session.current()) return
+      frame = undefined
+      callback(metadata)
+    }) }
+  }
+
+  return { reset, capture, later, presentFrame }
 }

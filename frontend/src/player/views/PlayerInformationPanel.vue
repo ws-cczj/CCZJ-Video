@@ -114,16 +114,16 @@ function onMinimizeApp():void { try { Window.Minimise() } catch { /* Host owns a
                 <span class="cczj-text-sm cczj-font-medium">{{ t('player.playSources') }}</span>
               </div>
               <div class="side-section-right cczj-flex cczj-items-center cczj-gap-2">
+                <Button variant="text" size="sm" class="sort-toggle-btn" :loading="catalog.refreshing" :disabled="catalog.loading"
+                  :title="t('playLine.cooldownHint')" :aria-label="t('sources.probe')" @click="catalog.retry">
+                  <span class="cczj-text-xs">{{ t('sources.probe') }}</span>
+                </Button>
                 <span class="side-count cczj-text-xs cczj-text-muted">{{ t('player.availableSources', { count: catalog.readyCount }) }}</span>
-                <span v-if="catalog.probingCount > 0" class="side-count cczj-text-xs cczj-text-muted">{{ t('player.probePendingCount', { count: catalog.probingCount }) }}</span>
               </div>
             </div>
 
               <div class="side-source-scroll" tabindex="0" :aria-label="t('player.playSources')">
                 <PlaybackRouteList dark expanded :sources="catalog.items" :active-key="catalog.activeKey" :active-line="details.lines[details.activeLineIndex]?.index??-1" :lines="details.lines" :busy="catalog.loading" :selectable="catalog.selectable" @choose="(key,line)=>emit('source',key,line)" />
-              </div>
-              <div class="side-source-actions cczj-flex cczj-items-center cczj-justify-end cczj-gap-4">
-                <Button variant="text" size="sm" :loading="catalog.refreshing" :title="t('playLine.cooldownHint')" @click="catalog.retry">{{t('sources.probe')}}</Button>
               </div>
             </div>
 

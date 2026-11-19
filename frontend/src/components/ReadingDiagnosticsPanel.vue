@@ -10,6 +10,8 @@ import { startupSnapshot } from '../diagnostics/startup'
 import { captureBrowserResources } from '../diagnostics/browserResources'
 import { recordingStatus, recordingObserverFailed, recordDiagnosticEvent, setRecordingStatus, recordingRevision, flushDiagnostics, diagnosticHealth } from '../diagnostics/recording'
 import { revealDiagnosticExport } from '../platform/diagnosticFiles'
+import { notifyDiagnosticReport } from '../diagnostics/exportFeedback'
+import DiagnosticSaveButton from './DiagnosticSaveButton.vue'
 import { readAndroidMemoryState } from '../api/runtime'
 import DiagnosticObservability from './DiagnosticObservability.vue'
 import DiagnosticSessionPanel from './DiagnosticSessionPanel.vue'
@@ -62,7 +64,14 @@ function snapshot(){return {application_mode:mode.mode,startup:startupSnapshot()
 async function exportReport(){
   if(busy.value)return
   busy.value=true
-  try{const flushComplete=await flushDiagnostics();const report=await ExportDiagnosticsReport(JSON.stringify({...snapshot(),diagnostic_flush_complete:flushComplete}));if(report)path.value=report.bundle_path||report.path}
+  try {
+    const flushComplete = await flushDiagnostics()
+    const report = await ExportDiagnosticsReport(JSON.stringify({ ...snapshot(), diagnostic_flush_complete: flushComplete }))
+    if (report) {
+      path.value = report.bundle_path || report.path
+      notifyDiagnosticReport(path.value)
+    }
+  }
   catch(error){errors.fromError(t('diagnostics.exportFailed'),error,'ReadingDiagnostics.export')}
   finally{busy.value=false}
 }
@@ -90,7 +99,11 @@ const bytes=(value:number|undefined|null)=>value==null?'—':`${(value/1048576).
       </div>
     </header>
     <DiagnosticSessionPanel :active="visible" />
-    <div v-if="path||recordingStatus.active" class="reading-diag-status" role="status"><span v-if="recordingStatus.active">{{t('diagnostics.recordingActive',{samples:recordingStatus.samples})}}</span><Button v-if="path" variant="text" @click="openReport">{{t(exportActionLabel)}}<Icon name="chevron-right" :size="16"/></Button></div>
+    <div v-if="path||recordingStatus.active" class="reading-diag-status">
+      <span v-if="recordingStatus.active" role="status">{{t('diagnostics.recordingActive',{samples:recordingStatus.samples})}}</span>
+      <DiagnosticSaveButton v-if="path" :path="path" />
+      <Button v-if="path" variant="text" @click="openReport">{{t(exportActionLabel)}}<Icon name="chevron-right" :size="16"/></Button>
+    </div>
     <p v-if="failed||recordingObserverFailed||recordingStatus.error" class="reading-diag-error" role="alert">{{recordingStatus.error||t('diagnostics.recordingObservationIncomplete')}}</p>
     <nav class="reading-diag-tabs" :aria-label="t('diagnostics.sectionNavigation')"><Segment v-model="section" :options="tabOptions" wrap /></nav>
     <div class="reading-diag-content">

@@ -48,7 +48,12 @@ func matchRequest() MatchRequest {
 }
 func matchService(t *testing.T, store *Store) *Service {
 	t.Helper()
+	database, _ := store.db()
+	if _, err := database.Exec(`INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)`, SourceSettingsKey, `{"disabled":["mgtv","migu","youku","sohu","leshi","xigua","bahamut"]}`); err != nil {
+		t.Fatal(err)
+	}
 	s := NewService(store, NewClient(nil), context.Background())
+	s.providers = make(map[string]Provider, 3)
 	for _, name := range []string{"bilibili", "qq", "iqiyi"} {
 		s.providers[name] = &matchProviderFixture{name: name}
 	}
@@ -202,8 +207,8 @@ func TestMatchYearAndTypeDisambiguateButEmptyWindowIsNotEmptyPool(t *testing.T) 
 	}
 	request.Year = ""
 	request.Kind = ""
-	if value := matchingWork(rows, request); value == nil || value.Ref != "movie" {
-		t.Fatal("equal work ranking did not select a stable identity", value)
+	if value := matchingWork(rows, request); value != nil {
+		t.Fatal("ambiguous same-name works should remain unmatched", value)
 	}
 	request.Year = "2023"
 	request.Kind = "国产剧"
@@ -296,7 +301,7 @@ func TestMatchGlobalConcurrencyAndCancellationRelease(t *testing.T) {
 func TestMatchDisabledProvidersAndSavedOffset(t *testing.T) {
 	store := testStore(t)
 	database, _ := store.db()
-	if _, err := database.Exec(`INSERT INTO settings(key,value) VALUES(?,?)`, SourceSettingsKey, `{"defaultProvider":"qq","disabled":["bilibili","iqiyi"]}`); err != nil {
+	if _, err := database.Exec(`INSERT INTO settings(key,value) VALUES(?,?)`, SourceSettingsKey, `{"defaultProvider":"qq","disabled":["bilibili","iqiyi","mgtv","migu","youku","sohu","leshi","xigua","bahamut"]}`); err != nil {
 		t.Fatal(err)
 	}
 	s := matchService(t, store)
@@ -313,7 +318,7 @@ func TestMatchDisabledProvidersAndSavedOffset(t *testing.T) {
 			t.Fatal("disabled provider was queried", name)
 		}
 	}
-	if _, err := database.Exec(`UPDATE settings SET value=? WHERE key=?`, `{"disabled":["bilibili","qq","iqiyi"]}`, SourceSettingsKey); err != nil {
+	if _, err := database.Exec(`UPDATE settings SET value=? WHERE key=?`, `{"disabled":["bilibili","qq","iqiyi","mgtv","migu","youku","sohu","leshi","xigua","bahamut"]}`, SourceSettingsKey); err != nil {
 		t.Fatal(err)
 	}
 	value, err = s.Match(context.Background(), matchRequest())
@@ -355,7 +360,7 @@ func TestMatchWrappedTimeoutKeepsItsClassification(t *testing.T) {
 func TestMatchExplainsTitleRejectionAndLogsEvenWithoutRecording(t *testing.T) {
 	store := testStore(t)
 	database, _ := store.db()
-	if _, err := database.Exec(`INSERT INTO settings(key,value) VALUES(?,?)`, SourceSettingsKey, `{"disabled":["qq","iqiyi"]}`); err != nil {
+	if _, err := database.Exec(`INSERT INTO settings(key,value) VALUES(?,?)`, SourceSettingsKey, `{"disabled":["qq","iqiyi","mgtv","migu","youku","sohu","leshi","xigua","bahamut"]}`); err != nil {
 		t.Fatal(err)
 	}
 	s := matchService(t, store)
@@ -386,7 +391,7 @@ func TestMatchExplainsTitleRejectionAndLogsEvenWithoutRecording(t *testing.T) {
 func TestMatchExplainsLegacyCooldownFromCacheWithoutNewRequests(t *testing.T) {
 	store := testStore(t)
 	database, _ := store.db()
-	if _, err := database.Exec(`INSERT INTO settings(key,value) VALUES(?,?)`, SourceSettingsKey, `{"disabled":["qq","iqiyi"]}`); err != nil {
+	if _, err := database.Exec(`INSERT INTO settings(key,value) VALUES(?,?)`, SourceSettingsKey, `{"disabled":["qq","iqiyi","mgtv","migu","youku","sohu","leshi","xigua","bahamut"]}`); err != nil {
 		t.Fatal(err)
 	}
 	s := matchService(t, store)
@@ -396,7 +401,7 @@ func TestMatchExplainsLegacyCooldownFromCacheWithoutNewRequests(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now()
-	if err := store.saveMatchFailure(context.Background(), request.LocalKey, "bilibili", matchFingerprint(request), "NO_WORK_MATCH", now); err != nil {
+	if err := store.saveMatchFailure(context.Background(), request.LocalKey, "bilibili", matchFingerprint(request), "NO_WORK_MATCH", now, now.Add(24*time.Hour)); err != nil {
 		t.Fatal(err)
 	}
 	value, err := s.Match(context.Background(), request)
@@ -431,7 +436,7 @@ func TestEpisodeFailureExplainsRejectedPreviewInsteadOfMissingNumber(t *testing.
 func TestLegacyEpisodeCooldownExplainsSpecialVersionWithoutUpstream(t *testing.T) {
 	store := testStore(t)
 	database, _ := store.db()
-	if _, err := database.Exec(`INSERT INTO settings(key,value) VALUES(?,?)`, SourceSettingsKey, `{"disabled":["qq","iqiyi"]}`); err != nil {
+	if _, err := database.Exec(`INSERT INTO settings(key,value) VALUES(?,?)`, SourceSettingsKey, `{"disabled":["qq","iqiyi","mgtv","migu","youku","sohu","leshi","xigua","bahamut"]}`); err != nil {
 		t.Fatal(err)
 	}
 	s := matchService(t, store)
@@ -445,7 +450,7 @@ func TestLegacyEpisodeCooldownExplainsSpecialVersionWithoutUpstream(t *testing.T
 	if err := store.Put(ctx, discoveryCacheKey("bilibili", "episodes", "series"), raw, now); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.saveMatchFailure(ctx, request.LocalKey, "bilibili", matchFingerprint(request), "NO_EPISODE_MATCH", now); err != nil {
+	if err := store.saveMatchFailure(ctx, request.LocalKey, "bilibili", matchFingerprint(request), "NO_EPISODE_MATCH", now, now.Add(24*time.Hour)); err != nil {
 		t.Fatal(err)
 	}
 	value, err := s.Match(ctx, request)

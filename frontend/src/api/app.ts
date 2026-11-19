@@ -71,6 +71,7 @@ export const FindSourcesByGlobalId = bind('FindSourcesByGlobalId', bindings.Find
 export const GetAllSources = bind('GetAllSources', bindings.GetAllSources)
 export const GetAllowPrivateNetwork = bind('GetAllowPrivateNetwork', bindings.GetAllowPrivateNetwork)
 export const GetAppVersion = bind('GetAppVersion', bindings.GetAppVersion)
+export const GetApplicationModeStatus = bind('GetApplicationModeStatus', bindings.GetApplicationModeStatus)
 export const GetCastStatus = bind('GetCastStatus', bindings.GetCastStatus)
 export const GetCloseBehavior = bind('GetCloseBehavior', bindings.GetCloseBehavior)
 export const GetCollectSchedule = bind('GetCollectSchedule', bindings.GetCollectSchedule)

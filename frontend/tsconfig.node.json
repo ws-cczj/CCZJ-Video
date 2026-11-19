@@ -4,6 +4,7 @@
     "tsBuildInfoFile": "./node_modules/.cache/tsconfig.node.tsbuildinfo",
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
     "allowSyntheticDefaultImports": true,
     "target": "ES2022",
     "lib": [

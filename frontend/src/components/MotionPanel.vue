@@ -10,7 +10,7 @@ import { createThemeReveal } from '../motion/themeReveal'
 import { routeTransition } from '../mobile/routeMotion'
 import '../mobile/route-motion.css'
 import { presentationProfile } from '../platform/presentation'
-import { Button, Modal, NumberField } from './ui'
+import { Button, Modal, NumberField, ToggleSwitch } from './ui'
 import CczjMobilePlayerDrawer from '../mobile/CczjMobilePlayerDrawer.vue'
 import Icon from './Icon.vue'
 const props=withDefaults(defineProps<{active?:boolean}>(),{active:true})
@@ -28,7 +28,8 @@ function resolved(path:string){const value=router.resolve(path);return {...value
 const pageTransition=computed(()=>routeTransition(resolved(routes[direction.value==='forward'?0:1]!),resolved(routes[direction.value==='forward'?1:0]!),0,1,mobile,routes))
 const playbackTransition=computed(()=>routeTransition(resolved(playerOpen.value?'/':'/player/preview/0/0'),resolved(playerOpen.value?'/player/preview/0/0':'/'),0,playerOpen.value?1:0,mobile))
 const timings=computed(()=>[
-  ...(mobile?[{key:'slow' as const,label:t('motion.mobilePageDuration')}]:[{key:'section' as const,label:t('motion.pageDuration')},{key:'dismiss' as const,label:t('motion.returnDuration')}]),
+  ...(!mobile?[{key:'section' as const,label:t('motion.pageDuration')}]:[]),
+  {key:'slow' as const,label:t(mobile?'motion.mobilePageDuration':'motion.detailPlaybackDuration')},
   {key:'group' as const,label:t('motion.groupDuration')},
   {key:'normal' as const,label:t('motion.overlayDuration')},
   {key:'reveal' as const,label:t('motion.themeDuration')},
@@ -60,13 +61,13 @@ onBeforeUnmount(stop)
   <div class="motion-page cczj-min-w-0">
     <header class="motion-header cczj-flex cczj-items-center cczj-justify-between cczj-gap-8">
       <div><h2>{{t('motion.switchTitle')}}</h2></div>
-      <label class="motion-toggle"><input type="checkbox" :checked="motion.enabled" :aria-label="t('motion.switchTitle')" @change="motion.setEnabled(($event.target as HTMLInputElement).checked)"/><span/></label>
+      <ToggleSwitch :model-value="motion.enabled" :ariaLabel="t('motion.switchTitle')" @update:model-value="motion.setEnabled" />
     </header>
     <p v-if="motion.systemReduced" class="motion-notice">{{t('motion.systemReduced')}}</p>
     <p v-else-if="!motion.enabled" class="motion-notice">{{t('motion.switchDesc')}}</p>
     <div class="motion-control cczj-flex cczj-items-center cczj-justify-between cczj-gap-8">
       <div><h3>{{t('motion.reduceMotion')}}</h3><p>{{t('motion.reduceMotionDesc')}}</p></div>
-      <label class="motion-toggle"><input type="checkbox" :checked="motion.options.reduceMotion" :aria-label="t('motion.reduceMotion')" @change="motion.setOptions({reduceMotion:($event.target as HTMLInputElement).checked})"/><span/></label>
+      <ToggleSwitch :model-value="motion.options.reduceMotion" :ariaLabel="t('motion.reduceMotion')" @update:model-value="motion.setOptions({reduceMotion:$event})" />
     </div>
     <div class="scenario-grid cczj-grid cczj-gap-8">
       <section class="motion-section cczj-min-w-0 cczj-border cczj-rounded-lg cczj-p-8">
@@ -105,7 +106,7 @@ onBeforeUnmount(stop)
     <section class="motion-section cczj-border cczj-rounded-lg cczj-p-8 cczj-mt-8">
       <h3>{{t('motion.detailTitle')}}</h3>
       <div v-for="item in toggles" :key="item.key" class="motion-control cczj-flex cczj-items-center cczj-justify-between cczj-gap-8">
-        <div><h4>{{item.title}}</h4><p>{{item.detail}}</p></div><label class="motion-toggle"><input type="checkbox" :checked="motion.options[item.key]" :aria-label="item.title" @change="motion.setOptions({[item.key]:($event.target as HTMLInputElement).checked})"/><span/></label>
+        <div><h4>{{item.title}}</h4><p>{{item.detail}}</p></div><ToggleSwitch :model-value="motion.options[item.key]" :ariaLabel="item.title" @update:model-value="motion.setOptions({[item.key]:$event})" />
       </div>
       <details class="cczj-mt-6"><summary>{{t('motion.adjustTimings')}}</summary><p class="cczj-mt-6">{{t(mobile?'motion.mobileTimingsHint':'motion.timingsHint')}}</p>
         <div v-for="item in timings" :key="item.key" class="motion-control cczj-flex cczj-flex-wrap cczj-items-center cczj-justify-between cczj-gap-8"><span>{{item.label}}</span><div class="cczj-flex cczj-items-center cczj-gap-4"><NumberField :model-value="parseInt(variables['--cczj-motion-'+item.key])" :min="100" :max="2500" :step="50" :ariaLabel="item.label" @update:model-value="setDuration(item.key,$event)"/><span>{{t('motion.milliseconds')}}</span></div></div>
@@ -128,7 +129,6 @@ p { font-size:.82rem;@apply cczj-text-muted;line-height:1.65;margin:0; }
 .scenario-player { z-index:5;background:#11151d;color:#e3edf6; }
 .theme-scenario { min-height:184px; }
 .motion-control { padding:15px 0; }.motion-control+.motion-control { @apply cczj-border-top; }.motion-control>div:first-child { @apply cczj-min-w-0; }
-.motion-toggle { @apply cczj-relative cczj-block cczj-flex-shrink-0;width:42px;height:24px; }.motion-toggle input { @apply cczj-absolute cczj-opacity-0 cczj-w-full cczj-h-full cczj-cursor-pointer;margin:0; }.motion-toggle span { @apply cczj-absolute cczj-inset-0 cczj-pointer-events-none cczj-border-strong;border-radius:24px;background:var(--bg-secondary);transition:background-color var(--cczj-motion-fast); }.motion-toggle span::before { content:'';@apply cczj-absolute cczj-h-16 cczj-w-16 cczj-rounded-50;left:3px;top:3px;background:var(--text-secondary);transition:transform var(--cczj-motion-fast); }.motion-toggle input:checked+span { background:var(--accent);@apply cczj-border-primary; }.motion-toggle input:checked+span::before { transform:translateX(18px);background:var(--accent-contrast); }.motion-toggle input:focus-visible+span { outline:2px solid var(--accent);outline-offset:3px; }
 .motion-notice { padding:12px 14px;@apply cczj-mb-8;background:var(--bg-card);border-left:3px solid var(--accent); }
 summary { @apply cczj-cursor-pointer; }
 @container(max-width:650px){.scenario-grid { grid-template-columns:1fr; }}

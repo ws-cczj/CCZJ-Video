@@ -9,8 +9,10 @@ import { isIOSRuntime } from '../../api/runtime'
 import { hlsWorkerConfig } from './worker'
 import type { BlockedSegment } from '../../utils/ts-cache/prefetch'
 import { byteRangeOf } from '../../utils/ts-cache/segment-key'
-import { confirmSegmentDecoded, rejectSegmentContent, transferFailure } from '../../utils/ts-cache/transfer'
+import { cacheHas } from '../../utils/ts-cache/memory-cache'
+import { confirmSegmentDecoded, rejectSegmentContent, transferFailure, transferSucceededSince } from '../../utils/ts-cache/transfer'
 import { clearM3u8TextCache } from '../../utils/ts-cache/m3u8'
+import type { LevelLoadedData, ManifestParsedData } from 'hls.js'
 
 type Lease = ReturnType<ReturnType<typeof createPlaybackSession>['capture']>
 type SourceError = 'unsupported' | 'load_failed' | 'fatal' | 'timeout'
@@ -80,21 +82,6 @@ export function createPlaybackSource(deps: {
       return false
     }
 
-    let parsed: { urls: string[]; targetduration: number; isMaster: boolean; streamInfo?: StreamVariantInfo[] }
-    try { parsed = await TsCache.fetchAndParseM3u8(playbackURL, lease.signal) }
-    catch { parsed = { urls: [], targetduration: 6, isMaster: false } }
-    if (!lease.current()) return false
-    let streams = parsed.streamInfo ?? []
-    if (!parsed.isMaster && parsed.urls.length && /\.(ts|aac|mp4|m4s)(\?|$)/i.test(parsed.urls[0])) {
-      TsCache.setSegments(parsed.urls)
-      TsCache.setTargetDuration(parsed.targetduration)
-      if (!streams.length) {
-        const bandwidth = extractBitrateFromUrl(parsed.urls[0])
-        if (bandwidth) streams = [{ bandwidth, resolution: '', codecs: '', url: parsed.urls[0] }]
-      }
-    }
-    deps.streams(streams)
-
     const fragPolicy = Hls.DefaultConfig?.fragLoadPolicy?.default
     const BaseGapController = Hls.DefaultConfig.gapController
     // Gap recovery must not silently seek over a required fragment while its
@@ -122,8 +109,9 @@ export function createPlaybackSource(deps: {
     let policySignature = ''
     let networkRecoveries = 0, mediaRecoveries = 0, recoveryPending = false, exhausted = false
     let managedFragment = false
-    let retryTarget: { url: string; range: string | null } | undefined
-    let fragments: any[] = []
+    let retryTarget: { url: string; range: string | null; failedAt?: number } | undefined
+    let fragments: LevelLoadedData['details']['fragments'] = []
+    let streams: StreamVariantInfo[] = []
     let authRefreshAt = -Infinity, authRefreshes = 0
     let loadedKey: { uri: string; method: string } | undefined
     const finishRecovery = () => {
@@ -133,16 +121,32 @@ export function createPlaybackSource(deps: {
       retryTarget = undefined; managedFragment = false
       deps.recovered?.()
     }
+    const canRecoverNetwork = () => lease.current() && !suspended && recoveryPending && !exhausted
+      && !(video.paused && video.readyState >= 2) && !video.ended
+    const restartFragment = () => {
+      try { hls.startLoad(video.currentTime) } catch { deps.error('load_failed') }
+    }
+    const resumeCachedFragment = () => {
+      const target = retryTarget
+      // The ordinary loader already delivers to a live HLS request. Only wake
+      // a stopped HLS instance with this fragment's retry still pending.
+      if (!managedFragment || networkTimer === null || !canRecoverNetwork() || video.seeking || hls.loadingEnabled || target?.failedAt === undefined) return
+      const { url, range, failedAt } = target
+      if (!transferSucceededSince(url, range, failedAt) || transferFailure(url, range) || !cacheHas(url, range)) return
+      cancelNetworkTimeout()
+      deps.networkIssue?.({ reason: 'fragment_retry_cache_ready', position_seconds: video.currentTime })
+      restartFragment()
+    }
     const recoverNetwork = () => {
-      if (!lease.current() || suspended || !recoveryPending || exhausted || (video.paused && video.readyState >= 2) || video.ended) return
+      if (!canRecoverNetwork()) return
       if (networkTimer !== null) return
       if (managedFragment) {
         deps.recovering?.('fragment_retry')
         networkTimer = setTimeout(lease.guard(() => {
           networkTimer = null
-          if ((video.paused && video.readyState >= 2) || suspended || !recoveryPending) return
-          try { hls.startLoad(video.currentTime) } catch { deps.error('load_failed') }
+          if (canRecoverNetwork()) restartFragment()
         }), TsCache.segmentRetryDelay(retryTarget?.url, retryTarget?.range))
+        resumeCachedFragment()
         return
       }
       if (++networkRecoveries > 2) { exhausted = true; hls.stopLoad(); deps.error('timeout'); return }
@@ -212,7 +216,7 @@ export function createPlaybackSource(deps: {
     if (Hls.Events.LEVEL_SWITCHED) hls.on(Hls.Events.LEVEL_SWITCHED, lease.guard(applyNetworkPolicy))
     const publishTimeline = () => {
       if (fragments.length) {
-        TsCache.setSegments(fragments.map((fragment: any) => absolute(fragment.url, playbackURL)), undefined, fragments.map((fragment: any) => ({
+        TsCache.setSegments(fragments.map(fragment => absolute(fragment.url, playbackURL)), undefined, fragments.map(fragment => ({
           url: absolute(fragment.url, playbackURL), start: fragment.start, duration: fragment.duration,
           range: byteRangeOf({ rangeStart: fragment.byteRangeStartOffset, rangeEnd: fragment.byteRangeEndOffset }),
           demandOnly: !!fragment.gap || (!!fragment.encrypted && !!fragment.byteRange?.length),
@@ -220,9 +224,26 @@ export function createPlaybackSource(deps: {
         deps.bufferChanged()
       }
     }
-    hls.on(Hls.Events.LEVEL_LOADED, lease.guard((_event: unknown, data: any) => {
-      fragments = data?.details?.fragments ?? []
-      TsCache.setTargetDuration(data.details.targetduration || parsed.targetduration || 6)
+    hls.on(Hls.Events.MANIFEST_PARSED, lease.guard((_event: unknown, data: ManifestParsedData) => {
+      streams = data.levels.filter(level => level.bitrate > 0).map(level => ({
+        bandwidth: level.bitrate,
+        resolution: level.width && level.height ? `${level.width}x${level.height}` : '',
+        codecs: [level.videoCodec, level.audioCodec].filter(Boolean).join(','),
+        url: level.uri,
+      }))
+      deps.streams(streams)
+    }))
+    hls.on(Hls.Events.LEVEL_LOADED, lease.guard((_event: unknown, data: LevelLoadedData) => {
+      fragments = data.details.fragments
+      TsCache.setTargetDuration(data.details.targetduration || 6)
+      if (!streams.length && fragments[0]) {
+        const url = absolute(fragments[0].url, playbackURL)
+        const bandwidth = extractBitrateFromUrl(url)
+        if (bandwidth) {
+          streams = [{ bandwidth, resolution: '', codecs: '', url }]
+          deps.streams(streams)
+        }
+      }
       publishTimeline()
     }))
     const currentIssue = () => {
@@ -244,7 +265,10 @@ export function createPlaybackSource(deps: {
       const issue = currentIssue()
       deps.segmentIssue?.(issue)
     }
-    offCache = TsCache.onStateChange(lease.guard(refreshIssue))
+    offCache = TsCache.onStateChange(lease.guard(() => {
+      resumeCachedFragment()
+      refreshIssue()
+    }))
     video.addEventListener('waiting', refreshIssue, { signal: lease.signal })
     video.addEventListener('playing', refreshIssue, { signal: lease.signal })
     video.addEventListener('playing', activateTransport, { signal: lease.signal })
@@ -313,7 +337,13 @@ export function createPlaybackSource(deps: {
       }
       if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
         managedFragment = !!data.frag && data.frag.sn !== 'initSegment'
-        retryTarget = managedFragment ? { url: data.frag.url, range: byteRangeOf({ rangeStart: data.frag.byteRangeStartOffset, rangeEnd: data.frag.byteRangeEndOffset }) } : undefined
+        retryTarget = managedFragment && data.frag.url ? { url: absolute(data.frag.url, playbackURL), range: byteRangeOf({ rangeStart: data.frag.byteRangeStartOffset, rangeEnd: data.frag.byteRangeEndOffset }) } : undefined
+        if (retryTarget && [Hls.ErrorDetails.FRAG_LOAD_ERROR, Hls.ErrorDetails.FRAG_LOAD_TIMEOUT].includes(data.details)) {
+          const failure = transferFailure(retryTarget.url, retryTarget.range)
+          if (failure && (failure.error.kind === 'network' || failure.error.kind === 'http') && ![401, 403].includes(failure.error.code)) {
+            retryTarget.failedAt = failure.at
+          }
+        }
         recoveryPending = true
         if (video.paused && video.readyState >= 2) { if (!managedFragment) { exhausted = true; deps.error('load_failed') }; return }
         recoverNetwork()

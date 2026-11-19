@@ -16,6 +16,11 @@
   cursor: none;
 }
 
+.player-wrapper.danmaku-hovered,
+.player-wrapper.danmaku-hovered .native-video {
+  @apply cczj-cursor-pointer;
+}
+
 .player-wrapper.fullscreen {
   @apply cczj-w-screen cczj-h-screen;
   border-radius: 0;

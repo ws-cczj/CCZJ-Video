@@ -18,6 +18,8 @@ export function modeReloadURL(href: string, mode: ApplicationMode, path=modeHome
   // Changing the query performs a document navigation, rather than only a hash
   // navigation. Only lightweight checkpoints cross this resource boundary.
   target.searchParams.set('application-mode', mode)
+  // Recovery can reload the same mode when session storage is unavailable.
+  target.searchParams.set('mode-reload', Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10))
   target.searchParams.delete('mode-resume')
   if(resumeToken)target.searchParams.set('mode-resume',resumeToken)
   target.hash = path

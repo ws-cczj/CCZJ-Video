@@ -23,7 +23,15 @@ type Client struct{ http *http.Client }
 
 func NewClient(client *http.Client) *Client { return &Client{http: client} }
 
-var allowedHosts = map[string]bool{"api.bilibili.com": true, "www.bilibili.com": true, "pbaccess.video.qq.com": true, "dm.video.qq.com": true, "mesh.if.iqiyi.com": true, "www.iqiyi.com": true, "pcw-api.iqiyi.com": true, "pcw-api.iq.com": true, "cmts.iqiyi.com": true}
+var allowedHosts = func() map[string]bool {
+	hosts := make(map[string]bool)
+	for _, source := range builtinProviders {
+		for _, host := range source.hosts {
+			hosts[host] = true
+		}
+	}
+	return hosts
+}()
 
 func AllowedURL(u *url.URL) bool {
 	return u != nil && u.Scheme == "https" && u.User == nil && u.Port() == "" && allowedHosts[u.Hostname()]
@@ -53,6 +61,45 @@ func (c *Client) read(ctx context.Context, rawURL string, body any) ([]byte, err
 		req.Header.Set("Content-Type", "application/json")
 	}
 	switch {
+	case u.Hostname() == mangoSearchHost:
+		req.Header.Set("User-Agent", mangoSearchAgent)
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("Referer", mangoWeb)
+	case u.Hostname() == mangoCatalogHost || u.Hostname() == mangoBarrageHost || isMangoCDN(u.Hostname()):
+		req.Header.Set("Referer", mangoWeb)
+		req.Header.Set("Accept", "application/json")
+	case u.Hostname() == miguSearchHost || u.Hostname() == miguCatalogHost || u.Hostname() == miguBarrageHost:
+		req.Header.Set("Referer", miguWeb+"/")
+		req.Header.Set("Accept", "application/json")
+		if u.Hostname() == miguSearchHost {
+			req.Header.Set("Origin", miguWeb)
+			req.Header.Set("appId", "miguvideo")
+			req.Header.Set("terminalId", "www")
+		}
+		if u.Hostname() == miguBarrageHost {
+			req.Header.Set("appCode", "miguvideo_default_h5")
+		}
+	case u.Hostname() == youkuSearchHost || u.Hostname() == youkuCatalogHost:
+		req.Header.Set("Referer", "https://www.youku.com/")
+		req.Header.Set("User-Agent", youkuAgent)
+		req.Header.Set("Accept", "application/json")
+	case u.Hostname() == sohuSearchHost || u.Hostname() == sohuCatalogHost || u.Hostname() == sohuBarrageHost:
+		req.Header.Set("Referer", sohuWeb+"/")
+		req.Header.Set("Origin", sohuWeb)
+		req.Header.Set("Accept", "application/json")
+	case u.Hostname() == leshiSearchHost || u.Hostname() == leshiCatalogHost || u.Hostname() == leshiVideoHost || u.Hostname() == leshiBarrageHost:
+		req.Header.Set("Referer", "https://www.le.com/")
+		if u.Hostname() == leshiSearchHost || u.Hostname() == leshiVideoHost {
+			req.Header.Del("Accept-Encoding")
+			req.Header.Set("Accept", "text/html")
+		}
+	case u.Hostname() == xiguaWebHost || u.Hostname() == xiguaBarrageHost:
+		req.Header.Set("Referer", "https://"+xiguaWebHost+"/")
+		req.Header.Set("User-Agent", xiguaAgent)
+		req.Header.Del("Accept-Encoding")
+	case u.Hostname() == bahamutAPIHost:
+		req.Header.Set("User-Agent", bahamutAgent)
+		req.Header.Set("Accept", "application/json")
 	case strings.Contains(u.Hostname(), "bilibili"):
 		req.Header.Set("Referer", "https://www.bilibili.com/")
 	case strings.Contains(u.Hostname(), "qq.com"):
@@ -66,10 +113,18 @@ func (c *Client) read(ctx context.Context, rawURL string, body any) ([]byte, err
 }
 
 func (c *Client) readHTTP(ctx context.Context, req *http.Request) ([]byte, error) {
+	return c.readHTTPWithCookies(ctx, req, nil)
+}
+
+func (c *Client) readHTTPWithCookies(ctx context.Context, req *http.Request, capture func([]*http.Cookie)) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	resp, err := c.http.Do(req.WithContext(ctx))
 	if err != nil {
+		var requestError *url.Error
+		if req.URL.Hostname() == youkuMTOPHost && errors.As(err, &requestError) {
+			err = requestError.Err
+		}
 		if errors.Is(err, context.DeadlineExceeded) {
 			return nil, apperror.Wrap(apperror.Timeout, err, "弹幕平台请求超时")
 		}
@@ -105,6 +160,9 @@ func (c *Client) readHTTP(ctx context.Context, req *http.Request) ([]byte, error
 	}
 	if len(data) > MaxPayload {
 		return nil, apperror.New(apperror.Corrupt, "弹幕响应超出大小限制")
+	}
+	if capture != nil {
+		capture(resp.Cookies())
 	}
 	return data, nil
 }

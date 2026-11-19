@@ -16,13 +16,19 @@ export interface ShortDramaEntry {
   lineIndex?: number
 }
 
+export interface ShortDramaNeighbor {
+  key: string
+  video: Video
+  episodeNumber?: number
+}
+
 /** One batch and one hydrated title belong to this view. Hidden tabs release
  * media and in-flight detail work; late replies cannot replace a newer choice. */
 export function useShortDramaFeed(source: Ref<string>, active: Ref<boolean>, beforeChange: () => void, entry: Ref<ShortDramaEntry | null> = shallowRef(null), options: { playing?: () => boolean; backgroundError?: (cause: unknown) => void; choose?: (batch:Video[],fallback:string,current?:{source:string;vod:string}) => Video[]; remember?: (source:string,vod:string) => void; preferenceVersion?: () => unknown } = {}) {
   const items = shallowRef<Video[]>([])
   const selected = ref(0), episodeIndex = ref(0)
   const detail = shallowRef<VideoDetailResponse | null>(null)
-  const loading = ref(false), error = ref('')
+  const loading = ref(false), refreshing = ref(false), error = ref('')
   const selecting = ref(false)
   const playbackSource = ref(source.value)
   const series = ref(false), completed = ref(false)
@@ -38,20 +44,53 @@ export function useShortDramaFeed(source: Ref<string>, active: Ref<boolean>, bef
   const episodes = computed(() => detail.value?.episodes ?? [])
   const episode = computed(() => episodes.value[episodeIndex.value])
   const url = computed(() => episode.value ? resolveEpisodeUrl(episode.value) : '')
-  const canPrevious = computed(() => (!loading.value || selecting.value) && (series.value ? !!url.value && episodeIndex.value > 0 : selected.value > 0))
-  const canNext = computed(() => !series.value && (selecting.value || (!loading.value && !detail.value)) ? !!items.value[selected.value + 1] : !loading.value && !!episodes.value.length && (!series.value || episodeIndex.value + 1 < episodes.value.length))
+  const canPrevious = computed(() => !!previousNeighbor.value)
+  const canNext = computed(() => !!nextNeighbor.value || (!series.value && !loading.value && !!episodes.value.length))
   let batchSource = ''
   let entryKey = ''
   let retryBatch = false
   let remoteSource='', remoteCategory='', remotePage=0, remoteHasMore=true
   let deadline: ReturnType<typeof setTimeout> | undefined
   let identitySource = ''
+  function eligible(item: Video): boolean {
+    return !options.choose || options.choose([item], effectiveSource.value).length > 0
+  }
+  function adjacentIndex(batch: Video[], delta: number): number {
+    let index = selected.value + delta
+    while (batch[index] && !eligible(batch[index]!)) index += delta
+    return index
+  }
+  const preparedNext = computed(() => {
+    const next = nextItem.value
+    const item = next?.batch[next.index]
+    return next && item && eligible(item) ? next : null
+  })
+  function neighbor(delta: number): ShortDramaNeighbor | null {
+    if (loading.value && !selecting.value) return null
+    if (series.value) {
+      const index = episodeIndex.value + delta
+      const target = episodes.value[index]
+      return target && video.value ? {
+        key: JSON.stringify([playbackSource.value, video.value.vod_id, index]),
+        video: video.value,
+        episodeNumber: target.ep_num || index + 1,
+      } : null
+    }
+    const next = delta > 0 ? preparedNext.value : null
+    const item = next ? next.batch[next.index] : items.value[adjacentIndex(items.value, delta)]
+    return item ? {
+      key: JSON.stringify([item.source_key || effectiveSource.value, item.vod_id]),
+      video: next?.prepared.detail.video ?? item,
+    } : null
+  }
+  const previousNeighbor = computed(() => neighbor(-1))
+  const nextNeighbor = computed(() => neighbor(1))
   const nextMedia = computed(() => {
     if (series.value) {
       const ep = episodes.value[episodeIndex.value + 1]
       return ep && video.value ? { ...ep, ep_url: resolveEpisodeUrl(ep), source_key: playbackSource.value, vod_id: String(video.value.vod_id ?? '') } : null
     }
-    const next = nextItem.value, ep = next?.prepared.detail.episodes[next.prepared.nextEpisode]
+    const next = preparedNext.value, ep = next?.prepared.detail.episodes[next.prepared.nextEpisode]
     return next && ep ? { ...ep, ep_url: resolveEpisodeUrl(ep), source_key: next.prepared.sourceKey, vod_id: String(next.prepared.detail.video?.vod_id ?? next.batch[next.index]?.vod_id ?? '') } : null
   })
   const updateRequests=createRequestScope(),updateGeneration=useGeneration()
@@ -90,6 +129,7 @@ export function useShortDramaFeed(source: Ref<string>, active: Ref<boolean>, bef
     clearTimeout(deadline); deadline = undefined
     if (clear) detail.value = null
     loading.value = false
+    refreshing.value = false
     selecting.value = false
     if (clear) completed.value = false
   }
@@ -99,20 +139,21 @@ export function useShortDramaFeed(source: Ref<string>, active: Ref<boolean>, bef
     error.value = failure.message
     if (url.value) options.backgroundError?.(cause)
   }
-  function begin(timeout: number): number {
+  function begin(timeout: number, onTimeout?: () => void): number {
     invalidate(false)
     const token = generation.begin()
     loading.value = true; error.value = ''
     deadline = setTimeout(() => {
       if (!generation.isCurrent(token)) return
       invalidate(false)
+      onTimeout?.()
       fail({ code: 'TIMEOUT', message: tr('shortDrama.timeout') })
     }, timeout)
     return token
   }
   function finish(token: number): void {
     if (!generation.isCurrent(token)) return
-    clearTimeout(deadline); deadline = undefined; loading.value = false
+    clearTimeout(deadline); deadline = undefined; loading.value = false; refreshing.value = false
   }
   async function readDetail(item: Video, requestedEpisode: number, scope = requests): Promise<Prepared> {
     const sourceKey = item.source_key || effectiveSource.value
@@ -169,17 +210,21 @@ export function useShortDramaFeed(source: Ref<string>, active: Ref<boolean>, bef
       fail(cause)
     } finally { if (generation.isCurrent(token)) selecting.value = false; finish(token) }
   }
-  async function refresh(force = false): Promise<void> {
+  function cancelRefresh(): void {
+    if (refreshing.value) invalidate(false)
+  }
+  async function refresh(force = false, manual = false): Promise<void> {
     if (entry.value) return
     if (!active.value || !source.value) return
     if (loading.value && !force) return
-    const token = begin(30000), sourceKey = source.value
+    const token = begin(30000, () => { retryBatch = true }), sourceKey = source.value
+    refreshing.value = manual
     series.value = false
     const previous = batchSource === source.value ? items.value.map(item => item.vod_id!).filter(Boolean) : []
     if (batchSource !== source.value) items.value = []
-    retryBatch = true
     try {
       let batch: Video[] = []
+      let discovered: Remote | undefined
       const failedTitles=new Set<string>()
       // Recommendations and remote discovery share the selected source. Local
       // catalogs from unrelated sources must not override that selection.
@@ -212,24 +257,31 @@ export function useShortDramaFeed(source: Ref<string>, active: Ref<boolean>, bef
         const rediscover=(force&&items.value.length>0)||!remoteHasMore
         const page=await requests.run(()=>GetShortDramaPage(sourceKey,rediscover?1:remotePage+1,'',rediscover?'':remoteSource,rediscover?'':remoteCategory))
         if(!generation.isCurrent(token))return
-        remoteSource=page.source_key;remoteCategory=page.category_id;remotePage=rediscover?1:remotePage+1;remoteHasMore=page.has_more
-        updatedSource=sourceKey;updatedAt=performance.now()
+        discovered = { source: page.source_key, category: page.category_id, page: rediscover ? 1 : remotePage + 1, hasMore: page.has_more }
         // The remote page already belongs to the resolved short-drama category.
         // Reuse it directly instead of waiting for another catalog query.
         batch=randomBatch(page.videos.filter(item=>!failedTitles.has(String(item.vod_id))))
       }
       if (!batch.length && cachedFailure) throw cachedFailure
+      const next = batch.length ? await hydrate(batch[0]!, token, 0) : undefined
+      if (!generation.isCurrent(token)) return
+      if (discovered) {
+        remoteSource = discovered.source; remoteCategory = discovered.category
+        remotePage = discovered.page; remoteHasMore = discovered.hasMore
+        updatedSource = sourceKey; updatedAt = performance.now()
+      }
       batchSource = sourceKey
-      emptySource.value = batch.length||remoteHasMore ? '' : sourceKey
-      if (batch.length) {
-        const next = await hydrate(batch[0]!, token, 0)
-        if (next) {commit(batch, 0, next);void updateCatalog()}
-      } else if(video.value||remoteHasMore)fail({code:'NOT_FOUND',message:tr('shortDrama.noOtherRecommendations')})
+      emptySource.value = batch.length || remoteHasMore ? '' : sourceKey
+      if (next) { commit(batch, 0, next); void updateCatalog() }
+      else if (video.value || remoteHasMore) {
+        retryBatch = true
+        fail({code:'NOT_FOUND',message:tr('shortDrama.noOtherRecommendations')})
+      }
     } catch (cause) {
       if(generation.isCurrent(token)&&normalizeApiError(cause).code==='VALIDATION'){
         remoteSource='';remoteCategory='';remotePage=0;remoteHasMore=true
       }
-      if (generation.isCurrent(token)) fail(cause)
+      if (generation.isCurrent(token)) { retryBatch = true; fail(cause) }
     } finally { finish(token) }
   }
   function selectEpisode(index: number): void {
@@ -260,19 +312,15 @@ export function useShortDramaFeed(source: Ref<string>, active: Ref<boolean>, bef
       if (episodes.value[index]) changeEpisode(index)
       return
     }
-    if (direction === 'next' && nextItem.value) {
-      if(options.choose&&!options.choose([nextItem.value.batch[nextItem.value.index]!],effectiveSource.value).length)nextItem.value=null
-    }
-    if (direction === 'next' && nextItem.value) {
+    const next = direction === 'next' ? preparedNext.value : null
+    if (next) {
       invalidate(false)
-      const next = nextItem.value
       if (next.remote) { remoteSource = next.remote.source; remoteCategory = next.remote.category; remotePage = next.remote.page; remoteHasMore = next.remote.hasMore }
       commit(next.batch, next.index, next.prepared)
       void recordDiagnosticEvent('short_drama_step', { prepared: true })
       return
     }
-    let index = selected.value + delta
-    while(index>=0&&index<items.value.length&&options.choose&&!options.choose([items.value[index]!],effectiveSource.value).length)index+=delta
+    const index = adjacentIndex(items.value, delta)
     if (index >= 0 && index < items.value.length) {
       void recordDiagnosticEvent('short_drama_step', { prepared: false })
       void open(index, false, true, true)
@@ -329,8 +377,7 @@ export function useShortDramaFeed(source: Ref<string>, active: Ref<boolean>, bef
     // or unbounded queue is created. The same choice is consumed by step().
     const timer = setTimeout(() => { if (nextGeneration.isCurrent(token)) { nextGeneration.invalidate(); nextRequests.cancel() } }, 15000)
     try {
-      let batch = items.value, index = selected.value + 1, remote: Remote | undefined
-      while(index<batch.length&&options.choose&&!options.choose([batch[index]!],effectiveSource.value).length)index++
+      let batch = items.value, index = adjacentIndex(batch, 1), remote: Remote | undefined
       if (!batch[index]) {
         const exclude = batch.filter(item => (item.source_key || source.value) === playbackSource.value).map(item => item.vod_id!).filter(Boolean)
         const rows = await nextRequests.run(() => GetShortDramaRecommendations(playbackSource.value, exclude))
@@ -357,7 +404,7 @@ export function useShortDramaFeed(source: Ref<string>, active: Ref<boolean>, bef
     finally { clearTimeout(timer) }
   }, { flush: 'post' })
   onScopeDispose(() => { cancelUpdate();invalidate(); nextGeneration.invalidate(); nextRequests.cancel() })
-  return { items, selected, episodeIndex, video, episodes, episode, url, detail, loading, selecting, error, playbackSource, effectiveSource, knownEmpty, series, completed, canPrevious, canNext, nextMedia, refresh, open, selectEpisode, follow, discover, step, ended,
+  return { items, selected, episodeIndex, video, episodes, episode, url, detail, loading, selecting, error, playbackSource, effectiveSource, knownEmpty, series, completed, canPrevious, canNext, previousNeighbor, nextNeighbor, nextMedia, refreshing, refresh, cancelRefresh, requestRefresh: () => refresh(true, true), open, selectEpisode, follow, discover, step, ended,
     markWatched:()=>{if(!series.value&&video.value?.vod_id)options.remember?.(playbackSource.value,String(video.value.vod_id))},
     retry: () => retryBatch || !items.value.length ? refresh(true) : open(selected.value, true) }
 }

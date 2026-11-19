@@ -7,11 +7,12 @@ import { useI18n } from 'vue-i18n'
 import Icon from '../components/Icon.vue'
 import RemoteImage from '../components/RemoteImage.vue'
 import '../player/shortDrama/presentation.css'
-import { Button, Empty } from '../components/ui'
+import { Button, Empty, Spinner } from '../components/ui'
 import CczjMobilePlayerDrawer from '../mobile/CczjMobilePlayerDrawer.vue'
 import { presentationProfile } from '../platform/presentation'
 import { useSourceStore } from '../stores/source'
 import { useErrorStore } from '../stores/error'
+import { useMotionStore } from '../stores/motion'
 import { useViewActivity } from '../composables/useViewActivity'
 import { useShortDramaSession } from '../player/shortDrama/session'
 import { useShortDramaPaging } from '../player/shortDrama/useShortDramaPaging'
@@ -36,6 +37,7 @@ const mobile = presentationProfile().ui === 'mobile'
 const sources = useSourceStore()
 const { currentSourceKey } = storeToRefs(sources)
 const errors = useErrorStore()
+const motion = useMotionStore()
 // Mobile scenes inject their preview route before navigation is committed.
 // Only the router's actual route may start or retain media playback.
 const sceneActive = useViewActivity(() => router.currentRoute.value.path === '/short-drama', 'committed')
@@ -54,6 +56,7 @@ const controlsHost = ref<HTMLElement>()
 const overlayHost = ref<HTMLElement>()
 const playbackSurface = ref<HTMLElement>(), pagingFrame = ref<HTMLCanvasElement>()
 const pagingCover = ref<HTMLElement>(), pagingChrome = ref<HTMLElement>()
+const pagingPreview = ref<HTMLElement>()
 let paging: ReturnType<typeof useShortDramaPaging>
 let paintedAt = 0, backdropFailed = false
 const feed = useShortDramaSession()
@@ -85,7 +88,7 @@ useDesktopPlaybackKeys({
 })
 function flush(): void {
   const media = player.value?.video()
-  if (media && player.value?.canPersistProgress() && Number.isFinite(media.currentTime)) history.syncHistoryToDb(media.currentTime, true)
+  if (media && player.value?.canPersistProgress() && Number.isFinite(media.currentTime)) history.updateCurrentEpProgress(media.currentTime, media.duration, true)
   if(media&&!sceneActive.value)media.pause()
   flushEpProgress()
   drawer.value = '';introExpanded.value=false
@@ -98,7 +101,7 @@ onBeforeUnmount(() => { flush(); stopObservingChange() })
 // Home can prepare the shared session while this scene is still leaving.
 // Retain this scene's presentation until its last visible pixels leave; never
 // pass a newly warmed URL into the outgoing decoder or its history identity.
-const presentationKeys = ['items', 'episodeIndex', 'video', 'episodes', 'episode', 'url', 'detail', 'loading', 'selecting', 'error', 'series', 'completed', 'canPrevious', 'canNext', 'effectiveSource', 'playbackSource', 'entry'] as const
+const presentationKeys = ['items', 'episodeIndex', 'video', 'episodes', 'episode', 'url', 'detail', 'loading', 'refreshing', 'selecting', 'error', 'series', 'completed', 'canPrevious', 'canNext', 'effectiveSource', 'playbackSource', 'entry'] as const
 type Presentation = Pick<typeof feed, typeof presentationKeys[number]>
 const snapshot = () => Object.fromEntries(presentationKeys.map(key => [key, feed[key]])) as Presentation
 const presented = shallowRef(snapshot())
@@ -106,19 +109,29 @@ watch(() => [active.value, sceneVisible.value, ...presentationKeys.map(key => fe
   if (active.value || !player.value || !sceneVisible.value) presented.value = snapshot()
 }, { flush: 'pre' })
 const presentation = Object.fromEntries(presentationKeys.map(key => [key, computed(() => presented.value[key])])) as { [K in keyof Presentation]: ComputedRef<Presentation[K]> }
-const { items, episodeIndex, video, episodes, episode, url, detail, loading, selecting, error, series, completed, canPrevious, canNext, effectiveSource, playbackSource, entry } = presentation
+const { items, episodeIndex, video, episodes, episode, url, detail, loading, refreshing, selecting, error, series, completed, canPrevious, canNext, effectiveSource, playbackSource, entry } = presentation
 paging = useShortDramaPaging({
   surface: playbackSurface, canvas: pagingFrame, cover: pagingCover, chrome: pagingChrome,
+  mobile: mobile ? { layer: pagingPreview, neighbor: direction => direction === 'next' ? feed.nextNeighbor : feed.previousNeighbor } : undefined,
   video: () => player.value?.video() ?? null, active: () => active.value, visible: () => sceneVisible.value,
   canMove: direction => direction === 'next' ? canNext.value : canPrevious.value,
   step: direction => feed.step(direction),
-  canRefresh: () => !feed.series && !feed.entry && feed.selected === 0,
-  refresh: () => paging.replace(() => void feed.refresh(true)),
+  canRefresh: () => mobile && !!feed.effectiveSource && !feed.series && !feed.entry && !feed.refreshing,
+  refresh: () => requestRefresh(false),
   timeout: () => errors.warn(t('shortDrama.loadFailed'), t('shortDrama.timeout'), '', 'short-drama.media'),
 })
 watch(error, value => { if (value) paging.reset() })
-watch(loading, value => { if (!value && !paging.frozen.value) paging.reset() }, { flush: 'post' })
+watch(loading, value => { if (!mobile && !value && !paging.frozen.value) paging.reset() }, { flush: 'post' })
 watch(currentSourceKey, () => paging.reset())
+const pullLabel = computed(() => t(refreshing.value ? 'shortDrama.refreshing' : paging.pullProgress.value === 1 ? 'shortDrama.releaseToRefresh' : 'shortDrama.pullToRefresh'))
+const neighborDisplay = computed(() => paging.preview.value ?? (active.value && motion.allows('pages') ? feed.nextNeighbor : null))
+function requestRefresh(resetPaging = true): void {
+  if (mobile) {
+    if (resetPaging) paging.reset()
+    void feed.requestRefresh()
+  }
+  else paging.replace(() => void feed.refresh())
+}
 function ended(): void {
   if (series.value && episodeIndex.value + 1 >= episodes.value.length) feed.ended()
   else paging.step('next')
@@ -132,7 +145,7 @@ useMobilePlayerGestures({
   enabled: mobile, interaction: 'portrait', device: createPlayerPlatform().device,
   surface: () => active.value && !hasPlayback.value ? stage.value : undefined,
   video: () => null, visible: () => {}, onVolume: () => {},
-  onSwipe: paging.step, onSwipeProgress: paging.drag, onSwipeCancel: paging.cancelDrag,
+  onContact: paging.contact, onSwipe: paging.step, onSwipeProgress: paging.drag, onSwipeCancel: paging.cancelDrag,
 })
 function discover(): void {
   if (entry.value) void router.push(mobile ? '/short-drama' : '/short-drama?view=feed')
@@ -168,10 +181,10 @@ watch([active,video],([visible,item])=>{
   if(!visible)showFavFolderModal.value=false
 },{flush:'post'})
 watch(videoKey, () => { paintedAt = -Infinity;backdropFailed = false;introExpanded.value=false;const canvas=backdrop.value;if(canvas){canvas.width=1;canvas.height=1} })
-function progress(position: number, duration?: number): void {
+function progress(position: number, duration?: number, force = false): void {
   if (!active.value) return
   if(position>0)feed.markWatched()
-  history.updateCurrentEpProgress(position, duration)
+  history.updateCurrentEpProgress(position, duration, force)
   paintBackdrop()
 }
 function paintBackdrop():void {
@@ -221,14 +234,14 @@ onBeforeUnmount(() => window.removeEventListener('cczj:android-overlay-back', ba
       </div>
       <div class="cczj-flex cczj-items-center cczj-gap-4">
         <Button v-if="hasPlayback" variant="text" icon :aria-label="t('settings.playback')" :title="t('settings.playback')" @click="player?.openPlaybackSettings()"><Icon name="settings" :size="20" /></Button>
-        <Button class="drama-refresh" variant="text" :aria-label="t(series ? 'shortDrama.backToFeed' : 'shortDrama.refresh')" :title="t(series ? 'shortDrama.backToFeed' : 'shortDrama.refresh')" :disabled="!effectiveSource || loading || paging.frozen.value" @click="series ? discover() : paging.replace(() => void feed.refresh())"><Icon :name="series ? 'back' : 'refresh'" :size="20" /><span v-if="!mobile || series">{{ t(series ? 'shortDrama.backToFeed' : 'shortDrama.refresh') }}</span></Button>
+        <Button class="drama-refresh" variant="text" :aria-label="t(series ? 'shortDrama.backToFeed' : 'shortDrama.refresh')" :title="t(series ? 'shortDrama.backToFeed' : 'shortDrama.refresh')" :disabled="!effectiveSource || loading || paging.frozen.value" @click="series ? discover() : requestRefresh()"><Icon :name="series ? 'back' : 'refresh'" :size="20" /><span v-if="!mobile || series">{{ t(series ? 'shortDrama.backToFeed' : 'shortDrama.refresh') }}</span></Button>
       </div>
     </header>
     <div class="drama-stage cczj-flex cczj-flex-1 cczj-items-center cczj-justify-center cczj-min-h-0">
       <div class="drama-frame cczj-relative">
       <div class="drama-screen cczj-h-full cczj-relative cczj-overflow-hidden">
         <div ref="playbackSurface" class="drama-playback-surface cczj-h-full cczj-w-full">
-        <VideoPlayer v-if="hasPlayback" ref="player" presentation="portrait" quiet-loading :portrait-controls-host="mobile ? undefined : controlsHost" :portrait-presentation-host="stage" :portrait-controls-pinned="!!drawer || introExpanded" :url="url" :video-key="videoKey" :autoplay="true" :show-title-bar="false" :resolve-resume="history.resolveDbResumePosition" @gesture-start="paging.contact" @swipe="paging.step" @swipe-progress="paging.drag" @swipe-cancel="paging.cancelDrag" @media-ready="onMediaReady" @media-error="paging.reset" @progress="progress" @ended="ended">
+        <VideoPlayer v-if="hasPlayback" ref="player" presentation="portrait" :portrait-controls-host="mobile ? undefined : controlsHost" :portrait-presentation-host="stage" :portrait-controls-pinned="!!drawer || introExpanded" :url="url" :video-key="videoKey" :autoplay="true" :show-title-bar="false" :resolve-resume="history.resolveDbResumePosition" :resume-immediately="route.query.resume === '1' && entry?.episodeIndex === episodeIndex" @gesture-start="paging.contact" @swipe="paging.step" @swipe-progress="paging.drag" @swipe-cancel="paging.cancelDrag" @media-ready="onMediaReady" @media-error="paging.reset" @progress="progress" @ended="ended">
           <template #portrait-summary>
             <div class="drama-status-queue cczj-flex cczj-items-center cczj-gap-4 cczj-min-w-0"><span class="cczj-truncate">{{t(series ? 'shortDrama.series' : 'shortDrama.forYou')}} · {{t('shortDrama.currentEpisode',{num:episode?.ep_num??episodeIndex+1})}}</span></div>
           </template>
@@ -265,8 +278,23 @@ onBeforeUnmount(() => window.removeEventListener('cczj:android-overlay-back', ba
           </Empty>
         </div>
         </div>
+        <div v-if="mobile" v-show="paging.preview.value" ref="pagingPreview" class="drama-neighbor cczj-absolute cczj-inset-0 cczj-pointer-events-none cczj-flex cczj-items-end" inert aria-hidden="true">
+          <template v-if="neighborDisplay">
+            <RemoteImage v-if="neighborDisplay.video.vod_pic" :key="neighborDisplay.video.vod_pic" :src="neighborDisplay.video.vod_pic" alt="" class="drama-neighbor-image cczj-absolute cczj-inset-0 cczj-w-full cczj-h-full" />
+            <div class="drama-neighbor-info cczj-relative cczj-w-full">
+              <h2 class="drama-title cczj-line-clamp-2">{{ neighborDisplay.video.vod_name }}</h2>
+              <span v-if="neighborDisplay.episodeNumber">{{ t('shortDrama.currentEpisode', { num: neighborDisplay.episodeNumber }) }}</span>
+            </div>
+          </template>
+        </div>
         <div v-show="paging.frozen.value" ref="pagingCover" class="drama-paging-frame cczj-absolute cczj-w-full cczj-h-full cczj-pointer-events-none cczj-top-0 cczj-left-0" inert aria-hidden="true"><canvas ref="pagingFrame" class="cczj-w-full cczj-h-full"/><div ref="pagingChrome"/></div>
         </div>
+      </div>
+      <div v-if="mobile && (refreshing || paging.pullProgress.value > 0)" class="drama-pull-status cczj-absolute cczj-flex cczj-items-center cczj-gap-4" @pointerdown.stop>
+        <Spinner v-if="refreshing && motion.allows('feedback')" inline size="sm" aria-hidden="true" />
+        <Icon v-else name="refresh" :size="18" :style="!refreshing && motion.allows('feedback') ? { transform: `rotate(${paging.pullProgress.value * 360}deg)` } : undefined" aria-hidden="true" />
+        <span role="status">{{ pullLabel }}</span>
+        <Button v-if="refreshing" class="drama-cancel-refresh" variant="text" :aria-label="t('shortDrama.cancelRefresh')" @click="feed.cancelRefresh()">{{ t('common.cancel') }}</Button>
       </div>
       <div v-if="!mobile" ref="controlsHost" class="drama-controls-host cczj-absolute cczj-inset-0 cczj-pointer-events-none" />
       <nav v-if="!mobile && video" class="drama-rail cczj-absolute cczj-flex cczj-flex-col cczj-items-center cczj-gap-6" :aria-label="navigationLabel" @pointerdown.stop @wheel.stop>
@@ -317,6 +345,11 @@ onBeforeUnmount(() => window.removeEventListener('cczj:android-overlay-back', ba
 .drama-screen { width: 100%; }
 .cczj-short-drama-surface .drama-playback-surface,.drama-paging-frame { background: var(--cczj-drama-chrome,#18191c); }
 .drama-paging-frame { z-index: 30; }
+.drama-neighbor { z-index: 30; background: var(--cczj-drama-chrome,#18191c); transform: translateY(100%); }
+.drama-neighbor-image { object-fit: cover; }
+.drama-neighbor-info { padding: 32px 16px; background: linear-gradient(transparent, #000c); }
+.drama-pull-status { z-index: 31; top: 70px; left: 50%; transform: translateX(-50%); min-height: 40px; padding: 0 12px; border-radius: 24px; background: var(--cczj-drama-chrome,#18191c); color: var(--text-primary); @apply cczj-whitespace-nowrap; }
+.drama-cancel-refresh { min-height: 44px; }
 .cczj-short-drama-surface .drama-screen { background: var(--cczj-drama-chrome); }
 .drama-screen :deep(.portrait-player) { background: var(--cczj-drama-chrome); }
 .drama-screen :deep(.native-video) { background: var(--cczj-drama-chrome); }

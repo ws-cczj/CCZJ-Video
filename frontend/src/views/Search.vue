@@ -47,7 +47,31 @@ const sourceOptions = computed(() =>
 
 const currentSearchSource = ref('')
 const keyword = ref('')
-const searchHistory = ref<string[]>(readStorage<string[]>(CCZJ.Settings.searchHistory, []))
+const SEARCH_HISTORY_LIMIT = 10
+function readSearchHistory(): string[] {
+  const stored = readStorage<unknown>(CCZJ.Settings.searchHistory, [])
+  if (!Array.isArray(stored)) return []
+  const unique = new Set<string>()
+  for (const value of stored) {
+    if (typeof value !== 'string') continue
+    const term = value.trim()
+    if (term) unique.add(term)
+    if (unique.size === SEARCH_HISTORY_LIMIT) break
+  }
+  const entries = Array.from(unique)
+  if (entries.length !== stored.length || entries.some((term, index) => term !== stored[index])) {
+    writeStorage(CCZJ.Settings.searchHistory, entries)
+  }
+  return entries
+}
+
+const searchHistory = ref(readSearchHistory())
+const historyTerms = ref<HTMLElement>()
+const historyExpanded = ref(false)
+const foldedHistoryCount = ref(SEARCH_HISTORY_LIMIT)
+const historyMoreNeedsRow = ref(false)
+const historyHasMore = computed(() => foldedHistoryCount.value < searchHistory.value.length)
+const hideHistoryTerm = (index: number) => !historyExpanded.value && index >= foldedHistoryCount.value
 const editingHistoryTerm=ref('')
 const { editing: managingHistory, finish: finishHistoryManagement, vHoldToEdit } = useHoldToEdit(mobile,undefined,()=>{editingHistoryTerm.value=''}, {dismissOnOutside:true,onEnter:element=>{editingHistoryTerm.value=element.dataset.historyTerm||''}})
 const sourceSearchMode = ref(readStorageBoolean(CCZJ.Settings.sourceSearchMode))
@@ -155,6 +179,55 @@ watch(
 // view) or data was refreshed — otherwise keep the cached result list so
 // returning to this tab does not re-hit the remote API and drop scroll state.
 const searchViewActive=useViewActivity(()=>router.currentRoute.value.path==='/search','committed')
+const historyVisible = useViewActivity()
+watch([historyTerms, searchHistory, historyVisible], ([host, , visible], _previous, cleanup) => {
+  if (!host || !visible) return
+  const chips = Array.from(host.querySelectorAll<HTMLElement>('[data-history-entry]'))
+  const more = host.querySelector<HTMLElement>('[data-history-more-size]')
+  if (!more) return
+  const container = host
+  const button = more
+
+  function measure(): void {
+    const width = container.getBoundingClientRect().width
+    if (width <= 0) return
+    const gap = Number.parseFloat(getComputedStyle(container).columnGap) || 0
+    const moreWidth = button.getBoundingClientRect().width
+    let row = 1
+    let rowWidth = 0
+    let fitWithMore = 0
+    let moreWouldStayOnFirstRow = false
+
+    for (const [index, chip] of chips.entries()) {
+      const chipWidth = chip.getBoundingClientRect().width
+      if (rowWidth && rowWidth + gap + chipWidth > width + 0.01) {
+        row++
+        rowWidth = 0
+      }
+      if (row > 2) {
+        foldedHistoryCount.value = fitWithMore
+        historyMoreNeedsRow.value = moreWouldStayOnFirstRow
+        return
+      }
+      rowWidth += (rowWidth ? gap : 0) + chipWidth
+      const moreFits = rowWidth + gap + moreWidth <= width + 0.01
+      if (row === 1 || moreFits) {
+        fitWithMore = index + 1
+        moreWouldStayOnFirstRow = row === 1 && moreFits
+      }
+    }
+    foldedHistoryCount.value = chips.length
+    historyExpanded.value = false
+  }
+
+  measure()
+  const observer = new ResizeObserver(measure)
+  observer.observe(host)
+  chips.forEach(chip => observer.observe(chip))
+  observer.observe(more)
+  cleanup(() => observer.disconnect())
+}, { flush: 'post' })
+
 const returnRefresh=createSceneSettledTask(()=>searchViewActive.value)
 onActivated(() => {void returnRefresh.schedule(refreshOnReturn)})
 async function refreshOnReturn():Promise<void> {
@@ -414,9 +487,9 @@ async function doSearch(): Promise<void> {
     return
   }
   finishHistoryManagement()
-  if (!searchHistory.value.includes(kw)) {
-    searchHistory.value.unshift(kw)
-    if (searchHistory.value.length > 10) searchHistory.value.pop()
+  historyExpanded.value = false
+  if (searchHistory.value[0] !== kw) {
+    searchHistory.value = [kw, ...searchHistory.value.filter(term => term !== kw)].slice(0, SEARCH_HISTORY_LIMIT)
     writeStorage(CCZJ.Settings.searchHistory, searchHistory.value)
   }
   hasSearched.value = true
@@ -462,13 +535,12 @@ function loadMore(): void {
 
 function clearHistory(): void {
   searchHistory.value = []
+  historyExpanded.value = false
   removeStorage(CCZJ.Settings.searchHistory)
 }
 
 function removeHistoryItem(kw: string): void {
-  const idx = searchHistory.value.indexOf(kw)
-  if (idx < 0) return
-  searchHistory.value.splice(idx, 1)
+  searchHistory.value = searchHistory.value.filter(term => term !== kw)
   if (searchHistory.value.length > 0) {
     writeStorage(CCZJ.Settings.searchHistory, searchHistory.value)
   } else {
@@ -827,41 +899,44 @@ function onSourceVideoClick(v: Video): void {
     </div>
 
     <!-- 历史搜索 -->
-    <section v-if="mobile && searchHistory.length > 0 && !hasSearched" class="cczj-mobile-search-history" :data-cczj-history-editing="managingHistory || undefined">
-      <div class="cczj-mobile-search-history-heading">
+    <section v-if="searchHistory.length > 0 && !hasSearched" :class="mobile ? 'cczj-mobile-search-history' : 'history-tags'" :data-cczj-history-editing="managingHistory || undefined">
+      <div v-if="mobile" class="cczj-mobile-search-history-heading">
         <h2><Icon name="clock" :size="15" />{{ t('search.historySearch') }}</h2>
       </div>
-      <div class="cczj-mobile-search-history-terms">
-        <div v-for="h in searchHistory" :key="h" v-hold-to-edit :data-history-term="h" class="cczj-mobile-search-history-chip">
-          <button type="button" class="cczj-mobile-search-history-term" @click="managingHistory ? finishHistoryManagement() : applyHistoryKeyword(h)">{{ h }}</button>
-          <button v-if="managingHistory && editingHistoryTerm === h" type="button" class="cczj-mobile-item-remove cczj-mobile-history-remove" data-cczj-remove :aria-label="`${t('search.deleteHistory')}: ${h}`" @click.stop="removeHistoryItem(h);finishHistoryManagement()"><Icon name="close" :size="10" /></button>
-        </div>
-      </div>
-    </section>
-    <div v-if="!mobile && searchHistory.length > 0 && !hasSearched" class="history-tags cczj-flex cczj-flex-wrap cczj-gap-2 cczj-mb-4">
-      <span class="history-label cczj-flex cczj-items-center cczj-gap-1">
+      <span v-else class="history-label cczj-flex-shrink-0 cczj-whitespace-nowrap">
         <Icon name="clock" :size="12" />
         {{ t('search.historySearch') }}
       </span>
-      <div
-        v-for="h in searchHistory"
-        :key="h"
-        class="tag-wrap cczj-flex cczj-items-center cczj-gap-1"
-      >
-        <Tag
-          class="tag-btn cczj-cursor-pointer"
-          role="button"
-          tabindex="0"
-          @click="applyHistoryKeyword(h)"
-          @keydown.enter.prevent="applyHistoryKeyword(h)"
-          @keydown.space.prevent="applyHistoryKeyword(h)"
-        >{{ h }}</Tag>
-        <Button variant="text" size="sm" icon class="tag-remove" :title="t('search.deleteHistory')" @click.stop="removeHistoryItem(h)">
-          <Icon name="close" :size="10" />
-        </Button>
+      <div ref="historyTerms" class="history-terms cczj-relative cczj-flex cczj-flex-wrap cczj-items-center cczj-min-w-0"
+        :class="mobile ? 'cczj-mobile-search-history-terms' : 'cczj-flex-1 cczj-gap-2'">
+        <template v-for="(term, index) in searchHistory" :key="term">
+          <div v-if="mobile" v-hold-to-edit="!hideHistoryTerm(index)" :data-history-term="term" data-history-entry
+            class="cczj-mobile-search-history-chip cczj-flex-shrink-0 cczj-max-w-full" :class="{ 'history-measure-only': hideHistoryTerm(index) }" :inert="hideHistoryTerm(index)">
+            <button type="button" class="cczj-mobile-search-history-term" :title="term" @click="managingHistory ? finishHistoryManagement() : applyHistoryKeyword(term)">
+              <span class="cczj-truncate">{{ term }}</span>
+            </button>
+            <button v-if="managingHistory && editingHistoryTerm === term" type="button" class="cczj-mobile-item-remove cczj-mobile-history-remove" data-cczj-remove :aria-label="`${t('search.deleteHistory')}: ${term}`" @click.stop="removeHistoryItem(term);finishHistoryManagement()"><Icon name="close" :size="10" /></button>
+          </div>
+          <div v-else class="tag-wrap cczj-flex-shrink-0 cczj-max-w-full cczj-gap-1" data-history-entry
+            :class="{ 'history-measure-only': hideHistoryTerm(index) }" :inert="hideHistoryTerm(index)">
+            <Tag class="tag-btn cczj-min-w-0" role="button" tabindex="0" :title="term"
+              @click="applyHistoryKeyword(term)" @keydown.enter.prevent="applyHistoryKeyword(term)" @keydown.space.prevent="applyHistoryKeyword(term)">
+              {{ term }}
+            </Tag>
+            <Button variant="text" size="sm" icon class="tag-remove cczj-flex-shrink-0" :aria-label="`${t('search.deleteHistory')}: ${term}`" @click.stop="removeHistoryItem(term)">
+              <Icon name="close" :size="10" />
+            </Button>
+          </div>
+        </template>
+        <div v-if="historyHasMore" class="cczj-flex-shrink-0" :class="{ 'cczj-w-full': !historyExpanded && historyMoreNeedsRow }">
+          <Button variant="text" :size="mobile ? 'md' : 'sm'" :aria-expanded="historyExpanded" @click="historyExpanded = !historyExpanded">
+            {{ t(historyExpanded ? 'common.collapse' : 'common.more') }}
+          </Button>
+        </div>
+        <Button data-history-more-size class="history-measure-only" variant="text" :size="mobile ? 'md' : 'sm'" inert aria-hidden="true">{{ t('common.more') }}</Button>
       </div>
-      <Button variant="text" size="sm" @click="clearHistory">{{ t('search.clearAll') }}</Button>
-    </div>
+      <Button v-if="!mobile" variant="text" size="sm" class="cczj-flex-shrink-0" @click="clearHistory">{{ t('search.clearAll') }}</Button>
+    </section>
 
     <!-- ============ 推荐区域（未搜索时显示） ============ -->
     <section v-if="!hasSearched && (recommendGroups.length > 0 || recommendLoading)" class="recommend-section cczj-mb-4">

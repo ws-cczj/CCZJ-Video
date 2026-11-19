@@ -104,10 +104,11 @@ async function removeMobileHistory(item: HistoryItem): Promise<void> {
 async function hydrateMissingPosters(): Promise<void> {
   const limit = 8
   const toLoad: HistoryItem[] = []
-  for (const h of history.value) {
+  for (const h of dedupedHistory.value) {
+    if (h.vod_name && h.vod_pic) continue
     const cached = posterCache.get(h.source_key, h.vod_id)
     const hasName = h.vod_name || cached?.vod_name
-    const hasPic = cached?.vod_pic
+    const hasPic = h.vod_pic || cached?.vod_pic
     if (!hasName || !hasPic) toLoad.push(h)
     if (toLoad.length >= limit) break
   }
@@ -115,16 +116,11 @@ async function hydrateMissingPosters(): Promise<void> {
     const key = `${h.source_key}:${h.vod_id}`
     if (loadingPoster.value.has(key)) continue
     loadingPoster.value.add(key)
-    const entry = await posterCache.ensureLoaded(h.source_key, h.vod_id)
-    if (entry?.vod_name) {
-      const idx = history.value.findIndex(
-        x => x.source_key === h.source_key && x.vod_id === h.vod_id
-      )
-      if (idx !== -1 && !history.value[idx].vod_name) {
-        history.value[idx].vod_name = entry.vod_name
-      }
+    try {
+      await posterCache.ensureLoaded(h.source_key, h.vod_id)
+    } finally {
+      loadingPoster.value.delete(key)
     }
-    loadingPoster.value.delete(key)
   }
 }
 
@@ -167,6 +163,7 @@ const groupedByDate = computed(() => {
   return Object.keys(groups)
     .sort((a, b) => (a < b ? 1 : -1))
     .map(key => ({
+      key,
       label: formatGroupLabel(key),
       items: groups[key],
     }))
@@ -316,8 +313,7 @@ function resolveName(h: HistoryItem): string {
 }
 
 function resolvePic(h: HistoryItem): string {
-  const cached = posterCache.get(h.source_key, h.vod_id)
-  return cached?.vod_pic || ''
+  return h.vod_pic || posterCache.getPic(h.source_key, h.vod_id)
 }
 
 function isPicLoading(h: HistoryItem): boolean {
@@ -396,7 +392,7 @@ function goDetail(h: HistoryItem): void {
 
     <!-- 历史列表（按日期分组） -->
     <div v-else  :data-cczj-editing="mobile && manageMode || undefined" class="history-list cczj-flex cczj-flex-col cczj-gap-12">
-      <div v-for="group in groupedByDate" :key="group.label" class="history-group cczj-flex cczj-flex-col cczj-gap-5">
+      <div v-for="group in groupedByDate" :key="group.key" class="history-group cczj-flex cczj-flex-col cczj-gap-5">
         <div class="group-header cczj-flex cczj-items-center cczj-justify-between cczj-gap-6 cczj-mb-3 cczj-px-2">
           <span class="group-label cczj-text-lg cczj-font-semibold cczj-text-primary">{{ group.label }}</span>
           <span class="group-count cczj-text-sm cczj-text-muted">{{ tr('history.recordCount', { count: group.items.length }) }}</span>

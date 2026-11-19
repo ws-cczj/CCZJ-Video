@@ -92,10 +92,10 @@ export function useMobilePlayerGestures(options: {
     if (kind.value === 'speed') { e.preventDefault(); return }
     const dx = e.clientX - s.x, dy = e.clientY - s.y
     if (options.interaction === 'portrait') {
-      if (Math.hypot(dx, dy) < 10) return
+      if (Math.hypot(dx, dy) < 10 && !suppressClick) return
       clearHold()
       suppressClick = true
-      swipe = Math.abs(dy) > Math.abs(dx) * 1.4 ? dy : 0
+      swipe = portraitDistance(dx, dy)
       options.onSwipeProgress?.(swipe)
       ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
       e.preventDefault()
@@ -136,6 +136,9 @@ export function useMobilePlayerGestures(options: {
         else { const video = options.video(); if (video) { video.volume = value; video.muted = value === 0 } }
       }
     }
+  }
+  function portraitDistance(x: number, y: number): number {
+    return Math.abs(y) >= 10 && Math.abs(y) > Math.abs(x) * 1.4 ? y : 0
   }
   function end(e: PointerEvent): void {
     const s = start

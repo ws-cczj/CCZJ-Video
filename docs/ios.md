@@ -1,6 +1,6 @@
 # iOS 本地应用构建与验收
 
-iOS 使用现有 Go 服务、Vue 移动宿主和 SQLite；不部署应用服务器。当前为适配阶段，Wails beta.30 的 iOS 支持仍属实验性。Windows 检查、Android 回归、iOS 编译、模拟器运行与 iPhone 真机验收分别报告，不能互相替代。
+iOS 使用现有 Go 服务、Vue 移动宿主和 SQLite；不部署应用服务器。当前为适配阶段，仓库的 Wails Go 模块、JavaScript runtime 和本机 CLI 均为 3.0.0，官方仍将 iOS 支持列为实验性。本机 Windows 环境完成的桌面编译和 Android 打包不能证明 iOS 兼容性；iOS 编译、模拟器与 iPhone 验收均尚未完成。[Wails 3.0.0 发布说明](https://github.com/wailsapp/wails/releases/tag/v3.0.0)
 
 ## 只有 Windows 时
 

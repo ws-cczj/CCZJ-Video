@@ -7,21 +7,28 @@ import { Button, Select, NumberField } from '../../components/ui'
 import { danmakuTypefaceStatus, ensureDanmakuTypeface } from './typeface'
 import DanmakuPreview from './DanmakuPreview.vue'
 import DanmakuRange from './DanmakuRange.vue'
-import InstalledResources from '../../resources/InstalledResources.vue'
-import {installedResourcesRevision} from '../../resources/store'
 import { defaultDanmakuPreferences, type DanmakuPreferences } from './preferences'
 import { useDanmaku } from './useDanmaku'
 import DanmakuCanvas from './DanmakuCanvas.vue'
-import { builtinDanmakuSources } from './sources'
-const props=defineProps<{mediaKey:string;mediaTitle:string;mediaYear?:string;mediaKind?:string;episodeLabel:string;current:number;duration:number;playing:boolean;fullscreen:boolean;mobile:boolean;host?:HTMLElement;video:()=>HTMLVideoElement|null}>()
+import { isDanmakuProvider } from '../../constants/danmakuSources'
+const props=defineProps<{mediaKey:string;mediaTitle:string;mediaYear?:string;mediaKind?:string;episodeLabel:string;current:number;duration:number;playing:boolean;fullscreen:boolean;mobile:boolean;interactive:boolean;host?:HTMLElement;video:()=>HTMLVideoElement|null}>()
 const emit=defineEmits<{prepared:[key:string,status:string]}>()
 const {t,te}=useI18n()
 const {preferences,preferencesReady,sourcesReady,boundSourceEnabled,binding,window:comments,error,busy,status,cooldownUntil,attempts,traceId,retry}=useDanmaku({key:()=>props.mediaKey,current:()=>props.current,title:()=>props.mediaTitle,year:()=>props.mediaYear||'',kind:()=>props.mediaKind||'',episode:()=>props.episodeLabel,duration:()=>props.duration})
 const advanced=ref(false)
 const opened=ref(false),panel=ref<HTMLElement>(),panelLeft=ref('16px'),viewportWidth=ref(640)
-watch(()=>[opened.value,preferences.value.enabled,preferences.value.fontFamily,installedResourcesRevision.value],([open,enabled,family])=>{if((open||enabled)&&family==='sans')void ensureDanmakuTypeface()},{immediate:true})
+watch(()=>[opened.value,preferences.value.enabled,preferences.value.fontFamily],([open,enabled,family])=>{if((open||enabled)&&family==='sans')void ensureDanmakuTypeface()},{immediate:true})
 const items=computed(()=>comments.value?.items??[]),enabled=computed(()=>preferences.value.enabled)
-const sourceName=computed(()=>builtinDanmakuSources.find(source=>source.id===binding.value?.episode.provider)?.name||'')
+const canvas = ref<InstanceType<typeof DanmakuCanvas>>()
+const interaction = computed(() => canvas.value?.interaction)
+const sourceName=computed(()=>sourceLabel(binding.value?.episode.provider ?? ''))
+const checkedSources = computed(() => attempts.value.filter(attempt =>
+  attempt.status === 'available' || attempt.status === 'no_match' ||
+  (attempt.status === 'error' && attempt.stage && attempt.stage !== 'cooldown'),
+).length)
+function sourceLabel(provider: string): string {
+ return isDanmakuProvider(provider) ? t(`danmakuSources.names.${provider}`) : provider
+}
 function reason(code:string):string {
  if(code==='EPISODE_SPECIAL_REJECTED')return t('danmaku.specialVersionReason')
  return te(`danmaku.reasons.${code}`)?t(`danmaku.reasons.${code}`):t('danmaku.reasonUnknown')
@@ -54,8 +61,8 @@ function setFont(value:string|number):void{preferences.value.fontFamily=value===
 function setWeight(value:string|number):void{preferences.value.fontWeight=[400,500,600,700].includes(Number(value))?Number(value) as DanmakuPreferences['fontWeight']:500}
 function setStyle(value:string|number):void{preferences.value.textStyle=value==='shadow'?'shadow':value==='none'?'none':'stroke'}
 function resetAppearance():void{
- const {enabled,freshDays}=preferences.value
- preferences.value={...defaultDanmakuPreferences,enabled,freshDays}
+ const {enabled}=preferences.value
+ preferences.value={...defaultDanmakuPreferences,enabled}
 }
 let previousFocus:HTMLElement|null=null
 let anchor:HTMLElement|undefined,resizeObserver:ResizeObserver|undefined
@@ -86,10 +93,13 @@ watch(()=>props.mediaKey,()=>close());watch(()=>props.fullscreen,()=>close())
 // Missing/disabled/failed sources also settle preparation; none blocks playback.
 watch(status,value=>{if(!['loading','matching','waiting','unbound'].includes(value))emit('prepared',props.mediaKey,value)},{immediate:true})
 onBeforeUnmount(()=>{keepOpen();resizeObserver?.disconnect();if(opened.value&&previousFocus?.isConnected)previousFocus.focus({preventScroll:true})})
-defineExpose({open,close,back,scheduleClose,toggle,ready:preferencesReady,engaged:opened,enabled,status})
+defineExpose({open,close,back,scheduleClose,toggle,ready:preferencesReady,engaged:opened,enabled,status,interaction})
 </script>
 <template>
- <DanmakuCanvas v-if="preferences.enabled&&sourcesReady&&boundSourceEnabled&&binding" :items="items" :offset="binding.offsetMs" :preferences="preferences" :current="current" :playing="playing" :video="video" />
+ <DanmakuCanvas v-if="preferences.enabled&&sourcesReady&&boundSourceEnabled&&binding"
+   :key="JSON.stringify([mediaKey, binding.episode.provider, binding.episode.episodeId])" ref="canvas"
+   :items="items" :offset="binding.offsetMs" :preferences="preferences" :current="current" :playing="playing"
+   :interactive="interactive&&!opened" :video="video" />
  <Teleport :to="host||'body'">
   <Transition name="cczj-danmaku-panel">
    <div v-if="opened" class="cczj-danmaku-mask" :style="{'--dm-panel-left':panelLeft}" :class="{'cczj-danmaku-portrait':mobile&&!fullscreen,'cczj-danmaku-touch':mobile}" @click.self="close()" @pointerdown.stop @wheel.stop @click.stop @dblclick.stop @keydown.stop="onKey">
@@ -117,7 +127,6 @@ defineExpose({open,close,back,scheduleClose,toggle,ready:preferencesReady,engage
          <span>{{range.label}}</span><div class="cczj-flex cczj-items-center cczj-gap-2"><NumberField :model-value="range.value" :ariaLabel="range.label" :min="range.min" :max="range.max" :step="1" @update:model-value="adjustRange(range.key,$event,range.factor)" /><span>{{range.unit}}</span></div>
         </div>
         <div class="cczj-danmaku-select"><span>{{t('danmaku.fontFamily')}}</span><Select :model-value="preferences.fontFamily" :options="fontOptions" :ariaLabel="t('danmaku.fontFamily')" inline inline-drop="up" @update:model-value="setFont" /></div>
-        <InstalledResources v-if="preferences.fontFamily==='sans'" compact />
         <div class="cczj-danmaku-select"><span>{{t('danmaku.fontWeight')}}</span><Select :model-value="preferences.fontWeight" :options="weightOptions" :ariaLabel="t('danmaku.fontWeight')" inline inline-drop="up" @update:model-value="setWeight" /></div>
         <div class="cczj-danmaku-select"><span>{{t('danmaku.textStyle')}}</span><Select :model-value="preferences.textStyle" :options="styleOptions" :ariaLabel="t('danmaku.textStyle')" inline inline-drop="up" @update:model-value="setStyle" /></div>
         <DanmakuRange v-if="preferences.textStyle==='stroke'" :label="t('danmaku.strokeWidth')" :value="preferences.strokeWidth" :min="0" :max="4" :step="0.25" :display="Number(preferences.strokeWidth.toFixed(2))+' px'" @change="preferences.strokeWidth=$event" />
@@ -128,7 +137,18 @@ defineExpose({open,close,back,scheduleClose,toggle,ready:preferencesReady,engage
       <p v-if="status!=='ready'" class="cczj-danmaku-status" role="status">{{t(`danmaku.states.${status}`)}}</p>
       <template v-if="advanced">
       <div class="cczj-danmaku-availability" role="status"><strong v-if="binding">{{sourceName}} · {{episodeLabel}}</strong><span v-if="comments">{{t('danmaku.fragmentCount',{count:comments.items.length})}} · {{t(comments.cached?'danmaku.fromCache':'danmaku.fromSource')}}</span><p>{{t('danmaku.autoHint')}}</p></div>
-      <details v-if="attempts.length" class="cczj-danmaku-cache cczj-danmaku-match-details"><summary>{{t('danmaku.matchDetails')}}</summary><p v-for="attempt in attempts" :key="attempt.provider"><strong>{{builtinDanmakuSources.find(source=>source.id===attempt.provider)?.name}} · {{t(`danmaku.attempts.${attempt.status}`)}}</strong><span v-if="attempt.code" class="cczj-danmaku-match-reason">{{reason(attempt.code)}} <code>{{attempt.code}}</code></span><small v-if="attempt.stage">{{t('danmaku.matchStage')}}: {{te(`danmaku.stages.${attempt.stage}`)?t(`danmaku.stages.${attempt.stage}`):attempt.stage}} · {{attempt.elapsedMs||0}} ms</small><small v-if="attempt.detail">{{attempt.detail}}</small><small v-if="attempt.retryAt">{{t('danmaku.matchRetryAt',{time:new Date(attempt.retryAt*1000).toLocaleString()})}}</small></p><p v-if="traceId">{{t('danmaku.matchLogId')}}<code>{{traceId}}</code></p><p>{{t('danmaku.matchLogHint')}}</p></details>
+      <details v-if="attempts.length" class="cczj-danmaku-cache cczj-danmaku-match-details">
+        <summary>{{ t('danmaku.matchDetails', { checked: checkedSources, total: attempts.length }) }}</summary>
+        <p v-for="attempt in attempts" :key="attempt.provider">
+          <strong>{{ sourceLabel(attempt.provider) }} · {{ t(`danmaku.attempts.${attempt.status}`) }}</strong>
+          <span v-if="attempt.code" class="cczj-danmaku-match-reason">{{ attempt.status === 'not_used' && attempt.code === 'TIMEOUT' ? t('danmaku.matchQueueDeadline') : reason(attempt.code) }} <code>{{ attempt.code }}</code></span>
+          <small v-if="attempt.stage">{{ t('danmaku.matchStage') }} · {{ te(`danmaku.stages.${attempt.stage}`) ? t(`danmaku.stages.${attempt.stage}`) : attempt.stage }} · {{ attempt.elapsedMs || 0 }} ms</small>
+          <small v-if="attempt.detail">{{ attempt.detail }}</small>
+          <small v-if="attempt.retryAt">{{ t('danmaku.matchRetryAt', { time: new Date(attempt.retryAt * 1000).toLocaleString() }) }}</small>
+        </p>
+        <p v-if="traceId">{{ t('danmaku.matchLogId') }}<code>{{ traceId }}</code></p>
+        <p>{{ t('danmaku.matchLogHint') }}</p>
+      </details>
       </template>
       <p v-if="error" class="cczj-danmaku-error" role="alert">{{error}} <Button variant="text" :disabled="busy" @click="retry">{{t('common.retry')}}</Button></p>
       <p v-if="cooldownUntil" class="cczj-danmaku-hint">{{t('danmaku.retryAfter',{time:new Date(cooldownUntil).toLocaleTimeString()})}}</p>

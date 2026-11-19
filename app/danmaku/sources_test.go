@@ -17,7 +17,7 @@ func TestSourceSettingsValidationAndDefault(t *testing.T) {
 	if err != nil || s.DefaultProvider != "bilibili" || s.Enabled("qq") || len(s.Disabled) != 1 {
 		t.Fatal(s, err)
 	}
-	s, err = DecodeSourceSettings(`{"disabled":["bilibili","qq","iqiyi"]}`)
+	s, err = DecodeSourceSettings(`{"disabled":["bilibili","qq","iqiyi","mgtv","migu","youku","sohu","leshi","xigua","bahamut"]}`)
 	if err != nil || s.DefaultProvider != "" {
 		t.Fatal(s, err)
 	}

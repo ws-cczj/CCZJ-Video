@@ -94,7 +94,7 @@ function autoSources(){
 it('delegates metadata and current episode to one cancellable backend match, reusing its first window',async()=>{
  autoSources()
  const state=mountAuto();await vi.waitFor(()=>expect(state.status.value).toBe('empty'))
- expect(mocks.match).toHaveBeenCalledExactlyOnceWith({localKey:binding.localKey,title:'sample',year:'2023',kind:'电视剧',episodeLabel:'第01集',durationMs:120000,positionMs:0,freshDays:1})
+ expect(mocks.match).toHaveBeenCalledExactlyOnceWith({localKey:binding.localKey,title:'sample',year:'2023',kind:'电视剧',episodeLabel:'第01集',durationMs:120000,positionMs:0})
  expect(mocks.search).not.toHaveBeenCalled();expect(mocks.episodes).not.toHaveBeenCalled();expect(mocks.bind).not.toHaveBeenCalled();expect(mocks.window).not.toHaveBeenCalled()
 })
 it('keeps the canvas unbound when all providers fail and retains their cooldown details',async()=>{
@@ -129,7 +129,7 @@ it('does not publish a previous binding before the backend evaluates default and
  expect(mocks.binding).not.toHaveBeenCalled();expect(mocks.match).toHaveBeenCalledOnce()
 })
 it('settles disabled availability without searching when every source is off',async()=>{
- autoSources();mocks.get.mockImplementation((key:string)=>Promise.resolve(key==='danmaku_sources_v1'?'{"defaultProvider":"","disabled":["qq","bilibili","iqiyi"]}':''))
+ autoSources();mocks.get.mockImplementation((key:string)=>Promise.resolve(key==='danmaku_sources_v1'?'{"defaultProvider":"","disabled":["qq","bilibili","iqiyi","mgtv","migu","youku","sohu","leshi","xigua","bahamut"]}':''))
  const state=mountAuto();await vi.waitFor(()=>expect(state.status.value).toBe('sourceDisabled'))
  expect(mocks.match).not.toHaveBeenCalled();expect(mocks.search).not.toHaveBeenCalled();expect(mocks.window).not.toHaveBeenCalled()
 })

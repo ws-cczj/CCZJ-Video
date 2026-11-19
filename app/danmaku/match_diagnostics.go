@@ -89,7 +89,7 @@ func episodeSummary(rows []Episode) string {
 func workMatchFailure(rows []Candidate, request MatchRequest) (string, string) {
 	named, eligible := 0, 0
 	for _, row := range rows {
-		if workTitleSimilarity(request.Title, row.Title) >= 800 {
+		if candidateTitleSimilarity(row, request.Title) >= 800 {
 			named++
 		}
 		if workMatchScore(row, request) >= 0 {
@@ -100,6 +100,8 @@ func workMatchFailure(rows []Candidate, request MatchRequest) (string, string) {
 	switch {
 	case len(rows) == 0:
 		return "WORK_SEARCH_EMPTY", detail
+	case eligible > 0:
+		return "AMBIGUOUS_WORK", detail
 	default:
 		return "WORK_TITLE_MISMATCH", detail
 	}
@@ -108,37 +110,40 @@ func workMatchFailure(rows []Candidate, request MatchRequest) (string, string) {
 func episodeMatchFailure(rows []Episode, request MatchRequest) (string, string) {
 	n, numbered := episodeOrdinal(request.EpisodeLabel)
 	movie := !numbered && matchMovie.MatchString(request.EpisodeLabel)
-	sameNumber, special, specialNumber := 0, 0, 0
+	counts := map[string]int{}
+	special, specialNumber := 0, 0
 	for _, row := range rows {
-		label := row.Number
-		if label == "" {
-			label = row.Title
-		}
-		remote, ok := episodeOrdinal(label)
 		if matchExtra.MatchString(row.Title) {
 			special++
-			if numbered && ok && n == remote {
+			if number, ok := episodeOrdinal(row.Number); numbered && ok && n == number {
 				specialNumber++
 			}
 			continue
 		}
-		if (!movie && (!numbered || !ok || n != remote)) || (movie && len(rows) != 1) {
-			continue
-		}
-		sameNumber++
+		_, reason := episodeScore(row, request, n, movie && len(rows) == 1)
+		counts[reason]++
 	}
+	sameNumber := counts[""] + counts["AMBIGUOUS_EPISODE"] + counts["EPISODE_DURATION_MISMATCH"] + counts["EPISODE_VERSION_MISMATCH"]
 	detail := fmt.Sprintf("policy=%s; episodes=%d; same_number=%d; special_rejected=%d; special_same_number=%d; local_duration_ms=%d", matchPolicy, len(rows), sameNumber, special, specialNumber, request.DurationMS)
 	switch {
 	case len(rows) == 0:
 		return "EPISODE_EMPTY", detail
 	case !numbered && !movie:
 		return "EPISODE_LABEL_UNSUPPORTED", detail
-	case sameNumber == 0 && specialNumber > 0:
+	case counts[""] > 0 || counts["AMBIGUOUS_EPISODE"] > 0:
+		return "AMBIGUOUS_EPISODE", detail
+	case counts["EPISODE_VERSION_MISMATCH"] > 0:
+		return "EPISODE_VERSION_MISMATCH", detail
+	case counts["EPISODE_DURATION_MISMATCH"] > 0:
+		return "EPISODE_DURATION_MISMATCH", detail
+	case movie && len(rows) != 1 && special != len(rows):
+		return "AMBIGUOUS_EPISODE", detail
+	case counts["EPISODE_NUMBER_UNKNOWN"] > 0:
+		return "EPISODE_NUMBER_UNKNOWN", detail
+	case specialNumber > 0:
 		return "EPISODE_SPECIAL_REJECTED", detail
 	case special == len(rows):
 		return "EPISODE_SPECIAL_ONLY", detail
-	case sameNumber == 0:
-		return "EPISODE_NUMBER_MISMATCH", detail
 	default:
 		return "EPISODE_NUMBER_MISMATCH", detail
 	}

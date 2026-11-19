@@ -83,7 +83,7 @@ func boundService(t *testing.T) (*Service, *testProvider, *time.Time) {
 	})
 	return s, p, &now
 }
-func TestMinimumOneDayCacheAndThirtyDayExpiry(t *testing.T) {
+func TestShortCacheFreshnessAndExpiry(t *testing.T) {
 	s, p, now := boundService(t)
 	ctx := context.Background()
 	first, err := s.ReadWindow(ctx, "video:source:episode", 6000, 0)
@@ -94,10 +94,10 @@ func TestMinimumOneDayCacheAndThirtyDayExpiry(t *testing.T) {
 		t.Fatal("offset was written into cached source timestamp")
 	}
 	calls := p.calls.Load()
-	*now = now.Add(23 * time.Hour)
+	*now = now.Add(time.Hour)
 	second, err := s.ReadWindow(ctx, "video:source:episode", 6000, 0)
 	if err != nil || !second.Cached || p.calls.Load() != calls {
-		t.Fatal("cache refetched before one day", second, err)
+		t.Fatal("cache refetched within the freshness window", second, err)
 	}
 	*now = now.Add(2 * time.Hour)
 	p.failure.Store(true)
@@ -105,9 +105,9 @@ func TestMinimumOneDayCacheAndThirtyDayExpiry(t *testing.T) {
 	if err != nil || !stale.Stale || len(stale.Warnings) == 0 {
 		t.Fatal("lost usable stale cache", stale, err)
 	}
-	*now = now.Add(30 * 24 * time.Hour)
+	*now = now.Add(3 * time.Hour)
 	if _, err = s.ReadWindow(ctx, "video:source:episode", 6000, 1); err == nil {
-		t.Fatal("retained stale payload after 30 days")
+		t.Fatal("retained stale payload after six hours")
 	}
 }
 func TestModeSwitchCancellationStopsSegmentWork(t *testing.T) {

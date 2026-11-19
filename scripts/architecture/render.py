@@ -15,7 +15,8 @@ methods=[
   ],
   [
     "GetSetting",
-    "SetSetting"
+    "SetSetting",
+    "GetApplicationModeStatus"
   ],
   [
     "GetVideoList",

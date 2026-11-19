@@ -1,4 +1,4 @@
-import { InstalledResources, InstallResource, RemoveResource } from './app'
+import { InstalledResources, RemoveResource } from './app'
 import { object, text, integer, boolean, list } from './decode'
 import { response } from './response'
 export interface InstalledResource { id:string;version:string;size:number;installed:boolean;corrupt:boolean;url:string }
@@ -12,6 +12,5 @@ function entry(value:unknown):InstalledResource {
 }
 export const installedResourcesAPI={
  list:()=>response(()=>InstalledResources(),value=>{const row=object(value);return {directory:text(row.directory),items:list(row.items,entry,16)}}),
- install:(id:string)=>response(()=>InstallResource(id),entry),
  remove:(id:string)=>response(()=>RemoveResource(id),()=>undefined),
 }

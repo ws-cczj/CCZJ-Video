@@ -143,6 +143,15 @@ public class WailsJSBridge {
             ((MainActivity) view.getContext()).updatePlayerFullscreenPolicy(id, orientation, locked);
     }
     @JavascriptInterface public String diagnosticShare(String path) { return diagnosticFiles.share(path); }
+    @JavascriptInterface public String diagnosticSave(String path, String id) {
+        return closed.get() ? "UNAVAILABLE" : diagnosticFiles.save(path, id);
+    }
+    @JavascriptInterface public boolean diagnosticSavesToDownloads() {
+        return CczjDiagnosticFiles.savesToDownloads();
+    }
+    @JavascriptInterface public boolean diagnosticOpenSaved(String id) {
+        return !closed.get() && diagnosticFiles.openSaved(id);
+    }
     @JavascriptInterface public String openExternalURL(String url) {
         WebView view = webView;
         if (view == null || closed.get() || !(view.getContext() instanceof android.app.Activity)) return "Android host unavailable";

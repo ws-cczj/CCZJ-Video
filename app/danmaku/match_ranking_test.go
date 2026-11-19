@@ -43,8 +43,8 @@ func TestMatchRanksMetadataInsteadOfRequiringIdentity(t *testing.T) {
 	if got := matchingEpisode(rows, request); got == nil || got.EpisodeID != "original" {
 		t.Fatalf("closest duration should rank first: %+v", got)
 	}
-	if got := matchingEpisode(rows[1:2], MatchRequest{EpisodeLabel: "第01集", DurationMS: 1800000}); got == nil {
-		t.Fatal("duration difference must not veto a matching episode")
+	if got := matchingEpisode(rows[1:2], MatchRequest{EpisodeLabel: "第01集", DurationMS: 1800000}); got != nil {
+		t.Fatal("a materially different cut must not supply comments")
 	}
 	if got := matchingEpisode(rows, MatchRequest{EpisodeLabel: "第03集"}); got != nil {
 		t.Fatal("array position must not substitute for a declared episode number")
@@ -67,7 +67,7 @@ func TestMatchAutomaticallyBindsRemasterAfterOldPolicyFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := database.Exec(`INSERT INTO settings(key,value) VALUES(?,?)`, SourceSettingsKey, `{"disabled":["qq","iqiyi"]}`); err != nil {
+	if _, err := database.Exec(`INSERT INTO settings(key,value) VALUES(?,?)`, SourceSettingsKey, `{"disabled":["qq","iqiyi","mgtv","migu","youku","sohu","leshi","xigua","bahamut"]}`); err != nil {
 		t.Fatal(err)
 	}
 	s := matchService(t, store)
@@ -84,7 +84,8 @@ func TestMatchAutomaticallyBindsRemasterAfterOldPolicyFailure(t *testing.T) {
 	if _, err := s.Search(ctx, "bilibili", request.Title); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.saveMatchFailure(ctx, request.LocalKey, "bilibili", strings.TrimPrefix(matchFingerprint(request), matchPolicy+":"), "EPISODE_SPECIAL_REJECTED", time.Now()); err != nil {
+	now := time.Now()
+	if err := store.saveMatchFailure(ctx, request.LocalKey, "bilibili", strings.TrimPrefix(matchFingerprint(request), matchPolicy+":"), "EPISODE_SPECIAL_REJECTED", now, now.Add(24*time.Hour)); err != nil {
 		t.Fatal(err)
 	}
 	value, err := s.Match(ctx, request)
@@ -100,19 +101,19 @@ func TestMatchAutomaticallyBindsRemasterAfterOldPolicyFailure(t *testing.T) {
 	}
 }
 
-func TestMatchRankingTiesDoNotRequireUserSelection(t *testing.T) {
+func TestMatchRankingTiesStayUnmatched(t *testing.T) {
 	request := matchRequest()
 	works := []Candidate{{Provider: "qq", Ref: "b", Title: "sample"}, {Provider: "qq", Ref: "a", Title: "sample"}}
 	episodes := []Episode{{Provider: "qq", EpisodeID: "b", Number: "1"}, {Provider: "qq", EpisodeID: "a", Number: "1"}}
 	w, e := matchingWork(works, request), matchingEpisode(episodes, request)
-	if w == nil || e == nil {
-		t.Fatal("equal ranking should select automatically")
+	if w != nil || e != nil {
+		t.Fatal("equal ranking should leave distinct identities unmatched")
 	}
 	works[0], works[1] = works[1], works[0]
 	episodes[0], episodes[1] = episodes[1], episodes[0]
 	w2, e2 := matchingWork(works, request), matchingEpisode(episodes, request)
-	if w2 == nil || e2 == nil || w.Ref != w2.Ref || e.EpisodeID != e2.EpisodeID {
-		t.Fatal("equal ranking should remain stable across upstream reorder")
+	if w2 != nil || e2 != nil {
+		t.Fatal("reordering candidates should not resolve a tie")
 	}
 }
 
@@ -137,7 +138,7 @@ func TestBilibiliSameNumberPreviewBadgeDoesNotOverrideFullEpisode(t *testing.T) 
 	}
 }
 
-func TestNewMatchingPolicyReevaluatesDecisionsButPreservesNetworkCooldown(t *testing.T) {
+func TestNewMatchingPolicyReevaluatesOldFailures(t *testing.T) {
 	for _, code := range []string{"NO_EPISODE_MATCH", "EPISODE_SPECIAL_REJECTED", "WORK_YEAR_MISMATCH", "TIMEOUT", "RATE_LIMITED", "EMPTY_POOL"} {
 		t.Run(code, func(t *testing.T) {
 			store := testStore(t)
@@ -145,7 +146,7 @@ func TestNewMatchingPolicyReevaluatesDecisionsButPreservesNetworkCooldown(t *tes
 			request := matchRequest()
 			fingerprint := matchFingerprint(request)
 			legacy := strings.TrimPrefix(fingerprint, matchPolicy+":")
-			if err := store.saveMatchFailure(context.Background(), request.LocalKey, "bilibili", legacy, code, now); err != nil {
+			if err := store.saveMatchFailure(context.Background(), request.LocalKey, "bilibili", legacy, code, now, now.Add(24*time.Hour)); err != nil {
 				t.Fatal(err)
 			}
 			got, err := store.matchFailure(context.Background(), request.LocalKey, "bilibili", fingerprint, now)
@@ -156,8 +157,12 @@ func TestNewMatchingPolicyReevaluatesDecisionsButPreservesNetworkCooldown(t *tes
 			if rejectedByOldPolicy && got != nil {
 				t.Fatal("old matching policy still blocked reevaluation", got)
 			}
-			if !rejectedByOldPolicy && (got == nil || got.Code != code || got.RetryAt != now.Add(24*time.Hour).Unix()) {
-				t.Fatal("upstream cooldown changed", got)
+			retryAt := now.Add(24 * time.Hour)
+			if code == "TIMEOUT" {
+				retryAt = now.Add(30 * time.Second)
+			}
+			if !rejectedByOldPolicy && (got == nil || got.Code != code || got.RetryAt != retryAt.Unix()) {
+				t.Fatal("unexpected upstream cooldown", got)
 			}
 			changed := request
 			changed.Title = "different work"

@@ -22,9 +22,9 @@ it('applies delay once and bounds lanes under a dense timestamp',()=>{
  expect(line.tick(6000,600,400,p)).toHaveLength(2)
  p.enabled=false;expect(line.tick(6100,600,400,p)).toEqual([])
 })
-it('clamps persisted cache and rendering preferences at runtime',()=>{
+it('clamps persisted rendering preferences at runtime',()=>{
  const p=decodeDanmakuPreferences(JSON.stringify({freshDays:0,opacity:4,rows:100,speed:-1}))
- expect(p.freshDays).toBe(1);expect(p.opacity).toBe(1);expect(p.rows).toBe(12);expect(p.speed).toBe(50)
+ expect(p.opacity).toBe(1);expect(p.rows).toBe(12);expect(p.speed).toBe(50)
  expect(decodeDanmakuPreferences('{bad')).toEqual(preferences())
 })
 it('applies rolling, fixed and colored filters without rewriting source items',()=>{

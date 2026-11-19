@@ -40,7 +40,9 @@ function badge(row:typeof rows.value[number]):string {
   return t(row.source.probe==='probing'||row.source.qualityState==='pending'?'playLine.probingShort':'playLine.unknownShort')
 }
 function description(row:typeof rows.value[number]):string {
-  return row.tier&&row.quality?t('playLine.declaredQuality',{quality:`${row.tier}P`,width:row.quality.width,height:row.quality.height}):quality(row)
+  if (!row.tier || !row.quality) return quality(row)
+  const declared = t('playLine.declaredQuality', { quality:`${row.tier}P`, width:row.quality.width, height:row.quality.height })
+  return row.quality.ep_num > 0 ? `${t('playLine.qualitySample', { episode:row.quality.ep_num })} · ${declared}` : declared
 }
 </script>
 <template>

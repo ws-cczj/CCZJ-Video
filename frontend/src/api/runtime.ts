@@ -121,7 +121,22 @@ export async function openExternalURL(url: string): Promise<void> {
 
 
 /** Full document navigation also works inside the Android WebView. */
-export function reloadApplication(url: string): void { window.location.replace(url) }
+export function reloadApplication(url: string, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    function release(): void {
+      clearTimeout(timer)
+      window.removeEventListener('pagehide', leaving)
+      signal?.removeEventListener('abort', aborted)
+    }
+    function leaving(): void { release(); resolve() }
+    function aborted(): void { release(); reject(new DOMException('Navigation cancelled', 'AbortError')) }
+    const timer = setTimeout(() => { release(); reject(new Error('Document navigation did not complete')) }, 8000)
+    window.addEventListener('pagehide', leaving, { once: true })
+    signal?.addEventListener('abort', aborted, { once: true })
+    if (signal?.aborted) { aborted(); return }
+    try { window.location.replace(url) } catch (error) { release(); reject(error) }
+  })
+}
 
 /** Android owns the Activity after the Go service has requested shutdown. */
 export function closeMobileApplication(): void {

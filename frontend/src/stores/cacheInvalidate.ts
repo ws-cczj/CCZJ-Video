@@ -3,6 +3,7 @@ import { dropDetailCache } from './detailCache'
 import { usePosterCacheStore } from './posterCache'
 import { useVideoStore } from './video'
 import { dropSourceCache, dropVideoCache } from '../utils/tsCache'
+import { invalidatePlaybackProbes } from '../player/page/sourceProbeCache'
 
 /**
  * Go 侧统一失效层（app/cache/invalidate.go）在前端的订阅端。
@@ -36,12 +37,14 @@ function applyInvalidate(payload: { scope?: string; source_key?: string; vod_ids
       dropDetailCache(sourceKey)
       poster.dropSource(sourceKey)
       video.dropFilterMeta(sourceKey)
+      invalidatePlaybackProbes(sourceKey)
       void dropSourceCache(sourceKey)
       return
     case 'video':
       if (!sourceKey || vodIds.length === 0) return
       dropDetailCache(sourceKey, vodIds)
       poster.dropSource(sourceKey, vodIds)
+      invalidatePlaybackProbes(sourceKey, vodIds)
       for (const vodId of vodIds) void dropVideoCache(sourceKey, vodId)
       return
     default:

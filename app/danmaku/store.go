@@ -9,6 +9,11 @@ import (
 	"time"
 )
 
+const (
+	cacheFreshness = 2 * time.Hour
+	cacheRetention = 6 * time.Hour
+)
+
 // Schema initializes fresh databases and isolated stores. Existing databases
 // receive additions through ordered migrations.
 var Schema = []string{
@@ -90,7 +95,7 @@ func (s *Store) Cached(ctx context.Context, key string, now time.Time) ([]byte, 
 	}
 	var raw []byte
 	var fetched int64
-	err = db.QueryRowContext(ctx, `SELECT payload,fetched_at FROM danmaku_cache WHERE cache_key=? AND fetched_at>=?`, key, now.AddDate(0, 0, -30).Unix()).Scan(&raw, &fetched)
+	err = db.QueryRowContext(ctx, `SELECT payload,fetched_at FROM danmaku_cache WHERE cache_key=? AND fetched_at>?`, key, now.Add(-cacheRetention).Unix()).Scan(&raw, &fetched)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, time.Time{}, nil
 	}
@@ -102,14 +107,14 @@ func (s *Store) Cached(ctx context.Context, key string, now time.Time) ([]byte, 
 }
 
 // Lazy maintenance belongs to active reads, so inactive modes have no timer.
-// Accesses cannot keep a payload alive beyond its fixed 30-day retention.
+// Retention is measured from fetch time so repeated reads cannot extend it.
 func (s *Store) prune(ctx context.Context, db *sql.DB, now time.Time) error {
 	s.sweepMu.Lock()
 	defer s.sweepMu.Unlock()
 	if !s.lastSweep.IsZero() && now.Sub(s.lastSweep) < time.Hour {
 		return nil
 	}
-	if _, err := db.ExecContext(ctx, `DELETE FROM danmaku_cache WHERE fetched_at<?`, now.AddDate(0, 0, -30).Unix()); err != nil {
+	if _, err := db.ExecContext(ctx, `DELETE FROM danmaku_cache WHERE fetched_at<=?`, now.Add(-cacheRetention).Unix()); err != nil {
 		return err
 	}
 	s.lastSweep = now
@@ -128,9 +133,7 @@ func (s *Store) Put(ctx context.Context, key string, raw []byte, now time.Time) 
 	if _, err = tx.ExecContext(ctx, `INSERT INTO danmaku_cache(cache_key,payload,fetched_at,accessed_at,bytes)VALUES(?,?,?,?,?) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,fetched_at=excluded.fetched_at,accessed_at=excluded.accessed_at,bytes=excluded.bytes`, key, raw, now.Unix(), now.Unix(), len(raw)); err != nil {
 		return err
 	}
-	// Fixed 30-day retention is independent of cache-hit touching. Capacity
-	// eviction never removes a segment fetched in the last day.
-	if _, err = tx.ExecContext(ctx, `DELETE FROM danmaku_cache WHERE fetched_at<?`, now.AddDate(0, 0, -30).Unix()); err != nil {
+	if _, err = tx.ExecContext(ctx, `DELETE FROM danmaku_cache WHERE fetched_at<=?`, now.Add(-cacheRetention).Unix()); err != nil {
 		return err
 	}
 	var total int64
@@ -138,7 +141,7 @@ func (s *Store) Put(ctx context.Context, key string, raw []byte, now time.Time) 
 		return err
 	}
 	if total > 128<<20 {
-		if _, err = tx.ExecContext(ctx, `DELETE FROM danmaku_cache WHERE cache_key IN (SELECT cache_key FROM (SELECT cache_key,SUM(bytes)OVER(ORDER BY accessed_at DESC,cache_key) AS running FROM danmaku_cache) WHERE running>? ) AND fetched_at<?`, 128<<20, now.Add(-24*time.Hour).Unix()); err != nil {
+		if _, err = tx.ExecContext(ctx, `DELETE FROM danmaku_cache WHERE cache_key IN (SELECT cache_key FROM (SELECT cache_key,SUM(bytes)OVER(ORDER BY accessed_at DESC,cache_key) AS running FROM danmaku_cache) WHERE running>? ) AND fetched_at<=?`, 128<<20, now.Add(-cacheFreshness).Unix()); err != nil {
 			return err
 		}
 		if err = tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(bytes),0) FROM danmaku_cache`).Scan(&total); err != nil {

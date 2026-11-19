@@ -9,7 +9,7 @@ import { APPLICATION_MODES, APPLICATION_MODE_KEYS, modeHome, routeMode } from '.
 import SplashScreen from './components/SplashScreen.vue'
 import ErrorToastStack from './components/ErrorToastStack.vue'
 import ConfirmModal from './components/ConfirmModal.vue'
-import { MotionTransition } from './components/ui'
+import { Button, Modal, MotionTransition, Spinner } from './components/ui'
 import { useErrorStore } from './stores/error'
 import { useThemeStore } from './stores/theme'
 import UpdateModal from './components/UpdateModal.vue'
@@ -30,7 +30,10 @@ onUnmounted(disposeRecordingObserver)
 
 
 const appMode = useApplicationMode()
-const modeShells = Object.fromEntries(APPLICATION_MODE_KEYS.map(mode => [mode, defineAsyncComponent(APPLICATION_MODES[mode].loadShell)]))
+const modeShells = Object.fromEntries(APPLICATION_MODE_KEYS.map(mode => [mode, defineAsyncComponent({
+  loader: APPLICATION_MODES[mode].loadShell,
+  onError: (_error, _retry, fail) => { appMode.shellFailed(); fail() },
+})]))
 
 const activeShell = computed(() => modeShells[appMode.mode])
 
@@ -102,7 +105,18 @@ onUnmounted(() => {
     <!-- 自定义标题栏：最顶部一条，背景色与页面主背景一致 -->
     <TitleBar v-if="!isMobileRuntime()" />
 
-    <component :is="activeShell" />
+    <component :is="activeShell" v-if="appMode.loaded" />
+
+    <Modal :model-value="appMode.blocked" :title="tr('modes.title')" :closable="false" :mask-closable="false">
+      <p v-if="appMode.issue" role="alert">{{ tr('modes.' + appMode.issue) }}</p>
+      <p v-else role="status" class="cczj-flex cczj-items-center cczj-gap-4">
+        <Spinner />{{ tr(appMode.phase === 'reloading' ? 'modes.reloading' : 'modes.switching') }}
+      </p>
+      <template v-if="!appMode.switching" #footer>
+        <Button v-if="appMode.loaded && !appMode.reloadTarget" @click="appMode.recover()">{{ tr('modes.returnCurrent') }}</Button>
+        <Button variant="primary" @click="appMode.retry()">{{ tr('common.retry') }}</Button>
+      </template>
+    </Modal>
 
     <!-- 全局更新弹窗 -->
     <UpdateModal />

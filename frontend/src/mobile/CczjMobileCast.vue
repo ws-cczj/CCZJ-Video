@@ -246,7 +246,7 @@ defineExpose({back})
       <Select :model-value="transportChoice" :options="transportOptions" :ariaLabel="t('mobile.castTransport')" :disabled="busy" inline @update:model-value="changeTransport" />
       <Button variant="text" :disabled="busy" :aria-pressed="fromStart" @click="fromStart=!fromStart">{{t(fromStart?'mobile.castFromStart':'mobile.castResumeNext')}}</Button>
     </div>
-    <div v-if="routesOpen" ref="routesBody" class="cczj-mobile-cast-routes cczj-flex-1 cczj-min-h-0 cczj-overflow-y-auto"><slot name="lines" :close="closeRoutes" /></div>
+    <div v-if="routesOpen" ref="routesBody" class="cczj-flex-1 cczj-min-h-0 cczj-overflow-y-auto"><slot name="lines" :close="closeRoutes" /></div>
     <template v-else-if="selected">
       <CczjMobileCastRemote layout="page" :has-lines="!!$slots.lines" v-bind="remoteView" @lines="openRoutes" @play="control(paused ? 'Play' : 'Pause')" @seek="control('Seek',$event)" @stop="control('Stop')" @change="chooseDevice" />
       <p v-if="confirmationExpired && needsConfirmation" class="cczj-mobile-drawer-hint">{{t('mobile.castRetryHint')}}</p>

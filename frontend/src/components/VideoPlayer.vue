@@ -51,7 +51,7 @@ import { usePlayerVolume } from '../player/usePlayerVolume'
 import { WriteLog } from '../api/app'
 import PlayerDanmakuButtons from '../player/danmaku/PlayerDanmakuButtons.vue'
 const PlayerDanmaku=defineAsyncComponent(()=>import('../player/danmaku/PlayerDanmaku.vue'))
-const danmakuRef=ref<{open:(anchor?:HTMLElement,hover?:boolean)=>void;close:()=>void;back:()=>void;scheduleClose:()=>void;toggle:()=>void;ready:boolean;engaged:boolean;enabled:boolean}|null>(null)
+const danmakuRef=ref<InstanceType<typeof PlayerDanmaku>|null>(null)
 const PlayerDesktopControls = defineAsyncComponent(()=>import('../player/views/PlayerDesktopControls.vue'))
 const desktopControls=ref<{engaged:boolean;close:()=>void}|null>(null)
 const CczjMobilePlayerChrome=defineAsyncComponent(()=>import('../mobile/CczjMobilePlayerChrome.vue'))
@@ -79,7 +79,6 @@ const props = withDefaults(defineProps<{
   portraitControlsHost?: HTMLElement
   portraitPresentationHost?: HTMLElement
   portraitControlsPinned?:boolean
-  quietLoading?: boolean
   autoplay?: boolean
   hasPrev?: boolean
   hasNext?: boolean
@@ -121,7 +120,7 @@ const perf = usePerfStore()
 const playerTrace = createPlayerTrace()
 const playerEvents = createPlayerEvents(playerTrace.id)
 let mediaLoadStarted=performance.now(),firstPlayingLogged=false
-let firstPresented=false, presentedFrame:number|undefined
+let firstPresented=false
 function logStartup(kind:string,data:Record<string,unknown>={}):void {
   const detail={player_session_id:playerTrace.id,elapsed_ms:Math.round(performance.now()-mediaLoadStarted),...data}
   playerEvents.event(kind,detail)
@@ -174,7 +173,7 @@ const {isFullscreen,isPiP,fullscreenBusy,toggleFullscreen,togglePiP,setFullscree
       ? video.videoHeight>video.videoWidth?'portrait':'landscape'
       : portrait?'portrait':'landscape'
   },
-  beforeFullscreen:()=>{cancelMobileTap();gestures.cancel();mobileScrubTime.value=-1;portraitScrubTime.value=-1;mobileChrome.value?.close()},
+  beforeFullscreen:()=>{cancelDesktopClick();cancelMobileTap();gestures.cancel();mobileScrubTime.value=-1;portraitScrubTime.value=-1;mobileChrome.value?.close()},
   failure:(operation,error)=>{
     playerEvents.issue(operation,error instanceof Error?error.name:'PLATFORM_OPERATION_FAILED',false)
     if(operation==='pip'){
@@ -203,11 +202,7 @@ watch(()=>props.portraitPresentationHost,(host,_previous,cleanup)=>{
   cleanup(()=>{host.removeEventListener('pointermove',move);host.removeEventListener('pointerleave',onMouseLeave)})
 },{immediate:true,flush:'post'})
 const loading = ref(true)
-const preparationStage = ref<'video'|'accessories'|'danmaku'|'ready'|'complete'>('video')
-const accessoriesReady = ref(false), prepared = ref(false), preparationNote = ref('')
-const preparationMessage = computed(() => preparationStage.value === 'ready' && preparationNote.value
-  ? preparationNote.value : t(`playerPreparation.${preparationStage.value}`))
-const autoplayStarting = ref(false)
+const accessoriesReady = ref(false), prepared = ref(false)
 let preparingAccessories = false, settleDanmaku: ((status:string) => void) | undefined
 const videoReady = ref(false)
 
@@ -322,7 +317,7 @@ function updateBuffer(): void {
 }
 
 // 缓存监控
-const telemetry=usePlaybackTelemetry({video:getVideoEl,url:()=>props.url,cachedBitrate:()=>extractBitrateFromCachedTs(),t,
+const telemetry=usePlaybackTelemetry({video:getVideoEl,url:()=>props.url,cachedBitrate:()=>extractBitrateFromCachedTs(),
   stall:(phase,detail)=>logStartup(`player_buffering_${phase}`,detail)})
 const {cacheStats,cachedRanges,loadingCached,loadingTotal,loadingSpeed,loadingElapsed,startLoadingStats,stopLoadingStats,
   resetPerfBaseline,alignPlaybackClock,endStall}=telemetry
@@ -346,16 +341,26 @@ const playback = createPlaybackControl({
   getVideo: getVideoEl,
   onMuted: () => { muted.value = true },
   onUnsupported: () => { errorMsg.value = t('player.errFormatUnsupported'); loading.value = false },
+  autoplay: {
+    session: mediaSession,
+    ready: () => interruptions.allowed() && !continuationState?.paused && !casting.value && resume.ready() && prepared.value && videoReady.value,
+    enabled: () => portrait || autoPlayEnabled.value,
+    state: state => {
+      if (state === 'requested') logStartup('player_autoplay_requested')
+      else { loading.value = false; logStartup('player_autoplay_blocked') }
+    },
+  },
 })
+const { starting: autoplayStarting, tryAutoplay } = playback
 function safePlay(auto: boolean) { return interruptions.allowed()?playback.play(auto):Promise.resolve('interrupted' as const) }
 const interruptions=usePlaybackInterruptions({video:getVideoEl,current:()=>mediaSession.capture().current,pip:()=>isPiP.value||document.body.dataset.playerPip==='1',
   play:()=>{if(!casting.value)void safePlay(false)},
-  cancel:()=>{playback.cancel();autoplayAttempt++;autoplayStarting.value=false;gestures.cancel();clearRecovery()},
+  retryAutoplay:()=>{const video=getVideoEl();if(video)tryAutoplay(video)},
+  cancel:()=>{playback.cancel();gestures.cancel();clearRecovery()},
   save:()=>resume.save(),
 })
 const casting=ref(false)
 const castState=ref<CastPlaybackState|null>(null)
-let autoplayAttempt=0, autoplayRetries=0, resumePlaybackRequested=false
 function updateCastStatus(value:CastPlaybackState):void {
   castState.value=value
   if(casting.value&&value.hasPosition){
@@ -377,7 +382,6 @@ function setCasting(active:boolean,position?:number):void {
     castState.value=null
     return
   }
-  autoplayAttempt++;autoplayStarting.value=false;resumePlaybackRequested=false
   playback.cancel()
   const video=getVideoEl()
   video?.setAttribute('data-autoplay-done','1')
@@ -386,57 +390,31 @@ function setCasting(active:boolean,position?:number):void {
   interruptions.cancelResume();clearRecovery();resume.dismissResumePrompt()
   playing.value=false;loading.value=false
 }
-function tryAutoplay(video:HTMLVideoElement):void {
-  if(!interruptions.allowed()||continuationState?.paused)return
-  if (casting.value || !resume.ready() || !prepared.value || !videoReady.value || autoplayStarting.value || (!portrait && !autoPlayEnabled.value && !resumePlaybackRequested) || video.hasAttribute('data-autoplay-done')) return
-  video.setAttribute('data-autoplay-done','1')
-  if(!video.paused)return
-  const session=mediaSession.capture()
-  const attempt=++autoplayAttempt
-  const automatic=!resumePlaybackRequested
-  resumePlaybackRequested=false
-  autoplayStarting.value=true
-  logStartup('player_autoplay_requested')
-  void safePlay(automatic).then(outcome=>{
-    if(!session.current()||attempt!==autoplayAttempt)return
-    autoplayStarting.value=false
-    // Seeking to history or replacing the MSE buffer can interrupt play(). A
-    // later canplay must be allowed to finish the same automatic start.
-    if(outcome==='interrupted'){
-      video.removeAttribute('data-autoplay-done')
-      // canplay can precede the interrupted promise's rejection. Retry once
-      // here as well; later readiness events can still start an unready video.
-      if(autoplayRetries++<1)mediaSession.later(()=>{if(video.paused&&!video.seeking&&video.readyState>=2)tryAutoplay(video)},50)
-    }
-    if(video.paused){loading.value=false;logStartup('player_autoplay_blocked')}
-  })
-}
 watch(autoPlayEnabled,enabled=>{if(enabled){const video=getVideoEl();if(video){video.removeAttribute('data-autoplay-done');tryAutoplay(video)}}})
 function continueWatching():void {
   if(casting.value){mobileChrome.value?.toggle('cast');return}
   interruptions.intent(true)
   if(continuationState)continuationState.paused=false
   casting.value=false
-  autoplayAttempt++;autoplayStarting.value=false
+  playback.cancel()
   jumpToSavedTime(false)
   const video=getVideoEl()
-  if(!prepared.value || !videoReady.value){resumePlaybackRequested=true;return}
-  if(video?.paused){video.setAttribute('data-autoplay-done','1');void safePlay(false)}
+  if(!video)return
+  if(!prepared.value){video.removeAttribute('data-autoplay-done');playback.requestResume();return}
+  if(video.paused){video.setAttribute('data-autoplay-done','1');void safePlay(false)}
 }
 function onDanmakuPrepared(key:string,status:string):void {
   if(key!==props.danmakuKey)return
   playerEvents.event('player_danmaku_availability',{status})
-  if(status==='noMatch')preparationNote.value=t('playerPreparation.noMatch')
-  else if(status==='error')preparationNote.value=t('playerPreparation.deferred')
   settleDanmaku?.(status)
 }
-async function prepareAccessories(video:HTMLVideoElement):Promise<void> {
+async function prepareAccessories():Promise<void> {
   if(preparingAccessories)return
   preparingAccessories=true
   const session=mediaSession.capture()
-  const complete=await preparePlayback({
+  await preparePlayback({
     signal:session.signal,
-    stage:stage=>{preparationStage.value=stage;logStartup('player_preparation',{stage})},
+    stage:stage=>logStartup('player_preparation',{stage}),
     accessories:async()=>{if(portrait)return;await initThumbSampler();await usePluginStore().ensureLoaded();if(session.current())onMediaReady()},
     danmaku:()=>{
       if(!props.danmakuKey)return Promise.resolve()
@@ -444,18 +422,23 @@ async function prepareAccessories(video:HTMLVideoElement):Promise<void> {
       accessoriesReady.value=true
       return pending
     },
-    timeout:stage=>{
-      logStartup('player_preparation_deferred',{stage})
-      if(stage==='danmaku')preparationNote.value=t('playerPreparation.deferred')
-    },
+    timeout:stage=>logStartup('player_preparation_deferred',{stage}),
   })
   if(!session.current())return
   settleDanmaku=undefined
-  if(complete){
-    prepared.value=true;tryAutoplay(video)
-    if(videoReady.value&&!autoplayStarting.value)loading.value=false
-    if(!video.paused)mediaSession.later(()=>{preparationStage.value='complete'},1200)
-  }
+}
+
+function settleMediaReadiness(video: HTMLVideoElement): void {
+  flushPendingSeek()
+  if (!resume.ready() || video.seeking || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || video.videoWidth === 0) return
+  videoReady.value = true
+  if (prepared.value) { tryAutoplay(video); return }
+  prepared.value = true
+  loading.value = false
+  stopLoadingStats()
+  emit('media-ready')
+  tryAutoplay(video)
+  void prepareAccessories()
 }
 
 const segmentIssue = ref<BlockedSegment | null>(null)
@@ -500,12 +483,13 @@ async function loadHls(video: HTMLVideoElement, url: string, continuation?:Conti
     video.playbackRate=continuation.rate
     speed.value=continuation.rate
     if(continuation.paused)video.setAttribute('data-autoplay-done','1')
-    else resumePlaybackRequested=true
+    else playback.requestResume()
   }
   const session = mediaSession.capture()
   bindCommonVideoEvents(video)
   errorMsg.value = ''
   loading.value = true
+  startLoadingStats()
   try {
     // Prepare bytes while SQLite resolves history. Playback still waits for
     // the seek decision, so a warmed episode never starts audibly at zero.
@@ -518,8 +502,7 @@ async function loadHls(video: HTMLVideoElement, url: string, continuation?:Conti
     if(casting.value)source.suspend()
     logStartup('player_source_attached')
     telemetry.start()
-    flushPendingSeek()
-    tryAutoplay(video)
+    settleMediaReadiness(video)
   } catch (error: unknown) {
     if (!session.current()) return
     destroyPlayerInternal(video)
@@ -559,8 +542,6 @@ function setupPlayer(continuation?:Continuation): void {
 }
 
 function bindCommonVideoEvents(video: HTMLVideoElement): void {
-  if ((video as any).__eventsBound) return
-  ;(video as any).__eventsBound = true
   const signal = mediaSession.capture().signal
   const on = (name: string, listener: EventListenerOrEventListenerObject) =>
     video.addEventListener(name, listener, { signal: signal })
@@ -620,10 +601,6 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
     updateBuffer()
     flushPendingSeek()
     console.log(`[Player] loadedmetadata: duration=${video.duration.toFixed(1)}s, volume=${video.volume.toFixed(2)}`)
-    // ⭐ 换集/换源后自动重建 AI 增强：destroyPlayerInternal 会 resetPipeline() 把 WebGL 上下文
-    // 还掉，而元数据就绪是唯一安全的挂点（要有 videoWidth/Height 才能建管线）。要不要重试由
-    // useVideoQuality 自己判断（它记得用户想要的档位）。
-    void prepareAccessories(video)
   })
   on('progress', updateBuffer)
   on('resize', () => {portraitContent.value=video.videoHeight>video.videoWidth;syncVideoLayout()})
@@ -631,6 +608,7 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
   on('seeked', () => {
     updateBuffer()
     notifySeeked()
+    settleMediaReadiness(video)
   })
   on('waiting', () => {
     if (video.paused || video.ended) return
@@ -645,30 +623,23 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
     playing.value=true
     loading.value=false
     if(!firstPlayingLogged){firstPlayingLogged=true;logStartup('player_media_playing',{prepared:prepared.value})}
-    if(!firstPresented && presentedFrame===undefined && typeof video.requestVideoFrameCallback==='function'){
-      const session=mediaSession.capture()
-      presentedFrame=video.requestVideoFrameCallback((_now,metadata)=>{
-        if(!session.current())return
-        presentedFrame=undefined
+    if(!firstPresented){
+      mediaSession.presentFrame(video,metadata=>{
         firstPresented=true
         logStartup('player_first_presented_frame',{media_time:metadata.mediaTime,presented_frames:metadata.presentedFrames})
       })
     }
     perf.markFirstFrame()
     endStall('playing')
-    mediaSession.later(()=>{if(prepared.value)preparationStage.value='complete'},1200)
   })
-  on('loadeddata', () => {
-    if (video.readyState >= 2 && video.videoWidth > 0) emit('media-ready')
-  })
+  on('loadeddata', () => settleMediaReadiness(video))
   on('canplay', () => {
-    flushPendingSeek()
-    videoReady.value = true
-    emit('media-ready')
+    settleMediaReadiness(video)
     endStall('ready')
-    loading.value = !prepared.value || autoplayStarting.value || (autoPlayEnabled.value&&!video.hasAttribute('data-autoplay-done'))
-    // ⭐ 修复：视频解码出帧后才触发自动播放，避免 AbortError
-    tryAutoplay(video)
+    if (prepared.value && !video.seeking) {
+      loading.value = false
+      stopLoadingStats()
+    }
   })
   on('volumechange', () => {
     if(continuationState){continuationState.muted=video.muted;continuationState.volume=video.volume}
@@ -711,15 +682,13 @@ function bindCommonVideoEvents(video: HTMLVideoElement): void {
   })
 }
 
-function destroyPlayerInternal(video: HTMLVideoElement): void {
+function destroyPlayerInternal(video?: HTMLVideoElement | null): void {
+  cancelDesktopClick()
   clearRecovery();interruptions.cancelResume();continuationState=undefined
-  if(presentedFrame!==undefined)video.cancelVideoFrameCallback?.(presentedFrame)
-  presentedFrame=undefined
   portraitContent.value = false
-  playback.cancel()
-  autoplayAttempt++;autoplayRetries=0;resumePlaybackRequested=false
+  playback.reset()
   mediaSession.reset()
-  preparationStage.value='video';prepared.value=false;autoplayStarting.value=false;accessoriesReady.value=false;preparingAccessories=false;preparationNote.value='';settleDanmaku=undefined
+  prepared.value=false;accessoriesReady.value=false;preparingAccessories=false;settleDanmaku=undefined
   resume.reset()
   clearNetworkErrTimer()
   m3u8StreamInfo.value = []
@@ -728,31 +697,30 @@ function destroyPlayerInternal(video: HTMLVideoElement): void {
   mediaRanges.value = []
   cachedRanges.value = []
   TsCache.setPlaybackBufferAhead(0)
-  source.dispose(video)
-  try {
+  source.dispose(video ?? undefined)
+  if (video) {
     video.onerror = null
     try { video.pause() } catch { /* ignore */ }
     try { video.removeAttribute('src') } catch { /* ignore */ }
     try { video.load() } catch { /* ignore */ }
     try { video.removeAttribute('data-autoplay-done') } catch { /* ignore */ }
-    try { delete (video as any).__eventsBound } catch { /* ignore */ }
-  } catch { /* ignore */ }
+  }
   telemetry.reset()
   resetPipeline()
   loading.value = true
+  playing.value = false
   videoReady.value = false
   showResumePrompt.value = false
 }
 
 function destroyPlayer(): void {
-  telemetry.stop()
-  const v = getVideoEl()
-  if (v) { resume.save(); destroyPlayerInternal(v) }
-  else { source.dispose(); mediaSession.reset(); playback.cancel(); resume.reset(); resetPipeline() }
+  resume.save()
+  destroyPlayerInternal(getVideoEl())
 }
 
 // ------ 用户交互控制 ------
 function togglePlay(): void {
+  cancelDesktopClick()
   if(casting.value){mobileChrome.value?.toggle('cast');return}
   const v = getVideoEl()
   if (!v || !prepared.value) return
@@ -760,7 +728,7 @@ function togglePlay(): void {
   interruptions.intent(v.paused)
   if(continuationState)continuationState.paused=!v.paused
   casting.value=false
-  autoplayAttempt++;autoplayStarting.value=false
+  playback.cancel()
   v.setAttribute('data-autoplay-done','1')
   if (v.paused) {
     safePlay(false) // 用户点击，不允许静音 fallback
@@ -932,7 +900,7 @@ if(mobile)watch([showPlaybackSettings,showSubtitlePanel,showReportAd,qualityOpen
   panels.forEach((panel,i)=>{if(i!==opened)panel.value=false})
   mobileChrome.value?.close('quick')
 })
-watch(isFullscreen, () => {cancelMobileTap();gestures.cancel();mobileScrubTime.value=-1;mobileLocked.value=false;mobileChrome.value?.close();keepVisible()})
+watch(isFullscreen, () => {cancelDesktopClick();cancelMobileTap();gestures.cancel();mobileScrubTime.value=-1;mobileLocked.value=false;mobileChrome.value?.close();keepVisible()})
 // ------ 键盘控制（仅在鼠标位于播放器内 或 全屏时生效） ------
 function onKeyDown(e: KeyboardEvent): void {
   // ⭐ V2：键盘快捷键现已由 Player.vue 页面级统一处理
@@ -944,7 +912,33 @@ function onKeyDown(e: KeyboardEvent): void {
   }
 }
 
-// 点击空白处关闭弹出面板
+const DESKTOP_DOUBLE_CLICK_MS = 300
+let desktopClickTimer: ReturnType<typeof setTimeout> | undefined
+function cancelDesktopClick(): void {
+  clearTimeout(desktopClickTimer)
+  desktopClickTimer = undefined
+}
+function onDesktopClick(event: MouseEvent, canToggle = true): void {
+  if (fullscreenBusy.value) return
+  if (likeDanmaku(event)) { cancelDesktopClick(); return }
+  if (event.detail > 1) return
+  cancelDesktopClick()
+  if (event.detail === 0) {
+    if (canToggle) togglePlay()
+    return
+  }
+  // The browser dispatches the first click before it can report a double click.
+  desktopClickTimer = setTimeout(() => {
+    desktopClickTimer = undefined
+    if (canToggle) togglePlay()
+  }, DESKTOP_DOUBLE_CLICK_MS)
+}
+function onDesktopDoubleClick(): void {
+  if (mobile || portrait || desktopClickTimer === undefined) return
+  cancelDesktopClick()
+  void toggleFullscreen()
+}
+
 let mobileTapTimer: ReturnType<typeof setTimeout> | undefined
 let mobileTapPoint: {x:number;y:number} | undefined
 function cancelMobileTap(): void {
@@ -964,6 +958,7 @@ function onWrapperClick(event?: MouseEvent): void {
       keepVisible()
       return
     }
+    if (event && likeDanmaku(event)) { cancelMobileTap(); return }
     const point = { x:event?.clientX ?? 0, y:event?.clientY ?? 0 }
     if (mobileTapTimer !== undefined && mobileTapPoint && Math.hypot(point.x - mobileTapPoint.x, point.y - mobileTapPoint.y) < 36) {
       cancelMobileTap()
@@ -975,19 +970,40 @@ function onWrapperClick(event?: MouseEvent): void {
     mobileTapTimer = setTimeout(() => { cancelMobileTap(); if (!mobileLocked.value) toggleShow(!showControls.value) }, 260)
     return
   }
-  // 只有视频已就绪（或正在播放/暂停中）时才 toggle play
-  if (!loading.value || videoReady.value) {
-    togglePlay()
-  }
+  if (event) onDesktopClick(event, !loading.value || videoReady.value)
   // 关闭所有弹出面板
   desktopControls.value?.close()
   mobileChrome.value?.close('speed')
 }
+function isVideoSurface(event: MouseEvent): boolean {
+  return event.target === getVideoEl() || event.target === wrapperRef.value
+}
+
+function likeDanmaku(event: MouseEvent): boolean {
+  return isVideoSurface(event) && !!danmakuRef.value?.interaction?.like(event)
+}
+
+function onSurfacePointerDown(event: PointerEvent): void {
+  if (isVideoSurface(event)) danmakuRef.value?.interaction?.press(event)
+  gestures.down(event)
+}
+
+function onSurfacePointerMove(event: PointerEvent): void {
+  if (isVideoSurface(event)) danmakuRef.value?.interaction?.hover(event)
+  else danmakuRef.value?.interaction?.leave()
+  gestures.move(event)
+}
+
+function cancelSurfacePointer(event: PointerEvent): void {
+  danmakuRef.value?.interaction?.cancelPress()
+  gestures.end(event)
+}
+
 function onVideoClick(event: MouseEvent): void {
   if (portrait && props.portraitPresentationHost) return
   event.stopPropagation()
   if (mobile || portrait) onWrapperClick(event)
-  else togglePlay()
+  else onDesktopClick(event)
 }
 
 function onMobileOverlayBack(event: Event): void {
@@ -1076,31 +1092,16 @@ watch(() => [props.url, props.videoKey] as const, ([newUrl, newKey], [oldUrl, ol
   chrome.reset()
   desktopControls.value?.close()
   mobileChrome.value?.close()
-  resume.save()
+  destroyPlayer()
   if (!newUrl) {
     lastCheckpoint=undefined
-    destroyPlayer()
     return
   }
   const switched = Boolean(oldUrl && (oldUrl !== newUrl || oldKey !== newKey))
   if (switched) {
-    resume.reset()
-    const v = getVideoEl()
-    if (v) {
-      try { v.pause() } catch { /* ignore */ }
-      try { v.removeAttribute('src') } catch { /* ignore */ }
-      try { v.load() } catch { /* ignore */ }
-    }
-    loading.value = true
-    videoReady.value = false
-    playing.value = false
     // 字幕文件是对着某一集配的，换集后时间轴基本必然错位，直接清掉比留着误导人好
     clearSubtitle()
   }
-  mediaSession.reset()
-  playback.cancel()
-  resume.reset()
-  clearNetworkErrTimer()
   mediaSession.later(() => {
     setupPlayer(continuation)
   }, 0)
@@ -1148,10 +1149,10 @@ defineExpose({ isPlaying:computed(()=>playing.value&&!loading.value&&!casting.va
 </script>
 
 <template>
-  <div class="player-wrapper" :class="{ fullscreen: isFullscreen && !portraitPresentationHost, 'cczj-mobile-video': mobile, 'portrait-player': portrait, 'portrait-content': portrait && portraitContent, 'cczj-mobile-player-locked': mobileLocked, 'cursor-hidden': !portrait && !mobile && playing && !showControls, 'show-controls': showControls }"
+  <div class="player-wrapper" :class="{ fullscreen: isFullscreen && !portraitPresentationHost, 'cczj-mobile-video': mobile, 'portrait-player': portrait, 'portrait-content': portrait && portraitContent, 'cczj-mobile-player-locked': mobileLocked, 'cursor-hidden': !portrait && !mobile && playing && !showControls, 'show-controls': showControls, 'danmaku-hovered': danmakuRef?.interaction?.hovered }"
     :data-video-fit="effectivePictureFit" :style="mobile ? { '--cczj-player-control-height': `${mobileControlHeight}px` } : undefined" ref="wrapperRef" tabindex="0" @mousemove="if (!mobile) { if(!portraitPresentationHost)toggleShow(true); mouseInside = true; updateEnhancementCompare($event) }" @mouseenter="mouseInside = true"
-    @mouseleave="!portraitPresentationHost && onMouseLeave()" @click="!portraitPresentationHost && onWrapperClick($event)" @dblclick.stop="!mobile && !portrait && toggleFullscreen()" @wheel.prevent="!portrait && onWheel($event)"
-    @pointerdown.capture="onControlPointerDown" @pointerdown="!portraitPresentationHost && gestures.down($event)" @pointermove="!portraitPresentationHost && gestures.move($event)" @pointerup="gestures.end" @pointercancel="gestures.end" @lostpointercapture.self="gestures.end" @contextmenu="(mobile || portrait) && $event.preventDefault()">
+    @mouseleave="!portraitPresentationHost && onMouseLeave()" @pointerleave="danmakuRef?.interaction?.leave()" @click="!portraitPresentationHost && onWrapperClick($event)" @dblclick.stop="onDesktopDoubleClick" @wheel.prevent="!portrait && onWheel($event)"
+    @pointerdown.capture="onControlPointerDown" @pointerdown="!portraitPresentationHost && onSurfacePointerDown($event)" @pointermove="!portraitPresentationHost && onSurfacePointerMove($event)" @pointerup="gestures.end" @pointercancel="cancelSurfacePointer" @lostpointercapture.self="gestures.end" @contextmenu="(mobile || portrait) && $event.preventDefault()">
     <PortraitPlayerControls v-if="portrait" :buffer-ranges="bufferRanges" :visible="mobile || controlsVisible" :controls-host="portraitControlsHost" :ready="prepared && !loading" :fullscreen="isFullscreen" :can-fullscreen="!fullscreenBusy && platform.fullscreen.supported(portraitPresentationHost ?? wrapperRef)" :current="current" :duration="duration" :playing="playing" :boosting="gestures.boosting.value" :boost-rate="speed" :muted="muted" @scrub="portraitScrubTime = $event ?? -1" @fullscreen="toggleFullscreen" @play="togglePlay" @seek="portraitSeek" @sound="enablePortraitSound">
       <slot name="portrait-info" />
       <template #status>
@@ -1192,7 +1193,9 @@ defineExpose({ isPlaying:computed(()=>playing.value&&!loading.value&&!casting.va
     <div v-if="!portrait" v-show="mouseInside" @click.stop @dblclick.stop class="player-drag-handle" :title="t('player.dragMoveWindow')" />
 
     <video ref="videoElement" class="native-video" :poster="mobile ? mobileVideoPoster : undefined" playsinline preload="auto" @click="onVideoClick"></video>
-    <PlayerDanmaku v-if="danmakuKey&&accessoriesReady" ref="danmakuRef" :media-key="danmakuKey" :media-title="mediaTitle" :media-year="mediaYear" :media-kind="mediaKind" :episode-label="episodeLabel" :current="current" :duration="duration" :playing="playing&&!loading" :fullscreen="isFullscreen" :mobile="mobile" :host="wrapperRef" :video="getVideoEl" @prepared="onDanmakuPrepared" />
+    <PlayerDanmaku v-if="danmakuKey&&accessoriesReady" ref="danmakuRef" :media-key="danmakuKey" :media-title="mediaTitle" :media-year="mediaYear" :media-kind="mediaKind" :episode-label="episodeLabel" :current="current" :duration="duration" :playing="playing&&!loading" :fullscreen="isFullscreen" :mobile="mobile" :host="wrapperRef" :video="getVideoEl"
+      :interactive="!casting&&!fullscreenBusy&&!mobileLocked&&!isPiP&&!errorMsg&&!mobileControlsPinned&&!qualityOpen&&!showVideoInfo&&!showPlaybackSettings&&!showSubtitlePanel&&!showReportAd"
+      @prepared="onDanmakuPrepared" />
     <div v-show="!casting && activeSubtitle" class="vp-subtitle" :class="{ 'with-controls': showControls }">
       <span>{{ activeSubtitle }}</span>
     </div>
@@ -1208,11 +1211,13 @@ defineExpose({ isPlaying:computed(()=>playing.value&&!loading.value&&!casting.va
       </div>
     </transition>
 
-    <div v-if="!casting && mobile && loading && !quietLoading" class="cczj-mobile-video-loading" :class="{ 'cczj-mobile-video-loading-initial': !videoReady }" role="status" aria-live="polite">
-      <img :src="loadingGif" class="loading-spinner" alt="" aria-hidden="true" />
-      <span>{{ preparationStage !== 'complete' ? preparationMessage : t('mobile.videoLoading') }}<span v-if="loadingElapsed > 0"> · {{ loadingElapsed }}s</span></span>
-    </div>
-    <div v-if="!casting && !mobile && loading && !quietLoading" class="loading">
+    <Teleport v-if="!casting && loading && (mobile || portrait)" :to="portraitPresentationHost ?? 'body'" :disabled="!portrait || !portraitPresentationHost">
+      <div class="cczj-mobile-video-loading" :class="{ 'cczj-mobile-video-loading-initial': !videoReady && !portrait, 'cczj-mobile-video-loading-portrait': portrait }">
+        <img :src="loadingGif" class="loading-spinner" alt="" aria-hidden="true" />
+        <span><span role="status">{{ t(recoveryVisible ? 'player.recoveringPlayback' : 'mobile.videoLoading') }}</span><span v-if="loadingElapsed > 0"> · {{ loadingElapsed }}s</span><span v-if="loadingSpeed"> · {{ loadingSpeed }}</span></span>
+      </div>
+    </Teleport>
+    <div v-if="!casting && !mobile && !portrait && loading" class="loading">
       <div class="loading-overlay">
         <!-- 加载动画 -->
         <img :src="loadingGif" class="loading-spinner" :alt="t('common.loading')" />
@@ -1220,12 +1225,12 @@ defineExpose({ isPlaying:computed(()=>playing.value&&!loading.value&&!casting.va
         <div class="loading-info">
           <div class="loading-text" role="status" aria-live="polite">
             <template v-if="recoveryVisible">{{ t('player.recoveringPlayback') }}</template>
-            <template v-else-if="preparationStage !== 'complete'">{{ preparationMessage }}</template>
+            <template v-else-if="!prepared">{{ t('playerPreparation.video') }}<span v-if="loadingElapsed > 0"> · {{ loadingElapsed }}s</span></template>
             <template v-else-if="loadingTotal > 0">{{ t('player.cachedSegments', { cached: loadingCached, total: loadingTotal }) }}</template>
             <template v-else>{{ t('player.connecting') }} {{ loadingElapsed }}s</template>
           </div>
           <div class="loading-speed" v-if="loadingSpeed">{{ loadingSpeed }}</div>
-          <div class="loading-bar-wrap" v-if="loadingTotal > 0">
+          <div class="loading-bar-wrap" v-if="prepared && loadingTotal > 0">
             <div class="loading-bar-fill"
               :style="{ width: (loadingTotal > 0 ? loadingCached / loadingTotal * 100 : 0) + '%' }">
             </div>
@@ -1286,11 +1291,11 @@ defineExpose({ isPlaying:computed(()=>playing.value&&!loading.value&&!casting.va
     <PlayerEnhancementWarning v-if="showAiWarning" :open="showAiWarning" @cancel="cancelAiMode" @confirm="confirmAiMode" />
 
     <!-- Visible transport height includes wrapped fullscreen controls. -->
-    <button v-show="!casting && !errorMsg && !portrait && prepared && !autoplayStarting && !playing && !loading && (!mobile || !mobileLocked)" type="button" class="pause-overlay" :class="{ 'pause-controls-visible': controlsVisible }" :aria-label="t('player.play')" @pointerdown.stop @click.stop="togglePlay">
+    <button v-show="!casting && !errorMsg && !portrait && prepared && !autoplayStarting && !playing && !loading && (!mobile || !mobileLocked)" type="button" class="pause-overlay" :class="{ 'pause-controls-visible': controlsVisible }" :aria-label="t('player.play')" @pointerdown.stop @click.stop="mobile ? togglePlay() : onDesktopClick($event)">
       <img :src="pauseImg" class="pause-icon" alt="" />
     </button>
 
-    <div v-if="mobile && !portrait" v-show="!casting && playing && !controlsVisible && !mobileLocked" class="cczj-mobile-mini-progress" aria-hidden="true"><span :style="{ transform: `scaleX(${displayedProgress / 100})` }" /></div>
+    <div v-if="mobile && !portrait && !isFullscreen && !fullscreenBusy" v-show="!casting && playing && !controlsVisible && !mobileLocked" class="cczj-mobile-mini-progress" aria-hidden="true"><span :style="{ transform: `scaleX(${displayedProgress / 100})` }" /></div>
     <!-- 进度条（独立行，在控制条上方） -->
     <Transition name="cczj-mobile-player-chrome"><div v-if="mobile && !portrait" v-show="!casting && !mobileLocked && controlsVisible" class="cczj-mobile-control-shade" /></Transition>
     <!-- ⭐ @mousemove.stop 阻止冒泡到 player-wrapper，避免悬停进度条时触发控制栏和音量弹出 -->
