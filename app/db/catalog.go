@@ -20,7 +20,7 @@ import (
 // Home chart work only has a purpose when a playable video catalog exists.
 func HasVisibleVideoCatalogContext(ctx context.Context) (bool, error) {
 	var exists bool
-	err := instance.GetContext(ctx, &exists, `SELECT EXISTS(SELECT 1 FROM source_videos sv
+	err := ReadDB().GetContext(ctx, &exists, `SELECT EXISTS(SELECT 1 FROM source_videos sv
 	 JOIN sources s ON s.source_key=sv.source_key WHERE s.kind='video' AND s.enabled=1
 	 AND sv.lifecycle_state='active' AND `+catalogTypeVisibilityClause("sv")+`)`)
 	return exists, err
@@ -422,7 +422,7 @@ func ExistingCatalogVodIDs(sourceKey string, vodIDs []string) (map[string]bool, 
 	}
 	q := `SELECT source_vod_id FROM source_videos WHERE source_key=? AND lifecycle_state='active' AND source_vod_id IN (` + strings.Join(marks, ",") + `)`
 	var found []string
-	if err := instance.Select(&found, q, args...); err != nil {
+	if err := ReadDB().Select(&found, q, args...); err != nil {
 		return nil, err
 	}
 	for _, id := range found {
@@ -446,7 +446,7 @@ func SearchCatalogByTitleContext(ctx context.Context, sourceKey, keyword string,
 		WHERE source_key=? AND lifecycle_state='active' AND ` + catalogTypeVisibilityClause("source_videos") + ` AND vod_name LIKE ?
 		ORDER BY vod_time DESC, id DESC LIMIT ?`
 	var rows []catalogTitleRow
-	if err := instance.SelectContext(ctx, &rows, q, sourceKey, "%"+strings.TrimSpace(keyword)+"%", limit); err != nil {
+	if err := ReadDB().SelectContext(ctx, &rows, q, sourceKey, "%"+strings.TrimSpace(keyword)+"%", limit); err != nil {
 		return nil, err
 	}
 	out := make([]*model.Video, 0, len(rows))
@@ -480,7 +480,7 @@ func GetCatalogItem(sourceKey, vodID string) (*CatalogItem, error) {
 }
 func GetCatalogItemContext(ctx context.Context, sourceKey, vodID string) (*CatalogItem, error) {
 	var item CatalogItem
-	err := instance.GetContext(ctx, &item, `SELECT id,source_key,source_vod_id,global_id,source_type_id,global_type_id,type_name,vod_name,vod_pic,vod_remarks,vod_year,vod_area,vod_time,lifecycle_state FROM source_videos WHERE source_key=? AND source_vod_id=? AND lifecycle_state='active' AND `+catalogTypeVisibilityClause("source_videos"), sourceKey, vodID)
+	err := ReadDB().GetContext(ctx, &item, `SELECT id,source_key,source_vod_id,global_id,source_type_id,global_type_id,type_name,vod_name,vod_pic,vod_remarks,vod_year,vod_area,vod_time,lifecycle_state FROM source_videos WHERE source_key=? AND source_vod_id=? AND lifecycle_state='active' AND `+catalogTypeVisibilityClause("source_videos"), sourceKey, vodID)
 	if err != nil {
 		return nil, err
 	}
@@ -492,7 +492,7 @@ func GetCatalogItemByGlobalID(sourceKey string, globalID int64) (*CatalogItem, e
 }
 func GetCatalogItemByGlobalIDContext(ctx context.Context, sourceKey string, globalID int64) (*CatalogItem, error) {
 	var item CatalogItem
-	err := instance.GetContext(ctx, &item, `SELECT id,source_key,source_vod_id,global_id,source_type_id,global_type_id,type_name,vod_name,vod_pic,vod_remarks,vod_year,vod_area,vod_time,lifecycle_state FROM source_videos WHERE source_key=? AND global_id=? AND lifecycle_state='active' AND `+catalogTypeVisibilityClause("source_videos")+` ORDER BY updated_at DESC LIMIT 1`, sourceKey, globalID)
+	err := ReadDB().GetContext(ctx, &item, `SELECT id,source_key,source_vod_id,global_id,source_type_id,global_type_id,type_name,vod_name,vod_pic,vod_remarks,vod_year,vod_area,vod_time,lifecycle_state FROM source_videos WHERE source_key=? AND global_id=? AND lifecycle_state='active' AND `+catalogTypeVisibilityClause("source_videos")+` ORDER BY updated_at DESC LIMIT 1`, sourceKey, globalID)
 	if err != nil {
 		return nil, err
 	}
@@ -556,7 +556,7 @@ func GetCatalogVideoPageContext(ctx context.Context, sourceKey string, filter Fi
 	}
 	clause := strings.Join(where, " AND ")
 	var total int
-	if err := instance.GetContext(ctx, &total, "SELECT COUNT(*) FROM source_videos WHERE "+clause, args...); err != nil {
+	if err := ReadDB().GetContext(ctx, &total, "SELECT COUNT(*) FROM source_videos WHERE "+clause, args...); err != nil {
 		return nil, err
 	}
 	orderColumn := "vod_time"
@@ -589,7 +589,7 @@ func GetCatalogVideoPageContext(ctx context.Context, sourceKey string, filter Fi
 		CursorValue string `db:"cursor_value"`
 	}
 	var rows []row
-	if err := instance.SelectContext(ctx, &rows, q, args...); err != nil {
+	if err := ReadDB().SelectContext(ctx, &rows, q, args...); err != nil {
 		return nil, err
 	}
 	hasMore := len(rows) > filter.PageSize
@@ -656,7 +656,7 @@ func StreamCatalogExportContext(ctx context.Context, sourceKey string, visit fun
 	if visit == nil {
 		return fmt.Errorf("catalog export visitor is required")
 	}
-	rows, err := instance.QueryxContext(ctx, `SELECT source_vod_id,source_type_id,type_name,vod_name,vod_pic,vod_remarks,vod_year,vod_area,vod_time
+	rows, err := ReadDB().QueryxContext(ctx, `SELECT source_vod_id,source_type_id,type_name,vod_name,vod_pic,vod_remarks,vod_year,vod_area,vod_time
 		FROM source_videos WHERE source_key=? AND lifecycle_state='active' AND `+catalogTypeVisibilityClause("source_videos")+` ORDER BY id`, sourceKey)
 	if err != nil {
 		return err
@@ -683,10 +683,10 @@ func GetCatalogYearsAndAreas(sourceKey string) ([]string, []string, error) {
 func GetCatalogYearsAndAreasContext(ctx context.Context, sourceKey string) ([]string, []string, error) {
 	var years, areas []string
 	visibility := `lifecycle_state='active' AND ` + catalogTypeVisibilityClause("source_videos")
-	if err := instance.SelectContext(ctx, &years, `SELECT DISTINCT vod_year FROM source_videos WHERE source_key=? AND `+visibility+` AND vod_year!='' ORDER BY vod_year DESC`, sourceKey); err != nil {
+	if err := ReadDB().SelectContext(ctx, &years, `SELECT DISTINCT vod_year FROM source_videos WHERE source_key=? AND `+visibility+` AND vod_year!='' ORDER BY vod_year DESC`, sourceKey); err != nil {
 		return nil, nil, err
 	}
-	if err := instance.SelectContext(ctx, &areas, `SELECT DISTINCT vod_area FROM source_videos WHERE source_key=? AND `+visibility+` AND vod_area!='' ORDER BY vod_area`, sourceKey); err != nil {
+	if err := ReadDB().SelectContext(ctx, &areas, `SELECT DISTINCT vod_area FROM source_videos WHERE source_key=? AND `+visibility+` AND vod_area!='' ORDER BY vod_area`, sourceKey); err != nil {
 		return nil, nil, err
 	}
 	return years, areas, nil
@@ -735,7 +735,7 @@ func getCatalogRecommend(ctx context.Context, sourceKey string, limit int, exclu
 		where += " AND source_vod_id NOT IN (" + strings.Join(marks, ",") + ")"
 	}
 	var maxID int64
-	if err := instance.GetContext(ctx, &maxID, "SELECT COALESCE(MAX(id),0) FROM source_videos WHERE "+where, args...); err != nil {
+	if err := ReadDB().GetContext(ctx, &maxID, "SELECT COALESCE(MAX(id),0) FROM source_videos WHERE "+where, args...); err != nil {
 		return nil, err
 	}
 	if maxID == 0 {
@@ -758,7 +758,7 @@ func getCatalogRecommend(ctx context.Context, sourceKey string, limit int, exclu
 	selectRows := func(extra string, extraArgs ...any) error {
 		queryArgs := append(append([]any{}, args...), extraArgs...)
 		var batch []row
-		if err := instance.SelectContext(ctx, &batch, "SELECT source_vod_id,global_id,source_type_id,type_name,vod_name,vod_pic,vod_remarks,vod_year,vod_area,vod_time FROM source_videos WHERE "+where+extra+" ORDER BY id LIMIT ?", append(queryArgs, limit-len(rows))...); err != nil {
+		if err := ReadDB().SelectContext(ctx, &batch, "SELECT source_vod_id,global_id,source_type_id,type_name,vod_name,vod_pic,vod_remarks,vod_year,vod_area,vod_time FROM source_videos WHERE "+where+extra+" ORDER BY id LIMIT ?", append(queryArgs, limit-len(rows))...); err != nil {
 			return err
 		}
 		rows = append(rows, batch...)
@@ -818,7 +818,7 @@ func ExportSourceTypes(sourceKey string) ([]SourceTypeExport, error) {
 }
 func ExportSourceTypesContext(ctx context.Context, sourceKey string) ([]SourceTypeExport, error) {
 	var out []SourceTypeExport
-	err := instance.SelectContext(ctx, &out, `SELECT source_type_id,parent_type_id,manual_short_drama,COALESCE(global_type_id,0) global_type_id,type_name FROM source_types WHERE source_key=? ORDER BY source_type_id`, sourceKey)
+	err := ReadDB().SelectContext(ctx, &out, `SELECT source_type_id,parent_type_id,manual_short_drama,COALESCE(global_type_id,0) global_type_id,type_name FROM source_types WHERE source_key=? ORDER BY source_type_id`, sourceKey)
 	return out, err
 }
 
@@ -843,13 +843,17 @@ func writeSourceTypes(ctx context.Context, tx *sqlx.Tx, sourceKey string, rows [
 		return nil
 	}
 
-	params := make([]sourceTypeUpsertRow, 0, len(rows))
-	for _, r := range rows {
-		params = append(params, sourceTypeUpsertRow{SourceKey: sourceKey, SourceTypeID: r.SourceTypeID, ParentTypeID: r.ParentTypeID, ManualShortDrama: r.ManualShortDrama, GlobalTypeID: r.GlobalTypeID, TypeName: r.TypeName})
+	stmt, err := tx.PrepareNamedContext(ctx, `INSERT INTO source_types(source_key,source_type_id,parent_type_id,manual_short_drama,global_type_id,type_name,updated_at) VALUES (:source_key,:source_type_id,:parent_type_id,COALESCE(:manual_short_drama,0),:global_type_id,:type_name,CURRENT_TIMESTAMP)
+		ON CONFLICT(source_key,source_type_id) DO UPDATE SET global_type_id=excluded.global_type_id,type_name=excluded.type_name,parent_type_id=CASE WHEN excluded.parent_type_id<>'' THEN excluded.parent_type_id ELSE source_types.parent_type_id END,manual_short_drama=COALESCE(:manual_short_drama,source_types.manual_short_drama),updated_at=CURRENT_TIMESTAMP`)
+	if err != nil {
+		return fmt.Errorf("prepare source types: %w", err)
 	}
-	if _, err := tx.NamedExecContext(ctx, `INSERT INTO source_types(source_key,source_type_id,parent_type_id,manual_short_drama,global_type_id,type_name,updated_at) VALUES (:source_key,:source_type_id,:parent_type_id,COALESCE(:manual_short_drama,0),:global_type_id,:type_name,CURRENT_TIMESTAMP)
-		ON CONFLICT(source_key,source_type_id) DO UPDATE SET global_type_id=excluded.global_type_id,type_name=excluded.type_name,parent_type_id=CASE WHEN excluded.parent_type_id<>'' THEN excluded.parent_type_id ELSE source_types.parent_type_id END,manual_short_drama=COALESCE(:manual_short_drama,source_types.manual_short_drama),updated_at=CURRENT_TIMESTAMP`, params); err != nil {
-		return fmt.Errorf("import source types: %w", err)
+	defer stmt.Close()
+	for _, r := range rows {
+		value := sourceTypeUpsertRow{SourceKey: sourceKey, SourceTypeID: r.SourceTypeID, ParentTypeID: r.ParentTypeID, ManualShortDrama: r.ManualShortDrama, GlobalTypeID: r.GlobalTypeID, TypeName: r.TypeName}
+		if _, err = stmt.ExecContext(ctx, value); err != nil {
+			return fmt.Errorf("import source types: %w", err)
+		}
 	}
 	return nil
 }

@@ -3,7 +3,7 @@ import { TsCacheLoader } from '../src/utils/ts-cache/loader'
 import { diskCache } from '../src/utils/ts-cache/disk-cache'
 import { cacheClear, cacheGet, setMemoryCacheBudget } from '../src/utils/ts-cache/memory-cache'
 import { MAX_CACHED_BYTES, MAX_CACHED_SEGMENTS } from '../src/utils/ts-cache/constants'
-import { beginCacheSession, prefetchFromSegments } from '../src/utils/ts-cache/prefetch'
+import { beginCacheSession, prefetchFromSegments, setTransportActive } from '../src/utils/ts-cache/prefetch'
 import { session } from '../src/utils/ts-cache/store'
 
 beforeEach(() => {
@@ -19,9 +19,11 @@ beforeEach(() => {
   session.playbackBufferAhead = 60
   session.episodes = [{ source_key: 'fixture', vod_id: '1', ep_num: 1, ep_url: 'https://fixture/playlist' }]
   session.currentEpIdx = 0
+  setTransportActive(true)
   vi.spyOn(diskCache, 'save').mockResolvedValue()
 })
 afterEach(() => {
+  setTransportActive(false)
   beginCacheSession()
   cacheClear()
   vi.clearAllTimers()
@@ -57,7 +59,7 @@ describe('fragment disk reads through the real playback loader', () => {
     const network = vi.fn()
     vi.stubGlobal('fetch', network)
     prefetchFromSegments(['https://fixture/17.ts'], 0, 0, 1)
-    await vi.advanceTimersByTimeAsync(301)
+    await vi.advanceTimersByTimeAsync(0)
     beginCacheSession()
     finish(new ArrayBuffer(16))
     await vi.advanceTimersByTimeAsync(0)
@@ -122,6 +124,7 @@ describe('fragment disk reads through the real playback loader', () => {
     const network = vi.fn()
     vi.stubGlobal('fetch', network)
     const result = request()
+    await vi.advanceTimersByTimeAsync(0)
     result.loader.abort()
     finish(buffer)
     await vi.advanceTimersByTimeAsync(0)

@@ -125,10 +125,10 @@ func TestMatchFallbackFailureCooldownAcrossServiceRestart(t *testing.T) {
 	if err != nil || result.Binding == nil || result.Binding.Episode.Provider != "qq" {
 		t.Fatal(result, err)
 	}
-	if defaultSource.searches.Load() != 1 || result.Attempts[0].Status != "cooling_down" || result.Attempts[0].RetryAt != now.Add(24*time.Hour).Unix() {
+	if defaultSource.searches.Load() != 1 || result.Attempts[0].Status != "cooling_down" || result.Attempts[0].RetryAt != now.Add(5*time.Minute).Unix() {
 		t.Fatal(defaultSource.searches.Load(), result.Attempts)
 	}
-	now = now.Add(24*time.Hour + time.Second)
+	now = now.Add(5*time.Minute + time.Second)
 	_, err = restarted.Match(context.Background(), matchRequest())
 	if err != nil {
 		t.Fatal(err)

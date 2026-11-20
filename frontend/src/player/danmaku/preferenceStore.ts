@@ -58,13 +58,13 @@ export const useDanmakuPreferencesStore = defineStore('danmaku-preferences', () 
   async function retry(): Promise<boolean> { return await load() && await flush() }
   function pageHidden(): void { if (document.hidden) void flush() }
   function pageLeaving(): void { void flush() }
-  document.addEventListener('visibilitychange', pageHidden)
-  window.addEventListener('pagehide', pageLeaving)
+  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', pageHidden)
+  if (typeof window !== 'undefined') window.addEventListener('pagehide', pageLeaving)
   function dispose(): void {
     if (disposed) return
     stopWatching(); void flush(); disposed = true
-    document.removeEventListener('visibilitychange', pageHidden)
-    window.removeEventListener('pagehide', pageLeaving)
+    if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', pageHidden)
+    if (typeof window !== 'undefined') window.removeEventListener('pagehide', pageLeaving)
     try { void Promise.resolve(request?.cancel?.()).catch(() => {}) } catch { /* Request may have settled. */ }
   }
   onScopeDispose(dispose)

@@ -1,9 +1,11 @@
 package danmaku
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 )
 
 func discoveryCacheKey(provider, kind, identity string) string {
@@ -42,7 +44,23 @@ func cachedDiscovery[T Candidate | Episode](ctx context.Context, s *Service, pro
 		}
 		return rows, nil
 	}
+	shortLived := func(raw []byte) time.Duration {
+		if bytes.Equal(raw, []byte("[]")) {
+			return noMatchCooldown
+		}
+		if provider == "bilibili" && kind == "search" {
+			var rows []Candidate
+			if json.Unmarshal(raw, &rows) == nil && bilibiliOfficialMissing(rows) {
+				return noMatchCooldown
+			}
+		}
+		return 0
+	}
+	trace, _ := ctx.Value(matchTraceKey{}).(string)
 	payload, err := s.load(ctx, key, func(raw []byte) error { _, err := decode(raw); return err }, func(ctx context.Context) ([]byte, error) {
+		if trace != "" {
+			ctx = context.WithValue(ctx, matchTraceKey{}, trace)
+		}
 		rows, err := fetch(ctx)
 		if err != nil {
 			return nil, err
@@ -54,7 +72,7 @@ func cachedDiscovery[T Candidate | Episode](ctx context.Context, s *Service, pro
 			return nil, schemaError(fmt.Errorf("discovery result exceeds budget"))
 		}
 		return json.Marshal(rows)
-	})
+	}, discoveryFreshness, shortLived)
 	if err != nil {
 		return nil, err
 	}

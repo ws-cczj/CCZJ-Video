@@ -44,11 +44,40 @@ export function videoPictureBounds(video: HTMLVideoElement, host: HTMLElement) {
 }
 
 /** Match enhancement output to the decoded image, including contain/cover/fill. */
-export function layoutCanvasToVideo(video: HTMLVideoElement, canvas: HTMLCanvasElement): void {
+export function layoutCanvasToVideo(video: HTMLVideoElement, canvas: HTMLCanvasElement) {
   const bounds = canvas.parentElement && videoPictureBounds(video, canvas.parentElement)
   if (!bounds) return
   canvas.style.left = `${bounds.left}px`
   canvas.style.top = `${bounds.top}px`
   canvas.style.width = `${bounds.width}px`
   canvas.style.height = `${bounds.height}px`
+  return bounds
+}
+
+export interface EnhancementBufferBudget { maxEdge: number; maxPixels: number }
+
+/** The output need only cover the displayed image in physical pixels. */
+export function sizeEnhancementBuffer(video: HTMLVideoElement, canvas: HTMLCanvasElement, scale: number, budget: EnhancementBufferBudget): boolean {
+  const bounds = layoutCanvasToVideo(video, canvas)
+  const ratio = window.devicePixelRatio || 1
+  const displayWidth = Math.max(1, Math.min(video.videoWidth * scale, Math.ceil((bounds ? bounds.width * ratio : video.videoWidth) || 1)))
+  const displayHeight = Math.max(1, Math.min(video.videoHeight * scale, Math.ceil((bounds ? bounds.height * ratio : video.videoHeight) || 1)))
+  const fit = Math.min(1, budget.maxEdge / Math.max(displayWidth, displayHeight), Math.sqrt(budget.maxPixels / (displayWidth * displayHeight)))
+  const width = Math.max(1, Math.floor(displayWidth * fit))
+  const height = Math.max(1, Math.floor(displayHeight * fit))
+  if (width === canvas.width && height === canvas.height) return false
+  canvas.width = width
+  canvas.height = height
+  return true
+}
+
+/** The source upload and canvas are RGBA8. Every intermediate target is RGBA16F. */
+export function enhancementBufferBudget(gl: WebGL2RenderingContext, width: number, height: number, sourceTargets: number, doubleTargets = 0): EnhancementBufferBudget | undefined {
+  const limit = Math.min(gl.getParameter(gl.MAX_TEXTURE_SIZE), gl.getParameter(gl.MAX_RENDERBUFFER_SIZE))
+  const scale = doubleTargets ? 2 : 1
+  if (Math.max(width * scale, height * scale) > limit) return
+  const textureBytes = width * height * (4 + 8 * sourceTargets + 32 * doubleTargets)
+  const pixels = Math.floor((256 * 1024 * 1024 - textureBytes) / 4)
+  if (pixels < 1) return
+  return { maxEdge: Math.min(4096, limit), maxPixels: Math.min(3840 * 2160, pixels) }
 }

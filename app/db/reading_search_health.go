@@ -33,7 +33,7 @@ func ReadReadingSearchHealth(ctx context.Context, kind model.SourceKind) (map[st
 		return nil, fmt.Errorf("invalid reading mode")
 	}
 	var rows []ReadingSearchHealth
-	err := instance.SelectContext(ctx, &rows, `SELECT source_id,checked_at,error_code,failures,retry_after FROM reading_search_health WHERE kind=?`, kind)
+	err := ReadDB().SelectContext(ctx, &rows, `SELECT source_id,checked_at,error_code,failures,retry_after FROM reading_search_health WHERE kind=?`, kind)
 	out := make(map[string]ReadingSearchHealth, len(rows))
 	for _, row := range rows {
 		out[row.SourceID] = row

@@ -9,7 +9,7 @@ it('rejects source directory data from another mode',async()=>{
   await expect(listNovelBuiltinSources()).rejects.toMatchObject({code:'CORRUPT'})
 })
 it('keeps unknown quality distinct from zero and rejects invalid persisted scores',async()=>{
-  const row={id:'comic',sourceKey:'source',name:'Comic',enabled:true,pool:'reserve',score:-1,confidence:'insufficient',checkedAt:0,deepAt:0,state:'unmeasured'}
+  const row={id:'comic',sourceKey:'source',name:'Comic',enabled:true,pool:'reserve',score:-1,confidence:'insufficient',checkedAt:0,deepAt:0,state:'unmeasured',supply:'custom',section:'reserve',site:'',origin:'',project:'',protocol:'',revision:'',family:'',language:'',capabilities:[],operations:[],reading:{readable:0,restricted:0,failed:0,warnings:0,stale:0,checkedAt:0}}
   rpc.comic.mockImplementation(()=>CancellablePromise.resolve({kind:'comic',registered:1,awaitingAdapter:0,auditRunning:false,rows:[row]}))
   expect((await listComicBuiltinSources()).rows?.[0]?.score).toBe(-1)
   row.score=-2

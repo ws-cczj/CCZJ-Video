@@ -48,7 +48,7 @@ type providerMatch struct {
 	err     error
 }
 
-const matchPolicy = "episode-priority-v3"
+const matchPolicy = "episode-priority-v4"
 
 const (
 	matchParallelism  = 3
@@ -236,7 +236,7 @@ func (s *Service) matchProvider(ctx context.Context, request MatchRequest, name 
 		value.attempt.Code = string(apperror.Storage)
 		return value
 	}
-	if failed != nil {
+	if failed != nil && (!catalogueCanRetry(failed) || playbackWorkPrefix(request.LocalKey) == "" || request.DurationMS <= 0) {
 		s.cooldownHits.Add(1)
 		value.attempt = *failed
 		value.attempt.Stage = "cooldown"
@@ -251,7 +251,7 @@ func (s *Service) matchProvider(ctx context.Context, request MatchRequest, name 
 		return value
 	}
 	probeCtx, stop := context.WithTimeout(ctx, matchProbeTimeout)
-	binding, window, code, err := s.probeMatch(probeCtx, request, name, &value.attempt)
+	binding, window, code, err := s.probeMatch(probeCtx, request, name, &value.attempt, failed)
 	diagnosticErr = err
 	stop()
 	if ctx.Err() != nil || errors.Is(err, context.Canceled) || apperror.Is(err, apperror.Cancelled) {
@@ -281,6 +281,17 @@ func (s *Service) matchProvider(ctx context.Context, request MatchRequest, name 
 		value.attempt.Status = "available"
 		return value
 	}
+	if failed != nil && value.attempt.Stage == "cooldown" && err == nil {
+		s.cooldownHits.Add(1)
+		s.explainCachedFailure(ctx, request, &value.attempt)
+		return value
+	}
+	if err == nil && value.attempt.RetryAt != 0 {
+		if value.attempt.Status == "cooling_down" {
+			s.cooldownHits.Add(1)
+		}
+		return value
+	}
 	if code == "" {
 		code = "NO_MATCH"
 	}
@@ -294,19 +305,35 @@ func (s *Service) matchProvider(ctx context.Context, request MatchRequest, name 
 	}
 	return value
 }
-func (s *Service) probeMatch(ctx context.Context, request MatchRequest, name string, attempt *MatchAttempt) (*Binding, *Window, string, error) {
+func (s *Service) probeMatch(ctx context.Context, request MatchRequest, name string, attempt *MatchAttempt, failed *MatchAttempt) (*Binding, *Window, string, error) {
+	work, episode, count, catalogErr := s.verifiedCatalog(ctx, request, name)
+	if catalogErr != nil {
+		matchLog(ctx, "danmaku stored catalogue unavailable", applog.Fields{"provider": name, "code": apperror.CodeOf(catalogErr)})
+		if failed != nil || ctx.Err() != nil || catalogueFailureStopsSearch(catalogErr) {
+			attempt.Stage = "episodes"
+			return nil, nil, "", catalogErr
+		}
+	}
+	if episode != nil {
+		return s.matchEpisodeWindow(ctx, request, work, episode, count, attempt)
+	}
+	if failed != nil {
+		*attempt = *failed
+		attempt.Stage = "cooldown"
+		return nil, nil, failed.Code, nil
+	}
 	attempt.Stage = "search"
-	rows, err := s.Search(ctx, name, request.Title)
+	search, err := s.matchSearch(ctx, request, name)
 	if err != nil {
 		return nil, nil, "", err
 	}
-	work := matchingWork(rows, request)
-	attempt.Stage = "work"
-	matchLog(ctx, "danmaku match candidates", applog.Fields{"provider": name, "count": len(rows), "candidates": candidateSummary(rows)})
+	rows, work := search.rows, search.work
+	if search.attempt.Status != "cooling_down" {
+		matchLog(ctx, "danmaku match candidates", applog.Fields{"provider": name, "count": len(rows), "candidates": candidateSummary(rows)})
+	}
 	if work == nil {
-		code, detail := workMatchFailure(rows, request)
-		attempt.Detail = detail
-		return nil, nil, code, nil
+		*attempt = search.attempt
+		return nil, nil, attempt.Code, nil
 	}
 	attempt.Stage = "episodes"
 	matchLog(ctx, "danmaku match work selected", applog.Fields{"provider": name, "title": work.Title, "year": work.Year, "kind": work.Kind, "ref": work.Ref, "policy": matchPolicy, "title_similarity": candidateTitleSimilarity(*work, request.Title), "score": workMatchScore(*work, request)})
@@ -314,7 +341,7 @@ func (s *Service) probeMatch(ctx context.Context, request MatchRequest, name str
 	if err != nil {
 		return nil, nil, "", err
 	}
-	episode := matchingEpisode(episodes, request)
+	episode = matchingEpisode(episodes, request)
 	attempt.Stage = "episode"
 	matchLog(ctx, "danmaku match episode candidates", applog.Fields{"provider": name, "count": len(episodes), "episodes": episodeSummary(episodes)})
 	if episode == nil {
@@ -340,8 +367,12 @@ func (s *Service) probeMatch(ctx context.Context, request MatchRequest, name str
 			return nil, nil, code, nil
 		}
 	}
-	matchLog(ctx, "danmaku match episode selected", applog.Fields{"provider": name, "episodes": len(episodes), "episode_id": episode.EpisodeID, "title": episode.Title, "number": episode.Number, "source_duration_ms": episode.DurationMS, "local_duration_ms": request.DurationMS, "policy": matchPolicy})
-	binding := &Binding{LocalKey: request.LocalKey, Episode: *episode, Confirmed: true}
+	return s.matchEpisodeWindow(ctx, request, work, episode, len(episodes), attempt)
+}
+
+func (s *Service) matchEpisodeWindow(ctx context.Context, request MatchRequest, work *Candidate, episode *Episode, count int, attempt *MatchAttempt) (*Binding, *Window, string, error) {
+	matchLog(ctx, "danmaku match episode selected", applog.Fields{"provider": episode.Provider, "episodes": count, "episode_id": episode.EpisodeID, "title": episode.Title, "number": episode.Number, "source_duration_ms": episode.DurationMS, "local_duration_ms": request.DurationMS, "policy": matchPolicy})
+	binding := &Binding{LocalKey: request.LocalKey, Episode: *episode, Confirmed: true, work: &matchedWork{Candidate: *work, Identity: workIdentity(request)}}
 	prior, err := s.Binding(ctx, request.LocalKey)
 	if err != nil {
 		return nil, nil, "", err

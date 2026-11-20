@@ -39,7 +39,7 @@ type NovelSourceRefresh struct {
 // Operational ranking may age it; the book's source choices must not disappear.
 func FindNovelSourceItems(ctx context.Context, itemID int, titleKey, authorKey string) ([]*model.LibraryItem, error) {
 	rows := []*model.LibraryItem{}
-	err := instance.SelectContext(ctx, &rows, `SELECT i.* FROM library_items i
+	err := ReadDB().SelectContext(ctx, &rows, `SELECT i.* FROM library_items i
 	 LEFT JOIN reading_work_sources w ON w.item_id=i.id AND w.kind='novel'
 	 WHERE i.kind='novel' AND (i.id=? OR w.title_key=?)
 	 ORDER BY (i.id=?) DESC,(w.author_key=?) DESC,w.seen_at DESC,i.id DESC LIMIT 128`, itemID, titleKey, itemID, authorKey)
@@ -55,7 +55,7 @@ func ReadNovelSourceChecks(ctx context.Context, ids []int) (map[int]NovelSourceC
 		return nil, err
 	}
 	var rows []NovelSourceCheck
-	if err = instance.SelectContext(ctx, &rows, query, args...); err != nil {
+	if err = ReadDB().SelectContext(ctx, &rows, query, args...); err != nil {
 		return nil, err
 	}
 	for _, row := range rows {
@@ -80,7 +80,7 @@ func ReadNovelSourceLimits(ctx context.Context, ids []int) (map[string]bool, err
 		return nil, err
 	}
 	var rows []NovelSourceLimit
-	if err = instance.SelectContext(ctx, &rows, query, args...); err != nil {
+	if err = ReadDB().SelectContext(ctx, &rows, query, args...); err != nil {
 		return nil, err
 	}
 	for _, row := range rows {
@@ -90,7 +90,7 @@ func ReadNovelSourceLimits(ctx context.Context, ids []int) (map[string]bool, err
 }
 func ReadNovelSourceRefresh(ctx context.Context, itemID int) (NovelSourceRefresh, error) {
 	var rows []NovelSourceRefresh
-	err := instance.SelectContext(ctx, &rows, `SELECT checked_at,generation,completed_generation FROM novel_book_source_refresh WHERE item_id=?`, itemID)
+	err := ReadDB().SelectContext(ctx, &rows, `SELECT checked_at,generation,completed_generation FROM novel_book_source_refresh WHERE item_id=?`, itemID)
 	if len(rows) > 0 {
 		return rows[0], err
 	}

@@ -48,6 +48,12 @@ type Binding struct {
 	Episode   Episode `json:"episode"`
 	OffsetMS  int64   `json:"offsetMs"`
 	Confirmed bool    `json:"confirmed"`
+	work      *matchedWork
+}
+
+type matchedWork struct {
+	Candidate Candidate `json:"candidate"`
+	Identity  string    `json:"identity"`
 }
 
 type Segment struct {

@@ -84,7 +84,7 @@ func GetShortDramaSourceTypesContext(ctx context.Context, sourceKey string, incl
 	if includeManual {
 		manual = " OR st.manual_short_drama=1"
 	}
-	err := instance.SelectContext(ctx, &rows, `WITH RECURSIVE related(type_id) AS (
+	err := ReadDB().SelectContext(ctx, &rows, `WITH RECURSIVE related(type_id) AS (
 	SELECT st.source_type_id FROM source_types st LEFT JOIN global_types gt ON gt.id=st.global_type_id
 	WHERE st.source_key=? AND st.source_type_id<>'' AND (st.type_name LIKE '%短剧%' OR st.type_name LIKE '%短劇%' OR st.type_name LIKE '%短片剧%' OR gt.type_name LIKE '%短剧%' OR gt.type_name LIKE '%短劇%' OR gt.type_name LIKE '%短片剧%'`+manual+`)
 	UNION

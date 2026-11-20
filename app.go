@@ -113,6 +113,21 @@ func buildApp() (*application.App, error) {
 	if application.System.IsMobile() {
 		return app, nil
 	}
+	var scaleResetMu sync.Mutex
+	var scaleResetTimer *time.Timer
+	var scaleResetGeneration uint64
+	var scaleResetStopped bool
+	stopScaleReset := func() {
+		scaleResetMu.Lock()
+		defer scaleResetMu.Unlock()
+		scaleResetStopped = true
+		scaleResetGeneration++
+		if scaleResetTimer != nil {
+			scaleResetTimer.Stop()
+			scaleResetTimer = nil
+		}
+	}
+	app.OnShutdown(stopScaleReset)
 	mainWindow.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
 		if app.Context().Err() != nil {
 			return
@@ -125,6 +140,7 @@ func buildApp() (*application.App, error) {
 		// Closing the main window is application exit; explicit Quit bypasses
 		// this user-close hook and runs service shutdown for active tasks.
 		event.Cancel()
+		stopScaleReset()
 		app.Quit()
 	})
 
@@ -141,30 +157,36 @@ func buildApp() (*application.App, error) {
 	// WebView2 may retain a stale zoom/raster scale after a frameless window is
 	// repeatedly minimised and restored. Let the native DPI resync finish, then
 	// normalise browser zoom and force the frontend to lay out at the final size.
-	var scaleResetMu sync.Mutex
-	var scaleResetTimer *time.Timer
-	var scaleResetGeneration uint64
 	resetWebviewScale := func(_ *application.WindowEvent) {
 		scaleResetMu.Lock()
+		defer scaleResetMu.Unlock()
+		if scaleResetStopped || app.Context().Err() != nil {
+			return
+		}
 		scaleResetGeneration++
 		generation := scaleResetGeneration
 		if scaleResetTimer != nil {
 			scaleResetTimer.Stop()
 		}
 		scaleResetTimer = time.AfterFunc(80*time.Millisecond, func() {
-			scaleResetMu.Lock()
-			if generation != scaleResetGeneration {
-				scaleResetMu.Unlock()
+			if app.Context().Err() != nil {
 				return
 			}
-			scaleResetTimer = nil
-			scaleResetMu.Unlock()
-			// SetZoom(1) is intentional here: ZoomReset may restore WebView2's
-			// stale per-monitor value instead of CSS's 100% content scale.
-			mainWindow.SetZoom(1.0)
-			mainWindow.ExecJS("window.dispatchEvent(new Event('resize'))")
+			application.InvokeAsync(func() {
+				scaleResetMu.Lock()
+				if scaleResetStopped || generation != scaleResetGeneration || app.Context().Err() != nil {
+					scaleResetMu.Unlock()
+					return
+				}
+				scaleResetTimer = nil
+				scaleResetMu.Unlock()
+				// ZoomReset may restore a stale per-monitor value.
+				mainWindow.SetZoom(1.0)
+				if app.Context().Err() == nil {
+					mainWindow.ExecJS("window.dispatchEvent(new Event('resize'))")
+				}
+			})
 		})
-		scaleResetMu.Unlock()
 	}
 	mainWindow.OnWindowEvent(events.Common.WindowRuntimeReady, resetWebviewScale)
 	appwindow.InstallRoundedCorners(mainWindow)
@@ -185,6 +207,7 @@ func buildApp() (*application.App, error) {
 	})
 	trayMenu.AddSeparator()
 	trayMenu.Add("退出").OnClick(func(ctx *application.Context) {
+		stopScaleReset()
 		app.Quit()
 	})
 

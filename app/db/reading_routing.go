@@ -76,7 +76,7 @@ func ReadReadingSourceChecks(ctx context.Context, kind model.SourceKind) (map[st
 		return nil, fmt.Errorf("invalid reading mode")
 	}
 	var rows []ReadingSourceCheck
-	if err := instance.SelectContext(ctx, &rows, `SELECT * FROM reading_source_checks WHERE kind=?`, kind); err != nil {
+	if err := ReadDB().SelectContext(ctx, &rows, `SELECT * FROM reading_source_checks WHERE kind=?`, kind); err != nil {
 		return nil, err
 	}
 	out := make(map[string]ReadingSourceCheck, len(rows))
@@ -180,7 +180,7 @@ type ReadingRouteEvidence struct {
 // that sources not in this sparse table lack the work.
 func KnownReadingRoutes(ctx context.Context, kind model.SourceKind, titleKey string) ([]ReadingRouteEvidence, error) {
 	var rows []ReadingRouteEvidence
-	err := instance.SelectContext(ctx, &rows, `SELECT w.source_key,w.revision,
+	err := ReadDB().SelectContext(ctx, &rows, `SELECT w.source_key,w.revision,
 	 COUNT(CASE WHEN e.evidence IN ('text','image') THEN e.chapter_id END) AS readable FROM reading_work_sources w
 	 JOIN library_items i ON i.id=w.item_id AND i.kind=w.kind
 	 LEFT JOIN library_chapters c ON c.item_id=w.item_id AND c.lifecycle_state='active'

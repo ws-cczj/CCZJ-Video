@@ -427,7 +427,7 @@ func GetLibraryChapter(id int) (*model.LibraryChapter, error) {
 }
 func GetLibraryChapterContext(ctx context.Context, id int) (*model.LibraryChapter, error) {
 	var chapter model.LibraryChapter
-	if err := instance.GetContext(ctx, &chapter, `SELECT * FROM library_chapters WHERE id=?`, id); err != nil {
+	if err := ReadDB().GetContext(ctx, &chapter, `SELECT * FROM library_chapters WHERE id=?`, id); err != nil {
 		return nil, err
 	}
 	return &chapter, nil
@@ -444,7 +444,7 @@ func GetLibraryChapterByOrd(itemID, ord int) (*model.LibraryChapter, error) {
 }
 func GetLibraryChapterByOrdContext(ctx context.Context, itemID, ord int) (*model.LibraryChapter, error) {
 	var chapter model.LibraryChapter
-	err := instance.GetContext(ctx, &chapter,
+	err := ReadDB().GetContext(ctx, &chapter,
 		`SELECT * FROM library_chapters WHERE item_id=? AND ord=? AND lifecycle_state='active' LIMIT 1`,
 		itemID, ord)
 	if err != nil {
@@ -475,7 +475,7 @@ func ListLibraryItems(kind model.SourceKind, sourceKey string, includeRetired bo
 	}
 	query += ` ORDER BY updated_at DESC, id DESC`
 	var items []*model.LibraryItem
-	if err := instance.Select(&items, query, args...); err != nil {
+	if err := ReadDB().Select(&items, query, args...); err != nil {
 		return nil, fmt.Errorf("list library items: %w", err)
 	}
 	return items, nil
@@ -493,7 +493,7 @@ func ListLibraryItemsByKind(kind model.SourceKind, includeRetired bool) ([]*mode
 	}
 	query += ` ORDER BY updated_at DESC, id DESC`
 	var items []*model.LibraryItem
-	if err := instance.Select(&items, query, args...); err != nil {
+	if err := ReadDB().Select(&items, query, args...); err != nil {
 		return nil, fmt.Errorf("list library items by kind: %w", err)
 	}
 	return items, nil
@@ -506,7 +506,7 @@ func GetLibraryItem(id int) (*model.LibraryItem, error) {
 }
 func GetLibraryItemContext(ctx context.Context, id int) (*model.LibraryItem, error) {
 	var item model.LibraryItem
-	if err := instance.GetContext(ctx, &item, `SELECT * FROM library_items WHERE id=?`, id); err != nil {
+	if err := ReadDB().GetContext(ctx, &item, `SELECT * FROM library_items WHERE id=?`, id); err != nil {
 		return nil, err
 	}
 	return &item, nil
@@ -519,7 +519,7 @@ func GetLibraryItemByRemote(kind model.SourceKind, sourceKey, remoteID string) (
 		return nil, err
 	}
 	var item model.LibraryItem
-	err := instance.Get(&item,
+	err := ReadDB().Get(&item,
 		`SELECT * FROM library_items WHERE kind=? AND source_key=? AND remote_id=?`,
 		string(kind.Normalize()), sourceKey, strings.TrimSpace(remoteID))
 	if err != nil {
@@ -544,7 +544,7 @@ func ListLibraryChaptersContext(ctx context.Context, itemID int, includeRetired 
 	}
 	query += ` ORDER BY ord, id`
 	var chapters []*model.LibraryChapter
-	if err := instance.SelectContext(ctx, &chapters, query, args...); err != nil {
+	if err := ReadDB().SelectContext(ctx, &chapters, query, args...); err != nil {
 		return nil, fmt.Errorf("list library chapters: %w", err)
 	}
 	return chapters, nil
@@ -556,7 +556,7 @@ func CountLibraryItems(kind model.SourceKind, sourceKey string) (int, error) {
 		return 0, err
 	}
 	var count int
-	err := instance.Get(&count,
+	err := ReadDB().Get(&count,
 		`SELECT COUNT(*) FROM library_items WHERE kind=? AND source_key=? AND lifecycle_state='active'`,
 		string(kind.Normalize()), sourceKey)
 	if err != nil {
@@ -571,7 +571,7 @@ func CountLibraryItemsBySource(kind model.SourceKind) (map[string]int, error) {
 		SourceKey string `db:"source_key"`
 		Count     int    `db:"count"`
 	}
-	if err := instance.Select(&rows, `SELECT source_key,COUNT(*) AS count FROM library_items WHERE kind=? AND lifecycle_state='active' GROUP BY source_key`, string(kind.Normalize())); err != nil {
+	if err := ReadDB().Select(&rows, `SELECT source_key,COUNT(*) AS count FROM library_items WHERE kind=? AND lifecycle_state='active' GROUP BY source_key`, string(kind.Normalize())); err != nil {
 		return nil, err
 	}
 	counts := make(map[string]int, len(rows))
@@ -615,12 +615,12 @@ func LibraryStats(kind model.SourceKind, sourceKey string) (items, chapters libr
 		return items, chapters, err
 	}
 	kindText := string(kind.Normalize())
-	if err := instance.Get(&items,
+	if err := ReadDB().Get(&items,
 		`SELECT COALESCE(SUM(lifecycle_state='active'),0) AS active, COALESCE(SUM(lifecycle_state='deleted'),0) AS retired
 		 FROM library_items WHERE kind=? AND source_key=?`, kindText, sourceKey); err != nil {
 		return items, chapters, fmt.Errorf("library item stats: %w", err)
 	}
-	if err := instance.Get(&chapters,
+	if err := ReadDB().Get(&chapters,
 		`SELECT COALESCE(SUM(c.lifecycle_state='active'),0) AS active, COALESCE(SUM(c.lifecycle_state='deleted'),0) AS retired
 		 FROM library_chapters c JOIN library_items i ON i.id=c.item_id
 		 WHERE i.kind=? AND i.source_key=?`, kindText, sourceKey); err != nil {

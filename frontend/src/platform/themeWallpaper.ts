@@ -52,12 +52,12 @@ export function createThemeWallpaper(commit:(url:string|undefined)=>void,failed:
     return pending
   }
   function pageHide(event:PageTransitionEvent):void {if(!event.persisted)dispose()}
-  window.addEventListener('pagehide',pageHide)
+  if(typeof window!=='undefined')window.addEventListener('pagehide',pageHide)
   function dispose():void {
     if(disposed)return
     disposed=true;revision++;abort?.abort();if(image)image.src=''
     if(objectURL)URL.revokeObjectURL(objectURL)
-    window.removeEventListener('pagehide',pageHide)
+    if(typeof window!=='undefined')window.removeEventListener('pagehide',pageHide)
     objectURL=undefined;image=undefined;abort=undefined;source=undefined;displayedSource=undefined;url.value=undefined;loading.value=false;error.value=false;commit(undefined)
   }
   return {url,loading,error,prepare,dispose}

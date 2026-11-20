@@ -258,6 +258,7 @@ const {
   qualityLabel,
   onMediaReady,
   notifySeeked,
+  syncEnhancementOutput,
   resetPipeline,
   hasPipeline,
 } = useVideoQuality({
@@ -1032,7 +1033,7 @@ function syncVideoLayout():void {
   const size=sizeVideoPicture(video,host,pip?'contain':effectivePictureFit.value,mobile)
   const previous=pictureSize.value
   if(size&&(!previous||size.width!==previous.width||size.height!==previous.height||size.sourceWidth!==previous.sourceWidth||size.sourceHeight!==previous.sourceHeight||size.viewportWidth!==previous.viewportWidth||size.viewportHeight!==previous.viewportHeight))pictureSize.value=size
-  wrapperRef.value?.querySelectorAll<HTMLCanvasElement>('canvas[data-cczj-enhancement]').forEach(canvas=>layoutCanvasToVideo(video,canvas))
+  if (!syncEnhancementOutput()) host.querySelectorAll<HTMLCanvasElement>('canvas[data-cczj-enhancement]').forEach(canvas => layoutCanvasToVideo(video, canvas))
 }
 watch([effectivePictureFit,isPiP,isFullscreen],syncVideoLayout,{flush:'post'})
 function applyPictureFit(value:string):void {
@@ -1049,6 +1050,7 @@ onMounted(async () => {
   if(mobileControlStackRef.value)displayResizeObserver.observe(mobileControlStackRef.value)
   const video=getVideoEl()
   if(video)displayResizeObserver.observe(video)
+  window.addEventListener('resize', syncVideoLayout)
   document.addEventListener('keydown', onKeyDown)
   if (mobile) window.addEventListener('cczj:android-overlay-back', onMobileOverlayBack)
   // 让播放器区域自动获得键盘焦点（上下键调节音量等）
@@ -1062,6 +1064,7 @@ onBeforeUnmount(() => {
   cancelMobileTap()
   playerDisposed = true
   displayResizeObserver?.disconnect()
+  window.removeEventListener('resize', syncVideoLayout)
   // Disable motion before resetting progress, which can start a transition.
   releasePlayerAnimations(wrapperRef.value)
   if (_bootTimer !== null) { window.clearTimeout(_bootTimer); _bootTimer = null }
@@ -1214,7 +1217,7 @@ defineExpose({ isPlaying:computed(()=>playing.value&&!loading.value&&!casting.va
     <Teleport v-if="!casting && loading && (mobile || portrait)" :to="portraitPresentationHost ?? 'body'" :disabled="!portrait || !portraitPresentationHost">
       <div class="cczj-mobile-video-loading" :class="{ 'cczj-mobile-video-loading-initial': !videoReady && !portrait, 'cczj-mobile-video-loading-portrait': portrait }">
         <img :src="loadingGif" class="loading-spinner" alt="" aria-hidden="true" />
-        <span><span role="status">{{ t(recoveryVisible ? 'player.recoveringPlayback' : 'mobile.videoLoading') }}</span><span v-if="loadingElapsed > 0"> · {{ loadingElapsed }}s</span><span v-if="loadingSpeed"> · {{ loadingSpeed }}</span></span>
+        <span><span role="status">{{ t(recoveryVisible ? 'player.recoveringPlayback' : 'mobile.videoLoading') }}</span><span v-if="loadingElapsed > 0"> · {{ loadingElapsed }}s</span><span v-if="loadingSpeed"> · {{ loadingSpeed }}</span><span v-if="prepared && loadingTotal > 0"> · {{ t('player.cachedSegments', { cached: loadingCached, total: loadingTotal }) }}</span></span>
       </div>
     </Teleport>
     <div v-if="!casting && !mobile && !portrait && loading" class="loading">
@@ -1259,7 +1262,7 @@ defineExpose({ isPlaying:computed(()=>playing.value&&!loading.value&&!casting.va
     </div>
 
     <div v-if="segmentIssue && !casting" class="resume-bili cczj-flex-wrap" role="status" aria-live="polite" @pointerdown.stop @click.stop @dblclick.stop>
-      <span class="resume-bili-text">{{ t('player.segmentUnavailable', { seconds: Math.ceil(segmentIssue.seconds) }) }}</span>
+      <span class="resume-bili-text">{{ t('player.segmentUnavailable', { seconds: Math.ceil(segmentIssue.seconds), retries: segmentIssue.retries }) }}</span>
       <Button variant="overlay" size="sm" @click.stop="source.retrySegment()">{{ t('player.segmentRetry') }}</Button>
       <Button variant="overlay" size="sm" @click.stop="source.skipSegment()">{{ t('player.segmentSkip') }}</Button>
     </div>

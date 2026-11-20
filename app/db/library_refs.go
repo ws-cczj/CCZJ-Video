@@ -39,7 +39,7 @@ func GetLibraryItemsByRefs(ctx context.Context, refs []LibraryRef) ([]*model.Lib
 			args = append(args, ref.Kind, ref.SourceKey, ref.RemoteID)
 		}
 		var batch []*model.LibraryItem
-		if err := instance.SelectContext(ctx, &batch, `SELECT * FROM library_items WHERE `+strings.Join(predicates, " OR "), args...); err != nil {
+		if err := ReadDB().SelectContext(ctx, &batch, `SELECT * FROM library_items WHERE `+strings.Join(predicates, " OR "), args...); err != nil {
 			return nil, err
 		}
 		rows = append(rows, batch...)

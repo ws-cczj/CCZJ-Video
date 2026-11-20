@@ -135,9 +135,6 @@ func (s *Service) BrowseNovels(ctx context.Context, channel, cursor string, refr
 		cached = decodeBrowseCache(raw, resolved.source.SourceKey, resolved.version, channel)
 		if cached == nil {
 			cached = decodeBrowseCache(raw, resolved.source.SourceKey, contentVersion, channel)
-			if cached != nil {
-				cached.Stale = true
-			}
 		}
 		if cached != nil {
 			refs := make([]db.LibraryRef, 0, len(cached.Items))

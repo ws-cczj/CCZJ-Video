@@ -3,8 +3,10 @@ package db
 import (
 	"cczjVideo/app/danmaku"
 	"cczjVideo/app/netpolicy"
+	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -25,6 +27,8 @@ const (
 
 var (
 	instance    *sqlx.DB
+	readPool    *sqlx.DB
+	readOwner   *sqlx.DB
 	lifecycleMu sync.Mutex
 	dataDir     string
 
@@ -60,9 +64,7 @@ func safeLog(level, msg string) {
 
 // sqliteDSN 把库文件和一组 pragma 拼成连接串。
 //
-// 三条 pragma 必须写在 DSN 里，而不是连上之后再 PRAGMA：连接池有 8 条连接，事后
-// 设置只对「当时借到的那一条」生效，其余连接仍按默认值跑，表现就是 WAL 有时收得住、
-// 有时收不住。
+// 连接选项必须写在 DSN 里，保证连接重建时仍使用相同的 WAL 和写入策略。
 //   - journal_size_limit：-wal 超过这个上限才会在归并时截回去。没有它，-wal 只增
 //     不减，采集一轮攒下的几十 MB 就一直躺在数据目录里。
 //   - wal_autocheckpoint：显式钉住默认值（约 4MB 触发一次被动归并）。
@@ -91,8 +93,45 @@ func InitDB(dir string) error {
 	if err != nil {
 		return err
 	}
-	instance, dataDir = database, dir
+	database.SetMaxOpenConns(1)
+	database.SetMaxIdleConns(1)
+	reader, err := openReadPool(dir, database)
+	if err != nil {
+		_ = database.Close()
+		return err
+	}
+	instance, readOwner, readPool, dataDir = database, database, reader, dir
 	return nil
+}
+
+func openReadPool(dir string, writer *sqlx.DB) (*sqlx.DB, error) {
+	version, err := schemaVersion(writer)
+	if err != nil {
+		return nil, err
+	}
+	absolute, err := filepath.Abs(filepath.Join(dir, "cczj_video.db"))
+	if err != nil {
+		return nil, err
+	}
+	p := filepath.ToSlash(absolute)
+	if !strings.HasPrefix(p, "/") {
+		p = "/" + p
+	}
+	dsn := url.URL{Scheme: "file", Path: p, RawQuery: "mode=ro&_pragma=busy_timeout(5000)"}
+	reader, err := sqlx.Open("sqlite", dsn.String())
+	if err != nil {
+		return nil, fmt.Errorf("open sqlite read pool: %w", err)
+	}
+	reader.SetMaxOpenConns(4)
+	reader.SetMaxIdleConns(4)
+	if err := reader.Ping(); err != nil {
+		_ = reader.Close()
+		return nil, fmt.Errorf("connect sqlite read pool: %w", err)
+	}
+	if version > LatestSchemaVersion() {
+		reader = reader.Unsafe()
+	}
+	return reader, nil
 }
 
 // Open returns an independently owned database. Failed startup closes partial
@@ -125,6 +164,9 @@ func Open(dir string) (database *sqlx.DB, err error) {
 func runMigrations() error {
 	database, err := migrateDatabase(instance, dataDir)
 	if err == nil {
+		if readOwner == instance {
+			readOwner = database
+		}
 		instance = database
 	}
 	return err
@@ -173,6 +215,14 @@ func DB() *sqlx.DB {
 	return instance
 }
 
+// ReadDB serves queries that do not belong to an active write transaction.
+func ReadDB() *sqlx.DB {
+	if readOwner == instance && readPool != nil {
+		return readPool
+	}
+	return instance
+}
+
 func DataDir() string {
 	return dataDir
 }
@@ -183,6 +233,12 @@ func Close() {
 	defer lifecycleMu.Unlock()
 	if instance == nil {
 		return
+	}
+	if readPool != nil && readOwner == instance {
+		if err := readPool.Close(); err != nil {
+			logWarn(fmt.Sprintf("关闭数据库读连接时报错: %v", err))
+		}
+		readPool, readOwner = nil, nil
 	}
 	var busy, logPages, moved int
 	switch err := walCheckpoint(&busy, &logPages, &moved); {
@@ -205,6 +261,19 @@ func Close() {
 // durable without it. A busy checkpoint is reported in the first result column.
 func walCheckpoint(busy, logPages, moved *int) error {
 	return instance.QueryRow("PRAGMA wal_checkpoint(TRUNCATE)").Scan(busy, logPages, moved)
+}
+
+// PassiveCheckpoint moves WAL pages that active readers and writers allow.
+func PassiveCheckpoint(ctx context.Context) error {
+	if !lifecycleMu.TryLock() {
+		return nil
+	}
+	defer lifecycleMu.Unlock()
+	if instance == nil {
+		return nil
+	}
+	var busy, logPages, moved int
+	return instance.QueryRowContext(ctx, "PRAGMA wal_checkpoint(PASSIVE)").Scan(&busy, &logPages, &moved)
 }
 
 func createTables() error {

@@ -10,8 +10,10 @@ import (
 )
 
 const (
-	cacheFreshness = 2 * time.Hour
-	cacheRetention = 6 * time.Hour
+	discoveryFreshness = 2 * time.Hour
+	commentFreshness   = time.Hour
+	cacheRetention     = 6 * time.Hour
+	cacheBudget        = 64 << 20
 )
 
 // Schema initializes fresh databases and isolated stores. Existing databases
@@ -28,6 +30,26 @@ type Store struct {
 	database  func() *sql.DB
 	sweepMu   sync.Mutex
 	lastSweep time.Time
+}
+
+type storedBinding struct {
+	Binding
+	Work *matchedWork `json:"matchWork,omitempty"`
+}
+
+func decodeBinding(raw []byte, key string) (*Binding, error) {
+	var saved storedBinding
+	if err := json.Unmarshal(raw, &saved); err != nil {
+		return nil, err
+	}
+	if err := ValidateBinding(saved.Binding); err != nil {
+		return nil, err
+	}
+	if saved.LocalKey != key {
+		return nil, errors.New("danmaku binding identity mismatch")
+	}
+	saved.Binding.work = saved.Work
+	return &saved.Binding, nil
 }
 
 func NewStore(database func() *sql.DB) *Store { return &Store{database: database} }
@@ -49,17 +71,7 @@ func (s *Store) Binding(ctx context.Context, key string) (*Binding, error) {
 	} else if err != nil {
 		return nil, err
 	}
-	var binding Binding
-	if err = json.Unmarshal(raw, &binding); err != nil {
-		return nil, err
-	}
-	if err = ValidateBinding(binding); err != nil {
-		return nil, err
-	}
-	if binding.LocalKey != key {
-		return nil, errors.New("danmaku binding identity mismatch")
-	}
-	return &binding, nil
+	return decodeBinding(raw, key)
 }
 func (s *Store) SaveBinding(ctx context.Context, b Binding) error {
 	if err := ValidateBinding(b); err != nil {
@@ -69,7 +81,7 @@ func (s *Store) SaveBinding(ctx context.Context, b Binding) error {
 	if err != nil {
 		return err
 	}
-	raw, err := json.Marshal(b)
+	raw, err := json.Marshal(storedBinding{Binding: b, Work: b.work})
 	if err != nil {
 		return err
 	}
@@ -114,13 +126,24 @@ func (s *Store) prune(ctx context.Context, db *sql.DB, now time.Time) error {
 	if !s.lastSweep.IsZero() && now.Sub(s.lastSweep) < time.Hour {
 		return nil
 	}
-	if _, err := db.ExecContext(ctx, `DELETE FROM danmaku_cache WHERE fetched_at<=?`, now.Add(-cacheRetention).Unix()); err != nil {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err = trimCache(ctx, tx, now, ""); err != nil {
+		return err
+	}
+	if err = tx.Commit(); err != nil {
 		return err
 	}
 	s.lastSweep = now
 	return nil
 }
 func (s *Store) Put(ctx context.Context, key string, raw []byte, now time.Time) error {
+	if len(raw) > cacheBudget {
+		return errors.New("danmaku cache payload exceeds capacity")
+	}
 	db, err := s.db()
 	if err != nil {
 		return err
@@ -133,23 +156,30 @@ func (s *Store) Put(ctx context.Context, key string, raw []byte, now time.Time) 
 	if _, err = tx.ExecContext(ctx, `INSERT INTO danmaku_cache(cache_key,payload,fetched_at,accessed_at,bytes)VALUES(?,?,?,?,?) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,fetched_at=excluded.fetched_at,accessed_at=excluded.accessed_at,bytes=excluded.bytes`, key, raw, now.Unix(), now.Unix(), len(raw)); err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, `DELETE FROM danmaku_cache WHERE fetched_at<=?`, now.Add(-cacheRetention).Unix()); err != nil {
+	if err = trimCache(ctx, tx, now, key); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func trimCache(ctx context.Context, tx *sql.Tx, now time.Time, writtenKey string) error {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM danmaku_cache WHERE fetched_at<=?`, now.Add(-cacheRetention).Unix()); err != nil {
 		return err
 	}
 	var total int64
-	if err = tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(bytes),0) FROM danmaku_cache`).Scan(&total); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(bytes),0) FROM danmaku_cache`).Scan(&total); err != nil {
 		return err
 	}
-	if total > 128<<20 {
-		if _, err = tx.ExecContext(ctx, `DELETE FROM danmaku_cache WHERE cache_key IN (SELECT cache_key FROM (SELECT cache_key,SUM(bytes)OVER(ORDER BY accessed_at DESC,cache_key) AS running FROM danmaku_cache) WHERE running>? ) AND fetched_at<=?`, 128<<20, now.Add(-cacheFreshness).Unix()); err != nil {
-			return err
-		}
-		if err = tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(bytes),0) FROM danmaku_cache`).Scan(&total); err != nil {
-			return err
-		}
-		if total > 128<<20 {
-			return errors.New("danmaku cache capacity reached; fresh entries retained")
-		}
+	if total <= cacheBudget {
+		return nil
 	}
-	return tx.Commit()
+	_, err := tx.ExecContext(ctx, `DELETE FROM danmaku_cache WHERE cache_key IN (
+		SELECT cache_key FROM (
+			SELECT cache_key,SUM(bytes) OVER (
+				ORDER BY (cache_key=?) DESC,accessed_at DESC,fetched_at DESC,cache_key
+			) AS retained_bytes
+			FROM danmaku_cache
+		) WHERE retained_bytes>?
+	)`, writtenKey, cacheBudget)
+	return err
 }

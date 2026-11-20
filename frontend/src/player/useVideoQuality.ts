@@ -222,7 +222,7 @@ export function useVideoQuality(deps: VideoQualityDeps) {
     writeSetting('quality_mode', 'original')
   }
 
-  async function startAiPipeline(mode: 'ai_anime' | 'ai_film' | 'ai_custom'): Promise<void> {
+  async function startAiPipeline(mode: 'ai_anime' | 'ai_film' | 'ai_custom', lighten = false): Promise<void> {
     stopAiPipeline()
     const token = pipelineGeneration
     const video = getVideoEl()
@@ -233,7 +233,9 @@ export function useVideoQuality(deps: VideoQualityDeps) {
     let permanent = false
     try {
       const started = await pipeline.start(async () => {
-        if (mode === 'ai_anime') {
+        if (lighten) {
+          candidate.value = new FilmUpscaler({ ...FILM_PRESET, sharpenOnly: true })
+        } else if (mode === 'ai_anime') {
           if (!checkAnime4kSupport().recommended) { permanent = true; return null }
           candidate.value = new Anime4kUpscaler({ ...ANIME4K_PRESET, tier })
         } else if (mode === 'ai_film') {
@@ -256,6 +258,11 @@ export function useVideoQuality(deps: VideoQualityDeps) {
       }, video, wrapperRef.value ?? undefined)
       if (token !== pipelineGeneration) return
       if (!started) {
+        if (!lighten && (candidate.value instanceof FilmUpscaler ||
+          (candidate.value instanceof CustomShaderUpscaler && candidate.value.budgetLimited))) {
+          await startAiPipeline(mode, true)
+          return
+        }
         if (candidate.value instanceof CustomShaderUpscaler && !candidate.value.capabilityMissing) {
           permanent = true
           pluginStore.markShaderBroken(shaderKey, candidate.value.error ?? 'init failed')
@@ -265,10 +272,31 @@ export function useVideoQuality(deps: VideoQualityDeps) {
       }
       upscaler = started
       qualityMode.value = mode
+      const announceSharpenOnly = () => showQualityToast(tr('player.qualitySharpenOnly'))
+      let sharpenOnly = started instanceof FilmUpscaler && started.isSharpenOnly
+      if (sharpenOnly) announceSharpenOnly()
+      let previous = video.getVideoPlaybackQuality?.()
+      let slowSamples = 0
       upscalerStatsTimer = setInterval(() => {
         if (token !== pipelineGeneration || !upscaler) return
         const stats = upscaler.getStats()
         upscalerStats.value = { fps: stats.fps, gpuEnabled: stats.gpuEnabled }
+        if (!sharpenOnly && upscaler instanceof FilmUpscaler && upscaler.isSharpenOnly) {
+          sharpenOnly = true
+          announceSharpenOnly()
+        }
+        if (upscaler instanceof CustomShaderUpscaler && upscaler.budgetLimited) {
+          void startAiPipeline(mode, true)
+          return
+        }
+        const sample = video.getVideoPlaybackQuality?.()
+        const frames = (sample?.totalVideoFrames ?? 0) - (previous?.totalVideoFrames ?? 0)
+        const dropped = (sample?.droppedVideoFrames ?? 0) - (previous?.droppedVideoFrames ?? 0)
+        previous = sample
+        const playing = !video.paused && !video.seeking && video.readyState >= 3 && !document.hidden
+        const slow = playing && frames >= 12 && dropped >= frames * 0.12
+        slowSamples = slow ? slowSamples + 1 : 0
+        if (!sharpenOnly && slowSamples >= 3) void startAiPipeline(mode, true)
       }, 2000)
     } catch (error) {
       if (token !== pipelineGeneration) return
@@ -321,6 +349,12 @@ export function useVideoQuality(deps: VideoQualityDeps) {
     if (upscaler) upscaler.onSeeked()
   }
 
+  function syncEnhancementOutput(): boolean {
+    if (!(upscaler instanceof FilmUpscaler || upscaler instanceof CustomShaderUpscaler)) return false
+    upscaler.resizeOutput()
+    return true
+  }
+
   /** 换集/换源：拆掉实例并忘掉「已就绪」，但保留用户想要的档位等下一条媒体重试。 */
   function resetPipeline(): void {
     if (qualityToastTimer) clearTimeout(qualityToastTimer)
@@ -357,6 +391,7 @@ export function useVideoQuality(deps: VideoQualityDeps) {
     qualityLabel,
     onMediaReady,
     notifySeeked,
+    syncEnhancementOutput,
     resetPipeline,
     hasPipeline,
   }

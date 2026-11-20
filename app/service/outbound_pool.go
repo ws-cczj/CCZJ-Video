@@ -31,6 +31,7 @@ func (a *App) startOutboundPool() error {
 		return apperror.Wrap(apperror.Storage, err, "恢复公共代理池失败")
 	}
 	a.outboundPool = pool
+	a.hostClosers.Add("outbound proxy pool", func(context.Context) error { pool.Close(); return nil })
 	pool.SetControlBudget(a.networkBudget)
 	outbound.Install(pool)
 	if !a.background.Go("outbound.proxy-pool", func(ctx context.Context) { pool.Run(ctx) }) {

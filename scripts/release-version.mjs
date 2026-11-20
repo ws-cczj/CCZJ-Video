@@ -8,7 +8,7 @@ export function githubRepository(remote) {
 }
 
 export function releaseNotes(changelog, version) {
-  if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-beta\.[1-9]\d*)?$/.test(version)) throw new Error('Use major.minor.patch or major.minor.patch-beta.N.')
+  if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-beta\.[1-9]\d*)?$/.test(version)) throw new Error('Use stable major.minor.patch or prerelease major.minor.patch-beta.N, without leading zeroes.')
   const escaped = version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const matches = [...changelog.matchAll(new RegExp('^## \\[' + escaped + '\\][^\\n]*\\n([\\s\\S]*?)(?=^## |$(?![\\s\\S]))', 'gm'))]
   if (matches.length !== 1 || !matches[0][1].trim()) throw new Error(`Add exactly one nonempty CHANGELOG.md section for ${version}.`)

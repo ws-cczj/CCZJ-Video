@@ -236,7 +236,7 @@ export default {
     specialVersionReason:'同集号候选是预告、花絮或剪辑，未自动套用。',
     matchStage:'阶段',matchLogId:'日志关联号：',matchLogHint:'设置 → 日志中搜索 danmaku.match 或此关联号。冷却保留原始失败原因；旧记录可能只有综合失败码。',reasonUnknown:'详见普通日志中的接口原因。',
     stages:{cooldown:'检查失败冷却',search:'搜索作品',work:'匹配作品',episodes:'读取剧集目录',episode:'匹配单集',window:'读取弹幕窗口',complete:'完成',work_cache:'用缓存解释历史作品失败',episode_cache:'用缓存解释历史单集失败'},
-    reasons:{WORK_SEARCH_EMPTY:'接口未返回作品候选。',WORK_TITLE_MISMATCH:'候选名称不一致，或只有不适用的投稿视频。',WORK_YEAR_MISMATCH:'同名候选的年份与本视频冲突。',WORK_TYPE_MISMATCH:'同名候选的类型与本视频冲突。',WORK_METADATA_MISMATCH:'同名候选均被年份或类型校验排除。',AMBIGUOUS_WORK:'有多个无法可靠区分的同名作品。',EPISODE_EMPTY:'目录中没有单集。',EPISODE_LABEL_UNSUPPORTED:'本地集标识无法可靠识别。',EPISODE_SPECIAL_ONLY:'目录只有特殊版本、预告或剪辑。',EPISODE_NUMBER_MISMATCH:'目录中没有匹配的声明集号。',EPISODE_NUMBER_UNKNOWN:'目录未声明可核对的集号。',EPISODE_VERSION_MISMATCH:'同集号对应的是不同剪辑版本。',EPISODE_DURATION_MISMATCH:'集号相同，但已知时长差异过大。',AMBIGUOUS_EPISODE:'同集号存在多个无法区分的单集。',EMPTY_POOL:'源站未提供有效弹幕池。',SEGMENT_NOT_FOUND:'所需弹幕分段不存在。',NO_WORK_MATCH:'历史记录：作品未匹配，未保存细分原因。',NO_EPISODE_MATCH:'历史记录：单集未匹配，未保存细分原因。',NO_MATCH:'未找到可靠匹配。',TIMEOUT:'接口请求超时。',UNAVAILABLE:'接口暂时不可用，具体网络原因见日志。',RATE_LIMITED:'源站或共享请求策略限制了请求频率。',AUTHENTICATION_REQUIRED:'接口需要登录或鉴权。',PERMISSION_DENIED:'接口拒绝访问，或该单集已关闭弹幕。',UNSUPPORTED:'当前接口分支尚未适配。',CORRUPT:'接口格式变化，或响应无法解析。',VALIDATION:'单集身份或请求参数未通过校验。',INVALID_EPISODE:'远端单集身份无效。',STORAGE:'本地读取或保存失败。',INTERNAL:'内部处理失败，详见日志。'},
+    reasons:{WORK_SEARCH_EMPTY:'接口未返回作品候选。',WORK_OFFICIAL_MISSING:'B站搜索未返回官方剧集，稍后可重新匹配。',WORK_TITLE_MISMATCH:'候选名称不一致，或只有不适用的投稿视频。',WORK_YEAR_MISMATCH:'同名候选的年份与本视频冲突。',WORK_TYPE_MISMATCH:'同名候选的类型与本视频冲突。',WORK_METADATA_MISMATCH:'同名候选均被年份或类型校验排除。',AMBIGUOUS_WORK:'有多个无法可靠区分的同名作品。',EPISODE_EMPTY:'目录中没有单集。',EPISODE_LABEL_UNSUPPORTED:'本地集标识无法可靠识别。',EPISODE_SPECIAL_ONLY:'目录只有特殊版本、预告或剪辑。',EPISODE_NUMBER_MISMATCH:'目录中没有匹配的声明集号。',EPISODE_NUMBER_UNKNOWN:'目录未声明可核对的集号。',EPISODE_VERSION_MISMATCH:'同集号对应的是不同剪辑版本。',EPISODE_DURATION_MISMATCH:'集号相同，但已知时长差异过大。',AMBIGUOUS_EPISODE:'同集号存在多个无法区分的单集。',EMPTY_POOL:'源站未提供有效弹幕池。',SEGMENT_NOT_FOUND:'所需弹幕分段不存在。',NO_WORK_MATCH:'历史记录：作品未匹配，未保存细分原因。',NO_EPISODE_MATCH:'历史记录：单集未匹配，未保存细分原因。',NO_MATCH:'未找到可靠匹配。',TIMEOUT:'接口请求超时。',UNAVAILABLE:'接口暂时不可用，具体网络原因见日志。',RATE_LIMITED:'源站或共享请求策略限制了请求频率。',AUTHENTICATION_REQUIRED:'接口需要登录或鉴权。',PERMISSION_DENIED:'接口拒绝访问，或该单集已关闭弹幕。',UNSUPPORTED:'当前接口分支尚未适配。',CORRUPT:'接口格式变化，或响应无法解析。',VALIDATION:'单集身份或请求参数未通过校验。',INVALID_EPISODE:'远端单集身份无效。',STORAGE:'本地读取或保存失败。',INTERNAL:'内部处理失败，详见日志。'},
     filterTypes:'按类型显示',scrolling:'滚动',fixedType:'固定',colored:'彩色',fragmentCount:'当前片段 {count} 条',autoHint:'最多三路同时探测，优先来源不可用时继续检查其余来源。',
     matchDetails:'自动匹配记录 · 已完成探测 {checked} / {total}',matchRetryAt:'冷却至 {time}；到期不自动请求',matchQueueDeadline:'匹配时限已到，尚未发起请求。',attempts:{not_used:'未探测',available:'可用',cancelled:'匹配已取消',no_match:'本次不可用',cooling_down:'跳过：冷却中',error:'记录异常'},
     retryAfter: '同一位置暂缓重试，可在 {time} 后再次尝试；跳转到其他片段仍可读取。',
@@ -1015,6 +1015,7 @@ export default {
   },
   // 播放线路（一条影片的 $$$ 多线路）
   playLine: {
+    currentRoute: '正在播放',
     switch: '切换线路',
     probingQuality: '探测清晰度…',
     unknownQuality: '清晰度未知',
@@ -1036,10 +1037,10 @@ export default {
     available: '可用',
     unavailable: '不可用',
     speedTest: '测速',
-    speedTestTip: '各线路各取一段样本比快慢，不打断当前播放',
+    speedTestTip: '本机分别抽样当前播放源的线路，比较下载速度和延迟',
     testing: '测速中…',
     testFailed: '线路测速失败',
-    allFailed: '所有线路都探测失败，可能都需要鉴权或已失效',
+    allFailed: '本次测速未取得可用结果',
   },
   // 播放器
   player: {
@@ -1095,7 +1096,7 @@ export default {
     cacheModeLabel: '缓存模式',
     cacheStatsTip: '命中: {hits} 未命中: {misses}；保留缓存 {entries} 片，连续可用 {inventory} 片，补货目标 {target} 片，冗余 {redundancy} 片',
     inventoryCountShort: '可用 {count} 片',
-    segmentUnavailable: '此片段多次加载失败，后续片段已就绪。跳过将略过约 {seconds} 秒内容。',
+    segmentUnavailable: '此片段已重试 {retries} 次，后续片段已就绪。跳过将略过约 {seconds} 秒内容。',
     segmentRetry: '继续重试',
     segmentSkip: '跳过此片段',
     cacheStatus: '缓存状态',
@@ -1160,6 +1161,7 @@ export default {
     pressNewKey: '按下新按键...',
     qualityModeLabel: '画质模式',
     qualitySwitchedGpu: '已切换至{label}（GPU 实时增强）',
+    qualitySharpenOnly: '已切换到轻量锐化',
     qualitySwitchedOriginal: '已切换至原高清',
     ready: '就绪',
     recommendSuffix: ' (推荐)',

@@ -37,7 +37,7 @@ describe('resume across episodes and lines', () => {
     await resume.load()
     expect(video.currentTime).toBe(0)
     video.readyState = 1
-    resume.flushPendingSeek()
+    resume.attached()
     expect(video.currentTime).toBe(29)
     resume.reset()
   })
@@ -87,7 +87,7 @@ describe('resume across episodes and lines', () => {
     backend.mockResolvedValue(900)
     await resume.load()
     video.readyState = 1
-    resume.flushPendingSeek()
+    resume.attached()
     expect(video.currentTime).toBe(119)
     video.ended = true
     storage.values.set('vp_t_episode-1', 119)
@@ -106,7 +106,7 @@ describe('resume across episodes and lines', () => {
     expect(resume.canPersist()).toBe(false)
     video.currentTime=1;resume.save()
     expect(storage.values.get('vp_t_episode-1')).toBe(7)
-    video.readyState=1;resume.flushPendingSeek()
+    video.readyState=1;resume.attached()
     expect(video.currentTime).toBe(60)
     expect(resume.canPersist()).toBe(true)
     expect(settings.has('auto_resume_jump')).toBe(false)
@@ -117,7 +117,7 @@ describe('resume across episodes and lines', () => {
     const {resume,video}=setup()
     storage.values.set('vp_t_episode-1',60)
     await resume.load()
-    video.readyState=1;video.currentTime=7;resume.track()
+    video.readyState=1;resume.attached();video.currentTime=7;resume.track()
     vi.advanceTimersByTime(3000)
     expect(storage.values.get('vp_t_episode-1')).toBe(60)
     resume.jumpToSavedTime(false)

@@ -89,18 +89,21 @@ describe('playback cache ownership and idle release', () => {
 
   it('aborts pending prefetch on last close and rejects a late response body', async () => {
     const release = retain()
-    let finish!: (body: ArrayBuffer) => void
+    TsCache.setTransportActive(true)
+    let finish!: () => void
     let signal!: AbortSignal
     vi.stubGlobal('fetch', vi.fn(async (_url, options) => {
       signal = options.signal
-      return { ok: true, arrayBuffer: () => new Promise<ArrayBuffer>(resolve => { finish = resolve }) }
+      return new Response(new ReadableStream<Uint8Array>({
+        start(controller) { finish = () => { controller.enqueue(new Uint8Array(1024)); controller.close() } },
+      }))
     }))
     prefetchFromSegments(['https://fixture/late.ts'], 0, 0, 1)
     await vi.advanceTimersByTimeAsync(301)
     expect(finish).toBeTypeOf('function')
     release()
     expect(signal.aborted).toBe(true)
-    finish(new ArrayBuffer(1024))
+    finish()
     await vi.advanceTimersByTimeAsync(0)
     expect(cache.totalCacheBytes).toBe(0)
     expect(prefetchState.queue).toHaveLength(0)

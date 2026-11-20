@@ -12,12 +12,12 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '24'
           cache: npm
@@ -28,7 +28,7 @@ jobs:
       - name: Verify boundaries, frontend and Go
         shell: pwsh
         run: ./scripts/verify.ps1
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - name: Install browser test dependencies
@@ -56,17 +56,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
       - name: Check concurrent backend work
         env:
           CGO_ENABLED: '1'
-        run: >-
-          go test -race -count=1
-          ./app/apperror ./app/media ./app/provider ./app/library
-          ./app/lifecycle ./app/collect ./app/collection ./app/cache
-          ./app/detail ./app/download ./app/download/engine ./app/db ./app/plugin ./app/proxy ./app/netstats ./app/resource ./app/diagnosticrecording
-          ./app/netbudget ./app/workflight ./app/readingstate
+        run: go test -race -count=1 ./app/...

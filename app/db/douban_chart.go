@@ -101,7 +101,7 @@ func UpdateDoubanHotnessBatch(hotnessBySubject map[string]string) (int, error) {
 	var rows []doubanHotnessRow
 	q := `SELECT id, created_at, douban_id AS subject FROM global_video WHERE douban_id IN (` +
 		strings.TrimSuffix(strings.Repeat("?,", len(subjects)), ",") + `)`
-	if err := instance.Select(&rows, q, args...); err != nil {
+	if err := ReadDB().Select(&rows, q, args...); err != nil {
 		applog.Error("[Douban] UpdateDoubanHotnessBatch 查 global_id 失败: %v", err)
 		return 0, err
 	}
@@ -148,7 +148,7 @@ func GetGlobalVideoByDoubanID(doubanID string) (*GlobalVideoRow, error) {
 		return nil, fmt.Errorf("douban_id is empty")
 	}
 	var row GlobalVideoRow
-	err := instance.Get(&row, `
+	err := ReadDB().Get(&row, `
 		SELECT *
 		FROM global_video
 		WHERE douban_id = ?
@@ -167,7 +167,7 @@ func getBestGlobalVideoByDoubanID(doubanID string) (*GlobalVideoRow, error) {
 		return nil, fmt.Errorf("douban_id is empty")
 	}
 	var row GlobalVideoRow
-	err := instance.Get(&row, `
+	err := ReadDB().Get(&row, `
 		SELECT *
 		FROM global_video
 		WHERE douban_id = ?
@@ -190,7 +190,7 @@ func GetRecentGlobalVideos(limit int) ([]GlobalVideoRow, error) {
 		limit = 10
 	}
 	var rows []GlobalVideoRow
-	err := instance.Select(&rows, `SELECT * FROM global_video WHERE pic != '' ORDER BY updated_at DESC LIMIT ?`, limit)
+	err := ReadDB().Select(&rows, `SELECT * FROM global_video WHERE pic != '' ORDER BY updated_at DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +205,7 @@ func GetCachedDoubanChartVideos(limit int) ([]GlobalVideoRow, error) {
 		limit = 20
 	}
 	var rows []GlobalVideoRow
-	err := instance.Select(&rows, `
+	err := ReadDB().Select(&rows, `
 		SELECT *
 		FROM global_video
 		WHERE TRIM(COALESCE(douban_id, '')) != ''

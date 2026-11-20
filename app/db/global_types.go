@@ -54,7 +54,7 @@ type GlobalTypeRow struct {
 // GetAllGlobalTypes 获取所有全局类型
 func GetAllGlobalTypes() ([]*GlobalTypeRow, error) {
 	var rows []*GlobalTypeRow
-	err := instance.Select(&rows, `SELECT id,type_name,sort,created_at,CASE WHEN EXISTS(
+	err := ReadDB().Select(&rows, `SELECT id,type_name,sort,created_at,CASE WHEN EXISTS(
 	 SELECT 1 FROM global_types denied WHERE denied.collect_enabled=0
 	 AND cczj_type_key(denied.type_name)=cczj_type_key(global_types.type_name)) THEN 0 ELSE collect_enabled END AS collect_enabled
 	 FROM global_types ORDER BY collect_enabled DESC, sort ASC, type_name COLLATE NOCASE ASC, id ASC`)
@@ -123,6 +123,10 @@ var defaultBlockedTypeKeys = func() []string {
 // Keep all three built-in labels visible before any source has supplied types.
 // Missing aliases inherit a saved choice; a fresh group starts disabled.
 func seedDefaultBlockedTypes(tx *sqlx.Tx) error {
+	exists, err := tableExists(tx, "global_types")
+	if err != nil || !exists {
+		return err
+	}
 	for _, name := range defaultBlockedTypeNames {
 		if _, err := tx.Exec(`INSERT OR IGNORE INTO global_types(type_name,collect_enabled)
 		 SELECT ?,COALESCE(MIN(collect_enabled),0) FROM global_types WHERE cczj_type_key(type_name)=?`, name, normalizeTypeName(name)); err != nil {
@@ -162,7 +166,7 @@ func getAllGlobalTypeCandidates() ([]struct {
 		Id       int64  `db:"id"`
 		TypeName string `db:"type_name"`
 	}
-	err := instance.Select(&candidates, `SELECT id, type_name FROM global_types`)
+	err := ReadDB().Select(&candidates, `SELECT id, type_name FROM global_types`)
 	return candidates, err
 }
 
@@ -196,7 +200,7 @@ func GetOrCreateGlobalTypeId(typeName string) (int64, error) {
 
 	// 1. 精确匹配
 	var id int64
-	err := instance.Get(&id, `SELECT id FROM global_types WHERE type_name = ?`, typeName)
+	err := ReadDB().Get(&id, `SELECT id FROM global_types WHERE type_name = ?`, typeName)
 	if err == nil && id > 0 {
 		return id, nil
 	}
@@ -236,7 +240,7 @@ func GetOrCreateGlobalTypeId(typeName string) (int64, error) {
 		return lid, nil
 	}
 	// INSERT OR IGNORE 可能因 UNIQUE 冲突而跳过，再查一次
-	err = instance.Get(&id, `SELECT id FROM global_types WHERE type_name = ?`, typeName)
+	err = ReadDB().Get(&id, `SELECT id FROM global_types WHERE type_name = ?`, typeName)
 	if err != nil {
 		return 0, fmt.Errorf("select global_types after insert: %w", err)
 	}
@@ -262,7 +266,7 @@ func SyncGlobalTypesFromSources() (int, error) {
 
 	total := 0
 	for _, src := range sources {
-		rows, qerr := instance.Queryx(`SELECT DISTINCT type_name FROM source_types WHERE source_key=?`, src.SourceKey)
+		rows, qerr := ReadDB().Queryx(`SELECT DISTINCT type_name FROM source_types WHERE source_key=?`, src.SourceKey)
 		if qerr != nil {
 			// 表可能不存在，跳过
 			continue
@@ -286,7 +290,7 @@ func SyncGlobalTypesFromSources() (int, error) {
 // GetEnabledCollectTypes 获取所有启用了采集的类型
 func GetEnabledCollectTypes() ([]*GlobalTypeRow, error) {
 	var rows []*GlobalTypeRow
-	err := instance.Select(&rows, `SELECT * FROM global_types WHERE collect_enabled = 1 ORDER BY sort ASC, id ASC`)
+	err := ReadDB().Select(&rows, `SELECT * FROM global_types WHERE collect_enabled = 1 ORDER BY sort ASC, id ASC`)
 	if err != nil {
 		applog.Error("[GlobalTypes] GetEnabledCollectTypes failed: %v", err)
 		return nil, err
@@ -302,7 +306,7 @@ func IsTypeCollectEnabled(typeName string) bool {
 		return true
 	}
 	var enabled bool
-	if err := instance.Get(&enabled, `SELECT COALESCE(MIN(collect_enabled),1) FROM global_types WHERE cczj_type_key(type_name)=?`, normalizeTypeName(typeName)); err != nil {
+	if err := ReadDB().Get(&enabled, `SELECT COALESCE(MIN(collect_enabled),1) FROM global_types WHERE cczj_type_key(type_name)=?`, normalizeTypeName(typeName)); err != nil {
 		applog.Error("[GlobalTypes] cannot read type policy: %v", err)
 		return false
 	}
@@ -315,7 +319,7 @@ func isGlobalTypeCollectEnabled(globalTypeID int64, typeName string) bool {
 	}
 	if globalTypeID > 0 {
 		var mapped string
-		if err := instance.Get(&mapped, `SELECT type_name FROM global_types WHERE id = ?`, globalTypeID); err == nil {
+		if err := ReadDB().Get(&mapped, `SELECT type_name FROM global_types WHERE id = ?`, globalTypeID); err == nil {
 			return IsTypeCollectEnabled(mapped)
 		}
 	}
@@ -331,6 +335,6 @@ func getAllSourceKeys() ([]struct {
 		SourceKey string `db:"source_key"`
 		Name      string `db:"name"`
 	}
-	err := instance.Select(&rows, `SELECT source_key, name FROM sources`)
+	err := ReadDB().Select(&rows, `SELECT source_key, name FROM sources`)
 	return rows, err
 }

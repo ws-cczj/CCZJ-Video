@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cacheSet, cacheClear, cacheHas } from '../src/utils/ts-cache/memory-cache'
-import { beginCacheSession, prefetchFromSegments } from '../src/utils/ts-cache/prefetch'
+import { beginCacheSession, prefetchFromSegments, setTransportActive } from '../src/utils/ts-cache/prefetch'
 import { cache, prefetchState, session } from '../src/utils/ts-cache/store'
 import { MAX_CACHED_BYTES } from '../src/utils/ts-cache/constants'
 import { TsCacheLoader } from '../src/utils/ts-cache/loader'
 
-vi.mock('../src/utils/ts-cache/disk-cache', () => ({ diskSave: vi.fn(async () => {}), diskLoad: vi.fn(async () => null) }))
+vi.mock('../src/utils/ts-cache/disk-cache', async original => ({
+  ...await original<typeof import('../src/utils/ts-cache/disk-cache')>(),
+  diskSave: vi.fn(async () => {}), diskLoad: vi.fn(async () => null),
+}))
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -18,8 +21,9 @@ beforeEach(() => {
   session.episodes = [{ source_key: 'test', vod_id: '1', ep_num: 1, ep_url: 'https://test/playlist' }]
   session.currentEpIdx = -1
   session.currentEpKey = ''
+  setTransportActive(true)
 })
-afterEach(async () => { beginCacheSession(); await vi.advanceTimersByTimeAsync(0); cacheClear(); vi.clearAllTimers(); prefetchState.debounceTimer = null; vi.useRealTimers(); vi.unstubAllGlobals() })
+afterEach(async () => { setTransportActive(false); beginCacheSession(); await vi.advanceTimersByTimeAsync(0); cacheClear(); vi.clearAllTimers(); prefetchState.debounceTimer = null; vi.useRealTimers(); vi.unstubAllGlobals() })
 
 describe('segment memory bounds and asynchronous session release', () => {
   it('rejects a movie returned to the HLS manifest loader without reading it as text', async () => {
@@ -79,13 +83,17 @@ describe('segment memory bounds and asynchronous session release', () => {
   })
 
   it('does not cache a response body that finishes after switching sessions', async () => {
-    let finish!: (buffer: ArrayBuffer) => void
-    const body = new Promise<ArrayBuffer>(resolve => { finish = resolve })
-    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, arrayBuffer: () => body })))
+    let finish!: () => void
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) { finish = () => { controller.enqueue(new Uint8Array(128)); controller.close() } },
+    })
+    const network = vi.fn(async () => new Response(body))
+    vi.stubGlobal('fetch', network)
     prefetchFromSegments(['https://test/old.ts'], 0, 0, 1)
     await vi.advanceTimersByTimeAsync(301)
+    expect(network).toHaveBeenCalledOnce()
     beginCacheSession()
-    finish(new ArrayBuffer(128))
+    finish()
     await vi.advanceTimersByTimeAsync(0)
     expect(cache.totalCacheBytes).toBe(0)
     expect(prefetchState.prefetchControllers.size).toBe(0)
@@ -93,12 +101,11 @@ describe('segment memory bounds and asynchronous session release', () => {
 
   it('keeps a timeout for bodies that stall after response headers', async () => {
     let aborted = false
-    vi.stubGlobal('fetch', vi.fn(async (_url, options) => ({
-      ok: true,
-      arrayBuffer: () => new Promise((_resolve, reject) => {
-        options.signal.addEventListener('abort', () => { aborted = true; reject(new Error('aborted')) }, { once: true })
-      }),
-    })))
+    vi.stubGlobal('fetch', vi.fn(async (_url, options) => new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        options.signal.addEventListener('abort', () => { aborted = true; controller.error(options.signal.reason) }, { once: true })
+      },
+    }))))
     prefetchFromSegments(['https://test/stalled.ts'], 0, 0, 1)
     await vi.advanceTimersByTimeAsync(60_000)
     expect(aborted).toBe(true)

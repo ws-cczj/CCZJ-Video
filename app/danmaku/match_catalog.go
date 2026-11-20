@@ -1,0 +1,149 @@
+package danmaku
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"strings"
+
+	"cczjVideo/app/apperror"
+	"cczjVideo/app/applog"
+)
+
+func workIdentity(request MatchRequest) string {
+	raw, _ := json.Marshal([]string{normalizedTitle(request.Title), metadataYear(request.Year), mediaKind(request.Kind)})
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
+}
+
+// The player key stores mode, source, source-local work ID, and episode.
+// Only numbered playback records with that exact stored parent may share a catalogue.
+func playbackWorkPrefix(key string) string {
+	var parts []json.RawMessage
+	if json.Unmarshal([]byte(key), &parts) != nil || len(parts) != 4 || string(parts[0]) != `"video"` {
+		return ""
+	}
+	for _, part := range parts[1:3] {
+		var value string
+		if json.Unmarshal(part, &value) != nil || strings.TrimSpace(value) == "" {
+			return ""
+		}
+	}
+	end := len(key) - len(parts[3]) - 1
+	if end < 1 || key[end-1] != ',' || key[end:len(key)-1] != string(parts[3]) {
+		return ""
+	}
+	return key[:end]
+}
+
+func (s *Service) verifiedCatalog(ctx context.Context, request MatchRequest, provider string) (*Candidate, *Episode, int, error) {
+	prefix := playbackWorkPrefix(request.LocalKey)
+	if prefix == "" || request.DurationMS <= 0 {
+		return nil, nil, 0, nil
+	}
+	if _, numbered := episodeOrdinal(request.EpisodeLabel); !numbered {
+		return nil, nil, 0, nil
+	}
+	anchors, err := s.store.catalogAnchors(ctx, prefix, provider)
+	if err != nil {
+		return nil, nil, 0, apperror.Wrap(apperror.Storage, err, "读取已验证弹幕目录失败")
+	}
+	identity := workIdentity(request)
+	var work *Candidate
+	var anchor Episode
+	for _, binding := range anchors {
+		var candidate Candidate
+		if binding.work != nil {
+			candidate = binding.work.Candidate
+			if binding.work.Identity != identity || candidate.Provider != provider || workMatchScore(candidate, request) < 0 {
+				continue
+			}
+		} else {
+			// Older Bilibili PGC bindings already carry a season ID and episode CID.
+			// Uploader videos and old bindings without a catalogue identity are excluded.
+			e := binding.Episode
+			if provider != "bilibili" || !decimalID.MatchString(e.SeriesID) || !strings.HasPrefix(e.PageURL, "https://www.bilibili.com/bangumi/play/ep") {
+				continue
+			}
+			candidate = Candidate{Provider: provider, Ref: "ss" + e.SeriesID, Title: request.Title, Year: request.Year, Kind: request.Kind}
+		}
+		if work != nil && candidate.Ref != work.Ref {
+			return nil, nil, 0, nil
+		}
+		if work == nil {
+			work, anchor = &candidate, binding.Episode
+		}
+	}
+	if work == nil {
+		return nil, nil, 0, nil
+	}
+	episodes, err := s.Episodes(ctx, provider, work.Ref)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	anchorFound := false
+	for _, e := range episodes {
+		if e.Provider == anchor.Provider && e.SeriesID == anchor.SeriesID && e.EpisodeID == anchor.EpisodeID {
+			anchorFound = true
+			break
+		}
+	}
+	episode := matchingEpisode(episodes, request)
+	if !anchorFound || episode == nil || episode.DurationMS <= 0 ||
+		(anchor.SeriesID != "" && episode.SeriesID != anchor.SeriesID) {
+		matchLog(ctx, "danmaku stored catalogue rejected", applog.Fields{"provider": provider, "ref": work.Ref, "anchor_found": anchorFound})
+		return nil, nil, 0, nil
+	}
+	matchLog(ctx, "danmaku stored catalogue reused", applog.Fields{"provider": provider, "ref": work.Ref, "episodes": len(episodes)})
+	return work, episode, len(episodes), nil
+}
+
+func (s *Store) catalogAnchors(ctx context.Context, prefix, provider string) ([]Binding, error) {
+	db, err := s.db()
+	if err != nil {
+		return nil, err
+	}
+	// A comma is the last byte of the prefix; the next byte value closes this
+	// primary-key range without using a wildcard or scanning other local works.
+	upper := prefix[:len(prefix)-1] + "-"
+	rows, err := db.QueryContext(ctx, `SELECT local_key,payload FROM danmaku_bindings
+		WHERE local_key>=? AND local_key<?
+		  AND CASE WHEN json_valid(CAST(payload AS TEXT)) THEN json_extract(CAST(payload AS TEXT),'$.episode.provider') END=?
+		ORDER BY updated_at DESC,local_key LIMIT 16`, prefix, upper, provider)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var result []Binding
+	for rows.Next() {
+		var key string
+		var raw []byte
+		if err := rows.Scan(&key, &raw); err != nil {
+			return nil, err
+		}
+		if len(raw) <= 8192 {
+			if binding, err := decodeBinding(raw, key); err == nil && binding.Episode.Provider == provider {
+				result = append(result, *binding)
+			}
+		}
+	}
+	return result, rows.Err()
+}
+
+func catalogueCanRetry(failed *MatchAttempt) bool {
+	if failed == nil {
+		return false
+	}
+	switch failed.Code {
+	case "WORK_SEARCH_EMPTY", "WORK_TITLE_MISMATCH", "WORK_OFFICIAL_MISSING", "NO_WORK_MATCH":
+		return true
+	default:
+		return false
+	}
+}
+
+func catalogueFailureStopsSearch(err error) bool {
+	return errors.Is(err, context.Canceled) || apperror.Is(err, apperror.Storage) || apperror.Is(err, apperror.Internal)
+}

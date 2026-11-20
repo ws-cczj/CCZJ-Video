@@ -58,9 +58,11 @@ export function createDebouncedWriter<T>(
     if (disposed) return
     disposed = true
     flush()
-    window.removeEventListener('beforeunload', flush)
-    window.removeEventListener('pagehide', flush)
-    document.removeEventListener('visibilitychange', onVisibilityChange)
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('beforeunload', flush)
+      window.removeEventListener('pagehide', flush)
+    }
+    if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisibilityChange)
   }
 
   function onVisibilityChange(): void {
@@ -71,8 +73,8 @@ export function createDebouncedWriter<T>(
   if (typeof window !== 'undefined') {
     window.addEventListener('beforeunload', flush)
     window.addEventListener('pagehide', flush)
-    document.addEventListener('visibilitychange', onVisibilityChange)
   }
+  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisibilityChange)
 
   // Pinia/effect-scope owners release listeners; module singletons live with the document.
   if (getCurrentScope()) onScopeDispose(dispose)

@@ -51,12 +51,21 @@ func TestPlayAndControlSOAP(t *testing.T) {
 		if e := xml.Unmarshal(data, new(any)); e != nil {
 			t.Error(e)
 		}
-		mu.Lock()
-		actions = append(actions, r.Header.Get("SOAPAction"))
-		bodies = append(bodies, string(data))
-		mu.Unlock()
+		action := r.Header.Get("SOAPAction")
 		w.Header().Set("Content-Type", "text/xml")
-		fmt.Fprint(w, `<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><Response/></s:Body></s:Envelope>`)
+		body := `<Response/>`
+		switch {
+		case strings.Contains(action, "#GetTransportInfo"):
+			body = `<GetTransportInfoResponse><CurrentTransportState>PLAYING</CurrentTransportState><CurrentTransportStatus>OK</CurrentTransportStatus></GetTransportInfoResponse>`
+		case strings.Contains(action, "#GetPositionInfo"):
+			body = `<GetPositionInfoResponse><TrackURI>https://cdn.example/movie.m3u8?a=1&amp;b=2</TrackURI><RelTime>00:00:12</RelTime><TrackDuration>00:50:00</TrackDuration></GetPositionInfoResponse>`
+		default:
+			mu.Lock()
+			actions = append(actions, action)
+			bodies = append(bodies, string(data))
+			mu.Unlock()
+		}
+		fmt.Fprint(w, `<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body>`+body+`</s:Body></s:Envelope>`)
 	}))
 	defer server.Close()
 	s := New(context.Background())
@@ -65,6 +74,13 @@ func TestPlayAndControlSOAP(t *testing.T) {
 		t.Fatal(e)
 	}
 	for _, action := range []string{"Pause", "Play", "Seek", "Stop"} {
+		if action == "Seek" {
+			s.mu.Lock()
+			current := s.devices["tv"]
+			current.playback.started = true
+			s.devices["tv"] = current
+			s.mu.Unlock()
+		}
 		if e := s.Control("tv", action, 3723); e != nil {
 			t.Fatal(e)
 		}

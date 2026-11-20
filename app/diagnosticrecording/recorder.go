@@ -275,9 +275,16 @@ func (r *Recorder) run(ctx context.Context, sink *recordSink) {
 		}
 		if reason != "" {
 			if event != nil {
-				sink.dropped.Add(1)
+				var failure error
+				if r.bytes < r.maxBytes && r.status.Markers < maxMarkers {
+					failure = r.writeEventLocked(event)
+				} else {
+					sink.dropped.Add(1)
+				}
+				r.finishLocked(reason, failure)
+			} else {
+				r.finishLocked(reason, nil)
 			}
-			r.finishLocked(reason, nil)
 			r.mu.Unlock()
 			return
 		}

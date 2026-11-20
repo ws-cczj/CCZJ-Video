@@ -1,4 +1,4 @@
-import { layoutCanvasToVideo } from './videoLayout'
+import { enhancementBufferBudget, sizeEnhancementBuffer, type EnhancementBufferBudget } from './videoLayout'
 /**
  * 扩展包着色器引擎 — 运行用户提供的 mpv hook 着色器（WebGL2 实时）
  *
@@ -60,12 +60,15 @@ export class CustomShaderUpscaler {
   private spec: CustomShaderSpec
   private canvas: HTMLCanvasElement | null = null
   private gl: WebGL2RenderingContext | null = null
+  private bufferBudget?: EnhancementBufferBudget
   private video: HTMLVideoElement | null = null
   private running = false
   private rafId = 0
   private videoFrameCallbackId: number | null = null
   private _error: string | null = null
   private _capability = false
+  private events: AbortController | null = null
+  private _budgetLimited = false
 
   private quadVAO: WebGLVertexArrayObject | null = null
   private quadVBO: WebGLBuffer | null = null
@@ -85,6 +88,7 @@ export class CustomShaderUpscaler {
   private lastUploadTime = -1
 
   get error(): string | null { return this._error }
+  get budgetLimited(): boolean { return this._budgetLimited }
   get capabilityMissing(): boolean { return this._capability }
 
   constructor(spec: CustomShaderSpec) {
@@ -101,6 +105,7 @@ export class CustomShaderUpscaler {
       }
 
       this.canvas = document.createElement('canvas')
+      this.canvas.hidden = true
       this.canvas.dataset.cczjEnhancement = 'true'
       this.canvas.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;z-index:2'
       const host = wrapper ?? video.parentElement
@@ -117,14 +122,22 @@ export class CustomShaderUpscaler {
       if (!gl.getExtension('EXT_color_buffer_float')) throw new ShaderCapabilityError('EXT_color_buffer_float 不可用')
       gl.getExtension('OES_texture_float_linear')
 
-      this.canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); this.stop() })
-      this.canvas.addEventListener('webglcontextrestored', () => { this.rebuild() })
+      this.events = new AbortController()
+      const { signal } = this.events
+      this.canvas.addEventListener('webglcontextlost', e => {
+        e.preventDefault()
+        this.stop()
+        if (this.canvas) this.canvas.hidden = true
+      }, { signal })
+      this.canvas.addEventListener('webglcontextrestored', () => {
+        this.destroy()
+        void this.init(video, host).then(ready => { if (ready) this.start() })
+      }, { signal })
 
       this.inputW = video.videoWidth || 1920
       this.inputH = video.videoHeight || 1080
       const scale = this.spec.scale === 1 ? 1 : 2
-      this.canvas.width = this.inputW * scale
-      this.canvas.height = this.inputH * scale
+      this.checkBudget()
 
       this.quadVAO = gl.createVertexArray()!
       gl.bindVertexArray(this.quadVAO)
@@ -183,11 +196,17 @@ export class CustomShaderUpscaler {
   }
 
   private allocFBOs(): void {
-    const gl = this.gl!
     for (let i = 0; i < this.passDefs.length; i++) {
       const p = this.passDefs[i]
       if (p.saveName) this.getFBO(`${p.saveName}_${i}`, this.inputW, this.inputH)
     }
+  }
+
+  private checkBudget(): void {
+    this.bufferBudget = enhancementBufferBudget(this.gl!, this.inputW, this.inputH, this.passDefs.length)
+    this._budgetLimited = !this.bufferBudget
+    if (!this.bufferBudget) throw new ShaderCapabilityError('Video shader exceeds GPU budget')
+    sizeEnhancementBuffer(this.video!, this.canvas!, this.spec.scale === 1 ? 1 : 2, this.bufferBudget)
   }
 
   private getFBO(name: string, w: number, h: number): FBOEntry {
@@ -241,6 +260,9 @@ export class CustomShaderUpscaler {
 
   destroy(): void {
     this.stop()
+    this.events?.abort()
+    this.events = null
+    this.lastUploadTime = -1
     const gl = this.gl
     if (gl) {
       for (const [, arr] of this.fboReg) for (const f of arr) deleteFBO(gl, f)
@@ -274,9 +296,17 @@ export class CustomShaderUpscaler {
   getStats(): { fps: number; gpuEnabled: boolean; qualityScale: number; enhancements: string[] } {
     return {
       fps: this.currentFps,
-      gpuEnabled: true,
+      gpuEnabled: this.running,
       qualityScale: this.spec.scale === 1 ? 1 : 2,
       enhancements: [this.spec.id],
+    }
+  }
+
+  resizeOutput(): void {
+    if (!this.video || !this.canvas || !this.running || !this.bufferBudget) return
+    if (sizeEnhancementBuffer(this.video, this.canvas, this.spec.scale === 1 ? 1 : 2, this.bufferBudget)) {
+      this.onSeeked()
+      this.render()
     }
   }
 
@@ -294,7 +324,6 @@ export class CustomShaderUpscaler {
       this.rafId = requestAnimationFrame(this.renderLoop)
     }
     this.render()
-    this.frames++
     const now = performance.now()
     if (now - this.lastFpsTime >= 2000) {
       this.currentFps = Math.round(this.frames / ((now - this.lastFpsTime) / 1000))
@@ -310,9 +339,6 @@ export class CustomShaderUpscaler {
     if (video.videoWidth !== this.inputW || video.videoHeight !== this.inputH) {
       this.inputW = video.videoWidth
       this.inputH = video.videoHeight
-      const scale = this.spec.scale === 1 ? 1 : 2
-      canvas.width = this.inputW * scale
-      canvas.height = this.inputH * scale
       this.rebuild()
       return
     }
@@ -359,12 +385,13 @@ export class CustomShaderUpscaler {
     }
 
     // 末帧直接画到画布：viewport 是 scale 倍尺寸，线性过滤即完成放大。
-    layoutCanvasToVideo(video, canvas)
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
     gl.viewport(0, 0, canvas.width, canvas.height)
     gl.useProgram(this.outputProg!)
     bind(this.outputProg!, src, 'u_input', 0)
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+    canvas.hidden = false
+    this.frames++
     gl.bindVertexArray(null)
   }
 
@@ -379,15 +406,18 @@ export class CustomShaderUpscaler {
     if (this.outputProg) { gl.deleteProgram(this.outputProg); this.outputProg = null }
     this.ulocs.clear()
     try {
+      this.checkBudget()
       this.compileAll(gl)
+      this.allocFBOs()
     } catch (e: any) {
       // 换分辨率后按新尺寸重新编译失败（例如着色器依赖固定 texel 尺寸）：
       // 报出来并让调用方回退，而不是留一条空管线静默黑屏。
       this._error = e?.message || String(e)
       console.error(`[${TAG}] rebuild:`, this._error)
+      this.destroy()
       return
     }
-    this.allocFBOs()
+    this.onSeeked()
     this.start()
   }
 }

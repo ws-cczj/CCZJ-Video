@@ -8,10 +8,10 @@ it('uses media time, preserves visible comments during a window refresh, and ski
  const line=new DanmakuTimeline(()=>100),p=preferences()
  line.setItems([item('a',0),item('b',5000)],0)
  expect(line.tick(0,600,400,p)[0]?.x).toBe(600)
- expect(line.tick(500,600,400,p)[0]?.x).toBe(550)
+ expect(line.tick(500,600,400,p)[0]?.x).toBe(562.5)
  line.setItems([item('a',0),item('b',5000),item('c',20000)],0)
  const visible=line.tick(500,600,400,p)
- expect(visible).toHaveLength(1);expect(visible[0]?.x).toBe(550)
+ expect(visible).toHaveLength(1);expect(visible[0]?.x).toBe(562.5)
  expect(line.tick(20000,600,400,p).map(row=>row.item.id)).toEqual(['c'])
  expect(line.tick(100,600,400,p).map(row=>row.item.id)).toEqual(['a'])
 })
@@ -24,7 +24,7 @@ it('applies delay once and bounds lanes under a dense timestamp',()=>{
 })
 it('clamps persisted rendering preferences at runtime',()=>{
  const p=decodeDanmakuPreferences(JSON.stringify({freshDays:0,opacity:4,rows:100,speed:-1}))
- expect(p.opacity).toBe(1);expect(p.rows).toBe(12);expect(p.speed).toBe(50)
+ expect(p.opacity).toBe(1);expect(p.rows).toBe(24);expect(p.speed).toBe(50)
  expect(decodeDanmakuPreferences('{bad')).toEqual(preferences())
 })
 it('applies rolling, fixed and colored filters without rewriting source items',()=>{

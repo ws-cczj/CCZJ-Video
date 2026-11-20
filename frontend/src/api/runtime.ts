@@ -14,12 +14,12 @@ export async function initializeRuntimeEnvironment(): Promise<void> {
 /** The Wails 3 runtime uses its native environment, rather than window.go. */
 export function isDesktopRuntime(): boolean {
   if (runtimeOS) return ['windows', 'darwin', 'linux'].includes(runtimeOS)
-  return System.IsWindows() || System.IsMac() || System.IsLinux()
+  return typeof window !== 'undefined' && (System.IsWindows() || System.IsMac() || System.IsLinux())
 }
 
 export function isMobileRuntime(): boolean {
   if (runtimeOS) return runtimeOS === 'android' || runtimeOS === 'ios'
-  return System.IsMobile()
+  return typeof window !== 'undefined' && System.IsMobile()
 }
 
 /** Platform-specific capabilities use the initialized host, never the user agent. */

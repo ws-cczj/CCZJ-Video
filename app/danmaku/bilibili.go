@@ -97,10 +97,12 @@ func (p *bilibiliProvider) Search(ctx context.Context, query string) ([]Candidat
 		rows, ok := data["result"].([]any)
 		if !ok {
 			if data["result"] == nil && text(data["numResults"]) == "0" {
+				logBilibiliSearchClass(ctx, kind, 0, 0, 0)
 				continue
 			}
 			return nil, schemaError(fmt.Errorf("missing search result kind=%s type=%T total=%v page=%v", kind, data["result"], data["numResults"], data["page"]))
 		}
+		before := len(result)
 		for _, value := range rows {
 			row := obj(value)
 			ref := text(row["bvid"])
@@ -124,6 +126,7 @@ func (p *bilibiliProvider) Search(ctx context.Context, query string) ([]Candidat
 			}
 			result = append(result, Candidate{Provider: "bilibili", Ref: ref, Title: plainTitle(text(row["title"])), Year: metadataYear(year), Kind: category})
 		}
+		logBilibiliSearchClass(ctx, kind, number(data["numResults"]), len(rows), len(result)-before)
 	}
 	return result, nil
 }

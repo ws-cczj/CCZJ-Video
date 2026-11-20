@@ -83,7 +83,7 @@ export function createPlaybackSource(deps: {
     }
 
     const fragPolicy = Hls.DefaultConfig?.fragLoadPolicy?.default
-    const BaseGapController = Hls.DefaultConfig.gapController
+    const BaseGapController = Hls.DefaultConfig?.gapController
     // Gap recovery must not silently seek over a required fragment while its
     // transport is retrying. Normal timestamp-hole recovery remains SDK-owned.
     const gapController = BaseGapController ? class extends BaseGapController {
@@ -167,11 +167,11 @@ export function createPlaybackSource(deps: {
     const activateTransport = () => { if (!suspended && lease.current()) TsCache.setTransportActive(true, transportOwner) }
     const finishTransport = () => { if (lease.current()) TsCache.setTransportActive(false, transportOwner) }
     let offCache: () => void = () => {}
-    window.addEventListener('online', online)
+    if (typeof window !== 'undefined') window.addEventListener('online', online)
     video.addEventListener('pause', pause)
     video.addEventListener('seeking', seek)
     const releaseOwned = () => {
-      window.removeEventListener('online', online)
+      if (typeof window !== 'undefined') window.removeEventListener('online', online)
       video.removeEventListener('pause', pause)
       video.removeEventListener('seeking', seek)
       video.removeEventListener('playing', finishRecovery)

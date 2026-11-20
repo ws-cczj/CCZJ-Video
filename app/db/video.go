@@ -79,7 +79,7 @@ func GetTypesContext(ctx context.Context, sourceKey string) ([]*model.VType, err
 
 func TableExists(name string) bool {
 	var count int
-	_ = instance.Get(&count, `SELECT COUNT(1) FROM sqlite_master WHERE type='table' AND name=?`, name)
+	_ = ReadDB().Get(&count, `SELECT COUNT(1) FROM sqlite_master WHERE type='table' AND name=?`, name)
 	return count > 0
 }
 
@@ -88,7 +88,7 @@ func GetSetting(key string) (string, error) {
 		return "", ErrDBNotOpen
 	}
 	var value string
-	err := instance.Get(&value, `SELECT value FROM settings WHERE key=?`, key)
+	err := ReadDB().Get(&value, `SELECT value FROM settings WHERE key=?`, key)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil
 	}
@@ -155,7 +155,7 @@ func GetTableColumnsContext(ctx context.Context, tableName string) ([]TableColum
 		return nil, fmt.Errorf("unsupported table: %s", tableName)
 	}
 	var cols []TableColumn
-	err := instance.SelectContext(ctx, &cols, fmt.Sprintf(`SELECT cid,name,COALESCE(type,'') col_type,"notnull",COALESCE(dflt_value,'') dflt_value,pk FROM pragma_table_info('%s')`, tableName))
+	err := ReadDB().SelectContext(ctx, &cols, fmt.Sprintf(`SELECT cid,name,COALESCE(type,'') col_type,"notnull",COALESCE(dflt_value,'') dflt_value,pk FROM pragma_table_info('%s')`, tableName))
 	return cols, err
 }
 
@@ -205,7 +205,7 @@ func GetGlobalIdForVideo(sourceKey, vodID string) (int64, error) {
 }
 func GetGlobalIdForVideoContext(ctx context.Context, sourceKey, vodID string) (int64, error) {
 	var id int64
-	err := instance.GetContext(ctx, &id, `SELECT global_id FROM source_videos WHERE source_key=? AND source_vod_id=? AND lifecycle_state='active' AND `+catalogTypeVisibilityClause("source_videos"), sourceKey, vodID)
+	err := ReadDB().GetContext(ctx, &id, `SELECT global_id FROM source_videos WHERE source_key=? AND source_vod_id=? AND lifecycle_state='active' AND `+catalogTypeVisibilityClause("source_videos"), sourceKey, vodID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, apperror.Newf(apperror.NotFound, "global_id not found: %s/%s", sourceKey, vodID)
 	}
@@ -226,6 +226,6 @@ func FindSourcesByGlobalIdContext(ctx context.Context, globalID int64) ([]Source
 		return nil, fmt.Errorf("invalid global_id: %d", globalID)
 	}
 	var out []SourceVideoRef
-	err := instance.SelectContext(ctx, &out, `SELECT source_key,source_vod_id AS vod_id,vod_name FROM source_videos WHERE global_id=? AND lifecycle_state='active' AND `+catalogTypeVisibilityClause("source_videos")+` ORDER BY source_key`, globalID)
+	err := ReadDB().SelectContext(ctx, &out, `SELECT source_key,source_vod_id AS vod_id,vod_name FROM source_videos WHERE global_id=? AND lifecycle_state='active' AND `+catalogTypeVisibilityClause("source_videos")+` ORDER BY source_key`, globalID)
 	return out, err
 }

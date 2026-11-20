@@ -78,7 +78,7 @@ func resolveSearchKeyword(ctx context.Context, kind model.SourceKind, query stri
 	// Stream only titles, with request cancellation, rather than allocating full
 	// metadata for the entire local library. Work is linear and memory is bounded
 	// by the number of matching titles.
-	rows, err := db.DB().QueryxContext(ctx, `SELECT DISTINCT title FROM library_items WHERE kind=? AND lifecycle_state='active'`, kind)
+	rows, err := db.ReadDB().QueryxContext(ctx, `SELECT DISTINCT title FROM library_items WHERE kind=? AND lifecycle_state='active'`, kind)
 	if err != nil {
 		return "", err
 	}

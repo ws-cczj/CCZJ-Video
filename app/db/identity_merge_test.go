@@ -43,8 +43,8 @@ func TestMergeCandidatesSkipSameNameDifferentYear(t *testing.T) {
 	database := useMigratedTestDB(t)
 	if _, err := database.Exec(`
 		INSERT INTO global_video (id, vod_name, name_norm, type_id, year) VALUES
-			(411, '大白鲨', '大白鲨', 1, '1975'), (412, '大白鲨', '大白鲨', 2, '2023');
-		INSERT INTO global_types (id, type_name, collect_enabled) VALUES (1, '电影', 1), (2, '纪录片', 1);
+			(411, '大白鲨', '大白鲨', 911, '1975'), (412, '大白鲨', '大白鲨', 912, '2023');
+		INSERT INTO global_types (id, type_name, collect_enabled) VALUES (911, '电影', 1), (912, '纪录片', 1);
 	`); err != nil {
 		t.Fatalf("seed: %v", err)
 	}

@@ -78,7 +78,7 @@ func IsDoubanSearchOnCooldown(globalID int) bool {
 	}
 	var onCooldown int
 	// NULL > ? 落到 CASE 的 ELSE，所以「没冷却」和「冷却已过」共用一条语句。
-	err := instance.Get(&onCooldown, `SELECT CASE WHEN douban_cooldown_until > ? THEN 1 ELSE 0 END
+	err := ReadDB().Get(&onCooldown, `SELECT CASE WHEN douban_cooldown_until > ? THEN 1 ELSE 0 END
 		FROM global_video WHERE id = ?`, time.Now().Format(doubanCooldownFormat), globalID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false
@@ -104,7 +104,7 @@ func MarkDoubanSearchFailureContext(ctx context.Context, globalID int) error {
 		return nil
 	}
 	var row doubanFailuresRow
-	if err := instance.GetContext(ctx, &row, `SELECT COALESCE(douban_search_failures, 0) AS douban_search_failures
+	if err := ReadDB().GetContext(ctx, &row, `SELECT COALESCE(douban_search_failures, 0) AS douban_search_failures
 		FROM global_video WHERE id = ?`, globalID); err != nil {
 		return err
 	}

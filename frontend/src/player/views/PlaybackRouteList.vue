@@ -1,14 +1,54 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onScopeDispose, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Button } from '../../components/ui'
-import type { PlayLine } from '../../types'
+import type { PlayLine, PlayLineSpeedResponse } from '../../types'
 import type { SourceOption } from '../page/useSourceCatalog'
 import { declaredQualityTier } from '../streamQuality'
+import { SpeedTestPlayLines, type LineMeasurementRequest } from '../../api/playback'
+import { createRequestScope } from '../../api/requestScope'
+import { useGeneration } from '../../composables/useGeneration'
+import { humanizeBytes } from '../../utils'
 
-const props=defineProps<{sources:SourceOption[];activeKey:string;activeLine:number;lines:PlayLine[];busy?:boolean;mobile?:boolean;dark?:boolean;expanded?:boolean;selectable:(source:SourceOption)=>boolean}>()
+const props=defineProps<{sources:SourceOption[];activeKey:string;activeLine:number;lines:PlayLine[];busy?:boolean;mobile?:boolean;dark?:boolean;expanded?:boolean;selectable:(source:SourceOption)=>boolean;measurement?:LineMeasurementRequest}>()
 const emit=defineEmits<{choose:[source:string,line?:number]}>()
 const {t}=useI18n()
+const measuring = ref(false)
+const measurementFailed = ref(false)
+const measured = ref<PlayLineSpeedResponse>()
+const requests = createRequestScope()
+const measurementGeneration = useGeneration()
+const measurementKey = computed(() => {
+  const request = props.measurement
+  if (!request || request.source_key !== props.activeKey || !request.ep_num || !(request.vod_id || request.global_id)) return ''
+  return JSON.stringify([request.source_key, request.vod_id, request.global_id, request.ep_num])
+})
+
+function resetMeasurement(): void {
+  measurementGeneration.invalidate()
+  requests.cancel()
+  measuring.value = false
+  measurementFailed.value = false
+  measured.value = undefined
+}
+watch(measurementKey, resetMeasurement, { flush: 'sync' })
+onScopeDispose(resetMeasurement)
+
+async function measureLines(): Promise<void> {
+  const request = props.measurement
+  if (!measurementKey.value || !request || props.busy || measuring.value) return
+  const generation = measurementGeneration.begin()
+  measuring.value = true
+  measurementFailed.value = false
+  try {
+    const result = await requests.run(() => SpeedTestPlayLines(request))
+    if (measurementGeneration.isCurrent(generation)) measured.value = result
+  } catch {
+    if (measurementGeneration.isCurrent(generation)) measurementFailed.value = true
+  } finally {
+    if (measurementGeneration.isCurrent(generation)) measuring.value = false
+  }
+}
 const rows=computed(()=>props.sources.filter(source=>source.source_key===props.activeKey||((source.probe==='local'||source.probe==='remote')&&!!source.vod_id)).flatMap(source=>{
   const known=source.source_key===props.activeKey?props.lines:[]
   const lines=known.length?known.map(line=>({index:line.index,name:line.name,quality:source.lines?.find(item=>item.index===line.index)})):
@@ -24,37 +64,60 @@ const visibleRows=computed(()=>{
 })
 function active(row:typeof rows.value[number]):boolean{return row.source.source_key===props.activeKey&&row.index===props.activeLine}
 function quality(row:typeof rows.value[number]):string {
-  if(row.tier)return `${row.tier}P`
   if(row.source.qualityState==='limited'||row.quality?.code==='RATE_LIMITED')return t('playLine.qualityLimited')
+  if(row.tier)return `${row.tier}P`
   if(row.quality&&!row.quality.ok)return t('playLine.qualityFailed')
   if(row.source.probe==='probing')return t('player.probeProbing')
   if(row.source.probe==='missing'||row.source.probe==='failed')return t(row.source.probe==='missing'?'player.probeMissing':'player.probeFailed')
   return t(row.source.qualityState==='pending'?'playLine.probingQuality':row.source.qualityState==='failed'?'playLine.qualityFailed':'playLine.unknownQuality')
 }
 function badge(row:typeof rows.value[number]):string {
-  if(row.tier)return `${row.tier}P`
   if(row.source.probe==='missing')return t('player.probeMissing')
   if(row.source.qualityState==='limited'||row.quality?.code==='RATE_LIMITED')return t('playLine.limitedShort')
+  if(row.tier)return `${row.tier}P`
   if(row.source.probe==='failed')return t('player.probeFailed')
   if(row.source.qualityState==='failed'||(row.quality&&!row.quality.ok))return t('playLine.unmeasuredShort')
   return t(row.source.probe==='probing'||row.source.qualityState==='pending'?'playLine.probingShort':'playLine.unknownShort')
 }
 function description(row:typeof rows.value[number]):string {
-  if (!row.tier || !row.quality) return quality(row)
+  if (!row.tier || !row.quality || row.source.qualityState==='limited' || row.quality.code==='RATE_LIMITED') return quality(row)
   const declared = t('playLine.declaredQuality', { quality:`${row.tier}P`, width:row.quality.width, height:row.quality.height })
   return row.quality.ep_num > 0 ? `${t('playLine.qualitySample', { episode:row.quality.ep_num })} · ${declared}` : declared
+}
+
+function routeLabel(row: typeof rows.value[number]): string {
+  return [row.name, active(row) ? t('playLine.currentRoute') : ''].filter(Boolean).join(' · ')
+}
+function speedLabel(row: typeof rows.value[number]): string {
+  if (row.source.source_key !== props.activeKey) return ''
+  const result = measured.value
+  const sample = result?.items.find(item => item.index === row.index)
+  if (!sample) return ''
+  if (!sample.ok) return t('playLine.unmeasuredShort')
+  return [sample.index === result?.best_index ? t('playLine.fastest') : '',
+    sample.bytes_per_sec > 0 ? `${humanizeBytes(sample.bytes_per_sec)}/s` : t('playLine.available'),
+    sample.latency_ms > 0 ? `${sample.latency_ms} ms` : ''].filter(Boolean).join(' · ')
 }
 </script>
 <template>
   <div class="playback-routes cczj-flex cczj-flex-col cczj-gap-3 cczj-min-w-0 cczj-min-h-0 cczj-overflow-visible cczj-p-2" :class="{'playback-routes-mobile':mobile,'playback-routes-dark':dark||mobile}" role="group" :aria-label="t('playLine.switch')">
+    <div v-if="measurementKey" class="cczj-flex cczj-items-center cczj-gap-2">
+      <Button variant="ghost" size="sm" :loading="measuring" :disabled="busy" :title="t('playLine.speedTestTip')" @click="measureLines">
+        {{ t(measuring ? 'playLine.testing' : 'playLine.speedTest') }}
+      </Button>
+      <small class="cczj-text-muted" aria-live="polite">
+        {{ measurementFailed ? t('playLine.testFailed') : measured?.best_index === -1 ? t('playLine.allFailed') : '' }}
+      </small>
+    </div>
     <Button v-for="row in visibleRows" :key="`${row.source.source_key}:${row.index??'pending'}`" block variant="ghost" class="route-item cczj-flex-shrink-0 cczj-text-left"
       :class="{active:active(row)}" :aria-pressed="active(row)" :data-source="row.source.source_key" :data-line="row.index"
       :disabled="busy||active(row)||(row.source.source_key!==activeKey&&!selectable(row.source))"
-      :title="description(row)" :aria-label="[row.source.name,row.name,description(row)].filter(Boolean).join(' · ')" @click="emit('choose',row.source.source_key,row.index)">
+      :title="description(row)" :aria-label="[row.source.name,row.name,description(row),speedLabel(row)].filter(Boolean).join(' · ')" @click="emit('choose',row.source.source_key,row.index)">
       <span class="route-content cczj-grid cczj-w-full cczj-min-w-0 cczj-gap-2">
         <span class="route-label cczj-truncate">{{row.source.name}}</span>
         <span class="route-quality cczj-text-sm cczj-font-semibold cczj-whitespace-nowrap">{{badge(row)}}</span>
-        <small v-if="row.name" class="route-name cczj-truncate cczj-text-xs cczj-font-normal">{{row.name}}</small>
+        <small v-if="routeLabel(row)" class="route-name cczj-truncate cczj-text-xs cczj-font-normal">{{ routeLabel(row) }}</small>
+        <small v-if="speedLabel(row)" class="route-speed cczj-truncate cczj-text-xs cczj-font-normal">{{ speedLabel(row) }}</small>
       </span>
     </Button>
   </div>
@@ -68,6 +131,7 @@ function description(row:typeof rows.value[number]):string {
 .route-label {grid-column:1;@apply cczj-min-w-0;}
 .route-quality {grid-column:2;grid-row:1 / span 2;padding:3px 7px;border:1px solid var(--route-border,var(--border));border-radius:6px;}
 .route-name {grid-column:1;grid-row:2;color:var(--route-muted,var(--text-secondary));}
+.route-speed {grid-column:1;color:var(--route-muted,var(--text-secondary));}
 .route-item.active {border-color:var(--route-active,var(--accent));color:var(--route-active,var(--accent));background:var(--route-active-bg,var(--bg-hover));@apply cczj-opacity-100;}
 .playback-routes-mobile {max-height:none;--route-text:var(--cczj-player-action-ink,#e5e9f0);--route-muted:var(--route-text);--route-bg:var(--cczj-player-action-bg,#24262b);--route-active:var(--route-text);--route-active-bg:var(--route-bg);@apply cczj-overflow-visible;}
 .playback-routes-mobile .route-item.active { border-color:var(--route-text); outline:1px solid var(--route-bg); outline-offset:2px; }

@@ -77,7 +77,7 @@ func GetRecycleItem(sourceKey, vodID string) (*RecycleItem, error) {
 }
 func GetRecycleItemContext(ctx context.Context, sourceKey, vodID string) (*RecycleItem, error) {
 	var item RecycleItem
-	err := instance.GetContext(ctx, &item, `SELECT `+recycleColumns+`
+	err := ReadDB().GetContext(ctx, &item, `SELECT `+recycleColumns+`
 		FROM source_videos WHERE source_key=? AND source_vod_id=? AND lifecycle_state='deleted'`, sourceKey, vodID)
 	if err != nil {
 		return nil, err
@@ -118,7 +118,7 @@ func RecycleSourceKeysContext(ctx context.Context, sourceKey string) ([]string, 
 		args = append(args, sourceKey)
 	}
 	var keys []string
-	if err := instance.SelectContext(ctx, &keys, query, args...); err != nil {
+	if err := ReadDB().SelectContext(ctx, &keys, query, args...); err != nil {
 		return nil, err
 	}
 	return keys, nil

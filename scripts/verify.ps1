@@ -1,4 +1,4 @@
-param([switch]$StaticOnly)
+param([switch]$StaticOnly, [switch]$Race)
 $ErrorActionPreference = 'Stop'
 
 node scripts/compress-embedded-json.mjs --check
@@ -141,4 +141,10 @@ go test -count=1 ./...
 if ($LASTEXITCODE -ne 0) {
     Write-Error 'go test failed.'
 }
+}
+
+if ($Race) {
+    if ((go env CGO_ENABLED).Trim() -ne '1') { Write-Error 'The Go race detector requires CGO_ENABLED=1 and a compatible C compiler.' }
+    go test -race -count=1 ./app/...
+    if ($LASTEXITCODE -ne 0) { Write-Error 'Go race verification failed.' }
 }

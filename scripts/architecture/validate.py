@@ -7,14 +7,19 @@ ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT/'.cache/reading-playwright'))
 from playwright.sync_api import sync_playwright
 OUT=ROOT/'dist/audit/architecture'
+graph=json.loads((OUT/'graph-data.json').read_text(encoding='utf-8'))
+feature_count=len(graph['features'])
+package_names={package['name'] for package in graph['packages']}
+dependency_count=sum(dep in package_names for package in graph['packages'] for dep in package['deps'])
+binding_count=len({method['name'] for feature in graph['features'] for method in feature['interfaces']})
 result={'errors':[],'checks':[]}
 with sync_playwright() as p:
     browser=p.chromium.launch(headless=True,channel=options.channel)
     page=browser.new_page(viewport={'width':1600,'height':1000},accept_downloads=True)
     page.on('pageerror',lambda e:result['errors'].append(str(e)))
     page.goto((OUT/'index.html').as_uri(),wait_until='networkidle')
-    assert page.locator('.node').count()==124
-    assert page.locator('.edge').count()==93
+    assert page.locator('.node').count()==feature_count*4
+    assert page.locator('.edge').count()==feature_count*3
     def check_labels():
         overflow=page.evaluate('''[...document.querySelectorAll('.node')].flatMap(g=>{const r=g.querySelector('rect').getBBox();return [...g.querySelectorAll('text')].filter(t=>{const b=t.getBBox();return b.x+b.width>r.x+r.width-5 || b.y+b.height>r.y+r.height-5}).map(t=>({node:g.dataset.id,text:t.textContent}))})''')
         assert not overflow,overflow
@@ -33,7 +38,7 @@ with sync_playwright() as p:
     old=page.locator('#world').get_attribute('transform')
     page.mouse.move(1100,500);page.mouse.down();page.mouse.move(1000,410,steps=6);page.mouse.up()
     assert old!=page.locator('#world').get_attribute('transform')
-    result['checks'].append('同一画布 31条功能链 / 216个公开绑定全部归入功能链；按钮和滚轮缩放、拖动平移通过')
+    result['checks'].append(f'同一画布 {feature_count}条功能链 / {binding_count}个公开绑定；按钮和滚轮缩放、拖动平移通过')
     page.locator('#search').fill('StartVideoDownload')
     page.locator('#findBtn').click()
     assert page.locator('#sideTitle').inner_text()=='搜索结果'
@@ -46,15 +51,15 @@ with sync_playwright() as p:
     page.locator('#closeSide').click()
     page.locator('#clear').click()
     page.locator('#view').select_option('dependencies')
-    assert page.locator('.node').count()==45
+    assert page.locator('.node').count()==len(package_names)
     check_labels()
     count=page.locator('.edge').count()
-    assert count>100
+    assert count==dependency_count
     page.locator('#search').fill('download')
     page.locator('#findBtn').click()
     page.locator('[data-locate="p-download"]').click()
     assert page.locator('#sideTitle').inner_text()=='Go 包 · download'
-    result['checks'].append(f'45个Go包 / {count}条直接导入全部绘制；模块定位与依赖高亮通过')
+    result['checks'].append(f'{len(package_names)}个Go包 / {count}条直接导入全部绘制；模块定位与依赖高亮通过')
     for view in ['lifecycle','data']:
         page.locator('#view').select_option(view)
         assert page.locator('.node').count()>20
@@ -62,7 +67,7 @@ with sync_playwright() as p:
         page.locator('#fitAll').click()
         assert float(page.locator('#zoomValue').inner_text().rstrip('%'))<100
     page.locator('#issuesBtn').click()
-    expected_issues={entry['id'] for entry in json.loads((OUT/'graph-data.json').read_text(encoding='utf-8'))['issues']}
+    expected_issues={entry['id'] for entry in graph['issues']}
     assert set(page.locator('[data-issue]').evaluate_all('(items)=>items.map(item=>item.dataset.issue)'))==expected_issues
     page.locator('[data-issue="A05"]').click()
     assert page.locator('#view').input_value()=='business'

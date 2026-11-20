@@ -113,6 +113,8 @@ func (a *Engine) downloadDirectSingle(ctx context.Context, task *downloadTask, u
 	if err != nil {
 		return fmt.Errorf("open file failed: %w", err)
 	}
+	closeOut := sync.OnceValue(out.Close)
+	defer closeOut()
 
 	var (
 		buf          = make([]byte, 128*1024)
@@ -125,7 +127,6 @@ func (a *Engine) downloadDirectSingle(ctx context.Context, task *downloadTask, u
 	for {
 		select {
 		case <-ctx.Done():
-			out.Close()
 			if !task.isPaused() {
 				task.setCancel()
 			}
@@ -135,7 +136,6 @@ func (a *Engine) downloadDirectSingle(ctx context.Context, task *downloadTask, u
 		}
 
 		if task.isPaused() {
-			out.Close()
 			a.emitProgress(task)
 			return nil
 		}
@@ -143,7 +143,6 @@ func (a *Engine) downloadDirectSingle(ctx context.Context, task *downloadTask, u
 		n, rerr := resp.Body.Read(buf)
 		if n > 0 {
 			if _, werr := out.Write(buf[:n]); werr != nil {
-				out.Close()
 				return fmt.Errorf("write file failed: %w", werr)
 			}
 			downloaded += int64(n)
@@ -172,12 +171,11 @@ func (a *Engine) downloadDirectSingle(ctx context.Context, task *downloadTask, u
 			if rerr == io.EOF {
 				break
 			}
-			out.Close()
 			return fmt.Errorf("read failed: %w", rerr)
 		}
 	}
 
-	if cerr := out.Close(); cerr != nil {
+	if cerr := closeOut(); cerr != nil {
 		return fmt.Errorf("close file failed: %w", cerr)
 	}
 	if total > 0 && downloaded != total {

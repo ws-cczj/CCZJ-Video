@@ -1,6 +1,7 @@
 import { effectScope } from 'vue'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useSourceCatalog } from '../src/player/page/useSourceCatalog'
+import { invalidatePlaybackProbes } from '../src/player/page/sourceProbeCache'
 
 const calls=vi.hoisted(()=>({probe:vi.fn(),search:vi.fn(),global:vi.fn()}))
 vi.mock('vue-i18n',()=>({useI18n:()=>({t:(key:string)=>key})}))
@@ -11,7 +12,7 @@ vi.mock('../src/player/page/sourceMatching',()=>({
 }))
 
 const scopes:ReturnType<typeof effectScope>[]=[]
-afterEach(()=>{scopes.splice(0).forEach(scope=>scope.stop());vi.resetAllMocks()})
+afterEach(()=>{scopes.splice(0).forEach(scope=>scope.stop());invalidatePlaybackProbes('current');invalidatePlaybackProbes('remote');vi.resetAllMocks()})
 function setup(remote=false, extra:{source_key:string;enabled:number|boolean}[]=[]) {
   const scope=effectScope();scopes.push(scope)
   calls.global.mockResolvedValue(0)

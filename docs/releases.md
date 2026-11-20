@@ -20,7 +20,7 @@ GitHub CLI 是仅在发布电脑使用的官方 MIT 工具，不进入 EXE／APK
 powershell -NoProfile -ExecutionPolicy Bypass -File build/release.ps1 -Publish -Commit -Version 2.4.2
 ```
 
-流程会同步 `version.json`、README、更新下载地址和历史说明，执行编译与静态检查，然后提交、构建并校验 Windows EXE／便携 ZIP／ARM64 APK。发布调用 `scripts/verify.ps1 -StaticOnly`，不运行自动化测试；界面与行为由用户验收。标签必须指向实际构建的干净提交；不允许把旧产物配上新 HEAD，也不移动既有版本标签。
+流程会同步 `version.json`、README、更新下载地址和历史说明，执行编译与静态检查，然后提交、构建并校验 Windows EXE／便携 ZIP／ARM64 APK。发布在本机执行 `scripts/verify.ps1 -StaticOnly`，推送精确标签后等待该提交在 GitHub 上的 Verify 工作流通过，再创建或继续发布草稿。工作流失败时可在修复后以新提交准备版本，或在排除临时故障后重跑该标签的 CI 再继续。界面与设备行为由用户验收。标签必须指向实际构建的干净提交，不允许把旧产物配上新 HEAD，也不移动既有版本标签。
 
 随后先推送标签和对应源码，创建 GitHub 草稿并上传八个发布文件，逐个检查附件名称、大小和 SHA256，再正式发布并设置为最新版本。全部文件齐全之后才推送当前分支，避免 `main/version.json` 提前向更新客户端公布尚不可下载的版本。GitHub 的草稿和发布行为见[官方 CLI 文档](https://cli.github.com/manual/gh_release_create)。
 
@@ -106,7 +106,7 @@ Android 下载匹配架构的 APK 到应用私有更新目录，校验后交给�
 
 ## 验证范围
 
-发布默认执行 `scripts/verify.ps1 -StaticOnly`：检查文档、版本元数据、前端约定与依赖边界、生成数据、样式复用，完成前端类型检查与构建、Go 静态检查与编译。后续产物校验核对版本、架构、签名、源码提交及远端附件摘要。已有发布流程测试仍保留在不带 `-StaticOnly` 的历史完整验证入口中，只有用户明确要求时运行。
+发布默认执行 `scripts/verify.ps1 -StaticOnly`，检查文档、版本元数据、前端约定与依赖边界、生成数据、样式复用，完成前端类型检查与构建、Go 静态检查与编译。产物校验核对版本、架构、签名、源码提交及远端附件摘要。完整本地验证入口保留现有用例，`-Race` 可在已启用 CGO 且具备兼容 C 编译器的环境中追加 Go 竞态检查。发布门禁以标签所指提交的 CI 为准。
 
 2.4.2 发布收尾的原始日志位于 `dist/audit/release-2.4.2`。完整仓库验证通过，前端为 74 文件／350 项测试；架构画布的 31 条功能链覆盖全部 216 个公开绑定。Android amd64 隔离验收的 16 项检查通过，覆盖正文／漫画图片、共享取消、分页、SQLite 旧值导入与重启恢复、写失败重试、备份身份还原，以及下载暂停、重启续传和 4 MiB 逐字节校验。拥塞检查实测六个下载名额占用、一条等待时，播放仍取得独立额度。
 

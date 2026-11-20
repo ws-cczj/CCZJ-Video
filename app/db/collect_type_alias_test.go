@@ -15,7 +15,8 @@ func setupTypeAliasPolicy(t *testing.T) {
 	instance = database
 	t.Cleanup(func() { instance = previous; database.Close() })
 	_, err = database.Exec(`INSERT INTO global_types(id,type_name,collect_enabled) VALUES
-	 (901,'福利',0),(902,'伦理片',0),(903,'倫理片',1),(904,'福利片',1),(905,'剧情片',1)`)
+	 (901,'福利',0),(902,'伦理片',0),(903,'倫理片',1),(904,'福利片',1),(905,'剧情片',1)
+	 ON CONFLICT(type_name) DO UPDATE SET id=excluded.id,collect_enabled=excluded.collect_enabled`)
 	if err != nil {
 		t.Fatal(err)
 	}

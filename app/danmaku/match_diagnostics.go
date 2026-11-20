@@ -65,6 +65,23 @@ func matchLog(ctx context.Context, message string, fields applog.Fields) {
 	applog.InfoFields(message, fields)
 }
 
+func logBilibiliSearchClass(ctx context.Context, kind string, total int64, received, accepted int) {
+	if trace, _ := ctx.Value(matchTraceKey{}).(string); trace != "" {
+		matchLog(ctx, "danmaku bilibili search class", applog.Fields{
+			"provider": "bilibili", "search_type": kind, "reported_total": total, "received": received, "decoded": accepted,
+		})
+	}
+}
+
+func bilibiliOfficialMissing(rows []Candidate) bool {
+	for _, row := range rows {
+		if row.Kind != "video" {
+			return false
+		}
+	}
+	return true
+}
+
 func candidateSummary(rows []Candidate) string {
 	parts := []string{}
 	for _, row := range rows[:min(5, len(rows))] {

@@ -64,7 +64,9 @@ func TestUpgradeDefaultTypePolicyRunsOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := database.Exec(`INSERT INTO global_types(type_name,collect_enabled) VALUES ('福利',1),('伦理片',1),('倫理片',1),('剧情片',1); PRAGMA user_version=20`); err != nil {
+	if _, err := database.Exec(`INSERT INTO global_types(type_name,collect_enabled) VALUES ('福利',1),('伦理片',1),('倫理片',1),('剧情片',1)
+		ON CONFLICT(type_name) DO UPDATE SET collect_enabled=excluded.collect_enabled; PRAGMA user_version=20`); err != nil {
+		database.Close()
 		t.Fatal(err)
 	}
 	database.Close()

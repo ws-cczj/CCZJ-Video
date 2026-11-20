@@ -44,6 +44,8 @@ Modal 退出由自身稳定过渡持有；ReaderSheet 则由 NovelBook、NovelRe
 
 桌面窗口轮廓由 [appearance_windows.go](../app/window/appearance_windows.go) 的 InstallRoundedCorners 持有，通过 [app.go](../app.go) 装配；Windows 11 用 DWM，Windows 10 用 DPI 感知的窗口区域，句柄转交和失败释放由该模块负责。[App.vue](../frontend/src/App.vue) 仅绘制 8 DIP 高光，[TitleBar.vue](../frontend/src/components/TitleBar.vue) 使用根应用图标并同步最大化状态。联查调整尺寸、DPI、最大化、恢复、系统全屏与固定播放覆盖层；手机与非 Windows 壳层不调用 Windows 几何 API。旧系统的 API 回退与安装包最低运行要求分开维护，当前 Go/Wails/WebView2 组合不支持 Win8；兼容边界见开发指南。
 
+`app.go` 在桌面实际退出时撤销延迟缩放回调，关闭到托盘的窗口仍可恢复。[lifecycle.go](../app/service/lifecycle.go) 排空任务后通过 [Closers](../app/lifecycle/closers.go) 按注册逆序释放资源；独立宿主资源的关闭错误与 SQLite 关闭分开处理。由 [sqlite.go](../app/db/sqlite.go) 先关闭只读池，再截断 WAL；数据库工作仍未排空时尝试有限时的被动检查点。联查正常退出、启动回滚与更新前的宿主关闭。
+
 | 关系 | 当前入口与所有者 |
 | --- | --- |
 | 主题选择、编辑与保存 | [SettingsThemeGroup.vue](../frontend/src/views/settings/SettingsThemeGroup.vue) → [ThemeEditorModal.vue](../frontend/src/views/settings/ThemeEditorModal.vue)／[stores/theme.ts](../frontend/src/stores/theme.ts) → [settingsQueue.ts](../frontend/src/api/settingsQueue.ts)；点击揭示由 [themeReveal.ts](../frontend/src/motion/themeReveal.ts) 持有临时过渡，选择卡片直接展示主题，编辑器实时作用于当前界面。编辑器即时预览、取消恢复、正式保存及失败重试需一起追踪；选择主题不插入瞬时保存文字，失败和重试保留。Android无ViewTransition时由themeReveal经api/themeReveal、WailsJSBridge与CczjThemeReveal完成原生快照圆形揭示与释放；扩散支持和减少动态效果独立于配色风格。 |
@@ -126,6 +128,9 @@ XML 详情兼容由 [FetchVideoDetailWithStrategy](../app/collect/fetcher.go) �
 
 ## 播放器与播放偏好
 
+- [HLS 代理](../app/proxy/hls.go) 为共享播放入口、投屏和原生桥接处理播放列表与媒体流的等待时限，联查 Range 重试、后缀缺失的列表、慢速持续传输和退出取消。[useVideoQuality.ts](../frontend/src/player/useVideoQuality.ts) 将显存预算和持续掉帧反馈接到画质选择，[VideoPlayer.vue](../frontend/src/components/VideoPlayer.vue) 的布局更新推动影视增强和扩展着色器重算输出尺寸，用户档位随换集保留。
+- 桌面与移动线路列表共享 [PlaybackRouteList.vue](../frontend/src/player/views/PlaybackRouteList.vue) 的手动测速。按当前来源、作品和集数请求既有 `SpeedTestPlayLines`，只展示本机测得的吞吐与请求延迟；离场、换集或换源撤销旧请求，切线仍由用户确认。
+
 移动媒体功能面板由 `CczjMobilePlayerChrome → CczjMobilePlayerDrawer → mobile/player/presentation.css` 管理布局，`player/controlPalette.css` 的 `cczj-player-dark-controls` 统一抽屉、投屏遥控、弹幕及桌面播放器设置的深色控件变量；Select／NumberField／Button／Segment 的选中、焦点、输入和按钮阴影均不继承应用强调色，弹幕只覆盖自身蓝色强调通道。倍速、线路、选集、投屏与更多设置不继承应用主题。面板的背景／文字／次要按钮／选中／进度角色在局部作用域定义，底部和全屏侧向布局共用，页内简介与侧栏仍属于应用主题。选集百分比绝对定位右上角，按钮对称内边距、内容居中，不为百分比预留排版空间；保留底部进度条和至少44px触摸目标，排序与关闭使用紧凑文字／图标。抽屉遮罩点击停止冒泡，close恢复控制栏；直接点击视频时优先关闭已打开面板并取消待处理单击，之后新的点击才切换控制栏。取消、系统返回、倍速选择和换集共用close；原焦点归还与控件自动隐藏计时保留。桌面普通播放的画面与暂停图标共用 `onDesktopClick`，在 300 ms 内接到双击时取消待执行单击，由 `onDesktopDoubleClick` 切换全屏。控制栏播放按钮和暂停图标的键盘激活立即响应。 续播／切集由当前媒体完成定位并解码目标帧后起播，缩略图、增强和弹幕随后准备。普通播放和短剧共用此路径。
 
 
@@ -152,6 +157,8 @@ XML 详情兼容由 [FetchVideoDetailWithStrategy](../app/collect/fetcher.go) �
 弹幕互动从 [VideoPlayer.vue](../frontend/src/components/VideoPlayer.vue) 的视频表面输入进入 [PlayerDanmaku.vue](../frontend/src/player/danmaku/PlayerDanmaku.vue) 和 [DanmakuCanvas.vue](../frontend/src/player/danmaku/DanmakuCanvas.vue)，单条暂停由 [timeline.ts](../frontend/src/player/danmaku/timeline.ts) 保留进度，+1 反馈与源管理共用 [DanmakuLikeFeedback.vue](../frontend/src/player/danmaku/DanmakuLikeFeedback.vue)。联查桌面单／双击、移动点击／拖动、遮罩、锁屏、投屏、全屏尺寸与后台；换集、换弹幕池、拖进度或卸载清理。仅消费实际已绘数据，在前端会话反馈。[textBitmaps.ts](../frontend/src/player/danmaku/textBitmaps.ts) 复用在屏文字，联查字体加载、字号、描边、缩放和寻址后失效。
 
 弹幕来源注册和身份规则归 [Go 来源目录](../app/danmaku/providers.go)，前端设置页、来源名称和 [匹配响应解码](../frontend/src/api/danmaku.ts) 共用 [前端来源目录](../frontend/src/constants/danmakuSources.ts)。联查默认全启用、旧设置解码、批量启停、优先来源、逐源探测和三路并发上限、重复诊断来源校验、[窗口](../app/danmaku/service.go) 局部缺段和 [播放回退](../frontend/src/player/danmaku/useDanmaku.ts)。
+
+[match_catalog.go](../app/danmaku/match_catalog.go) 从同一播放来源和源内作品的已验证单集绑定恢复目录引用，回读目录后重新校验目标单集。旧 B 站官方剧集绑定通过已有 season ID 和 CID 校验。[match_search.go](../app/danmaku/match_search.go) 按弹幕源及带季号的作品身份共享搜索失败记录；有目录证据时可直接补查目标集。[match_store.go](../app/danmaku/match_store.go) 保存单集冷却并按新时长解释旧记录。联查切集、重进、重新开启弹幕、同名不同季、目录身份冲突及 [正文缓存](../app/danmaku/store.go) 的单集身份、有效期和淘汰。
 
 芒果 TV 经 [mangoProvider](../app/danmaku/mango.go) 搜索、核对正片目录和读取分钟分片。联查默认优先级、三路并发、[临时搜索字段与共享请求身份](../app/netpolicy/identity.go)、作品／单集缓存隔离、启停保存与重进，以及匹配记录中的来源名称。
 

@@ -11,8 +11,10 @@ import (
 )
 
 const (
-	noMatchCooldown        = 24 * time.Hour
+	legacyDayCooldown      = 24 * time.Hour
 	temporaryMatchCooldown = 30 * time.Second
+	noMatchCooldown        = 5 * time.Minute
+	emptyPoolCooldown      = 30 * time.Minute
 )
 
 func matchCooldown(code string, err error) time.Duration {
@@ -26,18 +28,27 @@ func matchCooldown(code string, err error) time.Duration {
 		return temporaryMatchCooldown
 	case string(apperror.RateLimited):
 		return time.Minute
-	case "SEGMENT_NOT_FOUND", "AMBIGUOUS_WORK", "AMBIGUOUS_EPISODE", "EPISODE_NUMBER_UNKNOWN", "EPISODE_DURATION_MISMATCH", "EPISODE_VERSION_MISMATCH":
-		return 5 * time.Minute
+	case "EMPTY_POOL":
+		return emptyPoolCooldown
 	default:
 		return noMatchCooldown
 	}
 }
 
-// MatchSchema is applied by migration 17, separately from the original v15 schema.
-var MatchSchema = []string{
+// EpisodeMatchSchema is the failure ledger introduced by migration 17.
+var EpisodeMatchSchema = []string{
 	`CREATE TABLE IF NOT EXISTS danmaku_match_failures(local_key TEXT NOT NULL,provider TEXT NOT NULL,fingerprint TEXT NOT NULL,code TEXT NOT NULL,retry_at INTEGER NOT NULL,PRIMARY KEY(local_key,provider))`,
 	`CREATE INDEX IF NOT EXISTS idx_danmaku_match_retry ON danmaku_match_failures(retry_at)`,
 }
+
+// SearchMatchSchema adds work-level search history in migration 27.
+var SearchMatchSchema = []string{
+	`CREATE TABLE IF NOT EXISTS danmaku_search_failures(work_key TEXT NOT NULL,provider TEXT NOT NULL,code TEXT NOT NULL,failures INTEGER NOT NULL,retry_at INTEGER NOT NULL,failed_at INTEGER NOT NULL,PRIMARY KEY(work_key,provider))`,
+	`CREATE INDEX IF NOT EXISTS idx_danmaku_search_failed_at ON danmaku_search_failures(failed_at)`,
+}
+
+// MatchSchema initializes both matching ledgers in new and isolated stores.
+var MatchSchema = append(append([]string{}, EpisodeMatchSchema...), SearchMatchSchema...)
 
 func (s *Store) matchFailure(ctx context.Context, key, provider, fingerprint string, now time.Time) (*MatchAttempt, error) {
 	db, err := s.db()
@@ -55,23 +66,33 @@ func (s *Store) matchFailure(ctx context.Context, key, provider, fingerprint str
 	}
 	if storedFingerprint != fingerprint {
 		legacy := strings.TrimPrefix(fingerprint, matchPolicy+":")
-		if storedFingerprint == "episode-priority-v2:"+legacy {
+		switch storedFingerprint {
+		case "episode-priority-v2:" + legacy, "episode-priority-v3:" + legacy:
 			// The previous policy also cooled sources that had usable partial windows.
-			if value.Code == "SEGMENT_NOT_FOUND" {
+			if storedFingerprint == "episode-priority-v2:"+legacy && value.Code == "SEGMENT_NOT_FOUND" {
 				return nil, nil
 			}
-			return value, nil
-		}
-		decision := strings.HasPrefix(value.Code, "WORK_") || strings.HasPrefix(value.Code, "EPISODE_") || strings.HasPrefix(value.Code, "AMBIGUOUS_") || value.Code == "NO_WORK_MATCH" || value.Code == "NO_EPISODE_MATCH" || value.Code == "NO_MATCH"
-		if (storedFingerprint != legacy && storedFingerprint != "episode-priority-v1:"+legacy) || decision || value.Code == "SEGMENT_NOT_FOUND" {
+			switch value.Code {
+			case string(apperror.Timeout), string(apperror.Unavailable), string(apperror.RateLimited),
+				"WORK_OFFICIAL_MISSING", "SEGMENT_NOT_FOUND", "AMBIGUOUS_WORK", "AMBIGUOUS_EPISODE",
+				"EPISODE_NUMBER_UNKNOWN", "EPISODE_DURATION_MISMATCH", "EPISODE_VERSION_MISMATCH":
+				// These reasons already had individual deadlines.
+			default:
+				value.RetryAt -= int64((legacyDayCooldown - matchCooldown(value.Code, nil)) / time.Second)
+			}
+		case legacy, "episode-priority-v1:" + legacy:
+			decision := strings.HasPrefix(value.Code, "WORK_") || strings.HasPrefix(value.Code, "EPISODE_") || strings.HasPrefix(value.Code, "AMBIGUOUS_") || value.Code == "NO_WORK_MATCH" || value.Code == "NO_EPISODE_MATCH" || value.Code == "NO_MATCH"
+			if decision || value.Code == "SEGMENT_NOT_FOUND" {
+				return nil, nil
+			}
+			if value.Code != string(apperror.RateLimited) {
+				value.RetryAt -= int64((legacyDayCooldown - matchCooldown(value.Code, nil)) / time.Second)
+			}
+		default:
 			return nil, nil
 		}
-		if value.Code == string(apperror.Timeout) || value.Code == string(apperror.Unavailable) {
-			// The old deadline was always recorded as exactly one day after failure.
-			value.RetryAt = time.Unix(value.RetryAt, 0).Add(-noMatchCooldown + temporaryMatchCooldown).Unix()
-			if value.RetryAt <= now.Unix() {
-				return nil, nil
-			}
+		if value.RetryAt <= now.Unix() {
+			return nil, nil
 		}
 	}
 	return value, nil

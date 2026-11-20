@@ -61,6 +61,7 @@ async function fixture(work, configuration = {}) {
       }
       if (program !== 'gh') throw new Error('Unexpected program: ' + program)
       if (args[0] === 'auth') return configuration.authFailure ? fail('not authenticated') : success()
+      if (args[0] === 'run' && args[1] === 'list') return success(JSON.stringify([{ databaseId: 17, headBranch: 'v2.4.1', headSha: head }]))
       if (args[0] === 'api') {
         if (configuration.apiFailure) return { code: 1, stdout: 'HTTP/2.0 502 Bad Gateway\nContent-Type: text/plain\n\nunavailable', stderr: '' }
         const apiPath = args[2]
@@ -109,6 +110,9 @@ test('one command synchronizes versions, builds the exact commit, verifies eight
   assert.ok(metadata.assets.every(a => a.browser_download_url.includes('/v2.4.1/')))
   assert.match(readFileSync(join(state.root, 'README.md'), 'utf8'), /v2\.4\.1/)
   assert.equal(state.release().assets.length, 8)
+  const verify = state.commands.findIndex(c => c[0] === 'gh' && c[1] === 'run' && c[2] === 'watch' && c.includes('--exit-status'))
+  assert.ok(verify > state.commands.findIndex(c => c[0] === 'git' && c[1] === 'push' && c[3] === 'refs/tags/v2.4.1'))
+  assert.ok(state.commands.findIndex(c => c[1] === 'release' && c[2] === 'create') > verify)
   const final = state.commands.findIndex(c => c.includes('--draft=false'))
   assert.ok(final > state.commands.findIndex(c => c[1] === 'release' && c[2] === 'upload'))
   assert.ok(state.commands.findIndex(c => c[0] === 'git' && c.some(a => a.includes(':refs/heads/'))) > final)

@@ -57,15 +57,20 @@ var migrations = []migration{
 	{version: 24, note: "小说逐章读取与来源检测观测历史，当前状态沿用阅读证据表", apply: migrateNovelChapterObservations},
 	{version: 25, note: "小说逐作品来源缓存、静默复核冷却与实际失败即时失效", apply: migrateNovelSourceCache},
 	{version: 26, note: "保存来源分类父级并供短剧分类与本地目录共同查询", apply: func(tx *sqlx.Tx) error {
+		exists, err := tableExists(tx, "source_types")
+		if err != nil || !exists {
+			return err
+		}
 		if err := addColumnIfMissing(tx, "source_types", "parent_type_id", "TEXT NOT NULL DEFAULT ''"); err != nil {
 			return err
 		}
 		if err := addColumnIfMissing(tx, "source_types", "manual_short_drama", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 			return err
 		}
-		_, err := tx.Exec(`CREATE INDEX IF NOT EXISTS idx_source_types_parent ON source_types(source_key,parent_type_id)`)
+		_, err = tx.Exec(`CREATE INDEX IF NOT EXISTS idx_source_types_parent ON source_types(source_key,parent_type_id)`)
 		return err
 	}},
+	{version: 27, note: "同一作品各集共享弹幕搜索冷却与连续失败次数", apply: migrateDanmakuSearchFailures},
 }
 
 func migrateDefaultTypePolicy(tx *sqlx.Tx) error {
@@ -331,7 +336,16 @@ func migrateNetworkRequestLimits(tx *sqlx.Tx) error {
 }
 
 func migrateDanmakuMatchFailures(tx *sqlx.Tx) error {
-	for _, query := range danmaku.MatchSchema {
+	for _, query := range danmaku.EpisodeMatchSchema {
+		if _, err := tx.Exec(query); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func migrateDanmakuSearchFailures(tx *sqlx.Tx) error {
+	for _, query := range danmaku.SearchMatchSchema {
 		if _, err := tx.Exec(query); err != nil {
 			return err
 		}

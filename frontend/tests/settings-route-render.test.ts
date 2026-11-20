@@ -7,7 +7,7 @@ import { createI18n } from 'vue-i18n'
 
 vi.mock('../src/locales',()=>({tr:(key:string)=>key,setLocale:async()=>{}}))
 vi.mock('../src/router',()=>({default:{}}))
-vi.mock('../src/stores/motion',()=>({useMotionStore:()=>({enabled:true,options:{},duration:()=>0,load:async()=>{}})}))
+vi.mock('../src/stores/motion',()=>({useMotionStore:()=>({enabled:true,options:{},allows:()=>true,duration:()=>0,load:async()=>{}})}))
 vi.mock('../src/api/runtime',async original=>({...await original<object>(),isMobileRuntime:()=>false}))
 import Settings from '../src/views/Settings.vue'
 

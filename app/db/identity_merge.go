@@ -231,7 +231,7 @@ func IdentitySourceKeys(globalIDs []int64) ([]string, error) {
 	}
 	var keys []string
 	query := `SELECT DISTINCT source_key FROM source_videos WHERE global_id IN (` + strings.Join(marks, ",") + `)`
-	if err := instance.Select(&keys, query, ids...); err != nil {
+	if err := ReadDB().Select(&keys, query, ids...); err != nil {
 		return nil, fmt.Errorf("read sources of merged identities: %w", err)
 	}
 	return keys, nil

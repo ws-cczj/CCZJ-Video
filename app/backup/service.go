@@ -100,7 +100,7 @@ func (s *Service) buildPayload(dataDir string) (Payload, error) {
 	return s.buildPayloadContext(context.Background(), dataDir)
 }
 func (s *Service) buildPayloadContext(ctx context.Context, dataDir string) (Payload, error) {
-	snapshot, err := db.ReadBackupSnapshot(ctx, db.DB())
+	snapshot, err := db.ReadBackupSnapshot(ctx, db.ReadDB())
 	if err != nil {
 		return Payload{}, apperror.Wrap(apperror.Storage, err, "read backup snapshot")
 	}

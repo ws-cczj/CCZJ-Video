@@ -28,7 +28,7 @@ func GetEnabledSources() ([]*model.Source, error) {
 // GetEnabledSourcesByKind 返回某个模式下启用中的源。
 func GetEnabledSourcesByKind(kind model.SourceKind) ([]*model.Source, error) {
 	var sources []*model.Source
-	err := instance.Select(&sources,
+	err := ReadDB().Select(&sources,
 		`SELECT * FROM sources WHERE enabled = 1 AND kind = ? ORDER BY id`, string(kind.Normalize()))
 	return sources, err
 }
@@ -40,7 +40,7 @@ func GetSourcesByKind(kind model.SourceKind) ([]*model.Source, error) {
 
 func GetSourcesByKindContext(ctx context.Context, kind model.SourceKind) ([]*model.Source, error) {
 	var sources []*model.Source
-	err := instance.SelectContext(ctx, &sources, `SELECT * FROM sources WHERE kind = ? ORDER BY id`, string(kind.Normalize()))
+	err := ReadDB().SelectContext(ctx, &sources, `SELECT * FROM sources WHERE kind = ? ORDER BY id`, string(kind.Normalize()))
 	return sources, err
 }
 
@@ -53,7 +53,7 @@ func GetSourceByKeyContext(ctx context.Context, key string) (*model.Source, erro
 		return nil, err
 	}
 	var s model.Source
-	err := instance.GetContext(ctx, &s, `SELECT * FROM sources WHERE source_key = ?`, key)
+	err := ReadDB().GetContext(ctx, &s, `SELECT * FROM sources WHERE source_key = ?`, key)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +212,7 @@ func AutoDisableSource(key string, at time.Time) (bool, error) {
 // 恢复后的第一次失败上立刻把它再停用，冷却就成了摆设。
 func RecoverAutoDisabledSources(before time.Time) ([]string, error) {
 	var keys []string
-	if err := instance.Select(&keys,
+	if err := ReadDB().Select(&keys,
 		`SELECT source_key FROM sources WHERE auto_disabled_at<>0 AND auto_disabled_at<=? ORDER BY auto_disabled_at`,
 		before.Unix()); err != nil {
 		return nil, fmt.Errorf("read auto-disabled sources: %w", err)

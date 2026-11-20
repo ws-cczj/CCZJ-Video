@@ -18,13 +18,13 @@ func SearchVideoInSourceTable(sourceKey, title string) (string, bool) {
 		return "", false
 	}
 	var vodID string
-	err := instance.Get(&vodID, `SELECT source_vod_id FROM source_videos WHERE source_key=? AND lifecycle_state='active' AND `+catalogTypeVisibilityClause("source_videos")+` AND vod_name=? LIMIT 1`, sourceKey, title)
+	err := ReadDB().Get(&vodID, `SELECT source_vod_id FROM source_videos WHERE source_key=? AND lifecycle_state='active' AND `+catalogTypeVisibilityClause("source_videos")+` AND vod_name=? LIMIT 1`, sourceKey, title)
 	if err == nil && vodID != "" {
 		return vodID, true
 	}
 
 	// 模糊匹配：标题包含
-	err = instance.Get(&vodID, `SELECT source_vod_id FROM source_videos WHERE source_key=? AND lifecycle_state='active' AND `+catalogTypeVisibilityClause("source_videos")+` AND vod_name LIKE ? LIMIT 1`, sourceKey, "%"+title+"%")
+	err = ReadDB().Get(&vodID, `SELECT source_vod_id FROM source_videos WHERE source_key=? AND lifecycle_state='active' AND `+catalogTypeVisibilityClause("source_videos")+` AND vod_name LIKE ? LIMIT 1`, sourceKey, "%"+title+"%")
 	if err == nil && vodID != "" {
 		return vodID, true
 	}
@@ -35,7 +35,7 @@ func SearchVideoInSourceTable(sourceKey, title string) (string, bool) {
 // GetDoubanInfoByVodName 通过 vod_name 查询豆瓣信息
 func GetDoubanInfoByVodName(vodName string) (*DoubanInfoRow, error) {
 	var row DoubanInfoRow
-	err := instance.Get(&row, `SELECT
+	err := ReadDB().Get(&row, `SELECT
 		id AS global_id,
 		douban_id AS subject_id, douban_score AS rating, douban_votes AS votes,
 		writer, genre,
@@ -57,7 +57,7 @@ func GetDoubanInfoByKeyword(keyword string) (*DoubanInfoRow, error) {
 	}
 
 	var rows []DoubanInfoRow
-	err = instance.Select(&rows, `SELECT
+	err = ReadDB().Select(&rows, `SELECT
 		id AS global_id,
 		douban_id AS subject_id, douban_score AS rating, douban_votes AS votes,
 		writer, genre,
@@ -109,7 +109,7 @@ func GetIncompleteDoubanInfoContext(ctx context.Context, limit int) ([]*DoubanIn
 		)
 		AND (douban_cooldown_until IS NULL OR douban_cooldown_until < ?)
 		ORDER BY douban_last_attempt_at ASC, updated_at ASC LIMIT ?`
-	err := instance.SelectContext(ctx, &rows, q,
+	err := ReadDB().SelectContext(ctx, &rows, q,
 		time.Now().Format(doubanCooldownFormat), limit)
 	if err != nil {
 		applog.Error("[Douban] GetIncompleteDoubanInfo query failed: %v", err)
@@ -153,7 +153,7 @@ func GetDoubanInfoMissingSubjectIDContext(ctx context.Context, limit int) ([]*Do
 		WHERE (gv.douban_id = '' OR gv.douban_id IS NULL)
 		AND (gv.douban_cooldown_until IS NULL OR gv.douban_cooldown_until < ?)
 		ORDER BY gv.douban_last_attempt_at ASC, gv.id ASC LIMIT ?`
-	err := instance.SelectContext(ctx, &rows, q,
+	err := ReadDB().SelectContext(ctx, &rows, q,
 		time.Now().Format(doubanCooldownFormat), limit)
 	if err != nil {
 		applog.Error("[Douban] GetDoubanInfoMissingSubjectID query failed: %v", err)
@@ -308,7 +308,7 @@ func EnrichVideosWithDouban(videos []*model.Video) {
 	}
 
 	var rows []enrichRow
-	if err := instance.Select(&rows, query, args...); err != nil {
+	if err := ReadDB().Select(&rows, query, args...); err != nil {
 		for _, v := range videos {
 			EnrichVideoWithDouban(v)
 		}
@@ -371,7 +371,7 @@ func GetAllDoubanInfo() ([]*DoubanInfoRow, error) {
 func GetAllDoubanInfoPaginated(page, pageSize int) ([]*DoubanInfoRow, int, error) {
 	// 先查总数
 	var total int
-	err := instance.Get(&total, `SELECT COUNT(*) FROM global_video WHERE douban_id != '' OR douban_score != ''`)
+	err := ReadDB().Get(&total, `SELECT COUNT(*) FROM global_video WHERE douban_id != '' OR douban_score != ''`)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -396,7 +396,7 @@ func GetAllDoubanInfoPaginated(page, pageSize int) ([]*DoubanInfoRow, int, error
 		query += fmt.Sprintf(" LIMIT %d OFFSET %d", pageSize, offset)
 	}
 
-	err = instance.Select(&rows, query)
+	err = ReadDB().Select(&rows, query)
 	if err != nil {
 		return nil, 0, err
 	}

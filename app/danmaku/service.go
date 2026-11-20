@@ -31,6 +31,7 @@ type Service struct {
 	providers                           map[string]Provider
 	reads                               *workflight.Group[cachedPayload]
 	matches                             *workflight.Group[MatchResult]
+	searchMatches                       *workflight.Group[workSearchResult]
 	matchSlots                          chan struct{}
 	matchRuns, fallbacks, cooldownHits  atomic.Uint64
 	now                                 func() time.Time
@@ -58,11 +59,12 @@ func NewService(store *Store, client *Client, owner context.Context) *Service {
 	return &Service{
 		store: store, providers: providers,
 		reads: workflight.New[cachedPayload](owner, 64), matches: workflight.New[MatchResult](owner, 16),
-		matchSlots: make(chan struct{}, matchParallelism), now: time.Now,
+		searchMatches: workflight.New[workSearchResult](owner, matchParallelism),
+		matchSlots:    make(chan struct{}, matchParallelism), now: time.Now,
 	}
 }
 func (s *Service) Close(ctx context.Context) error {
-	return errors.Join(s.matches.Close(ctx), s.reads.Close(ctx))
+	return errors.Join(s.matches.Close(ctx), s.searchMatches.Close(ctx), s.reads.Close(ctx))
 }
 func (s *Service) provider(ctx context.Context, name string) (Provider, error) {
 	p := s.providers[name]
@@ -143,7 +145,7 @@ func cacheKey(e Episode, part string) string {
 	sum := sha256.Sum256(raw)
 	return e.Provider + ":" + hex.EncodeToString(sum[:])
 }
-func (s *Service) load(ctx context.Context, key string, validate func([]byte) error, fetch func(context.Context) ([]byte, error)) (cachedPayload, error) {
+func (s *Service) load(ctx context.Context, key string, validate func([]byte) error, fetch func(context.Context) ([]byte, error), freshness time.Duration, shortLived func([]byte) time.Duration) (cachedPayload, error) {
 	return s.reads.Do(ctx, key, func(ctx context.Context) (cachedPayload, error) {
 		now := s.now()
 		raw, at, err := s.store.Cached(ctx, key, now)
@@ -151,7 +153,13 @@ func (s *Service) load(ctx context.Context, key string, validate func([]byte) er
 		if len(raw) > 0 && validate(raw) != nil {
 			raw = nil
 		}
-		if len(raw) > 0 && err == nil && now.Before(at.Add(cacheFreshness)) {
+		freshFor := freshness
+		if len(raw) > 0 && shortLived != nil {
+			if shorter := shortLived(raw); shorter > 0 {
+				freshFor = shorter
+			}
+		}
+		if len(raw) > 0 && err == nil && now.Before(at.Add(freshFor)) {
 			s.hits.Add(1)
 			return cachedPayload{raw: raw, cached: true}, nil
 		}
@@ -161,7 +169,7 @@ func (s *Service) load(ctx context.Context, key string, validate func([]byte) er
 			if ctx.Err() != nil {
 				return cachedPayload{}, ctx.Err()
 			}
-			if len(raw) > 0 && s.now().Before(at.Add(cacheRetention)) {
+			if len(raw) > 0 && freshFor == freshness && s.now().Before(at.Add(cacheRetention)) {
 				s.stale.Add(1)
 				return cachedPayload{raw: raw, cached: true, stale: true, warning: "cached_source_unavailable"}, nil
 			}
@@ -219,6 +227,11 @@ func (s *Service) loadIndex(ctx context.Context, p Provider, e Episode) (cachedP
 			return nil, err
 		}
 		return json.Marshal(index)
+	}, discoveryFreshness, func(raw []byte) time.Duration {
+		if index, err := decodeIndex(raw); err == nil && len(index.Segments) == 0 {
+			return emptyPoolCooldown
+		}
+		return 0
 	})
 }
 
@@ -283,7 +296,7 @@ func (s *Service) readBoundWindow(ctx context.Context, binding *Binding, positio
 				return nil, err
 			}
 			return json.Marshal(segmentPayload{Items: items, Skipped: skipped})
-		})
+		}, commentFreshness, nil)
 		if err != nil {
 			if ctx.Err() != nil {
 				return nil, ctx.Err()

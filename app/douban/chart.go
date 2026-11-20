@@ -334,7 +334,7 @@ func chartItemsFromGlobalRows(rows []db.GlobalVideoRow) []DoubanChartItem {
 
 func upsertChartItems(items []DoubanChartItem) {
 	var existingCount int
-	if err := db.DB().Get(&existingCount, "SELECT COUNT(*) FROM global_video"); err != nil {
+	if err := db.ReadDB().Get(&existingCount, "SELECT COUNT(*) FROM global_video"); err != nil {
 		applog.Warn("[DoubanChart] 数据库查询失败: %v", err)
 		return
 	}
@@ -373,7 +373,7 @@ func upsertChartItems(items []DoubanChartItem) {
 	}
 
 	var totalCount int
-	db.DB().Get(&totalCount, "SELECT COUNT(*) FROM global_video")
+	db.ReadDB().Get(&totalCount, "SELECT COUNT(*) FROM global_video")
 	applog.Info("[DoubanChart] 入库完成: 新增 %d + 更新 %d = 处理 %d/%d 条 (global_video: %d → %d)",
 		newCount, updateCount, newCount+updateCount, len(items), existingCount, totalCount)
 }

@@ -161,6 +161,9 @@ func TestNewMatchingPolicyReevaluatesOldFailures(t *testing.T) {
 			if code == "TIMEOUT" {
 				retryAt = now.Add(30 * time.Second)
 			}
+			if code == "EMPTY_POOL" {
+				retryAt = now.Add(30 * time.Minute)
+			}
 			if !rejectedByOldPolicy && (got == nil || got.Code != code || got.RetryAt != retryAt.Unix()) {
 				t.Fatal("unexpected upstream cooldown", got)
 			}

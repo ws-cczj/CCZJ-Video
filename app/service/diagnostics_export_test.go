@@ -19,7 +19,7 @@ func TestDiagnosticsBundleIncludesTimelineAndProfiles(t *testing.T) {
 	if err := os.WriteFile(timeline, []byte("{\"type\":\"sample\"}\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	bundle, err := writeDiagnosticsBundle(report.Path, []string{report.Path, report.HeapProfilePath, report.GoroutineProfilePath, timeline, "", filepath.Join(root, "missing-end-profile")})
+	bundle, err := writeDiagnosticsBundle(report.Path, []string{report.Path, timeline})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +28,7 @@ func TestDiagnosticsBundleIncludesTimelineAndProfiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer archive.Close()
-	if len(archive.File) != 4 {
+	if len(archive.File) != 2 {
 		t.Fatalf("lost diagnostic inputs: %v", archive.File)
 	}
 	for _, file := range archive.File {
@@ -38,7 +38,7 @@ func TestDiagnosticsBundleIncludesTimelineAndProfiles(t *testing.T) {
 	}
 }
 
-func TestDiagnosticsExportWritesUsableLocalProfiles(t *testing.T) {
+func TestDiagnosticsExportWritesUsableLocalReport(t *testing.T) {
 	result, err := writeDiagnosticsReport(t.TempDir(), map[string]any{"format_version": 1, "fixture": "memory audit"})
 	if err != nil {
 		t.Fatal(err)
@@ -47,13 +47,8 @@ func TestDiagnosticsExportWritesUsableLocalProfiles(t *testing.T) {
 	if err != nil || !json.Valid(data) {
 		t.Fatalf("unreadable report: %v", err)
 	}
-	heap, err := os.ReadFile(result.HeapProfilePath)
-	if err != nil || len(heap) < 2 || heap[0] != 0x1f || heap[1] != 0x8b {
-		t.Fatalf("heap profile is not gzip pprof data: %v", err)
-	}
-	stacks, err := os.ReadFile(result.GoroutineProfilePath)
-	if err != nil || !strings.Contains(string(stacks), "goroutine") {
-		t.Fatalf("missing goroutine stacks: %v", err)
+	if result.HeapProfilePath != "" || result.GoroutineProfilePath != "" {
+		t.Fatal("export started implicit profiling")
 	}
 }
 

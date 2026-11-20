@@ -47,7 +47,7 @@ func tableStatsForMode(mode string) ([]TableStat, error) {
 		return nil, errors.New("database not initialized")
 	}
 	var names []string
-	if err := instance.Select(&names, `SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name`); err != nil {
+	if err := ReadDB().Select(&names, `SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name`); err != nil {
 		return nil, err
 	}
 	out := make([]TableStat, 0, len(names))
@@ -71,7 +71,7 @@ func tableStatsForMode(mode string) ([]TableStat, error) {
 				}
 				query += " WHERE item_id IN (SELECT id FROM library_items WHERE kind = ?)"
 				args = []any{mode}
-			case "global_video", "global_types", "favorites", "watch_history", "source_types", "source_videos", "collect_cursor", "source_health", "download_tasks", "download_task_imports", "danmaku_cache", "danmaku_bindings", "danmaku_match_failures", "douban_info", "douban_comments":
+			case "global_video", "global_types", "favorites", "watch_history", "source_types", "source_videos", "collect_cursor", "source_health", "download_tasks", "download_task_imports", "danmaku_cache", "danmaku_bindings", "danmaku_match_failures", "danmaku_search_failures", "douban_info", "douban_comments":
 				if mode != "video" {
 					continue
 				}
@@ -80,7 +80,7 @@ func tableStatsForMode(mode string) ([]TableStat, error) {
 			}
 		}
 		var rows int64
-		if err := instance.QueryRow(query, args...).Scan(&rows); err != nil {
+		if err := ReadDB().QueryRow(query, args...).Scan(&rows); err != nil {
 			return nil, fmt.Errorf("统计 %s 失败: %w", name, err)
 		}
 		out = append(out, TableStat{Name: name, Rows: rows})
@@ -127,7 +127,7 @@ func GetDoubanHealth() (DoubanHealth, error) {
 		{`SELECT COUNT(*) FROM global_video g WHERE TRIM(COALESCE(g.douban_id, '')) <> '' AND TRIM(COALESCE(g.douban_score, '')) = '' AND EXISTS (SELECT 1 FROM global_video s WHERE s.douban_id = g.douban_id AND TRIM(COALESCE(s.douban_score, '')) <> '')`, nil, &h.InheritCandidates},
 	}
 	for _, q := range scans {
-		if err := instance.QueryRow(q.query, q.args...).Scan(q.dest); err != nil {
+		if err := ReadDB().QueryRow(q.query, q.args...).Scan(q.dest); err != nil {
 			return h, err
 		}
 	}

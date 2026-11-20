@@ -94,12 +94,12 @@ func TestShortCacheFreshnessAndExpiry(t *testing.T) {
 		t.Fatal("offset was written into cached source timestamp")
 	}
 	calls := p.calls.Load()
-	*now = now.Add(time.Hour)
+	*now = now.Add(time.Hour - time.Minute)
 	second, err := s.ReadWindow(ctx, "video:source:episode", 6000, 0)
 	if err != nil || !second.Cached || p.calls.Load() != calls {
 		t.Fatal("cache refetched within the freshness window", second, err)
 	}
-	*now = now.Add(2 * time.Hour)
+	*now = now.Add(2*time.Hour + time.Minute)
 	p.failure.Store(true)
 	stale, err := s.ReadWindow(ctx, "video:source:episode", 6000, 1)
 	if err != nil || !stale.Stale || len(stale.Warnings) == 0 {
@@ -190,7 +190,7 @@ func TestCommentCacheReusesSamePoolButNeverAnotherEpisode(t *testing.T) {
 	}
 }
 
-func TestExpiredCacheIsPrunedOnReadAndFreshCapacityIsProtected(t *testing.T) {
+func TestExpiredCacheIsPrunedOnReadAndCapacityEvictsLeastRecent(t *testing.T) {
 	store := testStore(t)
 	database, _ := store.db()
 	ctx := context.Background()
@@ -208,18 +208,18 @@ func TestExpiredCacheIsPrunedOnReadAndFreshCapacityIsProtected(t *testing.T) {
 	if err := store.Put(ctx, "fresh", []byte("fresh"), now); err != nil {
 		t.Fatal(err)
 	}
-	// Exercise capacity policy without allocating 128 MiB in this test process.
-	if _, err := database.Exec(`UPDATE danmaku_cache SET bytes=? WHERE cache_key='fresh'`, 128<<20); err != nil {
+	// Account for a full cache without allocating the payload in this process.
+	if _, err := database.Exec(`UPDATE danmaku_cache SET bytes=? WHERE cache_key='fresh'`, cacheBudget); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Put(ctx, "new", []byte("new"), now); err == nil {
-		t.Fatal("exceeded budget by evicting a fresh item")
+	if err := store.Put(ctx, "new", []byte("new"), now.Add(time.Second)); err != nil {
+		t.Fatal(err)
 	}
-	raw, _, err := store.Cached(ctx, "fresh", now)
-	if err != nil || string(raw) != "fresh" {
-		t.Fatal("fresh cache lost", err)
+	raw, _, err := store.Cached(ctx, "fresh", now.Add(time.Second))
+	if err != nil || len(raw) != 0 {
+		t.Fatal("least-recent cache was retained", err)
 	}
-	if err := database.QueryRow(`SELECT COUNT(*)FROM danmaku_cache WHERE cache_key='new'`).Scan(&count); err != nil || count != 0 {
-		t.Fatal("failed insert did not roll back", count, err)
+	if err := database.QueryRow(`SELECT COUNT(*)FROM danmaku_cache WHERE cache_key='new'`).Scan(&count); err != nil || count != 1 {
+		t.Fatal("latest payload was not retained", count, err)
 	}
 }

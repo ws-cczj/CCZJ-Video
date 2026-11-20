@@ -18,7 +18,8 @@ func TestCollectionDoesNotCountOrAnnounceDisabledTypes(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(db.Close)
-	if _, err := db.DB().Exec(`INSERT INTO global_types(type_name,collect_enabled) VALUES ('伦理片',0),('倫理片',1),('福利',0),('福利片',1)`); err != nil {
+	if _, err := db.DB().Exec(`INSERT INTO global_types(type_name,collect_enabled) VALUES ('伦理片',0),('倫理片',1),('福利',0),('福利片',1)
+		ON CONFLICT(type_name) DO UPDATE SET collect_enabled=excluded.collect_enabled`); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.AddSource(&model.Source{SourceKey: "policy_count", Name: "Policy fixture", ApiUrl: "https://example.test/api", Enabled: 1}); err != nil {

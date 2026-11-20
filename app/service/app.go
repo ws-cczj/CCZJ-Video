@@ -96,6 +96,8 @@ type App struct {
 	operations      *operation.Metrics
 	settingsWriteMu sync.Mutex
 	stopComments    func(context.Context) error
+	storageClosers  lifecycle.Closers
+	hostClosers     lifecycle.Closers
 	recording       *diagnosticrecording.Recorder
 	// shutdownDone 在 ServiceShutdown 收尾时关闭。RestartApp 用它判断优雅退出
 	// 是否真的走完，只有没走完才允许自己 os.Exit。
@@ -253,6 +255,7 @@ func NewApp() *App {
 	a.background = lifecycle.NewGroup()
 	a.details = detail.NewWithContext(a.background.Context(), 90*time.Second)
 	a.media = mediaservice.NewService(db.GetVideoByIdContext, db.NewMediaStore(db.DB), a.details)
+	a.storageClosers.Add("video details", a.media.Close)
 	a.operations = &operation.Metrics{}
 	a.networkBudget = netbudget.New(a.background.Context(), netbudget.DefaultPolicy())
 	a.installedResources = installedresources.New(a.getDataDir)
@@ -274,6 +277,8 @@ func NewApp() *App {
 		}
 		return db.DB().DB
 	}), danmaku.NewClient(a.danmakuHTTP), a.background.Context())
+	a.storageClosers.Add("danmaku transport", func(context.Context) error { a.danmakuHTTP.CloseIdleConnections(); return nil })
+	a.storageClosers.Add("danmaku", a.danmaku.Close)
 
 	a.recording = diagnosticrecording.New(func() string { return filepath.Join(a.getDataDir(), "exports", "diagnostics") }, a.background, &resourceSampler)
 	if enabled, err := a.settings.Get(CCZJ.SettingDiagnosticsCapture); err == nil && enabled == "0" {
@@ -312,7 +317,9 @@ func NewApp() *App {
 	})
 	a.proxy = proxyservice.NewService(a.getDataDir)
 	a.hlsProxy = proxyservice.NewHLSServiceWithBudget(a.networkBudget)
+	a.hostClosers.Add("HLS transport", func(context.Context) error { a.hlsProxy.Close(); return nil })
 	a.castRelay = proxyservice.NewCastRelay(a.background.Context(), a.hlsProxy, castRelayActive)
+	a.hostClosers.Add("cast media", a.castRelay.Close)
 	a.cast = cast.NewWithMedia(a.background.Context(), a.castRelay)
 	// 阅读模式的图片代理与海报代理分开：海报那条有 300ms 全局节流（防豆瓣限流），
 	// 一话几十页漫画会被它拖成十几秒。缓存目录、TTL 与容量上限也各自一份，
@@ -328,7 +335,10 @@ func NewApp() *App {
 		return string(source.GetKind())
 	})
 	a.mobileMedia = proxyservice.NewMediaBridgeWithImages(a.background.Context(), a.hlsProxy, a.readingImages)
+	a.hostClosers.Add("mobile media", func(context.Context) error { return a.mobileMedia.Close() })
 	a.library = library.NewServiceWithRuntime(a.getDataDir, a.background.Context(), a.networkBudget)
+	a.storageClosers.Add("library", a.library.Close)
+	a.storageClosers.Add("reading images", a.readingImages.Close)
 	a.library.EnableBuiltinRouting()
 	a.readingImages.ConfigureReadingRuntime(a.library.WrapReadingTransport, a.library.BeginReadingForeground)
 	a.readingImages.SetEvidenceRecorder(a.library.RecordReadingImage)
@@ -336,6 +346,12 @@ func NewApp() *App {
 	a.library.SetImageURLBuilder(a.readingImages.URL)
 	modeLauncher := func(name string, fn func(context.Context)) bool { return a.modeWork().Go(name, fn) }
 	a.stopComments = douban.ConfigureCommentRuntime(a.background.Context(), modeLauncher)
+	a.storageClosers.Add("comments", func(ctx context.Context) error {
+		if a.stopComments == nil {
+			return nil
+		}
+		return a.stopComments(ctx)
+	})
 	a.proxy.SetMaintenanceLauncher(modeLauncher)
 	a.readingImages.SetMaintenanceLauncher(modeLauncher)
 	a.library.SetMaintenanceLauncher(modeLauncher)
@@ -431,6 +447,7 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 		return apperror.Wrap(apperror.Storage, err, "恢复网络请求冷却记录失败")
 	}
 	a.requestPolicy = requestPolicy
+	a.storageClosers.Add("network policy", requestPolicy.Close)
 	netpolicy.Install(requestPolicy)
 	if err := a.startOutboundPool(); err != nil {
 		return err
@@ -446,6 +463,7 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 			}
 		},
 	})
+	a.storageClosers.Add("downloads", a.downloads.Close)
 	if err := a.downloads.Restore(ctx); err != nil {
 		applog.Error("恢复下载任务失败: %v", err)
 	}

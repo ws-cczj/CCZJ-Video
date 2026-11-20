@@ -372,21 +372,21 @@ func TestModeAuditRecordsRealEndpointWithoutInventingContentScore(t *testing.T) 
 		}
 	}))
 	defer server.Close()
-	id := sourceQualityID("novel", server.URL, "")
-	s.registry = map[string][]*BatchSource{"novel": {{ID: id, Name: "metadata", Kind: "novel", URL: server.URL}}}
-	if err := s.auditSources(context.Background(), model.SourceKindNovel); err != nil {
+	id := sourceQualityID("comic", server.URL, "")
+	s.registry = map[string][]*BatchSource{"comic": {{ID: id, Name: "metadata", Kind: "comic", URL: server.URL}}}
+	if err := s.auditSources(context.Background(), model.SourceKindComic); err != nil {
 		t.Fatal(err)
 	}
-	checks, err := db.ReadReadingSourceChecks(context.Background(), model.SourceKindNovel)
+	checks, err := db.ReadReadingSourceChecks(context.Background(), model.SourceKindComic)
 	if err != nil || checks[id].State != "adapter_required" || checks[id].Score != -1 || checks[id].DeepAt != 0 || hits.Load() != 1 {
 		t.Fatal(checks[id], hits.Load(), err)
 	}
-	comicChecks, err := db.ReadReadingSourceChecks(context.Background(), model.SourceKindComic)
+	novelChecks, err := db.ReadReadingSourceChecks(context.Background(), model.SourceKindNovel)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := comicChecks[id]; ok {
-		t.Fatal("novel audit polluted manga ranking")
+	if _, ok := novelChecks[id]; ok {
+		t.Fatal("comic audit polluted novel ranking")
 	}
 }
 
@@ -400,12 +400,12 @@ func TestAuditPreemptionIsNotSavedAsFailedSource(t *testing.T) {
 	entered := make(chan struct{}, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { entered <- struct{}{}; <-r.Context().Done() }))
 	defer server.Close()
-	id := sourceQualityID("novel", server.URL, "")
-	s.registry = map[string][]*BatchSource{"novel": {{ID: id, Name: "preempt", Kind: "novel", URL: server.URL}}}
+	id := sourceQualityID("comic", server.URL, "")
+	s.registry = map[string][]*BatchSource{"comic": {{ID: id, Name: "preempt", Kind: "comic", URL: server.URL}}}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	done := make(chan error, 1)
-	go func() { done <- s.auditSources(ctx, model.SourceKindNovel) }()
+	go func() { done <- s.auditSources(ctx, model.SourceKindComic) }()
 	select {
 	case <-entered:
 	case <-ctx.Done():
@@ -421,7 +421,7 @@ func TestAuditPreemptionIsNotSavedAsFailedSource(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("audit did not stop")
 	}
-	checks, err := db.ReadReadingSourceChecks(context.Background(), model.SourceKindNovel)
+	checks, err := db.ReadReadingSourceChecks(context.Background(), model.SourceKindComic)
 	if err != nil {
 		t.Fatal(err)
 	}

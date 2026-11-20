@@ -21,6 +21,7 @@ const details = props.model.details, catalog = props.model.catalog, episodeList 
 const detailedEpisodeLabels = computed(() => hasDetailedEpisodeLabels(episodeList.items))
 const mobilePlayerTab = ref<'overview'|'comments'>('overview')
 const animatePlayback = useViewActivity(() => props.playing && (mobile ? mobilePlayerTab.value === 'overview' : !props.collapsed), 'committed')
+const canMeasure = useViewActivity(() => !props.collapsed && !catalog.loading, 'committed')
 const mobileCommentsVisited = ref(false)
 const mobileCommentsId = computed(() => {
   const id = String(details.video?.vod_douban_id || '').trim()
@@ -123,7 +124,9 @@ function onMinimizeApp():void { try { Window.Minimise() } catch { /* Host owns a
             </div>
 
               <div class="side-source-scroll" tabindex="0" :aria-label="t('player.playSources')">
-                <PlaybackRouteList dark expanded :sources="catalog.items" :active-key="catalog.activeKey" :active-line="details.lines[details.activeLineIndex]?.index??-1" :lines="details.lines" :busy="catalog.loading" :selectable="catalog.selectable" @choose="(key,line)=>emit('source',key,line)" />
+                <PlaybackRouteList dark expanded :sources="catalog.items" :active-key="catalog.activeKey" :active-line="details.lines[details.activeLineIndex]?.index??-1" :lines="details.lines" :busy="catalog.loading" :selectable="catalog.selectable"
+                  :measurement="canMeasure ? { source_key: details.sourceKey, vod_id: details.vodId, global_id: details.globalId, ep_num: episodeList.currentNumber } : undefined"
+                  @choose="(key,line)=>emit('source',key,line)" />
               </div>
             </div>
 

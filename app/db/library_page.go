@@ -85,7 +85,7 @@ func PageLibraryItems(ctx context.Context, q LibraryPageQuery) (*LibraryItemPage
 			return nil, fmt.Errorf("%w: catalog cursor does not match query", ErrInvalidCatalogQuery)
 		}
 	} else {
-		if err := instance.GetContext(ctx, &cursor.MaxID, `SELECT COALESCE(MAX(id),0) FROM library_items WHERE kind=?`, q.Kind); err != nil {
+		if err := ReadDB().GetContext(ctx, &cursor.MaxID, `SELECT COALESCE(MAX(id),0) FROM library_items WHERE kind=?`, q.Kind); err != nil {
 			return nil, err
 		}
 	}
@@ -100,7 +100,7 @@ func PageLibraryItems(ctx context.Context, q LibraryPageQuery) (*LibraryItemPage
 	if !q.IncludeRetired {
 		facetWhere += ` AND lifecycle_state='active'`
 	}
-	if err := instance.SelectContext(ctx, &genreRows, `SELECT DISTINCT genres FROM library_items WHERE `+facetWhere, q.Kind); err != nil {
+	if err := ReadDB().SelectContext(ctx, &genreRows, `SELECT DISTINCT genres FROM library_items WHERE `+facetWhere, q.Kind); err != nil {
 		return nil, err
 	}
 	genreSet := make(map[string]bool)
@@ -127,7 +127,7 @@ func PageLibraryItems(ctx context.Context, q LibraryPageQuery) (*LibraryItemPage
 			args = append(args, cursor.ID)
 		}
 	}
-	rows, err := instance.QueryxContext(ctx, `SELECT id,title,genres,status FROM library_items WHERE `+where+` ORDER BY `+order, args...)
+	rows, err := ReadDB().QueryxContext(ctx, `SELECT id,title,genres,status FROM library_items WHERE `+where+` ORDER BY `+order, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +187,7 @@ func PageLibraryItems(ctx context.Context, q LibraryPageQuery) (*LibraryItemPage
 		return nil, err
 	}
 	var materialized []*model.LibraryItem
-	if err := instance.SelectContext(ctx, &materialized, query, values...); err != nil {
+	if err := ReadDB().SelectContext(ctx, &materialized, query, values...); err != nil {
 		return nil, err
 	}
 	indexed := make(map[int]*model.LibraryItem, len(materialized))

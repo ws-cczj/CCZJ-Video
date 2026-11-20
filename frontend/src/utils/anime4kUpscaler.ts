@@ -301,6 +301,7 @@ export class Anime4kUpscaler {
     if (container) {
       container.style.position = container.style.position || 'relative'
       container.appendChild(this.canvas)
+      layoutCanvasToVideo(video, this.canvas)
     }
     try {
       this.gl = this.canvas.getContext('webgl2', {
@@ -564,7 +565,6 @@ export class Anime4kUpscaler {
     }
 
     const texelX = 1 / vw, texelY = 1 / vh
-    layoutCanvasToVideo(video, canvas)
 
     // 执行所有 pass
     for (let i = 0; i < this.passes.length; i++) {

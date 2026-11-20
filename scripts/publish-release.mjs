@@ -35,7 +35,7 @@ export async function publishRelease(options, { run = execute, log = console.log
   }
   const tag = `v${version}`, stage = resolve(root, options.outDir ?? 'dist/releases', tag)
   if (options.plan) {
-    log(`Plan: ${repository} ${tag} from ${branch}\nSynchronize version.json and README from CHANGELOG; verify; ${options.commit ? 'commit all nonignored changes; ' : 'require a clean commit; '}build EXE/ZIP/ARM64 APK; push exact tag; upload and verify draft assets; publish; push ${branch}.\nArtifacts: ${stage}\nNo files, commits, tags or remote releases were changed.`)
+    log(`Plan: ${repository} ${tag} from ${branch}\nSynchronize version.json and README from CHANGELOG; verify; ${options.commit ? 'commit all nonignored changes; ' : 'require a clean commit; '}build EXE/ZIP/ARM64 APK; push exact tag; wait for Verify on the release commit; upload and verify draft assets; publish; push ${branch}.\nArtifacts: ${stage}\nNo files, commits, tags or remote releases were changed.`)
     return { planned: true, version, repository }
   }
   // Authenticate before touching files or creating a local commit.
@@ -101,6 +101,18 @@ export async function publishRelease(options, { run = execute, log = console.log
   // after publishing, so update fallbacks cannot advertise unavailable assets.
   if (!localTag) command('git', ['tag', '-a', tag, '-m', `Release ${tag}`, head])
   if (!remoteCommit) command('git', ['push', 'origin', `refs/tags/${tag}`], { stream: true, timeout: 1800000 })
+  if (!release || release.draft) {
+    log(`Waiting for Verify on ${head}...`)
+    let verification
+    for (let attempt = 0; attempt < 24 && !verification; attempt++) {
+      const listing = command('gh', ['run', 'list', '--repo', repository, '--workflow', 'verify.yml', '--commit', head,
+        '--event', 'push', '--limit', '30', '--json', 'databaseId,headBranch,headSha'])
+      verification = JSON.parse(listing.stdout).find(run => run.headSha === head && run.headBranch === tag)
+      if (!verification) await new Promise(resolve => setTimeout(resolve, 5000))
+    }
+    if (!verification) throw new Error(`Verify has not started for ${tag}. Retry publication after GitHub queues the tagged commit.`)
+    command('gh', ['run', 'watch', String(verification.databaseId), '--repo', repository, '--exit-status'], { stream: true, timeout: 1800000 })
+  }
   const notes = join(stage, 'release-notes.md')
   if (!release) {
     command('gh', ['release', 'create', tag, '--repo', repository, '--verify-tag', '--draft', '--title', tag, '--notes-file', notes], { stream: true })

@@ -19,7 +19,12 @@ import (
 	"time"
 )
 
-const maxPlaylistBytes = 16 << 20
+const (
+	maxPlaylistBytes  = 16 << 20
+	hlsHeaderBudget   = 30 * time.Second
+	hlsPlaylistBudget = 30 * time.Second
+	hlsReadIdle       = 30 * time.Second
+)
 
 // maxRefBytes 限制调用方塞进来的引用页长度。超长直接忽略，退回按上游 URL 自己推导。
 const maxRefBytes = 1024
@@ -43,8 +48,7 @@ func NewHLSServiceWithBudget(budget *netbudget.Budget) *HLSService {
 	jar, _ := cookiejar.New(nil)
 	s := &HLSService{}
 	s.client = &http.Client{
-		Timeout: 45 * time.Second,
-		Jar:     jar,
+		Jar: jar,
 		// 计数层贴在真正干活的 Transport 外面：播放流量（m3u8 + 分片）是诊断页
 		// 「网络吞吐」里最该被看见的一类，而分片是流式转发，只有在读路径上才数得准。
 		Transport: netpolicy.WrapTransport(string(netstats.CategoryPlayback), netstats.WrapTransport(netstats.CategoryPlayback, &http.Transport{
@@ -174,7 +178,15 @@ func (s *HLSService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if referer == "" {
 		referer = RefererOrigin(upstream.String())
 	}
-	resp, finalURL, err := s.fetch(r.Context(), upstream, segmentRange(r, upstream), referer)
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+	knownPlaylist := hasPlaylistExtension(upstream)
+	if knownPlaylist {
+		playlistCtx, cancelPlaylist := context.WithTimeout(ctx, hlsPlaylistBudget)
+		defer cancelPlaylist()
+		ctx = playlistCtx
+	}
+	resp, finalURL, err := s.fetch(ctx, upstream, segmentRange(r, upstream), referer)
 	if err != nil {
 		http.Error(w, "upstream request failed", http.StatusBadGateway)
 		return
@@ -184,12 +196,16 @@ func (s *HLSService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	sniff, _ := r.Context().Value(hlsSniffPlaylistKey{}).(bool)
 	rewrites := responseIsPlaylist(resp, finalURL, sniff) &&
 		resp.StatusCode >= 200 && resp.StatusCode < 300
+	if rewrites && !knownPlaylist {
+		timer := time.AfterFunc(hlsPlaylistBudget, cancel)
+		defer timer.Stop()
+	}
 	if rewrites && resp.StatusCode != http.StatusOK {
 		// 上游按 Range 回了半张播放列表。重写必须基于完整列表，否则会发布一张
 		// 尾部集数被截掉的「合法」列表，用户看到的是能放但少几集——比直接报错更难查。
 		// 不带 Range 重取一次；再拿不到 200 就放弃重写，走下面的原样转发。
 		resp.Body.Close()
-		resp, finalURL, err = s.fetch(r.Context(), upstream, "", referer)
+		resp, finalURL, err = s.fetch(ctx, upstream, "", referer)
 		if err != nil {
 			http.Error(w, "upstream request failed", http.StatusBadGateway)
 			return
@@ -200,7 +216,11 @@ func (s *HLSService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if rewrites {
 		body, err := io.ReadAll(io.LimitReader(resp.Body, maxPlaylistBytes+1))
-		if err != nil || len(body) > maxPlaylistBytes {
+		if err != nil {
+			http.Error(w, "playlist read failed", http.StatusBadGateway)
+			return
+		}
+		if len(body) > maxPlaylistBytes {
 			http.Error(w, "playlist response too large", http.StatusBadGateway)
 			return
 		}
@@ -267,13 +287,22 @@ func (s *HLSService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // segmentRange 取出客户端要的字节区间。播放列表刻意忽略它：一张列表动辄几十 KB，
 // 分段取只会换来「截断的列表」，没有收益。
 func segmentRange(r *http.Request, upstream *url.URL) string {
-	if strings.HasSuffix(strings.ToLower(upstream.Path), ".m3u8") {
+	if hasPlaylistExtension(upstream) {
 		return ""
 	}
 	return r.Header.Get("Range")
 }
 
 func (s *HLSService) fetch(ctx context.Context, initial *url.URL, rangeHeader, referer string) (*http.Response, *url.URL, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	headerTimer := time.AfterFunc(hlsHeaderBudget, cancel)
+	transferred := false
+	defer func() {
+		headerTimer.Stop()
+		if !transferred {
+			cancel()
+		}
+	}()
 	current := initial
 	for redirects := 0; redirects <= 5; redirects++ {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, current.String(), nil)
@@ -289,15 +318,7 @@ func (s *HLSService) fetch(ctx context.Context, initial *url.URL, rangeHeader, r
 		if rangeHeader != "" {
 			req.Header.Set("Range", rangeHeader)
 		}
-		client := s.client
-		if streaming, _ := ctx.Value(hlsStreamKey{}).(bool); streaming {
-			// A continuous MP4 response can outlive the normal segment timeout.
-			// The LAN session and receiver connection own its cancellation.
-			copy := *client
-			copy.Timeout = 0
-			client = &copy
-		}
-		resp, err := client.Do(req)
+		resp, err := s.client.Do(req)
 		if err != nil {
 			if observe, ok := ctx.Value(hlsFetchObserveKey{}).(func(int, error)); ok {
 				observe(0, err)
@@ -305,6 +326,11 @@ func (s *HLSService) fetch(ctx context.Context, initial *url.URL, rangeHeader, r
 			return nil, nil, err
 		}
 		if resp.StatusCode < 300 || resp.StatusCode > 399 {
+			headerTimer.Stop()
+			idleTimer := time.AfterFunc(hlsReadIdle, cancel)
+			idleTimer.Stop()
+			resp.Body = &hlsResponseBody{ReadCloser: resp.Body, idleTimer: idleTimer, cancel: cancel}
+			transferred = true
 			if observe, ok := ctx.Value(hlsFetchObserveKey{}).(func(int, error)); ok {
 				observe(resp.StatusCode, nil)
 			}
@@ -328,10 +354,29 @@ func (s *HLSService) fetch(ctx context.Context, initial *url.URL, rangeHeader, r
 // AVPlayer. Every child playlist, key and segment must retain that route.
 type hlsProxyRouteKey struct{}
 type hlsResourceURLKey struct{}
-type hlsStreamKey struct{}
 type hlsFetchObserveKey struct{}
 type hlsSniffPlaylistKey struct{}
 type hlsPlaylistObserveKey struct{}
+
+// The idle deadline runs only while an upstream read is blocked. A slow
+// receiver can therefore apply backpressure without cancelling a healthy CDN.
+type hlsResponseBody struct {
+	io.ReadCloser
+	idleTimer *time.Timer
+	cancel    context.CancelFunc
+}
+
+func (b *hlsResponseBody) Read(p []byte) (int, error) {
+	b.idleTimer.Reset(hlsReadIdle)
+	defer b.idleTimer.Stop()
+	return b.ReadCloser.Read(p)
+}
+
+func (b *hlsResponseBody) Close() error {
+	b.idleTimer.Stop()
+	b.cancel()
+	return b.ReadCloser.Close()
+}
 
 // Extensionless CDN playlists sometimes carry application/octet-stream. LAN
 // child URLs must still be rewritten, with the inspected bytes preserved.
@@ -426,8 +471,11 @@ func parsePublicHTTPURL(raw string) (*url.URL, error) {
 }
 
 func isPlaylist(u *url.URL, contentType string) bool {
-	path := strings.ToLower(u.Path)
-	return strings.HasSuffix(path, ".m3u8") || strings.Contains(strings.ToLower(contentType), "mpegurl")
+	return hasPlaylistExtension(u) || strings.Contains(strings.ToLower(contentType), "mpegurl")
+}
+
+func hasPlaylistExtension(u *url.URL) bool {
+	return strings.HasSuffix(strings.ToLower(u.Path), ".m3u8")
 }
 
 func setHLSCORS(w http.ResponseWriter, r *http.Request) {

@@ -81,7 +81,7 @@ func normalizeSubjectID(sid string) string {
 // GetGlobalVideoByID 按 id 查询全局视频
 func GetGlobalVideoByID(id int) (*GlobalVideoRow, error) {
 	var row GlobalVideoRow
-	err := instance.Get(&row, `SELECT * FROM global_video WHERE id = ?`, id)
+	err := ReadDB().Get(&row, `SELECT * FROM global_video WHERE id = ?`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +146,7 @@ func UpsertDoubanInfoContext(ctx context.Context, info *DoubanInfoRow) error {
 // GetDoubanInfoByGlobalID 按 global_id 查询豆瓣信息（从 global_video 读取）
 func GetDoubanInfoByGlobalID(globalID int) (*DoubanInfoRow, error) {
 	var row DoubanInfoRow
-	err := instance.Get(&row, `SELECT
+	err := ReadDB().Get(&row, `SELECT
 		id AS global_id,
 		douban_id AS subject_id, douban_score AS rating, douban_votes AS votes,
 		writer, genre,
@@ -166,7 +166,7 @@ func GetGlobalIDByDoubanSubject(subjectID string) int {
 		return 0
 	}
 	var globalID int
-	err := instance.Get(&globalID, `
+	err := ReadDB().Get(&globalID, `
 		SELECT id
 		FROM global_video
 		WHERE douban_id = ?
@@ -240,7 +240,7 @@ func InheritDoubanFieldsFromSiblingsContext(ctx context.Context) (int, error) {
 		WHERE TRIM(COALESCE(g.douban_score, '')) = ''`
 
 	var donors []*doubanSiblingDonor
-	if err := instance.SelectContext(ctx, &donors, q); err != nil {
+	if err := ReadDB().SelectContext(ctx, &donors, q); err != nil {
 		applog.Error("[Douban] InheritDoubanFieldsFromSiblings query failed: %v", err)
 		return 0, err
 	}

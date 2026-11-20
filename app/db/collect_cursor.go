@@ -35,7 +35,7 @@ func migrateCollectCursor(tx *sqlx.Tx) error {
 // GetCollectCursor 返回源的游标；没有记录时返回零值（首次采集）。
 func GetCollectCursor(sourceKey string) (CollectCursor, error) {
 	var c CollectCursor
-	err := instance.Get(&c, `SELECT source_key, covered_until_unix, last_attempt_unix
+	err := ReadDB().Get(&c, `SELECT source_key, covered_until_unix, last_attempt_unix
 		FROM collect_cursor WHERE source_key=?`, sourceKey)
 	if errors.Is(err, sql.ErrNoRows) {
 		return CollectCursor{SourceKey: sourceKey}, nil

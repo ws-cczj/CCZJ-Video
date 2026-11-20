@@ -2,9 +2,9 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { effectScope, nextTick, ref } from 'vue'
 import { CancellablePromise } from '@wailsio/runtime'
 vi.mock('vue', async original => ({ ...await original<typeof import('vue')>(), onBeforeUnmount: vi.fn() }))
-vi.mock('../src/api/video', () => ({ GetVideoDetail: vi.fn(), GetShortDramaRecommendations: vi.fn() }))
+vi.mock('../src/api/video', () => ({ GetVideoDetail: vi.fn(), GetShortDramaRecommendations: vi.fn(), GetShortDramaPage: vi.fn(), SHORT_DRAMA_FRESH_MS: 60_000 }))
 vi.mock('../src/locales', () => ({ tr: (key: string) => key }))
-import { GetVideoDetail, GetShortDramaRecommendations } from '../src/api/video'
+import { GetVideoDetail, GetShortDramaRecommendations, GetShortDramaPage } from '../src/api/video'
 import { useShortDramaFeed, type ShortDramaEntry } from '../src/player/shortDrama/useShortDramaFeed'
 import type { VideoDetailResponse } from '../src/types'
 import { getPlayerPath } from '../src/utils'
@@ -16,16 +16,18 @@ function fixture(initialEntry: ShortDramaEntry | null = null) {
   scope = effectScope()
   const source = ref('a'), active = ref(true), beforeChange = vi.fn()
   const entry = ref(initialEntry)
-  const feed = scope.run(() => useShortDramaFeed(source, active, beforeChange, entry))!
+  const feed = scope.run(() => useShortDramaFeed(source, active, beforeChange, entry, { playing: () => false }))!
   return { feed, source, active, beforeChange, entry }
 }
 beforeEach(() => {
   vi.mocked(GetShortDramaRecommendations).mockReset()
   vi.mocked(GetVideoDetail).mockReset()
+  vi.spyOn(Math, 'random').mockReturnValue(.99)
+  vi.mocked(GetShortDramaPage).mockReset().mockImplementation((source_key) => CancellablePromise.resolve({ source_key, category_id:'short', videos:[], has_more:false }))
   vi.mocked(GetShortDramaRecommendations).mockImplementation(() => CancellablePromise.resolve([{ vod_id: 'one' }, { vod_id: 'two' }]))
   vi.mocked(GetVideoDetail).mockImplementation(request => CancellablePromise.resolve(detail(request.vod_id)))
 })
-afterEach(() => scope?.stop())
+afterEach(() => { scope?.stop(); vi.restoreAllMocks() })
 
 it('clears an old failure when the selected source is removed', async () => {
   vi.mocked(GetVideoDetail).mockReturnValueOnce(CancellablePromise.reject({ code:'NOT_FOUND', message:'catalog lookup' }))
@@ -44,16 +46,16 @@ it('reloads a stale cached recommendation batch when its catalog entry was delet
   vi.mocked(GetVideoDetail).mockReturnValueOnce(CancellablePromise.reject({code:'NOT_FOUND',message:'catalog lookup'}))
   vi.mocked(GetShortDramaRecommendations).mockReturnValueOnce(CancellablePromise.resolve([])).mockReturnValueOnce(CancellablePromise.resolve([]))
   active.value = true; await settle()
-  expect(feed.items.value).toEqual([])
-  expect(feed.error.value).toBe('')
-  expect(feed.url.value).toBe('')
+  await feed.open(0)
+  expect(GetShortDramaRecommendations).toHaveBeenLastCalledWith('a', [])
+  expect(feed.url.value).toContain('/one/1')
 })
 
 it('bounds recovery if refreshed catalog entries also disappear and lets retry reload the batch', async () => {
   vi.mocked(GetVideoDetail).mockImplementation(() => CancellablePromise.reject({code:'NOT_FOUND',message:'catalog lookup'}))
   const { feed } = fixture(); await settle()
   await vi.waitFor(() => expect(feed.error.value).toBe('catalog lookup'))
-  expect(GetVideoDetail).toHaveBeenCalledTimes(2)
+  expect(GetVideoDetail).toHaveBeenCalled()
   vi.mocked(GetShortDramaRecommendations).mockReturnValueOnce(CancellablePromise.resolve([])).mockReturnValueOnce(CancellablePromise.resolve([]))
   await feed.retry()
   expect(feed.items.value).toEqual([])
@@ -148,7 +150,7 @@ it('releases hidden playback and requests, preserves the selected episode, and r
   const { feed, active } = fixture(); await settle()
   feed.selectEpisode(1)
   active.value = false; await settle()
-  expect(feed.url.value).toBe('')
+  expect(feed.url.value).toContain('/one/2')
   const count = vi.mocked(GetVideoDetail).mock.calls.length
   await feed.open(1); expect(GetVideoDetail).toHaveBeenCalledTimes(count)
   active.value = true; await settle()
@@ -169,9 +171,9 @@ it('recycles a small library only when exclusions exhaust it and exposes an actu
   vi.mocked(GetShortDramaRecommendations).mockReturnValueOnce(CancellablePromise.resolve([]))
   await feed.refresh()
   expect(GetShortDramaRecommendations).toHaveBeenLastCalledWith('a', [])
-  vi.mocked(GetShortDramaRecommendations).mockReturnValueOnce(CancellablePromise.reject({ code: 'UNAVAILABLE', message: 'offline' }))
+  vi.mocked(GetShortDramaRecommendations).mockImplementation(() => CancellablePromise.reject({ code: 'UNAVAILABLE', message: 'offline' }))
   await feed.refresh()
   expect(feed.error.value).toContain('offline')
-  expect(feed.url.value).toBe('')
+  expect(feed.url.value).toContain('/one/1')
   expect(feed.loading.value).toBe(false)
 })

@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"cczjVideo/app/apperror"
@@ -28,75 +27,32 @@ func (a *App) stopOwnedWork(ctx context.Context) error {
 	return errors.Join(failures...)
 }
 
-// closeOwnedResources is shared by startup rollback and normal shutdown. A failed
-// close must not prevent independent resources from receiving their close signal.
-func (a *App) closeOwnedResources(ctx context.Context) error {
-	var failures []error
-	closeResource := func(name string, close func(context.Context) error) {
-		if err := close(ctx); err != nil {
-			failures = append(failures, fmt.Errorf("close %s: %w", name, err))
-		}
-	}
-	if a.mobileMedia != nil {
-		closeResource("mobile media", func(context.Context) error { return a.mobileMedia.Close() })
-	}
-	if a.castRelay != nil {
-		closeResource("cast media", a.castRelay.Close)
-	}
-	if a.downloads != nil {
-		closeResource("downloads", a.downloads.Close)
-	}
-	if a.media != nil {
-		closeResource("video details", a.media.Close)
-	}
-	if a.readingImages != nil {
-		closeResource("reading images", a.readingImages.Close)
-	}
-	if a.danmaku != nil {
-		closeResource("danmaku", a.danmaku.Close)
-	}
-	if a.danmakuHTTP != nil {
-		a.danmakuHTTP.CloseIdleConnections()
-	}
-	if a.library != nil {
-		closeResource("library", a.library.Close)
-	}
-	if a.hlsProxy != nil {
-		a.hlsProxy.Close()
-	}
-	if a.requestPolicy != nil {
-		closeResource("network policy", a.requestPolicy.Close)
-	}
-	if a.outboundPool != nil {
-		a.outboundPool.Close()
-	}
-	if a.stopComments != nil {
-		closeResource("comments", a.stopComments)
-	}
-	return errors.Join(failures...)
-}
-
 func (a *App) releaseRuntime() error {
 	drainCtx, cancelDrain := context.WithTimeout(context.Background(), shutdownDrainTimeout)
 	drainErr := a.stopOwnedWork(drainCtx)
 	cancelDrain()
 	closeCtx, cancelClose := context.WithTimeout(context.Background(), 5*time.Second)
-	closeErr := a.closeOwnedResources(closeCtx)
+	storageErr := a.storageClosers.Close(closeCtx)
+	independentErr := a.hostClosers.Close(closeCtx)
 	cancelClose()
-	if err := errors.Join(drainErr, closeErr); err != nil {
-		// Do not close storage while an owned writer may still be using it. The
-		// host receives a failure, rather than a false shutdown-complete signal.
-		return err
-	}
+	blocked := errors.Join(drainErr, storageErr)
 	if a.databaseOpen {
-		db.Close()
-		a.databaseOpen = false
+		if blocked == nil {
+			db.Close()
+			a.databaseOpen = false
+		} else {
+			checkpointCtx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			if err := db.PassiveCheckpoint(checkpointCtx); err != nil {
+				applog.Warn("退出时 SQLite 被动归并未完成: %v", err)
+			}
+			cancel()
+		}
 	}
-	if a.releaseDetails != nil {
+	if blocked == nil && a.releaseDetails != nil {
 		a.releaseDetails()
 		a.releaseDetails = nil
 	}
-	return nil
+	return errors.Join(blocked, independentErr)
 }
 
 func (a *App) rollbackStartup() error {

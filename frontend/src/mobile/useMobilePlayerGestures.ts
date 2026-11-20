@@ -145,7 +145,7 @@ export function useMobilePlayerGestures(options: {
     if (!s || e.pointerId !== s.id) return
     clearHold()
     start = null
-    if (s.root.hasPointerCapture(s.id)) s.root.releasePointerCapture(s.id)
+    if (s.root.hasPointerCapture?.(s.id)) s.root.releasePointerCapture(s.id)
     active.value = false
     const direction = swipe
     swipe = 0
@@ -171,7 +171,7 @@ export function useMobilePlayerGestures(options: {
     const saved = start
     start = null
     clearHold(); restoreRate()
-    if (saved?.root.hasPointerCapture(saved.id)) saved.root.releasePointerCapture(saved.id)
+    if (saved?.root.hasPointerCapture?.(saved.id)) saved.root.releasePointerCapture(saved.id)
     swipe = 0; active.value = false; hud.value = ''; kind.value = ''; seekTarget.value = -1; compact.value = false
     if (hide) clearTimeout(hide)
     if (collapse) clearTimeout(collapse)
@@ -207,7 +207,7 @@ export function useMobilePlayerGestures(options: {
     window.addEventListener('blur', cancel)
     window.addEventListener('pagehide', cancel)
     window.addEventListener('orientationchange', orientationChanged)
-    screen.orientation?.addEventListener('change', orientationChanged)
+    globalThis.screen?.orientation?.addEventListener('change', orientationChanged)
     document.addEventListener('visibilitychange', visibility)
   })
   onBeforeUnmount(() => {
@@ -220,7 +220,7 @@ export function useMobilePlayerGestures(options: {
     window.removeEventListener('blur', cancel)
     window.removeEventListener('pagehide', cancel)
     window.removeEventListener('orientationchange', orientationChanged)
-    screen.orientation?.removeEventListener('change', orientationChanged)
+    globalThis.screen?.orientation?.removeEventListener('change', orientationChanged)
     document.removeEventListener('visibilitychange', visibility)
   })
   return { locked, hud, kind, boosting, seekTarget, level, compact, active, down, move, end, cancel, consumeClick, toggleLock }

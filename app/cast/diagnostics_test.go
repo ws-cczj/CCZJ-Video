@@ -35,13 +35,13 @@ func TestRendererReportsPlaybackAndProgress(t *testing.T) {
 		if strings.Contains(action, "GetTransportInfo") {
 			body = `<u:GetTransportInfoResponse xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><CurrentTransportState>PLAYING</CurrentTransportState><CurrentTransportStatus>OK</CurrentTransportStatus></u:GetTransportInfoResponse>`
 		} else {
-			body = `<u:GetPositionInfoResponse xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><RelTime>00:00:12.5</RelTime><TrackDuration>00:01:30</TrackDuration></u:GetPositionInfoResponse>`
+			body = `<u:GetPositionInfoResponse xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><TrackURI>https://cdn.example/movie.mp4</TrackURI><RelTime>00:00:12.5</RelTime><TrackDuration>00:01:30</TrackDuration></u:GetPositionInfoResponse>`
 		}
 		fmt.Fprint(w, `<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body>`+body+`</s:Body></s:Envelope>`)
 	}))
 	defer server.Close()
 	svc := New(context.Background())
-	svc.devices["tv"] = renderer{Device: Device{ID: "tv"}, endpoint: server.URL, service: "urn:schemas-upnp-org:service:AVTransport:1", seen: time.Now(), session: "session-test"}
+	svc.devices["tv"] = renderer{Device: Device{ID: "tv"}, endpoint: server.URL, service: "urn:schemas-upnp-org:service:AVTransport:1", seen: time.Now(), session: "session-test", media: "https://cdn.example/movie.mp4"}
 	value, err := svc.StatusContext(context.Background(), "tv")
 	if err != nil {
 		t.Fatal(err)

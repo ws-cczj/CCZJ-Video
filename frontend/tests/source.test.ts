@@ -5,6 +5,9 @@ import { createPlaybackSession } from '../src/player/playbackSession'
 const fakes = vi.hoisted(() => ({ instances: [] as any[], cache: {
   enable: vi.fn(), setTransportActive: vi.fn(), setSegments: vi.fn(), setTargetDuration: vi.fn(),
   setAbrSwitchCallback: vi.fn(), notifyCurrentTs: vi.fn(), TsCacheLoader: class {},
+  onStateChange: vi.fn(() => vi.fn()), adaptiveFragmentTimeout: () => 60_000,
+  stats: () => ({ totalSegments: 0 }), blockedSegment: () => null, segmentRetryDelay: () => 1000,
+  setPlaybackBufferAhead: vi.fn(),
 } }))
 vi.mock('../src/utils/tsCache', () => ({ TsCache: fakes.cache }))
 vi.mock('hls.js', () => ({ default: class {
@@ -32,7 +35,7 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers())
 
 function setup() {
-  const video = { paused: true, ended: false, src: '', onerror: null } as unknown as HTMLVideoElement
+  const video = Object.assign(new EventTarget(), { paused: true, ended: false, readyState: 2, src: '', onerror: null }) as unknown as HTMLVideoElement
   const lease = createPlaybackSession()
   const events = { streams: vi.fn(), error: vi.fn(), fatal: vi.fn(), unrecoverable: vi.fn(), bufferChanged: vi.fn() }
   const source = createPlaybackSource(events)
@@ -68,11 +71,14 @@ describe('stream loading and recovery', () => {
     const { video, lease, source, events } = setup()
     await source.load(video, 'https://media/1.m3u8', lease.capture())
     const hls = fakes.instances[0]
-    hls.emit('error', { fatal: true, type: 'network', details: 'fragmentLoadError' })
+    const fragmentError = { fatal: true, type: 'network', details: 'fragLoadError', frag: { sn: 4 } }
+    hls.emit('error', fragmentError)
     expect(vi.getTimerCount()).toBe(0)
     Object.defineProperty(video, 'paused', { value: false, writable: true })
-    hls.emit('error', { fatal: true, type: 'network', details: 'fragmentLoadError' })
+    expect(source.resume()).toBe(true)
+    expect(vi.getTimerCount()).toBe(1)
     Object.defineProperty(video, 'paused', { value: true, writable: true })
+    video.dispatchEvent(new Event('pause'))
     vi.advanceTimersByTime(10000)
     expect(events.error).not.toHaveBeenCalled()
     source.dispose(video)

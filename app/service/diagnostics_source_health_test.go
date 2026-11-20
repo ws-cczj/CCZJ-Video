@@ -84,7 +84,7 @@ func addStreakSource(t *testing.T, key, name string) {
 	if err := db.AddSource(&model.Source{
 		SourceKey: key,
 		Name:      name,
-		ApiUrl:    "https://example.test/api.php",
+		ApiUrl:    "https://example.test/" + key + "/api.php",
 		Enabled:   1,
 	}); err != nil {
 		t.Fatalf("add source %s: %v", key, err)

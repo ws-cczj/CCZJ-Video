@@ -54,10 +54,14 @@ func TestBenchmarkSummaryPersistsWithoutImportAndRanksAboveQuickProbe(t *testing
 	if candidates[0] != quick {
 		t.Fatal("stale benchmark promoted above fresh evidence")
 	}
-	if q, err = s.saveSourceQuality(id, &TestOutcome{OK: true}); err != nil || q.Evidence != "benchmark:"+quality.Version || q.Samples != 9 {
-		t.Fatal("quick success erased richer evidence", q, err)
+	if q, err = s.saveSourceQuality(id, &TestOutcome{OK: true}); err != nil || q.Evidence != "local" || q.Samples != 1 {
+		t.Fatal("quick check did not use its own counters", q, err)
 	}
-	if q, err = s.saveSourceQuality(id, &TestOutcome{Stages: []*TestStage{{Name: StageSearch, Status: "failed"}}}); err != nil || q.Evidence != "local" || q.Samples != 1 || q.Successes != 0 {
+	var archived int
+	if err = db.DB().Get(&archived, `SELECT COUNT(*) FROM reading_source_observations WHERE source_id=? AND json_extract(result_json,'$.evidence')=?`, id, "benchmark:"+quality.Version); err != nil || archived == 0 {
+		t.Fatal("quick check erased archived benchmark evidence", archived, err)
+	}
+	if q, err = s.saveSourceQuality(id, &TestOutcome{Stages: []*TestStage{{Name: StageSearch, Status: "failed"}}}); err != nil || q.Evidence != "local" || q.Samples != 2 || q.Successes != 1 {
 		t.Fatal("mixed chapter counts with quick-run history", q, err)
 	}
 }

@@ -1,4 +1,5 @@
 import { createRenderer, h, nextTick, ref } from 'vue'
+import { createPinia } from 'pinia'
 import { afterEach, expect, it, vi } from 'vitest'
 const mocks=vi.hoisted(()=>({get:vi.fn(),set:vi.fn(()=>Promise.resolve()),binding:vi.fn(),window:vi.fn(),search:vi.fn(),episodes:vi.fn(),bind:vi.fn(),unbind:vi.fn(),match:vi.fn()}))
 vi.mock('../src/api/app',async()=>({...await vi.importActual('../src/api/errors'),GetSetting:mocks.get,SetSetting:mocks.set}))
@@ -8,8 +9,8 @@ type Node={parent:Node|null;children:Node[]}
 const node=():Node=>({parent:null,children:[]})
 const renderer=createRenderer<Node,Node>({createElement:node,createText:node,createComment:node,insert:(child,parent)=>{parent.children.push(child);child.parent=parent},remove:()=>{},setText:()=>{},setElementText:()=>{},parentNode:child=>child.parent,nextSibling:()=>null,patchProp:()=>{}})
 let unmount:(()=>void)|undefined
-function mount(current=()=>0){let state!:ReturnType<typeof useDanmaku>;const app=renderer.createApp({setup(){state=useDanmaku({key:()=> 'video:source:episode',current});return()=>h('div')}});app.mount(node());unmount=()=>app.unmount();return state}
-function mountAuto(key=ref('video:source:episode'),current=ref(0),year=ref('2023')){let state!:ReturnType<typeof useDanmaku>;const app=renderer.createApp({setup(){state=useDanmaku({key:()=>key.value,current:()=>current.value,title:()=> 'sample',year:()=>year.value,kind:()=> '电视剧',episode:()=> '第01集',duration:()=>120});return()=>h('div')}});app.mount(node());unmount=()=>app.unmount();return state}
+function mount(current=()=>0){let state!:ReturnType<typeof useDanmaku>;const app=renderer.createApp({setup(){state=useDanmaku({key:()=> 'video:source:episode',current});return()=>h('div')}});app.use(createPinia());app.mount(node());unmount=()=>app.unmount();return state}
+function mountAuto(key=ref('video:source:episode'),current=ref(0),year=ref('2023')){let state!:ReturnType<typeof useDanmaku>;const app=renderer.createApp({setup(){state=useDanmaku({key:()=>key.value,current:()=>current.value,title:()=> 'sample',year:()=>year.value,kind:()=> '电视剧',episode:()=> '第01集',duration:()=>120});return()=>h('div')}});app.use(createPinia());app.mount(node());unmount=()=>app.unmount();return state}
 afterEach(()=>{unmount?.();unmount=undefined;vi.clearAllMocks()})
 const binding={localKey:'video:source:episode',confirmed:true,offsetMs:0,episode:{provider:'qq',episodeId:'c4102g9a01t',aid:'',seriesId:'',title:'sample',number:'1',durationMs:120000,pageUrl:''}}
 it('waits for persisted disabled preferences before fetching, and never saves untouched defaults',async()=>{

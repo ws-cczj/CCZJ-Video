@@ -1,9 +1,9 @@
-import { layoutCanvasToVideo } from './videoLayout'
+import { enhancementBufferBudget, sizeEnhancementBuffer, type EnhancementBufferBudget } from './videoLayout'
 /** Film enhancement: FSRCNNX 2x super-resolution followed by CAS sharpening. */
 import fsrcnnxSource from './FSRCNNX_x2_8-0-4-1.glsl?raw'
 import { loseGlContext } from './anime4kUpscaler'
 
-export interface FilmUpscalerOptions { casStrength?: number }
+export interface FilmUpscalerOptions { casStrength?: number; sharpenOnly?: boolean }
 export interface FilmStats {
   fps: number; gpuEnabled: boolean
   qualityScale: number; enhancements: string[]
@@ -206,9 +206,12 @@ export class FilmUpscaler {
   private opts: Required<FilmUpscalerOptions>
   private canvas: HTMLCanvasElement | null = null
   private gl: WebGL2RenderingContext | null = null
+  private bufferBudget?: EnhancementBufferBudget
   private video: HTMLVideoElement | null = null
   private running = false; private rafId = 0; private videoFrameCallbackId: number | null = null
   private _error: string | null = null
+  private events: AbortController | null = null
+  private casOnly = false
 
   private quadVAO: WebGLVertexArrayObject | null = null
   private quadVBO: WebGLBuffer | null = null
@@ -238,13 +241,15 @@ export class FilmUpscaler {
   get error(): string | null { return this._error }
 
   constructor(opts: FilmUpscalerOptions = {}) {
-    this.opts = { casStrength: opts.casStrength ?? 0.8 }
+    this.opts = { casStrength: opts.casStrength ?? 0.8, sharpenOnly: opts.sharpenOnly ?? false }
   }
+  get isSharpenOnly(): boolean { return this.casOnly }
 
   async init(video: HTMLVideoElement, wrapper?: HTMLElement): Promise<boolean> {
     try {
       this.video = video
       this.canvas = document.createElement('canvas')
+      this.canvas.hidden = true
       this.canvas.dataset.cczjEnhancement = 'true'
       this.canvas.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;z-index:2'
       const c = wrapper ?? video.parentElement
@@ -257,15 +262,20 @@ export class FilmUpscaler {
       if (!gl) throw new Error('WebGL2')
       this.gl = gl
 
-      const hasFloat = !!gl.getExtension('EXT_color_buffer_float')
       gl.getExtension('OES_texture_float_linear')
-      if (!hasFloat) console.warn('[FilmUpscaler] EXT_color_buffer_float 不可用，降级到 RGBA8')
-
-      this.canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); this.stop() })
-      this.canvas.addEventListener('webglcontextrestored', () => { this.rebuild() })
+      this.events = new AbortController()
+      const { signal } = this.events
+      this.canvas.addEventListener('webglcontextlost', e => {
+        e.preventDefault()
+        this.stop()
+        if (this.canvas) this.canvas.hidden = true
+      }, { signal })
+      this.canvas.addEventListener('webglcontextrestored', () => {
+        this.destroy()
+        void this.init(video, c).then(ready => { if (ready) this.start() })
+      }, { signal })
 
       this.inputW = video.videoWidth || 1920; this.inputH = video.videoHeight || 1080
-      this.canvas.width = this.inputW * 2; this.canvas.height = this.inputH * 2
 
       this.quadVAO = gl.createVertexArray()!
       gl.bindVertexArray(this.quadVAO)
@@ -283,8 +293,8 @@ export class FilmUpscaler {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
       gl.bindTexture(gl.TEXTURE_2D, null)
 
-      this.compileAll(gl); this.allocFBOs()
-      console.log(`[FilmUpscaler] init: ${this.inputW}×${this.inputH} [${['FSRCNNX', 'CAS'].join(',')}]`)
+      this.configure(gl)
+      console.log(`[FilmUpscaler] init: ${this.inputW}×${this.inputH} [${this.casOnly ? 'CAS' : 'FSRCNNX + CAS'}]`)
       return true
     } catch (e: any) {
       this._error = e.message || String(e); console.error('[FilmUpscaler] init:', this._error)
@@ -294,14 +304,35 @@ export class FilmUpscaler {
     }
   }
 
+  private configure(gl: WebGL2RenderingContext): void {
+    const canvas = this.canvas!
+    const video = this.video!
+    this.passDefs = parseMpvShader(fsrcnnxSource)
+    const targets = this.passDefs.filter(pass => !pass.isAggregation).length
+    const fullBudget = !this.opts.sharpenOnly && gl.getExtension('EXT_color_buffer_float') &&
+      enhancementBufferBudget(gl, this.inputW, this.inputH, targets, 3)
+    this.casOnly = !fullBudget
+    this.bufferBudget = fullBudget || enhancementBufferBudget(gl, this.inputW, this.inputH, 0)
+    if (!this.bufferBudget) throw new Error('Video texture exceeds GPU budget')
+    sizeEnhancementBuffer(video, canvas, this.casOnly ? 1 : 2, this.bufferBudget)
+    this.compileAll(gl)
+    if (!this.casOnly) this.allocFBOs()
+  }
+
   private compileAll(gl: WebGL2RenderingContext): void {
+    const vsFlip = compileShader(gl, gl.VERTEX_SHADER, VERTEX_FLIP_SRC)
+    const casFs = compileShader(gl, gl.FRAGMENT_SHADER, CAS_FRAG)
+    if (vsFlip && casFs) this.casFlipProg = linkProgram(gl, vsFlip, casFs)
+    if (casFs) gl.deleteShader(casFs)
+    if (vsFlip) gl.deleteShader(vsFlip)
+    if (!this.casFlipProg) throw new Error('CAS shader')
+    if (this.casOnly) return
     const vs = compileShader(gl, gl.VERTEX_SHADER, VERTEX_SRC)
     if (!vs) throw new Error('VS')
     const fsProg = (src: string) => {
       const fs = compileShader(gl, gl.FRAGMENT_SHADER, src); if (!fs) throw new Error('FS')
       const p = linkProgram(gl, vs, fs)!; gl.deleteShader(fs); return p
     }
-    this.passDefs = parseMpvShader(fsrcnnxSource)
     this.passProgs = []
     for (let i = 0; i < this.passDefs.length; i++) {
       const pass = this.passDefs[i]
@@ -315,16 +346,6 @@ export class FilmUpscaler {
     if (!aggFs) throw new Error('Agg'); this.aggProg = linkProgram(gl, vs, aggFs)!; gl.deleteShader(aggFs)
 
     this.detailComposeProg = fsProg(DETAIL_COMPOSE_FRAG)
-    // canvas 输出用 flipped VS 重新链接 CAS
-    {
-      const vsFlip = compileShader(gl, gl.VERTEX_SHADER, VERTEX_FLIP_SRC)
-      const casFs = compileShader(gl, gl.FRAGMENT_SHADER, CAS_FRAG)
-      if (vsFlip && casFs) {
-        this.casFlipProg = linkProgram(gl, vsFlip, casFs)
-        gl.deleteShader(casFs)
-      }
-      gl.deleteShader(vsFlip)
-    }
     this.bilinearProg = fsProg(BILINEAR_UP_FRAG)
     gl.deleteShader(vs)
   }
@@ -384,13 +405,15 @@ export class FilmUpscaler {
 
   destroy(): void {
     this.stop()
+    this.events?.abort()
+    this.events = null
+    this.lastUploadTime = -1
     const gl = this.gl
     if (gl) {
       for (const [, a] of this.fboReg) for (const f of a) { gl.deleteTexture(f.tex); gl.deleteFramebuffer(f.fbo) }
       this.fboReg.clear()
       for (const f of [this.lowResFBO, this.detailFBO, this.composeFBO])
         deleteFBO(gl, f)
-      this.onSeeked()
       for (const p of this.passProgs) if (p) gl.deleteProgram(p)
       for (const p of [this.aggProg, this.detailComposeProg, this.casFlipProg, this.bilinearProg])
         if (p) gl.deleteProgram(p)
@@ -406,7 +429,7 @@ export class FilmUpscaler {
     this.bilinearProg = null
     this.quadVAO = null; this.quadVBO = null; this.videoTex = null
     if (this.canvas?.parentElement) this.canvas.parentElement.removeChild(this.canvas)
-    this.canvas = null; this.gl = null; this.video = null
+    this.canvas = null; this.gl = null; this.video = null; this.bufferBudget = undefined
   }
 
   setCompareSplit(percent: number | null): void {
@@ -415,7 +438,15 @@ export class FilmUpscaler {
   }
 
   getStats(): FilmStats {
-    return { fps: this.currentFps, gpuEnabled: true, qualityScale: 2, enhancements: ['FSRCNNX', 'CAS'] }
+    return { fps: this.currentFps, gpuEnabled: this.running, qualityScale: this.casOnly ? 1 : 2, enhancements: this.casOnly ? ['CAS'] : ['FSRCNNX', 'CAS'] }
+  }
+
+  resizeOutput(): void {
+    if (!this.video || !this.canvas || !this.running || !this.bufferBudget) return
+    if (sizeEnhancementBuffer(this.video, this.canvas, this.casOnly ? 1 : 2, this.bufferBudget)) {
+      this.onSeeked()
+      this.render()
+    }
   }
 
   private renderLoop = (): void => {
@@ -431,16 +462,12 @@ export class FilmUpscaler {
     } else {
       this.rafId = requestAnimationFrame(this.renderLoop)
     }
-    this.render(); this.frames++
+    this.render()
     const now = performance.now()
     if (now - this.lastFpsTime >= 2000) {
       this.currentFps = Math.round(this.frames / ((now - this.lastFpsTime) / 1000))
       this.frames = 0; this.lastFpsTime = now
     }
-  }
-
-  private syncCanvasToVideo(): void {
-    layoutCanvasToVideo(this.video!, this.canvas!)
   }
 
   private render(): void {
@@ -449,7 +476,6 @@ export class FilmUpscaler {
 
     if (video.videoWidth !== this.inputW || video.videoHeight !== this.inputH) {
       this.inputW = video.videoWidth; this.inputH = video.videoHeight
-      this.canvas!.width = this.inputW * 2; this.canvas!.height = this.inputH * 2
       this.rebuild(); return
     }
 
@@ -486,7 +512,7 @@ export class FilmUpscaler {
 
     // FSRCNNX detail reconstruction plus bilinear color upsampling
     let aggOut: FBOEntry | null = null
-    {
+    if (!this.casOnly) {
       // 细节+颜色合成管线：bilinear 彩色放大 + FSRCNNX 细节亮度 → 合成
       pass(this.lowResFBO!, this.bilinearProg!, outW, outH, () => {
         bind(this.bilinearProg!, src, 'u_input', 0)
@@ -523,10 +549,8 @@ export class FilmUpscaler {
       aggOut = this.composeFBO!
     }
 
-    // Step 5: CAS → Canvas（Y 翻转 VS 匹配 DOM 坐标系）
-    // 同步 canvas 布局到视频的 letterbox 区域
-    this.syncCanvasToVideo()
-    const finalSrc = aggOut
+    // The light path sharpens the decoded frame directly.
+    const finalSrc = this.casOnly ? { tex: this.videoTex!, w, h } : aggOut
     if (finalSrc && this.casFlipProg) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, null)
       gl.viewport(0, 0, this.canvas!.width, this.canvas!.height)
@@ -535,15 +559,16 @@ export class FilmUpscaler {
       set2f(this.casFlipProg, 'u_texelSize', 1/finalSrc.w, 1/finalSrc.h)
       set1f(this.casFlipProg, 'u_amount', this.opts.casStrength)
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+      this.canvas!.hidden = false
+      this.frames++
     }
 
     gl.bindVertexArray(null)
   }
 
   private rebuild(): void {
-    const gl = this.gl!; this.stop()
-    const vs = compileShader(gl, gl.VERTEX_SHADER, VERTEX_SRC)!
-
+    const gl = this.gl!
+    this.stop()
     for (const p of this.passProgs) if (p) gl.deleteProgram(p); this.passProgs = []
     for (const [, a] of this.fboReg) for (const f of a) { gl.deleteTexture(f.tex); gl.deleteFramebuffer(f.fbo) }
     this.fboReg.clear()
@@ -552,23 +577,17 @@ export class FilmUpscaler {
     this.onSeeked()
     this.ulocs.clear()
     this.lowResFBO = null; this.detailFBO = null; this.composeFBO = null
-
-    for (let i = 0; i < this.passDefs.length; i++) {
-      const pass = this.passDefs[i]
-      if (pass.isAggregation) { this.passProgs.push(null!); continue }
-      const fs = compileShader(gl, gl.FRAGMENT_SHADER, buildPassShader(pass, this.inputW, this.inputH))!
-      const p = linkProgram(gl, vs, fs)!; gl.deleteShader(fs); this.passProgs.push(p)
+    for (const program of [this.aggProg, this.detailComposeProg, this.casFlipProg, this.bilinearProg]) {
+      if (program) gl.deleteProgram(program)
     }
-    if (this.aggProg) { gl.deleteProgram(this.aggProg); this.aggProg = null }
-    const aggFs = compileShader(gl, gl.FRAGMENT_SHADER, buildAggShader(this.inputW, this.inputH))!
-    this.aggProg = linkProgram(gl, vs, aggFs); gl.deleteShader(aggFs)
-
-    if (this.detailComposeProg) gl.deleteProgram(this.detailComposeProg)
-    const composeFs = compileShader(gl, gl.FRAGMENT_SHADER, DETAIL_COMPOSE_FRAG)!
-    this.detailComposeProg = linkProgram(gl, vs, composeFs); gl.deleteShader(composeFs)
-
-    gl.deleteShader(vs)
-    this.allocFBOs(); this.start()
+    this.aggProg = this.detailComposeProg = this.casFlipProg = this.bilinearProg = null
+    try {
+      this.configure(gl)
+      this.start()
+    } catch (error) {
+      this._error = error instanceof Error ? error.message : String(error)
+      this.destroy()
+    }
   }
 }
 
@@ -581,4 +600,4 @@ export function checkFilmSupport(): { supported: boolean; message: string } {
   } catch { return { supported: false, message: 'WebGL2 检测失败' } }
 }
 
-export const FILM_PRESET: Required<FilmUpscalerOptions> = { casStrength: 0.8 }
+export const FILM_PRESET = { casStrength: 0.8 } satisfies FilmUpscalerOptions

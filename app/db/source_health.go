@@ -137,7 +137,7 @@ func ListSourceHealthContext(ctx context.Context, sourceKey, kind string, limit 
 		args = append(args, kind)
 	}
 	var rows []SourceHealthSample
-	err := instance.SelectContext(ctx, &rows, query+` ORDER BY ts_unix DESC, id DESC LIMIT ?`, append(args, limit)...)
+	err := ReadDB().SelectContext(ctx, &rows, query+` ORDER BY ts_unix DESC, id DESC LIMIT ?`, append(args, limit)...)
 	return rows, err
 }
 
@@ -153,7 +153,7 @@ func GetSourceHealth(sourceKey, kind string, window int) (SourceHealth, error) {
 	var h SourceHealth
 	// 聚合只覆盖子查询里那 window 条：成功率必须是"最近这段时间的成功率"，
 	// 全历史的成功率会被很久以前的正常运行稀释掉，看不出源正在恶化。
-	err := instance.Get(&h, `SELECT COUNT(*) AS samples,
+	err := ReadDB().Get(&h, `SELECT COUNT(*) AS samples,
 			COALESCE(SUM(ok), 0) AS oks,
 			CASE WHEN COUNT(*) > 0 THEN CAST(ROUND(100.0 * COALESCE(SUM(ok), 0) / COUNT(*)) AS INTEGER) ELSE 0 END AS success_rate,
 			COALESCE(CAST(AVG(CASE WHEN ok = 1 AND latency_ms > 0 THEN latency_ms END) AS INTEGER), 0) AS avg_latency_ms,
@@ -173,14 +173,14 @@ func GetSourceHealth(sourceKey, kind string, window int) (SourceHealth, error) {
 	var last struct {
 		OK bool `db:"ok"`
 	}
-	if err := instance.Get(&last, `SELECT ok FROM source_health
+	if err := ReadDB().Get(&last, `SELECT ok FROM source_health
 		WHERE source_key = ? AND kind = ? ORDER BY ts_unix DESC, id DESC LIMIT 1`, sourceKey, kind); err == nil {
 		h.LastOK = last.OK
 	}
 	var lastErr struct {
 		Err string `db:"err"`
 	}
-	if err := instance.Get(&lastErr, `SELECT err FROM source_health
+	if err := ReadDB().Get(&lastErr, `SELECT err FROM source_health
 		WHERE source_key = ? AND kind = ? AND ok = 0 ORDER BY ts_unix DESC, id DESC LIMIT 1`, sourceKey, kind); err == nil {
 		h.LastError = lastErr.Err
 	}
@@ -195,11 +195,11 @@ func GetSourceHealth(sourceKey, kind string, window int) (SourceHealth, error) {
 		ID int64 `db:"id"`
 	}
 	boundary := failBoundary{Ts: -1} // 从没成功过：全部失败都算连败
-	if err := instance.Get(&boundary, `SELECT ts_unix AS ts, id FROM source_health
+	if err := ReadDB().Get(&boundary, `SELECT ts_unix AS ts, id FROM source_health
 		WHERE source_key = ? AND kind = ? AND ok = 1 ORDER BY ts_unix DESC, id DESC LIMIT 1`, sourceKey, kind); err != nil {
 		boundary = failBoundary{Ts: -1}
 	}
-	_ = instance.Get(&h.FailStreak, `SELECT COUNT(*) FROM source_health
+	_ = ReadDB().Get(&h.FailStreak, `SELECT COUNT(*) FROM source_health
 		WHERE source_key = ? AND kind = ? AND ok = 0
 			AND (ts_unix > ? OR (ts_unix = ? AND id > ?))`,
 		sourceKey, kind, boundary.Ts, boundary.Ts, boundary.ID)

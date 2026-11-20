@@ -348,7 +348,6 @@ func (s *castStream) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		forward.Header.Del("Range")
 	}
 	forward = forward.WithContext(context.WithValue(forward.Context(), hlsSniffPlaylistKey{}, true))
-	forward = forward.WithContext(context.WithValue(forward.Context(), hlsStreamKey{}, s.continuous && s.base+id == s.root))
 	forward.URL = &url.URL{Path: "/__cczj/hls", RawQuery: strings.TrimPrefix(s.owner.hls.urlFor(resource.url, resource.referer), "/__cczj/hls?")}
 	forward.RequestURI = forward.URL.RequestURI()
 	// Request headers describe the LAN transfer, not the CDN connection.

@@ -30,8 +30,8 @@ export const useInstalledResources=defineStore('installed-resources',()=>{
   }catch(failure){if(!disposed&&normalizeApiError(failure).code!=='CANCELLED')error.value=normalizeApiError(failure).message;return false}
   finally{if(pending===request)pending=undefined;if(!disposed){busy.value='';if(!error.value)void load()}}
  }
- function dispose(){disposed=true;cancel();window.removeEventListener('pagehide',cancel)}
- window.addEventListener('pagehide',cancel)
+ function dispose(){disposed=true;cancel();if(typeof window!=='undefined')window.removeEventListener('pagehide',cancel)}
+ if(typeof window!=='undefined')window.addEventListener('pagehide',cancel)
  onScopeDispose(dispose)
  if(import.meta.hot)import.meta.hot.dispose(dispose)
  return {items,directory,busy,error,load,remove,cancel}

@@ -134,7 +134,7 @@ type ReadingObservationCount struct {
 
 func ReadNovelObservations(ctx context.Context, itemID int) ([]ReadingObservationCount, error) {
 	rows := []ReadingObservationCount{}
-	err := instance.SelectContext(ctx, &rows, `SELECT i.source_key,e.revision,e.evidence AS outcome,COUNT(*) AS count,MAX(e.checked_at) AS checked_at
+	err := ReadDB().SelectContext(ctx, &rows, `SELECT i.source_key,e.revision,e.evidence AS outcome,COUNT(*) AS count,MAX(e.checked_at) AS checked_at
 	 FROM reading_chapter_evidence e JOIN library_chapters c ON c.id=e.chapter_id JOIN library_items i ON i.id=c.item_id
 	 WHERE e.kind='novel' AND i.kind='novel' AND c.lifecycle_state='active' AND i.lifecycle_state='active'
 	 AND (?=0 OR i.id=?) GROUP BY i.source_key,e.revision,e.evidence,(e.checked_at>=?)`, itemID, itemID, time.Now().Add(-7*24*time.Hour).Unix())
