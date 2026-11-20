@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.3-beta.1] - 2026-11-20
+
+### Added
+
+- 桌面与移动播放器可手动测速，查看当前集各线路在本机测得的下载速度和延迟，再选择切换线路。
+
+### Changed
+
+- 弹幕匹配优先复用已经确认的同作品分集目录，目录不完整时再补查。缩短临时超时和未匹配的重试间隔，并根据原因区分冷却时间。
+- 画质增强随播放区域调整输出尺寸。影视增强与自定义着色器限制显存占用，持续掉帧时可降为 CAS 锐化。
+- SQLite 使用单写入连接和独立只读连接池，减少目录、阅读和备份查询与写入任务之间的争用。
+
+### Fixed
+
+- 修正慢速但持续传输的媒体流提前断开的问题，并为长时间无数据的连接设置空闲超时。
+- 修正窗口退出时延迟缩放回调仍可能访问 WebView、后台关闭错误影响数据库收尾、直链下载异常时临时文件句柄未及时释放的问题。
+- 修正批量目录入库时部分字段写入异常，以及诊断录制停止时可能漏掉已接收事件的问题。
+
+### Testing
+
+- 本版仅供手动下载测试，正式更新渠道仍提供 2.5.2。可重点检查 B 站跨集弹幕匹配、慢线路持续播放、切换全屏时的画质增强和正常退出。
+- 提供 Windows x64 安装包和便携包，以及 Android ARM64 安装包。仅支持 x86_64 的模拟器无法安装此 APK。
+
 ## [2.5.2] - 2026-11-19
 
 ### Added
