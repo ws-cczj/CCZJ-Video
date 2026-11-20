@@ -8,7 +8,7 @@ import subprocess
 import time
 from urllib.request import urlopen
 
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import TimeoutError as PlaywrightTimeout, sync_playwright
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -102,8 +102,16 @@ def main():
             assert page.evaluate('window.segmentDiskTest.load(17)') == segment
             assert page.evaluate('window.__segmentReads.length') == 1
             assert not network, network
-            page.evaluate('window.segmentDiskTest.prefetch(19)')
-            page.wait_for_function('window.segmentDiskTest.stats().bytes === 4 * 1024**2')
+            page.evaluate('window.segmentDiskTest.prefetch(19, 17)')
+            try:
+                page.wait_for_function('window.segmentDiskTest.stats().bytes === 4 * 1024**2')
+            except PlaywrightTimeout as error:
+                raise AssertionError({
+                    'cache': page.evaluate('window.segmentDiskTest.stats()'),
+                    'disk_reads': page.evaluate('window.__segmentReads'),
+                    'network': network,
+                    'errors': errors,
+                }) from error
             assert page.evaluate('window.__segmentReads') == ['https://segments.invalid/17.ts', 'https://segments.invalid/19.ts']
             assert not network, network
             # Expired metadata must fall back without cloning its binary first.

@@ -23,12 +23,16 @@ const url = (index: number) => `https://segments.invalid/${index}.ts`
   stats: () => TsCache.stats(),
   episode: () => session.currentEpKey,
   clearMemory: cacheClear,
-  prefetch(index: number) {
+  prefetch(index: number, playedIndex: number) {
+    const segments = [url(playedIndex), url(index)]
     TsCache.enable()
     TsCache.setPlaybackBufferAhead(60)
-    TsCache.prefetchFromSegments(Array.from({ length: 40 }, (_, item) => url(item)), 0, index, 1)
+    TsCache.setSegments(segments, 0, segments.map((url, i) => ({ url, start: i * 6, duration: 6 })))
+    TsCache.updatePlaybackState({ position: 6, rate: 1, paused: false, seeking: false, buffered: [] })
+    TsCache.setTransportActive(true)
   },
   async expire(index: number) {
+    TsCache.setTransportActive(false)
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open('tscache', 2)
       request.onsuccess = () => resolve(request.result)
@@ -39,7 +43,7 @@ const url = (index: number) => `https://segments.invalid/${index}.ts`
         const tx = db.transaction('segment_meta', 'readwrite')
         const store = tx.objectStore('segment_meta')
         const request = store.get(url(index))
-        request.onsuccess = () => store.put({ ...request.result, ts: Date.now() - 3 * 24 * 60 * 60 * 1000 })
+        request.onsuccess = () => store.put({ ...request.result, ts: Date.now() - 8 * 24 * 60 * 60 * 1000 })
         tx.oncomplete = () => resolve()
         tx.onabort = () => reject(tx.error)
         tx.onerror = () => reject(tx.error)
