@@ -20,9 +20,9 @@ GitHub CLI 是仅在发布电脑使用的官方 MIT 工具，不进入 EXE／APK
 powershell -NoProfile -ExecutionPolicy Bypass -File build/release.ps1 -Publish -Commit -Version 2.4.2
 ```
 
-流程会同步 `version.json`、README、更新下载地址和历史说明，执行编译与静态检查，然后提交、构建并校验 Windows EXE／便携 ZIP／ARM64 APK。发布在本机执行 `scripts/verify.ps1 -StaticOnly`，推送精确标签后等待该提交在 GitHub 上的 Verify 工作流通过，再创建或继续发布草稿。工作流失败时可在修复后以新提交准备版本，或在排除临时故障后重跑该标签的 CI 再继续。界面与设备行为由用户验收。标签必须指向实际构建的干净提交，不允许把旧产物配上新 HEAD，也不移动既有版本标签。
+流程会同步 `version.json`、README、更新下载地址和历史说明。本机执行 `scripts/verify.ps1 -StaticOnly` 并将生成的前端用于后续打包，然后提交、构建并校验 Windows EXE／便携 ZIP／ARM64 APK。推送精确标签后优先复用同一提交在 `main` 上已通过的 Verify，首次验证的提交则等待标签上的 Verify 通过，再创建或继续发布草稿。工作流失败时可在修复后以新提交准备版本，或在排除临时故障后重跑该标签的 CI 再继续。界面与设备行为由用户验收。标签必须指向实际构建的干净提交，不允许把旧产物配上新 HEAD，也不移动既有版本标签。
 
-随后先推送标签和对应源码，创建 GitHub 草稿并上传八个发布文件，逐个检查附件名称、大小和 SHA256，再正式发布并设置为最新版本。全部文件齐全之后才推送当前分支，避免 `main/version.json` 提前向更新客户端公布尚不可下载的版本。GitHub 的草稿和发布行为见[官方 CLI 文档](https://cli.github.com/manual/gh_release_create)。
+随后先推送标签和对应源码，创建 GitHub 草稿并上传八个发布文件，逐个检查附件名称、大小和 SHA256，再正式发布并设置为最新版本。全部文件齐全之后才推送当前分支，避免 `main/version.json` 提前向更新客户端公布尚不可下载的版本。`main` 推送可复用同一提交已通过的正式版本标签 Verify。GitHub 的草稿和发布行为见[官方 CLI 文档](https://cli.github.com/manual/gh_release_create)。
 
 ### 预览与重试
 

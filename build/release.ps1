@@ -9,14 +9,15 @@ param(
     [switch]$NoOpen,
     [switch]$Publish,
     [switch]$Commit,
-    [switch]$Plan
+    [switch]$Plan,
+    [switch]$SkipFrontend
 )
 $ErrorActionPreference = 'Stop'
 $workspace = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location -LiteralPath $workspace
 if ($Publish) {
     if ($ReleaseTag) { throw 'Custom release tags require the manual prerelease workflow in docs/releases.md.' }
-    if ($SkipVerify) { throw 'Publishing always runs repository verification.' }
+    if ($SkipVerify -or $SkipFrontend) { throw 'Publishing always runs repository verification and builds the frontend.' }
     $publishArgs = @('scripts/publish-release.mjs','--out-dir',$OutDir,'--android-signing',$AndroidSigning)
     if ($Version) { $publishArgs += @('--version',$Version) }
     if ($Commit) { $publishArgs += '--commit' }
@@ -26,6 +27,7 @@ if ($Publish) {
     exit $LASTEXITCODE
 }
 if ($Commit -or $Plan) { throw '-Commit and -Plan require -Publish.' }
+if ($SkipFrontend -and !$SkipVerify) { throw '-SkipFrontend requires -SkipVerify and an existing verified build.' }
 $metadata = Get-Content -LiteralPath version.json -Raw -Encoding UTF8 | ConvertFrom-Json
 if (!$Version) { $Version=$metadata.version }
 if ($Version -ne $metadata.version -or $Version -notmatch '^\d+\.\d+\.\d+(?:-beta\.[1-9]\d*)?$') { throw 'Release version must exactly match version.json and use major.minor.patch[-beta.N].' }
@@ -44,8 +46,12 @@ function Run-Step([string]$Label,[scriptblock]$Work) {
 }
 if (!$SkipBuild) {
     Run-Step 'Generate embedded JSON assets' { & node scripts/compress-embedded-json.mjs }
-    if (!$SkipVerify) { Run-Step 'Verify repository' { & powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1 -StaticOnly } }
-    Run-Step 'Build frontend' { Push-Location frontend; try { & npm run build } finally { Pop-Location } }
+    if (!$SkipVerify) {
+        Run-Step 'Verify repository' { & powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1 -StaticOnly }
+    } elseif (!$SkipFrontend) {
+        Run-Step 'Build frontend' { Push-Location frontend; try { & npm run build } finally { Pop-Location } }
+    }
+    if (!(Test-Path -LiteralPath 'frontend/dist/index.html' -PathType Leaf)) { throw 'Missing built frontend.' }
     Run-Step 'Package Windows' { & powershell -NoProfile -ExecutionPolicy Bypass -File build/windows/package.ps1 -Version $Version -OutDir $stage -BinOut "bin/cczjVideo-$Version.exe" }
     $androidArgs = @('-NoProfile','-ExecutionPolicy','Bypass','-File','build/android/build.ps1','-Arch','arm64','-BuildType','Release','-SkipFrontend')
     if ($AndroidSigning -eq 'ExistingPreview') { $androidArgs += '-UseExistingPreviewKey' }

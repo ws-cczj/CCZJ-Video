@@ -35,7 +35,7 @@ export async function publishRelease(options, { run = execute, log = console.log
   }
   const tag = `v${version}`, stage = resolve(root, options.outDir ?? 'dist/releases', tag)
   if (options.plan) {
-    log(`Plan: ${repository} ${tag} from ${branch}\nSynchronize version.json and README from CHANGELOG; verify; ${options.commit ? 'commit all nonignored changes; ' : 'require a clean commit; '}build EXE/ZIP/ARM64 APK; push exact tag; wait for Verify on the release commit; upload and verify draft assets; publish; push ${branch}.\nArtifacts: ${stage}\nNo files, commits, tags or remote releases were changed.`)
+    log(`Plan: ${repository} ${tag} from ${branch}\nSynchronize version.json and README from CHANGELOG; verify; ${options.commit ? 'commit all nonignored changes; ' : 'require a clean commit; '}build EXE/ZIP/ARM64 APK; push exact tag; reuse successful Verify on main or wait for tagged Verify; upload and verify draft assets; publish; push ${branch}.\nArtifacts: ${stage}\nNo files, commits, tags or remote releases were changed.`)
     return { planned: true, version, repository }
   }
   // Authenticate before touching files or creating a local commit.
@@ -92,7 +92,7 @@ export async function publishRelease(options, { run = execute, log = console.log
     log('Reusing verified artifacts for this exact release commit.')
   } else {
     command('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'build/release.ps1', '-Version', version,
-      '-OutDir', options.outDir ?? 'dist/releases', '-AndroidSigning', options.androidSigning ?? 'ExistingPreview', '-SkipVerify', '-NoOpen'], { stream: true, timeout: 1800000 })
+      '-OutDir', options.outDir ?? 'dist/releases', '-AndroidSigning', options.androidSigning ?? 'ExistingPreview', '-SkipVerify', '-SkipFrontend', '-NoOpen'], { stream: true, timeout: 1800000 })
     checked = await check(stage)
   }
   const manifest = checked.manifest
@@ -106,12 +106,18 @@ export async function publishRelease(options, { run = execute, log = console.log
     let verification
     for (let attempt = 0; attempt < 24 && !verification; attempt++) {
       const listing = command('gh', ['run', 'list', '--repo', repository, '--workflow', 'verify.yml', '--commit', head,
-        '--event', 'push', '--limit', '30', '--json', 'databaseId,headBranch,headSha'])
-      verification = JSON.parse(listing.stdout).find(run => run.headSha === head && run.headBranch === tag)
+        '--event', 'push', '--limit', '100', '--json', 'databaseId,headBranch,headSha,status,conclusion'])
+      const runs = JSON.parse(listing.stdout).filter(run => run.headSha === head)
+      verification = runs.find(run => run.headBranch === 'main' && run.status === 'completed' && run.conclusion === 'success')
+        ?? runs.find(run => run.headBranch === tag)
       if (!verification) await new Promise(resolve => setTimeout(resolve, 5000))
     }
     if (!verification) throw new Error(`Verify has not started for ${tag}. Retry publication after GitHub queues the tagged commit.`)
-    command('gh', ['run', 'watch', String(verification.databaseId), '--repo', repository, '--exit-status'], { stream: true, timeout: 1800000 })
+    if (verification.headBranch === 'main') {
+      log(`Reusing Verify run ${verification.databaseId} on main for ${head}.`)
+    } else {
+      command('gh', ['run', 'watch', String(verification.databaseId), '--repo', repository, '--exit-status'], { stream: true, timeout: 1800000 })
+    }
   }
   const notes = join(stage, 'release-notes.md')
   if (!release) {

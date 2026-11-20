@@ -4,11 +4,51 @@ on:
   push:
   pull_request:
 
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref_type != 'tag' }}
+
 permissions:
   contents: read
 
 jobs:
-  desktop:
+  reuse-verify:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref_type == 'tag')
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      actions: read
+    outputs:
+      run-id: ${{ steps.lookup.outputs.run-id }}
+    steps:
+      - name: Look up completed Verify for this commit
+        id: lookup
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF_TYPE: ${{ github.ref_type }}
+        run: |
+          if ! runs=$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/verify.yml/runs" \
+              -f head_sha="$GITHUB_SHA" -f event=push -f status=success -F per_page=100); then
+            echo "::warning::Could not look up Verify runs. Running all checks."
+            exit 0
+          fi
+          if [[ "$REF_TYPE" == tag ]]; then
+            ref_pattern='^main$'
+          else
+            # A new stable release is tagged and verified before its metadata reaches main.
+            ref_pattern='^v[0-9]+\.[0-9]+\.[0-9]+$'
+          fi
+          run_id=$(jq -r --arg pattern "$ref_pattern" \
+            '[.workflow_runs[] | select(.head_branch | test($pattern))][0].id // empty' <<< "$runs")
+          if [[ -n "$run_id" ]]; then
+            echo "run-id=$run_id" >> "$GITHUB_OUTPUT"
+            printf 'Reusing [Verify run %s](%s/%s/actions/runs/%s) for `%s`.\n' \
+              "$run_id" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$run_id" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  verify-core:
+    needs: reuse-verify
+    if: ${{ !cancelled() && (needs.reuse-verify.result == 'skipped' || (needs.reuse-verify.result == 'success' && needs.reuse-verify.outputs.run-id == '')) }}
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
@@ -28,31 +68,87 @@ jobs:
       - name: Verify boundaries, frontend and Go
         shell: pwsh
         run: ./scripts/verify.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          if-no-files-found: error
+          retention-days: 3
+
+  browser-e2e:
+    needs: reuse-verify
+    if: ${{ !cancelled() && (needs.reuse-verify.result == 'skipped' || (needs.reuse-verify.result == 'success' && needs.reuse-verify.outputs.run-id == '')) }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: player
+            os: ubuntu-latest
+          - shard: reading-settings
+            os: ubuntu-latest
+          - shard: plugin-resource
+            os: windows-latest
+    env:
+      PIP_CACHE_DIR: ${{ github.workspace }}/.cache/pip
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.cache/playwright
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
+      - uses: actions/cache@v4
+        id: browser-cache
+        with:
+          path: |
+            ${{ env.PIP_CACHE_DIR }}
+            ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
+          key: browser-${{ runner.os }}-${{ runner.arch }}-py3.12-${{ hashFiles('scripts/browser-test-requirements.txt') }}
       - name: Install browser test dependencies
-        run: |
-          python -m pip install -r scripts/browser-test-requirements.txt
-          python -m playwright install chromium
+        run: python -m pip install -r scripts/browser-test-requirements.txt
+      - name: Install Chromium system dependencies
+        if: runner.os == 'Linux'
+        run: python -m playwright install-deps chromium
+      - name: Install Chromium
+        if: steps.browser-cache.outputs.cache-hit != 'true'
+        run: python -m playwright install chromium
       - name: Check settings, frame resize and splash lifecycle
+        if: matrix.shard == 'reading-settings'
         run: python scripts/test-settings-browser.py
       - name: Check reading migration, paging and failed-save recovery in browser
+        if: matrix.shard == 'reading-settings'
         run: python scripts/test-reading-browser.py
       - name: Check real browser playback
+        if: matrix.shard == 'player'
         run: |
           python scripts/test-player-browser.py
           python scripts/test-player-idle-cache.py
       - name: Check on-demand IndexedDB segment reads
+        if: matrix.shard == 'player'
         run: python scripts/test-segment-disk-browser.py
       - name: Check plugin lifecycle and cooperative permissions
+        if: matrix.shard == 'plugin-resource'
         run: python scripts/test-plugin-browser.py
       - name: Check diagnostics lifecycle and retained browser memory
+        if: matrix.shard == 'plugin-resource'
         run: python scripts/test-resource-browser.py
       - name: Check image memory bounds and background resource release
+        if: matrix.shard == 'plugin-resource'
         run: python scripts/test-optimization-browser.py
 
   race:
+    needs: reuse-verify
+    if: ${{ !cancelled() && (needs.reuse-verify.result == 'skipped' || (needs.reuse-verify.result == 'success' && needs.reuse-verify.outputs.run-id == '')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
