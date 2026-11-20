@@ -92,13 +92,12 @@ def main():
             page.get_by_role('button', name='下载更新', exact=True).click()
             page.wait_for_function('typeof window.__finishDownload === "function"')
             page.get_by_role('button', name='后台下载', exact=True).click()
-            tip = page.locator('.ui-toast').filter(has_text='正在连接下载源')
-            expect(tip).to_be_visible()
-            tip.get_by_role('button',name='关闭',exact=True).click()
-            expect(tip).to_have_count(0)
+            background = page.get_by_role('complementary',name='后台更新状态',exact=True)
+            expect(background).to_contain_text('正在连接下载源')
             page.evaluate("window._wails.dispatchWailsEvent({name:'update:download:progress',data:{downloaded:512,total:1024,speed_bps:256}})")
             expect(page.locator('.bg-download-indicator')).to_have_count(0)
-            page.evaluate('window.updateTest.open()')
+            background.get_by_role('button',name='查看更新进度和安装详情',exact=True).click()
+            expect(background).to_have_count(0)
             expect(page.get_by_role('dialog')).to_contain_text('50%')
             expect(page.get_by_role('dialog')).to_contain_text('256 B/s')
             page.evaluate("window._wails.dispatchWailsEvent({name:'update:download:progress',data:{downloaded:100,total:-1,speed_bps:10}})")
@@ -108,27 +107,25 @@ def main():
             page.get_by_role('dialog').get_by_role('button',name='关闭',exact=True).click()
             path = 'C:/Users/耿/OneDrive/Desktop/CC video/CCZJ-Video-Update.9.1.0.123.exe'
             page.evaluate('(path) => window.__finishDownload(path)', path)
-            tip = page.locator('.ui-toast').filter(has_text='更新包已下载完成')
-            expect(tip).to_be_visible()
-            expect(tip).to_contain_text('点击选择安装时间')
-            tip.get_by_role('button',name='详细信息',exact=True).focus()
+            expect(background).to_contain_text('更新包已下载完成')
+            expect(background).to_contain_text('点击选择安装时间')
+            background.get_by_role('button',name='查看更新进度和安装详情',exact=True).focus()
             page.keyboard.press('Enter')
             page.get_by_role('button', name='退出时安装', exact=True).click()
             expect(page.get_by_role('button', name='取消退出时安装', exact=True)).to_be_visible()
             page.get_by_role('dialog').get_by_role('button', name='关闭', exact=True).click()
-            expect(tip).to_have_count(0,timeout=6000)
-            page.evaluate('window.updateTest.open()')
+            expect(background).to_be_visible()
+            background.get_by_role('button',name='查看更新进度和安装详情',exact=True).click()
             page.get_by_role('button', name='取消退出时安装', exact=True).click()
             page.get_by_role('button', name='立即更新', exact=True).click()
             page.wait_for_function('!!window.__installPath')
             assert page.evaluate("!!localStorage.getItem('cczj_update_download_state')"), 'failed install erased recoverable download state'
-            # Failure feedback uses the same dismissible tip stack.
+            # A failed background download leaves a recovery entry.
             page.evaluate('void window.updateTest.check()')
             page.get_by_role('button', name='下载更新', exact=True).click()
             page.get_by_role('button', name='后台下载', exact=True).click()
             page.evaluate("window.__failDownload(new Error('fixture network failure'))")
-            failure=page.locator('.ui-toast').filter(has_text='下载更新失败')
-            expect(failure).to_be_visible()
+            expect(background).to_contain_text('下载更新失败')
             page.evaluate("window.updateTest.sources.sources=window.__notificationSources=[{source_key:'long_source',name:'真实源名称很长用于窄屏提示和关闭按钮检查',api_url:'https://example.invalid/',enabled:1}]")
             for width in [1280,390,320]:
                 page.set_viewport_size({'width':width,'height':844})
@@ -156,7 +153,7 @@ def main():
                 page.evaluate("window.updateTest.collect.getState('long_source').running=false;window.updateTest.collect.getState('long_source').done=false")
             expect(page.locator('.collect-overlay,.bg-download-indicator')).to_have_count(0)
             assert not errors, errors
-            checks = ['Markdown release notes and history', 'escaped upstream HTML', 'available event', 'stale cache', 'live progress', 'unknown size', 'verification', 'completion', 'keyboard reopen', 'quit install', 'failed install recovery', 'download failure', 'manual tip close', 'five-second expiry', 'source navigation and expansion', '320/390/1280px layout', 'no bottom overlay']
+            checks = ['Markdown release notes and history', 'escaped upstream HTML', 'available event', 'stale cache', 'live progress', 'unknown size', 'verification', 'completion', 'keyboard reopen', 'quit install', 'failed install recovery', 'download failure', 'background status', 'collection notification expiry', 'source navigation and expansion', '320/390/1280px layout']
             (output/'browser-result.json').write_text(json.dumps({'passed': checks}, indent=2), encoding='utf-8')
             print('Update browser regressions passed: '+', '.join(checks))
         finally:

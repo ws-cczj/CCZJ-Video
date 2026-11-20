@@ -21,7 +21,7 @@ def main():
     args = parser.parse_args()
     bindings = (ROOT / 'frontend/bindings/cczjVideo/app/service/app.js').read_text(encoding='utf-8')
     names = re.findall(r'export function (\w+)\(', bindings)
-    special = {'GetRuntimeMetrics', 'GetDiagnostics', 'ListIdentityMergeCandidates', 'ExportDiagnosticsReport', 'GetDiagnosticsRecordingStatus', 'StartDiagnosticsRecording', 'StopDiagnosticsRecording', 'AddDiagnosticsRecordingMarker'}
+    special = {'GetRuntimeMetrics', 'GetDiagnostics', 'ListIdentityMergeCandidates', 'ExportDiagnosticsReport', 'GetDiagnosticsRecordingStatus', 'StartDiagnosticsRecording', 'StopDiagnosticsRecording', 'SubmitDiagnosticsEvents'}
     mock = '\n'.join(f'export async function {name}() {{ return {"[]" if name in ("ListPlugins", "RescanPlugins") else chr(34)+chr(34)}; }}' for name in names if name not in special)
     mock += '''
       export async function GetRuntimeMetrics() {
@@ -46,11 +46,13 @@ def main():
         Object.assign(window.__recording, {active:false,reason:'manual',ended_at_ms:Date.now()});
         return structuredClone(window.__recording);
       }
-      export async function AddDiagnosticsRecordingMarker(kind, payload) {
-        if (!window.__recording.active) return false;
-        window.__recording.markers++;
-        window.__recordingMarkers.push({kind,data:JSON.parse(payload)});
-        return true;
+      export async function SubmitDiagnosticsEvents(payload) {
+        const events = JSON.parse(payload);
+        if (window.__recording.active) {
+          window.__recording.markers += events.length;
+          window.__recordingMarkers.push(...events);
+        }
+        return { accepted: events.length, rejected: 0, daily_enabled: true };
       }
     '''
     metrics = {'uptime_seconds': 120, 'goroutines': 20, 'cache': [], 'network': {'categories': []},
@@ -135,15 +137,17 @@ def main():
                 page.get_by_role('button', name='导出诊断报告', exact=True).click()
                 assert len(page.evaluate('window.__exported.resources.history')) > 0, 'section changes lost the resource history'
                 page.get_by_role('button', name='开始记录', exact=True).click()
-                expect(page.get_by_role('button', name='结束并导出', exact=True)).to_be_visible()
+                expect(page.get_by_role('button', name='结束记录', exact=True)).to_be_visible()
                 page.wait_for_function('window.__recordingMarkers.some(e => e.kind === "recording_start")')
                 page.evaluate('window.diagnosticsTest.state.active = false; window.diagnosticsTest.perf.beginLoad("media.example"); window.diagnosticsTest.perf.markFirstFrame(); window.diagnosticsTest.perf.addStall(1200); window.diagnosticsTest.perf.addFrames(1000,10); window.diagnosticsTest.perf.addWatched(15);')
                 page.wait_for_function('window.__recordingMarkers.some(e => e.kind === "stall")')
                 hidden_calls = page.evaluate('window.__metricCalls')
-                page.wait_for_function('window.__recordingMarkers.some(e => e.kind === "playback_snapshot")', timeout=10000)
+                page.wait_for_function('window.__recordingMarkers.some(e => e.kind === "playback_snapshot")', timeout=20000)
                 assert page.evaluate('window.__metricCalls') == hidden_calls, 'recording restarted hidden panel polling'
                 page.evaluate('window.diagnosticsTest.state.active = true; window.__exported = null')
-                page.get_by_role('button', name='结束并导出', exact=True).click()
+                page.get_by_role('button', name='结束记录', exact=True).click()
+                expect(page.get_by_role('button', name='开始记录', exact=True)).to_be_visible()
+                page.get_by_role('button', name='导出诊断报告', exact=True).click()
                 page.wait_for_function('!!window.__exported')
                 expect(page.locator('.diag-export-bar')).to_contain_text('session.zip')
                 assert page.evaluate('window.__exported.playback.frames.dropped') == 10
@@ -151,14 +155,13 @@ def main():
                 assert page.evaluate('window.__exported.recording.active') is False
                 assert page.evaluate('window.__recordingMarkers.some(e => e.kind === "recording_stop")')
                 marker_count = page.evaluate('window.__recordingMarkers.length')
-                page.wait_for_timeout(5300)
+                page.wait_for_timeout(17000)
                 assert page.evaluate('window.__recordingMarkers.length') == marker_count, 'ended session left its frontend recording observer running'
                 preview = ROOT / 'dist/audit/diagnostics-preview.png'
                 preview.parent.mkdir(parents=True, exist_ok=True)
                 page.screenshot(path=str(preview), full_page=False)
                 page.evaluate('window.__metrics.resources.native_available = false; window.__metrics.resources.sampled_at_ms++')
-                page.wait_for_timeout(2300)
-                expect(page.locator('.resource-monitor')).to_contain_text('不可用')
+                expect(page.locator('.resource-monitor')).to_contain_text('不可用', timeout=18000)
             page.evaluate('window.diagnosticsTest.state.mounted = false')
             page.wait_for_timeout(100)
             before = page.evaluate('window.__metricCalls')

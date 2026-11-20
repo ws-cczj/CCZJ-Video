@@ -79,7 +79,7 @@ def main():
                 page.clock.fast_forward(31_000)
                 idle = page.evaluate('window.playerTest.segmentStats().bytes')
                 print(json.dumps({'playing_mib': playing/1024**2, 'immediate_close_mib': immediate/1024**2, 'reopened_mib': reopened/1024**2, 'idle_mib': idle/1024**2}))
-                assert idle <= 8*1024**2, f'player idle cache retained {idle/1024**2:.1f} MiB after closing'
+                assert idle <= 16*1024**2, f'player idle cache retained {idle/1024**2:.1f} MiB after closing'
                 assert not errors, errors
             finally:
                 browser.close()

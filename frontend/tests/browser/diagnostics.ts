@@ -7,6 +7,7 @@ import { addPluginSettingsTab } from '../../src/plugins/registry'
 import DiagnosticsPanel from '../../src/components/DiagnosticsPanel.vue'
 import { useThemeStore } from '../../src/stores/theme'
 import { usePerfStore } from '../../src/stores/perf'
+import { initializeDiagnostics, registerPlaybackSnapshot } from '../../src/diagnostics/recording'
 import '../../src/style.css'
 import '../../src/styles/cczj-utilities.css'
 
@@ -24,4 +25,7 @@ void useThemeStore().load().finally(async () => {
 })
 document.body.style.background = 'var(--bg-primary)'
 document.body.style.fontFamily = 'system-ui, sans-serif'
-;(window as any).diagnosticsTest = { state, perf: usePerfStore() }
+const perf = usePerfStore()
+registerPlaybackSnapshot(() => perf.snapshot())
+void initializeDiagnostics()
+;(window as any).diagnosticsTest = { state, perf }

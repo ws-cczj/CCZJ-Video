@@ -35,5 +35,5 @@ const app = createApp(defineComponent({ setup: () => () => h('main', { class: 'm
 ]) })).use(createPinia()).use(i18n).use(router)
 app.mount('#app')
 ;(window as any).optimizationTest = { state, imageProxyStats: () => ((window as any).__legacyImageProxyStats || imageProxyStats)(), getProxiedImageUrl,
-  retainedImages: () => [...(posterRoot?.querySelectorAll('img') || [])].filter(image => image.src.startsWith('data:')).length,
+  retainedImages: () => [...(posterRoot?.querySelectorAll('img') || [])].filter(image => image.src.startsWith('data:image/png')).length,
 }

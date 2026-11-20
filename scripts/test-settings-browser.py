@@ -173,24 +173,25 @@ def main():
                 assert page.locator('#basic-player').count()==0,'duplicate playback controls remain in settings'
                 # Motion preferences are real persisted controls, not timing documentation.
                 page.locator('.tab[data-group="motion"]').click()
-                page.locator('.style-option.lively').click()
-                page.wait_for_function("JSON.parse(window.__preferences.ui_motion_options).style==='lively'")
-                page.locator('.range-control input').first.fill('140')
-                page.locator('.range-control input').first.dispatch_event('change')
-                page.wait_for_function("JSON.parse(window.__preferences.ui_motion_options).speed===140")
-                assert page.evaluate("window.settingsTest.motion.tokenMs('--cczj-motion-normal')")<220
-                page.get_by_role('checkbox',name='Dialogs and menus',exact=True).uncheck()
+                page.get_by_text('Adjust durations by scene',exact=True).click()
+                duration=page.get_by_role('textbox',name='Dialogs and drawers',exact=True)
+                duration.fill('150')
+                duration.press('Enter')
+                page.wait_for_function("JSON.parse(window.__preferences?.ui_motion_options || '{}').durations?.normal===150")
+                assert page.evaluate("window.settingsTest.motion.tokenMs('--cczj-motion-normal')") == 150
+                page.get_by_role('switch',name='Dialogs and menus',exact=True).uncheck()
                 page.wait_for_function("document.documentElement.dataset.motionOverlays==='off'")
-                old_version=int(page.locator('.preview-sample').get_attribute('data-preview-version'))
-                page.locator('.small-button.play-preview').click()
-                page.locator(f'.preview-sample[data-preview-version="{old_version+1}"]').wait_for(state='visible')
-                assert page.locator('.preview-sample').evaluate('(el)=>getComputedStyle(el).animationName')!='none'
+                page.get_by_role('button',name='Preview playback entrance',exact=True).click()
+                player_preview=page.locator('.scenario-player')
+                player_preview.wait_for(state='visible')
+                player_preview.get_by_role('button',name='Back',exact=True).click()
+                player_preview.wait_for(state='detached')
                 page.wait_for_timeout(300)
                 page.set_viewport_size({'width':1600,'height':1000})
                 page.locator('.main-content').evaluate('(el)=>el.scrollTop=0')
                 page.screenshot(animations='disabled',path=str(output/'motion-updated.png'))
                 page.get_by_role('button',name='Restore defaults',exact=True).click()
-                page.wait_for_function("JSON.parse(window.__preferences.ui_motion_options).speed===100")
+                page.wait_for_function("JSON.parse(window.__preferences.ui_motion_options).durations?.normal===undefined")
                 page.locator('.tab[data-group="basic"]').click()
                 # Both accessibility and the application's motion preference disable ornaments.
                 page.evaluate("const spinner=document.createElement('span');spinner.id='test-loading-indicator';spinner.className='cczj-motion-spin';document.querySelector('.basic-settings').append(spinner)")
