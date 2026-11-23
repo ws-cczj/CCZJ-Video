@@ -1,69 +1,53 @@
 # CCZJ Video
 
-[![Verify](https://github.com/ws-cczj/CCZJ-Video/actions/workflows/verify.yml/badge.svg)](https://github.com/ws-cczj/CCZJ-Video/actions/workflows/verify.yml)
+<img src="./icon.png" alt="CCZJ Video 图标" width="96">
+
+CCZJ Video 是面向个人学习与研究的免费本地播放器与数据解析工具。用它播放视频、浏览短剧、阅读小说和漫画。内容来自公开网络或你配置的第三方来源，收藏、历史和进度保存在本机。
+
+**[官方下载](https://github.com/ws-cczj/CCZJ-Video/releases/latest)** · [更新日志](./CHANGELOG.md) · [问题反馈](https://github.com/ws-cczj/CCZJ-Video/issues)
+
+## 版权许可与免责声明
+
+- **纯本地播放器，仅限个人学习研究**：本软件仅作为本地多媒体播放器与数据解析学习工具，采用 [自定义非商业使用许可（v1.2）](./LICENSE)。**严禁任何形式的商业使用、收费售卖、改名换皮打包，以及公开搬运至网盘合集、第三方下载站或自媒体/短视频渠道引流传播**。如有人向你收费售卖本软件，均属违规行为。
+- **不提供任何资源，无内容方关联**：本软件不内置、不存储、不提供任何影视、短剧、小说、漫画或弹幕资源，所有网络资源均来自互联网公开网络或用户自行配置的第三方来源；开发者与任何第三方内容提供方无任何隶属或合作关系。
+- **无内置广告与 24 小时清理提示**：本软件本身不插入任何广告，播放画面中出现的广告均来自第三方视频源，切勿轻信。因学习测试产生的缓存及临时数据请在 24 小时内清理，严禁用于侵权或违法用途。
+- **零遥测与脚本安全**：本软件无作者中央服务器，不收集任何用户数据或遥测信息；第三方扩展脚本与应用共享本机权限（非沙箱），请仅运行可信来源的脚本。
+- **第三方组件与侵权联系**：第三方开源库、字体、着色器与外部美术素材归各自权利人所有；如有版权沟通或商业授权需求，请联系 `yikeshuoguo@qq.com`。
+
+向他人推荐软件时，请分享[官方项目主页](https://github.com/ws-cczj/CCZJ-Video)。完整使用条件见[许可全文](./LICENSE)。
+
+## 下载与安装
 
 Current release: **v2.5.2**
 
-视频、小说与漫画多源聚合应用，使用 Wails v3、Vue 3、TypeScript 和 Go。Windows 10/11 版需要 WebView2 运行时，Android 版目前为预览版。
+从 [GitHub Releases](https://github.com/ws-cczj/CCZJ-Video/releases) 选择适合设备的安装包。
 
-iOS 正在适配，提供 [本地构建、云端打包与个人自签流程](docs/ios.md)；尚未完成 iOS 编译与真机验收，不作为已支持的发布平台。
+| 平台 | 安装包 | 安装方式 |
+| --- | --- | --- |
+| Windows 10 / 11（x64） | `.exe` 可执行文件或 `-portable.zip` 便携包 | 直接运行 EXE，或解压便携包后启动。需要 WebView2 Runtime。 |
+| Android（ARM64，预览版） | `.apk` | 在 ARM64 设备上打开 APK 安装。仅支持 x86_64 的模拟器无法安装此包。 |
+| iOS | 适配中 | 当前没有公开安装包。 |
 
-## 能做什么
+## 主要功能
 
-- 管理多个采集源，采集视频目录、搜索、筛选和查看详情。
-- 在线播放、切换线路、断点续播，手动加载 SRT/VTT 字幕。
-- 短剧海报剧场与竖屏播放，支持推荐刷剧、单剧连播、长按倍速和抽屉选集。
-- 离线下载，支持暂停、恢复和取消。
-- 收藏、观看历史、回收站、数据备份和换机恢复。
-- 使用 Anime4K 动画增强，或 FSRCNNX 2× 超分与 CAS 锐化的影视增强。
-- 安装采集适配、主题、着色器和前端脚本扩展包。
-- 小说与漫画分别提供内置源、浏览、多源搜索和阅读；书架、追漫、阅读进度和偏好保存在本机 SQLite，可随完整备份恢复。
-
-“相似推荐”按演员、导演、类型、年份与地区匹配，不读取观看历史或收藏。画质增强效果与流畅度取决于素材和 GPU。
+- **视频播放**支持线路切换、断点续播、弹幕、外载 SRT / VTT 字幕与离线下载。
+- **短剧剧场**支持竖屏连播、滑动切换、选集与长按倍速。
+- **小说与漫画**支持多源搜索、书架、追漫和阅读进度。
+- **画质增强**提供 Anime4K 动画增强和 FSRCNNX 影视超分，实际效果取决于素材和设备。
+- **本机管理**支持收藏、历史、扩展包和数据备份。
 
 ## 开始使用
 
-1. 在“采集源”添加你自己的视频 API 地址并执行采集。
-2. 从首页或搜索打开影片详情，选择集数和播放线路。
-3. 在“设置 → 高级”导出数据备份；恢复时只补充或合并数据，不用旧库覆盖当前库。
+1. 首次打开应用时，阅读并确认使用条款。
+2. 看视频或短剧时，在「采集源」添加你有权使用的来源，执行采集后从首页或搜索进入详情。阅读小说或漫画时，在对应模式的来源管理中选择来源，再搜索作品。
+3. 换机前，在「设置 → 高级」导出备份。恢复会补充或合并现有数据。升级后若找不到旧记录，可查看「旧数据找回」。
 
-应用数据默认保存在 `%APPDATA%\CCZJ Video`。升级后找不到旧数据时，先查看“设置 → 高级 → 旧数据找回”；更新失败的结果可在下次启动和日志中查看。
+## 本机数据与联网
 
-## 扩展包与信任
+Windows 的应用数据通常位于 `%APPDATA%\CCZJ Video`，Android 应用数据保存在应用私有目录。收藏、历史、日志与设置保存在本机。采集来源、补全资料、加载弹幕、检查更新和投屏等功能会向对应服务或局域网设备发送必要请求。主动导出的文件由你自行管理。
 
-Windows 可在“设置 → 扩展包”拖入扩展包文件夹；Android 在该页管理内置及已安装扩展。格式和样例见[扩展包规范](docs/plugins.md)。
+## 反馈与贡献
 
-带脚本的包在首次明确启用时询问是否信任，授权按本机包身份保留，更新内容后不会自动重新询问。原封不动的内置包按程序内嵌内容校验后运行。清除信任会停用该包，重新启用时再确认；内容备份不会携带本机授权。
+遇到问题或有功能建议，可在 [GitHub Issues](https://github.com/ws-cczj/CCZJ-Video/issues) 提交。反馈故障时请注明应用版本、设备系统和复现步骤。请勿发送账号、Cookie 或私人来源凭据。
 
-脚本与应用共享权限，写入和网络授权提示只约束配合规则的代码。**这不是沙箱，请只运行可信来源的脚本。** 信任与权限记录属于当前安装，不随备份导入导出。
-
-## 开发与验证
-
-开发规范见 [AGENTS.md](AGENTS.md)，代码和公共能力入口见 [开发与复用指南](docs/development.md)。完整文档与历史资料从 [文档索引](docs/README.md) 查找。
-
-工具链版本以 `go.mod`、`frontend/package.json` 和锁文件为准。当前最低 **Go 1.26.0**，本机核对为 Go 1.26.2、Node 24.18.0，Wails Go／JS／CLI 均为 3.0.0。Android 构建会核对这三者及前端锁文件、已安装 runtime 的版本，并严格校验构建副本的源码补丁。
-
-桌面编译、Android APK 构建和设备验收分别报告。iOS 仍处适配阶段，本机 Windows 环境尚未完成 iOS 编译、模拟器或 iPhone 验收。平台构建与当前验证边界见下方开发文档。
-
-```powershell
-npm --prefix frontend ci
-wails3 dev -config ./build/config.yml -port 9245
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1
-```
-
-完整验证包含文档链接、版本同步、架构边界、CCZJ 样式复用、前端测试与构建、Go vet 和 Go 测试。公共控件先使用 `components/ui`；基础布局先查 `cczj-utilities.css`，不要在新页面另建一套。
-
-Windows 单独构建使用 `task build`。Android 构建、模拟器与热更新见 [Android 开发](docs/android.md)。同时准备 EXE、便携 ZIP、ARM64 APK 和校验清单，运行：
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File build/release.ps1 -NoOpen
-```
-
-版本读取 `version.json`，发布文件位于 `dist/releases/v版本号/`。一键提交、构建并发布 GitHub Release，双击 `build/publish.cmd` 或运行 `task publish`；更新说明读取 CHANGELOG。首次需要安装 GitHub CLI 并登录，详见[发布与自动更新](docs/releases.md)。
-
-## 更多资料
-
-- [文档索引](docs/README.md)：当前维护文档、验收结果和合并归档。
-- [扩展包规范](docs/plugins.md)：格式、权限和信任。
-- [更新日志](CHANGELOG.md)。
-- [使用许可](LICENSE)：分发与修改以原文条款为准。
+维护和自建请查阅[文档索引](./docs/README.md)及[开发与复用指南](./docs/development.md)。扩展作者可查阅[扩展包规范](./docs/plugins.md)。
