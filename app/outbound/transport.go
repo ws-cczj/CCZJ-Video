@@ -1,6 +1,7 @@
 package outbound
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
@@ -62,7 +63,7 @@ func (t *routeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if response.Body == nil {
 		cancel()
 	} else {
-		response.Body = &releasedBody{ReadCloser: response.Body, release: cancel}
+		response.Body = &releasedBody{ReadCloser: response.Body, release: cancel, request: req.Context()}
 	}
 	return response, nil
 }
@@ -263,12 +264,21 @@ type releasedBody struct {
 	io.ReadCloser
 	once    sync.Once
 	release func()
+	request context.Context
 }
 
 func (b *releasedBody) Read(data []byte) (int, error) {
+	if b.request != nil && b.request.Err() != nil {
+		return 0, b.request.Err()
+	}
 	n, err := b.ReadCloser.Read(data)
 	if errors.Is(err, io.EOF) {
 		b.once.Do(b.release)
+	}
+	// A tunnel closing at the same time as cancellation can surface as EOF.
+	// Use the caller context because releasing a normal body cancels its child.
+	if err != nil && b.request != nil && b.request.Err() != nil {
+		return n, b.request.Err()
 	}
 	return n, err
 }

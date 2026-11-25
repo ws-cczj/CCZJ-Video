@@ -66,9 +66,9 @@ func (s *Store) matchFailure(ctx context.Context, key, provider, fingerprint str
 		return nil, err
 	}
 	if storedFingerprint != fingerprint && strings.HasSuffix(fingerprint, tvIndexFingerprintSuffix) {
-		// Old keyword failures did not check the year index. Preserve limits and
-		// unrelated episode failures from the same matching policy.
-		if catalogueCanRetry(value) {
+		// Only explicit empty keyword results need rechecking through the year
+		// index. Older generic failures can still be explained from cached data.
+		if value.Code == "WORK_OFFICIAL_MISSING" || value.Code == "WORK_SEARCH_EMPTY" {
 			return nil, nil
 		}
 		fingerprint = strings.TrimSuffix(fingerprint, tvIndexFingerprintSuffix)

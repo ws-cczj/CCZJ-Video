@@ -30,7 +30,6 @@ import {
   setPlaybackTimeline,
   updatePlaybackState,
   setTransportActive,
-  checkpointPausedTransport,
   inventorySnapshot,
   cachedPlaybackRanges,
   blockedSegment,
@@ -325,7 +324,7 @@ export async function dropAllSegmentCache(): Promise<void> {
 export const TsCache = {
   enable, clear, stats, retainPlayback,
   setEpisodes, setCurrentEpisode, setSegments, setTargetDuration, setPlaybackBufferAhead,
-  updatePlaybackState, setTransportActive, checkpointPausedTransport, blockedSegment, retryBlockedSegment, acceptSkippedSegment,
+  updatePlaybackState, setTransportActive, blockedSegment, retryBlockedSegment, acceptSkippedSegment,
   hasPlaybackGap, segmentRetryDelay,
   cachedPlaybackRanges,
   prefetchFirst, prefetchNextEpisode, prefetchFromM3u8,

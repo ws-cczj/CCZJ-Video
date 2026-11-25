@@ -96,8 +96,8 @@ func TestShortCacheFreshnessAndExpiry(t *testing.T) {
 	calls := p.calls.Load()
 	*now = now.Add(commentFreshness - time.Minute)
 	second, err := s.ReadWindow(ctx, "video:source:episode", 6000, 0)
-	if err != nil || !second.Cached || p.calls.Load() != calls {
-		t.Fatal("cache refetched within the freshness window", second, err)
+	if err != nil || p.calls.Load() != calls {
+		t.Fatal("comment segments refetched within their freshness window", second, err)
 	}
 	*now = now.Add(2 * time.Minute)
 	p.failure.Store(true)

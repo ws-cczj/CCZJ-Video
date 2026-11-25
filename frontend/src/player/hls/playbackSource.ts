@@ -7,7 +7,7 @@ import { adaptiveForwardBuffer } from '../../utils/ts-cache/network'
 import { playbackTransportURL } from '../../platform/mediaTransport'
 import { isIOSRuntime } from '../../api/runtime'
 import { hlsWorkerConfig } from './worker'
-import type { BlockedSegment } from '../../utils/ts-cache/prefetch'
+import { checkpointPausedTransport, type BlockedSegment } from '../../utils/ts-cache/prefetch'
 import { byteRangeOf } from '../../utils/ts-cache/segment-key'
 import { cacheHas } from '../../utils/ts-cache/memory-cache'
 import { confirmSegmentDecoded, rejectSegmentContent, transferFailure, transferSucceededSince } from '../../utils/ts-cache/transfer'
@@ -169,7 +169,7 @@ export function createPlaybackSource(deps: {
     const pause = () => {
       cancelNetworkTimeout()
       if (video.readyState >= 2 && !video.ended && !video.seeking && lease.current()) {
-        TsCache.checkpointPausedTransport(transportOwner)
+        checkpointPausedTransport(transportOwner)
       }
     }
     const seek = () => {cancelNetworkTimeout();recoveryPending=false;exhausted=false;networkRecoveries=0;retryTarget=undefined;deps.recovered?.()}
