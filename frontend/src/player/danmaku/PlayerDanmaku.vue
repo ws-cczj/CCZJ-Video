@@ -142,7 +142,7 @@ defineExpose({open,close,back,scheduleClose,toggle,ready:preferencesReady,engage
         <p v-for="attempt in attempts" :key="attempt.provider">
           <strong>{{ sourceLabel(attempt.provider) }} · {{ t(`danmaku.attempts.${attempt.status}`) }}</strong>
           <span v-if="attempt.code" class="cczj-danmaku-match-reason">{{ attempt.status === 'not_used' && attempt.code === 'TIMEOUT' ? t('danmaku.matchQueueDeadline') : reason(attempt.code) }} <code>{{ attempt.code }}</code></span>
-          <small v-if="attempt.stage">{{ t('danmaku.matchStage') }} · {{ te(`danmaku.stages.${attempt.stage}`) ? t(`danmaku.stages.${attempt.stage}`) : attempt.stage }} · {{ attempt.elapsedMs || 0 }} ms</small>
+          <small v-if="attempt.stage">{{ t('danmaku.matchStage') }} · {{ te(`danmaku.stages.${attempt.stage}`) ? t(`danmaku.stages.${attempt.stage}`) : attempt.stage }} · {{ t('danmaku.attemptTotal', { ms: attempt.elapsedMs || 0 }) }}</small>
           <small v-if="attempt.detail">{{ attempt.detail }}</small>
           <small v-if="attempt.retryAt">{{ t('danmaku.matchRetryAt', { time: new Date(attempt.retryAt * 1000).toLocaleString() }) }}</small>
         </p>

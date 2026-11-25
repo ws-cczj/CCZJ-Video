@@ -6,7 +6,7 @@
  * `.toggle`（深色模式那枚复选框）留在这份样式里，不依赖父级。
  */
 defineOptions({ name: 'ThemeEditorModal' })
-import { ref, reactive, computed, watch, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, inject, watch, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '../../components/Icon.vue'
 import { Button, Modal, Spinner } from '../../components/ui'
@@ -16,9 +16,11 @@ import { pickColorFromImage } from '../../utils/imagePalette'
 import { isMobileRuntime } from '../../api/runtime'
 import { createRequestScope } from '../../api/requestScope'
 import ThemeImageCrop from './ThemeImageCrop.vue'
-import { prepareThemeImage, type ThemeCrop } from '../../utils/themeImage'
+import { prepareThemeImage, readThemeImageSource, type ThemeCrop } from '../../utils/themeImage'
 import { readFileDataURL } from '../../api/fileTransfer'
+import { routeWorkActivityKey } from '../../composables/useViewActivity'
 
+const props = defineProps<{ active: boolean }>()
 const { t } = useI18n()
 const mobile = isMobileRuntime()
 const themeStore = useThemeStore()
@@ -58,29 +60,32 @@ function prepareManualFields(existing?:CustomTheme):void {
   if(existing){for(const key of basicColors)if(existing[key]!==undefined)manualFields.add(key);for(const key of THEME_ROLE_KEYS)if(existing.roleColors?.[key])manualFields.add(key)}
 }
 
-const backgroundImageUrl = ref<string | null>(null)
-const cropSource=ref<string | null>(null)
+const backgroundImageUrl = computed(()=>bgSrc(editing.backgroundImage))
+const cropSource=computed(()=>bgSrc(editing.backgroundOriginal)??backgroundImageUrl.value)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const imageBusy=ref(false), paletteBusy=ref(false), saving=ref(false), cropOpen=ref(false)
-const previewLoading=ref(false),previewFailed=ref(false),previewAttempt=ref(0)
-let previewTimer:ReturnType<typeof setTimeout>|undefined
-watch(backgroundImageUrl,src=>{
-  clearTimeout(previewTimer);previewFailed.value=false;previewLoading.value=!!src
-  if(src)previewTimer=setTimeout(()=>previewError(),30000)
-},{flush:'sync'})
-function previewLoaded():void {clearTimeout(previewTimer);previewLoading.value=false;previewFailed.value=false}
-function previewError():void {clearTimeout(previewTimer);previewLoading.value=false;previewFailed.value=true}
-function retryPreview():void {previewLoading.value=true;previewFailed.value=false;previewAttempt.value++;clearTimeout(previewTimer);previewTimer=setTimeout(previewError,30000)}
+const previewImageUrl=computed(()=>themeStore.backgroundURLFor(backgroundImageUrl.value))
+const previewLoading=computed(()=>!!backgroundImageUrl.value&&!previewImageUrl.value&&themeStore.backgroundLoading)
+const previewFailed=computed(()=>!!backgroundImageUrl.value&&!previewImageUrl.value&&themeStore.backgroundFailed)
+function retryPreview():void {void themeStore.retryBackground()}
 const busy=computed(()=>imageBusy.value||paletteBusy.value||saving.value||previewLoading.value)
-let originalImage:Blob|null=null
 let imageAbort:AbortController|null=null
 let previousThemeId = ''
 const imageRequests = createRequestScope()
 let imageGeneration = 0, disposed = false
 let paletteAbort: AbortController | null = null
-function releaseImages(): void { imageGeneration++; imageAbort?.abort(); imageAbort=null; imageBusy.value=false; paletteBusy.value=false; cropOpen.value=false; originalImage=null; imageRequests.cancel(); paletteAbort?.abort(); paletteAbort = null }
-watch(editorOpen, open => { if (!open) {releaseImages();cropSource.value=null;backgroundImageUrl.value=null} }, { flush: 'sync' })
-onBeforeUnmount(() => { clearTimeout(previewTimer);disposed = true; releaseImages(); if (editorOpen.value) closeEditor() })
+function releaseImages(): void { imageGeneration++; imageAbort?.abort(); imageAbort=null; imageBusy.value=false; paletteBusy.value=false; cropOpen.value=false; imageRequests.cancel(); paletteAbort?.abort(); paletteAbort = null }
+watch(editorOpen, open => {
+  if (open) return
+  releaseImages()
+  editing.backgroundImage=undefined
+  editing.backgroundOriginal=undefined
+}, { flush: 'sync' })
+const routeActive = inject(routeWorkActivityKey)
+watch(()=>!saving.value&&(!props.active||routeActive?.value===false), inactive=>{
+  if(inactive&&editorOpen.value)closeEditor()
+})
+onBeforeUnmount(() => { disposed = true; releaseImages(); if (editorOpen.value) closeEditor() })
 
 function colorToHex(c: string): string {
   const m = c.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/)
@@ -159,8 +164,6 @@ function openCreate(): void {
     __mode: 'create' as const,
   })
   seedSurfaceAlphas(cur.palette)
-  backgroundImageUrl.value = bgSrc(cur.bgImage) || null
-  cropSource.value=bgSrc(editing.backgroundOriginal)||backgroundImageUrl.value
   editorOpen.value = true
   applyPreview()
 }
@@ -207,8 +210,6 @@ function openEditPreset(preset: { id: string; name: string; primary: string; pal
     })
     seedSurfaceAlphas(preset.palette)
   }
-  backgroundImageUrl.value = bgSrc(editing.backgroundImage) || null
-  cropSource.value=bgSrc(editing.backgroundOriginal)||backgroundImageUrl.value
   editorOpen.value = true
   applyPreview()
 }
@@ -234,8 +235,6 @@ function openEdit(id: string): void {
   // 老存档可能没有这些角色色：按当前主题算一遍补上，别让取色框变成纯黑
   fillMissingComponentColors(themeStore.paletteFromCustom(existing))
   separateLegacyEpisodes(themeStore.paletteFromCustom(existing))
-  backgroundImageUrl.value = bgSrc(editing.backgroundImage) || null
-  cropSource.value=bgSrc(editing.backgroundOriginal)||backgroundImageUrl.value
   editorOpen.value = true
   applyPreview()
 }
@@ -359,8 +358,14 @@ async function applyImagePalette(): Promise<void> {
   const abort = new AbortController()
   paletteAbort = abort
   paletteBusy.value=true
-  const picked = await pickColorFromImage(src, abort.signal)
-  if (paletteAbort === abort) {paletteAbort = null;paletteBusy.value=false}
+  let picked: string|null = null
+  try {
+    await themeStore.waitForBackground()
+    const preview = themeStore.backgroundURLFor(src)
+    if (preview && !abort.signal.aborted) picked = await pickColorFromImage(preview, abort.signal)
+  } finally {
+    if (paletteAbort === abort) {paletteAbort = null;paletteBusy.value=false}
+  }
   if (disposed || !editorOpen.value || abort.signal.aborted || generation !== imageGeneration || src !== bgSrc(editing.backgroundImage)) return
   if (!picked) {
     errorStore.warn(t('settings.pickFromImage'), t('settings.pickFromImageFailed'), '', 'Settings.applyImagePalette')
@@ -374,7 +379,6 @@ async function applyImagePalette(): Promise<void> {
 async function loadBackgroundImage(file: File): Promise<void> {
   if(saving.value)return
   releaseImages()
-  originalImage=file
   await processImage(file)
 }
 
@@ -391,12 +395,10 @@ async function processImage(blob:Blob,crop?:ThemeCrop):Promise<void> {
     const original=crop?(source?.startsWith('data:')?source:await imageRequests.run(()=>readFileDataURL(new File([blob],'original',{type:blob.type})))):undefined
     if(disposed||!editorOpen.value||abort.signal.aborted||generation!==imageGeneration)return
     editing.backgroundOriginal=original
-    backgroundImageUrl.value=url;editing.backgroundImage=url;cropOpen.value=false
-    if(!crop)cropSource.value=url
+    editing.backgroundImage=url;cropOpen.value=false
     applyPreview()
     await applyImagePalette()
   } catch(error) {
-    if(!crop&&generation===imageGeneration)originalImage=null
     if(!abort.signal.aborted&&!disposed&&editorOpen.value&&generation===imageGeneration)
       errorStore.fromError(t('settings.backgroundPreview'),error,'ThemeEditorModal.backgroundImage')
   } finally {if(generation===imageGeneration){imageBusy.value=false;imageAbort=null}}
@@ -404,20 +406,16 @@ async function processImage(blob:Blob,crop?:ThemeCrop):Promise<void> {
 
 async function applyCrop(crop:ThemeCrop):Promise<void> {
   if(busy.value)return
-  if(originalImage){await processImage(originalImage,crop);return}
   const src=cropSource.value
   if(!src)return
   const generation=imageGeneration
   const abort=new AbortController();imageAbort=abort;imageBusy.value=true
   try {
-    const response=await fetch(src,{signal:abort.signal})
-    if(!response.ok)throw new Error(t('settings.imageProcessFailed'))
-    const blob=await response.blob()
+    const blob=await readThemeImageSource(src,abort.signal)
     if(generation!==imageGeneration||abort.signal.aborted)return
-    originalImage=blob
     await processImage(blob,crop)
   } catch(error){if(!abort.signal.aborted)errorStore.fromError(t('settings.cropImage'),error,'ThemeEditorModal.crop')}
-  finally{if(generation===imageGeneration)imageBusy.value=false}
+  finally{if(generation===imageGeneration){imageBusy.value=false;imageAbort=null}}
 }
 
 async function restoreOriginal():Promise<void> {
@@ -425,7 +423,6 @@ async function restoreOriginal():Promise<void> {
   const original=editing.backgroundOriginal
   releaseImages()
   editing.backgroundImage=original;editing.backgroundOriginal=undefined
-  backgroundImageUrl.value=bgSrc(original)??null;cropSource.value=backgroundImageUrl.value
   applyPreview()
   await applyImagePalette()
 }
@@ -441,8 +438,6 @@ function onImageSelected(evt: Event): void {
 
 function clearBackgroundImage(): void {
   releaseImages()
-  backgroundImageUrl.value = null
-  cropSource.value=null
   editing.backgroundImage = undefined
   editing.backgroundOriginal=undefined
   applyPreview()
@@ -590,12 +585,12 @@ defineExpose({ openCreate, openEdit, openEditPreset, applyPreview })
           <Button variant="overlay" size="sm" icon :disabled="busy || previewFailed" :title="t('settings.cropImage')" :aria-label="t('settings.cropImage')" @click="cropOpen=true"><Icon name="crop" :size="16" /></Button>
           <Button variant="overlay" size="sm" icon :disabled="busy" :title="t('settings.removeImage')" :aria-label="t('settings.removeImage')" @click="clearBackgroundImage"><Icon name="x" :size="16" /></Button>
         </div>
-        <img v-if="backgroundImageUrl" :key="previewAttempt" :src="backgroundImageUrl" :alt="t('settings.backgroundPreview')" draggable="false" @load="previewLoaded" @error="previewError" />
-        <div v-else class="bg-drop-hint cczj-flex cczj-flex-col cczj-items-center cczj-gap-5">
+        <img v-if="previewImageUrl" :src="previewImageUrl" :alt="t('settings.backgroundPreview')" draggable="false" />
+        <div v-else-if="!backgroundImageUrl" class="bg-drop-hint cczj-flex cczj-flex-col cczj-items-center cczj-gap-5">
           <Icon name="plus" :size="42" />
           <span>{{ t(mobile ? 'mobile.chooseBackground' : 'settings.dropImage') }}</span>
         </div>
-        <div v-if="busy || themeStore.backgroundLoading" class="image-loading cczj-absolute cczj-inset-0 cczj-flex cczj-items-center cczj-justify-center" role="status">
+        <div v-if="busy" class="image-loading cczj-absolute cczj-inset-0 cczj-flex cczj-items-center cczj-justify-center" role="status">
           <Spinner :label="t(saving?'settings.imageSaving':'settings.imageProcessing')" />
         </div>
         <div v-else-if="previewFailed" class="image-loading cczj-absolute cczj-inset-0 cczj-flex cczj-flex-col cczj-gap-4 cczj-items-center cczj-justify-center" role="alert">

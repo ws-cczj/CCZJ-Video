@@ -18,7 +18,7 @@ CCZJ Video 是面向个人学习与研究的免费本地播放器与数据解析
 
 ## 下载与安装
 
-Current release: **v2.5.2**
+Current release: **v2.5.3**
 
 从 [GitHub Releases](https://github.com/ws-cczj/CCZJ-Video/releases) 选择适合设备的安装包。
 

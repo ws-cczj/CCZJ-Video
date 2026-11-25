@@ -1,6 +1,7 @@
 # Compatibility entry point; shared release preparation now includes Android.
-param([string]$Version='', [string]$Title='', [string]$OutDir='dist/releases', [switch]$SkipBuild, [switch]$AllowStaleDesc, [switch]$NoOpen)
-$arguments=@('-NoProfile','-ExecutionPolicy','Bypass','-File',(Join-Path $PSScriptRoot '../release.ps1'),'-OutDir',$OutDir)
+param([string]$Version='', [string]$Title='', [string]$OutDir='', [switch]$SkipBuild, [switch]$AllowStaleDesc, [switch]$NoOpen)
+$arguments=@('-NoProfile','-ExecutionPolicy','Bypass','-File',(Join-Path $PSScriptRoot '../release.ps1'))
+if($OutDir){$arguments+=@('-OutDir',$OutDir)}
 if($Version){$arguments+=@('-Version',$Version)}
 if($SkipBuild){$arguments+='-SkipBuild'}
 if($NoOpen){$arguments+='-NoOpen'}

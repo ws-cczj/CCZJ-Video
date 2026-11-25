@@ -31,10 +31,9 @@ type SourceOperationEvidence struct {
 }
 
 type sourceEvidenceSnapshot struct {
-	checks   map[string]db.ReadingSourceCheck
-	health   map[string]db.ReadingSearchHealth
-	quick    map[string]*SourceQuality
-	chapters map[string][]db.ReadingObservationCount
+	checks map[string]db.ReadingSourceCheck
+	health map[string]db.ReadingSearchHealth
+	quick  map[string]*SourceQuality
 }
 
 func (s *Service) sourceEvidence(ctx context.Context, kind model.SourceKind) (*sourceEvidenceSnapshot, error) {
@@ -50,17 +49,7 @@ func (s *Service) sourceEvidence(ctx context.Context, kind model.SourceKind) (*s
 	if err != nil {
 		return nil, err
 	}
-	e := &sourceEvidenceSnapshot{checks: checks, health: health, quick: quick, chapters: map[string][]db.ReadingObservationCount{}}
-	if kind == model.SourceKindNovel {
-		rows, err := db.ReadNovelObservations(ctx, 0)
-		if err != nil {
-			return nil, err
-		}
-		for _, row := range rows {
-			e.chapters[row.SourceKey] = append(e.chapters[row.SourceKey], row)
-		}
-	}
-	return e, nil
+	return &sourceEvidenceSnapshot{checks: checks, health: health, quick: quick}, nil
 }
 
 func readingEvidence(rows []db.ReadingObservationCount, revision string) *ReadingEvidence {

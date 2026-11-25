@@ -5,6 +5,8 @@ import { tr } from './locales'
 import TitleBar from './components/TitleBar.vue'
 import { useApplicationMode } from './modes/applicationMode'
 import { APPLICATION_MODES, APPLICATION_MODE_KEYS, modeHome, routeMode } from './modes/definitions'
+import { shortDramaScene } from './player/shortDrama/scene'
+import './player/shortDrama/presentation.css'
 
 import SplashScreen from './components/SplashScreen.vue'
 import ErrorToastStack from './components/ErrorToastStack.vue'
@@ -38,6 +40,8 @@ const modeShells = Object.fromEntries(APPLICATION_MODE_KEYS.map(mode => [mode, d
 const activeShell = computed(() => modeShells[appMode.mode])
 
 const router = useRouter()
+const desktopShortDrama = computed(() => appMode.mode === 'video' && !isMobileRuntime()
+  && shortDramaScene(router.currentRoute.value, false) === 'playback')
 function onAndroidBack(event: Event): void {
   if (event.defaultPrevented) return
   // Dispatch overlay handling in a separate phase. Window listeners installed
@@ -96,14 +100,16 @@ onUnmounted(() => {
 </script>
 
 <template>
+  <div v-if="!isMobileRuntime() && !desktopShortDrama && theme.backgroundURL"
+    class="app-wallpaper cczj-fixed cczj-inset-0 cczj-pointer-events-none" aria-hidden="true" />
   <!-- 启动画面 -->
   <SplashScreen />
 
   <!-- 投放标记刻意不在这一层：带着它整窗都是投放区，拖到播放器上也会静默装一个扩展包。
        扩展包投放区与主题编辑器图片区分别标记 data-file-drop-target。 -->
-  <div class="app-shell" :data-application-mode="appMode.mode">
+  <div class="app-shell" :class="{ 'app-shell-cinema': desktopShortDrama }" :data-application-mode="appMode.mode">
     <!-- 自定义标题栏：最顶部一条，背景色与页面主背景一致 -->
-    <TitleBar v-if="!isMobileRuntime()" />
+    <TitleBar v-if="!isMobileRuntime()" :cinema="desktopShortDrama" />
 
     <component :is="activeShell" v-if="appMode.loaded" />
 
@@ -268,21 +274,16 @@ onUnmounted(() => {
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
-/* 渲染背景图：把 --bg-image 作为顶层背景图叠加在背景色上 */
 html, body {
   @apply cczj-h-full;
   margin: 0;
-  @apply cczj-bg-primary;
-  background-image: var(--bg-image);
-  background-position: center;
-  background-size: cover;
-  background-repeat: no-repeat;
-  background-attachment: fixed;
   @apply cczj-text-primary cczj-overflow-hidden;
   -webkit-font-smoothing: antialiased;
   user-select: none;
   -webkit-user-select: none;
 }
+html { @apply cczj-bg-primary; }
+body { @apply cczj-bg-transparent; }
 
 /* 允许在内容输入区、视频描述、以及真正的文字区域中选择文字 */
 input, textarea, [contenteditable="true"], .allow-select, .video-description, .detail-description {
@@ -297,6 +298,10 @@ input, textarea, [contenteditable="true"], .allow-select, .video-description, .d
 
 html[data-cczj-platform=desktop] #app {
   --cczj-window-radius: 8px;
+}
+.app-wallpaper {
+  z-index: -1;
+  background: var(--bg-image) center / cover no-repeat;
 }
 html[data-cczj-platform=desktop] #app::after {
   content: '';
@@ -316,14 +321,13 @@ body[data-player-fullscreen='1'] #app::after { content: none; }
   /* Keep native resize hit areas outside scrollbars and interactive content. */
   padding: 0 6px 6px 0;
   box-sizing: border-box;
-  @apply cczj-h-screen cczj-bg-primary;
-  background-image: var(--bg-image, none);
-  background-position: center;
-  background-size: cover;
-  background-repeat: no-repeat;
-  background-attachment: fixed;
+  @apply cczj-h-screen;
   @apply cczj-flex cczj-flex-col;
   transition: background 0.3s;
+}
+.app-shell.app-shell-cinema {
+  background-color: var(--cczj-drama-chrome);
+  @apply cczj-transition-none;
 }
 /* 拖放态的描边不再由这里画：投放区收到只有扩展包那张卡片那么大，
    高亮跟着卡片走（styles/components/extensions-panel.css）。 */

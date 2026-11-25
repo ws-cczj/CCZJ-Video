@@ -392,9 +392,7 @@ func (s *Service) StartupCheck(ctx context.Context) {
 	if verdict, ok := updater.TakeInstallResult(); ok {
 		s.reportInstallVerdict(verdict)
 	}
-	// 这里以前会在确认版本对上之后删掉 .old 回滚副本。副本一被删，「退回上一版」
-	// 这个入口就永远是灰的；留着它的代价只是一个 30 MB 的文件，而下一次安装会用
-	// copy /y 把它覆盖掉，所以机器上最多只落后一个版本。
+	updater.CleanupWindowsUpdateFiles()
 	s.reconcilePendingInstall()
 
 	lastVersion := s.LastStartVersion()

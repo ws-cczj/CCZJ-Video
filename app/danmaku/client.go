@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"cczjVideo/app/apperror"
+	"cczjVideo/app/applog"
 )
 
 // Client allows only the provider endpoints used by these adapters. Dial and
@@ -116,10 +117,33 @@ func (c *Client) readHTTP(ctx context.Context, req *http.Request) ([]byte, error
 	return c.readHTTPWithCookies(ctx, req, nil)
 }
 
-func (c *Client) readHTTPWithCookies(ctx context.Context, req *http.Request, capture func([]*http.Cookie)) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+const danmakuHTTPTimeout = 15 * time.Second
+
+func (c *Client) readHTTPWithCookies(ctx context.Context, req *http.Request, capture func([]*http.Cookie)) (_ []byte, requestErr error) {
+	started := time.Now()
+	scope := "http"
+	if parent, ok := ctx.Deadline(); ok && parent.Before(started.Add(danmakuHTTPTimeout)) {
+		scope = "parent"
+	}
+	ctx, cancel := context.WithTimeout(ctx, danmakuHTTPTimeout)
 	defer cancel()
+	var headersMS int64
+	var status int
+	if trace, _ := ctx.Value(matchTraceKey{}).(string); trace != "" {
+		deadline, _ := ctx.Deadline()
+		stage, _ := ctx.Value(matchHTTPStageKey{}).(string)
+		defer func() {
+			matchLog(ctx, "danmaku HTTP request finished", applog.Fields{
+				"stage": stage, "host": req.URL.Hostname(), "http_status": status,
+				"headers_ms": headersMS, "duration_ms": time.Since(started).Milliseconds(),
+				"budget_ms": deadline.Sub(started).Milliseconds(), "deadline_scope": scope, "code": apperror.CodeOf(requestErr),
+			})
+		}()
+	}
 	resp, err := c.http.Do(req.WithContext(ctx))
+	if resp != nil {
+		headersMS, status = time.Since(started).Milliseconds(), resp.StatusCode
+	}
 	if err != nil {
 		var requestError *url.Error
 		if req.URL.Hostname() == youkuMTOPHost && errors.As(err, &requestError) {
@@ -129,6 +153,9 @@ func (c *Client) readHTTPWithCookies(ctx context.Context, req *http.Request, cap
 			return nil, apperror.Wrap(apperror.Timeout, err, "弹幕平台请求超时")
 		}
 		if errors.Is(err, context.Canceled) {
+			return nil, err
+		}
+		if apperror.CodeOf(err) != "" {
 			return nil, err
 		}
 		return nil, apperror.Wrap(apperror.Unavailable, err, "弹幕平台暂时不可用")

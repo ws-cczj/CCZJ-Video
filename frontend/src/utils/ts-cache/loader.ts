@@ -136,6 +136,7 @@ export class TsCacheLoader implements Loader<LoaderContext> {
       this.releaseSegment = request.release
       void request.promise.then(result => {
         if (!current()) return
+        Object.assign(this.stats, { segmentSource: result.source })
         if (result.cached) {
           if (playback) telemetry.curEpStats.hits++
           cached(result.buffer)

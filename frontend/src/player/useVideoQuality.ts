@@ -1,7 +1,8 @@
 import { computed, ref, watch, type Ref } from 'vue'
+import { videoPictureBounds } from '../utils/videoLayout'
 import { createEnhancementPipeline } from './enhancementPipeline'
-import { FilmUpscaler, FILM_PRESET, checkFilmSupport } from '../utils/filmUpscaler'
-import { Anime4kUpscaler, ANIME4K_PRESET, checkAnime4kSupport } from '../utils/anime4kUpscaler'
+import { FilmUpscaler, FILM_PRESET } from '../utils/filmUpscaler'
+import { Anime4kUpscaler, ANIME4K_PRESET } from '../utils/anime4kUpscaler'
 import type { Anime4kTier } from '../utils/anime4kUpscaler'
 import { CustomShaderUpscaler } from '../utils/customShaderUpscaler'
 import { usePluginStore } from '../stores/plugins'
@@ -12,6 +13,7 @@ export type QualityMode = 'original' | 'ai_anime' | 'ai_film' | 'ai_custom'
 
 export interface VideoQualityDeps {
   getVideoEl: () => HTMLVideoElement | null
+  sourceHeight: () => number
   /** 管线要把 WebGL canvas 覆盖在这个容器上，对比分界线也按它的宽度换算 */
   wrapperRef: Ref<HTMLDivElement | undefined>
   /** 与组件共用同一份 vp_settings，档位偏好才不会被两处互相覆盖 */
@@ -23,14 +25,7 @@ export interface VideoQualityDeps {
   keepVisible: () => void
 }
 
-/**
- * 画质增强管线（WebGL2 实时增强：锐化/对比度/边缘/去色带）的整套生命周期。
- *
- * 管线的实例本身是普通变量而不是 ref：它只会在 loadedmetadata 这类时机被显式重建，
- * 做成响应式会让「对比」按钮的出现时机跟着变化，而模板要读的只是「此刻有没有管线」。
- * 用户想要的档位（_desiredAiMode）与「本机此刻能不能跑」是两件事：换集只拆实例，
- * 偏好留着等下一条媒体的元数据自动重试，只有永久不支持或用户主动切回才落盘清掉。
- */
+/** Owns the enhancement instance for the current video and the saved quality preference. */
 export function useVideoQuality(deps: VideoQualityDeps) {
   const getVideoEl = deps.getVideoEl
   const wrapperRef = deps.wrapperRef
@@ -49,16 +44,15 @@ export function useVideoQuality(deps: VideoQualityDeps) {
   const pluginStore = usePluginStore()
   void pluginStore.ensureLoaded()
 
-  const anime4kTier = ref<Anime4kTier>(
-    (readSetting('anime4k_tier', 'M') as Anime4kTier) || 'M'
-  )
+  const savedTier = readSetting('anime4k_tier', 'M')
+  const anime4kTier = ref<Anime4kTier>(savedTier === 'S' || savedTier === 'L' ? savedTier : 'M')
 
   /** 当前扩展包着色器档位，形如 `<packId>/<shaderId>`。 */
   const customShaderKey = ref<string>(readSetting('custom_shader_key', ''))
 
   /** 根据视频分辨率推荐最佳档位 */
   const recommendedTier = computed<Anime4kTier>(() => {
-    const h = (getVideoEl()?.videoHeight) || 0
+    const h = deps.sourceHeight()
     if (h <= 0) return 'M'        // 元数据未就绪，默认 M
     if (h >= 1080) return 'S'
     if (h >= 720) return 'M'
@@ -77,12 +71,14 @@ export function useVideoQuality(deps: VideoQualityDeps) {
       value: `ai_custom_${o.key}`,
       label: pluginStore.shaderLabel(o),
     }))
-    return [
+    const options = [
       { value: 'original', label: tr('player.originalQuality') },
       ...animeOptions,
       { value: 'ai_film', label: tr('player.filmEnhance') },
       ...customOptions,
     ]
+    return sharpenOnly.value ? options.map(option => option.value === qualityDropdownValue.value
+      ? { ...option, label: tr('player.qualityLightMode', { label: option.label }) } : option) : options
   })
   // 当前下拉框选中值（根据 qualityMode + anime4kTier 计算）
   const qualityDropdownValue = computed(() => {
@@ -115,28 +111,43 @@ export function useVideoQuality(deps: VideoQualityDeps) {
   let pipelineGeneration = 0
   let upscaler: Upscaler | null = null
   let upscalerStatsTimer: ReturnType<typeof setInterval> | null = null
-  const upscalerSupported = ref(false)
-  const upscalerStats = ref<{ fps: number; gpuEnabled: boolean }>({ fps: 0, gpuEnabled: false })
+  let contextEvents: AbortController | undefined
+  const pipelineActive = ref(false)
+  const sharpenOnly = ref(false)
   const compareEnabled = ref(false)
   const compareSplit = ref(50)
   let _aiReady = false // 视频是否已就绪（loadedmetadata 之后），AI 才会启动
-  // 用户希望启用的增强模式，跨换集/换源保持（换源时 destroyPlayerInternal 只销毁管线，不动这个）。
-  // 初始化类瞬时失败（例如 WebGL 上下文名额被占满）不清它，下一条媒体的 loadedmetadata 会自动重试；
-  // 只有能力检查判定本机永久不支持、或用户主动切回原高清才清掉。
+  // Playback failures keep the preference for the next source. Removed or broken packs clear it.
   let _desiredAiMode: 'ai_anime' | 'ai_film' | 'ai_custom' | null =
     (isAiMode(qualityMode.value) && aiWarningAccepted.value) ? qualityMode.value : null
 
   function toggleEnhancementCompare(): void {
     if (!upscaler) return
     compareEnabled.value = !compareEnabled.value
-    upscaler.setCompareSplit(compareEnabled.value ? compareSplit.value : null)
+    syncCompareClip()
     keepVisible()
   }
   function updateEnhancementCompare(e: MouseEvent): void {
     if (!compareEnabled.value || !wrapperRef.value || !upscaler) return
     const rect = wrapperRef.value.getBoundingClientRect()
+    if (!rect.width) return
     compareSplit.value = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100))
-    upscaler.setCompareSplit(compareSplit.value)
+    syncCompareClip()
+  }
+
+  function syncCompareClip(): void {
+    if (!upscaler) return
+    const host = wrapperRef.value
+    const video = getVideoEl()
+    if (!compareEnabled.value || !host || !video) {
+      upscaler.setCompareSplit(null)
+      return
+    }
+    const bounds = videoPictureBounds(video, host)
+    if (bounds) {
+      const divider = host.getBoundingClientRect().width * compareSplit.value / 100
+      upscaler.setCompareSplit((divider - bounds.left) * 100 / bounds.width)
+    }
   }
 
   let _pendingQualityMode: QualityMode = 'original'
@@ -183,7 +194,6 @@ export function useVideoQuality(deps: VideoQualityDeps) {
       if (_aiReady) {
         startAiPipeline(mode)
       }
-      showQualityToast(tr('player.qualitySwitchedGpu', { label: qualityLabel(mode) }))
     } else {
       _desiredAiMode = null
       stopAiPipeline()
@@ -207,16 +217,9 @@ export function useVideoQuality(deps: VideoQualityDeps) {
 
   // AI 增强管线：动画模式用 Anime4K CNN 超分，影视模式用 FSRCNNX + CAS
 
-  /**
-   * 回退到原高清。
-   *
-   * permanent 表示本机能力不支持（没有 WebGL2、GPU 不支持浮点渲染目标）—— 这种条件重启也不会变，
-   * 落盘并丢掉重试意图，免得每次换集重复试探。初始化过程中的瞬时失败（例如 Chromium 每页约 16 个
-   * WebGL 上下文的名额被临时占满）只回退本次画面：偏好留在盘上、_desiredAiMode 也留着，
-   * 下一条媒体的 loadedmetadata 会再试一次。
-   */
   function fallBackToOriginal(permanent: boolean): void {
     qualityMode.value = 'original'
+    showQualityToast(tr('player.qualityUnavailable'))
     if (!permanent) return
     _desiredAiMode = null
     writeSetting('quality_mode', 'original')
@@ -229,6 +232,22 @@ export function useVideoQuality(deps: VideoQualityDeps) {
     if (!video) return
     const shaderKey = customShaderKey.value
     const tier = anime4kTier.value
+    const host = wrapperRef.value
+    contextEvents = new AbortController()
+    const events = { signal: contextEvents.signal, capture: true }
+    let lostCanvas: HTMLCanvasElement | null = null
+    host?.addEventListener('webglcontextlost', event => {
+      const target = event.target
+      if (!(target instanceof HTMLCanvasElement) || !target.dataset.cczjEnhancement) return
+      event.preventDefault()
+      lostCanvas = target
+      upscaler?.stop()
+      pipelineActive.value = false
+      compareEnabled.value = false
+    }, events)
+    host?.addEventListener('webglcontextrestored', event => {
+      if (lostCanvas === event.target && token === pipelineGeneration) void startAiPipeline(mode, lighten)
+    }, events)
     const candidate: { value: Upscaler | null } = { value: null }
     let permanent = false
     try {
@@ -236,11 +255,8 @@ export function useVideoQuality(deps: VideoQualityDeps) {
         if (lighten) {
           candidate.value = new FilmUpscaler({ ...FILM_PRESET, sharpenOnly: true })
         } else if (mode === 'ai_anime') {
-          if (!checkAnime4kSupport().recommended) { permanent = true; return null }
           candidate.value = new Anime4kUpscaler({ ...ANIME4K_PRESET, tier })
         } else if (mode === 'ai_film') {
-          upscalerSupported.value = checkFilmSupport().supported
-          if (!upscalerSupported.value) { permanent = true; return null }
           candidate.value = new FilmUpscaler({ ...FILM_PRESET })
         } else {
           const option = pluginStore.shaderOptions.find(o => o.key === shaderKey)
@@ -258,7 +274,7 @@ export function useVideoQuality(deps: VideoQualityDeps) {
       }, video, wrapperRef.value ?? undefined)
       if (token !== pipelineGeneration) return
       if (!started) {
-        if (!lighten && (candidate.value instanceof FilmUpscaler ||
+        if (!lighten && (candidate.value instanceof FilmUpscaler || candidate.value instanceof Anime4kUpscaler ||
           (candidate.value instanceof CustomShaderUpscaler && candidate.value.budgetLimited))) {
           await startAiPipeline(mode, true)
           return
@@ -267,27 +283,34 @@ export function useVideoQuality(deps: VideoQualityDeps) {
           permanent = true
           pluginStore.markShaderBroken(shaderKey, candidate.value.error ?? 'init failed')
         }
+        stopAiPipeline()
         fallBackToOriginal(permanent)
         return
       }
       upscaler = started
       qualityMode.value = mode
-      const announceSharpenOnly = () => showQualityToast(tr('player.qualitySharpenOnly'))
-      let sharpenOnly = started instanceof FilmUpscaler && started.isSharpenOnly
-      if (sharpenOnly) announceSharpenOnly()
+      pipelineActive.value = started.getStats().gpuEnabled && !lostCanvas
+      sharpenOnly.value = started instanceof FilmUpscaler && started.isSharpenOnly
+      if (pipelineActive.value) showQualityToast(sharpenOnly.value
+        ? tr('player.qualitySharpenOnly') : tr('player.qualitySwitchedGpu', { label: qualityLabel(mode) }))
       let previous = video.getVideoPlaybackQuality?.()
       let slowSamples = 0
       upscalerStatsTimer = setInterval(() => {
         if (token !== pipelineGeneration || !upscaler) return
-        const stats = upscaler.getStats()
-        upscalerStats.value = { fps: stats.fps, gpuEnabled: stats.gpuEnabled }
-        if (!sharpenOnly && upscaler instanceof FilmUpscaler && upscaler.isSharpenOnly) {
-          sharpenOnly = true
-          announceSharpenOnly()
-        }
-        if (upscaler instanceof CustomShaderUpscaler && upscaler.budgetLimited) {
-          void startAiPipeline(mode, true)
+        if (lostCanvas) return
+        const active = upscaler.getStats().gpuEnabled
+        if (!active) {
+          if (!lighten && (upscaler instanceof FilmUpscaler || upscaler instanceof Anime4kUpscaler || upscaler.budgetLimited)) {
+            void startAiPipeline(mode, true)
+          } else {
+            stopAiPipeline()
+            fallBackToOriginal(false)
+          }
           return
+        }
+        if (upscaler instanceof FilmUpscaler && sharpenOnly.value !== upscaler.isSharpenOnly) {
+          sharpenOnly.value = upscaler.isSharpenOnly
+          showQualityToast(sharpenOnly.value ? tr('player.qualitySharpenOnly') : tr('player.qualitySwitchedGpu', { label: qualityLabel(mode) }))
         }
         const sample = video.getVideoPlaybackQuality?.()
         const frames = (sample?.totalVideoFrames ?? 0) - (previous?.totalVideoFrames ?? 0)
@@ -296,7 +319,7 @@ export function useVideoQuality(deps: VideoQualityDeps) {
         const playing = !video.paused && !video.seeking && video.readyState >= 3 && !document.hidden
         const slow = playing && frames >= 12 && dropped >= frames * 0.12
         slowSamples = slow ? slowSamples + 1 : 0
-        if (!sharpenOnly && slowSamples >= 3) void startAiPipeline(mode, true)
+        if (!sharpenOnly.value && slowSamples >= 3) void startAiPipeline(mode, true)
       }, 2000)
     } catch (error) {
       if (token !== pipelineGeneration) return
@@ -321,6 +344,8 @@ export function useVideoQuality(deps: VideoQualityDeps) {
 
   function stopAiPipeline(): void {
     pipelineGeneration++
+    contextEvents?.abort()
+    contextEvents = undefined
     pipeline.reset()
     if (upscalerStatsTimer) {
       clearInterval(upscalerStatsTimer)
@@ -328,7 +353,8 @@ export function useVideoQuality(deps: VideoQualityDeps) {
     }
     upscaler = null
     compareEnabled.value = false
-    upscalerStats.value = { fps: 0, gpuEnabled: false }
+    pipelineActive.value = false
+    sharpenOnly.value = false
     console.log('[Player] AI 增强管线已停止')
   }
 
@@ -349,10 +375,9 @@ export function useVideoQuality(deps: VideoQualityDeps) {
     if (upscaler) upscaler.onSeeked()
   }
 
-  function syncEnhancementOutput(): boolean {
-    if (!(upscaler instanceof FilmUpscaler || upscaler instanceof CustomShaderUpscaler)) return false
-    upscaler.resizeOutput()
-    return true
+  function syncEnhancementOutput(): void {
+    upscaler?.resizeOutput()
+    if (compareEnabled.value) syncCompareClip()
   }
 
   /** 换集/换源：拆掉实例并忘掉「已就绪」，但保留用户想要的档位等下一条媒体重试。 */
@@ -364,14 +389,9 @@ export function useVideoQuality(deps: VideoQualityDeps) {
     _aiReady = false
   }
 
-  /**
-   * 此刻是否真的有管线在跑。
-   *
-   * 用函数而不是把实例做成 ref：模板要的只是这个真假值，而管线实例的创建/销毁时机是
-   * 元数据驱动的，做成响应式会让「对比」按钮的出现时机跟着变。
-   */
-  function hasPipeline(): boolean {
-    return upscaler !== null
+  function effectiveQualityLabel(): string {
+    if (!pipelineActive.value) return qualityLabel('original')
+    return sharpenOnly.value ? tr('player.lightSharpening') : qualityLabel(qualityMode.value)
   }
 
   return {
@@ -388,11 +408,11 @@ export function useVideoQuality(deps: VideoQualityDeps) {
     compareSplit,
     toggleEnhancementCompare,
     updateEnhancementCompare,
-    qualityLabel,
+    effectiveQualityLabel,
     onMediaReady,
     notifySeeked,
     syncEnhancementOutput,
     resetPipeline,
-    hasPipeline,
+    pipelineActive,
   }
 }

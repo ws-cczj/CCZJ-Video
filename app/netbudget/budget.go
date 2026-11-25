@@ -4,6 +4,7 @@ package netbudget
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -65,6 +66,22 @@ func New(owner context.Context, policy Policy) *Budget {
 	policy.Lanes = limits
 	return &Budget{owner: owner, policy: policy, hosts: make(map[string]int), lanes: make(map[string]int), changed: make(chan struct{})}
 }
+
+// ErrNoSpareCapacity reports an optional request that did not enter the queue.
+var ErrNoSpareCapacity = errors.New("no spare upstream request capacity")
+
+type noQueueKey struct{}
+
+// WithoutQueue admits optional work only when a permit is immediately available
+// and normal requests are not waiting.
+func WithoutQueue(ctx context.Context) context.Context {
+	return context.WithValue(ctx, noQueueKey{}, true)
+}
+
+func SkipsQueue(ctx context.Context) bool {
+	return ctx.Value(noQueueKey{}) == true
+}
+
 func (b *Budget) acquire(ctx context.Context, lane, host string) (func(), error) {
 	started := time.Now()
 	waiting := false
@@ -90,6 +107,11 @@ func (b *Budget) acquire(ctx context.Context, lane, host string) (func(), error)
 		if limit == 0 {
 			limit = total
 		}
+		optional := SkipsQueue(ctx)
+		if optional && b.waiting > 0 {
+			b.mu.Unlock()
+			return nil, ErrNoSpareCapacity
+		}
 		if b.active < total && b.hosts[host] < perHost && b.lanes[lane] < limit {
 			b.active++
 			b.hosts[host]++
@@ -113,6 +135,10 @@ func (b *Budget) acquire(ctx context.Context, lane, host string) (func(), error)
 					b.mu.Unlock()
 				})
 			}, nil
+		}
+		if optional {
+			b.mu.Unlock()
+			return nil, ErrNoSpareCapacity
 		}
 		if !waiting {
 			if b.waiting >= b.policy.Waiting {

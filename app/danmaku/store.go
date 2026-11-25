@@ -11,8 +11,8 @@ import (
 
 const (
 	discoveryFreshness = 2 * time.Hour
-	commentFreshness   = time.Hour
-	cacheRetention     = 6 * time.Hour
+	commentFreshness   = 24 * time.Hour
+	cacheRetention     = 7 * 24 * time.Hour
 	cacheBudget        = 64 << 20
 )
 

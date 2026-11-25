@@ -11,6 +11,7 @@ import ComicCard from '../components/ComicCard.vue'
 import ComicTrending from '../components/ComicTrending.vue'
 import ComicSpotlight from '../components/ComicSpotlight.vue'
 import Icon from '../../components/Icon.vue'
+import { Spinner } from '../../components/ui'
 
 const route = useRoute(), router = useRouter(), { t } = useI18n(), state = useComicState()
 const query = ref(''), selected = ref(''), channels = ref<ComicBrowseChannel[]>([]), startupError = ref('')
@@ -24,6 +25,13 @@ let observer: IntersectionObserver | null = null
 let disposed = false
 const active = useViewActivity(() => true, 'committed')
 const visible = computed(() => channels.value.filter(channel => !selected.value || channel.id === selected.value))
+const previousChannels = ref<string[]>([])
+const previousSelection = ref('')
+const selectedShelf = computed(() => shelves[selected.value])
+const retainingShelf = computed(() => !!selected.value && !selectedShelf.value?.page && previousChannels.value.length > 0)
+const displayed = computed(() => retainingShelf.value
+  ? channels.value.filter(channel => previousChannels.value.includes(channel.id))
+  : visible.value)
 const spotlights = computed(() => {
   const picks = channels.value.filter(channel=>!['honkai','terra'].includes(channel.id)).flatMap(channel=>shelves[channel.id]?.page?.items.slice(0,3)??[])
   return picks.filter((item): item is NonNullable<typeof item> => !!item)
@@ -92,6 +100,14 @@ function ensure(): void {
 }
 function choose(id: string): void { selected.value = id }
 function search(): void { void router.push({ path: '/comic/search', query: query.value.trim() ? { q: query.value.trim() } : {} }) }
+watch(selected, (next, previous) => {
+  if (!next || shelves[next]?.page) { previousChannels.value = []; previousSelection.value = ''; return }
+  const shown = channels.value.filter(channel => (!previous || channel.id === previous) && !!shelves[channel.id]?.page)
+  if (shown.length) {
+    previousChannels.value = shown.map(channel => channel.id)
+    previousSelection.value = previous
+  }
+}, { flush: 'sync' })
 watch(() => route.query.channel, value => { selected.value = typeof value === 'string' ? value : '' }, { immediate: true })
 watch(active, show => {
   if (show) {
@@ -116,12 +132,16 @@ onBeforeUnmount(() => { disposed = true; cancel(); observer?.disconnect(); secti
     <p v-if="startupError" class="comic-notice" role="alert">{{ startupError }}<button @click="loadChannels">{{ t('common.retry') }}</button></p>
     <router-link v-if="recent" :to="state.resumePath(recent)" class="manga-continue"><span class="manga-continue-mark" aria-hidden="true"><Icon name="bookmark" :size="18" /></span><div><small>{{ t('comic.continueReading') }}</small><strong>{{ recent.title }}</strong></div><span>{{ t('readingUI.pagePosition', { episode: recent.episodeOrd + 1, page: recent.page + 1 }) }}</span><Icon name="chevron-right" :size="18" /></router-link>
     <ComicSpotlight v-if="spotlightVisible" :series="spotlights" />
-    <ComicTrending v-if="!selected"/>
-    <section v-for="(channel, index) in visible" :ref="el => observeSection(el, channel.id)" :key="channel.id" class="manga-section" :data-channel="channel.id" :aria-busy="shelves[channel.id]?.loading">
-      <header class="manga-section-heading"><div><span class="manga-section-index" aria-hidden="true">{{ String(index + 1).padStart(2, '0') }}</span><h2>{{ channel.title }}</h2><small>{{ channel.description }}</small></div><button v-if="!selected" @click="choose(channel.id)">{{ t('comicRoom.viewAll') }}<Icon name="chevron-right" :size="17" /></button><button v-else :disabled="shelves[channel.id]?.loading" @click="load(channel.id, true)"><Icon name="refresh" :size="16" />{{ t('common.refresh') }}</button></header>
+    <ComicTrending :active="!selected" />
+    <div v-if="retainingShelf && selectedShelf?.error" class="comic-notice" role="alert">
+      {{ selectedShelf.error }}<button class="comic-text-button" @click="load(selected, true)">{{ t('common.retry') }}</button><router-link to="/comic/sources">{{ t('readingUI.sources') }}</router-link>
+    </div>
+    <Spinner v-else-if="retainingShelf || (selectedShelf?.loading && selectedShelf.page)" inline size="sm" role="status" :aria-label="t('common.loading')" />
+    <section v-for="(channel, index) in displayed" :ref="el => observeSection(el, channel.id)" :key="channel.id" class="manga-section" :data-channel="channel.id" :aria-busy="retainingShelf ? !selectedShelf?.error : shelves[channel.id]?.loading">
+      <header class="manga-section-heading"><div><span class="manga-section-index" aria-hidden="true">{{ String(index + 1).padStart(2, '0') }}</span><h2>{{ channel.title }}</h2><small>{{ channel.description }}</small></div><button v-if="!selected" @click="choose(channel.id)">{{ t('comicRoom.viewAll') }}<Icon name="chevron-right" :size="17" /></button><button v-else-if="!retainingShelf" :disabled="shelves[channel.id]?.loading" @click="load(channel.id, true)"><Icon name="refresh" :size="16" />{{ t('common.refresh') }}</button></header>
       <div v-if="shelves[channel.id]?.error" class="comic-notice" role="alert">{{ shelves[channel.id]!.error }}<button class="comic-text-button" @click="load(channel.id, true)">{{ t('common.retry') }}</button><router-link to="/comic/sources">{{ t('readingUI.sources') }}</router-link></div>
       <div v-if="!shelves[channel.id]?.page && !shelves[channel.id]?.error" class="manga-grid manga-skeleton" aria-hidden="true"><span v-for="n in 6" :key="n"></span></div>
-      <div v-else class="manga-grid"><ComicCard v-for="(item, order) in (selected ? shelves[channel.id]?.page?.items : shelves[channel.id]?.page?.items.slice(0, 6))" :key="`${item.sourceKey}:${item.remoteId}`" :series="item" :style="{ '--panel-order': order % 6 }" /></div>
+      <div v-else class="manga-grid"><ComicCard v-for="(item, order) in ((retainingShelf ? previousSelection : selected) === channel.id ? shelves[channel.id]?.page?.items : shelves[channel.id]?.page?.items.slice(0, 6))" :key="`${item.sourceKey}:${item.remoteId}`" :series="item" :style="{ '--panel-order': order % 6 }" /></div>
       <footer v-if="shelves[channel.id]?.page" class="manga-source-caption"><span>{{ shelves[channel.id]!.page!.sourceName }} · {{ t(shelves[channel.id]!.page!.fromCache ? 'comicRoom.cached' : 'comicRoom.updated') }} {{ new Date(shelves[channel.id]!.page!.fetchedAt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }}</span><span v-if="shelves[channel.id]!.page!.warning" role="status">{{ shelves[channel.id]!.page!.warning }}</span></footer>
     </section>
   </div>

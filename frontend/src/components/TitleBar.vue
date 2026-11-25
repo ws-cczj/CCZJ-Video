@@ -6,6 +6,7 @@ import { WindowIsMax, WindowToggleMax } from '../api/app'
 import Icon from './Icon.vue'
 import appIcon from '../../../icon.png'
 
+defineProps<{ cinema?: boolean }>()
 const isMaximized = ref(false)
 let alive = true
 
@@ -78,6 +79,7 @@ function onQuit(): void {
   -->
   <header
     class="titlebar"
+    :class="{ 'titlebar-cinema cczj-short-drama-surface': cinema }"
     style="--wails-draggable: drag"
     @dblclick="onToggleMax"
   >
@@ -143,6 +145,12 @@ function onQuit(): void {
   box-sizing: border-box;
   backdrop-filter: saturate(1.1) blur(4px);
   -webkit-backdrop-filter: saturate(1.1) blur(4px);
+}
+.titlebar.titlebar-cinema {
+  background: var(--cczj-drama-chrome);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  @apply cczj-transition-none;
 }
 
 .titlebar-left {

@@ -6,7 +6,6 @@ import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import Icon from '../components/Icon.vue'
 import RemoteImage from '../components/RemoteImage.vue'
-import '../player/shortDrama/presentation.css'
 import { Button, Empty, Spinner } from '../components/ui'
 import CczjMobilePlayerDrawer from '../mobile/CczjMobilePlayerDrawer.vue'
 import { presentationProfile } from '../platform/presentation'
@@ -31,8 +30,8 @@ import { useMobilePlayerGestures } from '../mobile/useMobilePlayerGestures'
 import { createPlayerPlatform } from '../player/platform'
 
 const { t } = useI18n(), router = useRouter(), route = useRoute()
-// Empty feed/theatre browsing does not need to parse the media and GPU stack.
-const VideoPlayer = defineAsyncComponent(() => import('../components/VideoPlayer.vue'))
+const loadVideoPlayer = () => import('../components/VideoPlayer.vue')
+const VideoPlayer = defineAsyncComponent(loadVideoPlayer)
 const mobile = presentationProfile().ui === 'mobile'
 const sources = useSourceStore()
 const { currentSourceKey } = storeToRefs(sources)
@@ -51,17 +50,20 @@ const introExpanded=ref(false)
 const drawerContent=ref<'episodes'|'intro'>('episodes')
 watch(drawer,value=>{if(value)drawerContent.value=value},{flush:'sync'})
 const stage = ref<HTMLElement>()
-const backdrop = ref<HTMLCanvasElement>()
 const controlsHost = ref<HTMLElement>()
 const overlayHost = ref<HTMLElement>()
 const playbackSurface = ref<HTMLElement>(), pagingFrame = ref<HTMLCanvasElement>()
 const pagingCover = ref<HTMLElement>(), pagingChrome = ref<HTMLElement>()
 const pagingPreview = ref<HTMLElement>()
 let paging: ReturnType<typeof useShortDramaPaging>
-let paintedAt = 0, backdropFailed = false
 const feed = useShortDramaSession()
 const browsing = computed(() => shortDramaScene(route, mobile) === 'theatre')
 const active = computed(() => sceneActive.value && !browsing.value)
+watch(active, visible => {
+  // Resolve the module while the detail request runs. Only a playback route
+  // prepares the code, and the decoder mounts after a playable URL arrives.
+  if (visible) void loadVideoPlayer().catch(() => { /* The async component owns the load error. */ })
+}, { immediate: true })
 function showTheatre():void { void router.push(mobile ? '/short-drama?view=theatre' : '/short-drama') }
 function openSeries(item:Video):void { void router.push(getShortDramaPath(item.source_key||currentSourceKey.value,item)) }
 function randomPlay():void { feed.discover(); void router.push(mobile ? '/short-drama' : '/short-drama?view=feed') }
@@ -110,6 +112,8 @@ watch(() => [active.value, sceneVisible.value, ...presentationKeys.map(key => fe
 }, { flush: 'pre' })
 const presentation = Object.fromEntries(presentationKeys.map(key => [key, computed(() => presented.value[key])])) as { [K in keyof Presentation]: ComputedRef<Presentation[K]> }
 const { items, episodeIndex, video, episodes, episode, url, detail, loading, refreshing, selecting, error, series, completed, canPrevious, canNext, effectiveSource, playbackSource, entry } = presentation
+const preparing = computed(() => !error.value && (loading.value || (!url.value &&
+  (!!entry.value || (effectiveSource.value ? !feed.knownEmpty : sources.loading)))))
 paging = useShortDramaPaging({
   surface: playbackSurface, canvas: pagingFrame, cover: pagingCover, chrome: pagingChrome,
   mobile: mobile ? { layer: pagingPreview, neighbor: direction => direction === 'next' ? feed.nextNeighbor : feed.previousNeighbor } : undefined,
@@ -180,24 +184,13 @@ watch([active,video],([visible,item])=>{
   if(!mobile && visible && item)void refreshFav()
   if(!visible)showFavFolderModal.value=false
 },{flush:'post'})
-watch(videoKey, () => { paintedAt = -Infinity;backdropFailed = false;introExpanded.value=false;const canvas=backdrop.value;if(canvas){canvas.width=1;canvas.height=1} })
+watch(videoKey, () => { introExpanded.value = false })
 function progress(position: number, duration?: number, force = false): void {
   if (!active.value) return
   if(position>0)feed.markWatched()
   history.updateCurrentEpProgress(position, duration, force)
-  paintBackdrop()
 }
-function paintBackdrop():void {
-  const media=player.value?.video(),canvas=backdrop.value,now=performance.now()
-  if(mobile||!active.value||!sceneVisible.value||document.hidden||backdropFailed||!canvas||!media||media.readyState<2||!media.videoWidth||!media.videoHeight||now-paintedAt<400)return
-  paintedAt=now
-  const scale=160/Math.max(media.videoWidth,media.videoHeight)
-  const width=Math.max(1,Math.round(media.videoWidth*scale)),height=Math.max(1,Math.round(media.videoHeight*scale))
-  if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height}
-  try {canvas.getContext('2d',{alpha:false})?.drawImage(media,0,0,width,height)}
-  catch {backdropFailed=true}
-}
-function onMediaReady():void {void paging.ready();paintBackdrop()}
+function onMediaReady():void { void paging.ready() }
 
 const episodeLabel = computed(() => episode.value?.ep_name || t('detail.episode', { num: episode.value?.ep_num ?? episodeIndex.value + 1 }))
 watch([detail, series], ([value]) => {
@@ -220,10 +213,9 @@ onBeforeUnmount(() => window.removeEventListener('cczj:android-overlay-back', ba
 </script>
 
 <template>
-  <section ref="stage" class="short-drama cczj-relative cczj-flex cczj-flex-col cczj-min-h-0 cczj-overflow-hidden" :class="{ 'cczj-short-drama-surface': hasPlayback || selecting, 'short-drama-mobile': mobile, 'drama-drawer-open': !mobile && !!drawer, 'drama-watching':!mobile&&hasPlayback&&!!player?.isPlaying&&!drawer }" :data-cczj-chrome="!browsing && (url || selecting) ? 'cinema' : undefined" :data-cczj-media-active="hasPlayback ? 'true' : undefined" :data-cczj-no-tab-swipe="hasPlayback ? '' : undefined" @wheel="wheel">
+  <section ref="stage" class="short-drama cczj-relative cczj-flex cczj-flex-col cczj-min-h-0 cczj-overflow-hidden" :class="{ 'cczj-short-drama-surface': !browsing && (!mobile || hasPlayback || selecting), 'short-drama-mobile': mobile, 'drama-drawer-open': !mobile && !!drawer, 'drama-watching':!mobile&&hasPlayback&&!!player?.isPlaying&&!drawer }" :data-cczj-chrome="!browsing && (url || selecting) ? 'cinema' : undefined" :data-cczj-media-active="hasPlayback ? 'true' : undefined" :data-cczj-no-tab-swipe="hasPlayback ? '' : undefined" @wheel="wheel">
     <ShortDramaTheatre v-show="browsing" :active="sceneActive && browsing" :mobile="mobile" @play="openSeries" @random="randomPlay"/>
     <template v-if="!browsing">
-    <canvas v-if="!mobile && hasPlayback" ref="backdrop" class="drama-ambience cczj-absolute cczj-pointer-events-none" width="1" height="1" aria-hidden="true" />
     <header class="drama-header cczj-flex cczj-items-center cczj-justify-between cczj-gap-4" @pointerdown.stop>
       <div class="drama-heading cczj-flex cczj-items-center cczj-gap-5">
         <Button v-if="!mobile || entry" class="drama-return" variant="text" icon :aria-label="t('shortDrama.returnTheatre')" @click="showTheatre"><Icon name="chevron-left" :size="22"/></Button>
@@ -269,12 +261,18 @@ onBeforeUnmount(() => window.removeEventListener('cczj:android-overlay-back', ba
             </div>
           </template>
         </VideoPlayer>
-        <div v-else class="drama-placeholder cczj-h-full cczj-flex cczj-flex-col cczj-items-center cczj-justify-center cczj-gap-6" role="status" aria-live="polite" :aria-busy="loading">
-          <Empty :title="error ? t('shortDrama.loadFailed') : loading ? video?.vod_name || t('shortDrama.forYou') : t('shortDrama.empty')" :description="error || t(loading ? 'shortDrama.preparingHint' : effectiveSource ? 'shortDrama.emptyHint' : 'shortDrama.noSource')">
+        <div v-else class="drama-placeholder cczj-h-full cczj-flex cczj-flex-col cczj-items-center cczj-justify-center cczj-gap-6" :aria-busy="preparing">
+          <template v-if="preparing">
+            <div role="status" class="cczj-flex cczj-flex-col cczj-items-center cczj-gap-4">
+              <Spinner aria-hidden="true" />
+              <span>{{ t('shortDrama.preparingHint') }}</span>
+            </div>
+            <Button variant="text" @click="showTheatre">{{ t('shortDrama.theatre') }}</Button>
+          </template>
+          <Empty v-else :title="error ? t('shortDrama.loadFailed') : t('shortDrama.empty')" :description="error || t(effectiveSource ? 'shortDrama.emptyHint' : 'shortDrama.noSource')">
             <Button v-if="feed.preferences.blocked.length" variant="text" :loading="feed.preferences.busy" @click="feed.preferences.restoreAll">{{t('shortDrama.restoreRecommendations',{count:feed.preferences.blocked.length})}}</Button>
-            <Button v-if="effectiveSource && !loading" @click="feed.retry">{{ t('common.retry') }}</Button>
-            <Button v-if="loading" variant="text" @click="showTheatre">{{ t('shortDrama.theatre') }}</Button>
-            <router-link v-else-if="!error" class="cczj-text-accent" to="/sources">{{ t('sidebar.sources') }}</router-link>
+            <Button v-if="effectiveSource" @click="feed.retry">{{ t('common.retry') }}</Button>
+            <router-link v-if="!error" class="cczj-text-accent" to="/sources">{{ t('sidebar.sources') }}</router-link>
           </Empty>
         </div>
         </div>
@@ -325,7 +323,6 @@ onBeforeUnmount(() => window.removeEventListener('cczj:android-overlay-back', ba
 <style scoped>
 .short-drama { height: 100%; color: var(--text-primary); --cczj-player-contained-width: min(360px,45%); }
 .short-drama.cczj-short-drama-surface { background: var(--cczj-drama-chrome); }
-.drama-ambience { inset:-8%;width:116%;height:116%;object-fit:cover;filter:blur(48px) saturate(.8) brightness(.85);opacity:.7; }
 .drama-header { @apply cczj-absolute cczj-flex-shrink-0; inset: 0 0 auto; z-index: 40; padding: 12px 24px 36px; pointer-events: none; }
 .cczj-short-drama-surface .drama-header { background: linear-gradient(#0007,transparent); }
 .drama-header,.drama-rail { transition:opacity var(--cczj-motion-normal); }

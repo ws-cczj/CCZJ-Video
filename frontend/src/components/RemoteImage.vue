@@ -20,6 +20,7 @@ interface Props {
   fallback?: string
   loading?: 'lazy' | 'eager'
   animate?: boolean
+  posterThumbnail?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -42,6 +43,7 @@ let resolving = false
 let cancelRelease: (() => void) | null = null
 let lastResolvedInput = ''
 let lastShownInput: string | null = null
+let usingPosterThumbnail = false
 const animateImage = ref(props.animate && !routeMoving?.value)
 watch(() => routeMoving?.value, moving => {
   if (moving) animateImage.value = false
@@ -115,22 +117,28 @@ function show(next: string): void {
   }, dip)
 }
 
-function resolveImage(rawSrc: string | null | undefined): void {
+function resolveImage(rawSrc: string | null | undefined, original = false): void {
   const token = ++requestToken.value
   const source = String(rawSrc || '').trim()
   settling.value = true
   resolving = true
-  function commit(nextSrc: string): void {
+  function commit(nextSrc: string, thumbnail = false): void {
     if (token !== requestToken.value || !active.value || disposed) return
     resolving = false
     lastResolvedInput = source
+    usingPosterThumbnail = thumbnail
     animateImage.value = props.animate && !routeMoving?.value && lastShownInput !== source
     show(nextSrc || props.fallback)
   }
 
-  const next = /^https?:\/\//i.test(source) ? resolveProxiedImageUrl(source) : source
+  const remote = /^https?:\/\//i.test(source)
+  if (remote && props.posterThumbnail && !original) {
+    commit(`/__cczj/poster-card?${new URLSearchParams({u:source})}`, true)
+    return
+  }
+  const next = remote ? resolveProxiedImageUrl(source) : source
   if (typeof next === 'string') commit(next)
-  else void next.then(commit)
+  else void next.then(url => commit(url))
 }
 
 function onImageLoad(): void {
@@ -152,6 +160,10 @@ function onImageAnimationEnd(event: AnimationEvent): void {
 
 function onImageError(): void {
   if (!active.value || disposed || resolving || !resolvedSrc.value) return
+  if (usingPosterThumbnail && lastResolvedInput === String(props.src || '').trim()) {
+    resolveImage(props.src, true)
+    return
+  }
   if (resolvedSrc.value !== props.fallback) {
     show(props.fallback)
     return
@@ -172,6 +184,7 @@ function onImgEl(el: Element | ComponentPublicInstance | null): void {
 
 function releaseSource(): void {
   resolvedSrc.value = ''
+  usingPosterThumbnail = false
   phase.value = 'hidden'
 }
 function scheduleImage(): void {

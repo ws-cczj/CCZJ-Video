@@ -401,7 +401,7 @@ func normalizeCase(p string) string {
 	return p
 }
 
-// isUpdateArtifact 判定 filePath 是否是本更新器落在应用目录里的产物。
+// isUpdateArtifact accepts private staging and downloads from the legacy location.
 //
 // InstallUpdate 最终会 exec.Command(filePath)，而这个方法是对前端（含扩展包）暴露的
 // 绑定，不校验就等于给了一个"让应用启动任意可执行文件"的入口。
@@ -414,20 +414,14 @@ func isUpdateArtifact(filePath string) bool {
 	if err != nil {
 		return false
 	}
-	appDir, err := filepath.Abs(getAppDir())
-	if err != nil {
-		return false
-	}
-	rel, err := filepath.Rel(normalizeCase(appDir), normalizeCase(abs))
-	if err != nil || rel == "." || rel == ".." || filepath.IsAbs(rel) {
-		return false
-	}
-	// 只接受应用目录直属的文件，不接受子目录里的东西。
-	if strings.ContainsRune(rel, rune(filepath.Separator)) {
+	parent := normalizeCase(filepath.Dir(abs))
+	legacy := legacyUpdateDirectory()
+	private, privateErr := updateDirectory()
+	if (legacy == "" || parent != normalizeCase(legacy)) && (privateErr != nil || parent != normalizeCase(private)) {
 		return false
 	}
 	base := strings.ToLower(filepath.Base(abs))
-	if normalizeCase(abs) == normalizeCase(filepath.Join(appDir, getAppExeName())) {
+	if legacy != "" && normalizeCase(abs) == normalizeCase(filepath.Join(legacy, getAppExeName())) {
 		return false
 	}
 	if strings.HasSuffix(base, digestSuffix) || strings.HasSuffix(base, ".part") {

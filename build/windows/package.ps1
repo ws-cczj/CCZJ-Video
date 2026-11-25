@@ -12,11 +12,8 @@
 param(
     [string] $Version = "",
     [string] $Arch = "amd64",
-    [string] $OutDir = "dist",
-    # Defaults to the binary the user actually launches, so pointing it at a
-    # scratch path is how you verify the release chain without replacing a
-    # working install.
-    [string] $BinOut = "bin/cczjVideo.exe",
+    [string] $OutDir = "",
+    [string] $BinOut = "",
     [switch] $AllowStaleFrontend
 )
 
@@ -36,6 +33,17 @@ if (-not $Version) {
 }
 if (-not $Version) { throw "could not read a version from version.json" }
 Write-Host "release version: $Version (windows/$Arch)"
+
+$locations = Get-Content -LiteralPath (Join-Path $root "build/artifact-paths.json") -Raw | ConvertFrom-Json
+if (!$OutDir) { $OutDir = "$($locations.packages)/windows/v$Version/$Arch" }
+$distPath = if ([IO.Path]::IsPathRooted($OutDir)) { $OutDir } else { Join-Path $root $OutDir }
+New-Item -ItemType Directory -Force -Path $distPath | Out-Null
+
+# The updater prefers the bare EXE and selects assets by platform and arch.
+$exeAsset = "cczjVideo-windows-$Arch-$Version.exe"
+$zipAsset = "cczjVideo-windows-$Arch-$Version-portable.zip"
+$exeTarget = Join-Path $distPath $exeAsset
+$zipTarget = Join-Path $distPath $zipAsset
 
 Step "generate embedded JSON assets" { & node scripts/compress-embedded-json.mjs }
 
@@ -73,6 +81,10 @@ Step "stamp version into info.generated.json" {
 # get linked into every later build, including debug ones.
 $sysoName = "wails_windows_$Arch.syso"
 $sysoPath = Join-Path $root $sysoName
+$temporaryOutput = !$BinOut
+if ($temporaryOutput) {
+    $BinOut = Join-Path $distPath (".cczj-build-" + [Guid]::NewGuid().ToString("N") + ".exe")
+}
 try {
     Step "generate $sysoName" {
         & wails3 generate syso `
@@ -89,33 +101,20 @@ try {
             -ldflags="-w -s -H windowsgui -X cczjVideo/app/updater.Version=$Version" `
             -o $BinOut
     }
+    Step "verify the version resource" {
+        & powershell -NoProfile -ExecutionPolicy Bypass -File build/windows/check_exe.ps1 `
+            -Path $BinOut -ExpectVersion $Version
+    }
+    if ((Resolve-Path -LiteralPath $BinOut).Path -ne [IO.Path]::GetFullPath($exeTarget)) {
+        Step "stage $exeAsset" { Copy-Item -LiteralPath $BinOut -Destination $exeTarget -Force }
+    }
 } finally {
-    Remove-Item -LiteralPath $sysoName -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $sysoPath -ErrorAction SilentlyContinue
+    if ($temporaryOutput) { Remove-Item -LiteralPath $BinOut -ErrorAction SilentlyContinue }
 }
 
-Step "verify the version resource" {
-    & powershell -NoProfile -ExecutionPolicy Bypass -File build/windows/check_exe.ps1 `
-        -Path $BinOut -ExpectVersion $Version
-}
-
-# Join-Path refuses to combine a root with an already-absolute path, and -OutDir
-# is commonly passed as a temp/CI path.
-$distPath = if ([IO.Path]::IsPathRooted($OutDir)) { $OutDir } else { Join-Path $root $OutDir }
-New-Item -ItemType Directory -Force -Path $distPath | Out-Null
-
-# Two assets on purpose. The updater's findBestAsset() only matches an asset in
-# its first (platform-aware) round when the lowercased name contains "windows"
-# or "amd64", and it prefers .exe over .zip: the bare exe therefore has to carry
-# the platform token, otherwise the in-app updater falls through to the zip and
-# can only open a folder for the user to install by hand.
-$exeAsset = "cczjVideo-windows-$Arch-$Version.exe"
-$zipAsset = "cczjVideo-windows-$Arch-$Version-portable.zip"
-$exeTarget = Join-Path $distPath $exeAsset
-$zipTarget = Join-Path $distPath $zipAsset
-
-Step "stage $exeAsset" { Copy-Item -LiteralPath $BinOut -Destination $exeTarget -Force }
 Step "stage $zipAsset" {
-    Compress-Archive -Path $exeTarget -DestinationPath $zipTarget -CompressionLevel Optimal -Force
+    Compress-Archive -LiteralPath $exeTarget -DestinationPath $zipTarget -CompressionLevel Optimal -Force
 }
 
 $checksumLines = @()

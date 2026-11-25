@@ -27,8 +27,12 @@ func GetEnabledSources() ([]*model.Source, error) {
 
 // GetEnabledSourcesByKind 返回某个模式下启用中的源。
 func GetEnabledSourcesByKind(kind model.SourceKind) ([]*model.Source, error) {
+	return GetEnabledSourcesByKindContext(context.Background(), kind)
+}
+
+func GetEnabledSourcesByKindContext(ctx context.Context, kind model.SourceKind) ([]*model.Source, error) {
 	var sources []*model.Source
-	err := ReadDB().Select(&sources,
+	err := ReadDB().SelectContext(ctx, &sources,
 		`SELECT * FROM sources WHERE enabled = 1 AND kind = ? ORDER BY id`, string(kind.Normalize()))
 	return sources, err
 }

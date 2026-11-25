@@ -51,8 +51,9 @@ type providerMatch struct {
 const matchPolicy = "episode-priority-v4"
 
 const (
-	matchParallelism  = 3
-	matchProbeTimeout = 12 * time.Second
+	matchParallelism   = 3
+	matchProbeTimeout  = 12 * time.Second
+	matchPriorityGrace = 500 * time.Millisecond
 	// Leave time for queued probes, cancellation and publishing the result.
 	MatchRequestTimeout = time.Duration((len(builtinProviders)+matchParallelism-1)/matchParallelism)*matchProbeTimeout + 7*time.Second
 )
@@ -63,8 +64,8 @@ func matchFingerprint(request MatchRequest) string {
 	return matchPolicy + ":" + hex.EncodeToString(sum[:])
 }
 
-// Match probes at most three enabled providers concurrently. Priority is source
-// order, never completion time; only the chosen concrete pool is persisted.
+// Match probes at most three enabled providers concurrently. A nonempty fallback
+// gives higher-priority probes a brief grace period before binding its pool.
 func (s *Service) Match(ctx context.Context, request MatchRequest) (MatchResult, error) {
 	if strings.TrimSpace(request.LocalKey) == "" || len(request.LocalKey) > 512 || strings.TrimSpace(request.Title) == "" || len(request.Title) > 300 || len(request.Year) > 32 || len(request.Kind) > 128 || len(request.EpisodeLabel) > 256 || request.DurationMS < 0 || request.DurationMS > 86400000 || request.PositionMS < 0 || request.PositionMS > 86400000 {
 		return MatchResult{}, apperror.New(apperror.Validation, "弹幕匹配信息无效")
@@ -125,9 +126,24 @@ func (s *Service) match(ctx context.Context, request MatchRequest, settings Sour
 		}(i, order[i])
 	}
 	// Queue lower-priority sources until a probe slot becomes available.
-	started := min(cap(s.matchSlots), len(order))
-	for i := 0; i < started; i++ {
-		start(i)
+	parallel := min(cap(s.matchSlots), len(order))
+	started := 0
+	startThrough := func(limit int) {
+		for started < min(limit, len(order)) {
+			start(started)
+			started++
+		}
+	}
+	// A previously readable first-choice source gets a short head start.
+	// Slow reads release the other slots without extending the probe deadline.
+	var headStart <-chan time.Time
+	if parallel > 1 && s.catalogHint(ctx, request, order[0]) != nil {
+		timer := time.NewTimer(time.Second)
+		defer timer.Stop()
+		headStart = timer.C
+		startThrough(1)
+	} else {
+		startThrough(parallel)
 	}
 	// Always join the owned probes before publishing the match or closing storage.
 	defer func() { cancel(); workers.Wait() }()
@@ -135,32 +151,70 @@ func (s *Service) match(ctx context.Context, request MatchRequest, settings Sour
 	next := 0
 	selected := -1
 	usable := false
+	fallback := -1
+	var priorityTimer *time.Timer
+	var priorityElapsed <-chan time.Time
+	defer func() {
+		if priorityTimer != nil {
+			priorityTimer.Stop()
+		}
+	}()
+	receive := func(value providerMatch) {
+		received[value.index] = &value
+		result.Attempts[value.index] = value.attempt
+		usable = usable || value.binding != nil
+		for next < len(order) && received[next] != nil {
+			if received[next].binding != nil {
+				selected = next
+				break
+			}
+			next++
+		}
+		if selected < 0 && value.binding != nil && value.window != nil && len(value.window.Items) > 0 &&
+			(fallback < 0 || value.index < fallback) {
+			fallback = value.index
+			if priorityTimer == nil {
+				priorityTimer = time.NewTimer(matchPriorityGrace)
+				priorityElapsed = priorityTimer.C
+			}
+		}
+	}
 collect:
-	for count := 0; count < len(order); count++ {
+	for count := 0; count < len(order); {
 		select {
 		case <-ctx.Done():
 			return MatchResult{}, ctx.Err()
 		case <-workCtx.Done():
 			break collect
+		case <-headStart:
+			headStart = nil
+			startThrough(parallel)
+			continue
 		case value := <-values:
-			copy := value
-			received[value.index] = &copy
-			result.Attempts[value.index] = value.attempt
-			usable = usable || value.binding != nil
-			for next < len(order) && received[next] != nil {
-				if received[next].binding != nil {
-					selected = next
-					break
-				}
-				next++
+			count++
+			receive(value)
+		case <-priorityElapsed:
+			// A higher-ranked result already in the queue is still eligible.
+			for ready := len(values); ready > 0; ready-- {
+				receive(<-values)
+			}
+			if selected < 0 {
+				selected = fallback
+				matchLog(ctx, "danmaku source priority wait expired", applog.Fields{
+					"provider": order[selected], "grace_ms": matchPriorityGrace.Milliseconds(),
+				})
 			}
 		}
 		if selected >= 0 {
 			break
 		}
 		if !usable && started < len(order) && workCtx.Err() == nil {
-			start(started)
-			started++
+			if headStart != nil {
+				headStart = nil
+				startThrough(1 + parallel)
+			} else {
+				startThrough(started + 1)
+			}
 		}
 	}
 	if selected >= 0 || workCtx.Err() != nil {
@@ -190,6 +244,9 @@ collect:
 		if err := s.store.SaveBinding(ctx, *chosen.binding); err != nil {
 			return MatchResult{}, apperror.Wrap(apperror.Storage, err, "保存弹幕匹配失败")
 		}
+		for _, probe := range received {
+			s.rememberCatalog(ctx, request, probe)
+		}
 		result.Binding = chosen.binding
 		result.Window = chosen.window
 		if selected > 0 {
@@ -207,6 +264,7 @@ collect:
 func (s *Service) matchProvider(ctx context.Context, request MatchRequest, name string) (value providerMatch) {
 	value = providerMatch{attempt: MatchAttempt{Provider: name, Status: "no_match", Stage: "cooldown"}}
 	began := time.Now()
+	var probeMS int64
 	var diagnosticErr error
 	defer func() {
 		if ctx.Err() != nil && (value.err != nil || value.attempt.Status == "cancelled") {
@@ -219,7 +277,7 @@ func (s *Service) matchProvider(ctx context.Context, request MatchRequest, name 
 			}
 		}
 		value.attempt.ElapsedMS = time.Since(began).Milliseconds()
-		fields := applog.Fields{"provider": name, "stage": value.attempt.Stage, "status": value.attempt.Status, "code": value.attempt.Code, "retry_at": value.attempt.RetryAt, "duration_ms": value.attempt.ElapsedMS, "detail": value.attempt.Detail}
+		fields := applog.Fields{"provider": name, "stage": value.attempt.Stage, "status": value.attempt.Status, "code": value.attempt.Code, "retry_at": value.attempt.RetryAt, "duration_ms": value.attempt.ElapsedMS, "probe_ms": probeMS, "probe_budget_ms": matchProbeTimeout.Milliseconds(), "detail": value.attempt.Detail}
 		if diagnosticErr == nil {
 			diagnosticErr = value.err
 		}
@@ -229,6 +287,9 @@ func (s *Service) matchProvider(ctx context.Context, request MatchRequest, name 
 		matchLog(ctx, "danmaku match provider", fields)
 	}()
 	fingerprint := matchFingerprint(request)
+	if name == "bilibili" && bilibiliIndexYear(request) != "" {
+		fingerprint += tvIndexFingerprintSuffix
+	}
 	failed, err := s.store.matchFailure(ctx, request.LocalKey, name, fingerprint, s.now())
 	if err != nil {
 		value.err = apperror.Wrap(apperror.Storage, err, "读取弹幕匹配冷却失败")
@@ -250,8 +311,10 @@ func (s *Service) matchProvider(ctx context.Context, request MatchRequest, name 
 		value.attempt.Status = "cancelled"
 		return value
 	}
+	probeStarted := time.Now()
 	probeCtx, stop := context.WithTimeout(ctx, matchProbeTimeout)
 	binding, window, code, err := s.probeMatch(probeCtx, request, name, &value.attempt, failed)
+	probeMS = time.Since(probeStarted).Milliseconds()
 	diagnosticErr = err
 	stop()
 	if ctx.Err() != nil || errors.Is(err, context.Canceled) || apperror.Is(err, apperror.Cancelled) {
@@ -306,6 +369,18 @@ func (s *Service) matchProvider(ctx context.Context, request MatchRequest, name 
 	return value
 }
 func (s *Service) probeMatch(ctx context.Context, request MatchRequest, name string, attempt *MatchAttempt, failed *MatchAttempt) (*Binding, *Window, string, error) {
+	prior, err := s.verifiedEpisodeBinding(ctx, request, name)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	if prior != nil {
+		matchLog(ctx, "danmaku stored episode reused", applog.Fields{"provider": name})
+		binding, window, code, err := s.matchEpisodeWindow(ctx, request, &prior.work.Candidate, &prior.Episode, 1, attempt)
+		if binding != nil || (err != nil && !apperror.Is(err, apperror.NotFound)) {
+			return binding, window, code, err
+		}
+		// A removed pool may be listed under a new episode ID in the catalogue.
+	}
 	work, episode, count, catalogErr := s.verifiedCatalog(ctx, request, name)
 	if catalogErr != nil {
 		matchLog(ctx, "danmaku stored catalogue unavailable", applog.Fields{"provider": name, "code": apperror.CodeOf(catalogErr)})
@@ -385,7 +460,9 @@ func (s *Service) matchEpisodeWindow(ctx context.Context, request MatchRequest, 
 		return nil, nil, "INVALID_EPISODE", err
 	}
 	attempt.Stage = "window"
-	window, err := s.readBoundWindow(ctx, binding, request.PositionMS)
+	started := time.Now()
+	window, err := s.readBoundWindow(ctx, binding, request.PositionMS, true)
+	matchLog(ctx, "danmaku initial window finished", applog.Fields{"provider": episode.Provider, "duration_ms": time.Since(started).Milliseconds(), "code": apperror.CodeOf(err)})
 	if err != nil {
 		return nil, nil, "", err
 	}

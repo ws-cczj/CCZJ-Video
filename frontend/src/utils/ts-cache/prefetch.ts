@@ -135,6 +135,12 @@ export function updatePlaybackState(state: { position: number; rate: number; pau
   }
   wake()
 }
+export function checkpointPausedTransport(owner: symbol): void {
+  if (!session.transportActive || session.transportOwner !== owner) return
+  queueRecentSegments()
+  setDiskPlaybackActive(false)
+}
+
 export function setTransportActive(active: boolean, owner?: symbol): void {
   if (!active && owner && session.transportOwner !== owner) return
   const wasActive = session.transportActive

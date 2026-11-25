@@ -5,7 +5,7 @@ import { danmakuTypefaceStatus } from './typeface'
 import { DanmakuTimeline, type DanmakuDraw } from './timeline'
 import { DanmakuTextBitmaps } from './textBitmaps'
 import DanmakuLikeFeedback from './DanmakuLikeFeedback.vue'
-import { danmakuFont, danmakuPixelRatio } from './textStyle'
+import { danmakuFont, danmakuPixelRatio, danmakuTextPadding } from './textStyle'
 import type { DanmakuItem } from '../../api/danmaku'
 import type { DanmakuPreferences } from './preferences'
 const props=defineProps<{items:DanmakuItem[];offset:number;preferences:DanmakuPreferences;current:number;playing:boolean;interactive:boolean;video:()=>HTMLVideoElement|null}>()
@@ -24,7 +24,12 @@ let context:CanvasRenderingContext2D|null=null,frame:number|undefined,observer:R
 let needsPaint = true
 let lastPaintTime = -Infinity
 const bitmaps = new DanmakuTextBitmaps()
-const timeline=new DanmakuTimeline((text,size)=>{if(!context)return text.length*size;context.font=danmakuFont(props.preferences,size);return context.measureText(text).width})
+const timeline = new DanmakuTimeline((text, size) => {
+  if (!context) return { left: 0, right: text.length * size }
+  context.font = danmakuFont(props.preferences, size)
+  const metrics = context.measureText(text)
+  return { left: Math.max(0, metrics.actualBoundingBoxLeft || 0), right: Math.max(metrics.width, metrics.actualBoundingBoxRight || 0) }
+})
 
 function canInteract(): boolean {
   return props.interactive && active.value && !disposed
@@ -42,8 +47,9 @@ function hit(point?: Point): DanmakuDraw | undefined {
   if (!point) return
   for (let index = visible.length - 1; index >= 0; index--) {
     const row = visible[index]
+    const padding = danmakuTextPadding(props.preferences, row.fontSize)
     if (point.x >= row.x && point.x <= row.x + row.width &&
-      point.y >= row.y - row.fontSize && point.y <= row.y + row.fontSize * .24) return row
+      point.y >= row.y - row.fontSize - padding && point.y <= row.y + row.fontSize * .25 + padding) return row
   }
 }
 

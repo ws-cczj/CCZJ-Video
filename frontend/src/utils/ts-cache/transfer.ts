@@ -14,7 +14,7 @@ export class SegmentFailure extends Error {
 export interface SegmentFailureRecord {
   attempts: number; failures: number; nextRetry: number; at: number; position: number; firstAt: number; firstPosition: number; error: SegmentFailure
 }
-export interface TransferResult { buffer: ArrayBuffer; stats: LoaderStats; cached: boolean; streamed: boolean }
+export interface TransferResult { buffer: ArrayBuffer; stats: LoaderStats; cached: boolean; streamed: boolean; source: 'memory' | 'disk' | 'network' }
 export interface SegmentLease { promise: Promise<TransferResult>; release: () => void }
 interface Consumer { purpose: TransferPurpose; progress?: (stats: LoaderStats, data: ArrayBuffer) => void; streamed: boolean }
 interface Flight {
@@ -158,7 +158,7 @@ async function run(flight: Flight, options: Parameters<typeof acquireSegment>[0]
   check()
   if (stored?.byteLength) {
     if (!hit) cacheSet(flight.url, stored, flight.episodeKey, flight.range)
-    return { buffer: stored, stats: flight.stats, cached: true, streamed: false }
+    return { buffer: stored, stats: flight.stats, cached: true, streamed: false, source: hit ? 'memory' : 'disk' }
   }
   const failure = failures.get(flight.key)
   if (failure && failure.nextRetry > performance.now()) throw failure.error
@@ -243,7 +243,7 @@ async function run(flight: Flight, options: Parameters<typeof acquireSegment>[0]
       while (successes.size > MAX_QUEUE_PER_EPISODE * 2) successes.delete(successes.keys().next().value!)
       recordFetchDuration(stats.loading.end - stats.loading.start, stats.loaded, options.duration, stats.loading.start); updateNetworkDiagnosis()
     }
-    return { buffer, stats, cached: false, streamed: false }
+    return { buffer, stats, cached: false, streamed: false, source: 'network' }
   } catch (cause) {
     const timeout = signal.aborted && signal.reason?.name === 'TimeoutError'
     if (flight.generation !== prefetchState.cacheSession || (signal.aborted && !timeout)) {

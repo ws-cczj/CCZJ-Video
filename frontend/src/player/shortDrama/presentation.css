@@ -1,9 +1,9 @@
-/* Only a populated viewing scene and its teleported drawers use this palette.
- * Application chrome, navigation and empty states keep the user's theme. */
+:root { --cczj-drama-chrome: #18191c; }
+
+/* Playback chrome and its teleported drawers use the same palette. */
 .cczj-short-drama-surface,
 .cczj-mobile-route-stage[data-cczj-chrome=cinema] > .cczj-mobile-navigation {
   color-scheme: dark;
-  --cczj-drama-chrome: #18191c;
   --cczj-drama-control: #24252a;
   --cczj-drama-ink: #f4f4f5;
   --cczj-drama-secondary: #a7a9b2;

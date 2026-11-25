@@ -77,8 +77,28 @@ func (p *bilibiliProvider) sign(ctx context.Context, q url.Values) (url.Values, 
 	return q, nil
 }
 func (p *bilibiliProvider) Search(ctx context.Context, query string) ([]Candidate, error) {
+	return p.searchClasses(ctx, query, "media_bangumi", "media_ft", "video")
+}
+
+// A platform keyword can omit the season. Candidate selection still receives the
+// original title so the first season or an uploader commentary cannot stand in.
+func bilibiliSeriesQuery(title string) string {
+	title = strings.TrimSpace(title)
+	for _, pattern := range []*regexp.Regexp{matchSeason, matchLatinSeason} {
+		spans := pattern.FindAllStringIndex(title, -1)
+		if len(spans) == 1 && spans[0][0] > 0 && spans[0][1] == len(title) {
+			base := strings.TrimSpace(title[:spans[0][0]])
+			if base != "" {
+				return base
+			}
+		}
+	}
+	return title
+}
+
+func (p *bilibiliProvider) searchClasses(ctx context.Context, query string, classes ...string) ([]Candidate, error) {
 	result := []Candidate{}
-	for _, kind := range []string{"media_bangumi", "media_ft", "video"} {
+	for _, kind := range classes {
 		q, err := p.sign(ctx, url.Values{"search_type": {kind}, "keyword": {query}, "page": {"1"}})
 		if err != nil {
 			return nil, err
@@ -129,6 +149,37 @@ func (p *bilibiliProvider) Search(ctx context.Context, query string) ([]Candidat
 		logBilibiliSearchClass(ctx, kind, number(data["numResults"]), len(rows), len(result)-before)
 	}
 	return result, nil
+}
+
+// The official TV index accepts a premiere date range including the time of day.
+// A single bounded page is shared by all local titles from the same year.
+func (p *bilibiliProvider) tvIndex(ctx context.Context, year string) ([]Candidate, error) {
+	y, err := strconv.Atoi(year)
+	if err != nil || len(year) != 4 {
+		return nil, apperror.New(apperror.Validation, "剧集年份无效")
+	}
+	q := url.Values{"season_type": {"5"}, "type": {"1"}, "order": {"2"}, "sort": {"0"},
+		"page": {"1"}, "pagesize": {"50"}, "release_date": {fmt.Sprintf("[%04d-01-01 00:00:00,%04d-01-01 00:00:00)", y, y+1)}}
+	root, err := p.client.object(ctx, "https://api.bilibili.com/pgc/season/index/result?"+q.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	if err = business(root["code"], "0"); err != nil {
+		return nil, err
+	}
+	rows, ok := obj(root["data"])["list"].([]any)
+	if !ok || len(rows) > 50 {
+		return nil, schemaError(fmt.Errorf("invalid Bilibili TV index page"))
+	}
+	results := make([]Candidate, 0, len(rows))
+	for _, v := range rows {
+		row := obj(v)
+		id, title := text(row["season_id"]), plainTitle(text(row["title"]))
+		if number(row["season_type"]) == 5 && decimalID.MatchString(id) && title != "" {
+			results = append(results, Candidate{Provider: "bilibili", Ref: "ss" + id, Title: title, Kind: "电视剧"})
+		}
+	}
+	return results, nil
 }
 
 var bvidPattern = regexp.MustCompile(`^BV[A-Za-z0-9]{10}$`)

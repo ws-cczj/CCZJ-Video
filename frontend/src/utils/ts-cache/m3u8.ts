@@ -21,7 +21,9 @@ export function getM3u8FromCache(url: string): string | null {
 export function setM3u8Cache(url: string, text: string, headers?: Headers): void {
   const previous = m3u8TextCache.get(url)
   if (previous !== undefined) { cacheBytes -= previous.text.length * 2; m3u8TextCache.delete(url) }
-  const control = headers?.get('Cache-Control') ?? ''
+  const localProxy = url.startsWith('/__cczj/hls?') || (typeof location !== 'undefined' && url.startsWith(location.origin + '/__cczj/hls?'))
+  const upstreamControl = localProxy ? headers?.get('X-CCZJ-Playlist-Cache-Control') : null
+  const control = upstreamControl ?? headers?.get('Cache-Control') ?? ''
   if (/\b(?:no-store|no-cache)\b/i.test(control)) return
   const maxAge = control.match(/(?:^|,)\s*max-age\s*=\s*"?(\d+)/i)
   const age = Math.max(0, Number(headers?.get('Age')) || 0)

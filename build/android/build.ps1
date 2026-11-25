@@ -7,7 +7,8 @@ param(
     [ValidateSet('Debug', 'Release')][string]$BuildType = 'Debug',
     [switch]$UseExistingPreviewKey,
     [switch]$SkipFrontend,
-    [switch]$Install
+    [switch]$Install,
+    [string]$OutputApk = ''
 )
 $ErrorActionPreference = 'Stop'
 $workspace = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
@@ -92,7 +93,11 @@ try {
     finally { Pop-Location }
     $flavor = if ($ApplicationId -eq 'com.cczj.video.acceptance') { 'acceptance' } else { 'preview' }
     $typeSuffix = if ($BuildType -eq 'Release') { '-release' } else { '' }
-    $output = Join-Path $workspace "bin/CCZJ-Video-android-$Arch-$flavor$typeSuffix.apk"
+    if (!$OutputApk) {
+        $locations = Get-Content -LiteralPath (Join-Path $workspace 'build/artifact-paths.json') -Raw | ConvertFrom-Json
+        $OutputApk = "$($locations.packages)/android/CCZJ-Video-android-$Arch-$flavor$typeSuffix.apk"
+    }
+    $output = if ([IO.Path]::IsPathRooted($OutputApk)) { $OutputApk } else { Join-Path $workspace $OutputApk }
     New-Item -ItemType Directory -Force -Path (Split-Path $output) | Out-Null
     $typeDir = $BuildType.ToLowerInvariant()
     Copy-Item -LiteralPath "$PSScriptRoot/app/build/outputs/apk/$typeDir/app-$typeDir.apk" -Destination $output

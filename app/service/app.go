@@ -229,7 +229,11 @@ func (a *App) quitGracefully() {
 
 func NewApp() *App {
 	a := &App{shutdownDone: make(chan struct{})}
-	updater.SetMobileUpdateDirectory(func() string { return filepath.Join(a.getDataDir(), "updates") })
+	if goruntime.GOOS == "android" {
+		updater.SetMobileUpdateDirectory(func() string {
+			return storagepaths.AndroidUpdates(application.Mobile.StoragePath())
+		})
+	}
 	a.settings = settings.NewService()
 	// 扩展包注册表只要一个「取数据目录」的函数：它在扫描时才被调用，
 	// 所以构造它可以早于数据库打开（启用状态才需要读库）。

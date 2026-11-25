@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, shallowRef, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
-import { Button, Empty, Skeleton } from '../../components/ui'
+import { Button, Empty, Skeleton, Spinner } from '../../components/ui'
 import Icon from '../../components/Icon.vue'
 import VirtualVideoGrid from '../../components/VirtualVideoGrid.vue'
 import { useSourceStore } from '../../stores/source'
@@ -13,17 +13,33 @@ const props = defineProps<{active:boolean;mobile:boolean}>()
 const emit = defineEmits<{play:[video:Video];random:[]}>()
 const {t}=useI18n()
 const {currentSourceKey}=storeToRefs(useSourceStore())
-const list=useVideoList({enabled:()=>props.active,remoteShortDrama:true})
+const stale = shallowRef<Video[]>([])
+const list=useVideoList({
+  enabled:()=>props.active, remoteShortDrama:true,
+  onDeleted: (vod, source) => { stale.value = stale.value.filter(item => String(item.vod_id) !== vod || (item.source_key || list.sourceKey) !== source) },
+})
+const displayed = computed(() => list.sourceKey === currentSourceKey.value ? (list.videos.length ? list.videos : stale.value) : [])
+const pending = computed(() => list.loading || list.refreshing)
 const draft=ref(''), keyword=ref(''), recent=ref(false)
 const filters=computed(()=>({short_drama:true,type_id:'',year:'',area:'',keyword:keyword.value,recent_days:recent.value?7:0}))
-let signature='', pendingPage=1
+let signature='', pendingPage=1, revision=0
 function load(page=1):void {
   if(!props.active || !currentSourceKey.value)return
   const next=JSON.stringify([currentSourceKey.value,filters.value])
-  if(next!==signature){list.reset(list.sourceKey===currentSourceKey.value);signature=next}
+  if (next !== signature) {
+    const sameSource = list.sourceKey === currentSourceKey.value
+    if (!sameSource) stale.value = []
+    else if (list.videos.length) stale.value = list.videos
+    list.reset(sameSource)
+    signature = next
+  }
   else if(page===1 && !keyword.value && list.error && !list.videos.length)list.reset()
   pendingPage=page
-  void list.load(currentSourceKey.value,filters.value,page,24)
+  const token = ++revision
+  void list.load(currentSourceKey.value, filters.value, page, 24).then(() => {
+    if (token !== revision || list.interrupted || !props.active || list.sourceKey !== currentSourceKey.value) return
+    if (list.videos.length || (!list.error && !list.refreshFailed)) stale.value = []
+  })
 }
 function search():void {
   const value=draft.value.trim()
@@ -31,7 +47,7 @@ function search():void {
   else keyword.value=value
 }
 watch([currentSourceKey,()=>props.active],([key,active])=>{
-  if(!key){list.reset();signature='';return}
+  if(!key){revision++;stale.value=[];list.reset();signature='';return}
   if(active && (list.interrupted || list.needsRefresh() || !list.videos.length || signature!==JSON.stringify([key,filters.value])))load()
 },{immediate:true,flush:'post'})
 watch([keyword,recent],()=>load())
@@ -44,7 +60,7 @@ watch([keyword,recent],()=>load())
         <Button variant="text" :aria-pressed="false" @click="emit('random')">{{t('shortDrama.recommendTab')}}</Button>
         <Button variant="text" class="theatre-tab-active" :aria-pressed="true">{{t('shortDrama.theatre')}}</Button>
       </nav>
-      <div v-else class="cczj-flex cczj-items-baseline cczj-gap-6"><h1>{{t('shortDrama.title')}}</h1><span class="theatre-count">{{t('shortDrama.titleCount',{count:list.total})}}</span></div>
+      <div v-else class="cczj-flex cczj-items-baseline cczj-gap-6"><h1>{{t('shortDrama.title')}}</h1><span v-if="list.videos.length" class="theatre-count">{{t('shortDrama.titleCount',{count:list.total})}}</span></div>
       <div class="theatre-actions cczj-flex cczj-items-center cczj-gap-6">
         <form class="theatre-search cczj-flex cczj-items-center cczj-gap-4" role="search" @submit.prevent="search">
           <Icon name="search" :size="17"/>
@@ -58,21 +74,22 @@ watch([keyword,recent],()=>load())
       <span v-if="list.remoteName" class="theatre-count">{{list.remoteName}}</span>
       <Button variant="text" :aria-pressed="!recent" @click="recent=false">{{t('shortDrama.allDramas')}}</Button>
       <Button variant="text" :aria-pressed="recent" @click="recent=true">{{t('shortDrama.recentDramas')}}</Button>
+      <Spinner v-if="pending && displayed.length" inline size="sm" role="status" :aria-label="t('common.loading')" />
     </nav>
-    <Skeleton class="theatre-skeleton" :loading="list.loading && !list.videos.length" variant="cards" :title="false" :rows="6" :label="t('common.loading')">
-    <Empty v-if="!list.videos.length" class="theatre-empty" :title="list.error ? t('shortDrama.loadFailed') : t('shortDrama.empty')" :description="list.error || (list.remoteEmpty ? t('shortDrama.providerEmpty',{source:list.remoteName}) : t(!currentSourceKey ? 'shortDrama.noSource' : keyword ? 'shortDrama.noMatches' : 'shortDrama.emptyHint'))">
+    <Skeleton class="theatre-skeleton" :loading="pending && !displayed.length" variant="cards" :title="false" :rows="6" :label="t('common.loading')">
+    <Empty v-if="!displayed.length" class="theatre-empty" :title="list.error ? t('shortDrama.loadFailed') : t('shortDrama.empty')" :description="list.error || (list.remoteEmpty ? t('shortDrama.providerEmpty',{source:list.remoteName}) : t(!currentSourceKey ? 'shortDrama.noSource' : keyword ? 'shortDrama.noMatches' : 'shortDrama.emptyHint'))">
       <Button v-if="currentSourceKey" @click="load(list.nextCursor?list.page+1:1)">{{t(list.nextCursor?'shortDrama.loadMore':'common.retry')}}</Button>
       <router-link v-if="!list.error && !keyword" to="/sources">{{t('sidebar.sources')}}</router-link>
     </Empty>
-    <VirtualVideoGrid v-else class="theatre-grid cczj-grid cczj-gap-8" :items="list.videos" @select="emit('play',$event)">
+    <VirtualVideoGrid v-else class="theatre-grid cczj-grid cczj-gap-8" :items="displayed" :aria-busy="pending" @select="emit('play',$event)">
       <template #meta="{item}"><span class="theatre-meta cczj-truncate">{{[item.type_name,item.vod_year].filter(Boolean).join(' · ')}}</span></template>
     </VirtualVideoGrid>
     </Skeleton>
-    <footer v-if="list.videos.length" class="theatre-footer cczj-flex cczj-flex-col cczj-items-center cczj-gap-6">
+    <footer v-if="displayed.length" class="theatre-footer cczj-flex cczj-flex-col cczj-items-center cczj-gap-6">
       <Button v-if="list.refreshFailed" :loading="list.refreshing" @click="load()">{{t('common.retry')}}</Button>
       <p v-if="list.error" role="alert">{{list.error}}</p>
       <Button v-if="list.error || list.nextCursor" :loading="list.loading||list.refreshing" @click="load(list.error ? pendingPage : list.page+1)">{{t(list.error?'common.retry':'shortDrama.loadMore')}}</Button>
-      <span v-else class="theatre-count">{{t('shortDrama.titleCount',{count:list.total})}}</span>
+      <span v-else-if="!pending && list.videos.length" class="theatre-count">{{t('shortDrama.titleCount',{count:list.total})}}</span>
     </footer>
   </div>
 </template>

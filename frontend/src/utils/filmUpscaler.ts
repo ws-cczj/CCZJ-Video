@@ -1,4 +1,4 @@
-import { enhancementBufferBudget, sizeEnhancementBuffer, type EnhancementBufferBudget } from './videoLayout'
+import { enhancementBufferBudget, enhancementOutputSize, sizeEnhancementBuffer, type EnhancementBufferBudget } from './videoLayout'
 /** Film enhancement: FSRCNNX 2x super-resolution followed by CAS sharpening. */
 import fsrcnnxSource from './FSRCNNX_x2_8-0-4-1.glsl?raw'
 import { loseGlContext } from './anime4kUpscaler'
@@ -17,76 +17,57 @@ export interface PassDef {
 // ==================== 着色器 ====================
 
 export const VERTEX_SRC = `#version 300 es
-in vec2 a_pos;
+layout(location=0) in vec2 a_pos;
 out vec2 v_uv;
 void main() { gl_Position = vec4(a_pos, 0.0, 1.0); v_uv = a_pos * 0.5 + 0.5; }`
 
 // canvas 输出专用：翻转 Y 以匹配 DOM 坐标系
 export const VERTEX_FLIP_SRC = `#version 300 es
-in vec2 a_pos;
+layout(location=0) in vec2 a_pos;
 out vec2 v_uv;
 void main() { gl_Position = vec4(a_pos.x, -a_pos.y, 0.0, 1.0); v_uv = a_pos * 0.5 + 0.5; }`
 
-
-
-
-
-// Reinhard 色调映射
-
-// 标准 AMD CAS 锐化
+// Contrast-adaptive sharpening with a local limiter for high-contrast edges.
 const CAS_FRAG = `#version 300 es
-precision highp float; in vec2 v_uv; out vec4 fragColor;
-uniform sampler2D u_input; uniform vec2 u_texelSize; uniform float u_amount;
-float luma(vec3 c) { return dot(c, vec3(0.299,0.587,0.114)); }
-void main() {
-  vec2 ts = u_texelSize;
-  vec3 e = texture(u_input, v_uv).rgb;
-  vec3 a = texture(u_input, v_uv + vec2(0,-ts.y)).rgb;
-  vec3 b = texture(u_input, v_uv + vec2(-ts.x,0)).rgb;
-  vec3 c = texture(u_input, v_uv + vec2(ts.x,0)).rgb;
-  vec3 d = texture(u_input, v_uv + vec2(0,ts.y)).rgb;
-  vec3 f = texture(u_input, v_uv + vec2(-ts.x,-ts.y)).rgb;
-  vec3 g = texture(u_input, v_uv + vec2(ts.x,-ts.y)).rgb;
-  vec3 h = texture(u_input, v_uv + vec2(-ts.x,ts.y)).rgb;
-  vec3 i = texture(u_input, v_uv + vec2(ts.x,ts.y)).rgb;
-  float mn = min(min(min(luma(a),luma(b)),min(luma(c),luma(d))),min(min(luma(f),luma(g)),min(luma(h),luma(i))));
-  mn = min(mn, luma(e));
-  float mx = max(max(max(luma(a),luma(b)),max(luma(c),luma(d))),max(max(luma(f),luma(g)),max(luma(h),luma(i))));
-  mx = max(mx, luma(e));
-  float amp = sqrt(min(mn, 2.0 - mx) / max(mx, 1e-5));
-  float w = amp * mix(0.0, 0.5, u_amount);
-  fragColor = vec4((e + w * (a + b + c + d)) / (1.0 + 4.0 * w), 1.0);
-}`
-
-// Bilinear color upsampling alongside FSRCNNX detail reconstruction.
-const BILINEAR_UP_FRAG = `#version 300 es
-precision highp float; in vec2 v_uv; out vec4 fragColor;
+precision highp float;
+precision highp sampler2D;
+in vec2 v_uv;
+out vec4 fragColor;
 uniform sampler2D u_input;
+uniform vec2 u_texelSize;
+uniform float u_amount;
+float luma(vec3 color) { return dot(color, vec3(0.2126, 0.7152, 0.0722)); }
 void main() {
-  fragColor = texture(u_input, v_uv);
+  vec3 center = texture(u_input, v_uv).rgb;
+  vec3 north = texture(u_input, v_uv - vec2(0.0, u_texelSize.y)).rgb;
+  vec3 south = texture(u_input, v_uv + vec2(0.0, u_texelSize.y)).rgb;
+  vec3 west = texture(u_input, v_uv - vec2(u_texelSize.x, 0.0)).rgb;
+  vec3 east = texture(u_input, v_uv + vec2(u_texelSize.x, 0.0)).rgb;
+  vec3 low = min(center, min(min(north, south), min(west, east)));
+  vec3 high = max(center, max(max(north, south), max(west, east)));
+  float headroom = min(luma(low), 1.0 - luma(high));
+  float weight = -0.19 * clamp(u_amount, 0.0, 1.0)
+               * sqrt(clamp(headroom / max(luma(high), 1e-5), 0.0, 1.0));
+  vec3 sharp = (center + weight * (north + south + west + east)) / (1.0 + 4.0 * weight);
+  fragColor = vec4(clamp(sharp, low, high), 1.0);
 }`
 
-
-// 颜色-细节合成着色器：将 FSRCNNX 提取的高频细节以加法叠加到彩色放大图上
+// SUBCONV1 packs four absolute luma samples in column-major subpixel order.
 const DETAIL_COMPOSE_FRAG = `#version 300 es
-precision highp float; in vec2 v_uv; out vec4 fragColor;
-uniform sampler2D u_detail;   // FSRCNNX 输出
-uniform sampler2D u_color;    // bilinear 上采样的彩色图
-float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+precision highp float;
+precision highp int;
+precision highp sampler2D;
+in vec2 v_uv;
+out vec4 fragColor;
+uniform sampler2D u_detail;
+uniform sampler2D u_color;
 void main() {
+  ivec2 pixel = ivec2(gl_FragCoord.xy);
+  int channel = (pixel.x % 2) * 2 + (pixel.y % 2);
+  float enhancedLuma = texelFetch(u_detail, pixel / 2, 0)[channel];
   vec3 color = texture(u_color, v_uv).rgb;
-  float detailL = texture(u_detail, v_uv).r;
-  float baseL = luma(color);
-  
-  // 提取 FSRCNNX 带来的"高频细节差值"
-  float detailDiff = detailL - baseL;
-  
-  // 将细节差值按照原色彩的亮度比例加回去，而不是直接相乘
-  vec3 outColor = color + detailDiff;
-  
-  // 防止过曝或负值
-  outColor = clamp(outColor, 0.0, 1.0);
-  fragColor = vec4(outColor, 1.0);
+  float delta = enhancedLuma - dot(color, vec3(0.2126, 0.7152, 0.0722));
+  fragColor = vec4(clamp(color + delta, 0.0, 1.0), 1.0);
 }`
 
 // ==================== mpv parser ====================
@@ -125,35 +106,21 @@ export function buildPassShader(pass: PassDef, iw: number, ih: number): string {
   const px = (1 / iw).toFixed(15), py = (1 / ih).toFixed(15)
   const samplers = pass.bindNames.map(n => `uniform sampler2D u_${n};`).join('\n')
   const defs = pass.bindNames.filter(n => !(pass.lumaBind && n === 'LUMA'))
-    .map(n => `#define ${n}_texOff(off) texture(u_${n}, v_uv + float(off) * vec2(${px}, ${py}))\n#define ${n}_tex(p) texture(u_${n}, p)`)
+    .map(n => `#define ${n}_texOff(off) texture(u_${n}, v_uv + vec2(off) * vec2(${px}, ${py}))\n#define ${n}_tex(p) texture(u_${n}, p)`)
     .join('\n')
   const lp = pass.lumaBind
-    ? `float _luma(sampler2D t, vec2 uv) { vec3 c = texture(t, uv).rgb; return dot(c, vec3(0.2126,0.7152,0.0722)); }\n#define LUMA_texOff(off) _luma(u_LUMA, v_uv + float(off) * vec2(${px}, ${py}))`
+    ? `float _luma(sampler2D t, vec2 uv) { vec3 c = texture(t, uv).rgb; return dot(c, vec3(0.2126,0.7152,0.0722)); }\n#define LUMA_texOff(off) _luma(u_LUMA, v_uv + vec2(off) * vec2(${px}, ${py}))`
     : ''
   const parts = [samplers, defs, lp].filter(s => s.length > 0)
   return `#version 300 es
 precision highp float;
+precision highp sampler2D;
 in vec2 v_uv;
 layout(location=0) out vec4 _out0;
 ${parts.join('\n')}
 void main() {
 ${pass.body}
 _out0 = res;
-}`
-}
-
-function buildAggShader(iw: number, ih: number): string {
-  return `#version 300 es
-precision highp float; in vec2 v_uv; out vec4 fragColor;
-uniform sampler2D u_SUBCONV1;
-void main() {
-  vec2 ic = v_uv * vec2(${iw}.0, ${ih}.0);
-  vec2 fc = fract(ic);
-  vec2 bs = (floor(ic) + vec2(0.5)) / vec2(${iw}.0, ${ih}.0);
-  ivec2 idx = ivec2(fc * vec2(2));
-  vec4 res = texture(u_SUBCONV1, bs);
-  float luma = res[idx.x * 2 + idx.y];
-  fragColor = vec4(luma, luma, luma, 1.0);
 }`
 }
 
@@ -181,18 +148,31 @@ export function linkProgram(gl: WebGL2RenderingContext, vs: WebGLShader, fs: Web
 
 export interface FBOEntry { tex: WebGLTexture; fbo: WebGLFramebuffer; w: number; h: number }
 
+export class EnhancementTargetError extends Error {}
+
 export function createFBO(gl: WebGL2RenderingContext, w: number, h: number, filter?: number): FBOEntry {
-  const tex = gl.createTexture()!
+  const tex = gl.createTexture()
+  if (!tex) throw new EnhancementTargetError('Cannot create texture')
   gl.bindTexture(gl.TEXTURE_2D, tex)
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null)
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter ?? gl.LINEAR)
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-  const fbo = gl.createFramebuffer()!
+  const fbo = gl.createFramebuffer()
+  if (!fbo) {
+    gl.deleteTexture(tex)
+    throw new EnhancementTargetError('Cannot create framebuffer')
+  }
   gl.bindFramebuffer(gl.FRAMEBUFFER, fbo)
   gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0)
+  const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER)
   gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+  if (status !== gl.FRAMEBUFFER_COMPLETE) {
+    gl.deleteFramebuffer(fbo)
+    gl.deleteTexture(tex)
+    throw new EnhancementTargetError('Incomplete enhancement framebuffer: ' + status)
+  }
   return { tex, fbo, w, h }
 }
 
@@ -206,27 +186,23 @@ export class FilmUpscaler {
   private opts: Required<FilmUpscalerOptions>
   private canvas: HTMLCanvasElement | null = null
   private gl: WebGL2RenderingContext | null = null
-  private bufferBudget?: EnhancementBufferBudget
+  private fullBudget?: EnhancementBufferBudget
+  private lightBudget?: EnhancementBufferBudget
   private video: HTMLVideoElement | null = null
   private running = false; private rafId = 0; private videoFrameCallbackId: number | null = null
   private _error: string | null = null
-  private events: AbortController | null = null
   private casOnly = false
 
   private quadVAO: WebGLVertexArrayObject | null = null
   private quadVBO: WebGLBuffer | null = null
   private videoTex: WebGLTexture | null = null
 
-  private fboReg: Map<string, FBOEntry[]> = new Map()
+  private targets = new Map<string, FBOEntry>()
   private passProgs: WebGLProgram[] = []
-  private aggProg: WebGLProgram | null = null
   private detailComposeProg: WebGLProgram | null = null
   private casFlipProg: WebGLProgram | null = null  // canvas 输出用（Y 翻转）
-  private bilinearProg: WebGLProgram | null = null
 
   // 预分配 FBO
-  private lowResFBO: FBOEntry | null = null
-  private detailFBO: FBOEntry | null = null
   private composeFBO: FBOEntry | null = null
 
   // uniform location 缓存（二级 Map，消除冲突）
@@ -254,7 +230,7 @@ export class FilmUpscaler {
       this.canvas.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;z-index:2'
       const c = wrapper ?? video.parentElement
       if (!c) throw new Error('No container')
-      c.style.position = 'relative'; c.appendChild(this.canvas)
+      c.appendChild(this.canvas)
 
       const gl = this.canvas.getContext('webgl2', {
         alpha: false, antialias: false, premultipliedAlpha: false, preserveDrawingBuffer: false,
@@ -263,18 +239,6 @@ export class FilmUpscaler {
       this.gl = gl
 
       gl.getExtension('OES_texture_float_linear')
-      this.events = new AbortController()
-      const { signal } = this.events
-      this.canvas.addEventListener('webglcontextlost', e => {
-        e.preventDefault()
-        this.stop()
-        if (this.canvas) this.canvas.hidden = true
-      }, { signal })
-      this.canvas.addEventListener('webglcontextrestored', () => {
-        this.destroy()
-        void this.init(video, c).then(ready => { if (ready) this.start() })
-      }, { signal })
-
       this.inputW = video.videoWidth || 1920; this.inputH = video.videoHeight || 1080
 
       this.quadVAO = gl.createVertexArray()!
@@ -305,18 +269,32 @@ export class FilmUpscaler {
   }
 
   private configure(gl: WebGL2RenderingContext): void {
-    const canvas = this.canvas!
-    const video = this.video!
-    this.passDefs = parseMpvShader(fsrcnnxSource)
-    const targets = this.passDefs.filter(pass => !pass.isAggregation).length
-    const fullBudget = !this.opts.sharpenOnly && gl.getExtension('EXT_color_buffer_float') &&
-      enhancementBufferBudget(gl, this.inputW, this.inputH, targets, 3)
-    this.casOnly = !fullBudget
-    this.bufferBudget = fullBudget || enhancementBufferBudget(gl, this.inputW, this.inputH, 0)
-    if (!this.bufferBudget) throw new Error('Video texture exceeds GPU budget')
-    sizeEnhancementBuffer(video, canvas, this.casOnly ? 1 : 2, this.bufferBudget)
-    this.compileAll(gl)
-    if (!this.casOnly) this.allocFBOs()
+    this.passDefs = parseMpvShader(fsrcnnxSource).filter(pass => !pass.isAggregation)
+    const targets = new Set(this.passDefs.map(pass => pass.saveName)).size
+    this.lightBudget = enhancementBufferBudget(gl, this.inputW, this.inputH, 0)
+    if (!this.lightBudget) throw new Error('Video texture exceeds GPU budget')
+    this.fullBudget = !this.opts.sharpenOnly && gl.getExtension('EXT_color_buffer_float')
+      ? enhancementBufferBudget(gl, this.inputW, this.inputH, targets, 1) : undefined
+    this.configureOutput()
+  }
+
+  // The bundled model requests reconstruction above 1.3x in both dimensions.
+  private configureOutput(): boolean {
+    const video = this.video!, canvas = this.canvas!, gl = this.gl!
+    const output = this.fullBudget && enhancementOutputSize(video, canvas, 2, this.fullBudget)
+    const light = !output || output.width <= this.inputW * 1.3 || output.height <= this.inputH * 1.3
+    const changedMode = !this.casFlipProg || this.casOnly !== light
+    if (changedMode) {
+      this.releasePasses(gl)
+      this.casOnly = light
+      this.compileAll(gl)
+      if (!light) this.allocFBOs()
+    }
+    if (light) return sizeEnhancementBuffer(video, canvas, 1, this.lightBudget!) || changedMode
+    if (canvas.width === output.width && canvas.height === output.height) return changedMode
+    canvas.width = output.width
+    canvas.height = output.height
+    return true
   }
 
   private compileAll(gl: WebGL2RenderingContext): void {
@@ -329,53 +307,44 @@ export class FilmUpscaler {
     if (this.casOnly) return
     const vs = compileShader(gl, gl.VERTEX_SHADER, VERTEX_SRC)
     if (!vs) throw new Error('VS')
-    const fsProg = (src: string) => {
-      const fs = compileShader(gl, gl.FRAGMENT_SHADER, src); if (!fs) throw new Error('FS')
-      const p = linkProgram(gl, vs, fs)!; gl.deleteShader(fs); return p
+    const program = (source: string, label: string): WebGLProgram => {
+      const fs = compileShader(gl, gl.FRAGMENT_SHADER, source)
+      if (!fs) throw new Error(label)
+      const linked = linkProgram(gl, vs, fs)
+      gl.deleteShader(fs)
+      if (!linked) throw new Error(label)
+      return linked
     }
-    this.passProgs = []
-    for (let i = 0; i < this.passDefs.length; i++) {
-      const pass = this.passDefs[i]
-      if (pass.isAggregation) { this.passProgs.push(null!); continue }
-      const fs = compileShader(gl, gl.FRAGMENT_SHADER, buildPassShader(pass, this.inputW, this.inputH))
-      if (!fs) throw new Error(`Pass ${pass.desc}`)
-      const p = linkProgram(gl, vs, fs)!; gl.deleteShader(fs)
-      this.passProgs.push(p)
+    try {
+      for (const pass of this.passDefs) {
+        this.passProgs.push(program(buildPassShader(pass, this.inputW, this.inputH), pass.desc))
+      }
+      this.detailComposeProg = program(DETAIL_COMPOSE_FRAG, 'FSRCNNX composition')
+    } finally {
+      gl.deleteShader(vs)
     }
-    const aggFs = compileShader(gl, gl.FRAGMENT_SHADER, buildAggShader(this.inputW, this.inputH))
-    if (!aggFs) throw new Error('Agg'); this.aggProg = linkProgram(gl, vs, aggFs)!; gl.deleteShader(aggFs)
-
-    this.detailComposeProg = fsProg(DETAIL_COMPOSE_FRAG)
-    this.bilinearProg = fsProg(BILINEAR_UP_FRAG)
-    gl.deleteShader(vs)
   }
 
   private allocFBOs(): void {
     const gl = this.gl!, w = this.inputW, h = this.inputH
-    const outW = w * 2, outH = h * 2
-    this.lowResFBO = createFBO(gl, outW, outH)
-    this.detailFBO = createFBO(gl, outW, outH)
-    this.composeFBO = createFBO(gl, outW, outH)
-
-    for (let i = 0; i < this.passDefs.length; i++) {
-      const p = this.passDefs[i]
-      if (!p.isAggregation && p.saveName) this.getFBO(`${p.saveName}_${i}`, w, h)
+    this.composeFBO = createFBO(gl, w * 2, h * 2)
+    // Repeated SAVE names in this model replace features after their last read.
+    for (const pass of this.passDefs) {
+      if (!this.targets.has(pass.saveName)) this.targets.set(pass.saveName, createFBO(gl, w, h))
     }
   }
 
-  private getFBO(name: string, w: number, h: number): FBOEntry {
-    let a = this.fboReg.get(name); if (!a) { a = []; this.fboReg.set(name, a) }
-    for (const f of a) if (f.w === w && f.h === h) return f
-    const fb = createFBO(this.gl!, w, h); a.push(fb); return fb
-  }
-
-  private resolveTex(name: string, before: number): FBOEntry | null {
-    for (let i = before - 1; i >= 0; i--) {
-      if (this.passDefs[i].saveName === name && !this.passDefs[i].isAggregation) {
-        return this.getFBO(`${name}_${i}`, this.inputW, this.inputH)
-      }
-    }
-    return null
+  private releasePasses(gl: WebGL2RenderingContext): void {
+    for (const target of this.targets.values()) deleteFBO(gl, target)
+    this.targets.clear()
+    deleteFBO(gl, this.composeFBO)
+    this.composeFBO = null
+    for (const program of this.passProgs) gl.deleteProgram(program)
+    this.passProgs = []
+    gl.deleteProgram(this.casFlipProg)
+    gl.deleteProgram(this.detailComposeProg)
+    this.casFlipProg = this.detailComposeProg = null
+    this.ulocs.clear()
   }
 
   private getLoc(prog: WebGLProgram, name: string): WebGLUniformLocation | null {
@@ -393,6 +362,7 @@ export class FilmUpscaler {
   }
   stop(): void {
     this.running = false
+    if (this.canvas) this.canvas.hidden = true
     if (this.rafId) { cancelAnimationFrame(this.rafId); this.rafId = 0 }
     const video = this.video as (HTMLVideoElement & { cancelVideoFrameCallback?: (id: number) => void }) | null
     if (video && this.videoFrameCallbackId !== null && video.cancelVideoFrameCallback) {
@@ -401,35 +371,27 @@ export class FilmUpscaler {
     this.videoFrameCallbackId = null
   }
 
-  onSeeked(): void { this.lastUploadTime = -1 }
+  onSeeked(): void {
+    this.lastUploadTime = -1
+    if (this.running && this.video?.paused) this.renderCurrentFrame()
+  }
 
   destroy(): void {
     this.stop()
-    this.events?.abort()
-    this.events = null
     this.lastUploadTime = -1
     const gl = this.gl
     if (gl) {
-      for (const [, a] of this.fboReg) for (const f of a) { gl.deleteTexture(f.tex); gl.deleteFramebuffer(f.fbo) }
-      this.fboReg.clear()
-      for (const f of [this.lowResFBO, this.detailFBO, this.composeFBO])
-        deleteFBO(gl, f)
-      for (const p of this.passProgs) if (p) gl.deleteProgram(p)
-      for (const p of [this.aggProg, this.detailComposeProg, this.casFlipProg, this.bilinearProg])
-        if (p) gl.deleteProgram(p)
+      this.releasePasses(gl)
       if (this.videoTex) gl.deleteTexture(this.videoTex)
       if (this.quadVBO) gl.deleteBuffer(this.quadVBO)
       if (this.quadVAO) gl.deleteVertexArray(this.quadVAO)
       this.ulocs.clear()
       loseGlContext(gl)
     }
-    this.passProgs = []; this.passDefs = []; this.fboReg.clear()
-    this.lowResFBO = null; this.detailFBO = null; this.composeFBO = null
-    this.aggProg = null; this.detailComposeProg = null; this.casFlipProg = null
-    this.bilinearProg = null
+    this.passDefs = []
     this.quadVAO = null; this.quadVBO = null; this.videoTex = null
     if (this.canvas?.parentElement) this.canvas.parentElement.removeChild(this.canvas)
-    this.canvas = null; this.gl = null; this.video = null; this.bufferBudget = undefined
+    this.canvas = null; this.gl = null; this.video = null; this.lightBudget = this.fullBudget = undefined
   }
 
   setCompareSplit(percent: number | null): void {
@@ -442,10 +404,15 @@ export class FilmUpscaler {
   }
 
   resizeOutput(): void {
-    if (!this.video || !this.canvas || !this.running || !this.bufferBudget) return
-    if (sizeEnhancementBuffer(this.video, this.canvas, this.casOnly ? 1 : 2, this.bufferBudget)) {
-      this.onSeeked()
-      this.render()
+    if (!this.running || !this.video || !this.canvas) return
+    try {
+      if (this.video.videoWidth !== this.inputW || this.video.videoHeight !== this.inputH || this.configureOutput()) {
+        this.lastUploadTime = -1
+        this.renderCurrentFrame()
+      }
+    } catch (error) {
+      this._error = error instanceof Error ? error.message : String(error)
+      this.stop()
     }
   }
 
@@ -462,11 +429,20 @@ export class FilmUpscaler {
     } else {
       this.rafId = requestAnimationFrame(this.renderLoop)
     }
-    this.render()
+    this.renderCurrentFrame()
     const now = performance.now()
     if (now - this.lastFpsTime >= 2000) {
       this.currentFps = Math.round(this.frames / ((now - this.lastFpsTime) / 1000))
       this.frames = 0; this.lastFpsTime = now
+    }
+  }
+
+  private renderCurrentFrame(): void {
+    try {
+      this.render()
+    } catch (error) {
+      this._error = error instanceof Error ? error.message : String(error)
+      this.stop()
     }
   }
 
@@ -510,47 +486,23 @@ export class FilmUpscaler {
 
     const src = this.videoTex!
 
-    // FSRCNNX detail reconstruction plus bilinear color upsampling
-    let aggOut: FBOEntry | null = null
     if (!this.casOnly) {
-      // 细节+颜色合成管线：bilinear 彩色放大 + FSRCNNX 细节亮度 → 合成
-      pass(this.lowResFBO!, this.bilinearProg!, outW, outH, () => {
-        bind(this.bilinearProg!, src, 'u_input', 0)
-      })
-      for (let i = 0; i < this.passDefs.length; i++) {
-        const pd = this.passDefs[i]
-        if (pd.isAggregation) {
-          pass(this.detailFBO!, this.aggProg!, outW, outH, () => {
-            const s = this.resolveTex('SUBCONV1', i)
-            if (s) bind(this.aggProg!, s.tex, 'u_SUBCONV1', 0)
-          })
-          continue
-        }
-        const out = this.getFBO(`${pd.saveName}_${i}`, w, h)
+      for (const [i, pd] of this.passDefs.entries()) {
         const prog = this.passProgs[i]
-        if (!prog) continue
-        pass(out, prog, w, h, () => {
-          let u = 0
-          for (const bn of pd.bindNames) {
-            if (bn === 'LUMA') { bind(prog, src, `u_${bn}`, u) }
-            else {
-              const s = this.resolveTex(bn, i)
-              if (s) bind(prog, s.tex, `u_${bn}`, u)
-              else if (bn === 'ORIGINAL' || bn === 'SOURCE') bind(prog, src, `u_${bn}`, u)
-            }
-            u++
-          }
+        pass(this.targets.get(pd.saveName)!, prog, w, h, () => {
+          pd.bindNames.forEach((name, unit) => {
+            const texture = name === 'LUMA' ? src : this.targets.get(name)!.tex
+            bind(prog, texture, 'u_' + name, unit)
+          })
         })
       }
       pass(this.composeFBO!, this.detailComposeProg!, outW, outH, () => {
-        bind(this.detailComposeProg!, this.detailFBO!.tex, 'u_detail', 0)
-        bind(this.detailComposeProg!, this.lowResFBO!.tex, 'u_color', 1)
+        bind(this.detailComposeProg!, this.targets.get('SUBCONV1')!.tex, 'u_detail', 0)
+        bind(this.detailComposeProg!, src, 'u_color', 1)
       })
-      aggOut = this.composeFBO!
     }
 
-    // The light path sharpens the decoded frame directly.
-    const finalSrc = this.casOnly ? { tex: this.videoTex!, w, h } : aggOut
+    const finalSrc = this.casOnly ? { tex: src, w, h } : this.composeFBO
     if (finalSrc && this.casFlipProg) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, null)
       gl.viewport(0, 0, this.canvas!.width, this.canvas!.height)
@@ -569,18 +521,8 @@ export class FilmUpscaler {
   private rebuild(): void {
     const gl = this.gl!
     this.stop()
-    for (const p of this.passProgs) if (p) gl.deleteProgram(p); this.passProgs = []
-    for (const [, a] of this.fboReg) for (const f of a) { gl.deleteTexture(f.tex); gl.deleteFramebuffer(f.fbo) }
-    this.fboReg.clear()
-    for (const f of [this.lowResFBO, this.detailFBO, this.composeFBO])
-      deleteFBO(gl, f)
+    this.releasePasses(gl)
     this.onSeeked()
-    this.ulocs.clear()
-    this.lowResFBO = null; this.detailFBO = null; this.composeFBO = null
-    for (const program of [this.aggProg, this.detailComposeProg, this.casFlipProg, this.bilinearProg]) {
-      if (program) gl.deleteProgram(program)
-    }
-    this.aggProg = this.detailComposeProg = this.casFlipProg = this.bilinearProg = null
     try {
       this.configure(gl)
       this.start()
@@ -589,15 +531,6 @@ export class FilmUpscaler {
       this.destroy()
     }
   }
-}
-
-export function checkFilmSupport(): { supported: boolean; message: string } {
-  try {
-    const c = document.createElement('canvas'); const gl = c.getContext('webgl2')
-    if (!gl) return { supported: false, message: 'WebGL2 不可用' }
-    loseGlContext(gl) // 探测 canvas 同样占上下文名额，用完就还
-    return { supported: true, message: 'FSRCNNX 2x + CAS available' }
-  } catch { return { supported: false, message: 'WebGL2 检测失败' } }
 }
 
 export const FILM_PRESET = { casStrength: 0.8 } satisfies FilmUpscalerOptions

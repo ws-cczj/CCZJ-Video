@@ -23,7 +23,6 @@ export const useShortDramaSession = defineStore('short-drama-session', () => {
   void preferences.load()
   const home = computed(() => mobile && router.currentRoute.value.path === '/')
   const playing = computed(() => router.currentRoute.value.path === '/short-drama' && shortDramaScene(router.currentRoute.value, mobile) !== 'theatre')
-  const enabled = computed(() => preferences.ready && (home.value || playing.value))
   const entry = computed<ShortDramaEntry | null>(() => {
     if (!playing.value) return null
     const query = router.currentRoute.value.query
@@ -31,6 +30,7 @@ export const useShortDramaSession = defineStore('short-drama-session', () => {
     const integer = (value: unknown) => typeof value === 'string' && Number.isSafeInteger(Number(value)) && Number(value) >= 0 ? Number(value) : 0
     return { sourceKey: query.source, vodId: query.vod, globalId: integer(query.global_id), episodeIndex: integer(query.episode), lineIndex: query.line === undefined ? undefined : integer(query.line) }
   })
+  const enabled = computed(() => (playing.value && !!entry.value) || (preferences.ready && (home.value || playing.value)))
   let beforeChange: (() => void) | undefined
   function observeChange(handler: () => void): () => void {
     beforeChange = handler

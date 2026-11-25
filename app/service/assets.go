@@ -19,6 +19,8 @@ func AssetMiddleware(a *App, mobile bool) func(http.Handler) http.Handler {
 				switch r.URL.Path {
 				case "/__cczj/img":
 					pipeline = "http.image"
+				case "/__cczj/poster-card":
+					pipeline = "http.posterCard"
 				case "/__cczj/hls":
 					pipeline = "http.hls"
 				case "/__cczj/android-media", "/__cczj/mobile-media":
@@ -79,6 +81,11 @@ func AssetMiddleware(a *App, mobile bool) func(http.Handler) http.Handler {
 				}
 				a.readingImages.ServeHTTP(w, r)
 				return
+			case "/__cczj/poster-card":
+				if !mobile && a.proxy != nil {
+					a.proxy.ServePosterCard(w, r)
+					return
+				}
 			}
 			if strings.HasPrefix(r.URL.Path, "/__cczj/") {
 				http.NotFound(w, r)

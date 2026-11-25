@@ -56,11 +56,8 @@ func cachedDiscovery[T Candidate | Episode](ctx context.Context, s *Service, pro
 		}
 		return 0
 	}
-	trace, _ := ctx.Value(matchTraceKey{}).(string)
+	ctx = context.WithValue(ctx, matchHTTPStageKey{}, kind)
 	payload, err := s.load(ctx, key, func(raw []byte) error { _, err := decode(raw); return err }, func(ctx context.Context) ([]byte, error) {
-		if trace != "" {
-			ctx = context.WithValue(ctx, matchTraceKey{}, trace)
-		}
 		rows, err := fetch(ctx)
 		if err != nil {
 			return nil, err

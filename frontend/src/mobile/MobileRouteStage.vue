@@ -9,7 +9,7 @@ import { routeVisualActivityKey, routeWorkActivityKey, routeVisualMotionKey } fr
 import { sceneMotionKey } from '../motion/sceneTasks'
 import { useMotionStore } from '../stores/motion'
 import { captureDiagnosticContext, recordTimeline, type DiagnosticContext } from '../diagnostics/session'
-const props=withDefaults(defineProps<{mobile:boolean;cache?:string[];wallpaper?:boolean;sections?:readonly string[]}>(),{cache:()=>[],sections:()=>[]})
+const props=withDefaults(defineProps<{mobile:boolean;cache?:string[];sections?:readonly string[]}>(),{cache:()=>[],sections:()=>[]})
 const secondaryCache=computed(()=>props.mobile?[...props.cache,'Detail']:props.cache)
 const router=useRouter(),route=useRoute(),transitionName=ref('cczj-mobile-route-forward')
 const motion=useMotionStore()
@@ -28,17 +28,6 @@ const movingScenes=shallowReactive(new Set<Element>())
 provide(sceneMotionKey,computed(()=>movingScenes.size>0||dragging.value||settling.value||committing.value))
 const backdropElement=ref<HTMLElement>()
 const viewportElement=ref<HTMLElement>()
-const canvasStyle=shallowRef<Record<string,string>>({})
-let canvasObserver:ResizeObserver|undefined,canvasFrame:number|undefined
-function measureCanvas():void {
-  if(canvasFrame!==undefined)return
-  canvasFrame=requestAnimationFrame(()=>{
-    canvasFrame=undefined
-    const bounds=viewportElement.value?.getBoundingClientRect()
-    if(!alive||!bounds)return
-    canvasStyle.value={'--route-canvas-left':`${-bounds.left}px`,'--route-canvas-top':`${-bounds.top}px`,'--route-canvas-width':`${innerWidth}px`,'--route-canvas-height':`${innerHeight}px`}
-  })
-}
 // Complete a peer slide before admitting another peer navigation. Newer
 // requests replace waiting requests without restarting half-translated pages.
 let releasePeerNavigation:((accept:boolean)=>void)|undefined
@@ -320,13 +309,10 @@ function enterTab(element:Element):void {
   else {deactivate(element);const visible=sceneVisibility.get(element);if(visible)visible.value=true}
 }
 function finishEnter(element:Element):void {endSceneMotion(element);notifyScroll()}
-onMounted(()=>{
-  notifyScroll()
-  if(props.wallpaper&&viewportElement.value){canvasObserver=new ResizeObserver(measureCanvas);canvasObserver.observe(viewportElement.value);window.addEventListener('resize',measureCanvas);measureCanvas()}
-})
-onBeforeUnmount(()=>{removePeerGuard();releasePeerNavigation?.(false);for(const element of sceneTimings.keys())finishSceneTiming(element,true);alive=false;revision++;finishSettle?.();movingScenes.clear();cancelDragFrame();cancelPaint();canvasObserver?.disconnect();window.removeEventListener('resize',measureCanvas);if(canvasFrame!==undefined)cancelAnimationFrame(canvasFrame);if(scrollFrame!==undefined)cancelAnimationFrame(scrollFrame)})
+onMounted(notifyScroll)
+onBeforeUnmount(()=>{removePeerGuard();releasePeerNavigation?.(false);for(const element of sceneTimings.keys())finishSceneTiming(element,true);alive=false;revision++;finishSettle?.();movingScenes.clear();cancelDragFrame();cancelPaint();if(scrollFrame!==undefined)cancelAnimationFrame(scrollFrame)})
 </script>
-<template><div class="cczj-mobile-route-stage" :style="canvasStyle" :class="{'cczj-route-wallpaper':wallpaper,'cczj-mobile-shared-backdrop':mobile,'cczj-mobile-tab-dragging':dragging,'cczj-mobile-tab-settling':settling}" @touchstart.passive="swipe.touchStart" @touchend.passive="swipe.touchEnd" @touchcancel.passive="swipe.cancel" @click.capture="swipe.click($event)" @animationstart.capture="trackEntrance" @animationend.capture="rememberEntrance" @animationcancel.capture="rememberEntrance">
+<template><div class="cczj-mobile-route-stage" :class="{'cczj-mobile-shared-backdrop':mobile,'cczj-mobile-tab-dragging':dragging,'cczj-mobile-tab-settling':settling}" @touchstart.passive="swipe.touchStart" @touchend.passive="swipe.touchEnd" @touchcancel.passive="swipe.cancel" @click.capture="swipe.click($event)" @animationstart.capture="trackEntrance" @animationend.capture="rememberEntrance" @animationcancel.capture="rememberEntrance">
  <div v-if="mobile" ref="backdropElement" class="cczj-mobile-route-backdrop" aria-hidden="true" :style="backdropStyle()" />
  <div ref="viewportElement" class="cczj-mobile-route-viewport">
   <template v-for="entry in primaryEntries" :key="entry.path"><router-view :route="entry" v-slot="{Component}"><Transition :name="name" :appear="routeScreenKey(entry)!==initialScreen" :css="motion.allows('pages')&&!dragging&&!committing&&!readerChange" @before-enter="enterTab" @enter="restoreEntrances" @before-leave="beginLeave" @after-leave="finishLeave" @after-enter="finishEnter" @enter-cancelled="cancelScene" @leave-cancelled="cancelScene"><KeepAlive><component v-if="Component&&tabVisible(entry.path)" :is="scene(Component)" :key="entry.path" :view="Component" :location="entry" :frame="$slots.default" :class="{'cczj-mobile-route-current':primary(route.path,route.query)&&entry.path===route.path,'cczj-mobile-route-preview':dragging&&entry.path===previewPath&&entry.path!==route.path}" :style="tabStyle(entry.path)" @vue:mounted="syncTab" @vue:updated="syncTab" /></KeepAlive></Transition></router-view></template>

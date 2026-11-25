@@ -16,6 +16,8 @@ import time
 from android_webview import AndroidWebView
 
 ROOT = Path(__file__).resolve().parent.parent
+LOCATIONS = json.loads((ROOT / "build/artifact-paths.json").read_text(encoding="utf-8"))
+ACCEPTANCE_APK = ROOT / LOCATIONS["packages"] / "android/CCZJ-Video-android-amd64-acceptance.apk"
 PACKAGE = 'com.cczj.video.acceptance'
 SPEC = importlib.util.spec_from_file_location('compiled', ROOT/'scripts/collect-android-diagnostics.py')
 COMPILED = importlib.util.module_from_spec(SPEC)
@@ -84,7 +86,7 @@ def main():
         owned('mkdir -p '+shlex.quote(update_dir))
         fixtures = {}
         for kind, local in [
-            ('valid', ROOT/'bin/CCZJ-Video-android-amd64-acceptance.apk'),
+            ('valid', ACCEPTANCE_APK),
             ('wrong-package', ROOT/'dist/releases/v2.4.0/cczjVideo-android-arm64-2.4.0.apk'),
         ]:
             tmp = '/data/local/tmp/cczj-update-installer-'+kind+'.apk'
@@ -125,7 +127,7 @@ def main():
             rejected = view.evaluate('(async()=>{try{const m=await import('+json.dumps(COMPILED.compiled_binding('InstallUpdate')[0])+');await m['+json.dumps(COMPILED.compiled_binding('InstallUpdate')[1])+']('+json.dumps(fixtures['valid'])+');return false}catch{return true}})()')
             assert rejected
             record('Java and Go both reject an APK with a mismatched checksum receipt')
-            checksum = hashlib.sha256((ROOT/'bin/CCZJ-Video-android-amd64-acceptance.apk').read_bytes()).hexdigest()
+            checksum = hashlib.sha256(ACCEPTANCE_APK.read_bytes()).hexdigest()
             owned('printf %s '+shlex.quote(checksum)+' > '+shlex.quote(fixtures['valid']+'.sha256'))
 
             native('shell', 'appops', 'set', PACKAGE, 'REQUEST_INSTALL_PACKAGES', 'deny')

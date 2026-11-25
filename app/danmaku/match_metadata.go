@@ -126,7 +126,7 @@ func matchingWork(rows []Candidate, request MatchRequest) *Candidate {
 			best = row
 			bestScore = score
 			ambiguous = false
-		} else if row.Ref != best.Ref || row.Provider != best.Provider {
+		} else if score == bestScore && (row.Ref != best.Ref || row.Provider != best.Provider) {
 			ambiguous = true
 		}
 	}

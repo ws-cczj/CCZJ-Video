@@ -20,7 +20,7 @@ import { createPlayerEvents } from '../diagnostics/playerEvents'
 import { createPlayerTrace } from '../diagnostics/architecture'
 import { releasePlayerAnimations } from '../player/releaseAnimations'
 import { usePlaybackPreferences } from '../player/usePlaybackPreferences'
-import { layoutCanvasToVideo, sizeVideoPicture, type VideoPictureSize } from '../utils/videoLayout'
+import { sizeVideoPicture, type VideoPictureSize } from '../utils/videoLayout'
 import { usePlayerOsd } from '../player/usePlayerOsd'
 import { useSubtitles } from '../player/useSubtitles'
 import { useThumbnailScrubber } from '../player/useThumbnailScrubber'
@@ -255,14 +255,15 @@ const {
   compareSplit,
   toggleEnhancementCompare,
   updateEnhancementCompare,
-  qualityLabel,
+  effectiveQualityLabel,
   onMediaReady,
   notifySeeked,
   syncEnhancementOutput,
   resetPipeline,
-  hasPipeline,
+  pipelineActive,
 } = useVideoQuality({
   getVideoEl,
+  sourceHeight: () => pictureSize.value?.sourceHeight ?? 0,
   wrapperRef,
   settings: { read: readSetting, write: writeSetting },
   keepVisible,
@@ -324,7 +325,7 @@ const {cacheStats,cachedRanges,loadingCached,loadingTotal,loadingSpeed,loadingEl
   resetPerfBaseline,alignPlaybackClock,endStall}=telemetry
 const { videoInfo, extractBitrateFromCachedTs } = useVideoInfo({
   getVideoEl, getUrl: () => props.url, duration, current, muted, volume, speed,
-  streams: m3u8StreamInfo, cacheStats, qualityLabel: () => qualityLabel(qualityMode.value), t,
+  streams: m3u8StreamInfo, cacheStats, qualityLabel: effectiveQualityLabel, t,
 })
 
 // ------ 工具 ------
@@ -465,6 +466,7 @@ const source = createPlaybackSource({
   resume:()=>{if(!casting.value)void safePlay(false)},
   unrecoverable: () => {playback.cancel();getVideoEl()?.pause();source.dispose(getVideoEl()??undefined)},
   bufferChanged: updateBuffer,
+  startup: logStartup,
   networkPolicy: detail => logStartup('player_network_policy', detail),
   networkIssue: detail => logStartup('player_network_issue', detail),
 })
@@ -492,12 +494,11 @@ async function loadHls(video: HTMLVideoElement, url: string, continuation?:Conti
   loading.value = true
   startLoadingStats()
   try {
-    // Prepare bytes while SQLite resolves history. Playback still waits for
-    // the seek decision, so a warmed episode never starts audibly at zero.
-    const [, attached] = await Promise.all([
-      resume.load(continuation?.position).then(() => { if (session.current()) logStartup('player_resume_loaded') }),
-      source.load(video, url, session),
-    ])
+    const startPosition = resume.load(continuation?.position).then(() => {
+      if (session.current()) logStartup('player_resume_loaded')
+      return resume.startPosition()
+    })
+    const attached = await source.load(video, url, session, startPosition)
     if (!session.current() || !attached) return
     resume.attached()
     if(casting.value)source.suspend()
@@ -801,7 +802,7 @@ watch(thumbPreviewState,(value,previous)=>{
   if(value==='unavailable')playerEvents.issue('preview','FRAME_UNAVAILABLE',true)
 })
 const detachResourceSnapshot = registerPlayerResourceSnapshot(() => ({
-  quality_mode: qualityMode.value, enhancement_active: hasPipeline(),
+  quality_mode: qualityMode.value, enhancement_active: pipelineActive.value,
   presentation: {profile:platform.profile,controls:portrait?'portrait':mobile?'mobile':'desktop',
     fullscreen_adapter:platform.fullscreen.kind,pip_adapter:platform.pip.kind,
     native_volume:!!platform.device.read()},
@@ -1033,7 +1034,7 @@ function syncVideoLayout():void {
   const size=sizeVideoPicture(video,host,pip?'contain':effectivePictureFit.value,mobile)
   const previous=pictureSize.value
   if(size&&(!previous||size.width!==previous.width||size.height!==previous.height||size.sourceWidth!==previous.sourceWidth||size.sourceHeight!==previous.sourceHeight||size.viewportWidth!==previous.viewportWidth||size.viewportHeight!==previous.viewportHeight))pictureSize.value=size
-  if (!syncEnhancementOutput()) host.querySelectorAll<HTMLCanvasElement>('canvas[data-cczj-enhancement]').forEach(canvas => layoutCanvasToVideo(video, canvas))
+  syncEnhancementOutput()
 }
 watch([effectivePictureFit,isPiP,isFullscreen],syncVideoLayout,{flush:'post'})
 function applyPictureFit(value:string):void {
@@ -1358,7 +1359,7 @@ defineExpose({ isPlaying:computed(()=>playing.value&&!loading.value&&!casting.va
             </template>
           </template>
 
-      <button v-if="qualityMode !== 'original' && hasPipeline() && (!mobile || mobileMoreCategory==='quality')" class="ctrl-btn" :class="{ active: compareEnabled }"
+      <button v-if="pipelineActive && (!mobile || mobileMoreCategory==='quality')" class="ctrl-btn" :class="{ active: compareEnabled }"
         @click.stop="toggleEnhancementCompare" :aria-label="t('player.compareToggleTip')" :title="t('player.compareToggleTip')">
         <Icon name="layers" :size="16" />
       </button>

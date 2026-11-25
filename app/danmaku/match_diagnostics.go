@@ -57,6 +57,7 @@ func (s *Service) explainCachedFailure(ctx context.Context, request MatchRequest
 }
 
 type matchTraceKey struct{}
+type matchHTTPStageKey struct{}
 
 func matchLog(ctx context.Context, message string, fields applog.Fields) {
 	fields["mode"] = "video"

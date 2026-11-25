@@ -97,8 +97,16 @@ func (s *Service) SourceDirectory(ctx context.Context, kind model.SourceKind) (*
 		return nil, err
 	}
 	out := &SourceDirectory{Kind: string(kind), Registered: len(registry), Rows: []*BuiltinSourceRow{}, AuditRunning: s.auditRunning.Load()}
+	chapterCounts := map[string][]db.ReadingObservationCount{}
 	var subscription *SourceOperationEvidence
 	if kind == model.SourceKindNovel {
+		counts, err := db.ReadNovelObservations(ctx, 0)
+		if err != nil {
+			return nil, err
+		}
+		for _, count := range counts {
+			chapterCounts[count.SourceKey] = append(chapterCounts[count.SourceKey], count)
+		}
 		raw, err := db.GetSetting(CCZJ.SettingNovelSubscriptionChecked)
 		if err != nil {
 			return nil, err
@@ -159,7 +167,7 @@ func (s *Service) SourceDirectory(ctx context.Context, kind model.SourceKind) (*
 			}
 		}
 		entry := &BuiltinSourceRow{ID: id, SourceKey: installed.SourceKey, Name: installed.Name, Enabled: installed.Enabled == 1, Pool: label, Score: e.Score, Confidence: e.Confidence, CheckedAt: checkedAt, DeepAt: check.DeepAt, State: state,
-			Supply: "custom", Section: "reserve", Site: installed.ApiUrl, Revision: sourceRevision(installed), Language: "unknown", Capabilities: []string{}, Operations: evidence.operations(id), Reading: readingEvidence(evidence.chapters[installed.SourceKey], sourceRevision(installed))}
+			Supply: "custom", Section: "reserve", Site: installed.ApiUrl, Revision: sourceRevision(installed), Language: "unknown", Capabilities: []string{}, Operations: evidence.operations(id), Reading: readingEvidence(chapterCounts[installed.SourceKey], sourceRevision(installed))}
 		if kind == model.SourceKindNovel && !e.Fresh {
 			entry.Score = -1
 		}

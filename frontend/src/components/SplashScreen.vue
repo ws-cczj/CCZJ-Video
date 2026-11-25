@@ -38,9 +38,6 @@ const monochrome=ref(false)
 const ready = ref(false)
 const show = ref(true)
 let disposed = false
-let wallpaperImage:HTMLImageElement|undefined
-let wallpaperReady:Promise<void>=Promise.resolve()
-let stopWallpaper:(()=>void)|undefined
 let finishTimer: ReturnType<typeof setTimeout> | undefined
 let deadlineTimer: ReturnType<typeof setTimeout> | undefined
 let stopTheme: (() => void) | undefined
@@ -61,28 +58,10 @@ function dispose(): void {
   clearTimeout(finishTimer)
   clearTimeout(deadlineTimer)
   stopTheme?.()
-  stopWallpaper?.()
-  if(wallpaperImage){wallpaperImage.src='';wallpaperImage=undefined}
   cancelAnimationFrame(revealFrame)
-}
-function warmWallpaper(src:string|undefined):void {
-  if(wallpaperImage){wallpaperImage.src='';wallpaperImage=undefined}
-  wallpaperReady=Promise.resolve()
-  if(!src||disposed)return
-  const image=new Image();wallpaperImage=image
-  image.decoding='async';image.src=src
-  const began=performance.now()
-  wallpaperReady=image.decode().then(()=>{
-    if(!disposed&&wallpaperImage===image)markStartup('wallpaper_decode',performance.now()-began)
-  },()=>{
-    if(!disposed&&wallpaperImage===image)markStartup('wallpaper_decode',performance.now()-began,true)
-  })
 }
 async function finishStartup():Promise<void> {
   await theme.waitForBackground()
-  if(disposed)return
-  let pending:Promise<void>
-  do{pending=wallpaperReady;await pending}while(!disposed&&pending!==wallpaperReady)
   if(!disposed)dismiss()
 }
 async function reveal(event: Event): Promise<void> {
@@ -105,7 +84,6 @@ onMounted(() => {
   if (appMode.mode !== 'video') { ready.value = true; finishTimer = setTimeout(dismiss, 850); return }
   // Bound the splash even when theme IPC or image loading fails.
   deadlineTimer = setTimeout(dismiss, 2200)
-  stopWallpaper=watch(()=>theme.backgroundURL,warmWallpaper,{immediate:true})
   stopTheme = watch(() => theme.loaded, loaded => { if (loaded) selectImage() })
   if (theme.loaded) selectImage()
 })

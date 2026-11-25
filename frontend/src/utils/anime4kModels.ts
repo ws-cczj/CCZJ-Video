@@ -77,8 +77,7 @@ export const TEX_VIDEO = 0
 
 // ==================== 管线构建 ====================
 
-/** 从模型结构构建完整的引擎 pass 列表。
- *  每个中间层 pass 分配独立的纹理索引，确保 pointwise 可以同时读取所有中间输出。 */
+/** Build model dependencies before assigning reusable source-sized GPU textures. */
 export function buildPipeline(structure: ModelStructure): EnginePassDef[] {
   const passes: EnginePassDef[] = []
   const r = structure.restore
@@ -132,8 +131,8 @@ export function buildPipeline(structure: ModelStructure): EnginePassDef[] {
   let rDualA = -1, rDualB = -1
 
   if (r.split16) {
-    let readA = (r.split && rSplitTex.length > 0) ? rSplitTex[rSplitTex.length - 1] : lastLinearTex
-    let readB = rLinearTex.length > 1 ? rLinearTex[rLinearTex.length - 2] : lastLinearTex
+    let readA = rLinearTex[0]
+    let readB = rLinearTex[1]
     for (let i = 0; i < r.split16.length; i += 2) {
       const fsA = r.split16[i].source
       const fsB = (i + 1 < r.split16.length) ? r.split16[i + 1].source : fsA
@@ -187,18 +186,16 @@ export function buildPipeline(structure: ModelStructure): EnginePassDef[] {
 
   // 线性 passes
   const uLinearTex: number[] = []
-  let uReadTex = restoreWrite
   for (let i = 0; i < u.linear.length; i++) {
     const writeTex = nextTex++
     passes.push({
       fs: u.linear[i].source,
-      read: uReadTex,
+      read: restoreWrite,
       write: writeTex,
       resScale: 1,
       flipY: 1,
     })
     uLinearTex.push(writeTex)
-    uReadTex = writeTex
   }
 
   // 8ch Split ReLU passes
@@ -222,16 +219,11 @@ export function buildPipeline(structure: ModelStructure): EnginePassDef[] {
   // 16ch Split ReLU passes (双纹理输入, L) — 拆成成对单输出 pass (非 MRT)
   // 每两个连续 shader 是一对 (tf + tf1)，权重不同。
   const uSplit16Tex: number[] = []
-  let udA = -1, udB = -1
   const uSplit16Pairs: Array<[number, number]> = []
 
   if (u.split16) {
-    let readA = (u.split && uSplitTex.length > 0) ? uSplitTex[uSplitTex.length - 1]
-      : uLinearTex.length > 0 ? uLinearTex[uLinearTex.length - 1]
-      : restoreWrite
-    let readB = uLinearTex.length > 1 ? uLinearTex[uLinearTex.length - 2]
-      : uLinearTex.length > 0 ? uLinearTex[uLinearTex.length - 1]
-      : restoreWrite
+    let readA = uLinearTex[0]
+    let readB = uLinearTex[1]
     for (let i = 0; i < u.split16.length; i += 2) {
       const fsA = u.split16[i].source
       const fsB = (i + 1 < u.split16.length) ? u.split16[i + 1].source : fsA
@@ -242,7 +234,6 @@ export function buildPipeline(structure: ModelStructure): EnginePassDef[] {
       uSplit16Pairs.push([outA, outB])
       readA = outA; readB = outB
     }
-    udA = readA; udB = readB
   }
 
   // Pointwise passes (M: 1×1 卷积，读取所有中间层输出)
@@ -271,23 +262,12 @@ export function buildPipeline(structure: ModelStructure): EnginePassDef[] {
   }
 
   // 最终空间卷积 pass (L: FS_U8, 在 Depth2Space 前)
-  // FS_U8 读取最后一对 split16 的输出 (conv2d_last_tf + conv2d_last_tf1),
-  // 形成残差结构: lastPair → FS_U8 → Depth2Space(读 lastPair + FS_U8 输出)
+  // The three RGB residuals are siblings reading the same preceding feature pair.
   let finalSpatialWrite = -1
   if (u.finalSpatial) {
-    if (uSplit16Pairs.length >= 1) {
-      const lastPair = uSplit16Pairs[uSplit16Pairs.length - 1]
-      const writeTex = nextTex++
-      passes.push({
-        fs: u.finalSpatial.source,
-        read: lastPair[0],
-        read2: lastPair[1],
-        write: writeTex,
-        resScale: 1,
-        flipY: 1,
-      })
-      finalSpatialWrite = writeTex
-    }
+    const [read, read2] = uSplit16Pairs[uSplit16Pairs.length - 2]
+    finalSpatialWrite = nextTex++
+    passes.push({ fs: u.finalSpatial.source, read, read2, write: finalSpatialWrite, resScale: 1, flipY: 1 })
   }
 
   // Depth2Space: 最终 upscale 输出 → canvas (2x 分辨率)
@@ -324,7 +304,30 @@ export function buildPipeline(structure: ModelStructure): EnginePassDef[] {
 
   // 自检: 反馈环 + 纹理索引越界 (权重/管线配置错误时尽早暴露)
   // 纹理索引 0 = TEX_VIDEO, 中间纹理从 1 开始, 总纹理数 = nextTex
-  assertPipelineValid(passes, Math.max(nextTex, TEX_VIDEO + 1))
+  // Translation to physical slots happens once. A texture stays live through every
+  // residual, pointwise and depth-to-space read, including the current draw.
+  const lastRead = new Map<number, number>()
+  for (const [i, pass] of passes.entries()) {
+    for (const input of [pass.read, pass.read2, pass.read3, pass.mainTex, ...(pass.pwSources ?? [])]) {
+      if (input !== undefined) lastRead.set(input, i)
+    }
+  }
+  const slots = [TEX_VIDEO]
+  const occupiedUntil = [Infinity]
+  for (const [i, pass] of passes.entries()) {
+    pass.read = slots[pass.read]
+    if (pass.read2 !== undefined) pass.read2 = slots[pass.read2]
+    if (pass.read3 !== undefined) pass.read3 = slots[pass.read3]
+    if (pass.mainTex !== undefined) pass.mainTex = slots[pass.mainTex]
+    if (pass.pwSources) pass.pwSources = pass.pwSources.map(input => slots[input])
+    if (pass.write === 'canvas') continue
+    const free = occupiedUntil.findIndex(end => end < i)
+    const slot = free < 0 ? occupiedUntil.length : free
+    occupiedUntil[slot] = lastRead.get(pass.write) ?? i
+    slots[pass.write] = slot
+    pass.write = slot
+  }
+  assertPipelineValid(passes, occupiedUntil.length)
 
   return passes
 }
@@ -334,7 +337,7 @@ function assertPipelineValid(passes: EnginePassDef[], numTextures: number): void
   for (let i = 0; i < passes.length; i++) {
     const p = passes[i]
     const w = typeof p.write === 'number' ? p.write : -1
-    const inputs = [p.read, p.read2 ?? -1, p.read3 ?? -1, p.mainTex ?? -1]
+    const inputs = [p.read, p.read2 ?? -1, p.read3 ?? -1, p.mainTex ?? -1, ...(p.pwSources ?? [])]
     const label = `(pass ${i}: ${p.fs.substring(0, 40).replace(/\n/g, ' ')}...)`
     // 中间纹理写入不能落到 TEX_VIDEO 上 — 视频纹理每帧由 texImage2D 重新上传,
     // 一旦被中间 pass 覆盖, 后续读 TEX_VIDEO 的 pass (残差/MAIN) 会拿到错误数据,

@@ -155,7 +155,12 @@ export function useDanmaku(deps: { key: () => string; current: () => number; tit
         message(value); matchState.value = 'error'
         retryAt = Date.now() + networkRetryDelay(networkPolicy.value.frequency, failure.retryAfterSeconds); cooldownUntil.value = retryAt
       }
-    } finally { if (current()) matching.value = false }
+    } finally {
+      if (current()) {
+        matching.value = false
+        if (matchState.value === 'idle') void fetchWindow()
+      }
+    }
   }
   watch([matchIdentity, preferencesReady, sourcesReady, bindingReady, () => preferences.value.enabled, () => deps.duration?.()], () => {
     if (deps.title && autoAttempted && autoAttempted !== matchIdentity.value) {

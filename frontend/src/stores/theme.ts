@@ -1026,7 +1026,6 @@ export const useThemeStore = defineStore('theme', () => {
     root.style.backgroundColor = palette.bgApp
     root.style.color = palette.textPrimary
     root.style.colorScheme = mode
-    document.body.style.backgroundColor = palette.bgApp
     document.body.style.color = palette.textPrimary
   }
 
@@ -1183,6 +1182,7 @@ export const useThemeStore = defineStore('theme', () => {
     customThemes,
     loaded,
     backgroundURL:wallpaper.url,
+    backgroundURLFor:wallpaper.urlFor,
     backgroundLoading:wallpaper.loading,
     backgroundFailed:wallpaper.error,
     retryBackground:()=>wallpaper.prepare(resolveThemeBg(current.value.bgImage),true),

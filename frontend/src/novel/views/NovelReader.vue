@@ -85,7 +85,7 @@ function queueBackground(result:NovelReaderData):void {
   if(disposed||generation!==backgroundGeneration||data.value?.chapter?.id!==result.chapter?.id)return
   if(result.text?.stale)void updateText(true)
   prefetch.update([result.previous,result.chapter,result.next].filter((row):row is NovelChapter=>!!row),result.previous?1:0)
-  if(result.count-result.index>3)return
+  if(result.count-result.index>3||tocRequest)return
   const currentChapter=result.chapter?.id,currentItem=result.item?.id
   const pending=refreshNovelContext(location());tocRequest=pending
   void pending.then(view=>{
@@ -124,7 +124,11 @@ async function loadDirectory(refresh=false):Promise<void>{
   }
  }
  catch(error){if(!disposed&&tocRequest===pending)tocError.value=normalizeApiError(error).message}
- finally{if(tocRequest===pending)tocRequest=null;directoryLoading.value=false;manualRefreshing.value=false}
+ finally{
+  if(tocRequest===pending){
+   tocRequest=null;directoryLoading.value=false;manualRefreshing.value=false
+  }
+ }
 }
 function refreshDirectory():void{void loadDirectory(true)}
 async function toggleImmersion():Promise<void>{
@@ -403,7 +407,7 @@ watch(()=>[reading.preferences.size,reading.preferences.leading,reading.preferen
 // 切章走 run：generation 会丢弃迟到的旧章响应，否则慢网络下会出现
 // 「正文是上一章、标题是这一章」。
 watch(itemId,()=>{finishCoverNavigation(false);pageTurn.cancel();save();resource.data.value=null;transitionFrom=0;transitionDirection=0;prefetch.clear();session.clear();frameData.value=[];frameOffsets.clear();framePositions.clear();directory.value=[];directoryLoaded.value=false})
-watch([itemId,chapterParam],()=>{cancelTextUpdate();adjacentLayouts.clear();if(coverNavigation?.chapter!==Number(chapterParam.value)){finishCoverNavigation(false);pageTurn.cancel()}save();stopScroll();cancelBackground();stopChapterMotion();void tocRequest?.cancel();tocRequest=null;directoryLoading.value=false;ready=false;if(!data.value?.text)ratio.value=0;panel.value='';void resource.run()},{immediate:true})
+watch([itemId,chapterParam],()=>{cancelTextUpdate();adjacentLayouts.clear();if(coverNavigation?.chapter!==Number(chapterParam.value)){finishCoverNavigation(false);pageTurn.cancel()}save();stopScroll();cancelBackground();stopChapterMotion();void tocRequest?.cancel();tocRequest=null;directoryLoading.value=false;manualRefreshing.value=false;tocError.value='';ready=false;if(!data.value?.text)ratio.value=0;panel.value='';void resource.run()},{immediate:true})
 watch(resource.status,status=>{clearTimeout(waitTimer);waiting.value=false;if(status==='loading')waitTimer=setTimeout(()=>waiting.value=true,180);if(status==='error'){finishCoverNavigation(false);if(text.value)panel.value='recovery'}},{flush:'sync'})
 watch(panel,value=>{if(value&&!pageTurn.committing.value)pageTurn.cancel();if(value==='chapters'&&!directoryLoaded.value)void loadDirectory()})
 function down(event:PointerEvent):void {

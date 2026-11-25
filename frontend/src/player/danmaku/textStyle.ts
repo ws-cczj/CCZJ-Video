@@ -10,6 +10,11 @@ export function danmakuFontSize(width:number,size:number):number { return size *
 export function danmakuFont(preferences: DanmakuPreferences, size: number): string {
   return `${preferences.fontWeight} ${size}px ${families[preferences.fontFamily]}`
 }
+export function danmakuTextPadding(preferences: DanmakuPreferences, size: number): number {
+  const scale = size / preferences.fontSize
+  const effect = preferences.textStyle === 'shadow' ? 12 : preferences.textStyle === 'stroke' ? preferences.strokeWidth : 0
+  return Math.max(2, Math.ceil(effect * scale))
+}
 /** Measurement, live drawing and the settings preview share identical typography. */
 export function paintDanmaku(context: CanvasRenderingContext2D, text: string, x: number, y: number, size: number, color: number, preferences: DanmakuPreferences): void {
   const scale = size / preferences.fontSize

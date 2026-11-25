@@ -65,6 +65,22 @@ powershell -NoProfile -ExecutionPolicy Bypass -File build/release.ps1 -NoOpen
 
 也可运行 `task release` 或双击 `build/release.cmd`。这个入口保留本地准备功能，不创建标签、不提交、不上传。发布目录是 `dist/releases/v版本号/`；`-SkipBuild` 仅重做清单，不能把修改后的源码编进旧文件。旧入口 `build/windows/release.ps1` 继续转接统一构建流程。
 
+### 安装包目录
+
+构建脚本从 [artifact-paths.json](../build/artifact-paths.json) 读取独立打包和发布的目录根。运行中的应用由 [storagepaths](../app/storagepaths/updates.go) 按平台选择私有下载目录。
+
+| 来源 | 目录与内容 |
+| --- | --- |
+| Windows 独立打包 `task package` | `dist/packages/windows/v<版本>/<架构>/`，含 EXE、便携 ZIP 和校验清单 |
+| Android 独立打包和开发宿主 | `dist/packages/android/`，APK 文件名区分架构、预览／验收与 Release；Gradle 中间 APK 由 `build/android/app/build/outputs/apk/` 管理 |
+| iOS 设备／模拟器打包 | `dist/packages/ios/device/` 和 `dist/packages/ios/simulator/`，含 APP，设备构建另有待签名 IPA；链接中间件留在 `bin/ios/` |
+| 正式发布和预发布 | `dist/releases/<tag>/`，Windows EXE／ZIP、Android ARM64 APK 及发布元数据直接写入该目录 |
+| Windows 应用内自动更新 | `%LOCALAPPDATA%\CCZJ Video\Updates\<安装标识>`，热替换时临时在运行中 EXE 的同目录创建同卷副本 |
+| Android 应用内自动更新 | 应用自己的 `files/CCZJ Video/updates/`，包经校验后交给系统安装器 |
+| 其他宿主 | 桌面通用下载路径为系统用户缓存根下的 `CCZJ Video/Updates/<安装标识>`。本仓库的发布入口提供 Windows 与 Android 成品，iOS 安装走外部签名流程 |
+
+`bin/cczjVideo.exe` 是 `task build`、`task run` 共用的开发程序。已有归档、验收脚本显式指定的目录和浏览器手动下载由各自的调用方管理。发布可按需指定 `-OutDir`，Android 打包可指定 `-OutputApk` 直接交付到指定文件。
+
 默认 `-AndroidSigning ExistingPreview` 使用本机已有预览版密钥；不存在时拒绝生成新身份。APK 包名仍为 `com.cczj.video.preview`，沿用既有预览版证书以支持覆盖安装，Release APK 不可调试。请保存原密钥，不能把它当作应用商店正式签名方案。
 
 使用自管密钥时，设置 `ANDROID_KEYSTORE_FILE`、`ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS`、`ANDROID_KEY_PASSWORD`，并传 `-AndroidSigning Environment`。更换证书通常无法覆盖已有预览版，规则见 [Android 应用签名文档](https://developer.android.com/studio/publish/app-signing)。
@@ -94,7 +110,7 @@ node scripts/check-release-artifacts.mjs dist/releases/v2.4.2
 
 [项目首页](../README.md)、关于页和启动摘要同步说明个人学习研究用途、商业使用及分发限制、第三方内容与广告、24 小时缓存清理、零遥测和脚本权限。关于页提供官方项目地址和作者邮箱 `yikeshuoguo@qq.com`，版权沟通与商业授权通过邮箱联系。
 
-Windows 保留下载、SHA256 校验、立即安装／退出时安装和替换回执。附件选择同时核对系统、架构和扩展名。
+Windows 下载包、SHA256 凭据、安装标记、交接脚本和上一版回滚副本保存在 `%LOCALAPPDATA%\CCZJ Video\Updates\<安装标识>`。自动更新支持立即安装及退出时安装，替换前在程序所在卷暂存并复核安装文件。成功后清理已使用的下载包和凭据，保留一份回滚副本。失败保留已校验包供重试。启动时也会收回旧版留在程序同目录的孤立校验凭据和陈旧半文件，并归档对应的 `.old` 副本。已下载且完整的旧包可继续保留。附件选择同时核对系统、架构和扩展名。
 
 下载保留 GitHub 直链与代理前缀并发探测、测速后选择可用候选的流程。代理前缀是远端下载入口，与用户电脑的 Clash 等本机代理分开；验收需要记录实际选中的地址及设备代理状态，不能把本机代理成功当作无代理网络通过。
 

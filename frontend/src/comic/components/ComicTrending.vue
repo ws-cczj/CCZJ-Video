@@ -1,32 +1,41 @@
 <script setup lang="ts">
-import { computed,ref,watch } from 'vue'
+import { computed,ref,shallowReactive,watch } from 'vue'
 import { useViewActivity } from '../../composables/useViewActivity'
 import { useI18n } from 'vue-i18n'
 import { comicTrending } from '../../api/comicBrowse'
 import { useAsyncResource } from '../../reading/asyncResource'
-import { Button,Segment,Spinner } from '../../components/ui'
+import { Button,Empty,Segment,Spinner } from '../../components/ui'
 import ComicCover from './ComicCover.vue'
 import Icon from '../../components/Icon.vue'
-const {t}=useI18n(),board=ref<'japan'|'china'>('japan')
-const resource=useAsyncResource({diagnosticLabel:'comic.trending',load:()=>comicTrending(board.value)})
-const page=computed(()=>resource.data.value?.board===board.value?resource.data.value:null)
+const props = defineProps<{ active: boolean }>()
+type Board = 'japan' | 'china'
+const {t}=useI18n(),board=ref<Board>('japan')
+const cache = shallowReactive(new Map<Board, { page: Awaited<ReturnType<typeof comicTrending>>; checkedAt: number }>())
+const resource=useAsyncResource({
+  diagnosticLabel: 'comic.trending',
+  load: (target: Board) => comicTrending(target),
+  onData: page => cache.set(page.board, { page, checkedAt: Date.now() }),
+})
+const page=computed(()=>cache.get(board.value)?.page)
 const source=computed(()=>`https://manga.bilibili.com/ranking/${board.value==='japan'?0:1}`)
-let lastChecked=0
-const active=useViewActivity(()=>true,'committed')
-watch([board,active],([,show])=>{
- if(!show){resource.cancel();return}
- if(!page.value||Date.now()-lastChecked>30*60*1000){lastChecked=Date.now();void resource.run()}
+const active=useViewActivity(()=>props.active,'committed')
+watch([board,active],([target,show])=>{
+ resource.cancel()
+ if (!show) return
+ const previous = cache.get(target)
+ if (!previous || Date.now() - previous.checkedAt > 30 * 60 * 1000) void resource.run(target)
 },{immediate:true})
 </script>
 <template>
- <section class="manga-trending manga-section" :aria-busy="resource.status.value==='loading'">
+ <section v-if="props.active" class="manga-trending manga-section" :aria-busy="resource.status.value==='loading'">
   <header class="manga-section-heading"><div><span class="manga-section-index" aria-hidden="true">↗</span><h2>{{t('comicRoom.trending')}}</h2></div><Segment v-model="board" :options="[{value:'japan',label:t('comicRoom.japanRank')},{value:'china',label:t('comicRoom.chinaRank')}]"/></header>
   <p class="manga-trend-note">{{t('comicRoom.trendingHint')}}</p>
   <div v-if="resource.error.value" class="comic-notice" role="status">{{resource.error.value.message}}<Button variant="text" @click="resource.retry()">{{t('common.retry')}}</Button></div>
-  <Spinner v-if="!page&&resource.status.value==='loading'" :label="t('common.loading')"/>
-  <ol v-if="page" class="manga-trend-grid cczj-grid cczj-gap-8">
+  <Spinner v-if="resource.status.value==='loading'" :inline="!!page" :size="page ? 'sm' : 'md'" role="status" :label="t('common.loading')"/>
+  <ol v-if="page?.items.length" class="manga-trend-grid cczj-grid cczj-gap-8">
    <li v-for="(item,index) in page.items.slice(0,12)" :key="item.url" class="cczj-min-w-0"><router-link :to="{path:'/comic/search',query:{q:item.title}}" class="manga-trend-card cczj-grid cczj-gap-4" :aria-label="t('comicRoom.findTrending',{title:item.title})"><div class="manga-trend-cover cczj-relative"><ComicCover :src="item.cover" :title="item.title"/><span class="manga-trend-rank">{{String(index+1).padStart(2,'0')}}</span></div><strong>{{item.title}}</strong><small>{{item.genres||item.author}}</small><span class="manga-trend-search cczj-flex cczj-items-center cczj-gap-3"><Icon name="search" :size="13"/>{{t('comicRoom.findSources')}}</span></router-link></li>
   </ol>
+  <Empty v-else-if="page && resource.status.value!=='loading' && !resource.error.value" :title="t('comicRoom.emptyRank')" />
   <footer class="manga-source-caption cczj-flex cczj-flex-wrap cczj-gap-5"><a :href="source" target="_blank" rel="noopener noreferrer">{{t('comicRoom.rankAttribution')}}</a><span v-if="page">{{t(page.stale?'comicRoom.staleRank':page.fromCache?'comicRoom.cached':'comicRoom.updated')}} {{new Date(page.fetchedAt*1000).toLocaleString()}}</span><span v-if="page?.warning" role="status">{{page.warning}}</span></footer>
  </section>
 </template>

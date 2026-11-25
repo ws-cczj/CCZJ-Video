@@ -13,6 +13,7 @@ import {
   buildPassShader,
   linkProgram,
   createFBO,
+  EnhancementTargetError,
   deleteFBO,
   type FBOEntry,
   type PassDef,
@@ -67,7 +68,6 @@ export class CustomShaderUpscaler {
   private videoFrameCallbackId: number | null = null
   private _error: string | null = null
   private _capability = false
-  private events: AbortController | null = null
   private _budgetLimited = false
 
   private quadVAO: WebGLVertexArrayObject | null = null
@@ -110,7 +110,6 @@ export class CustomShaderUpscaler {
       this.canvas.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;z-index:2'
       const host = wrapper ?? video.parentElement
       if (!host) throw new ShaderCapabilityError('No container')
-      host.style.position = 'relative'
       host.appendChild(this.canvas)
 
       const gl = this.canvas.getContext('webgl2', {
@@ -121,18 +120,6 @@ export class CustomShaderUpscaler {
       // pass 之间用 RGBA16F 中转，没有浮点渲染目标就画不出正确结果，直接判不可用
       if (!gl.getExtension('EXT_color_buffer_float')) throw new ShaderCapabilityError('EXT_color_buffer_float 不可用')
       gl.getExtension('OES_texture_float_linear')
-
-      this.events = new AbortController()
-      const { signal } = this.events
-      this.canvas.addEventListener('webglcontextlost', e => {
-        e.preventDefault()
-        this.stop()
-        if (this.canvas) this.canvas.hidden = true
-      }, { signal })
-      this.canvas.addEventListener('webglcontextrestored', () => {
-        this.destroy()
-        void this.init(video, host).then(ready => { if (ready) this.start() })
-      }, { signal })
 
       this.inputW = video.videoWidth || 1920
       this.inputH = video.videoHeight || 1080
@@ -162,7 +149,8 @@ export class CustomShaderUpscaler {
       return true
     } catch (e: any) {
       this._error = e?.message || String(e)
-      this._capability = e instanceof ShaderCapabilityError
+      this._capability = e instanceof ShaderCapabilityError || e instanceof EnhancementTargetError
+      if (e instanceof EnhancementTargetError) this._budgetLimited = true
       console.error(`[${TAG}] init:`, this._error)
       // 失败也要走完整销毁：只摘 canvas 会留着 this.gl，上下文既没用又不会被回收。
       this.destroy()
@@ -245,6 +233,7 @@ export class CustomShaderUpscaler {
 
   stop(): void {
     this.running = false
+    if (this.canvas) this.canvas.hidden = true
     if (this.rafId) { cancelAnimationFrame(this.rafId); this.rafId = 0 }
     const video = this.video as (HTMLVideoElement & { cancelVideoFrameCallback?: (id: number) => void }) | null
     if (video && this.videoFrameCallbackId !== null && video.cancelVideoFrameCallback) {
@@ -256,12 +245,11 @@ export class CustomShaderUpscaler {
   /** 换集/拖动进度：扩展包是无状态单帧处理，只需要丢掉跳帧检测用的时间戳。 */
   onSeeked(): void {
     this.lastUploadTime = -1
+    if (this.running && this.video?.paused) this.renderCurrentFrame()
   }
 
   destroy(): void {
     this.stop()
-    this.events?.abort()
-    this.events = null
     this.lastUploadTime = -1
     const gl = this.gl
     if (gl) {
@@ -305,8 +293,8 @@ export class CustomShaderUpscaler {
   resizeOutput(): void {
     if (!this.video || !this.canvas || !this.running || !this.bufferBudget) return
     if (sizeEnhancementBuffer(this.video, this.canvas, this.spec.scale === 1 ? 1 : 2, this.bufferBudget)) {
-      this.onSeeked()
-      this.render()
+      this.lastUploadTime = -1
+      this.renderCurrentFrame()
     }
   }
 
@@ -323,12 +311,21 @@ export class CustomShaderUpscaler {
     } else {
       this.rafId = requestAnimationFrame(this.renderLoop)
     }
-    this.render()
+    this.renderCurrentFrame()
     const now = performance.now()
     if (now - this.lastFpsTime >= 2000) {
       this.currentFps = Math.round(this.frames / ((now - this.lastFpsTime) / 1000))
       this.frames = 0
       this.lastFpsTime = now
+    }
+  }
+
+  private renderCurrentFrame(): void {
+    try {
+      this.render()
+    } catch (error) {
+      this._error = error instanceof Error ? error.message : String(error)
+      this.stop()
     }
   }
 
@@ -413,6 +410,7 @@ export class CustomShaderUpscaler {
       // 换分辨率后按新尺寸重新编译失败（例如着色器依赖固定 texel 尺寸）：
       // 报出来并让调用方回退，而不是留一条空管线静默黑屏。
       this._error = e?.message || String(e)
+      if (e instanceof EnhancementTargetError) this._budgetLimited = true
       console.error(`[${TAG}] rebuild:`, this._error)
       this.destroy()
       return

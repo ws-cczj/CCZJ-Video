@@ -1,8 +1,10 @@
-import { danmakuFontSize } from './textStyle'
+import { danmakuFontSize, danmakuTextPadding } from './textStyle'
 import type { DanmakuItem } from '../../api/danmaku'
 import type { DanmakuPreferences } from './preferences'
-export interface DanmakuDraw { item: DanmakuItem; x: number; y: number; width: number; fontSize: number }
-interface Active { item: DanmakuItem; born: number; lane: number; width: number; fontSize: number; pausedFor: number }
+interface TextWidth { left: number; right: number }
+interface TextLayout { width: number; textInset: number; fontSize: number }
+export interface DanmakuDraw extends TextLayout { item: DanmakuItem; x: number; y: number }
+interface Active extends TextLayout { item: DanmakuItem; born: number; lane: number; pausedFor: number }
 export function lowerBound(items: DanmakuItem[], time: number): number { let lo = 0, hi = items.length; while (lo < hi) { const mid = (lo + hi) >>> 1; if (items[mid].timeMs < time) lo = mid + 1; else hi = mid } return lo }
 /** Playback time is the only animation clock: pause, buffering and rate changes
  * need no independent CSS animation, timer or speed multiplier. */
@@ -14,7 +16,7 @@ export class DanmakuTimeline {
   private offset = 0
   private layout = ''
   private held: { row: Active; since: number } | undefined
-  constructor(private measure: (text: string, size: number) => number) { }
+  constructor(private measure: (text: string, size: number) => TextWidth) { }
   setItems(items: DanmakuItem[], offset: number) {
     this.items = [...items].sort((a, b) => a.timeMs - b.timeMs)
     if (offset !== this.offset) this.resetPosition()
@@ -34,12 +36,20 @@ export class DanmakuTimeline {
   }
   tick(time: number, width: number, height: number, p: DanmakuPreferences): DanmakuDraw[] {
     const font = danmakuFontSize(width,p.fontSize)
-    const rowHeight = Math.ceil(font * 1.35 + (p.textStyle === 'stroke' ? p.strokeWidth : 0))
+    const padding = danmakuTextPadding(p, font)
+    const rowHeight = Math.ceil(font * 1.35 + padding * 2)
+    const gap = Math.max(24, Math.ceil(font * .8)) + (1 - p.density) * 80
+    const textLayout = (item: DanmakuItem): TextLayout => {
+      const { left, right } = this.measure(item.text, font)
+      return { width: Math.ceil(left + right + padding * 2), textInset: left + padding, fontSize: font }
+    }
     const top = 12, bottom = Math.min(height * p.area, height - 48) - 8
     const rows = Math.max(0, Math.min(p.rows, Math.floor((bottom - top) / rowHeight)))
     // A viewport-relative shared velocity keeps equal-speed collision checks valid.
     const velocity = Math.max(1, width / 8) * p.speed / 100
-    const yOf = (mode: number, lane: number) => mode === 4 ? bottom - 4 - lane * rowHeight : top + font + lane * rowHeight
+    const yOf = (mode: number, lane: number) => mode === 4
+      ? bottom - Math.ceil(font * .25) - padding - lane * rowHeight
+      : top + padding + font + lane * rowHeight
     const layout = `${width}:${height}:${font}:${p.area}:${rows}:${p.speed}:${p.fixed}:${p.scrolling}:${p.colored}:${p.fontFamily}:${p.fontWeight}:${p.textStyle}:${p.strokeWidth}:${p.density}`
     if (!p.enabled) { this.resetPosition(); return [] }
     if (!rows || !width || !height) return []
@@ -58,10 +68,13 @@ export class DanmakuTimeline {
       const retained: Active[] = []
       for (const row of this.active) {
         if (row.lane >= rows || !shows(row.item) || retained.length >= maxActive) continue
-        row.fontSize = font
-        row.width = Math.min(12000, this.measure(row.item.text, font))
+        Object.assign(row, textLayout(row.item))
         const x = xOf(row), y = yOf(row.item.mode, row.lane)
-        if (x + row.width <= 0 || retained.some(other => Math.abs(y - yOf(other.item.mode, other.lane)) < rowHeight && x < xOf(other) + other.width && xOf(other) < x + row.width)) continue
+        if (x + row.width <= 0 || retained.some(other => {
+          const spacing = row.item.mode === 1 && other.item.mode === 1 ? gap : 0
+          return Math.abs(y - yOf(other.item.mode, other.lane)) < rowHeight &&
+            x < xOf(other) + other.width + spacing && xOf(other) < x + row.width + spacing
+        })) continue
         retained.push(row)
       }
       this.active = retained
@@ -76,22 +89,22 @@ export class DanmakuTimeline {
         const left = xOf(held), right = left + held.width
         const y = yOf(held.item.mode, held.lane)
         this.active = this.active.filter(row => row === held || Math.abs(yOf(row.item.mode, row.lane) - y) >= rowHeight ||
-          xOf(row) >= right || xOf(row) + row.width <= left)
+          xOf(row) >= right + gap || xOf(row) + row.width <= left - gap)
       }
     }
     while (this.cursor < this.items.length && this.items[this.cursor].timeMs + this.offset <= time) {
       const item = this.items[this.cursor++], born = item.timeMs + this.offset
       if (time - born > 800 || !shows(item)) continue
       if (this.active.length >= maxActive) continue
-      const size = font, widthOf = Math.min(12000, this.measure(item.text, size))
+      const entryX = width - (time - born) * velocity / 1000
       let lane = -1
       for (let i = 0; i < rows; i++) {
         const occupied = this.active.some(a => Math.abs(yOf(a.item.mode, a.lane) - yOf(item.mode, i)) < rowHeight &&
-          (a === this.held?.row || item.mode !== 1 || a.item.mode !== 1 || width - (xOf(a) + a.width) < 18 + (1 - p.density) * 80))
+          (a === this.held?.row || item.mode !== 1 || a.item.mode !== 1 || entryX - (xOf(a) + a.width) < gap))
         if (!occupied) { lane = i; break }
       }
-      if (lane >= 0) this.active.push({ item, born, lane, width: widthOf, fontSize: size, pausedFor: 0 })
+      if (lane >= 0) this.active.push({ item, born, lane, ...textLayout(item), pausedFor: 0 })
     }
-    return this.active.map(a => ({ item: a.item, x: xOf(a), y: yOf(a.item.mode, a.lane), width: a.width, fontSize: a.fontSize }))
+    return this.active.map(a => ({ item: a.item, x: xOf(a), y: yOf(a.item.mode, a.lane), width: a.width, textInset: a.textInset, fontSize: a.fontSize }))
   }
 }

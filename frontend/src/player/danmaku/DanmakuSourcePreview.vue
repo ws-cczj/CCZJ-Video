@@ -68,9 +68,14 @@ function like(lane: Lane): void {
 }
 
 .danmaku-preview-stage {
-  @apply cczj-overflow-clip cczj-min-w-0;
+  @apply cczj-overflow-hidden cczj-min-w-0;
   container-type: inline-size;
   padding-block: 12px 3px;
+}
+.danmaku-preview-stage.is-animated {
+  --preview-edge-mask: linear-gradient(to right, transparent, #000 16px, #000 calc(100% - 16px), transparent);
+  -webkit-mask-image: var(--preview-edge-mask);
+  mask-image: var(--preview-edge-mask);
 }
 
 .danmaku-preview-lane {

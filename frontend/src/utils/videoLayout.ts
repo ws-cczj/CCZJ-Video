@@ -57,7 +57,7 @@ export function layoutCanvasToVideo(video: HTMLVideoElement, canvas: HTMLCanvasE
 export interface EnhancementBufferBudget { maxEdge: number; maxPixels: number }
 
 /** The output need only cover the displayed image in physical pixels. */
-export function sizeEnhancementBuffer(video: HTMLVideoElement, canvas: HTMLCanvasElement, scale: number, budget: EnhancementBufferBudget): boolean {
+export function enhancementOutputSize(video: HTMLVideoElement, canvas: HTMLCanvasElement, scale: number, budget: EnhancementBufferBudget) {
   const bounds = layoutCanvasToVideo(video, canvas)
   const ratio = window.devicePixelRatio || 1
   const displayWidth = Math.max(1, Math.min(video.videoWidth * scale, Math.ceil((bounds ? bounds.width * ratio : video.videoWidth) || 1)))
@@ -65,6 +65,11 @@ export function sizeEnhancementBuffer(video: HTMLVideoElement, canvas: HTMLCanva
   const fit = Math.min(1, budget.maxEdge / Math.max(displayWidth, displayHeight), Math.sqrt(budget.maxPixels / (displayWidth * displayHeight)))
   const width = Math.max(1, Math.floor(displayWidth * fit))
   const height = Math.max(1, Math.floor(displayHeight * fit))
+  return { width, height }
+}
+
+export function sizeEnhancementBuffer(video: HTMLVideoElement, canvas: HTMLCanvasElement, scale: number, budget: EnhancementBufferBudget): boolean {
+  const { width, height } = enhancementOutputSize(video, canvas, scale, budget)
   if (width === canvas.width && height === canvas.height) return false
   canvas.width = width
   canvas.height = height

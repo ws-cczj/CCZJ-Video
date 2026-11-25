@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"cczjVideo/app/apperror"
@@ -15,6 +16,7 @@ import (
 
 // quitHook 是服务层递进来的退出通道（见 SetQuitHook）。
 var quitHook func()
+var windowsReplacementStarted atomic.Bool
 
 // SetQuitHook 注入退出通道。装更新必然要让当前进程退场，而退出得走应用的关停流程
 // —— 记录退出时刻、取消并等待采集与下载收尾、关日志、关库。updater 自己 os.Exit
@@ -199,6 +201,15 @@ func installBySwapWindows(newExePath string) error {
 //
 // 这里刻意不 Wait：进程还活着时脚本换不动 exe，等它就是等死锁。
 func startSwapScript(newExePath string, startAfterSwap bool) error {
+	if !windowsReplacementStarted.CompareAndSwap(false, true) {
+		return apperror.New(apperror.Unavailable, "已有更新或回滚正在交接")
+	}
+	started := false
+	defer func() {
+		if !started {
+			windowsReplacementStarted.Store(false)
+		}
+	}()
 	oldExeFull, err := runningExePath()
 	if err != nil {
 		return err
@@ -217,8 +228,30 @@ func startSwapScript(newExePath string, startAfterSwap bool) error {
 		return apperror.New(apperror.Validation, "更新包是空文件，已放弃安装")
 	}
 
-	appDir := filepath.Dir(oldExeFull)
+	appDir, err := updateDirectory()
+	if err != nil {
+		return apperror.Wrap(apperror.Storage, err, "无法定位更新目录")
+	}
+	if err := os.MkdirAll(appDir, 0700); err != nil {
+		return apperror.Wrap(apperror.Storage, err, "无法创建更新目录")
+	}
+	expected, err := loadDigestRecord(newExeFull)
+	if err != nil {
+		return apperror.Wrap(apperror.Corrupt, err, "无法读取更新包摘要")
+	}
 	oldExeName := filepath.Base(oldExeFull)
+	staged, err := copyUpdateFile(newExeFull, filepath.Dir(oldExeFull), oldExeName+".cczj-replace-*.part")
+	if err != nil {
+		return apperror.Wrap(apperror.Storage, err, "无法暂存用于替换的更新包")
+	}
+	defer func() {
+		if !started {
+			_ = os.Remove(staged)
+		}
+	}()
+	if err := verifyArtifact(staged, expected); err != nil {
+		return apperror.Wrap(apperror.Corrupt, err, "替换前更新包复核失败")
+	}
 	batPath := filepath.Join(appDir, swapScriptName)
 
 	batContent := buildSwapScript(startAfterSwap)
@@ -231,28 +264,31 @@ func startSwapScript(newExePath string, startAfterSwap bool) error {
 	applog.Info("[Updater] 新 exe: %s", newExeFull)
 	applog.Info("[Updater] 换完之后是否启动新版本: %v", startAfterSwap)
 
-	// 脚本正文里一个路径字面量都没有，四个路径全走参数。原因：Go 传参用的是宽字符
-	// 命令行，cmd 拿到的是正确 Unicode；写死在脚本文本里的非 ASCII 路径会被 cmd 按
-	// 控制台代码页（实测这台机器 936）重新解释，中文目录能把一整行 if 解析到别的
-	// 命令上去。脚本名也用相对名 + cmd.Dir，应用目录连命令行都不出现在上面，
-	// 路径里的 & ( ) 这些 cmd 元字符也就无从插手。
-	//
-	// 第五个参数是单实例锁的交接参数（见 buildSwapScript 第 6 条）。它对本进程 PID 取值，
-	// 递给脚本时不需要再拼任何东西：格式与解析都由 app/handoff 一处定义。
-	cmd := exec.Command("cmd", "/c", swapScriptName, oldExeFull, newExeFull, installResultPath(), oldExeName, handoff.Arg(os.Getpid()))
-	cmd.Dir = appDir
-	if err := cmd.Start(); err != nil {
+	if err := launchUpdateScript(appDir, swapScriptName, "OLD="+oldExeFull, "NEW="+staged,
+		"RESULT="+installResultPath(), "BASE="+oldExeName, "HANDOFF="+handoff.Arg(os.Getpid()),
+		"SOURCE="+newExeFull, "BACKUP="+filepath.Join(appDir, privateRollbackName)); err != nil {
 		os.Remove(batPath)
 		return apperror.Wrap(apperror.Unavailable, err, "启动更新脚本失败")
 	}
+	started = true
 	return nil
 }
 
-// swapScriptName 是替换脚本的文件名，放在应用目录里、以相对名启动。
+// The child environment preserves Unicode paths without placing them in cmd's
+// command line or writing them under a console code page.
+func launchUpdateScript(dir, name string, values ...string) error {
+	cmd := exec.Command("cmd", "/d", "/c", name)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "CCZJ_UPDATE_ENV=1")
+	cmd.Env = append(cmd.Env, values...)
+	return cmd.Start()
+}
+
+// swapScriptName lives in the private update directory.
 const swapScriptName = "_update_swap.bat"
 
-// buildSwapScript 生成热替换脚本的内容。脚本认五个参数：%1 旧 exe 全路径、
-// %2 新 exe 全路径、%3 结论文件、%4 旧 exe 文件名、%5 单实例锁的交接参数（见 app/handoff），
+// buildSwapScript receives the running executable, sibling staging file, result,
+// executable name, handoff argument, and the original download and rollback paths.
 // 所以正文可以保持纯 ASCII。两档安装（立即 / 退出时）共用这一份梯子，唯一分歧是形参
 // startAfterSwap —— %5 是数据不是分支：两档都收，只有要 start 的那一档才会把它拼上去。
 //
@@ -284,6 +320,7 @@ func buildSwapScript(startAfterSwap bool) string {
 	// 重试/改名/回执的梯子完全共用（见 TestBuildSwapScriptTiersDifferOnlyByStart）。
 	restore := []string{
 		`if not exist "%OLD%" ren "%OLD%.old" "%BASE%" >NUL 2>&1`,
+		`if defined SOURCE del /f /q "%NEW%" >NUL 2>&1`,
 	}
 	if startAfterSwap {
 		restore = append(restore, `if exist "%OLD%" start "" "%OLD%" %HANDOFF%`)
@@ -291,12 +328,16 @@ func buildSwapScript(startAfterSwap bool) string {
 
 	lines := []string{
 		"@echo off",
-		"setlocal",
+		"setlocal EnableExtensions DisableDelayedExpansion",
+		"if defined CCZJ_UPDATE_ENV goto :BEGIN_SWAP",
 		`set "OLD=%~1"`,
 		`set "NEW=%~2"`,
 		`set "RESULT=%~3"`,
 		`set "BASE=%~4"`,
 		`set "HANDOFF=%~5"`,
+		`set "SOURCE=%~6"`,
+		`set "BACKUP=%~7"`,
+		":BEGIN_SWAP",
 		// 趁本体还在原位给旧版留一份副本。读一个正在运行的 exe 是允许的（加载器按
 		// share-read 打开它），所以这一步不必等进程退出。
 		`copy /y "%OLD%" "%OLD%.old" >NUL 2>&1`,
@@ -353,12 +394,23 @@ func buildSwapScript(startAfterSwap bool) string {
 		"exit /b 1",
 		"",
 		":START_NEW",
+		`if not defined SOURCE set "SOURCE=%NEW%"`,
+		`if exist "%SOURCE%" del /f /q "%SOURCE%" >NUL 2>&1`,
+		`if not exist "%SOURCE%" del /f /q "%SOURCE%.sha256" >NUL 2>&1`,
+		`if not defined BACKUP goto :REPORT_OK`,
+		`if not exist "%OLD%.old" goto :REPORT_OK`,
+		":ARCHIVE_ROLLBACK",
+		`copy /b /y "%OLD%.old" "%BACKUP%.part" >NUL 2>&1`,
+		`if errorlevel 1 goto :CLEAN_BACKUP_STAGE`,
+		`move /y "%BACKUP%.part" "%BACKUP%" >NUL 2>&1`,
+		`if not errorlevel 1 del /f /q "%OLD%.old" >NUL 2>&1`,
+		":CLEAN_BACKUP_STAGE",
+		`if exist "%BACKUP%.part" del /f /q "%BACKUP%.part" >NUL 2>&1`,
+		":REPORT_OK",
 		// 两档共用这一行文案：「退出时安装」那一版不会启动新版本，写「starting new version」
 		// 就成了假话，而脚本的输出正是排查时看到的东西。
 		"echo Replace OK.",
 		`echo ok>"%RESULT%" 2>NUL`,
-		// .old 不在这里删：它是这次替换留下的回滚副本，设置页的「退回上一版」用的就是它。
-		// 下一次安装会 copy /y 覆盖掉，所以机器上最多只留一份、永远只落后一个版本。
 	)
 	if startAfterSwap {
 		lines = append(lines, `start "" "%OLD%" %HANDOFF%`)
@@ -384,14 +436,21 @@ func SwapBackupStat() (string, os.FileInfo, bool) {
 		return "", nil, false
 	}
 	path := exe + swapBackupSuffix
-	info, err := os.Stat(path)
-	if err != nil || info.IsDir() || info.Size() == 0 {
-		return "", nil, false
+	if info, err := os.Lstat(path); err == nil && info.Mode().IsRegular() && info.Size() > 0 {
+		return path, info, true
 	}
-	return path, info, true
+	if runtime.GOOS == "windows" {
+		if dir, err := updateDirectory(); err == nil {
+			path = filepath.Join(dir, privateRollbackName)
+			if info, err := os.Lstat(path); err == nil && info.Mode().IsRegular() && info.Size() > 0 {
+				return path, info, true
+			}
+		}
+	}
+	return "", nil, false
 }
 
-// rollbackScriptName 是回滚脚本的文件名，和替换脚本一样放在应用目录、以相对名启动。
+// rollbackScriptName lives in the private update directory.
 const rollbackScriptName = "_update_rollback.bat"
 
 // RollbackUpdate 用 .old 副本换回上一个程序，然后让位给脚本。
@@ -403,6 +462,15 @@ func RollbackUpdate() error {
 	if runtime.GOOS != "windows" {
 		return apperror.New(apperror.Unavailable, "只有 Windows 版本支持退回上一个程序副本")
 	}
+	if !windowsReplacementStarted.CompareAndSwap(false, true) {
+		return apperror.New(apperror.Unavailable, "已有更新或回滚正在交接")
+	}
+	started := false
+	defer func() {
+		if !started {
+			windowsReplacementStarted.Store(false)
+		}
+	}()
 	exe, err := runningExePath()
 	if err != nil {
 		return err
@@ -412,22 +480,32 @@ func RollbackUpdate() error {
 		return apperror.New(apperror.NotFound, "没有找到可退回的上一版程序副本")
 	}
 
-	appDir := filepath.Dir(exe)
+	appDir, err := updateDirectory()
+	if err != nil {
+		return apperror.Wrap(apperror.Storage, err, "无法定位更新目录")
+	}
+	if err := os.MkdirAll(appDir, 0700); err != nil {
+		return apperror.Wrap(apperror.Storage, err, "无法创建更新目录")
+	}
+	staged, err := copyUpdateFile(backup, filepath.Dir(exe), filepath.Base(exe)+".cczj-replace-*.part")
+	if err != nil {
+		return apperror.Wrap(apperror.Storage, err, "无法暂存用于回滚的副本")
+	}
 	batPath := filepath.Join(appDir, rollbackScriptName)
 	if err := os.WriteFile(batPath, []byte(buildRollbackScript()), 0755); err != nil {
+		_ = os.Remove(staged)
 		return apperror.Wrap(apperror.Storage, err, "创建回滚脚本失败")
 	}
 	applog.Info("[Updater] 创建回滚脚本: %s", batPath)
 	applog.Info("[Updater] 退回副本: %s (%d 字节, %s)", backup, info.Size(), info.ModTime().Format(time.RFC3339))
 
-	// 参数走命令行、脚本正文保持纯 ASCII，理由和 buildSwapScript 里那段注释一样。
-	// 第四个参数是交接参数：回滚那一档也有"进程还没让位就把应用又拉一次"的时刻（见 :BACK_FAILED）。
-	cmd := exec.Command("cmd", "/c", rollbackScriptName, exe, backup, installResultPath(), handoff.Arg(os.Getpid()))
-	cmd.Dir = appDir
-	if err := cmd.Start(); err != nil {
+	if err := launchUpdateScript(appDir, rollbackScriptName, "OLD="+exe, "BACK="+staged,
+		"RESULT="+installResultPath(), "HANDOFF="+handoff.Arg(os.Getpid()), "SOURCE="+backup); err != nil {
+		_ = os.Remove(staged)
 		os.Remove(batPath)
 		return apperror.Wrap(apperror.Unavailable, err, "启动回滚脚本失败")
 	}
+	started = true
 
 	go func() {
 		time.Sleep(500 * time.Millisecond)
@@ -436,8 +514,8 @@ func RollbackUpdate() error {
 	return nil
 }
 
-// buildRollbackScript 生成回滚脚本：%1 当前 exe 全路径、%2 副本全路径、%3 结论文件、
-// %4 单实例锁的交接参数（见 app/handoff）。
+// buildRollbackScript takes the executable, sibling staging file, result,
+// handoff argument and original rollback path.
 //
 // 它不复用替换脚本，因为替换脚本的 :RENAME_REPLACE 一进门就 del 掉 "%OLD%.old"：
 // 把参数对调过去，第一件事是把回滚的原料删了，然后才发现换不回去。
@@ -450,11 +528,15 @@ func RollbackUpdate() error {
 func buildRollbackScript() string {
 	lines := []string{
 		"@echo off",
-		"setlocal",
+		"setlocal EnableExtensions DisableDelayedExpansion",
+		"if defined CCZJ_UPDATE_ENV goto :BEGIN_ROLLBACK",
 		`set "OLD=%~1"`,
 		`set "BACK=%~2"`,
 		`set "RESULT=%~3"`,
 		`set "HANDOFF=%~4"`,
+		`set "SOURCE=%~5"`,
+		":BEGIN_ROLLBACK",
+		`if defined SOURCE set "STAGED=%BACK%"`,
 		"echo Waiting for the running process to release the executable...",
 		"set RETRY=0",
 		":RETRY_BACK",
@@ -469,6 +551,7 @@ func buildRollbackScript() string {
 		"",
 		// 换不回去：副本留在原地（用户还能再点一次或手工处理），本体保持不动。
 		":BACK_FAILED",
+		`if defined SOURCE del /f /q "%STAGED%" >NUL 2>&1`,
 		"echo Rollback failed. The current version is kept.",
 		`echo rollback_failed>"%RESULT%" 2>NUL`,
 		`if exist "%OLD%" start "" "%OLD%" %HANDOFF%`,
@@ -476,6 +559,7 @@ func buildRollbackScript() string {
 		"exit /b 1",
 		"",
 		":BACK_OK",
+		`if defined SOURCE del /f /q "%SOURCE%" >NUL 2>&1`,
 		"echo Rollback OK, starting the previous version...",
 		`echo rollback_ok>"%RESULT%" 2>NUL`,
 		// 副本已被 move 消费掉，这里不需要再清理它；旧版从此就是本体。

@@ -13,6 +13,7 @@ import (
 
 	"cczjVideo/app/apperror"
 	"cczjVideo/app/applog"
+	"cczjVideo/app/netbudget"
 	"cczjVideo/app/workflight"
 )
 
@@ -89,6 +90,10 @@ func (s *Service) Search(ctx context.Context, name, query string) ([]Candidate, 
 	if query == "" || len(query) > 300 {
 		return nil, apperror.New(apperror.Validation, "请输入影片名称")
 	}
+	return s.cachedSearch(ctx, name, query, p)
+}
+
+func (s *Service) cachedSearch(ctx context.Context, name, query string, p Provider) ([]Candidate, error) {
 	return cachedDiscovery(ctx, s, name, "search", query, 200, func(ctx context.Context) ([]Candidate, error) { return p.Search(ctx, query) })
 }
 func (s *Service) Episodes(ctx context.Context, name, ref string) ([]Episode, error) {
@@ -146,7 +151,22 @@ func cacheKey(e Episode, part string) string {
 	return e.Provider + ":" + hex.EncodeToString(sum[:])
 }
 func (s *Service) load(ctx context.Context, key string, validate func([]byte) error, fetch func(context.Context) ([]byte, error), freshness time.Duration, shortLived func([]byte) time.Duration) (cachedPayload, error) {
-	return s.reads.Do(ctx, key, func(ctx context.Context) (cachedPayload, error) {
+	trace, _ := ctx.Value(matchTraceKey{}).(string)
+	stage, _ := ctx.Value(matchHTTPStageKey{}).(string)
+	flightKey := key
+	optional := netbudget.SkipsQueue(ctx)
+	if optional {
+		// A regular reader must not inherit a speculative flight's refusal to queue.
+		flightKey += ":without-queue"
+	}
+	return s.reads.Do(ctx, flightKey, func(ctx context.Context) (cachedPayload, error) {
+		if optional {
+			ctx = netbudget.WithoutQueue(ctx)
+		}
+		if trace != "" {
+			ctx = context.WithValue(ctx, matchTraceKey{}, trace)
+			ctx = context.WithValue(ctx, matchHTTPStageKey{}, stage)
+		}
 		now := s.now()
 		raw, at, err := s.store.Cached(ctx, key, now)
 		cacheErr := err
@@ -169,7 +189,9 @@ func (s *Service) load(ctx context.Context, key string, validate func([]byte) er
 			if ctx.Err() != nil {
 				return cachedPayload{}, ctx.Err()
 			}
-			if len(raw) > 0 && freshFor == freshness && s.now().Before(at.Add(cacheRetention)) {
+			code := apperror.CodeOf(err)
+			temporary := code == "" || code == apperror.Unavailable || code == apperror.Timeout || code == apperror.RateLimited
+			if temporary && len(raw) > 0 && freshFor == freshness && s.now().Before(at.Add(cacheRetention)) {
 				s.stale.Add(1)
 				return cachedPayload{raw: raw, cached: true, stale: true, warning: "cached_source_unavailable"}, nil
 			}
@@ -221,6 +243,7 @@ func decodeSegment(raw []byte) (segmentPayload, error) {
 }
 
 func (s *Service) loadIndex(ctx context.Context, p Provider, e Episode) (cachedPayload, error) {
+	ctx = context.WithValue(ctx, matchHTTPStageKey{}, "dm_index")
 	return s.load(ctx, cacheKey(e, "index"), func(raw []byte) error { _, err := decodeIndex(raw); return err }, func(ctx context.Context) ([]byte, error) {
 		index, err := p.Index(ctx, e)
 		if err != nil {
@@ -248,10 +271,10 @@ func (s *Service) ReadWindow(ctx context.Context, key string, positionMS int64, 
 	if binding == nil {
 		return nil, apperror.New(apperror.NotFound, "当前单集尚未匹配弹幕")
 	}
-	return s.readBoundWindow(ctx, binding, positionMS)
+	return s.readBoundWindow(ctx, binding, positionMS, false)
 }
 
-func (s *Service) readBoundWindow(ctx context.Context, binding *Binding, positionMS int64) (*Window, error) {
+func (s *Service) readBoundWindow(ctx context.Context, binding *Binding, positionMS int64, initial bool) (*Window, error) {
 	if positionMS < 0 || positionMS > 24*60*60*1000 {
 		return nil, apperror.New(apperror.Validation, "播放位置无效")
 	}
@@ -267,7 +290,11 @@ func (s *Service) readBoundWindow(ctx context.Context, binding *Binding, positio
 	if sourcePosition < -75000 {
 		return result, nil
 	}
+	indexStarted := time.Now()
 	loaded, err := s.loadIndex(ctx, p, e)
+	if initial {
+		matchLog(ctx, "danmaku segment index finished", applog.Fields{"provider": e.Provider, "duration_ms": time.Since(indexStarted).Milliseconds(), "cached": loaded.cached, "code": apperror.CodeOf(err)})
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -280,9 +307,32 @@ func (s *Service) readBoundWindow(ctx context.Context, binding *Binding, positio
 	if loaded.warning != "" {
 		result.Warnings = append(result.Warnings, loaded.warning)
 	}
+	// The matching response can be displayed before lookahead is fetched.
+	// If the current segment is missing, the full window can still contain valid data.
+	if initial && sourcePosition >= 0 {
+		for _, segment := range index.Segments {
+			if sourcePosition < segment.StartMS || sourcePosition >= segment.EndMS {
+				continue
+			}
+			first := *result
+			first.StartMS = max(start, segment.StartMS)
+			first.EndMS = min(end, segment.EndMS)
+			window, err := s.readWindowSegments(ctx, p, e, []Segment{segment}, &first)
+			if err != nil || window.matchFailure() == "" {
+				return window, err
+			}
+			break
+		}
+	}
+	return s.readWindowSegments(ctx, p, e, index.Segments, result)
+}
+
+func (s *Service) readWindowSegments(ctx context.Context, p Provider, e Episode, segments []Segment, result *Window) (*Window, error) {
+	ctx = context.WithValue(ctx, matchHTTPStageKey{}, "dm_segment")
+	start, end := result.StartMS, result.EndMS
 	seen := map[string]bool{}
 	loadedCount := 0
-	for _, segment := range index.Segments {
+	for _, segment := range segments {
 		if segment.EndMS < start || segment.StartMS > end {
 			continue
 		}
@@ -290,13 +340,23 @@ func (s *Service) readBoundWindow(ctx context.Context, binding *Binding, positio
 		if loadedCount > 16 {
 			return nil, schemaError(fmt.Errorf("too many segments in time window"))
 		}
-		value, err := s.load(ctx, cacheKey(e, segment.Key), func(raw []byte) error { _, err := decodeSegment(raw); return err }, func(ctx context.Context) ([]byte, error) {
+		var emptySegment bool
+		value, err := s.load(ctx, cacheKey(e, segment.Key), func(raw []byte) error {
+			payload, err := decodeSegment(raw)
+			emptySegment = len(payload.Items) == 0
+			return err
+		}, func(ctx context.Context) ([]byte, error) {
 			items, skipped, err := p.Segment(ctx, e, segment)
 			if err != nil {
 				return nil, err
 			}
 			return json.Marshal(segmentPayload{Items: items, Skipped: skipped})
-		}, commentFreshness, nil)
+		}, commentFreshness, func([]byte) time.Duration {
+			if emptySegment {
+				return emptyPoolCooldown
+			}
+			return 0
+		})
 		if err != nil {
 			if ctx.Err() != nil {
 				return nil, ctx.Err()

@@ -7,9 +7,10 @@ import { useI18n } from 'vue-i18n'
 import { useCatalog } from '../../reading/useCatalog'
 import { useAsyncResource } from '../../reading/asyncResource'
 import Icon from '../../components/Icon.vue'
+import { Spinner } from '../../components/ui'
 import ComicCard from '../components/ComicCard.vue'
 import ComicLoadState from '../components/ComicLoadState.vue'
-import { listComicLibrary, listComicSources, searchComics, type ComicSearchResult } from '../data/repository'
+import { listComicSources, searchComics, type ComicSearchResult } from '../data/repository'
 import { isCompletedStatus, splitGenres, type ComicSeries } from '../domain'
 import { useModeViewState } from '../../modes/useModeViewState'
 import { startupTask } from '../../diagnostics/startup'
@@ -28,13 +29,15 @@ const searching = computed(() => route.path === '/comic/search')
 const genre = computed(() => String(route.query.genre || ''))
 const complete = computed(() => route.query.complete === '1')
 const sourceInventory = useAsyncResource({ load: listComicSources, isEmpty: isEmptyList })
-watch(searching, active => {
-  if (active && sourceInventory.status.value === 'idle') void sourceInventory.run()
-}, { immediate: true })
-
 const browse = useCatalog('comic', () => ({ genre: genre.value, complete: complete.value }), () => active.value&&!searching.value)
 const browseStatus = browse.status, browseError = browse.error
 const retryBrowse = browse.retry
+const filtersActive = computed(() => !!genre.value || complete.value)
+const needsSourceInventory = computed(() => searching.value || (!filtersActive.value && browseStatus.value === 'empty'))
+watch([active, needsSourceInventory], ([visible, needed]) => {
+  if (visible && needed) void sourceInventory.run()
+  else sourceInventory.cancel()
+}, { immediate: true })
 let searchGeneration=0,requestedKeyword=''
 const { status: searchStatus, data: searchData, error: searchError, retry: retrySearch, run: runSearch, cancel: cancelSearch } = useAsyncResource<ComicSearchResult, [string, number]>({
   diagnosticLabel:'comic.search',
@@ -62,7 +65,9 @@ const found = computed<ComicSeries[]>(() => (searching.value ? (searchData.value
 const related = computed(()=>(searchData.value?.items??[]).filter(item=>searchRelevance(item,searchData.value?.keyword??'')===0))
 const onlyPartialMatch = computed(()=>found.value.length>0&&!found.value.some(item=>searchRelevance(item,searchData.value?.keyword??'')>=3))
 const failedSources = computed(() => (searchData.value?.sources ?? []).filter(entry => entry.failed))
-const matches = computed(() => found.value.filter(item => (!genre.value || splitGenres(item.genres).includes(genre.value)) && (!complete.value || isCompletedStatus(item.status))))
+const matches = computed(() => searching.value || !browse.stale.value
+  ? found.value.filter(item => (!genre.value || splitGenres(item.genres).includes(genre.value)) && (!complete.value || isCompletedStatus(item.status)))
+  : found.value)
 // genres 是源给的自由文本，所以筛选项从已入库的作品里收集，不再是写死的枚举。
 const genreOptions = computed(() => {
   if (!searching.value) return browse.genres.value
@@ -72,17 +77,20 @@ const genreOptions = computed(() => {
 })
 const status = computed(() => (searching.value ? searchStatus.value : browseStatus.value))
 const loadError = computed(() => (searching.value ? searchError.value : browseError.value))
-const noSources = computed(() => (searching.value
-  ? !!searchData.value?.noSources || sourceInventory.status.value === 'empty'
-  : browseStatus.value === 'empty'))
-/** 空屏幕分五种：还没搜、正在加载、加载失败、还没加源、真的没匹配上。处置各不相同。 */
-const notice = computed<'none' | 'idle' | 'loading' | 'error' | 'guide' | 'noMatches'>(() => {
+const noEnabledSources = computed(() =>
+  ['ready', 'empty'].includes(sourceInventory.status.value) &&
+  !sourceInventory.data.value?.some(source => source.enabled),
+)
+const notice = computed<'none' | 'idle' | 'loading' | 'error' | 'guide' | 'catalogEmpty' | 'noMatches'>(() => {
   if (matches.value.length) return 'none'
-  if (searching.value && sourceInventory.status.value === 'empty') return 'guide'
-  if (searching.value && searchStatus.value === 'idle') return 'idle'
   if (status.value === 'loading') return 'loading'
   if (status.value === 'error') return 'error'
-  return noSources.value ? 'guide' : 'noMatches'
+  if (searching.value) {
+    if (searchData.value?.noSources || noEnabledSources.value) return 'guide'
+    return searchStatus.value === 'idle' ? 'idle' : 'noMatches'
+  }
+  if (filtersActive.value) return 'noMatches'
+  return noEnabledSources.value ? 'guide' : 'catalogEmpty'
 })
 
 function retryCurrent(): void {
@@ -93,6 +101,11 @@ function retryCurrent(): void {
 
 function filter(key: string, value: string): void {
   void router.replace({ path: route.path, query: { ...route.query, [key]: value || undefined } })
+}
+
+function resetFilters(): void {
+  const { genre: _genre, complete: _complete, ...query } = route.query
+  void router.replace({ path: route.path, query })
 }
 
 function submit(): void {
@@ -150,7 +163,8 @@ onMounted(()=>{if(searching.value)void startupTask('first_screen',reload)})
     </div>
     <ReadingSearchStatus v-if="searching && (searchData||searchStatus==='loading')" :searched="searchData?.searchedSources??0" :pending="searchData?.pendingSources??0" :loading="searchStatus==='loading'" :partial-match="onlyPartialMatch" :failures="failedSources" @stop="stopSearch" />
     <template v-if="notice === 'none'">
-      <div class="comic-grid"><ComicCard v-for="item in matches" :key="`${item.sourceKey}:${item.remoteId}`" :series="item" /></div>
+      <Spinner v-if="!searching && browse.loading.value" inline size="sm" role="status" :aria-label="t('common.loading')" />
+      <div class="comic-grid" :aria-busy="status === 'loading' || (!searching && browse.loading.value)"><ComicCard v-for="item in matches" :key="`${item.sourceKey}:${item.remoteId}`" :series="item" /></div>
       <button v-if="searching && searchData?.hasNext" type="button" class="comic-button comic-load-more" :disabled="searchStatus === 'loading'" @click="more">{{ t(searchData.pendingSources?'sourceRouting.more':'comic.loadMore') }}</button>
     </template>
     <div v-else-if="notice === 'idle'" class="comic-empty">
@@ -167,13 +181,17 @@ onMounted(()=>{if(searching.value)void startupTask('first_screen',reload)})
         </div>
       </template>
     </ComicLoadState>
+    <ComicLoadState v-else-if="notice === 'catalogEmpty'" status="empty" icon="panels" :title="t('comic.emptyCatalog')">
+      <template #actions><router-link to="/comic/search" class="comic-button">{{ t('comic.search') }}</router-link></template>
+    </ComicLoadState>
     <div v-else class="comic-empty">
       <Icon name="search" :size="36" />
       <h2>{{ t(searching?'sourceRouting.noTitleMatch':'comic.noMatches') }}</h2>
       <p>{{ t(searching&&searchData?.pendingSources?'sourceRouting.searchScope':searching&&failedSources.length?'sourceRouting.incompleteSearch':'comic.tryAnother') }}</p>
+      <button v-if="filtersActive" class="comic-button" @click="resetFilters">{{ t('common.resetFilters') }}</button>
     </div>
     <details v-if="searching&&related.length" class="reading-search-related"><summary class="cczj-cursor-pointer">{{ t('sourceRouting.otherResults',{count:related.length}) }}</summary><div class="comic-grid"><ComicCard v-for="item in related" :key="item.id" :series="item" /></div></details>
-    <p v-if="!searching && browse.nextError.value" class="comic-error" role="alert">{{ browse.nextError.value.message }}</p>
+    <p v-if="!searching && browse.nextError.value" class="comic-error" role="alert">{{ browse.nextError.value.message }} <button class="comic-text-button" @click="retryBrowse()">{{ t('common.retry') }}</button></p>
     <button v-if="searching && notice!=='none' && searchData?.hasNext" class="comic-button" :disabled="searchStatus==='loading'" @click="more">{{ t('sourceRouting.more') }}</button>
     <button v-if="!searching && browse.hasNext.value" class="comic-button" :disabled="browse.loading.value" @click="browse.more()">{{ t(browse.loading.value ? 'common.loading' : 'common.loadMore') }}</button>
 

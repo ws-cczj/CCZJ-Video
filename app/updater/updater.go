@@ -24,7 +24,7 @@ import (
 // 构建命令示例: go build -ldflags="-X cczjVideo/app/updater.Version=1.1.1"
 var Version = "dev"
 
-// installedVersionFile 是安装版本标记文件名（存放在应用目录）
+// installedVersionFile is the transient record of an installation attempt.
 const installedVersionFile = ".installed_version"
 
 // EffectiveVersion 返回当前有效版本号
@@ -39,7 +39,14 @@ func EffectiveVersion() string {
 
 // RecordInstalledVersion 记录已安装的版本号（安装前调用）
 func RecordInstalledVersion(version string) {
-	appDir := getAppDir()
+	appDir, err := updateDirectory()
+	if err == nil {
+		err = os.MkdirAll(appDir, 0700)
+	}
+	if err != nil {
+		applog.Warn("[Updater] 无法准备安装标记目录: %v", err)
+		return
+	}
 	fpath := filepath.Join(appDir, installedVersionFile)
 	if err := os.WriteFile(fpath, []byte(version), 0644); err != nil {
 		applog.Warn("[Updater] 记录安装版本失败: %v", err)
@@ -50,9 +57,12 @@ func RecordInstalledVersion(version string) {
 
 // ClearInstalledVersion 清除安装版本标记（启动时版本已匹配则无需保留）
 func ClearInstalledVersion() {
-	appDir := getAppDir()
-	fpath := filepath.Join(appDir, installedVersionFile)
-	os.Remove(fpath)
+	if dir, err := updateDirectory(); err == nil {
+		_ = os.Remove(filepath.Join(dir, installedVersionFile))
+	}
+	if legacy := legacyUpdateDirectory(); legacy != "" {
+		_ = os.Remove(filepath.Join(legacy, installedVersionFile))
+	}
 }
 
 // getInstalledVersion 读取已安装的版本号。读到的值留在 lastInstalledMarker 里：
@@ -61,9 +71,14 @@ func ClearInstalledVersion() {
 var lastInstalledMarker string
 
 func getInstalledVersion() string {
-	appDir := getAppDir()
-	fpath := filepath.Join(appDir, installedVersionFile)
-	data, err := os.ReadFile(fpath)
+	var data []byte
+	dir, err := updateDirectory()
+	if err == nil {
+		data, err = os.ReadFile(filepath.Join(dir, installedVersionFile))
+	}
+	if legacy := legacyUpdateDirectory(); err != nil && legacy != "" {
+		data, err = os.ReadFile(filepath.Join(legacy, installedVersionFile))
+	}
 	if err != nil {
 		return ""
 	}
@@ -75,7 +90,7 @@ func getInstalledVersion() string {
 }
 
 // InstalledMarkerSeenThisRun 返回本进程读到过的最后一次安装标记（清空之前的值）。
-// 标记文件在应用目录、不在数据目录，路径由本包独占，别让调用方猜。
+// The marker belongs to the updater's storage.
 func InstalledMarkerSeenThisRun() string { return lastInstalledMarker }
 
 // semverRegex 用于从 tag 名称中提取语义化版本号（如 release-v1.0.0 → 1.0.0）

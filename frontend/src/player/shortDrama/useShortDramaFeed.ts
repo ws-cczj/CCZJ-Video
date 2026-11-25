@@ -368,7 +368,7 @@ export function useShortDramaFeed(source: Ref<string>, active: Ref<boolean>, bef
     if (batchSource !== key || !items.value.length) void refresh()
     else if (!detail.value || error.value) {void open(selected.value, true);void updateCatalog()}
     else void updateCatalog()
-  }, { immediate: true, flush: 'post' })
+  }, { immediate: true })
   watch([detail, episodeIndex, series, active, () => options.playing?.() ?? active.value, () => options.preferenceVersion?.()], async () => {
     nextGeneration.invalidate(); nextRequests.cancel(); nextItem.value = null
     if (!active.value || !(options.playing?.() ?? active.value) || series.value || !detail.value) return
@@ -387,9 +387,8 @@ export function useShortDramaFeed(source: Ref<string>, active: Ref<boolean>, bef
           const pageNumber = remoteHasMore ? remotePage + 1 : 1
           const page = await nextRequests.run(() => GetShortDramaPage(source.value, pageNumber, '', remoteSource, remoteCategory))
           if (!nextGeneration.isCurrent(token)) return
-          const recommended=await nextRequests.run(()=>GetShortDramaRecommendations(playbackSource.value,exclude))
-          if(!nextGeneration.isCurrent(token))return
-          extra=randomBatch(recommended.map(item=>({...item,source_key:playbackSource.value})))
+          const excluded = new Set(exclude)
+          extra = randomBatch(page.videos.filter(item => page.source_key !== playbackSource.value || !excluded.has(String(item.vod_id)))).slice(0, 5)
           remote = { source: page.source_key, category: page.category_id, page: pageNumber, hasMore: page.has_more }
         }
         if (!extra.length) return

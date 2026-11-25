@@ -26,10 +26,11 @@ const (
 
 // Service owns proxy networking policy and request pacing.
 type Service struct {
-	client   *http.Client
-	mu       sync.Mutex
-	lastCall time.Time
-	images   *imageStore
+	client       *http.Client
+	mu           sync.Mutex
+	lastCall     time.Time
+	images       *imageStore
+	posterResize chan struct{}
 }
 
 func (s *Service) SetMaintenanceLauncher(launch func(string, func(context.Context)) bool) {
@@ -39,7 +40,7 @@ func (s *Service) SetMaintenanceLauncher(launch func(string, func(context.Contex
 // NewService creates an image proxy with conservative transport timeouts.
 // imageCacheDir 给出海报磁盘副本的根目录；传 nil 表示不落盘（单测用的就是这条）。
 func NewService(imageCacheDir func() string) *Service {
-	return &Service{images: newImageStore(imageCacheDir), client: &http.Client{
+	return &Service{images: newImageStore(imageCacheDir), posterResize: make(chan struct{}, 1), client: &http.Client{
 		Timeout: 30 * time.Second,
 		// 只统计真的出了网的图片：命中磁盘缓存和前端 imageProxyCache 时根本不会走到这里，
 		// 所以这一类的次数是「图片 miss」而不是「图片请求总数」。
@@ -59,8 +60,16 @@ func NewService(imageCacheDir func() string) *Service {
 
 // ImageContext fetches an image using the caller's cancellation context.
 func (s *Service) ImageContext(ctx context.Context, urlStr string) (string, error) {
+	data, contentType, err := s.imageBytes(ctx, urlStr)
+	if err != nil {
+		return "", err
+	}
+	return imageDataURL(contentType, data), nil
+}
+
+func (s *Service) imageBytes(ctx context.Context, urlStr string) ([]byte, string, error) {
 	if strings.TrimSpace(urlStr) == "" {
-		return "", apperror.New(apperror.Validation, "url is empty")
+		return nil, "", apperror.New(apperror.Validation, "url is empty")
 	}
 	originalURL := urlStr
 	if strings.Contains(urlStr, "s_ratio_poster") {
@@ -69,18 +78,20 @@ func (s *Service) ImageContext(ctx context.Context, urlStr string) (string, erro
 	// 请求发出去的是加工过的 URL（高清、可抓的镜像），磁盘副本仍然按前端给的那个 URL 记账：
 	// 同一个 URL 拿到的图不会自己变，换封面是换 URL，所以命中即可直接端回去，一次网都不出。
 	if data, contentType, ok := s.images.read(originalURL); ok {
-		return imageDataURL(contentType, data), nil
+		return data, contentType, nil
 	}
 	if !s.images.allow(originalURL) {
-		return "", apperror.New(apperror.Unavailable, "image fetch is cooling down after a previous failure")
+		return nil, "", apperror.New(apperror.Unavailable, "image fetch is cooling down after a previous failure")
 	}
 	data, contentType, err := s.fetchPoster(ctx, urlStr, originalURL)
 	if err != nil {
-		s.images.noteFailure(originalURL)
-		return "", err
+		if ctx.Err() == nil {
+			s.images.noteFailure(originalURL)
+		}
+		return nil, "", err
 	}
 	s.images.write(originalURL, data, contentType)
-	return imageDataURL(contentType, data), nil
+	return data, contentType, nil
 }
 
 // fetchPoster 按「最可能一次成功」的顺序试几个 URL 变体，第一个拿到图的即返回。

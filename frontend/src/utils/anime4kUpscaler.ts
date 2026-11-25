@@ -1,4 +1,4 @@
-import { layoutCanvasToVideo } from './videoLayout'
+import { enhancementBufferBudget, layoutCanvasToVideo } from './videoLayout'
 /**
  * Anime4K 动画超分辨率增强器 — WebGL2 实时 CNN 超分（多档位版）
  *
@@ -217,7 +217,7 @@ export class Anime4kUpscaler {
   private running = false
   private destroyed = false
   private seekFlag = false
-  private lastVideoTime = 0
+  private lastVideoTime = -1
   private texW = 0
   private texH = 0
   private outW = 0
@@ -226,7 +226,6 @@ export class Anime4kUpscaler {
   private frameCount = 0
   private lastFpsTime = 0
   private fps = 0
-  private useFloatBuffer = false
   private passes: EnginePassDef[] = []
   private tier: Anime4kTier = 'S'
   private opts: Required<Pick<UpscalerOptions, 'strength' | 'upscale' | 'outputWidth' | 'outputHeight'>>
@@ -247,9 +246,7 @@ export class Anime4kUpscaler {
   private _diagVideoCanvas: HTMLCanvasElement | null = null
   private _diagBilinCanvas: HTMLCanvasElement | null = null
   private _diagCanvasSnap: HTMLCanvasElement | null = null
-  private _renderErrorCount = 0
   private glErrorCount = 0
-  private _texImageFailCount = 0
 
   constructor(options: UpscalerOptions = {}) {
     this.tier = options.tier ?? 'S'
@@ -299,7 +296,6 @@ export class Anime4kUpscaler {
       'position:absolute;pointer-events:none;z-index:1;image-rendering:auto;display:none'
     const container = parent ?? video.parentElement
     if (container) {
-      container.style.position = container.style.position || 'relative'
       container.appendChild(this.canvas)
       layoutCanvasToVideo(video, this.canvas)
     }
@@ -315,18 +311,6 @@ export class Anime4kUpscaler {
     const vw = video.videoWidth, vh = video.videoHeight
     if (!vw || !vh) { this.error = '视频尚未就绪'; return false }
 
-    let outW = this.opts.outputWidth > 0 ? this.opts.outputWidth : vw * 2
-    let outH = this.opts.outputHeight > 0 ? this.opts.outputHeight : vh * 2
-
-    const maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE) as number
-    if (outW > maxTex || outH > maxTex) {
-      this.error = `输出尺寸 ${outW}x${outH} 超过 GPU 最大纹理限制 ${maxTex}x${maxTex}`
-      console.warn('[Anime4K]', this.error)
-      return false
-    }
-    this.outW = outW; this.outH = outH
-    this.canvas.width = outW; this.canvas.height = outH
-
     const extFloat = gl.getExtension('EXT_color_buffer_float')
     const extHalf = gl.getExtension('EXT_color_buffer_half_float')
     if (!extFloat && !extHalf) {
@@ -334,7 +318,6 @@ export class Anime4kUpscaler {
       console.warn('[Anime4K]', this.error)
       return false
     }
-    this.useFloatBuffer = true
 
     // 构建 pass 管线
     const structure = getModelStructure(this.tier)
@@ -348,6 +331,7 @@ export class Anime4kUpscaler {
 
     }
     const numTextures = maxTexIdx + 1
+    this.sizeOutput(gl, vw, vh, maxTexIdx)
     console.log(`[Anime4K] ${this.tier} model: ${numPasses} passes, ${numTextures} textures`)
 
     // 编译所有 pass 的 program
@@ -429,9 +413,9 @@ export class Anime4kUpscaler {
     this.videoFrameCallbackId = null
   }
 
-  /** 通知 upscaler 视频发生了 seek，强制下一帧渲染 */
   onSeeked(): void {
     this.seekFlag = true
+    if (this.running && this.sourceVideo?.paused) this.renderLoopFrame()
   }
 
   destroy(): void {
@@ -462,6 +446,10 @@ export class Anime4kUpscaler {
     this.canvas.style.clipPath = percent == null ? '' : `inset(0 0 0 ${Math.max(0, Math.min(100, percent))}%)`
   }
 
+  resizeOutput(): void {
+    if (this.sourceVideo && this.canvas) layoutCanvasToVideo(this.sourceVideo, this.canvas)
+  }
+
   updateOptions(opts: Partial<UpscalerOptions>): void {
     let needResize = false
     if (opts.strength !== undefined) this.opts.strength = opts.strength
@@ -473,17 +461,21 @@ export class Anime4kUpscaler {
       this.opts.outputHeight = opts.outputHeight
       needResize = true
     }
-    // 动态响应尺寸修改
-    if (needResize && this.gl && this.sourceVideo && this.canvas) {
-      const vw = this.sourceVideo.videoWidth
-      const vh = this.sourceVideo.videoHeight
-      if (vw && vh) {
-        this.outW = this.opts.outputWidth > 0 ? this.opts.outputWidth : vw * 2
-        this.outH = this.opts.outputHeight > 0 ? this.opts.outputHeight : vh * 2
-        this.canvas.width = this.outW
-        this.canvas.height = this.outH
-      }
+    if (needResize && this.gl && this.sourceVideo) {
+      this.sizeOutput(this.gl, this.texW, this.texH, this.textures.length - 1)
+      this.onSeeked()
     }
+  }
+
+  private sizeOutput(gl: WebGL2RenderingContext, width: number, height: number, targets: number): void {
+    const outW = this.opts.outputWidth || width * 2
+    const outH = this.opts.outputHeight || height * 2
+    const budget = enhancementBufferBudget(gl, width, height, targets)
+    if (!budget || Math.max(outW, outH) > budget.maxEdge || outW * outH > budget.maxPixels) {
+      throw new Error('Anime4K exceeds GPU budget')
+    }
+    this.outW = this.canvas!.width = outW
+    this.outH = this.canvas!.height = outH
   }
 
   getStats(): UpscalerStats {
@@ -493,7 +485,7 @@ export class Anime4kUpscaler {
       elapsed: this.lastFpsTime > 0 ? (performance.now() - this.lastFpsTime) / 1000 : 0,
       inputSize: v ? `${v.videoWidth}x${v.videoHeight}` : 'N/A',
       outputSize: c ? `${c.width}x${c.height}` : 'N/A',
-      gpuEnabled: this.gl !== null,
+      gpuEnabled: this.running,
     }
   }
 
@@ -514,21 +506,22 @@ export class Anime4kUpscaler {
     } else {
       this.animFrameId = requestAnimationFrame(this.renderLoop)
     }
+    this.renderLoopFrame()
+  }
+
+  private renderLoopFrame(): void {
     try {
       this.render()
-    } catch (e) {
-      console.error('[Anime4K] render() 异常:', e)
-      if (++this._renderErrorCount >= 3) {
-        console.error('[Anime4K] 连续渲染异常，停止管线')
-        this.stop()
-      }
+    } catch (error) {
+      this.error = error instanceof Error ? error.message : String(error)
+      this.stop()
     }
   }
 
   private render(): void {
     const gl = this.gl, video = this.sourceVideo, canvas = this.canvas
     if (!gl || !video || !canvas || !this.vao) return
-    if (video.readyState < 2 || video.paused || video.ended) return
+    if (video.readyState < 2) return
     const vw = video.videoWidth, vh = video.videoHeight
     if (vw <= 0 || vh <= 0) return
     const ct = video.currentTime
@@ -538,10 +531,7 @@ export class Anime4kUpscaler {
 
     if (this.texW !== vw || this.texH !== vh) {
       this.texW = vw; this.texH = vh
-      if (this.opts.outputWidth <= 0 || this.opts.outputHeight <= 0) {
-        this.outW = vw * 2; this.outH = vh * 2
-        canvas.width = this.outW; canvas.height = this.outH
-      }
+      this.sizeOutput(gl, vw, vh, this.textures.length - 1)
       this.allocateTextures(gl)
     }
 
@@ -552,17 +542,7 @@ export class Anime4kUpscaler {
     gl.activeTexture(gl.TEXTURE0)
     gl.bindTexture(gl.TEXTURE_2D, this.textures[TEX_VIDEO])
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false)
-    try {
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, video)
-      this._texImageFailCount = 0
-    } catch (e) {
-      this._texImageFailCount++
-      if (this._texImageFailCount >= 10) {
-        console.error('[Anime4K] texImage2D(video) 连续失败 %d 次，停止管线', this._texImageFailCount)
-        this.stop()
-      }
-      return
-    }
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, video)
 
     const texelX = 1 / vw, texelY = 1 / vh
 
@@ -650,13 +630,6 @@ export class Anime4kUpscaler {
       gl.bindVertexArray(this.vao)
       gl.drawArrays(gl.TRIANGLES, 0, 6)
 
-      if (!isCanvasOut) {
-        const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER)
-        if (status !== gl.FRAMEBUFFER_COMPLETE && this.glErrorCount < 3) {
-          console.error(`[Anime4K] Pass ${i} FBO 不完整: 0x${status.toString(16)}`)
-        }
-      }
-
       // ===== 诊断 =====
       if (this.diagEnabled && this.diagSampleThisSecond && !this.diagSampled) {
         const writeIdx = isCanvasOut ? -1 : (def.write as number)
@@ -701,7 +674,7 @@ export class Anime4kUpscaler {
       }
     }
 
-    this.checkGLErrors('frame')
+    if (this.diagEnabled) this.checkGLErrors('frame')
 
     // 每秒诊断输出
     if (this.diagEnabled) {
@@ -730,7 +703,6 @@ export class Anime4kUpscaler {
     }
 
     if (!this.canvasShown) { this.canvasShown = true; canvas.style.display = '' }
-    this._renderErrorCount = 0
     this.frameCount++
     const now = performance.now()
     if (now - this.lastFpsTime >= 1000) {
@@ -742,11 +714,18 @@ export class Anime4kUpscaler {
   // ==================== 辅助方法 ====================
 
   private allocateTextures(gl: WebGL2RenderingContext): void {
-    const internal = this.useFloatBuffer ? gl.RGBA16F : gl.RGBA8
-    for (let i = 0; i < this.textures.length; i++) {
-      if (!this.textures[i]) continue
-      gl.bindTexture(gl.TEXTURE_2D, this.textures[i]!)
-      gl.texImage2D(gl.TEXTURE_2D, 0, internal, this.texW, this.texH, 0, gl.RGBA, this.useFloatBuffer ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE, null)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo)
+    try {
+      for (const texture of this.textures.slice(1)) {
+        gl.bindTexture(gl.TEXTURE_2D, texture)
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, this.texW, this.texH, 0, gl.RGBA, gl.HALF_FLOAT, null)
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0)
+        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+          throw new Error('Incomplete Anime4K framebuffer')
+        }
+      }
+    } finally {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null)
     }
   }
 
@@ -880,25 +859,4 @@ export class Anime4kUpscaler {
     gl.bindVertexArray(null)
     return vao
   }
-}
-
-/** 检查当前环境是否支持 Anime4K */
-export function checkAnime4kSupport(): {
-  webgl2: boolean; floatBuffer: boolean; recommended: boolean; message: string
-} {
-  let gl2: WebGL2RenderingContext | null = null
-  try {
-    const c = document.createElement('canvas')
-    gl2 = c.getContext('webgl2')
-  } catch { /* ignore */ }
-  if (!gl2) {
-    return { webgl2: false, floatBuffer: false, recommended: false, message: 'WebGL2 不可用，Anime4K 无法运行' }
-  }
-  const hasFloat = !!(gl2.getExtension('EXT_color_buffer_float') || gl2.getExtension('EXT_color_buffer_half_float'))
-  // 探测用完就还：这些一次性 canvas 也各占一个上下文名额，攒够十来个就让真正的管线拿不到。
-  loseGlContext(gl2)
-  if (!hasFloat) {
-    return { webgl2: true, floatBuffer: false, recommended: false, message: 'GPU 不支持浮点渲染目标，Anime4K 不可用' }
-  }
-  return { webgl2: true, floatBuffer: true, recommended: true, message: 'Anime4K 可用，将启用 CNN 2× 超分辨率' }
 }

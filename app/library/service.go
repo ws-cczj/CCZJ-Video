@@ -403,22 +403,23 @@ func (s *Service) Search(ctx context.Context, kind model.SourceKind, keyword str
 	if page < 1 {
 		page = 1
 	}
-	sources, err := db.GetEnabledSourcesByKind(kind)
+	sources, err := db.GetEnabledSourcesByKindContext(ctx, kind)
 	if err != nil {
 		return nil, apperror.Wrap(apperror.Storage, err, "读取源列表失败")
 	}
 	plans := make([]sourceSearchState, 0, len(sources))
 	byKey := make(map[string]*model.Source, len(sources))
 	for _, source := range sources {
-		plans = append(plans, sourceSearchState{Key: source.SourceKey, Page: page})
+		plans = append(plans, sourceSearchState{Key: source.SourceKey, Version: sourceRevision(source), Page: page})
 		byKey[source.SourceKey] = source
 	}
 	return s.searchPlans(ctx, kind, keyword, page, plans, byKey, onResult)
 }
 
-func (s *Service) searchSourcePage(ctx context.Context, kind model.SourceKind, source *model.Source, keyword string, state sourceSearchState) *SourceResult {
+func (s *Service) searchSourcePage(ctx context.Context, kind model.SourceKind, source *model.Source, keyword string, state sourceSearchState, health map[string]db.ReadingSearchHealth) *SourceResult {
 	requestCtx := ctx
-	if s.routingEnabled.Load() {
+	routed := s.routingEnabled.Load()
+	if routed {
 		var cancel context.CancelFunc
 		deadline := novel.SearchDeadline
 		if kind == model.SourceKindComic {
@@ -428,17 +429,30 @@ func (s *Service) searchSourcePage(ctx context.Context, kind model.SourceKind, s
 		defer cancel()
 	}
 	result := &SourceResult{SourceKey: source.SourceKey, SourceName: source.Name, Items: []*Item{}}
+	sourceID := ""
+	if routed {
+		sourceID = sourceQualityID(string(kind), source.ApiUrl, source.StrategyConfig)
+		if last := health[sourceID]; last.RetryAfter > time.Now().Unix() &&
+			(state.Version == "" || state.Version == sourceRevision(source)) {
+			switch last.ErrorCode {
+			case string(apperror.Timeout), string(apperror.RateLimited), string(apperror.Unavailable), "SOURCE_GONE":
+				result.ErrorCode = last.ErrorCode
+				result.ErrorMessage = "来源暂缓查询，冷却结束后可重新搜索"
+				return result
+			}
+		}
+	}
 	defer func() {
 		// User cancellation, local storage errors and stale cursors say nothing
 		// about upstream health. A per-source deadline is an actual failed attempt.
-		if requestCtx.Err() != nil || !s.routingEnabled.Load() {
+		if requestCtx.Err() != nil || !routed {
 			return
 		}
 		switch result.ErrorCode {
 		case string(apperror.Cancelled), string(apperror.Storage), string(apperror.Conflict):
 			return
 		}
-		if err := db.RecordReadingSearchHealth(requestCtx, kind, sourceQualityID(string(kind), source.ApiUrl, source.StrategyConfig), result.ErrorCode); err != nil {
+		if err := db.RecordReadingSearchHealth(requestCtx, kind, sourceID, result.ErrorCode); err != nil {
 			applog.Warn("[Library] 保存搜索实测失败: %v", err)
 		}
 		if result.ErrorCode == "SOURCE_GONE" {
@@ -447,13 +461,13 @@ func (s *Service) searchSourcePage(ctx context.Context, kind model.SourceKind, s
 			}
 		}
 	}()
-	resolved, err := s.resolve(source.SourceKey, kind)
+	resolved, err := s.resolveContext(ctx, source.SourceKey, kind)
 	if err != nil {
 		result.ErrorCode, result.ErrorMessage = splitError(err)
 		return result
 	}
-	if state.Version != "" && state.Version != resolved.version {
-		result.ErrorCode, result.ErrorMessage = splitError(apperror.New(apperror.Conflict, "来源配置已变化，请重新搜索"))
+	if resolved.source.Enabled != 1 || (state.Version != "" && state.Version != resolved.version) {
+		result.ErrorCode, result.ErrorMessage = splitError(apperror.New(apperror.Conflict, "来源已停用或配置已变化，请重新搜索"))
 		return result
 	}
 	found, err := resolved.pipeline.Search(ctx, resolved.source.ApiUrl, keyword, state.Page, state.URL)
@@ -488,7 +502,7 @@ func (s *Service) searchSourcePage(ctx context.Context, kind model.SourceKind, s
 		result.ErrorCode, result.ErrorMessage = splitError(err)
 		return result
 	}
-	ids, err := db.UpsertLibraryItems(kind, source.SourceKey, rows, true)
+	ids, err := db.UpsertLibraryItemsContext(requestCtx, kind, source.SourceKey, rows, true)
 	if err != nil {
 		applog.Warn("[Library] 搜索结果入库失败 kind=%s source=%s count=%d: %v", kind, source.SourceKey, len(rows), err)
 		result.ErrorCode, result.ErrorMessage = splitError(apperror.Wrap(apperror.Storage, err, "写入搜索结果失败"))
@@ -521,7 +535,7 @@ func (s *Service) searchSourcePage(ctx context.Context, kind model.SourceKind, s
 	for _, item := range result.Items {
 		evidence = append(evidence, db.ReadingWorkEvidence{ItemID: item.ID, TitleKey: matching.Normalize(item.Title), AuthorKey: matching.Normalize(item.Author)})
 	}
-	if err := db.RecordReadingWorks(ctx, kind, source.SourceKey, resolved.version, evidence); err != nil {
+	if err := db.RecordReadingWorks(requestCtx, kind, source.SourceKey, resolved.version, evidence); err != nil {
 		result.ErrorCode, result.ErrorMessage = splitError(apperror.Wrap(apperror.Storage, err, "保存来源覆盖记录失败"))
 	}
 	return result

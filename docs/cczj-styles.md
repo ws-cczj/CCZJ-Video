@@ -79,6 +79,8 @@ npm --prefix frontend run check:css-reuse
 
 主题背景使用短 Blob URL 作为 CSS 变量值，原文件保留在主题数据中。[Chromium 的 CSSVariableData](https://chromium.googlesource.com/chromium/src/+/ab30ca95a699b434a885dd6b573a9fe4158caa76/third_party/blink/renderer/core/css/css_variable_data.h) 对单变量设有字节上限，不能将大图完整 base64 直接写入变量。裁剪交互采用独立 Modal、可移动选区、四边及角点缩放与像素字段；移动／缩放语义参考 [CropperSelection](https://fengyuanchen.github.io/cropperjs/api/cropper-selection.html)，使用项目原有控件与图标系统。界面保留动作、加载、错误和必要限制，技术依据集中在本文。
 
+桌面应用绘制一层固定壁纸，侧栏沿用主题的透明磨砂。首页和详情等层级页面侧向切换时，后页按前页边界裁切，前页的透明区域透出壁纸。观看短剧时移除固定壁纸层，标题栏和客户端预留边使用观看区底色。壁纸显示版最长边为桌面 2048px、移动端 1440px，编辑预览和取色共用当前显示版，裁剪按原图像素计算。主题选择卡片按需串行生成最长边 320px 的缩略图，离开分组或替换图片时撤销对应对象 URL。
+
 
 播放器控件配色由 `player/controlPalette.css` 的 `cczj-player-dark-controls` 拥有，移动抽屉、独立遥控、弹幕、桌面画质及播放偏好面板显式消费。它同时覆盖背景、文字、选中、按钮及强调色透明层，避免只覆盖 `--accent` 而让 Select 的 `--accent-alpha-15` 选中底色和焦点圈仍继承应用主题。弹幕通过 `--cczj-control-accent-rgb` 保留自身蓝色强调；inline Select 留在面板内继承变量；非inline Select 打开时只捕获触发控件实际使用的颜色／过渡变量白名单及文字颜色和color-scheme，带到Teleport列表，不复制背景图片或其他自由变量。移动端frame.css不再强制用应用surface覆盖所有select-panel，优先消费控件的bg-card；普通设置页和阅读器继续使用各自触发控件的主题；弹幕蓝色强调的透明层在局部重新声明，避免父级已解析的灰色透明层被继承。实际浅色／深色／彩色应用主题、竖屏及短横屏下的颜色和触摸仍由设备验收。
 

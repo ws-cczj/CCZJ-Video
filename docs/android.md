@@ -56,7 +56,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File build/android/build.ps1 `
 
 供后续设备复现的最小操作分别为：调用一个返回 MarshalError 的绑定并检查 cause 的 code／requestId；服务有在途工作时从应用退出入口检查关闭钩子及进程结束；发起可取消长请求后立即取消，并在多个长请求占用 Java 工作线程时重复，检查原生取消到达和后台工作释放。当前缺少这三条在本轮构建上的设备日志与时间对照，无法据此认定 Android 功能已验证。
 
-上游 #5859 报告的是 Activity 销毁期间在途调用回调访问已销毁 WebView，维护者留言仍要求复现核对。该报告可用于检查 Java 回调释放，尚不足以证明上述 JNI 错误、显式退出和早到取消已修复。当前保留严格局部补丁，代价是升级时逐处审查内部源码。项目侧适配能够解决调度、回调与 Activity 引用，JNI 错误信息丢失和 Go 登记前的取消交接需要框架层配合。适合向上游分别提出通用的 CallError 信封、显式退出清理及有界取消交接修复；补齐最小设备证据后再准备 issue／PR，发布需另行授权。[上游 #5859](https://github.com/wailsapp/wails/issues/5859)
+2026-11-20 复查 Wails v3.1.0 和主分支 `26809ff`，JNI 仍将绑定错误转换为字符串，Android 的 `destroy()` 仍为空，取消处理仍只查找已登记调用。结构化错误已有本项目提交的 #6345，优先在该 PR 继续补证。#5859 与 #6234 涉及在途回调、Activity 重建与 WebView 释放，应与用户显式调用 `App.Quit()` 的退出语义分开复现。早到取消可独立验证，在实际 Android 顺序和作用域明确后再提出窄改动。当前补丁继续适用于锁定的 3.0.0。此次上游核对基于源码，尚缺同一最小应用的 Android 对照日志。 [结构化错误 PR](https://github.com/wailsapp/wails/pull/6345) · [Activity 生命周期 PR](https://github.com/wailsapp/wails/pull/6234) · [Android 入口](https://github.com/wailsapp/wails/blob/26809ff62e7c257725432e92e6be6538347b2c1d/v3/pkg/application/application_android.go) · [调用处理](https://github.com/wailsapp/wails/blob/26809ff62e7c257725432e92e6be6538347b2c1d/v3/pkg/application/messageprocessor_call.go)
 
 ## 覆盖升级与数据排查
 

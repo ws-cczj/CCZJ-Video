@@ -2,7 +2,7 @@
 param(
     [string]$Version = '',
     [string]$ReleaseTag = '',
-    [string]$OutDir = 'dist/releases',
+    [string]$OutDir = '',
     [ValidateSet('ExistingPreview','Environment')][string]$AndroidSigning = 'ExistingPreview',
     [switch]$SkipBuild,
     [switch]$SkipVerify,
@@ -15,6 +15,8 @@ param(
 $ErrorActionPreference = 'Stop'
 $workspace = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location -LiteralPath $workspace
+$locations = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'artifact-paths.json') -Raw | ConvertFrom-Json
+if (!$OutDir) { $OutDir = $locations.releases }
 if ($Publish) {
     if ($ReleaseTag) { throw 'Custom release tags require the manual prerelease workflow in docs/releases.md.' }
     if ($SkipVerify -or $SkipFrontend) { throw 'Publishing always runs repository verification and builds the frontend.' }
@@ -39,6 +41,9 @@ if ($ReleaseTag) {
 $base = if ([IO.Path]::IsPathRooted($OutDir)) { $OutDir } else { Join-Path $workspace $OutDir }
 $stage = [IO.Path]::GetFullPath((Join-Path $base $tag))
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
+$exe = "cczjVideo-windows-amd64-$Version.exe"
+$zip = "cczjVideo-windows-amd64-$Version-portable.zip"
+$apk = "cczjVideo-android-arm64-$Version.apk"
 function Run-Step([string]$Label,[scriptblock]$Work) {
     Write-Host "==> $Label"
     & $Work
@@ -52,20 +57,20 @@ if (!$SkipBuild) {
         Run-Step 'Build frontend' { Push-Location frontend; try { & npm run build } finally { Pop-Location } }
     }
     if (!(Test-Path -LiteralPath 'frontend/dist/index.html' -PathType Leaf)) { throw 'Missing built frontend.' }
-    Run-Step 'Package Windows' { & powershell -NoProfile -ExecutionPolicy Bypass -File build/windows/package.ps1 -Version $Version -OutDir $stage -BinOut "bin/cczjVideo-$Version.exe" }
-    $androidArgs = @('-NoProfile','-ExecutionPolicy','Bypass','-File','build/android/build.ps1','-Arch','arm64','-BuildType','Release','-SkipFrontend')
+    Run-Step 'Package Windows' { & powershell -NoProfile -ExecutionPolicy Bypass -File build/windows/package.ps1 -Version $Version -OutDir $stage }
+    $androidArgs = @('-NoProfile','-ExecutionPolicy','Bypass','-File','build/android/build.ps1','-Arch','arm64','-BuildType','Release','-SkipFrontend','-OutputApk',(Join-Path $stage $apk))
     if ($AndroidSigning -eq 'ExistingPreview') { $androidArgs += '-UseExistingPreviewKey' }
     Run-Step 'Build Android ARM64' { & powershell @androidArgs }
-    Copy-Item -LiteralPath "bin/CCZJ-Video-android-arm64-preview-release.apk" -Destination (Join-Path $stage "cczjVideo-android-arm64-$Version.apk")
 }
-$exe = "cczjVideo-windows-amd64-$Version.exe"
-$zip = "cczjVideo-windows-amd64-$Version-portable.zip"
-$apk = "cczjVideo-android-arm64-$Version.apk"
 foreach ($name in @($exe,$zip,$apk)) { if (!(Test-Path -LiteralPath (Join-Path $stage $name))) { throw "Missing release asset: $name" } }
 Run-Step 'Read EXE version' { & powershell -NoProfile -ExecutionPolicy Bypass -File build/windows/check_exe.ps1 -Path (Join-Path $stage $exe) -ExpectVersion $Version }
 $apkMetadata = Join-Path $stage 'android-metadata.json'
 $checkArgs = @('-NoProfile','-ExecutionPolicy','Bypass','-File','build/android/check_apk.ps1','-Path',(Join-Path $stage $apk),'-Version',$Version,'-JsonOut',$apkMetadata)
-if ($AndroidSigning -eq 'ExistingPreview' -and (Test-Path -LiteralPath 'bin/CCZJ-Video-android-arm64-preview.apk')) { $checkArgs += @('-CompareSigningWith',(Resolve-Path -LiteralPath 'bin/CCZJ-Video-android-arm64-preview.apk').Path) }
+$previewApk = Join-Path $workspace "$($locations.packages)/android/CCZJ-Video-android-arm64-preview.apk"
+if (!(Test-Path -LiteralPath $previewApk)) {
+    $previewApk = Join-Path $workspace 'bin/CCZJ-Video-android-arm64-preview.apk'
+}
+if ($AndroidSigning -eq 'ExistingPreview' -and (Test-Path -LiteralPath $previewApk)) { $checkArgs += @('-CompareSigningWith',$previewApk) }
 Run-Step 'Read APK version, architecture and signature' { & powershell @checkArgs }
 $remote = & git config --get remote.origin.url
 $repo = [regex]::Match("$remote",'github\.com[:/]([^/]+/[^/]+?)(?:\.git)?$').Groups[1].Value

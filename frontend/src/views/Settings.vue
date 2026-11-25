@@ -218,7 +218,7 @@ onMounted(async () => {
       <div v-if="mountedGroups.basic" v-show="activeGroup === 'basic'" :class="{ 'settings-group-active': animatedGroup === 'basic' }" data-settings-group="basic"><SettingsBasicGroup @open-group="openGroup" /></div>
 
       <!-- ========== 主题外观 ========== -->
-      <div v-if="mountedGroups.theme" v-show="activeGroup === 'theme'" :class="{ 'settings-group-active': animatedGroup === 'theme' }" data-settings-group="theme"><SettingsThemeGroup /></div>
+      <div v-if="mountedGroups.theme" v-show="activeGroup === 'theme'" :class="{ 'settings-group-active': animatedGroup === 'theme' }" data-settings-group="theme"><SettingsThemeGroup :active="activeGroup === 'theme'" /></div>
 
       <!-- ========== 扩展包 ========== -->
       <div v-if="mountedGroups.extensions" v-show="activeGroup === 'extensions'" class="panel cczj-flex cczj-flex-col cczj-gap-2" :class="{ 'settings-group-active': animatedGroup === 'extensions' }">

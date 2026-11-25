@@ -29,7 +29,7 @@ python3 build/ios/build.py --platform simulator
 python3 scripts/test-ios-simulator.py
 ```
 
-构建输出在 `bin/ios/device/` 和 `bin/ios/simulator/`。模拟器测试只创建、修改和删除自身的临时设备，不卸载已有模拟器中的应用。其证据在 `dist/audit/ios-simulator/`。`--skip-frontend` 仅用于前端刚构建且此后未改动的情况。`--bundle-id` 可选择自签所需的唯一反向域名身份；日后覆盖安装和续签要保持该身份与账号一致。
+安装包输出在 `dist/packages/ios/device/` 和 `dist/packages/ios/simulator/`，链接中间产物写入 `bin/ios/`。模拟器测试只创建、修改和删除自身的临时设备，不卸载已有模拟器中的应用。其证据在 `dist/audit/ios-simulator/`。`--skip-frontend` 仅用于前端刚构建且此后未改动的情况。`--bundle-id` 可选择自签所需的唯一反向域名身份；日后覆盖安装和续签要保持该身份与账号一致。
 
 ## 个人安装与续签
 

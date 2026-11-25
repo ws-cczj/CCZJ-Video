@@ -67,7 +67,7 @@ tasks:
       - powershell -NoProfile -ExecutionPolicy Bypass -File build/windows/check_exe.ps1 -Path ./bin/cczjVideo.exe -ExpectVersion {{.VERSION}}
 
   package:
-    summary: Build and stage a shippable release in dist/ (exe, portable zip, checksums.txt)
+    summary: Build Windows packages in dist/packages/windows
     deps:
       - task: common:go:mod:tidy
       - task: common:build:frontend

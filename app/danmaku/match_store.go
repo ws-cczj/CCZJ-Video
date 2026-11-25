@@ -11,10 +11,11 @@ import (
 )
 
 const (
-	legacyDayCooldown      = 24 * time.Hour
-	temporaryMatchCooldown = 30 * time.Second
-	noMatchCooldown        = 5 * time.Minute
-	emptyPoolCooldown      = 30 * time.Minute
+	tvIndexFingerprintSuffix = ":tv-index"
+	legacyDayCooldown        = 24 * time.Hour
+	temporaryMatchCooldown   = 30 * time.Second
+	noMatchCooldown          = 5 * time.Minute
+	emptyPoolCooldown        = 30 * time.Minute
 )
 
 func matchCooldown(code string, err error) time.Duration {
@@ -63,6 +64,14 @@ func (s *Store) matchFailure(ctx context.Context, key, provider, fingerprint str
 	}
 	if err != nil {
 		return nil, err
+	}
+	if storedFingerprint != fingerprint && strings.HasSuffix(fingerprint, tvIndexFingerprintSuffix) {
+		// Old keyword failures did not check the year index. Preserve limits and
+		// unrelated episode failures from the same matching policy.
+		if catalogueCanRetry(value) {
+			return nil, nil
+		}
+		fingerprint = strings.TrimSuffix(fingerprint, tvIndexFingerprintSuffix)
 	}
 	if storedFingerprint != fingerprint {
 		legacy := strings.TrimPrefix(fingerprint, matchPolicy+":")

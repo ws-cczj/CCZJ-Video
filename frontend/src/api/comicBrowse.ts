@@ -32,6 +32,8 @@ export type ComicBrowseChannel = Awaited<ReturnType<typeof comicBrowseChannels>>
 export function comicTrending(board:'japan'|'china') {
  return response(()=>ComicTrending(board,false),value=>{
   const page=object(value)
-  return {board:choice(page.board,['japan','china']),fetchedAt:integer(page.fetchedAt,1),fromCache:boolean(page.fromCache),stale:boolean(page.stale),warning:text(page.warning),items:list(page.items,entry=>{const row=object(entry);return {title:text(row.title),author:text(row.author),cover:text(row.cover),genres:text(row.genres),url:text(row.url)}},24)}
+  const actualBoard=choice(page.board,['japan','china'])
+  if(actualBoard!==board)throw new TypeError('Mismatched comic ranking')
+  return {board:actualBoard,fetchedAt:integer(page.fetchedAt,1),fromCache:boolean(page.fromCache),stale:boolean(page.stale),warning:text(page.warning),items:list(page.items,entry=>{const row=object(entry);return {title:text(row.title),author:text(row.author),cover:text(row.cover),genres:text(row.genres),url:text(row.url)}},24)}
  })
 }

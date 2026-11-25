@@ -250,7 +250,21 @@ func (s *HLSService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				body = []byte(s.rewritePlaylist(string(body), finalURL, referer, route))
 			}
 			w.Header().Set("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8")
+			// Browser and cast clients must revalidate rewritten URLs. The local HLS
+			// loader maintains a separate bounded cache that can honor upstream freshness.
 			w.Header().Set("Cache-Control", "no-store")
+			if r.URL.Path == "/__cczj/hls" && route == "" && resp.Header.Get("Set-Cookie") == "" && !strings.Contains(strings.ToLower(resp.Header.Get("Pragma")), "no-cache") {
+				control := strings.Join(resp.Header.Values("Cache-Control"), ",")
+				if control == "" {
+					control = "private"
+				}
+				w.Header().Set("X-CCZJ-Playlist-Cache-Control", control)
+				for _, key := range []string{"Age", "Expires"} {
+					if value := resp.Header.Get(key); value != "" {
+						w.Header().Set(key, value)
+					}
+				}
+			}
 			w.Header().Set("Content-Length", fmt.Sprint(len(body)))
 			// 重写过就一定是完整体，状态必须回到 200：留着 206 而不带
 			// Content-Range，是一份自相矛盾的响应。

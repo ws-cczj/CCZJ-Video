@@ -1,4 +1,10 @@
 import { ref } from 'vue'
+import { isMobileRuntime } from '../api/runtime'
+import { markStartup } from '../diagnostics/startup'
+import { prepareWallpaperImage, readThemeImageSource } from '../utils/themeImage'
+
+const DESKTOP_WALLPAPER_EDGE = 2048
+const MOBILE_WALLPAPER_EDGE = 1440
 
 /** Own one displayed image and one replacement. Original data URLs remain in
  * durable theme data; CSS receives short object URLs within engine limits. */
@@ -23,11 +29,23 @@ export function createThemeWallpaper(commit:(url:string|undefined)=>void,failed:
     pending=(async()=>{
       let candidate:string|undefined
       let timedOut=false
+      const began=performance.now()
       const timer=setTimeout(()=>{timedOut=true;controller.abort()},30000)
       try {
-        if(next.startsWith('data:')){
-          const response=await fetch(next,{signal:controller.signal})
-          candidate=URL.createObjectURL(await response.blob())
+        let original:Blob|undefined
+        try {
+          original=await readThemeImageSource(next,controller.signal)
+        } catch (cause) {
+          // Some legacy remote wallpapers can render directly even when their
+          // server and the image proxy do not allow reading the image bytes.
+          const remote=new URL(next,document.baseURI)
+          if(controller.signal.aborted||!['http:','https:'].includes(remote.protocol)||remote.origin===location.origin)throw cause
+        }
+        if(original){
+          const edge=isMobileRuntime()?MOBILE_WALLPAPER_EDGE:DESKTOP_WALLPAPER_EDGE
+          const prepared=await prepareWallpaperImage(original,controller.signal,edge)
+          candidate=URL.createObjectURL(prepared)
+          original=undefined
         }
         if(controller.signal.aborted)throw new DOMException('Cancelled','AbortError')
         const target=new Image();image=target;target.decoding='async';target.src=candidate??next
@@ -40,9 +58,10 @@ export function createThemeWallpaper(commit:(url:string|undefined)=>void,failed:
         const previous=objectURL
         objectURL=candidate;candidate=undefined
         displayedSource=next;url.value=objectURL??next;commit(url.value);succeeded=true
+        markStartup('wallpaper_decode',performance.now()-began)
         if(previous)URL.revokeObjectURL(previous)
         return true
-      }catch(cause){if(!disposed&&token===revision){error.value=true;failed(timedOut?new DOMException('Image loading timed out','TimeoutError'):cause)}return false}
+      }catch(cause){if(!disposed&&token===revision){error.value=true;markStartup('wallpaper_decode',performance.now()-began,true);failed(timedOut?new DOMException('Image loading timed out','TimeoutError'):cause)}return false}
       finally{
         clearTimeout(timer)
         if(candidate)URL.revokeObjectURL(candidate)
@@ -60,5 +79,9 @@ export function createThemeWallpaper(commit:(url:string|undefined)=>void,failed:
     if(typeof window!=='undefined')window.removeEventListener('pagehide',pageHide)
     objectURL=undefined;image=undefined;abort=undefined;source=undefined;displayedSource=undefined;url.value=undefined;loading.value=false;error.value=false;commit(undefined)
   }
-  return {url,loading,error,prepare,dispose}
+  function urlFor(next:string|undefined):string|undefined {
+    const current=url.value
+    return displayedSource===next?current:undefined
+  }
+  return {url,urlFor,loading,error,prepare,dispose}
 }

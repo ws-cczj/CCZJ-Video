@@ -98,22 +98,6 @@ export interface VideoDetailResponse {
   error?: { source_key: string; global_id: number; source_vod_id: string; attempts: number; retryable: boolean; message: string }
 }
 
-// 一条线路的测速结果。bytes_per_sec 为 0 表示「下载快过本机时钟精度、量不出速度」，
-// 后端已把它排在最前面，界面只当没有速度值显示。
-export interface PlayLineSpeedItem {
-  index: number
-  name?: string
-  ep_num: number
-  ok: boolean
-  latency_ms: number
-  bytes_per_sec: number
-}
-
-export interface PlayLineSpeedResponse {
-  items: PlayLineSpeedItem[]
-  best_index: number
-}
-
 // 视频列表响应
 export interface VideoListResponse {
   videos: Video[]

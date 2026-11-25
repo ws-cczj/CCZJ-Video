@@ -626,7 +626,7 @@ const { editing: editingContinue, finish: finishContinueEditing, vHoldToEdit } =
             <template v-if="group.key === 'continue' && group.continueItems">
               <div v-for="(item, idx) in group.continueItems" :key="`rec-continue-${item.source_key}-${item.vod_id}`"
                 class="rec-card-wrap cczj-relative" v-hold-to-edit>
-                <VideoCard :video="item" @click="!editingContinue && goDetailFromRecommend(item)">
+                <VideoCard :video="item" poster-thumbnail @click="!editingContinue && goDetailFromRecommend(item)">
                   <template v-if="isMobileRuntime()" #meta><span class="cczj-mobile-continue-meta">{{ t('history.epProgress', { num: item.ep_num || 1 }) }}</span></template>
                 </VideoCard>
                 <Button v-if="!isMobileRuntime() || editingContinue" data-cczj-remove variant="overlay" size="sm" icon class="rec-remove-btn cczj-absolute cczj-rounded-50 cczj-opacity-0 cczj-transition-fast" :title="t('home.removeFromContinue')"
@@ -638,7 +638,7 @@ const { editing: editingContinue, finish: finishContinueEditing, vHoldToEdit } =
             </template>
             <template v-else-if="group.items && group.items.length > 0">
               <VideoCard v-for="(item, idx) in group.items"
-                :key="`rec-${group.key}-${String((item as any).vod_id ?? '')}-${idx}`" :video="item"
+                :key="`rec-${group.key}-${String((item as any).vod_id ?? '')}-${idx}`" :video="item" poster-thumbnail
                 @click="goDetailFromRecommend(item)" />
             </template>
           </div>
@@ -725,7 +725,7 @@ const { editing: editingContinue, finish: finishContinueEditing, vHoldToEdit } =
       </EmptyState>
     </div>
 
-    <VirtualVideoGrid v-else class="video-grid" :style="gridStyle" :items="list.videos" @select="goDetail" />
+    <VirtualVideoGrid v-else class="video-grid" :style="gridStyle" :items="list.videos" poster-thumbnail @select="goDetail" />
     </Skeleton>
   </div>
 <CczjMobileEditActions v-if="isMobileRuntime()" :open="editingContinue" @done="finishContinueEditing" @cancel="finishContinueEditing" />

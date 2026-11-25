@@ -46,7 +46,8 @@ def ready(data, previous):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--app", type=Path, default=ROOT / "bin/ios/simulator/CCZJVideo.app")
+    locations = json.loads((ROOT / "build/artifact-paths.json").read_text(encoding="utf-8"))
+    parser.add_argument("--app", type=Path, default=ROOT / locations["packages"] / "ios/simulator/CCZJVideo.app")
     args = parser.parse_args()
     if sys.platform != "darwin":
         parser.error("This test needs macOS, full Xcode and an installed iOS simulator runtime")

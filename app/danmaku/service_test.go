@@ -94,20 +94,20 @@ func TestShortCacheFreshnessAndExpiry(t *testing.T) {
 		t.Fatal("offset was written into cached source timestamp")
 	}
 	calls := p.calls.Load()
-	*now = now.Add(time.Hour - time.Minute)
+	*now = now.Add(commentFreshness - time.Minute)
 	second, err := s.ReadWindow(ctx, "video:source:episode", 6000, 0)
 	if err != nil || !second.Cached || p.calls.Load() != calls {
 		t.Fatal("cache refetched within the freshness window", second, err)
 	}
-	*now = now.Add(2*time.Hour + time.Minute)
+	*now = now.Add(2 * time.Minute)
 	p.failure.Store(true)
 	stale, err := s.ReadWindow(ctx, "video:source:episode", 6000, 1)
 	if err != nil || !stale.Stale || len(stale.Warnings) == 0 {
 		t.Fatal("lost usable stale cache", stale, err)
 	}
-	*now = now.Add(3 * time.Hour)
+	*now = now.Add(cacheRetention - commentFreshness)
 	if _, err = s.ReadWindow(ctx, "video:source:episode", 6000, 1); err == nil {
-		t.Fatal("retained stale payload after six hours")
+		t.Fatal("retained stale payload after expiry")
 	}
 }
 func TestModeSwitchCancellationStopsSegmentWork(t *testing.T) {

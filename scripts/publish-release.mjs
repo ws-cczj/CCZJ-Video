@@ -7,6 +7,8 @@ import { tmpdir } from 'node:os'
 import { githubRepository, prepareReleaseVersion } from './release-version.mjs'
 import { checkReleaseArtifacts } from './check-release-artifacts.mjs'
 
+const { releases } = JSON.parse(readFileSync(new URL('../build/artifact-paths.json', import.meta.url), 'utf8'))
+
 function execute(program, args, { cwd, stream = false, timeout = 120000 } = {}) {
   const result = spawnSync(program, args, { cwd, encoding: 'utf8', stdio: stream ? 'inherit' : 'pipe', timeout,
     env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never', GH_PROMPT_DISABLED: '1' } })
@@ -33,7 +35,8 @@ export async function publishRelease(options, { run = execute, log = console.log
   for (const marker of ['MERGE_HEAD', 'rebase-merge', 'rebase-apply', 'CHERRY_PICK_HEAD', 'REVERT_HEAD']) {
     if (existsSync(resolve(root, git('rev-parse', '--git-path', marker)))) throw new Error('Finish the active Git operation before releasing.')
   }
-  const tag = `v${version}`, stage = resolve(root, options.outDir ?? 'dist/releases', tag)
+  const outDir = options.outDir ?? releases
+  const tag = `v${version}`, stage = resolve(root, outDir, tag)
   if (options.plan) {
     log(`Plan: ${repository} ${tag} from ${branch}\nSynchronize version.json and README from CHANGELOG; verify; ${options.commit ? 'commit all nonignored changes; ' : 'require a clean commit; '}build EXE/ZIP/ARM64 APK; push exact tag; reuse successful Verify on main or wait for tagged Verify; upload and verify draft assets; publish; push ${branch}.\nArtifacts: ${stage}\nNo files, commits, tags or remote releases were changed.`)
     return { planned: true, version, repository }
@@ -92,7 +95,7 @@ export async function publishRelease(options, { run = execute, log = console.log
     log('Reusing verified artifacts for this exact release commit.')
   } else {
     command('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'build/release.ps1', '-Version', version,
-      '-OutDir', options.outDir ?? 'dist/releases', '-AndroidSigning', options.androidSigning ?? 'ExistingPreview', '-SkipVerify', '-SkipFrontend', '-NoOpen'], { stream: true, timeout: 1800000 })
+      '-OutDir', outDir, '-AndroidSigning', options.androidSigning ?? 'ExistingPreview', '-SkipVerify', '-SkipFrontend', '-NoOpen'], { stream: true, timeout: 1800000 })
     checked = await check(stage)
   }
   const manifest = checked.manifest

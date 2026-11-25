@@ -598,7 +598,6 @@ const panelModel:PlayerPanelModel = reactive({
             :force-play-token="_playToken">
             <template v-if="mobile" #lines="{close}">
               <PlaybackRouteList mobile :sources="sourceOptions" :active-key="activeSourceKey" :active-line="videoStore.lines[videoStore.activeLineIndex]?.index??-1" :lines="videoStore.lines" :busy="sourceSearchLoading" :selectable="sourceSelectable"
-                :measurement="probeActive && probeIdentity ? { source_key: probeIdentity.sourceKey, vod_id: probeIdentity.vodId, global_id: probeIdentity.globalId, ep_num: panelModel.episodes.currentNumber } : undefined"
                 @choose="(key,line)=>{void switchToSource(key,line);close()}" />
               <Button class="player-route-retry cczj-mt-4" variant="ghost" :loading="qualityRefreshing" :disabled="sourceSearchLoading" @click="probeSources">{{t('playLine.retryQuality')}}</Button>
               <p class="cczj-mobile-drawer-hint cczj-mt-4">{{t('playLine.cooldownHint')}}</p>

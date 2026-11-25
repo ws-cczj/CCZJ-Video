@@ -37,23 +37,24 @@ func (d *Downloader) client() *http.Client {
 // SetMobileUpdateDirectory is supplied by application assembly before requests.
 func SetMobileUpdateDirectory(directory func() string) { mobileUpdateDirectory.Store(directory) }
 
-// getAppDir uses Android's private update directory or the desktop executable directory.
+// getAppDir resolves the legacy executable-adjacent desktop location.
 func getAppDir() string {
-	if runtime.GOOS == "android" {
-		if directory, ok := mobileUpdateDirectory.Load().(func() string); ok {
-			return directory()
-		}
-		return filepath.Join(os.TempDir(), "cczj-updates")
-	}
 	exe, err := os.Executable()
 	if err != nil {
-		return "."
+		return ""
 	}
 	resolved, err := filepath.EvalSymlinks(exe)
 	if err != nil {
 		return filepath.Dir(exe)
 	}
 	return filepath.Dir(resolved)
+}
+
+func legacyUpdateDirectory() string {
+	if runtime.GOOS == "android" || runtime.GOOS == "ios" {
+		return ""
+	}
+	return getAppDir()
 }
 
 // getAppExeName 返回当前应用可执行文件名（不含路径）
@@ -68,45 +69,46 @@ func getAppExeName() string {
 // scanAlreadyDownloaded 扫描应用目录，查找已下载的更新包
 // 只恢复指定版本的已校验产物，不把旧包或当前程序本身当成新版。
 func scanAlreadyDownloaded(version string) (string, string) {
-	return scanDownloadedArtifacts(getAppDir(), getAppExeName(), version)
+	if dir, err := updateDirectory(); err == nil {
+		if path, ver := scanDownloadedArtifacts(dir, getAppExeName(), version); path != "" {
+			return path, ver
+		}
+	}
+	if legacy := legacyUpdateDirectory(); legacy != "" {
+		return scanDownloadedArtifacts(legacy, getAppExeName(), version)
+	}
+	return "", ""
 }
 
 func scanDownloadedArtifacts(appDir, exeName, version string) (string, string) {
-	patterns := []string{filepath.Join(appDir, stagingPrefix+".*")}
-	for _, pattern := range patterns {
-		matches, err := filepath.Glob(pattern)
-		if err != nil {
+	if version == "" {
+		return "", ""
+	}
+	entries, err := os.ReadDir(appDir)
+	if err != nil {
+		return "", ""
+	}
+	prefix := stagingPrefix + "." + version + "."
+	for _, entry := range entries {
+		name := entry.Name()
+		if !entry.Type().IsRegular() || !strings.HasPrefix(name, prefix) || normalizeCase(name) == normalizeCase(exeName) {
 			continue
 		}
-		for _, m := range matches {
-			// 摘要凭据不是产物：名字同样以前缀开头，别把它当更新包递出去。
-			if strings.HasSuffix(strings.ToLower(m), digestSuffix) || strings.HasSuffix(strings.ToLower(m), ".part") {
-				continue
-			}
-			// A downloaded exe may itself be the running app after a manual upgrade.
-			if normalizeCase(filepath.Clean(m)) == normalizeCase(filepath.Join(appDir, exeName)) {
-				continue
-			}
-			// Unknown legacy packages must be downloaded again; they cannot be labelled
-			// as the latest release merely because their filename looks like an update.
-			if version == "" || !strings.HasPrefix(filepath.Base(m), stagingPrefix+"."+version+".") {
-				continue
-			}
-			info, err := os.Stat(m)
-			if err != nil || info.IsDir() || info.Size() < 1024 {
-				continue // 跳过无效/太小的文件
-			}
-			// 没有凭据就是没被校验过的字节（写盘失败、进程被杀留下的半截包，或者
-			// 老版本下载的包）。InstallUpdate 装之前会拒绝它，这里就别把它当"已下载"
-			// 递给前端——按钮点了必然失败，比没有按钮更糟。
-			if !hasDigestRecord(m) {
-				// The downloader may be between rename and receipt creation.
-				// Scanning must not delete a file that another operation is publishing.
-				continue
-			}
-			applog.Info("[Updater] 发现已下载的更新包: %s (%d bytes)", m, info.Size())
-			return m, version
+		ext := strings.ToLower(filepath.Ext(name))
+		if ext == digestSuffix || ext == ".part" {
+			continue
 		}
+		info, err := entry.Info()
+		if err != nil || info.Size() < 1024 {
+			continue
+		}
+		path := filepath.Join(appDir, name)
+		// The downloader can be between rename and receipt creation.
+		if !hasDigestRecord(path) {
+			continue
+		}
+		applog.Info("[Updater] 发现已下载的更新包: %s (%d bytes)", path, info.Size())
+		return path, version
 	}
 	return "", ""
 }
@@ -129,8 +131,10 @@ func (d *Downloader) DownloadContext(ctx context.Context, downloadURL string, pr
 	defer client.CloseIdleConnections()
 	applog.Info("[Updater] 开始下载: %s", downloadURL)
 
-	// 确定保存路径：应用同目录
-	appDir := getAppDir()
+	appDir, err := updateDirectory()
+	if err != nil {
+		return "", apperror.Wrap(apperror.Storage, err, "无法定位更新下载目录")
+	}
 	if err := os.MkdirAll(appDir, 0700); err != nil {
 		return "", apperror.Wrap(apperror.Storage, err, "无法创建更新下载目录")
 	}

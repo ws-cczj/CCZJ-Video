@@ -130,6 +130,10 @@ type libraryItemRow struct {
 // 返回值按入参顺序给出 id，入参里 RemoteID 或 Title 为空的条目会被跳过，
 // 对应位置是 0——调用方不能把下标当成"一定写进去了"。
 func UpsertLibraryItems(kind model.SourceKind, sourceKey string, items []*model.LibraryItem, revive bool) ([]int, error) {
+	return UpsertLibraryItemsContext(context.Background(), kind, sourceKey, items, revive)
+}
+
+func UpsertLibraryItemsContext(ctx context.Context, kind model.SourceKind, sourceKey string, items []*model.LibraryItem, revive bool) ([]int, error) {
 	if err := model.ValidateSourceKey(sourceKey); err != nil {
 		return nil, err
 	}
@@ -162,7 +166,7 @@ func UpsertLibraryItems(kind model.SourceKind, sourceKey string, items []*model.
 		return ids, nil
 	}
 
-	tx, err := instance.Beginx()
+	tx, err := instance.BeginTxx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("begin library upsert: %w", err)
 	}
@@ -182,21 +186,21 @@ func UpsertLibraryItems(kind model.SourceKind, sourceKey string, items []*model.
 			genres=excluded.genres, status=excluded.status, latest=excluded.latest, words=excluded.words,
 			remote_updated_at=excluded.remote_updated_at, lifecycle_state=%s, updated_at=CURRENT_TIMESTAMP`,
 		lifecycleOnConflict)
-	if _, err := tx.NamedExec(q, rows); err != nil {
+	if _, err := tx.NamedExecContext(ctx, q, rows); err != nil {
 		return nil, fmt.Errorf("upsert library items: %w", err)
 	}
 
 	// 逐行回读 id：last_insert_rowid 在批量 NamedExec 之后只有最后一行的值。
 	// 条数是一屏搜索结果或一页目录，量级在几十，逐行查一次是可接受的代价，
 	// 而拿错 id 会让书架指到别的书上。
-	getID, err := tx.Preparex(`SELECT id FROM library_items WHERE kind=? AND source_key=? AND remote_id=?`)
+	getID, err := tx.PreparexContext(ctx, `SELECT id FROM library_items WHERE kind=? AND source_key=? AND remote_id=?`)
 	if err != nil {
 		return nil, fmt.Errorf("prepare library id lookup: %w", err)
 	}
 	defer getID.Close()
 	for n, row := range rows {
 		var id int
-		if err := getID.Get(&id, row.Kind, row.SourceKey, row.RemoteID); err != nil {
+		if err := getID.GetContext(ctx, &id, row.Kind, row.SourceKey, row.RemoteID); err != nil {
 			return nil, fmt.Errorf("read back library item id for %q: %w", row.Title, err)
 		}
 		ids[indexes[n]] = id

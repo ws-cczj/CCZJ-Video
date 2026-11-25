@@ -45,7 +45,7 @@ watch(() => dl.activeCount > 0, (active, _previous, cleanup) => {
 <template>
   <div class="app-body">
     <Sidebar v-if="!shortDramaPlayback" />
-    <MobileRouteStage class="desktop-video-stage" :mobile="false" :cache="cached" :sections="videoNavigationPaths" wallpaper>
+    <MobileRouteStage class="desktop-video-stage" :mobile="false" :cache="cached" :sections="videoNavigationPaths">
       <template #default="{ Component, route: shownRoute }">
         <main class="main-content" :class="{ 'short-drama-host': shownRoute.path === '/short-drama' }">
           <component :is="Component" :class="{ 'cczj-h-full': shownRoute.path === '/short-drama' }" />

@@ -73,9 +73,12 @@ def build(target, version, info, skip_frontend):
     clang = run("xcrun", "--sdk", sdk, "--find", "clang", capture=True)
     if not skip_frontend:
         run("npm", "--prefix", "frontend", "run", "build")
-    out = ROOT / "bin/ios" / target
+    intermediate = ROOT / "bin/ios" / target
+    intermediate.mkdir(parents=True, exist_ok=True)
+    archive = intermediate / "CCZJVideo.a"
+    locations = json.loads((ROOT / "build/artifact-paths.json").read_text(encoding="utf-8"))
+    out = ROOT / locations["packages"] / "ios" / target
     out.mkdir(parents=True, exist_ok=True)
-    archive = out / "CCZJVideo.a"
     env = os.environ.copy()
     env.update(GOWORK="off", GOOS="ios", GOARCH=arch, CGO_ENABLED="1", CC=clang,
         CGO_CFLAGS=f'-isysroot "{sdk_path}" -target {clang_target}',
@@ -105,7 +108,7 @@ def build(target, version, info, skip_frontend):
         info.pop("UIRequiredDeviceCapabilities", None)
     run("xcrun", "ibtool", "--compile", app / "LaunchScreen.storyboardc",
         "--minimum-deployment-target", MIN_IOS, GENERATED / "xcode/main/LaunchScreen.storyboard")
-    icon_info = out / "icons.plist"
+    icon_info = intermediate / "icons.plist"
     run("xcrun", "actool", "--compile", app, "--app-icon", "AppIcon", "--platform", sdk,
         "--minimum-deployment-target", MIN_IOS, "--product-type", "com.apple.product-type.application",
         "--target-device", "iphone", "--target-device", "ipad", "--output-partial-info-plist", icon_info,

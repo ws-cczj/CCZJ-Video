@@ -38,6 +38,72 @@ func playbackWorkPrefix(key string) string {
 	return key[:end]
 }
 
+// A successful read identifies a source and catalogue for this local work.
+// The remote episode is a witness used to validate a later catalogue lookup.
+type catalogHint struct {
+	Work    Candidate
+	Witness Episode
+}
+
+func catalogHintKey(request MatchRequest, provider string) string {
+	prefix := playbackWorkPrefix(request.LocalKey)
+	if prefix == "" {
+		return ""
+	}
+	return cacheKey(Episode{Provider: provider, EpisodeID: prefix}, "catalog-witness:"+workIdentity(request))
+}
+
+func (s *Service) catalogHint(ctx context.Context, request MatchRequest, provider string) *catalogHint {
+	key := catalogHintKey(request, provider)
+	if key == "" {
+		return nil
+	}
+	raw, _, err := s.store.Cached(ctx, key, s.now())
+	var hint catalogHint
+	if err != nil || len(raw) == 0 || len(raw) > 8192 || json.Unmarshal(raw, &hint) != nil {
+		return nil
+	}
+	if hint.Work.Provider != provider || hint.Work.Ref == "" || len(hint.Work.Ref) > 2048 ||
+		len(hint.Work.Title) > 1024 || workMatchScore(hint.Work, request) < 0 || hint.Witness.Provider != provider ||
+		ValidateBinding(Binding{LocalKey: request.LocalKey, Episode: hint.Witness, Confirmed: true}) != nil {
+		return nil
+	}
+	return &hint
+}
+
+func (s *Service) rememberCatalog(ctx context.Context, request MatchRequest, result *providerMatch) {
+	if result == nil || result.binding == nil || result.binding.work == nil ||
+		result.window == nil || len(result.window.Items) == 0 || result.window.Stale {
+		return
+	}
+	b := result.binding
+	key := catalogHintKey(request, b.Episode.Provider)
+	if key == "" {
+		return
+	}
+	raw, err := json.Marshal(catalogHint{Work: b.work.Candidate, Witness: b.Episode})
+	if err == nil && len(raw) <= 8192 {
+		if err = s.store.Put(ctx, key, raw, s.now()); err != nil && ctx.Err() == nil {
+			s.cacheFailures.Add(1)
+			applog.WarnFields("danmaku catalogue cache write failed", applog.Fields{"provider": b.Episode.Provider, "code": apperror.Storage})
+		}
+	}
+}
+
+// A confirmed binding for this exact local episode can go straight to its pool.
+func (s *Service) verifiedEpisodeBinding(ctx context.Context, request MatchRequest, provider string) (*Binding, error) {
+	prior, err := s.Binding(ctx, request.LocalKey)
+	if err != nil || prior == nil || prior.work == nil || request.DurationMS <= 0 {
+		return nil, err
+	}
+	if prior.Episode.Provider != provider || prior.work.Candidate.Provider != provider ||
+		prior.work.Identity != workIdentity(request) || workMatchScore(prior.work.Candidate, request) < 0 ||
+		prior.Episode.DurationMS <= 0 || matchingEpisode([]Episode{prior.Episode}, request) == nil {
+		return nil, nil
+	}
+	return prior, nil
+}
+
 func (s *Service) verifiedCatalog(ctx context.Context, request MatchRequest, provider string) (*Candidate, *Episode, int, error) {
 	prefix := playbackWorkPrefix(request.LocalKey)
 	if prefix == "" || request.DurationMS <= 0 {
@@ -77,7 +143,11 @@ func (s *Service) verifiedCatalog(ctx context.Context, request MatchRequest, pro
 		}
 	}
 	if work == nil {
-		return nil, nil, 0, nil
+		hint := s.catalogHint(ctx, request, provider)
+		if hint == nil {
+			return nil, nil, 0, nil
+		}
+		work, anchor = &hint.Work, hint.Witness
 	}
 	episodes, err := s.Episodes(ctx, provider, work.Ref)
 	if err != nil {

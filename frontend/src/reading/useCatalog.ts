@@ -1,10 +1,12 @@
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { fetchCatalogPage, type CatalogPageDTO, type LibraryKind } from '../api/library'
 import { useAsyncResource, type AsyncResource } from './asyncResource'
 import { startupTask } from '../diagnostics/startup'
 
 /** Owns bounded local-catalog paging; filters always apply to the whole catalog. */
 export function useCatalog(kind: LibraryKind, query: () => { genre?: string; complete?: boolean; sort?: string }, enabled: () => boolean = () => true) {
+  const filterKey = computed(() => JSON.stringify(query()))
+  const committedFilter = ref('')
   const resource: AsyncResource<CatalogPageDTO, [string]> = useAsyncResource<CatalogPageDTO, [string]>({
     diagnosticLabel:`${kind}.catalog`,
     load: cursor => {
@@ -17,10 +19,11 @@ export function useCatalog(kind: LibraryKind, query: () => { genre?: string; com
       })
     },
     isEmpty: page => page.items.length === 0,
+    onData: () => { committedFilter.value = filterKey.value },
   })
   async function reload(): Promise<void> {
     resource.cancel()
-    resource.data.value = null
+    if (kind !== 'comic') resource.data.value = null
     if (enabled()) await resource.run('')
   }
   watch(() => JSON.stringify([enabled(), query()]), reload)
@@ -28,9 +31,10 @@ export function useCatalog(kind: LibraryKind, query: () => { genre?: string; com
   const items = computed(() => resource.data.value?.items ?? [])
   const genres = computed(() => resource.data.value?.genres ?? [])
   const loading = computed(() => resource.status.value === 'loading')
+  const stale = computed(() => committedFilter.value !== filterKey.value)
   const status = computed(() => items.value.length && ['loading', 'error'].includes(resource.status.value) ? 'ready' : resource.status.value)
   const nextError = computed(() => items.value.length && resource.status.value === 'error' ? resource.error.value : null)
-  const hasNext = computed(() => !!resource.data.value?.nextCursor)
+  const hasNext = computed(() => !stale.value && !!resource.data.value?.nextCursor)
   function more(): void { if (!loading.value && hasNext.value) void resource.run(resource.data.value!.nextCursor) }
-  return { ...resource, status, items, genres, loading, nextError, hasNext, reload, more }
+  return { ...resource, status, items, genres, loading, stale, nextError, hasNext, reload, more }
 }

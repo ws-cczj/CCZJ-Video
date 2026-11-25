@@ -1,11 +1,10 @@
 import type { DanmakuItem } from '../../api/danmaku'
 import type { DanmakuPreferences } from './preferences'
-import { danmakuFont, paintDanmaku } from './textStyle'
+import { danmakuFont, danmakuTextPadding, paintDanmaku } from './textStyle'
 import type { DanmakuDraw } from './timeline'
 
 interface TextBitmap {
   canvas: HTMLCanvasElement
-  originX: number
   originY: number
 }
 
@@ -47,11 +46,11 @@ export class DanmakuTextBitmaps {
     const y = Math.round(row.y * scaleY)
     const bitmap = this.entries.get(item) ?? this.create(context, row, scaleX, scaleY, preferences)
     if (bitmap) {
-      context.drawImage(bitmap.canvas, x - bitmap.originX, y - bitmap.originY)
+      context.drawImage(bitmap.canvas, x, y - bitmap.originY)
       return
     }
     context.setTransform(scaleX, 0, 0, scaleY, 0, 0)
-    paintDanmaku(context, item.text, x / scaleX, y / scaleY, fontSize, item.color, preferences)
+    paintDanmaku(context, item.text, x / scaleX + row.textInset, y / scaleY, fontSize, item.color, preferences)
     context.resetTransform()
   }
 
@@ -60,10 +59,9 @@ export class DanmakuTextBitmaps {
     const { item, fontSize } = row
     context.font = danmakuFont(preferences, fontSize)
     const metrics = context.measureText(item.text)
-    const padding = preferences.textStyle === 'shadow' ? 12 : Math.max(2, preferences.strokeWidth)
-    const originX = Math.ceil((Math.max(0, metrics.actualBoundingBoxLeft || 0) + padding) * scaleX)
+    const padding = danmakuTextPadding(preferences, fontSize)
     const originY = Math.ceil((Math.max(fontSize, metrics.actualBoundingBoxAscent || 0) + padding) * scaleY)
-    const width = originX + Math.ceil((Math.max(row.width, metrics.actualBoundingBoxRight || 0) + padding) * scaleX)
+    const width = Math.ceil(row.width * scaleX)
     const height = originY + Math.ceil((Math.max(fontSize * .25, metrics.actualBoundingBoxDescent || 0) + padding) * scaleY)
     if (width > 4096 || this.pixels + width * height > maxPixels) return
 
@@ -73,9 +71,9 @@ export class DanmakuTextBitmaps {
     const brush = canvas.getContext('2d')
     if (!brush) return
     brush.setTransform(scaleX, 0, 0, scaleY, 0, 0)
-    paintDanmaku(brush, item.text, originX / scaleX, originY / scaleY, fontSize, item.color, preferences)
+    paintDanmaku(brush, item.text, row.textInset, originY / scaleY, fontSize, item.color, preferences)
 
-    const bitmap = { canvas, originX, originY }
+    const bitmap = { canvas, originY }
     this.entries.set(item, bitmap)
     this.pixels += width * height
     return bitmap

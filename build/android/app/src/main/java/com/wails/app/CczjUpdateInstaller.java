@@ -26,6 +26,7 @@ final class CczjUpdateInstaller {
     String install(String path) {
         try {
             if (path == null || path.length() > 4096) return "Invalid update path";
+            // This private root also owns downloads on the Go side.
             File root = new File(activity.getFilesDir(), "CCZJ Video/updates").getCanonicalFile();
             File file = new File(path).getCanonicalFile();
             if (!root.equals(file.getParentFile()) || !file.isFile()

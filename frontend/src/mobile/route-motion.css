@@ -74,14 +74,6 @@ html[data-motion-pages='off'] .cczj-mobile-tab-dragging .cczj-mobile-route-scene
    them. Navigation mount/unmount must not resize the outgoing page. */
 .cczj-mobile-shell .cczj-mobile-route-scene[data-route-surface=primary] { bottom:var(--cczj-route-navigation-height,calc(67px + env(safe-area-inset-bottom,0px))); }
 .cczj-mobile-route-scene > .main-content { @apply cczj-min-h-0; }
-/* Match the app canvas crop instead of replacing a wallpaper with an opaque
-   colour or independently covering each narrower desktop pane. */
-.cczj-route-wallpaper .cczj-mobile-route-scene::before {
-  content:'';@apply cczj-absolute cczj-pointer-events-none;z-index:-1;
-  left:var(--route-canvas-left,0px);top:var(--route-canvas-top,0px);
-  width:var(--route-canvas-width,100vw);height:var(--route-canvas-height,100vh);
-  background:var(--bg-primary);background-image:var(--bg-image,none);background-size:cover;background-position:center;
-}
 /* The route owns page entrance; reader-internal turns and nested loading
    indicators retain their own lifecycle. */
 .cczj-mobile-route-scene > .main-content > :not(.novel-reader):not(.comic-reader) { animation:none; }
@@ -106,4 +98,20 @@ html[data-cczj-platform=mobile] .main-content:has([data-cczj-editing=true]) { sc
 .cczj-desktop-player-open-enter-active,.cczj-desktop-player-close-leave-active { z-index:5; }
 .cczj-desktop-player-open-enter-from,.cczj-desktop-player-close-leave-to { transform:translate3d(100%,0,0); }
 .cczj-desktop-player-open-enter-to,.cczj-desktop-player-close-leave-from { transform:translate3d(0,0,0); }
-.desktop-video-stage > .cczj-mobile-route-viewport > .cczj-mobile-route-scene:not([data-path^='/player/']) { contain:layout paint; }
+.desktop-video-stage > .cczj-mobile-route-viewport > .cczj-mobile-route-scene:not([data-path^='/player/']) {
+  contain: layout paint;
+  @apply cczj-bg-transparent;
+}
+/* The rear scene moves 25% while the front scene moves 100%. Clip the
+   remaining 75% behind the front scene so its glass only shows the wallpaper. */
+.desktop-video-stage > .cczj-mobile-route-viewport > :is(.cczj-mobile-route-forward-leave-active,.cczj-mobile-route-back-enter-active) {
+  clip-path:inset(0 0 0 0);
+  transition:transform var(--cczj-motion-slow) var(--cczj-motion-ease-standard),
+    clip-path var(--cczj-motion-slow) var(--cczj-motion-ease-standard);
+}
+.desktop-video-stage > .cczj-mobile-route-viewport > :is(.cczj-mobile-route-forward-leave-to,.cczj-mobile-route-back-enter-from) {
+  clip-path:inset(0 75% 0 0);
+}
+html:is([data-motion-pages='off'],[data-cczj-motion='off']) .desktop-video-stage > .cczj-mobile-route-viewport > .cczj-mobile-route-scene {
+  clip-path:none;
+}

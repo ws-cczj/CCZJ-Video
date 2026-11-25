@@ -28,6 +28,7 @@ export function createPlaybackSource(deps: {
   resume?: () => void
   unrecoverable: () => void
   bufferChanged: () => void
+  startup?: (event: string, detail: Record<string, unknown>) => void
   networkPolicy?: (detail: Record<string, unknown>) => void
   networkIssue?: (detail: Record<string, unknown>) => void
   segmentIssue?: (issue: BlockedSegment | null) => void
@@ -57,22 +58,25 @@ export function createPlaybackSource(deps: {
     engine.dispose(video)
   }
 
-  async function load(video: HTMLVideoElement, url: string, lease: Lease): Promise<boolean> {
+  async function load(video: HTMLVideoElement, url: string, lease: Lease, resumePosition: Promise<number>): Promise<boolean> {
     TsCache.setTransportActive(false, transportOwner)
-    const playbackURL = await playbackTransportURL(proxyHlsURL(url), lease.signal)
+    const nativeHls = isIOSRuntime() && video.canPlayType('application/vnd.apple.mpegurl')
+    const [playbackURL, Hls, startPosition] = await Promise.all([
+      playbackTransportURL(proxyHlsURL(url), lease.signal),
+      nativeHls ? null : engine.loadRuntime(),
+      resumePosition,
+    ])
     if (!lease.current()) return false
     // The new source must publish its own timing before cached bytes can be
     // presented on the timeline or scheduled as this source's inventory.
     TsCache.setSegments([], undefined, [])
     // Native HLS keeps iPhone playback and PiP in AVPlayer. MSE/Hls.js is still
     // available for hosts without native HLS support.
-    if (isIOSRuntime() && video.canPlayType('application/vnd.apple.mpegurl')) {
+    if (!Hls) {
       video.src = playbackURL
       return true
     }
     TsCache.enable()
-    const Hls = await engine.loadRuntime()
-    if (!lease.current()) return false
     if (!Hls.isSupported()) {
       if (video.canPlayType('application/vnd.apple.mpegurl')) {
         video.src = playbackURL
@@ -93,7 +97,7 @@ export function createPlaybackSource(deps: {
     } : undefined
     const forward = adaptiveForwardBuffer()
     const hls = engine.create(video, {
-      autoStartLoad: !suspended,
+      autoStartLoad: !suspended, startPosition,
       ...hlsWorkerConfig, lowLatencyMode: false,
       maxBufferLength: forward, maxMaxBufferLength: forward, backBufferLength: 30,
       ...(gapController ? { gapController } : {}),
@@ -106,6 +110,7 @@ export function createPlaybackSource(deps: {
       loader: TsCache.TsCacheLoader,
     }, Hls)
 
+    let firstManifest = true, firstFragment = true
     let policySignature = ''
     let networkRecoveries = 0, mediaRecoveries = 0, recoveryPending = false, exhausted = false
     let managedFragment = false
@@ -161,7 +166,12 @@ export function createPlaybackSource(deps: {
     }
     const online = () => { if (recoveryPending && !exhausted) recoverNetwork() }
     resumeRecovery = () => {if(!recoveryPending)return false;if(!exhausted)recoverNetwork();return true}
-    const pause = () => cancelNetworkTimeout()
+    const pause = () => {
+      cancelNetworkTimeout()
+      if (video.readyState >= 2 && !video.ended && !video.seeking && lease.current()) {
+        TsCache.checkpointPausedTransport(transportOwner)
+      }
+    }
     const seek = () => {cancelNetworkTimeout();recoveryPending=false;exhausted=false;networkRecoveries=0;retryTarget=undefined;deps.recovered?.()}
     const clearSegmentIssue = () => deps.segmentIssue?.(null)
     const activateTransport = () => { if (!suspended && lease.current()) TsCache.setTransportActive(true, transportOwner) }
@@ -177,7 +187,7 @@ export function createPlaybackSource(deps: {
       video.removeEventListener('playing', finishRecovery)
       video.removeEventListener('waiting', refreshIssue)
       video.removeEventListener('playing', refreshIssue)
-      video.removeEventListener('playing', activateTransport)
+      video.removeEventListener('play', activateTransport)
       video.removeEventListener('ended', finishTransport)
       video.removeEventListener('seeking', clearSegmentIssue)
       lease.signal.removeEventListener('abort', onOwnedAbort)
@@ -213,6 +223,12 @@ export function createPlaybackSource(deps: {
       deps.bufferChanged(); applyNetworkPolicy()
       if (recoveryPending && video.readyState >= 3) finishRecovery()
     }))
+    hls.on(Hls.Events.FRAG_LOADED, lease.guard((_event: unknown, data: import('hls.js').FragLoadedData) => {
+      if (!firstFragment || data.frag.type !== 'main' || typeof data.frag.sn !== 'number') return
+      firstFragment = false
+      const stats = data.frag.stats as typeof data.frag.stats & { segmentSource?: string }
+      deps.startup?.('player_first_fragment_loaded', { source: stats.segmentSource ?? 'unknown', start_seconds: data.frag.start })
+    }))
     if (Hls.Events.LEVEL_SWITCHED) hls.on(Hls.Events.LEVEL_SWITCHED, lease.guard(applyNetworkPolicy))
     const publishTimeline = () => {
       if (fragments.length) {
@@ -225,6 +241,10 @@ export function createPlaybackSource(deps: {
       }
     }
     hls.on(Hls.Events.MANIFEST_PARSED, lease.guard((_event: unknown, data: ManifestParsedData) => {
+      if (firstManifest) {
+        firstManifest = false
+        deps.startup?.('player_manifest_parsed', { start_seconds: startPosition })
+      }
       streams = data.levels.filter(level => level.bitrate > 0).map(level => ({
         bandwidth: level.bitrate,
         resolution: level.width && level.height ? `${level.width}x${level.height}` : '',
@@ -271,7 +291,7 @@ export function createPlaybackSource(deps: {
     }))
     video.addEventListener('waiting', refreshIssue, { signal: lease.signal })
     video.addEventListener('playing', refreshIssue, { signal: lease.signal })
-    video.addEventListener('playing', activateTransport, { signal: lease.signal })
+    video.addEventListener('play', activateTransport, { signal: lease.signal })
     video.addEventListener('ended', finishTransport, { signal: lease.signal })
     video.addEventListener('seeking', clearSegmentIssue, { signal: lease.signal })
     retrySegment = () => { TsCache.retryBlockedSegment(); deps.segmentIssue?.(null); cancelNetworkTimeout(); recoveryPending = true; managedFragment = true; exhausted = false; recoverNetwork() }

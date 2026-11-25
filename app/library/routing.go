@@ -185,7 +185,7 @@ func (s *Service) ensureBuiltinSources(ctx context.Context, kind model.SourceKin
 		if kind == model.SourceKindNovel && !maintainedNovel(candidate.URL) {
 			enabled = 0
 		}
-		if err := db.AddSource(&model.Source{SourceKey: candidate.ID, Name: candidate.Name, ApiUrl: candidate.URL, Kind: string(kind), StrategyConfig: candidate.document, Enabled: enabled}); err != nil {
+		if err := db.AddSourceContext(ctx, &model.Source{SourceKey: candidate.ID, Name: candidate.Name, ApiUrl: candidate.URL, Kind: string(kind), StrategyConfig: candidate.document, Enabled: enabled}); err != nil {
 			return err
 		}
 		known[candidate.ID] = true

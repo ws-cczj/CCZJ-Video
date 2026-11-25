@@ -42,6 +42,7 @@ export async function checkReleaseArtifacts(directory) {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
   const version = JSON.parse(readFileSync(join(root, 'version.json'), 'utf8')).version
-  const { manifest } = await checkReleaseArtifacts(process.argv[2] ?? join(root, `dist/releases/v${version}`))
+  const { releases } = JSON.parse(readFileSync(join(root, 'build/artifact-paths.json'), 'utf8'))
+  const { manifest } = await checkReleaseArtifacts(process.argv[2] ?? join(root, releases, `v${version}`))
   console.log(`Release ${manifest.tag}: EXE, portable ZIP, ARM64 APK, metadata and SHA256 checks passed.`)
 }

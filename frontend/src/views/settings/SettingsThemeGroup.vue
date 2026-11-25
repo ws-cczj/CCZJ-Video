@@ -7,7 +7,7 @@
  * setup 作用域里直接调函数是同一个调用序列。
  */
 defineOptions({ name: 'SettingsThemeGroup' })
-import { computed, ref, type ComponentPublicInstance } from 'vue'
+import { computed, onScopeDispose, ref, shallowReactive, watch, type ComponentPublicInstance } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '../../components/Icon.vue'
 import { useThemeStore, type ColorPalette } from '../../stores/theme'
@@ -15,7 +15,11 @@ import { useConfirmStore } from '../../stores/confirm'
 import ThemeEditorModal from './ThemeEditorModal.vue'
 import { Button, Spinner } from '../../components/ui'
 import { presentationProfile } from '../../platform/presentation'
+import { useViewActivity } from '../../composables/useViewActivity'
+import { prepareThemeThumbnail, readThemeImageSource } from '../../utils/themeImage'
 
+const props = defineProps<{ active: boolean }>()
+const active = useViewActivity(() => props.active)
 const { t } = useI18n()
 const themeStore = useThemeStore()
 const confirmStore = useConfirmStore()
@@ -51,7 +55,7 @@ function bgSrc(bg?: string | null): string | undefined {
 
 function resolvePreset(t: { id: string; name: string; primary: string; palette: ColorPalette; mode: 'dark' | 'light'; bgImage?: string }) {
   const override = themeStore.customThemes.find((c) => c.id === t.id)
-  if (!override) return { data: t, isOverride: false, bg: bgSrc(t.bgImage), textPrimary: t.palette.textPrimary, sidebarBg: t.palette.bgSidebar }
+  if (!override) return { data: t, isOverride: false, source: active.value ? bgSrc(t.bgImage) : undefined, textPrimary: t.palette.textPrimary, sidebarBg: t.palette.bgSidebar }
   // 判断 override 的背景图是否仍是"预设资源"：若是，用当前构建的 URL；
   // 如果是用户上传的 data URL / http URL，则用用户自己的值。
   let bg: string | undefined = override.backgroundImage
@@ -60,7 +64,7 @@ function resolvePreset(t: { id: string; name: string; primary: string; palette: 
     if (resolved && resolved !== bg) bg = t.bgImage || resolved
   }
   // pack:// 引用在这一层换成实际图：包被删或还没读出来时按「无背景图」渲染，跟应用主题时的判断一致。
-  bg = bgSrc(bg)
+  bg = active.value ? bgSrc(bg) : undefined
   // 有背景图时，改用半透明的 tint 让图片展示出来（纯颜色主题仍然使用纯色）。
   // 透明度取主题自己存的那份，写死 0.55 会让卡片预览和实际应用不是一个浓度。
   const effectiveSidebarBg = bg
@@ -69,7 +73,7 @@ function resolvePreset(t: { id: string; name: string; primary: string; palette: 
   return {
     data: override,
     isOverride: true,
-    bg,
+    source: bg,
     textPrimary: override.text || t.palette.textPrimary,
     sidebarBg: effectiveSidebarBg,
   }
@@ -91,18 +95,69 @@ function hexToRgbaCss(color: string, alpha: number): string {
 }
 
 // ---------- 列表：把预设 + 自定义分别按 light/dark 分组 ----------
-const lightPresets = computed(() => themeStore.themes.filter(t => t.mode === 'light'))
-const darkPresets  = computed(() => themeStore.themes.filter(t => t.mode === 'dark'))
-
 // 自定义主题中，id 与预设重合的视为“对该预设的覆盖/修改”，不再作为独立卡片显示
 const presetIdsSet = computed(() => new Set(themeStore.themes.map((t) => t.id)))
 const pureCustomThemes = computed(() =>
   themeStore.customThemes.filter((c) => c.id!=='__preview__'&&!presetIdsSet.value.has(c.id))
 )
 
-// 卡片只负责显示，所以这里把 pack:// 引用换成实际图；持久化仍走 customThemes 里的原始引用。
+const thumbs = shallowReactive(new Map<string, { source: string; url: string }>())
+const presets = computed(() => themeStore.themes.map(preset => ({ preset, ...resolvePreset(preset) })))
+const thumbnailInputs = computed(() => active.value ? new Map([
+  ...presets.value.map(({ preset, source }) => [preset.id, source] as const),
+  ...pureCustomThemes.value.map(theme => [theme.id, bgSrc(theme.backgroundImage)] as const),
+]) : new Map<string, string | undefined>())
+
+function releaseThumbnail(id: string): void {
+  const entry = thumbs.get(id)
+  if (!entry) return
+  URL.revokeObjectURL(entry.url)
+  thumbs.delete(id)
+}
+
+watch(thumbnailInputs, async (inputs, _previous, cleanup) => {
+  const controller = new AbortController()
+  cleanup(() => controller.abort())
+  for (const [id, entry] of thumbs) if (inputs.get(id) !== entry.source) releaseThumbnail(id)
+  // A single decode at a time bounds transient memory when many themes have large originals.
+  for (const [id, source] of inputs) {
+    if (!source || thumbs.has(id)) continue
+    if (controller.signal.aborted) return
+    const task = new AbortController()
+    const cancel = () => task.abort()
+    controller.signal.addEventListener('abort', cancel, { once: true })
+    const timeout = setTimeout(cancel, 30000)
+    try {
+      const blob = await readThemeImageSource(source, task.signal)
+      const thumb = await prepareThemeThumbnail(blob, task.signal)
+      if (!task.signal.aborted) thumbs.set(id, { source, url: URL.createObjectURL(thumb) })
+    } catch { /* Keep the palette swatch when a thumbnail cannot be prepared. */ }
+    finally {
+      clearTimeout(timeout)
+      controller.signal.removeEventListener('abort', cancel)
+    }
+  }
+}, { immediate: true })
+onScopeDispose(() => { for (const id of thumbs.keys()) releaseThumbnail(id) })
+
+const presetCards = computed(() => presets.value.map(({ preset, data, isOverride, sidebarBg, textPrimary }) => {
+  const bg = thumbs.get(preset.id)?.url
+  return {
+    preset, isOverride, bg, textPrimary, name: data.name, primary: data.primary,
+    style: {
+      backgroundColor: bg && !isOverride ? 'transparent' : sidebarBg,
+      backgroundImage: bg ? `url(${bg})` : undefined,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      color: textPrimary,
+    },
+  }
+}))
+const lightPresets = computed(() => presetCards.value.filter(card => card.preset.mode === 'light'))
+const darkPresets = computed(() => presetCards.value.filter(card => card.preset.mode === 'dark'))
 const customCards = computed(() =>
-  pureCustomThemes.value.map((c) => ({ ...c, backgroundImage: bgSrc(c.backgroundImage) }))
+  pureCustomThemes.value.map(({ id, dark, sidebar, background, text, primary, name }) =>
+    ({ id, dark, sidebar, background, text, primary, name, backgroundImage: thumbs.get(id)?.url }))
 )
 
 function isActive(id: string): boolean {
@@ -130,32 +185,21 @@ function pickTheme(id: string, event: MouseEvent): void {
       <div class="theme-grid cczj-grid">
         <!-- 预设 -->
         <button
-          v-for="preset in lightPresets"
-          :key="preset.id"
+          v-for="card in lightPresets"
+          :key="card.preset.id"
           class="theme-card cczj-flex cczj-flex-col cczj-items-center cczj-gap-5 cczj-cursor-pointer"
-          :class="{ active: isActive(preset.id), hasBg: !!resolvePreset(preset).bg, 'is-override': resolvePreset(preset).isOverride }"
-          :style="[
-            resolvePreset(preset).bg
-              ? {
-                  backgroundColor: resolvePreset(preset).isOverride ? resolvePreset(preset).sidebarBg : 'transparent',
-                  backgroundImage: `url(${resolvePreset(preset).bg})`,
-                  backgroundSize: 'cover',
-                  backgroundPosition: 'center',
-                  color: resolvePreset(preset).textPrimary
-                }
-              : { background: resolvePreset(preset).isOverride ? resolvePreset(preset).sidebarBg : preset.palette.bgSidebar, color: resolvePreset(preset).textPrimary }
-          ]"
-          @click="pickTheme(preset.id, $event)"
+          :class="{ active: isActive(card.preset.id), hasBg: !!card.bg, 'is-override': card.isOverride }"
+          :style="card.style"
+          @click="pickTheme(card.preset.id, $event)"
         >
           <span v-if="!mobile" class="card-actions-top cczj-absolute cczj-flex cczj-gap-2" @click.stop>
-            <button class="mini-btn cczj-inline-flex cczj-items-center cczj-justify-center" @click="editor?.openEditPreset(preset)" :title="t('settings.editTheme')">
+            <button class="mini-btn cczj-inline-flex cczj-items-center cczj-justify-center" @click="editor?.openEditPreset(card.preset)" :title="t('settings.editTheme')">
               <Icon name="pencil" :size="12" />
             </button>
           </span>
-          <span v-if="!resolvePreset(preset).bg" class="swatch" :style="{ background: resolvePreset(preset).data.primary }"></span>
-          <span v-if="resolvePreset(preset).bg" class="swatch small" :style="{ background: resolvePreset(preset).data.primary }"></span>
-          <span class="label cczj-truncate" :style="{ color: resolvePreset(preset).textPrimary }">{{ resolvePreset(preset).data.name }}</span>
-          <span v-if="isActive(preset.id)" class="check cczj-inline-flex cczj-items-center cczj-justify-center"><Spinner v-if="themeStore.backgroundLoading" size="sm" inline role="status" :aria-label="t('common.loading')" /><Icon v-else :name="themeStore.backgroundFailed?'alert-triangle':'check'" :size="12" /></span>
+          <span class="swatch" :class="{ small: card.bg }" :style="{ background: card.primary }"></span>
+          <span class="label cczj-truncate" :style="{ color: card.textPrimary }">{{ card.name }}</span>
+          <span v-if="isActive(card.preset.id)" class="check cczj-inline-flex cczj-items-center cczj-justify-center"><Spinner v-if="themeStore.backgroundLoading" size="sm" inline role="status" :aria-label="t('common.loading')" /><Icon v-else :name="themeStore.backgroundFailed?'alert-triangle':'check'" :size="12" /></span>
         </button>
 
         <!-- 自定义（排除与预设同名的覆盖项，那些已通过上方预设卡显示） -->
@@ -205,32 +249,21 @@ function pickTheme(id: string, event: MouseEvent): void {
       <h4 class="sub-title">{{ t('settings.darkThemes') }}</h4>
       <div class="theme-grid cczj-grid">
         <button
-          v-for="preset in darkPresets"
-          :key="preset.id"
+          v-for="card in darkPresets"
+          :key="card.preset.id"
           class="theme-card cczj-flex cczj-flex-col cczj-items-center cczj-gap-5 cczj-cursor-pointer"
-          :class="{ active: isActive(preset.id), hasBg: !!resolvePreset(preset).bg, 'is-override': resolvePreset(preset).isOverride }"
-          :style="[
-            resolvePreset(preset).bg
-              ? {
-                  backgroundColor: resolvePreset(preset).isOverride ? resolvePreset(preset).sidebarBg : 'transparent',
-                  backgroundImage: `url(${resolvePreset(preset).bg})`,
-                  backgroundSize: 'cover',
-                  backgroundPosition: 'center',
-                  color: resolvePreset(preset).textPrimary
-                }
-              : { background: resolvePreset(preset).isOverride ? resolvePreset(preset).sidebarBg : preset.palette.bgSidebar, color: resolvePreset(preset).textPrimary }
-          ]"
-          @click="pickTheme(preset.id, $event)"
+          :class="{ active: isActive(card.preset.id), hasBg: !!card.bg, 'is-override': card.isOverride }"
+          :style="card.style"
+          @click="pickTheme(card.preset.id, $event)"
         >
           <span v-if="!mobile" class="card-actions-top cczj-absolute cczj-flex cczj-gap-2" @click.stop>
-            <button class="mini-btn cczj-inline-flex cczj-items-center cczj-justify-center" @click="editor?.openEditPreset(preset)" :title="t('settings.editTheme')">
+            <button class="mini-btn cczj-inline-flex cczj-items-center cczj-justify-center" @click="editor?.openEditPreset(card.preset)" :title="t('settings.editTheme')">
               <Icon name="pencil" :size="12" />
             </button>
           </span>
-          <span v-if="!resolvePreset(preset).bg" class="swatch" :style="{ background: resolvePreset(preset).data.primary }"></span>
-          <span v-if="resolvePreset(preset).bg" class="swatch small" :style="{ background: resolvePreset(preset).data.primary }"></span>
-          <span class="label cczj-truncate" :style="{ color: resolvePreset(preset).textPrimary }">{{ resolvePreset(preset).data.name }}</span>
-          <span v-if="isActive(preset.id)" class="check cczj-inline-flex cczj-items-center cczj-justify-center"><Spinner v-if="themeStore.backgroundLoading" size="sm" inline role="status" :aria-label="t('common.loading')" /><Icon v-else :name="themeStore.backgroundFailed?'alert-triangle':'check'" :size="12" /></span>
+          <span class="swatch" :class="{ small: card.bg }" :style="{ background: card.primary }"></span>
+          <span class="label cczj-truncate" :style="{ color: card.textPrimary }">{{ card.name }}</span>
+          <span v-if="isActive(card.preset.id)" class="check cczj-inline-flex cczj-items-center cczj-justify-center"><Spinner v-if="themeStore.backgroundLoading" size="sm" inline role="status" :aria-label="t('common.loading')" /><Icon v-else :name="themeStore.backgroundFailed?'alert-triangle':'check'" :size="12" /></span>
         </button>
 
         <button
@@ -272,7 +305,7 @@ function pickTheme(id: string, event: MouseEvent): void {
     </section>
 
     <!-- ========== 主题编辑器 弹窗 ========== -->
-    <ThemeEditorModal :ref="bindEditor" />
+    <ThemeEditorModal :ref="bindEditor" :active="props.active" />
   </div>
   <Button v-if="mobile" class="theme-edit-fab" variant="primary" :aria-label="t('settings.editTheme')" :title="t('settings.editTheme')" @click="editCurrent"><Icon name="pencil" :size="22" /></Button>
 </template>

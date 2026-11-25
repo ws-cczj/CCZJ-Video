@@ -117,7 +117,7 @@ func (s *Service) searchPageStream(ctx context.Context, kind model.SourceKind, k
 	if err := s.ensureBuiltinSources(ctx, kind); err != nil {
 		return nil, err
 	}
-	rows, err := db.GetEnabledSourcesByKind(kind)
+	rows, err := db.GetEnabledSourcesByKindContext(ctx, kind)
 	if err != nil {
 		return nil, apperror.Wrap(apperror.Storage, err, "读取源列表失败")
 	}
@@ -223,6 +223,14 @@ func (s *Service) searchPageStream(ctx context.Context, kind model.SourceKind, k
 
 func (s *Service) searchPlans(ctx context.Context, kind model.SourceKind, keyword string, page int, plans []sourceSearchState, sources map[string]*model.Source, onResult func(*SourceResult)) (*SearchOutcome, error) {
 	out := &SearchOutcome{Keyword: keyword, Page: page, Results: make([]*SourceResult, len(plans))}
+	var health map[string]db.ReadingSearchHealth
+	if s.routingEnabled.Load() && len(plans) > 0 {
+		var err error
+		health, err = db.ReadReadingSearchHealth(ctx, kind)
+		if err != nil {
+			return nil, apperror.Wrap(apperror.Storage, err, "读取来源冷却失败")
+		}
+	}
 	jobs := make(chan int)
 	var group sync.WaitGroup
 	for worker := 0; worker < min(searchConcurrency, len(plans)); worker++ {
@@ -242,7 +250,7 @@ func (s *Service) searchPlans(ctx context.Context, kind model.SourceKind, keywor
 				plan := plans[index]
 				var result *SourceResult
 				if source := sources[plan.Key]; source != nil {
-					result = s.searchSourcePage(ctx, kind, source, keyword, plan)
+					result = s.searchSourcePage(ctx, kind, source, keyword, plan, health)
 				} else {
 					result = &SourceResult{SourceKey: plan.Key, SourceName: plan.Key, Items: []*Item{}, ErrorCode: string(apperror.Unavailable), ErrorMessage: "来源已移除或停用，请重新搜索"}
 				}
